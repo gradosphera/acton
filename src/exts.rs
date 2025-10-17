@@ -1,5 +1,6 @@
 use crate::executor::Executor;
 use crate::exts_lib::Tuple;
+use crate::get_executor::GetExecutor;
 use crate::stack_serialization::TupleItem;
 use crate::{TESTS, extension, pop_args, register_ext_methods};
 use core::ffi::c_char;
@@ -32,6 +33,16 @@ extension!(register_test, (name: String), |_stack: &mut Tuple, (name,)| {
 });
 
 pub fn register_extensions(executor: &mut Executor) {
+    register_ext_methods!(executor, {
+        1 => print,
+        2 => eprint,
+        3 => read_file,
+        4 => assert_equal,
+        5 => register_test,
+    });
+}
+
+pub fn register_get_extensions(executor: &mut GetExecutor) {
     register_ext_methods!(executor, {
         1 => print,
         2 => eprint,

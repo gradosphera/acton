@@ -58,7 +58,7 @@ struct Data {
     is_set: bool
 }
 
-fun test_first() {
+get fun test_first() {
     println("123")
 }
 

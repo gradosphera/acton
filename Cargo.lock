@@ -302,6 +302,7 @@ dependencies = [
  "base64",
  "bigint",
  "bindgen",
+ "crc",
  "hex",
  "lazy_static",
  "num-bigint",

@@ -3,12 +3,15 @@ mod config;
 mod executor;
 mod exts;
 mod exts_lib;
+mod get_executor;
 mod stack_serialization;
 
 use crate::compiler::{Compiler, TolkCompilerResult};
 use crate::executor::{EmulationResult, Executor};
-use crate::exts::register_extensions;
+use crate::exts::{register_extensions, register_get_extensions};
+use crate::get_executor::{GetExecutor, GetMethodArgs, GetMethodInternalParams};
 use num_bigint::BigUint;
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
 use tonlib_core::TonAddress;
@@ -68,6 +71,7 @@ fn main() {
         .unwrap();
 
     let dest_address = TonAddress::new(0, state_init.cell_hash());
+    let data_cell = ArcCell::from_boc_hex("b5ee9c724101010100020000004cacb9cd").unwrap();
 
     let msg = Message {
         info: CommonMsgInfo::Int(IntMsgInfo {
@@ -88,8 +92,8 @@ fn main() {
         init: Some(EitherRef::new(StateInit {
             split_depth: None,
             tick_tock: None,
-            code: Some(Ref::new(code_cell)),
-            data: Some(Ref::new(ArcCell::from_boc_hex("b5ee9c724101010100020000004cacb9cd").unwrap())),
+            code: Some(Ref::new(code_cell.clone())),
+            data: Some(Ref::new(data_cell.clone())),
             library: None,
         })),
         body: EitherRef::new(ArcCell::from(Cell::default())),
@@ -136,4 +140,31 @@ fn main() {
             }
         }
     }
+
+    const X25: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
+
+    let params = GetMethodInternalParams {
+        code: code_cell.to_boc_b64(false).unwrap().to_string(),
+        data: data_cell.to_boc_b64(false).unwrap().to_string(),
+        verbosity: 5,
+        libs: "".to_string(),
+        address: dest_address.to_string(),
+        unixtime: 0,
+        balance: "10".to_string(),
+        rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+        gas_limit: "0".to_string(),
+        method_id: ((X25.checksum(b"test_first") & 0xff_ff) as i32 | 0x1_00_00),
+        debug_enabled: true,
+        extra_currencies: HashMap::new(),
+        prev_blocks_info: None,
+    };
+    let mut get_executor = GetExecutor::new(params.clone());
+    register_get_extensions(&mut get_executor);
+
+    let result = get_executor.run_get_method(GetMethodArgs {
+        stack: Default::default(),
+        params,
+    });
+
+    println!("{:?}", result)
 }
