@@ -69,7 +69,6 @@ pub enum EmulationResult {
 
 #[derive(Deserialize)]
 pub struct ResultSuccess {
-    pub success: bool, // true
     pub transaction: String,
     pub shard_account: String,
     pub vm_log: String,
@@ -78,37 +77,7 @@ pub struct ResultSuccess {
 
 #[derive(Deserialize)]
 pub struct ResultError {
-    pub success: bool, // false
     pub error: String,
     pub vm_log: Option<String>,
     pub vm_exit_code: Option<i64>,
-}
-
-#[derive(Deserialize)]
-pub struct VMResults {
-    pub vm_log: String,
-    pub vm_exit_code: i64,
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-pub enum EmulationResultUnion {
-    Success(EmulationResultSuccess),
-    Error(EmulationResultError),
-}
-
-#[derive(Deserialize)]
-pub struct EmulationResultSuccess {
-    pub success: bool, // true
-    pub transaction: String,
-    pub shard_account: String,
-    pub vm_log: String,
-    pub actions: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct EmulationResultError {
-    pub success: bool, // false
-    pub error: String,
-    pub vm_results: Option<VMResults>,
 }

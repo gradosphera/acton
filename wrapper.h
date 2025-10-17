@@ -8,6 +8,6 @@ const char *transaction_emulator_register_extmethod(void *transaction_emulator, 
                                                                            ExtFunc callback);
 
 
-typedef void (*WasmFsReadCallback)(int kind, char const* data, char** destContents, char** destError);
+typedef void (*WasmFsReadCallback)(int kind, char const* data, char** dest_contents, char** dest_error);
 
 const char *tolk_compile(const char *config_json, WasmFsReadCallback callback);

@@ -1,8 +1,8 @@
-use crate::{tolk_compile};
+use crate::tolk_compile;
+use serde::{Deserialize, Serialize};
 use std::ffi::{CStr, CString, c_char};
 use std::fs::{canonicalize, read_to_string};
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 
 pub struct Compiler {
     opt_level: i64,
@@ -128,7 +128,6 @@ pub enum TolkCompilerResult {
 
 #[derive(Deserialize)]
 pub struct TolkCompilerResultSuccess {
-    pub status: String, // "ok"
     #[serde(rename = "fiftCode")]
     pub _fift_code: String,
     #[serde(rename = "codeBoc64")]
@@ -139,6 +138,5 @@ pub struct TolkCompilerResultSuccess {
 
 #[derive(Deserialize)]
 pub struct TolkResultError {
-    pub status: String, // "error"
     pub message: String,
 }
