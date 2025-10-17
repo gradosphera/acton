@@ -1,18 +1,20 @@
 use crate::compiler::{Compiler, TolkCompilerResult};
-use crate::executor::{EmulationResult, Executor};
+use crate::executor::{EXECUTOR, EmulationResult, Executor, update_account};
 use crate::exts_lib::Tuple;
-use crate::get_executor::GetExecutor;
-use crate::stack_serialization::TupleItem;
-use crate::{TESTS, extension, pop_args, register_ext_methods};
+use crate::get_executor::{GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult};
+use crate::stack_serialization::{TupleItem, parse_tuple};
+use crate::{CRC16, TESTS, extension, pop_args, register_ext_methods};
 use core::ffi::c_char;
-use num_bigint::BigInt;
+use num_bigint::{BigInt, BigUint};
 use owo_colors::OwoColorize;
+use std::collections::HashMap;
 use std::path::Path;
+use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::tlb::TLB;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellBuilder, CellFamily, Load, Store};
-use tycho_types::models::{IntAddr, RelaxedMessage, RelaxedMsgInfo, StdAddr};
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, Lazy, Load, Store};
+use tycho_types::models::{IntAddr, RelaxedMessage, RelaxedMsgInfo, ShardAccount, StdAddr};
 
 extension!(print, (s: TupleItem), |_stack: &mut Tuple, (s,)| {
     println!("{}", s);
@@ -62,15 +64,15 @@ extension!(build, (path: String), |stack: &mut Tuple, (path,): (String,)| {
 });
 
 extension!(send_message, (mode: BigInt, message: ArcCell), |stack: &mut Tuple, (mode, message): (BigInt, ArcCell)| {
-    println!("sending with mode: {}", mode);
-
-    let executor = Executor::new();
+    let executor = EXECUTOR.lock().unwrap();
 
     let msg_b64 =  message.to_boc_b64(false).unwrap();
     let msg_b64_bytes = base64::decode(&msg_b64).unwrap();
     let msg_b64_cell = Boc::decode(msg_b64_bytes).unwrap();
     let mut slice = msg_b64_cell.as_slice().unwrap();
     let mut msg2 = RelaxedMessage::load_from(&mut slice).unwrap();
+
+    let mut dst_addr = IntAddr::default();
 
     match &mut msg2.info {
         RelaxedMsgInfo::Int(info) => {
@@ -79,7 +81,8 @@ extension!(send_message, (mode: BigInt, message: ArcCell), |stack: &mut Tuple, (
             let addr_b64_cell = Boc::decode(addr_b64_bytes).unwrap();
             let mut slice = addr_b64_cell.as_slice().unwrap();
 
-            info.src = Some(IntAddr::Std(StdAddr::load_from(&mut slice).unwrap()))
+            info.src = Some(IntAddr::Std(StdAddr::load_from(&mut slice).unwrap()));
+            dst_addr = info.dst.clone()
         }
         _ => {}
     }
@@ -91,12 +94,18 @@ extension!(send_message, (mode: BigInt, message: ArcCell), |stack: &mut Tuple, (
 
     let new_final_message = ArcCell::from_boc_b64(&base64_new).unwrap();
 
-    println!("sending: {}", msg_b64);
-    let result = executor.run_transaction_cell(new_final_message.clone());
+    let result = executor.run_transaction_cell(dst_addr.to_string(), new_final_message.clone());
 
     match result {
         EmulationResult::Success(result) => {
-             stack.push(TupleItem::Cell(ArcCell::from_boc_b64(&*result.transaction).unwrap()));
+            let shard_account_after = result.shard_account;
+            let acc_b64_bytes = base64::decode(&shard_account_after).unwrap();
+            let acc_b64_cell = Boc::decode(acc_b64_bytes).unwrap();
+            let mut slice = acc_b64_cell.as_slice().unwrap();
+            let acc = ShardAccount::load_from(&mut slice).unwrap();
+
+            update_account(dst_addr.to_string(), acc);
+            stack.push(TupleItem::Cell(ArcCell::from_boc_b64(&*result.transaction).unwrap()));
         }
         EmulationResult::Error(result) => {
             println!("Emulation error: {}", result.error);
@@ -112,6 +121,63 @@ extension!(send_message, (mode: BigInt, message: ArcCell), |stack: &mut Tuple, (
     }
 });
 
+extension!(run_get_method, (id: BigInt, code: ArcCell), |stack: &mut Tuple, (id, code): (BigInt, ArcCell)| {
+    let data_cell = ArcCell::default();
+
+     let state_init = tonlib_core::cell::CellBuilder::new()
+        .store_bit(false)
+        .unwrap()
+        .store_bit(false)
+        .unwrap()
+        .store_ref_cell_optional(Some(&code))
+        .unwrap()
+        .store_ref_cell_optional(Some(&ArcCell::default()))
+        .unwrap()
+        .store_bit(false)
+        .unwrap()
+        .build()
+        .unwrap();
+
+    let dest_address = TonAddress::new(0, state_init.cell_hash());
+
+    let params = GetMethodInternalParams {
+        code: code.to_boc_b64(false).unwrap().to_string(),
+        data: data_cell.to_boc_b64(false).unwrap().to_string(),
+        verbosity: 5,
+        libs: "".to_string(),
+        address: dest_address.to_string(),
+        unixtime: 0,
+        balance: "10".to_string(),
+        rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+        gas_limit: "0".to_string(),
+        method_id: if id == BigInt::default() {0} else {id.to_u64_digits().1[0] as i32},
+        debug_enabled: true,
+        extra_currencies: HashMap::new(),
+        prev_blocks_info: None,
+    };
+
+    let executor = GetExecutor::new(params.clone());
+
+    let result = executor.run_get_method(GetMethodArgs{
+        params,
+        stack: Tuple::empty(),
+    });
+
+    match (result) {
+        GetMethodResult::Success(result) => {
+            let cell = ArcCell::from_boc_b64(&result.stack).unwrap();
+            let tuple = parse_tuple(&cell).unwrap();
+
+            tuple.iter().for_each(|item| {
+                stack.push((*item).clone());
+            })
+        }
+        GetMethodResult::Error(result) => {
+            println!("Error: {}", result.error);
+        }
+    };
+});
+
 pub fn register_extensions(executor: &mut Executor) {
     register_ext_methods!(executor, {
         1 => print,
@@ -121,6 +187,7 @@ pub fn register_extensions(executor: &mut Executor) {
         5 => register_test,
         6 => build,
         7 => send_message,
+        8 => run_get_method,
     });
 }
 
@@ -133,5 +200,6 @@ pub fn register_get_extensions(executor: &mut GetExecutor) {
         5 => register_test,
         6 => build,
         7 => send_message,
+        8 => run_get_method,
     });
 }

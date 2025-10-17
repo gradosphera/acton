@@ -10,6 +10,12 @@ use tonlib_core::tlb_types::tlb::TLB;
 #[derive(Default, Debug)]
 pub struct Tuple(Vec<TupleItem>);
 
+impl Tuple {
+    pub fn empty() -> Tuple {
+        Tuple(vec![])
+    }
+}
+
 impl Deref for Tuple {
     type Target = Vec<TupleItem>;
 
