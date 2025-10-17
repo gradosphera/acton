@@ -1,46 +1,35 @@
 use crate::executor::Executor;
-use crate::exts_lib::{
-    Tuple, pop_two_tuples_and_equal, push_bool_as_int, push_string, take_last_string, with_tuple,
-};
+use crate::exts_lib::Tuple;
 use crate::stack_serialization::TupleItem;
-use crate::{TESTS, ext, register_ext_methods};
+use crate::{TESTS, ext_args, pop_args, register_ext_methods};
 use core::ffi::c_char;
 
-ext!(print, |t: &mut Tuple| {
-    if let Some(s) = take_last_string(t) {
-        println!("{}", s);
+ext_args!(print, (s: String), |_t: &mut Tuple, (s,)| {
+    println!("{}", s);
+});
+
+ext_args!(eprint, (s: String), |_t: &mut Tuple, (s,)| {
+    eprintln!("{}", s);
+});
+
+ext_args!(read_file, (path: String), |t: &mut Tuple, (path,)| {
+    match std::fs::read_to_string(&path) {
+        Ok(content) => t.push_string(&content),
+        Err(_) => t.push(TupleItem::Null),
     }
 });
 
-ext!(eprint, |t: &mut Tuple| {
-    if let Some(s) = take_last_string(t) {
-        eprintln!("{}", s);
+ext_args!(assert_equal, (left: Tuple, right: Tuple), |t: &mut Tuple, (left, right)| {
+    if left == right {
+        t.push_bool_as_int(true);
+    } else {
+        eprintln!("Assertion failed: incompatible values for comparison");
+        t.push_bool_as_int(false);
     }
 });
 
-ext!(read_file, |t: &mut Tuple| {
-    if let Some(path) = take_last_string(t) {
-        match std::fs::read_to_string(&path) {
-            Ok(content) => push_string(t, &content),
-            Err(_) => t.push(TupleItem::Null),
-        }
-    }
-});
-
-ext!(assert_equal, |t: &mut Tuple| {
-    match pop_two_tuples_and_equal(t) {
-        Some(eq) => push_bool_as_int(t, eq),
-        None => {
-            eprintln!("Assertion failed: incompatible values for comparison");
-            push_bool_as_int(t, false);
-        }
-    }
-});
-
-ext!(register_test, |t: &mut Tuple| {
-    if let Some(name) = take_last_string(t) {
-        TESTS.lock().unwrap().push(name);
-    }
+ext_args!(register_test, (name: String), |_t: &mut Tuple, (name,)| {
+    TESTS.lock().unwrap().push(name);
 });
 
 pub fn register_extensions(executor: &mut Executor) {

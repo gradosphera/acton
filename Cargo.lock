@@ -310,6 +310,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "thiserror",
  "tonlib-core",
  "tycho-types",
  "urlencoding",
