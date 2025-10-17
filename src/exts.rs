@@ -1,20 +1,24 @@
 use crate::compiler::{Compiler, TolkCompilerResult};
-use crate::executor::{EXECUTOR, EmulationResult, Executor, update_account};
+use crate::executor::{EXECUTOR, EmulationResult, Executor, get_account, update_account};
 use crate::exts_lib::Tuple;
 use crate::get_executor::{GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult};
 use crate::stack_serialization::{TupleItem, parse_tuple};
-use crate::{CRC16, TESTS, extension, pop_args, register_ext_methods};
+use crate::{TESTS, extension, pop_args, register_ext_methods};
 use core::ffi::c_char;
 use num_bigint::{BigInt, BigUint};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::path::Path;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
+use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
 use tonlib_core::tlb_types::tlb::TLB;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellBuilder, CellFamily, Lazy, Load, Store};
-use tycho_types::models::{IntAddr, RelaxedMessage, RelaxedMsgInfo, ShardAccount, StdAddr};
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Lazy, Load, Store};
+use tycho_types::models::{
+    AccountState, IntAddr, RelaxedMessage, RelaxedMsgInfo, ShardAccount, StdAddr,
+};
 
 extension!(print, (s: TupleItem), |_stack: &mut Tuple, (s,)| {
     println!("{}", s);
@@ -121,28 +125,26 @@ extension!(send_message, (mode: BigInt, message: ArcCell), |stack: &mut Tuple, (
     }
 });
 
-extension!(run_get_method, (id: BigInt, code: ArcCell), |stack: &mut Tuple, (id, code): (BigInt, ArcCell)| {
-    let data_cell = ArcCell::default();
+extension!(run_get_method, (id: BigInt, code: ArcCell, address: ArcCell), |stack: &mut Tuple, (id, code, address): (BigInt, ArcCell, ArcCell)| {
+    let address_boc = address.to_boc_hex(false).unwrap();
 
-     let state_init = tonlib_core::cell::CellBuilder::new()
-        .store_bit(false)
-        .unwrap()
-        .store_bit(false)
-        .unwrap()
-        .store_ref_cell_optional(Some(&code))
-        .unwrap()
-        .store_ref_cell_optional(Some(&ArcCell::default()))
-        .unwrap()
-        .store_bit(false)
-        .unwrap()
-        .build()
-        .unwrap();
+    let address_std = MsgAddrIntStd::from_boc_hex(address_boc.as_str()).unwrap();
+    let dst_addr_str = format!("{}:{}", &address_std.workchain, hex::encode(&address_std.address));
 
-    let dest_address = TonAddress::new(0, state_init.cell_hash());
+    let dest_address = TonAddress::from_msg_address(address_std).unwrap();
+
+    let shard_account = get_account(dst_addr_str);
+    let state = shard_account.account.load().unwrap().0.map(|s| s.state);
+
+    let data = if let Some(AccountState::Active(state)) = state {
+        state.data.unwrap_or(Cell::default())
+    } else {
+        Cell::default()
+    };
 
     let params = GetMethodInternalParams {
         code: code.to_boc_b64(false).unwrap().to_string(),
-        data: data_cell.to_boc_b64(false).unwrap().to_string(),
+        data: Boc::encode_base64(data),
         verbosity: 5,
         libs: "".to_string(),
         address: dest_address.to_string(),
@@ -168,9 +170,7 @@ extension!(run_get_method, (id: BigInt, code: ArcCell), |stack: &mut Tuple, (id,
             let cell = ArcCell::from_boc_b64(&result.stack).unwrap();
             let tuple = parse_tuple(&cell).unwrap();
 
-            tuple.iter().for_each(|item| {
-                stack.push((*item).clone());
-            })
+            stack.push(TupleItem::Tuple(tuple))
         }
         GetMethodResult::Error(result) => {
             println!("Error: {}", result.error);

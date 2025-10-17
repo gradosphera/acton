@@ -5,8 +5,10 @@ import "lib/io"
 fun register_test(name: slice): void asm "5 EXTCALL"
 
 fun build(path: slice): cell asm "6 EXTCALL"
+
 fun sendMessage(msg: cell, mode: int): Cell<Transaction>? asm "7 EXTCALL"
-fun runGetMethod<T>(code: cell, id: int): T asm "8 EXTCALL"
+
+fun runGetMethod<T>(addr: cell, code: cell, id: int): T asm "8 EXTCALL"
 
 struct Data {
     value: int32
@@ -64,7 +66,7 @@ fun main() {
         workchain: 0,
         stateInit: ContractState {
             code: cell,
-            data: createEmptyCell(),
+            data: beginCell().storeInt(5, 32).endCell(),
         }
     };
 
@@ -76,11 +78,15 @@ fun main() {
     });
 
     val res = msg.sendSync(SEND_MODE_REGULAR);
-    val tx = res!.load({assertEndAfterReading: false});
+    val tx = res!.load({
+        assertEndAfterReading: false
+    });
     println(tx.__toTuple());
 
-    val res2 = runGetMethod<int>(cell, (stringCrc16("some_data") & 0xffff) | 0x10000);
+    val res2 = runGetMethod<int>(address.buildAddress().endCell(), cell, (stringCrc16("some_data") & 0xffff) | 0x10000);
     println(res2);
+    val res3 = runGetMethod<tuple>(address.buildAddress().endCell(), cell, (stringCrc16("some_other_data") & 0xffff) | 0x10000);
+    println(res3);
 
     // val res2 = msg.sendSync(SEND_MODE_REGULAR);
     // val tx2 = res2!.load({assertEndAfterReading: false});
