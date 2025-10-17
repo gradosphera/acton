@@ -1,12 +1,13 @@
 use crate::stack_serialization::{TupleItem, parse_tuple, serialize_tuple};
 use num_bigint::BigInt;
 use std::ffi::{CStr, CString};
+use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::os::raw::c_char;
 use tonlib_core::cell::{ArcCell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Tuple(Vec<TupleItem>);
 
 impl Deref for Tuple {
@@ -26,6 +27,23 @@ impl DerefMut for Tuple {
 impl PartialEq for Tuple {
     fn eq(&self, other: &Self) -> bool {
         self.0.eq(&other.0)
+    }
+}
+
+impl fmt::Display for Tuple {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.len() == 1 {
+            write!(f, "{}", self.0[0])
+        } else {
+            write!(f, "(")?;
+            for (i, item) in self.0.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", item)?;
+            }
+            write!(f, ")")
+        }
     }
 }
 

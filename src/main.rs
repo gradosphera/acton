@@ -1,6 +1,7 @@
 mod compiler;
 mod config;
 mod executor;
+mod exit_codes;
 mod exts;
 mod exts_lib;
 mod get_executor;
@@ -9,11 +10,13 @@ mod stack_serialization;
 use crate::compiler::{Compiler, TolkCompilerResult};
 use crate::executor::{EmulationResult, Executor};
 use crate::exts::{register_extensions, register_get_extensions};
-use crate::get_executor::{GetExecutor, GetMethodArgs, GetMethodInternalParams};
+use crate::get_executor::{GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult};
 use num_bigint::BigUint;
+use owo_colors::OwoColorize;
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
 use tonlib_core::tlb_types::block::coins::{CurrencyCollection, Grams};
@@ -28,6 +31,8 @@ use tycho_types::cell::Load;
 use tycho_types::models::{ComputePhase, Transaction, TxInfo};
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+
+const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
 static TESTS: Mutex<Vec<String>> = Mutex::new(vec![]);
 
@@ -141,7 +146,80 @@ fn main() {
         }
     }
 
-    const X25: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
+    let tests = TESTS.lock().unwrap().clone();
+
+    if !tests.is_empty() {
+        println!("\n{}", "Running tests...".bold().cyan());
+        println!("{}", "─".repeat(50).dimmed());
+
+        let mut passed = 0;
+        let mut failed = 0;
+        let total = tests.len();
+
+        for (_i, test) in tests.iter().enumerate() {
+            print!("  {} {} \n", "○".dimmed(), test.dimmed());
+            std::io::stdout().flush().unwrap();
+
+            let result = execute_test(test, &code_cell, &data_cell, &dest_address);
+
+            let exit_code = match &result {
+                GetMethodResult::Success(result) => result.vm_exit_code,
+                GetMethodResult::Error(_) => 999,
+            };
+
+            // Clear the current line and print result
+            print!("\r");
+            if exit_code == 0 {
+                println!("  {} {} {}", "✓".green(), test.green(), "PASSED".green().bold());
+                passed += 1;
+            } else {
+                println!("  {} {} {}", "✗".red(), test.red(), "FAILED".red().bold());
+                failed += 1;
+
+                // Show error details for failed tests
+                match &result {
+                    GetMethodResult::Success(result) => {
+                        let exit_code = result.vm_exit_code as i64;
+                        println!("    {} exit_code={}", "└─".dimmed(), exit_code.to_string().yellow());
+
+                        // Show exit code description if available
+                        if let Some(info) = crate::exit_codes::get_exit_code_info(exit_code) {
+                            println!("      {} {}", "├─".dimmed(), info.description.dimmed());
+                            println!("      {} Phase: {}", "└─".dimmed(), info.phase.dimmed());
+                        }
+                    }
+                    GetMethodResult::Error(error) => {
+                        println!("    {} {}", "└─".dimmed(), error.error.yellow());
+                    }
+                }
+            }
+        }
+
+        println!("{}", "─".repeat(50).dimmed());
+
+        if failed == 0 {
+            println!(" {} {} passed", "✓".green().bold(), passed.to_string().green().bold());
+        } else {
+            println!(" {} {} passed, {} {} failed",
+                "✓".green().bold(), passed.to_string().green().bold(),
+                "✗".red().bold(), failed.to_string().red().bold());
+        }
+
+        println!(" {} total tests", total.to_string().cyan());
+
+        if failed > 0 {
+            println!("\n{}", "Some tests failed. Check the output above for details.".red());
+        }
+    }
+}
+
+fn execute_test(
+    test: &String,
+    code_cell: &Arc<Cell>,
+    data_cell: &Arc<Cell>,
+    dest_address: &TonAddress,
+) -> GetMethodResult {
+    // thread::sleep(Duration::from_secs(2));
 
     let params = GetMethodInternalParams {
         code: code_cell.to_boc_b64(false).unwrap().to_string(),
@@ -153,7 +231,7 @@ fn main() {
         balance: "10".to_string(),
         rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
         gas_limit: "0".to_string(),
-        method_id: ((X25.checksum(b"test_first") & 0xff_ff) as i32 | 0x1_00_00),
+        method_id: ((CRC16.checksum(test.as_bytes()) & 0xff_ff) as i32 | 0x1_00_00),
         debug_enabled: true,
         extra_currencies: HashMap::new(),
         prev_blocks_info: None,
@@ -165,6 +243,5 @@ fn main() {
         stack: Default::default(),
         params,
     });
-
-    println!("{:?}", result)
+    result
 }

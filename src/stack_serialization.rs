@@ -1,4 +1,5 @@
 use num_bigint::{BigInt, BigUint};
+use std::fmt;
 use tonlib_core::cell::{ArcCell, CellBuilder, CellParser};
 
 /// Helper function to load a small uint as u64
@@ -43,6 +44,39 @@ pub enum TupleItem {
     },
     Builder(ArcCell),
     Tuple(Vec<TupleItem>),
+}
+
+impl fmt::Display for TupleItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TupleItem::Int(value) => {
+                if *value == BigInt::from(18446744073709551615u64) {
+                    write!(f, "-1")
+                } else {
+                    write!(f, "{}", value)
+                }
+            }
+            TupleItem::Null => write!(f, "null"),
+            TupleItem::Nan => write!(f, "NaN"),
+            TupleItem::Cell(_) => write!(f, "Cell(...)"),
+            TupleItem::Slice { .. } => write!(f, "Slice(...)"),
+            TupleItem::Builder(_) => write!(f, "Builder(...)"),
+            TupleItem::Tuple(items) => {
+                if items.len() == 1 {
+                    write!(f, "{}", items[0])
+                } else {
+                    write!(f, "(")?;
+                    for (i, item) in items.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", item)?;
+                    }
+                    write!(f, ")")
+                }
+            }
+        }
+    }
 }
 
 /// Serialize a tuple item to a cell builder

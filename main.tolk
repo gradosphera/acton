@@ -26,7 +26,11 @@ fun Assert.notEqual<V1, V2>(left: V1, right: V2) {
 fun assert_equal<V1, V2>(left: V1, right: V2): bool asm "4 EXTCALL"
 
 struct Expectatiom<T> {
-    value: T
+    private value: T
+}
+
+fun Expectatiom<T>.create(value: T) {
+    return Expectatiom<T> { value }
 }
 
 fun Expectatiom<T>.toEqual<U>(self, expected: U) {
@@ -46,7 +50,7 @@ fun Expectatiom<T>.isNotNull(self) {
 }
 
 fun expect<T>(value: T) {
-    return Expectatiom<T> { value }
+    return Expectatiom<T>.create(value)
 }
 
 
@@ -58,8 +62,16 @@ struct Data {
     is_set: bool
 }
 
-get fun test_first() {
-    println("123")
+get fun `test-first`() {
+    expect(Data{ value: 0, is_set: false }).toEqual(Data{ value: 0, is_set: true });
+}
+
+get fun `test-second`() {
+    throw 9;
+}
+
+get fun `test-third`() {
+    // ...
 }
 
 fun run_test(cb: () -> void) {
@@ -78,7 +90,9 @@ fun main() {
     // println(ignore);
     //
     // run_test(test_first);
-    register_test("test_first");
+    register_test("test-first");
+    register_test("test-second");
+    register_test("test-third");
 
     // expect(10).toEqual(30);
     expect(null).isNotNull();

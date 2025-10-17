@@ -4,6 +4,7 @@ use crate::get_executor::GetExecutor;
 use crate::stack_serialization::TupleItem;
 use crate::{TESTS, extension, pop_args, register_ext_methods};
 use core::ffi::c_char;
+use owo_colors::OwoColorize;
 
 extension!(print, (s: String), |_stack: &mut Tuple, (s,)| {
     println!("{}", s);
@@ -20,10 +21,11 @@ extension!(read_file, (path: String), |stack: &mut Tuple, (path,)| {
     }
 });
 
-extension!(assert_equal, (left: Tuple, right: Tuple), |stack: &mut Tuple, (left, right)| {
+extension!(assert_equal, (left: Tuple, right: Tuple), |stack: &mut Tuple, (left, right): (Tuple, Tuple)| {
     if left == right {
         stack.push_bool_as_int(true);
     } else {
+        println!("  {} {} != {}", "✗".red().bold(), left.yellow(), right.yellow());
         stack.push_bool_as_int(false);
     }
 });
