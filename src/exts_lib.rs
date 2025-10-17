@@ -88,6 +88,12 @@ pub trait FromStack: Sized {
     fn from_item(item: TupleItem) -> Result<Self, ArgError>;
 }
 
+impl FromStack for TupleItem {
+    fn from_item(item: TupleItem) -> Result<Self, ArgError> {
+        Ok(item)
+    }
+}
+
 impl FromStack for String {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
         match item {

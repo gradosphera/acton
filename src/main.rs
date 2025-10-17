@@ -114,7 +114,7 @@ fn main() {
             let tx = Transaction::load_from(&mut slice).unwrap();
 
             let info: TxInfo = tx.info.parse().unwrap();
-            println!("{:?}", info);
+            // println!("{:?}", info);
             let exit_code = match info {
                 TxInfo::Ordinary(info) => match info.compute_phase {
                     ComputePhase::Skipped(_) => 0,
@@ -123,17 +123,17 @@ fn main() {
                 TxInfo::TickTock(_) => 0,
             };
 
-            println!("{}", exit_code);
-            println!("Transaction: {:?}", tx);
-            println!("Shard account: {}", result.shard_account);
-            println!("VM log: {}", result.vm_log);
-            if let Some(actions) = result.actions {
-                println!("Actions: {}", actions);
-            }
+            // println!("{}", exit_code);
+            // println!("Transaction: {:?}", tx);
+            // println!("Shard account: {}", result.shard_account);
+            // println!("VM log: {}", result.vm_log);
+            // if let Some(actions) = result.actions {
+            //     println!("Actions: {}", actions);
+            // }
 
-            TESTS.lock().unwrap().iter().for_each(|test| {
-                println!("{}", test);
-            })
+            // TESTS.lock().unwrap().iter().for_each(|test| {
+            //     println!("{}", test);
+            // })
         }
         EmulationResult::Error(result) => {
             println!("Emulation error: {}", result.error);
@@ -170,7 +170,12 @@ fn main() {
             // Clear the current line and print result
             print!("\r");
             if exit_code == 0 {
-                println!("  {} {} {}", "✓".green(), test.green(), "PASSED".green().bold());
+                println!(
+                    "  {} {} {}",
+                    "✓".green(),
+                    test.green(),
+                    "PASSED".green().bold()
+                );
                 passed += 1;
             } else {
                 println!("  {} {} {}", "✗".red(), test.red(), "FAILED".red().bold());
@@ -180,7 +185,11 @@ fn main() {
                 match &result {
                     GetMethodResult::Success(result) => {
                         let exit_code = result.vm_exit_code as i64;
-                        println!("    {} exit_code={}", "└─".dimmed(), exit_code.to_string().yellow());
+                        println!(
+                            "    {} exit_code={}",
+                            "└─".dimmed(),
+                            exit_code.to_string().yellow()
+                        );
 
                         // Show exit code description if available
                         if let Some(info) = crate::exit_codes::get_exit_code_info(exit_code) {
@@ -198,17 +207,28 @@ fn main() {
         println!("{}", "─".repeat(50).dimmed());
 
         if failed == 0 {
-            println!(" {} {} passed", "✓".green().bold(), passed.to_string().green().bold());
+            println!(
+                " {} {} passed",
+                "✓".green().bold(),
+                passed.to_string().green().bold()
+            );
         } else {
-            println!(" {} {} passed, {} {} failed",
-                "✓".green().bold(), passed.to_string().green().bold(),
-                "✗".red().bold(), failed.to_string().red().bold());
+            println!(
+                " {} {} passed, {} {} failed",
+                "✓".green().bold(),
+                passed.to_string().green().bold(),
+                "✗".red().bold(),
+                failed.to_string().red().bold()
+            );
         }
 
         println!(" {} total tests", total.to_string().cyan());
 
         if failed > 0 {
-            println!("\n{}", "Some tests failed. Check the output above for details.".red());
+            println!(
+                "\n{}",
+                "Some tests failed. Check the output above for details.".red()
+            );
         }
     }
 }

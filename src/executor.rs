@@ -3,6 +3,7 @@ use crate::{create_emulator, emulate_with_emulator, transaction_emulator_registe
 use serde::Deserialize;
 use std::ffi::{CString, c_void};
 use std::ptr::null;
+use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::message::Message;
 use tonlib_core::tlb_types::tlb::TLB;
 
@@ -19,6 +20,10 @@ impl Executor {
     }
 
     pub fn run_transaction(&self, message: Message) -> EmulationResult {
+        self.run_transaction_cell(ArcCell::from(message.to_cell().unwrap()))
+    }
+
+    pub fn run_transaction_cell(&self, message: ArcCell) -> EmulationResult {
         let message = CString::new(message.to_boc_b64(false).unwrap()).unwrap();
         let shard_account = CString::new(
             "te6cckEBAgEALgABUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAFAAVi1MQ==",
@@ -58,6 +63,7 @@ impl Executor {
 #[derive(Deserialize)]
 struct EmulationInternalResult {
     pub output: EmulationResult,
+    pub logs: String,
 }
 
 #[derive(Deserialize)]

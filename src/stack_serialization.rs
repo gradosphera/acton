@@ -58,7 +58,7 @@ impl fmt::Display for TupleItem {
             }
             TupleItem::Null => write!(f, "null"),
             TupleItem::Nan => write!(f, "NaN"),
-            TupleItem::Cell(_) => write!(f, "Cell(...)"),
+            TupleItem::Cell(cell) => write!(f, "{:?}", cell),
             TupleItem::Slice { .. } => write!(f, "Slice(...)"),
             TupleItem::Builder(_) => write!(f, "Builder(...)"),
             TupleItem::Tuple(items) => {

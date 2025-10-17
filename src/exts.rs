@@ -1,12 +1,20 @@
-use crate::executor::Executor;
+use crate::compiler::{Compiler, TolkCompilerResult};
+use crate::executor::{EmulationResult, Executor};
 use crate::exts_lib::Tuple;
 use crate::get_executor::GetExecutor;
 use crate::stack_serialization::TupleItem;
 use crate::{TESTS, extension, pop_args, register_ext_methods};
 use core::ffi::c_char;
+use num_bigint::BigInt;
 use owo_colors::OwoColorize;
+use std::path::Path;
+use tonlib_core::cell::ArcCell;
+use tonlib_core::tlb_types::tlb::TLB;
+use tycho_types::boc::Boc;
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, Load, Store};
+use tycho_types::models::{IntAddr, RelaxedMessage, RelaxedMsgInfo, StdAddr};
 
-extension!(print, (s: String), |_stack: &mut Tuple, (s,)| {
+extension!(print, (s: TupleItem), |_stack: &mut Tuple, (s,)| {
     println!("{}", s);
 });
 
@@ -34,6 +42,76 @@ extension!(register_test, (name: String), |_stack: &mut Tuple, (name,)| {
     TESTS.lock().unwrap().push(name);
 });
 
+extension!(build, (path: String), |stack: &mut Tuple, (path,): (String,)| {
+    let compiler = Compiler::new();
+    let result = compiler.compile(Path::new(&path));
+    match result {
+        Ok(TolkCompilerResult::Success(success)) => {
+            let code_cell = ArcCell::from_boc_b64(&*success.code_boc64).unwrap();
+            stack.push(TupleItem::Cell(code_cell))
+        }
+        Ok(TolkCompilerResult::Error(error)) => {
+            println!("Compilation failed: {}", error.message);
+            return;
+        }
+        Err(e) => {
+            println!("Failed to parse compilation result: {}", e);
+            return;
+        }
+    };
+});
+
+extension!(send_message, (mode: BigInt, message: ArcCell), |stack: &mut Tuple, (mode, message): (BigInt, ArcCell)| {
+    println!("sending with mode: {}", mode);
+
+    let executor = Executor::new();
+
+    let msg_b64 =  message.to_boc_b64(false).unwrap();
+    let msg_b64_bytes = base64::decode(&msg_b64).unwrap();
+    let msg_b64_cell = Boc::decode(msg_b64_bytes).unwrap();
+    let mut slice = msg_b64_cell.as_slice().unwrap();
+    let mut msg2 = RelaxedMessage::load_from(&mut slice).unwrap();
+
+    match &mut msg2.info {
+        RelaxedMsgInfo::Int(info) => {
+            let addr_b64 = "b5ee9c724101010100240000438015a63d6ec5cd11f837442aeba86b361f3890e715eca7c2cd44666017b8d6535d30a1578b99";
+            let addr_b64_bytes = hex::decode(&addr_b64).unwrap();
+            let addr_b64_cell = Boc::decode(addr_b64_bytes).unwrap();
+            let mut slice = addr_b64_cell.as_slice().unwrap();
+
+            info.src = Some(IntAddr::Std(StdAddr::load_from(&mut slice).unwrap()))
+        }
+        _ => {}
+    }
+
+    let mut builder= CellBuilder::new();
+    msg2.store_into(&mut builder, Cell::empty_context()).unwrap();
+    let new_cell = builder.build().unwrap();
+    let base64_new = Boc::encode_base64(new_cell);
+
+    let new_final_message = ArcCell::from_boc_b64(&base64_new).unwrap();
+
+    println!("sending: {}", msg_b64);
+    let result = executor.run_transaction_cell(new_final_message.clone());
+
+    match result {
+        EmulationResult::Success(result) => {
+             stack.push(TupleItem::Cell(ArcCell::from_boc_b64(&*result.transaction).unwrap()));
+        }
+        EmulationResult::Error(result) => {
+            println!("Emulation error: {}", result.error);
+            if let Some(vm_log) = result.vm_log {
+                println!("VM log: {}", vm_log);
+            }
+            if let Some(vm_exit_code) = result.vm_exit_code {
+                println!("VM exit code: {}", vm_exit_code);
+            }
+
+            stack.push(TupleItem::Null);
+        }
+    }
+});
+
 pub fn register_extensions(executor: &mut Executor) {
     register_ext_methods!(executor, {
         1 => print,
@@ -41,6 +119,8 @@ pub fn register_extensions(executor: &mut Executor) {
         3 => read_file,
         4 => assert_equal,
         5 => register_test,
+        6 => build,
+        7 => send_message,
     });
 }
 
@@ -51,5 +131,7 @@ pub fn register_get_extensions(executor: &mut GetExecutor) {
         3 => read_file,
         4 => assert_equal,
         5 => register_test,
+        6 => build,
+        7 => send_message,
     });
 }
