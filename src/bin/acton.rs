@@ -405,6 +405,8 @@ fn inject_locations_into_expect_calls(content: &str, file_path: &str) -> String 
     let tree = tolk_parser::parse(content);
     let root_node = tree.root_node();
 
+    emulator_rs::exts::process_struct_definitions(&root_node, content, file_path);
+
     let mut replacements = Vec::new();
     find_expect_calls(&root_node, content, file_path, &mut replacements);
 

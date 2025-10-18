@@ -1,6 +1,13 @@
 use num_bigint::{BigInt, BigUint};
 use std::fmt;
+use std::sync::Mutex;
 use tonlib_core::cell::{ArcCell, CellBuilder, CellParser};
+
+static STRUCT_FIELD_GETTER: Mutex<Option<fn(&str) -> Option<Vec<String>>>> = Mutex::new(None);
+
+pub fn set_struct_field_getter(getter: fn(&str) -> Option<Vec<String>>) {
+    *STRUCT_FIELD_GETTER.lock().unwrap() = Some(getter);
+}
 
 /// Helper function to load a small uint as u64
 fn load_uint_as_u64(
@@ -89,14 +96,34 @@ impl fmt::Display for TupleItem {
                 if items.len() == 1 {
                     write!(f, "{}", items[0])
                 } else {
-                    write!(f, "{} (", type_name)?;
-                    for (i, item) in items.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ", ")?;
+                    if let Some(getter) = *STRUCT_FIELD_GETTER.lock().unwrap()
+                        && let Some(field_names) = getter(&type_name)
+                    {
+                        if items.len() == field_names.len() {
+                            write!(f, "{} {{ ", type_name)?;
+                            for (i, (field_name, item)) in
+                                field_names.iter().zip(items.iter()).enumerate()
+                            {
+                                if i > 0 {
+                                    write!(f, ", ")?;
+                                }
+                                write!(f, "{}: {}", field_name, item)?;
+                            }
+                            write!(f, " }}")?;
+                            return Ok(());
                         }
-                        write!(f, "{}", item)?;
                     }
-                    write!(f, ")")
+
+                    write!(
+                        f,
+                        "{}({})",
+                        type_name,
+                        items
+                            .iter()
+                            .map(|item| format!("{}", item))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
                 }
             }
         }

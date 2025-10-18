@@ -13,6 +13,7 @@ use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
 use tonlib_core::tlb_types::tlb::TLB;
+use tree_sitter::Node;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Lazy, Load, Store};
 use tycho_types::models::{
@@ -31,6 +32,8 @@ static LAST_ASSERT_FAILURE: Mutex<Option<AssertFailure>> = Mutex::new(None);
 static TEST_OUTPUT_BUFFER: Mutex<String> = Mutex::new(String::new());
 static TEST_STDERR_BUFFER: Mutex<String> = Mutex::new(String::new());
 static CAPTURE_TEST_OUTPUT: Mutex<bool> = Mutex::new(false);
+static STRUCT_DEFINITIONS: std::sync::LazyLock<Mutex<HashMap<String, Vec<String>>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub fn get_last_assert_failure() -> Option<AssertFailure> {
     LAST_ASSERT_FAILURE.lock().unwrap().clone()
@@ -56,6 +59,67 @@ pub fn stop_capturing_test_output() -> (String, String) {
 
 pub fn is_capturing_test_output() -> bool {
     *CAPTURE_TEST_OUTPUT.lock().unwrap()
+}
+
+pub fn get_struct_field_names(type_name: &str) -> Option<Vec<String>> {
+    STRUCT_DEFINITIONS.lock().unwrap().get(type_name).cloned()
+}
+
+pub fn process_struct_definitions(node: &Node, content: &str, file_path: &str) {
+    let mut struct_defs = HashMap::new();
+    analyze_structs_recursive(&node, content, file_path, &mut struct_defs);
+    *STRUCT_DEFINITIONS.lock().unwrap() = struct_defs;
+    crate::stack_serialization::set_struct_field_getter(get_struct_field_names);
+}
+
+fn analyze_structs_recursive(
+    node: &Node,
+    content: &str,
+    file_path: &str,
+    struct_defs: &mut HashMap<String, Vec<String>>,
+) {
+    for i in 0..node.child_count() {
+        let child = node.child(i).unwrap();
+        analyze_structs_recursive(&child, content, file_path, struct_defs);
+    }
+
+    if node.kind() != "struct_declaration" {
+        return;
+    }
+
+    let Some(name_node) = node.child_by_field_name("name") else {
+        return;
+    };
+
+    let struct_name = name_node
+        .utf8_text(content.as_bytes())
+        .unwrap_or("")
+        .to_string();
+
+    let mut fields = Vec::new();
+
+    let Some(body_node) = node.child_by_field_name("body") else {
+        return;
+    };
+
+    let mut cursor = body_node.walk();
+    for child in body_node.children(&mut cursor) {
+        if child.kind() == "struct_field_declaration" {
+            let Some(field_name_node) = child.child_by_field_name("name") else {
+                continue;
+            };
+
+            let field_name = field_name_node
+                .utf8_text(content.as_bytes())
+                .unwrap_or("")
+                .to_string();
+            fields.push(field_name);
+        }
+    }
+
+    if !fields.is_empty() {
+        struct_defs.insert(struct_name, fields);
+    }
 }
 
 extension!(print, (s: TupleItem, type_name: String), |_stack: &mut Tuple, (s, type_name)| {
