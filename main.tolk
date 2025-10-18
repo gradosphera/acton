@@ -6,7 +6,43 @@ fun register_test(name: slice): void asm "5 EXTCALL"
 
 fun build(path: slice): cell asm "6 EXTCALL"
 
-fun sendMessage(msg: cell, mode: int): Cell<Transaction>? asm "7 EXTCALL"
+type TransactionList = tuple
+
+fun TransactionList.at(self, i: int): Transaction {
+    val raw_tx = self.get<Cell<Transaction>>(0);
+    return raw_tx.load({
+        assertEndAfterReading: false
+    })
+}
+
+fun Expectation<TransactionList>.toHaveSuccefulTransaction(self, to: AutoDeployAddress | address) {
+    val value = self.value;
+
+    if (value.size() == 0) {
+        // Need fail function
+        Assert.equal(true, false);
+    }
+
+    var i = 0;
+    while (i < value.size()) {
+        val item = value.at(i);
+
+        val address = beginCell().storeUint(4, 3).storeUint(0, 8).storeUint(item.address, 256).endCell();
+
+        match (to) {
+            AutoDeployAddress => {
+                Assert.equal(address, to.buildAddress().endCell())
+            }
+            address => {
+                Assert.equal(address, beginCell().storeAddress(to).endCell())
+            }
+        }
+
+        i += 1;
+    }
+}
+
+fun sendMessage(msg: cell, mode: int): TransactionList? asm "7 EXTCALL"
 
 fun runGetMethod<T>(addr: cell, code: cell, id: int): T asm "8 EXTCALL"
 
@@ -60,7 +96,7 @@ struct Transaction {
     endStatus: AccountStatus
 }
 
-fun OutMessage.sendSync(self, sendMode: int): Cell<Transaction>? {
+fun OutMessage.sendSync(self, sendMode: int): TransactionList? {
     return sendMessage(self.messageCell, sendMode)
 }
 
@@ -82,9 +118,14 @@ fun main() {
     });
 
     val res = msg.sendSync(SEND_MODE_REGULAR);
-    val tx = res!.load({
-        assertEndAfterReading: false
-    });
+    if (res == null) {
+        eprintln("Cannot parse message");
+        return;
+    }
+
+    expect(res).toHaveSuccefulTransaction(address);
+
+    val tx = res.at(0);
     println(tx.__toTuple());
 
     val res2 = runGetMethod<int>(address.buildAddress().endCell(), cell, (stringCrc16("some_data") & 0xffff) | 0x10000);

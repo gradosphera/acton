@@ -8,7 +8,6 @@ use core::ffi::c_char;
 use num_bigint::{BigInt, BigUint};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
-use std::hash::Hash;
 use std::path::Path;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
@@ -109,7 +108,7 @@ extension!(send_message, (mode: BigInt, message: ArcCell), |stack: &mut Tuple, (
             let acc = ShardAccount::load_from(&mut slice).unwrap();
 
             update_account(dst_addr.to_string(), acc);
-            stack.push(TupleItem::Cell(ArcCell::from_boc_b64(&*result.transaction).unwrap()));
+            stack.push(TupleItem::Tuple(vec![TupleItem::Cell(ArcCell::from_boc_b64(&*result.transaction).unwrap())]));
         }
         EmulationResult::Error(result) => {
             println!("Emulation error: {}", result.error);
