@@ -73,26 +73,6 @@ impl Tuple {
     }
 }
 
-/// Helper function to load a small uint as u64
-fn load_uint_as_u64(parser: &mut CellParser, bits: usize) -> Result<u64, anyhow::Error> {
-    let big_uint = parser.load_uint(bits)?;
-    let nums = big_uint.to_u64_digits();
-    if nums.len() == 0 {
-        return Ok(0);
-    }
-    Ok(nums[0])
-}
-
-/// Helper function to load a small uint as u32
-fn load_uint_as_u32(parser: &mut CellParser, bits: usize) -> Result<u32, anyhow::Error> {
-    let big_uint = parser.load_uint(bits)?;
-    let nums = big_uint.to_u64_digits();
-    if nums.len() == 0 {
-        return Ok(0);
-    }
-    Ok(nums[0] as u32)
-}
-
 /// Represents a stack value in TON VM
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TupleItem {
@@ -214,8 +194,8 @@ impl fmt::Display for TupleItem {
 
 /// Serialize a tuple item to a cell builder
 pub fn serialize_tuple_item(
-    src: &TupleItem,
     builder: &mut CellBuilder,
+    src: &TupleItem,
 ) -> Result<(), anyhow::Error> {
     match src {
         TupleItem::Null => {
@@ -231,7 +211,7 @@ pub fn serialize_tuple_item(
                 return Ok(());
             }
             // Use int257 for larger values
-            builder.store_uint(15, &BigUint::from(0x0100u16))?;
+            builder.store_u16(15, 0x0100)?;
             builder.store_int(257, &value.clone().into())?;
         }
         TupleItem::Nan => {
@@ -249,10 +229,10 @@ pub fn serialize_tuple_item(
             end_refs,
         } => {
             builder.store_u8(8, 0x04)?;
-            builder.store_uint(10, &BigUint::from(*start_bits))?;
-            builder.store_uint(10, &BigUint::from(*end_bits))?;
-            builder.store_uint(3, &BigUint::from(*start_refs))?;
-            builder.store_uint(3, &BigUint::from(*end_refs))?;
+            builder.store_u32(10, *start_bits)?;
+            builder.store_u32(10, *end_bits)?;
+            builder.store_u32(3, *start_refs)?;
+            builder.store_u32(3, *end_refs)?;
             builder.store_reference(&cell)?;
         }
         TupleItem::Builder(cell) => {
@@ -276,7 +256,7 @@ pub fn serialize_tuple_item(
                 }
 
                 let mut bc = CellBuilder::new();
-                serialize_tuple_item(item, &mut bc)?;
+                serialize_tuple_item(&mut bc, item)?;
                 tail = Some(ArcCell::new(bc.build()?));
             }
 
@@ -290,7 +270,7 @@ pub fn serialize_tuple_item(
             }
         }
         TupleItem::TypedTuple { items, .. } => {
-            serialize_tuple_item(&TupleItem::Tuple(items.clone()), builder)?
+            serialize_tuple_item(builder, &TupleItem::Tuple(items.clone()))?
         }
     }
     Ok(())
@@ -307,7 +287,7 @@ pub fn parse_tuple_item(parser: &mut CellParser) -> Result<TupleItem, anyhow::Er
             Ok(TupleItem::Int(BigInt::from(value as u64)))
         }
         2 => {
-            if load_uint_as_u64(parser, 7)? == 0 {
+            if parser.load_u64(7)? == 0 {
                 let value = parser.load_int(257)?;
                 Ok(TupleItem::Int(value))
             } else {
@@ -320,10 +300,10 @@ pub fn parse_tuple_item(parser: &mut CellParser) -> Result<TupleItem, anyhow::Er
             Ok(TupleItem::Cell(cell))
         }
         4 => {
-            let start_bits = load_uint_as_u32(parser, 10)?;
-            let end_bits = load_uint_as_u32(parser, 10)?;
-            let start_refs = load_uint_as_u32(parser, 3)?;
-            let end_refs = load_uint_as_u32(parser, 3)?;
+            let start_bits = parser.load_u32(10)?;
+            let end_bits = parser.load_u32(10)?;
+            let start_refs = parser.load_u32(3)?;
+            let end_refs = parser.load_u32(3)?;
 
             let cell_ref = parser.next_reference()?;
 
@@ -347,27 +327,27 @@ pub fn parse_tuple_item(parser: &mut CellParser) -> Result<TupleItem, anyhow::Er
                 let head_ref = parser.next_reference()?;
                 let tail_ref = parser.next_reference()?;
 
-                let mut tail_parser = CellParser::new(&tail_ref);
+                let mut tail_parser = tail_ref.parser();
                 items.insert(0, parse_tuple_item(&mut tail_parser)?);
 
                 let mut head_refs = vec![head_ref];
-                let mut current_parser = CellParser::new(&head_refs[0]);
+                let mut current_parser = head_refs[0].parser();
 
                 for _ in 0..length - 2 {
                     let old_head = current_parser.next_reference()?;
                     let new_tail = current_parser.next_reference()?;
 
-                    let mut new_tail_parser = CellParser::new(&new_tail);
+                    let mut new_tail_parser = new_tail.parser();
                     items.insert(0, parse_tuple_item(&mut new_tail_parser)?);
 
                     head_refs.push(old_head);
-                    current_parser = CellParser::new(&head_refs[head_refs.len() - 1]);
+                    current_parser = head_refs[head_refs.len() - 1].parser();
                 }
 
                 items.insert(0, parse_tuple_item(&mut current_parser)?);
             } else if length == 1 {
                 let ref_cell = parser.next_reference()?;
-                let mut item_parser = CellParser::new(&ref_cell);
+                let mut item_parser = ref_cell.parser();
                 items.push(parse_tuple_item(&mut item_parser)?);
             }
 
@@ -394,7 +374,7 @@ fn serialize_tuple_tail(src: &[TupleItem], builder: &mut CellBuilder) -> Result<
         builder.store_reference(&tail_cell)?;
 
         // tos
-        serialize_tuple_item(&src[src.len() - 1], builder)?;
+        serialize_tuple_item(builder, &src[src.len() - 1])?;
     }
     Ok(())
 }
@@ -402,9 +382,9 @@ fn serialize_tuple_tail(src: &[TupleItem], builder: &mut CellBuilder) -> Result<
 /// Parse a tuple (stack) from a cell
 pub fn parse_tuple(src: &ArcCell) -> Result<Vec<TupleItem>, anyhow::Error> {
     let mut cur_cell = ArcCell::clone(src);
-    let mut cs = CellParser::new(&cur_cell);
+    let mut cs = cur_cell.parser();
 
-    let size = load_uint_as_u64(&mut cs, 24)? as usize;
+    let size = cs.load_u32(24)? as usize;
     let mut result: Vec<TupleItem> = Vec::with_capacity(size);
 
     for _ in 0..size {
@@ -413,7 +393,7 @@ pub fn parse_tuple(src: &ArcCell) -> Result<Vec<TupleItem>, anyhow::Error> {
         result.insert(0, item);
 
         cur_cell = ArcCell::clone(&next_ref);
-        cs = CellParser::new(&cur_cell);
+        cs = cur_cell.parser();
     }
 
     Ok(result)
@@ -425,10 +405,10 @@ mod tests {
 
     fn roundtrip_test(item: TupleItem) {
         let mut builder = CellBuilder::new();
-        serialize_tuple_item(&item, &mut builder).unwrap();
+        serialize_tuple_item(&mut builder, &item).unwrap();
         let cell = ArcCell::new(builder.build().unwrap());
 
-        let mut parser = CellParser::new(&cell);
+        let mut parser = cell.parser();
         let deserialized = parse_tuple_item(&mut parser).unwrap();
 
         assert_eq!(item, deserialized);
