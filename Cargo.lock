@@ -319,6 +319,7 @@ name = "emulator-rs"
 version = "0.1.0"
 dependencies = [
  "abi",
+ "anyhow",
  "base64",
  "clap",
  "crc",
@@ -845,6 +846,7 @@ dependencies = [
 name = "tolk_parser"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "tree-sitter",
  "tree-sitter-tolk",
 ]

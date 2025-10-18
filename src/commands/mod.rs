@@ -1,0 +1,40 @@
+pub mod test;
+
+use std::collections::HashMap;
+
+pub trait Command {
+    fn name(&self) -> &str;
+    fn description(&self) -> &str;
+    fn execute(&self, args: &[String]) -> Result<(), String>;
+}
+
+pub struct CommandRegistry {
+    commands: HashMap<String, Box<dyn Command>>,
+}
+
+impl CommandRegistry {
+    pub fn new() -> Self {
+        Self {
+            commands: HashMap::new(),
+        }
+    }
+
+    pub fn register(&mut self, command: Box<dyn Command>) {
+        self.commands.insert(command.name().to_string(), command);
+    }
+
+    pub fn execute(&self, name: &str, args: &[String]) -> Result<(), String> {
+        if let Some(command) = self.commands.get(name) {
+            command.execute(args)
+        } else {
+            Err(format!("Unknown command: {}", name))
+        }
+    }
+
+    pub fn list_commands(&self) -> Vec<(&str, &str)> {
+        self.commands
+            .iter()
+            .map(|(name, cmd)| (name.as_str(), cmd.description()))
+            .collect()
+    }
+}

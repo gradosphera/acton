@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 tree-sitter = "0.25.10"
 tree-sitter-tolk = { path = "../../tree-sitter-tolk" }
+anyhow = "1.0.100"
