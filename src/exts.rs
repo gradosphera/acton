@@ -5,7 +5,7 @@ use crate::get_executor::{GetExecutor, GetMethodArgs, GetMethodInternalParams, G
 use crate::stack_serialization::{TupleItem, parse_tuple};
 use crate::{extension, pop_args, register_ext_methods};
 use core::ffi::c_char;
-use num_bigint::{BigInt};
+use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
@@ -28,6 +28,9 @@ pub struct AssertFailure {
 }
 
 static LAST_ASSERT_FAILURE: Mutex<Option<AssertFailure>> = Mutex::new(None);
+static TEST_OUTPUT_BUFFER: Mutex<String> = Mutex::new(String::new());
+static TEST_STDERR_BUFFER: Mutex<String> = Mutex::new(String::new());
+static CAPTURE_TEST_OUTPUT: Mutex<bool> = Mutex::new(false);
 
 pub fn get_last_assert_failure() -> Option<AssertFailure> {
     LAST_ASSERT_FAILURE.lock().unwrap().clone()
@@ -37,12 +40,38 @@ pub fn clear_last_assert_failure() {
     *LAST_ASSERT_FAILURE.lock().unwrap() = None;
 }
 
+pub fn start_capturing_test_output() {
+    *CAPTURE_TEST_OUTPUT.lock().unwrap() = true;
+    *TEST_OUTPUT_BUFFER.lock().unwrap() = String::new();
+    *TEST_STDERR_BUFFER.lock().unwrap() = String::new();
+}
+
+pub fn stop_capturing_test_output() -> (String, String) {
+    *CAPTURE_TEST_OUTPUT.lock().unwrap() = false;
+    (
+        TEST_OUTPUT_BUFFER.lock().unwrap().clone(),
+        TEST_STDERR_BUFFER.lock().unwrap().clone(),
+    )
+}
+
+pub fn is_capturing_test_output() -> bool {
+    *CAPTURE_TEST_OUTPUT.lock().unwrap()
+}
+
 extension!(print, (s: TupleItem), |_stack: &mut Tuple, (s,)| {
-    println!("{}", s);
+    if is_capturing_test_output() {
+        TEST_OUTPUT_BUFFER.lock().unwrap().push_str(&format!("{}\n", s));
+    } else {
+        println!("{}", s);
+    }
 });
 
 extension!(eprint, (s: String), |_stack: &mut Tuple, (s,)| {
-    eprintln!("{}", s);
+    if is_capturing_test_output() {
+        TEST_STDERR_BUFFER.lock().unwrap().push_str(&format!("{}\n", s));
+    } else {
+        eprintln!("{}", s);
+    }
 });
 
 extension!(read_file, (path: String), |stack: &mut Tuple, (path,)| {

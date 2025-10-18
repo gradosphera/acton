@@ -1,6 +1,8 @@
+import "lib/io"
 import "lib/testing/expect"
 
 get fun test_foo() {
+    println(1);
     expect(10).toEqual(20)
 }
 

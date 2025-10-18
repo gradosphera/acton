@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use emulator_rs::compiler::{Compiler, TolkCompilerResult};
 use emulator_rs::exts::{
     clear_last_assert_failure, get_last_assert_failure, register_get_extensions,
+    start_capturing_test_output, stop_capturing_test_output,
 };
 use emulator_rs::get_executor::{
     GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult,
@@ -122,9 +123,11 @@ fn run_all_tests(
 
         clear_last_assert_failure();
 
+        start_capturing_test_output();
         let start_time = Instant::now();
         let result = execute_test(test, &code_cell, &data_cell, &dest_address);
         let duration = start_time.elapsed();
+        let (captured_stdout, captured_stderr) = stop_capturing_test_output();
 
         let exit_code = match &result {
             GetMethodResult::Success(result) => result.vm_exit_code,
@@ -198,6 +201,20 @@ fn run_all_tests(
                 GetMethodResult::Error(error) => {
                     println!("    {} {}", "└─".dimmed(), error.error.yellow());
                 }
+            }
+        }
+
+        if !captured_stdout.trim().is_empty() {
+            println!("    {} Test output:", "└─".dimmed());
+            for line in captured_stdout.trim().lines() {
+                println!("       {}", line.dimmed());
+            }
+        }
+
+        if !captured_stderr.trim().is_empty() {
+            println!("    {} Test stderr:", "└─".dimmed());
+            for line in captured_stderr.trim().lines() {
+                println!("       {}", line.bright_red());
             }
         }
     }
