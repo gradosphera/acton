@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use emulator::exit_codes;
 use emulator::get_executor::{
     GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult,
 };
@@ -8,7 +9,7 @@ use emulator_rs::exts::{
     get_struct_field_types, register_get_extensions, start_capturing_test_output,
     stop_capturing_test_output,
 };
-use emulator_rs::{exit_codes, tolk_parser};
+use emulator_rs::tolk_parser;
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
 use std::fs;

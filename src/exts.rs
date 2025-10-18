@@ -1,4 +1,3 @@
-use crate::{extension, pop_args, register_ext_methods};
 use core::ffi::c_char;
 use emulator::executor::{
     EXECUTOR, EmulationResult, Executor, StoreExt, get_account, update_account,
@@ -7,6 +6,7 @@ use emulator::get_executor::{
     GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult,
 };
 use emulator::tuple::stack::{Tuple, TupleItem, parse_tuple};
+use emulator::{extension, pop_args, register_ext_methods};
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::path::Path;

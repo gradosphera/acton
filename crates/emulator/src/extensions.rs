@@ -1,4 +1,4 @@
-use emulator::tuple::stack::{Tuple, TupleItem, parse_tuple, serialize_tuple};
+use crate::tuple::stack::{Tuple, TupleItem, parse_tuple, serialize_tuple};
 use num_bigint::BigInt;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
@@ -18,7 +18,6 @@ pub enum ArgError {
     CellParse,
 }
 
-// =======================
 pub trait FromStack: Sized {
     fn from_item(item: TupleItem) -> Result<Self, ArgError>;
 }
@@ -157,9 +156,9 @@ macro_rules! pop_args {
     ($tuple:expr, $($ty:ty),+ $(,)?) => {{
         #[allow(non_snake_case)]
         {
-            let mut __errors: Option<$crate::exts_lib::ArgError> = None;
+            let mut __errors: Option<$crate::extensions::ArgError> = None;
             let __result = ( $(
-                match $crate::exts_lib::pop_arg::<$ty>($tuple) {
+                match $crate::extensions::pop_arg::<$ty>($tuple) {
                     Ok(v) => v,
                     Err(e) => {
                         __errors = Some(e);
@@ -181,9 +180,9 @@ macro_rules! extension {
     ($fn_name:ident, ($an:ident : $ty:ty), $body:expr ) => {
         unsafe extern "C" fn $fn_name(ptr: *const c_char) -> *const c_char {
             unsafe {
-                $crate::exts_lib::with_tuple(ptr, |__t: &mut emulator::tuple::stack::Tuple| {
-                    match (|| -> Result<$ty, $crate::exts_lib::ArgError> {
-                        $crate::exts_lib::pop_arg::<$ty>(__t)
+                $crate::extensions::with_tuple(ptr, |__t: &mut emulator::tuple::stack::Tuple| {
+                    match (|| -> Result<$ty, $crate::extensions::ArgError> {
+                        $crate::extensions::pop_arg::<$ty>(__t)
                     })() {
                         Ok($an) => {
                             $body(__t, ($an,));
@@ -199,8 +198,8 @@ macro_rules! extension {
     ($fn_name:ident, ($($an:ident : $ty:ty),+ $(,)?), $body:expr ) => {
         unsafe extern "C" fn $fn_name(ptr: *const c_char) -> *const c_char {
             unsafe {
-                $crate::exts_lib::with_tuple(ptr, |__t: &mut emulator::tuple::stack::Tuple| {
-                    match (|| -> Result<($($ty),*), $crate::exts_lib::ArgError> {
+                $crate::extensions::with_tuple(ptr, |__t: &mut emulator::tuple::stack::Tuple| {
+                    match (|| -> Result<($($ty),*), $crate::extensions::ArgError> {
                         pop_args!(__t, $($ty),*)
                     })() {
                         Ok(__vals) => {

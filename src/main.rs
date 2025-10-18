@@ -1,7 +1,4 @@
-mod config;
-mod exit_codes;
 mod exts;
-mod exts_lib;
 
 use crate::exts::register_extensions;
 use emulator::executor::{EmulationResult, Executor};
