@@ -1,4 +1,4 @@
-use core::ffi::c_char;
+use crate::context::Context;
 use emulator::executor::Executor;
 use emulator::get_executor::GetExecutor;
 use emulator::tuple::stack::Tuple;
@@ -25,9 +25,9 @@ pub fn clear_last_assert_failure() {
     *LAST_ASSERT_FAILURE.lock().unwrap() = None;
 }
 
-extension!(assert_equal, (location: String, message: String, right: Tuple, right_name: String, left: Tuple, left_name: String), assert_equal_impl);
+extension!(assert_equal, Context, (location: String, message: String, right: Tuple, right_name: String, left: Tuple, left_name: String), assert_equal_impl);
 fn assert_equal_impl(
-    _ctx: *mut std::ffi::c_void,
+    _ctx: &mut Context,
     stack: &mut Tuple,
     location: String,
     message: String,

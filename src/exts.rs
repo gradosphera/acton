@@ -1,4 +1,4 @@
-use core::ffi::c_char;
+use crate::context::Context;
 use emulator::blockchain::Blockchain;
 use emulator::executor::{EmulationResult, Executor, StoreExt};
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
@@ -23,16 +23,16 @@ lazy_static! {
     static ref BLOCKCHAIN: Mutex<Blockchain> = Mutex::new(Blockchain::new(Executor::new()));
 }
 
-extension!(read_file, (path: String), read_file_impl);
-fn read_file_impl(_ctx: *mut std::ffi::c_void, stack: &mut Tuple, path: String) {
+extension!(read_file, Context, (path: String), read_file_impl);
+fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
     match std::fs::read_to_string(&path) {
         Ok(content) => stack.push_string(&content),
         Err(_) => stack.push(TupleItem::Null),
     }
 }
 
-extension!(build, (path: String), build_impl);
-fn build_impl(_ctx: *mut std::ffi::c_void, stack: &mut Tuple, path: String) {
+extension!(build, Context, (path: String), build_impl);
+fn build_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
     let result = tolkc::compile(Path::new(&path));
     match result {
         tolkc::CompilerResult::Success(success) => {
@@ -46,13 +46,8 @@ fn build_impl(_ctx: *mut std::ffi::c_void, stack: &mut Tuple, path: String) {
     };
 }
 
-extension!(send_message, (mode: BigInt, message: ArcCell), send_message_impl);
-fn send_message_impl(
-    _ctx: *mut std::ffi::c_void,
-    stack: &mut Tuple,
-    mode: BigInt,
-    message: ArcCell,
-) {
+extension!(send_message, Context, (mode: BigInt, message: ArcCell), send_message_impl);
+fn send_message_impl(_ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message: ArcCell) {
     let mut blockchain: MutexGuard<'_, Blockchain> = BLOCKCHAIN.lock().unwrap();
 
     let msg_b64 = message.to_boc_b64(false).unwrap();
@@ -110,9 +105,9 @@ fn send_message_impl(
     }
 }
 
-extension!(run_get_method, (id: BigInt, code: ArcCell, address: ArcCell), run_get_method_impl);
+extension!(run_get_method, Context, (id: BigInt, code: ArcCell, address: ArcCell), run_get_method_impl);
 fn run_get_method_impl(
-    _ctx: *mut std::ffi::c_void,
+    _ctx: &mut Context,
     stack: &mut Tuple,
     id: BigInt,
     code: ArcCell,

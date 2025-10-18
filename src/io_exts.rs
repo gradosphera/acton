@@ -4,10 +4,8 @@ use emulator::get_executor::GetExecutor;
 use emulator::tuple::stack::{Tuple, TupleItem};
 use emulator::{extension, pop_args, register_ext_methods};
 
-extension!(print, (s: TupleItem, type_name: String), print_impl);
-fn print_impl(ctx: *mut std::ffi::c_void, _stack: &mut Tuple, s: TupleItem, type_name: String) {
-    let ctx = unsafe { std::mem::transmute::<*mut std::ffi::c_void, &mut Context>(ctx) };
-
+extension!(print, Context, (s: TupleItem, type_name: String), print_impl);
+fn print_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: String) {
     let typed_tuple = if let TupleItem::Tuple(tuple) = &s {
         TupleItem::TypedTuple {
             type_name,
@@ -24,10 +22,8 @@ fn print_impl(ctx: *mut std::ffi::c_void, _stack: &mut Tuple, s: TupleItem, type
     }
 }
 
-extension!(eprint, (s: String), eprint_impl);
-fn eprint_impl(ctx: *mut std::ffi::c_void, _stack: &mut Tuple, s: String) {
-    let ctx = unsafe { std::mem::transmute::<*mut std::ffi::c_void, &mut Context>(ctx) };
-
+extension!(eprint, Context, (s: String), eprint_impl);
+fn eprint_impl(ctx: &mut Context, _stack: &mut Tuple, s: String) {
     if ctx.capture_test_output {
         ctx.stderr_buffer.push_str(&format!("{}\n", s));
     } else {

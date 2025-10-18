@@ -1,8 +1,6 @@
-mod exts;
-
 use emulator::blockchain::Blockchain;
 use emulator::executor::{EmulationResult, Executor};
-use emulator_rs::{asserts_exts, io_exts};
+use emulator_rs::{asserts_exts, exts, io_exts};
 use num_bigint::{BigInt, BigUint};
 use std::path::Path;
 use tonlib_core::TonAddress;
