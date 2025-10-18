@@ -31,9 +31,9 @@ fn main() {
     };
 
     let mut blockchain = Blockchain::new(Executor::new());
-    exts::register_extensions(&mut blockchain.executor);
-    io_exts::register_extensions(&mut blockchain.executor);
-    asserts_exts::register_extensions(&mut blockchain.executor);
+    exts::register_extensions(&mut blockchain.executor, std::ptr::null_mut());
+    io_exts::register_extensions(&mut blockchain.executor, std::ptr::null_mut());
+    asserts_exts::register_extensions(&mut blockchain.executor, std::ptr::null_mut());
 
     let state_init = CellBuilder::new()
         .store_bit(false)

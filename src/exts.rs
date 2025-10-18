@@ -24,7 +24,7 @@ lazy_static! {
 }
 
 extension!(read_file, (path: String), read_file_impl);
-fn read_file_impl(stack: &mut Tuple, (path,): (String,)) {
+fn read_file_impl(_ctx: *mut std::ffi::c_void, stack: &mut Tuple, path: String) {
     match std::fs::read_to_string(&path) {
         Ok(content) => stack.push_string(&content),
         Err(_) => stack.push(TupleItem::Null),
@@ -32,7 +32,7 @@ fn read_file_impl(stack: &mut Tuple, (path,): (String,)) {
 }
 
 extension!(build, (path: String), build_impl);
-fn build_impl(stack: &mut Tuple, (path,): (String,)) {
+fn build_impl(_ctx: *mut std::ffi::c_void, stack: &mut Tuple, path: String) {
     let result = tolkc::compile(Path::new(&path));
     match result {
         tolkc::CompilerResult::Success(success) => {
@@ -47,7 +47,12 @@ fn build_impl(stack: &mut Tuple, (path,): (String,)) {
 }
 
 extension!(send_message, (mode: BigInt, message: ArcCell), send_message_impl);
-fn send_message_impl(stack: &mut Tuple, (mode, message): (BigInt, ArcCell)) {
+fn send_message_impl(
+    _ctx: *mut std::ffi::c_void,
+    stack: &mut Tuple,
+    mode: BigInt,
+    message: ArcCell,
+) {
     let mut blockchain: MutexGuard<'_, Blockchain> = BLOCKCHAIN.lock().unwrap();
 
     let msg_b64 = message.to_boc_b64(false).unwrap();
@@ -106,7 +111,13 @@ fn send_message_impl(stack: &mut Tuple, (mode, message): (BigInt, ArcCell)) {
 }
 
 extension!(run_get_method, (id: BigInt, code: ArcCell, address: ArcCell), run_get_method_impl);
-fn run_get_method_impl(stack: &mut Tuple, (id, code, address): (BigInt, ArcCell, ArcCell)) {
+fn run_get_method_impl(
+    _ctx: *mut std::ffi::c_void,
+    stack: &mut Tuple,
+    id: BigInt,
+    code: ArcCell,
+    address: ArcCell,
+) {
     let mut blockchain: MutexGuard<'_, Blockchain> = BLOCKCHAIN.lock().unwrap();
     let address_boc = address.to_boc_hex(false).unwrap();
 
@@ -165,8 +176,8 @@ fn run_get_method_impl(stack: &mut Tuple, (id, code, address): (BigInt, ArcCell,
     };
 }
 
-pub fn register_extensions(executor: &mut Executor) {
-    register_ext_methods!(executor, {
+pub fn register_extensions(executor: &mut Executor, ctx: *mut std::ffi::c_void) {
+    register_ext_methods!(executor, ctx, {
         3 => read_file,
         6 => build,
         7 => send_message,
@@ -174,8 +185,8 @@ pub fn register_extensions(executor: &mut Executor) {
     });
 }
 
-pub fn register_get_extensions(executor: &mut GetExecutor) {
-    register_ext_methods!(executor, {
+pub fn register_get_extensions(executor: &mut GetExecutor, ctx: *mut std::ffi::c_void) {
+    register_ext_methods!(executor, ctx, {
         3 => read_file,
         6 => build,
         7 => send_message,

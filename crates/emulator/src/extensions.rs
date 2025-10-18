@@ -180,14 +180,14 @@ macro_rules! pop_args {
 #[macro_export]
 macro_rules! extension {
     ($fn_name:ident, ($an:ident : $ty:ty), $body:expr ) => {
-        unsafe extern "C" fn $fn_name(ptr: *const c_char) -> *const c_char {
+        unsafe extern "C" fn $fn_name(ctx: *mut std::os::raw::c_void, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
             unsafe {
                 $crate::extensions::with_tuple(ptr, |__t: &mut emulator::tuple::stack::Tuple| {
                     match (|| -> Result<$ty, $crate::extensions::ArgError> {
                         $crate::extensions::pop_arg::<$ty>(__t)
                     })() {
                         Ok($an) => {
-                            $body(__t, ($an,));
+                            $body(ctx, __t, $an);
                         }
                         Err(e) => {
                             eprintln!("ext_args decode error in {}: {}", stringify!($fn_name), e);
@@ -198,7 +198,7 @@ macro_rules! extension {
         }
     };
     ($fn_name:ident, ($($an:ident : $ty:ty),+ $(,)?), $body:expr ) => {
-        unsafe extern "C" fn $fn_name(ptr: *const c_char) -> *const c_char {
+        unsafe extern "C" fn $fn_name(ctx: *mut std::os::raw::c_void, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
             unsafe {
                 $crate::extensions::with_tuple(ptr, |__t: &mut emulator::tuple::stack::Tuple| {
                     match (|| -> Result<($($ty),*), $crate::extensions::ArgError> {
@@ -207,7 +207,7 @@ macro_rules! extension {
                         Ok(__vals) => {
                             #[allow(non_snake_case, unused_variables)]
                             let ($($an, )*) = __vals;
-                            $body(__t, ($($an, )*));
+                            $body(ctx, __t, $($an, )*);
                         }
                         Err(e) => {
                             eprintln!("ext_args decode error in {}: {}", stringify!($fn_name), e);
@@ -245,9 +245,9 @@ pub unsafe fn with_tuple(ptr: *const c_char, f: impl FnOnce(&mut Tuple)) -> *con
 
 #[macro_export]
 macro_rules! register_ext_methods {
-    ($executor:expr, { $($id:expr => $fname:ident),+ $(,)? }) => {{
+    ($executor:expr, $ctx:expr, { $($id:expr => $fname:ident),+ $(,)? }) => {{
         $(
-            $executor.register_ext_method($id, $fname);
+            $executor.register_ext_method($id, $ctx, $fname);
         )+
     }};
 }

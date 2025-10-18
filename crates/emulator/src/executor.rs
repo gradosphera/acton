@@ -76,9 +76,14 @@ impl Executor {
         output.output
     }
 
-    pub fn register_ext_method(&mut self, id: i32, callback: RegisterExtMethodCallback) {
+    pub fn register_ext_method(
+        &mut self,
+        id: i32,
+        ctx: *mut std::os::raw::c_void,
+        callback: RegisterExtMethodCallback,
+    ) {
         let _ = unsafe {
-            transaction_emulator_register_extmethod(self.inner, id, Some(callback));
+            transaction_emulator_register_extmethod(self.inner, id, ctx, Some(callback));
         };
     }
 }
@@ -119,8 +124,12 @@ unsafe extern "C" {
         verbosity: std::os::raw::c_int,
     ) -> *mut std::os::raw::c_void;
 }
-pub type ExtFunc =
-    Option<unsafe extern "C" fn(arg1: *const std::os::raw::c_char) -> *const std::os::raw::c_char>;
+pub type ExtFunc = Option<
+    unsafe extern "C" fn(
+        ctx: *mut std::os::raw::c_void,
+        arg1: *const std::os::raw::c_char,
+    ) -> *const std::os::raw::c_char,
+>;
 unsafe extern "C" {
     pub fn emulate_with_emulator(
         em: *mut std::os::raw::c_void,
@@ -134,9 +143,12 @@ unsafe extern "C" {
     pub fn transaction_emulator_register_extmethod(
         transaction_emulator: *mut std::os::raw::c_void,
         id: std::os::raw::c_int,
+        ctx: *mut std::os::raw::c_void,
         callback: ExtFunc,
     ) -> *const std::os::raw::c_char;
 }
 
-type RegisterExtMethodCallback =
-    unsafe extern "C" fn(arg1: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
+type RegisterExtMethodCallback = unsafe extern "C" fn(
+    ctx: *mut std::os::raw::c_void,
+    arg1: *const std::os::raw::c_char,
+) -> *const std::os::raw::c_char;

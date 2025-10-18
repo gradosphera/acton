@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use emulator::exit_codes;
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem};
-use emulator_rs::io_exts::{start_capturing_test_output, stop_capturing_test_output};
+use emulator_rs::context::Context;
 use emulator_rs::{asserts_exts, exts, io_exts};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
@@ -114,13 +114,16 @@ fn run_all_tests(
 
         asserts_exts::clear_last_assert_failure();
 
-        start_capturing_test_output();
         let start_time = Instant::now();
         let result = execute_test(test, &code_cell, &data_cell, &dest_address);
         let duration = start_time.elapsed();
-        let (captured_stdout, captured_stderr) = stop_capturing_test_output();
+        let TestResult {
+            captured_stdout,
+            captured_stderr,
+            ..
+        } = result;
 
-        let exit_code = match &result {
+        let exit_code = match &result.get_result {
             GetMethodResult::Success(result) => result.vm_exit_code,
             GetMethodResult::Error(_) => 999,
         };
@@ -151,7 +154,7 @@ fn run_all_tests(
             );
             failed += 1;
 
-            match &result {
+            match &result.get_result {
                 GetMethodResult::Success(result) => {
                     let exit_code = result.vm_exit_code as i64;
 
@@ -278,12 +281,18 @@ fn run_all_tests(
     }
 }
 
+struct TestResult {
+    get_result: GetMethodResult,
+    captured_stdout: String,
+    captured_stderr: String,
+}
+
 fn execute_test(
     test: &TestDescriptor,
     code_cell: &Arc<Cell>,
     data_cell: &Arc<Cell>,
     dest_address: &TonAddress,
-) -> GetMethodResult {
+) -> TestResult {
     // thread::sleep(Duration::from_secs(2));
 
     let params = GetMethodParams {
@@ -303,12 +312,31 @@ fn execute_test(
     };
     let mut get_executor = GetExecutor::new(params.clone());
 
-    exts::register_get_extensions(&mut get_executor);
-    io_exts::register_get_extensions(&mut get_executor);
-    asserts_exts::register_get_extensions(&mut get_executor);
+    let mut ctx = Context {
+        stdout_buffer: "".to_string(),
+        stderr_buffer: "".to_string(),
+        capture_test_output: true,
+    };
+
+    exts::register_get_extensions(
+        &mut get_executor,
+        (&mut ctx) as *mut _ as *mut std::ffi::c_void,
+    );
+    io_exts::register_get_extensions(
+        &mut get_executor,
+        (&mut ctx) as *mut _ as *mut std::ffi::c_void,
+    );
+    asserts_exts::register_get_extensions(
+        &mut get_executor,
+        (&mut ctx) as *mut _ as *mut std::ffi::c_void,
+    );
 
     let result = get_executor.run_get_method(Default::default(), params);
-    result
+    TestResult {
+        get_result: result,
+        captured_stdout: ctx.stdout_buffer,
+        captured_stderr: ctx.stderr_buffer,
+    }
 }
 
 fn contract_address(code: &Arc<Cell>) -> TonAddress {

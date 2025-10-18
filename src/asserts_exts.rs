@@ -27,15 +27,14 @@ pub fn clear_last_assert_failure() {
 
 extension!(assert_equal, (location: String, message: String, right: Tuple, right_name: String, left: Tuple, left_name: String), assert_equal_impl);
 fn assert_equal_impl(
+    _ctx: *mut std::ffi::c_void,
     stack: &mut Tuple,
-    (location, message, right, right_name, left, left_name): (
-        String,
-        String,
-        Tuple,
-        String,
-        Tuple,
-        String,
-    ),
+    location: String,
+    message: String,
+    right: Tuple,
+    right_name: String,
+    left: Tuple,
+    left_name: String,
 ) {
     if left == right {
         stack.push_bool_as_int(true);
@@ -52,14 +51,14 @@ fn assert_equal_impl(
     }
 }
 
-pub fn register_extensions(executor: &mut Executor) {
-    register_ext_methods!(executor, {
+pub fn register_extensions(executor: &mut Executor, ctx: *mut std::ffi::c_void) {
+    register_ext_methods!(executor, ctx, {
         4 => assert_equal,
     });
 }
 
-pub fn register_get_extensions(executor: &mut GetExecutor) {
-    register_ext_methods!(executor, {
+pub fn register_get_extensions(executor: &mut GetExecutor, ctx: *mut std::ffi::c_void) {
+    register_ext_methods!(executor, ctx, {
         4 => assert_equal,
     });
 }
