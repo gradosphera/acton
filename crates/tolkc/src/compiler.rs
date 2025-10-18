@@ -64,8 +64,8 @@ impl Compiler {
             optimization_level: self.opt_level,
             with_stack_comments: self.with_stack_comments,
             with_src_line_comments: self.with_src_line_comments,
-            experimental_options: self.experimental_options,
-            fift_path: self.fift_path,
+            experimental_options: self.experimental_options.clone(),
+            fift_path: self.fift_path.clone(),
         })
         .expect("Critical error, cannot serializer path to JSON, should not happen");
 
