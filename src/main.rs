@@ -6,6 +6,7 @@ mod exts;
 mod exts_lib;
 mod get_executor;
 mod stack_serialization;
+mod tolk_parser;
 
 use crate::compiler::{Compiler, TolkCompilerResult};
 use crate::executor::{EmulationResult, Executor};
@@ -14,6 +15,7 @@ use crate::get_executor::{GetExecutor, GetMethodArgs, GetMethodInternalParams, G
 use num_bigint::BigUint;
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
+use std::fs::read_to_string;
 use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -37,6 +39,33 @@ const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 static TESTS: Mutex<Vec<String>> = Mutex::new(vec![]);
 
 fn main() {
+    let content = read_to_string("main.tolk").unwrap();
+
+    let tree = tolk_parser::parse(&content);
+    let root_node = tree.root_node();
+
+    for i in 0..root_node.child_count() {
+        let child = root_node.child(i).unwrap();
+
+        if child.kind() == "get_method_declaration" {
+            let name_node = child.child_by_field_name("name");
+            let raw_name = name_node
+                .unwrap()
+                .utf8_text(content.as_bytes())
+                .unwrap()
+                .to_string();
+            let name = raw_name
+                .strip_prefix("`")
+                .unwrap()
+                .strip_suffix("`")
+                .unwrap();
+
+            if name.starts_with("test") {
+                println!("{}", name);
+            }
+        }
+    }
+
     let compiler = Compiler::new();
     let compilation_result = compiler.compile(Path::new("main.tolk"));
     let code_cell = match compilation_result {
