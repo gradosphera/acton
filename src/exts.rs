@@ -28,11 +28,22 @@ pub struct AssertFailure {
     pub location: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct FieldDescription {
+    pub name: String,
+    pub type_name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructDescription {
+    pub fields: Vec<FieldDescription>,
+}
+
 static LAST_ASSERT_FAILURE: Mutex<Option<AssertFailure>> = Mutex::new(None);
 static TEST_OUTPUT_BUFFER: Mutex<String> = Mutex::new(String::new());
 static TEST_STDERR_BUFFER: Mutex<String> = Mutex::new(String::new());
 static CAPTURE_TEST_OUTPUT: Mutex<bool> = Mutex::new(false);
-static STRUCT_DEFINITIONS: std::sync::LazyLock<Mutex<HashMap<String, Vec<String>>>> =
+static STRUCT_DEFINITIONS: std::sync::LazyLock<Mutex<HashMap<String, StructDescription>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub fn get_last_assert_failure() -> Option<AssertFailure> {
@@ -62,7 +73,19 @@ pub fn is_capturing_test_output() -> bool {
 }
 
 pub fn get_struct_field_names(type_name: &str) -> Option<Vec<String>> {
-    STRUCT_DEFINITIONS.lock().unwrap().get(type_name).cloned()
+    STRUCT_DEFINITIONS
+        .lock()
+        .unwrap()
+        .get(type_name)
+        .map(|desc| desc.fields.iter().map(|f| f.name.clone()).collect())
+}
+
+pub fn get_struct_field_types(type_name: &str) -> Option<Vec<String>> {
+    STRUCT_DEFINITIONS
+        .lock()
+        .unwrap()
+        .get(type_name)
+        .map(|desc| desc.fields.iter().map(|f| f.type_name.clone()).collect())
 }
 
 pub fn process_struct_definitions(node: &Node, content: &str, file_path: &str) {
@@ -70,13 +93,14 @@ pub fn process_struct_definitions(node: &Node, content: &str, file_path: &str) {
     analyze_structs_recursive(&node, content, file_path, &mut struct_defs);
     *STRUCT_DEFINITIONS.lock().unwrap() = struct_defs;
     crate::stack_serialization::set_struct_field_getter(get_struct_field_names);
+    crate::stack_serialization::set_struct_field_type_getter(get_struct_field_types);
 }
 
 fn analyze_structs_recursive(
     node: &Node,
     content: &str,
     file_path: &str,
-    struct_defs: &mut HashMap<String, Vec<String>>,
+    struct_defs: &mut HashMap<String, StructDescription>,
 ) {
     for i in 0..node.child_count() {
         let child = node.child(i).unwrap();
@@ -109,16 +133,29 @@ fn analyze_structs_recursive(
                 continue;
             };
 
+            let Some(field_type_node) = child.child_by_field_name("type") else {
+                continue;
+            };
+
             let field_name = field_name_node
                 .utf8_text(content.as_bytes())
                 .unwrap_or("")
                 .to_string();
-            fields.push(field_name);
+
+            let field_type = field_type_node
+                .utf8_text(content.as_bytes())
+                .unwrap_or("")
+                .to_string();
+
+            fields.push(FieldDescription {
+                name: field_name,
+                type_name: field_type,
+            });
         }
     }
 
     if !fields.is_empty() {
-        struct_defs.insert(struct_name, fields);
+        struct_defs.insert(struct_name, StructDescription { fields });
     }
 }
 

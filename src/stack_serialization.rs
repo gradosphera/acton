@@ -4,9 +4,14 @@ use std::sync::Mutex;
 use tonlib_core::cell::{ArcCell, CellBuilder, CellParser};
 
 static STRUCT_FIELD_GETTER: Mutex<Option<fn(&str) -> Option<Vec<String>>>> = Mutex::new(None);
+static STRUCT_FIELD_TYPE_GETTER: Mutex<Option<fn(&str) -> Option<Vec<String>>>> = Mutex::new(None);
 
 pub fn set_struct_field_getter(getter: fn(&str) -> Option<Vec<String>>) {
     *STRUCT_FIELD_GETTER.lock().unwrap() = Some(getter);
+}
+
+pub fn set_struct_field_type_getter(getter: fn(&str) -> Option<Vec<String>>) {
+    *STRUCT_FIELD_TYPE_GETTER.lock().unwrap() = Some(getter);
 }
 
 /// Helper function to load a small uint as u64
@@ -63,6 +68,21 @@ impl Default for TupleItem {
     }
 }
 
+fn format_item_with_type(item: &TupleItem, type_name: &str) -> String {
+    match item {
+        TupleItem::Int(value) if type_name == "bool" => {
+            if *value == BigInt::from(0) {
+                "false".to_string()
+            } else if *value == BigInt::from(18446744073709551615u64) {
+                "true".to_string()
+            } else {
+                format!("{}", value)
+            }
+        }
+        _ => format!("{}", item),
+    }
+}
+
 impl fmt::Display for TupleItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -98,18 +118,29 @@ impl fmt::Display for TupleItem {
                 } else {
                     if let Some(getter) = *STRUCT_FIELD_GETTER.lock().unwrap()
                         && let Some(field_names) = getter(&type_name)
+                        && let Some(type_getter) = *STRUCT_FIELD_TYPE_GETTER.lock().unwrap()
+                        && let Some(field_types) = type_getter(&type_name)
                     {
-                        if items.len() == field_names.len() {
-                            write!(f, "{} {{ ", type_name)?;
-                            for (i, (field_name, item)) in
-                                field_names.iter().zip(items.iter()).enumerate()
+                        if items.len() == field_names.len() && items.len() == field_types.len() {
+                            write!(f, "{} {{\n", type_name)?;
+                            for (i, ((field_name, item), field_type)) in field_names
+                                .iter()
+                                .zip(items.iter())
+                                .zip(field_types.iter())
+                                .enumerate()
                             {
-                                if i > 0 {
-                                    write!(f, ", ")?;
+                                write!(
+                                    f,
+                                    "    {}: {}",
+                                    field_name,
+                                    format_item_with_type(item, field_type)
+                                )?;
+                                if i < field_names.len() - 1 {
+                                    write!(f, ",")?;
                                 }
-                                write!(f, "{}: {}", field_name, item)?;
+                                write!(f, "\n")?;
                             }
-                            write!(f, " }}")?;
+                            write!(f, "}}")?;
                             return Ok(());
                         }
                     }
