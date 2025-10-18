@@ -9,7 +9,6 @@ use emulator_rs::exts::{
     get_struct_field_types, register_get_extensions, start_capturing_test_output,
     stop_capturing_test_output,
 };
-use emulator_rs::tolk_parser;
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
 use std::fs;
@@ -345,7 +344,7 @@ struct TestDescriptor {
 }
 
 fn find_all_test(file: String, content: &String) -> Vec<TestDescriptor> {
-    let tree = tolk_parser::parse(&content);
+    let tree = tolk_parser::parser::parse(&content);
     let root_node = tree.root_node();
     let mut cursor = root_node.walk();
 
@@ -413,7 +412,7 @@ fn find_test_annotations(content: &String, child: Node) -> Vec<String> {
 }
 
 fn inject_locations_into_expect_calls(content: &str, file_path: &str) -> String {
-    let tree = tolk_parser::parse(content);
+    let tree = tolk_parser::parser::parse(content);
     let root_node = tree.root_node();
 
     emulator_rs::exts::process_struct_definitions(&root_node, content, file_path);

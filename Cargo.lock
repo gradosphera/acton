@@ -350,24 +350,17 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "bindgen",
- "cc",
  "clap",
  "crc",
  "emulator",
  "hex",
- "include_dir",
- "lazy_static",
  "num-bigint",
- "once_cell",
  "owo-colors",
  "pkg-config",
- "serde",
- "serde_json",
- "thiserror",
+ "tolk_parser",
  "tolkc",
  "tonlib-core",
  "tree-sitter",
- "tree-sitter-tolk",
  "tycho-types",
 ]
 
@@ -934,6 +927,14 @@ dependencies = [
  "pest_derive",
  "rustc-hash",
  "thiserror",
+]
+
+[[package]]
+name = "tolk_parser"
+version = "0.1.0"
+dependencies = [
+ "tree-sitter",
+ "tree-sitter-tolk",
 ]
 
 [[package]]
