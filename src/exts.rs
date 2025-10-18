@@ -23,7 +23,7 @@ lazy_static! {
     static ref BLOCKCHAIN: Mutex<Blockchain> = Mutex::new(Blockchain::new(Executor::new()));
 }
 
-extension!(read_file, Context, (path: String), read_file_impl);
+extension!(read_file in (Context) with (path: String) using read_file_impl);
 fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
     match std::fs::read_to_string(&path) {
         Ok(content) => stack.push_string(&content),
@@ -31,7 +31,7 @@ fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
     }
 }
 
-extension!(build, Context, (path: String), build_impl);
+extension!(build in (Context) with (path: String) using build_impl);
 fn build_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
     let result = tolkc::compile(Path::new(&path));
     match result {
@@ -46,7 +46,7 @@ fn build_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
     };
 }
 
-extension!(send_message, Context, (mode: BigInt, message: ArcCell), send_message_impl);
+extension!(send_message in (Context) with (mode: BigInt, message: ArcCell) using send_message_impl);
 fn send_message_impl(_ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message: ArcCell) {
     let mut blockchain: MutexGuard<'_, Blockchain> = BLOCKCHAIN.lock().unwrap();
 
@@ -105,7 +105,7 @@ fn send_message_impl(_ctx: &mut Context, stack: &mut Tuple, mode: BigInt, messag
     }
 }
 
-extension!(run_get_method, Context, (id: BigInt, code: ArcCell, address: ArcCell), run_get_method_impl);
+extension!(run_get_method in (Context) with (id: BigInt, code: ArcCell, address: ArcCell) using run_get_method_impl);
 fn run_get_method_impl(
     _ctx: &mut Context,
     stack: &mut Tuple,

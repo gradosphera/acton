@@ -25,7 +25,7 @@ pub fn clear_last_assert_failure() {
     *LAST_ASSERT_FAILURE.lock().unwrap() = None;
 }
 
-extension!(assert_equal, Context, (location: String, message: String, right: Tuple, right_name: String, left: Tuple, left_name: String), assert_equal_impl);
+extension!(assert_equal in (Context) with (location: String, message: String, right: Tuple, right_name: String, left: Tuple, left_name: String) using assert_equal_impl);
 fn assert_equal_impl(
     _ctx: &mut Context,
     stack: &mut Tuple,

@@ -4,7 +4,7 @@ use emulator::get_executor::GetExecutor;
 use emulator::tuple::stack::{Tuple, TupleItem};
 use emulator::{extension, pop_args, register_ext_methods};
 
-extension!(print, Context, (s: TupleItem, type_name: String), print_impl);
+extension!(print in (Context) with (s: TupleItem, type_name: String) using print_impl);
 fn print_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: String) {
     let typed_tuple = if let TupleItem::Tuple(tuple) = &s {
         TupleItem::TypedTuple {
@@ -22,7 +22,7 @@ fn print_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: St
     }
 }
 
-extension!(eprint, Context, (s: String), eprint_impl);
+extension!(eprint in (Context) with (s: String) using eprint_impl);
 fn eprint_impl(ctx: &mut Context, _stack: &mut Tuple, s: String) {
     if ctx.capture_test_output {
         ctx.stderr_buffer.push_str(&format!("{}\n", s));
