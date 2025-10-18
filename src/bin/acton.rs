@@ -1,12 +1,15 @@
 use clap::{Parser, Subcommand};
 use emulator_rs::compiler::{Compiler, TolkCompilerResult};
 use emulator_rs::exts::{
-    clear_last_assert_failure, get_last_assert_failure, register_get_extensions,
-    start_capturing_test_output, stop_capturing_test_output,
+    clear_last_assert_failure, get_last_assert_failure, get_struct_field_names,
+    get_struct_field_types, register_get_extensions, start_capturing_test_output,
+    stop_capturing_test_output,
 };
+use emulator_rs::exts_lib::Tuple;
 use emulator_rs::get_executor::{
     GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult,
 };
+use emulator_rs::stack_serialization::TupleItem;
 use emulator_rs::{exit_codes, tolk_parser};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
@@ -167,17 +170,31 @@ fn run_all_tests(
                     if let Some(assert_failure) = get_last_assert_failure()
                         && exit_code == 567
                     {
-                        println!(
-                            "    {} {} != {}",
-                            "└─".dimmed(),
-                            assert_failure.left.yellow(),
-                            assert_failure.right.yellow()
+                        let diff_output = format_tuple_diff(
+                            &assert_failure.left,
+                            &assert_failure.right,
+                            &assert_failure.left_type,
+                            &assert_failure.right_type,
                         );
 
                         if let Some(message) = &assert_failure.message {
                             if !message.is_empty() {
-                                println!("      {} {}", "├─".dimmed(), message.dimmed());
+                                let highlighted_message = highlight_actual_expected(message);
+                                println!(
+                                    "    {} {} {}",
+                                    "└─".dimmed(),
+                                    "Error:".bright_red(),
+                                    highlighted_message
+                                );
+                            } else {
+                                println!("    {}", "└─".dimmed());
                             }
+                        } else {
+                            println!("    {}", "└─".dimmed());
+                        }
+
+                        for line in diff_output.lines() {
+                            println!("        {}", line);
                         }
 
                         if let Some(location) = &assert_failure.location {
@@ -460,6 +477,122 @@ fn find_expect_calls(
                 let location = format!(", \"{file_path}:{line_number}\"",);
                 replacements.push((start, end, location));
             }
+        }
+    }
+}
+
+fn format_tuple_diff(left: &Tuple, right: &Tuple, left_type: &str, right_type: &str) -> String {
+    let left_item = TupleItem::TypedTuple {
+        type_name: left_type.to_string(),
+        items: (**left).clone(),
+    };
+    let right_item = TupleItem::TypedTuple {
+        type_name: right_type.to_string(),
+        items: (**right).clone(),
+    };
+
+    format_tuple_item_diff(&left_item, &right_item)
+}
+
+fn highlight_actual_expected(message: &str) -> String {
+    let result = message
+        .replace("actual", &"actual".red().to_string())
+        .replace("expected", &"expected".green().to_string());
+
+    result.to_string()
+}
+
+fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
+    match (left, right) {
+        (
+            TupleItem::TypedTuple {
+                type_name: left_type,
+                items: left_items,
+            },
+            TupleItem::TypedTuple {
+                type_name: right_type,
+                items: right_items,
+            },
+        ) => {
+            if left_type != right_type {
+                return format!("{} != {}", left, right);
+            }
+
+            let field_names = get_struct_field_names(left_type);
+            let field_types = get_struct_field_types(left_type);
+
+            if let (Some(field_names), Some(field_types)) = (field_names, field_types) {
+                if left_items.len() == field_names.len()
+                    && right_items.len() == field_names.len()
+                    && left_items.len() == field_types.len()
+                {
+                    let mut result = format!("{} {{\n", left_type);
+
+                    for ((field_name, left_item), right_item) in field_names
+                        .iter()
+                        .zip(left_items.iter())
+                        .zip(right_items.iter())
+                    {
+                        if left_item != right_item {
+                            result.push_str(&format!(
+                                "    {}: {}\n",
+                                field_name.yellow(),
+                                left_item.red()
+                            ));
+                            result.push_str(&format!(
+                                "    {:<width$}  {}\n",
+                                "",
+                                right_item.green(),
+                                width = field_name.len()
+                            ));
+                        } else {
+                            result.push_str(&format!(
+                                "    {}{} {}\n",
+                                field_name.dimmed(),
+                                ":".dimmed(),
+                                left_item.dimmed()
+                            ));
+                        }
+                    }
+
+                    result.push_str("}");
+                    result
+                } else {
+                    format!("{} != {}", left, right)
+                }
+            } else {
+                let mut result = "(\n".to_string();
+                let max_len = left_items.len().max(right_items.len());
+
+                for i in 0..max_len {
+                    let left_val = left_items.get(i);
+                    let right_val = right_items.get(i);
+
+                    match (left_val, right_val) {
+                        (Some(left_val), Some(right_val)) => {
+                            if left_val != right_val {
+                                result.push_str(&format!("    {},\n", left_val.red()));
+                                result.push_str(&format!("    {}\n", right_val.green()));
+                            } else {
+                                result.push_str(&format!("    {},\n", left_val.dimmed()));
+                            }
+                        }
+                        (Some(left_val), None) => {
+                            result.push_str(&format!("    {},\n", left_val.red()));
+                        }
+                        (None, Some(right_val)) => {
+                            result.push_str(&format!("    {}\n", right_val.green()));
+                        }
+                        (None, None) => {}
+                    }
+                }
+
+                result.push_str(")");
+                result
+            }
+        }
+        _ => {
+            format!("{} != {}", left.red(), right.green())
         }
     }
 }

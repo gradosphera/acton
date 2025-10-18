@@ -23,7 +23,9 @@ use tycho_types::models::{
 #[derive(Debug, Clone)]
 pub struct AssertFailure {
     pub left: Tuple,
+    pub left_type: String,
     pub right: Tuple,
+    pub right_type: String,
     pub message: Option<String>,
     pub location: Option<String>,
 }
@@ -187,13 +189,15 @@ extension!(read_file, (path: String), |stack: &mut Tuple, (path,)| {
     }
 });
 
-extension!(assert_equal, (location: String, message: String, right: Tuple, left: Tuple), |stack: &mut Tuple, (location, message, right, left): (String, String, Tuple, Tuple)| {
+extension!(assert_equal, (location: String, message: String, right: Tuple, right_name: String, left: Tuple, left_name: String), |stack: &mut Tuple, (location, message, right, right_name, left, left_name)| {
     if left == right {
         stack.push_bool_as_int(true);
     } else {
         *LAST_ASSERT_FAILURE.lock().unwrap() = Some(AssertFailure {
             left,
             right,
+            left_type: left_name,
+            right_type: right_name,
             message: Some(message),
             location: Some(location),
         });
