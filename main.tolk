@@ -1,8 +1,6 @@
-import "lib/expect"
+import "lib/testing/expect"
 import "lib/fs"
 import "lib/io"
-
-fun register_test(name: slice): void asm "5 EXTCALL"
 
 fun build(path: slice): cell asm "6 EXTCALL"
 

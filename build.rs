@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rustc-link-search=native=/Users/petrmakhnev/emulator-rs/libemulator/");
+    // println!("cargo:rustc-link-search=native=/Users/petrmakhnev/emulator-rs/libemulator-opt/");
     println!("cargo:rustc-link-search=native=/Users/petrmakhnev/emulator-rs/libtolk/");
 
     pkg_config::Config::new().probe("openssl").unwrap();
@@ -16,6 +17,13 @@ fn main() {
     println!("cargo:rustc-link-lib=static=ton_crypto_core");
     println!("cargo:rustc-link-lib=static=ton_block");
     println!("cargo:rustc-link-lib=static=src_parser");
+    // Release
+    // println!("cargo:rustc-link-lib=static=smc-envelope-opt");
+    // println!("cargo:rustc-link-lib=static=tdutils-opt");
+    // println!("cargo:rustc-link-lib=static=ton_crypto-opt");
+    // println!("cargo:rustc-link-lib=static=ton_crypto_core-opt");
+    // println!("cargo:rustc-link-lib=static=ton_block-opt");
+    // println!("cargo:rustc-link-lib=static=src_parser-opt");
     println!("cargo:rustc-link-lib=static=absl_hash");
     println!("cargo:rustc-link-lib=static=absl_raw_hash_set");
     println!("cargo:rustc-link-lib=static=absl_hashtablez_sampler");
@@ -28,6 +36,10 @@ fn main() {
     // Tolk
     println!("cargo:rustc-link-lib=static=tolkfiftlib");
     println!("cargo:rustc-link-lib=static=fift");
+
+    // Release
+    // println!("cargo:rustc-link-lib=static=tolkfiftlib-opt");
+    // println!("cargo:rustc-link-lib=static=fift-opt");
 
     println!("cargo:rustc-link-lib=dylib=ssl");
 

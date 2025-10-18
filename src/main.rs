@@ -6,19 +6,12 @@ mod exts;
 mod exts_lib;
 mod get_executor;
 mod stack_serialization;
-mod tolk_parser;
 
 use crate::compiler::{Compiler, TolkCompilerResult};
 use crate::executor::{EmulationResult, Executor};
-use crate::exts::{register_extensions, register_get_extensions};
-use crate::get_executor::{GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult};
+use crate::exts::register_extensions;
 use num_bigint::BigUint;
-use owo_colors::OwoColorize;
-use std::collections::HashMap;
-use std::fs::read_to_string;
-use std::io::Write;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
 use tonlib_core::tlb_types::block::coins::{CurrencyCollection, Grams};
@@ -34,38 +27,7 @@ use tycho_types::models::{ComputePhase, Transaction, TxInfo};
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
-
-static TESTS: Mutex<Vec<String>> = Mutex::new(vec![]);
-
 fn main() {
-    let content = read_to_string("main.tolk").unwrap();
-
-    let tree = tolk_parser::parse(&content);
-    let root_node = tree.root_node();
-
-    for i in 0..root_node.child_count() {
-        let child = root_node.child(i).unwrap();
-
-        if child.kind() == "get_method_declaration" {
-            let name_node = child.child_by_field_name("name");
-            let raw_name = name_node
-                .unwrap()
-                .utf8_text(content.as_bytes())
-                .unwrap()
-                .to_string();
-            let name = raw_name
-                .strip_prefix("`")
-                .unwrap_or(&raw_name)
-                .strip_suffix("`")
-                .unwrap_or(&raw_name);
-
-            if name.starts_with("test") {
-                println!("{}", name);
-            }
-        }
-    }
-
     let compiler = Compiler::new();
     let compilation_result = compiler.compile(Path::new("main.tolk"));
     let code_cell = match compilation_result {
@@ -174,123 +136,4 @@ fn main() {
             }
         }
     }
-
-    let tests = TESTS.lock().unwrap().clone();
-
-    if !tests.is_empty() {
-        println!("\n{}", "Running tests...".bold().cyan());
-        println!("{}", "─".repeat(50).dimmed());
-
-        let mut passed = 0;
-        let mut failed = 0;
-        let total = tests.len();
-
-        for (_i, test) in tests.iter().enumerate() {
-            print!("  {} {} \n", "○".dimmed(), test.dimmed());
-            std::io::stdout().flush().unwrap();
-
-            let result = execute_test(test, &code_cell, &data_cell, &dest_address);
-
-            let exit_code = match &result {
-                GetMethodResult::Success(result) => result.vm_exit_code,
-                GetMethodResult::Error(_) => 999,
-            };
-
-            // Clear the current line and print result
-            print!("\r");
-            if exit_code == 0 {
-                println!(
-                    "  {} {} {}",
-                    "✓".green(),
-                    test.green(),
-                    "PASSED".green().bold()
-                );
-                passed += 1;
-            } else {
-                println!("  {} {} {}", "✗".red(), test.red(), "FAILED".red().bold());
-                failed += 1;
-
-                // Show error details for failed tests
-                match &result {
-                    GetMethodResult::Success(result) => {
-                        let exit_code = result.vm_exit_code as i64;
-                        println!(
-                            "    {} exit_code={}",
-                            "└─".dimmed(),
-                            exit_code.to_string().yellow()
-                        );
-
-                        // Show exit code description if available
-                        if let Some(info) = crate::exit_codes::get_exit_code_info(exit_code) {
-                            println!("      {} {}", "├─".dimmed(), info.description.dimmed());
-                            println!("      {} Phase: {}", "└─".dimmed(), info.phase.dimmed());
-                        }
-                    }
-                    GetMethodResult::Error(error) => {
-                        println!("    {} {}", "└─".dimmed(), error.error.yellow());
-                    }
-                }
-            }
-        }
-
-        println!("{}", "─".repeat(50).dimmed());
-
-        if failed == 0 {
-            println!(
-                " {} {} passed",
-                "✓".green().bold(),
-                passed.to_string().green().bold()
-            );
-        } else {
-            println!(
-                " {} {} passed, {} {} failed",
-                "✓".green().bold(),
-                passed.to_string().green().bold(),
-                "✗".red().bold(),
-                failed.to_string().red().bold()
-            );
-        }
-
-        println!(" {} total tests", total.to_string().cyan());
-
-        if failed > 0 {
-            println!(
-                "\n{}",
-                "Some tests failed. Check the output above for details.".red()
-            );
-        }
-    }
-}
-
-fn execute_test(
-    test: &String,
-    code_cell: &Arc<Cell>,
-    data_cell: &Arc<Cell>,
-    dest_address: &TonAddress,
-) -> GetMethodResult {
-    // thread::sleep(Duration::from_secs(2));
-
-    let params = GetMethodInternalParams {
-        code: code_cell.to_boc_b64(false).unwrap().to_string(),
-        data: data_cell.to_boc_b64(false).unwrap().to_string(),
-        verbosity: 5,
-        libs: "".to_string(),
-        address: dest_address.to_string(),
-        unixtime: 0,
-        balance: "10".to_string(),
-        rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-        gas_limit: "0".to_string(),
-        method_id: ((CRC16.checksum(test.as_bytes()) & 0xff_ff) as i32 | 0x1_00_00),
-        debug_enabled: true,
-        extra_currencies: HashMap::new(),
-        prev_blocks_info: None,
-    };
-    let mut get_executor = GetExecutor::new(params.clone());
-    register_get_extensions(&mut get_executor);
-
-    let result = get_executor.run_get_method(GetMethodArgs {
-        stack: Default::default(),
-        params,
-    });
-    result
 }

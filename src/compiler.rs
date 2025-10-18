@@ -81,9 +81,20 @@ impl Compiler {
                     1 => {
                         let file_path = unsafe { CStr::from_ptr(data_ptr).to_str().unwrap() };
 
-                        let content = read_to_string(file_path).unwrap();
-                        let raw_str = CString::new(content).unwrap();
-                        unsafe { *dest_contents = raw_str.into_raw() }
+                        let content = read_to_string(file_path);
+                        match content {
+                            Ok(content) => {
+                                let raw_str = CString::new(content).unwrap();
+                                unsafe { *dest_contents = raw_str.into_raw() }
+                            }
+                            Err(error) => {
+                                let raw_str = CString::new(error.to_string()).unwrap();
+                                unsafe {
+                                    *dest_error = raw_str.into_raw();
+                                }
+                                return;
+                            }
+                        }
                     }
                     _ => {}
                 }

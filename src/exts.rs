@@ -3,7 +3,7 @@ use crate::executor::{EXECUTOR, EmulationResult, Executor, get_account, update_a
 use crate::exts_lib::Tuple;
 use crate::get_executor::{GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult};
 use crate::stack_serialization::{TupleItem, parse_tuple};
-use crate::{TESTS, extension, pop_args, register_ext_methods};
+use crate::{extension, pop_args, register_ext_methods};
 use core::ffi::c_char;
 use num_bigint::{BigInt, BigUint};
 use owo_colors::OwoColorize;
@@ -41,10 +41,6 @@ extension!(assert_equal, (left: Tuple, right: Tuple), |stack: &mut Tuple, (left,
         println!("  {} {} != {}", "✗".red().bold(), left.yellow(), right.yellow());
         stack.push_bool_as_int(false);
     }
-});
-
-extension!(register_test, (name: String), |_stack: &mut Tuple, (name,)| {
-    TESTS.lock().unwrap().push(name);
 });
 
 extension!(build, (path: String), |stack: &mut Tuple, (path,): (String,)| {
@@ -183,7 +179,6 @@ pub fn register_extensions(executor: &mut Executor) {
         2 => eprint,
         3 => read_file,
         4 => assert_equal,
-        5 => register_test,
         6 => build,
         7 => send_message,
         8 => run_get_method,
@@ -196,7 +191,6 @@ pub fn register_get_extensions(executor: &mut GetExecutor) {
         2 => eprint,
         3 => read_file,
         4 => assert_equal,
-        5 => register_test,
         6 => build,
         7 => send_message,
         8 => run_get_method,
