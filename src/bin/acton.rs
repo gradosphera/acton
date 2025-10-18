@@ -17,6 +17,7 @@ use std::time::Instant;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
+use tree_sitter::Node;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
@@ -109,9 +110,15 @@ fn run_all_tests(
 
     let mut passed = 0;
     let mut failed = 0;
+    let mut skipped = 0;
 
     for (_i, test) in tests.iter().enumerate() {
-        print!("  {} {} ", "○".dimmed(), test.name.dimmed());
+        if test.annotations.contains(&"skip".to_string()) {
+            println!("  {} {} {}", "○".dimmed(), test.name, "skipped".dimmed());
+            skipped += 1;
+            continue;
+        }
+        print!("  {} {} ", "○".dimmed(), test.name);
         std::io::stdout().flush().unwrap();
 
         let start_time = Instant::now();
@@ -178,25 +185,42 @@ fn run_all_tests(
 
     println!("{}", "─".repeat(50).dimmed());
 
-    if failed == 0 {
+    if failed == 0 && skipped == 0 {
         println!(
-            " {} {} {} {}{}",
+            " {} {} {} {} {}{}",
             "✓".green().bold(),
             passed.to_string().green().bold(),
             "passed".green().bold(),
+            "in".dimmed(),
+            total_duration_ms.to_string().green(),
+            "ms".green().dimmed()
+        );
+    } else if failed == 0 && skipped > 0 {
+        println!(
+            " {} {} {}, {} {} {} {} {}{}",
+            "✓".green().bold(),
+            passed.to_string().green().bold(),
+            "passed".green().bold(),
+            "○".yellow().bold(),
+            skipped.to_string().yellow().bold(),
+            "skipped".yellow().bold(),
+            "in".dimmed(),
             total_duration_ms.to_string().green(),
             "ms".green().dimmed()
         );
     } else {
         println!(
-            " {} {} {}, {} {} {} {} {}{}",
+            " {} {} {}, {} {} {}, {} {} {} {} {}{}",
             "✓".green().bold(),
             passed.to_string().green().bold(),
             "passed".green().bold(),
             "✗".red().bold(),
             failed.to_string().red().bold(),
             "failed".red().bold(),
-            "in".white().dimmed(),
+            "○".yellow().bold(),
+            skipped.to_string().yellow().bold(),
+            "skipped".yellow().bold(),
+            "in".dimmed(),
             total_duration_ms.to_string().red(),
             "ms".red().dimmed()
         );
@@ -298,7 +322,7 @@ fn find_all_test(file: String, content: &String) -> Vec<TestDescriptor> {
                         file: file.clone(),
                         id,
                         name: name.to_string(),
-                        annotations: vec![],
+                        annotations: find_test_annotations(content, child),
                     }];
                 }
             };
@@ -306,4 +330,34 @@ fn find_all_test(file: String, content: &String) -> Vec<TestDescriptor> {
             vec![]
         })
         .collect()
+}
+
+fn find_test_annotations(content: &String, child: Node) -> Vec<String> {
+    let mut annotations = Vec::new();
+    let Some(annotations_node) = child.child_by_field_name("annotations") else {
+        return vec![];
+    };
+
+    let mut cursor = annotations_node.walk();
+    for annotation in annotations_node.children(&mut cursor) {
+        if annotation.kind() != "annotation" {
+            continue;
+        }
+
+        if let Some(name_node) = annotation.child_by_field_name("name") {
+            let annotation_name = name_node.utf8_text(content.as_bytes()).unwrap_or("");
+            if annotation_name != "custom" {
+                continue;
+            }
+            let Some(args_node) = annotation.child_by_field_name("arguments") else {
+                continue;
+            };
+
+            let args_text = args_node.utf8_text(content.as_bytes()).unwrap_or("");
+            if args_text.contains("\"skip\"") {
+                annotations.push("skip".to_string());
+            }
+        }
+    }
+    annotations
 }
