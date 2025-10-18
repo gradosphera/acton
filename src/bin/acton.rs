@@ -55,7 +55,7 @@ fn main() {
 
             let tests = find_all_test(file.clone(), &content);
 
-            let executable_code = content + "\n\nfun main() {}"; // append dummy main
+            let executable_code = inject_locations_into_expect_calls(&content, &file);
             let tmp_test_filename = "test_".to_string().add(&*file);
 
             fs::write(&tmp_test_filename, executable_code).unwrap();
@@ -165,12 +165,23 @@ fn run_all_tests(
                         && exit_code == 567
                     {
                         println!(
-                            "    {} {} {} != {}",
+                            "    {} {} != {}",
                             "└─".dimmed(),
-                            "Assertion failed:",
                             assert_failure.left.yellow(),
                             assert_failure.right.yellow()
                         );
+
+                        if let Some(message) = &assert_failure.message {
+                            if !message.is_empty() {
+                                println!("      {} {}", "├─".dimmed(), message.dimmed());
+                            }
+                        }
+
+                        if let Some(location) = &assert_failure.location {
+                            if !location.is_empty() {
+                                println!("      {} at {}", "└─".dimmed(), location.dimmed());
+                            }
+                        }
                     } else {
                         println!(
                             "    {} exit_code={}",
@@ -371,4 +382,65 @@ fn find_test_annotations(content: &String, child: Node) -> Vec<String> {
         }
     }
     annotations
+}
+
+fn inject_locations_into_expect_calls(content: &str, file_path: &str) -> String {
+    let tree = tolk_parser::parse(content);
+    let root_node = tree.root_node();
+
+    let mut replacements = Vec::new();
+    find_expect_calls(&root_node, content, file_path, &mut replacements);
+
+    let mut result = content.to_string();
+
+    for (start, end, replacement) in replacements.into_iter().rev() {
+        result.replace_range(start..end, &replacement);
+    }
+
+    result + "\n\nfun main() {}"
+}
+
+fn find_expect_calls(
+    node: &Node,
+    content: &str,
+    file_path: &str,
+    replacements: &mut Vec<(usize, usize, String)>,
+) {
+    for i in 0..node.child_count() {
+        let child = node.child(i).unwrap();
+        find_expect_calls(&child, content, file_path, replacements);
+    }
+
+    if node.kind() == "function_call" {
+        let Some(callee_node) = node.child_by_field_name("callee") else {
+            return;
+        };
+
+        if callee_node.kind() == "identifier"
+            && callee_node.utf8_text(content.as_bytes()).unwrap_or("") == "expect"
+        {
+            let Some(args_node) = node.child_by_field_name("arguments") else {
+                return;
+            };
+
+            let mut arg_count = 0;
+            let mut cursor = args_node.walk();
+            for child in args_node.children(&mut cursor) {
+                if child.kind() == "call_argument" {
+                    arg_count += 1;
+                }
+            }
+
+            if arg_count == 1 {
+                let start = args_node.end_byte() - 1;
+                let end = args_node.end_byte() - 1;
+
+                let lines: Vec<&str> = content[..start].lines().collect();
+                let line_number = lines.len();
+
+                let location = format!(", \"{file_path}:{line_number}\"",);
+                replacements.push((start, end, location));
+            }
+        }
+    }
 }

@@ -24,6 +24,7 @@ pub struct AssertFailure {
     pub left: Tuple,
     pub right: Tuple,
     pub message: Option<String>,
+    pub location: Option<String>,
 }
 
 static LAST_ASSERT_FAILURE: Mutex<Option<AssertFailure>> = Mutex::new(None);
@@ -51,14 +52,15 @@ extension!(read_file, (path: String), |stack: &mut Tuple, (path,)| {
     }
 });
 
-extension!(assert_equal, (left: Tuple, right: Tuple), |stack: &mut Tuple, (left, right): (Tuple, Tuple)| {
+extension!(assert_equal, (location: String, message: String, right: Tuple, left: Tuple), |stack: &mut Tuple, (location, message, right, left): (String, String, Tuple, Tuple)| {
     if left == right {
         stack.push_bool_as_int(true);
     } else {
         *LAST_ASSERT_FAILURE.lock().unwrap() = Some(AssertFailure {
             left,
             right,
-            message: None,
+            message: Some(message),
+            location: Some(location),
         });
         stack.push_bool_as_int(false);
     }
