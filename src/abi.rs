@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tree_sitter::Node;
@@ -13,8 +14,10 @@ pub struct StructDescription {
     pub fields: Vec<FieldDescription>,
 }
 
-static STRUCT_DEFINITIONS: std::sync::LazyLock<Mutex<HashMap<String, StructDescription>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+lazy_static! {
+    static ref STRUCT_DEFINITIONS: Mutex<HashMap<String, StructDescription>> =
+        Mutex::new(HashMap::new());
+}
 
 pub fn get_struct_field_names(type_name: &str) -> Option<Vec<String>> {
     STRUCT_DEFINITIONS
