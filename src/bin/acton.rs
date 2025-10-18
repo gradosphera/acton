@@ -1,4 +1,6 @@
 use clap::{Parser, Subcommand};
+use emulator::blockchain::Blockchain;
+use emulator::executor::Executor;
 use emulator::exit_codes;
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem};
@@ -312,11 +314,14 @@ fn execute_test(
     };
     let mut get_executor = GetExecutor::new(params.clone());
 
+    let mut blockchain = Blockchain::new(Executor::new());
+
     let mut ctx = Context {
         stdout_buffer: "".to_string(),
         stderr_buffer: "".to_string(),
         capture_test_output: true,
         assert_failure: &mut None,
+        blockchain: &mut blockchain,
     };
 
     exts::register_get_extensions(

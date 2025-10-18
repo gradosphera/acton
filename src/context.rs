@@ -1,3 +1,4 @@
+use emulator::blockchain::Blockchain;
 use emulator::tuple::stack::Tuple;
 
 #[derive(Debug, Clone)]
@@ -15,4 +16,5 @@ pub struct Context<'a> {
     pub stderr_buffer: String,
     pub capture_test_output: bool,
     pub assert_failure: &'a mut Option<AssertFailure>,
+    pub blockchain: &'a mut Blockchain,
 }

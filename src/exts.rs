@@ -1,14 +1,11 @@
 use crate::context::Context;
-use emulator::blockchain::Blockchain;
 use emulator::executor::{EmulationResult, Executor, StoreExt};
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem, parse_tuple};
 use emulator::{extension, pop_args, register_ext_methods};
-use lazy_static::lazy_static;
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Mutex, MutexGuard};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
@@ -18,10 +15,6 @@ use tycho_types::cell::{Cell, Load};
 use tycho_types::models::{
     AccountState, IntAddr, RelaxedMessage, RelaxedMsgInfo, ShardAccount, StdAddr,
 };
-
-lazy_static! {
-    static ref BLOCKCHAIN: Mutex<Blockchain> = Mutex::new(Blockchain::new(Executor::new()));
-}
 
 extension!(read_file in (Context) with (path: String) using read_file_impl);
 fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
@@ -47,8 +40,8 @@ fn build_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
 }
 
 extension!(send_message in (Context) with (mode: BigInt, message: ArcCell) using send_message_impl);
-fn send_message_impl(_ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message: ArcCell) {
-    let mut blockchain: MutexGuard<'_, Blockchain> = BLOCKCHAIN.lock().unwrap();
+fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message: ArcCell) {
+    let blockchain = &mut ctx.blockchain;
 
     let msg_b64 = message.to_boc_b64(false).unwrap();
     #[allow(deprecated)]
@@ -107,13 +100,13 @@ fn send_message_impl(_ctx: &mut Context, stack: &mut Tuple, mode: BigInt, messag
 
 extension!(run_get_method in (Context) with (id: BigInt, code: ArcCell, address: ArcCell) using run_get_method_impl);
 fn run_get_method_impl(
-    _ctx: &mut Context,
+    ctx: &mut Context,
     stack: &mut Tuple,
     id: BigInt,
     code: ArcCell,
     address: ArcCell,
 ) {
-    let mut blockchain: MutexGuard<'_, Blockchain> = BLOCKCHAIN.lock().unwrap();
+    let blockchain = &mut ctx.blockchain;
     let address_boc = address.to_boc_hex(false).unwrap();
 
     let address_std = MsgAddrIntStd::from_boc_hex(address_boc.as_str()).unwrap();
