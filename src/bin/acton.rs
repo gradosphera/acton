@@ -2,11 +2,8 @@ use clap::{Parser, Subcommand};
 use emulator::exit_codes;
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem};
-use emulator_rs::exts::{
-    clear_last_assert_failure, get_last_assert_failure, get_struct_field_names,
-    get_struct_field_types, register_get_extensions, start_capturing_test_output,
-    stop_capturing_test_output,
-};
+use emulator_rs::io_exts::{start_capturing_test_output, stop_capturing_test_output};
+use emulator_rs::{asserts_exts, exts, io_exts};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
 use std::fs;
@@ -115,7 +112,7 @@ fn run_all_tests(
             continue;
         }
 
-        clear_last_assert_failure();
+        asserts_exts::clear_last_assert_failure();
 
         start_capturing_test_output();
         let start_time = Instant::now();
@@ -158,7 +155,7 @@ fn run_all_tests(
                 GetMethodResult::Success(result) => {
                     let exit_code = result.vm_exit_code as i64;
 
-                    if let Some(assert_failure) = get_last_assert_failure()
+                    if let Some(assert_failure) = asserts_exts::get_last_assert_failure()
                         && exit_code == 567
                     {
                         let diff_output = format_tuple_diff(
@@ -305,7 +302,10 @@ fn execute_test(
         prev_blocks_info: None,
     };
     let mut get_executor = GetExecutor::new(params.clone());
-    register_get_extensions(&mut get_executor);
+
+    exts::register_get_extensions(&mut get_executor);
+    io_exts::register_get_extensions(&mut get_executor);
+    asserts_exts::register_get_extensions(&mut get_executor);
 
     let result = get_executor.run_get_method(Default::default(), params);
     result
@@ -410,7 +410,7 @@ fn inject_locations_into_expect_calls(content: &str, file_path: &str) -> String 
     let tree = tolk_parser::parser::parse(content);
     let root_node = tree.root_node();
 
-    emulator_rs::exts::process_struct_definitions(&root_node, content, file_path);
+    emulator_rs::abi::process_struct_definitions(&root_node, content, file_path);
 
     let mut replacements = Vec::new();
     find_expect_calls(&root_node, content, file_path, &mut replacements);
@@ -506,8 +506,8 @@ fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
                 return format!("{} != {}", left, right);
             }
 
-            let field_names = get_struct_field_names(left_type);
-            let field_types = get_struct_field_types(left_type);
+            let field_names = emulator_rs::abi::get_struct_field_names(left_type);
+            let field_types = emulator_rs::abi::get_struct_field_types(left_type);
 
             if let (Some(field_names), Some(field_types)) = (field_names, field_types) {
                 if left_items.len() == field_names.len()

@@ -95,7 +95,7 @@ fn main() {
                 TxInfo::TickTock(_) => 0,
             };
 
-            // println!("{}", exit_code);
+            println!("{}", exit_code);
             // println!("Transaction: {:?}", tx);
             // println!("Shard account: {}", result.shard_account);
             // println!("VM log: {}", result.vm_log);

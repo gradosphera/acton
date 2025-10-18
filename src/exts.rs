@@ -8,223 +8,21 @@ use emulator::{extension, pop_args, register_ext_methods};
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Mutex;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
 use tonlib_core::tlb_types::tlb::TLB;
-use tree_sitter::Node;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
 use tycho_types::models::{
     AccountState, IntAddr, RelaxedMessage, RelaxedMsgInfo, ShardAccount, StdAddr,
 };
 
-#[derive(Debug, Clone)]
-pub struct AssertFailure {
-    pub left: Tuple,
-    pub left_type: String,
-    pub right: Tuple,
-    pub right_type: String,
-    pub message: Option<String>,
-    pub location: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct FieldDescription {
-    pub name: String,
-    pub type_name: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct StructDescription {
-    pub fields: Vec<FieldDescription>,
-}
-
-static LAST_ASSERT_FAILURE: Mutex<Option<AssertFailure>> = Mutex::new(None);
-static TEST_OUTPUT_BUFFER: Mutex<String> = Mutex::new(String::new());
-static TEST_STDERR_BUFFER: Mutex<String> = Mutex::new(String::new());
-static CAPTURE_TEST_OUTPUT: Mutex<bool> = Mutex::new(false);
-static STRUCT_DEFINITIONS: std::sync::LazyLock<Mutex<HashMap<String, StructDescription>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
-
-pub fn get_last_assert_failure() -> Option<AssertFailure> {
-    LAST_ASSERT_FAILURE.lock().unwrap().clone()
-}
-
-pub fn clear_last_assert_failure() {
-    *LAST_ASSERT_FAILURE.lock().unwrap() = None;
-}
-
-pub fn start_capturing_test_output() {
-    *CAPTURE_TEST_OUTPUT.lock().unwrap() = true;
-    *TEST_OUTPUT_BUFFER.lock().unwrap() = String::new();
-    *TEST_STDERR_BUFFER.lock().unwrap() = String::new();
-}
-
-pub fn stop_capturing_test_output() -> (String, String) {
-    *CAPTURE_TEST_OUTPUT.lock().unwrap() = false;
-    (
-        TEST_OUTPUT_BUFFER.lock().unwrap().clone(),
-        TEST_STDERR_BUFFER.lock().unwrap().clone(),
-    )
-}
-
-pub fn is_capturing_test_output() -> bool {
-    *CAPTURE_TEST_OUTPUT.lock().unwrap()
-}
-
-pub fn get_struct_field_names(type_name: &str) -> Option<Vec<String>> {
-    STRUCT_DEFINITIONS
-        .lock()
-        .unwrap()
-        .get(type_name)
-        .map(|desc| desc.fields.iter().map(|f| f.name.clone()).collect())
-}
-
-pub fn get_struct_field_types(type_name: &str) -> Option<Vec<String>> {
-    STRUCT_DEFINITIONS
-        .lock()
-        .unwrap()
-        .get(type_name)
-        .map(|desc| desc.fields.iter().map(|f| f.type_name.clone()).collect())
-}
-
-pub fn process_struct_definitions(node: &Node, content: &str, file_path: &str) {
-    let mut struct_defs = HashMap::new();
-    analyze_structs_recursive(&node, content, file_path, &mut struct_defs);
-    *STRUCT_DEFINITIONS.lock().unwrap() = struct_defs;
-    emulator::tuple::stack::set_struct_field_getter(get_struct_field_names);
-    emulator::tuple::stack::set_struct_field_type_getter(get_struct_field_types);
-}
-
-fn analyze_structs_recursive(
-    node: &Node,
-    content: &str,
-    file_path: &str,
-    struct_defs: &mut HashMap<String, StructDescription>,
-) {
-    for i in 0..node.child_count() {
-        let child = node.child(i).unwrap();
-        analyze_structs_recursive(&child, content, file_path, struct_defs);
-    }
-
-    if node.kind() != "struct_declaration" {
-        return;
-    }
-
-    let Some(name_node) = node.child_by_field_name("name") else {
-        return;
-    };
-
-    let struct_name = name_node
-        .utf8_text(content.as_bytes())
-        .unwrap_or("")
-        .to_string();
-
-    let mut fields = Vec::new();
-
-    let Some(body_node) = node.child_by_field_name("body") else {
-        return;
-    };
-
-    let mut cursor = body_node.walk();
-    for child in body_node.children(&mut cursor) {
-        if child.kind() == "struct_field_declaration" {
-            let Some(field_name_node) = child.child_by_field_name("name") else {
-                continue;
-            };
-
-            let Some(field_type_node) = child.child_by_field_name("type") else {
-                continue;
-            };
-
-            let field_name = field_name_node
-                .utf8_text(content.as_bytes())
-                .unwrap_or("")
-                .to_string();
-
-            let field_type = field_type_node
-                .utf8_text(content.as_bytes())
-                .unwrap_or("")
-                .to_string();
-
-            fields.push(FieldDescription {
-                name: field_name,
-                type_name: field_type,
-            });
-        }
-    }
-
-    if !fields.is_empty() {
-        struct_defs.insert(struct_name, StructDescription { fields });
-    }
-}
-
-extension!(print, (s: TupleItem, type_name: String), print_impl);
-fn print_impl(_stack: &mut Tuple, (s, type_name): (TupleItem, String)) {
-    let typed_tuple = if let TupleItem::Tuple(tuple) = &s {
-        TupleItem::TypedTuple {
-            type_name,
-            items: tuple.clone(),
-        }
-    } else {
-        s
-    };
-    if is_capturing_test_output() {
-        TEST_OUTPUT_BUFFER
-            .lock()
-            .unwrap()
-            .push_str(&format!("{}\n", typed_tuple));
-    } else {
-        println!("{}", typed_tuple);
-    }
-}
-
-extension!(eprint, (s: String), eprint_impl);
-fn eprint_impl(_stack: &mut Tuple, (s,): (String,)) {
-    if is_capturing_test_output() {
-        TEST_STDERR_BUFFER
-            .lock()
-            .unwrap()
-            .push_str(&format!("{}\n", s));
-    } else {
-        eprintln!("{}", s);
-    }
-}
-
 extension!(read_file, (path: String), read_file_impl);
 fn read_file_impl(stack: &mut Tuple, (path,): (String,)) {
     match std::fs::read_to_string(&path) {
         Ok(content) => stack.push_string(&content),
         Err(_) => stack.push(TupleItem::Null),
-    }
-}
-
-extension!(assert_equal, (location: String, message: String, right: Tuple, right_name: String, left: Tuple, left_name: String), assert_equal_impl);
-fn assert_equal_impl(
-    stack: &mut Tuple,
-    (location, message, right, right_name, left, left_name): (
-        String,
-        String,
-        Tuple,
-        String,
-        Tuple,
-        String,
-    ),
-) {
-    if left == right {
-        stack.push_bool_as_int(true);
-    } else {
-        *LAST_ASSERT_FAILURE.lock().unwrap() = Some(AssertFailure {
-            left,
-            right,
-            left_type: left_name,
-            right_type: right_name,
-            message: Some(message),
-            location: Some(location),
-        });
-        stack.push_bool_as_int(false);
     }
 }
 
@@ -345,7 +143,7 @@ fn run_get_method_impl(stack: &mut Tuple, (id, code, address): (BigInt, ArcCell,
 
     let result = executor.run_get_method(Tuple::empty(), params);
 
-    match (result) {
+    match result {
         GetMethodResult::Success(result) => {
             let cell = ArcCell::from_boc_b64(&result.stack).unwrap();
             let tuple = parse_tuple(&cell).unwrap();
@@ -360,10 +158,7 @@ fn run_get_method_impl(stack: &mut Tuple, (id, code, address): (BigInt, ArcCell,
 
 pub fn register_extensions(executor: &mut Executor) {
     register_ext_methods!(executor, {
-        1 => print,
-        2 => eprint,
         3 => read_file,
-        4 => assert_equal,
         6 => build,
         7 => send_message,
         8 => run_get_method,
@@ -372,10 +167,7 @@ pub fn register_extensions(executor: &mut Executor) {
 
 pub fn register_get_extensions(executor: &mut GetExecutor) {
     register_ext_methods!(executor, {
-        1 => print,
-        2 => eprint,
         3 => read_file,
-        4 => assert_equal,
         6 => build,
         7 => send_message,
         8 => run_get_method,

@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::ffi::{CStr, CString, c_char};
 use std::fs::{canonicalize, read_to_string};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// Compiles passed file with Tolk compiler.
 ///
