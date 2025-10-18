@@ -1,81 +1,10 @@
-use crate::stack_serialization::{TupleItem, parse_tuple, serialize_tuple};
+use emulator::tuple::stack::{Tuple, TupleItem, parse_tuple, serialize_tuple};
 use num_bigint::BigInt;
 use std::ffi::{CStr, CString};
-use std::fmt;
-use std::ops::{Deref, DerefMut};
 use std::os::raw::c_char;
-use tonlib_core::cell::{ArcCell, CellBuilder};
-use tonlib_core::tlb_types::tlb::TLB;
-
-#[derive(Default, Debug, Clone)]
-pub struct Tuple(Vec<TupleItem>);
-
-impl Tuple {
-    pub fn empty() -> Tuple {
-        Tuple(vec![])
-    }
-}
-
-impl Deref for Tuple {
-    type Target = Vec<TupleItem>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Tuple {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl PartialEq for Tuple {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&other.0)
-    }
-}
-
-impl fmt::Display for Tuple {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.len() == 1 {
-            write!(f, "{}", self.0[0])
-        } else {
-            write!(f, "(")?;
-            for (i, item) in self.0.iter().enumerate() {
-                if i > 0 {
-                    write!(f, ", ")?;
-                }
-                write!(f, "{}", item)?;
-            }
-            write!(f, ")")
-        }
-    }
-}
-
-impl Tuple {
-    pub fn push_string(&mut self, s: &str) {
-        let mut b = CellBuilder::new();
-        b.store_bits(s.len() * 8, s.as_bytes()).unwrap();
-        self.push(TupleItem::Slice {
-            cell: ArcCell::from(b.build().unwrap()),
-            start_bits: 0,
-            end_bits: (s.len() * 8) as u32,
-            end_refs: 0,
-            start_refs: 0,
-        });
-    }
-
-    pub fn push_bool_as_int(&mut self, v: bool) {
-        self.push(TupleItem::Int(if v {
-            BigInt::from(-1)
-        } else {
-            BigInt::from(0)
-        }));
-    }
-}
-
 use thiserror::Error;
+use tonlib_core::cell::ArcCell;
+use tonlib_core::tlb_types::tlb::TLB;
 
 #[derive(Debug, Error)]
 pub enum ArgError {
@@ -252,7 +181,7 @@ macro_rules! extension {
     ($fn_name:ident, ($an:ident : $ty:ty), $body:expr ) => {
         unsafe extern "C" fn $fn_name(ptr: *const c_char) -> *const c_char {
             unsafe {
-                $crate::exts_lib::with_tuple(ptr, |__t: &mut $crate::exts_lib::Tuple| {
+                $crate::exts_lib::with_tuple(ptr, |__t: &mut emulator::tuple::stack::Tuple| {
                     match (|| -> Result<$ty, $crate::exts_lib::ArgError> {
                         $crate::exts_lib::pop_arg::<$ty>(__t)
                     })() {
@@ -270,7 +199,7 @@ macro_rules! extension {
     ($fn_name:ident, ($($an:ident : $ty:ty),+ $(,)?), $body:expr ) => {
         unsafe extern "C" fn $fn_name(ptr: *const c_char) -> *const c_char {
             unsafe {
-                $crate::exts_lib::with_tuple(ptr, |__t: &mut $crate::exts_lib::Tuple| {
+                $crate::exts_lib::with_tuple(ptr, |__t: &mut emulator::tuple::stack::Tuple| {
                     match (|| -> Result<($($ty),*), $crate::exts_lib::ArgError> {
                         pop_args!(__t, $($ty),*)
                     })() {

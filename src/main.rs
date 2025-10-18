@@ -1,16 +1,12 @@
 mod config;
-mod executor;
 mod exit_codes;
 mod exts;
 mod exts_lib;
-mod get_executor;
-mod stack_serialization;
 
-use crate::executor::{EmulationResult, Executor};
 use crate::exts::register_extensions;
+use emulator::executor::{EmulationResult, Executor};
 use num_bigint::BigUint;
 use std::path::Path;
-use tolk::{Compiler, CompilerResult};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
 use tonlib_core::tlb_types::block::coins::{CurrencyCollection, Grams};
@@ -27,10 +23,9 @@ use tycho_types::models::{ComputePhase, Transaction, TxInfo};
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 fn main() {
-    let compiler = Compiler::new();
-    let compilation_result = compiler.compile(Path::new("main.tolk"));
+    let compilation_result = tolkc::compile(Path::new("main.tolk"));
     let code_cell = match compilation_result {
-        Ok(CompilerResult::Success(success)) => {
+        tolkc::CompilerResult::Success(success) => {
             // println!("Compilation successful!");
             // println!("Fift code {}", success._fift_code);
             // println!("Code BOC64: {}", success.code_boc64);
@@ -38,12 +33,8 @@ fn main() {
 
             ArcCell::from_boc_b64(&*success.code_boc64).unwrap()
         }
-        Ok(CompilerResult::Error(error)) => {
+        tolkc::CompilerResult::Error(error) => {
             println!("Compilation failed: {}", error.message);
-            return;
-        }
-        Err(e) => {
-            println!("Failed to parse compilation result: {}", e);
             return;
         }
     };
@@ -94,7 +85,8 @@ fn main() {
         body: EitherRef::new(ArcCell::from(Cell::default())),
     };
 
-    let output = executor.run_transaction(msg);
+    let msg_cell = Boc::decode_base64(msg.to_boc_b64(false).unwrap()).unwrap();
+    let output = executor.run_transaction_cell("".to_string(), msg_cell);
     match output {
         EmulationResult::Success(result) => {
             #[allow(deprecated)]

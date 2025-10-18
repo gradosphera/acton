@@ -1,9 +1,12 @@
-use crate::executor::{EXECUTOR, EmulationResult, Executor, get_account, update_account};
-use crate::exts_lib::Tuple;
-use crate::get_executor::{GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult};
-use crate::stack_serialization::{TupleItem, parse_tuple};
 use crate::{extension, pop_args, register_ext_methods};
 use core::ffi::c_char;
+use emulator::executor::{
+    EXECUTOR, EmulationResult, Executor, StoreExt, get_account, update_account,
+};
+use emulator::get_executor::{
+    GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult,
+};
+use emulator::tuple::stack::{Tuple, TupleItem, parse_tuple};
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use std::path::Path;
@@ -14,7 +17,7 @@ use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
 use tonlib_core::tlb_types::tlb::TLB;
 use tree_sitter::Node;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Lazy, Load, Store};
+use tycho_types::cell::{Cell, Load};
 use tycho_types::models::{
     AccountState, IntAddr, RelaxedMessage, RelaxedMsgInfo, ShardAccount, StdAddr,
 };
@@ -93,8 +96,8 @@ pub fn process_struct_definitions(node: &Node, content: &str, file_path: &str) {
     let mut struct_defs = HashMap::new();
     analyze_structs_recursive(&node, content, file_path, &mut struct_defs);
     *STRUCT_DEFINITIONS.lock().unwrap() = struct_defs;
-    crate::stack_serialization::set_struct_field_getter(get_struct_field_names);
-    crate::stack_serialization::set_struct_field_type_getter(get_struct_field_types);
+    emulator::tuple::stack::set_struct_field_getter(get_struct_field_names);
+    emulator::tuple::stack::set_struct_field_type_getter(get_struct_field_types);
 }
 
 fn analyze_structs_recursive(
@@ -242,14 +245,7 @@ extension!(send_message, (mode: BigInt, message: ArcCell), |stack: &mut Tuple, (
         _ => {}
     }
 
-    let mut builder= CellBuilder::new();
-    msg2.store_into(&mut builder, Cell::empty_context()).unwrap();
-    let new_cell = builder.build().unwrap();
-    let base64_new = Boc::encode_base64(new_cell);
-
-    let new_final_message = ArcCell::from_boc_b64(&base64_new).unwrap();
-
-    let result = executor.run_transaction_cell(dst_addr.to_string(), new_final_message.clone());
+    let result = executor.run_transaction_cell(dst_addr.to_string(), msg2.to_cell());
 
     match result {
         EmulationResult::Success(result) => {

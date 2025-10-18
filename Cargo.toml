@@ -7,6 +7,7 @@ edition = "2024"
 # local creates
 tree-sitter-tolk = { path = "./tree-sitter-tolk" }
 tolkc = { path = "crates/tolkc" }
+emulator = { path = "crates/emulator" }
 
 tonlib-core = "0.26.1"
 num-bigint = "0.4.6"

@@ -1,14 +1,13 @@
 use clap::{Parser, Subcommand};
+use emulator::get_executor::{
+    GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult,
+};
+use emulator::tuple::stack::{Tuple, TupleItem};
 use emulator_rs::exts::{
     clear_last_assert_failure, get_last_assert_failure, get_struct_field_names,
     get_struct_field_types, register_get_extensions, start_capturing_test_output,
     stop_capturing_test_output,
 };
-use emulator_rs::exts_lib::Tuple;
-use emulator_rs::get_executor::{
-    GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult,
-};
-use emulator_rs::stack_serialization::TupleItem;
 use emulator_rs::{exit_codes, tolk_parser};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;

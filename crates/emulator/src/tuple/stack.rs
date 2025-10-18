@@ -1,7 +1,76 @@
 use num_bigint::{BigInt, BigUint};
 use std::fmt;
+use std::ops::{Deref, DerefMut};
 use std::sync::Mutex;
 use tonlib_core::cell::{ArcCell, CellBuilder, CellParser};
+
+#[derive(Default, Debug, Clone)]
+pub struct Tuple(pub Vec<TupleItem>);
+
+impl Tuple {
+    pub fn empty() -> Tuple {
+        Tuple(vec![])
+    }
+}
+
+impl Deref for Tuple {
+    type Target = Vec<TupleItem>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Tuple {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl PartialEq for Tuple {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl fmt::Display for Tuple {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.len() == 1 {
+            write!(f, "{}", self.0[0])
+        } else {
+            write!(f, "(")?;
+            for (i, item) in self.0.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{}", item)?;
+            }
+            write!(f, ")")
+        }
+    }
+}
+
+impl Tuple {
+    pub fn push_string(&mut self, s: &str) {
+        let mut b = CellBuilder::new();
+        b.store_bits(s.len() * 8, s.as_bytes()).unwrap();
+        self.push(TupleItem::Slice {
+            cell: ArcCell::from(b.build().unwrap()),
+            start_bits: 0,
+            end_bits: (s.len() * 8) as u32,
+            end_refs: 0,
+            start_refs: 0,
+        });
+    }
+
+    pub fn push_bool_as_int(&mut self, v: bool) {
+        self.push(TupleItem::Int(if v {
+            BigInt::from(-1)
+        } else {
+            BigInt::from(0)
+        }));
+    }
+}
 
 static STRUCT_FIELD_GETTER: Mutex<Option<fn(&str) -> Option<Vec<String>>>> = Mutex::new(None);
 static STRUCT_FIELD_TYPE_GETTER: Mutex<Option<fn(&str) -> Option<Vec<String>>>> = Mutex::new(None);

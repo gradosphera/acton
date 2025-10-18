@@ -1,7 +1,6 @@
 use crate::config::CONFIG;
-use crate::exts_lib::Tuple;
-use crate::stack_serialization::serialize_tuple;
-use crate::{create_tvm_emulator, run_get_method, tvm_emulator_register_extmethod};
+use crate::executor::ExtFunc;
+use crate::tuple::stack::{Tuple, serialize_tuple};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::{CString, c_void};
@@ -108,4 +107,25 @@ pub struct GetMethodResultSuccess {
 pub struct GetMethodResultError {
     pub success: bool, // This should always be false for error
     pub error: String,
+}
+
+unsafe extern "C" {
+    pub fn tvm_emulator_register_extmethod(
+        transaction_emulator: *mut ::std::os::raw::c_void,
+        id: ::std::os::raw::c_int,
+        callback: ExtFunc,
+    ) -> *const ::std::os::raw::c_char;
+}
+unsafe extern "C" {
+    pub fn create_tvm_emulator(
+        params: *const ::std::os::raw::c_char,
+    ) -> *mut ::std::os::raw::c_void;
+}
+unsafe extern "C" {
+    pub fn run_get_method(
+        em: *mut ::std::os::raw::c_void,
+        params: *const ::std::os::raw::c_char,
+        stack: *const ::std::os::raw::c_char,
+        config: *const ::std::os::raw::c_char,
+    ) -> *mut ::std::os::raw::c_char;
 }
