@@ -11,58 +11,49 @@ pub struct GetExecutor {
 }
 
 impl GetExecutor {
-    pub fn new(params: GetMethodInternalParams) -> Self {
+    pub fn new(params: GetMethodParams) -> Self {
         let params = serde_json::to_string(&params).unwrap();
-        let params = CString::new(params.as_str()).unwrap();
+        let params_cstr = CString::new(params.as_str()).unwrap();
         GetExecutor {
-            inner: unsafe { create_tvm_emulator(params.as_ptr()) },
+            inner: unsafe { create_tvm_emulator(params_cstr.as_ptr()) },
         }
     }
 
-    pub fn run_get_method(&self, args: GetMethodArgs) -> GetMethodResult {
-        let stack = serialize_tuple(&**args.stack).unwrap();
-        let params = serde_json::to_string(&args.params).unwrap();
-        let config = CString::new(CONFIG).unwrap();
+    pub fn run_get_method(&self, stack: Tuple, params: GetMethodParams) -> GetMethodResult {
+        let params_str = serde_json::to_string(&params).unwrap();
+        let config_cstr = CString::new(CONFIG)
+            .expect("Cannot convert Config string to CString, should not happen");
 
+        let stack = serialize_tuple(&**stack).unwrap();
         let stack_b64 = stack.to_boc_b64(false).unwrap();
-        let result = unsafe {
-            let params = CString::new(params.as_str()).unwrap();
-            let stack_b64 = CString::new(stack_b64).unwrap();
+
+        let run_result = unsafe {
+            let params_cstr = CString::new(params_str.as_str()).unwrap();
+            let stack_b64_cstr = CString::new(stack_b64).unwrap();
             run_get_method(
                 self.inner,
-                params.into_raw(),
-                stack_b64.into_raw(),
-                config.into_raw(),
+                params_cstr.into_raw(),
+                stack_b64_cstr.into_raw(),
+                config_cstr.into_raw(),
             )
         };
 
-        let output_str = unsafe { CString::from_raw(result).to_string_lossy().to_string() };
+        let output_str = unsafe { CString::from_raw(run_result).to_string_lossy().to_string() };
 
-        serde_json::from_str::<GetInternalResult>(&output_str)
-            .unwrap()
-            .output
+        let result = serde_json::from_str::<GetInternalResult>(&output_str)
+            .expect("Failed to parse output, should not happen");
+        result.output
     }
 
-    pub fn register_ext_method(
-        &mut self,
-        id: i32,
-        callback: unsafe extern "C" fn(
-            arg1: *const ::std::os::raw::c_char,
-        ) -> *const ::std::os::raw::c_char,
-    ) {
+    pub fn register_ext_method(&mut self, id: i32, callback: RegisterExtMethodCallback) {
         let _ = unsafe {
             tvm_emulator_register_extmethod(self.inner, id, Some(callback));
         };
     }
 }
 
-pub struct GetMethodArgs {
-    pub stack: Tuple,
-    pub params: GetMethodInternalParams,
-}
-
 #[derive(Serialize, Clone)]
-pub struct GetMethodInternalParams {
+pub struct GetMethodParams {
     pub code: String,
     pub data: String,
     pub verbosity: i32,
@@ -95,7 +86,7 @@ pub enum GetMethodResult {
 
 #[derive(Deserialize, Debug)]
 pub struct GetMethodResultSuccess {
-    pub success: bool, // This should always be true for success
+    pub success: bool,
     pub stack: String,
     pub gas_used: String,
     pub vm_exit_code: i32,
@@ -105,27 +96,28 @@ pub struct GetMethodResultSuccess {
 
 #[derive(Deserialize, Debug)]
 pub struct GetMethodResultError {
-    pub success: bool, // This should always be false for error
+    pub success: bool,
     pub error: String,
 }
 
 unsafe extern "C" {
     pub fn tvm_emulator_register_extmethod(
-        transaction_emulator: *mut ::std::os::raw::c_void,
-        id: ::std::os::raw::c_int,
+        transaction_emulator: *mut std::os::raw::c_void,
+        id: std::os::raw::c_int,
         callback: ExtFunc,
-    ) -> *const ::std::os::raw::c_char;
+    ) -> *const std::os::raw::c_char;
 }
 unsafe extern "C" {
-    pub fn create_tvm_emulator(
-        params: *const ::std::os::raw::c_char,
-    ) -> *mut ::std::os::raw::c_void;
+    pub fn create_tvm_emulator(params: *const std::os::raw::c_char) -> *mut std::os::raw::c_void;
 }
 unsafe extern "C" {
     pub fn run_get_method(
-        em: *mut ::std::os::raw::c_void,
-        params: *const ::std::os::raw::c_char,
-        stack: *const ::std::os::raw::c_char,
-        config: *const ::std::os::raw::c_char,
-    ) -> *mut ::std::os::raw::c_char;
+        em: *mut std::os::raw::c_void,
+        params: *const std::os::raw::c_char,
+        stack: *const std::os::raw::c_char,
+        config: *const std::os::raw::c_char,
+    ) -> *mut std::os::raw::c_char;
 }
+
+type RegisterExtMethodCallback =
+    unsafe extern "C" fn(arg1: *const std::os::raw::c_char) -> *const std::os::raw::c_char;

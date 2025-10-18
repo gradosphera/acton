@@ -61,9 +61,9 @@ impl<T: Store + ?Sized> StoreExt for T {
 
 impl Executor {
     pub fn new() -> Self {
-        let config = CString::new(CONFIG).unwrap();
+        let config_cstr = CString::new(CONFIG).unwrap();
         Executor {
-            inner: unsafe { create_emulator(config.as_ptr(), 5) },
+            inner: unsafe { create_emulator(config_cstr.as_ptr(), 5) },
         }
     }
 
@@ -133,31 +133,32 @@ pub struct ResultError {
     pub vm_exit_code: Option<i64>,
 }
 
+// C FFI types
+
 unsafe extern "C" {
     pub fn create_emulator(
-        config: *const ::std::os::raw::c_char,
-        verbosity: ::std::os::raw::c_int,
-    ) -> *mut ::std::os::raw::c_void;
+        config: *const std::os::raw::c_char,
+        verbosity: std::os::raw::c_int,
+    ) -> *mut std::os::raw::c_void;
 }
-pub type ExtFunc = Option<
-    unsafe extern "C" fn(arg1: *const ::std::os::raw::c_char) -> *const ::std::os::raw::c_char,
->;
+pub type ExtFunc =
+    Option<unsafe extern "C" fn(arg1: *const std::os::raw::c_char) -> *const std::os::raw::c_char>;
 unsafe extern "C" {
     pub fn emulate_with_emulator(
-        em: *mut ::std::os::raw::c_void,
-        libs: *const ::std::os::raw::c_char,
-        account: *const ::std::os::raw::c_char,
-        message: *const ::std::os::raw::c_char,
-        params: *const ::std::os::raw::c_char,
-    ) -> *mut ::std::os::raw::c_char;
+        em: *mut std::os::raw::c_void,
+        libs: *const std::os::raw::c_char,
+        account: *const std::os::raw::c_char,
+        message: *const std::os::raw::c_char,
+        params: *const std::os::raw::c_char,
+    ) -> *mut std::os::raw::c_char;
 }
 unsafe extern "C" {
     pub fn transaction_emulator_register_extmethod(
-        transaction_emulator: *mut ::std::os::raw::c_void,
-        id: ::std::os::raw::c_int,
+        transaction_emulator: *mut std::os::raw::c_void,
+        id: std::os::raw::c_int,
         callback: ExtFunc,
-    ) -> *const ::std::os::raw::c_char;
+    ) -> *const std::os::raw::c_char;
 }
 
 type RegisterExtMethodCallback =
-    unsafe extern "C" fn(arg1: *const ::std::os::raw::c_char) -> *const ::std::os::raw::c_char;
+    unsafe extern "C" fn(arg1: *const std::os::raw::c_char) -> *const std::os::raw::c_char;

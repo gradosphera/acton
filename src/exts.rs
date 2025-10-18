@@ -2,9 +2,7 @@ use core::ffi::c_char;
 use emulator::executor::{
     EXECUTOR, EmulationResult, Executor, StoreExt, get_account, update_account,
 };
-use emulator::get_executor::{
-    GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult,
-};
+use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem, parse_tuple};
 use emulator::{extension, pop_args, register_ext_methods};
 use num_bigint::BigInt;
@@ -289,7 +287,7 @@ extension!(run_get_method, (id: BigInt, code: ArcCell, address: ArcCell), |stack
         Cell::default()
     };
 
-    let params = GetMethodInternalParams {
+    let params = GetMethodParams {
         code: code.to_boc_b64(false).unwrap().to_string(),
         data: Boc::encode_base64(data),
         verbosity: 5,
@@ -307,10 +305,7 @@ extension!(run_get_method, (id: BigInt, code: ArcCell, address: ArcCell), |stack
 
     let executor = GetExecutor::new(params.clone());
 
-    let result = executor.run_get_method(GetMethodArgs{
-        params,
-        stack: Tuple::empty(),
-    });
+    let result = executor.run_get_method(Tuple::empty(), params);
 
     match (result) {
         GetMethodResult::Success(result) => {

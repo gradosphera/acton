@@ -1,8 +1,6 @@
 use clap::{Parser, Subcommand};
 use emulator::exit_codes;
-use emulator::get_executor::{
-    GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult,
-};
+use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem};
 use emulator_rs::exts::{
     clear_last_assert_failure, get_last_assert_failure, get_struct_field_names,
@@ -291,7 +289,7 @@ fn execute_test(
 ) -> GetMethodResult {
     // thread::sleep(Duration::from_secs(2));
 
-    let params = GetMethodInternalParams {
+    let params = GetMethodParams {
         code: code_cell.to_boc_b64(false).unwrap().to_string(),
         data: data_cell.to_boc_b64(false).unwrap().to_string(),
         verbosity: 5,
@@ -309,10 +307,7 @@ fn execute_test(
     let mut get_executor = GetExecutor::new(params.clone());
     register_get_extensions(&mut get_executor);
 
-    let result = get_executor.run_get_method(GetMethodArgs {
-        stack: Default::default(),
-        params,
-    });
+    let result = get_executor.run_get_method(Default::default(), params);
     result
 }
 

@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use num_bigint::{BigInt, BigUint};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
@@ -84,10 +85,7 @@ pub fn set_struct_field_type_getter(getter: fn(&str) -> Option<Vec<String>>) {
 }
 
 /// Helper function to load a small uint as u64
-fn load_uint_as_u64(
-    parser: &mut CellParser,
-    bits: usize,
-) -> Result<u64, Box<dyn std::error::Error>> {
+fn load_uint_as_u64(parser: &mut CellParser, bits: usize) -> Result<u64, anyhow::Error> {
     let big_uint = parser.load_uint(bits)?;
     let nums = big_uint.to_u64_digits();
     if nums.len() == 0 {
@@ -97,10 +95,7 @@ fn load_uint_as_u64(
 }
 
 /// Helper function to load a small uint as u32
-fn load_uint_as_u32(
-    parser: &mut CellParser,
-    bits: usize,
-) -> Result<u32, Box<dyn std::error::Error>> {
+fn load_uint_as_u32(parser: &mut CellParser, bits: usize) -> Result<u32, anyhow::Error> {
     let big_uint = parser.load_uint(bits)?;
     let nums = big_uint.to_u64_digits();
     if nums.len() == 0 {
@@ -234,7 +229,7 @@ impl fmt::Display for TupleItem {
 pub fn serialize_tuple_item(
     src: &TupleItem,
     builder: &mut CellBuilder,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), anyhow::Error> {
     match src {
         TupleItem::Null => {
             builder.store_u8(8, 0x00)?;
@@ -282,7 +277,6 @@ pub fn serialize_tuple_item(
             let mut tail: Option<ArcCell> = None;
 
             for (i, item) in items.iter().enumerate() {
-                // Swap
                 let s = head;
                 head = tail;
                 tail = s;
@@ -316,7 +310,7 @@ pub fn serialize_tuple_item(
 }
 
 /// Parse a tuple item from a cell parser
-pub fn parse_tuple_item(parser: &mut CellParser) -> Result<TupleItem, Box<dyn std::error::Error>> {
+pub fn parse_tuple_item(parser: &mut CellParser) -> Result<TupleItem, anyhow::Error> {
     let kind = parser.load_u8(8)?;
 
     match kind {
@@ -330,7 +324,6 @@ pub fn parse_tuple_item(parser: &mut CellParser) -> Result<TupleItem, Box<dyn st
                 let value = parser.load_int(257)?;
                 Ok(TupleItem::Int(value))
             } else {
-                // Skip the bit that should be 1 for nan
                 parser.load_bit()?;
                 Ok(TupleItem::Nan)
             }
@@ -370,7 +363,6 @@ pub fn parse_tuple_item(parser: &mut CellParser) -> Result<TupleItem, Box<dyn st
                 let mut tail_parser = CellParser::new(&tail_ref);
                 items.insert(0, parse_tuple_item(&mut tail_parser)?);
 
-                // Store references to avoid lifetime issues
                 let mut head_refs = vec![head_ref];
                 let mut current_parser = CellParser::new(&head_refs[0]);
 
@@ -394,22 +386,19 @@ pub fn parse_tuple_item(parser: &mut CellParser) -> Result<TupleItem, Box<dyn st
 
             Ok(TupleItem::Tuple(items))
         }
-        _ => Err(format!("Unsupported stack item kind: {}", kind).into()),
+        _ => Err(anyhow!("Unsupported stack item kind: {}", kind).into()),
     }
 }
 
 /// Serialize a tuple (stack) to a cell
-pub fn serialize_tuple(src: &[TupleItem]) -> Result<ArcCell, Box<dyn std::error::Error>> {
+pub fn serialize_tuple(src: &[TupleItem]) -> Result<ArcCell, anyhow::Error> {
     let mut builder = CellBuilder::new();
     builder.store_uint(24, &BigUint::from(src.len()))?;
     serialize_tuple_tail(src, &mut builder)?;
     Ok(ArcCell::new(builder.build()?))
 }
 
-fn serialize_tuple_tail(
-    src: &[TupleItem],
-    builder: &mut CellBuilder,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn serialize_tuple_tail(src: &[TupleItem], builder: &mut CellBuilder) -> Result<(), anyhow::Error> {
     if !src.is_empty() {
         // rest:^(VmStackList n)
         let mut tail_builder = CellBuilder::new();
@@ -424,7 +413,7 @@ fn serialize_tuple_tail(
 }
 
 /// Parse a tuple (stack) from a cell
-pub fn parse_tuple(src: &ArcCell) -> Result<Vec<TupleItem>, Box<dyn std::error::Error>> {
+pub fn parse_tuple(src: &ArcCell) -> Result<Vec<TupleItem>, anyhow::Error> {
     let mut cur_cell = ArcCell::clone(src);
     let mut cs = CellParser::new(&cur_cell);
 
@@ -432,12 +421,10 @@ pub fn parse_tuple(src: &ArcCell) -> Result<Vec<TupleItem>, Box<dyn std::error::
     let mut result: Vec<TupleItem> = Vec::with_capacity(size);
 
     for _ in 0..size {
-        // next_reference берём, пока действителен текущий парсер
         let next_ref = cs.next_reference()?;
         let item = parse_tuple_item(&mut cs)?;
         result.insert(0, item);
 
-        // Обновляем «владельца» и создаём новый парсер, заимствующий из него
         cur_cell = ArcCell::clone(&next_ref);
         cs = CellParser::new(&cur_cell);
     }
@@ -556,13 +543,8 @@ mod tests {
 
     #[test]
     fn test_tuple_stack_roundtrip() {
-        // Test empty stack
         roundtrip_tuple_test(vec![]);
-
-        // Test single item stack
         roundtrip_tuple_test(vec![TupleItem::Null]);
-
-        // Test multi-item stack
         let items = vec![
             TupleItem::Null,
             TupleItem::Int(BigInt::from(42u64)),

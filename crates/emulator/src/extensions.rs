@@ -1,3 +1,5 @@
+//! This module defines a simple DSL for defining extension functions for the emulator.
+
 use crate::tuple::stack::{Tuple, TupleItem, parse_tuple, serialize_tuple};
 use num_bigint::BigInt;
 use std::ffi::{CStr, CString};
