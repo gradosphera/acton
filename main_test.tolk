@@ -1,12 +1,12 @@
 import "lib/testing/expect"
 
 get fun test_foo() {
-    // throw 10;
+    expect(10).toEqual(20)
 }
 
 @custom("skip")
 get fun test_skip() {
-    throw 10;
+    expect(10).toEqual(20)
 }
 
 get fun test_bar() {

@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand};
 use emulator_rs::compiler::{Compiler, TolkCompilerResult};
-use emulator_rs::exts::register_get_extensions;
+use emulator_rs::exts::{
+    clear_last_assert_failure, get_last_assert_failure, register_get_extensions,
+};
 use emulator_rs::get_executor::{
     GetExecutor, GetMethodArgs, GetMethodInternalParams, GetMethodResult,
 };
@@ -8,7 +10,6 @@ use emulator_rs::{exit_codes, tolk_parser};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
 use std::fs;
-use std::io::Write;
 use std::ops::Add;
 use std::path::Path;
 use std::process;
@@ -118,8 +119,8 @@ fn run_all_tests(
             skipped += 1;
             continue;
         }
-        print!("  {} {} ", "○".dimmed(), test.name);
-        std::io::stdout().flush().unwrap();
+
+        clear_last_assert_failure();
 
         let start_time = Instant::now();
         let result = execute_test(test, &code_cell, &data_cell, &dest_address);
@@ -129,9 +130,6 @@ fn run_all_tests(
             GetMethodResult::Success(result) => result.vm_exit_code,
             GetMethodResult::Error(_) => 999,
         };
-
-        // Clear the current line before printing result
-        print!("\r\x1b[K");
 
         let duration_ms = duration.as_millis();
         let (time_value, time_unit) = if duration_ms > 0 {
@@ -162,15 +160,28 @@ fn run_all_tests(
             match &result {
                 GetMethodResult::Success(result) => {
                     let exit_code = result.vm_exit_code as i64;
-                    println!(
-                        "    {} exit_code={}",
-                        "└─".dimmed(),
-                        exit_code.to_string().yellow()
-                    );
 
-                    if let Some(info) = exit_codes::get_exit_code_info(exit_code) {
-                        println!("      {} {}", "├─".dimmed(), info.description.dimmed());
-                        println!("      {} Phase: {}", "└─".dimmed(), info.phase.dimmed());
+                    if let Some(assert_failure) = get_last_assert_failure()
+                        && exit_code == 567
+                    {
+                        println!(
+                            "    {} {} {} != {}",
+                            "└─".dimmed(),
+                            "Assertion failed:",
+                            assert_failure.left.yellow(),
+                            assert_failure.right.yellow()
+                        );
+                    } else {
+                        println!(
+                            "    {} exit_code={}",
+                            "└─".dimmed(),
+                            exit_code.to_string().yellow()
+                        );
+
+                        if let Some(info) = exit_codes::get_exit_code_info(exit_code) {
+                            println!("      {} {}", "├─".dimmed(), info.description.dimmed());
+                            println!("      {} Phase: {}", "└─".dimmed(), info.phase.dimmed());
+                        }
                     }
                 }
                 GetMethodResult::Error(error) => {

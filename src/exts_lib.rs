@@ -7,7 +7,7 @@ use std::os::raw::c_char;
 use tonlib_core::cell::{ArcCell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Tuple(Vec<TupleItem>);
 
 impl Tuple {

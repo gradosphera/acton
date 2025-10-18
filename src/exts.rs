@@ -5,10 +5,10 @@ use crate::get_executor::{GetExecutor, GetMethodArgs, GetMethodInternalParams, G
 use crate::stack_serialization::{TupleItem, parse_tuple};
 use crate::{extension, pop_args, register_ext_methods};
 use core::ffi::c_char;
-use num_bigint::{BigInt, BigUint};
-use owo_colors::OwoColorize;
+use num_bigint::{BigInt};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Mutex;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
@@ -18,6 +18,23 @@ use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Lazy, Load, St
 use tycho_types::models::{
     AccountState, IntAddr, RelaxedMessage, RelaxedMsgInfo, ShardAccount, StdAddr,
 };
+
+#[derive(Debug, Clone)]
+pub struct AssertFailure {
+    pub left: Tuple,
+    pub right: Tuple,
+    pub message: Option<String>,
+}
+
+static LAST_ASSERT_FAILURE: Mutex<Option<AssertFailure>> = Mutex::new(None);
+
+pub fn get_last_assert_failure() -> Option<AssertFailure> {
+    LAST_ASSERT_FAILURE.lock().unwrap().clone()
+}
+
+pub fn clear_last_assert_failure() {
+    *LAST_ASSERT_FAILURE.lock().unwrap() = None;
+}
 
 extension!(print, (s: TupleItem), |_stack: &mut Tuple, (s,)| {
     println!("{}", s);
@@ -38,7 +55,11 @@ extension!(assert_equal, (left: Tuple, right: Tuple), |stack: &mut Tuple, (left,
     if left == right {
         stack.push_bool_as_int(true);
     } else {
-        println!("  {} {} != {}", "✗".red().bold(), left.yellow(), right.yellow());
+        *LAST_ASSERT_FAILURE.lock().unwrap() = Some(AssertFailure {
+            left,
+            right,
+            message: None,
+        });
         stack.push_bool_as_int(false);
     }
 });
