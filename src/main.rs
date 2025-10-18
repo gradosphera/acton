@@ -1,7 +1,8 @@
 mod exts;
 
-use crate::exts::register_extensions;
+use emulator::blockchain::Blockchain;
 use emulator::executor::{EmulationResult, Executor};
+use emulator_rs::{asserts_exts, io_exts};
 use num_bigint::{BigInt, BigUint};
 use std::path::Path;
 use tonlib_core::TonAddress;
@@ -29,8 +30,10 @@ fn main() {
         }
     };
 
-    let mut executor = Executor::new();
-    register_extensions(&mut executor);
+    let mut blockchain = Blockchain::new(Executor::new());
+    exts::register_extensions(&mut blockchain.executor);
+    io_exts::register_extensions(&mut blockchain.executor);
+    asserts_exts::register_extensions(&mut blockchain.executor);
 
     let state_init = CellBuilder::new()
         .store_bit(false)
@@ -76,7 +79,10 @@ fn main() {
     };
 
     let msg_cell = Boc::decode_base64(msg.to_boc_b64(false).unwrap()).unwrap();
-    let output = executor.run_transaction_cell(BigInt::from(0), "".to_string(), msg_cell);
+    let account = blockchain.get_account("".to_string());
+    let output = blockchain
+        .executor
+        .run_transaction_cell(account, BigInt::from(0), msg_cell);
     match output {
         EmulationResult::Success(result) => {
             #[allow(deprecated)]

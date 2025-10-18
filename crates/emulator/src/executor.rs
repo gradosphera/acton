@@ -1,44 +1,12 @@
 use crate::config::CONFIG;
-use lazy_static::lazy_static;
 use num_bigint::BigInt;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::ffi::{CString, c_void};
 use std::ptr::null;
-use std::sync::Mutex;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellFamily, HashBytes, Lazy, Store};
-use tycho_types::models::{Message, OptionalAccount, ShardAccount};
+use tycho_types::cell::{Cell, CellFamily, Store};
+use tycho_types::models::{Message, ShardAccount};
 use tycho_types::prelude::CellBuilder;
-
-lazy_static! {
-    pub static ref SHARD_ACCOUNTS: Mutex<HashMap<String, ShardAccount>> =
-        Mutex::new(HashMap::new());
-    pub static ref EXECUTOR: Mutex<Executor> = Mutex::new(Executor::new());
-}
-
-pub fn get_account(addr: String) -> ShardAccount {
-    let mut result = SHARD_ACCOUNTS.lock().unwrap();
-    let account = result.get(&addr);
-
-    match account {
-        Some(arg) => arg.clone(),
-        None => {
-            let acc = ShardAccount {
-                account: Lazy::new(&OptionalAccount(None)).unwrap(),
-                last_trans_hash: HashBytes::ZERO,
-                last_trans_lt: 0,
-            };
-            result.insert(addr.to_string(), acc.clone());
-            acc
-        }
-    }
-}
-
-pub fn update_account(addr: String, account: ShardAccount) {
-    let mut shard_accounts = SHARD_ACCOUNTS.lock().unwrap();
-    shard_accounts.insert(addr, account);
-}
 
 pub struct Executor {
     inner: *mut c_void,
@@ -70,24 +38,23 @@ impl Executor {
 
     pub fn run_transaction(
         &self,
+        account: ShardAccount,
         mode: BigInt,
-        dst_addr: String,
         message: Message,
     ) -> EmulationResult {
         let msg_cell = message.to_cell();
-        self.run_transaction_cell(mode, dst_addr, msg_cell)
+        self.run_transaction_cell(account, mode, msg_cell)
     }
 
     pub fn run_transaction_cell(
         &self,
+        account: ShardAccount,
         mode: BigInt,
-        dst_addr: String,
         message: Cell,
     ) -> EmulationResult {
         let message = CString::new(Boc::encode_base64(message)).unwrap();
 
-        let shard_account = get_account(dst_addr);
-        let shard_account_cell = shard_account.to_cell();
+        let shard_account_cell = account.to_cell();
         let shard_account_b64 = Boc::encode_base64(shard_account_cell);
         let shard_account_b64_cst = CString::new(shard_account_b64).unwrap();
 
