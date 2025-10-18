@@ -17,17 +17,10 @@ use tycho_types::boc::Boc;
 use tycho_types::cell::Load;
 use tycho_types::models::{ComputePhase, Transaction, TxInfo};
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
 fn main() {
     let compilation_result = tolkc::compile(Path::new("main.tolk"));
     let code_cell = match compilation_result {
         tolkc::CompilerResult::Success(success) => {
-            // println!("Compilation successful!");
-            // println!("Fift code {}", success._fift_code);
-            // println!("Code BOC64: {}", success.code_boc64);
-            // println!("Code hash: {}", success.code_hash_hex);
-
             ArcCell::from_boc_b64(&*success.code_boc64).unwrap()
         }
         tolkc::CompilerResult::Error(error) => {
@@ -109,10 +102,6 @@ fn main() {
             // if let Some(actions) = result.actions {
             //     println!("Actions: {}", actions);
             // }
-
-            // TESTS.lock().unwrap().iter().for_each(|test| {
-            //     println!("{}", test);
-            // })
         }
         EmulationResult::Error(result) => {
             println!("Emulation error: {}", result.error);
