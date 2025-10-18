@@ -13,6 +13,7 @@ use std::ops::Add;
 use std::path::Path;
 use std::process;
 use std::sync::Arc;
+use std::time::Instant;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
@@ -63,7 +64,7 @@ fn main() {
                 Ok(TolkCompilerResult::Success(result)) => {
                     let code_cell = ArcCell::from_boc_b64(&*result.code_boc64).unwrap();
                     let data_cell = ArcCell::default();
-                    run_all_tests(tests, &code_cell, &data_cell);
+                    run_all_tests(&file, tests, &code_cell, &data_cell);
                 }
                 Ok(TolkCompilerResult::Error(error)) => {
                     eprintln!("Cannot compile test file {}", error.message);
@@ -78,42 +79,76 @@ fn main() {
     }
 }
 
-fn run_all_tests(tests: Vec<TestDescriptor>, code_cell: &Arc<Cell>, data_cell: &Arc<Cell>) {
-    println!("\n{}", "Running tests...".bold().cyan());
+fn run_all_tests(
+    file_path: &str,
+    tests: Vec<TestDescriptor>,
+    code_cell: &Arc<Cell>,
+    data_cell: &Arc<Cell>,
+) {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+
+    println!(
+        "\n{} {}\n",
+        " TEST ".bold().on_cyan(),
+        cwd.display().dimmed()
+    );
     println!("{}", "─".repeat(50).dimmed());
 
+    let relative_path = Path::new(file_path)
+        .strip_prefix(cwd)
+        .unwrap_or_else(|_| Path::new(file_path));
+    println!(
+        " {} {} {}",
+        ">".dimmed(),
+        relative_path.display().to_string(),
+        format!("({} tests)", tests.len()).dimmed()
+    );
+
+    let total_start_time = Instant::now();
     let dest_address = contract_address(&code_cell);
 
     let mut passed = 0;
     let mut failed = 0;
-    let total = tests.len();
 
     for (_i, test) in tests.iter().enumerate() {
-        print!("  {} {} \n", "○".dimmed(), test.name.dimmed());
+        print!("  {} {} ", "○".dimmed(), test.name.dimmed());
         std::io::stdout().flush().unwrap();
 
+        let start_time = Instant::now();
         let result = execute_test(test, &code_cell, &data_cell, &dest_address);
+        let duration = start_time.elapsed();
 
         let exit_code = match &result {
             GetMethodResult::Success(result) => result.vm_exit_code,
             GetMethodResult::Error(_) => 999,
         };
 
-        print!("\r");
+        // Clear the current line before printing result
+        print!("\r\x1b[K");
+
+        let duration_ms = duration.as_millis();
+        let (time_value, time_unit) = if duration_ms > 0 {
+            (duration_ms.to_string(), "ms")
+        } else {
+            (duration.as_micros().to_string(), "μs")
+        };
+
         if exit_code == 0 {
             println!(
-                "  {} {} {}",
+                "  {} {} {}{}",
                 "✓".green(),
-                test.name.green(),
-                "PASSED".green().bold()
+                test.name,
+                time_value.green(),
+                time_unit.green().dimmed()
             );
             passed += 1;
         } else {
             println!(
-                "  {} {} {}",
+                "  {} {} {}{}",
                 "✗".red(),
-                test.name.red(),
-                "FAILED".red().bold()
+                test.name,
+                time_value.red(),
+                time_unit.red().dimmed()
             );
             failed += 1;
 
@@ -138,25 +173,34 @@ fn run_all_tests(tests: Vec<TestDescriptor>, code_cell: &Arc<Cell>, data_cell: &
         }
     }
 
+    let total_duration = total_start_time.elapsed();
+    let total_duration_ms = total_duration.as_millis();
+
     println!("{}", "─".repeat(50).dimmed());
 
     if failed == 0 {
         println!(
-            " {} {} passed",
+            " {} {} {} {}{}",
             "✓".green().bold(),
-            passed.to_string().green().bold()
+            passed.to_string().green().bold(),
+            "passed".green().bold(),
+            total_duration_ms.to_string().green(),
+            "ms".green().dimmed()
         );
     } else {
         println!(
-            " {} {} passed, {} {} failed",
+            " {} {} {}, {} {} {} {} {}{}",
             "✓".green().bold(),
             passed.to_string().green().bold(),
+            "passed".green().bold(),
             "✗".red().bold(),
-            failed.to_string().red().bold()
+            failed.to_string().red().bold(),
+            "failed".red().bold(),
+            "in".white().dimmed(),
+            total_duration_ms.to_string().red(),
+            "ms".red().dimmed()
         );
     }
-
-    println!(" {} total tests", total.to_string().cyan());
 
     if failed > 0 {
         println!(
