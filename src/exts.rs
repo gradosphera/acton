@@ -161,35 +161,58 @@ fn analyze_structs_recursive(
     }
 }
 
-extension!(print, (s: TupleItem, type_name: String), |_stack: &mut Tuple, (s, type_name)| {
-    if is_capturing_test_output() {
-        let typed_tuple = if let TupleItem::Tuple(tuple) = &s {
-            TupleItem::TypedTuple { type_name, items: tuple.clone() }
-        } else {
-            s
-        };
-        TEST_OUTPUT_BUFFER.lock().unwrap().push_str(&format!("{}\n", typed_tuple));
+extension!(print, (s: TupleItem, type_name: String), print_impl);
+fn print_impl(_stack: &mut Tuple, (s, type_name): (TupleItem, String)) {
+    let typed_tuple = if let TupleItem::Tuple(tuple) = &s {
+        TupleItem::TypedTuple {
+            type_name,
+            items: tuple.clone(),
+        }
     } else {
-        println!("{}", s);
-    }
-});
-
-extension!(eprint, (s: String), |_stack: &mut Tuple, (s,)| {
+        s
+    };
     if is_capturing_test_output() {
-        TEST_STDERR_BUFFER.lock().unwrap().push_str(&format!("{}\n", s));
+        TEST_OUTPUT_BUFFER
+            .lock()
+            .unwrap()
+            .push_str(&format!("{}\n", typed_tuple));
+    } else {
+        println!("{}", typed_tuple);
+    }
+}
+
+extension!(eprint, (s: String), eprint_impl);
+fn eprint_impl(_stack: &mut Tuple, (s,): (String,)) {
+    if is_capturing_test_output() {
+        TEST_STDERR_BUFFER
+            .lock()
+            .unwrap()
+            .push_str(&format!("{}\n", s));
     } else {
         eprintln!("{}", s);
     }
-});
+}
 
-extension!(read_file, (path: String), |stack: &mut Tuple, (path,)| {
+extension!(read_file, (path: String), read_file_impl);
+fn read_file_impl(stack: &mut Tuple, (path,): (String,)) {
     match std::fs::read_to_string(&path) {
         Ok(content) => stack.push_string(&content),
         Err(_) => stack.push(TupleItem::Null),
     }
-});
+}
 
-extension!(assert_equal, (location: String, message: String, right: Tuple, right_name: String, left: Tuple, left_name: String), |stack: &mut Tuple, (location, message, right, right_name, left, left_name)| {
+extension!(assert_equal, (location: String, message: String, right: Tuple, right_name: String, left: Tuple, left_name: String), assert_equal_impl);
+fn assert_equal_impl(
+    stack: &mut Tuple,
+    (location, message, right, right_name, left, left_name): (
+        String,
+        String,
+        Tuple,
+        String,
+        Tuple,
+        String,
+    ),
+) {
     if left == right {
         stack.push_bool_as_int(true);
     } else {
@@ -203,9 +226,10 @@ extension!(assert_equal, (location: String, message: String, right: Tuple, right
         });
         stack.push_bool_as_int(false);
     }
-});
+}
 
-extension!(build, (path: String), |stack: &mut Tuple, (path,): (String,)| {
+extension!(build, (path: String), build_impl);
+fn build_impl(stack: &mut Tuple, (path,): (String,)) {
     let result = tolkc::compile(Path::new(&path));
     match result {
         tolkc::CompilerResult::Success(success) => {
@@ -217,12 +241,14 @@ extension!(build, (path: String), |stack: &mut Tuple, (path,): (String,)| {
             return;
         }
     };
-});
+}
 
-extension!(send_message, (mode: BigInt, message: ArcCell), |stack: &mut Tuple, (mode, message): (BigInt, ArcCell)| {
+extension!(send_message, (mode: BigInt, message: ArcCell), send_message_impl);
+fn send_message_impl(stack: &mut Tuple, (mode, message): (BigInt, ArcCell)) {
     let executor = EXECUTOR.lock().unwrap();
 
-    let msg_b64 =  message.to_boc_b64(false).unwrap();
+    let msg_b64 = message.to_boc_b64(false).unwrap();
+    #[allow(deprecated)]
     let msg_b64_bytes = base64::decode(&msg_b64).unwrap();
     let msg_b64_cell = Boc::decode(msg_b64_bytes).unwrap();
     let mut slice = msg_b64_cell.as_slice().unwrap();
@@ -243,18 +269,21 @@ extension!(send_message, (mode: BigInt, message: ArcCell), |stack: &mut Tuple, (
         _ => {}
     }
 
-    let result = executor.run_transaction_cell(dst_addr.to_string(), msg2.to_cell());
+    let result = executor.run_transaction_cell(mode, dst_addr.to_string(), msg2.to_cell());
 
     match result {
         EmulationResult::Success(result) => {
             let shard_account_after = result.shard_account;
+            #[allow(deprecated)]
             let acc_b64_bytes = base64::decode(&shard_account_after).unwrap();
             let acc_b64_cell = Boc::decode(acc_b64_bytes).unwrap();
             let mut slice = acc_b64_cell.as_slice().unwrap();
             let acc = ShardAccount::load_from(&mut slice).unwrap();
 
             update_account(dst_addr.to_string(), acc);
-            stack.push(TupleItem::Tuple(vec![TupleItem::Cell(ArcCell::from_boc_b64(&*result.transaction).unwrap())]));
+            stack.push(TupleItem::Tuple(vec![TupleItem::Cell(
+                ArcCell::from_boc_b64(&*result.transaction).unwrap(),
+            )]));
         }
         EmulationResult::Error(result) => {
             println!("Emulation error: {}", result.error);
@@ -268,13 +297,18 @@ extension!(send_message, (mode: BigInt, message: ArcCell), |stack: &mut Tuple, (
             stack.push(TupleItem::Null);
         }
     }
-});
+}
 
-extension!(run_get_method, (id: BigInt, code: ArcCell, address: ArcCell), |stack: &mut Tuple, (id, code, address): (BigInt, ArcCell, ArcCell)| {
+extension!(run_get_method, (id: BigInt, code: ArcCell, address: ArcCell), run_get_method_impl);
+fn run_get_method_impl(stack: &mut Tuple, (id, code, address): (BigInt, ArcCell, ArcCell)) {
     let address_boc = address.to_boc_hex(false).unwrap();
 
     let address_std = MsgAddrIntStd::from_boc_hex(address_boc.as_str()).unwrap();
-    let dst_addr_str = format!("{}:{}", &address_std.workchain, hex::encode(&address_std.address));
+    let dst_addr_str = format!(
+        "{}:{}",
+        &address_std.workchain,
+        hex::encode(&address_std.address)
+    );
 
     let dest_address = TonAddress::from_msg_address(address_std).unwrap();
 
@@ -297,7 +331,11 @@ extension!(run_get_method, (id: BigInt, code: ArcCell, address: ArcCell), |stack
         balance: "10".to_string(),
         rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
         gas_limit: "0".to_string(),
-        method_id: if id == BigInt::default() {0} else {id.to_u64_digits().1[0] as i32},
+        method_id: if id == BigInt::default() {
+            0
+        } else {
+            id.to_u64_digits().1[0] as i32
+        },
         debug_enabled: true,
         extra_currencies: HashMap::new(),
         prev_blocks_info: None,
@@ -318,7 +356,7 @@ extension!(run_get_method, (id: BigInt, code: ArcCell, address: ArcCell), |stack
             println!("Error: {}", result.error);
         }
     };
-});
+}
 
 pub fn register_extensions(executor: &mut Executor) {
     register_ext_methods!(executor, {

@@ -1,5 +1,6 @@
 use crate::config::CONFIG;
 use lazy_static::lazy_static;
+use num_bigint::BigInt;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::ffi::{CString, c_void};
@@ -67,12 +68,22 @@ impl Executor {
         }
     }
 
-    pub fn run_transaction(&self, dst_addr: String, message: Message) -> EmulationResult {
+    pub fn run_transaction(
+        &self,
+        mode: BigInt,
+        dst_addr: String,
+        message: Message,
+    ) -> EmulationResult {
         let msg_cell = message.to_cell();
-        self.run_transaction_cell(dst_addr, msg_cell)
+        self.run_transaction_cell(mode, dst_addr, msg_cell)
     }
 
-    pub fn run_transaction_cell(&self, dst_addr: String, message: Cell) -> EmulationResult {
+    pub fn run_transaction_cell(
+        &self,
+        mode: BigInt,
+        dst_addr: String,
+        message: Cell,
+    ) -> EmulationResult {
         let message = CString::new(Boc::encode_base64(message)).unwrap();
 
         let shard_account = get_account(dst_addr);

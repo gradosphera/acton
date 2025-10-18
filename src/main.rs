@@ -2,7 +2,7 @@ mod exts;
 
 use crate::exts::register_extensions;
 use emulator::executor::{EmulationResult, Executor};
-use num_bigint::BigUint;
+use num_bigint::{BigInt, BigUint};
 use std::path::Path;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
@@ -76,7 +76,7 @@ fn main() {
     };
 
     let msg_cell = Boc::decode_base64(msg.to_boc_b64(false).unwrap()).unwrap();
-    let output = executor.run_transaction_cell("".to_string(), msg_cell);
+    let output = executor.run_transaction_cell(BigInt::from(0), "".to_string(), msg_cell);
     match output {
         EmulationResult::Success(result) => {
             #[allow(deprecated)]
