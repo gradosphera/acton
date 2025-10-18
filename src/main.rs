@@ -56,9 +56,9 @@ fn main() {
                 .to_string();
             let name = raw_name
                 .strip_prefix("`")
-                .unwrap()
+                .unwrap_or(&raw_name)
                 .strip_suffix("`")
-                .unwrap();
+                .unwrap_or(&raw_name);
 
             if name.starts_with("test") {
                 println!("{}", name);

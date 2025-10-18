@@ -33,6 +33,10 @@ get fun `test-third`() {
     // ...
 }
 
+get fun test_fourth() {
+    // ...
+}
+
 fun run_test(cb: () -> void) {
     cb()
 }
