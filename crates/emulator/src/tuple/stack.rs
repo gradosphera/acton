@@ -64,7 +64,7 @@ impl Tuple {
         });
     }
 
-    pub fn push_bool_as_int(&mut self, v: bool) {
+    pub fn push_bool(&mut self, v: bool) {
         self.push(TupleItem::Int(if v {
             BigInt::from(-1)
         } else {
@@ -130,7 +130,27 @@ impl fmt::Display for TupleItem {
             TupleItem::Null => write!(f, "null"),
             TupleItem::Nan => write!(f, "NaN"),
             TupleItem::Cell(cell) => write!(f, "{:?}", cell),
-            TupleItem::Slice { .. } => write!(f, "Slice(...)"),
+            TupleItem::Slice {
+                cell,
+                start_bits,
+                end_bits,
+                ..
+            } => {
+                let mut parser = cell.parser();
+                if let Ok(()) = parser.skip_bits(*start_bits as usize) {
+                    if let Ok(data) = parser.load_bits((*end_bits - *start_bits) as usize) {
+                        if let Ok(utf8_string) = String::from_utf8(data) {
+                            write!(f, "{}", utf8_string)
+                        } else {
+                            write!(f, "Slice(...)")
+                        }
+                    } else {
+                        write!(f, "Slice(...)")
+                    }
+                } else {
+                    write!(f, "Slice(...)")
+                }
+            }
             TupleItem::Builder(_) => write!(f, "Builder(...)"),
             TupleItem::Tuple(items) => {
                 if items.len() == 1 {

@@ -16,7 +16,7 @@ fn assert_equal_impl(
     left_name: String,
 ) {
     if left == right {
-        stack.push_bool_as_int(true);
+        stack.push_bool(true);
     } else {
         *ctx.assert_failure = Some(AssertFailure {
             left,
@@ -26,7 +26,7 @@ fn assert_equal_impl(
             message: Some(message),
             location: Some(location),
         });
-        stack.push_bool_as_int(false);
+        stack.push_bool(false);
     }
 }
 

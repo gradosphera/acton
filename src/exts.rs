@@ -34,7 +34,7 @@ fn build_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
         }
         tolkc::CompilerResult::Error(error) => {
             println!("Compilation failed: {}", error.message);
-            return;
+            stack.push(TupleItem::Null);
         }
     };
 }
