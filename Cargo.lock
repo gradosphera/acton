@@ -313,6 +313,7 @@ dependencies = [
  "tolk_parser",
  "tolkc",
  "tonlib-core",
+ "tree-sitter",
  "tycho-types",
 ]
 
