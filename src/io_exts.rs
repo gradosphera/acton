@@ -8,8 +8,9 @@ extension!(print in (Context) with (s: TupleItem, type_name: String) using print
 fn print_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: String) {
     let typed_tuple = if let TupleItem::Tuple(tuple) = &s {
         TupleItem::TypedTuple {
-            type_name,
+            abi: ctx.abi.find_type(&type_name),
             items: tuple.clone(),
+            type_name,
         }
     } else {
         s

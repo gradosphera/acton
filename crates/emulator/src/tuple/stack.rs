@@ -3,7 +3,6 @@ use anyhow::anyhow;
 use num_bigint::{BigInt, BigUint};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
-use std::sync::Mutex;
 use tonlib_core::cell::{ArcCell, CellBuilder, CellParser};
 
 #[derive(Default, Debug, Clone)]
@@ -74,13 +73,6 @@ impl Tuple {
     }
 }
 
-static STRUCT_DESCRIPTION_GETTER: Mutex<Option<fn(&str) -> Option<StructDescription>>> =
-    Mutex::new(None);
-
-pub fn set_struct_description_getter(getter: fn(&str) -> Option<StructDescription>) {
-    *STRUCT_DESCRIPTION_GETTER.lock().unwrap() = Some(getter);
-}
-
 /// Helper function to load a small uint as u64
 fn load_uint_as_u64(parser: &mut CellParser, bits: usize) -> Result<u64, anyhow::Error> {
     let big_uint = parser.load_uint(bits)?;
@@ -120,6 +112,7 @@ pub enum TupleItem {
     TypedTuple {
         type_name: String,
         items: Vec<TupleItem>,
+        abi: Option<StructDescription>,
     },
 }
 
@@ -173,13 +166,15 @@ impl fmt::Display for TupleItem {
                     write!(f, ")")
                 }
             }
-            TupleItem::TypedTuple { type_name, items } => {
+            TupleItem::TypedTuple {
+                type_name,
+                items,
+                abi,
+            } => {
                 if items.len() == 1 {
                     write!(f, "{}", items[0])
                 } else {
-                    if let Some(getter) = *STRUCT_DESCRIPTION_GETTER.lock().unwrap()
-                        && let Some(struct_desc) = getter(&type_name)
-                    {
+                    if let Some(struct_desc) = abi {
                         if items.len() == struct_desc.fields.len() {
                             write!(f, "{} {{\n", type_name)?;
                             for (i, (field, item)) in

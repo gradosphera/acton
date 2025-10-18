@@ -324,7 +324,6 @@ dependencies = [
  "crc",
  "emulator",
  "hex",
- "lazy_static",
  "num-bigint",
  "owo-colors",
  "tolk_parser",

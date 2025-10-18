@@ -1,3 +1,4 @@
+use abi::ABI;
 use clap::{Parser, Subcommand};
 use emulator::blockchain::Blockchain;
 use emulator::executor::Executor;
@@ -54,6 +55,12 @@ fn main() {
 
             let tests = find_all_test(file.clone(), &content);
 
+            let tree = tolk_parser::parser::parse(&content);
+            let root_node = tree.root_node();
+            let abi = ABI {
+                structs: abi::process_struct_definitions(&root_node, &content, &file),
+            };
+
             let executable_code = inject_locations_into_expect_calls(&content, &file);
             let tmp_test_filename = "test_".to_string().add(&*file);
 
@@ -64,7 +71,7 @@ fn main() {
                 tolkc::CompilerResult::Success(result) => {
                     let code_cell = ArcCell::from_boc_b64(&*result.code_boc64).unwrap();
                     let data_cell = ArcCell::default();
-                    run_all_tests(&file, tests, &code_cell, &data_cell);
+                    run_all_tests(&file, tests, &code_cell, &data_cell, &abi);
                 }
                 tolkc::CompilerResult::Error(error) => {
                     eprintln!("Cannot compile test file {}", error.message);
@@ -80,6 +87,7 @@ fn run_all_tests(
     tests: Vec<TestDescriptor>,
     code_cell: &Arc<Cell>,
     data_cell: &Arc<Cell>,
+    abi: &ABI,
 ) {
     let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
 
@@ -115,7 +123,7 @@ fn run_all_tests(
         }
 
         let start_time = Instant::now();
-        let result = execute_test(test, &code_cell, &data_cell, &dest_address);
+        let result = execute_test(test, &code_cell, &data_cell, &dest_address, abi);
         let duration = start_time.elapsed();
         let TestResult {
             captured_stdout,
@@ -167,6 +175,7 @@ fn run_all_tests(
                             &assert_failure.right,
                             &assert_failure.left_type,
                             &assert_failure.right_type,
+                            &abi,
                         );
 
                         if let Some(message) = &assert_failure.message {
@@ -294,6 +303,7 @@ fn execute_test(
     code_cell: &Arc<Cell>,
     data_cell: &Arc<Cell>,
     dest_address: &TonAddress,
+    abi: &ABI,
 ) -> TestResult {
     // thread::sleep(Duration::from_secs(2));
 
@@ -322,6 +332,7 @@ fn execute_test(
         capture_test_output: true,
         assert_failure: &mut None,
         blockchain: &mut blockchain,
+        abi: (*abi).clone(),
     };
 
     exts::register_get_extensions(
@@ -445,9 +456,6 @@ fn inject_locations_into_expect_calls(content: &str, file_path: &str) -> String 
     let tree = tolk_parser::parser::parse(content);
     let root_node = tree.root_node();
 
-    abi::process_struct_definitions(&root_node, content, file_path);
-    emulator::tuple::stack::set_struct_description_getter(abi::get_struct_description);
-
     let mut replacements = Vec::new();
     find_expect_calls(&root_node, content, file_path, &mut replacements);
 
@@ -505,13 +513,23 @@ fn find_expect_calls(
     }
 }
 
-fn format_tuple_diff(left: &Tuple, right: &Tuple, left_type: &str, right_type: &str) -> String {
+fn format_tuple_diff(
+    left: &Tuple,
+    right: &Tuple,
+    left_type: &str,
+    right_type: &str,
+    abi: &ABI,
+) -> String {
+    let left_type_str = left_type.to_string();
     let left_item = TupleItem::TypedTuple {
-        type_name: left_type.to_string(),
+        abi: abi.find_type(&left_type_str),
+        type_name: left_type_str,
         items: (**left).clone(),
     };
+    let right_type_str = right_type.to_string();
     let right_item = TupleItem::TypedTuple {
-        type_name: right_type.to_string(),
+        abi: abi.find_type(&right_type_str),
+        type_name: right_type_str,
         items: (**right).clone(),
     };
 
@@ -527,90 +545,90 @@ fn highlight_actual_expected(message: &str) -> String {
 }
 
 fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
-    match (left, right) {
-        (
-            TupleItem::TypedTuple {
-                type_name: left_type,
-                items: left_items,
-            },
-            TupleItem::TypedTuple {
-                type_name: right_type,
-                items: right_items,
-            },
-        ) => {
-            if left_type != right_type {
-                return format!("{} != {}", left, right);
-            }
+    if let (
+        TupleItem::TypedTuple {
+            type_name: left_type,
+            items: left_items,
+            abi,
+        },
+        TupleItem::TypedTuple {
+            type_name: right_type,
+            items: right_items,
+            ..
+        },
+    ) = (left, right)
+    {
+        if left_type != right_type {
+            return format!("{} != {}", left, right);
+        }
 
-            if let Some(struct_desc) = abi::get_struct_description(left_type) {
-                if left_items.len() == struct_desc.fields.len() {
-                    let mut result = format!("{} {{\n", left_type);
+        if let Some(struct_desc) = abi {
+            if left_items.len() == struct_desc.fields.len() {
+                let mut result = format!("{} {{\n", left_type);
 
-                    for (field, (left_item, right_item)) in struct_desc
-                        .fields
-                        .iter()
-                        .zip(left_items.iter().zip(right_items.iter()))
-                    {
-                        if left_item != right_item {
-                            result.push_str(&format!(
-                                "    {}: {}\n",
-                                field.name.yellow(),
-                                left_item.red()
-                            ));
-                            result.push_str(&format!(
-                                "    {:<width$}  {}\n",
-                                "",
-                                right_item.green(),
-                                width = field.name.len()
-                            ));
-                        } else {
-                            result.push_str(&format!(
-                                "    {}{} {}\n",
-                                field.name.dimmed(),
-                                ":".dimmed(),
-                                left_item.dimmed()
-                            ));
-                        }
-                    }
-
-                    result.push_str("}");
-                    result
-                } else {
-                    format!("{} != {}", left, right)
-                }
-            } else {
-                let mut result = "(\n".to_string();
-                let max_len = left_items.len().max(right_items.len());
-
-                for i in 0..max_len {
-                    let left_val = left_items.get(i);
-                    let right_val = right_items.get(i);
-
-                    match (left_val, right_val) {
-                        (Some(left_val), Some(right_val)) => {
-                            if left_val != right_val {
-                                result.push_str(&format!("    {},\n", left_val.red()));
-                                result.push_str(&format!("    {}\n", right_val.green()));
-                            } else {
-                                result.push_str(&format!("    {},\n", left_val.dimmed()));
-                            }
-                        }
-                        (Some(left_val), None) => {
-                            result.push_str(&format!("    {},\n", left_val.red()));
-                        }
-                        (None, Some(right_val)) => {
-                            result.push_str(&format!("    {}\n", right_val.green()));
-                        }
-                        (None, None) => {}
+                for (field, (left_item, right_item)) in struct_desc
+                    .fields
+                    .iter()
+                    .zip(left_items.iter().zip(right_items.iter()))
+                {
+                    if left_item != right_item {
+                        result.push_str(&format!(
+                            "    {}: {}\n",
+                            field.name.yellow(),
+                            left_item.red()
+                        ));
+                        result.push_str(&format!(
+                            "    {:<width$}  {}\n",
+                            "",
+                            right_item.green(),
+                            width = field.name.len()
+                        ));
+                    } else {
+                        result.push_str(&format!(
+                            "    {}{} {}\n",
+                            field.name.dimmed(),
+                            ":".dimmed(),
+                            left_item.dimmed()
+                        ));
                     }
                 }
 
-                result.push_str(")");
+                result.push_str("}");
                 result
+            } else {
+                format!("{} != {}", left, right)
             }
+        } else {
+            let mut result = "(\n".to_string();
+            let max_len = left_items.len().max(right_items.len());
+
+            for i in 0..max_len {
+                let left_val = left_items.get(i);
+                let right_val = right_items.get(i);
+
+                match (left_val, right_val) {
+                    (Some(left_val), Some(right_val)) => {
+                        if left_val != right_val {
+                            result.push_str(&format!("    {},\n", left_val.red()));
+                            result.push_str(&format!("    {}\n", right_val.green()));
+                        } else {
+                            result.push_str(&format!("    {},\n", left_val.dimmed()));
+                        }
+                    }
+                    (Some(left_val), None) => {
+                        result.push_str(&format!("    {},\n", left_val.red()));
+                    }
+                    (None, Some(right_val)) => {
+                        result.push_str(&format!("    {}\n", right_val.green()));
+                    }
+                    (None, None) => {}
+                }
+            }
+
+            result.push_str(")");
+            result
         }
-        _ => {
-            format!("{} != {}", left.red(), right.green())
-        }
+    } else {
+        format!("{} != {}", left.red(), right.green())
     }
 }

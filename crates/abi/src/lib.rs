@@ -1,31 +1,42 @@
-use lazy_static::lazy_static;
 use std::collections::HashMap;
-use std::sync::Mutex;
 
 #[derive(Debug, Clone)]
+pub struct ABI {
+    pub structs: HashMap<String, StructDescription>,
+}
+
+impl ABI {
+    pub fn find_type(&self, name: &String) -> Option<StructDescription> {
+        self.structs.get(name).cloned()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldDescription {
     pub name: String,
     pub type_name: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct StructDescription {
     pub fields: Vec<FieldDescription>,
 }
 
-lazy_static! {
-    static ref STRUCT_DEFINITIONS: Mutex<HashMap<String, StructDescription>> =
-        Mutex::new(HashMap::new());
+impl PartialEq for StructDescription {
+    fn eq(&self, other: &Self) -> bool {
+        self.fields.len() == other.fields.len()
+            && self.fields.iter().all(|field| other.fields.contains(field))
+    }
 }
 
-pub fn get_struct_description(type_name: &str) -> Option<StructDescription> {
-    STRUCT_DEFINITIONS.lock().unwrap().get(type_name).cloned()
-}
-
-pub fn process_struct_definitions(node: &tree_sitter::Node, content: &str, file_path: &str) {
+pub fn process_struct_definitions(
+    node: &tree_sitter::Node,
+    content: &str,
+    file_path: &str,
+) -> HashMap<String, StructDescription> {
     let mut struct_defs = HashMap::new();
     analyze_structs_recursive(&node, content, file_path, &mut struct_defs);
-    *STRUCT_DEFINITIONS.lock().unwrap() = struct_defs;
+    struct_defs
 }
 
 fn analyze_structs_recursive(

@@ -1,3 +1,4 @@
+use abi::ABI;
 use emulator::blockchain::Blockchain;
 use emulator::tuple::stack::Tuple;
 
@@ -17,4 +18,5 @@ pub struct Context<'a> {
     pub capture_test_output: bool,
     pub assert_failure: &'a mut Option<AssertFailure>,
     pub blockchain: &'a mut Blockchain,
+    pub abi: ABI,
 }
