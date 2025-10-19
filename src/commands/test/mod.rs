@@ -21,6 +21,13 @@ use tree_sitter::Node;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
+#[derive(Debug)]
+struct CustomAnnotationValues {
+    annotations: Vec<String>,
+    expected_exit_code: Option<i32>,
+    gas_limit: Option<u64>,
+}
+
 pub fn test_cmd(path: &String, filter: Option<&str>) -> Result<(), anyhow::Error> {
     let metadata = fs::metadata(path)?;
     let test_files = if metadata.is_file() {
@@ -565,6 +572,91 @@ fn find_all_test(file: String, content: &String) -> Vec<TestDescriptor> {
         .collect()
 }
 
+fn parse_annotation_object(content: &String, object_node: Node) -> CustomAnnotationValues {
+    let Some(arguments) = object_node.child_by_field_name("arguments") else {
+        return CustomAnnotationValues {
+            annotations: Vec::new(),
+            expected_exit_code: None,
+            gas_limit: None,
+        };
+    };
+
+    let mut annotations = Vec::new();
+    let mut expected_exit_code = None;
+    let mut gas_limit = None;
+
+    let mut cursor = arguments.walk();
+
+    for field in arguments.children(&mut cursor) {
+        if field.kind() == "instance_argument" {
+            let Some(name_node) = field.child_by_field_name("name") else {
+                continue;
+            };
+
+            let field_name = name_node.utf8_text(content.as_bytes()).unwrap_or("");
+
+            match field_name {
+                "skip" => {
+                    let is_true = field
+                        .child_by_field_name("value")
+                        .map(|value| is_boolean_true(content, value))
+                        .unwrap_or(true); // @custom({ skip }) -> true
+
+                    if is_true {
+                        annotations.push("skip".to_string());
+                    }
+                    continue;
+                }
+                _ => {}
+            }
+
+            if let Some(value_node) = field.child_by_field_name("value") {
+                match field_name {
+                    "fail_with" => {
+                        if let Some(number) = parse_number_literal(content, value_node) {
+                            if let Ok(code) = number.parse::<i32>() {
+                                expected_exit_code = Some(code);
+                            }
+                        }
+                    }
+                    "gas_limit" => {
+                        if let Some(number) = parse_number_literal(content, value_node) {
+                            if let Ok(limit) = number.parse::<u64>() {
+                                gas_limit = Some(limit);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    CustomAnnotationValues {
+        annotations,
+        expected_exit_code,
+        gas_limit,
+    }
+}
+
+fn is_boolean_true(content: &String, node: Node) -> bool {
+    if node.kind() == "boolean_literal" {
+        let text = node.utf8_text(content.as_bytes()).unwrap_or("");
+        text == "true"
+    } else {
+        false
+    }
+}
+
+fn parse_number_literal(content: &String, node: Node) -> Option<String> {
+    if node.kind() == "number_literal" {
+        let text = node.utf8_text(content.as_bytes()).unwrap_or("");
+        Some(text.to_string())
+    } else {
+        None
+    }
+}
+
 fn find_test_annotations(content: &String, child: Node) -> TestAnnotations {
     let mut annotations = Vec::new();
     let mut expected_exit_code = None;
@@ -593,36 +685,18 @@ fn find_test_annotations(content: &String, child: Node) -> TestAnnotations {
             };
 
             let mut arg_cursor = args_node.walk();
-            let mut args = Vec::new();
 
             for child in args_node.children(&mut arg_cursor) {
-                match child.kind() {
-                    "string_literal" => {
-                        let text = child.utf8_text(content.as_bytes()).unwrap_or("");
-                        let unquoted = text.trim_matches('"');
-                        args.push(unquoted.to_string());
+                if child.kind() == "object_literal" {
+                    let values = parse_annotation_object(content, child);
+
+                    annotations.extend(values.annotations);
+                    if values.expected_exit_code.is_some() {
+                        expected_exit_code = values.expected_exit_code;
                     }
-                    "number_literal" => {
-                        let text = child.utf8_text(content.as_bytes()).unwrap_or("");
-                        args.push(text.to_string());
+                    if values.gas_limit.is_some() {
+                        gas_limit = values.gas_limit;
                     }
-                    _ => {}
-                }
-            }
-
-            if args.len() >= 1 && args[0] == "skip" {
-                annotations.push("skip".to_string());
-            }
-
-            if args.len() >= 2 && args[0] == "fail_with" {
-                if let Ok(code) = args[1].parse::<i32>() {
-                    expected_exit_code = Some(code);
-                }
-            }
-
-            if args.len() >= 2 && args[0] == "gas_limit" {
-                if let Ok(limit) = args[1].parse::<u64>() {
-                    gas_limit = Some(limit);
                 }
             }
         }

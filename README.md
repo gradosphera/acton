@@ -54,23 +54,28 @@ acton test --filter "test_Foo_.*" . # all test with `test_Foo` prefix
 #### skip — Skip the test
 
 ```tolk
-@custom("skip")
+@custom({ skip })
 get fun test_something() {}
 ```
 
 #### fail_with — Requires termination with the given exit code
 
 ```tolk
-@custom("fail_with", 10)
+@custom({ fail_with: 10 })
 get fun test_something() {}
 ```
-
-> Note: number literals only for now!
 
 #### gas_limit — Set the gas limit for the test
 
 ```tolk
-@custom("gas_limit", 10000)
+@custom({ gas_limit: 10000 })
+get fun test_something() {}
+```
+
+You can combine multiple annotations:
+
+```tolk
+@custom({ fail_with: 10, gas_limit: 5000 })
 get fun test_something() {}
 ```
 
