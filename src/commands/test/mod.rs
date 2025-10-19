@@ -26,6 +26,7 @@ struct CustomAnnotationValues {
     annotations: Vec<String>,
     expected_exit_code: Option<i32>,
     gas_limit: Option<u64>,
+    todo_description: Option<String>,
 }
 
 pub fn test_cmd(path: &String, filter: Option<&str>) -> Result<(), anyhow::Error> {
@@ -52,14 +53,20 @@ pub fn test_cmd(path: &String, filter: Option<&str>) -> Result<(), anyhow::Error
     let mut total_passed = 0;
     let mut total_failed = 0;
     let mut total_skipped = 0;
+    let mut total_todo = 0;
 
-    for file in &test_files {
+    for (index, file) in test_files.iter().enumerate() {
         let result = run_tests_for_file(&file, filter);
         match result {
             Ok(stats) => {
                 total_passed += stats.passed;
                 total_failed += stats.failed;
                 total_skipped += stats.skipped;
+                total_todo += stats.todo;
+
+                if index > 0 && test_files.len() != index - 1 {
+                    println!()
+                }
             }
             Err(err) => {
                 eprintln!("{} Error in file '{}': {}", "Error:".red(), file, err);
@@ -67,52 +74,64 @@ pub fn test_cmd(path: &String, filter: Option<&str>) -> Result<(), anyhow::Error
             }
         }
     }
+
     if !test_files.is_empty() {
         println!("{}", "─".repeat(50).dimmed());
     }
 
-    if test_files.len() > 1 {
-        println!("\n{}", "─".repeat(50).dimmed());
-        if total_failed == 0 && total_skipped == 0 {
-            println!(
-                " {} {} {} {} {}{}",
-                "✓".green().bold(),
-                total_passed.to_string().green().bold(),
-                "passed".green().bold(),
-                "in".dimmed(),
-                test_files.len().to_string().green(),
-                "files".green().dimmed()
-            );
-        } else if total_failed == 0 && total_skipped > 0 {
-            println!(
-                " {} {} {}, {} {} {} {} {}{}",
-                "✓".green().bold(),
-                total_passed.to_string().green().bold(),
-                "passed".green().bold(),
-                "○".yellow().bold(),
-                total_skipped.to_string().yellow().bold(),
-                "skipped".yellow().bold(),
-                "in".dimmed(),
-                test_files.len().to_string().green(),
-                "files".green().dimmed()
-            );
-        } else {
-            println!(
-                " {} {} {}, {} {} {}, {} {} {} {} {}{}",
-                "✓".green().bold(),
-                total_passed.to_string().green().bold(),
-                "passed".green().bold(),
-                "✗".red().bold(),
-                total_failed.to_string().red().bold(),
-                "failed".red().bold(),
-                "○".yellow().bold(),
-                total_skipped.to_string().yellow().bold(),
-                "skipped".yellow().bold(),
-                "in".dimmed(),
-                test_files.len().to_string().red(),
-                "files".red().dimmed()
-            );
-        }
+    let mut parts = Vec::new();
+
+    if total_passed > 0 {
+        parts.push(format!(
+            "{} {} {}",
+            "✓".green().bold(),
+            total_passed.to_string().green().bold(),
+            "passed".green().bold()
+        ));
+    }
+
+    if total_failed > 0 {
+        parts.push(format!(
+            "{} {} {}",
+            "✗".red().bold(),
+            total_failed.to_string().red().bold(),
+            "failed".red().bold()
+        ));
+    }
+
+    if total_skipped > 0 {
+        parts.push(format!(
+            "{} {} {}",
+            "○".yellow().bold(),
+            total_skipped.to_string().yellow().bold(),
+            "skipped".yellow().bold()
+        ));
+    }
+
+    if total_todo > 0 {
+        parts.push(format!(
+            "{} {} {}",
+            "□".purple().bold(),
+            total_todo.to_string().purple().bold(),
+            "todo".purple().bold()
+        ));
+    }
+
+    let file_str = if test_files.len() == 1 {
+        "file"
+    } else {
+        "files"
+    };
+
+    if !parts.is_empty() {
+        let summary = parts.join(", ");
+        println!(
+            "\n {} {} {} {}",
+            summary,
+            "in".dimmed(),
+            test_files.len().to_string().green(),
+            file_str.green().dimmed()
+        );
     }
 
     if total_failed > 0 {
@@ -166,6 +185,7 @@ struct TestStats {
     passed: usize,
     failed: usize,
     skipped: usize,
+    todo: usize,
 }
 
 fn run_tests_for_file(file: &str, filter: Option<&str>) -> Result<TestStats, anyhow::Error> {
@@ -225,6 +245,7 @@ fn run_all_tests(
                     passed: 0,
                     failed: 0,
                     skipped: 0,
+                    todo: 0,
                 };
             }
         };
@@ -254,8 +275,23 @@ fn run_all_tests(
     let mut passed = 0;
     let mut failed = 0;
     let mut skipped = 0;
+    let mut todo = 0;
 
     for test in filtered_tests.iter() {
+        if test.annotations.contains(&"todo".to_string()) {
+            let description = test.todo_description.as_deref().unwrap_or("TODO");
+            println!(
+                "  {} {} {}{}{}",
+                "□".purple().bold(),
+                test.name,
+                "[".dimmed(),
+                description.dimmed(),
+                "]".dimmed()
+            );
+            todo += 1;
+            continue;
+        }
+
         if test.annotations.contains(&"skip".to_string()) {
             println!("  {} {} {}", "○".dimmed(), test.name, "skipped".dimmed());
             skipped += 1;
@@ -433,6 +469,7 @@ fn run_all_tests(
         passed,
         failed,
         skipped,
+        todo,
     }
 }
 
@@ -517,6 +554,7 @@ struct TestAnnotations {
     pub annotations: Vec<String>,
     pub expected_exit_code: Option<i32>,
     pub gas_limit: Option<u64>,
+    pub todo_description: Option<String>,
 }
 
 #[derive(Debug)]
@@ -527,6 +565,7 @@ struct TestDescriptor {
     pub annotations: Vec<String>,
     pub expected_exit_code: Option<i32>,
     pub gas_limit: Option<u64>,
+    pub todo_description: Option<String>,
 }
 
 fn find_all_test(file: String, content: &String) -> Vec<TestDescriptor> {
@@ -563,6 +602,7 @@ fn find_all_test(file: String, content: &String) -> Vec<TestDescriptor> {
                         annotations: test_annotations.annotations,
                         expected_exit_code: test_annotations.expected_exit_code,
                         gas_limit: test_annotations.gas_limit,
+                        todo_description: test_annotations.todo_description,
                     }];
                 }
             };
@@ -578,12 +618,14 @@ fn parse_annotation_object(content: &String, object_node: Node) -> CustomAnnotat
             annotations: Vec::new(),
             expected_exit_code: None,
             gas_limit: None,
+            todo_description: None,
         };
     };
 
     let mut annotations = Vec::new();
     let mut expected_exit_code = None;
     let mut gas_limit = None;
+    let mut todo_description = None;
 
     let mut cursor = arguments.walk();
 
@@ -604,6 +646,20 @@ fn parse_annotation_object(content: &String, object_node: Node) -> CustomAnnotat
 
                     if is_true {
                         annotations.push("skip".to_string());
+                    }
+                    continue;
+                }
+                "todo" => {
+                    if let Some(value_node) = field.child_by_field_name("value") {
+                        if let Some(description) = parse_string_literal(content, value_node) {
+                            annotations.push("todo".to_string());
+                            todo_description = Some(description);
+                        } else if value_node.kind() == "boolean_literal"
+                            && is_boolean_true(content, value_node)
+                        {
+                            annotations.push("todo".to_string());
+                            todo_description = Some("TODO".to_string());
+                        }
                     }
                     continue;
                 }
@@ -636,6 +692,7 @@ fn parse_annotation_object(content: &String, object_node: Node) -> CustomAnnotat
         annotations,
         expected_exit_code,
         gas_limit,
+        todo_description,
     }
 }
 
@@ -657,15 +714,27 @@ fn parse_number_literal(content: &String, node: Node) -> Option<String> {
     }
 }
 
+fn parse_string_literal(content: &String, node: Node) -> Option<String> {
+    if node.kind() == "string_literal" {
+        let text = node.utf8_text(content.as_bytes()).unwrap_or("");
+        let unquoted = text.trim_matches('"');
+        Some(unquoted.to_string())
+    } else {
+        None
+    }
+}
+
 fn find_test_annotations(content: &String, child: Node) -> TestAnnotations {
     let mut annotations = Vec::new();
     let mut expected_exit_code = None;
     let mut gas_limit = None;
+    let mut todo_description = None;
     let Some(annotations_node) = child.child_by_field_name("annotations") else {
         return TestAnnotations {
             annotations,
             expected_exit_code,
             gas_limit,
+            todo_description,
         };
     };
 
@@ -691,8 +760,14 @@ fn find_test_annotations(content: &String, child: Node) -> TestAnnotations {
                     "string_literal" => {
                         let text = child.utf8_text(content.as_bytes()).unwrap_or("");
                         let unquoted = text.trim_matches('"');
-                        if unquoted == "skip" {
-                            annotations.push("skip".to_string());
+                        match unquoted {
+                            "skip" => {
+                                annotations.push("skip".to_string());
+                            }
+                            "todo" => {
+                                annotations.push("todo".to_string());
+                            }
+                            _ => {}
                         }
                     }
                     "object_literal" => {
@@ -705,6 +780,9 @@ fn find_test_annotations(content: &String, child: Node) -> TestAnnotations {
                         if values.gas_limit.is_some() {
                             gas_limit = values.gas_limit;
                         }
+                        if values.todo_description.is_some() {
+                            todo_description = values.todo_description;
+                        }
                     }
                     _ => {}
                 }
@@ -715,6 +793,7 @@ fn find_test_annotations(content: &String, child: Node) -> TestAnnotations {
         annotations,
         expected_exit_code,
         gas_limit,
+        todo_description,
     }
 }
 

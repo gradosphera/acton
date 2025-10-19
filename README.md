@@ -73,6 +73,18 @@ get fun test_something() {}
 get fun test_something() {}
 ```
 
+#### todo — Mark test as TODO
+
+Such test is not executed, but marked as TODO.
+
+```tolk
+@custom("todo")
+get fun test_something() {}
+
+@custom({ todo: "Implement this feature later" })
+get fun test_something() {}
+```
+
 You can combine multiple annotations:
 
 ```tolk
