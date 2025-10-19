@@ -42,7 +42,7 @@ pub fn test_cmd(file: &String) -> Result<(), anyhow::Error> {
     };
 
     let executable_code = inject_locations_into_expect_calls(&content, &file);
-    let tmp_test_filename = "test_".to_string().add(&*file);
+    let tmp_test_filename = file.to_owned() + "_test.tolk";
 
     fs::write(&tmp_test_filename, executable_code)?;
 

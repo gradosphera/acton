@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use emulator_rs::commands::test::test_cmd;
+use owo_colors::OwoColorize;
 
 #[derive(Parser)]
 #[command(name = "acton")]
@@ -21,7 +22,7 @@ fn main() {
         Commands::Test { file } => {
             let result = test_cmd(&file);
             if let Err(err) = result {
-                eprintln!("{}", err);
+                eprintln!("{} {}", "Error:".red(), err);
             }
         }
     }

@@ -132,11 +132,28 @@ impl Compiler {
                                     return;
                                 }
                             }
+                        } else if file_path.contains("@fiftlib/") {
+                            let filename = file_path
+                                .strip_prefix("@fiftlib/")
+                                .unwrap_or_else(|| file_path);
+                            match read_fift_stdlib_file(filename).map(|s| s.to_string()) {
+                                Some(content) => content,
+                                None => {
+                                    let raw_str = CString::new(
+                                        "Cannot read Fift standard library file, file not found",
+                                    )
+                                    .unwrap();
+                                    unsafe {
+                                        *dest_error = raw_str.into_raw();
+                                    }
+                                    return;
+                                }
+                            }
                         } else {
                             match read_to_string(file_path) {
                                 Ok(content) => content,
                                 Err(error) => {
-                                    let raw_str = CString::new(error.to_string()).unwrap();
+                                    let raw_str = CString::new(error.to_string() + "aaa").unwrap();
                                     unsafe {
                                         *dest_error = raw_str.into_raw();
                                     }
@@ -210,11 +227,16 @@ pub struct CompilerResultError {
     pub message: String,
 }
 
-/// We embed the whole standard library in binary for easier distribution.
+/// We embed the whole standard library of Tolk and Fift in binary for easier distribution.
 static TOLK_STDLIB_DIR: Dir = include_dir!("./crates/tolkc/assets/tolk-stdlib");
+static FIFT_STDLIB_DIR: Dir = include_dir!("./crates/tolkc/assets/fift");
 
 fn read_stdlib_file(path: &str) -> Option<&'static str> {
     TOLK_STDLIB_DIR.get_file(path)?.contents_utf8()
+}
+
+fn read_fift_stdlib_file(path: &str) -> Option<&'static str> {
+    FIFT_STDLIB_DIR.get_file(path)?.contents_utf8()
 }
 
 // C FFI declarations
