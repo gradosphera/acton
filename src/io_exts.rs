@@ -15,18 +15,33 @@ fn print_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: St
     } else {
         s
     };
+    let formatted = format!("{}", typed_tuple);
+    let formatted = if formatted.starts_with("\"") {
+        &formatted[1..formatted.len() - 1]
+    } else {
+        formatted.as_str()
+    };
 
     if ctx.capture_test_output {
-        ctx.stdout_buffer.push_str(&format!("{}\n", typed_tuple));
+        ctx.stdout_buffer.push_str(formatted);
+        ctx.stdout_buffer.push_str("\n");
     } else {
-        println!("{}", typed_tuple);
+        println!("{}", formatted);
     }
 }
 
 extension!(eprint in (Context) with (s: String) using eprint_impl);
 fn eprint_impl(ctx: &mut Context, _stack: &mut Tuple, s: String) {
+    let formatted = format!("{}", s);
+    let formatted = if formatted.starts_with("\"") {
+        &formatted[1..formatted.len() - 1]
+    } else {
+        formatted.as_str()
+    };
+
     if ctx.capture_test_output {
-        ctx.stderr_buffer.push_str(&format!("{}\n", s));
+        ctx.stderr_buffer.push_str(&formatted);
+        ctx.stderr_buffer.push_str("\n");
     } else {
         eprintln!("{}", s);
     }

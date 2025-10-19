@@ -194,7 +194,7 @@ impl fmt::Display for TupleItem {
                 if let Ok(()) = parser.skip_bits(*start_bits as usize) {
                     if let Ok(data) = parser.load_bits((*end_bits - *start_bits) as usize) {
                         if let Ok(utf8_string) = String::from_utf8(data) {
-                            write!(f, "{}", utf8_string)
+                            write!(f, "\"{}\"", utf8_string)
                         } else {
                             write!(f, "Slice(...)")
                         }

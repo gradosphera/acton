@@ -61,6 +61,10 @@ fun Expectation<slice>.toBeNonEmpty(self) {
     Assert.notEqual(self.value, "", "expect(actual).toBeNonEmpty()", self.location)
 }
 
+fun Expectation<slice>.toBeEmpty(self) {
+    Assert.equal(self.value, "", "expect(actual).toBeEmpty()", self.location)
+}
+
 fun expect<T>(value: T, location: slice = "") {
     return Expectation<T>.create(value, __typeName(value), location)
 }
