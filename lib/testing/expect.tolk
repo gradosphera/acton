@@ -189,6 +189,62 @@ fun Expectation<int>.toBeNonNaN(self) {
     Assert.notEqual(self.value, __nan(), "expect(actual).toBeNonNaN()", self.location);
 }
 
+/// Asserts that actual value is true.
+/// 
+/// Example:
+/// ```tolk
+/// expect(true).toBeTrue();
+/// ```
+fun Expectation<bool>.toBeTrue(self) {
+    Assert.equal(self.value, true, "expect(actual).toBeTrue()", self.location);
+}
+
+/// Asserts that actual value is false.
+/// 
+/// Example:
+/// ```tolk
+/// expect(false).toBeFalse();
+/// ```
+fun Expectation<bool>.toBeFalse(self) {
+    Assert.equal(self.value, false, "expect(actual).toBeFalse()", self.location);
+}
+
+/// Asserts that actual address is internal.
+/// 
+/// Example:
+/// ```tolk
+/// expect(addr).toBeInternalAddress();
+/// ```
+fun Expectation<address>.toBeInternalAddress(self) {
+    if (!self.value.isInternal()) {
+        Assert.fail("Expected address to be internal", self.location);
+    }
+}
+
+/// Asserts that actual address is none.
+/// 
+/// Example:
+/// ```tolk
+/// expect(addr).toBeNoneAddress();
+/// ```
+fun Expectation<address>.toBeNoneAddress(self) {
+    if (!self.value.isNone()) {
+        Assert.fail("Expected address to be none", self.location);
+    }
+}
+
+/// Asserts that actual address is external.
+/// 
+/// Example:
+/// ```tolk
+/// expect(addr).toBeExternalAddress();
+/// ```
+fun Expectation<address>.toBeExternalAddress(self) {
+    if (!self.value.isExternal()) {
+        Assert.fail("Expected address to be external", self.location)
+    }
+}
+
 /// Asserts that actual value represeneted as tuple contains the expected value.
 /// 
 /// Example:
@@ -230,6 +286,19 @@ fun Expectation<tuple>.toNotContain<U>(self, expected: U) {
         }
         i += 1;
     }
+}
+
+/// Asserts that actual value represeneted as tuple has the expected length.
+/// 
+/// Example:
+/// ```tolk
+/// var tuple = createEmptyTuple();
+/// tuple.push(1);
+/// tuple.push(2);
+/// tuple.push(3);
+/// expect(tuple).toHaveLength(3);
+fun Expectation<tuple>.toHaveLength(self, length: int) {
+    Assert.equal(self.value.size(), length, "expect(actual).toHaveLength(expected)", self.location);
 }
 
 /// Creates a new expectation for the given value.
