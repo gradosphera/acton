@@ -327,6 +327,7 @@ dependencies = [
  "emulator",
  "hex",
  "num-bigint",
+ "num-traits",
  "owo-colors",
  "regex",
  "serde_json",

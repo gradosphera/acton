@@ -66,6 +66,20 @@ get fun test_something() {}
 get fun test_something() {}
 ```
 
+Alternatively, you can use `expectToEndWithExitCode(code)` function to set the expected exit code conditionally in the test.
+
+```tolk
+import "lib/testing/expect"
+
+get fun test_something() {
+    if (something) {
+        expectToEndWithExitCode(10);
+    }
+
+    throw 20; // Test will end with exit code 20 and be considered as failed
+}
+```
+
 #### gas_limit — Set the gas limit for the test
 
 ```tolk

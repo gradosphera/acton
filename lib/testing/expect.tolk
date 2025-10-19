@@ -317,6 +317,28 @@ fun expect<T>(value: T, location: slice = "") {
     return Expectation<T>.create(value, __typeName(value), location);
 }
 
+/// Sets the expected exit code for the test.
+/// 
+/// Example:
+/// ```tolk
+/// expectToEndWithExitCode(10);
+/// throw 10; // Test will end with exit code 10 and be considered as passed
+/// ```
+/// 
+/// Alternatively, you can use `@custom({ fail_with: 10 })` annotation to set 
+/// the expected exit code for the whole test.
+/// 
+/// ```tolk
+/// @custom({ fail_with: 10 })
+/// get fun test_fail_with() {
+///     throw 10; // ok
+/// }
+/// ```
+/// 
+/// This function is more flexible and can be used conditionally in the test.
+fun expectToEndWithExitCode(code: int): void
+    asm "102 EXTCALL"
+
 /// Returns a NaN value.
 /// 
 /// Example:

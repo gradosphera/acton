@@ -7,6 +7,8 @@ use emulator::executor::Executor;
 use emulator::exit_codes;
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem};
+use num_bigint::BigInt;
+use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
 use regex::Regex;
 use std::collections::HashMap;
@@ -305,6 +307,7 @@ fn run_all_tests(
             captured_stdout,
             captured_stderr,
             assert_failure,
+            expected_exit_code: dyn_expected_exit_code,
             ..
         } = result;
 
@@ -323,7 +326,9 @@ fn run_all_tests(
             (duration.as_micros().to_string(), "μs")
         };
 
-        let expected_exit_code = test.expected_exit_code.unwrap_or(0);
+        let expected_exit_code = dyn_expected_exit_code
+            .or_else(|| test.expected_exit_code)
+            .unwrap_or(0);
         let mut test_passed = exit_code == expected_exit_code;
 
         let gas_limit_exceeded = if let Some(limit) = test.gas_limit {
@@ -421,13 +426,11 @@ fn run_all_tests(
                             }
                         }
                     } else {
-                        if let Some(expected) = test.expected_exit_code
-                            && expected != 0
-                        {
+                        if expected_exit_code != 0 {
                             println!(
                                 "    {} Expected exit_code={}, got={}",
                                 "└─".dimmed(),
-                                expected.to_string().green(),
+                                expected_exit_code.to_string().green(),
                                 exit_code.to_string().bright_red()
                             );
                         } else {
@@ -478,6 +481,7 @@ struct TestResult {
     captured_stdout: String,
     captured_stderr: String,
     assert_failure: Option<AssertFailure>,
+    expected_exit_code: Option<i32>,
 }
 
 fn execute_test(
@@ -515,6 +519,7 @@ fn execute_test(
         assert_failure: &mut None,
         blockchain: &mut blockchain,
         abi: (*abi).clone(),
+        expected_exit_code: &mut Some(BigInt::from(0)),
     };
 
     exts::register_get_extensions(&mut get_executor, &mut ctx);
@@ -527,6 +532,11 @@ fn execute_test(
         captured_stdout: ctx.stdout_buffer,
         captured_stderr: ctx.stderr_buffer,
         assert_failure: (*ctx.assert_failure).clone(),
+        expected_exit_code: ctx
+            .expected_exit_code
+            .clone()
+            .map(|value| value.to_i32())
+            .unwrap_or(None),
     }
 }
 

@@ -92,6 +92,7 @@ fn execute_script(code_cell: &ArcCell, data_cell: &ArcCell, abi: &ABI) -> Script
         assert_failure: &mut None,
         blockchain: &mut blockchain,
         abi: (*abi).clone(),
+        expected_exit_code: &mut None,
     };
 
     exts::register_get_extensions(&mut get_executor, &mut ctx);

@@ -3,6 +3,7 @@ use emulator::executor::Executor;
 use emulator::get_executor::GetExecutor;
 use emulator::tuple::stack::Tuple;
 use emulator::{extension, pop_args, register_ext_methods};
+use num_bigint::BigInt;
 
 extension!(assert_fail in (Context) with (location: String, message: String) using assert_fail_impl);
 fn assert_fail_impl(ctx: &mut Context, _stack: &mut Tuple, location: String, message: String) {
@@ -45,10 +46,16 @@ fn assert_bin_impl(
     stack.push_bool(false);
 }
 
+extension!(expect_to_end_with_exit_code in (Context) with (code: BigInt) using expect_to_end_with_exit_code_impl);
+fn expect_to_end_with_exit_code_impl(ctx: &mut Context, _stack: &mut Tuple, code: BigInt) {
+    *ctx.expected_exit_code = Some(code);
+}
+
 pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         100 => assert_fail,
         101 => assert_bin,
+        102 => expect_to_end_with_exit_code,
     });
 }
 
@@ -56,5 +63,6 @@ pub fn register_get_extensions(executor: &mut GetExecutor, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         100 => assert_fail,
         101 => assert_bin,
+        102 => expect_to_end_with_exit_code,
     });
 }

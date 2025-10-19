@@ -44,6 +44,7 @@ fn main() {
         abi: ABI {
             structs: HashMap::new(),
         },
+        expected_exit_code: &mut None,
     };
 
     exts::register_extensions(&mut blockchain.executor, &mut ctx);
