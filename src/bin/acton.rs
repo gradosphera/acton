@@ -12,7 +12,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    #[command(about = "Execute tests")]
+    #[command(about = "Execute tests in file or directory")]
     Test {
         #[arg(help = "Test file or directory containing test files")]
         path: String,

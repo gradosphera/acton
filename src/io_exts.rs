@@ -4,8 +4,8 @@ use emulator::get_executor::GetExecutor;
 use emulator::tuple::stack::{Tuple, TupleItem};
 use emulator::{extension, pop_args, register_ext_methods};
 
-extension!(print in (Context) with (s: TupleItem, type_name: String) using print_impl);
-fn print_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: String) {
+extension!(println in (Context) with (s: TupleItem, type_name: String) using println_impl);
+fn println_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: String) {
     let typed_tuple = if let TupleItem::Tuple(tuple) = &s {
         TupleItem::TypedTuple {
             abi: ctx.abi.find_type(&type_name),
@@ -30,8 +30,8 @@ fn print_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: St
     }
 }
 
-extension!(eprint in (Context) with (s: String) using eprint_impl);
-fn eprint_impl(ctx: &mut Context, _stack: &mut Tuple, s: String) {
+extension!(eprintln in (Context) with (s: String) using eprintln_impl);
+fn eprintln_impl(ctx: &mut Context, _stack: &mut Tuple, s: String) {
     let formatted = format!("{}", s);
     let formatted = if formatted.starts_with("\"") {
         &formatted[1..formatted.len() - 1]
@@ -49,14 +49,14 @@ fn eprint_impl(ctx: &mut Context, _stack: &mut Tuple, s: String) {
 
 pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
-        1 => print,
-        2 => eprint,
+        1 => println,
+        2 => eprintln,
     });
 }
 
 pub fn register_get_extensions(executor: &mut GetExecutor, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
-        1 => print,
-        2 => eprint,
+        1 => println,
+        2 => eprintln,
     });
 }
