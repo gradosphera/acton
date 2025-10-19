@@ -11,7 +11,7 @@
 /// });
 /// ```
 fun println<T>(value: T): void {
-    println_impl(__typeName(value), value.__toTuple());
+    __println_impl(__typeName(value), value.__toTuple());
 }
 
 /// Prints the given slice string to the standard error output.
@@ -21,10 +21,10 @@ fun println<T>(value: T): void {
 /// eprintln("Something went wrong");
 /// ```
 fun eprintln(str: slice): void {
-    eprintln_impl(str);
+    __eprintln_impl(str);
 }
 
-fun println_impl(type_name: slice, str: tuple): void
+fun __println_impl(type_name: slice, str: tuple): void
     asm "1 EXTCALL"
-fun eprintln_impl(str: slice): void
+fun __eprintln_impl(str: slice): void
     asm "2 EXTCALL"

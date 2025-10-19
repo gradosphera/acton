@@ -31,7 +31,7 @@ Copy `lib/` with the functions into your project.
 To define test, use `get fun test_*() {}` syntax:
 
 ```tolk
-import "./lib/testing/expect"
+import "lib/testing/expect"
 
 get fun test_something() {
     expect(5 + 5).toEqual(10)
@@ -73,3 +73,24 @@ get fun test_something() {}
 @custom("gas_limit", 10000)
 get fun test_something() {}
 ```
+
+## Scripts
+
+Execute Tolk scripts:
+
+```
+acton script script.tolk
+```
+
+Execute standalone Tolk scripts with a `main()` function:
+
+```tolk
+import "lib/io"
+
+fun main() {
+    println("Hello, World!");
+    println("This is a Tolk script!");
+}
+```
+
+Scripts exit with the same exit code as the `main()` function finishes.

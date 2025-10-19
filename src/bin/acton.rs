@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use emulator_rs::commands::script::script_cmd;
 use emulator_rs::commands::test::test_cmd;
 use owo_colors::OwoColorize;
 
@@ -19,6 +20,11 @@ enum Commands {
         #[arg(short, long, help = "Filter tests by regex pattern")]
         filter: Option<String>,
     },
+    #[command(about = "Execute a Tolk script file")]
+    Script {
+        #[arg(help = "Script file to execute")]
+        path: String,
+    },
 }
 
 fn main() {
@@ -27,6 +33,12 @@ fn main() {
     match cli.command {
         Commands::Test { path, filter } => {
             let result = test_cmd(&path, filter.as_deref());
+            if let Err(err) = result {
+                eprintln!("{} {}", "Error:".red(), err);
+            }
+        }
+        Commands::Script { path } => {
+            let result = script_cmd(&path);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
             }

@@ -1,3 +1,4 @@
+pub mod script;
 pub mod test;
 
 use std::collections::HashMap;
