@@ -4,7 +4,7 @@ use serde_json;
 use std::fs;
 use std::path::Path;
 
-pub fn compile_cmd(path: &String, json: bool) -> Result<(), anyhow::Error> {
+pub fn compile_cmd(path: &String, json: bool, base64_only: bool) -> Result<(), anyhow::Error> {
     let metadata = fs::metadata(path)?;
     if !metadata.is_file() {
         return Err(anyhow!("Path '{}' is not a file", path));
@@ -22,7 +22,9 @@ pub fn compile_cmd(path: &String, json: bool) -> Result<(), anyhow::Error> {
 
     match compilation_result {
         tolkc::CompilerResult::Success(result) => {
-            if json {
+            if base64_only {
+                println!("{}", result.code_boc64);
+            } else if json {
                 let json_output = serde_json::json!({
                     "success": true,
                     "code_boc64": result.code_boc64,

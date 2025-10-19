@@ -32,6 +32,8 @@ enum Commands {
         path: String,
         #[arg(long, help = "Output result as JSON")]
         json: bool,
+        #[arg(long, help = "Output only base64 code")]
+        base64_only: bool,
     },
 }
 
@@ -51,8 +53,12 @@ fn main() {
                 eprintln!("{} {}", "Error:".red(), err);
             }
         }
-        Commands::Compile { path, json } => {
-            let result = compile_cmd(&path, json);
+        Commands::Compile {
+            path,
+            json,
+            base64_only,
+        } => {
+            let result = compile_cmd(&path, json, base64_only);
             if let Err(err) = result {
                 if json {
                     println!(
