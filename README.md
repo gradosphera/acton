@@ -54,7 +54,8 @@ acton test --filter "test_Foo_.*" . # all test with `test_Foo` prefix
 #### skip — Skip the test
 
 ```tolk
-@custom({ skip })
+@custom("skip")
+// or @custom({ skip })
 get fun test_something() {}
 ```
 

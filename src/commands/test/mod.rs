@@ -687,16 +687,26 @@ fn find_test_annotations(content: &String, child: Node) -> TestAnnotations {
             let mut arg_cursor = args_node.walk();
 
             for child in args_node.children(&mut arg_cursor) {
-                if child.kind() == "object_literal" {
-                    let values = parse_annotation_object(content, child);
+                match child.kind() {
+                    "string_literal" => {
+                        let text = child.utf8_text(content.as_bytes()).unwrap_or("");
+                        let unquoted = text.trim_matches('"');
+                        if unquoted == "skip" {
+                            annotations.push("skip".to_string());
+                        }
+                    }
+                    "object_literal" => {
+                        let values = parse_annotation_object(content, child);
 
-                    annotations.extend(values.annotations);
-                    if values.expected_exit_code.is_some() {
-                        expected_exit_code = values.expected_exit_code;
+                        annotations.extend(values.annotations);
+                        if values.expected_exit_code.is_some() {
+                            expected_exit_code = values.expected_exit_code;
+                        }
+                        if values.gas_limit.is_some() {
+                            gas_limit = values.gas_limit;
+                        }
                     }
-                    if values.gas_limit.is_some() {
-                        gas_limit = values.gas_limit;
-                    }
+                    _ => {}
                 }
             }
         }
