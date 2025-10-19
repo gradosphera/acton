@@ -2,7 +2,8 @@
 
 # Acton
 
-Blazingly fast shit.
+Blazingly fast ~~shit~~ toolkit for TON application development written in
+Rust.
 
 ## Building
 
