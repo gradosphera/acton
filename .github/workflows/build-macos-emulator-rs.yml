@@ -1,0 +1,259 @@
+name: Build emulator-rs with TON static libraries
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out emulator-rs repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install required system dependencies
+        run: |
+          brew update
+          brew install ccache ninja libsodium libmicrohttpd pkg-config automake libtool autoconf gnutls llvm@16
+
+      - name: Clone tree-sitter-tolk repository
+        run: |
+          git clone https://github.com/ton-blockchain/tree-sitter-tolk.git tree-sitter-tolk
+
+      - name: Clone TON repository
+        run: |
+          git clone https://github.com/i582/ton.git --branch pmakhnev/acton --single-branch ton-repo
+          cd ton-repo
+          git submodule update --init --recursive
+
+      - name: Get TON commit hash
+        id: ton-commit
+        run: |
+          TON_COMMIT=$(git ls-remote https://github.com/i582/ton.git pmakhnev/acton | cut -f1)
+          echo "commit=$TON_COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Cache TON build directory
+        id: cache-ton-build
+        uses: actions/cache@v4
+        with:
+          path: ton-repo/build
+          key: ton-build-${{ runner.os }}-${{ steps.ton-commit.outputs.commit }}
+          restore-keys: ton-build-${{ runner.os }}-
+
+      - name: Cache TON artifacts
+        id: cache-ton-artifacts
+        uses: actions/cache@v4
+        with:
+          path: ton-repo/artifacts
+          key: ton-artifacts-${{ runner.os }}-${{ steps.ton-commit.outputs.commit }}
+          restore-keys: ton-artifacts-${{ runner.os }}-
+
+      - name: Cache TON dependencies (OpenSSL, LZ4, Zlib)
+        id: cache-ton-deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ton-repo/openssl_3
+            ton-repo/lz4
+            ton-repo/zlib
+          key: ton-deps-${{ runner.os }}-${{ steps.ton-commit.outputs.commit }}
+          restore-keys: ton-deps-${{ runner.os }}-
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ runner.os }}-${{ steps.ton-commit.outputs.commit }}
+          restore-keys: ccache-${{ runner.os }}-
+
+      - name: Build TON static libraries
+        if: steps.cache-ton-artifacts.outputs.cache-hit != 'true'
+        run: |
+          cd ton-repo
+          cp assembly/native/build-macos-static.sh .
+          chmod +x build-macos-static.sh
+          ./build-macos-static.sh -a -c
+
+      - name: Show ccache stats
+        if: steps.cache-ton-artifacts.outputs.cache-hit != 'true'
+        run: ccache -s
+
+      - name: Copy TON artifacts to objs directory
+        run: |
+          mkdir -p objs
+          cp ton-repo/artifacts/libemulator.a objs/
+          cp ton-repo/artifacts/libtolk.a objs/
+
+      - name: Build acton binary
+        run: |
+          cargo build --release --bin acton
+
+      - name: Test acton binary
+        run: |
+          ./target/release/acton --help
+
+      - name: Upload acton binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: acton-macos-binary
+          path: target/release/acton
+
+  build-linux:
+    runs-on: ubuntu-latest
+    if: false
+
+    steps:
+      - name: Check out emulator-rs repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install required system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git cmake ninja-build pkg-config autoconf automake libtool zlib1g-dev libsecp256k1-dev libmicrohttpd-dev libsodium-dev liblz4-dev libjemalloc-dev ccache clang-16 llvm-16 libc++-16-dev libc++abi-16-dev
+          echo "/usr/lib/llvm-16/bin" >> "$GITHUB_PATH"
+
+      - name: Clone tree-sitter-tolk repository
+        run: |
+          git clone https://github.com/ton-blockchain/tree-sitter-tolk.git tree-sitter-tolk
+
+      - name: Clone TON repository
+        run: |
+          git clone https://github.com/i582/ton.git --branch pmakhnev/acton --single-branch ton-repo
+          cd ton-repo
+          git submodule update --init --recursive
+
+      - name: Get TON commit hash
+        id: ton-commit
+        run: |
+          TON_COMMIT=$(git ls-remote https://github.com/i582/ton.git pmakhnev/acton | cut -f1)
+          echo "commit=$TON_COMMIT" >> $GITHUB_OUTPUT
+
+      - name: Cache TON build directory
+        id: cache-ton-build
+        uses: actions/cache@v4
+        with:
+          path: ton-repo/build
+          key: ton-build-${{ runner.os }}-${{ steps.ton-commit.outputs.commit }}
+          restore-keys: ton-build-${{ runner.os }}-
+
+      - name: Cache TON artifacts
+        id: cache-ton-artifacts
+        uses: actions/cache@v4
+        with:
+          path: ton-repo/artifacts
+          key: ton-artifacts-${{ runner.os }}-${{ steps.ton-commit.outputs.commit }}
+          restore-keys: ton-artifacts-${{ runner.os }}-
+
+      - name: Cache TON dependencies (OpenSSL, LZ4, Zlib)
+        id: cache-ton-deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ton-repo/openssl_3
+            ton-repo/lz4
+            ton-repo/zlib
+          key: ton-deps-${{ runner.os }}-${{ steps.ton-commit.outputs.commit }}
+          restore-keys: ton-deps-${{ runner.os }}-
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ runner.os }}-${{ steps.ton-commit.outputs.commit }}
+          restore-keys: ccache-${{ runner.os }}-
+
+      - name: Build TON static libraries
+        if: steps.cache-ton-artifacts.outputs.cache-hit != 'true'
+        run: |
+          export CC=clang-16
+          export CXX=clang++-16
+          export AR=llvm-ar-16
+          export RANLIB=llvm-ranlib-16
+          cd ton-repo
+          cp assembly/native/build-ubuntu-static.sh .
+          chmod +x build-ubuntu-static.sh
+          ./build-ubuntu-static.sh -a -c
+
+      - name: Show ccache stats
+        if: steps.cache-ton-artifacts.outputs.cache-hit != 'true'
+        run: ccache -s
+
+      - name: Copy TON artifacts to objs directory
+        run: |
+          mkdir -p objs
+          cp ton-repo/artifacts/libemulator.a objs/
+          cp ton-repo/artifacts/libtolk.a objs/
+
+      - name: Build acton binary
+        run: |
+          export CC=clang-16
+          export CXX=clang++-16
+          export AR=llvm-ar-16
+          export RANLIB=llvm-ranlib-16
+          cargo build --release --bin acton
+
+      - name: Test acton binary
+        run: |
+          ./target/release/acton --help
+
+      - name: Upload acton binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: acton-linux-binary
+          path: target/release/acton
+
+  create-nightly-release:
+    needs: [build-macos]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Download macOS binary
+        uses: actions/download-artifact@v4
+        with:
+          name: acton-macos-binary
+          path: binaries/macos/
+
+      - name: Make binaries executable
+        run: |
+          chmod +x binaries/macos/acton
+
+      - name: Generate nightly tag
+        id: nightly-tag
+        run: |
+          echo "tag=nightly-$(date +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: Create nightly release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.nightly-tag.outputs.tag }}
+          name: Nightly Build ${{ steps.nightly-tag.outputs.tag }}
+          body: |
+            Automated nightly build of emulator-rs.
+
+            ## Binaries
+            - `acton` - macOS binary
+
+            Built from commit: ${{ github.sha }}
+          files: |
+            binaries/macos/acton
+          prerelease: true
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
