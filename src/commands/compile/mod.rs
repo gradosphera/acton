@@ -1,0 +1,56 @@
+use anyhow::anyhow;
+use owo_colors::OwoColorize;
+use serde_json;
+use std::fs;
+use std::path::Path;
+
+pub fn compile_cmd(path: &String, json: bool) -> Result<(), anyhow::Error> {
+    let metadata = fs::metadata(path)?;
+    if !metadata.is_file() {
+        return Err(anyhow!("Path '{}' is not a file", path));
+    }
+
+    if !path.ends_with(".tolk") {
+        return Err(anyhow!("File must end with .tolk"));
+    }
+
+    if !json {
+        println!("  {} {}", "Compiling".bold().cyan(), path.dimmed());
+    }
+
+    let compilation_result = tolkc::compile(Path::new(path));
+
+    match compilation_result {
+        tolkc::CompilerResult::Success(result) => {
+            if json {
+                let json_output = serde_json::json!({
+                    "success": true,
+                    "code_boc64": result.code_boc64,
+                    "code_hash_hex": result.code_hash_hex
+                });
+                println!("{}", serde_json::to_string_pretty(&json_output).unwrap());
+            } else {
+                println!("{}", "✓ Compilation successful".green().bold());
+                println!("Code in base64: {}", result.code_boc64.dimmed());
+                println!("Code hash hex: {}", result.code_hash_hex.dimmed());
+            }
+            Ok(())
+        }
+        tolkc::CompilerResult::Error(error) => {
+            if json {
+                let json_output = serde_json::json!({
+                    "success": false,
+                    "error": error.message
+                });
+                println!("{}", serde_json::to_string_pretty(&json_output).unwrap());
+            } else {
+                println!(
+                    "{} {}",
+                    "✗ Compilation failed".red().bold(),
+                    error.message.red()
+                );
+            }
+            std::process::exit(1);
+        }
+    }
+}

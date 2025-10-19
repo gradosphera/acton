@@ -1,3 +1,4 @@
+pub mod compile;
 pub mod script;
 pub mod test;
 

@@ -329,6 +329,7 @@ dependencies = [
  "num-bigint",
  "owo-colors",
  "regex",
+ "serde_json",
  "tolk_parser",
  "tolkc",
  "tonlib-core",

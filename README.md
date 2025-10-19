@@ -94,3 +94,13 @@ fun main() {
 ```
 
 Scripts exit with the same exit code as the `main()` function finishes.
+
+## Compilation
+
+Compile Tolk files to TVM bytecode:
+
+```
+acton compile file.tolk
+```
+
+The command outputs the compiled bytecode in base64 format and its hash.
