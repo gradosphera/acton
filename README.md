@@ -26,6 +26,8 @@ target/debug/acton test foo_test.tolk
 
 ## Testing
 
+Copy `lib/` with the functions into your project.
+
 ```
 acton test foo_test.tolk            # single file
 acton test .                        # all test files in dir and subdirs
