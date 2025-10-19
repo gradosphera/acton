@@ -21,27 +21,148 @@ use tree_sitter::Node;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
-pub fn test_cmd(file: &String, filter: Option<&str>) -> Result<(), anyhow::Error> {
-    if !file.ends_with("_test.tolk") {
-        return Err(anyhow!("File must end with __test.tolk"));
+pub fn test_cmd(path: &String, filter: Option<&str>) -> Result<(), anyhow::Error> {
+    let metadata = fs::metadata(path)?;
+    let test_files = if metadata.is_file() {
+        if !path.ends_with("_test.tolk") {
+            return Err(anyhow!("File must end with _test.tolk"));
+        }
+        vec![path.clone()]
+    } else if metadata.is_dir() {
+        find_test_files_recursively(path)?
+    } else {
+        return Err(anyhow!("Path '{}' is neither a file nor a directory", path));
+    };
+
+    let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+    println!(
+        "\n{} {}\n",
+        " TEST ".bold().on_cyan(),
+        cwd.display().dimmed()
+    );
+    println!("{}", "─".repeat(50).dimmed());
+
+    let mut total_passed = 0;
+    let mut total_failed = 0;
+    let mut total_skipped = 0;
+
+    for file in &test_files {
+        let result = run_tests_for_file(&file, filter);
+        match result {
+            Ok(stats) => {
+                total_passed += stats.passed;
+                total_failed += stats.failed;
+                total_skipped += stats.skipped;
+            }
+            Err(err) => {
+                eprintln!("{} Error in file '{}': {}", "Error:".red(), file, err);
+                total_failed += 1;
+            }
+        }
+    }
+    if !test_files.is_empty() {
+        println!("{}", "─".repeat(50).dimmed());
     }
 
-    let content = match fs::read_to_string(&file) {
+    if test_files.len() > 1 {
+        println!("\n{}", "─".repeat(50).dimmed());
+        if total_failed == 0 && total_skipped == 0 {
+            println!(
+                " {} {} {} {} {}{}",
+                "✓".green().bold(),
+                total_passed.to_string().green().bold(),
+                "passed".green().bold(),
+                "in".dimmed(),
+                test_files.len().to_string().green(),
+                "files".green().dimmed()
+            );
+        } else if total_failed == 0 && total_skipped > 0 {
+            println!(
+                " {} {} {}, {} {} {} {} {}{}",
+                "✓".green().bold(),
+                total_passed.to_string().green().bold(),
+                "passed".green().bold(),
+                "○".yellow().bold(),
+                total_skipped.to_string().yellow().bold(),
+                "skipped".yellow().bold(),
+                "in".dimmed(),
+                test_files.len().to_string().green(),
+                "files".green().dimmed()
+            );
+        } else {
+            println!(
+                " {} {} {}, {} {} {}, {} {} {} {} {}{}",
+                "✓".green().bold(),
+                total_passed.to_string().green().bold(),
+                "passed".green().bold(),
+                "✗".red().bold(),
+                total_failed.to_string().red().bold(),
+                "failed".red().bold(),
+                "○".yellow().bold(),
+                total_skipped.to_string().yellow().bold(),
+                "skipped".yellow().bold(),
+                "in".dimmed(),
+                test_files.len().to_string().red(),
+                "files".red().dimmed()
+            );
+        }
+    }
+
+    if total_failed > 0 {
+        println!("\n{}", "Some tests failed.".red());
+    }
+
+    Ok(())
+}
+
+fn find_test_files_recursively(dir_path: &str) -> Result<Vec<String>, anyhow::Error> {
+    let mut test_files = Vec::new();
+
+    fn visit_dir(dir: &Path, test_files: &mut Vec<String>) -> Result<(), anyhow::Error> {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                visit_dir(&path, test_files)?;
+            } else if let Some(file_name) = path.file_name() {
+                if file_name.to_string_lossy().ends_with("_test.tolk") {
+                    test_files.push(path.to_string_lossy().to_string());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    visit_dir(Path::new(dir_path), &mut test_files)?;
+    test_files.sort();
+    Ok(test_files)
+}
+
+#[derive(Debug)]
+struct TestStats {
+    passed: usize,
+    failed: usize,
+    skipped: usize,
+}
+
+fn run_tests_for_file(file: &str, filter: Option<&str>) -> Result<TestStats, anyhow::Error> {
+    let content = match fs::read_to_string(file) {
         Ok(content) => content,
         Err(err) => {
             return Err(anyhow!("Error reading file '{}': {}", file, err));
         }
     };
 
-    let tests = find_all_test(file.clone(), &content);
+    let tests = find_all_test(file.to_string(), &content);
 
     let tree = tolk_parser::parser::parse(&content)?;
     let root_node = tree.root_node();
     let abi = ABI {
-        structs: abi::process_struct_definitions(&root_node, &content, &file),
+        structs: abi::process_struct_definitions(&root_node, &content, file),
     };
 
-    let executable_code = inject_locations_into_expect_calls(&content, &file);
+    let executable_code = inject_locations_into_expect_calls(&content, file);
     let tmp_test_filename = file.to_owned() + "_test.tolk";
 
     fs::write(&tmp_test_filename, executable_code)?;
@@ -51,14 +172,14 @@ pub fn test_cmd(file: &String, filter: Option<&str>) -> Result<(), anyhow::Error
         tolkc::CompilerResult::Success(result) => {
             let code_cell = ArcCell::from_boc_b64(&*result.code_boc64).unwrap();
             let data_cell = ArcCell::default();
-            run_all_tests(&file, tests, &code_cell, &data_cell, &abi, filter)
+
+            let stats = run_all_tests(file, tests, &code_cell, &data_cell, &abi, filter);
+            Ok(stats)
         }
         tolkc::CompilerResult::Error(error) => {
-            return Err(anyhow!("Cannot compile test file {}", error.message));
+            Err(anyhow!("Cannot compile test file {}", error.message))
         }
     }
-
-    Ok(())
 }
 
 fn run_all_tests(
@@ -68,13 +189,17 @@ fn run_all_tests(
     data_cell: &Arc<Cell>,
     abi: &ABI,
     filter: Option<&str>,
-) {
+) -> TestStats {
     let filtered_tests = if let Some(pattern) = filter {
         let regex = match Regex::new(pattern) {
             Ok(r) => r,
             Err(e) => {
                 eprintln!("Invalid regex pattern '{}': {}", pattern, e);
-                return;
+                return TestStats {
+                    passed: 0,
+                    failed: 0,
+                    skipped: 0,
+                };
             }
         };
         tests
@@ -85,33 +210,26 @@ fn run_all_tests(
         tests
     };
 
-    let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+    if !filtered_tests.is_empty() {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+        let relative_path = Path::new(file_path)
+            .strip_prefix(&cwd)
+            .unwrap_or_else(|_| Path::new(file_path));
+        println!(
+            " {} {} {}",
+            ">".dimmed(),
+            relative_path.display().to_string(),
+            format!("({} tests)", filtered_tests.len()).dimmed()
+        );
+    }
 
-    println!(
-        "\n{} {}\n",
-        " TEST ".bold().on_cyan(),
-        cwd.display().dimmed()
-    );
-    println!("{}", "─".repeat(50).dimmed());
-
-    let relative_path = Path::new(file_path)
-        .strip_prefix(cwd)
-        .unwrap_or_else(|_| Path::new(file_path));
-    println!(
-        " {} {} {}",
-        ">".dimmed(),
-        relative_path.display().to_string(),
-        format!("({} tests)", filtered_tests.len()).dimmed()
-    );
-
-    let total_start_time = Instant::now();
     let dest_address = contract_address(&code_cell);
 
     let mut passed = 0;
     let mut failed = 0;
     let mut skipped = 0;
 
-    for (_i, test) in filtered_tests.iter().enumerate() {
+    for test in filtered_tests.iter() {
         if test.annotations.contains(&"skip".to_string()) {
             println!("  {} {} {}", "○".dimmed(), test.name, "skipped".dimmed());
             skipped += 1;
@@ -264,57 +382,10 @@ fn run_all_tests(
         }
     }
 
-    let total_duration = total_start_time.elapsed();
-    let total_duration_ms = total_duration.as_millis();
-
-    println!("{}", "─".repeat(50).dimmed());
-
-    if failed == 0 && skipped == 0 {
-        println!(
-            " {} {} {} {} {}{}",
-            "✓".green().bold(),
-            passed.to_string().green().bold(),
-            "passed".green().bold(),
-            "in".dimmed(),
-            total_duration_ms.to_string().green(),
-            "ms".green().dimmed()
-        );
-    } else if failed == 0 && skipped > 0 {
-        println!(
-            " {} {} {}, {} {} {} {} {}{}",
-            "✓".green().bold(),
-            passed.to_string().green().bold(),
-            "passed".green().bold(),
-            "○".yellow().bold(),
-            skipped.to_string().yellow().bold(),
-            "skipped".yellow().bold(),
-            "in".dimmed(),
-            total_duration_ms.to_string().green(),
-            "ms".green().dimmed()
-        );
-    } else {
-        println!(
-            " {} {} {}, {} {} {}, {} {} {} {} {}{}",
-            "✓".green().bold(),
-            passed.to_string().green().bold(),
-            "passed".green().bold(),
-            "✗".red().bold(),
-            failed.to_string().red().bold(),
-            "failed".red().bold(),
-            "○".yellow().bold(),
-            skipped.to_string().yellow().bold(),
-            "skipped".yellow().bold(),
-            "in".dimmed(),
-            total_duration_ms.to_string().red(),
-            "ms".red().dimmed()
-        );
-    }
-
-    if failed > 0 {
-        println!(
-            "\n{}",
-            "Some tests failed. Check the output above for details.".red()
-        );
+    TestStats {
+        passed,
+        failed,
+        skipped,
     }
 }
 

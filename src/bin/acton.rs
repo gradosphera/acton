@@ -14,7 +14,8 @@ struct Cli {
 enum Commands {
     #[command(about = "Execute tests")]
     Test {
-        file: String,
+        #[arg(help = "Test file or directory containing test files")]
+        path: String,
         #[arg(short, long, help = "Filter tests by regex pattern")]
         filter: Option<String>,
     },
@@ -24,8 +25,8 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Test { file, filter } => {
-            let result = test_cmd(&file, filter.as_deref());
+        Commands::Test { path, filter } => {
+            let result = test_cmd(&path, filter.as_deref());
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
             }
