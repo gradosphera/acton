@@ -129,6 +129,48 @@ fun Expectation<T>.toNotEqual<U>(self, expected: U) {
     Assert.notEqual(self.value, expected, "expect(actual).toNotEqual(expected)", self.location);
 }
 
+/// Asserts that actual value is less than expected value.
+///
+/// Example:
+/// ```tolk
+/// expect(5).toBeLess(10);
+/// ```
+fun Expectation<int>.toBeLess<U>(self, expected: U) {
+    __assert_comparison(self.value, expected, "<", "expect(actual).toBeLess(expected)", self.location);
+}
+
+/// Asserts that actual value is greater than expected value.
+///
+/// Example:
+/// ```tolk
+/// expect(10).toBeGreater(5);
+/// ```
+fun Expectation<int>.toBeGreater<U>(self, expected: U) {
+    __assert_comparison(self.value, expected, ">", "expect(actual).toBeGreater(expected)", self.location);
+}
+
+/// Asserts that actual value is less than or equal to expected value.
+///
+/// Example:
+/// ```tolk
+/// expect(5).toBeLessOrEqual(10);
+/// expect(10).toBeLessOrEqual(10);
+/// ```
+fun Expectation<int>.toBeLessOrEqual<U>(self, expected: U) {
+    __assert_comparison(self.value, expected, "<=", "expect(actual).toBeLessOrEqual(expected)", self.location);
+}
+
+/// Asserts that actual value is greater than or equal to expected value.
+///
+/// Example:
+/// ```tolk
+/// expect(10).toBeGreaterOrEqual(5);
+/// expect(10).toBeGreaterOrEqual(10);
+/// ```
+fun Expectation<int>.toBeGreaterOrEqual<U>(self, expected: U) {
+    __assert_comparison(self.value, expected, ">=", "expect(actual).toBeGreaterOrEqual(expected)", self.location);
+}
+
 /// Asserts that actual value is null.
 /// 
 /// Example:
@@ -347,6 +389,31 @@ fun expectToEndWithExitCode(code: int): void
 /// ```
 fun __nan(): int
     asm "PUSHNAN"
+
+/// Internal helper function for comparison assertions.
+///
+/// Don't use this function directly. Use comparison methods instead.
+fun __assert_comparison<V1, V2>(
+    left: V1,
+    right: V2,
+    op: slice,
+    message: slice,
+    location: slice
+) {
+    if (
+    !__assert_bin(
+        op,
+        __typeName(left),
+        left.__toTuple(),
+        __typeName(right),
+        right.__toTuple(),
+        message,
+        location
+    )
+    ) {
+        throw ASSERTION_FAILED;
+    }
+}
 
 /// Internal function to assert two values are equal or not equal.
 /// 

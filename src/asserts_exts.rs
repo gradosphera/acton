@@ -1,7 +1,7 @@
 use crate::context::{AssertBinFailure, AssertFailure, Context, FailAssertFailure};
 use emulator::executor::Executor;
 use emulator::get_executor::GetExecutor;
-use emulator::tuple::stack::Tuple;
+use emulator::tuple::stack::{Tuple, TupleItem};
 use emulator::{extension, pop_args, register_ext_methods};
 use num_bigint::BigInt;
 
@@ -32,6 +32,33 @@ fn assert_bin_impl(
     if operator == "!=" && left != right {
         stack.push_bool(true);
         return;
+    }
+
+    if operator == "<" || operator == ">" || operator == "<=" || operator == ">=" {
+        if let Some(TupleItem::Int(left_int)) = left.0.first()
+            && let Some(TupleItem::Int(right_int)) = right.0.first()
+        {
+            if operator == "<" && left_int < right_int
+                || operator == ">" && left_int > right_int
+                || operator == "<=" && left_int <= right_int
+                || operator == ">=" && left_int >= right_int
+            {
+                stack.push_bool(true);
+                return;
+            }
+
+            *ctx.assert_failure = Some(AssertFailure::Bin(AssertBinFailure {
+                operator,
+                left,
+                right,
+                left_type: left_name,
+                right_type: right_name,
+                message: Some(message),
+                location: Some(location),
+            }));
+            stack.push_bool(false);
+            return;
+        }
     }
 
     *ctx.assert_failure = Some(AssertFailure::Bin(AssertBinFailure {

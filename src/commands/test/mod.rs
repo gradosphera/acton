@@ -420,6 +420,25 @@ fn run_all_tests(
                             println!("         {}", value.dimmed());
                         }
 
+                        if let AssertFailure::Bin(assert_failure) = &assert_failure
+                            && assert_failure.is_ord()
+                        {
+                            let left = format_tuple_value(
+                                &assert_failure.left,
+                                &assert_failure.left_type,
+                                &abi,
+                            );
+
+                            let right = format_tuple_value(
+                                &assert_failure.left,
+                                &assert_failure.left_type,
+                                &abi,
+                            );
+
+                            println!("        Actual:   {}", left.red());
+                            println!("        Expected: {}", right.green());
+                        }
+
                         if let Some(location) = &assert_failure.location() {
                             if !location.is_empty() {
                                 println!("      {} at {}", "└─".dimmed(), location.dimmed());

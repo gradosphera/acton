@@ -14,6 +14,15 @@ pub struct AssertBinFailure {
     pub location: Option<String>,
 }
 
+impl AssertBinFailure {
+    pub fn is_ord(&self) -> bool {
+        self.operator == "<"
+            || self.operator == ">"
+            || self.operator == "<="
+            || self.operator == ">="
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FailAssertFailure {
     pub message: Option<String>,
