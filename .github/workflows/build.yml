@@ -31,7 +31,7 @@ jobs:
 
       - name: Clone TON repository
         run: |
-          git clone https://github.com/i582/ton.git --branch pmakhnev/acton --single-branch ton-repo
+          git clone https://github.com/i582/ton.git --branch pmakhnev/acton --single-branch --depth=1 ton-repo
           cd ton-repo
           git submodule update --init --recursive
 
@@ -126,7 +126,7 @@ jobs:
 
       - name: Clone TON repository
         run: |
-          git clone https://github.com/i582/ton.git --branch pmakhnev/acton --single-branch ton-repo
+          git clone https://github.com/i582/ton.git --branch pmakhnev/acton --single-branch --depth=1 ton-repo
           cd ton-repo
           git submodule update --init --recursive
 
@@ -211,7 +211,7 @@ jobs:
           path: target/release/acton
 
   create-nightly-release:
-    needs: [build-macos]
+    needs: [ build-macos ]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master'
 
