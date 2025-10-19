@@ -8,9 +8,9 @@ use emulator::exit_codes;
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem};
 use owo_colors::OwoColorize;
+use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
-use std::ops::Add;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
@@ -21,7 +21,7 @@ use tree_sitter::Node;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
-pub fn test_cmd(file: &String) -> Result<(), anyhow::Error> {
+pub fn test_cmd(file: &String, filter: Option<&str>) -> Result<(), anyhow::Error> {
     if !file.ends_with("_test.tolk") {
         return Err(anyhow!("File must end with __test.tolk"));
     }
@@ -51,7 +51,7 @@ pub fn test_cmd(file: &String) -> Result<(), anyhow::Error> {
         tolkc::CompilerResult::Success(result) => {
             let code_cell = ArcCell::from_boc_b64(&*result.code_boc64).unwrap();
             let data_cell = ArcCell::default();
-            run_all_tests(&file, tests, &code_cell, &data_cell, &abi)
+            run_all_tests(&file, tests, &code_cell, &data_cell, &abi, filter)
         }
         tolkc::CompilerResult::Error(error) => {
             return Err(anyhow!("Cannot compile test file {}", error.message));
@@ -67,7 +67,24 @@ fn run_all_tests(
     code_cell: &Arc<Cell>,
     data_cell: &Arc<Cell>,
     abi: &ABI,
+    filter: Option<&str>,
 ) {
+    let filtered_tests = if let Some(pattern) = filter {
+        let regex = match Regex::new(pattern) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("Invalid regex pattern '{}': {}", pattern, e);
+                return;
+            }
+        };
+        tests
+            .into_iter()
+            .filter(|test| regex.is_match(&test.name))
+            .collect::<Vec<_>>()
+    } else {
+        tests
+    };
+
     let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
 
     println!(
@@ -84,7 +101,7 @@ fn run_all_tests(
         " {} {} {}",
         ">".dimmed(),
         relative_path.display().to_string(),
-        format!("({} tests)", tests.len()).dimmed()
+        format!("({} tests)", filtered_tests.len()).dimmed()
     );
 
     let total_start_time = Instant::now();
@@ -94,7 +111,7 @@ fn run_all_tests(
     let mut failed = 0;
     let mut skipped = 0;
 
-    for (_i, test) in tests.iter().enumerate() {
+    for (_i, test) in filtered_tests.iter().enumerate() {
         if test.annotations.contains(&"skip".to_string()) {
             println!("  {} {} {}", "○".dimmed(), test.name, "skipped".dimmed());
             skipped += 1;

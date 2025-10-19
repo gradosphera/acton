@@ -328,6 +328,7 @@ dependencies = [
  "hex",
  "num-bigint",
  "owo-colors",
+ "regex",
  "tolk_parser",
  "tolkc",
  "tonlib-core",

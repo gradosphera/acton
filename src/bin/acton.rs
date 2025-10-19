@@ -12,15 +12,20 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Test { file: String },
+    #[command(about = "Execute tests")]
+    Test {
+        file: String,
+        #[arg(short, long, help = "Filter tests by regex pattern")]
+        filter: Option<String>,
+    },
 }
 
 fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Test { file } => {
-            let result = test_cmd(&file);
+        Commands::Test { file, filter } => {
+            let result = test_cmd(&file, filter.as_deref());
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
             }
