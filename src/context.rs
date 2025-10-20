@@ -1,5 +1,6 @@
 use abi::ABI;
 use emulator::blockchain::Blockchain;
+use emulator::emulator::Emulator;
 use emulator::tuple::stack::Tuple;
 use num_bigint::BigInt;
 
@@ -58,5 +59,6 @@ pub struct Context<'a> {
     pub assert_failure: &'a mut Option<AssertFailure>,
     pub expected_exit_code: &'a mut Option<BigInt>,
     pub blockchain: &'a mut Blockchain,
+    pub emulator: &'a mut Emulator,
     pub abi: ABI,
 }

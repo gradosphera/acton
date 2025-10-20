@@ -3,7 +3,6 @@ use anyhow::anyhow;
 use num_bigint::{BigInt, BigUint};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
-use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, CellBuilder, CellParser};
 use tonlib_core::tlb_types::tlb::TLB;
 

@@ -155,14 +155,14 @@ struct EmulationInternalResult {
     pub logs: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(untagged)]
 pub enum EmulationResult {
     Success(ResultSuccess),
     Error(ResultError),
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct ResultSuccess {
     pub transaction: String,
     pub shard_account: String,
@@ -170,7 +170,7 @@ pub struct ResultSuccess {
     pub actions: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct ResultError {
     pub error: String,
     pub vm_log: Option<String>,

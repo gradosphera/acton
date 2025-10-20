@@ -3,7 +3,7 @@ use crate::{asserts_exts, exts, io_exts};
 use abi::ABI;
 use anyhow::anyhow;
 use emulator::blockchain::Blockchain;
-use emulator::executor::Executor;
+use emulator::emulator::Emulator;
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
@@ -83,7 +83,8 @@ fn execute_script(code_cell: &ArcCell, data_cell: &ArcCell, abi: &ABI) -> Script
     };
 
     let mut get_executor = GetExecutor::new(params.clone());
-    let mut blockchain = Blockchain::new(Executor::new());
+    let mut emulator = Emulator::new();
+    let mut blockchain = Blockchain::new();
 
     let mut ctx = Context {
         stdout_buffer: "".to_string(),
@@ -91,6 +92,7 @@ fn execute_script(code_cell: &ArcCell, data_cell: &ArcCell, abi: &ABI) -> Script
         capture_test_output: false,
         assert_failure: &mut None,
         blockchain: &mut blockchain,
+        emulator: &mut emulator,
         abi: (*abi).clone(),
         expected_exit_code: &mut None,
     };

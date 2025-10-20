@@ -3,7 +3,7 @@ use crate::{asserts_exts, exts, io_exts};
 use abi::ABI;
 use anyhow::anyhow;
 use emulator::blockchain::Blockchain;
-use emulator::executor::Executor;
+use emulator::emulator::Emulator;
 use emulator::exit_codes;
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem};
@@ -529,7 +529,8 @@ fn execute_test(
     };
     let mut get_executor = GetExecutor::new(params.clone());
 
-    let mut blockchain = Blockchain::new(Executor::new());
+    let mut emulator = Emulator::new();
+    let mut blockchain = Blockchain::new();
 
     let mut ctx = Context {
         stdout_buffer: "".to_string(),
@@ -537,6 +538,7 @@ fn execute_test(
         capture_test_output: true,
         assert_failure: &mut None,
         blockchain: &mut blockchain,
+        emulator: &mut emulator,
         abi: (*abi).clone(),
         expected_exit_code: &mut Some(BigInt::from(0)),
     };

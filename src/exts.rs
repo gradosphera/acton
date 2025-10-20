@@ -1,7 +1,5 @@
 use crate::context::Context;
-use emulator::executor::{
-    EmulationResult, Executor, ExecutorVerbosity, RunTransactionArgs, StoreExt,
-};
+use emulator::executor::{EmulationResult, Executor};
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem, parse_tuple};
 use emulator::{extension, pop_args, register_ext_methods};
@@ -13,10 +11,8 @@ use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
 use tonlib_core::tlb_types::tlb::TLB;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, Load};
-use tycho_types::models::{
-    AccountState, IntAddr, RelaxedMessage, RelaxedMsgInfo, ShardAccount, StdAddr,
-};
+use tycho_types::cell::Cell;
+use tycho_types::models::{AccountState, IntAddr};
 
 extension!(read_file in (Context) with (path: String) using read_file_impl);
 fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
@@ -44,68 +40,25 @@ fn build_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
 extension!(send_message in (Context) with (mode: BigInt, message: ArcCell) using send_message_impl);
 fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message: ArcCell) {
     let blockchain = &mut ctx.blockchain;
+    let emulator = &ctx.emulator;
 
     let msg_b64 = message.to_boc_b64(false).unwrap();
-    let msg_b64_cell = Boc::decode_base64(msg_b64).unwrap();
-    let mut slice = msg_b64_cell.as_slice().unwrap();
-    let mut msg2 = RelaxedMessage::load_from(&mut slice).unwrap();
+    let msg_cell = Boc::decode_base64(msg_b64).unwrap();
 
-    let mut dst_addr = IntAddr::default();
+    // Send from null address for now
+    let src_addr = IntAddr::default();
+    let emulations = emulator.send_message(blockchain, msg_cell, Some(src_addr));
 
-    match &mut msg2.info {
-        RelaxedMsgInfo::Int(info) => {
-            let addr_b64 = "b5ee9c724101010100240000438015a63d6ec5cd11f837442aeba86b361f3890e715eca7c2cd44666017b8d6535d30a1578b99";
-            let addr_b64_cell = Boc::decode_hex(addr_b64).unwrap();
-            let mut slice = addr_b64_cell.as_slice().unwrap();
+    let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
+        EmulationResult::Success(res) => Some(res),
+        EmulationResult::Error(_) => None,
+    });
 
-            info.src = Some(IntAddr::Std(StdAddr::load_from(&mut slice).unwrap()));
-            dst_addr = info.dst.clone()
-        }
-        _ => {}
-    }
-
-    let account = blockchain.get_account(dst_addr.to_string());
-
-    let params = RunTransactionArgs {
-        config: emulator::config::DEFAULT_CONFIG.to_string(),
-        libs: None,
-        verbosity: ExecutorVerbosity::Short,
-        shard_account: account,
-        now: 0,
-        lt: Default::default(),
-        random_seed: None,
-        ignore_chksig: false,
-        debug_enabled: true,
-        prev_blocks_info: None,
-    };
-    let result = blockchain
-        .executor
-        .run_transaction(msg2.to_cell(), mode, params);
-
-    match result {
-        EmulationResult::Success(result) => {
-            let shard_account_after = result.shard_account;
-            let acc_b64_cell = Boc::decode_base64(shard_account_after).unwrap();
-            let mut slice = acc_b64_cell.as_slice().unwrap();
-            let acc = ShardAccount::load_from(&mut slice).unwrap();
-
-            blockchain.update_account(dst_addr.to_string(), acc);
-            stack.push(TupleItem::Tuple(vec![TupleItem::Cell(
-                ArcCell::from_boc_b64(&*result.transaction).unwrap(),
-            )]));
-        }
-        EmulationResult::Error(result) => {
-            println!("Emulation error: {}", result.error);
-            if let Some(vm_log) = result.vm_log {
-                println!("VM log: {}", vm_log);
-            }
-            if let Some(vm_exit_code) = result.vm_exit_code {
-                println!("VM exit code: {}", vm_exit_code);
-            }
-
-            stack.push(TupleItem::Null);
-        }
-    }
+    let transaction_cells = successful_emulations
+        .filter_map(|emulation| ArcCell::from_boc_b64(&*emulation.transaction).ok())
+        .map(|tx| TupleItem::Cell(tx))
+        .collect::<Vec<_>>();
+    stack.push(TupleItem::Tuple(transaction_cells));
 }
 
 extension!(run_get_method in (Context) with (id: BigInt, code: ArcCell, address: ArcCell) using run_get_method_impl);
