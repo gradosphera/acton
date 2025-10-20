@@ -210,6 +210,7 @@ dependencies = [
  "anyhow",
  "hex",
  "num-bigint",
+ "num-traits",
  "once_cell",
  "owo-colors",
  "pkg-config",

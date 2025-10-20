@@ -1,4 +1,5 @@
 use num_bigint::BigInt;
+use num_traits::cast::ToPrimitive;
 use std::collections::HashMap;
 use tycho_types::cell::{HashBytes, Lazy};
 use tycho_types::models::{OptionalAccount, ShardAccount};
@@ -25,7 +26,7 @@ impl Blockchain {
                 let acc = ShardAccount {
                     account: Lazy::new(&OptionalAccount(None)).unwrap(),
                     last_trans_hash: HashBytes::ZERO,
-                    last_trans_lt: 0,
+                    last_trans_lt: self.current_lt.to_u64().unwrap_or(0),
                 };
                 self.accounts.insert(raw_addr.to_string(), acc.clone());
                 acc
@@ -38,8 +39,7 @@ impl Blockchain {
     }
 
     pub fn get_lt(&mut self) -> BigInt {
-        let value = self.current_lt.clone();
         self.current_lt += BigInt::from(1_000_000);
-        value
+        self.current_lt.clone()
     }
 }

@@ -475,7 +475,7 @@ fn run_all_tests(
         if !captured_stdout.trim().is_empty() {
             println!("    {} Test output:", "└─".dimmed());
             for line in captured_stdout.trim().lines() {
-                println!("       {}", line.dimmed());
+                println!("       {}", line);
             }
         }
 

@@ -344,15 +344,20 @@ fn format_transaction_list(items: &&Vec<TupleItem>) -> String {
 
     let mut builder = "".to_string();
 
-    let mut known_contracts: HashSet<IntAddr> = HashSet::new();
+    let mut known_contracts: Vec<IntAddr> = vec![];
 
     for tx in &txs {
         let in_msg = tx.load_in_msg().unwrap();
         if let Some(in_msg) = &in_msg
             && let MsgInfo::Int(info) = &in_msg.info
         {
-            known_contracts.insert(info.src.clone());
-            known_contracts.insert(info.dst.clone());
+            // It's O(N) but we need order, and we don't have many (thousands) transactions
+            if !known_contracts.contains(&info.src) {
+                known_contracts.push(info.src.clone());
+            }
+            if !known_contracts.contains(&info.dst) {
+                known_contracts.push(info.dst.clone());
+            }
         }
     }
 
@@ -367,13 +372,6 @@ fn format_transaction_list(items: &&Vec<TupleItem>) -> String {
     for tx in txs {
         let mut tx_builder = "\x1b[0m".to_string();
 
-        if tx.orig_status == AccountStatus::NotExists && tx.end_status == AccountStatus::Active {
-            tx_builder += "account created\n"
-        }
-        if tx.orig_status == AccountStatus::Active && tx.end_status == AccountStatus::NotExists {
-            tx_builder += "account destroyed\n"
-        }
-
         tx_builder += "\x1b[0m";
         let in_msg = tx.load_in_msg().unwrap();
         if let Some(in_msg) = &in_msg
@@ -384,7 +382,7 @@ fn format_transaction_list(items: &&Vec<TupleItem>) -> String {
             }
 
             let mut body = in_msg.body.clone();
-            let mut opcode = body.load_u32().unwrap_or(0);
+            let mut opcode = body.load_u32().unwrap_or(1);
             if opcode == 0xFFFFFFFF {
                 // if bounce read another 32 bit to get actual opcode
                 opcode = body.load_u32().unwrap_or(0);
@@ -398,6 +396,12 @@ fn format_transaction_list(items: &&Vec<TupleItem>) -> String {
                 .as_str();
             tx_builder += " ";
             tx_builder += show_addr(&info.src).dimmed().to_string().as_str();
+
+            let letter = contract_letters.get(&info.src);
+            if let Some(letter) = letter {
+                tx_builder += format!(" {}  ", letter.bold()).as_str();
+            }
+
             tx_builder += " ";
             tx_builder += &format!("{} TON", amount.to_string()).green().to_string();
             tx_builder += " -> ";
@@ -424,6 +428,17 @@ fn format_transaction_list(items: &&Vec<TupleItem>) -> String {
                     .red()
                     .to_string()
                     .as_str();
+            }
+
+            tx_builder += format!("  lt: {} prev_lt: {}", tx.lt, tx.prev_trans_lt).as_str();
+
+            if tx.orig_status == AccountStatus::NotExists && tx.end_status == AccountStatus::Active
+            {
+                tx_builder += "\n- account created"
+            }
+            if tx.orig_status == AccountStatus::Active && tx.end_status == AccountStatus::NotExists
+            {
+                tx_builder += "\n- account destroyed"
             }
         }
 
