@@ -113,9 +113,7 @@ fn main() {
         .run_transaction(msg_cell, BigInt::from(0), params);
     match output {
         EmulationResult::Success(result) => {
-            #[allow(deprecated)]
-            let tx_cell: tycho_types::cell::Cell =
-                Boc::decode(base64::decode(&result.transaction).unwrap()).unwrap();
+            let tx_cell: tycho_types::cell::Cell = Boc::decode_base64(&result.transaction).unwrap();
             let mut slice = tx_cell.as_slice().unwrap();
             let tx = Transaction::load_from(&mut slice).unwrap();
 

@@ -837,15 +837,15 @@ fn inject_locations_into_expect_calls(content: &str, file_path: &str) -> String 
 
     let mut result = content.to_string();
 
+    if !has_entry_function(&root_node, &result) {
+        result += "\n\nfun main() {}"
+    }
+
     for (start, end, replacement) in replacements.into_iter().rev() {
         result.replace_range(start..end, &replacement);
     }
 
-    if !has_entry_function(&root_node, &result) {
-        result + "\n\nfun main() {}"
-    } else {
-        result
-    }
+    result
 }
 
 fn find_expect_calls(

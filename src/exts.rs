@@ -46,9 +46,7 @@ fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message
     let blockchain = &mut ctx.blockchain;
 
     let msg_b64 = message.to_boc_b64(false).unwrap();
-    #[allow(deprecated)]
-    let msg_b64_bytes = base64::decode(&msg_b64).unwrap();
-    let msg_b64_cell = Boc::decode(msg_b64_bytes).unwrap();
+    let msg_b64_cell = Boc::decode_base64(msg_b64).unwrap();
     let mut slice = msg_b64_cell.as_slice().unwrap();
     let mut msg2 = RelaxedMessage::load_from(&mut slice).unwrap();
 
@@ -57,8 +55,7 @@ fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message
     match &mut msg2.info {
         RelaxedMsgInfo::Int(info) => {
             let addr_b64 = "b5ee9c724101010100240000438015a63d6ec5cd11f837442aeba86b361f3890e715eca7c2cd44666017b8d6535d30a1578b99";
-            let addr_b64_bytes = hex::decode(&addr_b64).unwrap();
-            let addr_b64_cell = Boc::decode(addr_b64_bytes).unwrap();
+            let addr_b64_cell = Boc::decode_hex(addr_b64).unwrap();
             let mut slice = addr_b64_cell.as_slice().unwrap();
 
             info.src = Some(IntAddr::Std(StdAddr::load_from(&mut slice).unwrap()));
@@ -88,9 +85,7 @@ fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message
     match result {
         EmulationResult::Success(result) => {
             let shard_account_after = result.shard_account;
-            #[allow(deprecated)]
-            let acc_b64_bytes = base64::decode(&shard_account_after).unwrap();
-            let acc_b64_cell = Boc::decode(acc_b64_bytes).unwrap();
+            let acc_b64_cell = Boc::decode_base64(shard_account_after).unwrap();
             let mut slice = acc_b64_cell.as_slice().unwrap();
             let acc = ShardAccount::load_from(&mut slice).unwrap();
 

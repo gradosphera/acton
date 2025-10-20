@@ -25,6 +25,9 @@ fn assert_bin_impl(
     left_name: String,
     operator: String,
 ) {
+    let left = left.unwrap_single();
+    let right = right.unwrap_single();
+
     if operator == "==" && left == right {
         stack.push_bool(true);
         return;

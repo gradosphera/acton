@@ -14,6 +14,20 @@ impl Tuple {
     pub fn empty() -> Tuple {
         Tuple(vec![])
     }
+
+    pub fn unwrap_single(&self) -> Tuple {
+        if self.0.is_empty() {
+            return (*self).clone();
+        }
+
+        if let TupleItem::Tuple(item) = &self.0[0]
+            && item.len() == 1
+        {
+            return Tuple(vec![item[0].clone()]);
+        }
+
+        (*self).clone()
+    }
 }
 
 impl Deref for Tuple {
