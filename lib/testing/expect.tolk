@@ -334,7 +334,7 @@ fun Expectation<bool>.toBeFalse(self) {
 /// ```
 fun Expectation<address>.toBeInternalAddress(self) {
     if (!self.value.isInternal()) {
-        Assert.fail("Expected address to be internal", self.location);
+        Assert.fail("expect(actual).toBeInternalAddress(): Expected address to be internal", self.location);
     }
 }
 
@@ -346,7 +346,7 @@ fun Expectation<address>.toBeInternalAddress(self) {
 /// ```
 fun Expectation<address>.toBeNoneAddress(self) {
     if (!self.value.isNone()) {
-        Assert.fail("Expected address to be none", self.location);
+        Assert.fail("expect(actual).toBeNoneAddress(): Expected address to be none", self.location);
     }
 }
 
@@ -358,7 +358,7 @@ fun Expectation<address>.toBeNoneAddress(self) {
 /// ```
 fun Expectation<address>.toBeExternalAddress(self) {
     if (!self.value.isExternal()) {
-        Assert.fail("Expected address to be external", self.location);
+        Assert.fail("expect(actual).toBeExternalAddress(): Expected address to be external", self.location);
     }
 }
 
