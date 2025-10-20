@@ -1,6 +1,9 @@
 use crate::blockchain::Blockchain;
-use crate::executor::{EmulationResult, Executor, ExecutorVerbosity, RunTransactionArgs, StoreExt};
+use crate::executor::{
+    EmulationResult, Executor, ExecutorVerbosity, ResultError, RunTransactionArgs, StoreExt,
+};
 use num_bigint::BigInt;
+use serde::Deserialize;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
 use tycho_types::models::{
@@ -9,6 +12,23 @@ use tycho_types::models::{
 
 pub struct Emulator {
     pub executor: Executor,
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(untagged)]
+pub enum SendMessageResult {
+    Success(SendMessageResultSuccess),
+    Error(ResultError),
+}
+
+#[derive(Deserialize, Clone)]
+pub struct SendMessageResultSuccess {
+    pub raw_transaction: String,
+    pub transaction: Transaction,
+    pub parent_transaction: Option<Transaction>,
+    pub shard_account: ShardAccount,
+    pub vm_log: String,
+    pub actions: Option<String>,
 }
 
 impl Emulator {
@@ -22,7 +42,7 @@ impl Emulator {
         net: &mut Blockchain,
         message: Cell,
         src_addr: Option<IntAddr>,
-    ) -> Vec<EmulationResult> {
+    ) -> Vec<SendMessageResult> {
         let message = Emulator::patch_src_addr(message, src_addr);
         let message_obj = Message::load_from(&mut message.parse().unwrap()).unwrap();
         let MsgInfo::Int(int_message) = message_obj.info else {
@@ -46,22 +66,32 @@ impl Emulator {
                 prev_blocks_info: None,
             },
         );
-        let EmulationResult::Success(result) = result else {
-            return vec![result];
+        let result = match result {
+            EmulationResult::Success(result) => result,
+            EmulationResult::Error(err) => return vec![SendMessageResult::Error(err)],
         };
 
         let shard_account_after = &result.shard_account;
         let shard_account_cell = Boc::decode_base64(shard_account_after).unwrap();
         let mut shard_account_slice = shard_account_cell.as_slice().unwrap();
-        let acc = ShardAccount::load_from(&mut shard_account_slice).unwrap();
+        let shard_account = ShardAccount::load_from(&mut shard_account_slice).unwrap();
 
-        net.update_account(int_message.dst.to_string(), acc);
+        net.update_account(int_message.dst.to_string(), &shard_account);
 
         let tx_cell: Cell = Boc::decode_base64(&result.transaction).unwrap();
         let mut tx_slice = tx_cell.as_slice().unwrap();
         let transaction = Transaction::load_from(&mut tx_slice).unwrap();
 
-        std::iter::once(EmulationResult::Success(result))
+        let send_result = SendMessageResultSuccess {
+            raw_transaction: result.transaction,
+            transaction: transaction.clone(),
+            parent_transaction: None,
+            shard_account,
+            vm_log: result.vm_log,
+            actions: result.actions,
+        };
+
+        std::iter::once(SendMessageResult::Success(send_result))
             .chain(transaction.iter_out_msgs().flat_map(|msg| {
                 let Ok(msg) = msg else { return vec![] };
                 let send_results = self.send_message(net, msg.to_cell(), None);

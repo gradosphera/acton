@@ -1,4 +1,5 @@
 use crate::context::Context;
+use emulator::emulator::SendMessageResult;
 use emulator::executor::{EmulationResult, Executor};
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem, parse_tuple};
@@ -50,12 +51,12 @@ fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message
     let emulations = emulator.send_message(blockchain, msg_cell, Some(src_addr));
 
     let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
-        EmulationResult::Success(res) => Some(res),
-        EmulationResult::Error(_) => None,
+        SendMessageResult::Success(res) => Some(res),
+        SendMessageResult::Error(_) => None,
     });
 
     let transaction_cells = successful_emulations
-        .filter_map(|emulation| ArcCell::from_boc_b64(&*emulation.transaction).ok())
+        .filter_map(|emulation| ArcCell::from_boc_b64(&*emulation.raw_transaction).ok())
         .map(|tx| TupleItem::Cell(tx))
         .collect::<Vec<_>>();
     stack.push(TupleItem::Tuple(transaction_cells));

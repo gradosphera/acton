@@ -33,8 +33,8 @@ impl Blockchain {
         }
     }
 
-    pub fn update_account(&mut self, addr: String, account: ShardAccount) {
-        self.accounts.insert(addr, account);
+    pub fn update_account(&mut self, addr: String, account: &ShardAccount) {
+        self.accounts.insert(addr, account.clone());
     }
 
     pub fn get_lt(&mut self) -> BigInt {
