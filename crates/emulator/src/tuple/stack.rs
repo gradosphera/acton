@@ -3,7 +3,9 @@ use anyhow::anyhow;
 use num_bigint::{BigInt, BigUint};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
+use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, CellBuilder, CellParser};
+use tonlib_core::tlb_types::tlb::TLB;
 
 #[derive(Default, Debug, Clone)]
 pub struct Tuple(pub Vec<TupleItem>);
@@ -138,7 +140,7 @@ impl PartialEq for TupleSLice {
         for _ in 0..self_refs_count {
             match (self_parser.next_reference(), other_parser.next_reference()) {
                 (Ok(self_ref), Ok(other_ref)) => {
-                    if self_ref.cell_hash() != other_ref.cell_hash() {
+                    if self_ref.cell_hash().unwrap() != other_ref.cell_hash().unwrap() {
                         return false;
                     }
                 }
@@ -166,6 +168,28 @@ fn format_item_with_type(item: &TupleItem, type_name: &str) -> String {
             } else {
                 format!("{}", value)
             }
+        }
+        TupleItem::Slice(TupleSLice {
+            cell,
+            start_bits,
+            end_bits,
+            ..
+        }) if type_name == "address" => {
+            let length = (*end_bits - *start_bits);
+            let mut parser = cell.parser();
+            let Ok(()) = parser.skip_bits(*start_bits as usize) else {
+                return "Slice(...)".to_string();
+            };
+            if length == 2 && parser.load_u8(2).unwrap_or(0) == 0 {
+                return "addr_none".to_string();
+            }
+            if length != 267 {
+                return "Slice(...)".to_string();
+            }
+            let Ok(address) = parser.load_address() else {
+                return "Slice(...)".to_string();
+            };
+            address.to_string()
         }
         _ => format!("{}", item),
     }
@@ -225,6 +249,11 @@ impl fmt::Display for TupleItem {
                 items,
                 abi,
             } => {
+                if type_name == "address" && items.len() == 1 {
+                    let addr = &items[0];
+                    return write!(f, "{}", format_item_with_type(addr, type_name));
+                }
+
                 if items.len() == 1 {
                     write!(f, "{}", items[0])
                 } else {
