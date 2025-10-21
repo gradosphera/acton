@@ -73,7 +73,8 @@ impl Compiler {
             ) {
                 fn realpath(path: PathBuf) -> Result<String, std::io::Error> {
                     if path.is_absolute() {
-                        return Ok(path.into_os_string().into_string().unwrap());
+                        let abs_path = canonicalize(path)?;
+                        return Ok(abs_path.to_string_lossy().into_owned());
                     }
 
                     if path.starts_with("@stdlib/") {

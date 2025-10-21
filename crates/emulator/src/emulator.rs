@@ -49,7 +49,7 @@ impl Emulator {
             panic!("Emulator only supports internal messages for now");
         };
 
-        let dest_account = net.get_account(int_message.dst.to_string());
+        let dest_account = net.get_account(&int_message.dst.to_string());
         let result = self.executor.run_transaction(
             message,
             BigInt::from(0),
@@ -76,7 +76,7 @@ impl Emulator {
         let mut shard_account_slice = shard_account_cell.as_slice().unwrap();
         let shard_account = ShardAccount::load_from(&mut shard_account_slice).unwrap();
 
-        net.update_account(int_message.dst.to_string(), &shard_account);
+        net.update_account(&int_message.dst.to_string(), &shard_account);
 
         let tx_cell: Cell = Boc::decode_base64(&result.transaction).unwrap();
         let mut tx_slice = tx_cell.as_slice().unwrap();

@@ -1,73 +1,11 @@
 import "../contracts/errors"
 import "../contracts/messages"
 import "../contracts/storage"
+import "../../lib/emulation/methods"
+import "../../lib/emulation/network"
 import "../../lib/testing/expect"
 import "../../lib/types/transaction"
 import "../../lib/testing/transaction_expect"
-
-fun build(name: slice, path: slice): cell asm "6 EXTCALL"
-
-struct Network {
-}
-
-fun Network.create(): Network {
-    return Network{
-    }
-}
-
-fun Network.send(self, message: OutMessage, mode: int): TransactionList {
-    return sendMessage(message.messageCell, mode)!
-}
-
-fun Network.sendFrom(self, from: address, message: OutMessage, mode: int): TransactionList {
-    return sendMessageFrom(message.messageCell, from.toCell(), mode)!
-}
-
-struct Treasury {
-    address: address
-}
-
-fun Network.treasury(self, name: slice): Treasury {
-    val treasury_code = build(name, "./.jetton/tests/treasury.tolk");
-    val state_init: ContractState = {
-        code: treasury_code,
-        data: beginCell().storeSlice(name).endCell(),
-    };
-    val address = AutoDeployAddress {
-        stateInit: state_init,
-    }.buildAddress().endCell().beginParse().loadAddress();
-    val msg = createMessage({
-        bounce: false,
-        value: ton("10000"),
-        dest: {
-            workchain: 0,
-            stateInit: state_init,
-        },
-    });
-    self.send(msg, SEND_MODE_PAY_FEES_SEPARATELY);
-    return Treasury {
-        address
-    }
-}
-
-fun Network.runGetMethod<Ret, Args>(self, addr: address, code: cell, id: int, args: Args, _dummy: Ret): Ret {
-    val res = runGetMethod(beginCell().storeAddress(addr).endCell(), code, id, __typeName(_dummy), args.__toTuple());
-    return Ret.fromTuple(res)
-}
-
-fun Network.isDeployed(self, addr: address): bool {
-    return isDeployed(addr.toCell())
-}
-
-fun sendMessage(msg: cell, mode: int): TransactionList? asm "7 EXTCALL"
-fun sendMessageFrom(msg: cell, from: cell, mode: int): TransactionList? asm "9 EXTCALL"
-
-fun runGetMethod(addr: cell, code: cell, id: int, return_type: slice, args: tuple): tuple asm "8 EXTCALL"
-fun isDeployed(addr: cell): bool asm "11 EXTCALL"
-
-struct SendParams {
-    value: int
-}
 
 struct JettonWallet {
     address: address
@@ -83,12 +21,11 @@ fun JettonWallet.from_address(addr: address) {
     }
 }
 
-fun address.fromTuple(data: tuple): address {
-    return data.get(0)
-}
+fun address.fromTuple(data: tuple): address  asm "1 UNTUPLE"
 fun JettonWalletDataReply.fromTuple(data: tuple): JettonWalletDataReply asm "4 UNTUPLE"
 fun JettonDataReply.fromTuple(data: tuple): JettonDataReply asm "5 UNTUPLE"
 
+// TODO: single method
 // fun T.fromTuple(self): T {
 //     return untuple_any(sizeof(self)) as T
 // }
@@ -96,7 +33,7 @@ fun JettonDataReply.fromTuple(data: tuple): JettonDataReply asm "5 UNTUPLE"
 // fun untuple_any<T>(count: int): T asm "UNTUPLEVAR"
 
 fun JettonWallet.getWalletData(self, net: Network): JettonWalletDataReply {
-    val result = net.runGetMethod(self.address, self.init.code, 0x17b02, createEmptyTuple(), JettonWalletDataReply{
+    val result = net.runGetMethod(self.address, 0x17b02, createEmptyTuple(), JettonWalletDataReply{
         jettonBalance: ton("0.1"),
         ownerAddress: createAddressNone(),
         minterAddress: createAddressNone(),
@@ -107,11 +44,10 @@ fun JettonWallet.getWalletData(self, net: Network): JettonWalletDataReply {
 
 fun JettonWallet.getJettonBalance(self, net: Network): coins {
     if (!net.isDeployed(self.address)) {
-        // TODO: what if user forget to check?
         return 0
     }
 
-    val result = net.runGetMethod(self.address, self.init.code, 0x17b02, createEmptyTuple(), JettonWalletDataReply{
+    val result = net.runGetMethod(self.address, 0x17b02, createEmptyTuple(), JettonWalletDataReply{
         jettonBalance: ton("0.1"),
         ownerAddress: createAddressNone(),
         minterAddress: createAddressNone(),
@@ -269,7 +205,7 @@ fun JettonMinter.sendChangeAdmin(self, net: Network, from: address, new_owner: a
 }
 
 fun JettonMinter.getJettonData(self, net: Network): JettonDataReply {
-    val result = net.runGetMethod(self.address, self.init.code, 0x19e2d, createEmptyTuple(), JettonDataReply{
+    val result = net.runGetMethod(self.address, 0x19e2d, createEmptyTuple(), JettonDataReply{
         totalSupply: 0,
         mintable: false,
         adminAddress: createAddressNone(),
@@ -292,12 +228,7 @@ fun JettonMinter.getContent(self, net: Network): cell {
 }
 
 fun JettonMinter.getWalletAddress(self, net: Network, owner: address): address {
-    return net.runGetMethod(self.address, self.init.code, 0x19379, owner, createAddressNone())
-}
-
-fun accuireNet(id: slice): Network {
-    return Network{
-    };
+    return net.runGetMethod(self.address, 0x19379, owner, createAddressNone())
 }
 
 fun userWallet(minter: JettonMinter, net: Network, userAddress: address): JettonWallet {
@@ -1160,17 +1091,3 @@ get fun `test-can-not-send-to-masterchain`() {
         exit_code: ERR_WRONG_WORKCHAIN
     });
 }
-
-fun format_1<T1>(fmt: slice, arg1: T1): slice {
-    return ___format1_impl(fmt, __typeName(arg1), arg1.__toTuple());
-}
-
-fun format_3<T1, T2, T3>(fmt: slice, arg1: T1, arg2: T2, arg3: T3): slice {
-    return ___format3_impl(fmt, __typeName(arg1), arg1.__toTuple(), __typeName(arg2), arg2.__toTuple(), __typeName(arg3), arg3.__toTuple());
-}
-
-fun ___format1_impl(fmt: slice, type1: slice, arg1: tuple): slice
-    asm "200 EXTCALL"
-
-fun ___format3_impl(fmt: slice, type1: slice, arg1: tuple, type2: slice, arg2: tuple, type3: slice, arg3: tuple): slice
-    asm "202 EXTCALL"

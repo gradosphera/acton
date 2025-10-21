@@ -213,18 +213,19 @@ fn run_tests_for_file(file: &str, filter: Option<&str>) -> Result<TestStats, any
     let compilation_result = tolkc::compile_fast(Path::new(&tmp_test_filename));
     let result = match compilation_result {
         tolkc::CompilerResult::Success(result) => {
-            let code_cell = ArcCell::from_boc_b64(&*result.code_boc64).unwrap();
+            let _ = fs::remove_file(&tmp_test_filename);
+
+            let code_cell = ArcCell::from_boc_b64(&*result.code_boc64)?;
             let data_cell = ArcCell::default();
 
             let stats = run_all_tests(file, tests, &code_cell, &data_cell, &abi, filter);
             Ok(stats)
         }
         tolkc::CompilerResult::Error(error) => {
-            Err(anyhow!("Cannot compile test file {}", error.message))
+            let _ = fs::remove_file(&tmp_test_filename);
+            Err(anyhow!("Cannot compile test file: {}", error.message))
         }
     };
-
-    let _ = fs::remove_file(&tmp_test_filename);
 
     result
 }
@@ -533,6 +534,18 @@ fn run_all_tests(
                             if let Some(info) = exit_codes::get_exit_code_info(exit_code) {
                                 println!("      {} {}", "├─".dimmed(), info.description.dimmed());
                                 println!("      {} Phase: {}", "└─".dimmed(), info.phase.dimmed());
+                            } else if exit_code == 678 {
+                                println!(
+                                    "      {} {}",
+                                    "└─".dimmed(),
+                                    "Cannot run method of not deployed contract"
+                                );
+                            } else if exit_code == 679 {
+                                println!(
+                                    "      {} {}",
+                                    "└─".dimmed(),
+                                    "Cannot run method of contract without code"
+                                );
                             }
                         }
                     }

@@ -208,7 +208,7 @@ fn run_get_method_impl(
 
     let dest_address = TonAddress::from_msg_address(address_std).unwrap();
 
-    let shard_account = blockchain.get_account(dst_addr_str);
+    let shard_account = blockchain.get_account(&dst_addr_str);
     let state = shard_account.account.load().unwrap().0.map(|s| s.state);
 
     let data = if let Some(AccountState::Active(state)) = state {
@@ -272,8 +272,46 @@ fn is_deployed_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell) {
         hex::encode(&address_std.address)
     );
 
-    let is_deployed = ctx.blockchain.is_deployed(dst_addr_str);
+    let is_deployed = ctx.blockchain.is_deployed(&dst_addr_str);
     stack.push_bool(is_deployed);
+}
+
+extension!(get_deployed_code in (Context) with (address: ArcCell) using get_deployed_code_impl);
+fn get_deployed_code_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell) {
+    let address_boc = address.to_boc_hex(false).unwrap();
+
+    let address_std = MsgAddrIntStd::from_boc_hex(address_boc.as_str()).unwrap();
+    let dst_addr_str = format!(
+        "{}:{}",
+        &address_std.workchain,
+        hex::encode(&address_std.address)
+    );
+
+    let is_deployed = ctx.blockchain.is_deployed(&dst_addr_str);
+    if !is_deployed {
+        stack.push(TupleItem::Null);
+        return;
+    }
+
+    let account = ctx.blockchain.get_account(&dst_addr_str);
+    let state = account.account.load().unwrap().0.map(|s| s.state);
+
+    let Some(AccountState::Active(state)) = state else {
+        stack.push(TupleItem::Null);
+        return;
+    };
+
+    let Some(code) = state.code else {
+        stack.push(TupleItem::Null);
+        return;
+    };
+
+    let Ok(cell) = ArcCell::from_boc_b64(&Boc::encode_base64(code)) else {
+        stack.push(TupleItem::Null);
+        return;
+    };
+
+    stack.push(TupleItem::Cell(cell));
 }
 
 pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
@@ -281,9 +319,11 @@ pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
         3 => read_file,
         6 => build,
         7 => send_message,
+        8 => run_get_method,
         9 => send_message_from,
         10 => find_transaction_by_params,
         11 => is_deployed,
+        12 => get_deployed_code,
     });
 }
 
@@ -296,5 +336,6 @@ pub fn register_get_extensions(executor: &mut GetExecutor, ctx: &mut Context) {
         8 => run_get_method,
         10 => find_transaction_by_params,
         11 => is_deployed,
+        12 => get_deployed_code,
     });
 }
