@@ -6,7 +6,9 @@ version = 4
 name = "abi"
 version = "0.1.0"
 dependencies = [
+ "crc",
  "lazy_static",
+ "tolk_parser",
  "tree-sitter",
 ]
 
@@ -20,6 +22,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.100"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
+
+[[package]]
 name = "cc"
 version = "1.2.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -28,6 +36,21 @@ dependencies = [
  "find-msvc-tools",
  "shlex",
 ]
+
+[[package]]
+name = "crc"
+version = "3.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9710d3b3739c2e349eb44fe848ad0b7c8cb1e42bd87ee49371df2f7acaf3e675"
+dependencies = [
+ "crc-catalog",
+]
+
+[[package]]
+name = "crc-catalog"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19d374276b40fb8bbdee95aef7c7fa6b5316ec764510eb64b8dd0e2ed0d7e7f5"
 
 [[package]]
 name = "equivalent"
@@ -195,6 +218,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tolk_parser"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tree-sitter",
+ "tree-sitter-tolk",
+]
+
+[[package]]
 name = "tree-sitter"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -213,6 +245,16 @@ name = "tree-sitter-language"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4013970217383f67b18aef68f6fb2e8d409bc5755227092d32efb0422ba24b8"
+
+[[package]]
+name = "tree-sitter-tolk"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f590befdbb2996f0db1f3aea327fe3899bf9018744497ae92d8c1dad8e6e09d"
+dependencies = [
+ "cc",
+ "tree-sitter",
+]
 
 [[package]]
 name = "unicode-ident"
