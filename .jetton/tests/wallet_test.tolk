@@ -16,17 +16,6 @@ fun JettonWallet.fromAddress(addr: address) {
     return JettonWallet { address: addr, init: null }
 }
 
-fun address.fromTuple(data: tuple): address  asm "1 UNTUPLE"
-fun JettonWalletDataReply.fromTuple(data: tuple): JettonWalletDataReply asm "4 UNTUPLE"
-fun JettonDataReply.fromTuple(data: tuple): JettonDataReply asm "5 UNTUPLE"
-
-// TODO: single method
-// fun T.fromTuple(self): T {
-//     return untuple_any(sizeof(self)) as T
-// }
-//
-// fun untuple_any<T>(count: int): T asm "UNTUPLEVAR"
-
 fun JettonWallet.getJettonBalance(self, net: Network): coins {
     if (!net.isDeployed(self.address)) {
         return 0
@@ -1050,3 +1039,14 @@ get fun `test-can-not-send-to-masterchain`() {
         exit_code: ERR_WRONG_WORKCHAIN
     });
 }
+
+fun address.fromTuple(data: tuple): address  asm "1 UNTUPLE"
+fun JettonWalletDataReply.fromTuple(data: tuple): JettonWalletDataReply asm "4 UNTUPLE"
+fun JettonDataReply.fromTuple(data: tuple): JettonDataReply asm "5 UNTUPLE"
+
+// TODO: single method
+// fun T.fromTuple(self): T {
+//     return untuple_any(sizeof(self)) as T
+// }
+//
+// fun untuple_any<T>(count: int): T asm "UNTUPLEVAR"
