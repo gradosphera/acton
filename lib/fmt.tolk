@@ -1,4 +1,3 @@
-
 /// Formats a string with 1 argument.
 ///
 /// Example:

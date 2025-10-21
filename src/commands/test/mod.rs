@@ -20,7 +20,9 @@ use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
 use tree_sitter::Node;
-use tycho_types::models::ShardAccount;
+use tycho_types::boc::Boc;
+use tycho_types::cell::Load;
+use tycho_types::models::{AccountState, IntAddr, MsgInfo, ShardAccount, Transaction};
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
@@ -444,6 +446,53 @@ fn run_all_tests(
 
                             println!("        Actual:   {}", left.red());
                             println!("        Expected: {}", right.green());
+                        }
+
+                        if let AssertFailure::TransactionNotFound(assert_failure) = &assert_failure
+                        {
+                            let mut params = vec![];
+                            if let Some(deploy) = assert_failure.params.deploy {
+                                params.push(format!(
+                                    "  deploy={}",
+                                    if deploy {
+                                        "true".green().to_string()
+                                    } else {
+                                        "false".red().to_string()
+                                    }
+                                ))
+                            }
+                            if let Some(exit_code) = assert_failure.params.exit_code {
+                                params.push(format!(
+                                    "  exit_code={}",
+                                    if exit_code == 0 {
+                                        "0".green().to_string()
+                                    } else {
+                                        exit_code.to_string().red().to_string()
+                                    }
+                                ))
+                            }
+
+                            let diff_output = format!(
+                                "{}\nCannot find transaction from {} to {}\nwith:\n{}",
+                                assert_failure.txs,
+                                format_address(
+                                    &accounts,
+                                    &build_cache,
+                                    &assert_failure.txs,
+                                    &assert_failure.params.from
+                                ),
+                                format_address(
+                                    &accounts,
+                                    &build_cache,
+                                    &assert_failure.txs,
+                                    &Some(assert_failure.params.to.clone())
+                                ),
+                                params.join("\n"),
+                            );
+
+                            for line in diff_output.lines() {
+                                println!("        {}", line);
+                            }
                         }
 
                         if let Some(location) = &assert_failure.location() {
@@ -1076,4 +1125,114 @@ fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
         result.push_str(")");
         result
     }
+}
+
+fn format_addr_hash(addr: &IntAddr) -> String {
+    let raw = addr.as_std().unwrap().display_base64(true).to_string();
+    raw[..6].to_string() + ".." + &raw[raw.len() - 6..]
+}
+
+fn format_address(
+    accounts: &HashMap<String, ShardAccount>,
+    build_cache: &BuildCache,
+    txs: &TupleItem,
+    addr: &Option<IntAddr>,
+) -> String {
+    let Some(addr) = addr else {
+        return "<any>".cyan().to_string();
+    };
+
+    let TupleItem::TypedTuple { items, .. } = txs else {
+        return format_addr_hash(&addr);
+    };
+
+    let TupleItem::Tuple(items) = &items[0] else {
+        return format!("{}", items[0]);
+    };
+
+    let txs = items
+        .iter()
+        .filter_map(|el| match el {
+            TupleItem::Cell(cell) => Some(cell),
+            _ => None,
+        })
+        .map(|x| {
+            let result = x.to_boc_b64(false).unwrap();
+            let tx_cell: tycho_types::cell::Cell = Boc::decode_base64(&result).unwrap();
+            let mut tx_slice = tx_cell.as_slice().unwrap();
+            Transaction::load_from(&mut tx_slice).unwrap()
+        })
+        .collect::<Vec<_>>();
+
+    let mut known_contracts: Vec<IntAddr> = vec![];
+
+    for tx in &txs {
+        let in_msg = tx.load_in_msg().unwrap();
+        if let Some(in_msg) = &in_msg
+            && let MsgInfo::Int(info) = &in_msg.info
+        {
+            // It's O(N) but we need order, and we don't have many (thousands) transactions
+            if !known_contracts.contains(&info.src) {
+                known_contracts.push(info.src.clone());
+            }
+            if !known_contracts.contains(&info.dst) {
+                known_contracts.push(info.dst.clone());
+            }
+        }
+    }
+
+    let mut contract_letters: HashMap<IntAddr, String> = HashMap::new();
+
+    for (index, addr) in known_contracts.iter().enumerate() {
+        let letter = char::from_u32('A' as u32 + index as u32)
+            .unwrap_or_else(|| char::from_digit(index as u32, 10).unwrap());
+        contract_letters.insert(addr.clone(), letter.to_string());
+    }
+
+    let mut builder = "".to_string();
+
+    let contract_type = get_contract_type(accounts, build_cache, addr);
+
+    let letter = contract_letters.get(&addr);
+    if let Some(letter) = letter {
+        builder += format!("{} {} ", contract_type.cyan(), letter.bold()).as_str();
+    }
+
+    builder += format_addr_hash(&addr).dimmed().to_string().as_str();
+
+    builder
+}
+
+fn get_contract_type(
+    accounts: &HashMap<String, ShardAccount>,
+    build_cache: &BuildCache,
+    addr: &IntAddr,
+) -> String {
+    let account = accounts.get(&addr.to_string());
+    let Some(account) = account else {
+        return "".to_string();
+    };
+
+    let account_data = account.load_account();
+    let Ok(Some(data)) = account_data else {
+        return "".to_string();
+    };
+
+    let AccountState::Active(info) = data.state else {
+        return "".to_string();
+    };
+
+    let Some(code) = &info.code else {
+        return "".to_string();
+    };
+
+    let compilation_result = build_cache.built.iter().find(|(_name, result)| {
+        result.code_hash.to_ascii_lowercase() == code.repr_hash().to_string()
+    });
+
+    if let Some(result) = compilation_result {
+        return result.1.name.clone();
+    }
+
+    "".to_string()
 }

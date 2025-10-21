@@ -454,7 +454,7 @@ fn format_transaction_list(
             }
 
             tx_builder += " ";
-            tx_builder += "->  ";
+            tx_builder += "-> ";
 
             if let Some(message_abi) = message_abi {
                 tx_builder += message_abi
@@ -508,7 +508,7 @@ fn format_transaction_list(
                     .as_str();
             }
 
-            tx_builder += format!("  lt: {} prev_lt: {}", tx.lt, tx.prev_trans_lt).as_str();
+            // tx_builder += format!("  lt: {} prev_lt: {}", tx.lt, tx.prev_trans_lt).as_str();
 
             if tx.orig_status == AccountStatus::NotExists && tx.end_status == AccountStatus::Active
             {

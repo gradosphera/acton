@@ -1,9 +1,10 @@
 use abi::ContractAbi;
 use emulator::blockchain::Blockchain;
 use emulator::emulator::Emulator;
-use emulator::tuple::stack::Tuple;
+use emulator::tuple::stack::{Tuple, TupleItem};
 use num_bigint::BigInt;
 use std::collections::HashMap;
+use tycho_types::models::{IntAddr, Transaction};
 
 #[derive(Debug, Clone)]
 pub struct AssertBinFailure {
@@ -32,9 +33,27 @@ pub struct FailAssertFailure {
 }
 
 #[derive(Debug, Clone)]
+pub struct TransactionNotFoundParams {
+    pub to: IntAddr,
+    pub from: Option<IntAddr>,
+    pub exit_code: Option<u32>,
+    pub deploy: Option<bool>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TransactionNotFoundAssertFailure {
+    pub message: Option<String>,
+    pub location: Option<String>,
+    pub txs: TupleItem,
+    pub parsed_txs: Vec<Transaction>,
+    pub params: TransactionNotFoundParams,
+}
+
+#[derive(Debug, Clone)]
 pub enum AssertFailure {
     Bin(AssertBinFailure),
     Fail(FailAssertFailure),
+    TransactionNotFound(TransactionNotFoundAssertFailure),
 }
 
 impl AssertFailure {
@@ -42,6 +61,7 @@ impl AssertFailure {
         match self {
             AssertFailure::Bin(arg) => arg.message.clone(),
             AssertFailure::Fail(arg) => arg.message.clone(),
+            AssertFailure::TransactionNotFound(arg) => arg.message.clone(),
         }
     }
 
@@ -49,6 +69,7 @@ impl AssertFailure {
         match self {
             AssertFailure::Bin(arg) => arg.location.clone(),
             AssertFailure::Fail(arg) => arg.location.clone(),
+            AssertFailure::TransactionNotFound(arg) => arg.location.clone(),
         }
     }
 }
@@ -96,9 +117,9 @@ impl BuildCache {
 }
 
 pub struct CompilationResult {
-    name: String,
-    code_boc64: String,
-    code_hash: String,
+    pub name: String,
+    pub code_boc64: String,
+    pub code_hash: String,
 }
 
 pub struct Context<'a> {

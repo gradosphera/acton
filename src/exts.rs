@@ -1,6 +1,7 @@
+use crate::asserts_exts::process_txs_and_search_params;
 use crate::context::Context;
 use emulator::emulator::SendMessageResult;
-use emulator::executor::Executor;
+use emulator::executor::{Executor, StoreExt};
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::tuple::stack::{Tuple, TupleItem, TupleSLice, parse_tuple};
 use emulator::{extension, pop_args, register_ext_methods};
@@ -13,7 +14,7 @@ use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
 use tonlib_core::tlb_types::tlb::TLB;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
-use tycho_types::models::{AccountState, IntAddr};
+use tycho_types::models::{AccountState, AccountStatus, ComputePhase, IntAddr, MsgInfo, TxInfo};
 
 extension!(read_file in (Context) with (path: String) using read_file_impl);
 fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
@@ -94,6 +95,85 @@ fn send_message_from_impl(
         .map(|tx| TupleItem::Cell(tx))
         .collect::<Vec<_>>();
     stack.push(TupleItem::Tuple(transaction_cells));
+}
+
+extension!(find_transaction_by_params in (Context) with (params: Tuple, txs: Tuple) using find_transaction_by_params_impl);
+fn find_transaction_by_params_impl(
+    _ctx: &mut Context,
+    stack: &mut Tuple,
+    params: Tuple,
+    txs: Tuple,
+) {
+    if txs.0.len() == 0 {
+        stack.push(TupleItem::Null);
+        return;
+    }
+
+    let (params, parsed_txs) = match process_txs_and_search_params(&txs, params) {
+        Some(value) => value,
+        None => return,
+    };
+
+    let found = parsed_txs.iter().filter_map(|tx| {
+        if let Some(expected_deploy) = params.deploy {
+            if expected_deploy {
+                if tx.orig_status != AccountStatus::NotExists
+                    || tx.end_status != AccountStatus::Active
+                {
+                    // We expect to deploy contract but we don't
+                    return None;
+                }
+            }
+        }
+
+        let in_msg = tx.load_in_msg().unwrap();
+        if let Some(in_msg) = &in_msg
+            && let MsgInfo::Int(info) = &in_msg.info
+        {
+            if let Some(expected_from_addr) = &params.from {
+                let a1 = (*expected_from_addr).to_string();
+                let a2 = info.src.to_string();
+                if a1 != a2 {
+                    // Source address mismatch
+                    return None;
+                }
+            }
+
+            let a1 = params.to.to_string();
+            let a2 = info.dst.to_string();
+            if a1 != a2 {
+                // Destination address mismatch
+                return None;
+            }
+        };
+
+        let TxInfo::Ordinary(info) = tx.load_info().unwrap() else {
+            return None;
+        };
+
+        if let ComputePhase::Executed(compute) = info.compute_phase {
+            if let Some(expected_exit_code) = params.exit_code {
+                if compute.exit_code != expected_exit_code as i32 {
+                    // Exit code mismatch
+                    return None;
+                }
+            }
+        }
+
+        return Some(tx);
+    });
+
+    let txs = found.collect::<Vec<_>>();
+    if txs.is_empty() {
+        stack.push(TupleItem::Null);
+        return;
+    }
+
+    let first = txs.first().unwrap();
+    let tx_base64 = Boc::encode_base64(first.to_cell());
+    let tx_cell = ArcCell::from_boc_b64(&tx_base64).unwrap();
+
+    stack.push(TupleItem::Cell(tx_cell));
 }
 
 extension!(run_get_method in (Context) with (args: Tuple, return_type_name: String, id: BigInt, code: ArcCell, address: ArcCell) using run_get_method_impl);
@@ -177,7 +257,7 @@ pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
         6 => build,
         7 => send_message,
         9 => send_message_from,
-        8 => run_get_method,
+        10 => find_transaction_by_params,
     });
 }
 
@@ -188,5 +268,6 @@ pub fn register_get_extensions(executor: &mut GetExecutor, ctx: &mut Context) {
         7 => send_message,
         9 => send_message_from,
         8 => run_get_method,
+        10 => find_transaction_by_params,
     });
 }
