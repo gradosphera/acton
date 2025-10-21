@@ -27,22 +27,12 @@ fun JettonDataReply.fromTuple(data: tuple): JettonDataReply asm "5 UNTUPLE"
 //
 // fun untuple_any<T>(count: int): T asm "UNTUPLEVAR"
 
-fun JettonWallet.getWalletData(self, net: Network): JettonWalletDataReply {
-    val result = net.runGetMethod(self.address, 0x17b02, createEmptyTuple(), JettonWalletDataReply{
-        jettonBalance: ton("0.1"),
-        ownerAddress: createAddressNone(),
-        minterAddress: createAddressNone(),
-        jettonWalletCode: createEmptyCell(),
-    });
-    return result
-}
-
 fun JettonWallet.getJettonBalance(self, net: Network): coins {
     if (!net.isDeployed(self.address)) {
         return 0
     }
 
-    val result = net.runGetMethod(self.address, 0x17b02, createEmptyTuple(), JettonWalletDataReply{
+    val result = net.runGetMethod(self.address, "get_wallet_data", createEmptyTuple(), JettonWalletDataReply{
         jettonBalance: ton("0.1"),
         ownerAddress: createAddressNone(),
         minterAddress: createAddressNone(),
@@ -178,7 +168,7 @@ fun JettonMinter.sendChangeAdmin(self, net: Network, from: address, new_owner: a
 }
 
 fun JettonMinter.getJettonData(self, net: Network): JettonDataReply {
-    val result = net.runGetMethod(self.address, 0x19e2d, createEmptyTuple(), JettonDataReply{
+    val result = net.runGetMethod(self.address, "get_jetton_data", createEmptyTuple(), JettonDataReply{
         totalSupply: 0,
         mintable: false,
         adminAddress: createAddressNone(),
@@ -201,7 +191,7 @@ fun JettonMinter.getContent(self, net: Network): cell {
 }
 
 fun JettonMinter.getWalletAddress(self, net: Network, owner: address): address {
-    return net.runGetMethod(self.address, 0x19379, owner, createAddressNone())
+    return net.runGetMethod(self.address, "get_wallet_address", owner, createAddressNone())
 }
 
 fun userWallet(minter: JettonMinter, net: Network, userAddress: address): JettonWallet {

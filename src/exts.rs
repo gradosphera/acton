@@ -1,5 +1,6 @@
 use crate::asserts_exts::process_txs_and_search_params;
 use crate::context::Context;
+use crc::{CRC_16_XMODEM, Crc};
 use emulator::emulator::SendMessageResult;
 use emulator::executor::{Executor, StoreExt};
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
@@ -314,6 +315,13 @@ fn get_deployed_code_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell
     stack.push(TupleItem::Cell(cell));
 }
 
+extension!(crc16 in (Context) with (data: String) using crc16_impl);
+fn crc16_impl(_ctx: &mut Context, stack: &mut Tuple, data: String) {
+    let crc = Crc::<u16>::new(&CRC_16_XMODEM);
+    let result = crc.checksum(data.as_bytes());
+    stack.push(TupleItem::Int(BigInt::from(result)));
+}
+
 pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         3 => read_file,
@@ -324,6 +332,7 @@ pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
         10 => find_transaction_by_params,
         11 => is_deployed,
         12 => get_deployed_code,
+        13 => crc16,
     });
 }
 
@@ -337,5 +346,6 @@ pub fn register_get_extensions(executor: &mut GetExecutor, ctx: &mut Context) {
         10 => find_transaction_by_params,
         11 => is_deployed,
         12 => get_deployed_code,
+        13 => crc16,
     });
 }
