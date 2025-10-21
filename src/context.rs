@@ -1,4 +1,4 @@
-use abi::ABI;
+use abi::ContractAbi;
 use emulator::blockchain::Blockchain;
 use emulator::emulator::Emulator;
 use emulator::tuple::stack::Tuple;
@@ -60,5 +60,5 @@ pub struct Context<'a> {
     pub expected_exit_code: &'a mut Option<BigInt>,
     pub blockchain: &'a mut Blockchain,
     pub emulator: &'a mut Emulator,
-    pub abi: ABI,
+    pub abi: ContractAbi,
 }

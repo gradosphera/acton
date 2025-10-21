@@ -1,6 +1,6 @@
 use crate::context::Context;
 use crate::{asserts_exts, exts, io_exts};
-use abi::ABI;
+use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use emulator::blockchain::Blockchain;
 use emulator::emulator::Emulator;
@@ -28,11 +28,7 @@ pub fn script_cmd(path: &String) -> Result<(), anyhow::Error> {
 }
 
 fn run_script_file(file_path: &str, content: &str) -> Result<(), anyhow::Error> {
-    let tree = tolk_parser::parser::parse(content)?;
-    let root_node = tree.root_node();
-    let abi = ABI {
-        structs: abi::process_struct_definitions(&root_node, content, file_path),
-    };
+    let abi = contract_abi(content, file_path);
 
     let executable_code = content.to_string();
     let tmp_script_filename = format!("{}_script.tolk", file_path);
@@ -63,7 +59,7 @@ struct ScriptResult {
     get_result: GetMethodResult,
 }
 
-fn execute_script(code_cell: &ArcCell, data_cell: &ArcCell, abi: &ABI) -> ScriptResult {
+fn execute_script(code_cell: &ArcCell, data_cell: &ArcCell, abi: &ContractAbi) -> ScriptResult {
     let dest_address = contract_address(code_cell);
 
     let params = GetMethodParams {

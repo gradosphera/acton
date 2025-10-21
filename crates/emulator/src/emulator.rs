@@ -112,6 +112,9 @@ impl Emulator {
             _ => {}
         }
 
+        // For some reason this set to wrong value
+        message_obj.layout = None;
+
         message_obj.to_cell()
     }
 }

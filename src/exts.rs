@@ -62,10 +62,12 @@ fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message
     stack.push(TupleItem::Tuple(transaction_cells));
 }
 
-extension!(run_get_method in (Context) with (id: BigInt, code: ArcCell, address: ArcCell) using run_get_method_impl);
+extension!(run_get_method in (Context) with (args: Tuple, return_type_name: String, id: BigInt, code: ArcCell, address: ArcCell) using run_get_method_impl);
 fn run_get_method_impl(
     ctx: &mut Context,
     stack: &mut Tuple,
+    args: Tuple,
+    return_type_name: String,
     id: BigInt,
     code: ArcCell,
     address: ArcCell,
@@ -113,14 +115,19 @@ fn run_get_method_impl(
 
     let executor = GetExecutor::new(params.clone());
 
-    let result = executor.run_get_method(Tuple::empty(), params);
+    let result = executor.run_get_method(args, params);
 
     match result {
         GetMethodResult::Success(result) => {
             let cell = ArcCell::from_boc_b64(&result.stack).unwrap();
             let tuple = parse_tuple(&cell).unwrap();
 
-            stack.push(TupleItem::Tuple(tuple))
+            stack.push(TupleItem::TypedTuple {
+                contract_abi: ctx.abi.clone(),
+                abi: ctx.abi.find_type(&return_type_name),
+                type_name: return_type_name,
+                items: tuple,
+            })
         }
         GetMethodResult::Error(result) => {
             println!("Error: {}", result.error);

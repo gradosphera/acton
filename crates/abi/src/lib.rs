@@ -1,23 +1,23 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Pos {
     pub row: usize,
     pub column: usize,
     pub uri: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Field {
     pub name: String,
     pub type_info: TypeInfo,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BaseTypeInfo {
     Void,
     Int { width: usize },
@@ -36,13 +36,13 @@ pub enum BaseTypeInfo {
     AnonStruct { fields: Vec<TypeInfo> },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypeInfo {
     pub base: BaseTypeInfo,
     pub human_readable: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypeAbi {
     pub name: String,
     pub opcode: Option<u32>,
@@ -50,7 +50,7 @@ pub struct TypeAbi {
     pub fields: Vec<Field>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct GetMethod {
     pub name: String,
     pub id: u32,
@@ -59,19 +59,19 @@ pub struct GetMethod {
     pub parameters: Vec<Field>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ExitCodeInfo {
     pub constant_name: String,
     pub value: i32,
     pub usage_positions: Vec<Pos>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct EntryPoint {
     pub pos: Option<Pos>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ContractAbi {
     pub name: String,
     pub entry_point: Option<EntryPoint>,
@@ -82,7 +82,13 @@ pub struct ContractAbi {
     pub types: Vec<TypeAbi>,
 }
 
-#[derive(Debug)]
+impl ContractAbi {
+    pub fn find_type(&self, name: &String) -> Option<TypeAbi> {
+        self.types.iter().find(|typ| typ.name == *name).cloned()
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
 struct AbiInfo {
     get_methods: Vec<GetMethod>,
     messages: Vec<TypeAbi>,
@@ -97,108 +103,6 @@ struct FileInfo {
     path: String,
     content: String,
     tree: tree_sitter::Tree,
-}
-
-#[derive(Debug, Clone)]
-pub struct ABI {
-    pub structs: HashMap<String, StructDescription>,
-}
-
-impl ABI {
-    pub fn find_type(&self, name: &String) -> Option<StructDescription> {
-        self.structs.get(name).cloned()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FieldDescription {
-    pub name: String,
-    pub type_name: String,
-}
-
-#[derive(Debug, Clone, Eq)]
-pub struct StructDescription {
-    pub fields: Vec<FieldDescription>,
-}
-
-impl PartialEq for StructDescription {
-    fn eq(&self, other: &Self) -> bool {
-        self.fields.len() == other.fields.len()
-            && self.fields.iter().all(|field| other.fields.contains(field))
-    }
-}
-
-pub fn process_struct_definitions(
-    node: &tree_sitter::Node,
-    content: &str,
-    file_path: &str,
-) -> HashMap<String, StructDescription> {
-    let mut struct_defs = HashMap::new();
-    analyze_structs_recursive(&node, content, file_path, &mut struct_defs);
-    struct_defs
-}
-
-fn analyze_structs_recursive(
-    node: &tree_sitter::Node,
-    content: &str,
-    file_path: &str,
-    struct_defs: &mut HashMap<String, StructDescription>,
-) {
-    for i in 0..node.child_count() {
-        let child = node.child(i).unwrap();
-        analyze_structs_recursive(&child, content, file_path, struct_defs);
-    }
-
-    if node.kind() != "struct_declaration" {
-        return;
-    }
-
-    let Some(name_node) = node.child_by_field_name("name") else {
-        return;
-    };
-
-    let struct_name = name_node
-        .utf8_text(content.as_bytes())
-        .unwrap_or("")
-        .to_string();
-
-    let mut fields = Vec::new();
-
-    let Some(body_node) = node.child_by_field_name("body") else {
-        return;
-    };
-
-    let mut cursor = body_node.walk();
-    for child in body_node.children(&mut cursor) {
-        if child.kind() == "struct_field_declaration" {
-            let Some(field_name_node) = child.child_by_field_name("name") else {
-                continue;
-            };
-
-            let Some(field_type_node) = child.child_by_field_name("type") else {
-                continue;
-            };
-
-            let field_name = field_name_node
-                .utf8_text(content.as_bytes())
-                .unwrap_or("")
-                .to_string();
-
-            let field_type = field_type_node
-                .utf8_text(content.as_bytes())
-                .unwrap_or("")
-                .to_string();
-
-            fields.push(FieldDescription {
-                name: field_name,
-                type_name: field_type,
-            });
-        }
-    }
-
-    if !fields.is_empty() {
-        struct_defs.insert(struct_name, StructDescription { fields });
-    }
 }
 
 pub fn contract_abi(content: &str, file_path: &str) -> ContractAbi {
@@ -318,13 +222,16 @@ fn collect_imported_files_recursive(
 }
 
 fn resolve_import_path(base_file: &str, import_path: &str) -> Option<String> {
+    let import_path = add_tolk_extension_if_needed(import_path.to_string());
+
     let base_path = Path::new(base_file).parent()?;
 
     if import_path.starts_with("./") || import_path.starts_with("../") {
         let relative_path = base_path.join(import_path);
         return Some(relative_path.to_string_lossy().to_string());
     }
-    let relative_path = base_path.join(import_path);
+
+    let relative_path = base_path.join(&import_path);
     if relative_path.exists() {
         return Some(relative_path.to_string_lossy().to_string());
     }
@@ -336,6 +243,13 @@ fn resolve_import_path(base_file: &str, import_path: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+fn add_tolk_extension_if_needed(path: String) -> String {
+    if path.ends_with(".tolk") {
+        return path;
+    }
+    format!("{}.tolk", path)
 }
 
 fn merge_abi_info(target: &mut AbiInfo, source: AbiInfo) {

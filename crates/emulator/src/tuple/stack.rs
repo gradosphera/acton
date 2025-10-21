@@ -1,4 +1,4 @@
-use abi::StructDescription;
+use abi::{ContractAbi, TypeAbi};
 use anyhow::anyhow;
 use num_bigint::{BigInt, BigUint};
 use owo_colors::OwoColorize;
@@ -115,8 +115,23 @@ pub enum TupleItem {
     TypedTuple {
         type_name: String,
         items: Vec<TupleItem>,
-        abi: Option<StructDescription>,
+        abi: Option<TypeAbi>,
+        contract_abi: ContractAbi,
     },
+}
+
+impl TupleItem {
+    pub fn unwrap_single(&self) -> TupleItem {
+        let TupleItem::Tuple(items) = self else {
+            return (*self).clone();
+        };
+
+        if items.len() == 1 {
+            return items[0].clone();
+        }
+
+        (*self).clone()
+    }
 }
 
 impl PartialEq for TupleSLice {
@@ -177,11 +192,13 @@ impl Default for TupleItem {
 }
 
 fn format_item_with_type(item: &TupleItem, type_name: &str) -> String {
+    let item = item.unwrap_single();
+
     match item {
         TupleItem::Int(value) if type_name == "bool" => {
-            if *value == BigInt::from(0) {
+            if value == BigInt::from(0) {
                 "false".to_string()
-            } else if *value == BigInt::from(18446744073709551615u64) {
+            } else if value == BigInt::from(18446744073709551615u64) {
                 "true".to_string()
             } else {
                 format!("{}", value)
@@ -193,9 +210,9 @@ fn format_item_with_type(item: &TupleItem, type_name: &str) -> String {
             end_bits,
             ..
         }) if type_name == "address" => {
-            let length = (*end_bits - *start_bits);
+            let length = end_bits - start_bits;
             let mut parser = cell.parser();
-            let Ok(()) = parser.skip_bits(*start_bits as usize) else {
+            let Ok(()) = parser.skip_bits(start_bits as usize) else {
                 return "Slice(...)".to_string();
             };
             if length == 2 && parser.load_u8(2).unwrap_or(0) == 0 {
@@ -266,6 +283,7 @@ impl fmt::Display for TupleItem {
                 type_name,
                 items,
                 abi,
+                contract_abi,
             } => {
                 if type_name == "address" && items.len() == 1 {
                     let addr = &items[0];
@@ -273,7 +291,7 @@ impl fmt::Display for TupleItem {
                 }
 
                 if type_name == "TransactionList" && items.len() == 1 {
-                    return write!(f, "{}", format_transaction_list(&items));
+                    return write!(f, "{}", format_transaction_list(&items, contract_abi));
                 }
 
                 if items.len() == 1 {
@@ -289,7 +307,7 @@ impl fmt::Display for TupleItem {
                                     f,
                                     "    {}: {}",
                                     field.name,
-                                    format_item_with_type(item, &field.type_name)
+                                    format_item_with_type(item, &field.type_info.human_readable)
                                 )?;
                                 if i < struct_desc.fields.len() - 1 {
                                     write!(f, ",")?;
@@ -318,11 +336,11 @@ impl fmt::Display for TupleItem {
 }
 
 fn show_addr(addr: &IntAddr) -> String {
-    let raw = addr.as_std().unwrap().display_base64(false).to_string();
+    let raw = addr.as_std().unwrap().display_base64(true).to_string();
     raw[..6].to_string() + ".." + &raw[raw.len() - 6..]
 }
 
-fn format_transaction_list(items: &&Vec<TupleItem>) -> String {
+fn format_transaction_list(items: &&Vec<TupleItem>, contract_abi: &ContractAbi) -> String {
     let item = &items[0];
     let TupleItem::Tuple(items) = item else {
         return format!("{}", items[0]);
@@ -382,18 +400,36 @@ fn format_transaction_list(items: &&Vec<TupleItem>) -> String {
             }
 
             let mut body = in_msg.body.clone();
-            let mut opcode = body.load_u32().unwrap_or(1);
+            let mut opcode = body.load_u32().unwrap_or(0);
             if opcode == 0xFFFFFFFF {
                 // if bounce read another 32 bit to get actual opcode
                 opcode = body.load_u32().unwrap_or(0);
             }
 
+            let message_abi = contract_abi
+                .messages
+                .iter()
+                .find(|msg| msg.opcode != Some(0) && msg.opcode == Some(opcode));
+
             let amount = info.value.tokens.into_inner() as f64 / 1e9;
-            tx_builder += format!("0x{:x}", opcode)
-                .purple()
-                .bold()
-                .to_string()
-                .as_str();
+
+            if let Some(message_abi) = message_abi {
+                tx_builder += message_abi
+                    .name
+                    .as_str()
+                    .purple()
+                    .bold()
+                    .to_string()
+                    .as_str();
+            } else if opcode == 0 {
+                tx_builder += "empty".purple().bold().to_string().as_str();
+            } else {
+                tx_builder += format!("0x{:x}", opcode)
+                    .purple()
+                    .bold()
+                    .to_string()
+                    .as_str();
+            }
             tx_builder += " ";
             tx_builder += show_addr(&info.src).dimmed().to_string().as_str();
 

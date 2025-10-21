@@ -1,6 +1,6 @@
 use crate::context::{AssertFailure, Context};
 use crate::{asserts_exts, exts, io_exts};
-use abi::ABI;
+use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use emulator::blockchain::Blockchain;
 use emulator::emulator::Emulator;
@@ -200,11 +200,7 @@ fn run_tests_for_file(file: &str, filter: Option<&str>) -> Result<TestStats, any
 
     let tests = find_all_test(file.to_string(), &content);
 
-    let tree = tolk_parser::parser::parse(&content)?;
-    let root_node = tree.root_node();
-    let abi = ABI {
-        structs: abi::process_struct_definitions(&root_node, &content, file),
-    };
+    let abi = contract_abi(content.as_str(), file);
 
     let executable_code = inject_locations_into_expect_calls(&content, file);
     let tmp_test_filename = file.to_owned() + "_test.tolk";
@@ -235,7 +231,7 @@ fn run_all_tests(
     tests: Vec<TestDescriptor>,
     code_cell: &Arc<Cell>,
     data_cell: &Arc<Cell>,
-    abi: &ABI,
+    abi: &ContractAbi,
     filter: Option<&str>,
 ) -> TestStats {
     let filtered_tests = if let Some(pattern) = filter {
@@ -508,7 +504,7 @@ fn execute_test(
     code_cell: &Arc<Cell>,
     data_cell: &Arc<Cell>,
     dest_address: &TonAddress,
-    abi: &ABI,
+    abi: &ContractAbi,
 ) -> TestResult {
     // thread::sleep(Duration::from_secs(2));
 
@@ -904,17 +900,19 @@ fn format_tuple_diff(
     right: &Tuple,
     left_type: &str,
     right_type: &str,
-    abi: &ABI,
+    abi: &ContractAbi,
 ) -> String {
     let left_type_str = left_type.to_string();
     let left_item = TupleItem::TypedTuple {
         abi: abi.find_type(&left_type_str),
+        contract_abi: abi.clone(),
         type_name: left_type_str,
         items: (**left).clone(),
     };
     let right_type_str = right_type.to_string();
     let right_item = TupleItem::TypedTuple {
         abi: abi.find_type(&right_type_str),
+        contract_abi: abi.clone(),
         type_name: right_type_str,
         items: (**right).clone(),
     };
@@ -938,9 +936,10 @@ fn add_indent_to_lines(text: &str, indent: usize) -> String {
         .join("\n")
 }
 
-fn format_tuple_value(tuple: &Tuple, type_name: &String, abi: &ABI) -> String {
+fn format_tuple_value(tuple: &Tuple, type_name: &String, abi: &ContractAbi) -> String {
     let item = TupleItem::TypedTuple {
         abi: abi.find_type(type_name),
+        contract_abi: abi.clone(),
         type_name: type_name.to_string(),
         items: (**tuple).clone(),
     };
@@ -962,6 +961,7 @@ fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
             type_name: left_type,
             items: left_items,
             abi,
+            contract_abi,
         },
         TupleItem::TypedTuple {
             type_name: right_type,
