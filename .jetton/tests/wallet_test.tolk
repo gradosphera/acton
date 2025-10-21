@@ -168,7 +168,7 @@ fun JettonMinter.getContent(self, net: Network): cell {
 }
 
 fun JettonMinter.getWalletAddress(self, net: Network, owner: address): address {
-    return net.runGetMethod<address, address>(self.address, "get_wallet_address", owner)
+    return net.runGetMethod(self.address, "get_wallet_address", owner)
 }
 
 fun userWallet(minter: JettonMinter, net: Network, userAddress: address): JettonWallet {
