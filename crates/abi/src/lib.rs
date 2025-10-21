@@ -201,10 +201,13 @@ fn analyze_structs_recursive(
     }
 }
 
-pub fn contract_abi(root_node: &tree_sitter::Node, content: &str, file_path: &str) -> ContractAbi {
+pub fn contract_abi(content: &str, file_path: &str) -> ContractAbi {
     let contract_name = get_contract_name_from_file_path(file_path);
 
-    let files = collect_imported_files(root_node, content, file_path);
+    let tree = tolk_parser::parser::parse(content).unwrap();
+    let root_node = tree.root_node();
+
+    let files = collect_imported_files(&root_node, content, file_path);
 
     let mut abi_info = AbiInfo {
         get_methods: Vec::new(),
@@ -625,7 +628,6 @@ fn get_contract_name_from_file_path(file_path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tolk_parser::parser::parse;
 
     #[test]
     fn test_contract_abi_basic() {
@@ -642,9 +644,7 @@ fun onInternalMessage() {
 }
 "#;
 
-        let tree = parse(code).unwrap();
-        let root_node = tree.root_node();
-        let abi = contract_abi(&root_node, code, "test.tolk");
+        let abi = contract_abi(code, "test.tolk");
 
         assert_eq!(abi.name, "test");
         assert!(abi.entry_point.is_some());
@@ -665,9 +665,7 @@ get fun custom_method(): int {
 }
 "#;
 
-        let tree = parse(code).unwrap();
-        let root_node = tree.root_node();
-        let abi = contract_abi(&root_node, code, "test.tolk");
+        let abi = contract_abi(code, "test.tolk");
 
         assert_eq!(abi.get_methods.len(), 1);
         assert_eq!(abi.get_methods[0].name, "custom_method");
@@ -704,9 +702,7 @@ get fun custom_id(): int {
 }
 "#;
 
-        let tree = parse(code).unwrap();
-        let root_node = tree.root_node();
-        let abi = contract_abi(&root_node, code, "test.tolk");
+        let abi = contract_abi(code, "test.tolk");
 
         assert_eq!(abi.get_methods.len(), 5);
 
@@ -757,9 +753,7 @@ struct (0b1010) BinaryData {
 }
 "#;
 
-        let tree = parse(code).unwrap();
-        let root_node = tree.root_node();
-        let abi = contract_abi(&root_node, code, "test.tolk");
+        let abi = contract_abi(code, "test.tolk");
 
         assert_eq!(abi.types.len(), 5);
         assert_eq!(abi.messages.len(), 3); // Only structs with pack_prefix
@@ -806,9 +800,7 @@ fun regular_function() {
 }
 "#;
 
-        let tree = parse(code).unwrap();
-        let root_node = tree.root_node();
-        let abi = contract_abi(&root_node, code, "test.tolk");
+        let abi = contract_abi(code, "test.tolk");
 
         assert!(abi.entry_point.is_some());
         assert!(abi.external_entry_point.is_some());
@@ -851,9 +843,7 @@ get fun large_id(): int {
 }
 "#;
 
-        let tree = parse(code).unwrap();
-        let root_node = tree.root_node();
-        let abi = contract_abi(&root_node, code, "test.tolk");
+        let abi = contract_abi(code, "test.tolk");
 
         assert_eq!(abi.get_methods.len(), 3);
 
@@ -902,9 +892,7 @@ get fun main_method(): int {
 }
 "#;
 
-        let tree = parse(main_content).unwrap();
-        let root_node = tree.root_node();
-        let abi = contract_abi(&root_node, main_content, "main.tolk");
+        let abi = contract_abi(main_content, "main.tolk");
 
         let _ = fs::remove_file(import_path);
 
