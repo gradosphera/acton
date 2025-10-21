@@ -1,8 +1,8 @@
 use crate::context::Context;
 use emulator::emulator::SendMessageResult;
-use emulator::executor::{EmulationResult, Executor};
+use emulator::executor::Executor;
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
-use emulator::tuple::stack::{Tuple, TupleItem, parse_tuple};
+use emulator::tuple::stack::{Tuple, TupleItem, TupleSLice, parse_tuple};
 use emulator::{extension, pop_args, register_ext_methods};
 use num_bigint::BigInt;
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
 use tonlib_core::tlb_types::tlb::TLB;
 use tycho_types::boc::Boc;
-use tycho_types::cell::Cell;
+use tycho_types::cell::{Cell, Load};
 use tycho_types::models::{AccountState, IntAddr};
 
 extension!(read_file in (Context) with (path: String) using read_file_impl);
@@ -50,6 +50,38 @@ fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message
 
     // Send from null address for now
     let src_addr = IntAddr::default();
+    let emulations = emulator.send_message(blockchain, msg_cell, Some(src_addr));
+
+    let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
+        SendMessageResult::Success(res) => Some(res),
+        SendMessageResult::Error(_) => None,
+    });
+
+    let transaction_cells = successful_emulations
+        .filter_map(|emulation| ArcCell::from_boc_b64(&*emulation.raw_transaction).ok())
+        .map(|tx| TupleItem::Cell(tx))
+        .collect::<Vec<_>>();
+    stack.push(TupleItem::Tuple(transaction_cells));
+}
+
+extension!(send_message_from in (Context) with (mode: BigInt, from: ArcCell, message: ArcCell) using send_message_from_impl);
+fn send_message_from_impl(
+    ctx: &mut Context,
+    stack: &mut Tuple,
+    mode: BigInt,
+    from: ArcCell,
+    message: ArcCell,
+) {
+    let blockchain = &mut ctx.blockchain;
+    let emulator = &ctx.emulator;
+
+    let msg_b64 = message.to_boc_b64(false).unwrap();
+    let msg_cell = Boc::decode_base64(msg_b64).unwrap();
+
+    let from_cell = Boc::decode_base64(from.to_boc_b64(false).unwrap()).unwrap();
+    let mut from_slice = from_cell.as_slice().unwrap();
+    let src_addr = IntAddr::load_from(&mut from_slice).unwrap();
+
     let emulations = emulator.send_message(blockchain, msg_cell, Some(src_addr));
 
     let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
@@ -144,6 +176,7 @@ pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
         3 => read_file,
         6 => build,
         7 => send_message,
+        9 => send_message_from,
         8 => run_get_method,
     });
 }
@@ -153,6 +186,7 @@ pub fn register_get_extensions(executor: &mut GetExecutor, ctx: &mut Context) {
         3 => read_file,
         6 => build,
         7 => send_message,
+        9 => send_message_from,
         8 => run_get_method,
     });
 }

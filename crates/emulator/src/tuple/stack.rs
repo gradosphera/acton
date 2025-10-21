@@ -441,6 +441,21 @@ fn format_transaction_list(
 
             let amount = info.value.tokens.into_inner() as f64 / 1e9;
 
+            let src_contract_type = get_contract_type(accounts, build_cache, &info.src);
+            if src_contract_type != "" {
+                tx_builder += format!("{}", src_contract_type.cyan()).as_str();
+            } else {
+                tx_builder += show_addr(&info.src).dimmed().to_string().as_str();
+            }
+
+            let letter = contract_letters.get(&info.src);
+            if let Some(letter) = letter {
+                tx_builder += format!(" {}  ", letter.bold()).as_str();
+            }
+
+            tx_builder += " ";
+            tx_builder += "->  ";
+
             if let Some(message_abi) = message_abi {
                 tx_builder += message_abi
                     .name
@@ -460,19 +475,6 @@ fn format_transaction_list(
             }
             tx_builder += " ";
 
-            let src_contract_type = get_contract_type(accounts, build_cache, &info.src);
-            if src_contract_type != "" {
-                tx_builder += format!("{}", src_contract_type.cyan()).as_str();
-            } else {
-                tx_builder += show_addr(&info.src).dimmed().to_string().as_str();
-            }
-
-            let letter = contract_letters.get(&info.src);
-            if let Some(letter) = letter {
-                tx_builder += format!(" {}  ", letter.bold()).as_str();
-            }
-
-            tx_builder += " ";
             tx_builder += &format!("{} TON", amount.to_string()).green().to_string();
             tx_builder += " -> ";
 
@@ -510,11 +512,15 @@ fn format_transaction_list(
 
             if tx.orig_status == AccountStatus::NotExists && tx.end_status == AccountStatus::Active
             {
-                tx_builder += "\n- account created"
+                tx_builder += "\n";
+                tx_builder += "└─".dimmed().to_string().as_str();
+                tx_builder += " account created";
             }
             if tx.orig_status == AccountStatus::Active && tx.end_status == AccountStatus::NotExists
             {
-                tx_builder += "\n- account destroyed"
+                tx_builder += "\n";
+                tx_builder += "└─".dimmed().to_string().as_str();
+                tx_builder += " account destroyed"
             }
         }
 
