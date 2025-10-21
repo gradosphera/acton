@@ -23,11 +23,13 @@ fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
     }
 }
 
-extension!(build in (Context) with (path: String) using build_impl);
-fn build_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
+extension!(build in (Context) with (path: String, name: String) using build_impl);
+fn build_impl(ctx: &mut Context, stack: &mut Tuple, path: String, name: String) {
     let result = tolkc::compile(Path::new(&path));
     match result {
         tolkc::CompilerResult::Success(success) => {
+            ctx.build_cache
+                .memoize(&name, &path, &success.code_boc64, &success.code_hash_hex);
             let code_cell = ArcCell::from_boc_b64(&*success.code_boc64).unwrap();
             stack.push(TupleItem::Cell(code_cell))
         }
@@ -127,6 +129,8 @@ fn run_get_method_impl(
                 abi: ctx.abi.find_type(&return_type_name),
                 type_name: return_type_name,
                 items: tuple,
+                accounts: blockchain.get_accounts().clone(),
+                build_cache: ctx.build_cache.to_tuple_build_cache(),
             })
         }
         GetMethodResult::Error(result) => {

@@ -17,6 +17,10 @@ impl Blockchain {
         }
     }
 
+    pub fn get_accounts(&self) -> &HashMap<String, ShardAccount> {
+        &self.accounts
+    }
+
     pub fn get_account(&mut self, raw_addr: String) -> ShardAccount {
         let account = self.accounts.get(&raw_addr);
 

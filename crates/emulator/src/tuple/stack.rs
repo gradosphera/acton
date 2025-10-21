@@ -9,7 +9,10 @@ use tonlib_core::cell::{ArcCell, CellBuilder, CellParser};
 use tonlib_core::tlb_types::tlb::TLB;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
-use tycho_types::models::{AccountStatus, ComputePhase, IntAddr, MsgInfo, Transaction, TxInfo};
+use tycho_types::models::{
+    AccountState, AccountStatus, ComputePhase, IntAddr, IntMsgInfo, MsgInfo, ShardAccount,
+    Transaction, TxInfo,
+};
 
 #[derive(Default, Debug, Clone)]
 pub struct Tuple(pub Vec<TupleItem>);
@@ -102,6 +105,18 @@ pub struct TupleSLice {
     pub end_refs: u32,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompilationResult {
+    pub name: String,
+    pub code_boc64: String,
+    pub code_hash: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BuildCache {
+    pub built: HashMap<String, CompilationResult>,
+}
+
 /// Represents a stack value in TON VM
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TupleItem {
@@ -117,6 +132,8 @@ pub enum TupleItem {
         items: Vec<TupleItem>,
         abi: Option<TypeAbi>,
         contract_abi: ContractAbi,
+        accounts: HashMap<String, ShardAccount>,
+        build_cache: BuildCache,
     },
 }
 
@@ -284,6 +301,8 @@ impl fmt::Display for TupleItem {
                 items,
                 abi,
                 contract_abi,
+                accounts,
+                build_cache,
             } => {
                 if type_name == "address" && items.len() == 1 {
                     let addr = &items[0];
@@ -291,7 +310,11 @@ impl fmt::Display for TupleItem {
                 }
 
                 if type_name == "TransactionList" && items.len() == 1 {
-                    return write!(f, "{}", format_transaction_list(&items, contract_abi));
+                    return write!(
+                        f,
+                        "{}",
+                        format_transaction_list(&items, contract_abi, accounts, build_cache)
+                    );
                 }
 
                 if items.len() == 1 {
@@ -340,7 +363,12 @@ fn show_addr(addr: &IntAddr) -> String {
     raw[..6].to_string() + ".." + &raw[raw.len() - 6..]
 }
 
-fn format_transaction_list(items: &&Vec<TupleItem>, contract_abi: &ContractAbi) -> String {
+fn format_transaction_list(
+    items: &&Vec<TupleItem>,
+    contract_abi: &ContractAbi,
+    accounts: &HashMap<String, ShardAccount>,
+    build_cache: &BuildCache,
+) -> String {
     let item = &items[0];
     let TupleItem::Tuple(items) = item else {
         return format!("{}", items[0]);
@@ -431,7 +459,13 @@ fn format_transaction_list(items: &&Vec<TupleItem>, contract_abi: &ContractAbi) 
                     .as_str();
             }
             tx_builder += " ";
-            tx_builder += show_addr(&info.src).dimmed().to_string().as_str();
+
+            let src_contract_type = get_contract_type(accounts, build_cache, &info.src);
+            if src_contract_type != "" {
+                tx_builder += format!("{}", src_contract_type.cyan()).as_str();
+            } else {
+                tx_builder += show_addr(&info.src).dimmed().to_string().as_str();
+            }
 
             let letter = contract_letters.get(&info.src);
             if let Some(letter) = letter {
@@ -441,7 +475,13 @@ fn format_transaction_list(items: &&Vec<TupleItem>, contract_abi: &ContractAbi) 
             tx_builder += " ";
             tx_builder += &format!("{} TON", amount.to_string()).green().to_string();
             tx_builder += " -> ";
-            tx_builder += show_addr(&info.dst).dimmed().to_string().as_str();
+
+            let dst_contract_type = get_contract_type(accounts, build_cache, &info.dst);
+            if dst_contract_type != "" {
+                tx_builder += format!("{}", dst_contract_type.cyan()).as_str();
+            } else {
+                tx_builder += show_addr(&info.dst).dimmed().to_string().as_str();
+            }
 
             let letter = contract_letters.get(&info.dst);
             if let Some(letter) = letter {
@@ -483,6 +523,40 @@ fn format_transaction_list(items: &&Vec<TupleItem>, contract_abi: &ContractAbi) 
     }
 
     builder
+}
+
+fn get_contract_type(
+    accounts: &HashMap<String, ShardAccount>,
+    build_cache: &BuildCache,
+    addr: &IntAddr,
+) -> String {
+    let account = accounts.get(&addr.to_string());
+    let Some(account) = account else {
+        return "".to_string();
+    };
+
+    let account_data = account.load_account();
+    let Ok(Some(data)) = account_data else {
+        return "".to_string();
+    };
+
+    let AccountState::Active(info) = data.state else {
+        return "".to_string();
+    };
+
+    let Some(code) = &info.code else {
+        return "".to_string();
+    };
+
+    let compilation_result = build_cache.built.iter().find(|(_name, result)| {
+        result.code_hash.to_ascii_lowercase() == code.repr_hash().to_string()
+    });
+
+    if let Some(result) = compilation_result {
+        return result.1.name.clone();
+    }
+
+    "".to_string()
 }
 
 /// Serialize a tuple item to a cell builder

@@ -1,4 +1,4 @@
-use crate::context::{AssertFailure, Context};
+use crate::context::{AssertFailure, BuildCache, Context};
 use crate::{asserts_exts, exts, io_exts};
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
@@ -20,6 +20,7 @@ use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
 use tree_sitter::Node;
+use tycho_types::models::ShardAccount;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
@@ -304,6 +305,8 @@ fn run_all_tests(
             captured_stderr,
             assert_failure,
             expected_exit_code: dyn_expected_exit_code,
+            accounts,
+            build_cache,
             ..
         } = result;
 
@@ -394,6 +397,8 @@ fn run_all_tests(
                                 &assert_failure.left_type,
                                 &assert_failure.right_type,
                                 &abi,
+                                &accounts,
+                                &build_cache,
                             );
 
                             for line in diff_output.lines() {
@@ -411,7 +416,9 @@ fn run_all_tests(
                             let value = format_tuple_value(
                                 &assert_failure.left,
                                 &assert_failure.left_type,
+                                &accounts,
                                 &abi,
+                                &build_cache,
                             );
                             println!("         {}", value.dimmed());
                         }
@@ -422,13 +429,17 @@ fn run_all_tests(
                             let left = format_tuple_value(
                                 &assert_failure.left,
                                 &assert_failure.left_type,
+                                &accounts,
                                 &abi,
+                                &build_cache,
                             );
 
                             let right = format_tuple_value(
                                 &assert_failure.left,
                                 &assert_failure.left_type,
+                                &accounts,
                                 &abi,
+                                &build_cache,
                             );
 
                             println!("        Actual:   {}", left.red());
@@ -497,6 +508,8 @@ struct TestResult {
     captured_stderr: String,
     assert_failure: Option<AssertFailure>,
     expected_exit_code: Option<i32>,
+    accounts: HashMap<String, ShardAccount>,
+    build_cache: BuildCache,
 }
 
 fn execute_test(
@@ -527,6 +540,7 @@ fn execute_test(
 
     let mut emulator = Emulator::new();
     let mut blockchain = Blockchain::new();
+    let mut build_cache = BuildCache::new();
 
     let mut ctx = Context {
         stdout_buffer: "".to_string(),
@@ -535,6 +549,7 @@ fn execute_test(
         assert_failure: &mut None,
         blockchain: &mut blockchain,
         emulator: &mut emulator,
+        build_cache: &mut build_cache,
         abi: (*abi).clone(),
         expected_exit_code: &mut Some(BigInt::from(0)),
     };
@@ -554,6 +569,8 @@ fn execute_test(
             .clone()
             .map(|value| value.to_i32())
             .unwrap_or(None),
+        accounts: blockchain.get_accounts().clone(),
+        build_cache,
     }
 }
 
@@ -901,6 +918,8 @@ fn format_tuple_diff(
     left_type: &str,
     right_type: &str,
     abi: &ContractAbi,
+    accounts: &HashMap<String, ShardAccount>,
+    build_cache: &BuildCache,
 ) -> String {
     let left_type_str = left_type.to_string();
     let left_item = TupleItem::TypedTuple {
@@ -908,6 +927,8 @@ fn format_tuple_diff(
         contract_abi: abi.clone(),
         type_name: left_type_str,
         items: (**left).clone(),
+        accounts: accounts.clone(),
+        build_cache: build_cache.to_tuple_build_cache(),
     };
     let right_type_str = right_type.to_string();
     let right_item = TupleItem::TypedTuple {
@@ -915,6 +936,8 @@ fn format_tuple_diff(
         contract_abi: abi.clone(),
         type_name: right_type_str,
         items: (**right).clone(),
+        accounts: accounts.clone(),
+        build_cache: build_cache.to_tuple_build_cache(),
     };
 
     format_tuple_item_diff(&left_item, &right_item)
@@ -936,12 +959,20 @@ fn add_indent_to_lines(text: &str, indent: usize) -> String {
         .join("\n")
 }
 
-fn format_tuple_value(tuple: &Tuple, type_name: &String, abi: &ContractAbi) -> String {
+fn format_tuple_value(
+    tuple: &Tuple,
+    type_name: &String,
+    accounts: &HashMap<String, ShardAccount>,
+    abi: &ContractAbi,
+    build_cache: &BuildCache,
+) -> String {
     let item = TupleItem::TypedTuple {
         abi: abi.find_type(type_name),
         contract_abi: abi.clone(),
         type_name: type_name.to_string(),
         items: (**tuple).clone(),
+        accounts: accounts.clone(),
+        build_cache: build_cache.to_tuple_build_cache(),
     };
     let raw_str = format!("{}", item);
 
@@ -962,6 +993,8 @@ fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
             items: left_items,
             abi,
             contract_abi,
+            accounts,
+            build_cache,
         },
         TupleItem::TypedTuple {
             type_name: right_type,

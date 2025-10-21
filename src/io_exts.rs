@@ -12,6 +12,8 @@ fn println_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: 
             abi: ctx.abi.find_type(&type_name),
             items: tuple.clone(),
             type_name,
+            accounts: ctx.blockchain.get_accounts().clone(),
+            build_cache: ctx.build_cache.to_tuple_build_cache(),
         }
     } else {
         s
@@ -141,6 +143,8 @@ fn format_args(ctx: &mut Context, mut fmt: String, args: Vec<(String, TupleItem)
                 abi: ctx.abi.find_type(&type_name),
                 items: tuple.clone(),
                 type_name,
+                accounts: ctx.blockchain.get_accounts().clone(),
+                build_cache: ctx.build_cache.to_tuple_build_cache(),
             }
         } else {
             arg
