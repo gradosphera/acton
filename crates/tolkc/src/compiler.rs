@@ -22,19 +22,17 @@ use std::path::{Path, PathBuf};
 /// }
 /// ```
 pub fn compile(path: &Path) -> CompilerResult {
-    Compiler::new(
-        2,
-        "/Users/petrmakhnev/emulator-rs/crates/tolkc/assets/fift/".to_string(),
-    )
-    .compile(path)
+    Compiler::new(2).compile(path)
+}
+
+pub fn compile_fast(path: &Path) -> CompilerResult {
+    Compiler::new(0).compile(path)
 }
 
 /// Simple wrapper over C++ implemented Tolk compiler.
 pub struct Compiler {
     /// Level of optimizations, 0 – no optimizations, 2 – all optimizations.
     pub opt_level: i64,
-    /// Path to folder with Fift implementation files.
-    pub fift_path: String,
     /// Show comments with stack for instructions in Fift code.
     pub with_stack_comments: bool,
     /// Show comments with Tolk source file references in Fift code.
@@ -44,10 +42,9 @@ pub struct Compiler {
 }
 
 impl Compiler {
-    pub fn new(opt_level: i64, fift_path: String) -> Self {
+    pub fn new(opt_level: i64) -> Self {
         Self {
             opt_level,
-            fift_path,
             with_stack_comments: false,
             with_src_line_comments: false,
             experimental_options: "".to_string(),
@@ -64,7 +61,6 @@ impl Compiler {
             with_stack_comments: self.with_stack_comments,
             with_src_line_comments: self.with_src_line_comments,
             experimental_options: self.experimental_options.clone(),
-            fift_path: self.fift_path.clone(),
         })
         .expect("Critical error, cannot serializer path to JSON, should not happen");
 
@@ -201,8 +197,6 @@ pub struct CompilerConfig {
     pub with_src_line_comments: bool,
     #[serde(rename = "experimentalOptions")]
     pub experimental_options: String,
-    #[serde(rename = "fiftPath")]
-    pub fift_path: String,
 }
 
 #[derive(Deserialize)]

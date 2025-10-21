@@ -21,6 +21,10 @@ impl Blockchain {
         &self.accounts
     }
 
+    pub fn is_deployed(&self, raw_addr: String) -> bool {
+        self.accounts.contains_key(&raw_addr)
+    }
+
     pub fn get_account(&mut self, raw_addr: String) -> ShardAccount {
         let account = self.accounts.get(&raw_addr);
 

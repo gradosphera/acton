@@ -1,4 +1,4 @@
-use crate::context::{AssertFailure, BuildCache, Context};
+use crate::context::{AssertFailure, BuildCache, Context, TransactionGenericAssertFailure};
 use crate::{asserts_exts, exts, io_exts};
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
@@ -210,7 +210,7 @@ fn run_tests_for_file(file: &str, filter: Option<&str>) -> Result<TestStats, any
 
     fs::write(&tmp_test_filename, executable_code)?;
 
-    let compilation_result = tolkc::compile(Path::new(&tmp_test_filename));
+    let compilation_result = tolkc::compile_fast(Path::new(&tmp_test_filename));
     let result = match compilation_result {
         tolkc::CompilerResult::Success(result) => {
             let code_cell = ArcCell::from_boc_b64(&*result.code_boc64).unwrap();
@@ -278,6 +278,8 @@ fn run_all_tests(
     let mut skipped = 0;
     let mut todo = 0;
 
+    let mut build_cache = BuildCache::new();
+
     for test in filtered_tests.iter() {
         if test.annotations.contains(&"todo".to_string()) {
             let description = test.todo_description.as_deref().unwrap_or("TODO");
@@ -300,7 +302,14 @@ fn run_all_tests(
         }
 
         let start_time = Instant::now();
-        let result = execute_test(test, &code_cell, &data_cell, &dest_address, abi);
+        let result = execute_test(
+            test,
+            &code_cell,
+            &data_cell,
+            &dest_address,
+            &mut build_cache,
+            abi,
+        );
         let duration = start_time.elapsed();
         let TestResult {
             captured_stdout,
@@ -308,7 +317,6 @@ fn run_all_tests(
             assert_failure,
             expected_exit_code: dyn_expected_exit_code,
             accounts,
-            build_cache,
             ..
         } = result;
 
@@ -450,27 +458,7 @@ fn run_all_tests(
 
                         if let AssertFailure::TransactionNotFound(assert_failure) = &assert_failure
                         {
-                            let mut params = vec![];
-                            if let Some(deploy) = assert_failure.params.deploy {
-                                params.push(format!(
-                                    "  deploy={}",
-                                    if deploy {
-                                        "true".green().to_string()
-                                    } else {
-                                        "false".red().to_string()
-                                    }
-                                ))
-                            }
-                            if let Some(exit_code) = assert_failure.params.exit_code {
-                                params.push(format!(
-                                    "  exit_code={}",
-                                    if exit_code == 0 {
-                                        "0".green().to_string()
-                                    } else {
-                                        exit_code.to_string().red().to_string()
-                                    }
-                                ))
-                            }
+                            let params = format_search_transaction_parameters(assert_failure);
 
                             let diff_output = format!(
                                 "{}\nCannot find transaction from {} to {}\nwith:\n{}",
@@ -487,6 +475,33 @@ fn run_all_tests(
                                     &assert_failure.txs,
                                     &Some(assert_failure.params.to.clone())
                                 ),
+                                params.join("\n"),
+                            );
+
+                            for line in diff_output.lines() {
+                                println!("        {}", line);
+                            }
+                        }
+
+                        if let AssertFailure::TransactionIsFound(assert_failure) = &assert_failure {
+                            let params = format_search_transaction_parameters(assert_failure);
+
+                            let diff_output = format!(
+                                "{}\nUnexpected transaction from {} to {}\n{}{}",
+                                assert_failure.txs,
+                                format_address(
+                                    &accounts,
+                                    &build_cache,
+                                    &assert_failure.txs,
+                                    &assert_failure.params.from
+                                ),
+                                format_address(
+                                    &accounts,
+                                    &build_cache,
+                                    &assert_failure.txs,
+                                    &Some(assert_failure.params.to.clone())
+                                ),
+                                if params.len() != 0 { "with:\n" } else { "" },
                                 params.join("\n"),
                             );
 
@@ -551,6 +566,43 @@ fn run_all_tests(
     }
 }
 
+fn format_search_transaction_parameters(
+    assert_failure: &TransactionGenericAssertFailure,
+) -> Vec<String> {
+    let mut params = vec![];
+    if let Some(bounced) = assert_failure.params.bounced {
+        params.push(format!(
+            "  bounced={}",
+            if bounced {
+                "true".green().to_string()
+            } else {
+                "false".red().to_string()
+            }
+        ))
+    }
+    if let Some(deploy) = assert_failure.params.deploy {
+        params.push(format!(
+            "  deploy={}",
+            if deploy {
+                "true".green().to_string()
+            } else {
+                "false".red().to_string()
+            }
+        ))
+    }
+    if let Some(exit_code) = assert_failure.params.exit_code {
+        params.push(format!(
+            "  exit_code={}",
+            if exit_code == 0 {
+                "0".green().to_string()
+            } else {
+                exit_code.to_string().red().to_string()
+            }
+        ))
+    }
+    params
+}
+
 struct TestResult {
     get_result: GetMethodResult,
     captured_stdout: String,
@@ -558,7 +610,6 @@ struct TestResult {
     assert_failure: Option<AssertFailure>,
     expected_exit_code: Option<i32>,
     accounts: HashMap<String, ShardAccount>,
-    build_cache: BuildCache,
 }
 
 fn execute_test(
@@ -566,6 +617,7 @@ fn execute_test(
     code_cell: &Arc<Cell>,
     data_cell: &Arc<Cell>,
     dest_address: &TonAddress,
+    build_cache: &mut BuildCache,
     abi: &ContractAbi,
 ) -> TestResult {
     // thread::sleep(Duration::from_secs(2));
@@ -589,7 +641,6 @@ fn execute_test(
 
     let mut emulator = Emulator::new();
     let mut blockchain = Blockchain::new();
-    let mut build_cache = BuildCache::new();
 
     let mut ctx = Context {
         stdout_buffer: "".to_string(),
@@ -598,7 +649,7 @@ fn execute_test(
         assert_failure: &mut None,
         blockchain: &mut blockchain,
         emulator: &mut emulator,
-        build_cache: &mut build_cache,
+        build_cache,
         abi: (*abi).clone(),
         expected_exit_code: &mut Some(BigInt::from(0)),
     };
@@ -619,7 +670,6 @@ fn execute_test(
             .map(|value| value.to_i32())
             .unwrap_or(None),
         accounts: blockchain.get_accounts().clone(),
-        build_cache,
     }
 }
 

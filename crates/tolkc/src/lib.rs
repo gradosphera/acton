@@ -16,4 +16,4 @@
 
 pub mod compiler;
 
-pub use compiler::{Compiler, CompilerResult, compile};
+pub use compiler::{Compiler, CompilerResult, compile, compile_fast};

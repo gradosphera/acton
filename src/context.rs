@@ -38,10 +38,11 @@ pub struct TransactionNotFoundParams {
     pub from: Option<IntAddr>,
     pub exit_code: Option<u32>,
     pub deploy: Option<bool>,
+    pub bounced: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
-pub struct TransactionNotFoundAssertFailure {
+pub struct TransactionGenericAssertFailure {
     pub message: Option<String>,
     pub location: Option<String>,
     pub txs: TupleItem,
@@ -53,7 +54,8 @@ pub struct TransactionNotFoundAssertFailure {
 pub enum AssertFailure {
     Bin(AssertBinFailure),
     Fail(FailAssertFailure),
-    TransactionNotFound(TransactionNotFoundAssertFailure),
+    TransactionNotFound(TransactionGenericAssertFailure),
+    TransactionIsFound(TransactionGenericAssertFailure),
 }
 
 impl AssertFailure {
@@ -62,6 +64,7 @@ impl AssertFailure {
             AssertFailure::Bin(arg) => arg.message.clone(),
             AssertFailure::Fail(arg) => arg.message.clone(),
             AssertFailure::TransactionNotFound(arg) => arg.message.clone(),
+            AssertFailure::TransactionIsFound(arg) => arg.message.clone(),
         }
     }
 
@@ -70,6 +73,7 @@ impl AssertFailure {
             AssertFailure::Bin(arg) => arg.location.clone(),
             AssertFailure::Fail(arg) => arg.location.clone(),
             AssertFailure::TransactionNotFound(arg) => arg.location.clone(),
+            AssertFailure::TransactionIsFound(arg) => arg.location.clone(),
         }
     }
 }

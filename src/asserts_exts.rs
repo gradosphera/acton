@@ -1,5 +1,5 @@
 use crate::context::{
-    AssertBinFailure, AssertFailure, Context, FailAssertFailure, TransactionNotFoundAssertFailure,
+    AssertBinFailure, AssertFailure, Context, FailAssertFailure, TransactionGenericAssertFailure,
     TransactionNotFoundParams,
 };
 use emulator::executor::Executor;
@@ -111,7 +111,46 @@ fn fail_to_find_transaction_by_params_impl(
     };
 
     *ctx.assert_failure = Some(AssertFailure::TransactionNotFound(
-        TransactionNotFoundAssertFailure {
+        TransactionGenericAssertFailure {
+            txs: TupleItem::TypedTuple {
+                items: vec![TupleItem::Tuple(txs.0)],
+                contract_abi: ctx.abi.clone(),
+                abi: ctx.abi.find_type(&"TransactionList".to_string()),
+                type_name: "TransactionList".to_string(),
+                accounts: ctx.blockchain.get_accounts().clone(),
+                build_cache: ctx.build_cache.to_tuple_build_cache(),
+            },
+            parsed_txs,
+            params,
+            message: Some(message),
+            location: Some(location),
+        },
+    ));
+}
+
+extension!(fail_to_not_find_transaction_by_params in (Context) with (params: Tuple, txs: Tuple, message: String, location: String) using fail_to_not_find_transaction_by_params_impl);
+fn fail_to_not_find_transaction_by_params_impl(
+    ctx: &mut Context,
+    _stack: &mut Tuple,
+    params: Tuple,
+    txs: Tuple,
+    message: String,
+    location: String,
+) {
+    // struct SearchParams {
+    //     to: address,
+    //     from: address? = null,
+    //     exit_code: int32? = null,
+    //     deploy: bool? = null,
+    // }
+
+    let (params, parsed_txs) = match process_txs_and_search_params(&txs, params) {
+        Some(value) => value,
+        None => return,
+    };
+
+    *ctx.assert_failure = Some(AssertFailure::TransactionIsFound(
+        TransactionGenericAssertFailure {
             txs: TupleItem::TypedTuple {
                 items: vec![TupleItem::Tuple(txs.0)],
                 contract_abi: ctx.abi.clone(),
@@ -133,6 +172,7 @@ pub fn process_txs_and_search_params(
     params: Tuple,
 ) -> Option<(TransactionNotFoundParams, Vec<Transaction>)> {
     let mut params_reader = params.clone().0;
+    let raw_bounced = params_reader.pop();
     let raw_deploy = params_reader.pop();
     let raw_exit_code = params_reader.pop();
     let raw_from = params_reader.pop();
@@ -143,8 +183,16 @@ pub fn process_txs_and_search_params(
         from: None,
         exit_code: None,
         deploy: None,
+        bounced: None,
     };
 
+    if let Some(raw_bounced) = raw_bounced {
+        if let TupleItem::Null = raw_bounced {
+            params.bounced = None
+        } else if let TupleItem::Int(num) = raw_bounced {
+            params.bounced = Some(num == BigInt::from(18446744073709551615u64))
+        }
+    }
     if let Some(raw_deploy) = raw_deploy {
         if let TupleItem::Null = raw_deploy {
             params.deploy = None
@@ -183,7 +231,7 @@ pub fn process_txs_and_search_params(
             if let Ok(()) = slice.skip_first(start_bits as u16, 0)
                 && let Ok(address) = IntAddr::load_from(&mut slice)
             {
-                params.to = address;
+                params.from = Some(address);
             }
         }
     }
@@ -226,6 +274,7 @@ pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
         101 => assert_bin,
         102 => expect_to_end_with_exit_code,
         103 => fail_to_find_transaction_by_params,
+        104 => fail_to_not_find_transaction_by_params,
     });
 }
 
@@ -235,5 +284,6 @@ pub fn register_get_extensions(executor: &mut GetExecutor, ctx: &mut Context) {
         101 => assert_bin,
         102 => expect_to_end_with_exit_code,
         103 => fail_to_find_transaction_by_params,
+        104 => fail_to_not_find_transaction_by_params,
     });
 }

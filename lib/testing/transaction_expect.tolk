@@ -7,6 +7,7 @@ struct SearchParams {
     from: address? = null
     exit_code: int32? = null
     deploy: bool? = null
+    bounced: bool? = null
 }
 
 fun Expectation<TransactionList>.toHaveSuccesfulDeploy(self, params: SearchParams) {
@@ -33,6 +34,34 @@ fun Expectation<TransactionList>.toHaveSuccesfulTx(self, params: SearchParams, e
         failToFindTransactionByParams(
             self.location,
             "expect(actual).toHaveSuccesfulTx(expected)",
+            self.value,
+            params.__toTuple()
+        );
+        throw 567;
+    }
+}
+
+fun Expectation<TransactionList>.toNotHaveTx(self, params: SearchParams) {
+    val tx = findTransactionByParams(self.value, params.__toTuple());
+    if (tx != null) {
+        failToNotFindTransactionByParams(
+            self.location,
+            "expect(actual).toNotHaveTx(expected)",
+            self.value,
+            params.__toTuple()
+        );
+        throw 567;
+    }
+}
+
+fun Expectation<TransactionList>.toHaveBouncedTx(self, params: SearchParams) {
+    params.bounced = true;
+
+    val tx = findTransactionByParams(self.value, params.__toTuple());
+    if (tx == null) {
+        failToFindTransactionByParams(
+            self.location,
+            "expect(actual).toHaveBouncedTx(expected)",
             self.value,
             params.__toTuple()
         );
@@ -73,3 +102,6 @@ fun findTransactionByParams(txs: tuple, params: tuple): tuple?
 
 fun failToFindTransactionByParams(location: slice, message: slice, txs: tuple, params: tuple): tuple?
     asm "103 EXTCALL"
+
+fun failToNotFindTransactionByParams(location: slice, message: slice, txs: tuple, params: tuple): tuple?
+    asm "104 EXTCALL"

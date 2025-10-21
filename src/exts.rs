@@ -136,18 +136,21 @@ fn find_transaction_by_params_impl(
         if let Some(in_msg) = &in_msg
             && let MsgInfo::Int(info) = &in_msg.info
         {
+            if let Some(expected_bounced) = &params.bounced {
+                if *expected_bounced != info.bounced {
+                    // Bounced value mismatch
+                    return None;
+                }
+            }
+
             if let Some(expected_from_addr) = &params.from {
-                let a1 = (*expected_from_addr).to_string();
-                let a2 = info.src.to_string();
-                if a1 != a2 {
+                if (*expected_from_addr).to_string() != info.src.to_string() {
                     // Source address mismatch
                     return None;
                 }
             }
 
-            let a1 = params.to.to_string();
-            let a2 = info.dst.to_string();
-            if a1 != a2 {
+            if params.to.to_string() != info.dst.to_string() {
                 // Destination address mismatch
                 return None;
             }
@@ -258,6 +261,21 @@ fn run_get_method_impl(
     };
 }
 
+extension!(is_deployed in (Context) with (address: ArcCell) using is_deployed_impl);
+fn is_deployed_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell) {
+    let address_boc = address.to_boc_hex(false).unwrap();
+
+    let address_std = MsgAddrIntStd::from_boc_hex(address_boc.as_str()).unwrap();
+    let dst_addr_str = format!(
+        "{}:{}",
+        &address_std.workchain,
+        hex::encode(&address_std.address)
+    );
+
+    let is_deployed = ctx.blockchain.is_deployed(dst_addr_str);
+    stack.push_bool(is_deployed);
+}
+
 pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         3 => read_file,
@@ -265,6 +283,7 @@ pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
         7 => send_message,
         9 => send_message_from,
         10 => find_transaction_by_params,
+        11 => is_deployed,
     });
 }
 
@@ -276,5 +295,6 @@ pub fn register_get_extensions(executor: &mut GetExecutor, ctx: &mut Context) {
         9 => send_message_from,
         8 => run_get_method,
         10 => find_transaction_by_params,
+        11 => is_deployed,
     });
 }
