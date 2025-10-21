@@ -1,4 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::Path;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
@@ -88,6 +90,13 @@ struct AbiInfo {
     storage: Option<TypeAbi>,
     entry_point: Option<EntryPoint>,
     external_entry_point: Option<EntryPoint>,
+}
+
+#[derive(Debug)]
+struct FileInfo {
+    path: String,
+    content: String,
+    tree: tree_sitter::Tree,
 }
 
 #[derive(Debug, Clone)]
@@ -192,10 +201,28 @@ fn analyze_structs_recursive(
     }
 }
 
-pub fn contract_abi(node: &tree_sitter::Node, content: &str, file_path: &str) -> ContractAbi {
+pub fn contract_abi(root_node: &tree_sitter::Node, content: &str, file_path: &str) -> ContractAbi {
     let contract_name = get_contract_name_from_file_path(file_path);
 
-    let abi_info = collect_abi_info(node, content, file_path);
+    let files = collect_imported_files(root_node, content, file_path);
+
+    let mut abi_info = AbiInfo {
+        get_methods: Vec::new(),
+        messages: Vec::new(),
+        types: Vec::new(),
+        storage: None,
+        entry_point: None,
+        external_entry_point: None,
+    };
+
+    for file_info in files {
+        let file_abi = collect_abi_info(
+            &file_info.tree.root_node(),
+            &file_info.content,
+            &file_info.path,
+        );
+        merge_abi_info(&mut abi_info, file_abi);
+    }
 
     ContractAbi {
         name: contract_name,
@@ -205,6 +232,122 @@ pub fn contract_abi(node: &tree_sitter::Node, content: &str, file_path: &str) ->
         get_methods: abi_info.get_methods,
         messages: abi_info.messages,
         types: abi_info.types,
+    }
+}
+
+fn collect_imported_files(
+    root_node: &tree_sitter::Node,
+    content: &str,
+    file_path: &str,
+) -> Vec<FileInfo> {
+    let mut files = Vec::new();
+    let mut processed = HashSet::new();
+
+    let tree = tolk_parser::parser::parse(content).unwrap();
+    files.push(FileInfo {
+        path: file_path.to_string(),
+        content: content.to_string(),
+        tree,
+    });
+    processed.insert(file_path.to_string());
+
+    collect_imported_files_recursive(root_node, content, file_path, &mut files, &mut processed);
+
+    files
+}
+
+fn collect_imported_files_recursive(
+    node: &tree_sitter::Node,
+    content: &str,
+    file_path: &str,
+    files: &mut Vec<FileInfo>,
+    processed: &mut HashSet<String>,
+) {
+    let mut cursor = node.walk();
+    for child in node
+        .children(&mut cursor)
+        .filter(|child| child.kind() == "import_directive")
+    {
+        let Some(path_node) = child.child_by_field_name("path") else {
+            continue;
+        };
+
+        let import_path_text = path_node
+            .utf8_text(content.as_bytes())
+            .unwrap_or("")
+            .to_string();
+
+        let import_path = import_path_text.trim_matches('"');
+
+        let resolved_path = resolve_import_path(file_path, import_path);
+        let Some(resolved) = resolved_path else {
+            continue;
+        };
+
+        if processed.contains(&resolved) {
+            // recursive dependency, already processed
+            continue;
+        }
+
+        let Ok(import_content) = fs::read_to_string(&resolved) else {
+            continue;
+        };
+
+        if let Ok(tree) = tolk_parser::parser::parse(&import_content) {
+            let root_node = tree.root_node();
+
+            collect_imported_files_recursive(
+                &root_node,
+                &import_content,
+                &resolved,
+                files,
+                processed,
+            );
+
+            files.push(FileInfo {
+                path: resolved.clone(),
+                content: import_content,
+                tree,
+            });
+            processed.insert(resolved);
+        }
+    }
+}
+
+fn resolve_import_path(base_file: &str, import_path: &str) -> Option<String> {
+    let base_path = Path::new(base_file).parent()?;
+
+    if import_path.starts_with("./") || import_path.starts_with("../") {
+        let relative_path = base_path.join(import_path);
+        return Some(relative_path.to_string_lossy().to_string());
+    }
+    let relative_path = base_path.join(import_path);
+    if relative_path.exists() {
+        return Some(relative_path.to_string_lossy().to_string());
+    }
+
+    let with_ext = format!("{}.tolk", import_path);
+    let path_with_ext = base_path.join(with_ext);
+    if path_with_ext.exists() {
+        Some(path_with_ext.to_string_lossy().to_string())
+    } else {
+        None
+    }
+}
+
+fn merge_abi_info(target: &mut AbiInfo, source: AbiInfo) {
+    target.get_methods.extend(source.get_methods);
+    target.messages.extend(source.messages);
+    target.types.extend(source.types);
+
+    if target.storage.is_none() && source.storage.is_some() {
+        target.storage = source.storage;
+    }
+    if target.entry_point.is_none() && source.entry_point.is_some() {
+        target.entry_point = source.entry_point;
+    }
+    if target.external_entry_point.is_none() && source.external_entry_point.is_some() {
+        target.external_entry_point = source.external_entry_point;
     }
 }
 
@@ -733,13 +876,55 @@ get fun large_id(): int {
     }
 
     #[test]
+    fn test_imports_support() {
+        let import_content = r#"
+struct ImportedStruct {
+    value: int;
+}
+
+get fun imported_method(): int {
+    return 42;
+}
+"#;
+
+        let import_path = "test_import.tolk";
+        fs::write(import_path, import_content).unwrap();
+
+        let main_content = r#"
+import "test_import";
+
+struct MainStruct {
+    data: int;
+}
+
+get fun main_method(): int {
+    return 100;
+}
+"#;
+
+        let tree = parse(main_content).unwrap();
+        let root_node = tree.root_node();
+        let abi = contract_abi(&root_node, main_content, "main.tolk");
+
+        let _ = fs::remove_file(import_path);
+
+        assert_eq!(abi.types.len(), 2); // MainStruct and ImportedStruct
+        assert_eq!(abi.get_methods.len(), 2); // main_method and imported_method
+
+        let type_names: Vec<&str> = abi.types.iter().map(|t| t.name.as_str()).collect();
+        assert!(type_names.contains(&"MainStruct"));
+        assert!(type_names.contains(&"ImportedStruct"));
+
+        let method_names: Vec<&str> = abi.get_methods.iter().map(|m| m.name.as_str()).collect();
+        assert!(method_names.contains(&"main_method"));
+        assert!(method_names.contains(&"imported_method"));
+    }
+
+    #[test]
     fn test_crc16_consistency() {
         let test_name = "get_balance";
         let crc_value = CRC16.checksum(test_name.as_bytes()) as u32;
         let method_id = (crc_value & 0xFFFF) | 0x10000;
-
-        println!("CRC16 of '{}': 0x{:04x}", test_name, crc_value);
-        println!("Method ID: 0x{:08x}", method_id);
 
         assert!(crc_value > 0);
         assert!(method_id >= 0x10000);
