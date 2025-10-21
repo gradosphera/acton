@@ -14,10 +14,6 @@ struct JettonWallet {
     address: address
 }
 
-fun JettonWallet.fromAddress(addr: address) {
-    return JettonWallet { address: addr }
-}
-
 fun JettonWallet.getJettonBalance(self, net: Network): coins {
     if (!net.isDeployed(self.address)) {
         return 0
@@ -98,9 +94,7 @@ fun JettonMinter.fromStorage(storage: MinterStorage) {
         code: build("Minter", "./.jetton/contracts/jetton-minter-contract.tolk"),
         data: storage.toCell(),
     };
-    val addr = AutoDeployAddress {
-        stateInit: init,
-    }.buildAddress().endCell().beginParse().loadAddress();
+    val addr = address.fromValidBuilder(AutoDeployAddress { stateInit: init }.buildAddress());
     return JettonMinter {
         address: addr, init
     }
@@ -174,8 +168,8 @@ fun JettonMinter.getWalletAddress(self, net: Network, owner: address): address {
 }
 
 fun userWallet(minter: JettonMinter, net: Network, userAddress: address): JettonWallet {
-    val walletAddress = minter.getWalletAddress(net, userAddress);
-    return JettonWallet.fromAddress(walletAddress);
+    val address = minter.getWalletAddress(net, userAddress);
+    return JettonWallet { address }
 }
 
 fun setup_test(): (Network, JettonMinter, Treasury, Treasury) {
