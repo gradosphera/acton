@@ -9,16 +9,11 @@ import "../../lib/testing/transaction_expect"
 
 struct JettonWallet {
     address: address
-    init: ContractState
+    init: ContractState?
 }
 
-fun JettonWallet.from_address(addr: address) {
-    return JettonWallet {
-        address: addr, init: ContractState{
-            code: build("Wallet", "./.jetton/contracts/jetton-wallet-contract.tolk"),
-            data: createEmptyCell(),
-        }
-    }
+fun JettonWallet.fromAddress(addr: address) {
+    return JettonWallet { address: addr, init: null }
 }
 
 fun address.fromTuple(data: tuple): address  asm "1 UNTUPLE"
@@ -89,27 +84,6 @@ fun JettonWallet.sendBurn(self, net: Network, from: address, value: int, jettonA
     return net.sendFrom(from, msg, SEND_MODE_PAY_FEES_SEPARATELY)
 }
 
-fun JettonWallet.transferMessage(jettonAmount: int, to: address, responseAddress: address, customPayload: cell?, forwardAmount: int, forwardPayload: cell?): cell {
-    return AskToTransfer {
-        queryId: 0,
-        jettonAmount: jettonAmount,
-        transferRecipient: to,
-        sendExcessesTo: responseAddress,
-        customPayload: customPayload,
-        forwardTonAmount: forwardAmount,
-        forwardPayload: beginCell().storeMaybeRef(forwardPayload.toCell()).endCell().beginParse(),
-    }.toCell()
-}
-
-fun JettonWallet.burnMessage(jettonAmount: int, responseAddress: address, customPayload: cell?): cell {
-    return AskToBurn {
-        queryId: 0,
-        jettonAmount: jettonAmount,
-        sendExcessesTo: responseAddress,
-        customPayload: customPayload,
-    }.toCell()
-}
-
 fun JettonMinter.sendDiscovery(self, net: Network, from: address, ownerAddress: address, includeOwnerAddress: bool): TransactionList {
     val msg = createMessage({
         bounce: false,
@@ -142,18 +116,17 @@ struct JettonMinter {
     init: ContractState
 }
 
-fun JettonMinter.from_init(init: ContractState) {
+fun JettonMinter.fromStorage(storage: MinterStorage) {
+    val init = ContractState {
+        // TODO: in the future version there will be no path at all
+        code: build("Minter", "./.jetton/contracts/jetton-minter-contract.tolk"),
+        data: storage.toCell(),
+    };
     val addr = AutoDeployAddress {
         stateInit: init,
     }.buildAddress().endCell().beginParse().loadAddress();
     return JettonMinter {
         address: addr, init
-    }
-}
-
-fun JettonMinter.new(address: address, init: ContractState) {
-    return JettonMinter {
-        address, init
     }
 }
 
@@ -233,7 +206,7 @@ fun JettonMinter.getWalletAddress(self, net: Network, owner: address): address {
 
 fun userWallet(minter: JettonMinter, net: Network, userAddress: address): JettonWallet {
     val walletAddress = minter.getWalletAddress(net, userAddress);
-    return JettonWallet.from_address(walletAddress);
+    return JettonWallet.fromAddress(walletAddress);
 }
 
 fun setup_test(): (Network, JettonMinter, Treasury, Treasury) {
@@ -241,14 +214,11 @@ fun setup_test(): (Network, JettonMinter, Treasury, Treasury) {
 
     val deployer = net.treasury("deployer");
 
-    val minter = JettonMinter.from_init({
-        code: build("Minter", "./.jetton/contracts/jetton-minter-contract.tolk"),
-        data: MinterStorage {
-            totalSupply: 1000000,
-            adminAddress: deployer.address,
-            content: createEmptyCell(),
-            jettonWalletCode: build("Wallet", "./.jetton/contracts/jetton-wallet-contract.tolk"),
-        }.toCell(),
+    val minter = JettonMinter.fromStorage(MinterStorage {
+        totalSupply: 1000000,
+        adminAddress: deployer.address,
+        content: createEmptyCell(),
+        jettonWalletCode: build("Wallet", "./.jetton/contracts/jetton-wallet-contract.tolk"),
     });
 
     val transactions = minter.sendDeploy(net, { value: ton("10") });
@@ -263,9 +233,7 @@ get fun `test-can-mint`() {
     val (net, minter, deployer, _) = setup_test();
     val initial_total_supply = minter.getTotalSupply(net);
 
-    val addr = minter.getWalletAddress(net, deployer.address);
-
-    val wallet = JettonWallet.from_address(addr);
+    val wallet = userWallet(minter, net, deployer.address);
 
     val initial_jetton_balance = ton("1000.23");
     val mint_result = minter.sendMint(
@@ -290,8 +258,7 @@ get fun `test-not-a-minter-admin-should-not-be-able-to-mint-jettons`() {
     val (net, minter, deployer, not_deployer) = setup_test();
     val initial_total_supply = minter.getTotalSupply(net);
 
-    val addr = minter.getWalletAddress(net, deployer.address);
-    val wallet = JettonWallet.from_address(addr);
+    val wallet = userWallet(minter, net, deployer.address);
     val initial_jetton_balance = wallet.getJettonBalance(net);
 
     val mint_result = minter.sendMint(
@@ -914,6 +881,7 @@ get fun `test-report-correct-discovery-address`() {
     // Test discovery with includeOwnerAddress = true for notDeployer
     val discovery_result_not_deployer = minter.sendDiscovery(net, deployer.address, not_deployer.address, true);
     val not_deployer_jetton_wallet = userWallet(minter, net, not_deployer.address);
+    // TODO: way to check body
 
     expect(discovery_result_not_deployer).toHaveSuccesfulTx({
         from: minter.address,
@@ -955,7 +923,15 @@ get fun `test-wallet-should-restore-balance-on-internal-transfer-bounce`() {
         bounce: false,
         value: ton("1"),
         dest: deployer_jetton_wallet.address,
-        body: JettonWallet.transferMessage(tx_amount, not_deployer.address, deployer.address, null, 0, null),
+        body: AskToTransfer {
+            queryId: 0,
+            jettonAmount: tx_amount,
+            transferRecipient: not_deployer.address,
+            sendExcessesTo: deployer.address,
+            customPayload: null,
+            forwardTonAmount: 0,
+            forwardPayload: beginCell().storeMaybeRef(null).endCell().beginParse(),
+        }.toCell(),
     });
 
     val transfer_result = net.sendFrom(deployer.address, transfer_msg, SEND_MODE_PAY_FEES_SEPARATELY);
@@ -1009,7 +985,12 @@ get fun `test-wallet-should-restore-balance-on-burn-notification-bounce`() {
         bounce: false,
         value: ton("1"),
         dest: deployer_jetton_wallet.address,
-        body: JettonWallet.burnMessage(burn_amount, deployer.address, null),
+        body: AskToBurn {
+            queryId: 0,
+            jettonAmount: burn_amount,
+            sendExcessesTo: deployer.address,
+            customPayload: null,
+        }.toCell(),
     });
 
     val burn_result = net.sendFrom(deployer.address, burn_msg, SEND_MODE_PAY_FEES_SEPARATELY);
