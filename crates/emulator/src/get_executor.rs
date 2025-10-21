@@ -28,6 +28,8 @@ impl GetExecutor {
         let stack_b64 = stack.to_boc_b64(false).unwrap();
 
         let run_result = unsafe {
+            tvm_emulator_set_gas_limit(self.inner, i64::MAX - 1000);
+
             let params_cstr = CString::new(params_str.as_str()).unwrap();
             let stack_b64_cstr = CString::new(stack_b64).unwrap();
             run_get_method(
@@ -129,3 +131,10 @@ type RegisterExtMethodCallback = unsafe extern "C" fn(
     ctx: *mut std::os::raw::c_void,
     arg1: *const std::os::raw::c_char,
 ) -> *const std::os::raw::c_char;
+
+unsafe extern "C" {
+    pub fn tvm_emulator_set_gas_limit(
+        tvm_emulator: *mut std::os::raw::c_void,
+        gas_limit: i64,
+    ) -> bool;
+}
