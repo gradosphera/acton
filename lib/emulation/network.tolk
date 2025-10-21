@@ -52,12 +52,12 @@ fun Network.treasury(self, name: slice): Treasury {
     return Treasury { address }
 }
 
-fun Network.runGetMethod<Ret, Args>(self, addr: address, name: slice, args: Args, _dummy: Ret): Ret {
+fun Network.runGetMethod<Ret, Args>(self, addr: address, name: slice, args: Args): Ret {
     val method_id = (crc16(name) & 0xffff) | 0x10000;
-    return self.runGetMethodById(addr, method_id, args, _dummy)
+    return self.runGetMethodById(addr, method_id, args)
 }
 
-fun Network.runGetMethodById<Ret, Args>(self, addr: address, id: int, args: Args, _dummy: Ret): Ret {
+fun Network.runGetMethodById<Ret, Args>(self, addr: address, id: int, args: Args): Ret {
     if (!self.isDeployed(addr)) {
         throw CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT;
     }
@@ -67,7 +67,7 @@ fun Network.runGetMethodById<Ret, Args>(self, addr: address, id: int, args: Args
         throw CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE;
     }
 
-    val res = runGetMethod(addr.toCell(), code, id, __typeName(_dummy), args.__toTuple());
+    val res = runGetMethod(addr.toCell(), code, id, Ret.__typeName2(), args.__toTuple());
     return Ret.fromTuple(res)
 }
 

@@ -527,6 +527,10 @@ fun stringCrc16(constString: slice): int
 fun __typeName<T>(any: T): slice
     builtin
 
+@pure
+fun __typeName2<T>(): slice
+    builtin
+
 /// Compile-time function that calculates sha256 of a constant string and returns 256-bit integer.
 /// ```
 /// const hash = stringSha256("some_crypto_key")
