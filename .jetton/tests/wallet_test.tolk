@@ -32,7 +32,7 @@ fun JettonWallet.getJettonBalance(self, net: Network): coins {
         return 0
     }
 
-    val result = net.runGetMethod<JettonWalletDataReply, tuple>(self.address, "get_wallet_data", createEmptyTuple());
+    val result: JettonWalletDataReply = net.runGetMethod(self.address, "get_wallet_data");
     return result.jettonBalance
 }
 
@@ -163,7 +163,7 @@ fun JettonMinter.sendChangeAdmin(self, net: Network, from: address, new_owner: a
 }
 
 fun JettonMinter.getJettonData(self, net: Network): JettonDataReply {
-    return net.runGetMethod<JettonDataReply, tuple>(self.address, "get_jetton_data", createEmptyTuple());
+    return net.runGetMethod(self.address, "get_jetton_data");
 }
 
 fun JettonMinter.getTotalSupply(self, net: Network): int {
