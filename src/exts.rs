@@ -26,6 +26,12 @@ fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
 
 extension!(build in (Context) with (path: String, name: String) using build_impl);
 fn build_impl(ctx: &mut Context, stack: &mut Tuple, path: String, name: String) {
+    if let Some(cached) = ctx.build_cache.built.get(&path) {
+        let code_cell = ArcCell::from_boc_b64(&*cached.code_boc64).unwrap();
+        stack.push(TupleItem::Cell(code_cell));
+        return;
+    }
+
     let result = tolkc::compile(Path::new(&path));
     match result {
         tolkc::CompilerResult::Success(success) => {
@@ -186,6 +192,7 @@ fn run_get_method_impl(
     code: ArcCell,
     address: ArcCell,
 ) {
+    let args = args.unwrap_empty();
     let blockchain = &mut ctx.blockchain;
     let address_boc = address.to_boc_hex(false).unwrap();
 

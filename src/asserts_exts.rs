@@ -162,7 +162,7 @@ pub fn process_txs_and_search_params(
     if let Some(raw_from) = raw_from {
         if let TupleItem::Null = raw_from {
             params.from = None
-        } else if let TupleItem::Tuple(raw_from) = raw_from
+        } else if let TupleItem::Tuple(raw_from) = &raw_from
             && let TupleItem::Slice(TupleSLice {
                 cell, start_bits, ..
             }) = &raw_from[0]
@@ -173,6 +173,17 @@ pub fn process_txs_and_search_params(
                 && let Ok(address) = IntAddr::load_from(&mut slice)
             {
                 params.from = Some(address);
+            }
+        } else if let TupleItem::Slice(TupleSLice {
+            cell, start_bits, ..
+        }) = raw_from
+        {
+            let cell = Boc::decode_base64(cell.to_boc_b64(false).unwrap()).unwrap();
+            let mut slice = cell.as_slice().unwrap();
+            if let Ok(()) = slice.skip_first(start_bits as u16, 0)
+                && let Ok(address) = IntAddr::load_from(&mut slice)
+            {
+                params.to = address;
             }
         }
     }
