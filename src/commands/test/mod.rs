@@ -16,6 +16,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
+use teamcity::TeamcityReporter;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
@@ -23,6 +24,8 @@ use tree_sitter::Node;
 use tycho_types::boc::Boc;
 use tycho_types::cell::Load;
 use tycho_types::models::{AccountState, IntAddr, MsgInfo, ShardAccount, Transaction};
+
+mod teamcity;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
@@ -34,7 +37,7 @@ struct CustomAnnotationValues {
     todo_description: Option<String>,
 }
 
-pub fn test_cmd(path: &String, filter: Option<&str>) -> Result<(), anyhow::Error> {
+pub fn test_cmd(path: &String, filter: Option<&str>, teamcity: bool) -> Result<(), anyhow::Error> {
     let metadata = fs::metadata(path)?;
     let test_files = if metadata.is_file() {
         if !path.ends_with("_test.tolk") {
@@ -48,12 +51,19 @@ pub fn test_cmd(path: &String, filter: Option<&str>) -> Result<(), anyhow::Error
     };
 
     let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
-    println!(
-        "\n{} {}\n",
-        " TEST ".bold().on_cyan(),
-        cwd.display().dimmed()
-    );
-    println!("{}", "─".repeat(50).dimmed());
+
+    if teamcity {
+        TeamcityReporter::on_testing_started();
+    }
+
+    if !teamcity {
+        println!(
+            "\n{} {}\n",
+            " TEST ".bold().on_cyan(),
+            cwd.display().dimmed()
+        );
+        println!("{}", "─".repeat(50).dimmed());
+    }
 
     let mut total_passed = 0;
     let mut total_failed = 0;
@@ -61,7 +71,7 @@ pub fn test_cmd(path: &String, filter: Option<&str>) -> Result<(), anyhow::Error
     let mut total_todo = 0;
 
     for (index, file) in test_files.iter().enumerate() {
-        let result = run_tests_for_file(&file, filter);
+        let result = run_tests_for_file(&file, filter, teamcity);
         match result {
             Ok(stats) => {
                 total_passed += stats.passed;
@@ -143,6 +153,10 @@ pub fn test_cmd(path: &String, filter: Option<&str>) -> Result<(), anyhow::Error
         println!("\n{}", "Some tests failed.".red());
     }
 
+    if teamcity {
+        TeamcityReporter::on_testing_finished();
+    }
+
     Ok(())
 }
 
@@ -193,7 +207,11 @@ struct TestStats {
     todo: usize,
 }
 
-fn run_tests_for_file(file: &str, filter: Option<&str>) -> Result<TestStats, anyhow::Error> {
+fn run_tests_for_file(
+    file: &str,
+    filter: Option<&str>,
+    teamcity: bool,
+) -> Result<TestStats, anyhow::Error> {
     let content = match fs::read_to_string(file) {
         Ok(content) => content,
         Err(err) => {
@@ -218,7 +236,7 @@ fn run_tests_for_file(file: &str, filter: Option<&str>) -> Result<TestStats, any
             let code_cell = ArcCell::from_boc_b64(&*result.code_boc64)?;
             let data_cell = ArcCell::default();
 
-            let stats = run_all_tests(file, tests, &code_cell, &data_cell, &abi, filter);
+            let stats = run_all_tests(file, tests, &code_cell, &data_cell, &abi, filter, teamcity);
             Ok(stats)
         }
         tolkc::CompilerResult::Error(error) => {
@@ -237,6 +255,7 @@ fn run_all_tests(
     data_cell: &Arc<Cell>,
     abi: &ContractAbi,
     filter: Option<&str>,
+    teamcity: bool,
 ) -> TestStats {
     let filtered_tests = if let Some(pattern) = filter {
         let regex = match Regex::new(pattern) {
@@ -260,6 +279,8 @@ fn run_all_tests(
     };
 
     if !filtered_tests.is_empty() {
+        TeamcityReporter::on_test_suite_started(file_path);
+
         let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
         let relative_path = Path::new(file_path)
             .strip_prefix(&cwd)
@@ -282,7 +303,12 @@ fn run_all_tests(
     let mut build_cache = BuildCache::new();
 
     for test in filtered_tests.iter() {
+        if teamcity {
+            TeamcityReporter::on_test_started(&test.name, file_path);
+        }
+
         if test.annotations.contains(&"todo".to_string()) {
+            TeamcityReporter::on_test_ignored(&test.name, 0);
             let description = test.todo_description.as_deref().unwrap_or("TODO");
             println!(
                 "  {} {} {}{}{}",
@@ -297,6 +323,7 @@ fn run_all_tests(
         }
 
         if test.annotations.contains(&"skip".to_string()) {
+            TeamcityReporter::on_test_ignored(&test.name, 0);
             println!("  {} {} {}", "○".dimmed(), test.name, "skipped".dimmed());
             skipped += 1;
             continue;
@@ -353,6 +380,7 @@ fn run_all_tests(
         };
 
         if test_passed {
+            TeamcityReporter::on_test_finished(&test.name, file_path, duration_ms);
             println!(
                 "  {} {} {}{}",
                 "✓".green(),
@@ -382,7 +410,7 @@ fn run_all_tests(
                             gas_used.to_string().red(),
                             test.gas_limit.unwrap().to_string().green()
                         );
-                    } else if let Some(assert_failure) = assert_failure {
+                    } else if let Some(ref assert_failure) = assert_failure {
                         if let Some(message) = &assert_failure.message() {
                             if !message.is_empty() {
                                 let highlighted_message = highlight_actual_expected(message);
@@ -554,6 +582,8 @@ fn run_all_tests(
                     println!("    {} {}", "└─".dimmed(), error.error.yellow());
                 }
             }
+
+            TeamcityReporter::on_test_failed(&test.name, duration_ms, assert_failure.as_ref());
         }
 
         if !captured_stdout.trim().is_empty() {
@@ -569,6 +599,10 @@ fn run_all_tests(
                 println!("       {}", line.bright_red());
             }
         }
+    }
+
+    if !filtered_tests.is_empty() && teamcity {
+        TeamcityReporter::on_test_suite_finished(file_path);
     }
 
     TestStats {

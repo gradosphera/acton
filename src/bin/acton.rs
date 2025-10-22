@@ -20,6 +20,8 @@ enum Commands {
         path: String,
         #[arg(short, long, help = "Filter tests by regex pattern")]
         filter: Option<String>,
+        #[arg(long, help = "Output in TeamCity format for IDE integration")]
+        teamcity: bool,
     },
     #[command(about = "Execute a Tolk script file")]
     Script {
@@ -41,8 +43,12 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Test { path, filter } => {
-            let result = test_cmd(&path, filter.as_deref());
+        Commands::Test {
+            path,
+            filter,
+            teamcity,
+        } => {
+            let result = test_cmd(&path, filter.as_deref(), teamcity);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
             }
