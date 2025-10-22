@@ -1038,7 +1038,6 @@ get fun `test-can-not-send-to-masterchain`() {
     });
 }
 
-fun address.fromTuple(data: tuple): address  asm "1 UNTUPLE"
 fun JettonWalletDataReply.fromTuple(data: tuple): JettonWalletDataReply asm "4 UNTUPLE"
 fun JettonDataReply.fromTuple(data: tuple): JettonDataReply asm "5 UNTUPLE"
 

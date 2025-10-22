@@ -187,6 +187,13 @@ fun Network.getDeployedCode(self, addr: address): cell? {
 /// ```
 fun crc16(data: slice): int asm "13 EXTCALL"
 
+fun address.fromTuple(data: tuple): address  asm "1 UNTUPLE"
+fun int.fromTuple(data: tuple): int  asm "1 UNTUPLE"
+fun coins.fromTuple(data: tuple): coins  asm "1 UNTUPLE"
+fun bool.fromTuple(data: tuple): bool  asm "1 UNTUPLE"
+fun slice.fromTuple(data: tuple): slice  asm "1 UNTUPLE"
+fun cell.fromTuple(data: tuple): cell  asm "1 UNTUPLE"
+
 fun __treasuryCode(): cell asm """
     "te6cckEBBAEARQABFP8A9KQT9LzyyAsBAgEgAwIAWvLT/+1E0NP/0RK68qL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmWwAE0jD+omUe" base64>B B>boc PUSHREF
 """
