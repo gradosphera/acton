@@ -200,14 +200,14 @@ pub struct CompilerConfig {
     pub experimental_options: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum CompilerResult {
     Success(CompilerResultSuccess),
     Error(CompilerResultError),
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct CompilerResultSuccess {
     #[serde(rename = "fiftCode")]
     pub fift_code: String,
@@ -217,7 +217,7 @@ pub struct CompilerResultSuccess {
     pub code_hash_hex: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct CompilerResultError {
     pub message: String,
 }

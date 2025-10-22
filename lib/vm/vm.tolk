@@ -9,6 +9,14 @@ fun vm.getC7(): tuple
 fun vm.setC7(c7: tuple): void
     asm "c7 POPCTR";
 
+/// Read control register C5.
+fun vm.getC5(): cell
+    asm "c5 PUSHCTR";
+
+/// Write a new value to control register C5.
+fun vm.setC5(cell: cell): void
+    asm "c5 PUSHCTR";
+
 /// Generic helper to overwrite a single config parameter.
 @inline
 fun vm.setConfigParam<T>(value: T, index: int) {
