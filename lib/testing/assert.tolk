@@ -1,3 +1,6 @@
+import "@stdlib/gas-payments"
+import "../fmt"
+
 const ASSERTION_FAILED = 567
 
 /// Root module for the assertion API.
@@ -73,6 +76,106 @@ fun Assert.notEqual<V1, V2>(left: V1, right: V2, message: slice = "", location: 
 fun Assert.fail(message: slice = "", location: slice = ""): never {
     __assert_fail(message, location);
     throw ASSERTION_FAILED;
+}
+
+/// Asserts that the function without arguments consumes less than the expected amount of gas.
+/// 
+/// Until Tolk supports anonymous functions, you need to pass the standalone function as a parameter.
+/// 
+/// Example:
+/// ```
+/// fun to_track_gas() {
+///     // do something that consumes gas
+/// }
+/// 
+/// get fun test_gas_consumption() {
+///     Assert.consumesLessThan(to_track_gas, 100);
+/// }
+/// ```
+/// 
+/// If you need to pass arguments to the function, you can use the `consumesLessThan1`,
+/// `consumesLessThan2` or `consumesLessThan3` functions which are similar to the `consumesLessThan`
+/// but accept arguments.
+fun Assert.consumesLessThan<Ret>(fn: () -> Ret, expected: int) {
+    val start = getGasConsumedAtTheMoment();
+    val result = fn();
+    __assert_consumed_les(start, expected);
+    return result;
+}
+
+/// Asserts that the function with single argument consumes less than the expected amount of gas.
+/// 
+/// Until Tolk supports anonymous functions, you need to pass the standalone function as a parameter.
+/// 
+/// Example:
+/// ```
+/// fun to_track_gas(a: int) {
+///     // do something that consumes gas
+/// }
+/// 
+/// get fun test_gas_consumption() {
+///     Assert.consumesLessThan1(to_track_gas, 100, 100);
+/// //                                         ^^^ this argument will be passed 
+/// //                                             to the function as the first argument
+/// }
+/// ```
+fun Assert.consumesLessThan1<Ret, Arg1>(fn: (Arg1) -> Ret, arg1: Arg1, expected: int) {
+    val start = getGasConsumedAtTheMoment();
+    val result = fn(arg1);
+    __assert_consumed_les(start, expected);
+    return result;
+}
+
+/// Asserts that the function with two arguments consumes less than the expected amount of gas.
+/// 
+/// Until Tolk supports anonymous functions, you need to pass the standalone function as a parameter.
+/// 
+/// Example:
+/// ```
+/// fun to_track_gas(a: int, b: int) {
+///     // do something that consumes gas
+/// }
+/// 
+/// get fun test_gas_consumption() {
+///     Assert.consumesLessThan2(to_track_gas, 100, 100, 100);
+/// }
+/// ```
+fun Assert.consumesLessThan2<Ret, Arg1, Arg2>(fn: (Arg1, Arg2) -> Ret, arg1: Arg1, arg2: Arg2, expected: int) {
+    val start = getGasConsumedAtTheMoment();
+    val result = fn(arg1, arg2);
+    __assert_consumed_les(start, expected);
+    return result;
+}
+
+/// Asserts that the function with three arguments consumes less than the expected amount of gas.
+/// 
+/// Until Tolk supports anonymous functions, you need to pass the standalone function as a parameter.
+/// 
+/// Example:
+/// ```
+/// fun to_track_gas(a: int, b: int, c: int) {
+///     // do something that consumes gas
+/// }
+/// 
+/// get fun test_gas_consumption() {
+///     Assert.consumesLessThan3(to_track_gas, 100, 100, 100, 100);
+/// }
+/// ```
+fun Assert.consumesLessThan3<Ret, Arg1, Arg2, Arg3>(fn: (Arg1, Arg2, Arg3) -> Ret, arg1: Arg1, arg2: Arg2, arg3: Arg3, expected: int) {
+    val start = getGasConsumedAtTheMoment();
+    val result = fn(arg1, arg2, arg3);
+    __assert_consumed_les(start, expected);
+    return result;
+}
+
+/// Internal function to assert that the function consumed less than the expected amount of gas.
+/// 
+/// NOT FOR PUBLIC USE.
+fun __assert_consumed_les(start: int, expected: int) {
+    val consumed = getGasConsumedAtTheMoment() - start;
+    if (consumed > expected) {
+        Assert.fail(format2("Gas consumption was expected to be less than or equal to {}, but {} was consumed", expected, consumed))
+    }
 }
 
 /// Internal function to assert two values are equal or not equal.
