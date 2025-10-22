@@ -279,7 +279,9 @@ fn run_all_tests(
     };
 
     if !filtered_tests.is_empty() {
-        TeamcityReporter::on_test_suite_started(file_path);
+        if teamcity {
+            TeamcityReporter::on_test_suite_started(file_path);
+        }
 
         let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
         let relative_path = Path::new(file_path)
@@ -308,7 +310,9 @@ fn run_all_tests(
         }
 
         if test.annotations.contains(&"todo".to_string()) {
-            TeamcityReporter::on_test_ignored(&test.name, 0);
+            if teamcity {
+                TeamcityReporter::on_test_ignored(&test.name, 0);
+            }
             let description = test.todo_description.as_deref().unwrap_or("TODO");
             println!(
                 "  {} {} {}{}{}",
@@ -323,7 +327,9 @@ fn run_all_tests(
         }
 
         if test.annotations.contains(&"skip".to_string()) {
-            TeamcityReporter::on_test_ignored(&test.name, 0);
+            if teamcity {
+                TeamcityReporter::on_test_ignored(&test.name, 0);
+            }
             println!("  {} {} {}", "○".dimmed(), test.name, "skipped".dimmed());
             skipped += 1;
             continue;
@@ -582,7 +588,9 @@ fn run_all_tests(
                 }
             }
 
-            TeamcityReporter::on_test_failed(&test.name, duration_ms, assert_failure.as_ref());
+            if teamcity {
+                TeamcityReporter::on_test_failed(&test.name, duration_ms, assert_failure.as_ref());
+            }
         }
 
         if !captured_stdout.trim().is_empty() {
@@ -599,7 +607,9 @@ fn run_all_tests(
             }
         }
 
-        TeamcityReporter::on_test_finished(&test.name, file_path, duration_ms);
+        if teamcity {
+            TeamcityReporter::on_test_finished(&test.name, file_path, duration_ms);
+        }
     }
 
     if !filtered_tests.is_empty() && teamcity {
