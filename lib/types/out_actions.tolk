@@ -25,6 +25,24 @@ struct MessageRelaxedGeneric {
     body: RemainingBitsAndRefs
 }
 
+fun MessageRelaxedGeneric.loadOpcode(self): int? {
+    var slice = self.body;
+    if (slice.loadBool()) {
+        // actual body in the ref
+        if (slice.remainingRefsCount() == 0) {
+            return null;
+        }
+        val body = slice.loadRef();
+        slice = body.beginParse();
+    }
+
+    if (slice.remainingBitsCount() < 32) {
+        return null;
+    }
+
+    return slice.loadUint(32);
+}
+
 @overflow1023_policy("suppress")
 struct MessageRelaxed<X> {
     info: CommonMsgInfoRelaxed,
@@ -79,6 +97,12 @@ fun OutActionSendMessage.loadBody<Msg>(self): Msg {
     return self.loadMessage<Msg>().loadBody()
 }
 
+fun OutActionSendMessage.loadGenericMessage(self): MessageRelaxedGeneric {
+    return (self.out_msg as Cell<MessageRelaxedGeneric>).load({
+        assertEndAfterReading: false,
+    });
+}
+
 struct (0xad4de08e) OutActionSetCode {
     next: Cell<OutList>
     new_code: cell
@@ -93,6 +117,17 @@ fun OutAction.fromTuple(data: tuple): OutAction {
         return OutActionSetCode.fromTuple(data)
     } else {
         return OutActionSendMessage.fromTuple(data)
+    }
+}
+
+fun OutAction.kind(self): slice {
+    match (self) {
+        OutActionSendMessage => {
+            return "send-message"
+        }
+        OutActionSetCode => {
+            return "set-code"
+        }
     }
 }
 

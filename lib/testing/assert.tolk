@@ -198,3 +198,7 @@ fun ffi.assert_bin<V1, V2>(
 /// NOT FOR PUBLIC USE.
 fun ffi.assert_fail(message: slice = "", location: slice = ""): bool
     asm "100 EXTCALL"
+
+fun ffi.type_name_by_opcode(id: int): slice?
+    asm "14 EXTCALL"
+
