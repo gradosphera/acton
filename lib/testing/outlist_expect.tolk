@@ -2,6 +2,7 @@ import "assert"
 import "expect"
 import "../fmt"
 import "../ffi/ffi"
+import "../types/message"
 import "../types/out_actions"
 
 fun Expectation<OutActionList>.toBeNonEmpty(self) {
