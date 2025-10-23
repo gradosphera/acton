@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use emulator_rs::commands::compile::compile_cmd;
+use emulator_rs::commands::init::init_cmd;
 use emulator_rs::commands::script::script_cmd;
 use emulator_rs::commands::test::test_cmd;
 use owo_colors::OwoColorize;
@@ -14,6 +15,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    #[command(about = "Initialize a new project")]
+    Init,
     #[command(about = "Execute tests in file or directory")]
     Test {
         #[arg(help = "Test file or directory containing test files")]
@@ -43,6 +46,12 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Init => {
+            let result = init_cmd();
+            if let Err(err) = result {
+                eprintln!("{} {}", "Error:".red(), err);
+            }
+        }
         Commands::Test {
             path,
             filter,
