@@ -1,3 +1,4 @@
+use num_bigint::BigInt;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -85,6 +86,13 @@ pub struct ContractAbi {
 impl ContractAbi {
     pub fn find_type(&self, name: &String) -> Option<TypeAbi> {
         self.types.iter().find(|typ| typ.name == *name).cloned()
+    }
+
+    pub fn find_type_by_opcode(&self, id: BigInt) -> Option<TypeAbi> {
+        self.types
+            .iter()
+            .find(|typ| typ.opcode.is_some() && BigInt::from(typ.opcode.unwrap() as u64) == id)
+            .cloned()
     }
 }
 

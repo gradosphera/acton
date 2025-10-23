@@ -1,6 +1,8 @@
 //! This module defines a simple DSL for defining extension functions for the emulator.
 
-use crate::tuple::stack::{Tuple, TupleItem, TupleSLice, parse_tuple, serialize_tuple};
+use crate::tuple::stack::{
+    Tuple, TupleItem, TupleSLice, parse_tuple, serialize_tuple, snake_string_from_slice,
+};
 use num_bigint::BigInt;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
@@ -33,20 +35,7 @@ impl FromStack for TupleItem {
 impl FromStack for String {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
         match item {
-            TupleItem::Slice(TupleSLice {
-                cell,
-                start_bits,
-                end_bits,
-                ..
-            }) => {
-                let mut p = cell.parser();
-                p.skip_bits(start_bits as usize)
-                    .map_err(|_| ArgError::CellParse)?;
-                let bits = p
-                    .load_bits((end_bits - start_bits) as usize)
-                    .map_err(|_| ArgError::CellParse)?;
-                String::from_utf8(bits).map_err(|_| ArgError::Utf8)
-            }
+            TupleItem::Slice(slice) => snake_string_from_slice(&slice).ok_or(ArgError::CellParse),
             _ => Err(ArgError::TypeMismatch {
                 expected: "Slice(String)",
             }),

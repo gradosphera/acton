@@ -137,6 +137,18 @@ fn format5_impl(
 
 fn format_args(ctx: &mut Context, mut fmt: String, args: Vec<(String, TupleItem)>) -> String {
     for (type_name, arg) in args {
+        // Special formatting for hexadecimal numbers
+        if let Some(pos) = fmt.find("{:x}")
+            && let TupleItem::Tuple(args) = &arg
+            && args.len() == 1
+        {
+            if let TupleItem::Int(typed_arg) = &args[0] {
+                let formatted_arg = format!("{:x}", typed_arg);
+                fmt.replace_range(pos..pos + 4, formatted_arg.as_str());
+                continue;
+            }
+        }
+
         let typed_arg = if let TupleItem::Tuple(tuple) = &arg {
             TupleItem::TypedTuple {
                 contract_abi: ctx.abi.clone(),

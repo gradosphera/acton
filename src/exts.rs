@@ -322,6 +322,19 @@ fn crc16_impl(_ctx: &mut Context, stack: &mut Tuple, data: String) {
     stack.push(TupleItem::Int(BigInt::from(result)));
 }
 
+extension!(type_name_by_opcode in (Context) with (id: BigInt) using type_name_by_opcode_impl);
+fn type_name_by_opcode_impl(ctx: &mut Context, stack: &mut Tuple, id: BigInt) {
+    let type_abi = ctx.abi.find_type_by_opcode(id);
+    match type_abi {
+        None => {
+            stack.push(TupleItem::Null);
+        }
+        Some(type_abi) => {
+            stack.push_string(&type_abi.name);
+        }
+    }
+}
+
 pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         3 => read_file,
@@ -333,6 +346,7 @@ pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
         11 => is_deployed,
         12 => get_deployed_code,
         13 => crc16,
+        14 => type_name_by_opcode,
     });
 }
 
@@ -347,5 +361,6 @@ pub fn register_get_extensions(executor: &mut GetExecutor, ctx: &mut Context) {
         11 => is_deployed,
         12 => get_deployed_code,
         13 => crc16,
+        14 => type_name_by_opcode,
     });
 }

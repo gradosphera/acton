@@ -7,7 +7,7 @@ name = "abi"
 version = "0.1.0"
 dependencies = [
  "crc",
- "lazy_static",
+ "num-bigint",
  "tolk_parser",
  "tree-sitter",
 ]
