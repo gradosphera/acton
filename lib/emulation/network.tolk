@@ -5,35 +5,10 @@ import "../types/transaction"
 const CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT = 678
 const CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE = 679
 
-/// Return a network with a specified ID.
-/// 
-/// Network is an abstraction representing a blockchain and methods of interacting with it.
-/// 
-/// Example:
-/// ```
-/// get fun `test-send-message`() {
-///     val net = accuireNet("net");
-///     val deployer = net.treasury("deployer");
-/// 
-///     val counter = Counter.fromStorage({ counter: 0 });
-///     val message = createMessage({
-///         bounce: false,
-///         dest: counter.address,
-///         value: ton("1"),
-///     });
-///     net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
-/// }
-/// ```
-fun accuireNet(id: slice): Network {
-    return Network { id };
-}
-
 /// Abstraction representing a blockchain and methods of interacting with it.
 /// 
 /// To acquire a network, use the `accuireNet()` function.
-struct Network {
-    id: slice
-}
+struct net
 
 /// Represents a set of parameters for creating a message.
 struct SendParams {
@@ -42,7 +17,7 @@ struct SendParams {
 }
 
 /// Internal method, don't use it directly.
-fun Network.sendFromNull(self, message: OutMessage, mode: int): TransactionList {
+fun net.sendFromNull(message: OutMessage, mode: int): TransactionList {
     return ffi.sendMessage(message.messageCell, mode)!
 }
 
@@ -60,7 +35,7 @@ fun Network.sendFromNull(self, message: OutMessage, mode: int): TransactionList 
 ///     net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
 /// }
 /// ```
-fun Network.send(self, from: address, message: OutMessage, mode: int): TransactionList {
+fun net.send(from: address, message: OutMessage, mode: int): TransactionList {
     return ffi.sendMessageFrom(message.messageCell, from.toCell(), mode)!
 }
 
@@ -83,7 +58,7 @@ struct Treasury {
 ///     // ...
 /// }
 /// ```
-fun Network.treasury(self, name: slice): Treasury {
+fun net.treasury(name: slice): Treasury {
     val state_init: ContractState = {
         code: __treasuryCode(),
         data: beginCell().storeSlice(name).endCell(),
@@ -100,7 +75,7 @@ fun Network.treasury(self, name: slice): Treasury {
         },
     });
     // Deploy treasury
-    self.sendFromNull(msg, SEND_MODE_PAY_FEES_SEPARATELY);
+    net.sendFromNull(msg, SEND_MODE_PAY_FEES_SEPARATELY);
     return Treasury { address }
 }
 
@@ -138,9 +113,9 @@ fun Network.treasury(self, name: slice): Treasury {
 /// ```
 /// 
 /// If you need to run a get method by its ID, use [Network.runGetMethodById] instead.
-fun Network.runGetMethod<Ret, Args = tuple>(self, addr: address, name: slice, args: Args? = null): Ret {
+fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? = null): Ret {
     val method_id = (crc16(name) & 0xffff) | 0x10000;
-    return self.runGetMethodById(addr, method_id, args)
+    return net.runGetMethodById(addr, method_id, args)
 }
 
 /// Run a get method of a contract by its ID.
@@ -153,12 +128,12 @@ fun Network.runGetMethod<Ret, Args = tuple>(self, addr: address, name: slice, ar
 /// ```
 /// 
 /// See [Network.runGetMethod] for more information.
-fun Network.runGetMethodById<Ret, Args = tuple>(self, addr: address, id: int, args: Args? = null): Ret {
-    if (!self.isDeployed(addr)) {
+fun net.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, args: Args? = null): Ret {
+    if (!net.isDeployed(addr)) {
         throw CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT;
     }
 
-    val code = self.getDeployedCode(addr);
+    val code = net.getDeployedCode(addr);
     if (code == null) {
         throw CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE;
     }
@@ -169,14 +144,14 @@ fun Network.runGetMethodById<Ret, Args = tuple>(self, addr: address, id: int, ar
 }
 
 /// Check if a contract with a specified address is deployed.
-fun Network.isDeployed(self, addr: address): bool {
+fun net.isDeployed(addr: address): bool {
     return ffi.isDeployed(addr.toCell())
 }
 
 /// Get the code of a deployed contract by its address.
 /// 
 /// If the contract is not deployed, returns null.
-fun Network.getDeployedCode(self, addr: address): cell? {
+fun net.getDeployedCode(addr: address): cell? {
     return ffi.getDeployedCode(addr.toCell())
 }
 
