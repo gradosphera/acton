@@ -11,8 +11,9 @@ pub struct ActonConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageConfig {
     pub name: String,
-    pub description: Option<String>,
+    pub description: String,
     pub version: String,
+    pub license: Option<String>,
 }
 
 impl Default for ActonConfig {
@@ -20,8 +21,9 @@ impl Default for ActonConfig {
         Self {
             package: PackageConfig {
                 name: "my-acton-project".to_string(),
-                description: Some("A TON blockchain project".to_string()),
+                description: "A TON blockchain project".to_string(),
                 version: "0.1.0".to_string(),
+                license: Some("MIT".to_string()),
             },
         }
     }

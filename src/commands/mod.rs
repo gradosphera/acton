@@ -1,5 +1,6 @@
 pub mod compile;
 pub mod init;
+pub mod new;
 pub mod script;
 pub mod test;
 

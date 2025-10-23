@@ -25,3 +25,4 @@ serde = { version = "1.0", features = ["derive"] }
 toml = "0.9.8"
 include_dir = "0.7"
 num-traits = "0.2.19"
+inquire = "0.7"
