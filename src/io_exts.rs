@@ -1,8 +1,11 @@
 use crate::context::Context;
 use emulator::executor::Executor;
+use emulator::extensions::FromStack;
 use emulator::get_executor::GetExecutor;
 use emulator::tuple::stack::{Tuple, TupleItem};
 use emulator::{extension, pop_args, register_ext_methods};
+use inquire::{Confirm, Select, Text};
+use num_bigint::BigInt;
 
 extension!(println in (Context) with (s: TupleItem, type_name: String) using println_impl);
 fn println_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: String) {
@@ -176,6 +179,56 @@ fn format_args(ctx: &mut Context, mut fmt: String, args: Vec<(String, TupleItem)
     fmt
 }
 
+extension!(prompt in (Context) with (placeholder: String, message: String) using prompt_impl);
+fn prompt_impl(_ctx: &mut Context, stack: &mut Tuple, placeholder: String, message: String) {
+    let text = Text::new(&message)
+        .with_placeholder(&placeholder)
+        .prompt()
+        .unwrap_or("".to_string());
+
+    stack.push_string(&text);
+}
+
+extension!(select in (Context) with (variants: TupleItem, message: String) using select_impl);
+fn select_impl(_ctx: &mut Context, stack: &mut Tuple, variants: TupleItem, message: String) {
+    let TupleItem::Tuple(raw_variants) = variants else {
+        stack.push_string("");
+        return;
+    };
+
+    let variants = raw_variants
+        .iter()
+        .flat_map(|var| {
+            let str = String::from_item((*var).clone());
+            str.ok()
+        })
+        .collect::<Vec<_>>();
+
+    let result = Select::new(&message, variants)
+        .with_starting_cursor(0)
+        .prompt()
+        .unwrap_or("".to_string());
+
+    stack.push_string(&result);
+}
+
+extension!(confirm in (Context) with (help_message: String, default: BigInt, message: String) using confirm_impl);
+fn confirm_impl(
+    _ctx: &mut Context,
+    stack: &mut Tuple,
+    help_message: String,
+    default: BigInt,
+    message: String,
+) {
+    let res = Confirm::new(&message)
+        .with_default(default != BigInt::from(0))
+        .with_help_message(&help_message)
+        .prompt()
+        .unwrap_or(false);
+
+    stack.push_bool(res);
+}
+
 pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         1 => println,
@@ -185,6 +238,9 @@ pub fn register_extensions(executor: &mut Executor, ctx: &mut Context) {
         202 => format3,
         203 => format4,
         204 => format5,
+        205 => prompt,
+        206 => select,
+        207 => confirm,
     });
 }
 
@@ -197,5 +253,8 @@ pub fn register_get_extensions(executor: &mut GetExecutor, ctx: &mut Context) {
         202 => format3,
         203 => format4,
         204 => format5,
+        205 => prompt,
+        206 => select,
+        207 => confirm,
     });
 }

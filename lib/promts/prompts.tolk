@@ -1,0 +1,43 @@
+import "../ffi/ffi"
+
+/// Prompts the user for input.
+/// 
+/// Placeholder is the text that will be displayed in the input field as
+/// a hint to the user.
+/// 
+/// Example:
+/// ```tolk
+/// val name = prompt("What is your name?", "John");
+/// println(format1("Hello {}", name));
+/// ```
+fun prompt(message: slice, placeholder: slice = ""): slice {
+    return ffi.prompt(message, placeholder);
+}
+
+/// Prompts the user to select an option from a list of variants.
+/// 
+/// Example:
+/// ```tolk
+/// val name = select("What is your name?", ["John", "Jane", "Jim"] as tuple);
+/// println(format1("Hello {}", name));
+/// ```
+fun select(message: slice, variants: tuple): slice {
+    return ffi.select(message, variants);
+}
+
+/// Prompts the user to confirm an action.
+/// 
+/// Example:
+/// ```tolk
+/// val answer = confirm("Are you sure?", true, "Your data will be deleted");
+/// if (answer) {
+///     println("Data deleted");
+/// }
+/// ```
+fun confirm(message: slice, default: bool, help_message: slice): bool {
+    return ffi.confirm(message, default, help_message);
+}
+
+fun ffi.prompt(message: slice, placeholder: slice = ""): slice asm "205 EXTCALL"
+fun ffi.select(message: slice, variants: tuple): slice asm "206 EXTCALL"
+fun ffi.confirm(message: slice, default: bool, help_message: slice): bool asm "207 EXTCALL"
