@@ -117,7 +117,7 @@ fun Counter.fromStorage(storage: Storage) {
 
 We declared a structure that will describe our contract and a constructor that will create a new contract instance with the passed storage. The `build` function allows us to compile our contract to a `cell` with compiled code. If the contract has already been compiled in previous tests, it will return the code without recompilation, which greatly speeds up the tests.
 
-Note that we use `Storage` directly from **types.tolk**. If you add new fields in the future, the tests simply won't compile. This allows you to avoid a whole class of problems when TypeScript wrappers weren't updated accordingly.
+> Note that we use `Storage` directly from **types.tolk**. If you add new fields in the future, the tests simply won't compile. This allows you to avoid a whole class of problems when TypeScript wrappers weren't updated accordingly.
 
 Now let's write our first test in which we will deploy the contract.
 
@@ -222,7 +222,7 @@ get fun `test-should-deploy`() {
 }
 ```
 
-**Checkpoint:** We now have a clean, reusable way to deploy our Counter contract for testing! 🎯
+**Checkpoint:** We now have a clean, reusable way to deploy our Counter contract for testing!
 
 ## 6. Testing Contract Logic
 
