@@ -1,8 +1,10 @@
-# Writing your first integration test in Tolk
+---
+title: "Writing your first integration test in Tolk"
+---
 
 ## Overview
 
-In this tutorial, we'll build integration tests for a simple Counter smart contract in Tolk. Integration tests differ from unit tests they test real message sending between contracts, not just isolated functions like in unit tests.
+In this article, we'll build integration tests for a simple Counter smart contract in Tolk. Integration tests differ from unit tests they test real message sending between contracts, not just isolated functions like in unit tests.
 
 If you've written tests in TypeScript, you know that to write tests, you first need to write wrappers — TypeScript classes that implement various methods for deployment, sending messages, and executing getter methods. Without them, it's quite difficult to write tests.
 
@@ -21,8 +23,7 @@ The contract handles two types of messages:
 
 It also provides a getter `currentCounter()` to read the current value.
 
-**counter.tolk**
-```tolk
+```tolk title="counter.tolk"
 import "types"
 
 type AllowedMessage = IncreaseCounter | ResetCounter
@@ -59,9 +60,7 @@ get fun currentCounter(): int {
 
 The contract uses these data structures:
 
-**types.tolk**
-
-```tolk
+```tolk title="types.tolk"
 struct Storage {
     id: uint32
     counter: uint32

@@ -11,6 +11,10 @@ Cargo.lock
 *.swp
 *.swo
 
+docs/.astro
+docs/node_modules
+docs/dist
+
 # OS files
 .DS_Store
 Thumbs.db
