@@ -124,6 +124,14 @@ impl TeamcityReporter {
                     return;
                 }
             }
+
+            println!(
+                "##teamcity[testFailed name='{}' nodeId='test_{}' duration='{}' message='Test failed' details='{}']",
+                name,
+                name,
+                duration_ms,
+                Self::escape_name(&details),
+            );
         }
 
         println!(
