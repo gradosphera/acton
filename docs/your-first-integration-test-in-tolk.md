@@ -94,7 +94,7 @@ get fun `test-should-deploy`() {
 
 ## 3. Testing Contract Deployment
 
-First, we need to deploy our Counter contract in order to interact with it:
+First, we need to deploy our Counter contract in order to interact with it. But first let's create initial code for the contract.
 
 ```tolk
 import "types"
