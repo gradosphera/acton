@@ -261,7 +261,7 @@ impl Default for TupleItem {
     }
 }
 
-fn format_item_with_type(item: &TupleItem, type_name: &str) -> String {
+pub fn format_item_with_type(item: &TupleItem, type_name: &str) -> String {
     let item = item.unwrap_single();
 
     match item {

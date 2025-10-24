@@ -6,7 +6,7 @@ use emulator::blockchain::Blockchain;
 use emulator::emulator::Emulator;
 use emulator::exit_codes;
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
-use emulator::tuple::stack::{Tuple, TupleItem};
+use emulator::tuple::stack::{Tuple, TupleItem, format_item_with_type};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
@@ -59,10 +59,9 @@ pub fn test_cmd(path: &String, filter: Option<&str>, teamcity: bool) -> Result<(
     if !teamcity {
         println!(
             "\n{} {}\n",
-            " TEST ".bold().on_cyan(),
+            " TEST ".bold().on_blue(),
             cwd.display().dimmed()
         );
-        println!("{}", "─".repeat(50).dimmed());
     }
 
     let mut total_passed = 0;
@@ -84,14 +83,10 @@ pub fn test_cmd(path: &String, filter: Option<&str>, teamcity: bool) -> Result<(
                 }
             }
             Err(err) => {
-                eprintln!("{} Error in file '{}': {}", "Error:".red(), file, err);
+                println!("{} {}", "Error:".red(), err);
                 total_failed += 1;
             }
         }
-    }
-
-    if !test_files.is_empty() {
-        println!("{}", "─".repeat(50).dimmed());
     }
 
     let mut parts = Vec::new();
@@ -241,7 +236,9 @@ fn run_tests_for_file(
         }
         tolkc::CompilerResult::Error(error) => {
             let _ = fs::remove_file(&tmp_test_filename);
-            Err(anyhow!("Cannot compile test file: {}", error.message))
+            let normalized_filepath = error.message.replace(&tmp_test_filename, file);
+            let trimmed_message = normalized_filepath.trim();
+            Err(anyhow!(trimmed_message.to_string()))
         }
     };
 
@@ -463,6 +460,7 @@ fn run_all_tests(
                                 &accounts,
                                 &abi,
                                 &build_cache,
+                                8,
                             );
                             println!("         {}", value.dimmed());
                         }
@@ -476,6 +474,7 @@ fn run_all_tests(
                                 &accounts,
                                 &abi,
                                 &build_cache,
+                                8,
                             );
 
                             let right = format_tuple_value(
@@ -484,6 +483,7 @@ fn run_all_tests(
                                 &accounts,
                                 &abi,
                                 &build_cache,
+                                8,
                             );
 
                             println!("        Actual:   {}", left.red());
@@ -589,7 +589,12 @@ fn run_all_tests(
             }
 
             if teamcity {
-                TeamcityReporter::on_test_failed(&test.name, duration_ms, assert_failure.as_ref());
+                TeamcityReporter::on_test_failed(
+                    &test.name,
+                    duration_ms,
+                    assert_failure.as_ref(),
+                    &abi,
+                );
             }
         }
 
@@ -1122,6 +1127,7 @@ fn format_tuple_value(
     accounts: &HashMap<String, ShardAccount>,
     abi: &ContractAbi,
     build_cache: &BuildCache,
+    indent: usize,
 ) -> String {
     let item = TupleItem::TypedTuple {
         abi: abi.find_type(type_name),
@@ -1139,7 +1145,7 @@ fn format_tuple_value(
 
     let lines: Vec<_> = raw_str.lines().collect();
     let mut result = lines[0].to_string() + "\n";
-    result += &add_indent_to_lines(&lines[1..].join("\n"), 8);
+    result += &add_indent_to_lines(&lines[1..].join("\n"), indent);
     result
 }
 
@@ -1180,12 +1186,12 @@ fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
                     result.push_str(&format!(
                         "    {}: {}\n",
                         field.name.yellow(),
-                        left_item.red()
+                        format_item_with_type(left_item, &field.type_info.human_readable).red()
                     ));
                     result.push_str(&format!(
                         "    {:<width$}  {}\n",
                         "",
-                        right_item.green(),
+                        format_item_with_type(right_item, &field.type_info.human_readable).green(),
                         width = field.name.len()
                     ));
                 } else {
@@ -1193,7 +1199,7 @@ fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
                         "    {}{} {}\n",
                         field.name.dimmed(),
                         ":".dimmed(),
-                        left_item.dimmed()
+                        format_item_with_type(left_item, &field.type_info.human_readable).dimmed()
                     ));
                 }
             }

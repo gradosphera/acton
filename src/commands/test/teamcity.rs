@@ -78,34 +78,28 @@ impl TeamcityReporter {
         test_name: &str,
         duration_ms: u128,
         assert_failure: Option<&AssertFailure>,
+        abi: &&ContractAbi,
     ) {
         let name = Self::escape_name(test_name);
 
         if let Some(assert_failure) = assert_failure {
             if let AssertFailure::Bin(bin_failure) = assert_failure {
                 if bin_failure.operator == "==" {
-                    let empty_abi = ContractAbi {
-                        name: String::new(),
-                        entry_point: None,
-                        external_entry_point: None,
-                        storage: None,
-                        get_methods: Vec::new(),
-                        messages: Vec::new(),
-                        types: Vec::new(),
-                    };
                     let expected = test::format_tuple_value(
                         &bin_failure.right,
                         &bin_failure.right_type,
                         &HashMap::new(), // empty accounts for simple formatting
-                        &empty_abi,
+                        &abi,
                         &BuildCache::new(),
+                        0,
                     );
                     let actual = test::format_tuple_value(
                         &bin_failure.left,
                         &bin_failure.left_type,
                         &HashMap::new(),
-                        &empty_abi,
+                        &abi,
                         &BuildCache::new(),
+                        0,
                     );
 
                     println!(
