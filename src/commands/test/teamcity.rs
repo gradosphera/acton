@@ -132,6 +132,7 @@ impl TeamcityReporter {
                 duration_ms,
                 Self::escape_name(&details),
             );
+            return;
         }
 
         println!(
