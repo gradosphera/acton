@@ -1062,13 +1062,14 @@ fn find_expect_calls(
 
         // Don't add location if it already passed by the user
         if arg_count == 1 {
+            let column = callee_node.start_position().column + 1;
             let start = args_node.end_byte() - 1;
             let end = args_node.end_byte() - 1;
 
             let lines: Vec<&str> = content[..start].lines().collect();
             let line_number = lines.len();
 
-            let location = format!(", \"{file_path}:{line_number}\"",);
+            let location = format!(", \"{file_path}:{line_number}:{column}\"",);
             replacements.push((start, end, location));
         }
     }

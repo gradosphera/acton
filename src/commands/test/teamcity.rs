@@ -17,10 +17,10 @@ impl TeamcityReporter {
     }
 
     pub fn on_testing_started() {
-        println!("##teamcity[testingStarted]",);
+        println!("##teamcity[testingStarted]");
     }
     pub fn on_testing_finished() {
-        println!("##teamcity[testingFinished]",);
+        println!("##teamcity[testingFinished]");
     }
 
     pub fn on_test_suite_started(file_path: &str) {
@@ -83,6 +83,7 @@ impl TeamcityReporter {
         let name = Self::escape_name(test_name);
 
         if let Some(assert_failure) = assert_failure {
+            let details = assert_failure.location().unwrap_or("".to_string());
             if let AssertFailure::Bin(bin_failure) = assert_failure {
                 if bin_failure.operator == "==" {
                     let expected = test::format_tuple_value(
@@ -103,18 +104,22 @@ impl TeamcityReporter {
                     );
 
                     println!(
-                        "##teamcity[testFailed type='comparisonFailure' name='{}' nodeId='test_{}' duration='{}' message='Values are not equal' expected='{}' actual='{}' ]",
+                        "##teamcity[testFailed type='comparisonFailure' name='{}' nodeId='test_{}' duration='{}' message='Values are not equal' details='{}' expected='{}' actual='{}']",
                         name,
                         name,
                         duration_ms,
+                        Self::escape_name(&details),
                         Self::escape_name(&expected),
-                        Self::escape_name(&actual)
+                        Self::escape_name(&actual),
                     );
                     return;
                 } else if bin_failure.operator == "!=" {
                     println!(
-                        "##teamcity[testFailed name='{}' nodeId='test_{}' duration='{}' message='Values are equal but expected to be different' ]",
-                        name, name, duration_ms
+                        "##teamcity[testFailed name='{}' nodeId='test_{}' duration='{}' message='Values are equal but expected to be different' details='{}']",
+                        name,
+                        name,
+                        Self::escape_name(&details),
+                        duration_ms
                     );
                     return;
                 }
@@ -122,7 +127,7 @@ impl TeamcityReporter {
         }
 
         println!(
-            "##teamcity[testFailed name='{}' nodeId='test_{}' duration='{}' message='Test failed' ]",
+            "##teamcity[testFailed name='{}' nodeId='test_{}' duration='{}' message='Test failed']",
             name, name, duration_ms
         );
     }
