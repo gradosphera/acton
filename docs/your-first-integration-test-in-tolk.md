@@ -222,6 +222,8 @@ get fun `test-should-deploy`() {
 }
 ```
 
+For those who have already written contracts in TypeScript, this approach may be new. In TypeScript tests, global variables at the `describe` level are usually used and re-initialized before each test via `beforeEach`. However, in Tolk tests, this approach won't work, and it's easy to make mistakes by not resetting variables properly, leading to incorrect testing. The Tolk approach avoids this issue by design.
+
 **Checkpoint:** We now have a clean, reusable way to deploy our Counter contract for testing!
 
 ## 6. Testing Contract Logic
@@ -252,8 +254,6 @@ get fun `test-should-increase-counter`() {
 ```
 
 > Note that we use the `IncreaseCounter` type, which is imported from **types.tolk**. We don't need to declare it again, we just use it directly. Any future changes to this type will cause a compilation error if you forget to update its usage in the test.
-
-For those who have already written contracts in TypeScript, this approach may be new. In TypeScript tests, global variables at the `describe` level are usually used and re-initialized before each test via `beforeEach`. However, in Tolk tests, this approach won't work, and it's easy to make mistakes by not resetting variables properly, leading to incorrect testing. The Tolk approach avoids this issue by design.
 
 Now that we have successfully deployed and sent a message to our contract, we need to check that the counter has actually increased.
 
