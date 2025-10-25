@@ -185,7 +185,6 @@
       "scope": ["constant.other.symbol"],
       "settings": {"foreground": "#0184BC"},
     },
-    {"name": "Variable", "scope": ["variable"], "settings": {"foreground": "#E45649"}},
     {
       "name": "Variable Interpolation",
       "scope": ["variable.interpolation"],

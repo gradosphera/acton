@@ -116,7 +116,9 @@ fun Counter.fromStorage(storage: Storage) {
 
 We declared a structure that will describe our contract and a constructor that will create a new contract instance with the passed storage. The `build` function allows us to compile our contract to a `cell` with compiled code. If the contract has already been compiled in previous tests, it will return the code without recompilation, which greatly speeds up the tests.
 
-> Note that we use `Storage` directly from **types.tolk**. If you add new fields in the future, the tests simply won't compile. This allows you to avoid a whole class of problems when TypeScript wrappers weren't updated accordingly.
+:::note
+We use `Storage` directly from **types.tolk**. If you add new fields in the future, the tests simply won't compile. This allows you to avoid a whole class of problems when TypeScript wrappers weren't updated accordingly.
+:::
 
 Now let's write our first test in which we will deploy the contract.
 
@@ -142,7 +144,9 @@ Since we need to deploy a contract, we need a deployer account with some TON coi
 
 When the message is created, we call `net.send()` to send it.
 
-> Note that sending a message via `msg.send()` as in smart contracts will not work as you might expect. In fact, it will create an out action, but it will never be processed.
+:::caution
+Sending a message via `msg.send()` as in smart contracts will not work as you might expect. In fact, it will create an out action, but it will never be processed.
+:::
 
 ## 4. Adding Test Assertions
 
@@ -161,7 +165,7 @@ One of them, `toHaveSuccessfulDeploy`, checks that there is a successful contrac
 
 Now we have a full-fledged test that deploys our `Counter` contract! To run it and ensure the test passes, run the following command:
 
-```
+```bash
 acton test counter_test.tolk
 ``` 
 
@@ -252,7 +256,9 @@ get fun `test-should-increase-counter`() {
 }
 ```
 
-> Note that we use the `IncreaseCounter` type, which is imported from **types.tolk**. We don't need to declare it again, we just use it directly. Any future changes to this type will cause a compilation error if you forget to update its usage in the test.
+:::note
+We use the `IncreaseCounter` type, which is imported from **types.tolk**. We don't need to declare it again, we just use it directly. Any future changes to this type will cause a compilation error if you forget to update its usage in the test.
+:::
 
 Now that we have successfully deployed and sent a message to our contract, we need to check that the counter has actually increased.
 
@@ -280,7 +286,7 @@ Perfect! Now we can use this method in our test to get the current counter value
 
 Let's run the test via:
 
-```
+```bash
 acton test counter_test.tolk --filter "test-should-increase-counter"
 ```
 
