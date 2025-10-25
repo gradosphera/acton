@@ -146,6 +146,7 @@ export default defineConfig({
             {
               label: "Tests",
               items: [
+                {slug: "test-runner/tests/your-first-unit-test-in-tolk"},
                 {slug: "test-runner/tests/your-first-integration-test-in-tolk"},
               ],
             },
