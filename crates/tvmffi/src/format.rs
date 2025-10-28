@@ -1,4 +1,4 @@
-use crate::stack::{BuildCache, KnownAddresses, TupleItem, TupleSlice};
+use crate::stack::{BuildCache, KnownAddresses, Tuple, TupleItem, TupleSlice};
 use abi::ContractAbi;
 use num_bigint::BigInt;
 use owo_colors::OwoColorize;
@@ -64,7 +64,7 @@ impl fmt::Display for TupleItem {
             TupleItem::Nan => write!(f, "NaN"),
             TupleItem::Cell(cell) => write!(f, "{:?}", cell),
             TupleItem::Slice(slice) => {
-                if let Some(string) = crate::snake_string::snake_string_from_slice(slice) {
+                if let Some(string) = Tuple::parse_snake_string(slice) {
                     write!(f, "\"{}\"", string)
                 } else {
                     write!(f, "Slice(...)")

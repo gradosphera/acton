@@ -28,9 +28,7 @@ impl FromStack for TupleItem {
 impl FromStack for String {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
         match item {
-            TupleItem::Slice(slice) => {
-                crate::snake_string::snake_string_from_slice(&slice).ok_or(ArgError::CellParse)
-            }
+            TupleItem::Slice(slice) => Tuple::parse_snake_string(&slice).ok_or(ArgError::CellParse),
             _ => Err(ArgError::TypeMismatch {
                 expected: "Slice(String)",
             }),
