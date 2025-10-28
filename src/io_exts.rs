@@ -1,10 +1,10 @@
 use crate::context::Context;
-use emulator::extensions::FromStack;
 use emulator::traits::BaseExecutor;
-use emulator::tuple::stack::{Tuple, TupleItem};
 use emulator::{extension, pop_args, register_ext_methods};
 use inquire::{Confirm, Select, Text};
 use num_bigint::BigInt;
+use tvmffi::from_stack::FromStack;
+use tvmffi::stack::{Tuple, TupleItem};
 
 extension!(println in (Context) with (s: TupleItem, type_name: String) using println_impl);
 fn println_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: String) {

@@ -218,8 +218,8 @@ dependencies = [
  "pkg-config",
  "serde",
  "serde_json",
- "thiserror",
  "tonlib-core",
+ "tvmffi",
  "tycho-types",
 ]
 
@@ -748,6 +748,20 @@ checksum = "7f590befdbb2996f0db1f3aea327fe3899bf9018744497ae92d8c1dad8e6e09d"
 dependencies = [
  "cc",
  "tree-sitter",
+]
+
+[[package]]
+name = "tvmffi"
+version = "0.1.0"
+dependencies = [
+ "abi",
+ "anyhow",
+ "num-bigint",
+ "num-traits",
+ "owo-colors",
+ "thiserror",
+ "tonlib-core",
+ "tycho-types",
 ]
 
 [[package]]

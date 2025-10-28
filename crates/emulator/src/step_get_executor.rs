@@ -4,11 +4,11 @@ use crate::get_executor::{
     GetMethodParams, GetMethodResult, create_tvm_emulator, tvm_emulator_set_gas_limit,
 };
 use crate::traits::{BaseExecutor, RegisterExtMethodCallback};
-use crate::tuple::stack::{Tuple, serialize_tuple};
 use serde::Deserialize;
 use std::ffi::{CString, c_void};
 use std::os::raw::c_int;
 use tonlib_core::tlb_types::tlb::TLB;
+use tvmffi::stack::Tuple;
 
 #[derive(Clone)]
 pub struct StepGetExecutor {
@@ -43,7 +43,7 @@ impl StepGetExecutor {
         let config_cstr = CString::new(config::DEFAULT_CONFIG)
             .expect("Cannot convert Config string to CString, should not happen");
 
-        let stack = serialize_tuple(&**stack).unwrap();
+        let stack = stack.serialize().unwrap();
         let stack_b64 = stack.to_boc_b64(false).unwrap();
 
         let params_cstr = CString::new(params_str).unwrap();
@@ -61,7 +61,7 @@ impl StepGetExecutor {
     }
 
     pub fn run_get_method(&self, method_id: i32, stack: Tuple) {
-        let stack = serialize_tuple(&**stack).unwrap();
+        let stack = stack.serialize().unwrap();
         let stack_b64 = stack.to_boc_b64(false).unwrap();
         let stack_b64_cstr = CString::new(stack_b64).unwrap();
 

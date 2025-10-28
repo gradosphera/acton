@@ -12,11 +12,11 @@ use dap::types::{
     Breakpoint, Scope, ScopePresentationhint, Source, StackFrame, StoppedEventReason, Thread,
     ThreadEventReason,
 };
-use emulator::tuple::stack::TupleItem;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
 use tolkc::source_map::{DebugLocation, EntryContextDescription, SourceMap};
+use tvmffi::stack::TupleItem;
 use tycho_types::models::{OutAction, OwnedRelaxedMessage, RelaxedMsgInfo, StateInit};
 
 pub static VARIABLE_REFERENCE_COUNTER: AtomicU64 = AtomicU64::new(1000);

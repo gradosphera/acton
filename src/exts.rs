@@ -9,7 +9,6 @@ use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::step_executor::StepExecutor;
 use emulator::step_get_executor::StepGetExecutor;
 use emulator::traits::BaseExecutor;
-use emulator::tuple::stack::{Tuple, TupleItem, parse_tuple};
 use emulator::{extension, pop_args, register_ext_methods};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
@@ -19,6 +18,7 @@ use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
 use tonlib_core::tlb_types::tlb::TLB;
+use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
 use tycho_types::models::{
@@ -419,7 +419,7 @@ fn run_get_method_impl(
     match result {
         GetMethodResult::Success(result) => {
             let cell = ArcCell::from_boc_b64(&result.stack).unwrap();
-            let tuple = parse_tuple(&cell).unwrap();
+            let tuple = Tuple::deserialize(&cell).unwrap();
 
             stack.push(TupleItem::TypedTuple {
                 contract_abi: ctx.abi.clone(),

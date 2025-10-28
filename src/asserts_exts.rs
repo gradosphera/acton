@@ -3,11 +3,11 @@ use crate::context::{
     TransactionNotFoundParams,
 };
 use emulator::traits::BaseExecutor;
-use emulator::tuple::stack::{Tuple, TupleItem, TupleSLice};
 use emulator::{extension, pop_args, register_ext_methods};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use tonlib_core::tlb_types::tlb::TLB;
+use tvmffi::stack::{Tuple, TupleItem, TupleSlice};
 use tycho_types::boc::Boc;
 use tycho_types::cell::Load;
 use tycho_types::models::{IntAddr, Transaction};
@@ -212,7 +212,7 @@ pub fn process_txs_and_search_params(
         if let TupleItem::Null = raw_from {
             params.from = None
         } else if let TupleItem::Tuple(raw_from) = &raw_from
-            && let TupleItem::Slice(TupleSLice {
+            && let TupleItem::Slice(TupleSlice {
                 cell, start_bits, ..
             }) = &raw_from[0]
         {
@@ -223,7 +223,7 @@ pub fn process_txs_and_search_params(
             {
                 params.from = Some(address);
             }
-        } else if let TupleItem::Slice(TupleSLice {
+        } else if let TupleItem::Slice(TupleSlice {
             cell, start_bits, ..
         }) = raw_from
         {
@@ -237,7 +237,7 @@ pub fn process_txs_and_search_params(
         }
     }
     if let Some(raw_to) = raw_to {
-        if let TupleItem::Slice(TupleSLice {
+        if let TupleItem::Slice(TupleSlice {
             cell, start_bits, ..
         }) = raw_to
         {

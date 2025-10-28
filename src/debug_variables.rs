@@ -3,11 +3,12 @@ use crate::debug_context::{DebugContext, VARIABLE_REFERENCE_COUNTER};
 use dap::requests::VariablesArguments;
 use dap::types::Variable;
 use emulator::executor::StoreExt;
-use emulator::tuple::stack::{TupleItem, parse_tuple, parse_tuple_item};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::tlb::TLB;
+use tvmffi::serde::parse_tuple_item;
+use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::models::{
     CurrencyCollection, IntAddr, OutAction, OutActionsRevIter, OwnedRelaxedMessage, RelaxedMsgInfo,
@@ -37,7 +38,7 @@ impl DebugContext {
 
         let variables = if args.variables_reference == 1 {
             let stack = executor.get_stack();
-            let stack = parse_tuple(&ArcCell::from_boc_b64(&stack)?)?;
+            let stack = Tuple::deserialize(&ArcCell::from_boc_b64(&stack)?)?;
 
             current_loc
                 .variables
@@ -117,7 +118,7 @@ impl DebugContext {
         } else if args.variables_reference == 3 {
             let stack_boc = executor.get_stack();
             let stack_cell = ArcCell::from_boc_b64(&stack_boc)?;
-            let stack_tuple = parse_tuple(&stack_cell)?;
+            let stack_tuple = Tuple::deserialize(&stack_cell)?;
 
             stack_tuple
                 .iter()

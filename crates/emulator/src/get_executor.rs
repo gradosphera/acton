@@ -1,11 +1,11 @@
 use crate::config::DEFAULT_CONFIG;
 use crate::executor::ExtFunc;
 use crate::traits::{BaseExecutor, RegisterExtMethodCallback};
-use crate::tuple::stack::{Tuple, serialize_tuple};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::{CString, c_void};
 use tonlib_core::tlb_types::tlb::TLB;
+use tvmffi::stack::Tuple;
 
 pub struct GetExecutor {
     inner: *mut c_void,
@@ -42,7 +42,7 @@ impl GetExecutor {
         let config_cstr = CString::new(DEFAULT_CONFIG)
             .expect("Cannot convert Config string to CString, should not happen");
 
-        let stack = serialize_tuple(&**stack).unwrap();
+        let stack = stack.serialize().unwrap();
         let stack_b64 = stack.to_boc_b64(false).unwrap();
 
         let run_result = unsafe {

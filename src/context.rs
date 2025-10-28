@@ -5,10 +5,10 @@ use emulator::emulator::Emulator;
 use emulator::step_executor::StepExecutor;
 use emulator::step_get_executor::StepGetExecutor;
 use emulator::traits::BaseExecutor;
-use emulator::tuple::stack::{Tuple, TupleItem};
 use num_bigint::BigInt;
 use std::collections::HashMap;
 use tolkc::source_map::SourceMap;
+use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::cell::Cell;
 use tycho_types::models::{IntAddr, Transaction};
 
@@ -123,15 +123,15 @@ impl BuildCache {
             .map(|(name, result)| ((*name).clone(), (*result).clone()))
     }
 
-    pub fn to_tuple_build_cache(&self) -> emulator::tuple::stack::BuildCache {
-        emulator::tuple::stack::BuildCache {
+    pub fn to_tuple_build_cache(&self) -> tvmffi::stack::BuildCache {
+        tvmffi::stack::BuildCache {
             built: self
                 .built
                 .iter()
                 .map(|(k, v)| {
                     (
                         k.clone(),
-                        emulator::tuple::stack::CompilationResult {
+                        tvmffi::stack::CompilationResult {
                             name: v.name.clone(),
                             code_boc64: v.code_boc64.clone(),
                             code_hash: v.code_hash.clone(),
@@ -166,15 +166,15 @@ impl KnownAddresses {
         }
     }
 
-    pub fn to_tuple_known_addresses(&self) -> emulator::tuple::stack::KnownAddresses {
-        emulator::tuple::stack::KnownAddresses {
+    pub fn to_tuple_known_addresses(&self) -> tvmffi::stack::KnownAddresses {
+        tvmffi::stack::KnownAddresses {
             addresses: self
                 .addresses
                 .iter()
                 .map(|(k, v)| {
                     (
                         k.clone(),
-                        emulator::tuple::stack::KnownAddress {
+                        tvmffi::stack::KnownAddress {
                             name: v.name.clone(),
                         },
                     )
