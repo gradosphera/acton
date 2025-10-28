@@ -15,12 +15,19 @@ use tycho_types::models::{
     Transaction, TxInfo,
 };
 
+#[derive(Debug, Clone)]
 struct SendResult {
     tx: Transaction,
     children_ids: Vec<i64>,
     parent_lt: Option<i64>,
     actions: ArcCell,
     out_messages: Vec<ArcCell>,
+}
+
+#[derive(Debug, Clone)]
+struct TransactionNode {
+    send_result: SendResult,
+    children: Vec<TransactionNode>,
 }
 
 /// Context for formatting TupleItems with rich information
@@ -76,7 +83,7 @@ impl FormatterContext {
         slice.to_boc_hex(false).unwrap()
     }
 
-    /// Format transaction list
+    /// Format transaction list as a tree
     pub fn format_transaction_list(&self, items: &[TupleItem]) -> String {
         let item = &items[0];
         let TupleItem::Tuple(tx_items) = item else {
@@ -87,14 +94,8 @@ impl FormatterContext {
         let known_contracts = self.collect_known_contracts(&send_results);
         let contract_letters = self.create_contract_letters(&known_contracts);
 
-        let mut builder = String::new();
-        for send_result in send_results {
-            let tx_formatted = self.format_single_transaction(&send_result, &contract_letters);
-            builder.push_str(&tx_formatted);
-            builder.push_str("\n");
-        }
-
-        builder
+        let tree = self.build_transaction_tree(send_results);
+        self.format_transaction_tree(&tree, &contract_letters, 0, "")
     }
 
     /// Parse transaction items into SendResult structures
@@ -184,17 +185,142 @@ impl FormatterContext {
         contract_letters
     }
 
+    /// Build transaction tree from SendResult list
+    fn build_transaction_tree(&self, mut send_results: Vec<SendResult>) -> Vec<TransactionNode> {
+        let mut lt_to_result: HashMap<i64, SendResult> = HashMap::new();
+
+        for result in send_results.drain(..) {
+            lt_to_result.insert(result.tx.lt as i64, result);
+        }
+
+        let mut roots = Vec::new();
+        let mut processed = std::collections::HashSet::new();
+
+        for (lt, result) in &lt_to_result {
+            if result.parent_lt.is_none() || !lt_to_result.contains_key(&result.parent_lt.unwrap())
+            {
+                if !processed.contains(lt) {
+                    let node = self.build_node_recursive(*lt, &lt_to_result, &mut processed);
+                    if let Some(node) = node {
+                        roots.push(node);
+                    }
+                }
+            }
+        }
+
+        roots
+    }
+
+    /// Recursively build transaction tree node
+    fn build_node_recursive(
+        &self,
+        lt: i64,
+        lt_to_result: &HashMap<i64, SendResult>,
+        processed: &mut std::collections::HashSet<i64>,
+    ) -> Option<TransactionNode> {
+        if processed.contains(&lt) {
+            return None;
+        }
+
+        let result = lt_to_result.get(&lt)?;
+        processed.insert(lt);
+
+        let mut children = Vec::new();
+        for child_lt in &result.children_ids {
+            if let Some(child_node) = self.build_node_recursive(*child_lt, lt_to_result, processed)
+            {
+                children.push(child_node);
+            }
+        }
+
+        Some(TransactionNode {
+            send_result: result.clone(),
+            children,
+        })
+    }
+
+    /// Format transaction tree with proper indentation
+    fn format_transaction_tree(
+        &self,
+        nodes: &[TransactionNode],
+        contract_letters: &HashMap<IntAddr, String>,
+        depth: usize,
+        prefix: &str,
+    ) -> String {
+        let mut result = String::new();
+
+        for (i, node) in nodes.iter().enumerate() {
+            let is_last_child = i == nodes.len() - 1;
+
+            if depth > 0 {
+                result.push_str(prefix);
+                if is_last_child {
+                    result.push_str("└── ".dimmed().to_string().as_str());
+                } else {
+                    result.push_str("├── ".dimmed().to_string().as_str());
+                }
+            }
+
+            let child_prefix = if depth > 0 {
+                if is_last_child {
+                    format!("{}{}", prefix, "    ")
+                } else {
+                    format!("{}{}", prefix, "│   ".dimmed())
+                }
+            } else {
+                String::new()
+            };
+
+            let has_children = !node.children.is_empty();
+            let tx_formatted = if depth == 0 {
+                self.format_single_transaction(
+                    &node.send_result,
+                    contract_letters,
+                    true,
+                    &child_prefix,
+                    has_children,
+                )
+            } else {
+                self.format_single_transaction(
+                    &node.send_result,
+                    contract_letters,
+                    false,
+                    &child_prefix,
+                    has_children,
+                )
+            };
+            result.push_str(&tx_formatted);
+            result.push('\n');
+
+            // Recursively format children
+            if !node.children.is_empty() {
+                let children_formatted = self.format_transaction_tree(
+                    &node.children,
+                    contract_letters,
+                    depth + 1,
+                    &child_prefix,
+                );
+                result.push_str(&children_formatted);
+            }
+        }
+
+        result
+    }
+
     /// Format a single transaction
     fn format_single_transaction(
         &self,
         send_result: &SendResult,
         contract_letters: &HashMap<IntAddr, String>,
+        show_full_names: bool,
+        child_prefix: &str,
+        has_children: bool,
     ) -> String {
         let tx = &send_result.tx;
         let mut tx_builder = "".to_string();
 
-        tx_builder += &self.format_message_part(tx, contract_letters);
-        tx_builder += &self.format_transaction_info(tx);
+        tx_builder += &self.format_message_part(tx, contract_letters, show_full_names);
+        tx_builder += &self.format_transaction_info(tx, child_prefix, has_children);
 
         tx_builder
     }
@@ -204,6 +330,7 @@ impl FormatterContext {
         &self,
         tx: &Transaction,
         contract_letters: &HashMap<IntAddr, String>,
+        show_full_names: bool,
     ) -> String {
         let in_msg = tx.load_in_msg().unwrap().unwrap();
         let MsgInfo::Int(info) = &in_msg.info else {
@@ -216,8 +343,10 @@ impl FormatterContext {
             result += "(!) ".red().to_string().as_str();
         }
 
-        result += &self.format_address_with_letter(&info.src, contract_letters);
-        result += " -> ";
+        result += &self.format_address_with_letter(&info.src, contract_letters, show_full_names);
+        if show_full_names {
+            result += " -> ";
+        }
 
         let opcode = self.extract_opcode(&in_msg);
         let message_name = self.get_message_name(opcode);
@@ -228,13 +357,18 @@ impl FormatterContext {
         result += &format!("{} TON", amount.to_string()).green().to_string();
         result += " -> ";
 
-        result += &self.format_address_with_letter(&info.dst, contract_letters);
+        result += &self.format_address_with_letter(&info.dst, contract_letters, true);
 
         result
     }
 
     /// Format transaction execution info (gas, exit code, account changes)
-    fn format_transaction_info(&self, tx: &Transaction) -> String {
+    fn format_transaction_info(
+        &self,
+        tx: &Transaction,
+        child_prefix: &str,
+        has_children: bool,
+    ) -> String {
         let TxInfo::Ordinary(info) = tx.load_info().unwrap() else {
             panic!("tick-tock message is unexpected")
         };
@@ -256,15 +390,25 @@ impl FormatterContext {
                     && tx.end_status == AccountStatus::Active
                 {
                     result += "\n";
-                    result += "└─".dimmed().to_string().as_str();
-                    result += " account created";
+                    result += child_prefix;
+                    if has_children {
+                        result += "├──".dimmed().to_string().as_str();
+                    } else {
+                        result += "└──".dimmed().to_string().as_str();
+                    }
+                    result += " account created".dimmed().to_string().as_str();
                 }
                 if tx.orig_status == AccountStatus::Active
                     && tx.end_status == AccountStatus::NotExists
                 {
                     result += "\n";
-                    result += "└─".dimmed().to_string().as_str();
-                    result += " account destroyed";
+                    result += child_prefix;
+                    if has_children {
+                        result += "├──".dimmed().to_string().as_str();
+                    } else {
+                        result += "└──".dimmed().to_string().as_str();
+                    }
+                    result += " account destroyed".dimmed().to_string().as_str();
                 }
 
                 result
@@ -278,19 +422,30 @@ impl FormatterContext {
         &self,
         addr: &IntAddr,
         contract_letters: &HashMap<IntAddr, String>,
+        show_full_names: bool,
     ) -> String {
-        let contract_type = self.get_contract_type(addr);
-        let mut result = if contract_type != "" {
-            format!("{}", contract_type.cyan())
-        } else {
-            Self::format_addr_hash(addr).dimmed().to_string()
-        };
-
         if let Some(letter) = contract_letters.get(addr) {
-            result += &format!(" {} ", letter.bold());
+            if show_full_names {
+                let contract_type = self.get_contract_type(addr);
+                let mut result = if contract_type != "" {
+                    format!("{}", contract_type.cyan())
+                } else {
+                    Self::format_addr_hash(addr).dimmed().to_string()
+                };
+                result += &format!(" {} ", letter.bold());
+                result
+            } else {
+                "".to_string()
+            }
+        } else {
+            // No letter assigned, show full address info
+            let contract_type = self.get_contract_type(addr);
+            if contract_type != "" {
+                format!("{}", contract_type.cyan())
+            } else {
+                Self::format_addr_hash(addr).dimmed().to_string()
+            }
         }
-
-        result
     }
 
     /// Extract opcode from message body
