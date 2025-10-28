@@ -7,6 +7,22 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::tlb::TLB;
+
+/// Calculate visible length of a string (excluding ANSI escape codes)
+fn visible_len(s: &str) -> usize {
+    let mut len = 0;
+    let mut in_escape = false;
+    for ch in s.chars() {
+        if ch == '\x1b' {
+            in_escape = true;
+        } else if in_escape && ch == 'm' {
+            in_escape = false;
+        } else if !in_escape {
+            len += 1;
+        }
+    }
+    len
+}
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
@@ -268,10 +284,15 @@ impl FormatterContext {
                     format!("{}{}", prefix, "│   ".dimmed())
                 }
             } else {
-                String::new()
+                "    ".to_string()
             };
 
             let has_children = !node.children.is_empty();
+            let prefix_len = if depth > 0 {
+                visible_len(prefix) + 4
+            } else {
+                4 // 4 for "└── " added in format_single_transaction
+            };
             let tx_formatted = if depth == 0 {
                 self.format_single_transaction(
                     &node.send_result,
@@ -279,6 +300,8 @@ impl FormatterContext {
                     true,
                     &child_prefix,
                     has_children,
+                    prefix_len,
+                    true, // is_root
                 )
             } else {
                 self.format_single_transaction(
@@ -287,6 +310,8 @@ impl FormatterContext {
                     false,
                     &child_prefix,
                     has_children,
+                    prefix_len,
+                    false, // is_root
                 )
             };
             result.push_str(&tx_formatted);
@@ -315,12 +340,34 @@ impl FormatterContext {
         show_full_names: bool,
         child_prefix: &str,
         has_children: bool,
+        prefix_len: usize,
+        is_root: bool,
     ) -> String {
         let tx = &send_result.tx;
         let mut tx_builder = "".to_string();
 
-        tx_builder += &self.format_message_part(tx, contract_letters, show_full_names);
-        tx_builder += &self.format_transaction_info(tx, child_prefix, has_children);
+        let main_part = self.format_message_part(tx, contract_letters, false);
+        let main_part_visible_len = visible_len(&main_part);
+
+        if is_root {
+            let src_addr = match &tx.load_in_msg().unwrap().unwrap().info {
+                MsgInfo::Int(info) => info.src.clone(),
+                _ => panic!("Expected internal message"),
+            };
+            let src_formatted =
+                self.format_address_with_letter(&src_addr, contract_letters, show_full_names);
+            tx_builder += &format!("{} {} {}\n", "N/A".dimmed(), "->".dimmed(), src_formatted);
+            tx_builder += "└── ".dimmed().to_string().as_str();
+        }
+
+        tx_builder += &main_part;
+        tx_builder += &self.format_transaction_info(
+            tx,
+            child_prefix,
+            has_children,
+            main_part_visible_len,
+            prefix_len,
+        );
 
         tx_builder
     }
@@ -345,7 +392,7 @@ impl FormatterContext {
 
         result += &self.format_address_with_letter(&info.src, contract_letters, show_full_names);
         if show_full_names {
-            result += " -> ";
+            result += " -> ".dimmed().to_string().as_str();
         }
 
         let opcode = self.extract_opcode(&in_msg);
@@ -355,7 +402,7 @@ impl FormatterContext {
 
         let amount = info.value.tokens.into_inner() as f64 / 1e9;
         result += &format!("{} TON", amount.to_string()).green().to_string();
-        result += " -> ";
+        result += " -> ".dimmed().to_string().as_str();
 
         result += &self.format_address_with_letter(&info.dst, contract_letters, true);
 
@@ -368,6 +415,8 @@ impl FormatterContext {
         tx: &Transaction,
         child_prefix: &str,
         has_children: bool,
+        main_part_visible_len: usize,
+        prefix_len: usize,
     ) -> String {
         let TxInfo::Ordinary(info) = tx.load_info().unwrap() else {
             panic!("tick-tock message is unexpected")
@@ -376,7 +425,10 @@ impl FormatterContext {
         match info.compute_phase {
             ComputePhase::Executed(compute) => {
                 let mut result = String::new();
-                result += &format!(" gas={}", compute.gas_used.to_string().as_str())
+                // Add padding to align metadata
+                let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
+                result += &" ".repeat(padding_len);
+                result += &format!("gas={}", compute.gas_used.to_string().as_str())
                     .dimmed()
                     .to_string();
 
@@ -413,7 +465,14 @@ impl FormatterContext {
 
                 result
             }
-            _ => format!(" {}", "compute phase skipped".dimmed()),
+            _ => {
+                let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
+                format!(
+                    "{}{}",
+                    " ".repeat(padding_len),
+                    "compute phase skipped".dimmed()
+                )
+            }
         }
     }
 
