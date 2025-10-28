@@ -111,7 +111,7 @@ fn fail_to_find_transaction_by_params_impl(
 
     *ctx.assert_failure = Some(AssertFailure::TransactionNotFound(
         TransactionGenericAssertFailure {
-            txs: txs.to_typed(&"TransactionList".to_string()),
+            txs: txs.to_typed(&"SendResultList".to_string()),
             parsed_txs,
             params,
             message: Some(message),
@@ -143,7 +143,7 @@ fn fail_to_not_find_transaction_by_params_impl(
 
     *ctx.assert_failure = Some(AssertFailure::TransactionIsFound(
         TransactionGenericAssertFailure {
-            txs: txs.to_typed(&"TransactionList".to_string()),
+            txs: txs.to_typed(&"SendResultList".to_string()),
             parsed_txs,
             params,
             message: if message.is_empty() {

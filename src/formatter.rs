@@ -101,12 +101,7 @@ impl FormatterContext {
 
     /// Format transaction list as a tree
     pub fn format_transaction_list(&self, items: &[TupleItem]) -> String {
-        let item = &items[0];
-        let TupleItem::Tuple(tx_items) = item else {
-            return self.format(&items[0]);
-        };
-
-        let send_results = self.parse_send_results(tx_items);
+        let send_results = self.parse_send_results(items);
         let known_contracts = self.collect_known_contracts(&send_results);
         let contract_letters = self.create_contract_letters(&known_contracts);
 
@@ -605,7 +600,7 @@ impl FormatterContext {
                     return type_name.clone();
                 }
 
-                if type_name == "SendResultList" && items.len() == 1 {
+                if type_name == "SendResultList" {
                     return self.format_transaction_list(items);
                 }
 
@@ -740,48 +735,9 @@ impl FormatterContext {
             return Self::format_addr_hash(&addr);
         };
 
-        let TupleItem::Tuple(items) = &items[0] else {
-            return self.format(&items[0]);
-        };
-
-        let txs = items
-            .iter()
-            .filter_map(|el| match el {
-                TupleItem::Cell(cell) => Some(cell),
-                _ => None,
-            })
-            .map(|x| {
-                let result = x.to_boc_b64(false).unwrap();
-                let tx_cell: tycho_types::cell::Cell = Boc::decode_base64(&result).unwrap();
-                let mut tx_slice = tx_cell.as_slice().unwrap();
-                Transaction::load_from(&mut tx_slice).unwrap()
-            })
-            .collect::<Vec<_>>();
-
-        let mut known_contracts: Vec<IntAddr> = vec![];
-
-        for tx in &txs {
-            let in_msg = tx.load_in_msg().unwrap();
-            if let Some(in_msg) = &in_msg
-                && let MsgInfo::Int(info) = &in_msg.info
-            {
-                // It's O(N) but we need order, and we don't have many (thousands) transactions
-                if !known_contracts.contains(&info.src) {
-                    known_contracts.push(info.src.clone());
-                }
-                if !known_contracts.contains(&info.dst) {
-                    known_contracts.push(info.dst.clone());
-                }
-            }
-        }
-
-        let mut contract_letters: HashMap<IntAddr, String> = HashMap::new();
-
-        for (index, addr) in known_contracts.iter().enumerate() {
-            let letter = char::from_u32('A' as u32 + index as u32)
-                .unwrap_or_else(|| char::from_digit(index as u32, 10).unwrap());
-            contract_letters.insert(addr.clone(), letter.to_string());
-        }
+        let send_results = self.parse_send_results(items);
+        let known_contracts = self.collect_known_contracts(&send_results);
+        let contract_letters = self.create_contract_letters(&known_contracts);
 
         let mut builder = "".to_string();
 

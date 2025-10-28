@@ -8,7 +8,7 @@ use tvmffi::stack::{Tuple, TupleItem};
 
 extension!(println in (Context) with (s: TupleItem, type_name: String) using println_impl);
 fn println_impl(ctx: &mut Context, _stack: &mut Tuple, arg: TupleItem, type_name: String) {
-    let typed_arg = arg.to_typed(&type_name);
+    let typed_arg = arg.unwrap_single().to_typed(&type_name);
 
     let formatter = crate::formatter::FormatterContext::from_context(ctx);
     let formatted = strip_quotes(formatter.format(&typed_arg));
