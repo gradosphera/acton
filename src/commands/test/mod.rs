@@ -488,13 +488,11 @@ fn run_all_tests(
                         if let AssertFailure::Bin(assert_failure) = &assert_failure
                             && assert_failure.operator == "=="
                         {
-                            let diff_output = format_tuple_diff(
+                            let diff_output = formatter.format_tuple_diff(
                                 &assert_failure.left,
                                 &assert_failure.right,
                                 &assert_failure.left_type,
                                 &assert_failure.right_type,
-                                &abi,
-                                &formatter,
                             );
 
                             for line in diff_output.lines() {
@@ -509,11 +507,9 @@ fn run_all_tests(
                                 "       {}",
                                 "Values are equal but expected to be different:"
                             );
-                            let value = format_tuple_value(
+                            let value = formatter.format_tuple_value(
                                 &assert_failure.left,
                                 &assert_failure.left_type,
-                                &abi,
-                                &formatter,
                                 8,
                             );
                             println!("         {}", value.dimmed());
@@ -522,19 +518,15 @@ fn run_all_tests(
                         if let AssertFailure::Bin(assert_failure) = &assert_failure
                             && assert_failure.is_ord()
                         {
-                            let left = format_tuple_value(
+                            let left = formatter.format_tuple_value(
                                 &assert_failure.left,
                                 &assert_failure.left_type,
-                                &abi,
-                                &formatter,
                                 8,
                             );
 
-                            let right = format_tuple_value(
+                            let right = formatter.format_tuple_value(
                                 &assert_failure.left,
                                 &assert_failure.left_type,
-                                &abi,
-                                &formatter,
                                 8,
                             );
 
@@ -549,15 +541,11 @@ fn run_all_tests(
                             let diff_output = format!(
                                 "{}\nCannot find transaction from {} to {}\nwith:\n{}",
                                 assert_failure.txs,
-                                format_address(
-                                    &accounts,
-                                    &build_cache,
+                                formatter.format_address(
                                     &assert_failure.txs,
                                     &assert_failure.params.from
                                 ),
-                                format_address(
-                                    &accounts,
-                                    &build_cache,
+                                formatter.format_address(
                                     &assert_failure.txs,
                                     &Some(assert_failure.params.to.clone())
                                 ),
@@ -575,15 +563,11 @@ fn run_all_tests(
                             let diff_output = format!(
                                 "{}\nUnexpected transaction from {} to {}\n{}{}",
                                 assert_failure.txs,
-                                format_address(
-                                    &accounts,
-                                    &build_cache,
+                                formatter.format_address(
                                     &assert_failure.txs,
                                     &assert_failure.params.from
                                 ),
-                                format_address(
-                                    &accounts,
-                                    &build_cache,
+                                formatter.format_address(
                                     &assert_failure.txs,
                                     &Some(assert_failure.params.to.clone())
                                 ),
@@ -1177,273 +1161,10 @@ fn find_expect_calls(
     }
 }
 
-fn format_tuple_diff(
-    left: &Tuple,
-    right: &Tuple,
-    left_type: &str,
-    right_type: &str,
-    abi: &ContractAbi,
-    formatter: &FormatterContext,
-) -> String {
-    let left_type_str = left_type.to_string();
-    let left_item = TupleItem::TypedTuple {
-        abi: abi.find_type(&left_type_str),
-        type_name: left_type_str,
-        items: (**left).clone(),
-    };
-    let right_type_str = right_type.to_string();
-    let right_item = TupleItem::TypedTuple {
-        abi: abi.find_type(&right_type_str),
-        type_name: right_type_str,
-        items: (**right).clone(),
-    };
-
-    format_tuple_item_diff(&left_item, &right_item, formatter)
-}
-
 fn highlight_actual_expected(message: &str) -> String {
     let result = message
         .replace("actual", &"actual".red().to_string())
         .replace("expected", &"expected".green().to_string());
 
     result.to_string()
-}
-
-fn add_indent_to_lines(text: &str, indent: usize) -> String {
-    let indent_str = " ".repeat(indent);
-    text.lines()
-        .map(|line| format!("{}{}", indent_str, line))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-fn format_tuple_value(
-    tuple: &Tuple,
-    type_name: &String,
-    abi: &ContractAbi,
-    formatter: &FormatterContext,
-    indent: usize,
-) -> String {
-    let item = TupleItem::TypedTuple {
-        abi: abi.find_type(type_name),
-        type_name: type_name.to_string(),
-        items: (**tuple).clone(),
-    };
-    let raw_str = formatter.format(&item);
-
-    if !raw_str.contains("\n") {
-        return raw_str;
-    }
-
-    let lines: Vec<_> = raw_str.lines().collect();
-    let mut result = lines[0].to_string() + "\n";
-    result += &add_indent_to_lines(&lines[1..].join("\n"), indent);
-    result
-}
-
-fn format_tuple_item_diff(
-    left: &TupleItem,
-    right: &TupleItem,
-    formatter: &FormatterContext,
-) -> String {
-    let (
-        TupleItem::TypedTuple {
-            type_name: left_type,
-            items: left_items,
-            abi,
-        },
-        TupleItem::TypedTuple {
-            type_name: right_type,
-            items: right_items,
-            ..
-        },
-    ) = (left, right)
-    else {
-        return format!(
-            "{} != {}",
-            formatter.format(left).red(),
-            formatter.format(right).green()
-        );
-    };
-
-    if left_type != right_type {
-        return format!("{} != {}", left, right);
-    }
-
-    if let Some(struct_desc) = abi {
-        if left_items.len() == struct_desc.fields.len() {
-            let mut result = format!("{} {{\n", left_type);
-
-            for (field, (left_item, right_item)) in struct_desc
-                .fields
-                .iter()
-                .zip(left_items.iter().zip(right_items.iter()))
-            {
-                if left_item != right_item {
-                    result.push_str(&format!(
-                        "    {}: {}\n",
-                        field.name.yellow(),
-                        formatter.format(left_item).red()
-                    ));
-                    result.push_str(&format!(
-                        "    {:<width$}  {}\n",
-                        "",
-                        formatter.format(right_item).green(),
-                        width = field.name.len()
-                    ));
-                } else {
-                    result.push_str(&format!(
-                        "    {}{} {}\n",
-                        field.name.dimmed(),
-                        ":".dimmed(),
-                        formatter.format(left_item).dimmed()
-                    ));
-                }
-            }
-
-            result.push_str("}");
-            result
-        } else {
-            format!("{} != {}", left, right)
-        }
-    } else {
-        let mut result = "(\n".to_string();
-        let max_len = left_items.len().max(right_items.len());
-
-        for i in 0..max_len {
-            let left_val = left_items.get(i);
-            let right_val = right_items.get(i);
-
-            match (left_val, right_val) {
-                (Some(left_val), Some(right_val)) => {
-                    if left_val != right_val {
-                        result.push_str(&format!("    {},\n", left_val.red()));
-                        result.push_str(&format!("    {}\n", right_val.green()));
-                    } else {
-                        result.push_str(&format!("    {},\n", left_val.dimmed()));
-                    }
-                }
-                (Some(left_val), None) => {
-                    result.push_str(&format!("    {},\n", left_val.red()));
-                }
-                (None, Some(right_val)) => {
-                    result.push_str(&format!("    {}\n", right_val.green()));
-                }
-                (None, None) => {}
-            }
-        }
-
-        result.push_str(")");
-        result
-    }
-}
-
-fn format_addr_hash(addr: &IntAddr) -> String {
-    let raw = addr.as_std().unwrap().display_base64(true).to_string();
-    raw[..6].to_string() + ".." + &raw[raw.len() - 6..]
-}
-
-fn format_address(
-    accounts: &HashMap<String, ShardAccount>,
-    build_cache: &BuildCache,
-    txs: &TupleItem,
-    addr: &Option<IntAddr>,
-) -> String {
-    let Some(addr) = addr else {
-        return "<any>".cyan().to_string();
-    };
-
-    let TupleItem::TypedTuple { items, .. } = txs else {
-        return format_addr_hash(&addr);
-    };
-
-    let TupleItem::Tuple(items) = &items[0] else {
-        return format!("{}", items[0]);
-    };
-
-    let txs = items
-        .iter()
-        .filter_map(|el| match el {
-            TupleItem::Cell(cell) => Some(cell),
-            _ => None,
-        })
-        .map(|x| {
-            let result = x.to_boc_b64(false).unwrap();
-            let tx_cell: tycho_types::cell::Cell = Boc::decode_base64(&result).unwrap();
-            let mut tx_slice = tx_cell.as_slice().unwrap();
-            Transaction::load_from(&mut tx_slice).unwrap()
-        })
-        .collect::<Vec<_>>();
-
-    let mut known_contracts: Vec<IntAddr> = vec![];
-
-    for tx in &txs {
-        let in_msg = tx.load_in_msg().unwrap();
-        if let Some(in_msg) = &in_msg
-            && let MsgInfo::Int(info) = &in_msg.info
-        {
-            // It's O(N) but we need order, and we don't have many (thousands) transactions
-            if !known_contracts.contains(&info.src) {
-                known_contracts.push(info.src.clone());
-            }
-            if !known_contracts.contains(&info.dst) {
-                known_contracts.push(info.dst.clone());
-            }
-        }
-    }
-
-    let mut contract_letters: HashMap<IntAddr, String> = HashMap::new();
-
-    for (index, addr) in known_contracts.iter().enumerate() {
-        let letter = char::from_u32('A' as u32 + index as u32)
-            .unwrap_or_else(|| char::from_digit(index as u32, 10).unwrap());
-        contract_letters.insert(addr.clone(), letter.to_string());
-    }
-
-    let mut builder = "".to_string();
-
-    let contract_type = get_contract_type(accounts, build_cache, addr);
-
-    let letter = contract_letters.get(&addr);
-    if let Some(letter) = letter {
-        builder += format!("{} {} ", contract_type.cyan(), letter.bold()).as_str();
-    }
-
-    builder += format_addr_hash(&addr).dimmed().to_string().as_str();
-
-    builder
-}
-
-fn get_contract_type(
-    accounts: &HashMap<String, ShardAccount>,
-    build_cache: &BuildCache,
-    addr: &IntAddr,
-) -> String {
-    let account = accounts.get(&addr.to_string());
-    let Some(account) = account else {
-        return "".to_string();
-    };
-
-    let account_data = account.load_account();
-    let Ok(Some(data)) = account_data else {
-        return "".to_string();
-    };
-
-    let AccountState::Active(info) = data.state else {
-        return "".to_string();
-    };
-
-    let Some(code) = &info.code else {
-        return "".to_string();
-    };
-
-    let compilation_result = build_cache.built.iter().find(|(_name, result)| {
-        result.code_hash.to_ascii_lowercase() == code.repr_hash().to_string()
-    });
-
-    if let Some(result) = compilation_result {
-        return result.1.name.clone();
-    }
-
-    "".to_string()
 }

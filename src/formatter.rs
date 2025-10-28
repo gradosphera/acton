@@ -147,7 +147,10 @@ impl FormatterContext {
                 if src_contract_type != "" {
                     tx_builder += format!("{}", src_contract_type.cyan()).as_str();
                 } else {
-                    tx_builder += Self::show_addr(&info.src).dimmed().to_string().as_str();
+                    tx_builder += Self::format_addr_hash(&info.src)
+                        .dimmed()
+                        .to_string()
+                        .as_str();
                 }
 
                 let letter = contract_letters.get(&info.src);
@@ -184,7 +187,10 @@ impl FormatterContext {
                 if dst_contract_type != "" {
                     tx_builder += format!("{}", dst_contract_type.cyan()).as_str();
                 } else {
-                    tx_builder += Self::show_addr(&info.dst).dimmed().to_string().as_str();
+                    tx_builder += Self::format_addr_hash(&info.dst)
+                        .dimmed()
+                        .to_string()
+                        .as_str();
                 }
 
                 let letter = contract_letters.get(&info.dst);
@@ -311,9 +317,219 @@ impl FormatterContext {
         }
     }
 
+    pub fn format_tuple_value(&self, tuple: &Tuple, type_name: &String, indent: usize) -> String {
+        fn add_indent_to_lines(text: &str, indent: usize) -> String {
+            let indent_str = " ".repeat(indent);
+            text.lines()
+                .map(|line| format!("{}{}", indent_str, line))
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+
+        let item = TupleItem::TypedTuple {
+            abi: self.contract_abi.find_type(type_name),
+            type_name: type_name.to_string(),
+            items: (**tuple).clone(),
+        };
+        let raw_str = self.format(&item);
+
+        if !raw_str.contains("\n") {
+            return raw_str;
+        }
+
+        let lines: Vec<_> = raw_str.lines().collect();
+        let mut result = lines[0].to_string() + "\n";
+        result += &add_indent_to_lines(&lines[1..].join("\n"), indent);
+        result
+    }
+
     /// Show address in short format
-    fn show_addr(addr: &IntAddr) -> String {
+    fn format_addr_hash(addr: &IntAddr) -> String {
         let raw = addr.as_std().unwrap().display_base64(true).to_string();
         raw[..6].to_string() + ".." + &raw[raw.len() - 6..]
+    }
+
+    pub fn format_address(&self, txs: &TupleItem, addr: &Option<IntAddr>) -> String {
+        let Some(addr) = addr else {
+            return "<any>".cyan().to_string();
+        };
+
+        let TupleItem::TypedTuple { items, .. } = txs else {
+            return Self::format_addr_hash(&addr);
+        };
+
+        let TupleItem::Tuple(items) = &items[0] else {
+            return format!("{}", items[0]);
+        };
+
+        let txs = items
+            .iter()
+            .filter_map(|el| match el {
+                TupleItem::Cell(cell) => Some(cell),
+                _ => None,
+            })
+            .map(|x| {
+                let result = x.to_boc_b64(false).unwrap();
+                let tx_cell: tycho_types::cell::Cell = Boc::decode_base64(&result).unwrap();
+                let mut tx_slice = tx_cell.as_slice().unwrap();
+                Transaction::load_from(&mut tx_slice).unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        let mut known_contracts: Vec<IntAddr> = vec![];
+
+        for tx in &txs {
+            let in_msg = tx.load_in_msg().unwrap();
+            if let Some(in_msg) = &in_msg
+                && let MsgInfo::Int(info) = &in_msg.info
+            {
+                // It's O(N) but we need order, and we don't have many (thousands) transactions
+                if !known_contracts.contains(&info.src) {
+                    known_contracts.push(info.src.clone());
+                }
+                if !known_contracts.contains(&info.dst) {
+                    known_contracts.push(info.dst.clone());
+                }
+            }
+        }
+
+        let mut contract_letters: HashMap<IntAddr, String> = HashMap::new();
+
+        for (index, addr) in known_contracts.iter().enumerate() {
+            let letter = char::from_u32('A' as u32 + index as u32)
+                .unwrap_or_else(|| char::from_digit(index as u32, 10).unwrap());
+            contract_letters.insert(addr.clone(), letter.to_string());
+        }
+
+        let mut builder = "".to_string();
+
+        let contract_type = self.get_contract_type(addr);
+
+        let letter = contract_letters.get(&addr);
+        if let Some(letter) = letter {
+            builder += format!("{} {} ", contract_type.cyan(), letter.bold()).as_str();
+        }
+
+        builder += Self::format_addr_hash(&addr).dimmed().to_string().as_str();
+
+        builder
+    }
+}
+
+impl FormatterContext {
+    pub fn format_tuple_diff(
+        &self,
+        left: &Tuple,
+        right: &Tuple,
+        left_type: &str,
+        right_type: &str,
+    ) -> String {
+        let left_type_str = left_type.to_string();
+        let left_item = TupleItem::TypedTuple {
+            abi: self.contract_abi.find_type(&left_type_str),
+            type_name: left_type_str,
+            items: (**left).clone(),
+        };
+        let right_type_str = right_type.to_string();
+        let right_item = TupleItem::TypedTuple {
+            abi: self.contract_abi.find_type(&right_type_str),
+            type_name: right_type_str,
+            items: (**right).clone(),
+        };
+
+        self.format_tuple_item_diff(&left_item, &right_item)
+    }
+
+    fn format_tuple_item_diff(&self, left: &TupleItem, right: &TupleItem) -> String {
+        let (
+            TupleItem::TypedTuple {
+                type_name: left_type,
+                items: left_items,
+                abi,
+            },
+            TupleItem::TypedTuple {
+                type_name: right_type,
+                items: right_items,
+                ..
+            },
+        ) = (left, right)
+        else {
+            return format!(
+                "{} != {}",
+                self.format(left).red(),
+                self.format(right).green()
+            );
+        };
+
+        if left_type != right_type {
+            return format!("{} != {}", left, right);
+        }
+
+        if let Some(struct_desc) = abi {
+            if left_items.len() == struct_desc.fields.len() {
+                let mut result = format!("{} {{\n", left_type);
+
+                for (field, (left_item, right_item)) in struct_desc
+                    .fields
+                    .iter()
+                    .zip(left_items.iter().zip(right_items.iter()))
+                {
+                    if left_item != right_item {
+                        result.push_str(&format!(
+                            "    {}: {}\n",
+                            field.name.yellow(),
+                            self.format(left_item).red()
+                        ));
+                        result.push_str(&format!(
+                            "    {:<width$}  {}\n",
+                            "",
+                            self.format(right_item).green(),
+                            width = field.name.len()
+                        ));
+                    } else {
+                        result.push_str(&format!(
+                            "    {}{} {}\n",
+                            field.name.dimmed(),
+                            ":".dimmed(),
+                            self.format(left_item).dimmed()
+                        ));
+                    }
+                }
+
+                result.push_str("}");
+                result
+            } else {
+                format!("{} != {}", left, right)
+            }
+        } else {
+            let mut result = "(\n".to_string();
+            let max_len = left_items.len().max(right_items.len());
+
+            for i in 0..max_len {
+                let left_val = left_items.get(i);
+                let right_val = right_items.get(i);
+
+                match (left_val, right_val) {
+                    (Some(left_val), Some(right_val)) => {
+                        if left_val != right_val {
+                            result.push_str(&format!("    {},\n", left_val.red()));
+                            result.push_str(&format!("    {}\n", right_val.green()));
+                        } else {
+                            result.push_str(&format!("    {},\n", left_val.dimmed()));
+                        }
+                    }
+                    (Some(left_val), None) => {
+                        result.push_str(&format!("    {},\n", left_val.red()));
+                    }
+                    (None, Some(right_val)) => {
+                        result.push_str(&format!("    {}\n", right_val.green()));
+                    }
+                    (None, None) => {}
+                }
+            }
+
+            result.push_str(")");
+            result
+        }
     }
 }

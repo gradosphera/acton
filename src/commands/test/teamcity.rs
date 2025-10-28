@@ -85,20 +85,13 @@ impl TeamcityReporter {
             let details = assert_failure.location().unwrap_or("".to_string());
             if let AssertFailure::Bin(bin_failure) = assert_failure {
                 if bin_failure.operator == "==" {
-                    let expected = test::format_tuple_value(
+                    let expected = formatter.format_tuple_value(
                         &bin_failure.right,
                         &bin_failure.right_type,
-                        &formatter.contract_abi,
-                        formatter,
                         0,
                     );
-                    let actual = test::format_tuple_value(
-                        &bin_failure.left,
-                        &bin_failure.left_type,
-                        &formatter.contract_abi,
-                        formatter,
-                        0,
-                    );
+                    let actual =
+                        formatter.format_tuple_value(&bin_failure.left, &bin_failure.left_type, 0);
 
                     println!(
                         "##teamcity[testFailed type='comparisonFailure' name='{}' nodeId='test_{}' duration='{}' message='Values are not equal' details='{}' expected='{}' actual='{}']",
