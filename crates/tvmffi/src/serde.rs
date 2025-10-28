@@ -4,9 +4,12 @@ use num_bigint::{BigInt, BigUint};
 use tonlib_core::cell::{ArcCell, CellBuilder, CellParser};
 
 impl Tuple {
+    /// Serialize a tuple to a cell.
     pub fn serialize(&self) -> Result<ArcCell, anyhow::Error> {
         serialize_tuple(self)
     }
+
+    /// Deserialize a tuple from a cell.
     pub fn deserialize(src: &ArcCell) -> Result<Vec<TupleItem>, anyhow::Error> {
         parse_tuple(src)
     }

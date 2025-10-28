@@ -10,7 +10,6 @@
 //!         cell("remaining 46 bytes")
 //! ```
 use crate::stack::{Tuple, TupleItem, TupleSlice};
-use num_bigint::BigInt;
 use tonlib_core::cell::{ArcCell, CellBuilder};
 
 impl Tuple {
@@ -136,14 +135,6 @@ impl Tuple {
             end_bits: first_cell_bits,
             end_refs: refs_count,
             start_refs: 0,
-        }));
-    }
-
-    pub fn push_bool(&mut self, v: bool) {
-        self.push(TupleItem::Int(if v {
-            BigInt::from(-1)
-        } else {
-            BigInt::from(0)
         }));
     }
 }

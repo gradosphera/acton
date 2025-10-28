@@ -6,20 +6,23 @@ use std::ops::{Deref, DerefMut};
 use tonlib_core::cell::ArcCell;
 use tycho_types::models::{IntAddr, ShardAccount};
 
+/// Tuple represent a stack of items for the TVM.
 #[derive(Default, Debug, Clone)]
 pub struct Tuple(pub Vec<TupleItem>);
 
 impl Tuple {
+    /// Create an empty tuple.
     pub fn empty() -> Tuple {
         Tuple(vec![])
     }
 
+    /// Unwrap an empty tuple.
+    ///
+    /// ```text
+    /// (()) -> ()
+    /// ```
     pub fn unwrap_empty(&self) -> Tuple {
-        if self.0.is_empty() {
-            return (*self).clone();
-        }
-
-        if let TupleItem::Tuple(item) = &self.0[0]
+        if let Some(TupleItem::Tuple(item)) = &self.0.get(0)
             && item.len() == 0
         {
             return Tuple(vec![]);
@@ -27,18 +30,31 @@ impl Tuple {
 
         (*self).clone()
     }
-    pub fn unwrap_single(&self) -> Tuple {
-        if self.0.is_empty() {
-            return (*self).clone();
-        }
 
-        if let TupleItem::Tuple(item) = &self.0[0]
+    /// Unwrap a single item tuple.
+    ///
+    /// ```text
+    /// ((x)) -> (x)
+    /// ```
+    pub fn unwrap_single(&self) -> Tuple {
+        if let Some(TupleItem::Tuple(item)) = &self.0.get(0)
             && item.len() == 1
         {
             return Tuple(vec![item[0].clone()]);
         }
 
         (*self).clone()
+    }
+
+    /// Push a boolean value to the tuple.
+    ///
+    /// In TVM `true` is represented as `-1` and `false` is represented as `0`.
+    pub fn push_bool(&mut self, v: bool) {
+        self.push(TupleItem::Int(if v {
+            BigInt::from(-1)
+        } else {
+            BigInt::from(0)
+        }));
     }
 }
 
@@ -101,7 +117,7 @@ pub struct KnownAddresses {
     pub addresses: HashMap<IntAddr, KnownAddress>,
 }
 
-/// Represents a stack value in TON VM
+/// Represents a stack value in TVM
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TupleItem {
     Null,
@@ -132,6 +148,11 @@ pub struct TupleSlice {
 }
 
 impl TupleItem {
+    /// Unwrap a single item tuple.
+    ///
+    /// ```text
+    /// (x) -> x
+    /// ```
     pub fn unwrap_single(&self) -> TupleItem {
         let TupleItem::Tuple(items) = self else {
             return (*self).clone();
