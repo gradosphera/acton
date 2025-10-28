@@ -3,9 +3,10 @@ use abi::ContractAbi;
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
 use std::fmt::Write;
+use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::format::format_item_with_type;
-use tvmffi::stack::{Tuple, TupleItem, TupleSlice};
+use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
 use tycho_types::models::{
@@ -49,19 +50,14 @@ impl FormatterContext {
         }
     }
 
-    fn format_slice(&self, slice: &TupleSlice) -> String {
-        let length = slice.end_bits - slice.start_bits;
-        let mut parser = slice.cell.parser();
+    fn format_slice(&self, slice: &ArcCell) -> String {
+        let mut parser = slice.parser();
 
-        let Ok(()) = parser.skip_bits(slice.start_bits as usize) else {
-            return "Slice(...)".to_string();
-        };
-
-        if length == 2 && parser.load_u8(2).unwrap_or(0) == 0 {
+        if parser.remaining_bits() == 2 && parser.load_u8(2).unwrap_or(0) == 0 {
             return "addr_none".to_string();
         }
 
-        if length != 267
+        if parser.remaining_bits() == 267
             && let Ok(address) = parser.load_address()
         {
             return address.to_string();
@@ -249,16 +245,14 @@ impl FormatterContext {
             .known_addresses
             .addresses
             .iter()
-            .find(|(address, _info)| {
-                let a1 = address.to_string();
-                let s2 = addr.to_string();
-                a1 == s2
-            });
+            .find(|(address, _info)| address.to_string() == addr.to_string());
+
         if let Some(known_address) = known_address {
             return known_address.1.name.clone();
         }
 
-        let account = self.accounts.get(&addr.to_string());
+        let addr_str = addr.to_string();
+        let account = self.accounts.get(&addr_str);
         let Some(account) = account else {
             return "".to_string();
         };
@@ -326,20 +320,16 @@ impl FormatterContext {
 
                 format!("{}", item)
             }
-            TupleItem::Slice(slice) => {
-                if slice.start_bits == 0
-                    && slice.end_bits == 0
-                    && slice.start_refs == 0
-                    && slice.end_refs == 0
-                {
+            TupleItem::Slice(cell) => {
+                if cell.bit_len() == 0 && cell.references().len() == 0 {
                     return "empty slice".to_string();
                 }
 
-                if let Some(string) = Tuple::parse_snake_string(slice) {
+                if let Some(string) = Tuple::parse_snake_string(cell) {
                     return format!("\"{}\"", string);
                 }
 
-                self.format_slice(slice)
+                self.format_slice(cell)
             }
             _ => format!("{}", item),
         };

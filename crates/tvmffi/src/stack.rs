@@ -1,4 +1,3 @@
-use abi::TypeAbi;
 use num_bigint::BigInt;
 use std::fmt;
 use std::ops::{Deref, DerefMut};
@@ -100,22 +99,13 @@ pub enum TupleItem {
     Int(BigInt),
     Nan,
     Cell(ArcCell),
-    Slice(TupleSlice),
+    Slice(ArcCell),
     Builder(ArcCell),
     Tuple(Vec<TupleItem>),
     TypedTuple {
         type_name: String,
         items: Vec<TupleItem>,
     },
-}
-
-#[derive(Debug, Clone, Eq)]
-pub struct TupleSlice {
-    pub cell: ArcCell,
-    pub start_bits: u32,
-    pub end_bits: u32,
-    pub start_refs: u32,
-    pub end_refs: u32,
 }
 
 impl TupleItem {
@@ -134,57 +124,6 @@ impl TupleItem {
         }
 
         (*self).clone()
-    }
-}
-
-impl PartialEq for TupleSlice {
-    fn eq(&self, other: &Self) -> bool {
-        let self_bits_len = (self.end_bits - self.start_bits) as usize;
-        let other_bits_len = (other.end_bits - other.start_bits) as usize;
-        let self_refs_count = (self.end_refs - self.start_refs) as usize;
-        let other_refs_count = (other.end_refs - other.start_refs) as usize;
-
-        if self_bits_len != other_bits_len || self_refs_count != other_refs_count {
-            // fast path
-            return false;
-        }
-
-        let mut self_parser = self.cell.parser();
-        let mut other_parser = other.cell.parser();
-
-        if self_parser.skip_bits(self.start_bits as usize).is_err()
-            || other_parser.skip_bits(other.start_bits as usize).is_err()
-        {
-            return false;
-        }
-
-        match (
-            self_parser.load_bits(self_bits_len),
-            other_parser.load_bits(other_bits_len),
-        ) {
-            (Ok(self_data), Ok(other_data)) => {
-                if self_data != other_data {
-                    return false;
-                }
-            }
-            _ => return false,
-        }
-
-        let mut self_parser = self.cell.parser();
-        let mut other_parser = other.cell.parser();
-
-        for _ in 0..self_refs_count {
-            match (self_parser.next_reference(), other_parser.next_reference()) {
-                (Ok(self_ref), Ok(other_ref)) => {
-                    if self_ref.cell_hash() != other_ref.cell_hash() {
-                        return false;
-                    }
-                }
-                _ => return false,
-            }
-        }
-
-        true
     }
 }
 

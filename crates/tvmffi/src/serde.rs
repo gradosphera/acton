@@ -1,4 +1,4 @@
-use crate::stack::{Tuple, TupleItem, TupleSlice};
+use crate::stack::{Tuple, TupleItem};
 use anyhow::anyhow;
 use num_bigint::{BigInt, BigUint};
 use tonlib_core::cell::{ArcCell, CellBuilder, CellParser};
@@ -44,18 +44,12 @@ pub fn serialize_tuple_item(
             builder.store_u8(8, 0x03)?;
             builder.store_reference(&cell)?;
         }
-        TupleItem::Slice(TupleSlice {
-            cell,
-            start_bits,
-            end_bits,
-            start_refs,
-            end_refs,
-        }) => {
+        TupleItem::Slice(cell) => {
             builder.store_u8(8, 0x04)?;
-            builder.store_u32(10, *start_bits)?;
-            builder.store_u32(10, *end_bits)?;
-            builder.store_u32(3, *start_refs)?;
-            builder.store_u32(3, *end_refs)?;
+            builder.store_u32(10, 0)?;
+            builder.store_u32(10, cell.bit_len() as u32)?;
+            builder.store_u32(3, 0)?;
+            builder.store_u32(3, cell.references().len() as u32)?;
             builder.store_reference(&cell)?;
         }
         TupleItem::Builder(cell) => {
@@ -130,13 +124,27 @@ pub fn parse_tuple_item(parser: &mut CellParser) -> Result<TupleItem, anyhow::Er
 
             let cell_ref = parser.next_reference()?;
 
-            Ok(TupleItem::Slice(TupleSlice {
-                cell: cell_ref,
-                start_bits,
-                end_bits,
-                start_refs,
-                end_refs,
-            }))
+            let mut parser = cell_ref.parser();
+            parser.skip_bits(start_bits as usize)?;
+            let root_data_size = (end_bits - start_bits) as usize;
+            let root_bits = parser.load_bits(root_data_size)?;
+
+            // skip first refs
+            for _ in 0..start_refs {
+                parser.next_reference()?;
+            }
+
+            let mut builder = CellBuilder::new();
+            builder.store_bits(root_data_size, &root_bits)?;
+
+            for _ in start_refs..end_refs {
+                let next_ref = parser.next_reference()?;
+                builder.store_reference(&next_ref)?;
+            }
+
+            let final_cell = builder.build()?;
+
+            Ok(TupleItem::Slice(final_cell.into()))
         }
         5 => {
             let cell = parser.next_reference()?;
@@ -288,13 +296,7 @@ mod tests {
         builder.store_u8(8, 43).unwrap();
         let test_cell = ArcCell::new(builder.build().unwrap());
 
-        roundtrip_test(TupleItem::Slice(TupleSlice {
-            cell: test_cell,
-            start_bits: 0,
-            end_bits: 16,
-            start_refs: 0,
-            end_refs: 0,
-        }));
+        roundtrip_test(TupleItem::Slice(test_cell));
     }
 
     #[test]

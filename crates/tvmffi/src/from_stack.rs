@@ -101,7 +101,7 @@ impl FromStack for ArcCell {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stack::{Tuple, TupleItem, TupleSlice};
+    use crate::stack::{Tuple, TupleItem};
     use tonlib_core::cell::CellBuilder;
 
     #[test]
@@ -141,15 +141,8 @@ mod tests {
         let mut builder = CellBuilder::new();
         builder.store_bits(16, &[0xFF, 0xFF]).unwrap(); // Invalid UTF-8
         let cell = tonlib_core::cell::ArcCell::from(builder.build().unwrap());
-        let slice = TupleSlice {
-            cell,
-            start_bits: 0,
-            end_bits: 16,
-            start_refs: 0,
-            end_refs: 0,
-        };
 
-        let result = String::from_item(TupleItem::Slice(slice));
+        let result = String::from_item(TupleItem::Slice(cell));
         assert!(matches!(result, Err(ArgError::CellParse)));
     }
 
@@ -296,15 +289,8 @@ mod tests {
         let mut builder = CellBuilder::new();
         builder.store_bits(7, &[0xFF]).unwrap(); // 7 bits, not divisible by 8
         let cell = tonlib_core::cell::ArcCell::from(builder.build().unwrap());
-        let slice = TupleSlice {
-            cell,
-            start_bits: 0,
-            end_bits: 7,
-            start_refs: 0,
-            end_refs: 0,
-        };
 
-        let result = String::from_item(TupleItem::Slice(slice));
+        let result = String::from_item(TupleItem::Slice(cell));
         assert!(matches!(result, Err(ArgError::CellParse)));
 
         // Test very large tuple

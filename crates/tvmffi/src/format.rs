@@ -1,6 +1,7 @@
 use crate::stack::{Tuple, TupleItem};
 use num_bigint::BigInt;
 use std::fmt;
+use tonlib_core::cell::ArcCell;
 
 pub fn format_item_with_type(item: &TupleItem, type_name: &str) -> String {
     let item = item.unwrap_single();
@@ -15,25 +16,35 @@ pub fn format_item_with_type(item: &TupleItem, type_name: &str) -> String {
                 format!("{}", value)
             }
         }
-        TupleItem::Slice(slice) if type_name == "address" => {
-            let length = slice.end_bits - slice.start_bits;
-            let mut parser = slice.cell.parser();
-            let Ok(()) = parser.skip_bits(slice.start_bits as usize) else {
-                return "Slice(...)".to_string();
-            };
-            if length == 2 && parser.load_u8(2).unwrap_or(0) == 0 {
-                return "addr_none".to_string();
+        TupleItem::Slice(cell) => {
+            if cell.bit_len() == 0 && cell.references().len() == 0 {
+                return "empty slice".to_string();
             }
-            if length != 267 {
-                return "Slice(...)".to_string();
+
+            if let Some(string) = Tuple::parse_snake_string(&cell) {
+                return format!("\"{}\"", string);
             }
-            let Ok(address) = parser.load_address() else {
-                return "Slice(...)".to_string();
-            };
-            address.to_string()
+
+            format_slice(&cell)
         }
         _ => format!("{}", item),
     }
+}
+
+fn format_slice(slice: &ArcCell) -> String {
+    let mut parser = slice.parser();
+
+    if parser.remaining_bits() == 2 && parser.load_u8(2).unwrap_or(0) == 0 {
+        return "addr_none".to_string();
+    }
+
+    if parser.remaining_bits() == 267
+        && let Ok(address) = parser.load_address()
+    {
+        return address.to_string();
+    }
+
+    "Slice(...)".to_string()
 }
 
 impl fmt::Display for TupleItem {
@@ -49,8 +60,8 @@ impl fmt::Display for TupleItem {
             TupleItem::Null => write!(f, "null"),
             TupleItem::Nan => write!(f, "NaN"),
             TupleItem::Cell(cell) => write!(f, "{:?}", cell),
-            TupleItem::Slice(slice) => {
-                if let Some(string) = Tuple::parse_snake_string(slice) {
+            TupleItem::Slice(cell) => {
+                if let Some(string) = Tuple::parse_snake_string(cell) {
                     write!(f, "\"{}\"", string)
                 } else {
                     write!(f, "Slice(...)")

@@ -9,7 +9,7 @@
 //!     cell("second 127 bytes")
 //!         cell("remaining 46 bytes")
 //! ```
-use crate::stack::{Tuple, TupleItem, TupleSlice};
+use crate::stack::{Tuple, TupleItem};
 use tonlib_core::cell::{ArcCell, CellBuilder};
 
 impl Tuple {
@@ -18,20 +18,11 @@ impl Tuple {
     /// If the slice is not a snake string, returns `None`.
     /// This is tricky since we cannot be sure that the slice is a snake string and
     /// not some other data with 8-bit encoding that forms a valid UTF-8 string.
-    pub fn parse_snake_string(slice: &TupleSlice) -> Option<String> {
-        let TupleSlice {
-            cell,
-            start_bits,
-            end_bits,
-            start_refs,
-            end_refs,
-        } = slice;
-
+    pub fn parse_snake_string(cell: &ArcCell) -> Option<String> {
         let mut all_bits = Vec::new();
 
         let mut parser = cell.parser();
-        parser.skip_bits(*start_bits as usize).ok()?;
-        let bits_to_load = (end_bits - start_bits) as usize;
+        let bits_to_load = cell.bit_len();
         if (bits_to_load % 8) != 0 {
             // this is most likely not a snake string
             return None;
@@ -48,15 +39,10 @@ impl Tuple {
             return Some(result);
         }
 
-        if bytes_to_load == 127 && start_refs == end_refs {
+        if bytes_to_load == 127 && parser.remaining_refs() == 0 {
             // this is a single cell snake string
             let result = String::from_utf8(all_bits).ok()?;
             return Some(result);
-        }
-
-        // skip references if needed
-        for _ in 0..*start_refs {
-            parser.next_reference().ok()?;
         }
 
         let mut next_data_ref = parser.next_reference().ok()?;
@@ -91,13 +77,7 @@ impl Tuple {
             // Fast path, the string fits in one cell
             let mut b = CellBuilder::new();
             b.store_bits(total_bits, bytes).unwrap();
-            self.push(TupleItem::Slice(TupleSlice {
-                cell: ArcCell::from(b.build().unwrap()),
-                start_bits: 0,
-                end_bits: total_bits as u32,
-                end_refs: 0,
-                start_refs: 0,
-            }));
+            self.push(TupleItem::Slice(b.build().unwrap().into()));
             return;
         }
 
@@ -112,8 +92,6 @@ impl Tuple {
         }
 
         // build cells from last to first
-        let cell_count = cell_data.len();
-        let first_cell_bits = cell_data[0].1 as u32;
         let mut next_cell: Option<ArcCell> = None;
 
         for (chunk, bits) in cell_data.into_iter().rev() {
@@ -128,14 +106,7 @@ impl Tuple {
         }
 
         let root_cell = next_cell.unwrap();
-        let refs_count = if cell_count > 1 { 1 } else { 0 };
-        self.push(TupleItem::Slice(TupleSlice {
-            cell: root_cell,
-            start_bits: 0,
-            end_bits: first_cell_bits,
-            end_refs: refs_count,
-            start_refs: 0,
-        }));
+        self.push(TupleItem::Slice(root_cell));
     }
 }
 
@@ -285,11 +256,11 @@ mod tests {
                 test_string
             );
 
-            let Some(TupleItem::Slice(slice)) = tuple.0.first() else {
+            let Some(TupleItem::Slice(cell)) = tuple.0.first() else {
                 panic!("Expected slice item for string: {}", test_string);
             };
 
-            let actual_bits = (slice.end_bits - slice.start_bits) as usize;
+            let actual_bits = cell.bit_len();
 
             if requires_multiple_cells {
                 assert_eq!(
@@ -298,7 +269,8 @@ mod tests {
                     test_string
                 );
                 assert_eq!(
-                    slice.end_refs, 1,
+                    cell.references().len(),
+                    1,
                     "Multi-cell string should have 1 reference: {}",
                     test_string
                 );
@@ -309,48 +281,12 @@ mod tests {
                     test_string
                 );
                 assert_eq!(
-                    slice.end_refs, 0,
+                    cell.references().len(),
+                    0,
                     "Single-cell string should have 0 references: {}",
                     test_string
                 );
             }
         }
-    }
-
-    #[test]
-    fn test_parse_invalid_data() {
-        use tonlib_core::cell::CellBuilder;
-        let mut builder = CellBuilder::new();
-        builder.store_bits(7, &[0xFF]).unwrap(); // 7 bits, not divisible by 8
-        let cell = ArcCell::from(builder.build().unwrap());
-
-        let slice = TupleSlice {
-            cell,
-            start_bits: 0,
-            end_bits: 7,
-            start_refs: 0,
-            end_refs: 0,
-        };
-
-        let result = Tuple::parse_snake_string(&slice);
-        assert_eq!(
-            result, None,
-            "Should return None for data not divisible by 8 bits"
-        );
-
-        let mut builder = CellBuilder::new();
-        builder.store_bits(16, &[0xFF, 0xFF]).unwrap(); // Invalid UTF-8 bytes
-        let cell = ArcCell::from(builder.build().unwrap());
-
-        let slice = TupleSlice {
-            cell,
-            start_bits: 0,
-            end_bits: 16,
-            start_refs: 0,
-            end_refs: 0,
-        };
-
-        let result = Tuple::parse_snake_string(&slice);
-        assert_eq!(result, None, "Should return None for invalid UTF-8");
     }
 }

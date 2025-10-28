@@ -7,7 +7,7 @@ use emulator::{extension, pop_args, register_ext_methods};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use tonlib_core::tlb_types::tlb::TLB;
-use tvmffi::stack::{Tuple, TupleItem, TupleSlice};
+use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::Load;
 use tycho_types::models::{IntAddr, Transaction};
@@ -202,40 +202,26 @@ pub fn process_txs_and_search_params(
         if let TupleItem::Null = raw_from {
             params.from = None
         } else if let TupleItem::Tuple(raw_from) = &raw_from
-            && let TupleItem::Slice(TupleSlice {
-                cell, start_bits, ..
-            }) = &raw_from[0]
+            && let TupleItem::Slice(cell) = &raw_from[0]
         {
             let cell = Boc::decode_base64(cell.to_boc_b64(false).unwrap()).unwrap();
             let mut slice = cell.as_slice().unwrap();
-            if let Ok(()) = slice.skip_first(*start_bits as u16, 0)
-                && let Ok(address) = IntAddr::load_from(&mut slice)
-            {
+            if let Ok(address) = IntAddr::load_from(&mut slice) {
                 params.from = Some(address);
             }
-        } else if let TupleItem::Slice(TupleSlice {
-            cell, start_bits, ..
-        }) = raw_from
-        {
+        } else if let TupleItem::Slice(cell) = raw_from {
             let cell = Boc::decode_base64(cell.to_boc_b64(false).unwrap()).unwrap();
             let mut slice = cell.as_slice().unwrap();
-            if let Ok(()) = slice.skip_first(start_bits as u16, 0)
-                && let Ok(address) = IntAddr::load_from(&mut slice)
-            {
+            if let Ok(address) = IntAddr::load_from(&mut slice) {
                 params.from = Some(address);
             }
         }
     }
     if let Some(raw_to) = raw_to {
-        if let TupleItem::Slice(TupleSlice {
-            cell, start_bits, ..
-        }) = raw_to
-        {
+        if let TupleItem::Slice(cell) = raw_to {
             let cell = Boc::decode_base64(cell.to_boc_b64(false).unwrap()).unwrap();
             let mut slice = cell.as_slice().unwrap();
-            if let Ok(()) = slice.skip_first(start_bits as u16, 0)
-                && let Ok(address) = IntAddr::load_from(&mut slice)
-            {
+            if let Ok(address) = IntAddr::load_from(&mut slice) {
                 params.to = address;
             }
         }
