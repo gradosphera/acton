@@ -6,7 +6,8 @@ use crossbeam_channel::{Receiver, Sender, unbounded};
 use dap::events::{Event, StoppedEventBody, ThreadEventBody};
 use dap::prelude::{Command, Request, Response, ResponseBody};
 use dap::responses::{
-    ContinueResponse, ScopesResponse, StackTraceResponse, ThreadsResponse, VariablesResponse,
+    ContinueResponse, EvaluateResponse, ScopesResponse, StackTraceResponse, ThreadsResponse,
+    VariablesResponse,
 };
 use dap::types;
 use dap::types::{
@@ -582,7 +583,19 @@ impl DebugContext {
             }
             Command::SetExceptionBreakpoints(_) => {}
             Command::Disconnect(_) => {} // do nothing, should be handled in the request loop
-            Command::Evaluate(_) => {}
+            Command::Evaluate(args) => {
+                let expression = args.expression.clone();
+                let rsp = req.success(ResponseBody::Evaluate(EvaluateResponse {
+                    result: expression,
+                    type_field: None,
+                    presentation_hint: None,
+                    variables_reference: 0,
+                    named_variables: None,
+                    indexed_variables: None,
+                    memory_reference: None,
+                }));
+                self.send_response(rsp)?;
+            }
             _ => {
                 eprintln!("Unhandled command: {:?}", req.command);
                 return Err(anyhow!("Unhandled command: {:?}", req.command));
