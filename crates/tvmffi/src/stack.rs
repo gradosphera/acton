@@ -13,6 +13,14 @@ impl Tuple {
         Tuple(vec![])
     }
 
+    /// Creates wrapper over values with specified type.
+    pub fn to_typed(&self, type_name: &String) -> TupleItem {
+        TupleItem::TypedTuple {
+            type_name: type_name.clone(),
+            items: self.0.clone(),
+        }
+    }
+
     /// Unwrap an empty tuple.
     ///
     /// ```text
@@ -109,6 +117,21 @@ pub enum TupleItem {
 }
 
 impl TupleItem {
+    /// Creates wrapper over values with specified type.
+    pub fn to_typed(&self, type_name: &String) -> TupleItem {
+        if let TupleItem::Tuple(item) = self {
+            return TupleItem::TypedTuple {
+                type_name: type_name.clone(),
+                items: item.clone(),
+            };
+        }
+
+        TupleItem::TypedTuple {
+            type_name: type_name.clone(),
+            items: vec![self.clone()],
+        }
+    }
+
     /// Unwrap a single item tuple.
     ///
     /// ```text

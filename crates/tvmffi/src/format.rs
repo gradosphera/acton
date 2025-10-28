@@ -2,20 +2,12 @@ use crate::stack::{Tuple, TupleItem};
 use num_bigint::BigInt;
 use std::fmt;
 use tonlib_core::cell::ArcCell;
+use tonlib_core::tlb_types::tlb::TLB;
 
-pub fn format_item_with_type(item: &TupleItem, type_name: &str) -> String {
+pub fn format_item(item: &TupleItem) -> String {
     let item = item.unwrap_single();
 
     match item {
-        TupleItem::Int(value) if type_name == "bool" => {
-            if value == BigInt::from(0) {
-                "false".to_string()
-            } else if value == BigInt::from(18446744073709551615u64) {
-                "true".to_string()
-            } else {
-                format!("{}", value)
-            }
-        }
         TupleItem::Slice(cell) => {
             if cell.bit_len() == 0 && cell.references().len() == 0 {
                 return "empty slice".to_string();
@@ -59,15 +51,9 @@ impl fmt::Display for TupleItem {
             }
             TupleItem::Null => write!(f, "null"),
             TupleItem::Nan => write!(f, "NaN"),
-            TupleItem::Cell(cell) => write!(f, "{:?}", cell),
-            TupleItem::Slice(cell) => {
-                if let Some(string) = Tuple::parse_snake_string(cell) {
-                    write!(f, "\"{}\"", string)
-                } else {
-                    write!(f, "Slice(...)")
-                }
-            }
-            TupleItem::Builder(_) => write!(f, "Builder(...)"),
+            TupleItem::Cell(cell) => write!(f, "{}", cell.to_boc_hex(false).unwrap()),
+            TupleItem::Slice(cell) => write!(f, "{}", cell.to_boc_hex(false).unwrap()),
+            TupleItem::Builder(cell) => write!(f, "{}", cell.to_boc_hex(false).unwrap()),
             TupleItem::Tuple(items) => {
                 if items.len() == 1 {
                     write!(f, "{}", items[0])
@@ -85,22 +71,21 @@ impl fmt::Display for TupleItem {
             TupleItem::TypedTuple { type_name, items } => {
                 if type_name == "address" && items.len() == 1 {
                     let addr = &items[0];
-                    return write!(f, "{}", format_item_with_type(addr, type_name));
+                    return write!(f, "{}", format_item(addr));
                 }
 
+                let formatted_items = items
+                    .iter()
+                    .map(|item| format!("{}", item))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
                 if items.len() == 1 {
-                    write!(f, "{}", items[0])
+                    write!(f, "{}", formatted_items)
+                } else if type_name == "tuple" {
+                    write!(f, "({})", formatted_items)
                 } else {
-                    write!(
-                        f,
-                        "{}({})",
-                        type_name,
-                        items
-                            .iter()
-                            .map(|item| format!("{}", item))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
+                    write!(f, "{} ({})", type_name, formatted_items)
                 }
             }
         }

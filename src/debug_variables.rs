@@ -53,14 +53,11 @@ impl DebugContext {
                     let value = stack
                         .get(stack.len() - 1 - index)
                         .unwrap_or(&TupleItem::Null);
-                    let value2 = TupleItem::TypedTuple {
-                        items: vec![value.clone()],
-                        type_name: variable.var_type.clone(),
-                    };
+                    let typed_value = value.to_typed(&variable.var_type);
                     Some(Variable {
                         name: variable.name.clone(),
                         type_field: Some(variable.var_type.clone()),
-                        value: format!("{}", value2),
+                        value: format!("{}", typed_value),
                         ..Default::default()
                     })
                 })
@@ -73,7 +70,7 @@ impl DebugContext {
                 variables.push(Variable {
                     name: "c4 (storage)".to_string(),
                     type_field: Some("storage".to_string()),
-                    value: out_actions.to_boc_hex(false).unwrap(),
+                    value: out_actions.to_boc_hex(false)?,
                     ..Default::default()
                 });
             }

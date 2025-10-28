@@ -111,10 +111,7 @@ fn fail_to_find_transaction_by_params_impl(
 
     *ctx.assert_failure = Some(AssertFailure::TransactionNotFound(
         TransactionGenericAssertFailure {
-            txs: TupleItem::TypedTuple {
-                items: vec![TupleItem::Tuple(txs.0)],
-                type_name: "TransactionList".to_string(),
-            },
+            txs: txs.to_typed(&"TransactionList".to_string()),
             parsed_txs,
             params,
             message: Some(message),
@@ -146,14 +143,19 @@ fn fail_to_not_find_transaction_by_params_impl(
 
     *ctx.assert_failure = Some(AssertFailure::TransactionIsFound(
         TransactionGenericAssertFailure {
-            txs: TupleItem::TypedTuple {
-                items: vec![TupleItem::Tuple(txs.0)],
-                type_name: "TransactionList".to_string(),
-            },
+            txs: txs.to_typed(&"TransactionList".to_string()),
             parsed_txs,
             params,
-            message: Some(message),
-            location: Some(location),
+            message: if message.is_empty() {
+                None
+            } else {
+                Some(message)
+            },
+            location: if location.is_empty() {
+                None
+            } else {
+                Some(location)
+            },
         },
     ));
 }

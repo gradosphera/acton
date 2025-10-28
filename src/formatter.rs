@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::tlb::TLB;
-use tvmffi::format::format_item_with_type;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
@@ -15,21 +14,21 @@ use tycho_types::models::{
 
 /// Context for formatting TupleItems with rich information
 #[derive(Debug, Clone)]
-pub struct FormatterContext {
-    pub contract_abi: ContractAbi,
-    pub accounts: HashMap<String, ShardAccount>,
-    pub build_cache: BuildCache,
-    pub known_addresses: KnownAddresses,
+pub struct FormatterContext<'a> {
+    pub contract_abi: &'a ContractAbi,
+    pub accounts: &'a HashMap<String, ShardAccount>,
+    pub build_cache: &'a BuildCache,
+    pub known_addresses: &'a KnownAddresses,
 }
 
-impl FormatterContext {
+impl<'a> FormatterContext<'a> {
     /// Create formatter context from the main Context
-    pub fn from_context(ctx: &crate::context::Context) -> Self {
+    pub fn from_context(ctx: &'a crate::context::Context) -> Self {
         Self {
-            contract_abi: ctx.abi.clone(),
-            accounts: ctx.blockchain.get_accounts().clone(),
-            build_cache: ctx.build_cache.clone(),
-            known_addresses: ctx.known_addresses.clone(),
+            contract_abi: &ctx.abi,
+            accounts: &ctx.blockchain.get_accounts(),
+            build_cache: &ctx.build_cache,
+            known_addresses: &ctx.known_addresses,
         }
     }
 
@@ -63,7 +62,15 @@ impl FormatterContext {
             return address.to_string();
         }
 
-        "Slice(...)".to_string()
+        slice.to_boc_hex(false).unwrap()
+    }
+
+    fn format_address_slice(&self, slice: &ArcCell) -> String {
+        let mut parser = slice.parser();
+        if let Ok(address) = parser.load_address() {
+            return address.to_string();
+        }
+        slice.to_boc_hex(false).unwrap()
     }
 
     /// Format transaction list
@@ -285,6 +292,10 @@ impl FormatterContext {
     pub fn format(&self, item: &TupleItem) -> String {
         let formatted = match item {
             TupleItem::TypedTuple { type_name, items } => {
+                if items.is_empty() {
+                    return type_name.clone();
+                }
+
                 if type_name == "TransactionList" && items.len() == 1 {
                     return self.format_transaction_list(items);
                 }
@@ -306,7 +317,7 @@ impl FormatterContext {
                             f,
                             "    {}: {}",
                             field.name,
-                            format_item_with_type(item, &field.type_info.human_readable)
+                            self.format(&item.to_typed(&field.type_info.human_readable))
                         )
                         .ok();
                         if i < struct_desc.fields.len() - 1 {
@@ -316,6 +327,27 @@ impl FormatterContext {
                     }
                     write!(f, "}}").ok();
                     return f;
+                }
+
+                if let TupleItem::Slice(cell) = &items[0]
+                    && type_name == "address"
+                {
+                    return self.format_address_slice(cell);
+                }
+                if let TupleItem::Int(value) = &items[0]
+                    && type_name == "bool"
+                {
+                    return if value == &num_bigint::BigInt::from(0) {
+                        "false".to_string()
+                    } else if value == &num_bigint::BigInt::from(18446744073709551615u64) {
+                        "true".to_string()
+                    } else {
+                        format!("{}", value)
+                    };
+                }
+
+                if let TupleItem::Slice(_) = &items[0] {
+                    return self.format(&items[0]);
                 }
 
                 format!("{}", item)
@@ -334,12 +366,7 @@ impl FormatterContext {
             _ => format!("{}", item),
         };
 
-        // Remove quotes from strings if it's the root element
-        if formatted.starts_with("\"") && formatted.ends_with("\"") {
-            formatted[1..formatted.len() - 1].to_string()
-        } else {
-            formatted
-        }
+        formatted
     }
 
     pub fn format_tuple_value(&self, tuple: &Tuple, type_name: &String, indent: usize) -> String {
@@ -351,10 +378,7 @@ impl FormatterContext {
                 .join("\n")
         }
 
-        let item = TupleItem::TypedTuple {
-            type_name: type_name.to_string(),
-            items: (**tuple).clone(),
-        };
+        let item = tuple.to_typed(&type_name.to_string());
         let formatted = self.format(&item);
 
         if !formatted.contains("\n") {
@@ -441,7 +465,7 @@ impl FormatterContext {
     }
 }
 
-impl FormatterContext {
+impl FormatterContext<'_> {
     pub fn format_tuple_diff(
         &self,
         left: &Tuple,
@@ -449,45 +473,14 @@ impl FormatterContext {
         left_type: &str,
         right_type: &str,
     ) -> String {
-        let left_type_str = left_type.to_string();
-        let left_item = TupleItem::TypedTuple {
-            type_name: left_type_str,
-            items: (**left).clone(),
-        };
-        let right_type_str = right_type.to_string();
-        let right_item = TupleItem::TypedTuple {
-            type_name: right_type_str,
-            items: (**right).clone(),
-        };
-
-        self.format_tuple_item_diff(&left_item, &right_item)
-    }
-
-    fn format_tuple_item_diff(&self, left: &TupleItem, right: &TupleItem) -> String {
-        let (
-            TupleItem::TypedTuple {
-                type_name: left_type,
-                items: left_items,
-            },
-            TupleItem::TypedTuple {
-                type_name: right_type,
-                items: right_items,
-                ..
-            },
-        ) = (left, right)
-        else {
-            return format!(
-                "{} != {}",
-                self.format(left).red(),
-                self.format(right).green()
-            );
-        };
+        let left_items = &left.0;
+        let right_items = &right.0;
 
         if left_type != right_type {
             return format!("{} != {}", left, right);
         }
 
-        let abi = self.contract_abi.find_type(left_type);
+        let abi = self.contract_abi.find_type(&left_type.to_string());
         if let Some(struct_desc) = abi {
             if left_items.len() == struct_desc.fields.len() {
                 let mut result = format!("{} {{\n", left_type);

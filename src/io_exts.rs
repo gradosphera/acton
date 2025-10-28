@@ -18,7 +18,7 @@ fn println_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: 
     };
 
     let formatter = crate::formatter::FormatterContext::from_context(ctx);
-    let formatted = formatter.format(&typed_tuple);
+    let formatted = strip_quotes(formatter.format(&typed_tuple));
 
     if ctx.capture_test_output {
         ctx.stdout_buffer.push_str(&formatted);
@@ -30,15 +30,8 @@ fn println_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: 
 
 extension!(eprintln in (Context) with (s: String) using eprintln_impl);
 fn eprintln_impl(ctx: &mut Context, _stack: &mut Tuple, s: String) {
-    let formatted = format!("{}", s);
-    let formatted = if formatted.starts_with("\"") {
-        &formatted[1..formatted.len() - 1]
-    } else {
-        formatted.as_str()
-    };
-
     if ctx.capture_test_output {
-        ctx.stderr_buffer.push_str(&formatted);
+        ctx.stderr_buffer.push_str(&s);
         ctx.stderr_buffer.push_str("\n");
     } else {
         eprintln!("{}", s);
@@ -136,35 +129,31 @@ fn format_args(ctx: &mut Context, mut fmt: String, args: Vec<(String, TupleItem)
         if let Some(pos) = fmt.find("{:x}")
             && let TupleItem::Tuple(args) = &arg
             && args.len() == 1
+            && let TupleItem::Int(typed_arg) = &args[0]
         {
-            if let TupleItem::Int(typed_arg) = &args[0] {
-                let formatted_arg = format!("{:x}", typed_arg);
-                fmt.replace_range(pos..pos + 4, formatted_arg.as_str());
-                continue;
-            }
+            let formatted_arg = format!("{:x}", typed_arg);
+            fmt.replace_range(pos..pos + 4, formatted_arg.as_str());
+            continue;
         }
 
-        let typed_arg = if let TupleItem::Tuple(tuple) = &arg {
-            TupleItem::TypedTuple {
-                items: tuple.clone(),
-                type_name,
-            }
-        } else {
-            arg
-        };
+        let typed_arg = arg.to_typed(&type_name);
 
-        let formatted_arg = format!("{}", typed_arg);
-        let formatted_arg = if formatted_arg.starts_with("\"") {
-            &formatted_arg[1..formatted_arg.len() - 1]
-        } else {
-            formatted_arg.as_str()
-        };
+        let formatter = crate::formatter::FormatterContext::from_context(ctx);
+        let formatted = strip_quotes(formatter.format(&typed_arg));
 
         if let Some(pos) = fmt.find("{}") {
-            fmt.replace_range(pos..pos + 2, formatted_arg);
+            fmt.replace_range(pos..pos + 2, formatted.as_str());
         }
     }
     fmt
+}
+
+fn strip_quotes(formatted: String) -> String {
+    if formatted.starts_with("\"") && formatted.ends_with("\"") {
+        formatted[1..formatted.len() - 1].to_string()
+    } else {
+        formatted
+    }
 }
 
 extension!(prompt in (Context) with (placeholder: String, message: String) using prompt_impl);
