@@ -119,7 +119,7 @@ fn send_message_from_impl(
         }
     };
 
-    let successful_emulations = if ctx.debug {
+    let successful_emulations = if false && ctx.debug {
         let RelaxedMsgInfo::Int(int_message) = message_obj.info else {
             panic!("Emulator only supports internal messages for now");
         };
