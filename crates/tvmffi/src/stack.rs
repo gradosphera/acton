@@ -1,10 +1,8 @@
-use abi::{ContractAbi, TypeAbi};
+use abi::TypeAbi;
 use num_bigint::BigInt;
-use std::collections::HashMap;
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 use tonlib_core::cell::ArcCell;
-use tycho_types::models::{IntAddr, ShardAccount};
 
 /// Tuple represent a stack of items for the TVM.
 #[derive(Default, Debug, Clone)]
@@ -95,28 +93,6 @@ impl PartialEq for Tuple {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CompilationResult {
-    pub name: String,
-    pub code_boc64: String,
-    pub code_hash: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct BuildCache {
-    pub built: HashMap<String, CompilationResult>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct KnownAddress {
-    pub name: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct KnownAddresses {
-    pub addresses: HashMap<IntAddr, KnownAddress>,
-}
-
 /// Represents a stack value in TVM
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TupleItem {
@@ -131,10 +107,6 @@ pub enum TupleItem {
         type_name: String,
         items: Vec<TupleItem>,
         abi: Option<TypeAbi>,
-        contract_abi: ContractAbi,
-        accounts: HashMap<String, ShardAccount>,
-        build_cache: BuildCache,
-        known_addresses: KnownAddresses,
     },
 }
 

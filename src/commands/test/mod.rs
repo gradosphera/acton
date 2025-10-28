@@ -4,6 +4,7 @@ use crate::context::{
 };
 use crate::dap::DapMessage;
 use crate::debug_context::DebugContext;
+use crate::formatter::FormatterContext;
 use crate::{asserts_exts, exts, io_exts};
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
@@ -29,7 +30,6 @@ use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
 use tree_sitter::Node;
-use tvmffi::format::format_item_with_type;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::Load;
@@ -450,6 +450,13 @@ fn run_all_tests(
             );
             failed += 1;
 
+            let formatter = FormatterContext {
+                contract_abi: abi.clone(),
+                accounts: accounts.clone(),
+                build_cache: build_cache.clone(),
+                known_addresses: known_addresses.clone(),
+            };
+
             match &result.get_result {
                 GetMethodResult::Success(result) => {
                     let exit_code = result.vm_exit_code as i64;
@@ -487,9 +494,7 @@ fn run_all_tests(
                                 &assert_failure.left_type,
                                 &assert_failure.right_type,
                                 &abi,
-                                &accounts,
-                                &build_cache,
-                                &known_addresses,
+                                &formatter,
                             );
 
                             for line in diff_output.lines() {
@@ -507,10 +512,8 @@ fn run_all_tests(
                             let value = format_tuple_value(
                                 &assert_failure.left,
                                 &assert_failure.left_type,
-                                &accounts,
                                 &abi,
-                                &build_cache,
-                                &known_addresses,
+                                &formatter,
                                 8,
                             );
                             println!("         {}", value.dimmed());
@@ -522,20 +525,16 @@ fn run_all_tests(
                             let left = format_tuple_value(
                                 &assert_failure.left,
                                 &assert_failure.left_type,
-                                &accounts,
                                 &abi,
-                                &build_cache,
-                                &known_addresses,
+                                &formatter,
                                 8,
                             );
 
                             let right = format_tuple_value(
                                 &assert_failure.left,
                                 &assert_failure.left_type,
-                                &accounts,
                                 &abi,
-                                &build_cache,
-                                &known_addresses,
+                                &formatter,
                                 8,
                             );
 
@@ -646,7 +645,7 @@ fn run_all_tests(
                     &test.name,
                     duration_ms,
                     assert_failure.as_ref(),
-                    &abi,
+                    &formatter,
                 );
             }
         }
@@ -1184,32 +1183,22 @@ fn format_tuple_diff(
     left_type: &str,
     right_type: &str,
     abi: &ContractAbi,
-    accounts: &HashMap<String, ShardAccount>,
-    build_cache: &BuildCache,
-    known_addresses: &KnownAddresses,
+    formatter: &FormatterContext,
 ) -> String {
     let left_type_str = left_type.to_string();
     let left_item = TupleItem::TypedTuple {
         abi: abi.find_type(&left_type_str),
-        contract_abi: abi.clone(),
         type_name: left_type_str,
         items: (**left).clone(),
-        accounts: accounts.clone(),
-        build_cache: build_cache.to_tuple_build_cache(),
-        known_addresses: known_addresses.to_tuple_known_addresses(),
     };
     let right_type_str = right_type.to_string();
     let right_item = TupleItem::TypedTuple {
         abi: abi.find_type(&right_type_str),
-        contract_abi: abi.clone(),
         type_name: right_type_str,
         items: (**right).clone(),
-        accounts: accounts.clone(),
-        build_cache: build_cache.to_tuple_build_cache(),
-        known_addresses: known_addresses.to_tuple_known_addresses(),
     };
 
-    format_tuple_item_diff(&left_item, &right_item)
+    format_tuple_item_diff(&left_item, &right_item, formatter)
 }
 
 fn highlight_actual_expected(message: &str) -> String {
@@ -1231,22 +1220,16 @@ fn add_indent_to_lines(text: &str, indent: usize) -> String {
 fn format_tuple_value(
     tuple: &Tuple,
     type_name: &String,
-    accounts: &HashMap<String, ShardAccount>,
     abi: &ContractAbi,
-    build_cache: &BuildCache,
-    known_addresses: &KnownAddresses,
+    formatter: &FormatterContext,
     indent: usize,
 ) -> String {
     let item = TupleItem::TypedTuple {
         abi: abi.find_type(type_name),
-        contract_abi: abi.clone(),
         type_name: type_name.to_string(),
         items: (**tuple).clone(),
-        accounts: accounts.clone(),
-        build_cache: build_cache.to_tuple_build_cache(),
-        known_addresses: known_addresses.to_tuple_known_addresses(),
     };
-    let raw_str = format!("{}", item);
+    let raw_str = formatter.format(&item);
 
     if !raw_str.contains("\n") {
         return raw_str;
@@ -1258,16 +1241,16 @@ fn format_tuple_value(
     result
 }
 
-fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
+fn format_tuple_item_diff(
+    left: &TupleItem,
+    right: &TupleItem,
+    formatter: &FormatterContext,
+) -> String {
     let (
         TupleItem::TypedTuple {
             type_name: left_type,
             items: left_items,
             abi,
-            contract_abi,
-            accounts,
-            build_cache,
-            ..
         },
         TupleItem::TypedTuple {
             type_name: right_type,
@@ -1276,7 +1259,11 @@ fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
         },
     ) = (left, right)
     else {
-        return format!("{} != {}", left.red(), right.green());
+        return format!(
+            "{} != {}",
+            formatter.format(left).red(),
+            formatter.format(right).green()
+        );
     };
 
     if left_type != right_type {
@@ -1296,12 +1283,12 @@ fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
                     result.push_str(&format!(
                         "    {}: {}\n",
                         field.name.yellow(),
-                        format_item_with_type(left_item, &field.type_info.human_readable).red()
+                        formatter.format(left_item).red()
                     ));
                     result.push_str(&format!(
                         "    {:<width$}  {}\n",
                         "",
-                        format_item_with_type(right_item, &field.type_info.human_readable).green(),
+                        formatter.format(right_item).green(),
                         width = field.name.len()
                     ));
                 } else {
@@ -1309,7 +1296,7 @@ fn format_tuple_item_diff(left: &TupleItem, right: &TupleItem) -> String {
                         "    {}{} {}\n",
                         field.name.dimmed(),
                         ":".dimmed(),
-                        format_item_with_type(left_item, &field.type_info.human_readable).dimmed()
+                        formatter.format(left_item).dimmed()
                     ));
                 }
             }

@@ -1,7 +1,6 @@
 use crate::commands::test;
-use crate::context::{AssertFailure, BuildCache, KnownAddresses};
-use abi::ContractAbi;
-use std::collections::HashMap;
+use crate::context::AssertFailure;
+use crate::formatter::FormatterContext;
 
 pub struct TeamcityReporter;
 
@@ -78,7 +77,7 @@ impl TeamcityReporter {
         test_name: &str,
         duration_ms: u128,
         assert_failure: Option<&AssertFailure>,
-        abi: &&ContractAbi,
+        formatter: &FormatterContext,
     ) {
         let name = Self::escape_name(test_name);
 
@@ -89,19 +88,15 @@ impl TeamcityReporter {
                     let expected = test::format_tuple_value(
                         &bin_failure.right,
                         &bin_failure.right_type,
-                        &HashMap::new(), // empty accounts for simple formatting
-                        &abi,
-                        &BuildCache::new(),
-                        &KnownAddresses::new(),
+                        &formatter.contract_abi,
+                        formatter,
                         0,
                     );
                     let actual = test::format_tuple_value(
                         &bin_failure.left,
                         &bin_failure.left_type,
-                        &HashMap::new(),
-                        &abi,
-                        &BuildCache::new(),
-                        &KnownAddresses::new(),
+                        &formatter.contract_abi,
+                        formatter,
                         0,
                     );
 

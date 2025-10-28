@@ -54,13 +54,9 @@ impl DebugContext {
                         .get(stack.len() - 1 - index)
                         .unwrap_or(&TupleItem::Null);
                     let value2 = TupleItem::TypedTuple {
-                        contract_abi: Default::default(),
                         abi: None,
                         items: vec![value.clone()],
                         type_name: variable.var_type.clone(),
-                        accounts: HashMap::new(),
-                        build_cache: Default::default(),
-                        known_addresses: Default::default(),
                     };
                     Some(Variable {
                         name: variable.name.clone(),

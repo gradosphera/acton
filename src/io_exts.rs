@@ -10,26 +10,19 @@ extension!(println in (Context) with (s: TupleItem, type_name: String) using pri
 fn println_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: String) {
     let typed_tuple = if let TupleItem::Tuple(tuple) = &s {
         TupleItem::TypedTuple {
-            contract_abi: ctx.abi.clone(),
             abi: ctx.abi.find_type(&type_name),
             items: tuple.clone(),
-            type_name,
-            accounts: ctx.blockchain.get_accounts().clone(),
-            build_cache: ctx.build_cache.to_tuple_build_cache(),
-            known_addresses: ctx.known_addresses.to_tuple_known_addresses(),
+            type_name: type_name.clone(),
         }
     } else {
         s
     };
-    let formatted = format!("{}", typed_tuple);
-    let formatted = if formatted.starts_with("\"") {
-        &formatted[1..formatted.len() - 1]
-    } else {
-        formatted.as_str()
-    };
+
+    let formatter = crate::formatter::FormatterContext::from_context(ctx);
+    let formatted = formatter.format(&typed_tuple);
 
     if ctx.capture_test_output {
-        ctx.stdout_buffer.push_str(formatted);
+        ctx.stdout_buffer.push_str(&formatted);
         ctx.stdout_buffer.push_str("\n");
     } else {
         println!("{}", formatted);
@@ -154,13 +147,9 @@ fn format_args(ctx: &mut Context, mut fmt: String, args: Vec<(String, TupleItem)
 
         let typed_arg = if let TupleItem::Tuple(tuple) = &arg {
             TupleItem::TypedTuple {
-                contract_abi: ctx.abi.clone(),
                 abi: ctx.abi.find_type(&type_name),
                 items: tuple.clone(),
                 type_name,
-                accounts: ctx.blockchain.get_accounts().clone(),
-                build_cache: ctx.build_cache.to_tuple_build_cache(),
-                known_addresses: ctx.known_addresses.to_tuple_known_addresses(),
             }
         } else {
             arg

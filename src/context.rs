@@ -84,6 +84,7 @@ impl AssertFailure {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct BuildCache {
     pub built: HashMap<String, CompilationResult>,
 }
@@ -122,28 +123,9 @@ impl BuildCache {
             .find(|(_, result)| result.code_hash == code_hash)
             .map(|(name, result)| ((*name).clone(), (*result).clone()))
     }
-
-    pub fn to_tuple_build_cache(&self) -> tvmffi::stack::BuildCache {
-        tvmffi::stack::BuildCache {
-            built: self
-                .built
-                .iter()
-                .map(|(k, v)| {
-                    (
-                        k.clone(),
-                        tvmffi::stack::CompilationResult {
-                            name: v.name.clone(),
-                            code_boc64: v.code_boc64.clone(),
-                            code_hash: v.code_hash.clone(),
-                        },
-                    )
-                })
-                .collect(),
-        }
-    }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CompilationResult {
     pub name: String,
     pub code_boc64: String,
@@ -151,10 +133,12 @@ pub struct CompilationResult {
     pub source_map: SourceMap,
 }
 
+#[derive(Debug, Clone)]
 pub struct KnownAddress {
     pub name: String,
 }
 
+#[derive(Debug, Clone)]
 pub struct KnownAddresses {
     pub addresses: HashMap<IntAddr, KnownAddress>,
 }
@@ -163,23 +147,6 @@ impl KnownAddresses {
     pub fn new() -> Self {
         Self {
             addresses: HashMap::new(),
-        }
-    }
-
-    pub fn to_tuple_known_addresses(&self) -> tvmffi::stack::KnownAddresses {
-        tvmffi::stack::KnownAddresses {
-            addresses: self
-                .addresses
-                .iter()
-                .map(|(k, v)| {
-                    (
-                        k.clone(),
-                        tvmffi::stack::KnownAddress {
-                            name: v.name.clone(),
-                        },
-                    )
-                })
-                .collect(),
         }
     }
 }
