@@ -10,7 +10,7 @@ impl Tuple {
     }
 
     /// Deserialize a tuple from a cell.
-    pub fn deserialize(src: &ArcCell) -> Result<Vec<TupleItem>, anyhow::Error> {
+    pub fn deserialize(src: &ArcCell) -> Result<Tuple, anyhow::Error> {
         parse_tuple(src)
     }
 }
@@ -86,7 +86,7 @@ pub fn serialize_tuple_item(
                 builder.store_reference(t)?;
             }
         }
-        TupleItem::TypedTuple { items, .. } => {
+        TupleItem::TypedTuple { inner: items, .. } => {
             serialize_tuple_item(builder, &TupleItem::Tuple(items.clone()))?
         }
     }
@@ -182,7 +182,7 @@ pub fn parse_tuple_item(parser: &mut CellParser) -> Result<TupleItem, anyhow::Er
                 items.push(parse_tuple_item(&mut item_parser)?);
             }
 
-            Ok(TupleItem::Tuple(items))
+            Ok(TupleItem::Tuple(Tuple(items)))
         }
         6 => {
             // TODO: support continuation
@@ -215,7 +215,7 @@ fn serialize_tuple_tail(src: &[TupleItem], builder: &mut CellBuilder) -> Result<
 }
 
 /// Parse a tuple (stack) from a cell
-pub fn parse_tuple(src: &ArcCell) -> Result<Vec<TupleItem>, anyhow::Error> {
+pub fn parse_tuple(src: &ArcCell) -> Result<Tuple, anyhow::Error> {
     let mut cur_cell = ArcCell::clone(src);
     let mut cs = cur_cell.parser();
 
@@ -231,7 +231,7 @@ pub fn parse_tuple(src: &ArcCell) -> Result<Vec<TupleItem>, anyhow::Error> {
         cs = cur_cell.parser();
     }
 
-    Ok(result)
+    Ok(Tuple(result))
 }
 
 #[cfg(test)]
@@ -253,7 +253,7 @@ mod tests {
         let serialized = serialize_tuple(&Tuple(items.clone())).unwrap();
         let deserialized = parse_tuple(&serialized).unwrap();
 
-        assert_eq!(items, deserialized);
+        assert_eq!(Tuple(items), deserialized);
     }
 
     #[test]
@@ -310,13 +310,15 @@ mod tests {
 
     #[test]
     fn test_empty_tuple_roundtrip() {
-        roundtrip_test(TupleItem::Tuple(vec![]));
+        roundtrip_test(TupleItem::Tuple(Tuple::empty()));
     }
 
     #[test]
     fn test_single_item_tuple_roundtrip() {
-        roundtrip_test(TupleItem::Tuple(vec![TupleItem::Null]));
-        roundtrip_test(TupleItem::Tuple(vec![TupleItem::Int(BigInt::from(123u64))]));
+        roundtrip_test(TupleItem::Tuple(Tuple(vec![TupleItem::Null])));
+        roundtrip_test(TupleItem::Tuple(Tuple(vec![TupleItem::Int(BigInt::from(
+            123u64,
+        ))])));
     }
 
     #[test]
@@ -326,14 +328,17 @@ mod tests {
             TupleItem::Int(BigInt::from(42u64)),
             TupleItem::Nan,
         ];
-        roundtrip_test(TupleItem::Tuple(items));
+        roundtrip_test(TupleItem::Tuple(Tuple(items)));
     }
 
     #[test]
     fn test_nested_tuple_roundtrip() {
-        let inner_tuple =
-            TupleItem::Tuple(vec![TupleItem::Null, TupleItem::Int(BigInt::from(1u64))]);
-        let outer_tuple = TupleItem::Tuple(vec![inner_tuple, TupleItem::Int(BigInt::from(2u64))]);
+        let inner_tuple = TupleItem::Tuple(Tuple(vec![
+            TupleItem::Null,
+            TupleItem::Int(BigInt::from(1u64)),
+        ]));
+        let outer_tuple =
+            TupleItem::Tuple(Tuple(vec![inner_tuple, TupleItem::Int(BigInt::from(2u64))]));
         roundtrip_test(outer_tuple);
     }
 

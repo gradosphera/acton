@@ -173,7 +173,7 @@ impl DebugContext {
                     }
                 })
                 .collect(),
-            TupleItem::TypedTuple { items, .. } => items
+            TupleItem::TypedTuple { inner: items, .. } => items
                 .iter()
                 .enumerate()
                 .map(|(index, item)| {

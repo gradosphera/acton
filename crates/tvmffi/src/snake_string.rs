@@ -123,14 +123,14 @@ mod tests {
         tuple.push_string(small_string);
         let serialized = serialize_tuple(&tuple).unwrap();
         let deserialized = parse_tuple(&serialized).unwrap();
-        assert_eq!(tuple.0, deserialized);
+        assert_eq!(tuple, deserialized);
 
         let large_string = "A".repeat(200); // 200 bytes = 1600 bits > 1023
         let mut tuple = Tuple::empty();
         tuple.push_string(&large_string);
         let serialized = serialize_tuple(&tuple).unwrap();
         let deserialized = parse_tuple(&serialized).unwrap();
-        assert_eq!(tuple.0, deserialized);
+        assert_eq!(tuple, deserialized);
     }
 
     #[test]
@@ -140,7 +140,7 @@ mod tests {
         tuple.push_string(empty_string);
         let serialized = serialize_tuple(&tuple).unwrap();
         let deserialized = parse_tuple(&serialized).unwrap();
-        assert_eq!(tuple.0, deserialized);
+        assert_eq!(tuple, deserialized);
 
         if let Some(TupleItem::Slice(slice)) = tuple.0.first() {
             let parsed = Tuple::parse_snake_string(slice);
@@ -169,7 +169,7 @@ mod tests {
             tuple.push_string(&*test_string);
             let serialized = serialize_tuple(&tuple).unwrap();
             let deserialized = parse_tuple(&serialized).unwrap();
-            assert_eq!(tuple.0, deserialized);
+            assert_eq!(tuple, deserialized);
 
             if let Some(TupleItem::Slice(slice)) = tuple.0.first() {
                 let parsed = Tuple::parse_snake_string(slice);
@@ -196,7 +196,7 @@ mod tests {
             tuple.push_string(&*test_string);
             let serialized = serialize_tuple(&tuple).unwrap();
             let deserialized = parse_tuple(&serialized).unwrap();
-            assert_eq!(tuple.0, deserialized);
+            assert_eq!(tuple, deserialized);
 
             // Test that we can parse it back
             if let Some(TupleItem::Slice(slice)) = tuple.0.first() {

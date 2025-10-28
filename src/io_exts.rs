@@ -10,7 +10,7 @@ extension!(println in (Context) with (s: TupleItem, type_name: String) using pri
 fn println_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: String) {
     let typed_tuple = if let TupleItem::Tuple(tuple) = &s {
         TupleItem::TypedTuple {
-            items: tuple.clone(),
+            inner: tuple.clone(),
             type_name: type_name.clone(),
         }
     } else {

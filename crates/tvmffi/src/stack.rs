@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use tonlib_core::cell::ArcCell;
 
 /// Tuple represent a stack of items for the TVM.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Eq)]
 pub struct Tuple(pub Vec<TupleItem>);
 
 impl Tuple {
@@ -16,7 +16,7 @@ impl Tuple {
     pub fn to_typed(&self, type_name: &String) -> TupleItem {
         TupleItem::TypedTuple {
             type_name: type_name.clone(),
-            items: self.0.clone(),
+            inner: self.clone(),
         }
     }
 
@@ -91,11 +91,8 @@ pub enum TupleItem {
     Cell(ArcCell),
     Slice(ArcCell),
     Builder(ArcCell),
-    Tuple(Vec<TupleItem>),
-    TypedTuple {
-        type_name: String,
-        items: Vec<TupleItem>,
-    },
+    Tuple(Tuple),
+    TypedTuple { type_name: String, inner: Tuple },
 }
 
 impl TupleItem {
@@ -104,13 +101,13 @@ impl TupleItem {
         if let TupleItem::Tuple(item) = self {
             return TupleItem::TypedTuple {
                 type_name: type_name.clone(),
-                items: item.clone(),
+                inner: item.clone(),
             };
         }
 
         TupleItem::TypedTuple {
             type_name: type_name.clone(),
-            items: vec![self.clone()],
+            inner: Tuple(vec![self.clone()]),
         }
     }
 

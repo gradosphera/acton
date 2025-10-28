@@ -82,7 +82,7 @@ impl FromStack for bool {
 impl FromStack for Tuple {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
         match item {
-            TupleItem::Tuple(v) => Ok(Tuple(v)),
+            TupleItem::Tuple(v) => Ok(v),
             _ => Err(ArgError::TypeMismatch { expected: "Tuple" }),
         }
     }
@@ -197,13 +197,13 @@ mod tests {
         inner_tuple.push_string("test");
         inner_tuple.push(TupleItem::Int(BigInt::from(42)));
 
-        let tuple_item = TupleItem::Tuple(inner_tuple.0.clone());
+        let tuple_item = TupleItem::Tuple(Tuple(inner_tuple.0.clone()));
         let result = Tuple::from_item(tuple_item);
         assert_eq!(result, Ok(inner_tuple));
 
         // Test empty tuple
         let empty_tuple = Tuple::empty();
-        let tuple_item = TupleItem::Tuple(empty_tuple.0.clone());
+        let tuple_item = TupleItem::Tuple(Tuple(empty_tuple.0.clone()));
         let result = Tuple::from_item(tuple_item);
         assert_eq!(result, Ok(empty_tuple));
     }
@@ -260,7 +260,7 @@ mod tests {
         ));
 
         // Test bool from non-int
-        let result = bool::from_item(TupleItem::Tuple(vec![]));
+        let result = bool::from_item(TupleItem::Tuple(Tuple::empty()));
         assert!(matches!(
             result,
             Err(ArgError::TypeMismatch {
@@ -298,7 +298,7 @@ mod tests {
         for i in 0..1000 {
             large_tuple.push(TupleItem::Int(BigInt::from(i)));
         }
-        let tuple_item = TupleItem::Tuple(large_tuple.0.clone());
+        let tuple_item = TupleItem::Tuple(Tuple(large_tuple.0.clone()));
         let result = Tuple::from_item(tuple_item);
         assert_eq!(result.map(|t| t.0.len()), Ok(1000));
     }

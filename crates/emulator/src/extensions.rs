@@ -92,12 +92,10 @@ pub unsafe fn with_tuple(ptr: *const c_char, f: impl FnOnce(&mut Tuple)) -> *con
         Err(_) => return CString::new("").unwrap().into_raw().cast_const(),
     };
 
-    let mut tuple = Tuple(
-        ArcCell::from_boc_b64(boc)
-            .ok()
-            .and_then(|c| tvmffi::serde::parse_tuple(&c).ok())
-            .unwrap_or_else(|| Vec::new()),
-    );
+    let mut tuple = ArcCell::from_boc_b64(boc)
+        .ok()
+        .and_then(|c| tvmffi::serde::parse_tuple(&c).ok())
+        .unwrap_or_else(|| Tuple::empty());
 
     f(&mut tuple);
 

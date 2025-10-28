@@ -83,7 +83,7 @@ fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message
         .filter_map(|emulation| ArcCell::from_boc_b64(&*emulation.raw_transaction).ok())
         .map(|tx| TupleItem::Cell(tx))
         .collect::<Vec<_>>();
-    stack.push(TupleItem::Tuple(transaction_cells));
+    stack.push(TupleItem::Tuple(Tuple(transaction_cells)));
 }
 
 extension!(send_message_from in (Context) with (mode: BigInt, from: ArcCell, message: ArcCell) using send_message_from_impl);
@@ -196,7 +196,7 @@ fn send_message_from_impl(
         let result = match result {
             EmulationResult::Success(result) => result,
             EmulationResult::Error(err) => {
-                stack.push(TupleItem::Tuple(vec![]));
+                stack.push(TupleItem::Tuple(Tuple::empty()));
                 return;
             }
         };
@@ -236,7 +236,7 @@ fn send_message_from_impl(
         .filter_map(|emulation| ArcCell::from_boc_b64(&*emulation.raw_transaction).ok())
         .map(|tx| TupleItem::Cell(tx))
         .collect::<Vec<_>>();
-    stack.push(TupleItem::Tuple(transaction_cells));
+    stack.push(TupleItem::Tuple(Tuple(transaction_cells)));
 }
 
 extension!(find_transaction_by_params in (Context) with (params: Tuple, txs: Tuple) using find_transaction_by_params_impl);
@@ -423,7 +423,7 @@ fn run_get_method_impl(
 
             stack.push(TupleItem::TypedTuple {
                 type_name: return_type_name,
-                items: tuple,
+                inner: tuple,
             })
         }
         GetMethodResult::Error(result) => {

@@ -301,7 +301,10 @@ impl FormatterContext {
     /// Format any TupleItem with rich formatting
     pub fn format(&self, item: &TupleItem) -> String {
         let formatted = match item {
-            TupleItem::TypedTuple { type_name, items } => {
+            TupleItem::TypedTuple {
+                type_name,
+                inner: items,
+            } => {
                 if items.is_empty() {
                     return type_name.clone();
                 }
@@ -360,7 +363,7 @@ impl FormatterContext {
                     return self.format(&items[0]);
                 }
 
-                format!("{}", self.format_tuple(&Tuple((*items).clone())))
+                format!("{}", self.format_tuple(items))
             }
             TupleItem::Slice(cell) => {
                 if cell.bit_len() == 0 && cell.references().len() == 0 {
@@ -437,7 +440,7 @@ impl FormatterContext {
             return "<any>".cyan().to_string();
         };
 
-        let TupleItem::TypedTuple { items, .. } = txs else {
+        let TupleItem::TypedTuple { inner: items, .. } = txs else {
             return Self::format_addr_hash(&addr);
         };
 
