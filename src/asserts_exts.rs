@@ -113,7 +113,6 @@ fn fail_to_find_transaction_by_params_impl(
         TransactionGenericAssertFailure {
             txs: TupleItem::TypedTuple {
                 items: vec![TupleItem::Tuple(txs.0)],
-                abi: ctx.abi.find_type(&"TransactionList".to_string()),
                 type_name: "TransactionList".to_string(),
             },
             parsed_txs,
@@ -149,7 +148,6 @@ fn fail_to_not_find_transaction_by_params_impl(
         TransactionGenericAssertFailure {
             txs: TupleItem::TypedTuple {
                 items: vec![TupleItem::Tuple(txs.0)],
-                abi: ctx.abi.find_type(&"TransactionList".to_string()),
                 type_name: "TransactionList".to_string(),
             },
             parsed_txs,

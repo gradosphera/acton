@@ -422,7 +422,6 @@ fn run_get_method_impl(
             let tuple = Tuple::deserialize(&cell).unwrap();
 
             stack.push(TupleItem::TypedTuple {
-                abi: ctx.abi.find_type(&return_type_name),
                 type_name: return_type_name,
                 items: tuple,
             })

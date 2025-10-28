@@ -44,7 +44,7 @@ fun Expectation<T>.create(value: T, value_type: slice, location: slice = "") {
 /// ```
 @noinline
 fun Expectation<T>.toEqual<U>(self, expected: U) {
-    Assert.equal(self.value, expected, "expect(actual).toEqual(expected)", self.location);
+    Assert.equal(self.value, expected, "expect(<actual>).toEqual(<expected>)", self.location);
 }
 
 /// Asserts that actual value is not equal to expected value.
@@ -54,7 +54,7 @@ fun Expectation<T>.toEqual<U>(self, expected: U) {
 /// expect(10).toNotEqual(20);
 /// ```
 fun Expectation<T>.toNotEqual<U>(self, expected: U) {
-    Assert.notEqual(self.value, expected, "expect(actual).toNotEqual(expected)", self.location);
+    Assert.notEqual(self.value, expected, "expect(<actual>).toNotEqual(<expected>)", self.location);
 }
 
 /// Asserts that actual value is less than expected value.
@@ -68,7 +68,7 @@ fun Expectation<int>.toBeLess<U>(self, expected: U) {
         self.value,
         expected,
         "<",
-        "expect(actual).toBeLess(expected)",
+        "expect(<actual>).toBeLess(<expected>)",
         self.location
     );
 }
@@ -84,7 +84,7 @@ fun Expectation<int>.toBeGreater<U>(self, expected: U) {
         self.value,
         expected,
         ">",
-        "expect(actual).toBeGreater(expected)",
+        "expect(<actual>).toBeGreater(<expected>)",
         self.location
     );
 }
@@ -101,7 +101,7 @@ fun Expectation<int>.toBeLessOrEqual<U>(self, expected: U) {
         self.value,
         expected,
         "<=",
-        "expect(actual).toBeLessOrEqual(expected)",
+        "expect(<actual>).toBeLessOrEqual(<expected>)",
         self.location
     );
 }
@@ -118,7 +118,7 @@ fun Expectation<int>.toBeGreaterOrEqual<U>(self, expected: U) {
         self.value,
         expected,
         ">=",
-        "expect(actual).toBeGreaterOrEqual(expected)",
+        "expect(<actual>).toBeGreaterOrEqual(<expected>)",
         self.location
     );
 }
@@ -179,7 +179,7 @@ fun Expectation<int>.toBeApproxEqRel(self, expected: int, max_delta: int) {
 /// expect(null).toBeNull();
 /// ```
 fun Expectation<T?>.toBeNull(self) {
-    Assert.equal(self.value, null, "expect(actual).toBeNull()", self.location);
+    Assert.equal(self.value, null, "expect(<actual>).toBeNull()", self.location);
 }
 
 /// Asserts that actual value is not null.
@@ -189,7 +189,7 @@ fun Expectation<T?>.toBeNull(self) {
 /// expect(null).toBeNotNull();
 /// ```
 fun Expectation<T?>.toBeNotNull(self) {
-    Assert.notEqual(self.value, null, "expect(actual).toBeNotNull()", self.location);
+    Assert.notEqual(self.value, null, "expect(<actual>).toBeNotNull()", self.location);
 }
 
 /// Asserts that actual value is not empty.
@@ -199,7 +199,7 @@ fun Expectation<T?>.toBeNotNull(self) {
 /// expect("").toBeNonEmpty();
 /// ```
 fun Expectation<slice>.toBeNonEmpty(self) {
-    Assert.notEqual(self.value, "", "expect(actual).toBeNonEmpty()", self.location);
+    Assert.notEqual(self.value, "", "expect(<actual>).toBeNonEmpty()", self.location);
 }
 
 /// Asserts that actual value is empty.
@@ -209,7 +209,7 @@ fun Expectation<slice>.toBeNonEmpty(self) {
 /// expect("").toBeEmpty();
 /// ```
 fun Expectation<slice>.toBeEmpty(self) {
-    Assert.equal(self.value, "", "expect(actual).toBeEmpty()", self.location);
+    Assert.equal(self.value, "", "expect(<actual>).toBeEmpty()", self.location);
 }
 
 /// Asserts that actual value is NaN.
@@ -219,7 +219,7 @@ fun Expectation<slice>.toBeEmpty(self) {
 /// expect(nan()).toBeNaN();
 /// ```
 fun Expectation<int>.toBeNaN(self) {
-    Assert.equal(self.value, ffi.nan(), "expect(actual).toBeNaN()", self.location);
+    Assert.equal(self.value, ffi.nan(), "expect(<actual>).toBeNaN()", self.location);
 }
 
 /// Asserts that actual value is not NaN.
@@ -229,7 +229,7 @@ fun Expectation<int>.toBeNaN(self) {
 /// expect(nan()).toBeNonNaN();
 /// ```
 fun Expectation<int>.toBeNonNaN(self) {
-    Assert.notEqual(self.value, ffi.nan(), "expect(actual).toBeNonNaN()", self.location);
+    Assert.notEqual(self.value, ffi.nan(), "expect(<actual>).toBeNonNaN()", self.location);
 }
 
 /// Asserts that actual value is true.
@@ -239,7 +239,7 @@ fun Expectation<int>.toBeNonNaN(self) {
 /// expect(true).toBeTrue();
 /// ```
 fun Expectation<bool>.toBeTrue(self) {
-    Assert.equal(self.value, true, "expect(actual).toBeTrue()", self.location);
+    Assert.equal(self.value, true, "expect(<actual>).toBeTrue()", self.location);
 }
 
 /// Asserts that actual value is false.
@@ -249,7 +249,7 @@ fun Expectation<bool>.toBeTrue(self) {
 /// expect(false).toBeFalse();
 /// ```
 fun Expectation<bool>.toBeFalse(self) {
-    Assert.equal(self.value, false, "expect(actual).toBeFalse()", self.location);
+    Assert.equal(self.value, false, "expect(<actual>).toBeFalse()", self.location);
 }
 
 /// Asserts that actual address is internal.
@@ -260,7 +260,7 @@ fun Expectation<bool>.toBeFalse(self) {
 /// ```
 fun Expectation<address>.toBeInternalAddress(self) {
     if (!self.value.isInternal()) {
-        Assert.fail("expect(actual).toBeInternalAddress(): Expected address to be internal", self.location);
+        Assert.fail("expect(<actual>).toBeInternalAddress(): Expected address to be internal", self.location);
     }
 }
 
@@ -272,7 +272,7 @@ fun Expectation<address>.toBeInternalAddress(self) {
 /// ```
 fun Expectation<address>.toBeNoneAddress(self) {
     if (!self.value.isNone()) {
-        Assert.fail("expect(actual).toBeNoneAddress(): Expected address to be none", self.location);
+        Assert.fail("expect(<actual>).toBeNoneAddress(): Expected address to be none", self.location);
     }
 }
 
@@ -284,7 +284,7 @@ fun Expectation<address>.toBeNoneAddress(self) {
 /// ```
 fun Expectation<address>.toBeExternalAddress(self) {
     if (!self.value.isExternal()) {
-        Assert.fail("expect(actual).toBeExternalAddress(): Expected address to be external", self.location);
+        Assert.fail("expect(<actual>).toBeExternalAddress(): Expected address to be external", self.location);
     }
 }
 
@@ -342,7 +342,7 @@ fun Expectation<tuple>.toNotContain<U>(self, expected: U) {
 /// expect(tuple).toHaveLength(3);
 /// ```
 fun Expectation<tuple>.toHaveLength(self, length: int) {
-    Assert.equal(self.value.size(), length, "expect(actual).toHaveLength(expected)", self.location);
+    Assert.equal(self.value.size(), length, "expect(<actual>).toHaveLength(<expected>)", self.location);
 }
 
 /// Asserts that actual value represeneted as map contains the expected key.
@@ -357,7 +357,7 @@ fun Expectation<tuple>.toHaveLength(self, length: int) {
 fun Expectation<map<K, V>>.toContainKey(self, key: K) {
     val result = self.value.get(key);
     if (!result.isFound) {
-        Assert.fail(format1("expect(actual).toContainKey(expected): Key '{}' not found in the map", key), self.location)
+        Assert.fail(format1("expect(<actual>).toContainKey(<expected>): Key '{}' not found in the map", key), self.location)
     }
 }
 
@@ -373,7 +373,7 @@ fun Expectation<map<K, V>>.toContainKey(self, key: K) {
 fun Expectation<map<K, V>>.toNotContainKey(self, key: K) {
     val result = self.value.get(key);
     if (result.isFound) {
-        Assert.fail(format1("expect(actual).toNotContainKey(expected): Key '{}' is found in the map", key), self.location)
+        Assert.fail(format1("expect(<actual>).toNotContainKey(<expected>): Key '{}' is found in the map", key), self.location)
     }
 }
 
@@ -396,7 +396,7 @@ fun Expectation<map<K, V>>.toContainValue(self, value: V) {
         r = self.value.iterateNext(r)
     }
 
-    Assert.fail(format1("expect(actual).toContainValue(expected): Value '{}' not found in the map", value), self.location)
+    Assert.fail(format1("expect(<actual>).toContainValue(<expected>): Value '{}' not found in the map", value), self.location)
 }
 
 /// Asserts that actual value represeneted as map does NOT contain the expected value.
@@ -413,7 +413,7 @@ fun Expectation<map<K, V>>.toNotContainValue(self, value: V) {
     while (r.isFound) {
         val map_value = r.loadValue();
         if (map_value == value) {
-            Assert.fail(format1("expect(actual).toNotContainValue(expected): Value '{}' is found in the map", value), self.location)
+            Assert.fail(format1("expect(<actual>).toNotContainValue(<expected>): Value '{}' is found in the map", value), self.location)
         }
         r = self.value.iterateNext(r)
     }
@@ -428,7 +428,7 @@ fun Expectation<map<K, V>>.toNotContainValue(self, value: V) {
 /// ```
 fun Expectation<map<K, V>>.toBeEmpty(self) {
     if (!self.value.isEmpty()) {
-        Assert.fail("expect(actual).toBeEmpty(): Map is not empty", self.location)
+        Assert.fail("expect(<actual>).toBeEmpty(): Map is not empty", self.location)
     }
 }
 
@@ -443,7 +443,7 @@ fun Expectation<map<K, V>>.toBeEmpty(self) {
 /// ```
 fun Expectation<map<K, V>>.toBeNonEmpty(self) {
     if (self.value.isEmpty()) {
-        Assert.fail("expect(actual).toBeNonEmpty(): Map is empty", self.location)
+        Assert.fail("expect(<actual>).toBeNonEmpty(): Map is empty", self.location)
     }
 }
 
@@ -464,7 +464,7 @@ fun Expectation<map<K, V>>.toHaveLength(self, length: int) {
         r = self.value.iterateNext(r)
     }
 
-    Assert.equal(length, map_length, "expect(actual).toHaveLength(expected)", self.location)
+    Assert.equal(length, map_length, "expect(<actual>).toHaveLength(<expected>)", self.location)
 }
 
 /// Creates a new expectation for the given value.

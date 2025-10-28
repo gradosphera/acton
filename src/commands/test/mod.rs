@@ -530,7 +530,7 @@ fn run_all_tests(
 
                             let diff_output = format!(
                                 "{}\nCannot find transaction from {} to {}\nwith:\n{}",
-                                assert_failure.txs,
+                                formatter.format(&assert_failure.txs),
                                 formatter.format_address(
                                     &assert_failure.txs,
                                     &assert_failure.params.from
@@ -552,7 +552,7 @@ fn run_all_tests(
 
                             let diff_output = format!(
                                 "{}\nUnexpected transaction from {} to {}\n{}{}",
-                                assert_failure.txs,
+                                formatter.format(&assert_failure.txs),
                                 formatter.format_address(
                                     &assert_failure.txs,
                                     &assert_failure.params.from
@@ -714,8 +714,6 @@ fn execute_test(
     req_receiver: Receiver<Request>,
     dap_sender: Sender<DapMessage>,
 ) -> TestResult {
-    // thread::sleep(Duration::from_secs(2));
-
     let params = GetMethodParams {
         code: code_cell.to_boc_b64(false).unwrap().to_string(),
         data: data_cell.to_boc_b64(false).unwrap().to_string(),
@@ -865,7 +863,8 @@ fn find_all_test(file: String, content: &String) -> Vec<TestDescriptor> {
                     .strip_suffix("`")
                     .unwrap_or(&raw_name);
 
-                if name.starts_with("test") {
+                // get fun `test-foo`() or get fun test_foo()
+                if name.starts_with("test-") || name.starts_with("test_") {
                     let id = (CRC16.checksum(name.as_bytes()) & 0xff_ff) as i32 | 0x1_00_00;
                     let test_annotations = annotations::find_test_annotations(content, child);
 
@@ -960,8 +959,8 @@ fn find_expect_calls(
 
 fn highlight_actual_expected(message: &str) -> String {
     let result = message
-        .replace("actual", &"actual".red().to_string())
-        .replace("expected", &"expected".green().to_string());
+        .replace("<actual>", &"actual".red().to_string())
+        .replace("<expected>", &"expected".green().to_string());
 
     result.to_string()
 }

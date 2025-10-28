@@ -38,7 +38,7 @@ fun Expectation<TransactionList>.toHaveSuccessfulDeploy(self, params: SearchPara
     if (tx == null) {
         ffi.failToFindTransactionByParams(
             self.location,
-            "expect(actual).toHaveSuccessfulDeploy(expected)",
+            "expect(<actual>).toHaveSuccessfulDeploy(<expected>)",
             self.value,
             params.__toTuple()
         );
@@ -67,7 +67,7 @@ fun Expectation<TransactionList>.toHaveSuccessfulTx(self, params: SearchParams) 
     if (tx == null) {
         ffi.failToFindTransactionByParams(
             self.location,
-            "expect(actual).toHaveSuccessfulTx(expected)",
+            "expect(<actual>).toHaveSuccessfulTx(<expected>)",
             self.value,
             params.__toTuple()
         );
@@ -89,7 +89,7 @@ fun Expectation<TransactionList>.toNotHaveTx(self, params: SearchParams) {
     if (tx != null) {
         ffi.failToNotFindTransactionByParams(
             self.location,
-            "expect(actual).toNotHaveTx(expected)",
+            "expect(<actual>).toNotHaveTx(<expected>)",
             self.value,
             params.__toTuple()
         );
@@ -113,7 +113,7 @@ fun Expectation<TransactionList>.toHaveBouncedTx(self, params: SearchParams) {
     if (tx == null) {
         ffi.failToFindTransactionByParams(
             self.location,
-            "expect(actual).toHaveBouncedTx(expected)",
+            "expect(<actual>).toHaveBouncedTx(<expected>)",
             self.value,
             params.__toTuple()
         );
@@ -134,17 +134,17 @@ fun Expectation<TransactionList>.toHaveBouncedTx(self, params: SearchParams) {
 /// ```
 fun Expectation<TransactionList>.toHaveFailedTx(self, params: SearchParams) {
     if (params.exit_code == null) {
-        Assert.fail("expect(actual).toHaveFailedTx(params) must have not null exit_code parameter in params");
+        Assert.fail("expect(<actual>).toHaveFailedTx(params) must have not null exit_code parameter in params");
     }
     if (params.exit_code == 0) {
-        Assert.fail("expect(actual).toHaveFailedTx(params) must have non zero exit_code parameter in params");
+        Assert.fail("expect(<actual>).toHaveFailedTx(params) must have non zero exit_code parameter in params");
     }
 
     val tx = ffi.findTransactionByParams(self.value, params.__toTuple());
     if (tx == null) {
         ffi.failToFindTransactionByParams(
             self.location,
-            "expect(actual).toHaveFailedTx(expected)",
+            "expect(<actual>).toHaveFailedTx(<expected>)",
             self.value,
             params.__toTuple()
         );

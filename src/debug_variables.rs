@@ -54,7 +54,6 @@ impl DebugContext {
                         .get(stack.len() - 1 - index)
                         .unwrap_or(&TupleItem::Null);
                     let value2 = TupleItem::TypedTuple {
-                        abi: None,
                         items: vec![value.clone()],
                         type_name: variable.var_type.clone(),
                     };

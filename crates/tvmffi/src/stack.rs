@@ -106,7 +106,6 @@ pub enum TupleItem {
     TypedTuple {
         type_name: String,
         items: Vec<TupleItem>,
-        abi: Option<TypeAbi>,
     },
 }
 

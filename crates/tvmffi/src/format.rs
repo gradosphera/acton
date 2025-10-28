@@ -71,11 +71,7 @@ impl fmt::Display for TupleItem {
                     write!(f, ")")
                 }
             }
-            TupleItem::TypedTuple {
-                type_name,
-                items,
-                abi,
-            } => {
+            TupleItem::TypedTuple { type_name, items } => {
                 if type_name == "address" && items.len() == 1 {
                     let addr = &items[0];
                     return write!(f, "{}", format_item_with_type(addr, type_name));
@@ -84,28 +80,6 @@ impl fmt::Display for TupleItem {
                 if items.len() == 1 {
                     write!(f, "{}", items[0])
                 } else {
-                    if let Some(struct_desc) = abi {
-                        if items.len() == struct_desc.fields.len() {
-                            write!(f, "{} {{\n", type_name)?;
-                            for (i, (field, item)) in
-                                struct_desc.fields.iter().zip(items.iter()).enumerate()
-                            {
-                                write!(
-                                    f,
-                                    "    {}: {}",
-                                    field.name,
-                                    format_item_with_type(item, &field.type_info.human_readable)
-                                )?;
-                                if i < struct_desc.fields.len() - 1 {
-                                    write!(f, ",")?;
-                                }
-                                write!(f, "\n")?;
-                            }
-                            write!(f, "}}")?;
-                            return Ok(());
-                        }
-                    }
-
                     write!(
                         f,
                         "{}({})",

@@ -10,7 +10,6 @@ extension!(println in (Context) with (s: TupleItem, type_name: String) using pri
 fn println_impl(ctx: &mut Context, _stack: &mut Tuple, s: TupleItem, type_name: String) {
     let typed_tuple = if let TupleItem::Tuple(tuple) = &s {
         TupleItem::TypedTuple {
-            abi: ctx.abi.find_type(&type_name),
             items: tuple.clone(),
             type_name: type_name.clone(),
         }
@@ -147,7 +146,6 @@ fn format_args(ctx: &mut Context, mut fmt: String, args: Vec<(String, TupleItem)
 
         let typed_arg = if let TupleItem::Tuple(tuple) = &arg {
             TupleItem::TypedTuple {
-                abi: ctx.abi.find_type(&type_name),
                 items: tuple.clone(),
                 type_name,
             }
