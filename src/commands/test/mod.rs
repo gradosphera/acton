@@ -344,18 +344,18 @@ fn run_all_tests(
 
     for test in filtered_tests.iter() {
         if teamcity {
-            TeamcityReporter::on_test_started(&test.name, file_path);
+            TeamcityReporter::on_test_started(&beatify_test_name(&test.name), file_path);
         }
 
         if test.annotations.contains(&"todo".to_string()) {
             if teamcity {
-                TeamcityReporter::on_test_ignored(&test.name, 0);
+                TeamcityReporter::on_test_ignored(&beatify_test_name(&test.name), 0);
             }
             let description = test.todo_description.as_deref().unwrap_or("TODO");
             println!(
                 "  {} {} {}{}{}",
                 "□".purple().bold(),
-                test.name,
+                beatify_test_name(&test.name),
                 "[".dimmed(),
                 description.dimmed(),
                 "]".dimmed()
@@ -366,9 +366,14 @@ fn run_all_tests(
 
         if test.annotations.contains(&"skip".to_string()) {
             if teamcity {
-                TeamcityReporter::on_test_ignored(&test.name, 0);
+                TeamcityReporter::on_test_ignored(&beatify_test_name(&test.name), 0);
             }
-            println!("  {} {} {}", "○".dimmed(), test.name, "skipped".dimmed());
+            println!(
+                "  {} {} {}",
+                "○".dimmed(),
+                beatify_test_name(&test.name),
+                "skipped".dimmed()
+            );
             skipped += 1;
             continue;
         }
@@ -433,7 +438,7 @@ fn run_all_tests(
             println!(
                 "  {} {} {}{}",
                 "✓".green(),
-                test.name,
+                beatify_test_name(&test.name),
                 time_value.green(),
                 time_unit.green().dimmed()
             );
@@ -442,7 +447,7 @@ fn run_all_tests(
             println!(
                 "  {} {} {}{}",
                 "✗".red(),
-                test.name,
+                beatify_test_name(&test.name),
                 time_value.red(),
                 time_unit.red().dimmed()
             );
@@ -696,7 +701,7 @@ fn run_all_tests(
 
             if teamcity {
                 TeamcityReporter::on_test_failed(
-                    &test.name,
+                    &beatify_test_name(&test.name),
                     duration_ms,
                     assert_failure.as_ref(),
                     &formatter,
@@ -719,7 +724,11 @@ fn run_all_tests(
         }
 
         if teamcity {
-            TeamcityReporter::on_test_finished(&test.name, file_path, duration_ms);
+            TeamcityReporter::on_test_finished(
+                &beatify_test_name(&test.name),
+                file_path,
+                duration_ms,
+            );
         }
     }
 
@@ -733,6 +742,14 @@ fn run_all_tests(
         skipped,
         todo,
     }
+}
+
+fn beatify_test_name(name: &String) -> String {
+    name.replace("-", " ")
+        .replace("_", " ")
+        .to_string()
+        .trim_start_matches("test ")
+        .to_string()
 }
 
 fn normalize_path(file: &String) -> String {
