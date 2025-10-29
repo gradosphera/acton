@@ -19,14 +19,24 @@ struct SendParams {
     value: coins
 }
 
+/// Represents a list of child transactions IDs (LT) for single send result.
 type ChildTxsIds = tuple
 
+/// Represents a list of out messages for single send result.
 type OutMessages = tuple
 
-fun OutMessages.getAsCell(self, index: int): cell {
+/// Returns the out message at the given index as a raw cell.
+/// 
+/// To get parsed message, use [OutMessages.at] method.
+fun OutMessages.atCell(self, index: int): cell {
     return self.get<cell>(index);
 }
 
+/// Returns the out message at the given index as a parsed message of given type.
+/// 
+/// To get raw cell, use [OutMessages.atCell] method.
+/// 
+/// If actual message body has a different type, loading will fail.
 fun OutMessages.at<Msg>(self, index: int): MessageRelaxed<Msg> {
     val cell = self.get<cell>(index) as Cell<MessageRelaxed<Msg>>;
     try {
@@ -59,22 +69,35 @@ fun OutMessages.at<Msg>(self, index: int): MessageRelaxed<Msg> {
     }
 }
 
+/// Represents a single send result obtained from [net.send] method.
 struct SendResult {
+    /// Raw cell with encoded transaction.
     tx: Cell<Transaction>
+    /// List of child transactions IDs.
+    /// This transactions are directly produced by this transaction.
     child_txs: ChildTxsIds
+    /// Parent transaction LT that produced this transaction or null if this transaction is the root one.
     parent_lt: int?
-    out_actions: Cell<OutList> // use SendResult.allOutActions() to load all actions
+    /// Raw cell with encoded out actions.
+    /// Use [SendResult.allOutActions] to load all actions.
+    out_actions: Cell<OutList>
+    /// All out messages produced by this transaction.
     out_messages: OutMessages
 }
 
-fun SendResult.fromTuple(data: tuple): SendResult  asm "5 UNTUPLE"
-
+/// Returns all out actions produced by this transaction as a list.
 fun SendResult.allOutActions(self): OutActionList {
     return vm.parseOutActions(self.out_actions)
 }
 
+/// Represents a list of send results obtained from [net.send] method.
+/// 
+/// This list represent all transactions produced by a [net.send] call.
+/// 
+/// To get a single send result, use [SendResultList.at] method.
 type SendResultList = tuple
 
+/// Returns the send result at the given index.
 fun SendResultList.at(self, index: int): SendResult {
     val tuple = self.get<tuple>(index);
     return SendResult.fromTuple(tuple)
@@ -99,6 +122,8 @@ fun net.sendFromNull(message: OutMessage, mode: int): TransactionList {
 ///     net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
 /// }
 /// ```
+/// 
+/// Returns a list of send results representing all transactions produced by this send call.
 fun net.send(from: address, message: OutMessage, mode: int): SendResultList {
     return ffi.sendMessageFrom(message.messageCell, from.toCell(), mode)!
 }
@@ -280,6 +305,7 @@ fun coins.fromTuple(data: tuple): coins  asm "1 UNTUPLE"
 fun bool.fromTuple(data: tuple): bool  asm "1 UNTUPLE"
 fun slice.fromTuple(data: tuple): slice  asm "1 UNTUPLE"
 fun cell.fromTuple(data: tuple): cell  asm "1 UNTUPLE"
+fun SendResult.fromTuple(data: tuple): SendResult  asm "5 UNTUPLE"
 
 fun __treasuryCode(): cell asm """
     "te6cckEBBAEARQABFP8A9KQT9LzyyAsBAgEgAwIAWvLT/+1E0NP/0RK68qL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmWwAE0jD+omUe" base64>B B>boc PUSHREF
