@@ -1002,6 +1002,7 @@ fn execute_test(
             source_map,
             &req_receiver,
             dap_sender,
+            Some(test.name.clone()),
         );
 
         ctx.dbg_ctx = &mut dbg_ctx;

@@ -62,6 +62,12 @@ pub struct DebugStep {
     pub thread_id: i64,
 }
 
+#[derive(Debug, Clone)]
+pub struct CallFrame {
+    pub function_name: String,
+    pub loc: DebugLocation,
+}
+
 pub struct Stepper {
     pub executors: Vec<AnyExecutor>,
     pub source_maps: Vec<SourceMap>,
@@ -70,10 +76,19 @@ pub struct Stepper {
     buffer: VecDeque<DebugStep>,
     terminated: bool,
     thread_id: i64,
+    callstacks: Vec<Vec<CallFrame>>,
+    callstack: Vec<CallFrame>,
+    root_function_name: String,
+    root_frame_added: bool,
 }
 
 impl Stepper {
-    pub fn new(executor: AnyExecutor, source_map: SourceMap, thread_id: i64) -> Self {
+    pub fn new(
+        executor: AnyExecutor,
+        source_map: SourceMap,
+        thread_id: i64,
+        root_function_name: String,
+    ) -> Self {
         Stepper {
             executors: vec![executor],
             source_maps: vec![source_map],
@@ -82,6 +97,10 @@ impl Stepper {
             buffer: VecDeque::new(),
             terminated: false,
             thread_id,
+            callstacks: Vec::new(),
+            callstack: Vec::new(),
+            root_function_name,
+            root_frame_added: false,
         }
     }
 
@@ -89,14 +108,18 @@ impl Stepper {
         self.executors.push(executor);
         self.source_maps.push(source_map);
         self.buffers.push(self.buffer.clone());
+        self.callstacks.push(self.callstack.clone());
         self.current_executor_id += 1;
         self.buffer = VecDeque::new();
+        self.callstack = Vec::new();
+        self.root_frame_added = false;
     }
 
     pub fn pop_executor(&mut self) {
         self.executors.pop();
         self.source_maps.pop();
         self.buffer = self.buffers.pop().unwrap_or(VecDeque::new());
+        self.callstack = self.callstacks.pop().unwrap_or(Vec::new());
         if self.current_executor_id > 0 {
             self.current_executor_id -= 1;
         }
@@ -104,6 +127,14 @@ impl Stepper {
     }
 
     pub fn next(&mut self) -> Option<DebugStep> {
+        let step = self.next_impl();
+        if let Some(step) = &step {
+            self.update_callstack_for_step(step);
+        }
+        step
+    }
+
+    pub fn next_impl(&mut self) -> Option<DebugStep> {
         if let Some(step) = self.buffer.pop_front() {
             return Some(step);
         }
@@ -192,6 +223,48 @@ impl Stepper {
     pub fn get_current_step(&self) -> Option<&DebugStep> {
         self.buffer.front()
     }
+
+    pub fn get_callstack(&self) -> &Vec<CallFrame> {
+        &self.callstack
+    }
+
+    fn update_callstack_for_step(&mut self, step: &DebugStep) {
+        match &step.kind {
+            StepKind::SyntheticEnterFunction(func_name) => {
+                if let Some(loc) = &step.loc {
+                    self.callstack.push(CallFrame {
+                        function_name: func_name.clone(),
+                        loc: loc.clone(),
+                    });
+                }
+            }
+            StepKind::SyntheticAfterFunctionCall(func_name) => {
+                if !self.callstack.is_empty() {
+                    let last = self.callstack.last().unwrap();
+                    if last.function_name == *func_name {
+                        self.callstack.pop();
+                    }
+                }
+            }
+            StepKind::SyntheticEnterInlined(func_name) => {
+                if let Some(loc) = &step.loc {
+                    self.callstack.push(CallFrame {
+                        function_name: func_name.clone(),
+                        loc: loc.clone(),
+                    });
+                }
+            }
+            StepKind::SyntheticLeaveInlined(func_name) => {
+                if !self.callstack.is_empty() {
+                    let last = self.callstack.last().unwrap();
+                    if last.function_name == *func_name {
+                        self.callstack.pop();
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 pub struct DebugContext {
@@ -209,6 +282,7 @@ pub struct DebugContext {
     pub breakpoints: HashMap<PathBuf, Vec<BreakpointInfo>>,
     pub next_breakpoint_id: i64,
     pub formatter_context: FormatterContext,
+    pub test_name: Option<String>,
 }
 
 impl DebugContext {
@@ -231,6 +305,7 @@ impl DebugContext {
             breakpoints: HashMap::new(),
             next_breakpoint_id: 1,
             formatter_context: FormatterContext::empty(),
+            test_name: None,
         }
     }
 
@@ -239,8 +314,10 @@ impl DebugContext {
         source_map: &SourceMap,
         req_receiver: &Receiver<Request>,
         dap_sender: Sender<DapMessage>,
+        test_name: Option<String>,
     ) -> DebugContext {
-        let stepper = Stepper::new(executor, source_map.clone(), 1);
+        let root_name = test_name.clone().unwrap_or_else(|| "test".to_string());
+        let stepper = Stepper::new(executor, source_map.clone(), 1, root_name);
         DebugContext {
             stepper: Some(stepper),
             last_step: None,
@@ -256,6 +333,7 @@ impl DebugContext {
             breakpoints: HashMap::new(),
             next_breakpoint_id: 1,
             formatter_context: FormatterContext::empty(),
+            test_name,
         }
     }
 
@@ -278,11 +356,14 @@ impl DebugContext {
         stop_on_entry: bool,
     ) -> anyhow::Result<()> {
         let sm = source_map.unwrap_or(SourceMap::default());
+        let root_name = self.get_root_function_name(id);
 
         if let Some(stepper) = &mut self.stepper {
             stepper.push_executor(executor, sm);
+            stepper.thread_id = id;
+            stepper.root_function_name = root_name;
         } else {
-            self.stepper = Some(Stepper::new(executor, sm, id));
+            self.stepper = Some(Stepper::new(executor, sm, id, root_name));
         }
 
         self.send_event(Event::Thread(ThreadEventBody {
@@ -328,6 +409,7 @@ impl DebugContext {
     pub fn finish_thread(&mut self, id: i64) -> anyhow::Result<()> {
         if let Some(stepper) = &mut self.stepper {
             stepper.pop_executor();
+            stepper.thread_id = 1
         }
 
         self.last_step = None;
@@ -368,7 +450,7 @@ impl DebugContext {
                         },
                         Thread {
                             id: 2,
-                            name: "get method".to_string(),
+                            name: "send/get thread".to_string(),
                         },
                     ],
                 }));
@@ -407,43 +489,11 @@ impl DebugContext {
                 let rsp = req.success(ResponseBody::Variables(VariablesResponse { variables }));
                 self.send_response(rsp)?;
             }
-            Command::StackTrace(_args) => {
-                let stack_frame = if let Some(step) = &self.last_step {
-                    if let Some(loc) = &step.loc {
-                        let line_offset = if let EntryContextDescription::Basic { ast_kind } =
-                            &loc.context.description
-                            && ast_kind == "ast_function_declaration"
-                        {
-                            1
-                        } else {
-                            0
-                        };
-                        StackFrame {
-                            name: "script.tolk".to_string(),
-                            line: loc.loc.line + 1 + line_offset,
-                            column: loc.loc.column + 2,
-                            source: Some(Source {
-                                name: Some("script.tolk".to_string()),
-                                path: Some(
-                                    loc.loc
-                                        .file
-                                        .to_string()
-                                        .replace("_script.tolk", "")
-                                        .replace("_test.tolk_test.tolk", "_test.tolk"),
-                                ),
-                                ..Default::default()
-                            }),
-                            ..Default::default()
-                        }
-                    } else {
-                        StackFrame::default()
-                    }
-                } else {
-                    StackFrame::default()
-                };
+            Command::StackTrace(args) => {
+                let stack_frames = self.build_stack_frames(args.thread_id);
 
                 let rsp = req.success(ResponseBody::StackTrace(StackTraceResponse {
-                    stack_frames: vec![stack_frame],
+                    stack_frames,
                     total_frames: None,
                 }));
                 self.send_response(rsp)?;
@@ -603,6 +653,109 @@ impl DebugContext {
         }
 
         Ok(false)
+    }
+
+    fn normalize_path(file: &String) -> String {
+        file.to_string()
+            .replace("_script.tolk", "")
+            .replace("_test.tolk_test.tolk", "_test.tolk")
+    }
+
+    fn get_root_function_name(&self, thread_id: i64) -> String {
+        if thread_id == 1 {
+            self.test_name.clone().unwrap_or_else(|| "test".to_string())
+        } else {
+            "onInternalMessage".to_string()
+        }
+    }
+
+    fn create_stack_frame(&self, loc: &DebugLocation, function_name: String) -> StackFrame {
+        let line_offset = if let EntryContextDescription::Basic { ast_kind } =
+            &loc.context.description
+            && ast_kind == "ast_function_declaration"
+        {
+            1
+        } else {
+            0
+        };
+
+        let file_path = Self::normalize_path(&loc.loc.file.to_string());
+        let file_name = std::path::Path::new(&file_path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown.tolk")
+            .to_string();
+
+        StackFrame {
+            name: function_name,
+            line: loc.loc.line + 1 + line_offset,
+            column: loc.loc.column + 2,
+            source: Some(Source {
+                name: Some(file_name),
+                path: Some(file_path),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn build_stack_frames(&self, thread_id: i64) -> Vec<StackFrame> {
+        let Some(stepper) = &self.stepper else {
+            return Vec::new();
+        };
+
+        let callstack = if thread_id == 1 {
+            stepper
+                .callstacks
+                .first()
+                .unwrap_or(&stepper.get_callstack())
+        } else if stepper.thread_id > 1 {
+            stepper.get_callstack()
+        } else {
+            &Vec::new()
+        };
+
+        let step = stepper.get_current_step();
+
+        let Some(step) = step else {
+            return Vec::new();
+        };
+        let Some(loc) = &step.loc else {
+            return Vec::new();
+        };
+
+        let top_frame_name = if callstack.is_empty() {
+            self.get_root_function_name(thread_id)
+        } else {
+            callstack.last().unwrap().function_name.clone()
+        };
+        let top_frame = self.create_stack_frame(loc, top_frame_name);
+
+        let final_callstack = if thread_id == stepper.thread_id {
+            vec![top_frame]
+        } else {
+            vec![]
+        };
+
+        let remaining_callstack = callstack
+            .iter()
+            .enumerate()
+            .rev()
+            .map(|(idx, frame)| {
+                let function_name = if idx == 0 {
+                    self.get_root_function_name(thread_id)
+                } else {
+                    callstack.iter().nth(idx - 1).unwrap().function_name.clone()
+                };
+
+                self.create_stack_frame(&frame.loc, function_name)
+            })
+            .collect::<Vec<_>>();
+
+        final_callstack
+            .into_iter()
+            .chain(remaining_callstack)
+            .collect()
     }
 
     pub(crate) fn need_to_stop_child_thread_on_start(&self) -> bool {

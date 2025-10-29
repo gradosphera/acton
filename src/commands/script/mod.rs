@@ -126,6 +126,7 @@ fn execute_script(
             source_map,
             &req_receiver,
             dap_sender,
+            Some("main".to_string()),
         );
 
         ctx.dbg_ctx = &mut dbg_ctx;
