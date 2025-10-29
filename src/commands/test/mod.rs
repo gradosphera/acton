@@ -25,12 +25,13 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::{fs, process};
 use teamcity::TeamcityReporter;
-use tolkc::source_map::SourceMap;
+use tolkc::source_map::{SourceLocation, SourceMap};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
 use tree_sitter::Node;
 use tycho_types::models::ShardAccount;
+use vmlogs::parser::VmLine;
 
 mod annotations;
 mod teamcity;
@@ -451,6 +452,8 @@ fn run_all_tests(
                 GetMethodResult::Success(result) => {
                     let exit_code = result.vm_exit_code as i64;
 
+                    let exit_code_info = find_exception_info(&result.vm_log, source_map);
+
                     if gas_limit_exceeded {
                         println!(
                             "    {} Gas limit exceeded: used {}, limit {}",
@@ -590,8 +593,34 @@ fn run_all_tests(
                                 exit_code.to_string().yellow()
                             );
 
+                            if let Some(info) = &exit_code_info {
+                                if let Some(loc) = &info.loc {
+                                    println!(
+                                        "      {} at {}:{}:{}",
+                                        "├─".dimmed(),
+                                        loc.file.replace("_test.tolk_test.tolk", "_test.tolk"),
+                                        loc.line + 1,
+                                        loc.column + 2,
+                                    );
+                                }
+                                if !info.description.is_empty() {
+                                    println!(
+                                        "      {} {}",
+                                        "├─".dimmed(),
+                                        info.description.dimmed()
+                                    );
+                                }
+                            }
+
                             if let Some(info) = exit_codes::get_exit_code_info(exit_code) {
-                                println!("      {} {}", "├─".dimmed(), info.description.dimmed());
+                                if exit_code_info.is_none() {
+                                    // Don't show duplicate info
+                                    println!(
+                                        "      {} {}",
+                                        "├─".dimmed(),
+                                        info.description.dimmed()
+                                    );
+                                }
                                 println!("      {} Phase: {}", "└─".dimmed(), info.phase.dimmed());
                             } else if exit_code == 678 {
                                 println!(
@@ -690,6 +719,82 @@ fn format_search_transaction_parameters(
         ))
     }
     params
+}
+
+struct ExceptionInfo {
+    description: String,
+    loc: Option<SourceLocation>,
+}
+
+fn find_exception_info(vm_logs: &String, source_map: &SourceMap) -> Option<ExceptionInfo> {
+    let res = vmlogs::parser::parse_lines(vm_logs.as_str());
+
+    let exception = res.iter().rfind(|line| match line {
+        Ok(VmLine::VmException { .. }) => true,
+        _ => false,
+    });
+    let Some(found) = exception else {
+        return None;
+    };
+
+    let location = res.iter().rfind(|line| match line {
+        Ok(VmLine::VmLoc { .. }) => true,
+        _ => false,
+    });
+
+    let (hash, offset) = match location {
+        Some(Ok(VmLine::VmLoc { hash, offset })) => (hash.to_string(), offset.parse().unwrap_or(0)),
+        _ => ("".to_string(), 0),
+    };
+
+    let loc = find_source_loc(source_map, &hash, offset);
+
+    let description = match found {
+        Ok(VmLine::VmException { message, .. }) => message.to_string(),
+        _ => unreachable!(),
+    };
+
+    Some(ExceptionInfo { description, loc })
+}
+
+fn find_source_loc(source_map: &SourceMap, hash: &String, offset: i32) -> Option<SourceLocation> {
+    if source_map.high_level.locations.len() != 0 {
+        let Some(marks) = source_map.debug_marks.get(hash) else {
+            return None;
+        };
+
+        let mut debug_pairs = marks
+            .iter()
+            .filter(|(mark_offset, _)| return *mark_offset == offset)
+            .collect::<Vec<_>>();
+
+        if debug_pairs.is_empty() {
+            // We can't always find the exact location, so try to find an approximate location
+            debug_pairs = marks
+                .iter()
+                .rfind(|(mark_offset, _)| return offset > *mark_offset)
+                .iter()
+                .map(|pair| *pair)
+                .collect::<Vec<_>>();
+        }
+
+        let exact_locs = source_map
+            .high_level
+            .locations
+            .iter()
+            .filter(|loc| !loc.loc.file.is_empty() && !loc.loc.file.starts_with("@stdlib/"))
+            .filter(|loc| {
+                debug_pairs
+                    .iter()
+                    .find(|(_, debug_id)| (*debug_id) as i64 == loc.idx)
+                    .is_some()
+            })
+            .collect::<Vec<_>>();
+
+        exact_locs.last().and_then(|l| Some(l.loc.clone()))
+    } else {
+        None
+    }
 }
 
 struct TestResult {

@@ -10,6 +10,7 @@ tolkc = { path = "crates/tolkc" }
 emulator = { path = "crates/emulator" }
 tolk_parser = { path = "crates/tolk_parser" }
 tvmffi = { path = "crates/tvmffi" }
+vmlogs = { path = "crates/vmlogs" }
 
 tonlib-core = "0.26.1"
 num-bigint = "0.4.6"
