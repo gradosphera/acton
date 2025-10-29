@@ -3,74 +3,297 @@ import "../testing/assert"
 import "../tlb/either"
 import "../vm/vm"
 
+/// Represents a node in the out list.
+/// This is an internal type, you shouldn't use it directly.
 struct OutList {
     action: OutAction
 }
 
+/// Represents send message action.
 struct (0x0ec3c86d) OutActionSendMessage {
-    next: Cell<OutList>
-    mode: uint8,
+    prev: Cell<OutList>
+    /// Mode of the send message. See `SEND_MODE_*` constants.
+    mode: uint8
+    /// Message to send.
+    /// 
+    /// To load the actual message, use [OutActionSendMessage.loadMessage] method.
     out_msg: cell
 }
 
+/// Loads the message from the out message cell.
+/// 
+/// Note that you should provide the message type as a generic parameter.
+/// 
+/// If you want to access the body of the message, use [OutActionSendMessage.loadBody] method.
+/// 
+/// Example:
+/// ```
+/// val out_actions = vm.outActions();
+/// val action = out_actions.at(0);
+/// if (action is OutActionSendMessage) {
+///     val message = action.loadMessage<IncreaseCounter>();
+///     val body = message.loadBody();
+///     println(body.increaseBy);
+/// }
+/// ```
 fun OutActionSendMessage.loadMessage<Msg>(self): MessageRelaxed<Msg> {
     return (self.out_msg as Cell<MessageRelaxed<Msg>>).load({
         assertEndAfterReading: false,
     });
 }
 
+/// Loads the body of the message.
+/// 
+/// Note that you should provide the message type as a generic parameter.
+/// 
+/// Example:
+/// ```
+/// val out_actions = vm.outActions();
+/// val action = out_actions.at(0);
+/// if (action is OutActionSendMessage) {
+///     val body = action.loadBody<IncreaseCounter>();
+///     println(body.increaseBy);
+/// }
+/// ```
 fun OutActionSendMessage.loadBody<Msg>(self): Msg {
     return self.loadMessage<Msg>().loadBody()
 }
 
+/// Loads the generic message from the out message cell.
+/// Unlike [OutActionSendMessage.loadMessage], this method does not require type of the message to load.
+/// Instead it loads the message with body as a slice. Use this method if don't know the type of the message.
+/// 
+/// Example:
+/// ```
+/// val out_actions = vm.outActions();
+/// val action = out_actions.at(0);
+/// if (action is OutActionSendMessage) {
+///     val message = action.loadGenericMessage();
+///     val opcode = message.loadOpcode();
+///     println(opcode);
+/// }
+/// ```
 fun OutActionSendMessage.loadGenericMessage(self): MessageRelaxedGeneric {
     return (self.out_msg as Cell<MessageRelaxedGeneric>).load({
         assertEndAfterReading: false,
     });
 }
 
+/// Represents set code action.
 struct (0xad4de08e) OutActionSetCode {
-    next: Cell<OutList>
+    prev: Cell<OutList>
+    /// New code to set.
     new_code: cell
 }
 
+/// Represents reserve currency action.
 struct (0x36e6b809) OutActionReserveCurrency {
-    next: Cell<OutList>
+    prev: Cell<OutList>
+    /// Mode of the reserve currency. See `RESERVE_MODE_*` constants.
     mode: uint8,
+    /// Currency to reserve.
     currency: CurrencyCollection
 }
 
+/// Represents change library action.
 struct (0x26fa1dd4) OutActionChangeLibrary {
-    next: Cell<OutList>
+    prev: Cell<OutList>
+    /// Mode of the change library.
     mode: uint7,
+    /// Library reference, either hash or cell reference.
     libref: LibRef
 }
 
-fun OutActionChangeLibrary.toTuple(self) {
-    var tuple = createEmptyTuple();
-    tuple.push(self.next);
-    tuple.push(self.mode);
-    if (self.libref is LibRefHash) {
-        tuple.push(0);
-        tuple.push(self.libref.lib_hash);
-    } else {
-        tuple.push(1);
-        tuple.push(self.libref.library);
-    }
-    return tuple
-}
-
+/// Represents library reference as a hash.
 struct (0b0) LibRefHash {
+    /// Hash of the library.
     lib_hash: bits256
 }
 
+/// Represents library reference as a cell reference.
 struct (0b1) LibRefRef {
+    /// Cell reference to the library.
     library: cell
 }
 
+/// Represents library reference, either hash or cell reference.
 type LibRef = LibRefHash | LibRefRef
 
-type OutAction = OutActionSendMessage | OutActionSetCode | OutActionReserveCurrency | OutActionChangeLibrary
+/// Represents all possible out actions.
+type OutAction = 
+    | OutActionSendMessage
+    | OutActionSetCode
+    | OutActionReserveCurrency
+    | OutActionChangeLibrary
+
+/// Returns the kind of the out action as a string.
+fun OutAction.kind(self): slice {
+    match (self) {
+        OutActionSendMessage => {
+            return "send-message"
+        }
+        OutActionSetCode => {
+            return "set-code"
+        }
+        OutActionReserveCurrency => {
+            return "reserve-currency"
+        }
+        OutActionChangeLibrary => {
+            return "change-library"
+        }
+    }
+
+    return "unknown-action";
+}
+
+/// Represents a list of out actions.
+/// 
+/// To get the out actions, use [vm.outActions] method.
+type OutActionList = tuple
+
+/// Returns the out action at the given index.
+/// 
+/// NOTE: this list is reversed, so the last action is at index 0.
+/// 
+/// Example:
+/// ```
+/// val out_actions = vm.outActions();
+/// val action = out_actions.at(0);
+/// println(action.kind());
+/// ```
+fun OutActionList.at(self, i: int): OutAction {
+    val raw_action = self.get<tuple>(i);
+    return OutAction.fromTuple(raw_action);
+}
+
+/// Returns the send message action at the given index.
+/// 
+/// If the action is not a send message, returns null.
+/// 
+/// Example:
+/// ```
+/// val out_actions = vm.outActions();
+/// val action = out_actions.getSendMessageAt(0);
+/// if (action != null) {
+///     println(action.mode);
+/// }
+/// ```
+fun OutActionList.getSendMessageAt(self, i: int): OutActionSendMessage? {
+    val action = self.at(i);
+    if (action is OutActionSendMessage) {
+        return action
+    }
+    return null
+}
+
+/// Returns the body of the send message at the given index.
+/// 
+/// Note that you should provide the message type as a generic parameter.
+/// 
+/// If the action is not a send message, returns null.
+/// 
+/// Example:
+/// ```
+/// val out_actions = vm.outActions();
+/// val body = out_actions.getSendMessageBodyAt<IncreaseCounter>(0);
+/// if (body != null) {
+///     println(body.increaseBy);
+/// }
+/// ```
+fun OutActionList.getSendMessageBodyAt<Msg>(self, i: int): Msg? {
+    val action = self.at(i);
+    if (action is OutActionSendMessage) {
+        val msg = (action.out_msg as Cell<MessageRelaxed<Msg>>).load({
+            assertEndAfterReading: false,
+        });
+
+        if (msg.body is EitherLeft<Msg>) {
+            return msg.body.value
+        }
+        if (msg.body is EitherRight<Cell<Msg>>) {
+            return msg.body.value.load({
+                assertEndAfterReading: false
+            })
+        }
+        return null
+    }
+    return null
+}
+
+/// Returns the out actions for the message.
+fun OutMessage.outActions(self, mode: int): OutActionList {
+    // val prev_c5 = vm.getC5();
+    self.send(mode);
+    val list = vm.outActions();
+    // vm.setC5(prev_c5);
+    return list;
+}
+
+/// Returns the out actions from the control register C5 at that moment.
+/// 
+/// Example:
+/// ```
+/// val out_actions = vm.outActions();
+/// println(out_actions.size());
+/// ```
+fun vm.outActions(): OutActionList {
+    return vm.parseOutActions(vm.getC5())
+}
+
+/// Parses the out actions from the raw cell (like C5 register).
+/// 
+/// Example:
+/// ```
+/// val out_actions = vm.parseOutActions(vm.getC5());
+/// println(out_actions.size());
+/// ```
+fun vm.parseOutActions(cell: cell): OutActionList {
+    var result = createEmptyTuple();
+    val root = cell as Cell<OutList>;
+    var next: Cell<OutList>? = root;
+
+    while (next != null) {
+        val loaded = next.load();
+        match (loaded.action) {
+            OutActionSendMessage => {
+                result.push(loaded.action.__toTuple());
+                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
+                    next = null
+                } else {
+                    next = loaded.action.prev;
+                }
+            }
+            OutActionSetCode => {
+                result.push(loaded.action.__toTuple());
+                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
+                    next = null
+                } else {
+                    next = loaded.action.prev;
+                }
+            }
+            OutActionReserveCurrency => {
+                result.push(loaded.action.__toTuple());
+                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
+                    next = null
+                } else {
+                    next = loaded.action.prev;
+                }
+            }
+            OutActionChangeLibrary => {
+                result.push(loaded.action.toTuple());
+                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
+                    next = null
+                } else {
+                    next = loaded.action.prev;
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+// Implementation details
 
 fun OutActionSendMessage.fromTuple(data: tuple): OutActionSendMessage asm "3 UNTUPLE"
 fun OutActionSetCode.fromTuple(data: tuple): OutActionSetCode asm "2 UNTUPLE"
@@ -104,114 +327,16 @@ fun OutAction.fromTuple(data: tuple): OutAction {
     }
 }
 
-fun OutAction.kind(self): slice {
-    match (self) {
-        OutActionSendMessage => {
-            return "send-message"
-        }
-        OutActionSetCode => {
-            return "set-code"
-        }
-        OutActionReserveCurrency => {
-            return "reserve-currency"
-        }
-        OutActionChangeLibrary => {
-            return "change-library"
-        }
+fun OutActionChangeLibrary.toTuple(self) {
+    var tuple = createEmptyTuple();
+    tuple.push(self.prev);
+    tuple.push(self.mode);
+    if (self.libref is LibRefHash) {
+        tuple.push(0);
+        tuple.push(self.libref.lib_hash);
+    } else {
+        tuple.push(1);
+        tuple.push(self.libref.library);
     }
-
-    return "unknown-action";
-}
-
-type OutActionList = tuple
-
-fun OutActionList.at(self, i: int): OutAction {
-    val raw_action = self.get<tuple>(i);
-    return OutAction.fromTuple(raw_action);
-}
-
-fun OutActionList.getSendMessageAt(self, i: int): OutActionSendMessage? {
-    val action = self.at(i);
-    if (action is OutActionSendMessage) {
-        return action
-    }
-    return null
-}
-
-fun OutActionList.getSendMessageBodyAt<Msg>(self, i: int): Msg? {
-    val action = self.at(i);
-    if (action is OutActionSendMessage) {
-        val msg = (action.out_msg as Cell<MessageRelaxed<Msg>>).load({
-            assertEndAfterReading: false,
-        });
-
-        if (msg.body is EitherLeft<Msg>) {
-            return msg.body.value
-        }
-        if (msg.body is EitherRight<Cell<Msg>>) {
-            return msg.body.value.load({
-                assertEndAfterReading: false
-            })
-        }
-        return null
-    }
-    return null
-}
-
-fun OutMessage.outActions(self, mode: int): OutActionList {
-    // val prev_c5 = vm.getC5();
-    self.send(mode);
-    val list = vm.outActions();
-    // vm.setC5(prev_c5);
-    return list;
-}
-
-fun vm.outActions(): OutActionList {
-    return vm.parseOutActions(vm.getC5())
-}
-
-fun vm.parseOutActions(cell: cell): OutActionList {
-    var result = createEmptyTuple();
-    val root = cell as Cell<OutList>;
-    var next: Cell<OutList>? = root;
-
-    while (next != null) {
-        val loaded = next.load();
-        match (loaded.action) {
-            OutActionSendMessage => {
-                result.push(loaded.action.__toTuple());
-                if (loaded.action.next.beginParse().remainingBitsCount() == 0) {
-                    next = null
-                } else {
-                    next = loaded.action.next;
-                }
-            }
-            OutActionSetCode => {
-                result.push(loaded.action.__toTuple());
-                if (loaded.action.next.beginParse().remainingBitsCount() == 0) {
-                    next = null
-                } else {
-                    next = loaded.action.next;
-                }
-            }
-            OutActionReserveCurrency => {
-                result.push(loaded.action.__toTuple());
-                if (loaded.action.next.beginParse().remainingBitsCount() == 0) {
-                    next = null
-                } else {
-                    next = loaded.action.next;
-                }
-            }
-            OutActionChangeLibrary => {
-                result.push(loaded.action.toTuple());
-                if (loaded.action.next.beginParse().remainingBitsCount() == 0) {
-                    next = null
-                } else {
-                    next = loaded.action.next;
-                }
-            }
-        }
-    }
-
-    return result;
+    return tuple
 }
