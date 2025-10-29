@@ -387,7 +387,7 @@ fn run_get_method_impl(
     code: ArcCell,
     address: ArcCell,
 ) {
-    let args = args.unwrap_empty();
+    let args = args.unwrap_empty().unwrap_tuple();
     let blockchain = &mut ctx.blockchain;
     let address_boc = address.to_boc_hex(false).unwrap();
 

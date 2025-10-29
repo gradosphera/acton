@@ -50,6 +50,14 @@ impl Tuple {
         (*self).clone()
     }
 
+    pub fn unwrap_tuple(&self) -> Tuple {
+        if let Some(TupleItem::Tuple(item)) = &self.0.get(0) {
+            return Tuple(item.0.clone());
+        }
+
+        (*self).clone()
+    }
+
     /// Push a boolean value to the tuple.
     ///
     /// In TVM `true` is represented as `-1` and `false` is represented as `0`.

@@ -189,12 +189,28 @@ fun net.treasury(name: slice): Treasury {
 ///
 /// ## With struct return type
 /// 
-/// If get method returns a struct, just specify the type of the struct as a first type argument:
+/// If get method returns a struct, specify the type of the struct as a first type argument:
 /// ```
 /// get fun get_jetton_data(): JettonDataReply { ... }
 /// ```
 /// ```
 /// val data = net.runGetMethod<JettonDataReply>(wallet.address, "get_jetton_data");
+/// ```
+/// And provide glue method:
+/// ```
+/// fun JettonDataReply.fromTuple(t: tuple): JettonDataReply asm "<count fields> UNTUPLE"
+/// ```
+///
+/// ## With tensor return type
+///
+/// If get method returns a tensor, specify tuple as a first type argument:
+/// ```
+/// get fun get_all_data(): (int, slice) { ... }
+/// ```
+/// ```
+/// val data: tuple = net.runGetMethod(wallet.address, "get_all_data");
+/// val first = data.get<int>(0);
+/// val second = data.get<int>(1);
 /// ```
 /// 
 /// If you need to run a get method by its ID, use [Network.runGetMethodById] instead.
@@ -308,12 +324,22 @@ fun net.registerCodeCell(code: cell, name: slice) {
 fun crc16(data: slice): int asm "13 EXTCALL"
 
 fun address.fromTuple(data: tuple): address  asm "1 UNTUPLE"
+fun address?.fromTuple(data: tuple): address  asm "1 UNTUPLE"
 fun int.fromTuple(data: tuple): int  asm "1 UNTUPLE"
+fun int?.fromTuple(data: tuple): int  asm "1 UNTUPLE"
 fun coins.fromTuple(data: tuple): coins  asm "1 UNTUPLE"
+fun coins?.fromTuple(data: tuple): coins  asm "1 UNTUPLE"
 fun bool.fromTuple(data: tuple): bool  asm "1 UNTUPLE"
+fun bool?.fromTuple(data: tuple): bool  asm "1 UNTUPLE"
 fun slice.fromTuple(data: tuple): slice  asm "1 UNTUPLE"
+fun slice?.fromTuple(data: tuple): slice  asm "1 UNTUPLE"
 fun cell.fromTuple(data: tuple): cell  asm "1 UNTUPLE"
+fun cell?.fromTuple(data: tuple): cell  asm "1 UNTUPLE"
 fun SendResult.fromTuple(data: tuple): SendResult  asm "5 UNTUPLE"
+
+fun tuple.fromTuple(data: tuple): tuple {
+    return data;
+}
 
 fun __treasuryCode(): cell asm """
     "te6cckEBBAEARQABFP8A9KQT9LzyyAsBAgEgAwIAWvLT/+1E0NP/0RK68qL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmWwAE0jD+omUe" base64>B B>boc PUSHREF
