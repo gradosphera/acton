@@ -1053,33 +1053,5 @@ fn get_locations(executor: &AnyExecutor, source_map: &SourceMap) -> Option<Vec<D
     let pos = executor.get_code_pos();
     let (hash, offset) = pos.split_once(":").unwrap();
     let offset = offset.parse::<i32>().unwrap();
-
-    let Some(marks) = source_map.debug_marks.get(hash) else {
-        return None;
-    };
-
-    let debug_pairs = marks
-        .iter()
-        .filter(|(mark_offset, _)| return *mark_offset == offset)
-        .collect::<Vec<_>>();
-
-    let locs = source_map
-        .high_level
-        .locations
-        .iter()
-        .filter(|loc| {
-            debug_pairs
-                .iter()
-                .find(|(_, debug_id)| (*debug_id) as i64 == loc.idx)
-                .is_some()
-        })
-        .filter(|loc| !loc.loc.file.is_empty() && !loc.loc.file.starts_with("@stdlib/"))
-        .map(|loc| (*loc).clone())
-        .collect::<Vec<_>>();
-
-    if locs.is_empty() {
-        return None;
-    }
-
-    Some(locs)
+    crate::vmtrace::low_level_loc_to_debug_locations(source_map, hash, offset, false)
 }

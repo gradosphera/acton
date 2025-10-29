@@ -5,7 +5,7 @@ use crate::context::{
 use crate::dap::DapMessage;
 use crate::debug_context::DebugContext;
 use crate::formatter::FormatterContext;
-use crate::{asserts_exts, exts, io_exts};
+use crate::{asserts_exts, exts, io_exts, vmtrace};
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use crossbeam_channel::{Receiver, Sender, unbounded};
@@ -831,38 +831,7 @@ fn find_backtrace(
     source_map: &SourceMap,
     lines: Vec<Result<VmLine, String>>,
 ) -> Vec<DebugLocation> {
-    let execution_path = lines
-        .iter()
-        .filter_map(|line| match line {
-            Ok(VmLine::VmLoc { hash, offset }) => Some((hash, offset.parse().unwrap_or(0))),
-            _ => None,
-        })
-        .flat_map(|(hash, offset)| {
-            let Some(marks) = source_map.debug_marks.get(*hash) else {
-                return vec![];
-            };
-
-            let debug_pairs = marks
-                .iter()
-                .filter(|(mark_offset, _)| return *mark_offset == offset)
-                .collect::<Vec<_>>();
-
-            let exact_locs = source_map
-                .high_level
-                .locations
-                .iter()
-                .filter(|loc| !loc.loc.file.is_empty() && !loc.loc.file.starts_with("@stdlib/"))
-                .filter(|loc| {
-                    debug_pairs
-                        .iter()
-                        .find(|(_, debug_id)| (*debug_id) as i64 == loc.idx)
-                        .is_some()
-                })
-                .collect::<Vec<_>>();
-
-            exact_locs
-        })
-        .collect::<Vec<_>>();
+    let execution_path = vmtrace::build_vm_trace_from_lines(lines, source_map);
 
     let mut stack = vec![];
 
@@ -894,43 +863,13 @@ fn find_backtrace(
 }
 
 fn find_source_loc(source_map: &SourceMap, hash: &String, offset: i32) -> Option<SourceLocation> {
-    if source_map.high_level.locations.len() != 0 {
-        let Some(marks) = source_map.debug_marks.get(hash) else {
-            return None;
-        };
-
-        let mut debug_pairs = marks
-            .iter()
-            .filter(|(mark_offset, _)| return *mark_offset == offset)
-            .collect::<Vec<_>>();
-
-        if debug_pairs.is_empty() {
-            // We can't always find the exact location, so try to find an approximate location
-            debug_pairs = marks
-                .iter()
-                .rfind(|(mark_offset, _)| return offset > *mark_offset)
-                .iter()
-                .map(|pair| *pair)
-                .collect::<Vec<_>>();
-        }
-
-        let exact_locs = source_map
-            .high_level
-            .locations
-            .iter()
-            .filter(|loc| !loc.loc.file.is_empty() && !loc.loc.file.starts_with("@stdlib/"))
-            .filter(|loc| {
-                debug_pairs
-                    .iter()
-                    .find(|(_, debug_id)| (*debug_id) as i64 == loc.idx)
-                    .is_some()
-            })
-            .collect::<Vec<_>>();
-
-        exact_locs.last().and_then(|l| Some(l.loc.clone()))
-    } else {
-        None
+    if source_map.high_level.locations.is_empty() {
+        // `--backtrace full` is not enabled
+        return None;
     }
+
+    let locs = vmtrace::low_level_loc_to_debug_locations(source_map, hash.as_str(), offset, true)?;
+    locs.last().and_then(|l| Some(l.loc.clone()))
 }
 
 struct TestResult {
