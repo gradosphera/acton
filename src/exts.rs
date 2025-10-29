@@ -1,5 +1,5 @@
 use crate::asserts_exts::process_txs_and_search_params;
-use crate::context::{AnyExecutor, Context, KnownAddress};
+use crate::context::{AnyExecutor, AssertFailure, Context, FailAssertFailure, KnownAddress};
 use crate::debug_context::StepMode;
 use crc::{CRC_16_XMODEM, Crc};
 use emulator::config::DEFAULT_CONFIG;
@@ -56,7 +56,10 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, path: String, name: String) 
             stack.push(TupleItem::Cell(code_cell))
         }
         tolkc::CompilerResult::Error(error) => {
-            println!("Compilation failed: {}", error.message);
+            *ctx.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
+                message: Some(format!("Compilation failed: {}", error.message)),
+                location: None,
+            }));
             stack.push(TupleItem::Null);
         }
     };
