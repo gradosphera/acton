@@ -7,7 +7,7 @@ struct MessageRelaxedGeneric {
     body: RemainingBitsAndRefs
 }
 
-fun MessageRelaxedGeneric.loadOpcode(self): int? {
+fun MessageRelaxedGeneric.loadOpcode(self, skip_bounce: bool = false): int? {
     var slice = self.body;
     if (slice.loadBool()) {
         // actual body in the ref
@@ -22,7 +22,14 @@ fun MessageRelaxedGeneric.loadOpcode(self): int? {
         return null;
     }
 
-    return slice.loadUint(32);
+    val opcode = slice.loadUint(32);
+    if (skip_bounce && opcode == 0xFFFFFFFF) {
+        if (slice.remainingBitsCount() < 32) {
+            return null
+        }
+        return slice.loadUint(32);
+    }
+    return opcode;
 }
 
 @overflow1023_policy("suppress")
