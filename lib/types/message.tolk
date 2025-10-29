@@ -16,8 +16,8 @@ import "../tlb/maybe"
 /// }
 /// ```
 struct MessageRelaxedGeneric {
-    info: CommonMsgInfoRelaxed,
-    init: Maybe<Either<StateInit, Cell<StateInit>>>,
+    info: CommonMsgInfoRelaxed
+    init: Maybe<Either<StateInit, Cell<StateInit>>>
     body: RemainingBitsAndRefs
 }
 
@@ -53,7 +53,7 @@ fun MessageRelaxedGeneric.loadOpcode(self, skip_bounce: bool = false): int? {
     val opcode = slice.loadUint(32);
     if (skip_bounce && opcode == 0xFFFFFFFF) {
         if (slice.remainingBitsCount() < 32) {
-            return null
+            return null;
         }
         return slice.loadUint(32);
     }
@@ -76,8 +76,8 @@ fun MessageRelaxedGeneric.loadOpcode(self, skip_bounce: bool = false): int? {
 /// ```
 @overflow1023_policy("suppress")
 struct MessageRelaxed<X> {
-    info: CommonMsgInfoRelaxed,
-    init: Maybe<Either<StateInit, Cell<StateInit>>>,
+    info: CommonMsgInfoRelaxed
+    init: Maybe<Either<StateInit, Cell<StateInit>>>
     body: Either<X, Cell<X>>
 }
 
@@ -97,31 +97,29 @@ struct MessageRelaxed<X> {
 /// ```
 fun MessageRelaxed<X>.loadBody(self): X {
     if (self.body is EitherLeft<X>) {
-        return self.body.value
+        return self.body.value;
     }
-    return self.body.value.load({
-        assertEndAfterReading: false
-    })
+    return self.body.value.load({ assertEndAfterReading: false });
 }
 
 /// Represents common message info for relaxed message.
 struct (0b0) CommonMsgInfoRelaxed {
-    ihr_disabled: bool,
-    bounce: bool,
-    bounced: bool,
-    src: address,
-    dest: address,
-    value: CurrencyCollection,
-    extra_flags: varuint16,
-    fwd_fee: coins,
-    created_lt: uint64,
+    ihr_disabled: bool
+    bounce: bool
+    bounced: bool
+    src: address
+    dest: address
+    value: CurrencyCollection
+    extra_flags: varuint16
+    fwd_fee: coins
+    created_lt: uint64
     created_at: uint32
 }
 
 /// Represents a currency collection as TON amount + extra currencies.
 struct CurrencyCollection {
     /// Amount in nanoton.
-    grams: coins,
+    grams: coins
     /// Extra currencies.
     other: map<int32, varuint32>
 }

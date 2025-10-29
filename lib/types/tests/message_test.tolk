@@ -1,9 +1,9 @@
 import "../message"
-import "../../emulation/network"
-import "../../vm/vm"
 import "../out_actions"
+import "../../emulation/network"
 import "../../testing/expect"
 import "../../testing/outlist_expect"
+import "../../vm/vm"
 
 struct (0x7e8764ef) IncreaseCounter {
     queryId: uint64
@@ -15,10 +15,8 @@ get fun `test-load-opcode`() {
     val msg = createMessage({
         bounce: false,
         value: ton("1.9999"),
-        dest: dest,
-        body: IncreaseCounter {
-            queryId: 0, increaseBy: 1
-        },
+        dest,
+        body: IncreaseCounter { queryId: 0, increaseBy: 1 },
     });
     msg.send(SEND_MODE_REGULAR | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
     val out_actions = vm.outActions();

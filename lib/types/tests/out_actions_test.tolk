@@ -1,8 +1,8 @@
-import "../../vm/vm"
 import "../out_actions"
 import "../../emulation/network"
 import "../../testing/expect"
 import "../../testing/outlist_expect"
+import "../../vm/vm"
 
 struct (0x7e8764ef) IncreaseCounter {
     queryId: uint64
@@ -17,10 +17,8 @@ get fun `test-out-actions`() {
     val msg = createMessage({
         bounce: false,
         value: ton("1.9999"),
-        dest: dest,
-        body: IncreaseCounter {
-            queryId: 0, increaseBy: 1
-        },
+        dest,
+        body: IncreaseCounter { queryId: 0, increaseBy: 1 },
     });
 
     // Setup actions to test
