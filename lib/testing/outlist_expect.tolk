@@ -5,14 +5,39 @@ import "../ffi/ffi"
 import "../types/message"
 import "../types/out_actions"
 
+/// Expect the out action list to be non empty.
+/// 
+/// Example:
+/// ```
+/// val out_actions = vm.outActions();
+/// expect(out_actions).toBeNonEmpty();
+/// ```
 fun Expectation<OutActionList>.toBeNonEmpty(self) {
     expect(self.value.size(), self.location).toNotEqual(0);
 }
 
+/// Expect the out action list to be empty.
+/// 
+/// Example:
+/// ```
+/// val out_actions = vm.outActions();
+/// expect(out_actions).toBeEmpty();
+/// ```
 fun Expectation<OutActionList>.toBeEmpty(self) {
     expect(self.value.size(), self.location).toEqual(0);
 }
 
+/// Expect the out action at the given index to be a send message.
+/// 
+/// Example:
+/// ```
+/// val out_actions = vm.outActions();
+/// expect(out_actions).toBeSendMessageAt<IncreaseCounter>(0);
+/// ```
+/// 
+/// Note that you should provide the message type as a generic parameter.
+/// 
+/// If the action is not a send message, the test will fail.
 fun Expectation<OutActionList>.toBeSendMessageAt<Msg>(self, index: int) {
     val action = self.value.at(index);
     if (action is OutActionSendMessage) {
