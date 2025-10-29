@@ -43,6 +43,7 @@ pub fn test_cmd(
     filter: Option<&str>,
     teamcity: bool,
     debug: bool,
+    backtrace: Option<String>,
 ) -> Result<(), anyhow::Error> {
     let metadata = fs::metadata(path)?;
     let test_files = if metadata.is_file() {
@@ -76,7 +77,7 @@ pub fn test_cmd(
     let mut total_todo = 0;
 
     for (index, file) in test_files.iter().enumerate() {
-        let result = run_tests_for_file(&file, filter, teamcity, debug);
+        let result = run_tests_for_file(&file, filter, teamcity, debug, backtrace.clone());
         match result {
             Ok(stats) => {
                 total_passed += stats.passed;
@@ -220,6 +221,7 @@ fn run_tests_for_file(
     filter: Option<&str>,
     teamcity: bool,
     debug: bool,
+    backtrace: Option<String>,
 ) -> Result<TestStats, anyhow::Error> {
     let content = match fs::read_to_string(file) {
         Ok(content) => content,
@@ -237,7 +239,8 @@ fn run_tests_for_file(
 
     fs::write(&tmp_test_filename, executable_code)?;
 
-    let compilation_result = tolkc::compile_fast(Path::new(&tmp_test_filename), debug);
+    let need_debug_info = debug || backtrace == Some("full".to_string());
+    let compilation_result = tolkc::compile_fast(Path::new(&tmp_test_filename), need_debug_info);
     let result = match compilation_result {
         tolkc::CompilerResult::Success(result) => {
             let _ = fs::remove_file(&tmp_test_filename);
@@ -255,6 +258,7 @@ fn run_tests_for_file(
                 filter,
                 teamcity,
                 debug,
+                backtrace,
             );
             Ok(stats)
         }
@@ -279,6 +283,7 @@ fn run_all_tests(
     filter: Option<&str>,
     teamcity: bool,
     debug: bool,
+    backtrace: Option<String>,
 ) -> TestStats {
     let filtered_tests = if let Some(pattern) = filter {
         let regex = match Regex::new(pattern) {
@@ -602,6 +607,12 @@ fn run_all_tests(
                                         loc.line + 1,
                                         loc.column + 2,
                                     );
+                                } else if backtrace.is_none() {
+                                    println!(
+                                        "      {} Re-run with {} to get more information",
+                                        "├─".dimmed(),
+                                        "--backtrace full".yellow()
+                                    );
                                 }
                                 if !info.description.is_empty() {
                                     println!(
@@ -733,8 +744,9 @@ fn find_exception_info(vm_logs: &String, source_map: &SourceMap) -> Option<Excep
         Ok(VmLine::VmException { .. }) => true,
         _ => false,
     });
-    let Some(found) = exception else {
-        return None;
+    let description = match exception {
+        Some(Ok(VmLine::VmException { message, .. })) => message.to_string(),
+        _ => "".to_string(),
     };
 
     let location = res.iter().rfind(|line| match line {
@@ -748,11 +760,6 @@ fn find_exception_info(vm_logs: &String, source_map: &SourceMap) -> Option<Excep
     };
 
     let loc = find_source_loc(source_map, &hash, offset);
-
-    let description = match found {
-        Ok(VmLine::VmException { message, .. }) => message.to_string(),
-        _ => unreachable!(),
-    };
 
     Some(ExceptionInfo { description, loc })
 }

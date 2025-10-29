@@ -35,6 +35,8 @@ enum Commands {
         teamcity: bool,
         #[arg(long, help = "Enable debug mode")]
         debug: bool,
+        #[arg(long, help = "Enable backtraces")]
+        backtrace: Option<String>,
     },
     #[command(about = "Execute a Tolk script file")]
     Script {
@@ -75,8 +77,9 @@ fn main() {
             filter,
             teamcity,
             debug,
+            backtrace,
         } => {
-            let result = test_cmd(&path, filter.as_deref(), teamcity, debug);
+            let result = test_cmd(&path, filter.as_deref(), teamcity, debug, backtrace);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
             }

@@ -263,6 +263,17 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         },
     );
 
+    // Tolk related
+
+    map.insert(
+        63,
+        ExitCodeInfo {
+            name: "Type prefix mismatch",
+            description: "Unable to load data from cell because prefix does not match.",
+            phase: "Compute phase",
+        },
+    );
+
     map
 });
 
