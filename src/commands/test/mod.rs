@@ -332,6 +332,7 @@ fn run_all_tests(
 
     let mut build_cache = BuildCache::new();
     let mut known_addresses = KnownAddresses::new();
+    let mut known_code_cells = HashMap::new();
 
     let (req_receiver, dap_sender) = if debug {
         crate::dap::start_dap_server()
@@ -380,6 +381,7 @@ fn run_all_tests(
             &dest_address,
             &mut build_cache,
             &mut known_addresses,
+            &mut known_code_cells,
             abi,
             source_map,
             debug,
@@ -451,6 +453,7 @@ fn run_all_tests(
                 accounts,
                 build_cache: build_cache.clone(),
                 known_addresses: known_addresses.clone(),
+                known_code_cells: known_code_cells.clone(),
             };
 
             match &result.get_result {
@@ -888,6 +891,7 @@ fn execute_test(
     dest_address: &TonAddress,
     build_cache: &mut BuildCache,
     known_addresses: &mut KnownAddresses,
+    known_code_cells: &mut HashMap<String, String>,
     abi: &ContractAbi,
     source_map: &SourceMap,
     debug: bool,
@@ -923,6 +927,7 @@ fn execute_test(
         emulator: &mut emulator,
         build_cache,
         known_addresses,
+        known_code_cells,
         abi: (*abi).clone(),
         expected_exit_code: &mut Some(BigInt::from(0)),
         dbg_ctx: &mut DebugContext::empty(),

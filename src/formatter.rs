@@ -53,6 +53,7 @@ pub struct FormatterContext {
     pub accounts: HashMap<String, ShardAccount>,
     pub build_cache: BuildCache,
     pub known_addresses: KnownAddresses,
+    pub known_code_cells: HashMap<String, String>,
 }
 
 impl FormatterContext {
@@ -62,6 +63,7 @@ impl FormatterContext {
             accounts: HashMap::new(),
             build_cache: BuildCache::new(),
             known_addresses: KnownAddresses::new(),
+            known_code_cells: HashMap::new(),
         }
     }
 
@@ -72,6 +74,7 @@ impl FormatterContext {
             accounts: ctx.blockchain.get_accounts().clone(),
             build_cache: ctx.build_cache.clone(),
             known_addresses: ctx.known_addresses.clone(),
+            known_code_cells: ctx.known_code_cells.clone(),
         }
     }
 
@@ -537,6 +540,30 @@ impl FormatterContext {
             .addresses
             .iter()
             .find(|(address, _info)| address.to_string() == addr.to_string());
+
+        if let Some(known_address) = known_address {
+            return known_address.1.name.clone();
+        }
+
+        if let Some(account) = self.accounts.get(&addr.to_string()) {
+            let state = account.account.load().unwrap().0.unwrap().state;
+            let code_hash = match state {
+                AccountState::Uninit => None,
+                AccountState::Active(state) => state
+                    .code
+                    .and_then(|code| Some(code.repr_hash().to_string())),
+                AccountState::Frozen(_) => None,
+            };
+
+            let known_code_cell = self
+                .known_code_cells
+                .iter()
+                .find(|(hash, _info)| code_hash == Some((*hash).clone()));
+
+            if let Some(known_code_cell) = known_code_cell {
+                return known_code_cell.1.clone();
+            }
+        }
 
         if let Some(known_address) = known_address {
             return known_address.1.name.clone();

@@ -286,6 +286,19 @@ fun net.registerAddress(addr: address, name: slice) {
     ffi.registerAddress(addr.toCell(), name);
 }
 
+/// Register a code cell with a name.
+/// 
+/// This allows test runner to show the name instead of the address in the test output
+/// if the actual code of the contract is match to previously registered code.
+/// 
+/// Example:
+/// ```
+/// net.registerCodeCell(code, "my_code");
+/// ```
+fun net.registerCodeCell(code: cell, name: slice) {
+    ffi.registerCodeCell(code, name);
+}
+
 /// Calculate the CRC16 checksum of a slice.
 /// 
 /// Example:
@@ -312,3 +325,4 @@ fun ffi.runGetMethod(addr: cell, code: cell, id: int, return_type: slice, args: 
 fun ffi.isDeployed(addr: cell): bool asm "11 EXTCALL"
 fun ffi.getDeployedCode(addr: cell): cell? asm "12 EXTCALL"
 fun ffi.registerAddress(address: cell, name: slice): void asm "15 EXTCALL"
+fun ffi.registerCodeCell(cell: cell, name: slice): void asm "16 EXTCALL"

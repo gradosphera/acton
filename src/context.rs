@@ -204,6 +204,7 @@ pub struct Context<'a> {
     pub emulator: &'a mut Emulator,
     pub build_cache: &'a mut BuildCache,
     pub known_addresses: &'a mut KnownAddresses,
+    pub known_code_cells: &'a mut HashMap<String, String>,
     pub abi: ContractAbi,
     pub debug: bool,
     pub dbg_ctx: &'a mut DebugContext,

@@ -591,6 +591,12 @@ fn register_address_impl(ctx: &mut Context, stack: &mut Tuple, name: String, add
         .insert(addr, KnownAddress { name });
 }
 
+extension!(register_code in (Context) with (name: String, address: ArcCell) using register_code_impl);
+fn register_code_impl(ctx: &mut Context, _stack: &mut Tuple, name: String, code: ArcCell) {
+    ctx.known_code_cells
+        .insert(code.cell_hash().unwrap().to_hex(), name);
+}
+
 pub fn register_extensions(executor: &mut dyn BaseExecutor, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         3 => read_file,
@@ -604,5 +610,6 @@ pub fn register_extensions(executor: &mut dyn BaseExecutor, ctx: &mut Context) {
         13 => crc16,
         14 => type_name_by_opcode,
         15 => register_address,
+        16 => register_code,
     });
 }

@@ -97,6 +97,7 @@ fn execute_script(
     let mut blockchain = Blockchain::new();
     let mut build_cache = BuildCache::new();
     let mut known_addresses = KnownAddresses::new();
+    let mut known_code_cell = HashMap::new();
 
     let mut ctx = Context {
         stdout_buffer: "".to_string(),
@@ -107,6 +108,7 @@ fn execute_script(
         emulator: &mut emulator,
         build_cache: &mut build_cache,
         known_addresses: &mut known_addresses,
+        known_code_cells: &mut known_code_cell,
         abi: (*abi).clone(),
         expected_exit_code: &mut None,
         dbg_ctx: &mut DebugContext::empty(),
