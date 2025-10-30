@@ -165,6 +165,7 @@ pub fn process_txs_and_search_params(
     params: Tuple,
 ) -> Option<(TransactionNotFoundParams, Vec<Transaction>)> {
     let mut params_reader = params.clone().0;
+    let raw_opcode = params_reader.pop();
     let raw_bounced = params_reader.pop();
     let raw_deploy = params_reader.pop();
     let raw_exit_code = params_reader.pop();
@@ -177,8 +178,16 @@ pub fn process_txs_and_search_params(
         exit_code: None,
         deploy: None,
         bounced: None,
+        opcode: None,
     };
 
+    if let Some(raw_opcode) = raw_opcode {
+        if let TupleItem::Null = raw_opcode {
+            params.opcode = None
+        } else if let TupleItem::Int(num) = raw_opcode {
+            params.opcode = num.to_u32()
+        }
+    }
     if let Some(raw_bounced) = raw_bounced {
         if let TupleItem::Null = raw_bounced {
             params.bounced = None

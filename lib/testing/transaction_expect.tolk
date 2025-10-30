@@ -15,7 +15,8 @@ import "../types/transaction"
 ///     to: counter.address,
 /// });
 /// ```
-fun Expectation<SendResultList>.toHaveSuccessfulDeploy(self, params: SearchParams) {
+fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = never>(self, params: SearchParams) {
+    params.opcode = Msg.getDeclaredPackPrefix();
     params.exit_code = 0;
     params.deploy = true;
 
@@ -43,7 +44,8 @@ fun Expectation<SendResultList>.toHaveSuccessfulDeploy(self, params: SearchParam
 ///     to: counter.address,
 /// });
 /// ```
-fun Expectation<SendResultList>.toHaveSuccessfulTx(self, params: SearchParams) {
+fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = never>(self, params: SearchParams) {
+    params.opcode = Msg.getDeclaredPackPrefix();
     if (params.exit_code == null) {
         params.exit_code = 0;
     }
@@ -69,7 +71,9 @@ fun Expectation<SendResultList>.toHaveSuccessfulTx(self, params: SearchParams) {
 ///     to: counter.address,
 /// });
 /// ```
-fun Expectation<SendResultList>.toNotHaveTx(self, params: SearchParams) {
+fun Expectation<SendResultList>.toNotHaveTx<Msg = never>(self, params: SearchParams) {
+    params.opcode = Msg.getDeclaredPackPrefix();
+
     val tx = ffi.findTransactionByParams(self.value, params.__toTuple());
     if (tx != null) {
         ffi.failToNotFindTransactionByParams(
@@ -91,7 +95,8 @@ fun Expectation<SendResultList>.toNotHaveTx(self, params: SearchParams) {
 ///     to: counter.address,
 /// });
 /// ```
-fun Expectation<SendResultList>.toHaveBouncedTx(self, params: SearchParams) {
+fun Expectation<SendResultList>.toHaveBouncedTx<Msg = never>(self, params: SearchParams) {
+    params.opcode = Msg.getDeclaredPackPrefix();
     params.bounced = true;
 
     val tx = ffi.findTransactionByParams(self.value, params.__toTuple());
@@ -117,7 +122,9 @@ fun Expectation<SendResultList>.toHaveBouncedTx(self, params: SearchParams) {
 ///     exit_code: 123,
 /// });
 /// ```
-fun Expectation<SendResultList>.toHaveFailedTx(self, params: SearchParams) {
+fun Expectation<SendResultList>.toHaveFailedTx<Msg = never>(self, params: SearchParams) {
+    params.opcode = Msg.getDeclaredPackPrefix();
+
     if (params.exit_code == null) {
         Assert.fail("expect(<actual>).toHaveFailedTx(params) must have not null exit_code parameter in params");
     }
@@ -152,4 +159,8 @@ fun Expectation<SendResult>.toConsumeLessThan(self, amount: int) {
         "expect(<actual>).toConsumeLessThan(<expected>)",
         self.location
     );
+}
+
+fun never.getDeclaredPackPrefix() {
+    return null;
 }

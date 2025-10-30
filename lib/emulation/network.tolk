@@ -118,6 +118,8 @@ struct SearchParams {
     deploy: bool? = null
     /// Whether the transaction is a bounced transaction.
     bounced: bool? = null
+    /// Opcode of the in message.
+    opcode: uint32? = null
 }
 
 /// Find a transaction in the send result list by specified parameters.
@@ -129,7 +131,8 @@ struct SearchParams {
 /// expect(result).toBeDefined();
 /// val tx = result.unwrap();
 /// ```
-fun SendResultList.findTransaction(self, params: SearchParams): Maybe<Transaction> {
+fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams): Maybe<Transaction> {
+    params.opcode = Msg.getDeclaredPackPrefix();
     val tx = ffi.findTransactionByParams(self, params.__toTuple());
     if (tx == null) {
         return None{};

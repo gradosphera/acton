@@ -589,7 +589,7 @@ fn run_all_tests(
 
                         if let AssertFailure::TransactionNotFound(assert_failure) = &assert_failure
                         {
-                            let params = format_search_transaction_parameters(assert_failure);
+                            let params = format_search_transaction_parameters(assert_failure, abi);
 
                             let diff_output = format!(
                                 "{}\nCannot find transaction from {} to {}\nwith:\n{}",
@@ -611,7 +611,7 @@ fn run_all_tests(
                         }
 
                         if let AssertFailure::TransactionIsFound(assert_failure) = &assert_failure {
-                            let params = format_search_transaction_parameters(assert_failure);
+                            let params = format_search_transaction_parameters(assert_failure, abi);
 
                             let diff_output = format!(
                                 "{}\nUnexpected transaction from {} to {}\n{}{}",
@@ -827,8 +827,25 @@ fn normalize_path(file: &String) -> String {
 
 fn format_search_transaction_parameters(
     assert_failure: &TransactionGenericAssertFailure,
+    abi: &ContractAbi,
 ) -> Vec<String> {
     let mut params = vec![];
+    if let Some(opcode) = assert_failure.params.opcode {
+        let opcode_type = abi.find_type_by_opcode(BigInt::from(opcode));
+        params.push(format!(
+            "  opcode={} {}",
+            format!("0x{:x}", opcode).green(),
+            opcode_type
+                .and_then(|typ| Some(typ.name.clone()))
+                .unwrap_or(if opcode == 0 {
+                    "empty".to_string()
+                } else {
+                    "unknown".to_string()
+                })
+                .purple()
+                .bold()
+        ))
+    }
     if let Some(bounced) = assert_failure.params.bounced {
         params.push(format!(
             "  bounced={}",

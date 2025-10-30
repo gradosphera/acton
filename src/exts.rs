@@ -327,6 +327,14 @@ fn find_transaction_by_params_impl(
         if let Some(in_msg) = &in_msg
             && let MsgInfo::Int(info) = &in_msg.info
         {
+            if let Some(expected_opcode) = &params.opcode {
+                let opcode = in_msg.body.clone().load_u32().unwrap();
+                if *expected_opcode != opcode {
+                    // Opcode mismatch
+                    return None;
+                }
+            }
+
             if let Some(expected_bounced) = &params.bounced {
                 if *expected_bounced != info.bounced {
                     // Bounced value mismatch

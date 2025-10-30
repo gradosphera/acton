@@ -46,6 +46,7 @@ pub struct TransactionNotFoundParams {
     pub exit_code: Option<u32>,
     pub deploy: Option<bool>,
     pub bounced: Option<bool>,
+    pub opcode: Option<u32>,
 }
 
 #[derive(Debug, Clone)]

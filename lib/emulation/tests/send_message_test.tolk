@@ -84,3 +84,18 @@ get fun `test-find-transaction`() {
     val unknown_tx = res.findTransaction({ to: deployer.address });
     expect(unknown_tx).toBeNone();
 }
+
+get fun `test-find-transaction-with-type`() {
+    val (counter, deployer) = setupTest();
+
+    val res = counter.sendIncrease(deployer.address, 100);
+    expect(res).toHaveSuccessfulTx({ from: deployer.address, to: counter.address });
+
+    expect(counter.getCounter()).toEqual(100);
+
+    val tx = res.findTransaction<IncreaseCounter>({ to: counter.address });
+    expect(tx).toBeDefined();
+
+    val unknown_tx = res.findTransaction<ResetCounter>({ to: counter.address });
+    expect(unknown_tx).toBeNone();
+}
