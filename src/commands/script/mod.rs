@@ -1,4 +1,4 @@
-use crate::context::{AnyExecutor, BuildCache, Context, KnownAddresses};
+use crate::context::{AnyExecutor, BuildCache, Context, Emulations, KnownAddresses};
 use crate::debug_context::DebugContext;
 use crate::{asserts_exts, exts, io_exts};
 use abi::{ContractAbi, contract_abi};
@@ -98,6 +98,7 @@ fn execute_script(
     let mut build_cache = BuildCache::new();
     let mut known_addresses = KnownAddresses::new();
     let mut known_code_cell = HashMap::new();
+    let mut emulations = Emulations::new();
 
     let mut ctx = Context {
         stdout_buffer: "".to_string(),
@@ -109,10 +110,12 @@ fn execute_script(
         build_cache: &mut build_cache,
         known_addresses: &mut known_addresses,
         known_code_cells: &mut known_code_cell,
+        emulations: &mut emulations,
         abi: (*abi).clone(),
         expected_exit_code: &mut None,
         dbg_ctx: &mut DebugContext::empty(),
         debug,
+        need_debug_info: false,
     };
 
     if debug {

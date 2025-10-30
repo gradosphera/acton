@@ -4,7 +4,7 @@ use crate::executor::{
 };
 use num_bigint::BigInt;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, Load, Store};
+use tycho_types::cell::{Cell, Load};
 use tycho_types::models::{
     IntAddr, Message, MsgInfo, RelaxedMessage, RelaxedMsgInfo, ShardAccount, Transaction,
 };
@@ -19,6 +19,15 @@ pub enum SendMessageResult {
     Error(ResultError),
 }
 
+impl SendMessageResult {
+    pub fn vm_logs(&self) -> String {
+        match self {
+            SendMessageResult::Success(res) => res.vm_log.clone(),
+            SendMessageResult::Error(res) => res.vm_log.clone().unwrap_or("".to_string()),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct SendMessageResultSuccess {
     pub raw_transaction: String,
@@ -29,6 +38,7 @@ pub struct SendMessageResultSuccess {
     pub out_messages: Vec<Cell>,
     pub vm_log: String,
     pub actions: Option<String>,
+    pub code: Option<Cell>,
 }
 
 impl Emulator {
@@ -45,19 +55,19 @@ impl Emulator {
     ) -> Vec<SendMessageResult> {
         let message = Emulator::patch_src_addr(message, src_addr);
         let message_obj = Message::load_from(&mut message.parse().unwrap()).unwrap();
-        let MsgInfo::Int(int_message) = message_obj.info else {
+        let MsgInfo::Int(int_message) = &message_obj.info else {
             panic!("Emulator only supports internal messages for now");
         };
 
         let dest_account = net.get_account(&int_message.dst.to_string());
         let result = self.executor.run_transaction(
-            message,
+            message.clone(),
             BigInt::from(0),
             RunTransactionArgs {
                 config: crate::config::DEFAULT_CONFIG.to_string(),
                 libs: None,
                 verbosity: ExecutorVerbosity::FullLocation,
-                shard_account: dest_account,
+                shard_account: dest_account.clone(),
                 now: 0,
                 lt: net.get_lt(),
                 random_seed: None,
@@ -88,6 +98,8 @@ impl Emulator {
             .map(|it| it.to_cell())
             .collect::<Vec<_>>();
 
+        let code = Executor::get_code_cell(&message_obj, &dest_account);
+
         let send_result = SendMessageResultSuccess {
             raw_transaction: result.transaction,
             transaction: transaction.clone(),
@@ -97,6 +109,7 @@ impl Emulator {
             out_messages,
             vm_log: result.vm_log,
             actions: result.actions,
+            code,
         };
 
         let mut all_results = std::iter::once(SendMessageResult::Success(send_result.clone()))

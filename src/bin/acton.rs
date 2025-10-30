@@ -37,6 +37,8 @@ enum Commands {
         debug: bool,
         #[arg(long, help = "Enable backtraces")]
         backtrace: Option<String>,
+        #[arg(long, help = "Enable coverage collection")]
+        coverage: bool,
     },
     #[command(about = "Execute a Tolk script file")]
     Script {
@@ -78,8 +80,16 @@ fn main() {
             teamcity,
             debug,
             backtrace,
+            coverage,
         } => {
-            let result = test_cmd(&path, filter.as_deref(), teamcity, debug, backtrace);
+            let result = test_cmd(
+                &path,
+                filter.as_deref(),
+                teamcity,
+                debug,
+                backtrace,
+                coverage,
+            );
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
             }

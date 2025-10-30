@@ -4,7 +4,9 @@ use crate::debug_context::StepMode;
 use crc::{CRC_16_XMODEM, Crc};
 use emulator::config::DEFAULT_CONFIG;
 use emulator::emulator::{Emulator, SendMessageResult, SendMessageResultSuccess};
-use emulator::executor::{EmulationResult, ExecutorVerbosity, RunTransactionArgs, StoreExt};
+use emulator::executor::{
+    EmulationResult, Executor, ExecutorVerbosity, RunTransactionArgs, StoreExt,
+};
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::step_executor::StepExecutor;
 use emulator::step_get_executor::StepGetExecutor;
@@ -42,7 +44,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, path: String, name: String) 
         return;
     }
 
-    let result = tolkc::compile(Path::new(&path), ctx.debug);
+    let result = tolkc::compile(Path::new(&path), ctx.need_debug_info);
     match result {
         tolkc::CompilerResult::Success(success) => {
             ctx.build_cache.memoize(
@@ -122,29 +124,18 @@ fn send_message_from_impl(
         }
     };
 
-    let successful_emulations = if ctx.debug {
-        let RelaxedMsgInfo::Int(int_message) = message_obj.info else {
+    let emulations = if ctx.debug {
+        let RelaxedMsgInfo::Int(int_message) = &message_obj.info else {
             panic!("Emulator only supports internal messages for now");
         };
 
         let dest_account = blockchain.get_account(&int_message.dst.to_string());
-        let code = match get_address_code_cell(&dest_account) {
-            Some(code) => Some(code),
-            None => {
-                if let Some(init) = message_obj.init
-                    && let Some(code) = init.code
-                {
-                    Some(code)
-                } else {
-                    None
-                }
-            }
-        };
+        let code = Executor::get_code_cell(&message_obj, &dest_account);
 
         let step_executor = StepExecutor::new();
         let source_map = ctx
             .build_cache
-            .result_for_code(code)
+            .result_for_code(&code)
             .map(|res| res.1.source_map);
 
         let need_to_stop_on_entry = ctx.dbg_ctx.need_to_stop_child_thread_on_start();
@@ -224,20 +215,21 @@ fn send_message_from_impl(
             out_messages: vec![],
             vm_log: result.vm_log,
             actions: result.actions,
+            code,
         };
-        vec![send_result]
+        vec![SendMessageResult::Success(send_result)]
     } else {
-        let emulations = emulator.send_message(blockchain, msg_cell, Some(src_addr));
-
-        let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
-            SendMessageResult::Success(res) => Some((*res).clone()),
-            SendMessageResult::Error(_) => None,
-        });
-        successful_emulations.collect::<Vec<_>>()
+        emulator.send_message(blockchain, msg_cell, Some(src_addr))
     };
 
+    ctx.emulations.results.push(emulations.clone());
+
+    let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
+        SendMessageResult::Success(res) => Some((*res).clone()),
+        SendMessageResult::Error(_) => None,
+    });
+
     let transaction_cells = successful_emulations
-        .iter()
         .filter_map(|emulation| {
             let Ok(tx) = ArcCell::from_boc_b64(&*emulation.raw_transaction) else {
                 return None;
@@ -440,7 +432,7 @@ fn run_get_method_impl(
 
         let source_map = ctx
             .build_cache
-            .result_for_code(Some(
+            .result_for_code(&Some(
                 Boc::decode_base64(code.to_boc_b64(false).unwrap()).unwrap(),
             ))
             .map(|res| res.1.source_map);
@@ -552,20 +544,6 @@ fn get_address_code(account: &ShardAccount) -> Option<ArcCell> {
     };
 
     Some(cell)
-}
-
-fn get_address_code_cell(account: &ShardAccount) -> Option<Cell> {
-    let state = account.account.load().unwrap().0.map(|s| s.state);
-
-    let Some(AccountState::Active(state)) = state else {
-        return None;
-    };
-
-    let Some(code) = state.code else {
-        return None;
-    };
-
-    Some(code)
 }
 
 extension!(crc16 in (Context) with (data: String) using crc16_impl);

@@ -1,7 +1,7 @@
 use crate::debug_context::DebugContext;
 use abi::ContractAbi;
 use emulator::blockchain::Blockchain;
-use emulator::emulator::Emulator;
+use emulator::emulator::{Emulator, SendMessageResult};
 use emulator::step_executor::StepExecutor;
 use emulator::step_get_executor::StepGetExecutor;
 use emulator::traits::BaseExecutor;
@@ -115,7 +115,7 @@ impl BuildCache {
         );
     }
 
-    pub fn result_for_code(&self, code: Option<Cell>) -> Option<(String, CompilationResult)> {
+    pub fn result_for_code(&self, code: &Option<Cell>) -> Option<(String, CompilationResult)> {
         let Some(code) = code else { return None };
         let code_hash = code.repr_hash().to_string().to_uppercase();
         self.built
@@ -194,6 +194,16 @@ impl AnyExecutor {
     }
 }
 
+pub struct Emulations {
+    pub results: Vec<Vec<SendMessageResult>>,
+}
+
+impl Emulations {
+    pub fn new() -> Self {
+        Self { results: vec![] }
+    }
+}
+
 pub struct Context<'a> {
     pub stdout_buffer: String,
     pub stderr_buffer: String,
@@ -207,6 +217,8 @@ pub struct Context<'a> {
     pub known_code_cells: &'a mut HashMap<String, String>,
     pub abi: ContractAbi,
     pub debug: bool,
+    pub need_debug_info: bool,
+    pub emulations: &'a mut Emulations,
     pub dbg_ctx: &'a mut DebugContext,
 }
 

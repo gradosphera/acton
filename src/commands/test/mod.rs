@@ -1,5 +1,6 @@
+use crate::commands::test::coverage::{Coverage, collect_coverage, print_coverage_summary};
 use crate::context::{
-    AnyExecutor, AssertFailure, BuildCache, Context, KnownAddresses,
+    AnyExecutor, AssertFailure, BuildCache, Context, Emulations, KnownAddresses,
     TransactionGenericAssertFailure,
 };
 use crate::dap::DapMessage;
@@ -34,6 +35,7 @@ use tycho_types::models::ShardAccount;
 use vmlogs::parser::VmLine;
 
 mod annotations;
+mod coverage;
 mod teamcity;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
@@ -44,6 +46,7 @@ pub fn test_cmd(
     teamcity: bool,
     debug: bool,
     backtrace: Option<String>,
+    coverage: bool,
 ) -> Result<(), anyhow::Error> {
     let metadata = fs::metadata(path)?;
     let test_files = if metadata.is_file() {
@@ -75,15 +78,21 @@ pub fn test_cmd(
     let mut total_failed = 0;
     let mut total_skipped = 0;
     let mut total_todo = 0;
+    let mut coverages = vec![];
 
     for (index, file) in test_files.iter().enumerate() {
-        let result = run_tests_for_file(&file, filter, teamcity, debug, backtrace.clone());
+        let result =
+            run_tests_for_file(&file, filter, teamcity, debug, backtrace.clone(), coverage);
         match result {
             Ok(stats) => {
                 total_passed += stats.passed;
                 total_failed += stats.failed;
                 total_skipped += stats.skipped;
                 total_todo += stats.todo;
+
+                if let Some(coverage) = stats.coverage {
+                    coverages.push(coverage);
+                }
 
                 if index > 0 && test_files.len() != index - 1 {
                     println!()
@@ -155,6 +164,10 @@ pub fn test_cmd(
         println!("\n{}", "Some tests failed.".red());
     }
 
+    if !coverages.is_empty() {
+        print_coverage_summary(&coverages, teamcity);
+    }
+
     if teamcity {
         TeamcityReporter::on_testing_finished();
     }
@@ -214,6 +227,7 @@ struct TestStats {
     failed: usize,
     skipped: usize,
     todo: usize,
+    coverage: Option<Coverage>,
 }
 
 fn run_tests_for_file(
@@ -222,6 +236,7 @@ fn run_tests_for_file(
     teamcity: bool,
     debug: bool,
     backtrace: Option<String>,
+    coverage: bool,
 ) -> Result<TestStats, anyhow::Error> {
     let content = match fs::read_to_string(file) {
         Ok(content) => content,
@@ -239,7 +254,7 @@ fn run_tests_for_file(
 
     fs::write(&tmp_test_filename, executable_code)?;
 
-    let need_debug_info = debug || backtrace == Some("full".to_string());
+    let need_debug_info = debug || backtrace == Some("full".to_string()) || coverage;
     let compilation_result = tolkc::compile_fast(Path::new(&tmp_test_filename), need_debug_info);
     let result = match compilation_result {
         tolkc::CompilerResult::Success(result) => {
@@ -259,6 +274,7 @@ fn run_tests_for_file(
                 teamcity,
                 debug,
                 backtrace,
+                coverage,
             );
             Ok(stats)
         }
@@ -284,6 +300,7 @@ fn run_all_tests(
     teamcity: bool,
     debug: bool,
     backtrace: Option<String>,
+    coverage: bool,
 ) -> TestStats {
     let filtered_tests = if let Some(pattern) = filter {
         let regex = match Regex::new(pattern) {
@@ -295,6 +312,7 @@ fn run_all_tests(
                     failed: 0,
                     skipped: 0,
                     todo: 0,
+                    coverage: None,
                 };
             }
         };
@@ -333,6 +351,7 @@ fn run_all_tests(
     let mut build_cache = BuildCache::new();
     let mut known_addresses = KnownAddresses::new();
     let mut known_code_cells = HashMap::new();
+    let mut emulations = Emulations::new();
 
     let (req_receiver, dap_sender) = if debug {
         crate::dap::start_dap_server()
@@ -387,11 +406,13 @@ fn run_all_tests(
             &mut build_cache,
             &mut known_addresses,
             &mut known_code_cells,
+            &mut emulations,
             abi,
             source_map,
             debug,
             req_receiver.clone(),
             dap_sender.clone(),
+            coverage,
         );
         let duration = start_time.elapsed();
         let TestResult {
@@ -736,11 +757,18 @@ fn run_all_tests(
         TeamcityReporter::on_test_suite_finished(file_path);
     }
 
+    let coverage = if coverage {
+        Some(collect_coverage(&emulations, &build_cache))
+    } else {
+        None
+    };
+
     TestStats {
         passed,
         failed,
         skipped,
         todo,
+        coverage,
     }
 }
 
@@ -909,11 +937,13 @@ fn execute_test(
     build_cache: &mut BuildCache,
     known_addresses: &mut KnownAddresses,
     known_code_cells: &mut HashMap<String, String>,
+    emulations: &mut Emulations,
     abi: &ContractAbi,
     source_map: &SourceMap,
     debug: bool,
     req_receiver: Receiver<Request>,
     dap_sender: Sender<DapMessage>,
+    coverage: bool,
 ) -> TestResult {
     let params = GetMethodParams {
         code: code_cell.to_boc_b64(false).unwrap().to_string(),
@@ -945,10 +975,12 @@ fn execute_test(
         build_cache,
         known_addresses,
         known_code_cells,
+        emulations,
         abi: (*abi).clone(),
         expected_exit_code: &mut Some(BigInt::from(0)),
         dbg_ctx: &mut DebugContext::empty(),
         debug,
+        need_debug_info: debug || coverage,
     };
 
     let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) = if debug {

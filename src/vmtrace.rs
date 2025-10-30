@@ -1,7 +1,7 @@
 use tolkc::source_map::{DebugLocation, SourceMap};
 use vmlogs::parser::VmLine;
 
-pub fn build_vm_trace(vm_logs: String, source_map: &SourceMap) -> Vec<DebugLocation> {
+pub fn build_vm_trace(vm_logs: &String, source_map: &SourceMap) -> Vec<DebugLocation> {
     let lines = vmlogs::parser::parse_lines(vm_logs.as_str());
     build_vm_trace_from_lines(lines, source_map)
 }

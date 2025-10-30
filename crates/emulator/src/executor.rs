@@ -7,7 +7,7 @@ use std::ffi::{CString, c_void};
 use std::ptr::null;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellFamily, Store};
-use tycho_types::models::ShardAccount;
+use tycho_types::models::{AccountState, BaseMessage, RelaxedMessage, ShardAccount};
 use tycho_types::prelude::CellBuilder;
 
 pub struct Executor {
@@ -84,6 +84,39 @@ impl Executor {
         let output_str = unsafe { CString::from_raw(result_cstr).to_string_lossy().to_string() };
         let result = serde_json::from_str::<EmulationInternalResult>(&output_str).unwrap();
         result.output
+    }
+
+    pub fn get_address_code_cell(account: &ShardAccount) -> Option<Cell> {
+        let state = account.account.load().unwrap().0.map(|s| s.state);
+
+        let Some(AccountState::Active(state)) = state else {
+            return None;
+        };
+
+        let Some(code) = state.code else {
+            return None;
+        };
+
+        Some(code)
+    }
+
+    pub fn get_code_cell<T, B>(
+        message: &BaseMessage<T, B>,
+        account: &ShardAccount,
+    ) -> Option<Cell> {
+        let account_code = Executor::get_address_code_cell(&account);
+        match account_code {
+            Some(code) => Some(code),
+            None => {
+                if let Some(init) = &message.init
+                    && let Some(code) = &init.code
+                {
+                    Some(code.clone())
+                } else {
+                    None
+                }
+            }
+        }
     }
 }
 
