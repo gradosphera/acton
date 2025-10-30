@@ -20,11 +20,32 @@ struct SendParams {
     value: coins
 }
 
+/// Information about external outgoing message.
+struct ExtOutMsgInfo {
+    /// Internal source address.
+    src: address
+    /// Optional external destination address.
+    dst: address
+    /// Logical time when the message was created.
+    created_lt: int64
+    /// Unix timestamp when the message was created.
+    created_at: uint32
+}
+
 /// Represents a list of child transactions IDs (LT) for single send result.
 type ChildTxsIds = tuple
 
 /// Represents a list of out messages for single send result.
 type OutMessages = tuple
+
+/// Represents a list of external outgoing messages for single send result.
+type ExtOutList = tuple
+
+/// Returns the external outgoing message at the given index with given type.
+fun ExtOutList.at<Msg>(self, index: int): MessageRelaxed<Msg> {
+    val cell = self.get<cell>(index) as Cell<MessageRelaxed<Msg>>;
+    return cell.load();
+}
 
 /// Returns the out message at the given index as a raw cell.
 /// 
@@ -84,6 +105,8 @@ struct SendResult {
     out_messages: OutMessages
     /// Amount of gas used by this transaction.
     gas_used: int
+    /// All external outgoing messages produced by this transaction.
+    externals: ExtOutList
 }
 
 /// Returns all out actions produced by this transaction as a list.
@@ -375,7 +398,7 @@ fun slice.fromTuple(data: tuple): slice  asm "1 UNTUPLE"
 fun slice?.fromTuple(data: tuple): slice  asm "1 UNTUPLE"
 fun cell.fromTuple(data: tuple): cell  asm "1 UNTUPLE"
 fun cell?.fromTuple(data: tuple): cell  asm "1 UNTUPLE"
-fun SendResult.fromTuple(data: tuple): SendResult  asm "6 UNTUPLE"
+fun SendResult.fromTuple(data: tuple): SendResult  asm "7 UNTUPLE"
 
 fun tuple.fromTuple(data: tuple): tuple {
     return data;

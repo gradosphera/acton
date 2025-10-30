@@ -39,6 +39,7 @@ pub struct SendMessageResultSuccess {
     pub vm_log: String,
     pub actions: Option<String>,
     pub code: Option<Cell>,
+    pub externals: Vec<Cell>,
 }
 
 impl Emulator {
@@ -56,7 +57,7 @@ impl Emulator {
         let message = Emulator::patch_src_addr(message, src_addr);
         let message_obj = Message::load_from(&mut message.parse().unwrap()).unwrap();
         let MsgInfo::Int(int_message) = &message_obj.info else {
-            panic!("Emulator only supports internal messages for now");
+            return vec![];
         };
 
         let dest_account = net.get_account(&int_message.dst.to_string());
@@ -110,11 +111,20 @@ impl Emulator {
             vm_log: result.vm_log,
             actions: result.actions,
             code,
+            externals: vec![],
         };
+
+        let mut externals: Vec<Cell> = vec![];
 
         let mut all_results = std::iter::once(SendMessageResult::Success(send_result.clone()))
             .chain(transaction.iter_out_msgs().flat_map(|msg| {
                 let Ok(msg) = msg else { return vec![] };
+
+                if let MsgInfo::ExtOut(_) = &msg.info {
+                    externals.push(msg.to_cell());
+                    return vec![];
+                };
+
                 let mut send_results = self.send_message(net, msg.to_cell(), None);
                 for result in &mut send_results {
                     match result {
@@ -140,6 +150,7 @@ impl Emulator {
 
         if let Some(SendMessageResult::Success(result)) = all_results.get_mut(0) {
             result.child_transactions = child_txs;
+            result.externals = externals;
         }
 
         all_results

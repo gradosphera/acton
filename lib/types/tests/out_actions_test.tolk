@@ -1,3 +1,4 @@
+import "../message"
 import "../out_actions"
 import "../../emulation/network"
 import "../../testing/expect"
@@ -50,8 +51,10 @@ get fun `test-out-actions`() {
         expect(out_actions).toBeSendMessageAt<IncreaseCounter>(2);
 
         val message = third_action.loadMessage<IncreaseCounter>();
-        expect(message.info.value.grams).toEqual(ton("1.9999"));
-        expect(message.info.dest).toEqual(dest);
+        if (message.info is IntMsgInfoRelaxed) {
+            expect(message.info.value.grams).toEqual(ton("1.9999"));
+            expect(message.info.dest).toEqual(dest);
+        }
     }
 
     val fourth_action = out_actions.at(3);

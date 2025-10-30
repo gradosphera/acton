@@ -102,8 +102,24 @@ fun MessageRelaxed<X>.loadBody(self): X {
     return self.body.value.load({ assertEndAfterReading: false });
 }
 
-/// Represents common message info for relaxed message.
-struct (0b0) CommonMsgInfoRelaxed {
+type CommonMsgInfoRelaxed = IntMsgInfoRelaxed | ExtMsgInfoRelaxed
+
+fun CommonMsgInfoRelaxed.src(self) {
+    match (self) {
+        IntMsgInfoRelaxed => self.src,
+        ExtMsgInfoRelaxed => self.src,
+    }
+}
+
+fun CommonMsgInfoRelaxed.dest(self) {
+    match (self) {
+        IntMsgInfoRelaxed => self.dest,
+        ExtMsgInfoRelaxed => self.dest,
+    }
+}
+
+/// Represents common message info for internal relaxed message.
+struct (0b0) IntMsgInfoRelaxed {
     ihr_disabled: bool
     bounce: bool
     bounced: bool
@@ -112,6 +128,14 @@ struct (0b0) CommonMsgInfoRelaxed {
     value: CurrencyCollection
     extra_flags: varuint16
     fwd_fee: coins
+    created_lt: uint64
+    created_at: uint32
+}
+
+/// Represents common message info for external relaxed message.
+struct (0b11) ExtMsgInfoRelaxed {
+    src: address
+    dest: address
     created_lt: uint64
     created_at: uint32
 }

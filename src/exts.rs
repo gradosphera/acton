@@ -216,6 +216,7 @@ fn send_message_from_impl(
             vm_log: result.vm_log,
             actions: result.actions,
             code,
+            externals: vec![],
         };
         vec![SendMessageResult::Success(send_result)]
     } else {
@@ -278,6 +279,18 @@ fn send_message_from_impl(
                 _ => BigInt::from(0),
             };
 
+            let externals_tuple = Tuple(
+                emulation
+                    .externals
+                    .iter()
+                    .filter_map(|ext_cell| {
+                        let boc = Boc::encode_base64(&ext_cell);
+                        ArcCell::from_boc_b64(&boc).ok()
+                    })
+                    .map(|cell| TupleItem::Cell(cell))
+                    .collect::<Vec<_>>(),
+            );
+
             Some(TupleItem::Tuple(Tuple(vec![
                 TupleItem::Cell(tx),
                 TupleItem::Tuple(child_txs),
@@ -285,6 +298,7 @@ fn send_message_from_impl(
                 TupleItem::Cell(actions),
                 TupleItem::Tuple(out_messages),
                 TupleItem::Int(gas_used),
+                TupleItem::Tuple(externals_tuple),
             ])))
         })
         .collect::<Vec<_>>();

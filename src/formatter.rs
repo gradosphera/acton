@@ -23,12 +23,13 @@ fn visible_len(s: &str) -> usize {
     }
     len
 }
+use emulator::executor::StoreExt;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
 use tycho_types::models::{
-    AccountState, AccountStatus, ComputePhase, IntAddr, Message, MsgInfo, ShardAccount,
-    Transaction, TxInfo,
+    AccountState, AccountStatus, ComputePhase, ExtOutMsgInfo, IntAddr, Message, MsgInfo,
+    ShardAccount, Transaction, TxInfo,
 };
 
 #[derive(Debug, Clone)]
@@ -38,6 +39,7 @@ struct SendResult {
     parent_lt: Option<i64>,
     actions: ArcCell,
     out_messages: Vec<ArcCell>,
+    externals: Vec<Cell>,
 }
 
 #[derive(Debug, Clone)]
@@ -122,12 +124,14 @@ impl FormatterContext {
                     tuple[1].clone(),
                     tuple[3].clone(),
                     tuple[4].clone(),
+                    tuple[6].clone(), // externals
                 ) {
                     (
                         TupleItem::Cell(tx),
                         TupleItem::Tuple(child_ids),
                         TupleItem::Cell(actions),
                         TupleItem::Tuple(out_messages),
+                        TupleItem::Tuple(externals),
                     ) => {
                         let result = tx.to_boc_b64(false).unwrap();
                         let tx_cell: Cell = Boc::decode_base64(&result).unwrap();
@@ -152,6 +156,18 @@ impl FormatterContext {
                                 .iter()
                                 .filter_map(|msg| match msg {
                                     TupleItem::Cell(cell) => Some(cell.clone()),
+                                    _ => None,
+                                })
+                                .collect(),
+                            externals: externals
+                                .iter()
+                                .filter_map(|ext| match ext {
+                                    TupleItem::Cell(cell) => {
+                                        let cell =
+                                            Boc::decode_base64(&cell.to_boc_b64(false).unwrap())
+                                                .unwrap();
+                                        Some(cell)
+                                    }
                                     _ => None,
                                 })
                                 .collect(),
@@ -361,6 +377,7 @@ impl FormatterContext {
         tx_builder += &main_part;
         tx_builder += &self.format_transaction_info(
             tx,
+            send_result,
             child_prefix,
             has_children,
             main_part_visible_len,
@@ -411,6 +428,7 @@ impl FormatterContext {
     fn format_transaction_info(
         &self,
         tx: &Transaction,
+        send_result: &SendResult,
         child_prefix: &str,
         has_children: bool,
         main_part_visible_len: usize,
@@ -459,6 +477,48 @@ impl FormatterContext {
                         result += "└──".dimmed().to_string().as_str();
                     }
                     result += " account destroyed".dimmed().to_string().as_str();
+                }
+
+                for (i, ext_msg) in send_result.externals.iter().enumerate() {
+                    let mut slice = ext_msg.as_slice().unwrap();
+                    let Ok(msg) = Message::load_from(&mut slice) else {
+                        continue;
+                    };
+
+                    let MsgInfo::ExtOut(info) = &msg.info else {
+                        continue;
+                    };
+
+                    result += "\n";
+                    result += child_prefix;
+
+                    result += "├── ".dimmed().to_string().as_str();
+
+                    let dst_info = if let Some(ext_addr) = &info.dst {
+                        let hex_data = hex::encode(&ext_addr.data);
+                        format!(
+                            "{} {} {} {}",
+                            "external".blue(),
+                            "->".dimmed(),
+                            format!("0x{}", hex_data).cyan(),
+                            format!("({} bits)", ext_addr.data_bit_len).dimmed(),
+                        )
+                    } else {
+                        format!("{} {} {}", "external".blue(), "->".dimmed(), "none".cyan())
+                    };
+
+                    result += dst_info.as_str();
+                    result += "\n";
+                    result += &" ".repeat(prefix_len);
+                    if has_children || i < send_result.externals.len() - 1 {
+                        result += "├── ".dimmed().to_string().as_str();
+                    } else {
+                        result += "└── ".dimmed().to_string().as_str();
+                    }
+                    result += Boc::encode_hex(msg.body.to_cell())
+                        .dimmed()
+                        .to_string()
+                        .as_str();
                 }
 
                 result

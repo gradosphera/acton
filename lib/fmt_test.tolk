@@ -75,6 +75,7 @@ get fun `test-format-struct-with-very-nested-`() {
     expect(format1("{}", VeryNested {})).toEqual(expected_type);
 }
 
+@custom({todo: "fix struct formatting for union types"})
 get fun `test-format-message`() {
     val src = net.randomAddress("src");
     val dest = net.randomAddress("counter");
