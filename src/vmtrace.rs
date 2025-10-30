@@ -1,4 +1,4 @@
-use tolkc::source_map::{DebugLocation, SourceMap};
+use tolkc::source_map::{DebugLocation, EntryContextDescription, SourceMap};
 use vmlogs::parser::VmLine;
 
 pub fn build_vm_trace(vm_logs: &String, source_map: &SourceMap) -> Vec<DebugLocation> {
@@ -69,7 +69,7 @@ fn find_locations_by_debug_marks(
     source_map: &SourceMap,
     debug_pairs: Vec<&(i32, i32)>,
 ) -> Vec<DebugLocation> {
-    source_map
+    let locs = source_map
         .high_level
         .locations
         .iter()
@@ -79,7 +79,40 @@ fn find_locations_by_debug_marks(
                 .find(|(_, debug_id)| (*debug_id) as i64 == loc.idx)
                 .is_some()
         })
-        .filter(|loc| !loc.loc.file.is_empty() && !loc.loc.file.starts_with("@stdlib/"))
+        .filter(|loc| {
+            loc.loc.column != -1
+                && !loc.loc.file.is_empty()
+                && !loc.loc.file.starts_with("@stdlib/")
+        })
         .cloned()
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>();
+
+    if locs
+        .iter()
+        .find(|loc| {
+            matches!(
+                &loc.context.description,
+                EntryContextDescription::Basic { ast_kind } if ast_kind == "ast_block_statement"
+            )
+        })
+        .is_some()
+    {
+        let actual_locs = locs
+            .iter()
+            .rev()
+            .take_while(|el| {
+                !matches!(
+                    &el.context.description,
+                    EntryContextDescription::Basic { ast_kind } if ast_kind == "ast_block_statement"
+                )
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        println!("{:?}", locs);
+
+        return actual_locs;
+    }
+
+    locs
 }

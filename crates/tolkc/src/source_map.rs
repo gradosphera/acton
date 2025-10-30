@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use tycho_types::boc::Boc;
@@ -32,7 +32,7 @@ impl Default for SourceMap {
 }
 
 /// Source map data structure for Tolk compiler output
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct HighLevelSourceMap {
     pub version: String,
     pub language: Option<String>,
@@ -42,14 +42,14 @@ pub struct HighLevelSourceMap {
     pub locations: Vec<DebugLocation>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SourceFile {
     pub path: String,
     pub is_stdlib: bool,
     pub content: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GlobalVariable {
     pub name: String,
     #[serde(rename = "type")]
@@ -57,7 +57,7 @@ pub struct GlobalVariable {
     pub loc: SourceLocation,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SourceLocation {
     pub file: String,
     pub line: i64,
@@ -67,7 +67,7 @@ pub struct SourceLocation {
     pub length: i64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DebugLocation {
     pub idx: i64,
     pub loc: SourceLocation,
@@ -76,7 +76,7 @@ pub struct DebugLocation {
     pub debug: Option<DebugInfo>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Variable {
     pub name: String,
     #[serde(rename = "type")]
@@ -86,7 +86,7 @@ pub struct Variable {
     pub possible_qualifier_types: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EntryContext {
     pub description: EntryContextDescription,
     pub inlining: InliningInfo,
@@ -95,7 +95,7 @@ pub struct EntryContext {
     pub containing_function: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum EntryContextDescription {
     Basic {
@@ -112,13 +112,13 @@ pub enum EntryContextDescription {
     },
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct InliningInfo {
     pub inlined_to_func: Option<String>,
     pub containing_func_inline_mode: i64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DebugInfo {
     pub opcode: String,
     pub line_str: String,
@@ -228,7 +228,10 @@ pub fn parse_marks_dict(
     dict.iter().for_each(|kv| {
         let kv = kv.unwrap();
         let hash = kv.0.as_data_slice().load_biguint(256).unwrap();
-        let hash = format!("{:x}", hash).to_uppercase();
+        let mut hash = format!("{:x}", hash).to_uppercase();
+        if hash.len() < 64 {
+            hash = "0".repeat(64 - hash.len()) + hash.as_str()
+        }
 
         let mut slice = kv.1;
         let is_normal = slice.load_bit().unwrap();
