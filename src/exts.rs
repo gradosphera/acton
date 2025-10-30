@@ -278,12 +278,21 @@ fn send_message_from_impl(
                     .collect::<Vec<_>>(),
             );
 
+            let gas_used = match parsed_tx.load_info() {
+                Ok(TxInfo::Ordinary(info)) => match info.compute_phase {
+                    ComputePhase::Executed(compute) => compute.gas_used.into(),
+                    _ => BigInt::from(0),
+                },
+                _ => BigInt::from(0),
+            };
+
             Some(TupleItem::Tuple(Tuple(vec![
                 TupleItem::Cell(tx),
                 TupleItem::Tuple(child_txs),
                 parent_lt,
                 TupleItem::Cell(actions),
                 TupleItem::Tuple(out_messages),
+                TupleItem::Int(gas_used),
             ])))
         })
         .collect::<Vec<_>>();

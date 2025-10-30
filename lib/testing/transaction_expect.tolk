@@ -153,6 +153,23 @@ fun Expectation<SendResultList>.toHaveFailedTx(self, params: SearchParams) {
     }
 }
 
+/// Expect the transaction to consume less than the expected amount of gas.
+/// 
+/// Example:
+/// ```
+/// let result = net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
+/// expect(result.at(0)).toConsumeLessThan(1000);
+/// ```
+fun Expectation<SendResult>.toConsumeLessThan(self, amount: int) {
+    ffi.assert_comparison(
+        self.value.gas_used,
+        amount,
+        "<",
+        "expect(<actual>).toConsumeLessThan(<expected>)",
+        self.location
+    );
+}
+
 // fun Expectation<TransactionList>.findMessage<Message>(self, criteria: SearchParams): Transaction {
 //     // TODO
 // }

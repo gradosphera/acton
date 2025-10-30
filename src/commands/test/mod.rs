@@ -531,8 +531,8 @@ fn run_all_tests(
                             );
 
                             let right = formatter.format_tuple_value(
-                                &assert_failure.left,
-                                &assert_failure.left_type,
+                                &assert_failure.right,
+                                &assert_failure.right_type,
                                 8,
                             );
 

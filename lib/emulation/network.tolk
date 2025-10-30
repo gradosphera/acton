@@ -81,6 +81,8 @@ struct SendResult {
     out_actions: Cell<OutList>
     /// All out messages produced by this transaction.
     out_messages: OutMessages
+    /// Amount of gas used by this transaction.
+    gas_used: int
 }
 
 /// Returns all out actions produced by this transaction as a list.
@@ -335,7 +337,7 @@ fun slice.fromTuple(data: tuple): slice  asm "1 UNTUPLE"
 fun slice?.fromTuple(data: tuple): slice  asm "1 UNTUPLE"
 fun cell.fromTuple(data: tuple): cell  asm "1 UNTUPLE"
 fun cell?.fromTuple(data: tuple): cell  asm "1 UNTUPLE"
-fun SendResult.fromTuple(data: tuple): SendResult  asm "5 UNTUPLE"
+fun SendResult.fromTuple(data: tuple): SendResult  asm "6 UNTUPLE"
 
 fun tuple.fromTuple(data: tuple): tuple {
     return data;

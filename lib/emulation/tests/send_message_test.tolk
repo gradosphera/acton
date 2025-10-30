@@ -1,0 +1,70 @@
+import "../network"
+import "contracts/types"
+import "../../build/build"
+import "../../testing/expect"
+import "../../testing/transaction_expect"
+
+struct Counter {
+    address: address
+    init: ContractState
+}
+
+fun Counter.fromStorage(storage: Storage) {
+    val init = ContractState {
+        code: build("Counter", "lib/emulation/tests/contracts/counter.tolk"),
+        data: storage.toCell(),
+    };
+    val address = address.fromValidBuilder(AutoDeployAddress { stateInit: init }.buildAddress());
+    return Counter { address, init }
+}
+
+fun Counter.sendIncrease(self, from: address, increaseBy: int) {
+    val msg = createMessage({
+        bounce: false,
+        value: ton("0.1"),
+        dest: self.address,
+        body: IncreaseCounter { increaseBy },
+    });
+    return net.send(from, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+}
+
+fun setupTest() {
+    val counter = Counter.fromStorage({ id: 0, counter: 0 });
+
+    val deployer = net.treasury("deployer");
+    val msg = createMessage({
+        bounce: false,
+        value: ton("1.0"),
+        dest: {
+            stateInit: counter.init,
+        },
+    });
+    val res = net.send(deployer.address, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+    expect(res).toHaveSuccessfulDeploy({ to: counter.address });
+
+    return (counter, deployer)
+}
+
+fun Counter.getCounter(self): int {
+    return net.runGetMethod(self.address, "currentCounter")
+}
+
+get fun `test-send-message`() {
+    val (counter, deployer) = setupTest();
+
+    val res = counter.sendIncrease(deployer.address, 100);
+    expect(res).toHaveSuccessfulTx({ from: deployer.address, to: counter.address });
+
+    expect(counter.getCounter()).toEqual(100);
+}
+
+get fun `test-send-message-with-gas`() {
+    val (counter, deployer) = setupTest();
+
+    val res = counter.sendIncrease(deployer.address, 100);
+    expect(res).toHaveSuccessfulTx({ from: deployer.address, to: counter.address });
+
+    expect(counter.getCounter()).toEqual(100);
+
+    expect(res.at(0)).toConsumeLessThan(1500);
+}
