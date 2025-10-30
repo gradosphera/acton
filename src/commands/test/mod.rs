@@ -181,7 +181,7 @@ pub fn test_cmd(
                             lcov_path, err
                         );
                     } else {
-                        println!("LCOV file generated: {}", lcov_path);
+                        println!("LCOV file saved in {}", lcov_path);
                     }
                 }
                 _ => {
