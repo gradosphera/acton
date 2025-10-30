@@ -2,6 +2,7 @@ use crate::debug_context::DebugContext;
 use abi::ContractAbi;
 use emulator::blockchain::Blockchain;
 use emulator::emulator::{Emulator, SendMessageResult};
+use emulator::get_executor::GetMethodResultSuccess;
 use emulator::step_executor::StepExecutor;
 use emulator::step_get_executor::StepGetExecutor;
 use emulator::traits::BaseExecutor;
@@ -196,11 +197,15 @@ impl AnyExecutor {
 
 pub struct Emulations {
     pub results: Vec<Vec<SendMessageResult>>,
+    pub get_results: Vec<GetMethodResultSuccess>,
 }
 
 impl Emulations {
     pub fn new() -> Self {
-        Self { results: vec![] }
+        Self {
+            results: vec![],
+            get_results: vec![],
+        }
     }
 }
 

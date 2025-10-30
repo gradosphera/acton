@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use std::ffi::{CString, c_void};
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::Tuple;
+use tycho_types::boc::Boc;
+use tycho_types::cell::Cell;
 
 pub struct GetExecutor {
     inner: *mut c_void,
@@ -62,10 +64,20 @@ impl GetExecutor {
 
         let result = serde_json::from_str::<GetInternalResult>(&output_str)
             .expect("Failed to parse output, should not happen");
-        // if let GetMethodResult::Success(result) = &result.output {
-        //     println!("{}", result.vm_log);
-        // }
-        result.output
+        match result.output {
+            GetMethodRawResult::Success(result) => {
+                GetMethodResult::Success(GetMethodResultSuccess {
+                    success: result.success,
+                    stack: result.stack,
+                    gas_used: result.gas_used,
+                    vm_exit_code: result.vm_exit_code,
+                    vm_log: result.vm_log,
+                    missing_library: result.missing_library,
+                    code: Boc::decode_base64(params.code).ok(),
+                })
+            }
+            GetMethodRawResult::Error(err) => GetMethodResult::Error(err),
+        }
     }
 }
 
@@ -91,17 +103,33 @@ pub struct GetMethodParams {
 
 #[derive(Deserialize, Debug)]
 struct GetInternalResult {
-    output: GetMethodResult,
+    output: GetMethodRawResult,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(untagged)]
+pub enum GetMethodRawResult {
+    Success(GetMethodRawResultSuccess),
+    Error(GetMethodResultError),
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct GetMethodRawResultSuccess {
+    pub success: bool,
+    pub stack: String,
+    pub gas_used: String,
+    pub vm_exit_code: i32,
+    pub vm_log: String,
+    pub missing_library: Option<String>,
+}
+
+#[derive(Debug)]
 pub enum GetMethodResult {
     Success(GetMethodResultSuccess),
     Error(GetMethodResultError),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetMethodResultSuccess {
     pub success: bool,
     pub stack: String,
@@ -109,6 +137,7 @@ pub struct GetMethodResultSuccess {
     pub vm_exit_code: i32,
     pub vm_log: String,
     pub missing_library: Option<String>,
+    pub code: Option<Cell>,
 }
 
 #[derive(Deserialize, Debug)]

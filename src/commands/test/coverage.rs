@@ -34,13 +34,19 @@ pub fn collect_coverage(emulations: &Emulations, build_cache: &BuildCache) -> Co
 
     let mut whole_trace = vec![];
 
-    for emulation in successful_results {
-        let Some(result) = build_cache.result_for_code(&emulation.code) else {
+    let results = successful_results.map(|result| (result.code.clone(), result.vm_log.clone()));
+    let get_results = emulations
+        .get_results
+        .iter()
+        .map(|result| (result.code.clone(), result.vm_log.clone()));
+
+    for (code, vm_log) in results.chain(get_results) {
+        let Some(result) = build_cache.result_for_code(&code) else {
             continue;
         };
 
         let source_map = result.1.source_map;
-        let logs = &emulation.vm_log;
+        let logs = &vm_log;
 
         let mut trace = build_vm_trace(logs, &source_map);
         whole_trace.append(&mut trace);

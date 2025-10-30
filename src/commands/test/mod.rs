@@ -1030,7 +1030,7 @@ fn execute_test(
 
         ctx.dbg_ctx.process_incoming_requests(true).unwrap();
 
-        let get_result = get_executor.finish_get_method();
+        let get_result = get_executor.finish_get_method(&params.code);
 
         (
             get_result,

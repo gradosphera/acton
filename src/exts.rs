@@ -462,7 +462,7 @@ fn run_get_method_impl(
 
         ctx.dbg_ctx.finish_thread(2).unwrap();
 
-        step_get_executor.finish_get_method()
+        step_get_executor.finish_get_method(&params.code)
     } else {
         let executor = GetExecutor::new(params.clone());
         executor.run_get_method(args, params)
@@ -470,6 +470,8 @@ fn run_get_method_impl(
 
     match result {
         GetMethodResult::Success(result) => {
+            ctx.emulations.get_results.push(result.clone());
+
             let cell = ArcCell::from_boc_b64(&result.stack).unwrap();
             let tuple = Tuple::deserialize(&cell).unwrap();
 

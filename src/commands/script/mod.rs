@@ -78,8 +78,8 @@ fn execute_script(
     let dest_address = contract_address(code_cell);
 
     let params = GetMethodParams {
-        code: code_cell.to_boc_b64(false).unwrap().to_string(),
-        data: data_cell.to_boc_b64(false).unwrap().to_string(),
+        code: code_cell.to_boc_b64(false)?.to_string(),
+        data: data_cell.to_boc_b64(false)?.to_string(),
         verbosity: 5,
         libs: "".to_string(),
         address: dest_address.to_string(),
@@ -140,7 +140,7 @@ fn execute_script(
 
         ctx.dbg_ctx.process_incoming_requests(true)?;
 
-        let result = get_executor.finish_get_method();
+        let result = get_executor.finish_get_method(&params.code);
         return Ok(ScriptResult { get_result: result });
     }
 
