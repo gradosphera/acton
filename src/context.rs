@@ -41,7 +41,7 @@ pub struct FailAssertFailure {
 
 #[derive(Debug, Clone)]
 pub struct TransactionNotFoundParams {
-    pub to: IntAddr,
+    pub to: Option<IntAddr>,
     pub from: Option<IntAddr>,
     pub exit_code: Option<u32>,
     pub deploy: Option<bool>,

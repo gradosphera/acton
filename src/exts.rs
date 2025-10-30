@@ -349,9 +349,11 @@ fn find_transaction_by_params_impl(
                 }
             }
 
-            if params.to.to_string() != info.dst.to_string() {
-                // Destination address mismatch
-                return None;
+            if let Some(expected_to_addr) = &params.to {
+                if (*expected_to_addr).to_string() != info.dst.to_string() {
+                    // Destination address mismatch
+                    return None;
+                }
             }
         };
 

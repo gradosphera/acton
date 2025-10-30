@@ -598,10 +598,8 @@ fn run_all_tests(
                                     &assert_failure.txs,
                                     &assert_failure.params.from
                                 ),
-                                formatter.format_address(
-                                    &assert_failure.txs,
-                                    &Some(assert_failure.params.to.clone())
-                                ),
+                                formatter
+                                    .format_address(&assert_failure.txs, &assert_failure.params.to),
                                 params.join("\n"),
                             );
 
@@ -622,7 +620,7 @@ fn run_all_tests(
                                 ),
                                 formatter.format_address(
                                     &assert_failure.txs,
-                                    &Some(assert_failure.params.to.clone())
+                                    &assert_failure.params.to,
                                 ),
                                 if params.len() != 0 { "with:\n" } else { "" },
                                 params.join("\n"),

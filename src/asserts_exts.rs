@@ -229,11 +229,21 @@ pub fn process_txs_and_search_params(
         }
     }
     if let Some(raw_to) = raw_to {
-        if let TupleItem::Slice(cell) = raw_to {
+        if let TupleItem::Null = raw_to {
+            params.to = None
+        } else if let TupleItem::Tuple(raw_to) = &raw_to
+            && let TupleItem::Slice(cell) = &raw_to[0]
+        {
             let cell = Boc::decode_base64(cell.to_boc_b64(false).unwrap()).unwrap();
             let mut slice = cell.as_slice().unwrap();
             if let Ok(address) = IntAddr::load_from(&mut slice) {
-                params.to = address;
+                params.to = Some(address);
+            }
+        } else if let TupleItem::Slice(cell) = raw_to {
+            let cell = Boc::decode_base64(cell.to_boc_b64(false).unwrap()).unwrap();
+            let mut slice = cell.as_slice().unwrap();
+            if let Ok(address) = IntAddr::load_from(&mut slice) {
+                params.to = Some(address);
             }
         }
     }

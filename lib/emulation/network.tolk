@@ -107,7 +107,7 @@ fun SendResultList.at(self, index: int): SendResult {
 /// Represents a set of parameters to search for a transaction in the transaction list.
 struct SearchParams {
     /// Destination address of the transaction.
-    to: address
+    to: address? = null
     /// Source address of the transaction.
     from: address? = null
     /// Exit code of the transaction.
