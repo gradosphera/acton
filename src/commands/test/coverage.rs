@@ -34,19 +34,13 @@ pub fn collect_coverage(emulations: &Emulations, build_cache: &BuildCache) -> Co
 
     let mut whole_trace = vec![];
 
-    let results = successful_results.map(|result| (result.code.clone(), result.vm_log.clone()));
-    let get_results = emulations
-        .get_results
-        .iter()
-        .map(|result| (result.code.clone(), result.vm_log.clone()));
-
-    for (code, vm_log) in results.chain(get_results) {
-        let Some(result) = build_cache.result_for_code(&code) else {
+    for result in successful_results {
+        let Some(build_result) = build_cache.result_for_code(&result.code) else {
             continue;
         };
 
-        let source_map = result.1.source_map;
-        let logs = &vm_log;
+        let source_map = build_result.1.source_map;
+        let logs = &result.vm_log;
 
         let mut trace = build_vm_trace(logs, &source_map);
         whole_trace.append(&mut trace);
@@ -83,6 +77,18 @@ pub fn collect_coverage(emulations: &Emulations, build_cache: &BuildCache) -> Co
             }
             whole_executable_locations_per_file.insert(path.clone(), locs.clone());
         }
+    }
+
+    for get_result in &emulations.get_results {
+        let Some(build_result) = build_cache.result_for_code(&get_result.code) else {
+            continue;
+        };
+
+        let source_map = build_result.1.source_map;
+        let logs = &get_result.vm_log;
+
+        let mut trace = build_vm_trace(logs, &source_map);
+        whole_trace.append(&mut trace);
     }
 
     let mut coverages: Vec<FileCoverage> = vec![];
