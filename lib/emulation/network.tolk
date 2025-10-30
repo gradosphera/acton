@@ -131,7 +131,7 @@ struct SearchParams {
 /// expect(result).toBeDefined();
 /// val tx = result.unwrap();
 /// ```
-fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams): Maybe<Transaction> {
+fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams = {}): Maybe<Transaction> {
     params.opcode = Msg.getDeclaredPackPrefix();
     val tx = ffi.findTransactionByParams(self, params.__toTuple());
     if (tx == null) {

@@ -15,7 +15,7 @@ import "../types/transaction"
 ///     to: counter.address,
 /// });
 /// ```
-fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = never>(self, params: SearchParams) {
+fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = never>(self, params: SearchParams = {}) {
     params.opcode = Msg.getDeclaredPackPrefix();
     params.exit_code = 0;
     params.deploy = true;
@@ -44,7 +44,7 @@ fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = never>(self, params
 ///     to: counter.address,
 /// });
 /// ```
-fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = never>(self, params: SearchParams) {
+fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = never>(self, params: SearchParams = {}) {
     params.opcode = Msg.getDeclaredPackPrefix();
     if (params.exit_code == null) {
         params.exit_code = 0;
@@ -71,7 +71,7 @@ fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = never>(self, params: Se
 ///     to: counter.address,
 /// });
 /// ```
-fun Expectation<SendResultList>.toNotHaveTx<Msg = never>(self, params: SearchParams) {
+fun Expectation<SendResultList>.toNotHaveTx<Msg = never>(self, params: SearchParams = {}) {
     params.opcode = Msg.getDeclaredPackPrefix();
 
     val tx = ffi.findTransactionByParams(self.value, params.__toTuple());
@@ -95,7 +95,7 @@ fun Expectation<SendResultList>.toNotHaveTx<Msg = never>(self, params: SearchPar
 ///     to: counter.address,
 /// });
 /// ```
-fun Expectation<SendResultList>.toHaveBouncedTx<Msg = never>(self, params: SearchParams) {
+fun Expectation<SendResultList>.toHaveBouncedTx<Msg = never>(self, params: SearchParams = {}) {
     params.opcode = Msg.getDeclaredPackPrefix();
     params.bounced = true;
 
@@ -122,7 +122,7 @@ fun Expectation<SendResultList>.toHaveBouncedTx<Msg = never>(self, params: Searc
 ///     exit_code: 123,
 /// });
 /// ```
-fun Expectation<SendResultList>.toHaveFailedTx<Msg = never>(self, params: SearchParams) {
+fun Expectation<SendResultList>.toHaveFailedTx<Msg = never>(self, params: SearchParams = {}) {
     params.opcode = Msg.getDeclaredPackPrefix();
 
     if (params.exit_code == null) {
