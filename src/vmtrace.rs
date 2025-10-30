@@ -109,8 +109,6 @@ fn find_locations_by_debug_marks(
             .cloned()
             .collect::<Vec<_>>();
 
-        println!("{:?}", locs);
-
         return actual_locs;
     }
 
