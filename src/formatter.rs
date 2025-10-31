@@ -544,7 +544,7 @@ impl FormatterContext {
         if let Some(letter) = contract_letters.get(addr) {
             if show_full_names {
                 let contract_type = self.get_contract_type(addr);
-                let mut result = if contract_type != "" {
+                let mut result = if let Some(contract_type) = contract_type {
                     format!("{}", contract_type.cyan())
                 } else {
                     Self::format_addr_hash(addr).dimmed().to_string()
@@ -557,7 +557,7 @@ impl FormatterContext {
         } else {
             // No letter assigned, show full address info
             let contract_type = self.get_contract_type(addr);
-            if contract_type != "" {
+            if let Some(contract_type) = contract_type {
                 format!("{}", contract_type.cyan())
             } else {
                 Self::format_addr_hash(addr).dimmed().to_string()
@@ -594,7 +594,7 @@ impl FormatterContext {
     }
 
     /// Get contract type for address
-    fn get_contract_type(&self, addr: &IntAddr) -> String {
+    fn get_contract_type(&self, addr: &IntAddr) -> Option<String> {
         let known_address = self
             .known_addresses
             .addresses
@@ -602,11 +602,11 @@ impl FormatterContext {
             .find(|(address, _info)| address.to_string() == addr.to_string());
 
         if let Some(known_address) = known_address {
-            return known_address.1.name.clone();
+            return Some(known_address.1.name.clone());
         }
 
         if let Some(account) = self.accounts.get(&addr.to_string()) {
-            let state = account.account.load().unwrap().0.unwrap().state;
+            let state = account.account.load().ok()?.0?.state;
             let code_hash = match state {
                 AccountState::Uninit => None,
                 AccountState::Active(state) => state
@@ -621,31 +621,31 @@ impl FormatterContext {
                 .find(|(hash, _info)| code_hash == Some((*hash).clone()));
 
             if let Some(known_code_cell) = known_code_cell {
-                return known_code_cell.1.clone();
+                return Some(known_code_cell.1.clone());
             }
         }
 
         if let Some(known_address) = known_address {
-            return known_address.1.name.clone();
+            return Some(known_address.1.name.clone());
         }
 
         let addr_str = addr.to_string();
         let account = self.accounts.get(&addr_str);
         let Some(account) = account else {
-            return "".to_string();
+            return None;
         };
 
         let account_data = account.load_account();
         let Ok(Some(data)) = account_data else {
-            return "".to_string();
+            return None;
         };
 
         let AccountState::Active(info) = data.state else {
-            return "".to_string();
+            return None;
         };
 
         let Some(code) = &info.code else {
-            return "".to_string();
+            return None;
         };
 
         let compilation_result = self.build_cache.built.iter().find(|(_name, result)| {
@@ -653,10 +653,10 @@ impl FormatterContext {
         });
 
         if let Some(result) = compilation_result {
-            return result.1.name.clone();
+            return Some(result.1.name.clone());
         }
 
-        "".to_string()
+        None
     }
 
     pub fn format_tuple(&self, tuple: &Tuple) -> String {
@@ -867,8 +867,15 @@ impl FormatterContext {
         let contract_type = self.get_contract_type(addr);
 
         let letter = contract_letters.get(&addr);
+        if let Some(contract_type) = contract_type {
+            builder += format!("{} ", contract_type.cyan()).as_str();
+        } else {
+            builder += Self::format_addr_hash(&addr).as_str();
+            builder += " ";
+        }
+
         if let Some(letter) = letter {
-            builder += format!("{} {} ", contract_type.cyan(), letter.bold()).as_str();
+            builder += format!("{} ", letter.bold()).as_str();
         }
 
         builder += Self::format_addr_hash(&addr).dimmed().to_string().as_str();
