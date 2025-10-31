@@ -1,5 +1,5 @@
 use crate::commands::test::coverage::{
-    Coverage, collect_coverage, generate_lcov_file, print_coverage_summary,
+    Coverage, collect_coverage, generate_lcov_file, merge_coverages, print_coverage_summary,
 };
 use crate::context::{
     AnyExecutor, AssertFailure, BuildCache, Context, Emulations, KnownAddresses,
@@ -168,14 +168,15 @@ pub fn test_cmd(
     }
 
     if !coverages.is_empty() {
-        print_coverage_summary(&coverages, teamcity);
+        let merged_coverage = merge_coverages(&coverages);
+        print_coverage_summary(&merged_coverage, teamcity);
 
         if let Some(format_type) = format {
             println!();
             match format_type {
                 "lcov" => {
                     let lcov_path = "lcov.info";
-                    if let Err(err) = generate_lcov_file(&coverages, lcov_path) {
+                    if let Err(err) = generate_lcov_file(&merged_coverage, lcov_path) {
                         eprintln!(
                             "Warning: Failed to generate LCOV file '{}': {}",
                             lcov_path, err

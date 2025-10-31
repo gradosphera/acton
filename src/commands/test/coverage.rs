@@ -154,12 +154,42 @@ pub fn collect_coverage(emulations: &Emulations, build_cache: &BuildCache) -> Co
     Coverage { files: coverages }
 }
 
-pub fn print_coverage_summary(coverages: &Vec<Coverage>, teamcity: bool) {
+pub fn merge_coverages(coverages: &Vec<Coverage>) -> Coverage {
+    let mut merged_files: HashMap<String, FileCoverage> = HashMap::new();
+
+    for coverage in coverages {
+        for file_coverage in &coverage.files {
+            let file = &file_coverage.file;
+            if let Some(existing) = merged_files.get_mut(file) {
+                existing.executable_lines += file_coverage.executable_lines;
+                existing.covered_lines += file_coverage.covered_lines;
+
+                for (&line, &hits) in &file_coverage.line_hits {
+                    *existing.line_hits.entry(line).or_insert(0) += hits;
+                }
+
+                let mut combined_lines = existing.executable_line_numbers.clone();
+                combined_lines.extend_from_slice(&file_coverage.executable_line_numbers);
+                combined_lines.sort_unstable();
+                combined_lines.dedup();
+                existing.executable_line_numbers = combined_lines;
+            } else {
+                merged_files.insert(file.clone(), file_coverage.clone());
+            }
+        }
+    }
+
+    Coverage {
+        files: merged_files.into_values().collect(),
+    }
+}
+
+pub fn print_coverage_summary(coverage: &Coverage, teamcity: bool) {
     if teamcity {
         return;
     }
 
-    if coverages.iter().all(|coverage| coverage.files.is_empty()) {
+    if coverage.files.is_empty() {
         // Empty coverage info, likely compilation error
         return;
     }
@@ -175,11 +205,9 @@ pub fn print_coverage_summary(coverages: &Vec<Coverage>, teamcity: bool) {
     let mut total_executable_lines = 0i64;
     let mut total_covered_lines = 0i64;
 
-    for coverage in coverages {
-        for file_coverage in &coverage.files {
-            total_executable_lines += file_coverage.executable_lines;
-            total_covered_lines += file_coverage.covered_lines;
-        }
+    for file_coverage in &coverage.files {
+        total_executable_lines += file_coverage.executable_lines;
+        total_covered_lines += file_coverage.covered_lines;
     }
 
     if total_executable_lines > 0 {
@@ -204,79 +232,72 @@ pub fn print_coverage_summary(coverages: &Vec<Coverage>, teamcity: bool) {
         ]);
     }
 
-    for coverage in coverages {
-        for file_coverage in &coverage.files {
-            let percentage = if file_coverage.executable_lines > 0 {
-                (file_coverage.covered_lines as f64 / file_coverage.executable_lines as f64 * 100.0)
-            } else {
-                0.0
-            };
+    for file_coverage in &coverage.files {
+        let percentage = if file_coverage.executable_lines > 0 {
+            file_coverage.covered_lines as f64 / file_coverage.executable_lines as f64 * 100.0
+        } else {
+            0.0
+        };
 
-            let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
-            let relative_path = Path::new(&file_coverage.file)
-                .strip_prefix(&cwd)
-                .unwrap_or_else(|_| Path::new(&file_coverage.file))
-                .display()
-                .to_string();
+        let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+        let relative_path = Path::new(&file_coverage.file)
+            .strip_prefix(&cwd)
+            .unwrap_or_else(|_| Path::new(&file_coverage.file))
+            .display()
+            .to_string();
 
-            let (covered_color, percentage_color) = match percentage as u32 {
-                0..=50 => (Color::DarkRed, Color::DarkRed),
-                51..=80 => (Color::DarkYellow, Color::DarkYellow),
-                _ => (Color::DarkGreen, Color::DarkGreen),
-            };
+        let (covered_color, percentage_color) = match percentage as u32 {
+            0..=50 => (Color::DarkRed, Color::DarkRed),
+            51..=80 => (Color::DarkYellow, Color::DarkYellow),
+            _ => (Color::DarkGreen, Color::DarkGreen),
+        };
 
-            table.add_row(vec![
-                TableCell::new(relative_path)
-                    .set_alignment(CellAlignment::Left)
-                    .fg(percentage_color),
-                TableCell::new(file_coverage.covered_lines.to_string())
-                    .set_alignment(CellAlignment::Right)
-                    .fg(covered_color),
-                TableCell::new(file_coverage.executable_lines.to_string())
-                    .set_alignment(CellAlignment::Right),
-                TableCell::new(format!("{:.1}%", percentage))
-                    .set_alignment(CellAlignment::Right)
-                    .fg(percentage_color),
-            ]);
-        }
+        table.add_row(vec![
+            TableCell::new(relative_path)
+                .set_alignment(CellAlignment::Left)
+                .fg(percentage_color),
+            TableCell::new(file_coverage.covered_lines.to_string())
+                .set_alignment(CellAlignment::Right)
+                .fg(covered_color),
+            TableCell::new(file_coverage.executable_lines.to_string())
+                .set_alignment(CellAlignment::Right),
+            TableCell::new(format!("{:.1}%", percentage))
+                .set_alignment(CellAlignment::Right)
+                .fg(percentage_color),
+        ]);
     }
 
     println!("{}", table);
 }
 
-pub fn generate_lcov_file(
-    coverages: &Vec<Coverage>,
-    output_path: &str,
-) -> Result<(), std::io::Error> {
+pub fn generate_lcov_file(coverage: &Coverage, output_path: &str) -> Result<(), std::io::Error> {
     let mut lcov_content = String::new();
 
-    for coverage in coverages {
-        for file_coverage in &coverage.files {
-            if file_coverage.line_hits.is_empty() {
-                continue;
-            }
-
-            // SF: source file
-            lcov_content.push_str(&format!("SF:{}\n", file_coverage.file));
-
-            // DA: line data (line number, execution count)
-            for &line_number in &file_coverage.executable_line_numbers {
-                let hit_count = file_coverage
-                    .line_hits
-                    .get(&line_number)
-                    .copied()
-                    .unwrap_or(0);
-                lcov_content.push_str(&format!("DA:{},{}\n", line_number + 1, hit_count));
-            }
-
-            // LF: lines found (total executable lines)
-            lcov_content.push_str(&format!("LF:{}\n", file_coverage.executable_lines));
-
-            // LH: lines hit (covered lines)
-            lcov_content.push_str(&format!("LH:{}\n", file_coverage.covered_lines));
-
-            lcov_content.push_str("end_of_record\n");
+    for file_coverage in &coverage.files {
+        if file_coverage.line_hits.is_empty() {
+            continue;
         }
+
+        // SF: source file
+        lcov_content.push_str(&format!("SF:{}\n", file_coverage.file));
+
+        // DA: line data (line number, execution count)
+        for &line_number in &file_coverage.executable_line_numbers {
+            let hit_count = file_coverage
+                .line_hits
+                .get(&line_number)
+                .copied()
+                .unwrap_or(0);
+            lcov_content.push_str(&format!("DA:{},{}\n", line_number + 1, hit_count));
+        }
+
+        // LF: lines found (total executable lines)
+        lcov_content.push_str(&format!("LF:{}\n", file_coverage.executable_lines));
+
+        // LH: lines hit (covered lines)
+        lcov_content.push_str(&format!("LH:{}\n", file_coverage.covered_lines));
+
+        lcov_content.push_str("end_of_record\n");
     }
 
     fs::write(output_path, lcov_content)
