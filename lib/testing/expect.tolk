@@ -64,7 +64,7 @@ fun Expectation<T>.toNotEqual<U>(self, expected: U) {
 /// ```tolk
 /// expect(5).toBeLess(10);
 /// ```
-fun Expectation<int>.toBeLess<U>(self, expected: U) {
+fun Expectation<T>.toBeLess<U>(self, expected: U) {
     ffi.assert_comparison(
         self.value,
         expected,
@@ -80,7 +80,7 @@ fun Expectation<int>.toBeLess<U>(self, expected: U) {
 /// ```tolk
 /// expect(10).toBeGreater(5);
 /// ```
-fun Expectation<int>.toBeGreater<U>(self, expected: U) {
+fun Expectation<T>.toBeGreater<U>(self, expected: U) {
     ffi.assert_comparison(
         self.value,
         expected,
@@ -97,7 +97,7 @@ fun Expectation<int>.toBeGreater<U>(self, expected: U) {
 /// expect(5).toBeLessOrEqual(10);
 /// expect(10).toBeLessOrEqual(10);
 /// ```
-fun Expectation<int>.toBeLessOrEqual<U>(self, expected: U) {
+fun Expectation<T>.toBeLessOrEqual<U>(self, expected: U) {
     ffi.assert_comparison(
         self.value,
         expected,
@@ -114,7 +114,7 @@ fun Expectation<int>.toBeLessOrEqual<U>(self, expected: U) {
 /// expect(10).toBeGreaterOrEqual(5);
 /// expect(10).toBeGreaterOrEqual(10);
 /// ```
-fun Expectation<int>.toBeGreaterOrEqual<U>(self, expected: U) {
+fun Expectation<T>.toBeGreaterOrEqual<U>(self, expected: U) {
     ffi.assert_comparison(
         self.value,
         expected,
