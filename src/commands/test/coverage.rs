@@ -185,10 +185,6 @@ pub fn merge_coverages(coverages: &Vec<Coverage>) -> Coverage {
 }
 
 pub fn print_coverage_summary(coverage: &Coverage, teamcity: bool) {
-    if teamcity {
-        return;
-    }
-
     if coverage.files.is_empty() {
         // Empty coverage info, likely compilation error
         return;
@@ -232,13 +228,22 @@ pub fn print_coverage_summary(coverage: &Coverage, teamcity: bool) {
         ]);
     }
 
-    for file_coverage in &coverage.files {
-        let percentage = if file_coverage.executable_lines > 0 {
-            file_coverage.covered_lines as f64 / file_coverage.executable_lines as f64 * 100.0
-        } else {
-            0.0
-        };
+    let mut files_with_percentage: Vec<(f64, &FileCoverage)> = coverage
+        .files
+        .iter()
+        .map(|file_coverage| {
+            let percentage = if file_coverage.executable_lines > 0 {
+                file_coverage.covered_lines as f64 / file_coverage.executable_lines as f64 * 100.0
+            } else {
+                0.0
+            };
+            (percentage, file_coverage)
+        })
+        .collect();
 
+    files_with_percentage.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+    for (percentage, file_coverage) in files_with_percentage {
         let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
         let relative_path = Path::new(&file_coverage.file)
             .strip_prefix(&cwd)
