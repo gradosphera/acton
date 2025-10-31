@@ -1,5 +1,5 @@
 MessageRelaxedGeneric {
-    info: CommonMsgInfoRelaxed {
+    info: IntMsgInfoRelaxed {
         ihr_disabled: true,
         bounce: false,
         bounced: false,

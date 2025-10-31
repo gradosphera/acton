@@ -16,7 +16,7 @@ import "../tlb/maybe"
 /// }
 /// ```
 struct MessageRelaxedGeneric {
-    info: CommonMsgInfoRelaxed
+    info: IntMsgInfoRelaxed
     init: Maybe<Either<StateInit, Cell<StateInit>>>
     body: RemainingBitsAndRefs
 }
@@ -36,31 +36,27 @@ struct MessageRelaxedGeneric {
 /// }
 /// ```
 fun MessageRelaxedGeneric.loadOpcode(self, skip_bounce: bool = false): int? {
-    var slice = self.body;
-    if (slice.loadBool()) {
-        // actual body in the ref
-        if (slice.remainingRefsCount() == 0) {
-            return null;
-        }
-        val body = slice.loadRef();
-        slice = body.beginParse();
-    }
-
-    if (slice.remainingBitsCount() < 32) {
-        return null;
-    }
-
-    val opcode = slice.loadUint(32);
-    if (skip_bounce && opcode == 0xFFFFFFFF) {
-        if (slice.remainingBitsCount() < 32) {
-            return null;
-        }
-        return slice.loadUint(32);
-    }
-    return opcode;
+    return impl_msg.load_opcode(self.body, skip_bounce);
 }
 
-/// Represents a generic message. Unlike [MessageRelaxedGeneric], this message loads the body of the message with passed type.
+/// Represents a generic external message. Unlike [ExtMessageRelaxed], this message does not
+/// load the body of the message. Instead body is represented as a slice and can be parsed
+/// later manually (for example to load the opcode).
+struct ExtMessageRelaxedGeneric {
+    info: ExtMsgInfoRelaxed
+    init: Maybe<Either<StateInit, Cell<StateInit>>>
+    body: RemainingBitsAndRefs
+}
+
+/// Loads the opcode of the message.
+/// 
+/// If [skip_bounce] is true, the 0xFFFFFFFF prefix is skipped.
+fun ExtMessageRelaxedGeneric.loadOpcode(self, skip_bounce: bool = false): int? {
+    return impl_msg.load_opcode(self.body, skip_bounce);
+}
+
+/// Represents a generic message. Unlike [MessageRelaxedGeneric], this message loads
+/// the body of the message with passed type.
 /// 
 /// If actual message body has a different type, loading will fail with exit code 63.
 /// 
@@ -76,7 +72,7 @@ fun MessageRelaxedGeneric.loadOpcode(self, skip_bounce: bool = false): int? {
 /// ```
 @overflow1023_policy("suppress")
 struct MessageRelaxed<X> {
-    info: CommonMsgInfoRelaxed
+    info: IntMsgInfoRelaxed
     init: Maybe<Either<StateInit, Cell<StateInit>>>
     body: Either<X, Cell<X>>
 }
@@ -102,20 +98,25 @@ fun MessageRelaxed<X>.loadBody(self): X {
     return self.body.value.load({ assertEndAfterReading: false });
 }
 
-type CommonMsgInfoRelaxed = IntMsgInfoRelaxed | ExtMsgInfoRelaxed
-
-fun CommonMsgInfoRelaxed.src(self) {
-    match (self) {
-        IntMsgInfoRelaxed => self.src,
-        ExtMsgInfoRelaxed => self.src,
-    }
+/// Represents a generic external message. Unlike [ExtMessageRelaxedGeneric], this message 
+/// loads the body of the message with passed type.
+/// 
+/// If actual message body has a different type, loading will fail with exit code 63.
+@overflow1023_policy("suppress")
+struct ExtMessageRelaxed<X> {
+    info: ExtMsgInfoRelaxed
+    init: Maybe<Either<StateInit, Cell<StateInit>>>
+    body: Either<X, Cell<X>>
 }
 
-fun CommonMsgInfoRelaxed.dest(self) {
-    match (self) {
-        IntMsgInfoRelaxed => self.dest,
-        ExtMsgInfoRelaxed => self.dest,
+/// Loads the body of the message.
+/// 
+/// Note that if message type mismatch, loading will fail with exit code 63.
+fun ExtMessageRelaxed<X>.loadBody(self): X {
+    if (self.body is EitherLeft<X>) {
+        return self.body.value;
     }
+    return self.body.value.load({ assertEndAfterReading: false });
 }
 
 /// Represents common message info for internal relaxed message.
@@ -146,4 +147,31 @@ struct CurrencyCollection {
     grams: coins
     /// Extra currencies.
     other: map<int32, varuint32>
+}
+
+struct impl_msg
+
+fun impl_msg.load_opcode(body: slice, skip_bounce: bool) {
+    var slice = body;
+    if (slice.loadBool()) {
+        // actual body in the ref
+        if (slice.remainingRefsCount() == 0) {
+            return null;
+        }
+        val body = slice.loadRef();
+        slice = body.beginParse();
+    }
+
+    if (slice.remainingBitsCount() < 32) {
+        return null;
+    }
+
+    val opcode = slice.loadUint(32);
+    if (skip_bounce && opcode == 0xFFFFFFFF) {
+        if (slice.remainingBitsCount() < 32) {
+            return null;
+        }
+        return slice.loadUint(32);
+    }
+    return opcode;
 }

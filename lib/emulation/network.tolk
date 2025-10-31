@@ -42,9 +42,32 @@ type OutMessages = tuple
 type ExtOutList = tuple
 
 /// Returns the external outgoing message at the given index with given type.
-fun ExtOutList.at<Msg>(self, index: int): MessageRelaxed<Msg> {
-    val cell = self.get<cell>(index) as Cell<MessageRelaxed<Msg>>;
+/// 
+/// Note that if message is not a given type, loading will fail with exit code 63.
+/// If you want to handle this case, use [ExtOutList.atOrNull] instead.
+fun ExtOutList.at<Msg>(self, index: int): ExtMessageRelaxed<Msg> {
+    val cell = self.get<cell>(index) as Cell<ExtMessageRelaxed<Msg>>;
     return cell.load();
+}
+
+/// Returns the external outgoing message at the given index with given type or 
+/// null if message is not a given type.
+/// 
+/// Note that if message is not a given type, this method will return null instead 
+/// of throwing an exception. Use [ExtOutList.at] if you don't want to handle null case.
+fun ExtOutList.atOrNull<Msg>(self, index: int): ExtMessageRelaxed<Msg>? {
+    val cell = self.get<cell>(index) as Cell<ExtMessageRelaxed<Msg>>;
+    try {
+        return cell.load();
+    } catch (e) {
+        if (e == 63) {
+            // opcode mismatch
+            return null;
+        }
+        
+        // other errors are not expected
+        throw e;
+    }
 }
 
 /// Returns the out message at the given index as a raw cell.

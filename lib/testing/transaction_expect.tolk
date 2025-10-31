@@ -1,5 +1,6 @@
 import "expect"
 import "assert"
+import "../fmt"
 import "../emulation/network"
 import "../ffi/ffi"
 import "../types/transaction"
@@ -142,6 +143,41 @@ fun Expectation<SendResultList>.toHaveFailedTx<Msg = never>(self, params: Search
         );
         throw 567;
     }
+}
+
+/// Expect the transaction to emit an external message of given type.
+/// 
+/// Example:
+/// ```
+/// expect(txs).toEmitExternalMessage<IncreaseCounter>();
+/// ```
+fun Expectation<SendResultList>.toEmitExternalMessage<Msg>(self) {
+    var i = 0;
+    while (i < self.value.size()) {
+        val result = self.value.at(i);
+
+        var j = 0;
+        while (j < self.value.size()) {
+            val external = result.externals.atOrNull<Msg>(j);
+            if (external != null) {
+                // message found
+                return
+            }
+            j += 1;
+        }
+
+        i += 1;
+    }
+
+    Assert.fail(
+        format3(
+            "expect(<actual>).toEmitExternalMessage<{}>(): Cannot find external message {} (opcode: 0x{:x})",
+            Msg.__typeName2(),
+            Msg.__typeName2(),
+            Msg.getDeclaredPackPrefix()
+        ),
+        self.location
+    );
 }
 
 /// Expect the transaction to consume less than the expected amount of gas.
