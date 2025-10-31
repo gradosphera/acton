@@ -382,8 +382,6 @@ fn find_transaction_by_params_impl(
                     return None;
                 }
             }
-        } else {
-            return None;
         }
 
         return Some(tx);
