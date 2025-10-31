@@ -63,6 +63,30 @@ fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = never>(self, params: Se
     }
 }
 
+/// Expect the transaction list to have a transaction with specified parameters.
+///
+/// Example:
+/// ```
+/// expect(txs).toHaveTx({
+///     from: deployer.address,
+///     to: counter.address,
+/// });
+/// ```
+fun Expectation<SendResultList>.toHaveTx<Msg = never>(self, params: SearchParams = {}) {
+    params.opcode = Msg.getDeclaredPackPrefix();
+
+    val tx = ffi.findTransactionByParams(self.value, params.__toTuple());
+    if (tx == null) {
+        ffi.failToFindTransactionByParams(
+            self.location,
+            "expect(<actual>).toHaveTx(<expected>)",
+            self.value,
+            params.__toTuple()
+        );
+        throw 567;
+    }
+}
+
 /// Expect the transaction list to NOT have a transaction with specified parameters.
 /// 
 /// Example:
