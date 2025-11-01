@@ -38,7 +38,8 @@ false @was-split !
   { @zcount @cut-zeroes rot // isnottoplevel cutcodes uncutdebugmarks
     @marksize { ref@ dictnew swap // dictmapb cutdebugmarks uncutdebugmarks
                 10 { drop // cutdebugmarks uncutdebugmark
-                     @zcount - <b swap rot // emptyb cutdebugmark cutdebugmarks
+                     dup @zcount < { @zcount - } ifnot // extra check to avoid overflow
+                     <b swap rot // emptyb cutdebugmark cutdebugmarks
                      10 b>udict! { abort"could not add subbed debug marks" } ifnot true }
                 dictforeach drop // dictmapb cutdebugmarks
                 ref, true } dictmap -rot } ifnot // cutdebugmarks isnottoplevel cutcodes
