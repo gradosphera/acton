@@ -505,7 +505,7 @@ impl FormatterContext {
                         let hex_data = hex::encode(&ext_addr.data);
                         format!(
                             "{} {} {} {} {}",
-                            "external".blue(),
+                            "ext-out".blue(),
                             message_name,
                             "->".dimmed(),
                             format!("0x{}", hex_data).cyan(),
@@ -514,7 +514,7 @@ impl FormatterContext {
                     } else {
                         format!(
                             "{} {} {} {}",
-                            "external".blue(),
+                            "ext-out".blue(),
                             message_name,
                             "->".dimmed(),
                             "none".cyan()
