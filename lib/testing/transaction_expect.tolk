@@ -181,7 +181,7 @@ fun Expectation<SendResultList>.toEmitExternalMessage<Msg>(self) {
         val result = self.value.at(i);
 
         var j = 0;
-        while (j < self.value.size()) {
+        while (j < result.externals.size()) {
             val external = result.externals.atOrNull<Msg>(j);
             if (external != null) {
                 // message found
