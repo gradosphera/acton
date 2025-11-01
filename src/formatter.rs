@@ -492,33 +492,36 @@ impl FormatterContext {
                     result += "\n";
                     result += child_prefix;
 
-                    result += "├── ".dimmed().to_string().as_str();
-
-                    let dst_info = if let Some(ext_addr) = &info.dst {
-                        let hex_data = hex::encode(&ext_addr.data);
-                        format!(
-                            "{} {} {} {}",
-                            "external".blue(),
-                            "->".dimmed(),
-                            format!("0x{}", hex_data).cyan(),
-                            format!("({} bits)", ext_addr.data_bit_len).dimmed(),
-                        )
-                    } else {
-                        format!("{} {} {}", "external".blue(), "->".dimmed(), "none".cyan())
-                    };
-
-                    result += dst_info.as_str();
-                    result += "\n";
-                    result += &" ".repeat(prefix_len);
                     if has_children || i < send_result.externals.len() - 1 {
                         result += "├── ".dimmed().to_string().as_str();
                     } else {
                         result += "└── ".dimmed().to_string().as_str();
                     }
-                    result += Boc::encode_hex(msg.body.to_cell())
-                        .dimmed()
-                        .to_string()
-                        .as_str();
+
+                    let opcode = self.extract_opcode(&msg);
+                    let message_name = self.get_message_name(opcode);
+
+                    let dst_info = if let Some(ext_addr) = &info.dst {
+                        let hex_data = hex::encode(&ext_addr.data);
+                        format!(
+                            "{} {} {} {} {}",
+                            "external".blue(),
+                            message_name,
+                            "->".dimmed(),
+                            format!("0x{}", hex_data).cyan(),
+                            format!("({} bits)", ext_addr.data_bit_len).dimmed(),
+                        )
+                    } else {
+                        format!(
+                            "{} {} {} {}",
+                            "external".blue(),
+                            message_name,
+                            "->".dimmed(),
+                            "none".cyan()
+                        )
+                    };
+
+                    result += dst_info.as_str();
                 }
 
                 result
