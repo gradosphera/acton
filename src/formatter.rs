@@ -466,6 +466,10 @@ impl FormatterContext {
             }
         }
 
+        if info.aborted {
+            result += " aborted".red().to_string().as_str();
+        }
+
         let mut extra_infos = vec![];
 
         if tx.orig_status == AccountStatus::NotExists && tx.end_status == AccountStatus::Active {
