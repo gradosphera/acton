@@ -1,5 +1,6 @@
 use crate::context::{BuildCache, KnownAddresses};
 use abi::{ContractAbi, TypeAbi};
+use emulator::exit_codes::get_exit_code_info;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
@@ -7,6 +8,13 @@ use std::collections::{HashMap, VecDeque};
 use std::fmt::Write;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::tlb::TLB;
+use tvmffi::stack::{Tuple, TupleItem};
+use tycho_types::boc::Boc;
+use tycho_types::cell::{Cell, Load};
+use tycho_types::models::{
+    AccountState, AccountStatus, ComputePhase, IntAddr, Message, MsgInfo, ShardAccount,
+    Transaction, TxInfo,
+};
 
 /// Calculate visible length of a string (excluding ANSI escape codes)
 fn visible_len(s: &str) -> usize {
@@ -23,14 +31,6 @@ fn visible_len(s: &str) -> usize {
     }
     len
 }
-use emulator::executor::StoreExt;
-use tvmffi::stack::{Tuple, TupleItem};
-use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, Load};
-use tycho_types::models::{
-    AccountState, AccountStatus, ComputePhase, ExtOutMsgInfo, IntAddr, Message, MsgInfo,
-    ShardAccount, Transaction, TxInfo,
-};
 
 #[derive(Debug, Clone)]
 struct SendResult {
@@ -438,9 +438,10 @@ impl FormatterContext {
             panic!("tick-tock message is unexpected")
         };
 
+        let mut result = String::new();
+
         match info.compute_phase {
             ComputePhase::Executed(compute) => {
-                let mut result = String::new();
                 // Add padding to align metadata
                 let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
                 result += &" ".repeat(padding_len);
@@ -453,88 +454,98 @@ impl FormatterContext {
                         .red()
                         .to_string();
                 }
-
-                if tx.orig_status == AccountStatus::NotExists
-                    && tx.end_status == AccountStatus::Active
-                {
-                    result += "\n";
-                    result += child_prefix;
-                    if has_children {
-                        result += "├──".dimmed().to_string().as_str();
-                    } else {
-                        result += "└──".dimmed().to_string().as_str();
-                    }
-                    result += " account created".dimmed().to_string().as_str();
-                }
-                if tx.orig_status == AccountStatus::Active
-                    && tx.end_status == AccountStatus::NotExists
-                {
-                    result += "\n";
-                    result += child_prefix;
-                    if has_children {
-                        result += "├──".dimmed().to_string().as_str();
-                    } else {
-                        result += "└──".dimmed().to_string().as_str();
-                    }
-                    result += " account destroyed".dimmed().to_string().as_str();
-                }
-
-                for (i, ext_msg) in send_result.externals.iter().enumerate() {
-                    let mut slice = ext_msg.as_slice().unwrap();
-                    let Ok(msg) = Message::load_from(&mut slice) else {
-                        continue;
-                    };
-
-                    let MsgInfo::ExtOut(info) = &msg.info else {
-                        continue;
-                    };
-
-                    result += "\n";
-                    result += child_prefix;
-
-                    if has_children || i < send_result.externals.len() - 1 {
-                        result += "├── ".dimmed().to_string().as_str();
-                    } else {
-                        result += "└── ".dimmed().to_string().as_str();
-                    }
-
-                    let opcode = self.extract_opcode(&msg);
-                    let message_name = self.get_message_name(opcode);
-
-                    let dst_info = if let Some(ext_addr) = &info.dst {
-                        let hex_data = hex::encode(&ext_addr.data);
-                        format!(
-                            "{} {} {} {} {}",
-                            "ext-out".blue(),
-                            message_name,
-                            "->".dimmed(),
-                            format!("0x{}", hex_data).cyan(),
-                            format!("({} bits)", ext_addr.data_bit_len).dimmed(),
-                        )
-                    } else {
-                        format!(
-                            "{} {} {} {}",
-                            "ext-out".blue(),
-                            message_name,
-                            "->".dimmed(),
-                            "none".cyan()
-                        )
-                    };
-
-                    result += dst_info.as_str();
-                }
-
-                result
             }
             _ => {
                 let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
-                format!(
+                result += format!(
                     "{}{}",
                     " ".repeat(padding_len),
                     "compute phase skipped".dimmed()
                 )
+                .as_str()
             }
         }
+
+        let mut extra_infos = vec![];
+
+        if tx.orig_status == AccountStatus::NotExists && tx.end_status == AccountStatus::Active {
+            extra_infos.push("account created".to_string());
+        }
+        if tx.orig_status == AccountStatus::Active && tx.end_status == AccountStatus::NotExists {
+            extra_infos.push("account destroyed".to_string());
+        }
+
+        match info.action_phase {
+            None => {}
+            Some(action) => {
+                if action.result_code != 0 {
+                    result += &format!(" action_result_code={}", action.result_code)
+                        .red()
+                        .to_string();
+
+                    extra_infos.push("Action phase failed".to_string());
+
+                    if let Some(info) = get_exit_code_info(action.result_code as i64) {
+                        extra_infos.push(format!("Description: {}", info.description.to_string()));
+                    }
+                }
+            }
+        }
+
+        for ext_msg in send_result.externals.iter() {
+            let mut slice = ext_msg.as_slice().unwrap();
+            let Ok(msg) = Message::load_from(&mut slice) else {
+                continue;
+            };
+
+            let MsgInfo::ExtOut(info) = &msg.info else {
+                continue;
+            };
+
+            let opcode = self.extract_opcode(&msg);
+            let message_name = self.get_message_name(opcode);
+
+            let msg_info = if let Some(ext_addr) = &info.dst {
+                let hex_data = hex::encode(&ext_addr.data);
+                format!(
+                    "{} {} {} {} {}",
+                    "ext-out".blue(),
+                    message_name,
+                    "->".dimmed(),
+                    format!("0x{}", hex_data).cyan(),
+                    format!("({} bits)", ext_addr.data_bit_len).dimmed(),
+                )
+            } else {
+                format!(
+                    "{} {} {} {}",
+                    "ext-out".blue(),
+                    message_name,
+                    "->".dimmed(),
+                    "none".cyan()
+                )
+            };
+
+            extra_infos.push(msg_info);
+        }
+
+        if extra_infos.len() > 0 {
+            result += "\n";
+        }
+
+        for (idx, info) in extra_infos.iter().enumerate() {
+            result += child_prefix;
+
+            if has_children || idx < extra_infos.len() - 1 {
+                result += "├── ".dimmed().to_string().as_str();
+            } else {
+                result += "└── ".dimmed().to_string().as_str();
+            }
+
+            result += info.as_str();
+            result += "\n";
+        }
+
+        result
     }
 
     /// Format address with contract type and letter

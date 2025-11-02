@@ -55,8 +55,8 @@ struct (0b0111) Transaction {
 /// println(body.increaseBy);
 /// ```
 fun Transaction.loadBody<Msg>(self) {
-    val im_msg_cell = self.messages.load().in_msg.unwrap() as cell as Cell<MessageRelaxed<Msg>>;
-    val in_msg = im_msg_cell.load();
+    val in_msg_cell = self.messages.load().in_msg.unwrap() as cell as Cell<MessageRelaxed<Msg>>;
+    val in_msg = in_msg_cell.load();
     return in_msg.loadBody()
 }
 
