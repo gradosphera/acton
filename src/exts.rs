@@ -214,6 +214,8 @@ fn send_message_from_impl(
             shard_account,
             out_messages: vec![],
             vm_log: result.vm_log,
+            logs: "".to_string(),
+            debug_logs: "".to_string(),
             actions: result.actions,
             code,
             externals: vec![],

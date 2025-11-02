@@ -212,15 +212,20 @@ impl Emulations {
         }
     }
 
+    pub fn find_tx_by_lt(&self, lt: u64) -> Option<&SendMessageResult> {
+        self.results.iter().flatten().find(|res| match res {
+            SendMessageResult::Success(res) if res.transaction.lt == lt => true,
+            _ => false,
+        })
+    }
+
     pub fn find_tx_logs(&self, lt: u64) -> Option<String> {
-        self.results
-            .iter()
-            .flatten()
-            .find(|res| match res {
-                SendMessageResult::Success(res) if res.transaction.lt == lt => true,
-                _ => false,
-            })
-            .and_then(|res| Some(res.vm_logs()))
+        self.find_tx_by_lt(lt).and_then(|res| Some(res.vm_logs()))
+    }
+
+    pub fn find_tx_debug_logs(&self, lt: u64) -> Option<String> {
+        self.find_tx_by_lt(lt)
+            .and_then(|res| Some(res.debug_logs()))
     }
 }
 

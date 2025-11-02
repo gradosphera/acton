@@ -455,6 +455,26 @@ impl FormatterContext {
                     .dimmed()
                     .to_string();
 
+                let debug_logs = self.emulations.find_tx_debug_logs(tx.lt);
+
+                if let Some(debug_logs) = debug_logs
+                    && !debug_logs.is_empty()
+                {
+                    extra_infos.push(format!(
+                        "Debug logs:\n{}",
+                        debug_logs
+                            .lines()
+                            .map(|line| format!(
+                                "{}{}   {}",
+                                child_prefix,
+                                "│".dimmed(),
+                                line.trim_start_matches("#DEBUG#: ").dimmed()
+                            ))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    ));
+                }
+
                 if compute.exit_code != 0 {
                     result += &format!(" exit_code={}", compute.exit_code)
                         .red()

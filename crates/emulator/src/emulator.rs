@@ -26,6 +26,13 @@ impl SendMessageResult {
             SendMessageResult::Error(res) => res.vm_log.clone().unwrap_or("".to_string()),
         }
     }
+
+    pub fn debug_logs(&self) -> String {
+        match self {
+            SendMessageResult::Success(res) => res.debug_logs.clone(),
+            SendMessageResult::Error(res) => "".to_string(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -37,6 +44,8 @@ pub struct SendMessageResultSuccess {
     pub shard_account: ShardAccount,
     pub out_messages: Vec<Cell>,
     pub vm_log: String,
+    pub logs: String,
+    pub debug_logs: String,
     pub actions: Option<String>,
     pub code: Option<Cell>,
     pub externals: Vec<Cell>,
@@ -61,7 +70,7 @@ impl Emulator {
         };
 
         let dest_account = net.get_account(&int_message.dst.to_string());
-        let result = self.executor.run_transaction(
+        let (result, logs, debug_logs) = self.executor.run_transaction(
             message.clone(),
             BigInt::from(0),
             RunTransactionArgs {
@@ -109,6 +118,8 @@ impl Emulator {
             shard_account,
             out_messages,
             vm_log: result.vm_log,
+            logs,
+            debug_logs,
             actions: result.actions,
             code,
             externals: vec![],

@@ -60,7 +60,7 @@ impl Executor {
         message: Cell,
         mode: BigInt,
         params: RunTransactionArgs,
-    ) -> EmulationResult {
+    ) -> (EmulationResult, String, String) {
         let message = CString::new(Boc::encode_base64(message)).unwrap();
 
         let shard_account_cell = params.shard_account.to_cell();
@@ -83,7 +83,7 @@ impl Executor {
 
         let output_str = unsafe { CString::from_raw(result_cstr).to_string_lossy().to_string() };
         let result = serde_json::from_str::<EmulationInternalResult>(&output_str).unwrap();
-        result.output
+        (result.output, result.logs, result.debug_logs)
     }
 
     pub fn get_address_code_cell(account: &ShardAccount) -> Option<Cell> {
@@ -193,6 +193,7 @@ pub struct EmulationInternalParams {
 struct EmulationInternalResult {
     pub output: EmulationResult,
     pub logs: String,
+    pub debug_logs: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
