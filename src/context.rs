@@ -198,6 +198,7 @@ impl AnyExecutor {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Emulations {
     pub results: Vec<Vec<SendMessageResult>>,
     pub get_results: Vec<GetMethodResultSuccess>,
@@ -209,6 +210,17 @@ impl Emulations {
             results: vec![],
             get_results: vec![],
         }
+    }
+
+    pub fn find_tx_logs(&self, lt: u64) -> Option<String> {
+        self.results
+            .iter()
+            .flatten()
+            .find(|res| match res {
+                SendMessageResult::Success(res) if res.transaction.lt == lt => true,
+                _ => false,
+            })
+            .and_then(|res| Some(res.vm_logs()))
     }
 }
 

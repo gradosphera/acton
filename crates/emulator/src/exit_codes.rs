@@ -15,22 +15,25 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         0,
         ExitCodeInfo {
             name: "Success",
-            description: "Standard successful execution exit code.",
+            description: "Standard successful execution exit code",
             phase: "Compute and action phases",
         },
     );
 
-    map.insert(1, ExitCodeInfo {
-        name: "Alt Success",
-        description: "Alternative successful execution exit code. Reserved, but does not occur.",
-        phase: "Compute phase",
-    });
+    map.insert(
+        1,
+        ExitCodeInfo {
+            name: "Alt Success",
+            description: "Alternative successful execution exit code. Reserved, but does not occur",
+            phase: "Compute phase",
+        },
+    );
 
     map.insert(
         2,
         ExitCodeInfo {
             name: "Stack Underflow",
-            description: "Stack underflow.",
+            description: "Stack underflow",
             phase: "Compute phase",
         },
     );
@@ -39,7 +42,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         3,
         ExitCodeInfo {
             name: "Stack Overflow",
-            description: "Stack overflow.",
+            description: "Stack overflow",
             phase: "Compute phase",
         },
     );
@@ -48,7 +51,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         4,
         ExitCodeInfo {
             name: "Integer Overflow",
-            description: "Integer overflow.",
+            description: "Integer overflow",
             phase: "Compute phase",
         },
     );
@@ -57,7 +60,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         5,
         ExitCodeInfo {
             name: "Range Check Error",
-            description: "Range check error — an integer is out of its expected range.",
+            description: "Range check error — an integer is out of its expected range",
             phase: "Compute phase",
         },
     );
@@ -66,7 +69,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         6,
         ExitCodeInfo {
             name: "Invalid Opcode",
-            description: "Invalid TVM opcode.",
+            description: "Invalid TVM opcode",
             phase: "Compute phase",
         },
     );
@@ -75,7 +78,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         7,
         ExitCodeInfo {
             name: "Type Check Error",
-            description: "Type check error.",
+            description: "Type check error",
             phase: "Compute phase",
         },
     );
@@ -84,7 +87,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         8,
         ExitCodeInfo {
             name: "Cell Overflow",
-            description: "Cell overflow.",
+            description: "Cell overflow",
             phase: "Compute phase",
         },
     );
@@ -93,7 +96,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         9,
         ExitCodeInfo {
             name: "Cell Underflow",
-            description: "Cell underflow.",
+            description: "Cell underflow",
             phase: "Compute phase",
         },
     );
@@ -102,7 +105,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         10,
         ExitCodeInfo {
             name: "Dictionary Error",
-            description: "Dictionary error.",
+            description: "Dictionary error",
             phase: "Compute phase",
         },
     );
@@ -111,7 +114,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         11,
         ExitCodeInfo {
             name: "Unknown Error",
-            description: "Unknown error, may be thrown by user programs.",
+            description: "Unknown error, may be thrown by user programs",
             phase: "Compute phase",
         },
     );
@@ -120,7 +123,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         12,
         ExitCodeInfo {
             name: "Fatal Error",
-            description: "Fatal error. Thrown by TVM in situations deemed impossible.",
+            description: "Fatal error. Thrown by TVM in situations deemed impossible",
             phase: "Compute phase",
         },
     );
@@ -129,7 +132,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         13,
         ExitCodeInfo {
             name: "Out of Gas",
-            description: "Out of gas error.",
+            description: "Out of gas error",
             phase: "Compute phase",
         },
     );
@@ -138,7 +141,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         -14,
         ExitCodeInfo {
             name: "Out of Gas (Negative)",
-            description: "Same as 13. Negative, so that it cannot be faked.",
+            description: "Same as 13. Negative, so that it cannot be faked",
             phase: "Compute phase",
         },
     );
@@ -147,7 +150,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         14,
         ExitCodeInfo {
             name: "VM Virtualization",
-            description: "VM virtualization error. Reserved, but never thrown.",
+            description: "VM virtualization error. Reserved, but never thrown",
             phase: "Compute phase",
         },
     );
@@ -156,7 +159,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         32,
         ExitCodeInfo {
             name: "Invalid Action List",
-            description: "Action list is invalid.",
+            description: "Action list is invalid",
             phase: "Action phase",
         },
     );
@@ -165,7 +168,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         33,
         ExitCodeInfo {
             name: "Action List Too Long",
-            description: "Action list is too long.",
+            description: "Action list is too long",
             phase: "Action phase",
         },
     );
@@ -174,7 +177,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         34,
         ExitCodeInfo {
             name: "Invalid Action",
-            description: "Action is invalid or not supported.",
+            description: "Action is invalid or not supported",
             phase: "Action phase",
         },
     );
@@ -183,7 +186,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         35,
         ExitCodeInfo {
             name: "Invalid Source Address",
-            description: "Invalid source address in outbound message.",
+            description: "Invalid source address in outbound message",
             phase: "Action phase",
         },
     );
@@ -192,7 +195,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         36,
         ExitCodeInfo {
             name: "Invalid Destination Address",
-            description: "Invalid destination address in outbound message.",
+            description: "Invalid destination address in outbound message",
             phase: "Action phase",
         },
     );
@@ -201,7 +204,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         37,
         ExitCodeInfo {
             name: "Not Enough Toncoin",
-            description: "Not enough Toncoin.",
+            description: "Not enough Toncoin",
             phase: "Action phase",
         },
     );
@@ -210,7 +213,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         38,
         ExitCodeInfo {
             name: "Not Enough Extra Currencies",
-            description: "Not enough extra currencies.",
+            description: "Not enough extra currencies",
             phase: "Action phase",
         },
     );
@@ -219,14 +222,14 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         39,
         ExitCodeInfo {
             name: "Message Too Large",
-            description: "Outbound message does not fit into a cell after rewriting.",
+            description: "Outbound message does not fit into a cell after rewriting",
             phase: "Action phase",
         },
     );
 
     map.insert(40, ExitCodeInfo {
         name: "Cannot Process Message",
-        description: "Cannot process a message — not enough funds, the message is too large, or its Merkle depth is too big.",
+        description: "Cannot process a message — not enough funds, the message is too large, or its Merkle depth is too big",
         phase: "Action phase",
     });
 
@@ -234,7 +237,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         41,
         ExitCodeInfo {
             name: "Library Reference Null",
-            description: "Library reference is null during library change action.",
+            description: "Library reference is null during library change action",
             phase: "Action phase",
         },
     );
@@ -243,14 +246,14 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         42,
         ExitCodeInfo {
             name: "Library Change Error",
-            description: "Library change action error.",
+            description: "Library change action error",
             phase: "Action phase",
         },
     );
 
     map.insert(43, ExitCodeInfo {
         name: "Library Limits Exceeded",
-        description: "Exceeded the maximum number of cells in the library or the maximum depth of the Merkle tree.",
+        description: "Exceeded the maximum number of cells in the library or the maximum depth of the Merkle tree",
         phase: "Action phase",
     });
 
@@ -258,7 +261,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         50,
         ExitCodeInfo {
             name: "Account Size Exceeded",
-            description: "Account state size exceeded limits.",
+            description: "Account state size exceeded limits",
             phase: "Action phase",
         },
     );
@@ -269,7 +272,7 @@ pub static EXIT_CODE_DESCRIPTIONS: Lazy<HashMap<i64, ExitCodeInfo>> = Lazy::new(
         63,
         ExitCodeInfo {
             name: "Type prefix mismatch",
-            description: "Unable to load data from cell because prefix does not match.",
+            description: "Unable to load data from cell because prefix does not match",
             phase: "Compute phase",
         },
     );

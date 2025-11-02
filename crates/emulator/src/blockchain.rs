@@ -1,8 +1,18 @@
 use num_bigint::BigInt;
 use num_traits::cast::ToPrimitive;
 use std::collections::HashMap;
-use tycho_types::cell::{HashBytes, Lazy};
-use tycho_types::models::{OptionalAccount, ShardAccount};
+use tycho_types::cell::{Cell, HashBytes, Lazy};
+use tycho_types::models::{AccountState, OptionalAccount, ShardAccount};
+
+pub fn account_code(accounts: &HashMap<String, ShardAccount>, addr: String) -> Option<Cell> {
+    let account = accounts.get(&addr);
+    let state = account?.account.load().ok()?.0?.state;
+    match state {
+        AccountState::Uninit => None,
+        AccountState::Active(state) => state.code,
+        AccountState::Frozen(_) => None,
+    }
+}
 
 pub struct Blockchain {
     accounts: HashMap<String, ShardAccount>,

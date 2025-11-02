@@ -8,7 +8,7 @@ use crate::context::{
 use crate::dap::DapMessage;
 use crate::debug_context::DebugContext;
 use crate::formatter::FormatterContext;
-use crate::{asserts_exts, exts, io_exts, vmtrace};
+use crate::{asserts_exts, exts, io_exts, retrace};
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use crossbeam_channel::{Receiver, Sender, unbounded};
@@ -505,6 +505,7 @@ fn run_all_tests(
                 contract_abi: abi.clone(),
                 accounts,
                 build_cache: build_cache.clone(),
+                emulations: emulations.clone(),
                 known_addresses: known_addresses.clone(),
                 known_code_cells: known_code_cells.clone(),
             };
@@ -513,7 +514,7 @@ fn run_all_tests(
                 GetMethodResult::Success(result) => {
                     let exit_code = result.vm_exit_code as i64;
 
-                    let exit_code_info = find_exception_info(&result.vm_log, source_map);
+                    let exit_code_info = retrace::find_exception_info(&result.vm_log, source_map);
 
                     if gas_limit_exceeded {
                         println!(
@@ -659,7 +660,7 @@ fn run_all_tests(
                                         "├─".dimmed(),
                                         format!(
                                             "{}:{}:{}",
-                                            normalize_path(&loc.file),
+                                            SourceLocation::normalize_path(&loc.file),
                                             loc.line + 1,
                                             loc.column + 2
                                         )
@@ -680,7 +681,9 @@ fn run_all_tests(
                                                     |func_name| {
                                                         let location = format!(
                                                             "{}:{}:{}",
-                                                            normalize_path(&loc.loc.file),
+                                                            SourceLocation::normalize_path(
+                                                                &loc.loc.file
+                                                            ),
                                                             loc.loc.line + 1,
                                                             loc.loc.column + 2
                                                         );
@@ -805,25 +808,6 @@ fn beatify_test_name(name: &String) -> String {
         .to_string()
 }
 
-fn normalize_path(file: &String) -> String {
-    let normalized = file.replace("_test.tolk_test.tolk", "_test.tolk");
-
-    if let Ok(cwd) = std::env::current_dir() {
-        let file_path = Path::new(&normalized);
-
-        if let Ok(relative) = file_path.strip_prefix(&cwd) {
-            let relative_str = relative.to_string_lossy();
-            if relative_str.len() < normalized.len()
-                || normalized.starts_with(cwd.to_string_lossy().as_ref())
-            {
-                return relative_str.to_string();
-            }
-        }
-    }
-
-    normalized
-}
-
 fn format_search_transaction_parameters(
     assert_failure: &TransactionGenericAssertFailure,
     abi: &ContractAbi,
@@ -896,90 +880,6 @@ fn format_search_transaction_parameters(
         ))
     }
     params
-}
-
-struct ExceptionInfo {
-    description: String,
-    loc: Option<SourceLocation>,
-    backtrace: Vec<DebugLocation>,
-}
-
-fn find_exception_info(vm_logs: &String, source_map: &SourceMap) -> Option<ExceptionInfo> {
-    let lines = vmlogs::parser::parse_lines(vm_logs.as_str());
-
-    let exception = lines.iter().rfind(|line| match line {
-        Ok(VmLine::VmException { .. }) => true,
-        _ => false,
-    });
-    let description = match exception {
-        Some(Ok(VmLine::VmException { message, .. })) => message.to_string(),
-        _ => "".to_string(),
-    };
-
-    let location = lines.iter().rfind(|line| match line {
-        Ok(VmLine::VmLoc { .. }) => true,
-        _ => false,
-    });
-
-    let (hash, offset) = match location {
-        Some(Ok(VmLine::VmLoc { hash, offset })) => (hash.to_string(), offset.parse().unwrap_or(0)),
-        _ => ("".to_string(), 0),
-    };
-
-    let loc = find_source_loc(source_map, &hash, offset);
-
-    let backtrace = find_backtrace(source_map, lines);
-
-    Some(ExceptionInfo {
-        description,
-        loc,
-        backtrace,
-    })
-}
-
-fn find_backtrace(
-    source_map: &SourceMap,
-    lines: Vec<Result<VmLine, String>>,
-) -> Vec<DebugLocation> {
-    let execution_path = vmtrace::build_vm_trace_from_lines(lines, source_map);
-
-    let mut stack = vec![];
-
-    for step in &execution_path {
-        if step.context.event == Some("EnterFunction".to_string())
-            || step.context.event == Some("EnterInlinedFunction".to_string())
-        {
-            if step.context.event_function.is_none() {
-                continue;
-            }
-
-            stack.push(step);
-        }
-        if step.context.event == Some("AfterFunctionCall".to_string())
-            || step.context.event == Some("LeaveInlinedFunction".to_string())
-        {
-            let event_function = &step.context.event_function;
-
-            let Some(last) = stack.last() else {
-                continue;
-            };
-
-            if last.context.event_function == *event_function {
-                stack.pop();
-            }
-        }
-    }
-    stack.iter().map(|loc| (**loc).clone()).collect::<Vec<_>>()
-}
-
-fn find_source_loc(source_map: &SourceMap, hash: &String, offset: i32) -> Option<SourceLocation> {
-    if source_map.high_level.locations.is_empty() {
-        // `--backtrace full` is not enabled
-        return None;
-    }
-
-    let locs = vmtrace::low_level_loc_to_debug_locations(source_map, hash.as_str(), offset, true)?;
-    locs.last().and_then(|l| Some(l.loc.clone()))
 }
 
 struct TestResult {

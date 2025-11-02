@@ -8,4 +8,5 @@ pub mod debug_variables;
 pub mod exts;
 pub mod formatter;
 pub mod io_exts;
+pub mod retrace;
 pub mod vmtrace;

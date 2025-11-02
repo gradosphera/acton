@@ -13,7 +13,7 @@ pub struct Emulator {
     pub executor: Executor,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SendMessageResult {
     Success(SendMessageResultSuccess),
     Error(ResultError),
@@ -28,7 +28,7 @@ impl SendMessageResult {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SendMessageResultSuccess {
     pub raw_transaction: String,
     pub transaction: Transaction,

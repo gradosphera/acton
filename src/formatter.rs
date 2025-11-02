@@ -1,5 +1,7 @@
-use crate::context::{BuildCache, KnownAddresses};
+use crate::context::{BuildCache, Emulations, KnownAddresses};
+use crate::retrace;
 use abi::{ContractAbi, TypeAbi};
+use emulator::blockchain::account_code;
 use emulator::exit_codes::get_exit_code_info;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
@@ -54,6 +56,7 @@ pub struct FormatterContext {
     pub contract_abi: ContractAbi,
     pub accounts: HashMap<String, ShardAccount>,
     pub build_cache: BuildCache,
+    pub emulations: Emulations,
     pub known_addresses: KnownAddresses,
     pub known_code_cells: HashMap<String, String>,
 }
@@ -64,6 +67,7 @@ impl FormatterContext {
             contract_abi: ContractAbi::default(),
             accounts: HashMap::new(),
             build_cache: BuildCache::new(),
+            emulations: Emulations::new(),
             known_addresses: KnownAddresses::new(),
             known_code_cells: HashMap::new(),
         }
@@ -75,6 +79,7 @@ impl FormatterContext {
             contract_abi: ctx.abi.clone(),
             accounts: ctx.blockchain.get_accounts().clone(),
             build_cache: ctx.build_cache.clone(),
+            emulations: ctx.emulations.clone(),
             known_addresses: ctx.known_addresses.clone(),
             known_code_cells: ctx.known_code_cells.clone(),
         }
@@ -439,6 +444,7 @@ impl FormatterContext {
         };
 
         let mut result = String::new();
+        let mut extra_infos = vec![];
 
         match info.compute_phase {
             ComputePhase::Executed(compute) => {
@@ -453,6 +459,33 @@ impl FormatterContext {
                     result += &format!(" exit_code={}", compute.exit_code)
                         .red()
                         .to_string();
+
+                    if let Some(info) = get_exit_code_info(compute.exit_code as i64) {
+                        extra_infos.push(format!(
+                            "Compute phase failed: {}",
+                            info.description.to_string()
+                        ));
+                    }
+
+                    // Trying to retrace exit code to find out exact Tolk source location
+                    let logs = self.emulations.find_tx_logs(tx.lt);
+                    let in_msg = tx.load_in_msg();
+                    if let Some(logs) = logs
+                        && let Ok(Some(in_msg)) = &in_msg
+                        && let MsgInfo::Int(info) = &in_msg.info
+                    {
+                        let code = account_code(&self.accounts, info.dst.to_string());
+                        let result = self.build_cache.result_for_code(&code);
+
+                        if let Some(result) = result {
+                            let info = retrace::find_exception_info(&logs, &result.1.source_map);
+                            if let Some(info) = info
+                                && let Some(loc) = info.loc
+                            {
+                                extra_infos.push(format!("at {}", loc.format()));
+                            }
+                        }
+                    }
                 }
             }
             _ => {
@@ -469,8 +502,6 @@ impl FormatterContext {
         if info.aborted {
             result += " aborted".red().to_string().as_str();
         }
-
-        let mut extra_infos = vec![];
 
         if tx.orig_status == AccountStatus::NotExists && tx.end_status == AccountStatus::Active {
             extra_infos.push("account created".to_string());

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::Path;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, CellSlice, Load};
 use tycho_types::dict::{Dict, RawDict};
@@ -65,6 +67,36 @@ pub struct SourceLocation {
     pub end_line: i64,
     pub end_column: i64,
     pub length: i64,
+}
+
+impl SourceLocation {
+    pub fn format(&self) -> String {
+        format!(
+            "{}:{}:{}",
+            Self::normalize_path(&self.file),
+            self.line + 1,
+            self.column + 2
+        )
+    }
+
+    pub fn normalize_path(file: &String) -> String {
+        let normalized = file.replace("_test.tolk_test.tolk", "_test.tolk");
+
+        if let Ok(cwd) = std::env::current_dir() {
+            let file_path = Path::new(&normalized);
+
+            if let Ok(relative) = file_path.strip_prefix(&cwd) {
+                let relative_str = relative.to_string_lossy();
+                if relative_str.len() < normalized.len()
+                    || normalized.starts_with(cwd.to_string_lossy().as_ref())
+                {
+                    return relative_str.to_string();
+                }
+            }
+        }
+
+        normalized
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
