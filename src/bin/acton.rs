@@ -57,6 +57,8 @@ enum Commands {
         json: bool,
         #[arg(long, help = "Output only base64 code")]
         base64_only: bool,
+        #[arg(long, help = "Output code to binary BoC file")]
+        boc: Option<String>,
     },
 }
 
@@ -108,8 +110,9 @@ fn main() {
             path,
             json,
             base64_only,
+            boc,
         } => {
-            let result = compile_cmd(&path, json, base64_only);
+            let result = compile_cmd(&path, json, base64_only, boc);
             if let Err(err) = result {
                 if json {
                     println!(

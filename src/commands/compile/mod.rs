@@ -5,7 +5,12 @@ use std::fs;
 use std::path::Path;
 use tycho_types::boc::Boc;
 
-pub fn compile_cmd(path: &String, json: bool, base64_only: bool) -> Result<(), anyhow::Error> {
+pub fn compile_cmd(
+    path: &String,
+    json: bool,
+    base64_only: bool,
+    boc: Option<String>,
+) -> Result<(), anyhow::Error> {
     let metadata = fs::metadata(path)?;
     if !metadata.is_file() {
         return Err(anyhow!("Path '{}' is not a file", path));
@@ -24,7 +29,13 @@ pub fn compile_cmd(path: &String, json: bool, base64_only: bool) -> Result<(), a
     match compilation_result {
         tolkc::CompilerResult::Success(result) => {
             let code = Boc::decode_base64(result.code_boc64.clone())?;
-            let code_hex = Boc::encode_hex(code);
+            let code_hex = Boc::encode_hex(&code);
+
+            if let Some(boc) = boc {
+                let bytes = Boc::encode(code);
+                fs::write(boc, bytes)?;
+                return Ok(());
+            }
 
             if base64_only {
                 println!("{}", result.code_boc64);
