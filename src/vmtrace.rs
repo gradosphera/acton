@@ -46,7 +46,7 @@ pub fn low_level_loc_to_debug_locations(
         .filter(|(mark_offset, _)| return *mark_offset == offset)
         .collect::<Vec<_>>();
 
-    if debug_pairs.is_empty() && allow_approx {
+    if debug_pairs.is_empty() && !marks.is_empty() && allow_approx {
         // We can't always find the exact location, so try to find an approximate location
         // For example, to find location where exit code is thrown
         debug_pairs = marks
@@ -55,6 +55,12 @@ pub fn low_level_loc_to_debug_locations(
             .iter()
             .map(|pair| *pair)
             .collect::<Vec<_>>();
+
+        if debug_pairs.is_empty() {
+            // If we don't find approx info but have marks info,
+            // use first one to show at least some location to user
+            debug_pairs = vec![marks.first().unwrap()]
+        }
     }
 
     let locs = find_locations_by_debug_marks(source_map, debug_pairs);
