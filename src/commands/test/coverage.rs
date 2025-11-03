@@ -6,7 +6,7 @@ use owo_colors::OwoColorize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
-use tolkc::source_map::EntryContextDescription;
+use tolkc::source_map::{EntryContextDescription, SourceMap};
 
 #[derive(Debug, Clone)]
 pub struct Coverage {
@@ -50,45 +50,7 @@ pub fn collect_coverage(emulations: &Emulations, build_cache: &BuildCache) -> Co
             continue;
         }
 
-        let mut executable_lines_per_file: HashMap<String, HashSet<i64>> = HashMap::new();
-        let source_maps_locations = source_map.high_level.locations;
-        let executable_locations = source_maps_locations;
-        for loc in executable_locations {
-            if loc.loc.file.contains("@stdlib/")
-                || loc.loc.file.is_empty()
-                || loc.loc.file.contains("/lib/")
-                || loc.loc.file.contains("/.acton/")
-                || loc.loc.file.contains("_test.tolk")
-            {
-                continue;
-            }
-
-            let file = loc.loc.file.clone();
-            if whole_executable_lines_per_file.contains_key(&file) {
-                // we already have executable lines for this file
-                continue;
-            }
-
-            if let EntryContextDescription::Basic { ast_kind } = loc.context.description
-                && ast_kind == "ast_block_statement"
-            {
-                // skip block statements
-                continue;
-            }
-
-            let entry = executable_lines_per_file
-                .entry(file)
-                .or_insert_with(HashSet::new);
-            entry.insert(loc.loc.line);
-        }
-
-        for (path, locs) in &executable_lines_per_file {
-            if whole_executable_lines_per_file.contains_key(path) {
-                // we already have executable lines for this file
-                continue;
-            }
-            whole_executable_lines_per_file.insert(path.clone(), locs.clone());
-        }
+        build_executable_lines_per_file(&mut whole_executable_lines_per_file, source_map);
     }
 
     for get_result in &emulations.get_results {
@@ -101,6 +63,13 @@ pub fn collect_coverage(emulations: &Emulations, build_cache: &BuildCache) -> Co
 
         let mut trace = build_vm_trace(logs, &source_map);
         whole_trace.append(&mut trace);
+
+        // Optimization: don't process same source map several times
+        if !seen_source_maps.insert(source_map.hash()) {
+            continue;
+        }
+
+        build_executable_lines_per_file(&mut whole_executable_lines_per_file, source_map);
     }
 
     let mut coverages: Vec<FileCoverage> = vec![];
@@ -144,6 +113,51 @@ pub fn collect_coverage(emulations: &Emulations, build_cache: &BuildCache) -> Co
     }
 
     Coverage { files: coverages }
+}
+
+fn build_executable_lines_per_file(
+    whole_executable_lines_per_file: &mut HashMap<String, HashSet<i64>>,
+    source_map: SourceMap,
+) {
+    let mut executable_lines_per_file: HashMap<String, HashSet<i64>> = HashMap::new();
+    let source_maps_locations = source_map.high_level.locations;
+    let executable_locations = source_maps_locations;
+    for loc in executable_locations {
+        if loc.loc.file.contains("@stdlib/")
+            || loc.loc.file.is_empty()
+            || loc.loc.file.contains("/lib/")
+            || loc.loc.file.contains("/.acton/")
+            || loc.loc.file.contains("_test.tolk")
+        {
+            continue;
+        }
+
+        let file = loc.loc.file.clone();
+        if whole_executable_lines_per_file.contains_key(&file) {
+            // we already have executable lines for this file
+            continue;
+        }
+
+        if let EntryContextDescription::Basic { ast_kind } = loc.context.description
+            && ast_kind == "ast_block_statement"
+        {
+            // skip block statements
+            continue;
+        }
+
+        let entry = executable_lines_per_file
+            .entry(file)
+            .or_insert_with(HashSet::new);
+        entry.insert(loc.loc.line);
+    }
+
+    for (path, locs) in &executable_lines_per_file {
+        if whole_executable_lines_per_file.contains_key(path) {
+            // we already have executable lines for this file
+            continue;
+        }
+        whole_executable_lines_per_file.insert(path.clone(), locs.clone());
+    }
 }
 
 pub fn merge_coverages(coverages: &Vec<Coverage>) -> Coverage {

@@ -447,10 +447,11 @@ fn run_all_tests(
             assert_failure,
             expected_exit_code: dyn_expected_exit_code,
             accounts,
+            get_result,
             ..
         } = result;
 
-        let (exit_code, gas_used) = match &result.get_result {
+        let (exit_code, gas_used) = match &get_result {
             GetMethodResult::Success(result) => {
                 let gas_used = result.gas_used.parse::<u64>().unwrap_or(0);
                 (result.vm_exit_code, gas_used)
@@ -509,7 +510,7 @@ fn run_all_tests(
                 known_code_cells: known_code_cells.clone(),
             };
 
-            match &result.get_result {
+            match &get_result {
                 GetMethodResult::Success(result) => {
                     let exit_code = result.vm_exit_code as i64;
 
@@ -777,6 +778,20 @@ fn run_all_tests(
                 file_path,
                 duration_ms,
             );
+        }
+
+        if coverage {
+            // For coverage, we need to process test logs as well, so register it here
+            if let GetMethodResult::Success(get_result) = get_result {
+                emulations.get_results.push(get_result);
+                build_cache.memoize(
+                    &test.name,
+                    &file_path.to_string(),
+                    &code_cell.to_boc_b64(false).unwrap(),
+                    &code_cell.cell_hash().unwrap().to_hex().to_ascii_uppercase(),
+                    source_map.clone(),
+                )
+            }
         }
     }
 
