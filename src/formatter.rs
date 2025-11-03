@@ -13,6 +13,7 @@ use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
+use tycho_types::error::Error;
 use tycho_types::models::{
     AccountState, AccountStatus, ComputePhase, IntAddr, Message, MsgInfo, ShardAccount,
     Transaction, TxInfo,
@@ -104,9 +105,25 @@ impl FormatterContext {
     fn format_address_slice(&self, slice: &ArcCell) -> String {
         let mut parser = slice.parser();
         if let Ok(address) = parser.load_address() {
+            let addr = Self::arc_cell_to_addr(slice);
+
+            if let Some(addr) = &addr {
+                let contract_type = self.get_contract_type(addr);
+                if let Some(contract_type) = contract_type {
+                    return format!("{} ({})", address.to_string(), contract_type);
+                }
+            }
+
             return address.to_string();
         }
         slice.to_boc_hex(false).unwrap()
+    }
+
+    fn arc_cell_to_addr(slice: &ArcCell) -> Option<IntAddr> {
+        let cell = Boc::decode_hex(slice.to_boc_hex(false).ok()?).ok()?;
+        let mut slice = cell.as_slice().ok()?;
+        let addr = IntAddr::load_from(&mut slice);
+        addr.ok()
     }
 
     /// Format transaction list as a tree

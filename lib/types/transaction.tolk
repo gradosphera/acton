@@ -43,7 +43,7 @@ struct (0b0111) Transaction {
     description: Cell<TransactionDescr>
 }
 
-/// Loads the in message of the transaction with given type.
+/// Loads the in message body of the transaction with given type.
 /// 
 /// Note that if message type mismatch, loading will fail with exit code 63.
 /// 
@@ -58,6 +58,14 @@ fun Transaction.loadBody<Msg>(self) {
     val in_msg_cell = self.messages.load().in_msg.unwrap() as cell as Cell<MessageRelaxed<Msg>>;
     val in_msg = in_msg_cell.load();
     return in_msg.loadBody()
+}
+
+/// Loads the in message of the transaction with given type.
+///
+/// Note that if message type mismatch, loading will fail with exit code 63.
+fun Transaction.loadInMsg<Msg>(self) {
+    val in_msg_cell = self.messages.load().in_msg.unwrap() as cell as Cell<MessageRelaxed<Msg>>;
+    return in_msg_cell.load()
 }
 
 struct TransactionMessages {
