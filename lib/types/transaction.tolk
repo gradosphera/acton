@@ -292,10 +292,21 @@ type TransactionDescr =
     | TransMergePrepare
     | TransMergeInstall
 
+type VarUint7 = int
+
+fun VarUint7.packToBuilder(self, mutate b: builder) {
+    b.storeUint(self, 32) // TODO: correct serialization
+}
+
+fun VarUint7.unpackFromSlice(mutate s: slice): VarUint7 {
+    val size = s.loadUint(3);
+    return s.loadUint(size * 8);
+}
+
 /// Represents storage used information.
 struct StorageUsed {
-    cells: uint32,
-    bits: uint32
+    cells: VarUint7,
+    bits: VarUint7
 }
 
 /// Represents storage extra information.

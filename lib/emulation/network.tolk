@@ -479,6 +479,16 @@ fun net.registerCodeCell(code: cell, name: slice) {
     ffi.registerCodeCell(code, name);
 }
 
+/// Returns current account state for address or none if no information available.
+fun net.getAccountState(addr: address): AccountInfo? {
+    val cell = ffi.getAccountState(addr.toCell());
+    if (cell == null) {
+        return null;
+    }
+    val typed_cell = cell as Cell<AccountInfo>;
+    return typed_cell.load()
+}
+
 /// Calculate the CRC16 checksum of a slice.
 /// 
 /// Example:
@@ -519,3 +529,4 @@ fun ffi.registerCodeCell(cell: cell, name: slice): void asm "16 EXTCALL"
 fun ffi.findTransactionByParams(txs: tuple, params: tuple): cell? asm "10 EXTCALL"
 fun ffi.failToFindTransactionByParams(location: slice, message: slice, txs: tuple, params: tuple): tuple? asm "103 EXTCALL"
 fun ffi.failToNotFindTransactionByParams(location: slice, message: slice, txs: tuple, params: tuple): tuple? asm "104 EXTCALL"
+fun ffi.getAccountState(addr: cell): cell? asm "17 EXTCALL"

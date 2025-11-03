@@ -22,7 +22,7 @@ use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, Load};
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, Load, Store};
 use tycho_types::models::{
     AccountState, AccountStatus, ComputePhase, IntAddr, MsgInfo, RelaxedMessage, RelaxedMsgInfo,
     ShardAccount, Transaction, TxInfo,
@@ -703,6 +703,37 @@ fn register_code_impl(ctx: &mut Context, _stack: &mut Tuple, name: String, code:
         .insert(code.cell_hash().unwrap().to_hex(), name);
 }
 
+extension!(account_state in (Context) with (address: ArcCell) using account_state_impl);
+fn account_state_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell) {
+    let address_cell = Boc::decode_base64(address.to_boc_b64(false).unwrap()).unwrap();
+    let mut address_slice = address_cell.parse().unwrap();
+    let addr = IntAddr::load_from(&mut address_slice).unwrap();
+
+    let Ok(account) = ctx.blockchain.get_account(&addr.to_string()).account.load() else {
+        stack.push(TupleItem::Null);
+        return;
+    };
+
+    let Some(account) = account.0 else {
+        stack.push(TupleItem::Null);
+        return;
+    };
+
+    let mut builder = CellBuilder::new();
+    builder.store_bit(true).unwrap();
+    account
+        .store_into(&mut builder, Cell::empty_context())
+        .unwrap();
+    let cell = builder.build().unwrap();
+
+    let Ok(cell) = ArcCell::from_boc_b64(&Boc::encode_base64(cell)) else {
+        stack.push(TupleItem::Null);
+        return;
+    };
+
+    stack.push(TupleItem::Cell(cell))
+}
+
 pub fn register_extensions(executor: &mut dyn BaseExecutor, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         3 => read_file,
@@ -717,5 +748,6 @@ pub fn register_extensions(executor: &mut dyn BaseExecutor, ctx: &mut Context) {
         14 => type_name_by_opcode,
         15 => register_address,
         16 => register_code,
+        17 => account_state,
     });
 }
