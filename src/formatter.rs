@@ -597,7 +597,10 @@ impl FormatterContext {
             }
 
             result += info.as_str();
-            result += "\n";
+
+            if idx < extra_infos.len() - 1 {
+                result += "\n";
+            }
         }
 
         result
