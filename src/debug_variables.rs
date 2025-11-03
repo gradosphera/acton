@@ -20,16 +20,16 @@ impl DebugContext {
         &mut self,
         args: &&VariablesArguments,
     ) -> anyhow::Result<Vec<Variable>> {
-        let current_loc = match &self.last_step {
+        let stepper = match &self.stepper {
+            Some(s) => s,
+            None => return Ok(vec![]),
+        };
+
+        let current_loc = match &stepper.get_current_step() {
             Some(step) => match &step.loc {
                 Some(loc) => loc,
                 None => return Ok(vec![]),
             },
-            None => return Ok(vec![]),
-        };
-
-        let stepper = match &self.stepper {
-            Some(s) => s,
             None => return Ok(vec![]),
         };
 

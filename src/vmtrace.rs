@@ -26,7 +26,7 @@ pub fn build_vm_trace_from_lines(
                 .filter(|(mark_offset, _)| return *mark_offset == offset)
                 .collect::<Vec<_>>();
 
-            find_locations_by_debug_marks(source_map, debug_pairs)
+            find_locations_by_debug_marks(source_map, debug_pairs, false)
         })
         .collect::<Vec<_>>()
 }
@@ -35,6 +35,7 @@ pub fn low_level_loc_to_debug_locations(
     source_map: &SourceMap,
     hash: &str,
     offset: i32,
+    skip_block_statements: bool,
     allow_approx: bool,
 ) -> Option<Vec<DebugLocation>> {
     let Some(marks) = source_map.debug_marks.get(hash) else {
@@ -63,7 +64,7 @@ pub fn low_level_loc_to_debug_locations(
         }
     }
 
-    let locs = find_locations_by_debug_marks(source_map, debug_pairs);
+    let locs = find_locations_by_debug_marks(source_map, debug_pairs, skip_block_statements);
     if locs.is_empty() {
         return None;
     }
@@ -74,6 +75,7 @@ pub fn low_level_loc_to_debug_locations(
 fn find_locations_by_debug_marks(
     source_map: &SourceMap,
     debug_pairs: Vec<&(i32, i32)>,
+    skip_block_statements: bool,
 ) -> Vec<DebugLocation> {
     let locs = source_map
         .high_level
@@ -93,15 +95,16 @@ fn find_locations_by_debug_marks(
         .cloned()
         .collect::<Vec<_>>();
 
-    if locs
-        .iter()
-        .find(|loc| {
-            matches!(
-                &loc.context.description,
-                EntryContextDescription::Basic { ast_kind } if ast_kind == "ast_block_statement"
-            )
-        })
-        .is_some()
+    if skip_block_statements
+        && locs
+            .iter()
+            .find(|loc| {
+                matches!(
+                    &loc.context.description,
+                    EntryContextDescription::Basic { ast_kind } if ast_kind == "ast_block_statement"
+                )
+            })
+            .is_some()
     {
         let actual_locs = locs
             .iter()

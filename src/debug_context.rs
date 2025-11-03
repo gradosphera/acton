@@ -74,6 +74,8 @@ pub struct Stepper {
     pub current_executor_id: usize,
     pub buffers: Vec<VecDeque<DebugStep>>,
     buffer: VecDeque<DebugStep>,
+    last_breakpoint_line: i64,
+    last_breakpoint_lines: Vec<i64>,
     current_step: Option<DebugStep>,
     terminated: bool,
     thread_id: i64,
@@ -97,6 +99,8 @@ impl Stepper {
             buffers: Vec::new(),
             buffer: VecDeque::new(),
             current_step: None,
+            last_breakpoint_line: 0,
+            last_breakpoint_lines: Vec::new(),
             terminated: false,
             thread_id,
             callstacks: Vec::new(),
@@ -111,6 +115,7 @@ impl Stepper {
         self.source_maps.push(source_map);
         self.buffers.push(self.buffer.clone());
         self.callstacks.push(self.callstack.clone());
+        self.last_breakpoint_lines.push(self.last_breakpoint_line);
         self.current_executor_id += 1;
         self.buffer = VecDeque::new();
         self.callstack = Vec::new();
@@ -122,6 +127,7 @@ impl Stepper {
         self.source_maps.pop();
         self.buffer = self.buffers.pop().unwrap_or(VecDeque::new());
         self.callstack = self.callstacks.pop().unwrap_or(Vec::new());
+        self.last_breakpoint_line = self.last_breakpoint_lines.pop().unwrap_or(0);
         if self.current_executor_id > 0 {
             self.current_executor_id -= 1;
         }
@@ -227,6 +233,13 @@ impl Stepper {
         self.current_step.as_ref()
     }
 
+    pub fn get_current_step_line(&self) -> Option<i64> {
+        self.get_current_step()
+            .as_ref()
+            .and_then(|s| s.loc.as_ref())
+            .map(|loc| loc.loc.line)
+    }
+
     pub fn get_callstack(&self) -> &Vec<CallFrame> {
         &self.callstack
     }
@@ -272,7 +285,6 @@ impl Stepper {
 
 pub struct DebugContext {
     pub stepper: Option<Stepper>,
-    pub last_step: Option<DebugStep>,
     pub dap_sender: Sender<DapMessage>,
     pub req_receiver: Receiver<Request>,
     pub tuple_variables: HashMap<i64, TupleItem>,
@@ -295,7 +307,6 @@ impl DebugContext {
 
         DebugContext {
             stepper: None,
-            last_step: None,
             dap_sender,
             req_receiver,
             tuple_variables: HashMap::new(),
@@ -323,7 +334,6 @@ impl DebugContext {
         let stepper = Stepper::new(executor, source_map.clone(), 1, root_name);
         DebugContext {
             stepper: Some(stepper),
-            last_step: None,
             dap_sender,
             req_receiver: req_receiver.clone(),
             tuple_variables: HashMap::new(),
@@ -415,7 +425,6 @@ impl DebugContext {
             stepper.thread_id = 1
         }
 
-        self.last_step = None;
         self.tuple_variables.clear();
         self.out_actions_variables.clear();
         self.out_action_variables.clear();
@@ -521,14 +530,9 @@ impl DebugContext {
                     return Ok(true);
                 }
 
-                println!(
-                    "Current step: {:?}",
-                    self.stepper.as_ref().unwrap().get_current_step()
-                );
-
                 self.send_event(Event::Stopped(StoppedEventBody {
                     reason: StoppedEventReason::Step,
-                    thread_id: Some(1),
+                    thread_id: self.current_thread_id(),
                     description: None,
                     preserve_focus_hint: None,
                     text: None,
@@ -547,7 +551,7 @@ impl DebugContext {
 
                 self.send_event(Event::Stopped(StoppedEventBody {
                     reason: StoppedEventReason::Step,
-                    thread_id: Some(1),
+                    thread_id: self.current_thread_id(),
                     description: None,
                     preserve_focus_hint: None,
                     text: None,
@@ -566,7 +570,7 @@ impl DebugContext {
 
                 self.send_event(Event::Stopped(StoppedEventBody {
                     reason: StoppedEventReason::Step,
-                    thread_id: Some(1),
+                    thread_id: self.current_thread_id(),
                     description: None,
                     preserve_focus_hint: None,
                     text: None,
@@ -661,6 +665,14 @@ impl DebugContext {
         }
 
         Ok(false)
+    }
+
+    fn current_thread_id(&self) -> Option<i64> {
+        let Some(stepper) = &self.stepper else {
+            return None;
+        };
+
+        Some(stepper.thread_id)
     }
 
     fn normalize_path(file: &String) -> String {
@@ -770,29 +782,22 @@ impl DebugContext {
         self.performing_step == Some(StepMode::StepIn)
     }
 
-    fn check_breakpoint(&self, step: &DebugStep) -> Option<i64> {
-        let loc = step.loc.as_ref()?;
-        let file_path = PathBuf::from(&loc.loc.file);
-
-        let normalized_path = if file_path.to_string_lossy().ends_with("_script.tolk") {
-            PathBuf::from(file_path.to_string_lossy().replace("_script.tolk", ""))
-        } else if file_path
-            .to_string_lossy()
-            .ends_with("_test.tolk_test.tolk")
-        {
-            PathBuf::from(
-                file_path
-                    .to_string_lossy()
-                    .replace("_test.tolk_test.tolk", "_test.tolk"),
-            )
-        } else {
-            file_path
+    fn check_breakpoint(&mut self, step: &DebugStep) -> Option<i64> {
+        let stepper = match &mut self.stepper {
+            Some(s) => s,
+            None => return None,
         };
+
+        let loc = step.loc.as_ref()?;
+        let normalized_path = PathBuf::from(Self::normalize_path(&loc.loc.file));
 
         let file_breakpoints = self.breakpoints.get(&normalized_path)?;
 
         for bp_info in file_breakpoints {
-            if bp_info.breakpoint.line == loc.loc.line + 1 {
+            if bp_info.breakpoint.line == loc.loc.line + 1
+                && bp_info.breakpoint.line != stepper.last_breakpoint_line
+            {
+                stepper.last_breakpoint_line = bp_info.breakpoint.line;
                 return Some(bp_info.id);
             }
         }
@@ -826,7 +831,6 @@ impl DebugContext {
             match step.kind {
                 StepKind::UnmappedAdvance => continue,
                 _ => {
-                    self.last_step = Some(step);
                     return false;
                 }
             }
@@ -836,16 +840,12 @@ impl DebugContext {
     fn step_over_impl(&mut self) -> bool {
         self.performing_step = Some(StepMode::StepOver);
 
-        let current_line = self
-            .last_step
-            .as_ref()
-            .and_then(|s| s.loc.as_ref())
-            .map(|loc| loc.loc.line);
-
         let stepper = match &mut self.stepper {
             Some(s) => s,
             None => return true,
         };
+
+        let current_line = stepper.get_current_step_line();
 
         loop {
             let step = match stepper.next() {
@@ -856,33 +856,33 @@ impl DebugContext {
             match &step.kind {
                 StepKind::UnmappedAdvance => continue,
                 StepKind::SyntheticEnterInlined(func) => {
-                    match skip_inlined_function_new(stepper, func.clone(), current_line) {
-                        Some(next_step) => {
-                            self.last_step = Some(next_step);
-                            return false;
-                        }
-                        None => return true,
+                    let is_end = skip_inlined_function(stepper, func.clone());
+                    if is_end {
+                        return true;
+                    }
+
+                    if current_line != stepper.get_current_step_line() {
+                        return false;
                     }
                 }
                 StepKind::SyntheticEnterFunction(func) => {
-                    match skip_function_new(stepper, func.clone(), current_line) {
-                        Some(next_step) => {
-                            self.last_step = Some(next_step);
-                            return false;
-                        }
-                        None => return true,
+                    let is_end = skip_function(stepper, func.clone());
+                    if is_end {
+                        return true;
+                    }
+
+                    if current_line != stepper.get_current_step_line() {
+                        return false;
                     }
                 }
                 StepKind::Mapped => {
-                    if let Some(curr_line) = current_line
+                    if let Some(cur_line) = current_line
                         && let Some(loc) = &step.loc
                     {
-                        if loc.loc.line != curr_line {
-                            self.last_step = Some(step);
+                        if loc.loc.line != cur_line {
                             return false;
                         }
                     } else {
-                        self.last_step = Some(step);
                         return false;
                     }
                 }
@@ -894,17 +894,17 @@ impl DebugContext {
     fn step_out_impl(&mut self) -> bool {
         self.performing_step = Some(StepMode::StepIn);
 
-        let (current_function, current_line) = match &self.last_step {
-            Some(step) => match &step.loc {
-                Some(loc) => (loc.context.containing_function.clone(), loc.loc.line),
-                None => return self.continue_impl(),
-            },
-            None => return self.continue_impl(),
-        };
-
         let stepper = match &mut self.stepper {
             Some(s) => s,
             None => return true,
+        };
+
+        let current_function = match &stepper.get_current_step() {
+            Some(step) => match &step.loc {
+                Some(loc) => loc.context.containing_function.clone(),
+                None => return self.continue_impl(),
+            },
+            None => return self.continue_impl(),
         };
 
         loop {
@@ -916,26 +916,12 @@ impl DebugContext {
             match &step.kind {
                 StepKind::UnmappedAdvance => continue,
                 StepKind::SyntheticAfterFunctionCall(func) if func == &current_function => loop {
-                    let next_step = match stepper.next() {
-                        Some(s) => s,
-                        None => return true,
-                    };
-
-                    match next_step.kind {
-                        StepKind::UnmappedAdvance => continue,
-                        StepKind::Mapped => {
-                            if let Some(loc) = &next_step.loc {
-                                if loc.loc.line != current_line {
-                                    self.last_step = Some(next_step);
-                                    return false;
-                                }
-                            }
-                        }
-                        _ => {
-                            self.last_step = Some(next_step);
-                            return false;
-                        }
-                    }
+                    stepper.buffer.push_front(step.clone());
+                    return false;
+                },
+                StepKind::SyntheticLeaveInlined(func) if func == &current_function => loop {
+                    stepper.buffer.push_front(step.clone());
+                    return false;
                 },
                 _ => {}
             }
@@ -959,8 +945,6 @@ impl DebugContext {
             };
 
             if let Some(bp_id) = self.check_breakpoint(&step) {
-                self.last_step = Some(step.clone());
-
                 if let Err(e) = self.send_event(Event::Stopped(StoppedEventBody {
                     reason: StoppedEventReason::Breakpoint,
                     thread_id: Some(step.thread_id),
@@ -979,17 +963,13 @@ impl DebugContext {
     }
 }
 
-fn skip_inlined_function_new(
-    stepper: &mut Stepper,
-    func_name: String,
-    _current_line: Option<i64>,
-) -> Option<DebugStep> {
+fn skip_inlined_function(stepper: &mut Stepper, func_name: String) -> bool {
     let mut depth = 1;
 
     loop {
         let step = match stepper.next() {
             Some(s) => s,
-            None => return None,
+            None => return true,
         };
 
         match &step.kind {
@@ -999,7 +979,8 @@ fn skip_inlined_function_new(
             StepKind::SyntheticLeaveInlined(f) if f == &func_name => {
                 depth -= 1;
                 if depth == 0 {
-                    return Some(step);
+                    stepper.buffer.push_front(step.clone());
+                    return false;
                 }
             }
             _ => {}
@@ -1007,17 +988,13 @@ fn skip_inlined_function_new(
     }
 }
 
-fn skip_function_new(
-    stepper: &mut Stepper,
-    func_name: String,
-    _current_line: Option<i64>,
-) -> Option<DebugStep> {
+fn skip_function(stepper: &mut Stepper, func_name: String) -> bool {
     let mut depth = 1;
 
     loop {
         let step = match stepper.next() {
             Some(s) => s,
-            None => return None,
+            None => return true,
         };
 
         match &step.kind {
@@ -1027,29 +1004,8 @@ fn skip_function_new(
             StepKind::SyntheticAfterFunctionCall(f) if f == &func_name => {
                 depth -= 1;
                 if depth == 0 {
-                    return Some(step);
-                    // loop {
-                    //     let next_step = match stepper.next() {
-                    //         Some(s) => s,
-                    //         None => return None,
-                    //     };
-                    //
-                    //     match next_step.kind {
-                    //         StepKind::UnmappedAdvance => continue,
-                    //         StepKind::Mapped => {
-                    //             if let Some(curr_line) = current_line {
-                    //                 if let Some(loc) = &next_step.loc {
-                    //                     if loc.loc.line != curr_line {
-                    //                         return Some(next_step);
-                    //                     }
-                    //                 }
-                    //             } else {
-                    //                 return Some(next_step);
-                    //             }
-                    //         }
-                    //         _ => return Some(next_step),
-                    //     }
-                    // }
+                    stepper.buffer.push_front(step.clone());
+                    return false;
                 }
             }
             _ => {}
@@ -1061,5 +1017,5 @@ fn get_locations(executor: &AnyExecutor, source_map: &SourceMap) -> Option<Vec<D
     let pos = executor.get_code_pos();
     let (hash, offset) = pos.split_once(":").unwrap();
     let offset = offset.parse::<i32>().unwrap();
-    crate::vmtrace::low_level_loc_to_debug_locations(source_map, hash, offset, false)
+    crate::vmtrace::low_level_loc_to_debug_locations(source_map, hash, offset, false, false)
 }

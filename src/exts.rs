@@ -285,6 +285,12 @@ fn send_message_debug(
 
     ctx.dbg_ctx.finish_thread(2).unwrap();
 
+    if ctx.dbg_ctx.performing_step != Some(StepMode::Continue) {
+        // When we step out from nested message/get method, send stop message to client to
+        // stop on a line after send/call get method
+        ctx.dbg_ctx.step(StepMode::StepIn);
+    }
+
     let result = match result {
         EmulationResult::Success(result) => result,
         EmulationResult::Error(_) => {
@@ -519,6 +525,12 @@ fn run_get_method_impl(
         }
 
         ctx.dbg_ctx.finish_thread(2).unwrap();
+
+        if ctx.dbg_ctx.performing_step != Some(StepMode::Continue) {
+            // When we step out from nested message/get method, send stop message to client to
+            // stop on a line after send/call get method
+            ctx.dbg_ctx.step(StepMode::StepIn);
+        }
 
         step_get_executor.finish_get_method(&params.code)
     } else {

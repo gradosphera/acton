@@ -83,6 +83,7 @@ fn find_source_loc(source_map: &SourceMap, hash: &String, offset: i32) -> Option
         return None;
     }
 
-    let locs = vmtrace::low_level_loc_to_debug_locations(source_map, hash.as_str(), offset, true)?;
+    let locs =
+        vmtrace::low_level_loc_to_debug_locations(source_map, hash.as_str(), offset, false, true)?;
     locs.last().and_then(|l| Some(l.loc.clone()))
 }
