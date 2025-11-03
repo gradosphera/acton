@@ -167,14 +167,16 @@ pub fn merge_coverages(coverages: &Vec<Coverage>) -> Coverage {
         for file_coverage in &coverage.files {
             let file = &file_coverage.file;
             if let Some(existing) = merged_files.get_mut(file) {
-                let mut covered_lines_num = existing.covered_lines;
                 for (&line, &hits) in &file_coverage.line_hits {
                     *existing.line_hits.entry(line).or_insert(0) += hits;
-                    if hits > 0 && !existing.line_hits.contains_key(&line) {
-                        covered_lines_num += 1
-                    }
                 }
-                existing.covered_lines = covered_lines_num;
+                if file_coverage.executable_lines != existing.executable_lines {
+                    for line in &file_coverage.executable_line_numbers {
+                        existing.executable_line_numbers.insert(*line);
+                    }
+                    existing.executable_lines = existing.executable_line_numbers.len() as i64;
+                }
+                existing.covered_lines = existing.line_hits.len() as i64;
             } else {
                 merged_files.insert(file.clone(), file_coverage.clone());
             }
