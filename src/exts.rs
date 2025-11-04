@@ -411,10 +411,26 @@ fn find_transaction_by_params_impl(
             && let MsgInfo::Int(info) = &in_msg.info
         {
             if let Some(expected_opcode) = &params.opcode {
-                let opcode = in_msg.body.clone().load_u32().unwrap();
-                if *expected_opcode != opcode {
-                    // Opcode mismatch
+                let mut slice = in_msg.body.clone();
+                let Ok(opcode) = slice.load_u32() else {
+                    // No opcode at all
                     return None;
+                };
+                if *expected_opcode != opcode {
+                    if params.bounced == Some(true) {
+                        // if bounced, try to match opcode after 0xFFFFFFFF
+                        let Ok(bounced_opcode) = slice.load_u32() else {
+                            // No bounced opcode at all
+                            return None;
+                        };
+                        if *expected_opcode != bounced_opcode {
+                            // Bounced opcode mismatch
+                            return None;
+                        }
+                    } else {
+                        // Opcode mismatch
+                        return None;
+                    }
                 }
             }
 
