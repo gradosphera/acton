@@ -14,9 +14,9 @@ pub struct Control {
     pub idx: u64,
 }
 
-impl Control {
-    pub fn string(&self) -> String {
-        format!("c{}", self.idx)
+impl std::fmt::Display for Control {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "c{}", self.idx)
     }
 }
 
@@ -25,9 +25,9 @@ pub struct StackRegister {
     pub idx: i64,
 }
 
-impl StackRegister {
-    pub fn string(&self) -> String {
-        format!("s{}", self.idx)
+impl std::fmt::Display for StackRegister {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "s{}", self.idx)
     }
 }
 
@@ -36,19 +36,12 @@ pub struct Code {
     pub instructions: Vec<Instruction>,
 }
 
-impl Code {
-    pub fn string(&self) -> String {
-        let mut builder = String::new();
-        for instruction in &self.instructions {
-            builder.push_str(&format!("{}\n", instruction.print(0)));
-        }
-        builder
-    }
-}
-
 impl std::fmt::Display for Code {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.string())
+        for instruction in &self.instructions {
+            writeln!(f, "{}", instruction.print(0))?;
+        }
+        Ok(())
     }
 }
 

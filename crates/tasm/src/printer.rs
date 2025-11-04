@@ -18,17 +18,13 @@ impl Instruction {
 
         builder.trim_end().to_string()
     }
-
-    pub fn string(&self) -> String {
-        self.print(0)
-    }
 }
 
 impl ArgValue {
     pub fn string(&self) -> String {
         match self {
-            ArgValue::Control(c) => c.string(),
-            ArgValue::StackRegister(s) => s.string(),
+            ArgValue::Control(c) => format!("{}", c),
+            ArgValue::StackRegister(s) => format!("{}", s),
             ArgValue::Int(b) => format!("{}", b),
             _ => panic!("unhandled value: {:?}", self),
         }
@@ -46,8 +42,8 @@ fn normalize_name(name: &str) -> String {
 fn format_arg(arg: &ArgValue, depth: usize) -> String {
     let indent = "    ".repeat(depth);
     match arg {
-        ArgValue::Control(c) => c.string(),
-        ArgValue::StackRegister(s) => s.string(),
+        ArgValue::Control(c) => format!("{}", c),
+        ArgValue::StackRegister(s) => format!("{}", s),
         ArgValue::Int(b) => format!("{}", b),
         ArgValue::Cell(s) => {
             let slice = s.as_slice().unwrap();
