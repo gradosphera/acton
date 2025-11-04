@@ -5,9 +5,11 @@ use crate::executor::{
 use num_bigint::BigInt;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
+use tycho_types::dict::Dict;
 use tycho_types::models::{
     IntAddr, Message, MsgInfo, RelaxedMessage, RelaxedMsgInfo, ShardAccount, Transaction,
 };
+use tycho_types::prelude::HashBytes;
 
 pub struct Emulator {
     pub executor: Executor,
@@ -68,6 +70,7 @@ impl Emulator {
         &self,
         net: &mut Blockchain,
         message: Cell,
+        libs: &Dict<HashBytes, Cell>,
         src_addr: Option<IntAddr>,
     ) -> Vec<SendMessageResult> {
         let message = Emulator::patch_src_addr(message, src_addr);
@@ -82,7 +85,7 @@ impl Emulator {
             BigInt::from(0),
             RunTransactionArgs {
                 config: crate::config::DEFAULT_CONFIG.to_string(),
-                libs: None,
+                libs: Some(libs.to_cell()),
                 verbosity: ExecutorVerbosity::FullLocation,
                 shard_account: dest_account.clone(),
                 now: 0,
@@ -143,7 +146,7 @@ impl Emulator {
                     return vec![];
                 };
 
-                let mut send_results = self.send_message(net, msg.to_cell(), None);
+                let mut send_results = self.send_message(net, msg.to_cell(), libs, None);
                 for result in &mut send_results {
                     match result {
                         SendMessageResult::Success(result) => {

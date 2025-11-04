@@ -99,6 +99,7 @@ fn execute_script(
     let mut known_addresses = KnownAddresses::new();
     let mut known_code_cell = HashMap::new();
     let mut emulations = Emulations::new();
+    let mut libraries = vec![];
 
     let mut ctx = Context {
         stdout_buffer: "".to_string(),
@@ -117,6 +118,7 @@ fn execute_script(
         debug,
         backtrace: None,
         need_debug_info: false,
+        libraries: &mut libraries,
     };
 
     if debug {

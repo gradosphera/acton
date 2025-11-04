@@ -1,3 +1,5 @@
+import "../ffi/ffi"
+
 /// Holds the methods to change the VM state.
 struct vm
 
@@ -58,3 +60,10 @@ fun vm.setLogicalTime(logicalTime: int) {
 fun vm.setOriginalBalance(balance: coins, extraCurrencies: dict = null) {
     vm.setConfigParam([balance, extraCurrencies], 7);
 }
+
+/// Register a new library for current test.
+fun vm.registerLibrary(cell: cell) {
+    ffi.register_library(cell)
+}
+
+fun ffi.register_library(cell: cell): void asm "18 EXTCALL"

@@ -947,6 +947,7 @@ fn execute_test(
 
     let mut emulator = Emulator::new();
     let mut blockchain = Blockchain::new();
+    let mut libraries = vec![];
 
     let mut ctx = Context {
         stdout_buffer: "".to_string(),
@@ -965,6 +966,7 @@ fn execute_test(
         debug,
         backtrace: backtrace.cloned(),
         need_debug_info: debug || coverage || backtrace == Some(&"full".to_string()),
+        libraries: &mut libraries,
     };
 
     let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) = if debug {

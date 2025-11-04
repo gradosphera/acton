@@ -22,7 +22,8 @@ use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellBuilder, CellFamily, Load, Store};
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Load, Store};
+use tycho_types::dict::Dict;
 use tycho_types::models::{
     AccountState, AccountStatus, ComputePhase, IntAddr, MsgInfo, RelaxedMessage, RelaxedMsgInfo,
     ShardAccount, Transaction, TxInfo,
@@ -77,7 +78,7 @@ fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message
 
     // Send from null address for now
     let src_addr = IntAddr::default();
-    let emulations = emulator.send_message(blockchain, msg_cell, Some(src_addr));
+    let emulations = emulator.send_message(blockchain, msg_cell, &Dict::default(), Some(src_addr));
 
     let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
         SendMessageResult::Success(res) => Some(res),
@@ -121,10 +122,15 @@ fn send_message_from_impl(
         }
     };
 
+    let mut libs = Dict::<HashBytes, Cell>::new();
+    for lib in ctx.libraries.clone() {
+        libs.add(lib.repr_hash(), lib.clone()).ok();
+    }
+
     let emulations = if ctx.debug {
-        send_message_debug(ctx, &msg_cell, Some(src_addr))
+        send_message_debug(ctx, &msg_cell, &libs, Some(src_addr))
     } else {
-        emulator.send_message(blockchain, msg_cell, Some(src_addr))
+        emulator.send_message(blockchain, msg_cell, &libs, Some(src_addr))
     };
 
     ctx.emulations.results.push(emulations.clone());
@@ -212,6 +218,7 @@ fn send_message_from_impl(
 fn send_message_debug(
     ctx: &mut Context,
     msg_cell: &Cell,
+    libs: &Dict<HashBytes, Cell>,
     src_addr: Option<IntAddr>,
 ) -> Vec<SendMessageResult> {
     let mut msg_slice = msg_cell.as_slice().unwrap();
@@ -248,7 +255,7 @@ fn send_message_debug(
         BigInt::from(0),
         RunTransactionArgs {
             config: DEFAULT_CONFIG.to_string(),
-            libs: None,
+            libs: Some(libs.to_cell()),
             verbosity: ExecutorVerbosity::FullLocation,
             shard_account: dest_account.clone(),
             now: 0,
@@ -343,7 +350,7 @@ fn send_message_debug(
                 return vec![];
             };
 
-            let mut send_results = send_message_debug(ctx, &msg.to_cell(), None);
+            let mut send_results = send_message_debug(ctx, &msg.to_cell(), libs, None);
             for result in &mut send_results {
                 match result {
                     SendMessageResult::Success(result) => {
@@ -750,6 +757,12 @@ fn account_state_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell) {
     stack.push(TupleItem::Cell(cell))
 }
 
+extension!(register_lib in (Context) with (lib: ArcCell) using register_lib_impl);
+fn register_lib_impl(ctx: &mut Context, _stack: &mut Tuple, lib: ArcCell) {
+    let cell = Boc::decode_base64(lib.to_boc_b64(false).unwrap()).unwrap();
+    ctx.libraries.push(cell)
+}
+
 pub fn register_extensions(executor: &mut dyn BaseExecutor, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         3 => read_file,
@@ -765,5 +778,6 @@ pub fn register_extensions(executor: &mut dyn BaseExecutor, ctx: &mut Context) {
         15 => register_address,
         16 => register_code,
         17 => account_state,
+        18 => register_lib,
     });
 }

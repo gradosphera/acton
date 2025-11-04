@@ -251,6 +251,7 @@ pub struct Context<'a> {
     pub backtrace: Option<String>,
     pub emulations: &'a mut Emulations,
     pub dbg_ctx: &'a mut DebugContext,
+    pub libraries: &'a mut Vec<Cell>,
 }
 
 impl<'a> Context<'a> {
