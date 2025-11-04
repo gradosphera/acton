@@ -1,4 +1,5 @@
 pub mod compile;
+pub mod disasm;
 pub mod init;
 pub mod new;
 pub mod script;

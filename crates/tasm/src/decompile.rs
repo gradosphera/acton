@@ -5,7 +5,7 @@ use num_bigint::{BigInt, BigUint};
 use num_traits::ToPrimitive;
 use smallvec::smallvec;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellBuilder, CellFamily, CellSlice, DynCell};
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, CellSlice, DynCell, Store};
 use tycho_types::dict::RawDict;
 
 const SPEC: &str = include_str!("../spec/tvm-specification.json");
@@ -332,7 +332,12 @@ struct InstructionWithRange {
 }
 
 fn dyn_cell_to_cell(cell: &DynCell) -> Cell {
-    Boc::decode_base64(Boc::encode_base64(cell)).expect("Cell after encoding must be correct")
+    let mut builder = CellBuilder::new();
+    cell.as_slice()
+        .unwrap()
+        .store_into(&mut builder, Cell::empty_context())
+        .expect("Cell after encoding must be correct");
+    builder.build().unwrap()
 }
 
 #[cfg(test)]

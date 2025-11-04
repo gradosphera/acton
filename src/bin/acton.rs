@@ -1,5 +1,7 @@
+use anyhow;
 use clap::{Parser, Subcommand};
 use emulator_rs::commands::compile::compile_cmd;
+use emulator_rs::commands::disasm::disasm_cmd;
 use emulator_rs::commands::init::init_cmd;
 use emulator_rs::commands::new::new_cmd;
 use emulator_rs::commands::script::script_cmd;
@@ -59,6 +61,15 @@ enum Commands {
         base64_only: bool,
         #[arg(long, help = "Output code to binary BoC file")]
         boc: Option<String>,
+    },
+    #[command(about = "Disassemble TVM bitcode to human-readable TASM")]
+    Disasm {
+        #[arg(help = "Binary BoC file to disassemble (se -s flag to pass a string)")]
+        boc_file: Option<String>,
+        #[arg(short, long, help = "BoC string in hex or base64 format")]
+        string: Option<String>,
+        #[arg(short, long, help = "Output file (if not specified, output to stdout)")]
+        output: Option<String>,
     },
 }
 
@@ -126,6 +137,16 @@ fn main() {
                 } else {
                     eprintln!("{} {}", "Error:".red(), err);
                 }
+            }
+        }
+        Commands::Disasm {
+            boc_file,
+            string,
+            output,
+        } => {
+            let result = disasm_cmd(boc_file, string, output);
+            if let Err(err) = result {
+                eprintln!("{} {}", "Error:".red(), err);
             }
         }
     }
