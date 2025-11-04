@@ -539,7 +539,7 @@ impl FormatterContext {
                     if let Some(info) = get_exit_code_info(compute.exit_code as i64) {
                         extra_infos.push(format!(
                             "Compute phase failed: {}",
-                            info.description.to_string()
+                            info.description.to_string().yellow()
                         ));
                     }
 
@@ -558,7 +558,46 @@ impl FormatterContext {
                             if let Some(info) = info
                                 && let Some(loc) = info.loc
                             {
-                                extra_infos.push(format!("at {}", loc.format()));
+                                let mut backtrace_result = "".to_string();
+
+                                if !info.backtrace.is_empty() {
+                                    let max_function_name_len = info
+                                        .backtrace
+                                        .iter()
+                                        .filter_map(|loc| loc.context.event_function.as_ref())
+                                        .map(|name| name.len() + 2)
+                                        .max()
+                                        .unwrap_or(0);
+
+                                    let backtrace_lines =
+                                        info.backtrace.iter().rev().filter_map(|loc| {
+                                            loc.context.event_function.as_ref().map(|func_name| {
+                                                let location = format!(
+                                                    "{}:{}:{}",
+                                                    SourceLocation::normalize_path(&loc.loc.file),
+                                                    loc.loc.line + 1,
+                                                    loc.loc.column + 2
+                                                );
+                                                format!(
+                                                    "{:<width$} {}",
+                                                    func_name.green(),
+                                                    format!("at {}", location).dimmed(),
+                                                    width = max_function_name_len
+                                                )
+                                            })
+                                        });
+
+                                    for line in backtrace_lines {
+                                        backtrace_result +=
+                                            format!("{}       {}\n", child_prefix, line).as_str();
+                                    }
+                                }
+
+                                extra_infos.push(format!(
+                                    "at {}\n{}",
+                                    loc.format().dimmed(),
+                                    backtrace_result
+                                ));
                             }
                         }
                     }
