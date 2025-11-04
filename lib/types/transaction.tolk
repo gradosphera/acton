@@ -1,4 +1,5 @@
 import "message"
+import "../testing/assert"
 import "../tlb/maybe"
 
 struct (0b00) Uninitialized
@@ -66,6 +67,31 @@ fun Transaction.loadBody<Msg>(self) {
 fun Transaction.loadInMsg<Msg>(self) {
     val in_msg_cell = self.messages.load().in_msg.unwrap() as cell as Cell<MessageRelaxed<Msg>>;
     return in_msg_cell.load()
+}
+
+/// Returns consumed gas for transaction.
+fun Transaction.getUsedGas(self) {
+    val description = self.description.load();
+    if (description is TransOrd) {
+        if (description.compute_ph is TrComputeVm) {
+            return description.compute_ph.data.load().gas_used as int
+        } else {
+            Assert.fail("Cannot get used gas for transaction with skipped compute phase")
+        }
+    } else {
+        Assert.fail("Cannot get used gas for non TransOrd")
+    }
+    throw ASSERTION_FAILED;
+}
+
+/// Return address of account of this transaction.
+fun Transaction.getAccountAddress(self, workchain: int = BASECHAIN) {
+    return address.fromValidBuilder(
+        beginCell()
+            .storeUint(0b100, 3)
+            .storeInt(workchain, 8)
+            .storeSlice(self.account_addr as slice)
+    );
 }
 
 struct TransactionMessages {
@@ -151,9 +177,9 @@ struct (0b1) TrComputeVm {
 }
 
 struct TrComputeVmRef {
-    gas_used: uint32,
-    gas_limit: uint32,
-    gas_credit: Maybe<uint32>,
+    gas_used: VarUint7,
+    gas_limit: VarUint7,
+    gas_credit: Maybe<VarUint3>,
     mode: int8,
     exit_code: int32,
     exit_arg: Maybe<int32>,
@@ -300,6 +326,17 @@ fun VarUint7.packToBuilder(self, mutate b: builder) {
 
 fun VarUint7.unpackFromSlice(mutate s: slice): VarUint7 {
     val size = s.loadUint(3);
+    return s.loadUint(size * 8);
+}
+
+type VarUint3 = int
+
+fun VarUint3.packToBuilder(self, mutate b: builder) {
+    b.storeUint(self, 16) // TODO: correct serialization
+}
+
+fun VarUint3.unpackFromSlice(mutate s: slice): VarUint3 {
+    val size = s.loadUint(2);
     return s.loadUint(size * 8);
 }
 
