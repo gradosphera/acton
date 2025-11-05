@@ -5,9 +5,6 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_char};
 use std::fs::{canonicalize, read_to_string};
 use std::path::{Path, PathBuf};
-use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellFamily, CellSlice, Load};
-use tycho_types::dict::{Dict, RawDict};
 
 /// Compiles passed file with Tolk compiler.
 ///

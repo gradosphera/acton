@@ -199,7 +199,7 @@ fn confirm_impl(
     stack.push_bool(res);
 }
 
-pub fn register_extensions(executor: &mut dyn BaseExecutor, ctx: &mut Context) {
+pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         1 => println,
         2 => eprintln,

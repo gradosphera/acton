@@ -2,10 +2,7 @@ use crate::commands::test::coverage::{
     Coverage, collect_coverage, generate_lcov_file, merge_coverages, print_coverage_summary,
 };
 use crate::commands::test::instrumentation::inject_locations_into_expect_calls;
-use crate::context::{
-    AnyExecutor, AssertFailure, BuildCache, Context, Emulations, KnownAddresses,
-    TransactionGenericAssertFailure,
-};
+use crate::context::{AnyExecutor, AssertFailure, BuildCache, Context, Emulations, KnownAddresses};
 use crate::dap::DapMessage;
 use crate::debug_context::DebugContext;
 use crate::formatter::FormatterContext;

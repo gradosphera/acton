@@ -32,14 +32,14 @@ impl SendMessageResult {
     pub fn debug_logs(&self) -> String {
         match self {
             SendMessageResult::Success(res) => res.debug_logs.clone(),
-            SendMessageResult::Error(res) => "".to_string(),
+            SendMessageResult::Error(_) => "".to_string(),
         }
     }
 
     pub fn executor_logs(&self) -> String {
         match self {
             SendMessageResult::Success(res) => res.logs.clone(),
-            SendMessageResult::Error(res) => "".to_string(),
+            SendMessageResult::Error(_) => "".to_string(),
         }
     }
 }

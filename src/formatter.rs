@@ -42,7 +42,9 @@ struct SendResult {
     tx: Transaction,
     children_ids: Vec<i64>,
     parent_lt: Option<i64>,
+    #[allow(dead_code)]
     actions: ArcCell,
+    #[allow(dead_code)]
     out_messages: Vec<ArcCell>,
     externals: Vec<Cell>,
 }

@@ -7,7 +7,7 @@ use std::ffi::{CString, c_void};
 use std::ptr::null;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellFamily, Store};
-use tycho_types::models::{AccountState, BaseMessage, RelaxedMessage, ShardAccount};
+use tycho_types::models::{AccountState, BaseMessage, ShardAccount};
 use tycho_types::prelude::CellBuilder;
 
 pub struct Executor {
@@ -58,7 +58,7 @@ impl Executor {
     pub fn run_transaction(
         &self,
         message: Cell,
-        mode: BigInt,
+        _mode: BigInt,
         params: RunTransactionArgs,
     ) -> (EmulationResult, String, String) {
         let message = CString::new(Boc::encode_base64(message)).unwrap();

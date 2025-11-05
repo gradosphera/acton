@@ -1,4 +1,3 @@
-use crate::commands::test;
 use crate::context::AssertFailure;
 use crate::formatter::FormatterContext;
 

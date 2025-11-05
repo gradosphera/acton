@@ -51,7 +51,7 @@ impl StepExecutor {
     pub fn prepare_transaction(
         &self,
         message: Cell,
-        mode: BigInt,
+        _mode: BigInt,
         params: RunTransactionArgs,
     ) -> PrepareResult {
         let message = CString::new(Boc::encode_base64(message)).unwrap();
@@ -129,6 +129,8 @@ pub struct PrepareResult {
 
 #[derive(Deserialize)]
 struct EmulationInternalResult {
+    #[allow(dead_code)]
     pub output: EmulationResult,
+    #[allow(dead_code)]
     pub logs: String,
 }

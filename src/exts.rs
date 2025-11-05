@@ -69,7 +69,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, path: String, name: String) 
 }
 
 extension!(send_message in (Context) with (mode: BigInt, message: ArcCell) using send_message_impl);
-fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, mode: BigInt, message: ArcCell) {
+fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, _mode: BigInt, message: ArcCell) {
     let blockchain = &mut ctx.blockchain;
     let emulator = &ctx.emulator;
 
@@ -96,7 +96,7 @@ extension!(send_message_from in (Context) with (mode: BigInt, from: ArcCell, mes
 fn send_message_from_impl(
     ctx: &mut Context,
     stack: &mut Tuple,
-    mode: BigInt,
+    _mode: BigInt,
     from: ArcCell,
     message: ArcCell,
 ) {
@@ -709,7 +709,7 @@ fn type_name_by_opcode_impl(ctx: &mut Context, stack: &mut Tuple, id: BigInt) {
 }
 
 extension!(register_address in (Context) with (name: String, address: ArcCell) using register_address_impl);
-fn register_address_impl(ctx: &mut Context, stack: &mut Tuple, name: String, address: ArcCell) {
+fn register_address_impl(ctx: &mut Context, _stack: &mut Tuple, name: String, address: ArcCell) {
     let address_cell = Boc::decode_base64(address.to_boc_b64(false).unwrap()).unwrap();
     let mut address_slice = address_cell.parse().unwrap();
 
@@ -763,7 +763,7 @@ fn register_lib_impl(ctx: &mut Context, _stack: &mut Tuple, lib: ArcCell) {
     ctx.libraries.push(cell)
 }
 
-pub fn register_extensions(executor: &mut dyn BaseExecutor, ctx: &mut Context) {
+pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         3 => read_file,
         6 => build,

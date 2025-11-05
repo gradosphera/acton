@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 use tycho_types::boc::Boc;
@@ -221,10 +220,10 @@ fn get_real_code_hashes(code: &Cell) -> HashMap<String, (String, i32)> {
 
     for kv in d.iter() {
         let kv = kv.unwrap();
-        let mut key_slice = kv.0.as_data_slice();
+        let key_slice = kv.0.as_data_slice();
 
         let mut builder = CellBuilder::new();
-        builder.store_slice(kv.1);
+        builder.store_slice(kv.1).unwrap();
         let v = builder.build().unwrap();
 
         let idx_key = slice_to_string(&mut key_slice.clone(), 19);

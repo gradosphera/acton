@@ -287,7 +287,7 @@ pub fn process_txs_and_search_params(
     Some((params, parsed_txs))
 }
 
-pub fn register_extensions(executor: &mut dyn BaseExecutor, ctx: &mut Context) {
+pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         100 => assert_fail,
         101 => assert_bin,
