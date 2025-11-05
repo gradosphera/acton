@@ -149,9 +149,7 @@ pub struct InstalledSendMessageAction {
 
 impl InstalledSendMessageAction {
     pub fn message(&self) -> Option<RelaxedMessage> {
-        let mut msg_slice = self.msg_cell.as_slice().ok()?;
-        let msg = RelaxedMessage::load_from(&mut msg_slice).ok()?;
-        Some(msg)
+        self.msg_cell.parse::<RelaxedMessage>().ok()
     }
 }
 

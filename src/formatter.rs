@@ -106,7 +106,9 @@ impl FormatterContext {
             return address.to_string();
         }
 
-        slice.to_boc_hex(false).unwrap()
+        slice
+            .to_boc_hex(false)
+            .unwrap_or("<invalid slice>".to_string())
     }
 
     fn format_address_slice(&self, slice: &ArcCell) -> String {
@@ -123,7 +125,10 @@ impl FormatterContext {
 
             return address.to_string();
         }
-        slice.to_boc_hex(false).unwrap()
+
+        slice
+            .to_boc_hex(false)
+            .unwrap_or("invalid address".to_string())
     }
 
     fn arc_cell_to_addr(slice: &ArcCell) -> Option<IntAddr> {
@@ -162,10 +167,9 @@ impl FormatterContext {
                         TupleItem::Tuple(out_messages),
                         TupleItem::Tuple(externals),
                     ) => {
-                        let result = tx.to_boc_b64(false).unwrap();
-                        let tx_cell: Cell = Boc::decode_base64(&result).unwrap();
-                        let mut tx_slice = tx_cell.as_slice().unwrap();
-                        let tx = Transaction::load_from(&mut tx_slice).unwrap();
+                        let result = tx.to_boc_b64(false).ok()?;
+                        let tx_cell: Cell = Boc::decode_base64(&result).ok()?;
+                        let tx = tx_cell.parse::<Transaction>().ok()?;
                         Some(SendResult {
                             tx,
                             children_ids: child_ids
@@ -192,9 +196,8 @@ impl FormatterContext {
                                 .iter()
                                 .filter_map(|ext| match ext {
                                     TupleItem::Cell(cell) => {
-                                        let cell =
-                                            Boc::decode_base64(&cell.to_boc_b64(false).unwrap())
-                                                .unwrap();
+                                        let boc = cell.to_boc_b64(false).ok()?;
+                                        let cell = Boc::decode_base64(&boc).ok()?;
                                         Some(cell)
                                     }
                                     _ => None,
@@ -214,7 +217,10 @@ impl FormatterContext {
         let mut known_contracts: Vec<IntAddr> = vec![];
 
         for send_result in send_results {
-            let in_msg = send_result.tx.load_in_msg().unwrap();
+            let Ok(in_msg) = send_result.tx.load_in_msg() else {
+                continue;
+            };
+
             if let Some(in_msg) = &in_msg
                 && let MsgInfo::Int(info) = &in_msg.info
             {
@@ -256,7 +262,8 @@ impl FormatterContext {
         let mut processed = std::collections::HashSet::new();
 
         for (lt, result) in &lt_to_result {
-            if result.parent_lt.is_none() || !lt_to_result.contains_key(&result.parent_lt.unwrap())
+            if result.parent_lt.is_none()
+                || !lt_to_result.contains_key(&result.parent_lt.unwrap_or(-1))
             {
                 if !processed.contains(lt) {
                     let node = self.build_node_recursive(*lt, &lt_to_result, &mut processed);
@@ -393,14 +400,17 @@ impl FormatterContext {
         let main_part_visible_len = visible_len(&main_part);
 
         if is_root {
-            let src_addr = match &tx.load_in_msg().unwrap().unwrap().info {
-                MsgInfo::Int(info) => info.src.clone(),
-                _ => panic!("Expected internal message"),
-            };
-            let src_formatted =
-                self.format_address_with_letter(&src_addr, contract_letters, show_full_names);
-            tx_builder += &format!("{} {} {}\n", "N/A".dimmed(), "->".dimmed(), src_formatted);
-            tx_builder += "└── ".dimmed().to_string().as_str();
+            let in_msg = &tx.load_in_msg();
+            if let Ok(Some(in_msg)) = in_msg {
+                let src_addr = match &in_msg.info {
+                    MsgInfo::Int(info) => info.src.clone(),
+                    _ => panic!("Expected internal message"),
+                };
+                let src_formatted =
+                    self.format_address_with_letter(&src_addr, contract_letters, show_full_names);
+                tx_builder += &format!("{} {} {}\n", "N/A".dimmed(), "->".dimmed(), src_formatted);
+                tx_builder += "└── ".dimmed().to_string().as_str();
+            }
         }
 
         tx_builder += &main_part;
@@ -497,8 +507,8 @@ impl FormatterContext {
         prefix_len: usize,
         contract_letters: &HashMap<IntAddr, String>,
     ) -> String {
-        let TxInfo::Ordinary(info) = tx.load_info().unwrap() else {
-            panic!("tick-tock message is unexpected")
+        let Ok(TxInfo::Ordinary(info)) = tx.load_info() else {
+            return "tick-tock message".to_string();
         };
 
         let mut result = String::new();
@@ -764,8 +774,12 @@ impl FormatterContext {
                     let message = installed_actions.find_message(&hash);
 
                     let (loc, formated) = if let Some(message) = message {
-                        let msg = message.message().unwrap();
-                        let formated = self.format_single_message(&msg, contract_letters, false);
+                        let msg = message.message();
+
+                        let formated = match msg {
+                            Some(msg) => self.format_single_message(&msg, contract_letters, false),
+                            None => hash.to_string(),
+                        };
 
                         (
                             self.find_source_loc(tx, &message.loc_hash, message.loc_offset),
@@ -1086,8 +1100,12 @@ impl FormatterContext {
             }
             TupleItem::Null => return "null".to_string(),
             TupleItem::Nan => return "NaN".to_string(),
-            TupleItem::Cell(cell) => cell.to_boc_hex(false).unwrap(),
-            TupleItem::Builder(cell) => cell.to_boc_hex(false).unwrap(),
+            TupleItem::Cell(cell) => cell
+                .to_boc_hex(false)
+                .unwrap_or("<invalid cell>".to_string()),
+            TupleItem::Builder(cell) => cell
+                .to_boc_hex(false)
+                .unwrap_or("<invalid builder>".to_string()),
             TupleItem::Tuple(items) => {
                 if items.len() == 1 {
                     return self.format(&items[0]);
@@ -1123,9 +1141,10 @@ impl FormatterContext {
             let field_value = if let Some(abi) = self.contract_abi.find_type(&field_type) {
                 let result = self.format_structure(abi, level, items);
                 Self::add_indent_to_lines_except_first(result.as_str(), (level + 1) * 4)
-            } else {
-                let field_value = items.pop_front().unwrap();
+            } else if let Some(field_value) = items.pop_front() {
                 self.format(&field_value.to_typed(&field_type))
+            } else {
+                "<unknown value>".to_string()
             };
 
             write!(f, "    {}: {}", field.name, field_value).ok();
@@ -1187,7 +1206,10 @@ impl FormatterContext {
 
     /// Show address in short format
     fn format_addr_hash(addr: &IntAddr) -> String {
-        let raw = addr.as_std().unwrap().display_base64(true).to_string();
+        let Some(std_addr) = addr.as_std() else {
+            return addr.to_string();
+        };
+        let raw = std_addr.display_base64(true).to_string();
         raw[..6].to_string() + ".." + &raw[raw.len() - 6..]
     }
 
