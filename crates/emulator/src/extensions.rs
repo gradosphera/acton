@@ -81,8 +81,13 @@ macro_rules! extension {
 }
 
 fn cell_to_ffi_boc64(cell: ArcCell) -> *const c_char {
-    let s = cell.to_boc_b64(false).unwrap();
-    CString::new(s).unwrap().into_raw().cast_const()
+    let s = cell
+        .to_boc_b64(false)
+        .expect("Failed to encode cell to BOC");
+    CString::new(s)
+        .expect("Failed to create C string from BOC")
+        .into_raw()
+        .cast_const()
 }
 
 pub unsafe fn with_tuple(ptr: *const c_char, f: impl FnOnce(&mut Tuple)) -> *const c_char {
@@ -99,7 +104,7 @@ pub unsafe fn with_tuple(ptr: *const c_char, f: impl FnOnce(&mut Tuple)) -> *con
 
     f(&mut tuple);
 
-    cell_to_ffi_boc64(tvmffi::serde::serialize_tuple(&tuple).unwrap())
+    cell_to_ffi_boc64(tvmffi::serde::serialize_tuple(&tuple).expect("Failed to serialize tuple"))
 }
 
 #[macro_export]

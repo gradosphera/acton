@@ -674,7 +674,7 @@ fn run_file_tests(
                             "    {} Gas limit exceeded: used {}, limit {}",
                             "└─".dimmed(),
                             gas_used.to_string().red(),
-                            test.gas_limit.unwrap().to_string().green()
+                            test.gas_limit.unwrap_or(0).to_string().green()
                         );
                     } else if let Some(ref assert_failure) = assert_failure {
                         if let Some(message) = &assert_failure.message() {
@@ -943,8 +943,14 @@ fn run_file_tests(
                 runner.build_cache.memoize(
                     &test.name,
                     &file_path.to_string(),
-                    &code_cell.to_boc_b64(false).unwrap(),
-                    &code_cell.cell_hash().unwrap().to_hex().to_ascii_uppercase(),
+                    &code_cell
+                        .to_boc_b64(false)
+                        .expect("Failed to encode code cell to BoC"),
+                    &code_cell
+                        .cell_hash()
+                        .expect("Failed to get code cell hash")
+                        .to_hex()
+                        .to_ascii_uppercase(),
                     source_map.clone(),
                 )
             }
@@ -981,17 +987,17 @@ fn beatify_test_name(name: &String) -> String {
 fn contract_address(code: &Arc<Cell>) -> TonAddress {
     let state_init = CellBuilder::new()
         .store_bit(false)
-        .unwrap()
+        .expect("Failed to store bounce flag")
         .store_bit(false)
-        .unwrap()
+        .expect("Failed to store maybe libraries")
         .store_ref_cell_optional(Some(&code))
-        .unwrap()
+        .expect("Failed to store code cell")
         .store_ref_cell_optional(Some(&ArcCell::default()))
-        .unwrap()
+        .expect("Failed to store data cell")
         .store_bit(false)
-        .unwrap()
+        .expect("Failed to store maybe tick/tock")
         .build()
-        .unwrap();
+        .expect("Failed to build state init cell");
 
     let dest_address = TonAddress::new(0, state_init.cell_hash());
     dest_address
@@ -1018,17 +1024,17 @@ fn find_all_test(content: &String) -> Vec<TestDescriptor> {
         .children(&mut cursor)
         .flat_map(|child| {
             if child.kind() == "get_method_declaration" {
-                let name_node = child.child_by_field_name("name");
+                let Some(name_node) = child.child_by_field_name("name") else {
+                    return vec![];
+                };
                 let raw_name = name_node
-                    .unwrap()
                     .utf8_text(content.as_bytes())
-                    .unwrap()
-                    .to_string();
-                let name = raw_name
-                    .strip_prefix("`")
-                    .unwrap_or(&raw_name)
-                    .strip_suffix("`")
-                    .unwrap_or(&raw_name);
+                    .map(|text| text.to_string());
+
+                let Ok(raw_name) = raw_name else {
+                    return vec![];
+                };
+                let name = raw_name.trim_matches('`').to_string();
 
                 // get fun `test-foo`() or get fun test_foo()
                 if name.starts_with("test-") || name.starts_with("test_") {

@@ -91,8 +91,11 @@ impl Compiler {
                 match kind {
                     0 => {
                         let mut relative_path = "".to_string();
-                        let relative_path_raw =
-                            unsafe { CStr::from_ptr(data_ptr).to_str().unwrap() };
+                        let relative_path_raw = unsafe {
+                            CStr::from_ptr(data_ptr)
+                                .to_str()
+                                .expect("Invalid UTF-8 in relative path")
+                        };
                         if !relative_path_raw.ends_with(".tolk") {
                             relative_path.push_str(relative_path_raw);
                             relative_path += ".tolk";
@@ -100,20 +103,29 @@ impl Compiler {
                             relative_path.push_str(relative_path_raw);
                         }
 
-                        let Ok(abs_path) = realpath(relative_path.parse().unwrap()) else {
-                            let raw_str =
-                                CString::new("cannot realpath a path".to_string()).unwrap();
+                        let Ok(abs_path) = realpath(
+                            relative_path
+                                .parse()
+                                .expect("Failed to parse relative path"),
+                        ) else {
+                            let raw_str = CString::new("cannot realpath a path".to_string())
+                                .expect("Failed to create C string");
                             unsafe {
                                 *dest_error = raw_str.into_raw();
                             }
                             return;
                         };
 
-                        let raw_str = CString::new(abs_path).unwrap();
+                        let raw_str = CString::new(abs_path)
+                            .expect("Failed to create C string from absolute path");
                         unsafe { *dest_contents = raw_str.into_raw() }
                     }
                     1 => {
-                        let file_path = unsafe { CStr::from_ptr(data_ptr).to_str().unwrap() };
+                        let file_path = unsafe {
+                            CStr::from_ptr(data_ptr)
+                                .to_str()
+                                .expect("Invalid UTF-8 in file path")
+                        };
 
                         let content = if file_path.contains("@stdlib/") {
                             let filename = file_path
@@ -125,7 +137,7 @@ impl Compiler {
                                     let raw_str = CString::new(
                                         "Cannot read standard library file, file not found",
                                     )
-                                    .unwrap();
+                                    .expect("Failed to create C string");
                                     unsafe {
                                         *dest_error = raw_str.into_raw();
                                     }
@@ -142,7 +154,7 @@ impl Compiler {
                                     let raw_str = CString::new(
                                         "Cannot read Fift standard library file, file not found",
                                     )
-                                    .unwrap();
+                                    .expect("Failed to create C string");
                                     unsafe {
                                         *dest_error = raw_str.into_raw();
                                     }
@@ -153,7 +165,8 @@ impl Compiler {
                             match read_to_string(file_path) {
                                 Ok(content) => content,
                                 Err(error) => {
-                                    let raw_str = CString::new(error.to_string() + "aaa").unwrap();
+                                    let raw_str = CString::new(error.to_string() + "aaa")
+                                        .expect("Failed to create C string from error");
                                     unsafe {
                                         *dest_error = raw_str.into_raw();
                                     }
@@ -162,7 +175,8 @@ impl Compiler {
                             }
                         };
 
-                        let raw_str = CString::new(content).unwrap();
+                        let raw_str =
+                            CString::new(content).expect("Failed to create C string from content");
                         unsafe { *dest_contents = raw_str.into_raw() }
                     }
                     _ => {}

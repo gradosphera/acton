@@ -1,6 +1,7 @@
 use crate::context::AnyExecutor;
 use crate::debug_context::{DebugContext, VARIABLE_REFERENCE_COUNTER};
 use crate::formatter::FormatterContext;
+use anyhow::anyhow;
 use dap::requests::VariablesArguments;
 use dap::types::Variable;
 use emulator::executor::StoreExt;
@@ -240,7 +241,11 @@ impl DebugContext {
         let mut c5_slice = c5_cell.parser();
 
         if let TupleItem::Cell(c5_tuple) = parse_tuple_item(&mut c5_slice)? {
-            let c5_cell = &Boc::decode_base64(&c5_tuple.to_boc_b64(false).unwrap())?;
+            let c5_boc = c5_tuple
+                .to_boc_b64(false)
+                .map_err(|e| anyhow!("Failed to encode c5 tuple to BoC: {}", e))?;
+            let c5_cell = &Boc::decode_base64(&c5_boc)
+                .map_err(|e| anyhow!("Failed to decode c5 BoC: {}", e))?;
             let c5_slice = c5_cell.as_slice()?;
 
             let out_actions = OutActionsRevIter::new(c5_slice)
@@ -438,8 +443,7 @@ impl DebugContext {
     fn build_message_children(&mut self, message: &OwnedRelaxedMessage) -> Vec<Variable> {
         let mut variables = Vec::new();
 
-        let info_ref =
-            crate::debug_context::VARIABLE_REFERENCE_COUNTER.fetch_add(1, Ordering::SeqCst) as i64;
+        let info_ref = VARIABLE_REFERENCE_COUNTER.fetch_add(1, Ordering::SeqCst) as i64;
         self.msg_info_variables
             .insert(info_ref, message.info.clone());
         variables.push(Variable {
@@ -451,8 +455,7 @@ impl DebugContext {
         });
 
         if let Some(init) = &message.init {
-            let init_ref = crate::debug_context::VARIABLE_REFERENCE_COUNTER
-                .fetch_add(1, Ordering::SeqCst) as i64;
+            let init_ref = VARIABLE_REFERENCE_COUNTER.fetch_add(1, Ordering::SeqCst) as i64;
             self.state_init_variables.insert(init_ref, init.clone());
             variables.push(Variable {
                 name: "init".to_string(),
@@ -472,10 +475,10 @@ impl DebugContext {
 
         let msg_cell = message.body.1.clone();
         let msg_offset = message.body.0.offset();
-        let mut msg_slice = msg_cell.as_slice().unwrap();
-        msg_slice
-            .skip_first(msg_offset.bits, msg_offset.refs)
-            .unwrap();
+        let Ok(mut msg_slice) = msg_cell.as_slice() else {
+            return Vec::new();
+        };
+        msg_slice.skip_first(msg_offset.bits, msg_offset.refs).ok();
         let msg_cell = msg_slice.to_cell();
 
         variables.push(Variable {

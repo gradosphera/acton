@@ -3,7 +3,7 @@ use num_bigint::BigInt;
 use num_traits::Zero;
 use tolkc::source_map::{DebugLocation, SourceLocation, SourceMap};
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, Load};
+use tycho_types::cell::Cell;
 use tycho_types::models::RelaxedMessage;
 use vmlogs::executor_parser::{ExecutorLine, parse_executor_lines};
 use vmlogs::parser::{CellLike, VmLine, VmStackValue};

@@ -4,7 +4,7 @@ use crate::executor::{
 };
 use num_bigint::BigInt;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, Load};
+use tycho_types::cell::Cell;
 use tycho_types::dict::Dict;
 use tycho_types::models::{
     IntAddr, Message, MsgInfo, RelaxedMessage, RelaxedMsgInfo, ShardAccount, Transaction,
@@ -74,7 +74,9 @@ impl Emulator {
         src_addr: Option<IntAddr>,
     ) -> Vec<SendMessageResult> {
         let message = Emulator::patch_src_addr(message, src_addr);
-        let message_obj = Message::load_from(&mut message.parse().unwrap()).unwrap();
+        let Ok(message_obj) = message.parse::<Message>() else {
+            return vec![];
+        };
         let MsgInfo::Int(int_message) = &message_obj.info else {
             return vec![];
         };
@@ -102,15 +104,19 @@ impl Emulator {
         };
 
         let shard_account_after = &result.shard_account;
-        let shard_account_cell = Boc::decode_base64(shard_account_after).unwrap();
-        let mut shard_account_slice = shard_account_cell.as_slice().unwrap();
-        let shard_account = ShardAccount::load_from(&mut shard_account_slice).unwrap();
+        let shard_account_cell =
+            Boc::decode_base64(shard_account_after).expect("Failed to decode shard account BoC");
+        let shard_account = shard_account_cell
+            .parse::<ShardAccount>()
+            .expect("Failed to load shard account from slice");
 
         net.update_account(&int_message.dst.to_string(), &shard_account);
 
-        let tx_cell: Cell = Boc::decode_base64(&result.transaction).unwrap();
-        let mut tx_slice = tx_cell.as_slice().unwrap();
-        let transaction = Transaction::load_from(&mut tx_slice).unwrap();
+        let tx_cell: Cell =
+            Boc::decode_base64(&result.transaction).expect("Failed to decode transaction BoC");
+        let transaction = tx_cell
+            .parse::<Transaction>()
+            .expect("Failed to parse transaction BoC");
 
         let out_messages = transaction
             .iter_out_msgs()
@@ -178,20 +184,23 @@ impl Emulator {
     }
 
     /// Set custom `src` address if it is None.
-    pub fn patch_src_addr(message: Cell, src_addr: Option<IntAddr>) -> Cell {
-        let Some(from) = src_addr else { return message };
+    pub fn patch_src_addr(message_cell: Cell, src_addr: Option<IntAddr>) -> Cell {
+        let Some(from) = src_addr else {
+            return message_cell;
+        };
 
-        let mut slice = message.as_slice().unwrap();
-        let mut message_obj = RelaxedMessage::load_from(&mut slice).unwrap();
+        let mut message = message_cell
+            .parse::<RelaxedMessage>()
+            .expect("Failed to load message from cell");
 
-        match &mut message_obj.info {
+        match &mut message.info {
             RelaxedMsgInfo::Int(info) if info.src.is_none() => info.src = Some(from),
             _ => {}
         }
 
         // For some reason this set to wrong value
-        message_obj.layout = None;
+        message.layout = None;
 
-        message_obj.to_cell()
+        message.to_cell()
     }
 }
