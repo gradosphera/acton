@@ -46,7 +46,7 @@ fn run_script_file(
     let compilation_result = tolkc::compile(Path::new(&tmp_script_filename), debug);
     let result = match compilation_result {
         tolkc::CompilerResult::Success(result) => {
-            let code_cell = ArcCell::from_boc_b64(&*result.code_boc64).unwrap();
+            let code_cell = ArcCell::from_boc_b64(&*result.code_boc64)?;
             let data_cell = ArcCell::default();
 
             let script_result = execute_script(

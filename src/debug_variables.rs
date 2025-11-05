@@ -241,7 +241,7 @@ impl DebugContext {
 
         if let TupleItem::Cell(c5_tuple) = parse_tuple_item(&mut c5_slice)? {
             let c5_cell = &Boc::decode_base64(&c5_tuple.to_boc_b64(false).unwrap())?;
-            let c5_slice = c5_cell.as_slice().unwrap();
+            let c5_slice = c5_cell.as_slice()?;
 
             let out_actions = OutActionsRevIter::new(c5_slice)
                 .filter_map(|action| action.ok())

@@ -46,7 +46,7 @@ pub fn compile_cmd(
                     "code_hex": code_hex,
                     "code_hash_hex": result.code_hash_hex
                 });
-                println!("{}", serde_json::to_string_pretty(&json_output).unwrap());
+                println!("{}", serde_json::to_string_pretty(&json_output)?);
             } else {
                 println!("{}", "✓ Compilation successful".green().bold());
                 println!("Code in base64: {}", result.code_boc64.dimmed());
@@ -61,7 +61,7 @@ pub fn compile_cmd(
                     "success": false,
                     "error": error.message
                 });
-                println!("{}", serde_json::to_string_pretty(&json_output).unwrap());
+                println!("{}", serde_json::to_string_pretty(&json_output)?);
             } else {
                 println!(
                     "{} {}",
