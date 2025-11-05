@@ -110,3 +110,16 @@ macro_rules! register_ext_methods {
         )+
     }};
 }
+
+#[macro_export]
+macro_rules! try_ctx {
+    ($ctx:expr, $expr:expr, $($arg:tt)*) => {
+        match $expr {
+            Ok(value) => value,
+            Err(e) => {
+                $ctx.fail(format!($($arg)*, e));
+                return Default::default();
+            }
+        }
+    };
+}

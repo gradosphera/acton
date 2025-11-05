@@ -11,7 +11,7 @@ use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::step_executor::StepExecutor;
 use emulator::step_get_executor::StepGetExecutor;
 use emulator::traits::BaseExecutor;
-use emulator::{extension, pop_args, register_ext_methods};
+use emulator::{extension, pop_args, register_ext_methods, try_ctx};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::collections::HashMap;
@@ -40,7 +40,12 @@ fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
 extension!(build in (Context) with (path: String, name: String) using build_impl);
 fn build_impl(ctx: &mut Context, stack: &mut Tuple, path: String, name: String) {
     if let Some(cached) = ctx.build_cache.built.get(&path) {
-        let code_cell = ArcCell::from_boc_b64(&*cached.code_boc64).unwrap();
+        let code_cell = try_ctx!(
+            ctx,
+            ArcCell::from_boc_b64(&*cached.code_boc64),
+            "Failed to decode cached code BoC for {}: {}",
+            path
+        );
         stack.push(TupleItem::Cell(code_cell));
         return;
     }
@@ -55,7 +60,12 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, path: String, name: String) 
                 &success.code_hash_hex,
                 success.source_map.unwrap_or(Default::default()),
             );
-            let code_cell = ArcCell::from_boc_b64(&*success.code_boc64).unwrap();
+            let code_cell = try_ctx!(
+                ctx,
+                ArcCell::from_boc_b64(&*success.code_boc64),
+                "Failed to decode compiled code BoC for {}: {}",
+                path
+            );
             stack.push(TupleItem::Cell(code_cell))
         }
         tolkc::CompilerResult::Error(error) => {
@@ -73,8 +83,16 @@ fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, _mode: BigInt, messag
     let blockchain = &mut ctx.blockchain;
     let emulator = &ctx.emulator;
 
-    let msg_b64 = message.to_boc_b64(false).unwrap();
-    let msg_cell = Boc::decode_base64(msg_b64).unwrap();
+    let msg_b64 = try_ctx!(
+        ctx,
+        message.to_boc_b64(false),
+        "Failed to encode message to BoC: {}"
+    );
+    let msg_cell = try_ctx!(
+        ctx,
+        Boc::decode_base64(msg_b64),
+        "Failed to decode message from BoC: {}"
+    );
 
     // Send from null address for now
     let src_addr = IntAddr::default();
@@ -103,11 +121,32 @@ fn send_message_from_impl(
     let blockchain = &mut ctx.blockchain;
     let emulator = &ctx.emulator;
 
-    let msg_b64 = message.to_boc_b64(false).unwrap();
-    let msg_cell = Boc::decode_base64(msg_b64).unwrap();
+    let msg_b64 = try_ctx!(
+        ctx,
+        message.to_boc_b64(false),
+        "Failed to encode message to BoC: {}"
+    );
+    let msg_cell = try_ctx!(
+        ctx,
+        Boc::decode_base64(msg_b64),
+        "Failed to decode message from BoC: {}"
+    );
 
-    let from_cell = Boc::decode_base64(from.to_boc_b64(false).unwrap()).unwrap();
-    let mut from_slice = from_cell.as_slice().unwrap();
+    let from_b64 = try_ctx!(
+        ctx,
+        from.to_boc_b64(false),
+        "Failed to encode from address to BoC: {}"
+    );
+    let from_cell = try_ctx!(
+        ctx,
+        Boc::decode_base64(from_b64),
+        "Failed to decode from address from BoC: {}"
+    );
+    let mut from_slice = try_ctx!(
+        ctx,
+        from_cell.as_slice(),
+        "Failed to create slice `from` from address cell: {}"
+    );
     let src_addr = IntAddr::load_from(&mut from_slice);
     let src_addr = match src_addr {
         Ok(src_addr) => src_addr,
@@ -163,10 +202,10 @@ fn send_message_from_impl(
                 None => ArcCell::default(),
             };
 
-            let result = tx.to_boc_b64(false).unwrap();
-            let tx_cell: Cell = Boc::decode_base64(&result).unwrap();
-            let mut tx_slice = tx_cell.as_slice().unwrap();
-            let parsed_tx = Transaction::load_from(&mut tx_slice).unwrap();
+            let result = tx.to_boc_b64(false).ok()?;
+            let tx_cell: Cell = Boc::decode_base64(&result).ok()?;
+            let mut tx_slice = tx_cell.as_slice().ok()?;
+            let parsed_tx = Transaction::load_from(&mut tx_slice).ok()?;
 
             let out_messages = Tuple(
                 parsed_tx
@@ -221,11 +260,20 @@ fn send_message_debug(
     libs: &Dict<HashBytes, Cell>,
     src_addr: Option<IntAddr>,
 ) -> Vec<SendMessageResult> {
-    let mut msg_slice = msg_cell.as_slice().unwrap();
-    let message_obj = RelaxedMessage::load_from(&mut msg_slice).unwrap();
+    let mut msg_slice = try_ctx!(
+        ctx,
+        msg_cell.as_slice(),
+        "Failed to create slice from message cell: {}"
+    );
+    let message_obj = try_ctx!(
+        ctx,
+        RelaxedMessage::load_from(&mut msg_slice),
+        "Failed to load message from slice: {}"
+    );
 
     let RelaxedMsgInfo::Int(int_message) = &message_obj.info else {
-        panic!("Emulator only supports internal messages for now");
+        ctx.fail("Emulator only supports internal messages for now".to_string());
+        return vec![];
     };
 
     let dest_account = ctx.blockchain.get_account(&int_message.dst.to_string());
@@ -305,16 +353,40 @@ fn send_message_debug(
     };
 
     let shard_account_after = &result.shard_account;
-    let shard_account_cell = Boc::decode_base64(shard_account_after).unwrap();
-    let mut shard_account_slice = shard_account_cell.as_slice().unwrap();
-    let shard_account = ShardAccount::load_from(&mut shard_account_slice).unwrap();
+    let shard_account_cell = try_ctx!(
+        ctx,
+        Boc::decode_base64(shard_account_after),
+        "Failed to decode shard account BoC: {}"
+    );
+    let mut shard_account_slice = try_ctx!(
+        ctx,
+        shard_account_cell.as_slice(),
+        "Failed to create slice from shard account cell: {}"
+    );
+    let shard_account = try_ctx!(
+        ctx,
+        ShardAccount::load_from(&mut shard_account_slice),
+        "Failed to load shard account from slice: {}"
+    );
 
     ctx.blockchain
         .update_account(&int_message.dst.to_string(), &shard_account);
 
-    let tx_cell: Cell = Boc::decode_base64(&result.transaction).unwrap();
-    let mut tx_slice = tx_cell.as_slice().unwrap();
-    let transaction = Transaction::load_from(&mut tx_slice).unwrap();
+    let tx_cell: Cell = try_ctx!(
+        ctx,
+        Boc::decode_base64(&result.transaction),
+        "Failed to decode transaction BoC: {}"
+    );
+    let mut tx_slice = try_ctx!(
+        ctx,
+        tx_cell.as_slice(),
+        "Failed to create slice from transaction cell: {}"
+    );
+    let transaction = try_ctx!(
+        ctx,
+        Transaction::load_from(&mut tx_slice),
+        "Failed to load transaction from slice: {}"
+    );
 
     let out_messages = transaction
         .iter_out_msgs()
@@ -383,7 +455,7 @@ fn send_message_debug(
 
 extension!(find_transaction_by_params in (Context) with (params: Tuple, txs: Tuple) using find_transaction_by_params_impl);
 fn find_transaction_by_params_impl(
-    _ctx: &mut Context,
+    ctx: &mut Context,
     stack: &mut Tuple,
     params: Tuple,
     txs: Tuple,
@@ -507,7 +579,11 @@ fn find_transaction_by_params_impl(
 
     let first = txs.first().unwrap();
     let tx_base64 = Boc::encode_base64(first.to_cell());
-    let tx_cell = ArcCell::from_boc_b64(&tx_base64).unwrap();
+    let tx_cell = try_ctx!(
+        ctx,
+        ArcCell::from_boc_b64(&tx_base64),
+        "Failed to decode transaction BoC: {}"
+    );
 
     stack.push(TupleItem::Cell(tx_cell));
 }
@@ -612,8 +688,16 @@ fn run_get_method_impl(
         GetMethodResult::Success(result) => {
             ctx.emulations.get_results.push(result.clone());
 
-            let cell = ArcCell::from_boc_b64(&result.stack).unwrap();
-            let tuple = Tuple::deserialize(&cell).unwrap();
+            let cell = try_ctx!(
+                ctx,
+                ArcCell::from_boc_b64(&result.stack),
+                "Failed to decode stack BoC: {}"
+            );
+            let tuple = try_ctx!(
+                ctx,
+                Tuple::deserialize(&cell),
+                "Failed to deserialize tuple: {}"
+            );
 
             stack.push(TupleItem::TypedTuple {
                 type_name: return_type_name,

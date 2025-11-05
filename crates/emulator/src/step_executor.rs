@@ -42,7 +42,7 @@ impl BaseExecutor for StepExecutor {
 
 impl StepExecutor {
     pub fn new() -> Self {
-        let config_cstr = CString::new(DEFAULT_CONFIG).unwrap();
+        let config_cstr = CString::new(DEFAULT_CONFIG).expect("DEFAULT_CONFIG contains null bytes");
         StepExecutor {
             inner: unsafe { create_emulator(config_cstr.as_ptr(), 5) },
         }
@@ -54,15 +54,19 @@ impl StepExecutor {
         _mode: BigInt,
         params: RunTransactionArgs,
     ) -> PrepareResult {
-        let message = CString::new(Boc::encode_base64(message)).unwrap();
+        let message = CString::new(Boc::encode_base64(message))
+            .expect("Failed to create C string from message BOC");
 
         let shard_account_cell = params.shard_account.to_cell();
         let shard_account_b64 = Boc::encode_base64(shard_account_cell);
-        let shard_account_b64_cst = CString::new(shard_account_b64).unwrap();
+        let shard_account_b64_cst = CString::new(shard_account_b64)
+            .expect("Failed to create C string from shard account BOC");
 
         let params = run_common_args_to_internal_params(&params);
-        let params_str = serde_json::to_string(&params).unwrap();
-        let params_cstr = CString::new(params_str).unwrap();
+        let params_str =
+            serde_json::to_string(&params).expect("Failed to serialize emulation params to JSON");
+        let params_cstr =
+            CString::new(params_str).expect("Failed to create C string from params JSON");
 
         let result_cstr = unsafe {
             emulate_sbs(
@@ -75,7 +79,8 @@ impl StepExecutor {
         };
 
         let output_str = unsafe { CString::from_raw(result_cstr).to_string_lossy().to_string() };
-        let result = serde_json::from_str::<PrepareResult>(&output_str).unwrap();
+        let result = serde_json::from_str::<PrepareResult>(&output_str)
+            .expect("Failed to parse emulator prepare result JSON");
         result
     }
 

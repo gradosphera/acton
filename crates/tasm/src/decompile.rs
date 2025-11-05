@@ -4,7 +4,6 @@ use anyhow::anyhow;
 use num_bigint::{BigInt, BigUint};
 use num_traits::ToPrimitive;
 use smallvec::smallvec;
-use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, CellSlice, DynCell, Store};
 use tycho_types::dict::RawDict;
 
@@ -343,6 +342,7 @@ fn dyn_cell_to_cell(cell: &DynCell) -> Cell {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tycho_types::boc::Boc;
 
     #[test]
     pub fn test_disassemble_jetton_minter() {

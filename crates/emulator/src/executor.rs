@@ -25,8 +25,8 @@ impl<T: Store + ?Sized> StoreExt for T {
     fn to_cell(&self) -> Cell {
         let mut builder = CellBuilder::new();
         self.store_into(&mut builder, Cell::empty_context())
-            .unwrap();
-        builder.build().unwrap()
+            .expect("Failed to store data into cell builder");
+        builder.build().expect("Failed to build cell from builder")
     }
 }
 
@@ -49,7 +49,7 @@ impl BaseExecutor for Executor {
 
 impl Executor {
     pub fn new() -> Self {
-        let config_cstr = CString::new(DEFAULT_CONFIG).unwrap();
+        let config_cstr = CString::new(DEFAULT_CONFIG).expect("DEFAULT_CONFIG contains null bytes");
         Executor {
             inner: unsafe { create_emulator(config_cstr.as_ptr(), 5) },
         }
@@ -61,15 +61,19 @@ impl Executor {
         _mode: BigInt,
         params: RunTransactionArgs,
     ) -> (EmulationResult, String, String) {
-        let message = CString::new(Boc::encode_base64(message)).unwrap();
+        let message = CString::new(Boc::encode_base64(message))
+            .expect("Failed to create C string from message BOC");
 
         let shard_account_cell = params.shard_account.to_cell();
         let shard_account_b64 = Boc::encode_base64(shard_account_cell);
-        let shard_account_b64_cst = CString::new(shard_account_b64).unwrap();
+        let shard_account_b64_cst = CString::new(shard_account_b64)
+            .expect("Failed to create C string from shard account BOC");
 
         let params = run_common_args_to_internal_params(&params);
-        let params_str = serde_json::to_string(&params).unwrap();
-        let params_cstr = CString::new(params_str).unwrap();
+        let params_str =
+            serde_json::to_string(&params).expect("Failed to serialize emulation params to JSON");
+        let params_cstr =
+            CString::new(params_str).expect("Failed to create C string from params JSON");
 
         let result_cstr = unsafe {
             emulate_with_emulator(
@@ -82,12 +86,18 @@ impl Executor {
         };
 
         let output_str = unsafe { CString::from_raw(result_cstr).to_string_lossy().to_string() };
-        let result = serde_json::from_str::<EmulationInternalResult>(&output_str).unwrap();
+        let result = serde_json::from_str::<EmulationInternalResult>(&output_str)
+            .expect("Failed to parse emulator output JSON");
         (result.output, result.logs, result.debug_logs)
     }
 
     pub fn get_address_code_cell(account: &ShardAccount) -> Option<Cell> {
-        let state = account.account.load().unwrap().0.map(|s| s.state);
+        let state = account
+            .account
+            .load()
+            .ok()
+            .and_then(|loaded| loaded.0)
+            .map(|s| s.state);
 
         let Some(AccountState::Active(state)) = state else {
             return None;

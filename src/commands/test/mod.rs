@@ -103,8 +103,14 @@ impl TestRunner {
         source_map: &SourceMap,
     ) -> TestResult {
         let params = GetMethodParams {
-            code: code_cell.to_boc_b64(false).unwrap().to_string(),
-            data: ArcCell::default().to_boc_b64(false).unwrap().to_string(),
+            code: code_cell
+                .to_boc_b64(false)
+                .expect("Failed to encode code cell to BoC")
+                .to_string(),
+            data: ArcCell::default()
+                .to_boc_b64(false)
+                .expect("Failed to encode data cell to BoC")
+                .to_string(),
             verbosity: 5,
             libs: "".to_string(),
             address: dest_address.to_string(),

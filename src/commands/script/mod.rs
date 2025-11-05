@@ -82,7 +82,7 @@ fn execute_script(
     debug: bool,
     debug_port: u16,
 ) -> anyhow::Result<ScriptResult> {
-    let dest_address = contract_address(code_cell);
+    let dest_address = contract_address(code_cell)?;
 
     let params = GetMethodParams {
         code: code_cell.to_boc_b64(false)?.to_string(),
@@ -177,21 +177,21 @@ fn print_script_result(result: ScriptResult) {
     }
 }
 
-fn contract_address(code: &ArcCell) -> TonAddress {
+fn contract_address(code: &ArcCell) -> anyhow::Result<TonAddress> {
     let state_init = CellBuilder::new()
         .store_bit(false)
-        .unwrap()
+        .map_err(|e| anyhow!("Failed to store bounce flag: {}", e))?
         .store_bit(false)
-        .unwrap()
+        .map_err(|e| anyhow!("Failed to store maybe libraries: {}", e))?
         .store_ref_cell_optional(Some(code))
-        .unwrap()
+        .map_err(|e| anyhow!("Failed to store code cell: {}", e))?
         .store_ref_cell_optional(Some(&ArcCell::default()))
-        .unwrap()
+        .map_err(|e| anyhow!("Failed to store data cell: {}", e))?
         .store_bit(false)
-        .unwrap()
+        .map_err(|e| anyhow!("Failed to store maybe tick/tock: {}", e))?
         .build()
-        .unwrap();
+        .map_err(|e| anyhow!("Failed to build state init cell: {}", e))?;
 
     let dest_address = TonAddress::new(0, state_init.cell_hash());
-    dest_address
+    Ok(dest_address)
 }
