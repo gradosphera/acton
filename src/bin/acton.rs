@@ -28,7 +28,30 @@ enum Commands {
         )]
         path: String,
     },
-    #[command(about = "Execute tests in file or directory")]
+    #[command(
+        about = "Execute tests in file or directory",
+        after_help = "\x1b[1;4mExamples:\x1b[0m
+    \x1b[2m# Run all tests in current directory\x1b[0m
+    \x1b[1macton test\x1b[0m
+
+    \x1b[2m# Run tests in specific file\x1b[0m
+    \x1b[1macton test my_test.tolk\x1b[0m
+
+    \x1b[2m# Run tests in directory with regex filter\x1b[0m
+    \x1b[1macton test . --filter \"wallet.*\"\x1b[0m
+
+    \x1b[2m# Exclude tests\x1b[0m
+    \x1b[1macton test . --exclude \"**/integration/**\"\x1b[0m
+
+    \x1b[2m# Exclude multiple patterns\x1b[0m
+    \x1b[1macton test . --exclude \"**/e2e/**\" --exclude \"**/gas/**\"\x1b[0m
+
+    \x1b[2m# Enable coverage collection\x1b[0m
+    \x1b[1macton test . --coverage --format lcov\x1b[0m
+
+    \x1b[2m# Run in debug mode\x1b[0m
+    \x1b[1macton test my_test.tolk --debug\x1b[0m"
+    )]
     Test {
         #[arg(help = "Test file or directory containing test files (default: current directory)")]
         path: Option<String>,
@@ -40,13 +63,19 @@ enum Commands {
         debug: bool,
         #[arg(long, help = "Debug server port", default_value = "12345")]
         debug_port: u16,
-        #[arg(long, help = "Enable backtraces")]
+        #[arg(
+            long,
+            help = "Enable backtraces (currently only \"full\" mode is available)"
+        )]
         backtrace: Option<String>,
-        #[arg(long, help = "Enable coverage collection")]
+        #[arg(long, help = "Generate a coverage profile")]
         coverage: bool,
-        #[arg(long, help = "Output coverage in specified format (lcov)")]
+        #[arg(long, help = "Output coverage profile in specified format (lcov)")]
         format: Option<String>,
-        #[arg(long, help = "Exclude test files matching glob patterns")]
+        #[arg(
+            long,
+            help = "Exclude test files and directories matching glob patterns"
+        )]
         exclude: Vec<String>,
     },
     #[command(about = "Execute a Tolk script file")]
