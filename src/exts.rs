@@ -175,7 +175,6 @@ fn send_message_from_impl(
     from: ArcCell,
     message: ArcCell,
 ) {
-    let blockchain = &mut ctx.blockchain;
     let emulator = &ctx.emulator;
 
     let msg_b64 = try_ctx!(
@@ -218,20 +217,8 @@ fn send_message_from_impl(
         }
     };
 
-    let mut libs = Dict::<HashBytes, LibDescr>::new();
-    for lib in ctx.libraries.clone() {
-        let mut publishers = Dict::new();
-        publishers.add(src_addr.as_std().unwrap().address, ()).ok();
-
-        libs.add(
-            lib.repr_hash(),
-            LibDescr {
-                lib: lib.clone(),
-                publishers,
-            },
-        )
-        .ok();
-    }
+    let libs = ctx.build_libs(&src_addr);
+    let blockchain = &mut ctx.blockchain;
 
     let emulations = if ctx.debug {
         send_message_debug(ctx, &msg_cell, &libs, Some(src_addr))
@@ -670,11 +657,8 @@ fn run_get_method_impl(
     let address_boc = address.to_boc_hex(false).unwrap();
 
     let address_std = MsgAddrIntStd::from_boc_hex(address_boc.as_str()).unwrap();
-    let dst_addr_str = format!(
-        "{}:{}",
-        &address_std.workchain,
-        hex::encode(&address_std.address)
-    );
+    let address_hash = address_std.address.clone();
+    let dst_addr_str = format!("{}:{}", &address_std.workchain, hex::encode(&address_hash));
 
     let dest_address = TonAddress::from_msg_address(address_std).unwrap();
 
@@ -687,12 +671,18 @@ fn run_get_method_impl(
         Cell::default()
     };
 
+    let libs =
+        ctx.build_libs_with_hash_owner(&HashBytes::from_slice(address_hash.clone().as_slice()));
+    let libs_root = libs.clone().into_root();
+
     let method_id = id.to_i32().unwrap_or(0);
     let params = GetMethodParams {
         code: code.to_boc_b64(false).unwrap().to_string(),
         data: Boc::encode_base64(data),
         verbosity: 5,
-        libs: "".to_string(),
+        libs: libs_root
+            .map(|root| Boc::encode_base64(root))
+            .unwrap_or("".to_string()),
         address: dest_address.to_string(),
         unixtime: 0,
         balance: "10".to_string(),

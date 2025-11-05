@@ -11,8 +11,9 @@ use num_bigint::BigInt;
 use std::collections::HashMap;
 use tolkc::source_map::SourceMap;
 use tvmffi::stack::{Tuple, TupleItem};
-use tycho_types::cell::Cell;
-use tycho_types::models::{IntAddr, Transaction};
+use tycho_types::cell::{Cell, HashBytes};
+use tycho_types::dict::Dict;
+use tycho_types::models::{IntAddr, LibDescr, Transaction};
 
 #[derive(Debug, Clone)]
 pub struct AssertBinFailure {
@@ -262,5 +263,27 @@ impl<'a> Context<'a> {
             message: Some(message),
             location: None,
         }));
+    }
+
+    pub fn build_libs(&self, owner: &IntAddr) -> Dict<HashBytes, LibDescr> {
+        self.build_libs_with_hash_owner(&owner.as_std().unwrap().address)
+    }
+
+    pub fn build_libs_with_hash_owner(&self, owner: &HashBytes) -> Dict<HashBytes, LibDescr> {
+        let mut libs = Dict::<HashBytes, LibDescr>::new();
+        for lib in self.libraries.clone() {
+            let mut publishers = Dict::new();
+            publishers.add(owner, ()).ok();
+
+            libs.add(
+                lib.repr_hash(),
+                LibDescr {
+                    lib: lib.clone(),
+                    publishers,
+                },
+            )
+            .ok();
+        }
+        libs
     }
 }
