@@ -220,11 +220,14 @@ fn send_message_from_impl(
 
     let mut libs = Dict::<HashBytes, LibDescr>::new();
     for lib in ctx.libraries.clone() {
+        let mut publishers = Dict::new();
+        publishers.add(src_addr.as_std().unwrap().address, ()).ok();
+
         libs.add(
             lib.repr_hash(),
             LibDescr {
                 lib: lib.clone(),
-                publishers: Default::default(),
+                publishers,
             },
         )
         .ok();
