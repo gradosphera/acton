@@ -84,13 +84,14 @@ pub fn poll_request(
     }
 }
 
-pub fn start_dap_server() -> (Receiver<Request>, Sender<DapMessage>) {
+pub fn start_dap_server(port: u16) -> (Receiver<Request>, Sender<DapMessage>) {
+    let address = format!("127.0.0.1:{}", port);
     let (req_sender, req_receiver) = unbounded::<Request>();
     let (dap_message_sender, dap_message_receiver) = unbounded::<DapMessage>();
 
     thread::spawn(move || {
-        let listener = TcpListener::bind("127.0.0.1:12345").unwrap();
-        println!("Debugger server listening on 127.0.0.1:12345");
+        let listener = TcpListener::bind(&address).unwrap();
+        println!("Debugger server listening on {}", address);
 
         let stream = listener.incoming().next().unwrap().unwrap();
         println!("New connection established");

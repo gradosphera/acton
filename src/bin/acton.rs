@@ -37,6 +37,8 @@ enum Commands {
         teamcity: bool,
         #[arg(long, help = "Enable debug mode")]
         debug: bool,
+        #[arg(long, help = "Debug server port", default_value = "12345")]
+        debug_port: u16,
         #[arg(long, help = "Enable backtraces")]
         backtrace: Option<String>,
         #[arg(long, help = "Enable coverage collection")]
@@ -50,6 +52,8 @@ enum Commands {
         path: String,
         #[arg(long, help = "Enable debug mode")]
         debug: bool,
+        #[arg(long, help = "Debug server port", default_value = "12345")]
+        debug_port: u16,
     },
     #[command(about = "Compile a Tolk file")]
     Compile {
@@ -94,6 +98,7 @@ fn main() {
             filter,
             teamcity,
             debug,
+            debug_port,
             backtrace,
             coverage,
             format,
@@ -103,6 +108,7 @@ fn main() {
                 filter.as_deref(),
                 teamcity,
                 debug,
+                debug_port,
                 backtrace,
                 coverage,
                 format.as_deref(),
@@ -111,8 +117,12 @@ fn main() {
                 eprintln!("{} {}", "Error:".red(), err);
             }
         }
-        Commands::Script { path, debug } => {
-            let result = script_cmd(&path, debug);
+        Commands::Script {
+            path,
+            debug,
+            debug_port,
+        } => {
+            let result = script_cmd(&path, debug, debug_port);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
             }

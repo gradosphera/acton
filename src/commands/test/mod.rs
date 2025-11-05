@@ -46,6 +46,7 @@ pub fn test_cmd(
     filter: Option<&str>,
     teamcity: bool,
     debug: bool,
+    debug_port: u16,
     backtrace: Option<String>,
     coverage: bool,
     format: Option<&str>,
@@ -83,8 +84,15 @@ pub fn test_cmd(
     let mut coverages = vec![];
 
     for (index, file) in test_files.iter().enumerate() {
-        let result =
-            run_tests_for_file(&file, filter, teamcity, debug, backtrace.clone(), coverage);
+        let result = run_tests_for_file(
+            &file,
+            filter,
+            teamcity,
+            debug,
+            debug_port,
+            backtrace.clone(),
+            coverage,
+        );
         match result {
             Ok(stats) => {
                 total_passed += stats.passed;
@@ -261,6 +269,7 @@ fn run_tests_for_file(
     filter: Option<&str>,
     teamcity: bool,
     debug: bool,
+    debug_port: u16,
     backtrace: Option<String>,
     coverage: bool,
 ) -> Result<TestStats, anyhow::Error> {
@@ -299,6 +308,7 @@ fn run_tests_for_file(
                 filter,
                 teamcity,
                 debug,
+                debug_port,
                 backtrace,
                 coverage,
             );
@@ -325,6 +335,7 @@ fn run_all_tests(
     filter: Option<&str>,
     teamcity: bool,
     debug: bool,
+    debug_port: u16,
     backtrace: Option<String>,
     coverage: bool,
 ) -> TestStats {
@@ -380,7 +391,7 @@ fn run_all_tests(
     let mut emulations = Emulations::new();
 
     let (req_receiver, dap_sender) = if debug {
-        crate::dap::start_dap_server()
+        crate::dap::start_dap_server(debug_port)
     } else {
         let (_, req_receiver) = unbounded::<Request>();
         let (dap_message_sender, _) = unbounded::<DapMessage>();

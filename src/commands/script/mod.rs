@@ -16,7 +16,7 @@ use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
 
-pub fn script_cmd(path: &String, debug: bool) -> Result<(), anyhow::Error> {
+pub fn script_cmd(path: &String, debug: bool, debug_port: u16) -> Result<(), anyhow::Error> {
     let metadata = fs::metadata(path)?;
     if !metadata.is_file() {
         return Err(anyhow!("Path '{}' is not a file", path));
@@ -27,10 +27,15 @@ pub fn script_cmd(path: &String, debug: bool) -> Result<(), anyhow::Error> {
     }
 
     let content = fs::read_to_string(path)?;
-    run_script_file(path, &content, debug)
+    run_script_file(path, &content, debug, debug_port)
 }
 
-fn run_script_file(file_path: &str, content: &str, debug: bool) -> Result<(), anyhow::Error> {
+fn run_script_file(
+    file_path: &str,
+    content: &str,
+    debug: bool,
+    debug_port: u16,
+) -> Result<(), anyhow::Error> {
     let abi = contract_abi(content, file_path);
 
     let executable_code = content.to_string();
@@ -50,6 +55,7 @@ fn run_script_file(file_path: &str, content: &str, debug: bool) -> Result<(), an
                 &abi,
                 &result.source_map.unwrap_or(Default::default()),
                 debug,
+                debug_port,
             );
             print_script_result(script_result?);
             Ok(())
@@ -74,6 +80,7 @@ fn execute_script(
     abi: &ContractAbi,
     source_map: &SourceMap,
     debug: bool,
+    debug_port: u16,
 ) -> anyhow::Result<ScriptResult> {
     let dest_address = contract_address(code_cell);
 
@@ -127,7 +134,7 @@ fn execute_script(
         io_exts::register_extensions(&mut get_executor, &mut ctx);
         asserts_exts::register_extensions(&mut get_executor, &mut ctx);
 
-        let (req_receiver, dap_sender) = crate::dap::start_dap_server();
+        let (req_receiver, dap_sender) = crate::dap::start_dap_server(debug_port);
 
         let mut dbg_ctx = DebugContext::new(
             AnyExecutor::Get(get_executor.clone()),
