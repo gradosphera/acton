@@ -41,6 +41,175 @@ mod teamcity;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
+#[derive(Debug, Clone)]
+pub struct TestConfig {
+    pub teamcity: bool,
+    pub debug: bool,
+    pub debug_port: u16,
+    pub backtrace: Option<String>,
+    pub coverage: bool,
+    pub filter: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct TestResult {
+    pub get_result: GetMethodResult,
+    pub captured_stdout: String,
+    pub captured_stderr: String,
+    pub assert_failure: Option<AssertFailure>,
+    pub expected_exit_code: Option<i32>,
+    pub accounts: HashMap<String, ShardAccount>,
+}
+
+#[derive(Debug)]
+pub struct TestRunner {
+    config: TestConfig,
+    build_cache: BuildCache,
+    known_addresses: KnownAddresses,
+    known_code_cells: HashMap<String, String>,
+    emulations: Emulations,
+    req_receiver: Receiver<Request>,
+    dap_sender: Sender<DapMessage>,
+}
+
+impl TestRunner {
+    pub fn new(config: TestConfig) -> Self {
+        let (req_receiver, dap_sender) = if config.debug {
+            crate::dap::start_dap_server(config.debug_port)
+        } else {
+            let (_, req_receiver) = unbounded::<Request>();
+            let (dap_message_sender, _) = unbounded::<DapMessage>();
+            (req_receiver, dap_message_sender)
+        };
+
+        Self {
+            config,
+            build_cache: BuildCache::new(),
+            known_addresses: KnownAddresses::new(),
+            known_code_cells: HashMap::new(),
+            emulations: Emulations::new(),
+            req_receiver,
+            dap_sender,
+        }
+    }
+
+    fn execute_test(
+        &mut self,
+        test: &TestDescriptor,
+        code_cell: &Arc<Cell>,
+        data_cell: &Arc<Cell>,
+        dest_address: &TonAddress,
+        abi: &ContractAbi,
+        source_map: &SourceMap,
+    ) -> TestResult {
+        let params = GetMethodParams {
+            code: code_cell.to_boc_b64(false).unwrap().to_string(),
+            data: data_cell.to_boc_b64(false).unwrap().to_string(),
+            verbosity: 5,
+            libs: "".to_string(),
+            address: dest_address.to_string(),
+            unixtime: 0,
+            balance: "10".to_string(),
+            rand_seed: "0000000000000000000000000000000000000000000000000000000000000000"
+                .to_string(),
+            gas_limit: "0".to_string(),
+            method_id: test.id,
+            debug_enabled: true,
+            extra_currencies: HashMap::new(),
+            prev_blocks_info: None,
+        };
+
+        let mut emulator = Emulator::new();
+        let mut blockchain = Blockchain::new();
+        let mut libraries = vec![];
+
+        let mut ctx = Context {
+            stdout_buffer: "".to_string(),
+            stderr_buffer: "".to_string(),
+            capture_test_output: true,
+            assert_failure: &mut None,
+            blockchain: &mut blockchain,
+            emulator: &mut emulator,
+            build_cache: &mut self.build_cache,
+            known_addresses: &mut self.known_addresses,
+            known_code_cells: &mut self.known_code_cells,
+            emulations: &mut self.emulations,
+            abi: (*abi).clone(),
+            expected_exit_code: &mut None,
+            dbg_ctx: &mut DebugContext::empty(),
+            debug: self.config.debug,
+            backtrace: self.config.backtrace.clone(),
+            need_debug_info: self.config.debug
+                || self.config.backtrace == Some("full".to_string())
+                || self.config.coverage,
+            libraries: &mut libraries,
+        };
+
+        let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) =
+            if self.config.debug {
+                let mut get_executor = StepGetExecutor::new(Default::default(), params.clone());
+
+                exts::register_extensions(&mut get_executor, &mut ctx);
+                io_exts::register_extensions(&mut get_executor, &mut ctx);
+                asserts_exts::register_extensions(&mut get_executor, &mut ctx);
+
+                let mut dbg_ctx = DebugContext::new(
+                    AnyExecutor::Get(get_executor.clone()),
+                    source_map,
+                    &self.req_receiver,
+                    self.dap_sender.clone(),
+                    Some(test.name.clone()),
+                );
+
+                ctx.dbg_ctx = &mut dbg_ctx;
+
+                get_executor.run_get_method(test.id, Default::default());
+
+                ctx.dbg_ctx.process_incoming_requests(true).unwrap();
+
+                let get_result = get_executor.finish_get_method(&params.code);
+
+                (
+                    get_result,
+                    ctx.stdout_buffer,
+                    ctx.stderr_buffer,
+                    (*ctx.assert_failure).clone(),
+                    ctx.expected_exit_code
+                        .clone()
+                        .map(|value| value.to_i32())
+                        .unwrap_or(None),
+                )
+            } else {
+                let mut get_executor = GetExecutor::new(params.clone());
+
+                exts::register_extensions(&mut get_executor, &mut ctx);
+                io_exts::register_extensions(&mut get_executor, &mut ctx);
+                asserts_exts::register_extensions(&mut get_executor, &mut ctx);
+
+                let get_result = get_executor.run_get_method(Default::default(), params);
+
+                (
+                    get_result,
+                    ctx.stdout_buffer,
+                    ctx.stderr_buffer,
+                    (*ctx.assert_failure).clone(),
+                    ctx.expected_exit_code
+                        .clone()
+                        .and_then(|value| value.to_i32()),
+                )
+            };
+
+        TestResult {
+            get_result: result,
+            captured_stdout,
+            captured_stderr,
+            assert_failure,
+            expected_exit_code,
+            accounts: blockchain.get_accounts().clone(),
+        }
+    }
+}
+
 pub fn test_cmd(
     path: &String,
     filter: Option<&str>,
@@ -51,6 +220,14 @@ pub fn test_cmd(
     coverage: bool,
     format: Option<&str>,
 ) -> Result<(), anyhow::Error> {
+    let config = TestConfig {
+        teamcity,
+        debug,
+        debug_port,
+        backtrace,
+        coverage,
+        filter: filter.map(|s| s.to_string()),
+    };
     let metadata = fs::metadata(path)?;
     let test_files = if metadata.is_file() {
         if !path.ends_with("_test.tolk") {
@@ -65,11 +242,11 @@ pub fn test_cmd(
 
     let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
 
-    if teamcity {
+    if config.teamcity {
         TeamcityReporter::on_testing_started();
     }
 
-    if !teamcity {
+    if !config.teamcity {
         println!(
             "\n{} {}\n",
             " TEST ".bold().on_blue(),
@@ -84,15 +261,7 @@ pub fn test_cmd(
     let mut coverages = vec![];
 
     for (index, file) in test_files.iter().enumerate() {
-        let result = run_tests_for_file(
-            &file,
-            filter,
-            teamcity,
-            debug,
-            debug_port,
-            backtrace.clone(),
-            coverage,
-        );
+        let result = run_tests_for_file(&file, &config);
         match result {
             Ok(stats) => {
                 total_passed += stats.passed;
@@ -202,7 +371,7 @@ pub fn test_cmd(
         }
     }
 
-    if teamcity {
+    if config.teamcity {
         TeamcityReporter::on_testing_finished();
     }
 
@@ -264,15 +433,7 @@ struct TestStats {
     coverage: Option<Coverage>,
 }
 
-fn run_tests_for_file(
-    file: &str,
-    filter: Option<&str>,
-    teamcity: bool,
-    debug: bool,
-    debug_port: u16,
-    backtrace: Option<String>,
-    coverage: bool,
-) -> Result<TestStats, anyhow::Error> {
+fn run_tests_for_file(file: &str, config: &TestConfig) -> Result<TestStats, anyhow::Error> {
     let content = match fs::read_to_string(file) {
         Ok(content) => content,
         Err(err) => {
@@ -289,7 +450,8 @@ fn run_tests_for_file(
 
     fs::write(&tmp_test_filename, executable_code)?;
 
-    let need_debug_info = debug || backtrace == Some("full".to_string()) || coverage;
+    let need_debug_info =
+        config.debug || config.backtrace == Some("full".to_string()) || config.coverage;
     let compilation_result = tolkc::compile_fast(Path::new(&tmp_test_filename), need_debug_info);
     let result = match compilation_result {
         tolkc::CompilerResult::Success(result) => {
@@ -298,19 +460,15 @@ fn run_tests_for_file(
             let code_cell = ArcCell::from_boc_b64(&*result.code_boc64)?;
             let data_cell = ArcCell::default();
 
+            let mut runner = TestRunner::new(config.clone());
             let stats = run_all_tests(
+                &mut runner,
                 file,
                 tests,
                 &code_cell,
                 &data_cell,
                 &abi,
                 &result.source_map.unwrap_or(Default::default()),
-                filter,
-                teamcity,
-                debug,
-                debug_port,
-                backtrace,
-                coverage,
             );
             Ok(stats)
         }
@@ -326,20 +484,15 @@ fn run_tests_for_file(
 }
 
 fn run_all_tests(
+    runner: &mut TestRunner,
     file_path: &str,
     tests: Vec<TestDescriptor>,
     code_cell: &Arc<Cell>,
     data_cell: &Arc<Cell>,
     abi: &ContractAbi,
     source_map: &SourceMap,
-    filter: Option<&str>,
-    teamcity: bool,
-    debug: bool,
-    debug_port: u16,
-    backtrace: Option<String>,
-    coverage: bool,
 ) -> TestStats {
-    let filtered_tests = if let Some(pattern) = filter {
+    let filtered_tests = if let Some(pattern) = &runner.config.filter {
         let regex = match Regex::new(pattern) {
             Ok(r) => r,
             Err(e) => {
@@ -362,7 +515,7 @@ fn run_all_tests(
     };
 
     if !filtered_tests.is_empty() {
-        if teamcity {
+        if runner.config.teamcity {
             TeamcityReporter::on_test_suite_started(file_path);
         }
 
@@ -385,26 +538,13 @@ fn run_all_tests(
     let mut skipped = 0;
     let mut todo = 0;
 
-    let mut build_cache = BuildCache::new();
-    let mut known_addresses = KnownAddresses::new();
-    let mut known_code_cells = HashMap::new();
-    let mut emulations = Emulations::new();
-
-    let (req_receiver, dap_sender) = if debug {
-        crate::dap::start_dap_server(debug_port)
-    } else {
-        let (_, req_receiver) = unbounded::<Request>();
-        let (dap_message_sender, _) = unbounded::<DapMessage>();
-        (req_receiver, dap_message_sender)
-    };
-
     for test in filtered_tests.iter() {
-        if teamcity {
+        if runner.config.teamcity {
             TeamcityReporter::on_test_started(&beatify_test_name(&test.name), file_path);
         }
 
         if test.annotations.contains(&"todo".to_string()) {
-            if teamcity {
+            if runner.config.teamcity {
                 TeamcityReporter::on_test_ignored(&beatify_test_name(&test.name), 0);
             }
             let description = test.todo_description.as_deref().unwrap_or("TODO");
@@ -421,7 +561,7 @@ fn run_all_tests(
         }
 
         if test.annotations.contains(&"skip".to_string()) {
-            if teamcity {
+            if runner.config.teamcity {
                 TeamcityReporter::on_test_ignored(&beatify_test_name(&test.name), 0);
             }
             println!(
@@ -435,23 +575,8 @@ fn run_all_tests(
         }
 
         let start_time = Instant::now();
-        let result = execute_test(
-            test,
-            &code_cell,
-            &data_cell,
-            &dest_address,
-            &mut build_cache,
-            &mut known_addresses,
-            &mut known_code_cells,
-            &mut emulations,
-            abi,
-            source_map,
-            debug,
-            req_receiver.clone(),
-            dap_sender.clone(),
-            backtrace.as_ref(),
-            coverage,
-        );
+        let result =
+            runner.execute_test(test, &code_cell, &data_cell, &dest_address, abi, source_map);
         let duration = start_time.elapsed();
         let TestResult {
             captured_stdout,
@@ -520,11 +645,11 @@ fn run_all_tests(
             let formatter = FormatterContext {
                 contract_abi: abi.clone(),
                 accounts,
-                build_cache: build_cache.clone(),
-                emulations: emulations.clone(),
-                known_addresses: known_addresses.clone(),
-                known_code_cells: known_code_cells.clone(),
-                backtrace: backtrace.clone(),
+                build_cache: runner.build_cache.clone(),
+                emulations: runner.emulations.clone(),
+                known_addresses: runner.known_addresses.clone(),
+                known_code_cells: runner.known_code_cells.clone(),
+                backtrace: runner.config.backtrace.clone(),
             };
 
             match &get_result {
@@ -718,7 +843,7 @@ fn run_all_tests(
                                             println!("      {}     {}", "│".dimmed(), line);
                                         }
                                     }
-                                } else if backtrace.is_none() {
+                                } else if runner.config.backtrace.is_none() {
                                     println!(
                                         "      {} Re-run with {} to get more information",
                                         "├─".dimmed(),
@@ -765,7 +890,7 @@ fn run_all_tests(
                 }
             }
 
-            if teamcity {
+            if runner.config.teamcity {
                 TeamcityReporter::on_test_failed(
                     &beatify_test_name(&test.name),
                     duration_ms,
@@ -789,7 +914,7 @@ fn run_all_tests(
             }
         }
 
-        if teamcity {
+        if runner.config.teamcity {
             TeamcityReporter::on_test_finished(
                 &beatify_test_name(&test.name),
                 file_path,
@@ -797,11 +922,11 @@ fn run_all_tests(
             );
         }
 
-        if coverage {
+        if runner.config.coverage {
             // For coverage, we need to process test logs as well, so register it here
             if let GetMethodResult::Success(get_result) = get_result {
-                emulations.get_results.push(get_result);
-                build_cache.memoize(
+                runner.emulations.get_results.push(get_result);
+                runner.build_cache.memoize(
                     &test.name,
                     &file_path.to_string(),
                     &code_cell.to_boc_b64(false).unwrap(),
@@ -812,12 +937,12 @@ fn run_all_tests(
         }
     }
 
-    if !filtered_tests.is_empty() && teamcity {
+    if !filtered_tests.is_empty() && runner.config.teamcity {
         TeamcityReporter::on_test_suite_finished(file_path);
     }
 
-    let coverage = if coverage {
-        Some(collect_coverage(&emulations, &build_cache))
+    let coverage = if runner.config.coverage {
+        Some(collect_coverage(&runner.emulations, &runner.build_cache))
     } else {
         None
     };
@@ -911,134 +1036,6 @@ fn format_search_transaction_parameters(
         ))
     }
     params
-}
-
-struct TestResult {
-    get_result: GetMethodResult,
-    captured_stdout: String,
-    captured_stderr: String,
-    assert_failure: Option<AssertFailure>,
-    expected_exit_code: Option<i32>,
-    accounts: HashMap<String, ShardAccount>,
-}
-
-fn execute_test(
-    test: &TestDescriptor,
-    code_cell: &Arc<Cell>,
-    data_cell: &Arc<Cell>,
-    dest_address: &TonAddress,
-    build_cache: &mut BuildCache,
-    known_addresses: &mut KnownAddresses,
-    known_code_cells: &mut HashMap<String, String>,
-    emulations: &mut Emulations,
-    abi: &ContractAbi,
-    source_map: &SourceMap,
-    debug: bool,
-    req_receiver: Receiver<Request>,
-    dap_sender: Sender<DapMessage>,
-    backtrace: Option<&String>,
-    coverage: bool,
-) -> TestResult {
-    let params = GetMethodParams {
-        code: code_cell.to_boc_b64(false).unwrap().to_string(),
-        data: data_cell.to_boc_b64(false).unwrap().to_string(),
-        verbosity: 5,
-        libs: "".to_string(),
-        address: dest_address.to_string(),
-        unixtime: 0,
-        balance: "10".to_string(),
-        rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-        gas_limit: "0".to_string(),
-        method_id: test.id,
-        debug_enabled: true,
-        extra_currencies: HashMap::new(),
-        prev_blocks_info: None,
-    };
-    let mut get_executor = GetExecutor::new(params.clone());
-
-    let mut emulator = Emulator::new();
-    let mut blockchain = Blockchain::new();
-    let mut libraries = vec![];
-
-    let mut ctx = Context {
-        stdout_buffer: "".to_string(),
-        stderr_buffer: "".to_string(),
-        capture_test_output: true,
-        assert_failure: &mut None,
-        blockchain: &mut blockchain,
-        emulator: &mut emulator,
-        build_cache,
-        known_addresses,
-        known_code_cells,
-        emulations,
-        abi: (*abi).clone(),
-        expected_exit_code: &mut None,
-        dbg_ctx: &mut DebugContext::empty(),
-        debug,
-        backtrace: backtrace.cloned(),
-        need_debug_info: debug || coverage || backtrace == Some(&"full".to_string()),
-        libraries: &mut libraries,
-    };
-
-    let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) = if debug {
-        let mut get_executor = StepGetExecutor::new(Default::default(), params.clone());
-
-        exts::register_extensions(&mut get_executor, &mut ctx);
-        io_exts::register_extensions(&mut get_executor, &mut ctx);
-        asserts_exts::register_extensions(&mut get_executor, &mut ctx);
-
-        let mut dbg_ctx = DebugContext::new(
-            AnyExecutor::Get(get_executor.clone()),
-            source_map,
-            &req_receiver,
-            dap_sender,
-            Some(test.name.clone()),
-        );
-
-        ctx.dbg_ctx = &mut dbg_ctx;
-
-        get_executor.run_get_method(test.id, Default::default());
-
-        ctx.dbg_ctx.process_incoming_requests(true).unwrap();
-
-        let get_result = get_executor.finish_get_method(&params.code);
-
-        (
-            get_result,
-            ctx.stdout_buffer,
-            ctx.stderr_buffer,
-            (*ctx.assert_failure).clone(),
-            ctx.expected_exit_code
-                .clone()
-                .map(|value| value.to_i32())
-                .unwrap_or(None),
-        )
-    } else {
-        exts::register_extensions(&mut get_executor, &mut ctx);
-        io_exts::register_extensions(&mut get_executor, &mut ctx);
-        asserts_exts::register_extensions(&mut get_executor, &mut ctx);
-
-        let get_result = get_executor.run_get_method(Default::default(), params);
-
-        (
-            get_result,
-            ctx.stdout_buffer,
-            ctx.stderr_buffer,
-            (*ctx.assert_failure).clone(),
-            ctx.expected_exit_code
-                .clone()
-                .and_then(|value| value.to_i32()),
-        )
-    };
-
-    TestResult {
-        get_result: result,
-        captured_stdout,
-        captured_stderr,
-        assert_failure,
-        expected_exit_code,
-        accounts: blockchain.get_accounts().clone(),
-    }
 }
 
 fn contract_address(code: &Arc<Cell>) -> TonAddress {
