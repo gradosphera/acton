@@ -1,5 +1,6 @@
 use crate::context::{AnyExecutor, BuildCache, Context, Emulations, KnownAddresses};
 use crate::debug_context::DebugContext;
+use crate::file_build_cache::FileBuildCache;
 use crate::{asserts_exts, exts, io_exts};
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
@@ -16,7 +17,18 @@ use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
 
-pub fn script_cmd(path: &String, debug: bool, debug_port: u16) -> anyhow::Result<()> {
+pub fn script_cmd(
+    path: &String,
+    debug: bool,
+    debug_port: u16,
+    clear_cache: bool,
+) -> anyhow::Result<()> {
+    if clear_cache {
+        let mut file_cache = FileBuildCache::new(None)?;
+        file_cache.clear()?;
+        println!("  {} Cache cleared", "✓".green().bold());
+    }
+
     let metadata = fs::metadata(path)?;
     if !metadata.is_file() {
         return Err(anyhow!("Path '{}' is not a file", path));
@@ -103,6 +115,8 @@ fn execute_script(
     let mut emulator = Emulator::new();
     let mut blockchain = Blockchain::new();
     let mut build_cache = BuildCache::new();
+    let mut file_build_cache =
+        FileBuildCache::new(None).expect("Failed to create file cache for script execution");
     let mut known_addresses = KnownAddresses::new();
     let mut known_code_cell = HashMap::new();
     let mut emulations = Emulations::new();
@@ -116,6 +130,7 @@ fn execute_script(
         blockchain: &mut blockchain,
         emulator: &mut emulator,
         build_cache: &mut build_cache,
+        file_build_cache: &mut file_build_cache,
         known_addresses: &mut known_addresses,
         known_code_cells: &mut known_code_cell,
         emulations: &mut emulations,

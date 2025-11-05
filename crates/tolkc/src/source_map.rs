@@ -7,7 +7,7 @@ use tycho_types::cell::{Cell, CellBuilder, CellFamily, CellSlice, Load};
 use tycho_types::dict::{Dict, RawDict};
 use tycho_types::prelude::DynCell;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceMap {
     pub high_level: HighLevelSourceMap,
     pub debug_marks: HashMap<String, Vec<(i32, i32)>>,

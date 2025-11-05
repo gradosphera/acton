@@ -113,6 +113,33 @@ struct FileInfo {
     tree: tree_sitter::Tree,
 }
 
+pub fn get_file_dependencies(file_path: &str, include_itself: bool) -> Result<Vec<String>, String> {
+    let content = match fs::read_to_string(file_path) {
+        Ok(content) => content,
+        Err(e) => return Err(format!("Failed to read file '{}': {}", file_path, e)),
+    };
+
+    let tree = match tolk_parser::parser::parse(&content) {
+        Ok(tree) => tree,
+        Err(e) => return Err(format!("Failed to parse file '{}': {:?}", file_path, e)),
+    };
+
+    let root_node = tree.root_node();
+    let files = collect_imported_files(&root_node, &content, file_path);
+
+    let mut dependencies: Vec<String> = files
+        .into_iter()
+        .map(|file_info| file_info.path)
+        .filter(|path| path != file_path)
+        .collect();
+
+    if include_itself {
+        dependencies.push(file_path.to_string());
+    }
+
+    Ok(dependencies)
+}
+
 pub fn contract_abi(content: &str, file_path: &str) -> ContractAbi {
     let contract_name = get_contract_name_from_file_path(file_path);
 

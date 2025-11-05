@@ -77,6 +77,7 @@ impl TestSettings {
         coverage_override: Option<bool>,
         coverage_format_override: Option<String>,
         exclude_override: Option<Vec<String>>,
+        clear_cache_override: Option<bool>,
     ) -> TestConfig {
         TestConfig {
             filter: filter_override.or_else(|| self.filter.clone()),
@@ -88,6 +89,7 @@ impl TestSettings {
             coverage_format: coverage_format_override.or_else(|| self.coverage_format.clone()),
             exclude_patterns: exclude_override
                 .unwrap_or_else(|| self.exclude.clone().unwrap_or_default()),
+            clear_cache: clear_cache_override.unwrap_or(false),
         }
     }
 }

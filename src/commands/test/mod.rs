@@ -5,6 +5,7 @@ use crate::commands::test::instrumentation::inject_locations_into_expect_calls;
 use crate::context::{AnyExecutor, AssertFailure, BuildCache, Context, Emulations, KnownAddresses};
 use crate::dap::DapMessage;
 use crate::debug_context::DebugContext;
+use crate::file_build_cache::FileBuildCache;
 use crate::formatter::FormatterContext;
 use crate::{asserts_exts, exts, io_exts, retrace};
 use abi::{ContractAbi, contract_abi};
@@ -50,6 +51,7 @@ pub struct TestConfig {
     pub filter: Option<String>,
     pub coverage_format: Option<String>,
     pub exclude_patterns: Vec<String>,
+    pub clear_cache: bool,
 }
 
 #[derive(Debug)]
@@ -66,6 +68,7 @@ pub struct TestResult {
 pub struct TestRunner {
     config: TestConfig,
     build_cache: BuildCache,
+    file_build_cache: FileBuildCache,
     known_addresses: KnownAddresses,
     known_code_cells: HashMap<String, String>,
     emulations: Emulations,
@@ -86,6 +89,7 @@ impl TestRunner {
         Self {
             config,
             build_cache: BuildCache::new(),
+            file_build_cache: FileBuildCache::new(None).expect("Failed to create file cache"),
             known_addresses: KnownAddresses::new(),
             known_code_cells: HashMap::new(),
             emulations: Emulations::new(),
@@ -137,6 +141,7 @@ impl TestRunner {
             blockchain: &mut blockchain,
             emulator: &mut emulator,
             build_cache: &mut self.build_cache,
+            file_build_cache: &mut self.file_build_cache,
             known_addresses: &mut self.known_addresses,
             known_code_cells: &mut self.known_code_cells,
             emulations: &mut self.emulations,
@@ -217,6 +222,12 @@ impl TestRunner {
 }
 
 pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()> {
+    if config.clear_cache {
+        let mut file_cache = FileBuildCache::new(None)?;
+        file_cache.clear()?;
+        println!("  {} Cache cleared", "✓".green().bold());
+    }
+
     // If path is omitted, default to current directory
     let path = path.unwrap_or_else(|| ".".to_string());
 
@@ -420,6 +431,10 @@ pub fn find_test_files_recursively(
             let rel = path.strip_prefix(root).unwrap_or(path);
 
             if let Some(name) = rel.file_name().and_then(|s| s.to_str()) {
+                if name.ends_with("_test.tolk_test.tolk") {
+                    // skip temp test file
+                    continue;
+                }
                 if !name.ends_with("_test.tolk") {
                     continue;
                 }

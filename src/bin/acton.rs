@@ -77,6 +77,8 @@ enum Commands {
             help = "Exclude test files and directories matching glob patterns"
         )]
         exclude: Vec<String>,
+        #[arg(long, help = "Clear compilation cache before running")]
+        clear_cache: bool,
     },
     #[command(about = "Execute a Tolk script file")]
     Script {
@@ -86,6 +88,8 @@ enum Commands {
         debug: bool,
         #[arg(long, help = "Debug server port", default_value = "12345")]
         debug_port: u16,
+        #[arg(long, help = "Clear compilation cache before running")]
+        clear_cache: bool,
     },
     #[command(about = "Compile a Tolk file")]
     Compile {
@@ -99,6 +103,8 @@ enum Commands {
         boc: Option<String>,
         #[arg(long, help = "Output Fit code to file")]
         fift: Option<String>,
+        #[arg(long, help = "Clear compilation cache before running")]
+        clear_cache: bool,
     },
     #[command(about = "Disassemble TVM bitcode to human-readable TASM")]
     Disasm {
@@ -138,9 +144,18 @@ fn main() {
             coverage,
             format,
             exclude,
+            clear_cache,
         } => {
             let config = create_test_config(
-                filter, teamcity, debug, debug_port, backtrace, coverage, format, exclude,
+                filter,
+                teamcity,
+                debug,
+                debug_port,
+                backtrace,
+                coverage,
+                format,
+                exclude,
+                clear_cache,
             );
             let result = test_cmd(path, &config);
             if let Err(err) = result {
@@ -151,8 +166,9 @@ fn main() {
             path,
             debug,
             debug_port,
+            clear_cache,
         } => {
-            let result = script_cmd(&path, debug, debug_port);
+            let result = script_cmd(&path, debug, debug_port, clear_cache);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
             }
@@ -163,8 +179,9 @@ fn main() {
             base64_only,
             boc,
             fift,
+            clear_cache,
         } => {
-            let result = compile_cmd(&path, json, base64_only, boc, fift);
+            let result = compile_cmd(&path, json, base64_only, boc, fift, clear_cache);
             if let Err(err) = result {
                 if json {
                     println!(
@@ -225,6 +242,7 @@ fn create_test_config(
     coverage: bool,
     format: Option<String>,
     exclude: Vec<String>,
+    clear_cache: bool,
 ) -> TestConfig {
     let acton_config = ActonConfig::load().ok();
 
@@ -244,6 +262,7 @@ fn create_test_config(
             } else {
                 None
             },
+            None,
         );
     }
 
@@ -256,5 +275,6 @@ fn create_test_config(
         filter,
         coverage_format: format,
         exclude_patterns: exclude,
+        clear_cache,
     }
 }

@@ -12,10 +12,12 @@ use emulator::step_executor::StepExecutor;
 use emulator::step_get_executor::StepGetExecutor;
 use emulator::traits::BaseExecutor;
 use emulator::{extension, pop_args, register_ext_methods, try_ctx};
+use log::{info, warn};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::Instant;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
@@ -39,7 +41,12 @@ fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
 
 extension!(build in (Context) with (path: String, name: String) using build_impl);
 fn build_impl(ctx: &mut Context, stack: &mut Tuple, path: String, name: String) {
+    let start_time = Instant::now();
+
     if let Some(cached) = ctx.build_cache.built.get(&path) {
+        let elapsed = start_time.elapsed();
+        info!("Build {} from memory cache in {:?}", path, elapsed);
+
         let code_cell = try_ctx!(
             ctx,
             ArcCell::from_boc_b64(&*cached.code_boc64),
@@ -50,9 +57,53 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, path: String, name: String) 
         return;
     }
 
+    if let Some(cached_entry) =
+        ctx.file_build_cache
+            .get(&path, ctx.need_debug_info, 2, "1.1".to_string())
+    {
+        let elapsed = start_time.elapsed();
+        info!(
+            "Build {} from file cache (.acton/cache) in {:?}",
+            path, elapsed
+        );
+
+        ctx.build_cache.memoize(
+            &name,
+            &path,
+            &cached_entry.code_boc64,
+            &cached_entry.code_hash_hex,
+            cached_entry.source_map.clone().unwrap_or_default(),
+        );
+
+        let code_cell = try_ctx!(
+            ctx,
+            ArcCell::from_boc_b64(&*cached_entry.code_boc64),
+            "Failed to decode cached code BoC for {}: {}",
+            path
+        );
+        stack.push(TupleItem::Cell(code_cell));
+        return;
+    }
+
+    let compile_start = Instant::now();
     let result = tolkc::compile(Path::new(&path), ctx.need_debug_info);
+    let compile_time = compile_start.elapsed();
+
     match result {
         tolkc::CompilerResult::Success(success) => {
+            let total_elapsed = start_time.elapsed();
+            info!(
+                "Build {} from source (compilation: {:?}, total: {:?})",
+                path, compile_time, total_elapsed
+            );
+
+            if let Err(err) =
+                ctx.file_build_cache
+                    .put(&path, &success, ctx.need_debug_info, 2, "1.1".to_string())
+            {
+                warn!("Failed to build cached code BoC for {}: {}", path, err);
+            }
+
             ctx.build_cache.memoize(
                 &name,
                 &path,
@@ -69,6 +120,12 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, path: String, name: String) 
             stack.push(TupleItem::Cell(code_cell))
         }
         tolkc::CompilerResult::Error(error) => {
+            let total_elapsed = start_time.elapsed();
+            info!(
+                "Build {} failed after {:?}: {}",
+                path, total_elapsed, error.message
+            );
+
             *ctx.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
                 message: Some(format!("Compilation failed: {}", error.message)),
                 location: None,

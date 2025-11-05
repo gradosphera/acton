@@ -1,4 +1,5 @@
 use crate::debug_context::DebugContext;
+use crate::file_build_cache::FileBuildCache;
 use abi::ContractAbi;
 use emulator::blockchain::Blockchain;
 use emulator::emulator::{Emulator, SendMessageResult};
@@ -243,6 +244,7 @@ pub struct Context<'a> {
     pub blockchain: &'a mut Blockchain,
     pub emulator: &'a mut Emulator,
     pub build_cache: &'a mut BuildCache,
+    pub file_build_cache: &'a mut FileBuildCache,
     pub known_addresses: &'a mut KnownAddresses,
     pub known_code_cells: &'a mut HashMap<String, String>,
     pub abi: ContractAbi,
