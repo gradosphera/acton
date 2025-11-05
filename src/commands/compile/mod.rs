@@ -10,6 +10,7 @@ pub fn compile_cmd(
     json: bool,
     base64_only: bool,
     boc: Option<String>,
+    fift: Option<String>,
 ) -> anyhow::Result<()> {
     let metadata = fs::metadata(path)?;
     if !metadata.is_file() {
@@ -30,6 +31,10 @@ pub fn compile_cmd(
         tolkc::CompilerResult::Success(result) => {
             let code = Boc::decode_base64(result.code_boc64.clone())?;
             let code_hex = Boc::encode_hex(&code);
+
+            if let Some(fift) = fift {
+                fs::write(fift, result.fift_code)?;
+            }
 
             if let Some(boc) = boc {
                 let bytes = Boc::encode(code);

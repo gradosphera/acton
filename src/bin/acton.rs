@@ -97,6 +97,8 @@ enum Commands {
         base64_only: bool,
         #[arg(long, help = "Output code to binary BoC file")]
         boc: Option<String>,
+        #[arg(long, help = "Output Fit code to file")]
+        fift: Option<String>,
     },
     #[command(about = "Disassemble TVM bitcode to human-readable TASM")]
     Disasm {
@@ -160,8 +162,9 @@ fn main() {
             json,
             base64_only,
             boc,
+            fift,
         } => {
-            let result = compile_cmd(&path, json, base64_only, boc);
+            let result = compile_cmd(&path, json, base64_only, boc, fift);
             if let Err(err) = result {
                 if json {
                     println!(
