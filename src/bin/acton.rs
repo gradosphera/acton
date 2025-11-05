@@ -1,4 +1,3 @@
-use anyhow;
 use clap::{Parser, Subcommand};
 use emulator_rs::commands::compile::compile_cmd;
 use emulator_rs::commands::disasm::disasm_cmd;
@@ -6,6 +5,7 @@ use emulator_rs::commands::init::init_cmd;
 use emulator_rs::commands::new::new_cmd;
 use emulator_rs::commands::script::script_cmd;
 use emulator_rs::commands::test::{TestConfig, test_cmd};
+use emulator_rs::config::ActonConfig;
 use owo_colors::OwoColorize;
 use std::fs::OpenOptions;
 
@@ -137,16 +137,9 @@ fn main() {
             format,
             exclude,
         } => {
-            let config = TestConfig {
-                teamcity,
-                debug,
-                debug_port,
-                backtrace,
-                coverage,
-                filter: filter.map(|s| s.to_string()),
-                coverage_format: format,
-                exclude_patterns: exclude,
-            };
+            let config = create_test_config(
+                filter, teamcity, debug, debug_port, backtrace, coverage, format, exclude,
+            );
             let result = test_cmd(path, &config);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
@@ -218,4 +211,47 @@ fn setup_logging() -> Result<(), Box<dyn std::error::Error>> {
         .apply()?;
 
     Ok(())
+}
+
+fn create_test_config(
+    filter: Option<String>,
+    teamcity: bool,
+    debug: bool,
+    debug_port: u16,
+    backtrace: Option<String>,
+    coverage: bool,
+    format: Option<String>,
+    exclude: Vec<String>,
+) -> TestConfig {
+    let acton_config = ActonConfig::load().ok();
+
+    if let Some(acton_config) = acton_config
+        && let Some(test_settings) = &acton_config.test
+    {
+        return test_settings.to_test_config(
+            filter,
+            if teamcity { Some(true) } else { None },
+            if debug { Some(true) } else { None },
+            Some(debug_port),
+            backtrace,
+            if coverage { Some(true) } else { None },
+            format,
+            if !exclude.is_empty() {
+                Some(exclude)
+            } else {
+                None
+            },
+        );
+    }
+
+    TestConfig {
+        teamcity,
+        debug,
+        debug_port,
+        backtrace,
+        coverage,
+        filter,
+        coverage_format: format,
+        exclude_patterns: exclude,
+    }
 }
