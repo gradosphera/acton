@@ -29,8 +29,8 @@ enum Commands {
     },
     #[command(about = "Execute tests in file or directory")]
     Test {
-        #[arg(help = "Test file or directory containing test files")]
-        path: String,
+        #[arg(help = "Test file or directory containing test files (default: current directory)")]
+        path: Option<String>,
         #[arg(short, long, help = "Filter tests by regex pattern")]
         filter: Option<String>,
         #[arg(long, help = "Output in TeamCity format for IDE integration")]
@@ -104,7 +104,7 @@ fn main() {
             format,
         } => {
             let result = test_cmd(
-                &path,
+                &path.unwrap_or_else(|| ".".to_string()),
                 filter.as_deref(),
                 teamcity,
                 debug,
