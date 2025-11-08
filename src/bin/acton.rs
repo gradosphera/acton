@@ -46,6 +46,9 @@ enum Commands {
     \x1b[2m# Exclude multiple patterns\x1b[0m
     \x1b[1macton test . --exclude \"**/e2e/**\" --exclude \"**/gas/**\"\x1b[0m
 
+    \x1b[2m# Include only specific directories\x1b[0m
+    \x1b[1macton test . --include \"**/unit/**\" --include \"**/wallet/**\"\x1b[0m
+
     \x1b[2m# Enable coverage collection\x1b[0m
     \x1b[1macton test . --coverage --format lcov\x1b[0m
 
@@ -77,6 +80,11 @@ enum Commands {
             help = "Exclude test files and directories matching glob patterns"
         )]
         exclude: Vec<String>,
+        #[arg(
+            long,
+            help = "Include only test files and directories matching glob patterns"
+        )]
+        include: Vec<String>,
         #[arg(long, help = "Clear compilation cache before running")]
         clear_cache: bool,
     },
@@ -144,6 +152,7 @@ fn main() {
             coverage,
             format,
             exclude,
+            include,
             clear_cache,
         } => {
             let config = create_test_config(
@@ -155,6 +164,7 @@ fn main() {
                 coverage,
                 format,
                 exclude,
+                include,
                 clear_cache,
             );
             let result = test_cmd(path, &config);
@@ -242,6 +252,7 @@ fn create_test_config(
     coverage: bool,
     format: Option<String>,
     exclude: Vec<String>,
+    include: Vec<String>,
     clear_cache: bool,
 ) -> TestConfig {
     let acton_config = ActonConfig::load().ok();
@@ -262,6 +273,11 @@ fn create_test_config(
             } else {
                 None
             },
+            if !include.is_empty() {
+                Some(include)
+            } else {
+                None
+            },
             None,
         );
     }
@@ -275,6 +291,7 @@ fn create_test_config(
         filter,
         coverage_format: format,
         exclude_patterns: exclude,
+        include_patterns: include,
         clear_cache,
     }
 }

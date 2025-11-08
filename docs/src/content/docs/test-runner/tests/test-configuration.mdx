@@ -64,16 +64,18 @@ acton test --coverage --filter "test-deploy" --debug
 
 ### Filter Options
 
-| Configuration | CLI Flag    | Type   | Description                         |
-|---------------|-------------|--------|-------------------------------------|
-| `filter`      | `--filter`  | String | Regex pattern to filter test names  |
-| `exclude`     | `--exclude` | Array  | Glob patterns to exclude test files |
+| Configuration | CLI Flag    | Type   | Description                              |
+|---------------|-------------|--------|------------------------------------------|
+| `filter`      | `--filter`  | String | Regex pattern to filter test names       |
+| `exclude`     | `--exclude` | Array  | Glob patterns to exclude test files      |
+| `include`     | `--include` | Array  | Glob patterns to include only test files |
 
 **Examples:**
 ```toml
 [test]
 filter = "test-wallet.*"           # Only wallet tests
 exclude = ["**/integration/**"]    # Skip integration directory
+include = ["**/unit/**"]           # Only include unit test files
 ```
 
 ### Output Options

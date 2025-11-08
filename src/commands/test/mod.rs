@@ -51,6 +51,7 @@ pub struct TestConfig {
     pub filter: Option<String>,
     pub coverage_format: Option<String>,
     pub exclude_patterns: Vec<String>,
+    pub include_patterns: Vec<String>,
     pub clear_cache: bool,
 }
 
@@ -238,7 +239,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         }
         vec![path.clone()]
     } else if metadata.is_dir() {
-        find_test_files_recursively(&path, &config.exclude_patterns)?
+        find_test_files_recursively(&path, &config.exclude_patterns, &config.include_patterns)?
             .into_iter()
             .map(|p| p.to_string_lossy().to_string())
             .collect()
@@ -390,15 +391,26 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
 pub fn find_test_files_recursively(
     dir_path: &str,
     exclude_patterns: &[String],
+    include_patterns: &[String],
 ) -> anyhow::Result<Vec<PathBuf>> {
-    let mut builder = GlobSetBuilder::new();
+    let mut exclude_builder = GlobSetBuilder::new();
     for p in exclude_patterns {
-        builder.add(Glob::new(p)?);
+        exclude_builder.add(Glob::new(p)?);
     }
     for p in ["**/node_modules/**", "**/.git/**", "**/target/**"] {
-        builder.add(Glob::new(p)?);
+        exclude_builder.add(Glob::new(p)?);
     }
-    let excludes: GlobSet = builder.build()?;
+    let excludes: GlobSet = exclude_builder.build()?;
+
+    let includes: Option<GlobSet> = if !include_patterns.is_empty() {
+        let mut include_builder = GlobSetBuilder::new();
+        for p in include_patterns {
+            include_builder.add(Glob::new(p)?);
+        }
+        Some(include_builder.build()?)
+    } else {
+        None
+    };
 
     let root = Path::new(dir_path);
 
@@ -444,6 +456,12 @@ pub fn find_test_files_recursively(
 
             if excludes.is_match(rel) {
                 continue;
+            }
+
+            if let Some(includes) = &includes {
+                if !includes.is_match(rel) {
+                    continue;
+                }
             }
 
             out.push(path.to_path_buf());

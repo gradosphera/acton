@@ -29,6 +29,7 @@ pub struct TestSettings {
     pub coverage: Option<bool>,
     pub coverage_format: Option<String>,
     pub exclude: Option<Vec<String>>,
+    pub include: Option<Vec<String>>,
 }
 
 impl Default for ActonConfig {
@@ -77,6 +78,7 @@ impl TestSettings {
         coverage_override: Option<bool>,
         coverage_format_override: Option<String>,
         exclude_override: Option<Vec<String>>,
+        include_override: Option<Vec<String>>,
         clear_cache_override: Option<bool>,
     ) -> TestConfig {
         TestConfig {
@@ -89,6 +91,8 @@ impl TestSettings {
             coverage_format: coverage_format_override.or_else(|| self.coverage_format.clone()),
             exclude_patterns: exclude_override
                 .unwrap_or_else(|| self.exclude.clone().unwrap_or_default()),
+            include_patterns: include_override
+                .unwrap_or_else(|| self.include.clone().unwrap_or_default()),
             clear_cache: clear_cache_override.unwrap_or(false),
         }
     }
