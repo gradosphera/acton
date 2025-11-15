@@ -109,7 +109,7 @@ enum Commands {
     root\x1b[2m = \x1b[0m\x1b[2;32m\"contracts/wallet.tolk\"\x1b[0m
     output\x1b[2m = \x1b[0m\x1b[2;32m\"wallet.boc\"\x1b[0m
     out-function\x1b[2m = \x1b[0m\x1b[2;32m\"getWalletCode\"\x1b[0m
-    depends\x1b[2m = [\x1b[2;32m\"child\"\x1b[0m]
+    depends\x1b[2m = [\x1b[2;32m\"child\"\x1b[0m\x1b[2m]\x1b[0m
     \x1b[2m# or as library with custom function name and output path\x1b[0m
     depends\x1b[2m = \x1b[0m\x1b[2m[\x1b[0m
       \x1b[2m{\x1b[0m name\x1b[2m = \x1b[0m\x1b[2;32m\"child\"\x1b[0m\x1b[2m,\x1b[0m kind\x1b[2m = \x1b[0m\x1b[2;32m\"library\"\x1b[0m\x1b[2m,\x1b[0m out-function\x1b[2m = \x1b[0m\x1b[2;32m\"getChildCode\"\x1b[0m\x1b[2m,\x1b[0m out-path\x1b[2m = \x1b[0m\x1b[2;32m\"child_dep.tolk\"\x1b[0m \x1b[2m}\x1b[0m
