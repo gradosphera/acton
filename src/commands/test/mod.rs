@@ -1,3 +1,4 @@
+use crate::commands::build::build_cmd;
 use crate::commands::test::coverage::{
     Coverage, collect_coverage, generate_lcov_file, merge_coverages, print_coverage_summary,
 };
@@ -241,11 +242,9 @@ impl<'a> TestRunner<'a> {
 }
 
 pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()> {
-    if config.clear_cache {
-        let mut file_cache = FileBuildCache::new(None)?;
-        file_cache.clear()?;
-        println!("  {} Cache cleared", "✓".green().bold());
-    }
+    // First we need to build all contracts and generate all dependency files with code
+    build_cmd(None, config.clear_cache, None)?;
+    println!("     {} tests", "Running".green().bold());
 
     // If path is omitted, default to current directory
     let path = path.unwrap_or_else(|| ".".to_string());
@@ -272,12 +271,10 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     }
 
     if !config.teamcity {
-        println!(
-            "\n{} {}\n",
-            " TEST ".bold().on_blue(),
-            cwd.display().dimmed()
-        );
+        println!("\n{} {}", " TEST ".bold().on_blue(), cwd.display().dimmed());
     }
+
+    println!();
 
     let mut file_cache = FileBuildCache::new(None)?;
 

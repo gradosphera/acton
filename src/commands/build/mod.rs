@@ -22,6 +22,8 @@ pub fn build_cmd(
         println!("  {} Cache cleared", "✓".green().bold());
     }
 
+    println!("   {} contracts", "Compiling".green().bold());
+
     let config = ActonConfig::load()?;
 
     let contracts = match config.contracts() {
