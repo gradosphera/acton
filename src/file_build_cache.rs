@@ -2,7 +2,6 @@ use abi;
 use anyhow::{Result, anyhow};
 use fs2::FileExt;
 use log::debug;
-use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -53,7 +52,7 @@ impl FileBuildCache {
                 break;
             }
 
-            debug!("{}", "Cache directory currently locked, waiting...".cyan());
+            debug!("{}", "Cache directory currently locked, waiting...");
             thread::sleep(Duration::from_millis(1000));
         }
 

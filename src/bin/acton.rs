@@ -117,13 +117,21 @@ enum Commands {
     \x1b[1macton build wallet\x1b[0m
 
     \x1b[2m# Build contracts with fresh cache\x1b[0m
-    \x1b[1macton build --clear-cache\x1b[0m"
+    \x1b[1macton build --clear-cache\x1b[0m
+
+    \x1b[2m# Generate dependency graph as SVG file\x1b[0m
+    \x1b[1macton build --graph deps.svg\x1b[0m"
     )]
     Build {
         #[arg(help = "Contract name to build (builds all if not specified)")]
         contract: Option<String>,
         #[arg(long, help = "Clear compilation cache before building")]
         clear_cache: bool,
+        #[arg(
+            long,
+            help = "Generate dependency graph as SVG file (requires graphviz)"
+        )]
+        graph: Option<String>,
     },
     #[command(about = "Compile a Tolk file")]
     Compile {
@@ -212,8 +220,9 @@ fn main() {
         Commands::Build {
             contract,
             clear_cache,
+            graph,
         } => {
-            let result = build_cmd(contract, clear_cache);
+            let result = build_cmd(contract, clear_cache, graph);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
                 std::process::exit(1);
