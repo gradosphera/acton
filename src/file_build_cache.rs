@@ -236,9 +236,10 @@ impl FileBuildCache {
 
         if let Some(deps) = &contract_info.depends {
             for dep in deps {
+                let dep_name = dep.name();
                 let contract_config = contracts
-                    .get(dep)
-                    .ok_or_else(|| anyhow!("Contract '{}' not found in Acton.toml", dep))?;
+                    .get(dep_name)
+                    .ok_or_else(|| anyhow!("Contract '{}' not found in Acton.toml", dep_name))?;
 
                 result.append(&mut self.get_dependencies(contract_config.root.as_str())?);
             }

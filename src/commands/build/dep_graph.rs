@@ -22,15 +22,16 @@ pub(crate) fn build_dependency_graph(
         };
 
         for dep in depends {
-            if !graph.contains_key(dep) {
+            let dep_name = dep.name();
+            if !graph.contains_key(dep_name) {
                 return Err(anyhow!(
                     "Contract '{}' depends on '{}' which is not defined in Acton.toml",
                     key,
-                    dep
+                    dep_name
                 ));
             }
 
-            graph.get_mut(dep).unwrap().push((*key).clone());
+            graph.get_mut(dep_name).unwrap().push((*key).clone());
             *in_degree.get_mut(*key).unwrap() += 1;
         }
     }
@@ -94,8 +95,9 @@ pub(crate) fn collect_dependencies_for_contract(
 
         if let Some(deps) = &contract_config.depends {
             for dep in deps {
-                dependencies.insert(dep.clone());
-                to_visit.push_back(dep.clone());
+                let dep_name = dep.name();
+                dependencies.insert(dep_name.to_string());
+                to_visit.push_back(dep_name.to_string());
             }
         }
     }

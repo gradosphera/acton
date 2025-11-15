@@ -5,6 +5,30 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Default)]
+pub enum DependencyKind {
+    #[serde(rename = "simple")]
+    #[default]
+    Simple,
+    #[serde(rename = "library")]
+    Library,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[serde(untagged)]
+pub enum ContractDependency {
+    Simple(String),
+    Detailed {
+        name: String,
+        #[serde(default)]
+        kind: DependencyKind,
+        #[serde(rename = "out-function")]
+        out_function: Option<String>,
+        #[serde(rename = "out-path")]
+        out_path: Option<String>,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActonConfig {
     pub package: PackageConfig,
@@ -44,7 +68,7 @@ pub struct ContractsConfig {
 pub struct ContractConfig {
     pub name: String,
     pub root: String,
-    pub depends: Option<Vec<String>>,
+    pub depends: Option<Vec<ContractDependency>>,
     pub output: Option<String>,
 }
 
@@ -60,6 +84,58 @@ impl Default for ActonConfig {
             test: None,
             contracts: None,
         }
+    }
+}
+
+impl std::fmt::Display for ContractDependency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContractDependency::Simple(name) => write!(f, "{}", name),
+            ContractDependency::Detailed { name, .. } => write!(f, "{}", name),
+        }
+    }
+}
+
+impl ContractDependency {
+    pub fn name(&self) -> &str {
+        match self {
+            ContractDependency::Simple(name) => name,
+            ContractDependency::Detailed { name, .. } => name,
+        }
+    }
+
+    pub fn kind(&self) -> DependencyKind {
+        match self {
+            ContractDependency::Simple(_) => DependencyKind::Simple,
+            ContractDependency::Detailed { kind, .. } => kind.clone(),
+        }
+    }
+
+    pub fn compiled_code_function(&self) -> Option<&str> {
+        match self {
+            ContractDependency::Simple(_) => None,
+            ContractDependency::Detailed { out_function, .. } => out_function.as_deref(),
+        }
+    }
+
+    pub fn compiled_code_out_path(&self) -> Option<&str> {
+        match self {
+            ContractDependency::Simple(_) => None,
+            ContractDependency::Detailed { out_path, .. } => out_path.as_deref(),
+        }
+    }
+}
+
+impl ContractConfig {
+    pub fn dependency_names(&self) -> Vec<&str> {
+        self.depends
+            .as_ref()
+            .map(|deps| deps.iter().map(|dep| dep.name()).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn get_dependency(&self, name: &str) -> Option<&ContractDependency> {
+        self.depends.as_ref()?.iter().find(|dep| dep.name() == name)
     }
 }
 

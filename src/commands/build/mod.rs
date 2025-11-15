@@ -1,4 +1,4 @@
-use crate::config::{ActonConfig, ContractConfig};
+use crate::config::{ActonConfig, ContractConfig, ContractDependency, DependencyKind};
 use crate::file_build_cache::FileBuildCache;
 use anyhow::anyhow;
 use log::debug;
@@ -182,10 +182,11 @@ pub(crate) fn generate_dependency_files(
 
 fn generate_single_dependency_file(
     contract_key: &str,
-    dependency_key: &str,
+    dependency: &ContractDependency,
     compiled_contracts: &HashMap<String, String>,
     gen_dir: &Path,
 ) -> anyhow::Result<()> {
+    let dependency_key = dependency.name();
     let boc_base64 = compiled_contracts.get(dependency_key).ok_or_else(|| {
         anyhow!(
             "[INTERNAL ERROR] Dependency '{}' must be compiled before '{}'",
@@ -194,11 +195,30 @@ fn generate_single_dependency_file(
         )
     })?;
 
-    let func_name = format_valid_function_name(dependency_key);
-    let content = generate_tolk_dependency_content(&func_name, boc_base64, dependency_key);
+    let func_name = dependency
+        .compiled_code_function()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format_valid_function_name(dependency_key));
 
-    let gen_file_path = gen_dir.join(format!("{}_code.tolk", dependency_key));
-    fs::write(&gen_file_path, content)?;
+    let dep_kind = dependency.kind();
+    debug!(
+        "Generating dependency file for '{}' with kind {:?}",
+        dependency_key, dep_kind
+    );
+    let content =
+        generate_tolk_dependency_content(&func_name, boc_base64, dependency_key, dep_kind);
+
+    let output_filename = dependency
+        .compiled_code_out_path()
+        .unwrap_or(
+            gen_dir
+                .join(format!("{}_code.tolk", dependency_key))
+                .to_str()
+                .unwrap(),
+        )
+        .to_string();
+
+    fs::write(&output_filename, content)?;
 
     Ok(())
 }
@@ -220,7 +240,20 @@ fn generate_tolk_dependency_content(
     func_name: &str,
     boc_base64: &str,
     dependency_key: &str,
+    kind: DependencyKind,
 ) -> String {
+    let asm_code = match kind {
+        DependencyKind::Simple => {
+            format!("    \"{}\" base64>B B>boc PUSHREF", boc_base64)
+        }
+        DependencyKind::Library => {
+            format!(
+                "    \"{}\" base64>B B>boc hashu <b 2 8 u, swap 256 u, b>spec PUSHREF",
+                boc_base64
+            )
+        }
+    };
+
     format!(
         "// Auto-generated dependency code for contract '{}'
 // Provides compiled BoC data for the '{}' contract
@@ -229,9 +262,9 @@ fn generate_tolk_dependency_content(
 // Do not edit manually — changes will be overwritten
 
 fun {}(): cell asm \"\"\"
-    \"{}\" base64>B B>boc PUSHREF
+{}
 \"\"\"
 ",
-        dependency_key, dependency_key, func_name, boc_base64
+        dependency_key, dependency_key, func_name, asm_code
     )
 }
