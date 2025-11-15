@@ -33,10 +33,10 @@ fun Assert.equal<V1, V2>(left: V1, right: V2, message: slice = "", location: sli
     if (
     !ffi.assert_bin(
         "==",
-        __typeName(left),
-        left.__toTuple(),
-        __typeName(right),
-        right.__toTuple(),
+        left.typeNameOfObject(),
+        left.toTuple(),
+        right.typeNameOfObject(),
+        right.toTuple(),
         message,
         location
     )
@@ -57,10 +57,10 @@ fun Assert.notEqual<V1, V2>(left: V1, right: V2, message: slice = "", location: 
     if (
     !ffi.assert_bin(
         "!=",
-        __typeName(left),
-        left.__toTuple(),
-        __typeName(right),
-        right.__toTuple(),
+        left.typeNameOfObject(),
+        left.toTuple(),
+        right.typeNameOfObject(),
+        right.toTuple(),
         message,
         location
     )

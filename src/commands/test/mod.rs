@@ -14,10 +14,12 @@ use crossbeam_channel::{Receiver, Sender, unbounded};
 use dap::prelude::Request;
 use emulator::blockchain::Blockchain;
 use emulator::emulator::Emulator;
+use emulator::executor::ExecutorVerbosity;
 use emulator::exit_codes;
 use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::step_get_executor::StepGetExecutor;
 use globset::{Glob, GlobSet, GlobSetBuilder};
+use log::{debug, error};
 use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
 use regex::Regex;
@@ -66,10 +68,10 @@ pub struct TestResult {
 }
 
 #[derive(Debug)]
-pub struct TestRunner {
+pub struct TestRunner<'a> {
     config: TestConfig,
     build_cache: BuildCache,
-    file_build_cache: FileBuildCache,
+    file_build_cache: &'a mut FileBuildCache,
     known_addresses: KnownAddresses,
     known_code_cells: HashMap<String, String>,
     emulations: Emulations,
@@ -77,8 +79,8 @@ pub struct TestRunner {
     dap_sender: Sender<DapMessage>,
 }
 
-impl TestRunner {
-    pub fn new(config: TestConfig) -> Self {
+impl<'a> TestRunner<'a> {
+    pub fn new(config: TestConfig, cache: &'a mut FileBuildCache) -> TestRunner<'a> {
         let (req_receiver, dap_sender) = if config.debug {
             crate::dap::start_dap_server(config.debug_port)
         } else {
@@ -90,13 +92,27 @@ impl TestRunner {
         Self {
             config,
             build_cache: BuildCache::new(),
-            file_build_cache: FileBuildCache::new(None).expect("Failed to create file cache"),
+            file_build_cache: cache,
             known_addresses: KnownAddresses::new(),
             known_code_cells: HashMap::new(),
             emulations: Emulations::new(),
             req_receiver,
             dap_sender,
         }
+    }
+
+    fn minimal_log_verbosity(&self) -> ExecutorVerbosity {
+        if self.config.debug || self.config.backtrace == Some("full".to_owned()) {
+            // for these modes we need all logs for work
+            return ExecutorVerbosity::FullLocationStackVerbose;
+        }
+
+        if self.config.coverage {
+            // for coverage, we need at least locations to map to actual source code
+            return ExecutorVerbosity::FullLocation;
+        }
+
+        ExecutorVerbosity::Short
     }
 
     fn execute_test(
@@ -107,6 +123,7 @@ impl TestRunner {
         abi: &ContractAbi,
         source_map: &SourceMap,
     ) -> TestResult {
+        let verbosity = self.minimal_log_verbosity();
         let params = GetMethodParams {
             code: code_cell
                 .to_boc_b64(false)
@@ -116,7 +133,7 @@ impl TestRunner {
                 .to_boc_b64(false)
                 .expect("Failed to encode data cell to BoC")
                 .to_string(),
-            verbosity: 5,
+            verbosity,
             libs: "".to_string(),
             address: dest_address.to_string(),
             unixtime: 0,
@@ -130,7 +147,7 @@ impl TestRunner {
             prev_blocks_info: None,
         };
 
-        let mut emulator = Emulator::new();
+        let mut emulator = Emulator::new(verbosity);
         let mut blockchain = Blockchain::new();
         let mut libraries = vec![];
 
@@ -155,6 +172,7 @@ impl TestRunner {
                 || self.config.backtrace == Some("full".to_string())
                 || self.config.coverage,
             libraries: &mut libraries,
+            default_log_level: verbosity,
         };
 
         let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) =
@@ -261,6 +279,8 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         );
     }
 
+    let mut file_cache = FileBuildCache::new(None)?;
+
     let mut total_passed = 0;
     let mut total_failed = 0;
     let mut total_skipped = 0;
@@ -268,7 +288,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     let mut coverages = vec![];
 
     for (index, file) in test_files.iter().enumerate() {
-        let result = run_tests_for_file(&file, &config);
+        let result = run_tests_for_file(&file, &config, &mut file_cache);
         match result {
             Ok(stats) => {
                 total_passed += stats.passed;
@@ -481,7 +501,43 @@ struct TestStats {
     coverage: Option<Coverage>,
 }
 
-fn run_tests_for_file(file: &str, config: &TestConfig) -> Result<TestStats, anyhow::Error> {
+fn compile_test_file(
+    file_cache: &mut FileBuildCache,
+    file: &str,
+    need_debug_info: bool,
+) -> anyhow::Result<tolkc::CompilerResult> {
+    let cache_entry = file_cache.get(file, need_debug_info, 0, "1.2".to_string());
+    if let Some(cache_entry) = cache_entry {
+        return Ok(tolkc::CompilerResult::Success(
+            tolkc::compiler::CompilerResultSuccess {
+                fift_code: cache_entry.fift_code,
+                code_boc64: cache_entry.code_boc64,
+                code_hash_hex: cache_entry.code_hash_hex,
+                source_map: cache_entry.source_map,
+            },
+        ));
+    }
+    let compilation_result = tolkc::compile(Path::new(&file), need_debug_info);
+    match &compilation_result {
+        tolkc::CompilerResult::Success(result) => {
+            let cache_result = file_cache.put(file, result, need_debug_info, 0, "1.2".to_string());
+            match cache_result {
+                Ok(_) => {}
+                Err(err) => {
+                    error!("Cannot cache result of compilation {file}: {err}",)
+                }
+            }
+        }
+        tolkc::CompilerResult::Error(_) => {}
+    }
+    Ok(compilation_result)
+}
+
+fn run_tests_for_file(
+    file: &str,
+    config: &TestConfig,
+    file_cache: &mut FileBuildCache,
+) -> Result<TestStats, anyhow::Error> {
     let content = match fs::read_to_string(file) {
         Ok(content) => content,
         Err(err) => {
@@ -500,14 +556,17 @@ fn run_tests_for_file(file: &str, config: &TestConfig) -> Result<TestStats, anyh
 
     let need_debug_info =
         config.debug || config.backtrace == Some("full".to_string()) || config.coverage;
-    let compilation_result = tolkc::compile_fast(Path::new(&tmp_test_filename), need_debug_info);
+    let now = Instant::now();
+    let compilation_result = compile_test_file(file_cache, &tmp_test_filename, need_debug_info)?;
+    debug!("Test file '{file}' compilation time: {:?}", now.elapsed());
+
     let result = match compilation_result {
         tolkc::CompilerResult::Success(result) => {
             let _ = fs::remove_file(&tmp_test_filename);
 
             let code_cell = ArcCell::from_boc_b64(&*result.code_boc64)?;
 
-            let mut runner = TestRunner::new(config.clone());
+            let mut runner = TestRunner::new(config.clone(), file_cache);
             let stats = run_file_tests(
                 &mut runner,
                 file,
