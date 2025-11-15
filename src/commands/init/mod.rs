@@ -113,6 +113,7 @@ fn discover_contracts() -> HashMap<String, ContractConfig> {
             name: contract_name,
             root: relative_path,
             depends: Some(vec![]),
+            output: None,
         };
 
         contracts.insert(contract_key, contract_config);

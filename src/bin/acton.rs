@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use emulator_rs::commands::build::build_cmd;
 use emulator_rs::commands::compile::compile_cmd;
 use emulator_rs::commands::disasm::disasm_cmd;
 use emulator_rs::commands::init::init_cmd;
@@ -99,6 +100,31 @@ enum Commands {
         #[arg(long, help = "Clear compilation cache before running")]
         clear_cache: bool,
     },
+    #[command(
+        about = "Build all contracts",
+        after_help = "\x1b[1;4mExamples:\x1b[0m
+    \x1b[2m# Configure contracts in Acton.toml\x1b[0m
+    \x1b[2m[\x1b[0mcontracts.wallet\x1b[2m]\x1b[0m
+    name\x1b[2m = \x1b[0m\x1b[2;32m\"Wallet Contract\"\x1b[0m
+    root\x1b[2m = \x1b[0m\x1b[2;32m\"contracts/wallet.tolk\"\x1b[0m
+    output\x1b[2m = \x1b[0m\x1b[2;32m\"wallet.boc\"\x1b[0m
+    depends\x1b[2m = \x1b[0m\x1b[2m[]\x1b[0m
+
+    \x1b[2m# Build all contracts\x1b[0m
+    \x1b[1macton build\x1b[0m
+
+    \x1b[2m# Build specific contract\x1b[0m
+    \x1b[1macton build wallet\x1b[0m
+
+    \x1b[2m# Build contracts with fresh cache\x1b[0m
+    \x1b[1macton build --clear-cache\x1b[0m"
+    )]
+    Build {
+        #[arg(help = "Contract name to build (builds all if not specified)")]
+        contract: Option<String>,
+        #[arg(long, help = "Clear compilation cache before building")]
+        clear_cache: bool,
+    },
     #[command(about = "Compile a Tolk file")]
     Compile {
         #[arg(help = "Tolk file to compile")]
@@ -181,6 +207,16 @@ fn main() {
             let result = script_cmd(&path, debug, debug_port, clear_cache);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
+            }
+        }
+        Commands::Build {
+            contract,
+            clear_cache,
+        } => {
+            let result = build_cmd(contract, clear_cache);
+            if let Err(err) = result {
+                eprintln!("{} {}", "Error:".red(), err);
+                std::process::exit(1);
             }
         }
         Commands::Compile {

@@ -45,6 +45,7 @@ pub struct ContractConfig {
     pub name: String,
     pub root: String,
     pub depends: Option<Vec<String>>,
+    pub output: Option<String>,
 }
 
 impl Default for ActonConfig {
