@@ -1,6 +1,7 @@
 use crate::commands::test::TestConfig;
 use anyhow::{Result, anyhow};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -8,6 +9,7 @@ use std::path::Path;
 pub struct ActonConfig {
     pub package: PackageConfig,
     pub test: Option<TestSettings>,
+    pub contracts: Option<ContractsConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,6 +34,19 @@ pub struct TestSettings {
     pub include: Option<Vec<String>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractsConfig {
+    #[serde(flatten)]
+    pub contracts: HashMap<String, ContractConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractConfig {
+    pub name: String,
+    pub root: String,
+    pub depends: Option<Vec<String>>,
+}
+
 impl Default for ActonConfig {
     fn default() -> Self {
         Self {
@@ -42,6 +57,7 @@ impl Default for ActonConfig {
                 license: Some("MIT".to_string()),
             },
             test: None,
+            contracts: None,
         }
     }
 }
@@ -64,6 +80,55 @@ impl ActonConfig {
         let content = toml::to_string_pretty(self)?;
         fs::write("Acton.toml", content)?;
         Ok(())
+    }
+
+    pub fn contracts(&self) -> Option<&HashMap<String, ContractConfig>> {
+        self.contracts.as_ref().map(|c| &c.contracts)
+    }
+
+    pub fn get_contract(&self, name: &str) -> Option<&ContractConfig> {
+        self.contracts.as_ref()?.contracts.get(name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_parsing() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[contracts.counter]
+name = "Counter Contract"
+root = "counter.tolk"
+depends = []
+
+[contracts.wallet-v5]
+name = "Wallet V5"
+root = "wallet-v5.tolk"
+depends = []
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        assert_eq!(config.package.name, "test-project");
+
+        let contracts = config.contracts().unwrap();
+        assert_eq!(contracts.len(), 2);
+
+        let counter = config.get_contract("counter").unwrap();
+        assert_eq!(counter.name, "Counter Contract");
+        assert_eq!(counter.root, "counter.tolk");
+        assert_eq!(counter.depends, Some(vec![]));
+
+        let wallet = config.get_contract("wallet-v5").unwrap();
+        assert_eq!(wallet.name, "Wallet V5");
+        assert_eq!(wallet.root, "wallet-v5.tolk");
+        assert_eq!(wallet.depends, Some(vec![]));
     }
 }
 
