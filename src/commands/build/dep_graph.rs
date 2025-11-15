@@ -1,4 +1,4 @@
-use crate::config::ContractConfig;
+use crate::config::{ContractConfig, DependencyKind};
 use anyhow::anyhow;
 use owo_colors::OwoColorize;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -152,7 +152,18 @@ pub(crate) fn generate_dependency_graph_svg(
         };
         if let Some(depends) = &config.depends {
             for dep in depends {
-                dot_content.push_str(&format!("    \"{}\" -> \"{}\";\n", key, dep));
+                let dep_name = dep.name();
+                let dep_kind = dep.kind();
+
+                let label = match dep_kind {
+                    DependencyKind::Simple => " simple ",
+                    DependencyKind::Library => " library ",
+                };
+
+                dot_content.push_str(&format!(
+                    "    \"{}\" -> \"{}\" [label=\"{}\", labeldistance=3];\n",
+                    key, dep_name, label
+                ));
             }
         }
     }
