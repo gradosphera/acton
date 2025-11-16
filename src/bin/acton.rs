@@ -110,7 +110,7 @@ enum Commands {
         base64_only: bool,
         #[arg(long, help = "Output code to binary BoC file")]
         boc: Option<String>,
-        #[arg(long, help = "Output Fit code to file")]
+        #[arg(long, help = "Output Fift code to file")]
         fift: Option<String>,
         #[arg(long, help = "Clear compilation cache before running")]
         clear_cache: bool,
