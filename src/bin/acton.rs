@@ -10,6 +10,7 @@ use emulator_rs::commands::script::script_cmd;
 use emulator_rs::commands::test::{TestConfig, test_cmd};
 use emulator_rs::config::ActonConfig;
 use owo_colors::OwoColorize;
+use std::fs;
 use std::fs::OpenOptions;
 
 #[derive(Parser)]
@@ -332,11 +333,12 @@ fn main() {
     }
 }
 
-fn setup_logging() -> Result<(), Box<dyn std::error::Error>> {
+fn setup_logging() -> anyhow::Result<()> {
+    fs::create_dir_all(".acton/")?;
     let log_file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open("debug.log")?;
+        .open(".acton/debug.log")?;
 
     fern::Dispatch::new()
         .format(|out, message, record| {
