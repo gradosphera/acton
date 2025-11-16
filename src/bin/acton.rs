@@ -87,29 +87,7 @@ enum Commands {
     },
     #[command(
         about = "Build all contracts",
-        after_help = "\x1b[1;4mExamples:\x1b[0m
-    \x1b[2m# Configure contracts in Acton.toml\x1b[0m
-    \x1b[2m[\x1b[0mcontracts.wallet\x1b[2m]\x1b[0m
-    name\x1b[2m = \x1b[0m\x1b[2;32m\"Wallet Contract\"\x1b[0m
-    root\x1b[2m = \x1b[0m\x1b[2;32m\"contracts/wallet.tolk\"\x1b[0m
-    output\x1b[2m = \x1b[0m\x1b[2;32m\"wallet.boc\"\x1b[0m
-    depends\x1b[2m = [\x1b[2;32m\"child\"\x1b[0m\x1b[2m]\x1b[0m
-    \x1b[2m# or as library with custom function name and output path\x1b[0m
-    depends\x1b[2m = \x1b[0m\x1b[2m[\x1b[0m
-      \x1b[2m{\x1b[0m name\x1b[2m = \x1b[0m\x1b[2;32m\"child\"\x1b[0m\x1b[2m,\x1b[0m kind\x1b[2m = \x1b[0m\x1b[2;32m\"library_ref\"\x1b[0m\x1b[2m,\x1b[0m function\x1b[2m = \x1b[0m\x1b[2;32m\"getChildCode\"\x1b[0m\x1b[2m,\x1b[0m path\x1b[2m = \x1b[0m\x1b[2;32m\"child_dep.tolk\"\x1b[0m \x1b[2m}\x1b[0m
-    \x1b[2m]\x1b[0m
-
-    \x1b[2m# Build all contracts\x1b[0m
-    \x1b[1macton build\x1b[0m
-
-    \x1b[2m# Build specific contract\x1b[0m
-    \x1b[1macton build wallet\x1b[0m
-
-    \x1b[2m# Build contracts with fresh cache\x1b[0m
-    \x1b[1macton build --clear-cache\x1b[0m
-
-    \x1b[2m# Generate dependency graph as SVG file\x1b[0m
-    \x1b[1macton build --graph deps.svg\x1b[0m"
+        after_help = example_build_usage()
     )]
     Build {
         #[arg(help = "Contract name to build (builds all if not specified)")]
@@ -190,6 +168,59 @@ fn example_test_usage() -> StyledStr {
     for (name, value) in exampled_command.iter() {
         let _ = write!(writer, "{USAGE_SEP}{named}# {}{named:#}", name);
         let _ = write!(writer, "{USAGE_SEP}{example}{}{example:#}\n", value);
+    }
+
+    writer
+}
+
+fn example_build_usage() -> StyledStr {
+    use std::fmt::Write as _;
+
+    let mut writer = StyledStr::new();
+    let styled = Styles::styled();
+
+    // for some reason `cstr` cannot output `{` correctly :/
+    let config_example = color_print::cformat!(
+        r#"<dim>[</>contracts.wallet<dim>]</>
+     name<dim> = </><green>"Wallet Contract"</>
+     root<dim> = </><green>"contracts/wallet.tolk"</>
+     output<dim> = </><green>"wallet.boc"</>
+     depends<dim> = [</><green>"child"</><dim>]</>
+     <dim># or as library with custom function name and output path</>
+     depends<dim> = </><dim>[</>
+       <dim>{{</> name<dim> = </><green>"child"</><dim>,</> kind<dim> = </><green>"library_ref"</><dim>,</> function<dim> = </><green>"getChildCode"</><dim>,</> path<dim> = </><green>"child_dep.tolk"</> <dim>}}</>
+     <dim>]</>"#
+    );
+
+    let build_examples = Vec::from([
+        ("Build all contracts", "acton build"),
+        ("Build specific contract", "acton build wallet"),
+        (
+            "Build contracts with fresh cache",
+            "acton build --clear-cache",
+        ),
+        (
+            "Generate dependency graph as SVG file",
+            "acton build --graph deps.svg",
+        ),
+    ]);
+
+    let header = styled.get_header();
+    let named = Style::new().dimmed();
+    let literal = styled.get_literal();
+
+    let _ = write!(writer, "{header}Configuration:{header:#}");
+    let _ = write!(
+        writer,
+        "\n     {named}# Configure contracts in Acton.toml{named:#}"
+    );
+    let _ = write!(writer, "\n     {}", config_example);
+    let _ = write!(writer, "\n\n{header}Examples:{header:#}");
+
+    const USAGE_SEP: &str = "\n     ";
+    for (name, value) in build_examples.iter() {
+        let _ = write!(writer, "{USAGE_SEP}{named}# {}{named:#}", name);
+        let _ = write!(writer, "{USAGE_SEP}{literal}{}{literal:#}\n", value);
     }
 
     writer
