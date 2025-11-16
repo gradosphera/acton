@@ -3,6 +3,7 @@ use crate::commands::test::coverage::{
     Coverage, collect_coverage, generate_lcov_file, merge_coverages, print_coverage_summary,
 };
 use crate::commands::test::instrumentation::inject_locations_into_expect_calls;
+use crate::config::ActonConfig;
 use crate::context::{AnyExecutor, AssertFailure, BuildCache, Context, Emulations, KnownAddresses};
 use crate::dap::DapMessage;
 use crate::debug_context::DebugContext;
@@ -123,7 +124,7 @@ impl<'a> TestRunner<'a> {
         dest_address: &TonAddress,
         abi: &ContractAbi,
         source_map: &SourceMap,
-    ) -> TestResult {
+    ) -> anyhow::Result<TestResult> {
         let verbosity = self.minimal_log_verbosity();
         let params = GetMethodParams {
             code: code_cell
@@ -153,6 +154,7 @@ impl<'a> TestRunner<'a> {
         let mut libraries = vec![];
 
         let mut ctx = Context {
+            config: &ActonConfig::load()?,
             stdout_buffer: "".to_string(),
             stderr_buffer: "".to_string(),
             capture_test_output: true,
@@ -196,7 +198,7 @@ impl<'a> TestRunner<'a> {
 
                 get_executor.run_get_method(test.id, Default::default());
 
-                ctx.dbg_ctx.process_incoming_requests(true).unwrap();
+                ctx.dbg_ctx.process_incoming_requests(true)?;
 
                 let get_result = get_executor.finish_get_method(&params.code);
 
@@ -230,14 +232,14 @@ impl<'a> TestRunner<'a> {
                 )
             };
 
-        TestResult {
+        Ok(TestResult {
             get_result: result,
             captured_stdout,
             captured_stderr,
             assert_failure,
             expected_exit_code,
             accounts: blockchain.get_accounts().clone(),
-        }
+        })
     }
 }
 
@@ -676,7 +678,19 @@ fn run_file_tests(
         }
 
         let start_time = Instant::now();
-        let result = runner.execute_test(test, &code_cell, &dest_address, abi, source_map);
+        let result = match runner.execute_test(test, &code_cell, &dest_address, abi, source_map) {
+            Ok(result) => result,
+            Err(err) => {
+                println!(
+                    "{}: Cannot execute test '{}': {}",
+                    "Error".red(),
+                    test.name,
+                    err
+                );
+                failed += 1;
+                continue;
+            }
+        };
         let duration = start_time.elapsed();
         let TestResult {
             captured_stdout,

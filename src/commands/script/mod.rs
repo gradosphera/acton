@@ -1,3 +1,4 @@
+use crate::config::ActonConfig;
 use crate::context::{AnyExecutor, BuildCache, Context, Emulations, KnownAddresses};
 use crate::debug_context::DebugContext;
 use crate::file_build_cache::FileBuildCache;
@@ -127,6 +128,7 @@ fn execute_script(
     let mut libraries = vec![];
 
     let mut ctx = Context {
+        config: &ActonConfig::load()?,
         stdout_buffer: "".to_string(),
         stderr_buffer: "".to_string(),
         capture_test_output: false,

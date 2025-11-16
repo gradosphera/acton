@@ -1,3 +1,4 @@
+use crate::config::ActonConfig;
 use crate::debug_context::DebugContext;
 use crate::file_build_cache::FileBuildCache;
 use abi::ContractAbi;
@@ -238,6 +239,7 @@ impl Emulations {
 }
 
 pub struct Context<'a> {
+    pub config: &'a ActonConfig,
     pub stdout_buffer: String,
     pub stderr_buffer: String,
     pub capture_test_output: bool,

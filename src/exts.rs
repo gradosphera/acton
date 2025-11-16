@@ -12,7 +12,7 @@ use emulator::step_executor::StepExecutor;
 use emulator::step_get_executor::StepGetExecutor;
 use emulator::traits::BaseExecutor;
 use emulator::{extension, pop_args, register_ext_methods, try_ctx};
-use log::{info, warn};
+use log::{debug, info, warn};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::collections::HashMap;
@@ -40,8 +40,25 @@ fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) {
 }
 
 extension!(build in (Context) with (path: String, name: String) using build_impl);
-fn build_impl(ctx: &mut Context, stack: &mut Tuple, path: String, name: String) {
+fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: String) {
+    debug!("Building {name}");
     let start_time = Instant::now();
+
+    if path.is_empty() {
+        debug!("No path provided, search in contracts");
+        let contracts = ctx.config.contracts.clone().unwrap_or_default().contracts;
+        let found_contract = contracts.iter().find(|(_, config)| config.name == name);
+
+        if let Some((_, found_contract)) = found_contract {
+            debug!("Found contract with info: {:?}", found_contract);
+            path = found_contract.src.clone()
+        } else {
+            ctx.fail(format!(
+                "Cannot find contract {name} in Acton.toml, please add it or provide an explicit path to the entry point"
+            ));
+            return;
+        }
+    }
 
     if let Some(cached) = ctx.build_cache.built.get(&path) {
         let elapsed = start_time.elapsed();
