@@ -1,3 +1,4 @@
+mod actions_tests;
 mod annotations_tests;
 mod basic_unit_tests;
 mod config_tests;

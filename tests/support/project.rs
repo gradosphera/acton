@@ -8,7 +8,7 @@ use tempfile::TempDir;
 pub struct ProjectBuilder {
     name: String,
     temp_dir: TempDir,
-    contracts: Vec<(String, String)>,
+    contracts: Vec<(String, String, Vec<String>)>, // (name, code, depends)
     tests: Vec<(String, String)>,
     files: Vec<(String, String)>,
     test_config: Option<TestConfig>,
@@ -23,7 +23,8 @@ pub struct TestConfig {
 
 impl ProjectBuilder {
     pub fn new(name: &str) -> Self {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let mut temp_dir = TempDir::new().expect("Failed to create temp dir");
+        temp_dir.disable_cleanup(true);
         Self {
             name: name.to_string(),
             temp_dir,
@@ -35,7 +36,23 @@ impl ProjectBuilder {
     }
 
     pub fn contract(mut self, name: &str, code: &str) -> Self {
-        self.contracts.push((name.to_string(), code.to_string()));
+        self.contracts
+            .push((name.to_string(), code.to_string(), Vec::new()));
+        self
+    }
+
+    /// Add a contract with dependencies
+    ///
+    /// # Examples
+    /// ```
+    /// .contract_with_deps("simple", CONTRACT_CODE, vec!["child"])
+    /// ```
+    pub fn contract_with_deps(mut self, name: &str, code: &str, depends: Vec<&str>) -> Self {
+        self.contracts.push((
+            name.to_string(),
+            code.to_string(),
+            depends.iter().map(|s| s.to_string()).collect(),
+        ));
         self
     }
 
@@ -82,7 +99,7 @@ impl ProjectBuilder {
         let tests_dir = project_path.join("tests");
         fs::create_dir_all(&tests_dir).expect("Failed to create tests dir");
 
-        for (name, code) in &self.contracts {
+        for (name, code, _) in &self.contracts {
             let file_path = contracts_dir.join(format!("{}.tolk", name));
             fs::write(file_path, code).expect("Failed to write contract file");
         }
@@ -132,7 +149,7 @@ impl ProjectBuilder {
     fn create_acton_toml(
         project_path: &Path,
         name: &str,
-        contracts: &[(String, String)],
+        contracts: &[(String, String, Vec<String>)],
         test_config: &Option<TestConfig>,
     ) {
         let mut toml_content = format!(
@@ -146,17 +163,31 @@ license = "MIT"
             name
         );
 
-        for (contract_name, _) in contracts {
+        for (contract_name, _, depends) in contracts {
+            let depends_str = if depends.is_empty() {
+                "[]".to_string()
+            } else {
+                format!(
+                    "[{}]",
+                    depends
+                        .iter()
+                        .map(|d| format!("\"{}\"", d))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            };
+
             toml_content.push_str(&format!(
                 r#"[contracts.{}]
 name = "{}"
 src = "contracts/{}.tolk"
-depends = []
+depends = {}
 
 "#,
                 contract_name.to_lowercase(),
                 contract_name,
-                contract_name
+                contract_name,
+                depends_str
             ));
         }
 

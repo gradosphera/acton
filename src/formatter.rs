@@ -790,7 +790,7 @@ impl FormatterContext {
                             formated,
                         )
                     } else {
-                        (None, hash.to_string())
+                        (None, "msg: ".to_owned() + hash)
                     };
 
                     let message_part = formated;
