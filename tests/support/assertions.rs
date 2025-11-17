@@ -41,6 +41,7 @@ pub trait TestOutputExt {
     fn assert_passed(&self, count: usize) -> &Self;
     fn assert_failed(&self, count: usize) -> &Self;
     fn assert_skipped(&self, count: usize) -> &Self;
+    fn assert_todo(&self, count: usize) -> &Self;
     fn assert_test_passed(&self, name: &str) -> &Self;
     fn assert_test_failed(&self, name: &str) -> &Self;
     fn assert_contains(&self, text: &str) -> &Self;
@@ -81,6 +82,18 @@ impl TestOutputExt for TestSuccess {
     fn assert_skipped(&self, count: usize) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
         let skipped_text = format!("○ {} skipped", count);
+        assert!(
+            stdout.contains(&skipped_text),
+            "Expected '{}' in stdout, but got:\n{}",
+            skipped_text,
+            stdout
+        );
+        self
+    }
+
+    fn assert_todo(&self, count: usize) -> &Self {
+        let stdout = strip_ansi(&self.get_stdout());
+        let skipped_text = format!("□ {} todo", count);
         assert!(
             stdout.contains(&skipped_text),
             "Expected '{}' in stdout, but got:\n{}",
@@ -209,6 +222,18 @@ impl TestOutputExt for TestFailure {
     fn assert_skipped(&self, count: usize) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
         let skipped_text = format!("○ {} skipped", count);
+        assert!(
+            stdout.contains(&skipped_text),
+            "Expected '{}' in stdout, but got:\n{}",
+            skipped_text,
+            stdout
+        );
+        self
+    }
+
+    fn assert_todo(&self, count: usize) -> &Self {
+        let stdout = strip_ansi(&self.get_stdout());
+        let skipped_text = format!("□ {} todo", count);
         assert!(
             stdout.contains(&skipped_text),
             "Expected '{}' in stdout, but got:\n{}",
