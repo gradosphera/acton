@@ -140,7 +140,7 @@ fn example_test_usage() -> StyledStr {
         ("Run tests in specific file", "acton test my_test.tolk"),
         (
             "Run tests in directory with regex filter",
-            "acton test . --filtedr \"wallet.*\"",
+            "acton test . --filter \"wallet.*\"",
         ),
         (
             "Exclude tests",
