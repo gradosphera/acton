@@ -123,6 +123,8 @@ impl Project {
             project: Arc::new(ProjectRef {
                 path: self.path.clone(),
             }),
+            test_path: None,
+            filter: None,
         }
     }
 
@@ -138,29 +140,70 @@ pub struct ProjectRef {
 pub struct ActonCommand {
     pub(crate) cmd: snapbox::cmd::Command,
     pub(crate) project: Arc<ProjectRef>,
+    pub(crate) test_path: Option<String>,
+    pub(crate) filter: Option<String>,
 }
 
 impl ActonCommand {
+    /// Start test command (defaults to running all tests in current directory)
     pub fn test(mut self) -> Self {
-        self.cmd = self
-            .cmd
-            .arg("test")
-            .current_dir(&self.project.path)
-            .arg(".");
+        self.cmd = self.cmd.arg("test").current_dir(&self.project.path);
         self
     }
 
+    /// Specify path to test file or directory
+    ///
+    /// # Examples
+    /// ```
+    /// .test().path(".")                   // All tests (default)
+    /// .test().path("tests/my_test.tolk")  // Specific file
+    /// .test().path("tests/")              // Specific directory
+    /// ```
+    pub fn path(mut self, path: &str) -> Self {
+        self.test_path = Some(path.to_string());
+        self
+    }
+
+    /// Filter tests by name pattern (regex)
+    ///
+    /// # Examples
+    /// ```
+    /// .test().filter("test-basic")        // Run tests matching "test-basic"
+    /// .test().filter("counter.*")         // Run tests starting with "counter"
+    /// ```
+    pub fn filter(mut self, pattern: &str) -> Self {
+        self.filter = Some(pattern.to_string());
+        self
+    }
+
+    /// Enable backtrace output
+    ///
+    /// # Examples
+    /// ```
+    /// .test().with_backtrace("full")      // Full backtrace
+    /// ```
     pub fn with_backtrace(mut self, level: &str) -> Self {
         self.cmd = self.cmd.arg("--backtrace").arg(level);
         self
     }
 
+    /// Enable coverage collection
     pub fn with_coverage(mut self) -> Self {
         self.cmd = self.cmd.arg("--coverage");
         self
     }
 
+    /// Run the command and return output
     pub fn run(mut self) -> TestOutput {
+        // Add path argument (default to "." if not specified)
+        let path = self.test_path.unwrap_or_else(|| ".".to_string());
+        self.cmd = self.cmd.arg(path);
+
+        // Add filter if specified
+        if let Some(filter) = self.filter {
+            self.cmd = self.cmd.arg("--filter").arg(filter);
+        }
+
         self.cmd = self.cmd.env("NO_COLOR", "1");
         let output = self.cmd.assert();
         TestOutput {

@@ -315,7 +315,8 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
 
     let mut parts = Vec::new();
 
-    if total_passed > 0 {
+    // Show 0 passed only if no tests at all
+    if total_passed > 0 || (total_failed == 0 && total_skipped == 0 && total_todo == 0) {
         parts.push(format!(
             "{} {} {}",
             "✓".green().bold(),

@@ -108,6 +108,8 @@ impl FixtureProject {
             project: Arc::new(crate::support::project::ProjectRef {
                 path: self.project_path.clone(),
             }),
+            test_path: None,
+            filter: None,
         }
     }
 
