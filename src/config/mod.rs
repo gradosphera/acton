@@ -180,12 +180,12 @@ version = "0.1.0"
 
 [contracts.counter]
 name = "Counter Contract"
-root = "counter.tolk"
+src = "counter.tolk"
 depends = []
 
 [contracts.wallet-v5]
 name = "Wallet V5"
-root = "wallet-v5.tolk"
+src = "wallet-v5.tolk"
 depends = []
 "#;
 

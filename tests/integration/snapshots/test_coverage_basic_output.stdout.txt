@@ -1,0 +1,20 @@
+   Compiling contracts
+   Compiling simple
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+
+ TEST  [ROOT]
+
+ > ./tests/test_test.tolk (1 tests)
+  ✓ coverage example [TIME]
+
+ ✓ 1 passed in 1 file
+
+ COVERAGE  
+
+────────────────────────────────────────────────────────
+ File             Covered Lines   Total Lines   % Lines 
+────────────────────────────────────────────────────────
+ All files                    4             4    100.0% 
+ code/math.tolk               4             4    100.0% 

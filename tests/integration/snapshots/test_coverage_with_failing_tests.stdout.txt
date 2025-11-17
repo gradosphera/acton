@@ -1,0 +1,29 @@
+   Compiling contracts
+   Compiling simple
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+
+ TEST  [ROOT]
+
+ > ./tests/test_test.tolk (2 tests)
+  ✓ passing [TIME]
+  ✗ failing [TIME]
+    └─ Error: expect(actual).toEqual(expected)
+        (
+            -1,
+            0
+        )
+      └─ at ./tests/test_test[LINE]
+
+ ✓ 1 passed, ✗ 1 failed in 1 file
+
+Some tests failed.
+
+ COVERAGE  
+
+─────────────────────────────────────────────────────────────
+ File                  Covered Lines   Total Lines   % Lines 
+─────────────────────────────────────────────────────────────
+ All files                         2             3     66.7% 
+ code/validator.tolk               2             3     66.7% 

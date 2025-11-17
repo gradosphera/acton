@@ -10,6 +10,7 @@ pub struct ProjectBuilder {
     temp_dir: TempDir,
     contracts: Vec<(String, String)>,
     tests: Vec<(String, String)>,
+    files: Vec<(String, String)>,
 }
 
 impl ProjectBuilder {
@@ -20,6 +21,7 @@ impl ProjectBuilder {
             temp_dir,
             contracts: Vec::new(),
             tests: Vec::new(),
+            files: Vec::new(),
         }
     }
 
@@ -30,6 +32,17 @@ impl ProjectBuilder {
 
     pub fn test_file(mut self, name: &str, code: &str) -> Self {
         self.tests.push((name.to_string(), code.to_string()));
+        self
+    }
+
+    /// Add a custom file to the project (e.g., library files)
+    ///
+    /// # Examples
+    /// ```
+    /// .file("lib/math", "fun add(a: int, b: int): int { return a + b; }")
+    /// ```
+    pub fn file(mut self, path: &str, code: &str) -> Self {
+        self.files.push((path.to_string(), code.to_string()));
         self
     }
 
@@ -54,6 +67,14 @@ impl ProjectBuilder {
             let adjusted_code = Self::adjust_imports(code);
             let file_path = tests_dir.join(format!("{}_test.tolk", name));
             fs::write(file_path, adjusted_code).expect("Failed to write test file");
+        }
+
+        for (path, code) in &self.files {
+            let file_path = project_path.join(format!("{}.tolk", path));
+            if let Some(parent) = file_path.parent() {
+                fs::create_dir_all(parent).expect("Failed to create parent directories");
+            }
+            fs::write(file_path, code).expect("Failed to write custom file");
         }
 
         Self::create_acton_toml(&project_path, &self.name, &self.contracts);
@@ -190,6 +211,12 @@ impl ActonCommand {
     /// Enable coverage collection
     pub fn with_coverage(mut self) -> Self {
         self.cmd = self.cmd.arg("--coverage");
+        self
+    }
+
+    /// Enable coverage with specific format (e.g., "lcov")
+    pub fn with_coverage_format(mut self, format: &str) -> Self {
+        self.cmd = self.cmd.arg("--coverage").arg("--format").arg(format);
         self
     }
 
