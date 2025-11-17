@@ -1,7 +1,6 @@
 use crate::common::assertion;
 use crate::support::snapshots::normalize_output;
-use crate::support::{ProjectBuilder, TestOutputExt};
-use std::collections::HashMap;
+use crate::support::{CompilationOrder, ProjectBuilder, TestOutputExt, extract_compiled_contracts};
 use std::fs;
 use tycho_types::boc::Boc;
 
@@ -935,105 +934,4 @@ depends = []
         .assert_stderr_snapshot_matches(
             "integration/snapshots/test_build_missing_boc_file.stderr.txt",
         );
-}
-
-#[test]
-fn test_build_incremental_with_changes() {
-    let project = ProjectBuilder::new("incremental")
-        .contract("base", SIMPLE_CONTRACT)
-        .contract_with_deps("dependent", SIMPLE_CONTRACT, vec!["base"])
-        .build();
-
-    let first_output = project.acton().build().run().success();
-    let first_compiled = extract_compiled_contracts(&first_output.get_normalized_stdout());
-    assert_eq!(first_compiled.len(), 2, "Should compile both contracts");
-
-    let second_output = project.acton().build().run().success();
-    let second_compiled = extract_compiled_contracts(&second_output.get_normalized_stdout());
-    assert_eq!(
-        second_compiled.len(),
-        0,
-        "Should not compile anything (cache)"
-    );
-
-    fs::write(
-        project.path().join("contracts/base.tolk"),
-        r#"
-        fun onInternalMessage(in: InMessage) {
-            // Modified
-        }
-        fun onBouncedMessage(_: InMessageBounced) {}
-    "#,
-    )
-    .expect("Write modified contract");
-
-    let third_output = project.acton().build().run().success();
-    let third_compiled = extract_compiled_contracts(&third_output.get_normalized_stdout());
-
-    assert!(
-        third_compiled.contains(&"base".to_string()),
-        "Should recompile base"
-    );
-}
-
-struct CompilationOrder {
-    positions: HashMap<String, usize>,
-}
-
-impl CompilationOrder {
-    fn from_stdout(stdout: &str) -> Self {
-        let mut positions = HashMap::new();
-        let compiled = extract_compiled_contracts(stdout);
-        for contract in compiled {
-            if let Some(pos) = stdout.find(&format!("Compiling {}", contract)) {
-                positions.insert(contract, pos);
-            }
-        }
-        Self { positions }
-    }
-
-    fn assert_before(&self, first: &str, second: &str) {
-        let first_pos = self
-            .positions
-            .get(first)
-            .unwrap_or_else(|| panic!("Contract '{}' was not compiled", first));
-        let second_pos = self
-            .positions
-            .get(second)
-            .unwrap_or_else(|| panic!("Contract '{}' was not compiled", second));
-
-        assert!(
-            first_pos < second_pos,
-            "{} (at {}) should be compiled before {} (at {})",
-            first,
-            first_pos,
-            second,
-            second_pos
-        );
-    }
-
-    fn assert_chain(&self, contracts: &[&str]) {
-        for i in 0..contracts.len() - 1 {
-            self.assert_before(contracts[i], contracts[i + 1]);
-        }
-    }
-}
-
-fn extract_compiled_contracts(stdout: &str) -> Vec<String> {
-    stdout
-        .lines()
-        .filter_map(|line| {
-            if line.contains("Compiling contracts") {
-                return None;
-            }
-
-            if line.contains("Compiling ") {
-                line.split("Compiling ")
-                    .nth(1)
-                    .map(|s| s.trim().to_string())
-            } else {
-                None
-            }
-        })
-        .collect()
 }
