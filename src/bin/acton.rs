@@ -1,3 +1,4 @@
+use clap::ColorChoice;
 use clap::builder::styling::Style;
 use clap::builder::{StyledStr, Styles};
 use clap::{Parser, Subcommand, arg};
@@ -10,12 +11,13 @@ use emulator_rs::commands::script::script_cmd;
 use emulator_rs::commands::test::{TestConfig, test_cmd};
 use emulator_rs::config::ActonConfig;
 use owo_colors::OwoColorize;
-use std::fs;
 use std::fs::OpenOptions;
+use std::{fs, process};
 
 #[derive(Parser)]
 #[command(name = "acton")]
 #[command(about = "TON blockchain development tool")]
+#[command(color = ColorChoice::Auto)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -236,12 +238,14 @@ fn main() {
             let result = init_cmd();
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
+                process::exit(1)
             }
         }
         Commands::New { path } => {
             let result = new_cmd(&path);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
+                process::exit(1)
             }
         }
         Commands::Test {
@@ -272,6 +276,7 @@ fn main() {
             let result = test_cmd(path, &config);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
+                process::exit(1)
             }
         }
         Commands::Script {
@@ -283,6 +288,7 @@ fn main() {
             let result = script_cmd(&path, debug, debug_port, clear_cache);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
+                process::exit(1)
             }
         }
         Commands::Build {
@@ -317,6 +323,7 @@ fn main() {
                     );
                 } else {
                     eprintln!("{} {}", "Error:".red(), err);
+                    process::exit(1)
                 }
             }
         }
@@ -328,6 +335,7 @@ fn main() {
             let result = disasm_cmd(boc_file, string, output);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
+                process::exit(1)
             }
         }
     }

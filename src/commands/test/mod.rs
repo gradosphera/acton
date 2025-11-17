@@ -276,6 +276,9 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         println!("\n{} {}", " TEST ".bold().on_blue(), cwd.display().dimmed());
     }
 
+    // hacky init VM with debug enabled due to global variables :/
+    tolkc::compile("./testdata/simple.tolk".as_ref(), true);
+
     println!();
 
     let mut file_cache = FileBuildCache::new(None)?;

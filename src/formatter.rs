@@ -408,7 +408,12 @@ impl FormatterContext {
                 };
                 let src_formatted =
                     self.format_address_with_letter(&src_addr, contract_letters, show_full_names);
-                tx_builder += &format!("{} {} {}\n", "N/A".dimmed(), "->".dimmed(), src_formatted);
+                tx_builder += &format!(
+                    "{} {} {}\n",
+                    "N/A".dimmed(),
+                    "->".dimmed(),
+                    src_formatted.trim()
+                );
                 tx_builder += "└── ".dimmed().to_string().as_str();
             }
         }
@@ -533,9 +538,8 @@ impl FormatterContext {
                         debug_logs
                             .lines()
                             .map(|line| format!(
-                                "{}{}   {}",
+                                "{}    {}",
                                 child_prefix,
-                                "│".dimmed(),
                                 line.trim_start_matches("#DEBUG#: ").dimmed()
                             ))
                             .collect::<Vec<_>>()
