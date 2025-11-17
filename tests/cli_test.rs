@@ -8,8 +8,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-static LIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/lib");
-
 #[test]
 fn test_help_works() {
     let mut cmd = cargo::cargo_bin_cmd!("acton");
@@ -20,33 +18,10 @@ fn test_help_works() {
         .stdout(contains("Usage: acton test"));
 }
 
-fn copy_fixture_project(name: &str) -> TempDir {
-    let tmp = TempDir::new().unwrap();
-    fs::create_dir_all(tmp.path().join("lib")).unwrap();
-    LIB_DIR.extract(tmp.path().join("lib")).unwrap();
-    let fixture_dir = Path::new("tests/projects").join(name);
-
-    let mut opts = CopyOptions::new();
-    opts.copy_inside = true;
-
-    copy(&fixture_dir, tmp.path(), &opts).unwrap();
-
-    tmp
-}
-
 #[test]
 fn test_can_test_basic_project() {
-    let tmp = copy_fixture_project("basic");
-    let full_path = tmp.path().join("basic");
-
-    let counter_path = full_path.join("tests/counter_test.tolk");
-    let new_content = fs::read_to_string(&counter_path)
-        .unwrap()
-        .replace("../../../../", "../../");
-    fs::write(&counter_path, new_content).unwrap();
-
-    let (stdout, _stderr, status) = run_all_tests_in(&full_path, None);
-    let stdout = strip_ansi(&stdout);
+    let setup = ProjectSetup::new("basic");
+    let (stdout, _, status) = setup.run_tests(None);
 
     assert!(status.success());
 
@@ -58,14 +33,8 @@ fn test_can_test_basic_project() {
 
 #[test]
 fn test_can_test_basic_project_with_failing_contract_code() {
-    let tmp = copy_fixture_project("basic");
-    let full_path = tmp.path().join("basic");
-
-    patch_imports(&full_path);
-    enable_slot(&full_path, "contracts/counter.tolk", 1);
-
-    let (stdout, _stderr, status) = run_all_tests_in(&full_path, None);
-    let stdout = sanitize_output(strip_ansi(&stdout).as_str(), &full_path);
+    let setup = ProjectSetup::new("basic").with_enabled_contract_slot(1);
+    let (stdout, _, status) = setup.run_tests(None);
 
     println!("{}", stdout);
     assert!(!status.success());
@@ -95,14 +64,8 @@ fn test_can_test_basic_project_with_failing_contract_code() {
 
 #[test]
 fn test_can_test_basic_project_with_failing_contract_code_with_backtrace_full() {
-    let tmp = copy_fixture_project("basic");
-    let full_path = tmp.path().join("basic");
-
-    patch_imports(&full_path);
-    enable_slot(&full_path, "contracts/counter.tolk", 1);
-
-    let (stdout, _stderr, status) = run_all_tests_in(&full_path, Some("full"));
-    let stdout = sanitize_output(strip_ansi(&stdout).as_str(), &full_path);
+    let setup = ProjectSetup::new("basic").with_enabled_contract_slot(1);
+    let (stdout, _, status) = setup.run_tests(Some("full"));
 
     println!("{}", stdout);
     assert!(!status.success());
@@ -138,15 +101,8 @@ fn test_can_test_basic_project_with_failing_contract_code_with_backtrace_full() 
 
 #[test]
 fn test_can_test_project_with_compilation_error() {
-    let tmp = copy_fixture_project("with_compilation_error");
-    let full_path = tmp.path().join("with_compilation_error");
-
-    patch_imports(&full_path);
-    enable_slot(&full_path, "contracts/counter.tolk", 1);
-
-    let (stdout, stderr, status) = run_all_tests_in(&full_path, None);
-    let stdout = sanitize_output(strip_ansi(&stdout).as_str(), &full_path);
-    let stderr = sanitize_output(strip_ansi(&stderr).as_str(), &full_path);
+    let setup = ProjectSetup::new("with_compilation_error").with_enabled_contract_slot(1);
+    let (stdout, stderr, status) = setup.run_tests(None);
 
     println!("{}", stdout);
     println!("{}", stderr);
@@ -163,15 +119,8 @@ Error: Build failed with 1 error"));
 
 #[test]
 fn test_can_test_project_with_gas_limit_failure() {
-    let tmp = copy_fixture_project("basic");
-    let full_path = tmp.path().join("basic");
-
-    patch_imports(&full_path);
-    enable_slot(&full_path, "tests/counter_test.tolk", 1);
-
-    let (stdout, stderr, status) = run_all_tests_in(&full_path, None);
-    let stdout = sanitize_output(strip_ansi(&stdout).as_str(), &full_path);
-    let stderr = sanitize_output(strip_ansi(&stderr).as_str(), &full_path);
+    let setup = ProjectSetup::new("basic").with_enabled_test_slot(1);
+    let (stdout, stderr, status) = setup.run_tests(None);
 
     println!("{}", stdout);
     println!("{}", stderr);
@@ -186,15 +135,8 @@ fn test_can_test_project_with_gas_limit_failure() {
 
 #[test]
 fn test_can_test_project_with_simple_expect_failure() {
-    let tmp = copy_fixture_project("basic");
-    let full_path = tmp.path().join("basic");
-
-    patch_imports(&full_path);
-    enable_slot(&full_path, "tests/counter_test.tolk", 2);
-
-    let (stdout, stderr, status) = run_all_tests_in(&full_path, None);
-    let stdout = sanitize_output(strip_ansi(&stdout).as_str(), &full_path);
-    let stderr = sanitize_output(strip_ansi(&stderr).as_str(), &full_path);
+    let setup = ProjectSetup::new("basic").with_enabled_test_slot(2);
+    let (stdout, stderr, status) = setup.run_tests(None);
 
     println!("{}", stdout);
     println!("{}", stderr);
@@ -214,15 +156,8 @@ fn test_can_test_project_with_simple_expect_failure() {
 
 #[test]
 fn test_can_test_project_with_exit_code_mismatch() {
-    let tmp = copy_fixture_project("basic");
-    let full_path = tmp.path().join("basic");
-
-    patch_imports(&full_path);
-    enable_slot(&full_path, "tests/counter_test.tolk", 3);
-
-    let (stdout, stderr, status) = run_all_tests_in(&full_path, None);
-    let stdout = sanitize_output(strip_ansi(&stdout).as_str(), &full_path);
-    let stderr = sanitize_output(strip_ansi(&stderr).as_str(), &full_path);
+    let setup = ProjectSetup::new("basic").with_enabled_test_slot(3);
+    let (stdout, stderr, status) = setup.run_tests(None);
 
     println!("{}", stdout);
     println!("{}", stderr);
@@ -236,15 +171,8 @@ fn test_can_test_project_with_exit_code_mismatch() {
 
 #[test]
 fn test_can_test_project_with_throw_in_test() {
-    let tmp = copy_fixture_project("basic");
-    let full_path = tmp.path().join("basic");
-
-    patch_imports(&full_path);
-    enable_slot(&full_path, "tests/counter_test.tolk", 4);
-
-    let (stdout, stderr, status) = run_all_tests_in(&full_path, None);
-    let stdout = sanitize_output(strip_ansi(&stdout).as_str(), &full_path);
-    let stderr = sanitize_output(strip_ansi(&stderr).as_str(), &full_path);
+    let setup = ProjectSetup::new("basic").with_enabled_test_slot(4);
+    let (stdout, stderr, status) = setup.run_tests(None);
 
     println!("{}", stdout);
     println!("{}", stderr);
@@ -260,15 +188,8 @@ fn test_can_test_project_with_throw_in_test() {
 
 #[test]
 fn test_can_test_project_with_throw_in_test_and_backtrace_full() {
-    let tmp = copy_fixture_project("basic");
-    let full_path = tmp.path().join("basic");
-
-    patch_imports(&full_path);
-    enable_slot(&full_path, "tests/counter_test.tolk", 4);
-
-    let (stdout, stderr, status) = run_all_tests_in(&full_path, Some("full"));
-    let stdout = sanitize_output(strip_ansi(&stdout).as_str(), &full_path);
-    let stderr = sanitize_output(strip_ansi(&stderr).as_str(), &full_path);
+    let setup = ProjectSetup::new("basic").with_enabled_test_slot(4);
+    let (stdout, stderr, status) = setup.run_tests(Some("full"));
 
     println!("{}", stdout);
     println!("{}", stderr);
@@ -285,22 +206,15 @@ fn test_can_test_project_with_throw_in_test_and_backtrace_full() {
 
 #[test]
 fn test_can_test_project_with_debug_output_in_contract() {
-    let tmp = copy_fixture_project("basic");
-    let full_path = tmp.path().join("basic");
-
-    patch_imports(&full_path);
-    enable_slot(&full_path, "contracts/counter.tolk", 2);
-    enable_slot(&full_path, "tests/counter_test.tolk", 5);
-
-    let (stdout, stderr, status) = run_all_tests_in(&full_path, Some("full"));
-    let stdout = sanitize_output(strip_ansi(&stdout).as_str(), &full_path);
-    let stderr = sanitize_output(strip_ansi(&stderr).as_str(), &full_path);
+    let setup = ProjectSetup::new("basic")
+        .with_enabled_contract_slot(2)
+        .with_enabled_test_slot(5);
+    let (stdout, stderr, status) = setup.run_tests(Some("full"));
 
     println!("{}", stdout);
     println!("{}", stderr);
     assert!(status.success());
 
-    // TODO
     assert!(stdout.contains(
         " > ./tests/counter_test.tolk (2 tests)
   ✓ should increase counter <TIME>
@@ -312,15 +226,8 @@ fn test_can_test_project_with_debug_output_in_contract() {
 
 #[test]
 fn test_can_test_project_with_stderr_output_in_test() {
-    let tmp = copy_fixture_project("basic");
-    let full_path = tmp.path().join("basic");
-
-    patch_imports(&full_path);
-    enable_slot(&full_path, "tests/counter_test.tolk", 6);
-
-    let (stdout, stderr, status) = run_all_tests_in(&full_path, Some("full"));
-    let stdout = sanitize_output(strip_ansi(&stdout).as_str(), &full_path);
-    let stderr = sanitize_output(strip_ansi(&stderr).as_str(), &full_path);
+    let setup = ProjectSetup::new("basic").with_enabled_test_slot(6);
+    let (stdout, stderr, status) = setup.run_tests(Some("full"));
 
     println!("{}", stdout);
     println!("{}", stderr);
@@ -332,6 +239,56 @@ fn test_can_test_project_with_stderr_output_in_test() {
     └─ Test stderr:
        error output"
     ));
+}
+
+struct ProjectSetup {
+    tmp_dir: TempDir,
+    project_path: PathBuf,
+}
+
+impl ProjectSetup {
+    fn new(project_name: &str) -> Self {
+        let tmp = Self::copy_fixture_project(project_name);
+        let project_path = tmp.path().join(project_name);
+        patch_imports(&project_path);
+
+        Self {
+            tmp_dir: tmp,
+            project_path,
+        }
+    }
+
+    fn with_enabled_contract_slot(mut self, slot: usize) -> Self {
+        enable_slot(&self.project_path, "contracts/counter.tolk", slot);
+        self
+    }
+
+    fn with_enabled_test_slot(mut self, slot: usize) -> Self {
+        enable_slot(&self.project_path, "tests/counter_test.tolk", slot);
+        self
+    }
+
+    fn run_tests(&self, backtrace: Option<&str>) -> (String, String, std::process::ExitStatus) {
+        let (stdout, stderr, status) = run_all_tests_in(&self.project_path, backtrace);
+        let (stdout, stderr) = process_test_output(&stdout, &stderr, &self.project_path);
+        (stdout, stderr, status)
+    }
+
+    fn copy_fixture_project(name: &str) -> TempDir {
+        static LIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/lib");
+
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join("lib")).unwrap();
+        LIB_DIR.extract(tmp.path().join("lib")).unwrap();
+        let fixture_dir = Path::new("tests/projects").join(name);
+
+        let mut opts = CopyOptions::new();
+        opts.copy_inside = true;
+
+        copy(&fixture_dir, tmp.path(), &opts).unwrap();
+
+        tmp
+    }
 }
 
 fn enable_slot(full_path: &PathBuf, file: &str, index: usize) {
@@ -378,11 +335,17 @@ fn strip_ansi(s: &str) -> String {
     String::from_utf8(bytes).unwrap()
 }
 
+fn process_test_output(stdout: &str, stderr: &str, project_path: &PathBuf) -> (String, String) {
+    let stdout = sanitize_output(strip_ansi(stdout).as_str(), project_path);
+    let stderr = sanitize_output(strip_ansi(stderr).as_str(), project_path);
+    (stdout, stderr)
+}
+
 fn sanitize_output(s: &str, full_path: &PathBuf) -> String {
-    static TIME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(✗|✓ [^\n]+?) \d+ms").unwrap());
+    static TIME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\d+ms").unwrap());
     static LINE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(\.tolk):\d+:\d+").unwrap());
 
-    let s = TIME_RE.replace_all(s, "$1 <TIME>").to_string();
+    let s = TIME_RE.replace_all(s, "<TIME>").to_string();
     let s = LINE_RE.replace_all(&s, "$1:<LINE>").to_string();
     let s = s
         .replace(&full_path.to_string_lossy().to_string(), "<ROOT>")
