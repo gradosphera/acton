@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tempfile::TempDir;
 
 pub struct FixtureProject {
-    tmp_dir: TempDir,
+    _tmp_dir: TempDir,
     project_path: PathBuf,
     enabled_slots: HashMap<String, Vec<usize>>,
 }
@@ -22,7 +22,7 @@ impl FixtureProject {
         Self::patch_imports(&project_path);
 
         Self {
-            tmp_dir,
+            _tmp_dir: tmp_dir,
             project_path,
             enabled_slots: HashMap::new(),
         }
@@ -110,6 +110,9 @@ impl FixtureProject {
             }),
             test_path: None,
             filter: None,
+            build_clear_cache: false,
+            build_contract: None,
+            build_graph: None,
         }
     }
 

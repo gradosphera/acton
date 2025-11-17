@@ -42,7 +42,7 @@ pub fn build_cmd(
     }
 
     let mut file_cache = FileBuildCache::new(None)?;
-    let mut failure_count = 0;
+    let failure_count = 0;
     let total_start = Instant::now();
 
     if let Some(filter) = &contract_filter {
@@ -89,16 +89,7 @@ pub fn build_cmd(
             &config,
         )?;
 
-        let code_boc64 = process_contract(
-            &mut file_cache,
-            &mut failure_count,
-            contract_config,
-            contract_path,
-        );
-
-        let Some(code_boc64) = &code_boc64 else {
-            continue;
-        };
+        let code_boc64 = process_contract(&mut file_cache, contract_config, contract_path)?;
 
         compiled_contracts.insert(contract_key.clone(), code_boc64.clone());
 
@@ -126,29 +117,23 @@ pub fn build_cmd(
 
 fn process_contract(
     file_cache: &mut FileBuildCache,
-    failure_count: &mut i32,
     contract_config: &ContractConfig,
     contract_path: &String,
-) -> Option<String> {
+) -> anyhow::Result<String> {
     let code_boc64 = if contract_path.ends_with(".boc") {
         debug!("Loading BoC file: {}", contract_path);
         match fs::read(contract_path) {
             Ok(boc_data) => match Boc::decode(&boc_data) {
                 Ok(boc) => {
                     let boc_base64 = Boc::encode_base64(&boc);
-                    Some(boc_base64)
+                    boc_base64
                 }
                 Err(e) => {
-                    eprintln!(
-                        "Warning: Failed to decode BoC file {}: {}",
-                        contract_path, e
-                    );
-                    None
+                    anyhow::bail!("Failed to decode BoC file {}: {}", contract_path, e);
                 }
             },
             Err(e) => {
-                eprintln!("Warning: Failed to read BoC file {}: {}", contract_path, e);
-                None
+                anyhow::bail!("Failed to read BoC file {}: {}", contract_path, e);
             }
         }
     } else {
@@ -156,7 +141,7 @@ fn process_contract(
 
         if let Some(cached_result) = cached_result {
             debug!("Cache hit, use cached result for '{}'", contract_path);
-            Some(cached_result.code_boc64)
+            cached_result.code_boc64
         } else {
             debug!("Cache miss, recompile '{}'", contract_path);
             let compile_start = Instant::now();
@@ -178,17 +163,15 @@ fn process_contract(
 
                     println!("    {} in {:?}", "Finished".green(), compile_time);
 
-                    Some(result.code_boc64)
+                    result.code_boc64
                 }
                 tolkc::CompilerResult::Error(error) => {
-                    eprintln!("{}", error.message);
-                    *failure_count += 1;
-                    None
+                    return Err(anyhow!("Cannot compile script file {}", error.message));
                 }
             }
         }
     };
-    code_boc64
+    Ok(code_boc64)
 }
 
 fn save_boc_file(contract_config: &ContractConfig, code_boc64: &str) -> anyhow::Result<()> {
@@ -205,11 +188,6 @@ pub(crate) fn generate_dependency_files(
     compiled_contracts: &HashMap<String, String>, // contract_key -> boc_base64
     acton_config: &ActonConfig,
 ) -> anyhow::Result<()> {
-    let gen_dir = Path::new("gen");
-    if !gen_dir.exists() {
-        fs::create_dir_all(gen_dir)?;
-    }
-
     let Some(depends) = &config.depends else {
         return Ok(());
     };
@@ -218,10 +196,18 @@ pub(crate) fn generate_dependency_files(
     }
 
     for dep in depends {
-        generate_single_dependency_file(key, dep, compiled_contracts, acton_config, gen_dir)?;
+        generate_single_dependency_file(key, dep, compiled_contracts, acton_config)?;
     }
 
     Ok(())
+}
+
+fn create_gen_dir<'a>() -> anyhow::Result<&'a Path> {
+    let gen_dir = Path::new("gen");
+    if !gen_dir.exists() {
+        fs::create_dir_all(gen_dir)?;
+    }
+    Ok(gen_dir)
 }
 
 fn generate_single_dependency_file(
@@ -229,8 +215,8 @@ fn generate_single_dependency_file(
     dependency: &ContractDependency,
     compiled_contracts: &HashMap<String, String>,
     acton_config: &ActonConfig,
-    gen_dir: &Path,
 ) -> anyhow::Result<()> {
+    let gen_dir = create_gen_dir()?;
     let dependency_key = dependency.name();
     let boc_base64 = compiled_contracts.get(dependency_key).ok_or_else(|| {
         anyhow!(
@@ -267,6 +253,13 @@ fn generate_single_dependency_file(
                 .unwrap(),
         )
         .to_string();
+
+    let path = Path::new(&output_filename);
+    let dir = path.parent();
+
+    if let Some(dir) = dir {
+        fs::create_dir_all(dir)?;
+    }
 
     fs::write(&output_filename, content)?;
 

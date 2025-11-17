@@ -1,7 +1,7 @@
 use crate::config::{ContractConfig, DependencyKind};
 use anyhow::anyhow;
 use owo_colors::OwoColorize;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fs;
 use std::process::Command;
 
@@ -9,7 +9,7 @@ pub(crate) fn build_dependency_graph(
     contracts: &[(&String, &ContractConfig)],
 ) -> anyhow::Result<Vec<String>> {
     let mut graph: HashMap<String, Vec<String>> = HashMap::new();
-    let mut in_degree: HashMap<String, usize> = HashMap::new();
+    let mut in_degree: BTreeMap<String, usize> = BTreeMap::new();
 
     for (key, _) in contracts {
         graph.insert((*key).clone(), Vec::new());

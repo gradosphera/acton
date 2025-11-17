@@ -8,10 +8,31 @@ use tempfile::TempDir;
 pub struct ProjectBuilder {
     name: String,
     temp_dir: TempDir,
-    contracts: Vec<(String, String, Vec<String>)>, // (name, code, depends)
+    contracts: Vec<ContractDef>,
     tests: Vec<(String, String)>,
     files: Vec<(String, String)>,
     test_config: Option<TestConfig>,
+    license: Option<String>,
+}
+
+struct ContractDef {
+    name: String,
+    code: ContractSource,
+    depends: Vec<DependencyDef>,
+    output: Option<String>,
+}
+
+enum ContractSource {
+    Tolk(String), // Tolk source code
+    Boc(Vec<u8>), // Raw BoC bytes
+}
+
+#[derive(Clone)]
+struct DependencyDef {
+    name: String,
+    kind: Option<String>,     // "embed_code" or "library_ref"
+    function: Option<String>, // custom function name
+    path: Option<String>,     // custom output path
 }
 
 #[derive(Clone)]
@@ -32,27 +53,117 @@ impl ProjectBuilder {
             tests: Vec::new(),
             files: Vec::new(),
             test_config: None,
+            license: Some("MIT".to_string()),
         }
     }
 
-    pub fn contract(mut self, name: &str, code: &str) -> Self {
-        self.contracts
-            .push((name.to_string(), code.to_string(), Vec::new()));
+    /// Set project license (for gen file headers)
+    ///
+    /// # Examples
+    /// ```
+    /// .with_license(Some("Apache-2.0"))  // Set custom license
+    /// .with_license(None)                 // No license header
+    /// ```
+    pub fn with_license(mut self, license: Option<&str>) -> Self {
+        self.license = license.map(|s| s.to_string());
         self
     }
 
-    /// Add a contract with dependencies
+    pub fn contract(mut self, name: &str, code: &str) -> Self {
+        self.contracts.push(ContractDef {
+            name: name.to_string(),
+            code: ContractSource::Tolk(code.to_string()),
+            depends: Vec::new(),
+            output: None,
+        });
+        self
+    }
+
+    /// Add a contract from a BoC file
+    ///
+    /// # Examples
+    /// ```
+    /// .contract_from_boc("precompiled", boc_bytes)
+    /// ```
+    pub fn contract_from_boc(mut self, name: &str, boc_data: Vec<u8>) -> Self {
+        self.contracts.push(ContractDef {
+            name: name.to_string(),
+            code: ContractSource::Boc(boc_data),
+            depends: Vec::new(),
+            output: None,
+        });
+        self
+    }
+
+    /// Add a contract with simple dependencies (default EmbedCode)
     ///
     /// # Examples
     /// ```
     /// .contract_with_deps("simple", CONTRACT_CODE, vec!["child"])
     /// ```
     pub fn contract_with_deps(mut self, name: &str, code: &str, depends: Vec<&str>) -> Self {
-        self.contracts.push((
-            name.to_string(),
-            code.to_string(),
-            depends.iter().map(|s| s.to_string()).collect(),
-        ));
+        self.contracts.push(ContractDef {
+            name: name.to_string(),
+            code: ContractSource::Tolk(code.to_string()),
+            depends: depends
+                .iter()
+                .map(|s| DependencyDef {
+                    name: s.to_string(),
+                    kind: None,
+                    function: None,
+                    path: None,
+                })
+                .collect(),
+            output: None,
+        });
+        self
+    }
+
+    /// Add a contract with detailed dependency configuration
+    ///
+    /// # Examples
+    /// ```
+    /// .contract_with_detailed_deps("main", CODE, vec![
+    ///     ("child", Some("library_ref"), None, None),
+    ///     ("utils", Some("embed_code"), Some("customFunc"), None),
+    /// ])
+    /// ```
+    pub fn contract_with_detailed_deps(
+        mut self,
+        name: &str,
+        code: &str,
+        depends: Vec<(&str, Option<&str>, Option<&str>, Option<&str>)>,
+    ) -> Self {
+        self.contracts.push(ContractDef {
+            name: name.to_string(),
+            code: ContractSource::Tolk(code.to_string()),
+            depends: depends
+                .iter()
+                .map(|(dep_name, kind, function, path)| DependencyDef {
+                    name: dep_name.to_string(),
+                    kind: kind.map(|s| s.to_string()),
+                    function: function.map(|s| s.to_string()),
+                    path: path.map(|s| s.to_string()),
+                })
+                .collect(),
+            output: None,
+        });
+        self
+    }
+
+    /// Add a contract with BoC output
+    ///
+    /// # Examples
+    /// ```
+    /// .contract_with_output("simple", CONTRACT_CODE, "simple.boc")
+    /// ```
+    pub fn contract_with_output(mut self, name: &str, code: &str, output: &str) -> Self {
+        self.contracts.push(ContractDef {
+            name: name.to_string(),
+            code: ContractSource::Tolk(code.to_string()),
+            depends: Vec::new(),
+            output: Some(output.to_string()),
+        });
         self
     }
 
@@ -99,9 +210,17 @@ impl ProjectBuilder {
         let tests_dir = project_path.join("tests");
         fs::create_dir_all(&tests_dir).expect("Failed to create tests dir");
 
-        for (name, code, _) in &self.contracts {
-            let file_path = contracts_dir.join(format!("{}.tolk", name));
-            fs::write(file_path, code).expect("Failed to write contract file");
+        for contract in &self.contracts {
+            match &contract.code {
+                ContractSource::Tolk(code) => {
+                    let file_path = contracts_dir.join(format!("{}.tolk", contract.name));
+                    fs::write(file_path, code).expect("Failed to write contract file");
+                }
+                ContractSource::Boc(boc_data) => {
+                    let file_path = contracts_dir.join(format!("{}.boc", contract.name));
+                    fs::write(file_path, boc_data).expect("Failed to write BoC file");
+                }
+            }
         }
 
         for (name, code) in &self.tests {
@@ -123,6 +242,7 @@ impl ProjectBuilder {
             &self.name,
             &self.contracts,
             &self.test_config,
+            &self.license,
         );
 
         Project {
@@ -149,46 +269,87 @@ impl ProjectBuilder {
     fn create_acton_toml(
         project_path: &Path,
         name: &str,
-        contracts: &[(String, String, Vec<String>)],
+        contracts: &[ContractDef],
         test_config: &Option<TestConfig>,
+        license: &Option<String>,
     ) {
+        let license_line = if let Some(lic) = license {
+            format!("license = \"{}\"\n", lic)
+        } else {
+            String::new()
+        };
+
         let mut toml_content = format!(
             r#"[package]
 name = "{}"
 description = "A test project"
 version = "0.1.0"
-license = "MIT"
-
+{}
 "#,
-            name
+            name, license_line
         );
 
-        for (contract_name, _, depends) in contracts {
-            let depends_str = if depends.is_empty() {
-                "[]".to_string()
-            } else {
-                format!(
-                    "[{}]",
-                    depends
-                        .iter()
-                        .map(|d| format!("\"{}\"", d))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
+        for contract in contracts {
+            let file_extension = match &contract.code {
+                ContractSource::Tolk(_) => "tolk",
+                ContractSource::Boc(_) => "boc",
             };
 
             toml_content.push_str(&format!(
-                r#"[contracts.{}]
-name = "{}"
-src = "contracts/{}.tolk"
-depends = {}
-
-"#,
-                contract_name.to_lowercase(),
-                contract_name,
-                contract_name,
-                depends_str
+                "[contracts.{}]\nname = \"{}\"\nsrc = \"contracts/{}.{}\"\n",
+                contract.name.to_lowercase(),
+                contract.name,
+                contract.name,
+                file_extension,
             ));
+
+            // Generate dependencies
+            if contract.depends.is_empty() {
+                toml_content.push_str("depends = []\n");
+            } else {
+                let has_detailed = contract
+                    .depends
+                    .iter()
+                    .any(|d| d.kind.is_some() || d.function.is_some() || d.path.is_some());
+
+                if has_detailed {
+                    toml_content.push_str("depends = [\n");
+                    for dep in &contract.depends {
+                        if dep.kind.is_none() && dep.function.is_none() && dep.path.is_none() {
+                            toml_content.push_str(&format!("  \"{}\",\n", dep.name));
+                        } else {
+                            toml_content.push_str(&format!("  {{ name = \"{}\"", dep.name));
+                            if let Some(kind) = &dep.kind {
+                                toml_content.push_str(&format!(", kind = \"{}\"", kind));
+                            }
+                            if let Some(function) = &dep.function {
+                                toml_content.push_str(&format!(", function = \"{}\"", function));
+                            }
+                            if let Some(path) = &dep.path {
+                                toml_content.push_str(&format!(", path = \"{}\"", path));
+                            }
+                            toml_content.push_str(" },\n");
+                        }
+                    }
+                    toml_content.push_str("]\n");
+                } else {
+                    toml_content.push_str(&format!(
+                        "depends = [{}]\n",
+                        contract
+                            .depends
+                            .iter()
+                            .map(|d| format!("\"{}\"", d.name))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+            }
+
+            if let Some(output) = &contract.output {
+                toml_content.push_str(&format!("output = \"{}\"\n", output));
+            }
+
+            toml_content.push_str("\n");
         }
 
         // Add [test] section if test_config is provided
@@ -230,6 +391,9 @@ impl Project {
             }),
             test_path: None,
             filter: None,
+            build_contract: None,
+            build_clear_cache: false,
+            build_graph: None,
         }
     }
 
@@ -247,9 +411,17 @@ pub struct ActonCommand {
     pub(crate) project: Arc<ProjectRef>,
     pub(crate) test_path: Option<String>,
     pub(crate) filter: Option<String>,
+    pub(crate) build_contract: Option<String>,
+    pub(crate) build_clear_cache: bool,
+    pub(crate) build_graph: Option<Option<String>>,
 }
 
 impl ActonCommand {
+    pub fn build(mut self) -> Self {
+        self.cmd = self.cmd.arg("build").current_dir(&self.project.path);
+        self
+    }
+
     /// Start test command (defaults to running all tests in current directory)
     pub fn test(mut self) -> Self {
         self.cmd = self.cmd.arg("test").current_dir(&self.project.path);
@@ -304,15 +476,65 @@ impl ActonCommand {
         self
     }
 
+    /// Build specific contract (only for build command)
+    ///
+    /// # Examples
+    /// ```
+    /// .build().contract("my_contract")   // Build only my_contract and its dependencies
+    /// ```
+    pub fn contract(mut self, name: &str) -> Self {
+        self.build_contract = Some(name.to_string());
+        self
+    }
+
+    /// Clear compilation cache before building (only for build command)
+    ///
+    /// # Examples
+    /// ```
+    /// .build().clear_cache()              // Clear cache before building
+    /// ```
+    pub fn clear_cache(mut self) -> Self {
+        self.build_clear_cache = true;
+        self
+    }
+
+    /// Generate dependency graph SVG (only for build command)
+    ///
+    /// # Examples
+    /// ```
+    /// .build().with_graph(None)           // Generate deps.svg (default)
+    /// .build().with_graph(Some("my.svg")) // Generate my.svg
+    /// ```
+    pub fn with_graph(mut self, path: Option<&str>) -> Self {
+        self.build_graph = Some(path.map(|s| s.to_string()));
+        self
+    }
+
     /// Run the command and return output
     pub fn run(mut self) -> TestOutput {
-        // Add path argument (default to "." if not specified)
-        let path = self.test_path.unwrap_or_else(|| ".".to_string());
-        self.cmd = self.cmd.arg(path);
+        if let Some(path) = self.test_path {
+            self.cmd = self.cmd.arg(path);
+        }
 
-        // Add filter if specified
         if let Some(filter) = self.filter {
             self.cmd = self.cmd.arg("--filter").arg(filter);
+        }
+
+        if let Some(contract) = self.build_contract {
+            self.cmd = self.cmd.arg(contract);
+        }
+
+        if self.build_clear_cache {
+            self.cmd = self.cmd.arg("--clear-cache");
+        }
+
+        if let Some(graph_path) = self.build_graph {
+            self.cmd = self.cmd.arg("--graph");
+            if let Some(path) = graph_path {
+                self.cmd = self.cmd.arg(path);
+            } else {
+                self.cmd = self.cmd.arg("");
+            }
         }
 
         self.cmd = self.cmd.env("NO_COLOR", "1");

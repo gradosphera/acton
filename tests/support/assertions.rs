@@ -48,8 +48,8 @@ pub trait TestOutputExt {
     fn assert_not_contains(&self, text: &str) -> &Self;
     fn get_stdout(&self) -> String;
     fn get_stderr(&self) -> String;
-    fn snapshot_stdout(&self) -> String;
-    fn snapshot_stderr(&self) -> String;
+    fn get_normalized_stdout(&self) -> String;
+    fn get_normalized_stderr(&self) -> String;
     fn assert_snapshot_matches(&self, path: &str) -> &Self;
     fn assert_stderr_snapshot_matches(&self, path: &str) -> &Self;
 }
@@ -159,16 +159,16 @@ impl TestOutputExt for TestSuccess {
             .expect("Failed to convert stderr to string")
     }
 
-    fn snapshot_stdout(&self) -> String {
+    fn get_normalized_stdout(&self) -> String {
         normalize_output(&self.get_stdout(), &self.project_path)
     }
 
-    fn snapshot_stderr(&self) -> String {
+    fn get_normalized_stderr(&self) -> String {
         normalize_output(&self.get_stderr(), &self.project_path)
     }
 
     fn assert_snapshot_matches(&self, path: &str) -> &Self {
-        let normalized = self.snapshot_stdout();
+        let normalized = self.get_normalized_stdout();
         let assertion = assertion();
 
         let mut snapshot_path = std::env::current_dir().expect("Failed to get current dir");
@@ -181,7 +181,7 @@ impl TestOutputExt for TestSuccess {
     }
 
     fn assert_stderr_snapshot_matches(&self, path: &str) -> &Self {
-        let normalized = self.snapshot_stderr();
+        let normalized = self.get_normalized_stderr();
         let assertion = assertion();
 
         let mut snapshot_path = std::env::current_dir().expect("Failed to get current dir");
@@ -301,16 +301,16 @@ impl TestOutputExt for TestFailure {
             .expect("Failed to convert stderr to string")
     }
 
-    fn snapshot_stdout(&self) -> String {
+    fn get_normalized_stdout(&self) -> String {
         normalize_output(&self.get_stdout(), &self.project_path)
     }
 
-    fn snapshot_stderr(&self) -> String {
+    fn get_normalized_stderr(&self) -> String {
         normalize_output(&self.get_stderr(), &self.project_path)
     }
 
     fn assert_snapshot_matches(&self, path: &str) -> &Self {
-        let normalized = self.snapshot_stdout();
+        let normalized = self.get_normalized_stdout();
         let assertion = assertion();
 
         let mut snapshot_path = std::env::current_dir().expect("Failed to get current dir");
@@ -323,7 +323,7 @@ impl TestOutputExt for TestFailure {
     }
 
     fn assert_stderr_snapshot_matches(&self, path: &str) -> &Self {
-        let normalized = self.snapshot_stderr();
+        let normalized = self.get_normalized_stderr();
         let assertion = assertion();
 
         let mut snapshot_path = std::env::current_dir().expect("Failed to get current dir");
