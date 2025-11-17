@@ -1,0 +1,180 @@
+use crate::common::{acton_exe, assert_ui};
+use crate::support::project::ActonCommand;
+use fs_extra::dir::{CopyOptions, copy};
+use include_dir::{Dir, include_dir};
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tempfile::TempDir;
+
+pub struct FixtureProject {
+    tmp_dir: TempDir,
+    project_path: PathBuf,
+    enabled_slots: HashMap<String, Vec<usize>>,
+}
+
+impl FixtureProject {
+    /// Load a fixture project from tests/projects/{name}
+    pub fn load(name: &str) -> Self {
+        let tmp_dir = Self::copy_fixture_project(name);
+        let project_path = tmp_dir.path().join(name);
+        Self::patch_imports(&project_path);
+
+        Self {
+            tmp_dir,
+            project_path,
+            enabled_slots: HashMap::new(),
+        }
+    }
+
+    /// Enable a single slot in a file
+    ///
+    /// # Example
+    /// ```
+    /// FixtureProject::load("basic")
+    ///     .with_slot("contracts/counter.tolk", 1)
+    /// ```
+    pub fn with_slot(mut self, file: &str, slot: usize) -> Self {
+        let slots = self
+            .enabled_slots
+            .entry(file.to_string())
+            .or_insert_with(Vec::new);
+        slots.push(slot);
+        Self::enable_slot(&self.project_path, file, slot);
+        self
+    }
+
+    /// Enable multiple slots in a file
+    ///
+    /// # Example
+    /// ```
+    /// FixtureProject::load("basic")
+    ///     .with_slots("tests/counter_test.tolk", &[1, 2, 3])
+    /// ```
+    pub fn with_slots(mut self, file: &str, slots: &[usize]) -> Self {
+        for &slot in slots {
+            let slot_list = self
+                .enabled_slots
+                .entry(file.to_string())
+                .or_insert_with(Vec::new);
+            slot_list.push(slot);
+            Self::enable_slot(&self.project_path, file, slot);
+        }
+        self
+    }
+
+    /// Enable a slot in contract file (shorthand)
+    pub fn with_contract_slot(self, slot: usize) -> Self {
+        self.with_slot("contracts/counter.tolk", slot)
+    }
+
+    /// Enable multiple contract slots (shorthand)
+    pub fn with_contract_slots(self, slots: &[usize]) -> Self {
+        self.with_slots("contracts/counter.tolk", slots)
+    }
+
+    /// Enable a slot in test file (shorthand)
+    pub fn with_test_slot(self, slot: usize) -> Self {
+        self.with_slot("tests/counter_test.tolk", slot)
+    }
+
+    /// Enable multiple test slots (shorthand)
+    pub fn with_test_slots(self, slots: &[usize]) -> Self {
+        self.with_slots("tests/counter_test.tolk", slots)
+    }
+
+    /// Replace template variables in all files
+    ///
+    /// # Example
+    /// ```
+    /// let mut vars = HashMap::new();
+    /// vars.insert("VALUE", "100");
+    /// FixtureProject::load("basic")
+    ///     .with_template_vars(vars)
+    /// ```
+    pub fn with_template_vars(self, vars: HashMap<&str, &str>) -> Self {
+        for (key, value) in vars {
+            self.replace_in_all_files(&format!("{{{{ {} }}}}", key), value);
+        }
+        self
+    }
+
+    /// Get ActonCommand builder for this project
+    pub fn acton(&self) -> ActonCommand {
+        let cmd = snapbox::cmd::Command::new(acton_exe()).with_assert(assert_ui());
+        ActonCommand {
+            cmd,
+            project: Arc::new(crate::support::project::ProjectRef {
+                path: self.project_path.clone(),
+            }),
+        }
+    }
+
+    /// Get the project path
+    pub fn path(&self) -> &Path {
+        &self.project_path
+    }
+
+    fn copy_fixture_project(name: &str) -> TempDir {
+        static LIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/lib");
+
+        let tmp = TempDir::new().expect("Failed to create temp dir");
+        fs::create_dir_all(tmp.path().join("lib")).expect("Failed to create lib dir");
+        LIB_DIR
+            .extract(tmp.path().join("lib"))
+            .expect("Failed to extract lib");
+
+        let fixture_dir = Path::new("tests/projects").join(name);
+
+        let mut opts = CopyOptions::new();
+        opts.copy_inside = true;
+
+        copy(&fixture_dir, tmp.path(), &opts).expect("Failed to copy fixture project");
+
+        tmp
+    }
+
+    fn patch_imports(project_path: &PathBuf) {
+        let test_file = project_path.join("tests/counter_test.tolk");
+        if test_file.exists() {
+            let content = fs::read_to_string(&test_file).expect("Failed to read test file");
+            let new_content = content.replace("../../../../", "../../");
+            fs::write(&test_file, new_content).expect("Failed to write test file");
+        }
+    }
+
+    fn enable_slot(project_path: &PathBuf, file: &str, index: usize) {
+        let file_path = project_path.join(file);
+        if !file_path.exists() {
+            panic!("File {} does not exist in fixture project", file);
+        }
+
+        let content =
+            fs::read_to_string(&file_path).expect(&format!("Failed to read file {}", file));
+        let new_content = content.replace(&format!("// SLOT_{}: ", index), "");
+        fs::write(&file_path, new_content).expect(&format!("Failed to write file {}", file));
+    }
+
+    fn replace_in_all_files(&self, from: &str, to: &str) {
+        use walkdir::WalkDir;
+
+        for entry in WalkDir::new(&self.project_path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                if let Some(ext) = entry.path().extension() {
+                    if ext == "tolk" || ext == "toml" {
+                        let content =
+                            fs::read_to_string(entry.path()).expect("Failed to read file");
+                        if content.contains(from) {
+                            let new_content = content.replace(from, to);
+                            fs::write(entry.path(), new_content).expect("Failed to write file");
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
