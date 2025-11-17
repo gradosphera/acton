@@ -233,7 +233,7 @@ pub fn executor_line<'a>(i: &mut I<'a>) -> PResult<ExecutorLine<'a>> {
 }
 
 // Parse executor log line, skipping the prefix before "     "
-pub fn parse_executor_line(input: &str) -> Result<ExecutorLine, String> {
+pub fn parse_executor_line(input: &str) -> Result<ExecutorLine<'_>, String> {
     let parts: Vec<&str> = input.splitn(2, "	").collect();
     if parts.len() != 2 {
         return Err(format!("Invalid executor log format: {}", input));
@@ -246,7 +246,7 @@ pub fn parse_executor_line(input: &str) -> Result<ExecutorLine, String> {
     }
 }
 
-pub fn parse_executor_lines(input: &str) -> Vec<Result<ExecutorLine, String>> {
+pub fn parse_executor_lines(input: &str) -> Vec<Result<ExecutorLine<'_>, String>> {
     input
         .split_inclusive('\n')
         .filter(|line| !line.trim().is_empty())

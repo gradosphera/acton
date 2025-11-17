@@ -148,7 +148,7 @@ pub struct InstalledSendMessageAction {
 }
 
 impl InstalledSendMessageAction {
-    pub fn message(&self) -> Option<RelaxedMessage> {
+    pub fn message(&self) -> Option<RelaxedMessage<'_>> {
         self.msg_cell.parse::<RelaxedMessage>().ok()
     }
 }

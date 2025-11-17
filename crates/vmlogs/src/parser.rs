@@ -36,7 +36,7 @@ impl<'a> VmStack<'a> {
     }
 }
 
-fn parse_stack_content(input: &str) -> Vec<VmStackValue> {
+fn parse_stack_content(input: &str) -> Vec<VmStackValue<'_>> {
     let content = input.trim_start_matches('[').trim_end_matches(']');
     if content.is_empty() {
         return Vec::new();
@@ -352,7 +352,7 @@ pub fn vm_line<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
     .parse_next(i)
 }
 
-pub fn parse_lines(input: &str) -> Vec<Result<VmLine, String>> {
+pub fn parse_lines(input: &str) -> Vec<Result<VmLine<'_>, String>> {
     input
         .split_inclusive('\n')
         .map(|line| {

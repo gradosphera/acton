@@ -1,207 +1,243 @@
-use assert_cmd::cargo;
 use fs_extra::dir::{CopyOptions, copy};
 use include_dir::{Dir, include_dir};
-use once_cell::sync::Lazy;
-use predicates::str::contains;
-use regex::Regex;
+use snapbox::IntoData;
+use snapbox::cmd::OutputAssert;
+use snapbox::filter::Filter;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+    }};
+}
+
 #[test]
-fn test_help_works() {
-    let mut cmd = cargo::cargo_bin_cmd!("acton");
-    cmd.arg("test")
+fn test_acton_help() {
+    snapbox::cmd::Command::acton_ui()
         .arg("--help")
         .assert()
         .success()
-        .stdout(contains("Usage: acton test"));
+        .stdout_eq(snapbox::file!["testsuite/acton/stdout.txt"])
+        .stderr_eq(snapbox::str![""]);
+}
+
+#[test]
+fn test_acton_build_help() {
+    snapbox::cmd::Command::acton_ui()
+        .arg("build")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::file!["testsuite/build/stdout.txt"])
+        .stderr_eq(snapbox::str![""]);
+}
+
+static MIN_LITERAL_REDACTIONS: &[(&str, &str)] = &[
+    ("[EXE]", std::env::consts::EXE_SUFFIX),
+    ("[BROKEN_PIPE]", "Broken pipe (os error 32)"),
+    ("[BROKEN_PIPE]", "The pipe is being closed. (os error 232)"),
+    // Unix message for an entity was not found
+    ("[NOT_FOUND]", "No such file or directory (os error 2)"),
+    // Windows message for an entity was not found
+    (
+        "[NOT_FOUND]",
+        "The system cannot find the file specified. (os error 2)",
+    ),
+    (
+        "[NOT_FOUND]",
+        "The system cannot find the path specified. (os error 3)",
+    ),
+    ("[NOT_FOUND]", "Access is denied. (os error 5)"),
+    ("[NOT_FOUND]", "program not found"),
+    // Unix message for exit status
+    ("[EXIT_STATUS]", "exit status"),
+    // Windows message for exit status
+    ("[EXIT_STATUS]", "exit code"),
+];
+
+pub fn assert_ui() -> snapbox::Assert {
+    let mut subs = snapbox::Redactions::new();
+    subs.extend(MIN_LITERAL_REDACTIONS.into_iter().cloned())
+        .unwrap();
+    add_regex_redactions(&mut subs);
+
+    snapbox::Assert::new()
+        .action_env(snapbox::assert::DEFAULT_ACTION_ENV)
+        .redact_with(subs)
+}
+
+fn add_regex_redactions(subs: &mut snapbox::Redactions) {
+    subs.insert("[TIME]", regex!(r"(\d+\.)?\d+ms")).unwrap();
+    subs.insert("[LINE]", regex!(r"(\.tolk):\d+:\d+")).unwrap();
+}
+
+pub fn acton_exe() -> PathBuf {
+    snapbox::cmd::cargo_bin!("acton").to_path_buf()
+}
+
+pub trait ActonCommandExt {
+    fn acton_ui() -> Self;
+}
+
+impl ActonCommandExt for snapbox::cmd::Command {
+    fn acton_ui() -> Self {
+        Self::new(acton_exe()).with_assert(assert_ui())
+    }
 }
 
 #[test]
 fn test_can_test_basic_project() {
     let setup = ProjectSetup::new("basic");
-    let (stdout, _, status) = setup.run_tests(None);
+    let output = setup.run_tests(None);
 
-    assert!(status.success());
+    let assert = output.success();
 
-    assert!(stdout.contains("> ./tests/counter_test.tolk (2 tests)"));
-    assert!(stdout.contains("✓ should increase counter"));
-    assert!(stdout.contains("✓ should reset counter"));
-    assert!(stdout.contains("✓ 2 passed in 1 file"));
+    let stdout = assert.get_output().stdout.clone();
+    let content = normalize_content(setup, stdout);
+
+    assertion().eq(
+        content,
+        snapbox::file!["projects/basic/outs/test_can_test_basic_project.stdout.txt"],
+    );
 }
 
 #[test]
 fn test_can_test_basic_project_with_failing_contract_code() {
     let setup = ProjectSetup::new("basic").with_enabled_contract_slot(1);
-    let (stdout, _, status) = setup.run_tests(None);
+    let output = setup.run_tests(None);
 
-    println!("{}", stdout);
-    assert!(!status.success());
+    let assert = output.failure();
 
-    assert!(stdout.contains(" > ./tests/counter_test.tolk (2 tests)
-  ✗ should increase counter <TIME>
-    └─ Error: expect(actual).toHaveSuccessfulTx(expected)
-        N/A -> deployer A
-        └── IncreaseCounter 0.1 TON -> Counter B                                        gas=1513 exit_code=10 aborted
-            └── Compute phase failed: Dictionary error
+    let stdout = assert.get_output().stdout.clone();
+    let content = normalize_content(setup, stdout);
 
-        Cannot find transaction from deployer A EQBvDB..FHByMJ to Counter B EQANZp..QQ5GsV
-        with:
-          exit_code=0
-      └─ at ./tests/counter_test.tolk:<LINE>"));
-    assert!(stdout.contains("  ✗ should reset counter <TIME>
-    └─ Error: expect(actual).toHaveSuccessfulTx(expected)
-        N/A -> deployer A
-        └── IncreaseCounter 0.1 TON -> Counter B                                        gas=1513 exit_code=10 aborted
-            └── Compute phase failed: Dictionary error
-
-        Cannot find transaction from deployer A EQBvDB..FHByMJ to Counter B EQANZp..QQ5GsV
-        with:
-          exit_code=0
-      └─ at ./tests/counter_test.tolk:<LINE>"));
+    assertion().eq(
+        content,
+        snapbox::file![
+            "projects/basic/outs/test_can_test_basic_project_with_failing_contract_code.stdout.txt"
+        ],
+    );
 }
 
 #[test]
 fn test_can_test_basic_project_with_failing_contract_code_with_backtrace_full() {
     let setup = ProjectSetup::new("basic").with_enabled_contract_slot(1);
-    let (stdout, _, status) = setup.run_tests(Some("full"));
+    let output = setup.run_tests(Some("full"));
 
-    println!("{}", stdout);
-    assert!(!status.success());
+    let assert = output.failure();
 
-    assert!(stdout.contains(" > ./tests/counter_test.tolk (2 tests)
-  ✗ should increase counter <TIME>
-    └─ Error: expect(actual).toHaveSuccessfulTx(expected)
-        N/A -> deployer A
-        └── IncreaseCounter 0.1 TON -> Counter B                                        gas=1513 exit_code=10 aborted
-            ├── Compute phase failed: Dictionary error
-            └── at contracts/counter.tolk:<LINE>
-                   __throw   at contracts/counter.tolk:<LINE>
+    let stdout = assert.get_output().stdout.clone();
+    let content = normalize_content(setup, stdout);
 
-
-        Cannot find transaction from deployer A EQBvDB..FHByMJ to Counter B EQANZp..QQ5GsV
-        with:
-          exit_code=0
-      └─ at ./tests/counter_test.tolk:<LINE>"));
-    assert!(stdout.contains("  ✗ should reset counter <TIME>
-    └─ Error: expect(actual).toHaveSuccessfulTx(expected)
-        N/A -> deployer A
-        └── IncreaseCounter 0.1 TON -> Counter B                                        gas=1513 exit_code=10 aborted
-            ├── Compute phase failed: Dictionary error
-            └── at contracts/counter.tolk:<LINE>
-                   __throw   at contracts/counter.tolk:<LINE>
-
-
-        Cannot find transaction from deployer A EQBvDB..FHByMJ to Counter B EQANZp..QQ5GsV
-        with:
-          exit_code=0
-      └─ at ./tests/counter_test.tolk:<LINE>"));
+    assertion().eq(
+        content,
+        snapbox::file!["projects/basic/outs/test_can_test_basic_project_with_failing_contract_code_with_backtrace_full.stdout.txt"],
+    );
 }
 
 #[test]
 fn test_can_test_project_with_compilation_error() {
     let setup = ProjectSetup::new("with_compilation_error").with_enabled_contract_slot(1);
-    let (stdout, stderr, status) = setup.run_tests(None);
+    let output = setup.run_tests(None);
 
-    println!("{}", stdout);
-    println!("{}", stderr);
-    assert!(!status.success());
+    let assert = output.failure();
 
-    assert!(stderr.contains("<ROOT>/contracts/counter.tolk:<LINE>: error: field `body2` doesn't exist in type `InMessage`
+    let stderr = assert.get_output().stderr.clone();
+    let content = normalize_content(setup, stderr);
 
-    // in function `onInternalMessage`
-   6 |     val msg = lazy AllowedMessage.fromSlice(in.body2);
-     |                                                ^^^^^
-
-Error: Build failed with 1 error"));
+    assertion().eq(
+        content,
+        snapbox::file!["projects/with_compilation_error/outs/test_can_test_project_with_compilation_error.stderr.txt"],
+    );
 }
 
 #[test]
 fn test_can_test_project_with_gas_limit_failure() {
     let setup = ProjectSetup::new("basic").with_enabled_test_slot(1);
-    let (stdout, stderr, status) = setup.run_tests(None);
+    let output = setup.run_tests(None);
 
-    println!("{}", stdout);
-    println!("{}", stderr);
-    assert!(!status.success());
+    let assert = output.failure();
 
-    assert!(stdout.contains(
-        " > ./tests/counter_test.tolk (2 tests)
-  ✗ should increase counter <TIME>
-    └─ Gas limit exceeded: used 153499, limit 100"
-    ));
+    let stdout = assert.get_output().stdout.clone();
+    let content = normalize_content(setup, stdout);
+
+    assertion().eq(
+        content,
+        snapbox::file![
+            "projects/basic/outs/test_can_test_project_with_gas_limit_failure.stdout.txt"
+        ],
+    );
 }
 
 #[test]
 fn test_can_test_project_with_simple_expect_failure() {
     let setup = ProjectSetup::new("basic").with_enabled_test_slot(2);
-    let (stdout, stderr, status) = setup.run_tests(None);
+    let output = setup.run_tests(None);
 
-    println!("{}", stdout);
-    println!("{}", stderr);
-    assert!(!status.success());
+    let assert = output.failure();
 
-    assert!(stdout.contains(
-        " > ./tests/counter_test.tolk (2 tests)
-  ✗ should increase counter <TIME>
-    └─ Error: expect(actual).toEqual(expected)
-        (
-            1,
-            2
-        )
-      └─ at ./tests/counter_test.tolk:<LINE>"
-    ));
+    let stdout = assert.get_output().stdout.clone();
+    let content = normalize_content(setup, stdout);
+
+    assertion().eq(
+        content,
+        snapbox::file![
+            "projects/basic/outs/test_can_test_project_with_simple_expect_failure.stdout.txt"
+        ],
+    );
 }
 
 #[test]
 fn test_can_test_project_with_exit_code_mismatch() {
     let setup = ProjectSetup::new("basic").with_enabled_test_slot(3);
-    let (stdout, stderr, status) = setup.run_tests(None);
+    let output = setup.run_tests(None);
 
-    println!("{}", stdout);
-    println!("{}", stderr);
-    assert!(!status.success());
+    let assert = output.failure();
 
-    assert!(stdout.contains(
-        "  ✗ should reset counter <TIME>
-    └─ Expected exit_code=100, got=0"
-    ));
+    let stdout = assert.get_output().stdout.clone();
+    let content = normalize_content(setup, stdout);
+
+    assertion().eq(
+        content,
+        snapbox::file![
+            "projects/basic/outs/test_can_test_project_with_exit_code_mismatch.stdout.txt"
+        ],
+    );
 }
 
 #[test]
 fn test_can_test_project_with_throw_in_test() {
     let setup = ProjectSetup::new("basic").with_enabled_test_slot(4);
-    let (stdout, stderr, status) = setup.run_tests(None);
+    let output = setup.run_tests(None);
 
-    println!("{}", stdout);
-    println!("{}", stderr);
-    assert!(!status.success());
+    let assert = output.failure();
 
-    assert!(stdout.contains(
-        "  ✗ should reset counter <TIME>
-    └─ exit_code=9
-      ├─ Re-run with --backtrace full to get more information
-      └─ Phase: Compute phase"
-    ));
+    let stdout = assert.get_output().stdout.clone();
+    let content = normalize_content(setup, stdout);
+
+    assertion().eq(
+        content,
+        snapbox::file!["projects/basic/outs/test_can_test_project_with_throw_in_test.stdout.txt"],
+    );
 }
 
 #[test]
 fn test_can_test_project_with_throw_in_test_and_backtrace_full() {
     let setup = ProjectSetup::new("basic").with_enabled_test_slot(4);
-    let (stdout, stderr, status) = setup.run_tests(Some("full"));
+    let output = setup.run_tests(Some("full"));
 
-    println!("{}", stdout);
-    println!("{}", stderr);
-    assert!(!status.success());
+    let assert = output.failure();
 
-    assert!(stdout.contains(
-        "  ✗ should reset counter <TIME>
-    └─ exit_code=9
-      ├─ at tests/counter_test.tolk:<LINE>
-      │     __throw   at tests/counter_test.tolk:<LINE>
-      └─ Phase: Compute phase"
-    ));
+    let stdout = assert.get_output().stdout.clone();
+    let content = normalize_content(setup, stdout);
+
+    assertion().eq(
+        content,
+        snapbox::file!["projects/basic/outs/test_can_test_project_with_throw_in_test_and_backtrace_full.stdout.txt"],
+    );
 }
 
 #[test]
@@ -209,36 +245,37 @@ fn test_can_test_project_with_debug_output_in_contract() {
     let setup = ProjectSetup::new("basic")
         .with_enabled_contract_slot(2)
         .with_enabled_test_slot(5);
-    let (stdout, stderr, status) = setup.run_tests(Some("full"));
+    let output = setup.run_tests(Some("full"));
 
-    println!("{}", stdout);
-    println!("{}", stderr);
-    assert!(status.success());
+    let assert = output.success();
 
-    assert!(stdout.contains(
-        " > ./tests/counter_test.tolk (2 tests)
-  ✓ should increase counter <TIME>
-    └─ Test output:
-       N/A -> deployer A
-       └── IncreaseCounter 0.1 TON -> Counter B                                        gas=1508"
-    ));
+    let stdout = assert.get_output().stdout.clone();
+    let content = normalize_content(setup, stdout);
+
+    assertion().eq(
+        content,
+        snapbox::file![
+            "projects/basic/outs/test_can_test_project_with_debug_output_in_contract.stdout.txt"
+        ],
+    );
 }
 
 #[test]
 fn test_can_test_project_with_stderr_output_in_test() {
     let setup = ProjectSetup::new("basic").with_enabled_test_slot(6);
-    let (stdout, stderr, status) = setup.run_tests(Some("full"));
+    let output = setup.run_tests(Some("full"));
 
-    println!("{}", stdout);
-    println!("{}", stderr);
-    assert!(status.success());
+    let assert = output.success();
 
-    assert!(stdout.contains(
-        " > ./tests/counter_test.tolk (2 tests)
-  ✓ should increase counter <TIME>
-    └─ Test stderr:
-       error output"
-    ));
+    let stderr = assert.get_output().stdout.clone();
+    let content = normalize_content(setup, stderr);
+
+    assertion().eq(
+        content,
+        snapbox::file![
+            "projects/basic/outs/test_can_test_project_with_stderr_output_in_test.stderr.txt"
+        ],
+    );
 }
 
 struct ProjectSetup {
@@ -258,20 +295,30 @@ impl ProjectSetup {
         }
     }
 
-    fn with_enabled_contract_slot(mut self, slot: usize) -> Self {
+    fn with_enabled_contract_slot(self, slot: usize) -> Self {
         enable_slot(&self.project_path, "contracts/counter.tolk", slot);
         self
     }
 
-    fn with_enabled_test_slot(mut self, slot: usize) -> Self {
+    fn with_enabled_test_slot(self, slot: usize) -> Self {
         enable_slot(&self.project_path, "tests/counter_test.tolk", slot);
         self
     }
 
-    fn run_tests(&self, backtrace: Option<&str>) -> (String, String, std::process::ExitStatus) {
-        let (stdout, stderr, status) = run_all_tests_in(&self.project_path, backtrace);
-        let (stdout, stderr) = process_test_output(&stdout, &stderr, &self.project_path);
-        (stdout, stderr, status)
+    fn run_tests(&self, backtrace: Option<&str>) -> OutputAssert {
+        let mut cmd = snapbox::cmd::Command::acton_ui()
+            .arg("test")
+            .env("NO_COLOR", "1")
+            .current_dir(&self.project_path)
+            .arg(".");
+
+        cmd = if backtrace == Some("full") {
+            cmd.arg("--backtrace").arg("full")
+        } else {
+            cmd
+        };
+
+        cmd.assert()
     }
 
     fn copy_fixture_project(name: &str) -> TempDir {
@@ -307,59 +354,27 @@ fn patch_imports(full_path: &PathBuf) {
     fs::write(&counter_path, new_content).unwrap();
 }
 
-fn run_all_tests_in(
-    tmp: &PathBuf,
-    backtrace: Option<&str>,
-) -> (String, String, std::process::ExitStatus) {
-    let mut cmd = cargo::cargo_bin_cmd!("acton");
-    let cmd = cmd
-        .arg("test")
-        .env("NO_COLOR", "1")
-        .current_dir(tmp)
-        .arg(".");
-
-    if backtrace == Some("full") {
-        cmd.arg("--backtrace");
-        cmd.arg("full");
-    }
-
-    let output = cmd.output().unwrap();
-
-    let stdout = strip_ansi(&String::from_utf8(output.stdout).unwrap());
-    let stderr = strip_ansi(&String::from_utf8(output.stderr).unwrap());
-    (stdout, stderr, output.status)
-}
-
 fn strip_ansi(s: &str) -> String {
     let bytes = strip_ansi_escapes::strip(s.as_bytes());
     String::from_utf8(bytes).unwrap()
 }
 
-fn process_test_output(stdout: &str, stderr: &str, project_path: &PathBuf) -> (String, String) {
-    let stdout = sanitize_output(strip_ansi(stdout).as_str(), project_path);
-    let stderr = sanitize_output(strip_ansi(stderr).as_str(), project_path);
-    (stdout, stderr)
+fn assertion() -> snapbox::Assert {
+    snapbox::Assert::new().action_env("SNAPSHOTS")
 }
 
-fn sanitize_output(s: &str, full_path: &PathBuf) -> String {
-    static TIME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\d+ms").unwrap());
-    static LINE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(\.tolk):\d+:\d+").unwrap());
-
-    let s = TIME_RE.replace_all(s, "<TIME>").to_string();
-    let s = LINE_RE.replace_all(&s, "$1:<LINE>").to_string();
-    let s = s
-        .replace(&full_path.to_string_lossy().to_string(), "<ROOT>")
-        .to_string();
-    let s = s.replace("/private", "").to_string();
-
-    s.lines()
-        .map(|l| {
-            let is_whitespace_only = l.chars().all(|ch| ch.is_whitespace());
-            if is_whitespace_only {
-                return "".to_string();
-            }
-            return l.to_string();
-        })
-        .collect::<Vec<String>>()
-        .join("\n")
+fn normalize_content(setup: ProjectSetup, stdout: Vec<u8>) -> String {
+    let content = strip_ansi(String::from_utf8(stdout.clone()).unwrap().as_str()).into_data();
+    let content = snapbox::filter::FilterPaths.filter(content.into_data());
+    let content = snapbox::filter::FilterNewlines.filter(content);
+    let content = content.render().expect("came in as a String");
+    let assert1 = assert_ui();
+    let mut redactions = assert1.redactions().clone();
+    let tmp_dir = setup.tmp_dir.path().to_string_lossy().to_string();
+    redactions.insert("[ROOT]", tmp_dir.clone()).unwrap();
+    redactions
+        .insert("[ROOT]", "/private".to_owned() + tmp_dir.as_str())
+        .unwrap();
+    let content = redactions.redact(&content);
+    content
 }
