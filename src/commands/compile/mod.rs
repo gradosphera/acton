@@ -43,16 +43,6 @@ pub fn compile_cmd(
             path, elapsed
         );
 
-        if !json {
-            println!(
-                "  {} {} {} ({})",
-                "Using cached".bold().green(),
-                path.dimmed(),
-                "(from .acton/cache)".dimmed(),
-                format!("{:?}", elapsed).dimmed()
-            );
-        }
-
         let code = Boc::decode_base64(cached_entry.code_boc64.clone())?;
         let code_hex = Boc::encode_hex(&code);
 
