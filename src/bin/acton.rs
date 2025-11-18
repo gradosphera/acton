@@ -78,6 +78,14 @@ enum Commands {
         include: Vec<String>,
         #[arg(long, help = "Clear compilation cache before running")]
         clear_cache: bool,
+        #[arg(
+            long,
+            default_value = "test-results",
+            help = "JUnit XML output directory"
+        )]
+        junit_path: Option<String>,
+        #[arg(long, help = "Merge all test suites into a single JUnit XML file")]
+        junit_merge: bool,
     },
     #[command(about = "Execute a Tolk script file")]
     Script {
@@ -159,6 +167,14 @@ fn example_test_usage() -> StyledStr {
         (
             "Enable coverage collection",
             "acton test . --coverage --format lcov",
+        ),
+        (
+            "Generate JUnit XML report",
+            "acton test . --reporter junit --junit-path ./test-results",
+        ),
+        (
+            "Generate merged JUnit XML report",
+            "acton test . --reporter junit --junit-merge",
         ),
         ("Run in debug mode", "acton test my_test.tolk --debug"),
     ]);
@@ -263,6 +279,8 @@ fn main() {
             exclude,
             include,
             clear_cache,
+            junit_path,
+            junit_merge,
         } => {
             let mut report_formats = Vec::new();
 
@@ -274,9 +292,10 @@ fn main() {
                 match format_str.to_lowercase().as_str() {
                     "console" => report_formats.push(ReportFormat::Console),
                     "teamcity" => report_formats.push(ReportFormat::TeamCity),
+                    "junit" => report_formats.push(ReportFormat::JUnit),
                     _ => {
                         eprintln!(
-                            "Warning: Unknown report format '{}'. Supported formats: console, teamcity",
+                            "Warning: Unknown report format '{}'. Supported formats: console, teamcity, junit",
                             format_str
                         );
                     }
@@ -299,6 +318,8 @@ fn main() {
                 include,
                 clear_cache,
                 report_formats,
+                junit_path,
+                junit_merge,
             );
             let result = test_cmd(path, &config);
             if let Err(err) = result {
@@ -404,6 +425,8 @@ fn create_test_config(
     include: Vec<String>,
     clear_cache: bool,
     report_formats: Vec<ReportFormat>,
+    junit_path: Option<String>,
+    junit_merge: bool,
 ) -> TestConfig {
     let acton_config = ActonConfig::load().ok();
 
@@ -429,6 +452,8 @@ fn create_test_config(
                 None
             },
             None,
+            junit_path,
+            junit_merge,
         );
     }
 
@@ -444,5 +469,7 @@ fn create_test_config(
         include_patterns: include,
         clear_cache,
         report_formats,
+        junit_path,
+        junit_merge,
     }
 }

@@ -220,6 +220,8 @@ impl TestSettings {
         exclude_override: Option<Vec<String>>,
         include_override: Option<Vec<String>>,
         clear_cache_override: Option<bool>,
+        junit_path_override: Option<String>,
+        junit_merge_override: bool,
     ) -> TestConfig {
         TestConfig {
             filter: filter_override.or_else(|| self.filter.clone()),
@@ -235,6 +237,8 @@ impl TestSettings {
             include_patterns: include_override
                 .unwrap_or_else(|| self.include.clone().unwrap_or_default()),
             clear_cache: clear_cache_override.unwrap_or(false),
+            junit_path: junit_path_override,
+            junit_merge: junit_merge_override,
         }
     }
 }

@@ -4,6 +4,7 @@ use crate::commands::test::coverage::{
 };
 use crate::commands::test::instrumentation::inject_locations_into_expect_calls;
 use crate::commands::test::reporting::console::{ConsoleConfig, ConsoleReporter};
+use crate::commands::test::reporting::junit::{JUnitConfig, JUnitReporter};
 use crate::commands::test::reporting::teamcity::TeamCityReporter;
 use crate::commands::test::reporting::{
     ReporterManager, TestExecutionContext, TestReport, TestStatus, TestSuiteStats,
@@ -52,6 +53,7 @@ const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 pub enum ReportFormat {
     Console,
     TeamCity,
+    JUnit,
 }
 
 #[derive(Debug, Clone)]
@@ -67,6 +69,8 @@ pub struct TestConfig {
     pub exclude_patterns: Vec<String>,
     pub include_patterns: Vec<String>,
     pub clear_cache: bool,
+    pub junit_path: Option<String>,
+    pub junit_merge: bool,
 }
 
 #[derive(Debug)]
@@ -129,6 +133,15 @@ impl<'a> TestRunner<'a> {
 
         if config.report_formats.contains(&ReportFormat::TeamCity) {
             reporter_manager.add_reporter(Box::new(TeamCityReporter::new()));
+        }
+
+        if config.report_formats.contains(&ReportFormat::JUnit) {
+            let mut junit_config = JUnitConfig::default();
+            if let Some(ref path) = config.junit_path {
+                junit_config.output_dir = path.into();
+            }
+            junit_config.merge_suites = config.junit_merge;
+            reporter_manager.add_reporter(Box::new(JUnitReporter::new(junit_config)));
         }
     }
 
