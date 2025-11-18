@@ -115,6 +115,10 @@ impl FixtureProject {
             build_graph: None,
             disasm_string: None,
             disasm_output: None,
+            compile_json: false,
+            compile_base64_only: false,
+            compile_boc: None,
+            compile_fift: None,
         }
     }
 

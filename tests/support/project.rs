@@ -457,6 +457,10 @@ impl Project {
             build_graph: None,
             disasm_string: None,
             disasm_output: None,
+            compile_json: false,
+            compile_base64_only: false,
+            compile_boc: None,
+            compile_fift: None,
         }
     }
 
@@ -479,6 +483,10 @@ pub struct ActonCommand {
     pub(crate) build_graph: Option<Option<String>>,
     pub(crate) disasm_string: Option<String>,
     pub(crate) disasm_output: Option<String>,
+    pub(crate) compile_json: bool,
+    pub(crate) compile_base64_only: bool,
+    pub(crate) compile_boc: Option<String>,
+    pub(crate) compile_fift: Option<String>,
 }
 
 impl ActonCommand {
@@ -561,6 +569,35 @@ impl ActonCommand {
     /// ```
     pub fn with_output(mut self, output_path: &str) -> Self {
         self.disasm_output = Some(output_path.to_string());
+        self
+    }
+
+    pub fn compile(mut self, file_path: &str) -> Self {
+        self.cmd = self
+            .cmd
+            .arg("compile")
+            .arg(file_path)
+            .current_dir(&self.project.path);
+        self
+    }
+
+    pub fn with_json(mut self) -> Self {
+        self.compile_json = true;
+        self
+    }
+
+    pub fn base64_only(mut self) -> Self {
+        self.compile_base64_only = true;
+        self
+    }
+
+    pub fn with_boc_output(mut self, boc_path: &str) -> Self {
+        self.compile_boc = Some(boc_path.to_string());
+        self
+    }
+
+    pub fn with_fift_output(mut self, fift_path: &str) -> Self {
+        self.compile_fift = Some(fift_path.to_string());
         self
     }
 
@@ -680,6 +717,22 @@ impl ActonCommand {
 
         if let Some(output_file) = self.disasm_output {
             self.cmd = self.cmd.arg("--output").arg(output_file);
+        }
+
+        if self.compile_json {
+            self.cmd = self.cmd.arg("--json");
+        }
+
+        if self.compile_base64_only {
+            self.cmd = self.cmd.arg("--base64-only");
+        }
+
+        if let Some(boc_path) = self.compile_boc {
+            self.cmd = self.cmd.arg("--boc").arg(boc_path);
+        }
+
+        if let Some(fift_path) = self.compile_fift {
+            self.cmd = self.cmd.arg("--fift").arg(fift_path);
         }
 
         self.cmd = self.cmd.env("NO_COLOR", "1");

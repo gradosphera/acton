@@ -509,6 +509,7 @@ version = "0.1.0"
 dependencies = [
  "abi",
  "anyhow",
+ "base64",
  "chrono",
  "clap",
  "color-print",

@@ -1,0 +1,7 @@
+  Compiling contracts/undefined.tolk
+✗ Compilation failed [ROOT]/contracts/undefined[LINE]: error: undefined symbol `nonexistent`
+
+    // in function `onInternalMessage`
+   3 |                 val x = nonexistent();
+     |                         ^^^^^^^^^^^
+

@@ -1,0 +1,321 @@
+use crate::support::{ProjectBuilder, TestOutputExt};
+use std::fs;
+
+const SIMPLE_CONTRACT: &str = r#"
+fun onInternalMessage(in: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
+#[test]
+fn test_compile_simple_contract() {
+    let project = ProjectBuilder::new("compile-simple")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_contains("Code in base64")
+        .assert_contains("Code in hex")
+        .assert_contains("Code hash hex");
+}
+
+#[test]
+fn test_compile_file_not_found() {
+    let project = ProjectBuilder::new("compile-not-found").build();
+
+    project
+        .acton()
+        .compile("nonexistent.tolk")
+        .run()
+        .failure()
+        .assert_contains("No such file or directory");
+}
+
+#[test]
+fn test_compile_not_a_file() {
+    let project = ProjectBuilder::new("compile-dir")
+        .contract("test", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts")
+        .run()
+        .failure()
+        .assert_stderr_contains("is not a file");
+}
+
+#[test]
+fn test_compile_wrong_extension() {
+    let project = ProjectBuilder::new("compile-wrong-ext").build();
+
+    fs::create_dir_all(project.path().join("src")).unwrap();
+    fs::write(project.path().join("src/test.txt"), "some content").unwrap();
+
+    project
+        .acton()
+        .compile("src/test.txt")
+        .run()
+        .failure()
+        .assert_stderr_contains("must end with .tolk");
+}
+
+#[test]
+fn test_compile_syntax_error() {
+    let project = ProjectBuilder::new("compile-syntax")
+        .contract("broken", "fun invalid {{{")
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/broken.tolk")
+        .run()
+        .failure()
+        .assert_contains("Compilation failed");
+}
+
+#[test]
+fn test_compile_undefined_symbol() {
+    let project = ProjectBuilder::new("compile-undefined")
+        .contract(
+            "undefined",
+            r#"
+            fun onInternalMessage(in: InMessage) {
+                val x = nonexistent();
+            }
+            fun onBouncedMessage(_: InMessageBounced) {}
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/undefined.tolk")
+        .run()
+        .failure()
+        .assert_snapshot_matches("integration/snapshots/test_compile_undefined_symbol.stdout.txt");
+}
+
+// ========================================
+// Cache Tests
+// ========================================
+
+#[test]
+fn test_compile_cache_hit() {
+    let project = ProjectBuilder::new("compile-cache")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    // First compilation from source
+    let first = project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .run()
+        .success();
+
+    first.assert_contains("Compilation successful");
+
+    // Second compilation from cache
+    let second = project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .run()
+        .success();
+
+    second.assert_contains("Compilation successful (from cache)");
+}
+
+#[test]
+fn test_compile_cache_invalidation_on_change() {
+    let project = ProjectBuilder::new("compile-cache-invalidate")
+        .contract("test", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/test.tolk")
+        .run()
+        .success();
+
+    fs::write(
+        project.path().join("contracts/test.tolk"),
+        r#"
+        fun onInternalMessage(in: InMessage) {
+            // Modified
+        }
+        fun onBouncedMessage(_: InMessageBounced) {}
+    "#,
+    )
+    .unwrap();
+
+    let output = project
+        .acton()
+        .compile("contracts/test.tolk")
+        .run()
+        .success();
+
+    output.assert_not_contains("from cache");
+}
+
+#[test]
+fn test_compile_with_clear_cache() {
+    let project = ProjectBuilder::new("compile-clear")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    // First compilation
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .run()
+        .success();
+
+    // Second compilation should use cache
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .run()
+        .success()
+        .assert_contains("from cache");
+
+    // Third compilation with clear-cache
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .clear_cache()
+        .run()
+        .success()
+        .assert_contains("Cache cleared")
+        .assert_not_contains("from cache");
+}
+
+// ========================================
+// Output Format Tests
+// ========================================
+
+#[test]
+fn test_compile_json_output() {
+    let project = ProjectBuilder::new("compile-json")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    let output = project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_json()
+        .run()
+        .success();
+
+    let stdout = output.get_stdout();
+    assert!(stdout.contains("\"success\": true"));
+    assert!(stdout.contains("\"code_boc64\""));
+    assert!(stdout.contains("\"code_hex\""));
+    assert!(stdout.contains("\"code_hash_hex\""));
+}
+
+#[test]
+fn test_compile_json_error() {
+    let project = ProjectBuilder::new("compile-json-err")
+        .contract("broken", "fun invalid {{{")
+        .build();
+
+    let output = project
+        .acton()
+        .compile("contracts/broken.tolk")
+        .with_json()
+        .run()
+        .failure();
+
+    let stdout = output.get_stdout();
+    assert!(stdout.contains("\"success\": false"));
+    assert!(stdout.contains("\"error\""));
+}
+
+#[test]
+fn test_compile_base64_only() {
+    let project = ProjectBuilder::new("compile-base64")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    let output = project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .base64_only()
+        .run()
+        .success();
+
+    let stdout = output.get_stdout().trim().to_string();
+
+    assert!(!stdout.contains("Compilation successful"));
+    assert!(!stdout.contains("Code in base64"));
+
+    #[allow(deprecated)]
+    let decoded = base64::decode(&stdout).expect("Decoding failed");
+    assert!(decoded.len() > 0);
+}
+
+// ========================================
+// File Output Tests
+// ========================================
+
+#[test]
+fn test_compile_with_boc_output() {
+    let project = ProjectBuilder::new("compile-boc-out")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_boc_output("output.boc")
+        .run()
+        .success();
+
+    let boc_file = project.path().join("output.boc");
+    assert!(boc_file.exists(), "BoC file should be created");
+
+    let content = fs::read(&boc_file).unwrap();
+    assert!(!content.is_empty(), "BoC file should not be empty");
+}
+
+#[test]
+fn test_compile_with_fift_output() {
+    let project = ProjectBuilder::new("compile-fift-out")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_fift_output("output.fif")
+        .run()
+        .success();
+
+    let fift_file = project.path().join("output.fif");
+    assert!(fift_file.exists(), "Fift file should be created");
+
+    let content = fs::read_to_string(&fift_file).unwrap();
+    assert!(!content.is_empty(), "Fift file should not be empty");
+}
+
+#[test]
+fn test_compile_with_both_outputs() {
+    let project = ProjectBuilder::new("compile-both-out")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_boc_output("output.boc")
+        .with_fift_output("output.fif")
+        .run()
+        .success();
+
+    assert!(project.path().join("output.boc").exists());
+    assert!(project.path().join("output.fif").exists());
+}
