@@ -1,0 +1,18 @@
+   Compiling contracts
+   Compiling simple
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+··x
+
+stdout | ./tests/first_test_test.tolk > test_first
+First test output
+
+FAIL test_second_fail: expect(<actual>).toEqual(<expected>)
+  ./tests/second_test_test[LINE]
+
+stdout | ./tests/second_test_test.tolk > test_second_fail
+This test will fail
+
+stderr | ./tests/second_test_test.tolk > test_second_fail
+Error output

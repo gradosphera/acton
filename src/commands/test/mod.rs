@@ -4,6 +4,7 @@ use crate::commands::test::coverage::{
 };
 use crate::commands::test::instrumentation::inject_locations_into_expect_calls;
 use crate::commands::test::reporting::console::{ConsoleConfig, ConsoleReporter};
+use crate::commands::test::reporting::dot::DotReporter;
 use crate::commands::test::reporting::junit::{JUnitConfig, JUnitReporter};
 use crate::commands::test::reporting::teamcity::TeamCityReporter;
 use crate::commands::test::reporting::{
@@ -54,6 +55,7 @@ pub enum ReportFormat {
     Console,
     TeamCity,
     JUnit,
+    Dot,
 }
 
 #[derive(Debug, Clone)]
@@ -142,6 +144,10 @@ impl<'a> TestRunner<'a> {
             }
             junit_config.merge_suites = config.junit_merge;
             reporter_manager.add_reporter(Box::new(JUnitReporter::new(junit_config)));
+        }
+
+        if config.report_formats.contains(&ReportFormat::Dot) {
+            reporter_manager.add_reporter(Box::new(DotReporter::new()));
         }
     }
 

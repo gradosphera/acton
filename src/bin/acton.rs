@@ -169,6 +169,10 @@ fn example_test_usage() -> StyledStr {
             "acton test . --coverage --format lcov",
         ),
         (
+            "Run with teamcity service messages",
+            "acton test . --reporter console,teamcity",
+        ),
+        (
             "Generate JUnit XML report",
             "acton test . --reporter junit --junit-path ./test-results",
         ),
@@ -293,9 +297,10 @@ fn main() {
                     "console" => report_formats.push(ReportFormat::Console),
                     "teamcity" => report_formats.push(ReportFormat::TeamCity),
                     "junit" => report_formats.push(ReportFormat::JUnit),
+                    "dot" => report_formats.push(ReportFormat::Dot),
                     _ => {
                         eprintln!(
-                            "Warning: Unknown report format '{}'. Supported formats: console, teamcity, junit",
+                            "Warning: Unknown report format '{}'. Supported formats: console, teamcity, junit, dot",
                             format_str
                         );
                     }

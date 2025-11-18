@@ -9,6 +9,7 @@ use tolkc::source_map::SourceMap;
 use tycho_types::models::ShardAccount;
 
 pub mod console;
+pub mod dot;
 pub mod junit;
 pub mod teamcity;
 

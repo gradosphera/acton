@@ -261,3 +261,77 @@ fn test_junit_reporter_with_merge() {
             "integration/snapshots/test_junit_with_merge.xml.gen",
         );
 }
+
+#[test]
+fn test_dot_reporter_basic() {
+    FixtureProject::load("basic")
+        .acton()
+        .test()
+        .with_reporter("dot")
+        .run()
+        .success()
+        .assert_contains("··")
+        .assert_snapshot_matches("integration/snapshots/test_dot_basic.stdout.txt");
+}
+
+#[test]
+fn test_dot_reporter_with_failures() {
+    FixtureProject::load("basic")
+        .with_contract_slot(1) // Enable "throw 10;" in contract
+        .acton()
+        .test()
+        .with_reporter("dot")
+        .run()
+        .failure()
+        .assert_contains("xx")
+        .assert_contains("FAIL")
+        .assert_snapshot_matches("integration/snapshots/test_dot_with_failures.stdout.txt");
+}
+
+#[test]
+fn test_dot_reporter_multiple_files() {
+    ProjectBuilder::new("dot_multi_file")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "first_test",
+            r#"
+            import "../../lib/testing/expect"
+            import "../../lib/io"
+
+            get fun test_first() {
+                println("First test output");
+                expect(1).toEqual(1);
+            }
+        "#,
+        )
+        .test_file(
+            "second_test",
+            r#"
+            import "../../lib/testing/expect"
+            import "../../lib/io"
+
+            get fun test_second() {
+                expect(2).toEqual(2);
+            }
+
+            get fun test_second_fail() {
+                println("This test will fail");
+                eprintln("Error output");
+                expect(1).toEqual(2); // This will fail
+            }
+        "#,
+        )
+        .build()
+        .acton()
+        .test()
+        .with_reporter("dot")
+        .run()
+        .failure()
+        .assert_contains("··x")
+        .assert_contains("stdout |")
+        .assert_contains("stderr |")
+        .assert_contains("First test output")
+        .assert_contains("This test will fail")
+        .assert_contains("Error output")
+        .assert_snapshot_matches("integration/snapshots/test_dot_multiple_files.stdout.txt");
+}
