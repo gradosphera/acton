@@ -13,9 +13,9 @@ fn println_impl(ctx: &mut Context, _stack: &mut Tuple, arg: TupleItem, type_name
     let formatter = crate::formatter::FormatterContext::from_context(ctx);
     let formatted = strip_quotes(formatter.format(&typed_arg));
 
-    if ctx.capture_output {
-        ctx.stdout_buffer.push_str(&formatted);
-        ctx.stdout_buffer.push_str("\n");
+    if ctx.io.capture_output {
+        ctx.io.stdout_buffer.push_str(&formatted);
+        ctx.io.stdout_buffer.push_str("\n");
     } else {
         println!("{}", formatted);
     }
@@ -23,9 +23,9 @@ fn println_impl(ctx: &mut Context, _stack: &mut Tuple, arg: TupleItem, type_name
 
 extension!(eprintln in (Context) with (s: String) using eprintln_impl);
 fn eprintln_impl(ctx: &mut Context, _stack: &mut Tuple, s: String) {
-    if ctx.capture_output {
-        ctx.stderr_buffer.push_str(&s);
-        ctx.stderr_buffer.push_str("\n");
+    if ctx.io.capture_output {
+        ctx.io.stderr_buffer.push_str(&s);
+        ctx.io.stderr_buffer.push_str("\n");
     } else {
         eprintln!("{}", s);
     }

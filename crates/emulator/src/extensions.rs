@@ -122,7 +122,7 @@ macro_rules! try_ctx {
         match $expr {
             Ok(value) => value,
             Err(e) => {
-                $ctx.fail(format!($($arg)*, e));
+                $ctx.asserts.fail(format!($($arg)*, e));
                 return Default::default();
             }
         }

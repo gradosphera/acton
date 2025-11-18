@@ -1,5 +1,8 @@
 use crate::config::ActonConfig;
-use crate::context::{AnyExecutor, BuildCache, Context, Emulations, KnownAddresses};
+use crate::context::{
+    AnyExecutor, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
+    Emulations, IoContext, KnownAddresses,
+};
 use crate::debug_context::DebugContext;
 use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
@@ -122,27 +125,40 @@ fn execute_script(
     let mut emulations = Emulations::new();
     let mut libraries = vec![];
 
+    let mut assert_failure = None;
+    let mut expected_exit_code = None;
+
     let mut ctx = Context {
         config: &ActonConfig::load()?,
-        stdout_buffer: "".to_string(),
-        stderr_buffer: "".to_string(),
-        capture_output: false,
-        assert_failure: &mut None,
-        blockchain: &mut blockchain,
-        emulator: &mut emulator,
-        build_cache: &mut build_cache,
-        file_build_cache: &mut file_build_cache,
-        known_addresses: &mut known_addresses,
-        known_code_cells: &mut known_code_cell,
-        emulations: &mut emulations,
         abi,
-        expected_exit_code: &mut None,
-        dbg_ctx: None,
-        debug,
-        backtrace: None,
-        need_debug_info: false,
-        libraries: &mut libraries,
         default_log_level: verbosity,
+        io: IoContext {
+            stdout_buffer: "".to_string(),
+            stderr_buffer: "".to_string(),
+            capture_output: false,
+        },
+        asserts: AssertsContext {
+            assert_failure: &mut assert_failure,
+            expected_exit_code: &mut expected_exit_code,
+        },
+        chain: ChainContext {
+            blockchain: &mut blockchain,
+            emulator: &mut emulator,
+            emulations: &mut emulations,
+            libraries: &mut libraries,
+        },
+        build: BuildContext {
+            build_cache: &mut build_cache,
+            file_build_cache: &mut file_build_cache,
+            known_addresses: &mut known_addresses,
+            known_code_cells: &mut known_code_cell,
+        },
+        debug: DebugCtx {
+            enabled: debug,
+            need_debug_info: false,
+            backtrace: None,
+            ctx: None,
+        },
     };
 
     if debug {
@@ -158,11 +174,11 @@ fn execute_script(
             "main".to_string(),
         );
 
-        ctx.with_dbg(&mut dbg_ctx);
+        ctx.debug.with_ctx(&mut dbg_ctx);
 
         executor.prepare_get_method(0, Tuple::empty());
 
-        ctx.dbg().process_incoming_requests(true)?;
+        ctx.debug.ctx().process_incoming_requests(true)?;
 
         let result = executor.finish_get_method(&params.code);
         return Ok(ScriptResult { result });

@@ -14,7 +14,7 @@ use tycho_types::models::{IntAddr, Transaction};
 
 extension!(assert_fail in (Context) with (location: String, message: String) using assert_fail_impl);
 fn assert_fail_impl(ctx: &mut Context, _stack: &mut Tuple, location: String, message: String) {
-    *ctx.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
+    *ctx.asserts.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
         message: Some(message),
         location: Some(location),
     }));
@@ -57,7 +57,7 @@ fn assert_bin_impl(
                 return;
             }
 
-            *ctx.assert_failure = Some(AssertFailure::Bin(AssertBinFailure {
+            *ctx.asserts.assert_failure = Some(AssertFailure::Bin(AssertBinFailure {
                 operator,
                 left,
                 right,
@@ -71,7 +71,7 @@ fn assert_bin_impl(
         }
     }
 
-    *ctx.assert_failure = Some(AssertFailure::Bin(AssertBinFailure {
+    *ctx.asserts.assert_failure = Some(AssertFailure::Bin(AssertBinFailure {
         operator,
         left,
         right,
@@ -85,7 +85,7 @@ fn assert_bin_impl(
 
 extension!(expect_to_end_with_exit_code in (Context) with (code: BigInt) using expect_to_end_with_exit_code_impl);
 fn expect_to_end_with_exit_code_impl(ctx: &mut Context, _stack: &mut Tuple, code: BigInt) {
-    *ctx.expected_exit_code = Some(code);
+    *ctx.asserts.expected_exit_code = Some(code);
 }
 
 extension!(fail_to_find_transaction_by_params in (Context) with (params: Tuple, txs: Tuple, message: String, location: String) using fail_to_find_transaction_by_params_impl);
@@ -109,7 +109,7 @@ fn fail_to_find_transaction_by_params_impl(
         None => return,
     };
 
-    *ctx.assert_failure = Some(AssertFailure::TransactionNotFound(
+    *ctx.asserts.assert_failure = Some(AssertFailure::TransactionNotFound(
         TransactionGenericAssertFailure {
             txs: txs.to_typed(&"SendResultList".to_string()),
             parsed_txs,
@@ -141,7 +141,7 @@ fn fail_to_not_find_transaction_by_params_impl(
         None => return,
     };
 
-    *ctx.assert_failure = Some(AssertFailure::TransactionIsFound(
+    *ctx.asserts.assert_failure = Some(AssertFailure::TransactionIsFound(
         TransactionGenericAssertFailure {
             txs: txs.to_typed(&"SendResultList".to_string()),
             parsed_txs,

@@ -12,7 +12,10 @@ use crate::commands::test::reporting::{
     extract_suite_name,
 };
 use crate::config::ActonConfig;
-use crate::context::{AnyExecutor, AssertFailure, BuildCache, Context, Emulations, KnownAddresses};
+use crate::context::{
+    AnyExecutor, AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context,
+    DebugCtx, Emulations, IoContext, KnownAddresses,
+};
 use crate::dap::DapTransport;
 use crate::debug_context::DebugContext;
 use crate::ffi;
@@ -194,29 +197,42 @@ impl<'a> TestRunner<'a> {
         let mut blockchain = Blockchain::new();
         let mut libraries = vec![];
 
+        let mut assert_failure = None;
+        let mut expected_exit_code = None;
+
         let mut ctx = Context {
             config: &ActonConfig::load()?,
-            stdout_buffer: "".to_string(),
-            stderr_buffer: "".to_string(),
-            capture_output: true,
-            assert_failure: &mut None,
-            blockchain: &mut blockchain,
-            emulator: &mut emulator,
-            build_cache: &mut self.build_cache,
-            file_build_cache: &mut self.file_build_cache,
-            known_addresses: &mut self.known_addresses,
-            known_code_cells: &mut self.known_code_cells,
-            emulations: &mut self.emulations,
             abi,
-            expected_exit_code: &mut None,
-            dbg_ctx: None,
-            debug: self.config.debug,
-            backtrace: self.config.backtrace.clone(),
-            need_debug_info: self.config.debug
-                || self.config.backtrace == Some("full".to_string())
-                || self.config.coverage,
-            libraries: &mut libraries,
             default_log_level: verbosity,
+            io: IoContext {
+                stdout_buffer: "".to_string(),
+                stderr_buffer: "".to_string(),
+                capture_output: true,
+            },
+            asserts: AssertsContext {
+                assert_failure: &mut assert_failure,
+                expected_exit_code: &mut expected_exit_code,
+            },
+            chain: ChainContext {
+                blockchain: &mut blockchain,
+                emulator: &mut emulator,
+                emulations: &mut self.emulations,
+                libraries: &mut libraries,
+            },
+            build: BuildContext {
+                build_cache: &mut self.build_cache,
+                file_build_cache: &mut self.file_build_cache,
+                known_addresses: &mut self.known_addresses,
+                known_code_cells: &mut self.known_code_cells,
+            },
+            debug: DebugCtx {
+                enabled: self.config.debug,
+                need_debug_info: self.config.debug
+                    || self.config.backtrace == Some("full".to_string())
+                    || self.config.coverage,
+                backtrace: self.config.backtrace.clone(),
+                ctx: None,
+            },
         };
 
         let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) =
@@ -232,20 +248,21 @@ impl<'a> TestRunner<'a> {
                     test.name.clone(),
                 );
 
-                ctx.with_dbg(&mut dbg_ctx);
+                ctx.debug.with_ctx(&mut dbg_ctx);
 
                 get_executor.prepare_get_method(test.id, Default::default());
 
-                ctx.dbg_ctx.unwrap().process_incoming_requests(true)?;
+                ctx.debug.ctx.unwrap().process_incoming_requests(true)?;
 
                 let get_result = get_executor.finish_get_method(&params.code);
 
                 (
                     get_result,
-                    ctx.stdout_buffer,
-                    ctx.stderr_buffer,
-                    (*ctx.assert_failure).clone(),
-                    ctx.expected_exit_code
+                    ctx.io.stdout_buffer,
+                    ctx.io.stderr_buffer,
+                    (*ctx.asserts.assert_failure).clone(),
+                    ctx.asserts
+                        .expected_exit_code
                         .clone()
                         .map(|value| value.to_i32())
                         .unwrap_or(None),
@@ -259,10 +276,11 @@ impl<'a> TestRunner<'a> {
 
                 (
                     get_result,
-                    ctx.stdout_buffer,
-                    ctx.stderr_buffer,
-                    (*ctx.assert_failure).clone(),
-                    ctx.expected_exit_code
+                    ctx.io.stdout_buffer,
+                    ctx.io.stderr_buffer,
+                    (*ctx.asserts.assert_failure).clone(),
+                    ctx.asserts
+                        .expected_exit_code
                         .clone()
                         .and_then(|value| value.to_i32()),
                 )

@@ -53,14 +53,14 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
             debug!("Found contract with info: {:?}", found_contract);
             path = found_contract.src.clone()
         } else {
-            ctx.fail(format!(
+            ctx.asserts.fail(format!(
                 "Cannot find contract {name} in Acton.toml, please add it or provide an explicit path to the entry point"
             ));
             return;
         }
     }
 
-    if let Some(cached) = ctx.build_cache.built.get(&path) {
+    if let Some(cached) = ctx.build.build_cache.built.get(&path) {
         let elapsed = start_time.elapsed();
         info!("Build {} from memory cache in {:?}", path, elapsed);
 
@@ -75,8 +75,9 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
     }
 
     if let Some(cached_entry) =
-        ctx.file_build_cache
-            .get(&path, ctx.need_debug_info, 2, "1.2".to_string())
+        ctx.build
+            .file_build_cache
+            .get(&path, ctx.debug.need_debug_info, 2, "1.2".to_string())
     {
         let elapsed = start_time.elapsed();
         info!(
@@ -84,7 +85,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
             path, elapsed
         );
 
-        ctx.build_cache.memoize(
+        ctx.build.build_cache.memoize(
             &name,
             &path,
             &cached_entry.code_boc64,
@@ -103,7 +104,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
     }
 
     let compile_start = Instant::now();
-    let result = tolkc::compile(Path::new(&path), ctx.need_debug_info);
+    let result = tolkc::compile(Path::new(&path), ctx.debug.need_debug_info);
     let compile_time = compile_start.elapsed();
 
     match result {
@@ -114,14 +115,17 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
                 path, compile_time, total_elapsed
             );
 
-            if let Err(err) =
-                ctx.file_build_cache
-                    .put(&path, &success, ctx.need_debug_info, 2, "1.2".to_string())
-            {
+            if let Err(err) = ctx.build.file_build_cache.put(
+                &path,
+                &success,
+                ctx.debug.need_debug_info,
+                2,
+                "1.2".to_string(),
+            ) {
                 warn!("Failed to build cached code BoC for {}: {}", path, err);
             }
 
-            ctx.build_cache.memoize(
+            ctx.build.build_cache.memoize(
                 &name,
                 &path,
                 &success.code_boc64,
@@ -143,7 +147,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
                 path, total_elapsed, error.message
             );
 
-            *ctx.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
+            *ctx.asserts.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
                 message: Some(format!("Compilation failed: {}", error.message)),
                 location: None,
             }));
@@ -154,8 +158,8 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
 
 extension!(send_message in (Context) with (mode: BigInt, message: ArcCell) using send_message_impl);
 fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, _mode: BigInt, message: ArcCell) {
-    let blockchain = &mut ctx.blockchain;
-    let emulator = &ctx.emulator;
+    let blockchain = &mut ctx.chain.blockchain;
+    let emulator = &ctx.chain.emulator;
 
     let msg_b64 = try_ctx!(
         ctx,
@@ -198,7 +202,7 @@ fn send_message_from_impl(
     from: ArcCell,
     message: ArcCell,
 ) {
-    let emulator = &ctx.emulator;
+    let emulator = &ctx.chain.emulator;
 
     let msg_b64 = try_ctx!(
         ctx,
@@ -230,7 +234,7 @@ fn send_message_from_impl(
     let src_addr = match src_addr {
         Ok(src_addr) => src_addr,
         Err(err) => {
-            ctx.fail(format!(
+            ctx.asserts.fail(format!(
                 "Failed to decode src address from x{{{}}} with length={}: {}",
                 from_slice.display_data(),
                 from_slice.size_bits(),
@@ -240,10 +244,10 @@ fn send_message_from_impl(
         }
     };
 
-    let libs = ctx.build_libs(&src_addr);
-    let blockchain = &mut ctx.blockchain;
+    let libs = ctx.chain.build_libs(&src_addr);
+    let blockchain = &mut ctx.chain.blockchain;
 
-    let emulations = if ctx.debug {
+    let emulations = if ctx.debug.enabled {
         send_message_debug(
             ctx,
             &msg_cell,
@@ -261,7 +265,7 @@ fn send_message_from_impl(
         )
     };
 
-    ctx.emulations.results.push(emulations.clone());
+    ctx.chain.emulations.results.push(emulations.clone());
 
     let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
         SendMessageResult::Success(res) => Some((*res).clone()),
@@ -362,22 +366,28 @@ fn send_message_debug(
     );
 
     let RelaxedMsgInfo::Int(int_message) = &message_obj.info else {
-        ctx.fail("Emulator only supports internal messages for now".to_string());
+        ctx.asserts
+            .fail("Emulator only supports internal messages for now".to_string());
         return vec![];
     };
 
-    let dest_account = ctx.blockchain.get_account(&int_message.dst.to_string());
+    let dest_account = ctx
+        .chain
+        .blockchain
+        .get_account(&int_message.dst.to_string());
     let code = Executor::get_code_cell(&message_obj, &dest_account);
 
     let step_executor = StepExecutor::new();
     let source_map = ctx
+        .build
         .build_cache
         .result_for_code(&code)
         .map(|res| res.1.source_map);
 
-    let need_to_stop_on_entry = ctx.dbg().need_to_stop_child_thread_on_start();
+    let need_to_stop_on_entry = ctx.debug.ctx().need_to_stop_child_thread_on_start();
 
-    ctx.dbg()
+    ctx.debug
+        .ctx()
         .begin_thread(
             2,
             AnyExecutor::Message(step_executor.clone()),
@@ -397,7 +407,7 @@ fn send_message_debug(
             verbosity: verbosity.unwrap_or(ExecutorVerbosity::FullLocation),
             shard_account: dest_account.clone(),
             now: 0,
-            lt: ctx.blockchain.get_lt(),
+            lt: ctx.chain.blockchain.get_lt(),
             random_seed: None,
             ignore_chksig: false,
             debug_enabled: true,
@@ -409,30 +419,30 @@ fn send_message_debug(
     }
     if prepare_result.skipped {
         // Since compute phase is skipped, we don't need to run anything
-        ctx.dbg().finish_thread(2).unwrap();
+        ctx.debug.ctx().finish_thread(2).unwrap();
         return vec![];
     }
 
     // Step to update internal state
     if need_to_stop_on_entry {
-        ctx.dbg().step(StepMode::StepIn);
+        ctx.debug.ctx().step(StepMode::StepIn);
     } else {
-        ctx.dbg().step(StepMode::Continue);
+        ctx.debug.ctx().step(StepMode::Continue);
     }
 
-    if !ctx.dbg().stepper.is_terminated() {
+    if !ctx.debug.ctx().stepper.is_terminated() {
         // Process requests only if we have something to execute and generates a requests
-        ctx.dbg().process_incoming_requests(false).unwrap();
+        ctx.debug.ctx().process_incoming_requests(false).unwrap();
     }
 
     let result = step_executor.finish_transaction();
 
-    ctx.dbg().finish_thread(2).unwrap();
+    ctx.debug.ctx().finish_thread(2).unwrap();
 
-    if ctx.dbg().performing_step != Some(StepMode::Continue) {
+    if ctx.debug.ctx().performing_step != Some(StepMode::Continue) {
         // When we step out from nested message/get method, send stop message to client to
         // stop on a line after send/call get method
-        ctx.dbg().step(StepMode::StepIn);
+        ctx.debug.ctx().step(StepMode::StepIn);
     }
 
     let result = match result {
@@ -459,7 +469,8 @@ fn send_message_debug(
         "Failed to load shard account from slice: {}"
     );
 
-    ctx.blockchain
+    ctx.chain
+        .blockchain
         .update_account(&int_message.dst.to_string(), &shard_account);
 
     let tx_cell: Cell = try_ctx!(
@@ -689,7 +700,7 @@ fn run_get_method_impl(
     address: ArcCell,
 ) {
     let args = args.unwrap_empty().unwrap_tuple();
-    let blockchain = &mut ctx.blockchain;
+    let blockchain = &mut ctx.chain.blockchain;
     let address_boc = address.to_boc_hex(false).unwrap();
 
     let address_std = MsgAddrIntStd::from_boc_hex(address_boc.as_str()).unwrap();
@@ -707,8 +718,9 @@ fn run_get_method_impl(
         Cell::default()
     };
 
-    let libs =
-        ctx.build_libs_with_hash_owner(&HashBytes::from_slice(address_hash.clone().as_slice()));
+    let libs = ctx
+        .chain
+        .build_libs_with_hash_owner(&HashBytes::from_slice(address_hash.clone().as_slice()));
     let libs_root = libs.clone().into_root();
 
     let method_id = id.to_i32().unwrap_or(0);
@@ -730,17 +742,18 @@ fn run_get_method_impl(
         prev_blocks_info: None,
     };
 
-    let result = if ctx.debug {
+    let result = if ctx.debug.enabled {
         let step_get_executor = StepGetExecutor::new(Default::default(), params.clone());
 
         let source_map = ctx
+            .build
             .build_cache
             .result_for_code(&Some(
                 Boc::decode_base64(code.to_boc_b64(false).unwrap()).unwrap(),
             ))
             .map(|res| res.1.source_map);
 
-        let dbg_ctx = ctx.dbg();
+        let dbg_ctx = ctx.debug.ctx();
         dbg_ctx
             .begin_thread(
                 2,
@@ -780,7 +793,7 @@ fn run_get_method_impl(
 
     match result {
         GetMethodResult::Success(result) => {
-            ctx.emulations.get_results.push(result.clone());
+            ctx.chain.emulations.get_results.push(result.clone());
 
             let cell = try_ctx!(
                 ctx,
@@ -815,7 +828,7 @@ fn is_deployed_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell) {
         hex::encode(&address_std.address)
     );
 
-    let is_deployed = ctx.blockchain.is_deployed(&dst_addr_str);
+    let is_deployed = ctx.chain.blockchain.is_deployed(&dst_addr_str);
     stack.push_bool(is_deployed);
 }
 
@@ -830,13 +843,13 @@ fn get_deployed_code_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell
         hex::encode(&address_std.address)
     );
 
-    let is_deployed = ctx.blockchain.is_deployed(&dst_addr_str);
+    let is_deployed = ctx.chain.blockchain.is_deployed(&dst_addr_str);
     if !is_deployed {
         stack.push(TupleItem::Null);
         return;
     }
 
-    let account = ctx.blockchain.get_account(&dst_addr_str);
+    let account = ctx.chain.blockchain.get_account(&dst_addr_str);
     let cell = match get_address_code(&account) {
         Some(value) => value,
         None => {
@@ -905,7 +918,8 @@ fn register_address_impl(ctx: &mut Context, _stack: &mut Tuple, name: String, ad
         "Failed to load address from slice: {}"
     );
 
-    ctx.known_addresses
+    ctx.build
+        .known_addresses
         .addresses
         .insert(addr, KnownAddress { name });
 }
@@ -913,7 +927,7 @@ fn register_address_impl(ctx: &mut Context, _stack: &mut Tuple, name: String, ad
 extension!(register_code in (Context) with (name: String, address: ArcCell) using register_code_impl);
 fn register_code_impl(ctx: &mut Context, _stack: &mut Tuple, name: String, code: ArcCell) {
     let hash = try_ctx!(ctx, code.cell_hash(), "Failed to get cell hash: {}");
-    ctx.known_code_cells.insert(hash.to_hex(), name);
+    ctx.build.known_code_cells.insert(hash.to_hex(), name);
 }
 
 extension!(account_state in (Context) with (address: ArcCell) using account_state_impl);
@@ -934,7 +948,13 @@ fn account_state_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell) {
         "Failed to load address from slice: {}"
     );
 
-    let Ok(account) = ctx.blockchain.get_account(&addr.to_string()).account.load() else {
+    let Ok(account) = ctx
+        .chain
+        .blockchain
+        .get_account(&addr.to_string())
+        .account
+        .load()
+    else {
         stack.push(TupleItem::Null);
         return;
     };
@@ -981,7 +1001,7 @@ fn register_lib_impl(ctx: &mut Context, _stack: &mut Tuple, lib: ArcCell) {
         Boc::decode_base64(lib_boc),
         "Failed to decode lib from BoC: {}"
     );
-    ctx.libraries.push(cell)
+    ctx.chain.libraries.push(cell)
 }
 
 pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context) {

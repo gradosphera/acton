@@ -240,42 +240,66 @@ impl Emulations {
 
 pub struct Context<'a> {
     pub config: &'a ActonConfig,
+    pub abi: &'a ContractAbi,
+    pub default_log_level: ExecutorVerbosity,
+
+    pub io: IoContext,
+    pub asserts: AssertsContext<'a>,
+    pub chain: ChainContext<'a>,
+    pub build: BuildContext<'a>,
+    pub debug: DebugCtx<'a>,
+}
+
+#[derive(Debug, Clone)]
+pub struct IoContext {
     pub stdout_buffer: String,
     pub stderr_buffer: String,
     pub capture_output: bool,
+}
+
+pub struct AssertsContext<'a> {
     pub assert_failure: &'a mut Option<AssertFailure>,
     pub expected_exit_code: &'a mut Option<BigInt>,
+}
+
+pub struct ChainContext<'a> {
     pub blockchain: &'a mut Blockchain,
     pub emulator: &'a mut Emulator,
+    pub emulations: &'a mut Emulations,
+    pub libraries: &'a mut Vec<Cell>,
+}
+
+pub struct BuildContext<'a> {
     pub build_cache: &'a mut BuildCache,
     pub file_build_cache: &'a mut FileBuildCache,
     pub known_addresses: &'a mut KnownAddresses,
     pub known_code_cells: &'a mut HashMap<String, String>,
-    pub abi: &'a ContractAbi,
-    pub debug: bool,
-    pub need_debug_info: bool,
-    pub backtrace: Option<String>,
-    pub emulations: &'a mut Emulations,
-    pub dbg_ctx: Option<&'a mut DebugContext>,
-    pub libraries: &'a mut Vec<Cell>,
-    pub default_log_level: ExecutorVerbosity,
 }
 
-impl<'a> Context<'a> {
+pub struct DebugCtx<'a> {
+    pub enabled: bool,
+    pub need_debug_info: bool,
+    pub backtrace: Option<String>,
+    pub ctx: Option<&'a mut DebugContext>,
+}
+
+impl<'a> AssertsContext<'a> {
     pub fn fail(&mut self, message: String) {
         *self.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
             message: Some(message),
             location: None,
         }));
     }
+}
 
+impl<'a> ChainContext<'a> {
     pub fn build_libs(&self, owner: &IntAddr) -> Dict<HashBytes, LibDescr> {
         self.build_libs_with_hash_owner(&owner.as_std().unwrap().address)
     }
 
     pub fn build_libs_with_hash_owner(&self, owner: &HashBytes) -> Dict<HashBytes, LibDescr> {
         let mut libs = Dict::<HashBytes, LibDescr>::new();
-        for lib in self.libraries.clone() {
+        for lib in self.libraries.iter().cloned() {
             let mut publishers = Dict::new();
             publishers.add(owner, ()).ok();
 
@@ -290,13 +314,15 @@ impl<'a> Context<'a> {
         }
         libs
     }
+}
 
-    pub fn with_dbg(&mut self, dbg: &'a mut DebugContext) {
-        self.dbg_ctx = Some(dbg)
+impl<'a> DebugCtx<'a> {
+    pub fn with_ctx(&mut self, dbg: &'a mut DebugContext) {
+        self.ctx = Some(dbg)
     }
 
-    pub fn dbg(&mut self) -> &mut DebugContext {
-        self.dbg_ctx
+    pub fn ctx(&mut self) -> &mut DebugContext {
+        self.ctx
             .as_mut()
             .expect("Debug context accessed from non debug context")
     }
