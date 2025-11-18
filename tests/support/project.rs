@@ -461,6 +461,8 @@ impl Project {
             compile_base64_only: false,
             compile_boc: None,
             compile_fift: None,
+            test_reporters: Vec::new(),
+            junit_merge: false,
         }
     }
 
@@ -487,6 +489,8 @@ pub struct ActonCommand {
     pub(crate) compile_base64_only: bool,
     pub(crate) compile_boc: Option<String>,
     pub(crate) compile_fift: Option<String>,
+    pub(crate) test_reporters: Vec<String>,
+    pub(crate) junit_merge: bool,
 }
 
 impl ActonCommand {
@@ -649,6 +653,30 @@ impl ActonCommand {
         self
     }
 
+    /// Add test reporter
+    ///
+    /// # Examples
+    /// ```
+    /// .test().with_reporter("teamcity")           // TeamCity format
+    /// .test().with_reporter("junit")              // JUnit XML format
+    /// .test().with_reporter("console")            // Console format (default)
+    /// ```
+    pub fn with_reporter(mut self, reporter: &str) -> Self {
+        self.test_reporters.push(reporter.to_string());
+        self
+    }
+
+    /// Enable JUnit merge mode (all suites in single file)
+    ///
+    /// # Examples
+    /// ```
+    /// .test().with_reporter("junit").with_junit_merge()
+    /// ```
+    pub fn with_junit_merge(mut self) -> Self {
+        self.junit_merge = true;
+        self
+    }
+
     /// Build specific contract (only for build command)
     ///
     /// # Examples
@@ -692,6 +720,16 @@ impl ActonCommand {
 
         if let Some(filter) = self.filter {
             self.cmd = self.cmd.arg("--filter").arg(filter);
+        }
+
+        if !self.test_reporters.is_empty() {
+            for reporter in &self.test_reporters {
+                self.cmd = self.cmd.arg("--reporter").arg(reporter);
+            }
+        }
+
+        if self.junit_merge {
+            self.cmd = self.cmd.arg("--junit-merge");
         }
 
         if let Some(contract) = self.build_contract {

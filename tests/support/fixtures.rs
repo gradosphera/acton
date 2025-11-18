@@ -119,6 +119,8 @@ impl FixtureProject {
             compile_base64_only: false,
             compile_boc: None,
             compile_fift: None,
+            test_reporters: vec![],
+            junit_merge: false,
         }
     }
 

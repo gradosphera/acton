@@ -337,7 +337,9 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
                     coverages.push(coverage);
                 }
 
-                if index + 1 < test_files.len() {
+                if index + 1 < test_files.len()
+                    && config.report_formats.contains(&ReportFormat::Console)
+                {
                     println!()
                 }
             }
@@ -606,11 +608,9 @@ fn run_file_tests(
         tests
     };
 
-    if !filtered_tests.is_empty() {
-        runner
-            .reporter_manager
-            .on_suite_started(file_path, &filtered_tests)?;
-    }
+    runner
+        .reporter_manager
+        .on_suite_started(file_path, &filtered_tests)?;
 
     let dest_address = contract_address(&code_cell);
 
@@ -760,20 +760,18 @@ fn run_file_tests(
         }
     }
 
-    if !filtered_tests.is_empty() {
-        let suite_stats = TestSuiteStats {
-            total: passed + failed + skipped + todo,
-            passed,
-            failed,
-            skipped,
-            ignored: 0,
-            todo,
-            duration: Duration::default(), // TODO: track suite duration
-        };
-        runner
-            .reporter_manager
-            .on_suite_finished(file_path, &suite_stats)?;
-    }
+    let suite_stats = TestSuiteStats {
+        total: passed + failed + skipped + todo,
+        passed,
+        failed,
+        skipped,
+        ignored: 0,
+        todo,
+        duration: Duration::default(), // TODO: track suite duration
+    };
+    runner
+        .reporter_manager
+        .on_suite_finished(file_path, &suite_stats)?;
 
     let coverage = if runner.config.coverage {
         Some(collect_coverage(&runner.emulations, &runner.build_cache))

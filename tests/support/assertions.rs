@@ -62,6 +62,9 @@ pub trait TestOutputExt {
     fn get_normalized_stderr(&self) -> String;
     fn assert_snapshot_matches(&self, path: &str) -> &Self;
     fn assert_stderr_snapshot_matches(&self, path: &str) -> &Self;
+    fn assert_file_exists(&self, path: &str) -> &Self;
+    fn assert_file_contains(&self, path: &str, content: &str) -> &Self;
+    fn assert_file_snapshot_matches(&self, file_path: &str, snapshot_path: &str) -> &Self;
 }
 
 impl TestOutputExt for TestSuccess {
@@ -211,6 +214,63 @@ impl TestOutputExt for TestSuccess {
 
         let expected = Data::read_from(&snapshot_path, None);
         assertion.eq(normalized, expected);
+        self
+    }
+
+    fn assert_file_exists(&self, path: &str) -> &Self {
+        let file_path = self.project_path.join(path);
+        assert!(
+            file_path.exists(),
+            "Expected file '{}' to exist, but it doesn't",
+            file_path.display()
+        );
+        self
+    }
+
+    fn assert_file_contains(&self, path: &str, content: &str) -> &Self {
+        let file_path = self.project_path.join(path);
+        assert!(
+            file_path.exists(),
+            "File '{}' doesn't exist",
+            file_path.display()
+        );
+
+        let file_content = std::fs::read_to_string(&file_path)
+            .unwrap_or_else(|e| panic!("Failed to read file '{}': {}", file_path.display(), e));
+
+        assert!(
+            file_content.contains(content),
+            "Expected '{}' in file '{}', but content was:\n{}",
+            content,
+            file_path.display(),
+            file_content
+        );
+        self
+    }
+
+    fn assert_file_snapshot_matches(&self, file_path: &str, snapshot_path: &str) -> &Self {
+        let full_file_path = self.project_path.join(file_path);
+        assert!(
+            full_file_path.exists(),
+            "File '{}' doesn't exist",
+            full_file_path.display()
+        );
+
+        let file_content = std::fs::read_to_string(&full_file_path).unwrap_or_else(|e| {
+            panic!("Failed to read file '{}': {}", full_file_path.display(), e)
+        });
+
+        let assertion = assertion();
+
+        let mut snapshot_full_path = std::env::current_dir().expect("Failed to get current dir");
+        snapshot_full_path.push("tests");
+        snapshot_full_path.push(snapshot_path);
+
+        let expected = Data::read_from(&snapshot_full_path, None);
+        assertion.eq(
+            normalize_output(&file_content, &PathBuf::from(file_path)),
+            expected,
+        );
         self
     }
 }
@@ -364,6 +424,63 @@ impl TestOutputExt for TestFailure {
 
         let expected = Data::read_from(&snapshot_path, None);
         assertion.eq(normalized, expected);
+        self
+    }
+
+    fn assert_file_exists(&self, path: &str) -> &Self {
+        let file_path = self.project_path.join(path);
+        assert!(
+            file_path.exists(),
+            "Expected file '{}' to exist, but it doesn't",
+            file_path.display()
+        );
+        self
+    }
+
+    fn assert_file_contains(&self, path: &str, content: &str) -> &Self {
+        let file_path = self.project_path.join(path);
+        assert!(
+            file_path.exists(),
+            "File '{}' doesn't exist",
+            file_path.display()
+        );
+
+        let file_content = std::fs::read_to_string(&file_path)
+            .unwrap_or_else(|e| panic!("Failed to read file '{}': {}", file_path.display(), e));
+
+        assert!(
+            file_content.contains(content),
+            "Expected '{}' in file '{}', but content was:\n{}",
+            content,
+            file_path.display(),
+            file_content
+        );
+        self
+    }
+
+    fn assert_file_snapshot_matches(&self, file_path: &str, snapshot_path: &str) -> &Self {
+        let full_file_path = self.project_path.join(file_path);
+        assert!(
+            full_file_path.exists(),
+            "File '{}' doesn't exist",
+            full_file_path.display()
+        );
+
+        let file_content = std::fs::read_to_string(&full_file_path).unwrap_or_else(|e| {
+            panic!("Failed to read file '{}': {}", full_file_path.display(), e)
+        });
+
+        let assertion = assertion();
+
+        let mut snapshot_full_path = std::env::current_dir().expect("Failed to get current dir");
+        snapshot_full_path.push("tests");
+        snapshot_full_path.push(snapshot_path);
+
+        let expected = Data::read_from(&snapshot_full_path, None);
+        assertion.eq(
+            normalize_output(&file_content, &PathBuf::from(file_path)),
+            expected,
+        );
         self
     }
 }

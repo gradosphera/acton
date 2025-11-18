@@ -1,7 +1,7 @@
 use super::{TestReport, TestReporter, TestStatus, TestSuiteStats, escape_xml, extract_suite_name};
 use crate::commands::test::TestDescriptor;
 use quick_junit::{NonSuccessKind, Report, TestCase, TestCaseStatus, TestSuite};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -36,7 +36,7 @@ struct JUnitTestSuite {
 
 pub struct JUnitReporter {
     config: JUnitConfig,
-    suites: HashMap<String, JUnitTestSuite>,
+    suites: BTreeMap<String, JUnitTestSuite>,
     current_suite: Option<String>,
 }
 
@@ -44,7 +44,7 @@ impl JUnitReporter {
     pub fn new(config: JUnitConfig) -> Self {
         Self {
             config,
-            suites: HashMap::new(),
+            suites: BTreeMap::new(),
             current_suite: None,
         }
     }

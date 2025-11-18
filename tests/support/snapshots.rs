@@ -1,4 +1,5 @@
 use crate::common::{assert_ui, strip_ansi};
+use crate::regex;
 use snapbox::IntoData;
 use snapbox::filter::Filter;
 use std::path::PathBuf;
@@ -14,6 +15,18 @@ pub fn normalize_output(stdout: &str, project_path: &PathBuf) -> String {
 
     let tmp_dir = project_path.to_string_lossy().to_string();
     redactions.insert("[ROOT]", tmp_dir.clone()).unwrap();
+    redactions
+        .insert(
+            "[DATE]",
+            regex!(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}"),
+        )
+        .unwrap();
+    redactions
+        .insert("[DURATION]", regex!(r"duration='\d+'"))
+        .unwrap();
+    redactions
+        .insert("[TIME]", regex!(r#"time="\d+\.\d+""#))
+        .unwrap();
     redactions
         .insert("[ROOT]", "/private".to_owned() + tmp_dir.as_str())
         .unwrap();
