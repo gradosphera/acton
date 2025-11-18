@@ -1,4 +1,3 @@
-pub mod asserts_exts;
 pub mod commands;
 pub mod config;
 pub mod context;
@@ -8,6 +7,5 @@ pub mod debug_variables;
 pub mod exts;
 pub mod file_build_cache;
 pub mod formatter;
-pub mod io_exts;
 pub mod retrace;
 pub mod vmtrace;

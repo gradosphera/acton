@@ -15,8 +15,8 @@ use crate::config::ActonConfig;
 use crate::context::{AnyExecutor, AssertFailure, BuildCache, Context, Emulations, KnownAddresses};
 use crate::dap::DapMessage;
 use crate::debug_context::DebugContext;
+use crate::exts;
 use crate::file_build_cache::FileBuildCache;
-use crate::{asserts_exts, exts, io_exts};
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use crossbeam_channel::{Receiver, Sender, unbounded};
@@ -204,7 +204,7 @@ impl<'a> TestRunner<'a> {
             config: &ActonConfig::load()?,
             stdout_buffer: "".to_string(),
             stderr_buffer: "".to_string(),
-            capture_test_output: true,
+            capture_output: true,
             assert_failure: &mut None,
             blockchain: &mut blockchain,
             emulator: &mut emulator,
@@ -213,7 +213,7 @@ impl<'a> TestRunner<'a> {
             known_addresses: &mut self.known_addresses,
             known_code_cells: &mut self.known_code_cells,
             emulations: &mut self.emulations,
-            abi: (*abi).clone(),
+            abi,
             expected_exit_code: &mut None,
             dbg_ctx: &mut DebugContext::empty(),
             debug: self.config.debug,
@@ -229,16 +229,14 @@ impl<'a> TestRunner<'a> {
             if self.config.debug {
                 let mut get_executor = StepGetExecutor::new(Default::default(), params.clone());
 
-                exts::register_extensions(&mut get_executor, &mut ctx);
-                io_exts::register_extensions(&mut get_executor, &mut ctx);
-                asserts_exts::register_extensions(&mut get_executor, &mut ctx);
+                exts::register(&mut get_executor, &mut ctx);
 
                 let mut dbg_ctx = DebugContext::new(
                     AnyExecutor::Get(get_executor.clone()),
                     source_map,
                     &self.req_receiver,
                     self.dap_sender.clone(),
-                    Some(test.name.clone()),
+                    test.name.clone(),
                 );
 
                 ctx.dbg_ctx = &mut dbg_ctx;
@@ -262,9 +260,7 @@ impl<'a> TestRunner<'a> {
             } else {
                 let mut get_executor = GetExecutor::new(params.clone());
 
-                exts::register_extensions(&mut get_executor, &mut ctx);
-                io_exts::register_extensions(&mut get_executor, &mut ctx);
-                asserts_exts::register_extensions(&mut get_executor, &mut ctx);
+                exts::register(&mut get_executor, &mut ctx);
 
                 let get_result = get_executor.run_get_method(Default::default(), params);
 

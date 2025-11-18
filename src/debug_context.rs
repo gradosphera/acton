@@ -292,7 +292,7 @@ pub struct DebugContext {
     pub breakpoints: HashMap<PathBuf, Vec<BreakpointInfo>>,
     pub next_breakpoint_id: i64,
     pub formatter_context: FormatterContext,
-    pub test_name: Option<String>,
+    pub test_name: String,
 }
 
 impl DebugContext {
@@ -314,7 +314,7 @@ impl DebugContext {
             breakpoints: HashMap::new(),
             next_breakpoint_id: 1,
             formatter_context: FormatterContext::empty(),
-            test_name: None,
+            test_name: "".to_owned(),
         }
     }
 
@@ -323,10 +323,9 @@ impl DebugContext {
         source_map: &SourceMap,
         req_receiver: &Receiver<Request>,
         dap_sender: Sender<DapMessage>,
-        test_name: Option<String>,
+        test_name: String,
     ) -> DebugContext {
-        let root_name = test_name.clone().unwrap_or_else(|| "test".to_string());
-        let stepper = Stepper::new(executor, source_map.clone(), 1, root_name);
+        let stepper = Stepper::new(executor, source_map.clone(), 1, test_name.clone());
         DebugContext {
             stepper: Some(stepper),
             dap_sender,
@@ -687,7 +686,7 @@ impl DebugContext {
 
     fn get_root_function_name(&self, thread_id: i64) -> String {
         if thread_id == 1 {
-            self.test_name.clone().unwrap_or_else(|| "test".to_string())
+            self.test_name.clone()
         } else {
             "onInternalMessage".to_string()
         }

@@ -1,6 +1,6 @@
-use crate::asserts_exts::process_txs_and_search_params;
 use crate::context::{AnyExecutor, AssertFailure, Context, FailAssertFailure, KnownAddress};
 use crate::debug_context::StepMode;
+use crate::exts::assert::process_txs_and_search_params;
 use crc::{CRC_16_XMODEM, Crc};
 use emulator::config::DEFAULT_CONFIG;
 use emulator::emulator::{Emulator, SendMessageResult, SendMessageResultSuccess};

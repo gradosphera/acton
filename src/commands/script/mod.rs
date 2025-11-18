@@ -1,8 +1,8 @@
 use crate::config::ActonConfig;
 use crate::context::{AnyExecutor, BuildCache, Context, Emulations, KnownAddresses};
 use crate::debug_context::DebugContext;
+use crate::exts;
 use crate::file_build_cache::FileBuildCache;
-use crate::{asserts_exts, exts, io_exts};
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use emulator::blockchain::Blockchain;
@@ -18,6 +18,7 @@ use tolkc::source_map::SourceMap;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
+use tvmffi::stack::Tuple;
 
 pub fn script_cmd(
     path: &String,
@@ -79,7 +80,7 @@ fn run_script_file(
 }
 
 struct ScriptResult {
-    get_result: GetMethodResult,
+    result: GetMethodResult,
 }
 
 fn execute_script(
@@ -124,7 +125,7 @@ fn execute_script(
         config: &ActonConfig::load()?,
         stdout_buffer: "".to_string(),
         stderr_buffer: "".to_string(),
-        capture_test_output: false,
+        capture_output: false,
         assert_failure: &mut None,
         blockchain: &mut blockchain,
         emulator: &mut emulator,
@@ -133,7 +134,7 @@ fn execute_script(
         known_addresses: &mut known_addresses,
         known_code_cells: &mut known_code_cell,
         emulations: &mut emulations,
-        abi: (*abi).clone(),
+        abi,
         expected_exit_code: &mut None,
         dbg_ctx: &mut DebugContext::empty(),
         debug,
@@ -144,43 +145,38 @@ fn execute_script(
     };
 
     if debug {
-        let mut get_executor = StepGetExecutor::new(Default::default(), params.clone());
-        exts::register_extensions(&mut get_executor, &mut ctx);
-        io_exts::register_extensions(&mut get_executor, &mut ctx);
-        asserts_exts::register_extensions(&mut get_executor, &mut ctx);
+        let mut executor = StepGetExecutor::new(Tuple::empty(), params.clone());
+        exts::register(&mut executor, &mut ctx);
 
         let (req_receiver, dap_sender) = crate::dap::start_dap_server(debug_port);
 
         let mut dbg_ctx = DebugContext::new(
-            AnyExecutor::Get(get_executor.clone()),
+            AnyExecutor::Get(executor.clone()),
             source_map,
             &req_receiver,
             dap_sender,
-            Some("main".to_string()),
+            "main".to_string(),
         );
 
         ctx.dbg_ctx = &mut dbg_ctx;
 
-        get_executor.run_get_method(0, Default::default());
+        executor.run_get_method(0, Tuple::empty());
 
         ctx.dbg_ctx.process_incoming_requests(true)?;
 
-        let result = get_executor.finish_get_method(&params.code);
-        return Ok(ScriptResult { get_result: result });
+        let result = executor.finish_get_method(&params.code);
+        return Ok(ScriptResult { result });
     }
 
-    let mut get_executor = GetExecutor::new(params.clone());
-    exts::register_extensions(&mut get_executor, &mut ctx);
-    io_exts::register_extensions(&mut get_executor, &mut ctx);
-    asserts_exts::register_extensions(&mut get_executor, &mut ctx);
+    let mut executor = GetExecutor::new(params.clone());
+    exts::register(&mut executor, &mut ctx);
 
-    let result = get_executor.run_get_method(Default::default(), params);
-
-    Ok(ScriptResult { get_result: result })
+    let result = executor.run_get_method(Tuple::empty(), params);
+    Ok(ScriptResult { result })
 }
 
 fn print_script_result(result: ScriptResult) {
-    match &result.get_result {
+    match &result.result {
         GetMethodResult::Success(success_result) => {
             let exit_code = success_result.vm_exit_code;
             std::process::exit(exit_code);

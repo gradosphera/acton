@@ -13,7 +13,7 @@ fn println_impl(ctx: &mut Context, _stack: &mut Tuple, arg: TupleItem, type_name
     let formatter = crate::formatter::FormatterContext::from_context(ctx);
     let formatted = strip_quotes(formatter.format(&typed_arg));
 
-    if ctx.capture_test_output {
+    if ctx.capture_output {
         ctx.stdout_buffer.push_str(&formatted);
         ctx.stdout_buffer.push_str("\n");
     } else {
@@ -23,7 +23,7 @@ fn println_impl(ctx: &mut Context, _stack: &mut Tuple, arg: TupleItem, type_name
 
 extension!(eprintln in (Context) with (s: String) using eprintln_impl);
 fn eprintln_impl(ctx: &mut Context, _stack: &mut Tuple, s: String) {
-    if ctx.capture_test_output {
+    if ctx.capture_output {
         ctx.stderr_buffer.push_str(&s);
         ctx.stderr_buffer.push_str("\n");
     } else {
