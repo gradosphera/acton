@@ -60,7 +60,6 @@ pub enum ReportFormat {
 
 #[derive(Debug, Clone)]
 pub struct TestConfig {
-    pub teamcity: bool,
     pub report_formats: Vec<ReportFormat>,
     pub debug: bool,
     pub debug_port: u16,

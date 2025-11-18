@@ -49,8 +49,6 @@ enum Commands {
         path: Option<String>,
         #[arg(short, long, help = "Filter tests by regex pattern")]
         filter: Option<String>,
-        #[arg(long, help = "Output in TeamCity format for IDE integration")]
-        teamcity: bool,
         #[arg(long, help = "Report formats to use", value_delimiter = ',')]
         reporter: Vec<String>,
         #[arg(long, help = "Enable debug mode")]
@@ -273,7 +271,6 @@ fn main() {
         Commands::Test {
             path,
             filter,
-            teamcity,
             reporter,
             debug,
             debug_port,
@@ -287,10 +284,6 @@ fn main() {
             junit_merge,
         } => {
             let mut report_formats = Vec::new();
-
-            if teamcity {
-                report_formats.push(ReportFormat::TeamCity);
-            }
 
             for format_str in reporter {
                 match format_str.to_lowercase().as_str() {
@@ -313,7 +306,6 @@ fn main() {
 
             let config = create_test_config(
                 filter,
-                teamcity,
                 debug,
                 debug_port,
                 backtrace,
@@ -420,7 +412,6 @@ fn setup_logging() -> anyhow::Result<()> {
 
 fn create_test_config(
     filter: Option<String>,
-    teamcity: bool,
     debug: bool,
     debug_port: u16,
     backtrace: Option<String>,
@@ -440,7 +431,6 @@ fn create_test_config(
     {
         return test_settings.to_test_config(
             filter,
-            if teamcity { Some(true) } else { None },
             if debug { Some(true) } else { None },
             Some(debug_port),
             backtrace,
@@ -463,7 +453,6 @@ fn create_test_config(
     }
 
     TestConfig {
-        teamcity,
         debug,
         debug_port,
         backtrace,

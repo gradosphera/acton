@@ -211,7 +211,6 @@ impl TestSettings {
     pub fn to_test_config(
         &self,
         filter_override: Option<String>,
-        teamcity_override: Option<bool>,
         debug_override: Option<bool>,
         debug_port_override: Option<u16>,
         backtrace_override: Option<String>,
@@ -225,7 +224,6 @@ impl TestSettings {
     ) -> TestConfig {
         TestConfig {
             filter: filter_override.or_else(|| self.filter.clone()),
-            teamcity: teamcity_override.unwrap_or_else(|| self.teamcity.unwrap_or(false)),
             report_formats: vec![],
             debug: debug_override.unwrap_or_else(|| self.debug.unwrap_or(false)),
             debug_port: debug_port_override.unwrap_or_else(|| self.debug_port.unwrap_or(12345)),
