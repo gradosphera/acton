@@ -4,6 +4,7 @@ mod basic_unit_tests;
 mod build_tests;
 mod config_tests;
 mod coverage_tests;
+mod disasm_tests;
 mod fixture_tests;
 mod flags_tests;
 mod incremental_tests;

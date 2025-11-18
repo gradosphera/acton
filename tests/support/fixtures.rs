@@ -113,6 +113,8 @@ impl FixtureProject {
             build_clear_cache: false,
             build_contract: None,
             build_graph: None,
+            disasm_string: None,
+            disasm_output: None,
         }
     }
 

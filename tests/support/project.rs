@@ -455,6 +455,8 @@ impl Project {
             build_contract: None,
             build_clear_cache: false,
             build_graph: None,
+            disasm_string: None,
+            disasm_output: None,
         }
     }
 
@@ -475,6 +477,8 @@ pub struct ActonCommand {
     pub(crate) build_contract: Option<String>,
     pub(crate) build_clear_cache: bool,
     pub(crate) build_graph: Option<Option<String>>,
+    pub(crate) disasm_string: Option<String>,
+    pub(crate) disasm_output: Option<String>,
 }
 
 impl ActonCommand {
@@ -507,6 +511,56 @@ impl ActonCommand {
             .arg("script")
             .arg(script_path)
             .current_dir(&self.project.path);
+        self
+    }
+
+    /// Start disasm command (without input - use with disasm_file or disasm_string)
+    ///
+    /// # Examples
+    /// ```
+    /// .disasm().disasm_file("contract.boc")
+    /// .disasm().disasm_string("hex_or_base64_string")
+    /// ```
+    pub fn disasm(mut self) -> Self {
+        self.cmd = self.cmd.arg("disasm").current_dir(&self.project.path);
+        self
+    }
+
+    /// Start disasm command with file input
+    ///
+    /// # Examples
+    /// ```
+    /// .disasm_file("contract.boc")
+    /// ```
+    pub fn disasm_file(mut self, file_path: &str) -> Self {
+        self.cmd = self
+            .cmd
+            .arg("disasm")
+            .arg(file_path)
+            .current_dir(&self.project.path);
+        self
+    }
+
+    /// Start disasm command with string input (hex or base64)
+    ///
+    /// # Examples
+    /// ```
+    /// .disasm_string("base64_encoded_boc")
+    /// ```
+    pub fn disasm_string(mut self, boc_string: &str) -> Self {
+        self.cmd = self.cmd.arg("disasm").current_dir(&self.project.path);
+        self.disasm_string = Some(boc_string.to_string());
+        self
+    }
+
+    /// Specify output file for disasm result
+    ///
+    /// # Examples
+    /// ```
+    /// .disasm_file("contract.boc").with_output("output.tasm")
+    /// ```
+    pub fn with_output(mut self, output_path: &str) -> Self {
+        self.disasm_output = Some(output_path.to_string());
         self
     }
 
@@ -618,6 +672,14 @@ impl ActonCommand {
             } else {
                 self.cmd = self.cmd.arg("");
             }
+        }
+
+        if let Some(boc_string) = self.disasm_string {
+            self.cmd = self.cmd.arg("--string").arg(boc_string);
+        }
+
+        if let Some(output_file) = self.disasm_output {
+            self.cmd = self.cmd.arg("--output").arg(output_file);
         }
 
         self.cmd = self.cmd.env("NO_COLOR", "1");
