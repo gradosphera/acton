@@ -300,10 +300,6 @@ fn main() {
                 }
             }
 
-            if report_formats.is_empty() {
-                report_formats.push(ReportFormat::Console);
-            }
-
             let config = create_test_config(
                 filter,
                 debug,
@@ -431,6 +427,7 @@ fn create_test_config(
     {
         return test_settings.to_test_config(
             filter,
+            report_formats,
             if debug { Some(true) } else { None },
             Some(debug_port),
             backtrace,

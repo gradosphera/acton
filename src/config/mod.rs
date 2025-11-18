@@ -257,6 +257,7 @@ impl TestSettings {
     pub fn to_test_config(
         &self,
         filter_override: Option<String>,
+        report_formats: Vec<ReportFormat>,
         debug_override: Option<bool>,
         debug_port_override: Option<u16>,
         backtrace_override: Option<String>,
@@ -268,22 +269,28 @@ impl TestSettings {
         junit_path_override: Option<String>,
         junit_merge_override: bool,
     ) -> TestConfig {
-        let mut report_formats = Vec::new();
-        if let Some(reporters) = &self.reporter {
-            for reporter in reporters {
-                match reporter.to_lowercase().as_str() {
-                    "console" => report_formats.push(ReportFormat::Console),
-                    "teamcity" => report_formats.push(ReportFormat::TeamCity),
-                    "junit" => report_formats.push(ReportFormat::JUnit),
-                    "dot" => report_formats.push(ReportFormat::Dot),
-                    _ => {} // skip unknown reporters
+        let mut final_report_formats = Vec::new();
+
+        if report_formats.is_empty() {
+            // process config reporters only if no cli reporters provided
+            if let Some(reporters) = &self.reporter {
+                for reporter in reporters {
+                    match reporter.to_lowercase().as_str() {
+                        "console" => final_report_formats.push(ReportFormat::Console),
+                        "teamcity" => final_report_formats.push(ReportFormat::TeamCity),
+                        "junit" => final_report_formats.push(ReportFormat::JUnit),
+                        "dot" => final_report_formats.push(ReportFormat::Dot),
+                        _ => {} // skip unknown reporters
+                    }
                 }
             }
+        } else {
+            final_report_formats = report_formats.clone();
         }
 
         TestConfig {
             filter: filter_override.or_else(|| self.filter.clone()),
-            report_formats,
+            report_formats: final_report_formats,
             debug: debug_override.unwrap_or_else(|| self.debug.unwrap_or(false)),
             debug_port: debug_port_override.unwrap_or_else(|| self.debug_port.unwrap_or(12345)),
             backtrace: backtrace_override.or_else(|| self.backtrace.clone()),
