@@ -349,23 +349,23 @@ fn test_build_gen_file_naming() {
         .contract_with_deps(
             "main",
             SIMPLE_CONTRACT,
-            vec!["my-contract", "my_contract_2", "my-contract-3"],
+            vec!["my_contract", "my_contract_2", "my_contract_3"],
         )
         .build();
 
     project.acton().build().run().success();
 
-    assert!(project.path().join("gen/my-contract_code.tolk").exists());
+    assert!(project.path().join("gen/my_contract_code.tolk").exists());
     assert!(project.path().join("gen/my_contract_2_code.tolk").exists());
-    assert!(project.path().join("gen/my-contract-3_code.tolk").exists());
+    assert!(project.path().join("gen/my_contract_3_code.tolk").exists());
 
-    let file1 = fs::read_to_string(project.path().join("gen/my-contract_code.tolk")).unwrap();
+    let file1 = fs::read_to_string(project.path().join("gen/my_contract_code.tolk")).unwrap();
     assert!(file1.contains("fun my_contractCompiledCode()"));
 
     let file2 = fs::read_to_string(project.path().join("gen/my_contract_2_code.tolk")).unwrap();
     assert!(file2.contains("fun my_contract_2CompiledCode()"));
 
-    let file3 = fs::read_to_string(project.path().join("gen/my-contract-3_code.tolk")).unwrap();
+    let file3 = fs::read_to_string(project.path().join("gen/my_contract_3_code.tolk")).unwrap();
     assert!(file3.contains("fun my_contract_3CompiledCode()"));
 }
 

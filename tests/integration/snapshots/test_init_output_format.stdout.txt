@@ -1,0 +1,8 @@
+Discovered 2 contracts:
+  Contract1 (contract1)
+  Contract2 (contract2)
+
+✓ Initialized new Acton project
+Created Acton.toml with project configuration
+Created .acton/ directory with standard library
+Created .acton/tolk-stdlib directory with Tolk standard library

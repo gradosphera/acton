@@ -7,3 +7,4 @@ mod coverage_tests;
 mod fixture_tests;
 mod flags_tests;
 mod incremental_tests;
+mod init_tests;

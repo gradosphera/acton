@@ -13,6 +13,7 @@ pub struct ProjectBuilder {
     files: Vec<(String, String)>,
     test_config: Option<TestConfig>,
     license: Option<String>,
+    create_acton_toml: bool,
 }
 
 struct ContractDef {
@@ -20,6 +21,7 @@ struct ContractDef {
     code: ContractSource,
     depends: Vec<DependencyDef>,
     output: Option<String>,
+    dir: Option<String>,
 }
 
 enum ContractSource {
@@ -54,7 +56,14 @@ impl ProjectBuilder {
             files: Vec::new(),
             test_config: None,
             license: Some("MIT".to_string()),
+            create_acton_toml: true,
         }
+    }
+
+    /// Don't create Acton.toml (useful for testing init command)
+    pub fn without_acton_toml(mut self) -> Self {
+        self.create_acton_toml = false;
+        self
     }
 
     /// Set project license (for gen file headers)
@@ -75,6 +84,28 @@ impl ProjectBuilder {
             code: ContractSource::Tolk(code.to_string()),
             depends: Vec::new(),
             output: None,
+            dir: None,
+        });
+        self
+    }
+
+    /// Add a contract file in a custom directory
+    ///
+    /// Useful for testing `init` command discovery with contracts in non-standard locations.
+    /// The file will be created at `{directory}/{name}.tolk`.
+    ///
+    /// # Examples
+    /// ```
+    /// .contract_at("wallet", "src/contracts", CONTRACT_CODE)  // Creates src/contracts/wallet.tolk
+    /// .contract_at("nested", "contracts/nested", CONTRACT_CODE)  // Creates contracts/nested/nested.tolk
+    /// ```
+    pub fn contract_at(mut self, name: &str, directory: &str, code: &str) -> Self {
+        self.contracts.push(ContractDef {
+            name: name.to_string(),
+            code: ContractSource::Tolk(code.to_string()),
+            depends: Vec::new(),
+            output: None,
+            dir: Some(directory.to_string()),
         });
         self
     }
@@ -91,6 +122,7 @@ impl ProjectBuilder {
             code: ContractSource::Boc(boc_data),
             depends: Vec::new(),
             output: None,
+            dir: None,
         });
         self
     }
@@ -115,6 +147,7 @@ impl ProjectBuilder {
                 })
                 .collect(),
             output: None,
+            dir: None,
         });
         self
     }
@@ -147,6 +180,7 @@ impl ProjectBuilder {
                 })
                 .collect(),
             output: None,
+            dir: None,
         });
         self
     }
@@ -163,6 +197,7 @@ impl ProjectBuilder {
             code: ContractSource::Tolk(code.to_string()),
             depends: Vec::new(),
             output: Some(output.to_string()),
+            dir: None,
         });
         self
     }
@@ -211,13 +246,20 @@ impl ProjectBuilder {
         fs::create_dir_all(&tests_dir).expect("Failed to create tests dir");
 
         for contract in &self.contracts {
+            let contract_dir = if let Some(ref custom_dir) = contract.dir {
+                project_path.join(custom_dir)
+            } else {
+                contracts_dir.clone()
+            };
+            fs::create_dir_all(&contract_dir).expect("Failed to create contract directory");
+
             match &contract.code {
                 ContractSource::Tolk(code) => {
-                    let file_path = contracts_dir.join(format!("{}.tolk", contract.name));
+                    let file_path = contract_dir.join(format!("{}.tolk", contract.name));
                     fs::write(file_path, code).expect("Failed to write contract file");
                 }
                 ContractSource::Boc(boc_data) => {
-                    let file_path = contracts_dir.join(format!("{}.boc", contract.name));
+                    let file_path = contract_dir.join(format!("{}.boc", contract.name));
                     fs::write(file_path, boc_data).expect("Failed to write BoC file");
                 }
             }
@@ -237,13 +279,15 @@ impl ProjectBuilder {
             fs::write(file_path, code).expect("Failed to write custom file");
         }
 
-        Self::create_acton_toml(
-            &project_path,
-            &self.name,
-            &self.contracts,
-            &self.test_config,
-            &self.license,
-        );
+        if self.create_acton_toml {
+            Self::create_acton_toml(
+                &project_path,
+                &self.name,
+                &self.contracts,
+                &self.test_config,
+                &self.license,
+            );
+        }
 
         Project {
             path: project_path,
@@ -295,12 +339,17 @@ version = "0.1.0"
                 ContractSource::Boc(_) => "boc",
             };
 
+            let contract_path = if let Some(ref custom_dir) = contract.dir {
+                format!("{}/{}.{}", custom_dir, contract.name, file_extension)
+            } else {
+                format!("contracts/{}.{}", contract.name, file_extension)
+            };
+
             toml_content.push_str(&format!(
-                "[contracts.{}]\nname = \"{}\"\nsrc = \"contracts/{}.{}\"\n",
-                contract.name.to_lowercase(),
+                "[contracts.{}]\nname = \"{}\"\nsrc = \"{}\"\n",
+                contract.name.to_lowercase().replace("-", "_"),
                 contract.name,
-                contract.name,
-                file_extension,
+                contract_path,
             ));
 
             // Generate dependencies
@@ -425,6 +474,12 @@ impl ActonCommand {
     /// Start test command (defaults to running all tests in current directory)
     pub fn test(mut self) -> Self {
         self.cmd = self.cmd.arg("test").current_dir(&self.project.path);
+        self
+    }
+
+    /// Start init command
+    pub fn init(mut self) -> Self {
+        self.cmd = self.cmd.arg("init").current_dir(&self.project.path);
         self
     }
 
