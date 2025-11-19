@@ -141,6 +141,12 @@ export default defineConfig({
       },
       sidebar: [
         {
+          label: "Commands",
+          items: [
+            {slug: "disasm", label: "disasm"},
+          ],
+        },
+        {
           label: "Test Runner",
           items: [
             {
