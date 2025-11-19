@@ -3,7 +3,7 @@ use crate::context::{
     AnyExecutor, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
     Emulations, Env, IoContext, KnownAddresses,
 };
-use crate::debug_context::DebugContext;
+use crate::debugger::debug_context::DebugContext;
 use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
 use abi::{ContractAbi, contract_abi};
@@ -164,7 +164,7 @@ fn execute_script(
         let mut executor = StepGetExecutor::new(Tuple::empty(), params.clone());
         ffi::register(&mut executor, &mut ctx);
 
-        let transport = crate::dap::start_dap_server(debug_port);
+        let transport = crate::debugger::start_dap_server(debug_port);
 
         let mut dbg_ctx = DebugContext::new(
             transport,

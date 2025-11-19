@@ -16,8 +16,8 @@ use crate::context::{
     AnyExecutor, AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context,
     DebugCtx, Emulations, Env, IoContext, KnownAddresses,
 };
-use crate::dap::DapTransport;
-use crate::debug_context::DebugContext;
+use crate::debugger::dap::DapTransport;
+use crate::debugger::debug_context::DebugContext;
 use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
 use abi::{ContractAbi, contract_abi};
@@ -104,7 +104,7 @@ impl<'a> TestRunner<'a> {
         reporter_manager: &'a mut ReporterManager,
     ) -> TestRunner<'a> {
         let transport = if config.debug {
-            crate::dap::start_dap_server(config.debug_port)
+            crate::debugger::start_dap_server(config.debug_port)
         } else {
             DapTransport::dummy()
         };

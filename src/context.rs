@@ -1,5 +1,5 @@
 use crate::config::{ActonConfig, ContractConfig};
-use crate::debug_context::DebugContext;
+use crate::debugger::debug_context::DebugContext;
 use crate::file_build_cache::FileBuildCache;
 use abi::ContractAbi;
 use emulator::blockchain::Blockchain;

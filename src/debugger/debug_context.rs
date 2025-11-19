@@ -1,5 +1,5 @@
 use crate::context::AnyExecutor;
-use crate::dap::{DapMessage, DapTransport};
+use crate::debugger::dap::{DapMessage, DapTransport};
 use crate::formatter::FormatterContext;
 use anyhow::anyhow;
 use dap::events::{Event, StoppedEventBody, ThreadEventBody};
@@ -409,7 +409,7 @@ impl DebugContext {
         Ok(())
     }
 
-    pub(crate) fn on_request(&mut self, req: Request) -> anyhow::Result<bool> {
+    pub fn on_request(&mut self, req: Request) -> anyhow::Result<bool> {
         debug!("DAP on_request: {:?}", req.command);
         match &req.command {
             Command::Initialize(args) => {
@@ -737,7 +737,7 @@ impl DebugContext {
             .collect()
     }
 
-    pub(crate) fn need_to_stop_child_thread_on_start(&self) -> bool {
+    pub fn need_to_stop_child_thread_on_start(&self) -> bool {
         self.performing_step == Some(StepMode::StepIn)
     }
 
@@ -759,7 +759,7 @@ impl DebugContext {
         None
     }
 
-    pub(crate) fn step(&mut self, mode: StepMode) -> bool {
+    pub fn step(&mut self, mode: StepMode) -> bool {
         match mode {
             StepMode::StepIn => self.step_in_impl(),
             StepMode::StepOver => self.step_over_impl(),

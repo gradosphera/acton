@@ -1,5 +1,5 @@
 use crate::context::AnyExecutor;
-use crate::debug_context::{DebugContext, VARIABLE_REFERENCE_COUNTER};
+use crate::debugger::debug_context::{DebugContext, VARIABLE_REFERENCE_COUNTER};
 use crate::formatter::FormatterContext;
 use anyhow::anyhow;
 use dap::requests::VariablesArguments;
@@ -19,7 +19,7 @@ use tycho_types::models::{
 use tycho_types::num::Tokens;
 
 impl DebugContext {
-    pub(crate) fn process_variables(
+    pub fn process_variables(
         &mut self,
         args: &&VariablesArguments,
     ) -> anyhow::Result<Vec<Variable>> {
@@ -272,8 +272,7 @@ impl DebugContext {
                     OutAction::ChangeLibrary { .. } => "ChangeLibrary",
                 };
 
-                let action_ref = crate::debug_context::VARIABLE_REFERENCE_COUNTER
-                    .fetch_add(1, Ordering::SeqCst) as i64;
+                let action_ref = VARIABLE_REFERENCE_COUNTER.fetch_add(1, Ordering::SeqCst) as i64;
                 self.variables.out_action.insert(action_ref, action.clone());
 
                 let value = match action {
@@ -319,8 +318,7 @@ impl DebugContext {
                     ..Default::default()
                 }];
 
-                let message_ref = crate::debug_context::VARIABLE_REFERENCE_COUNTER
-                    .fetch_add(1, Ordering::SeqCst) as i64;
+                let message_ref = VARIABLE_REFERENCE_COUNTER.fetch_add(1, Ordering::SeqCst) as i64;
                 if let Ok(message) = out_msg.load() {
                     self.variables.message.insert(message_ref, message);
                     variables.push(Variable {
