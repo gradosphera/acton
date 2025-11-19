@@ -268,7 +268,7 @@ fn test_coverage_lcov_snapshot() {
 
     let lcov_content = fs::read_to_string(&lcov_path).expect("Should read lcov.info");
     assertion().eq(
-        normalize_output(lcov_content.as_str(), &project.path().to_path_buf()),
+        normalize_output(lcov_content.as_str(), project.path()),
         snapbox::file!("snapshots/test_coverage_lcov_snapshot.lcov"),
     )
 }

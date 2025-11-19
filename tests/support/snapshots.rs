@@ -2,9 +2,9 @@ use crate::common::{assert_ui, strip_ansi};
 use crate::regex;
 use snapbox::IntoData;
 use snapbox::filter::Filter;
-use std::path::PathBuf;
+use std::path::Path;
 
-pub fn normalize_output(stdout: &str, project_path: &PathBuf) -> String {
+pub fn normalize_output(stdout: &str, project_path: &Path) -> String {
     let content = strip_ansi(stdout).into_data();
     let content = snapbox::filter::FilterPaths.filter(content.into_data());
     let content = snapbox::filter::FilterNewlines.filter(content);

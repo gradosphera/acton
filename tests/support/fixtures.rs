@@ -36,10 +36,7 @@ impl FixtureProject {
     ///     .with_slot("contracts/counter.tolk", 1)
     /// ```
     pub fn with_slot(mut self, file: &str, slot: usize) -> Self {
-        let slots = self
-            .enabled_slots
-            .entry(file.to_string())
-            .or_insert_with(Vec::new);
+        let slots = self.enabled_slots.entry(file.to_string()).or_default();
         slots.push(slot);
         Self::enable_slot(&self.project_path, file, slot);
         self
@@ -52,12 +49,10 @@ impl FixtureProject {
     /// FixtureProject::load("basic")
     ///     .with_slots("tests/counter_test.tolk", &[1, 2, 3])
     /// ```
+    #[allow(dead_code)]
     pub fn with_slots(mut self, file: &str, slots: &[usize]) -> Self {
         for &slot in slots {
-            let slot_list = self
-                .enabled_slots
-                .entry(file.to_string())
-                .or_insert_with(Vec::new);
+            let slot_list = self.enabled_slots.entry(file.to_string()).or_default();
             slot_list.push(slot);
             Self::enable_slot(&self.project_path, file, slot);
         }
@@ -70,6 +65,7 @@ impl FixtureProject {
     }
 
     /// Enable multiple contract slots (shorthand)
+    #[allow(dead_code)]
     pub fn with_contract_slots(self, slots: &[usize]) -> Self {
         self.with_slots("contracts/counter.tolk", slots)
     }
@@ -80,6 +76,7 @@ impl FixtureProject {
     }
 
     /// Enable multiple test slots (shorthand)
+    #[allow(dead_code)]
     pub fn with_test_slots(self, slots: &[usize]) -> Self {
         self.with_slots("tests/counter_test.tolk", slots)
     }
@@ -93,9 +90,10 @@ impl FixtureProject {
     /// FixtureProject::load("basic")
     ///     .with_template_vars(vars)
     /// ```
+    #[allow(dead_code)]
     pub fn with_template_vars(self, vars: HashMap<&str, &str>) -> Self {
         for (key, value) in vars {
-            self.replace_in_all_files(&format!("{{{{ {} }}}}", key), value);
+            self.replace_in_all_files(&format!("{{{{ {key} }}}}"), value);
         }
         self
     }
@@ -125,6 +123,7 @@ impl FixtureProject {
     }
 
     /// Get the project path
+    #[allow(dead_code)]
     pub fn path(&self) -> &Path {
         &self.project_path
     }
@@ -148,7 +147,7 @@ impl FixtureProject {
         tmp
     }
 
-    fn patch_imports(project_path: &PathBuf) {
+    fn patch_imports(project_path: &Path) {
         let test_file = project_path.join("tests/counter_test.tolk");
         if test_file.exists() {
             let content = fs::read_to_string(&test_file).expect("Failed to read test file");
@@ -157,18 +156,20 @@ impl FixtureProject {
         }
     }
 
-    fn enable_slot(project_path: &PathBuf, file: &str, index: usize) {
+    fn enable_slot(project_path: &Path, file: &str, index: usize) {
         let file_path = project_path.join(file);
         if !file_path.exists() {
-            panic!("File {} does not exist in fixture project", file);
+            panic!("File {file} does not exist in fixture project");
         }
 
         let content =
-            fs::read_to_string(&file_path).expect(&format!("Failed to read file {}", file));
-        let new_content = content.replace(&format!("// SLOT_{}: ", index), "");
-        fs::write(&file_path, new_content).expect(&format!("Failed to write file {}", file));
+            fs::read_to_string(&file_path).unwrap_or_else(|_| panic!("Failed to read file {file}"));
+        let new_content = content.replace(&format!("// SLOT_{index}: "), "");
+        fs::write(&file_path, new_content)
+            .unwrap_or_else(|_| panic!("Failed to write file {file}"));
     }
 
+    #[allow(dead_code)]
     fn replace_in_all_files(&self, from: &str, to: &str) {
         use walkdir::WalkDir;
 

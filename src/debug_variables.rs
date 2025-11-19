@@ -121,7 +121,7 @@ impl DebugContext {
                 .rev()
                 .enumerate()
                 .map(|(index, item)| Variable {
-                    name: format!("s{}", index),
+                    name: format!("s{index}"),
                     type_field: Some("stack_item".to_string()),
                     value: self.formatter_context.format(item),
                     ..Default::default()
@@ -171,7 +171,7 @@ impl DebugContext {
                         0
                     };
                     Variable {
-                        name: format!("[{}]", index),
+                        name: format!("[{index}]"),
                         type_field: Some(Self::get_item_type(item)),
                         value: self.formatter_context.format(item),
                         variables_reference: item_ref,
@@ -192,7 +192,7 @@ impl DebugContext {
                         0
                     };
                     Variable {
-                        name: format!("[{}]", index),
+                        name: format!("[{index}]"),
                         type_field: Some(Self::get_item_type(item)),
                         value: self.formatter_context.format(item),
                         variables_reference: item_ref,
@@ -241,9 +241,9 @@ impl DebugContext {
         if let TupleItem::Cell(c5_tuple) = parse_tuple_item(&mut c5_slice)? {
             let c5_boc = c5_tuple
                 .to_boc_b64(false)
-                .map_err(|e| anyhow!("Failed to encode c5 tuple to BoC: {}", e))?;
+                .map_err(|e| anyhow!("Failed to encode c5 tuple to BoC: {e}"))?;
             let c5_cell = &Boc::decode_base64(&c5_boc)
-                .map_err(|e| anyhow!("Failed to decode c5 BoC: {}", e))?;
+                .map_err(|e| anyhow!("Failed to decode c5 BoC: {e}"))?;
             let c5_slice = c5_cell.as_slice()?;
 
             let out_actions = OutActionsRevIter::new(c5_slice)
@@ -295,11 +295,11 @@ impl DebugContext {
                             FormatterContext::format_reserve_currency_flags(*mode)
                         )
                     }
-                    _ => format!("{:?}", action),
+                    _ => format!("{action:?}"),
                 };
 
                 Variable {
-                    name: format!("[{}] {}", index, action_type),
+                    name: format!("[{index}] {action_type}"),
                     type_field: Some(action_type.to_string()),
                     value,
                     variables_reference: action_ref,
@@ -334,7 +334,7 @@ impl DebugContext {
                     variables.push(Variable {
                         name: "out_msg".to_string(),
                         type_field: Some("Lazy<OwnedRelaxedMessage>".to_string()),
-                        value: format!("{:?}", out_msg),
+                        value: format!("{out_msg:?}"),
                         ..Default::default()
                     });
                 }
@@ -351,7 +351,7 @@ impl DebugContext {
             OutAction::SetCode { new_code } => vec![Variable {
                 name: "new_code".to_string(),
                 type_field: Some("Cell".to_string()),
-                value: format!("{:?}", new_code),
+                value: format!("{new_code:?}"),
                 ..Default::default()
             }],
             OutAction::ReserveCurrency { mode, value } => vec![
@@ -372,13 +372,13 @@ impl DebugContext {
                 Variable {
                     name: "mode".to_string(),
                     type_field: Some("ChangeLibraryMode".to_string()),
-                    value: format!("{:?}", mode),
+                    value: format!("{mode:?}"),
                     ..Default::default()
                 },
                 Variable {
                     name: "lib".to_string(),
                     type_field: Some("LibRef".to_string()),
-                    value: format!("{:?}", lib),
+                    value: format!("{lib:?}"),
                     ..Default::default()
                 },
             ],
@@ -392,7 +392,7 @@ impl DebugContext {
     fn format_int_addr(addr: &IntAddr) -> String {
         match addr {
             IntAddr::Std(std_addr) => std_addr.display_base64(true).to_string(),
-            IntAddr::Var(var_addr) => format!("{:?}", var_addr), // fallback for VarAddr
+            IntAddr::Var(var_addr) => format!("{var_addr:?}"), // fallback for VarAddr
         }
     }
 
@@ -420,15 +420,13 @@ impl DebugContext {
     fn format_currency_collection(currency: &CurrencyCollection) -> String {
         let ton_amount = currency.tokens.into_inner() as f64 / 1_000_000_000.0;
 
-        let mut result = format!("{:.9} TON ", ton_amount);
+        let mut result = format!("{ton_amount:.9} TON ");
 
         if !currency.other.is_empty() {
             let mut other_currencies = Vec::new();
             let dict = currency.other.as_dict();
-            for entry in dict.iter() {
-                if let Ok((currency_id, amount)) = entry {
-                    other_currencies.push(format!("{}: {}", currency_id, amount));
-                }
+            for (currency_id, amount) in dict.iter().flatten() {
+                other_currencies.push(format!("{currency_id}: {amount}"));
             }
             if !other_currencies.is_empty() {
                 result.push_str(&format!(" + [{}]", other_currencies.join(", ")));
@@ -599,7 +597,7 @@ impl DebugContext {
             variables.push(Variable {
                 name: "split_depth".to_string(),
                 type_field: Some("SplitDepth".to_string()),
-                value: format!("{:?}", split_depth),
+                value: format!("{split_depth:?}"),
                 ..Default::default()
             });
         } else {

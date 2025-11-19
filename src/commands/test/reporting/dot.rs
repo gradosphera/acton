@@ -66,7 +66,7 @@ impl DotReporter {
 
         let lines: Vec<&str> = content.trim().lines().collect();
         for line in lines {
-            println!("{}", line);
+            println!("{line}");
         }
 
         Ok(())

@@ -51,7 +51,9 @@ pub trait TestOutputExt {
     fn assert_failed(&self, count: usize) -> &Self;
     fn assert_skipped(&self, count: usize) -> &Self;
     fn assert_todo(&self, count: usize) -> &Self;
+    #[allow(dead_code)]
     fn assert_test_passed(&self, name: &str) -> &Self;
+    #[allow(dead_code)]
     fn assert_test_failed(&self, name: &str) -> &Self;
     fn assert_contains(&self, text: &str) -> &Self;
     fn assert_not_contains(&self, text: &str) -> &Self;
@@ -70,72 +72,60 @@ pub trait TestOutputExt {
 impl TestOutputExt for TestSuccess {
     fn assert_passed(&self, count: usize) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let passed_text = format!("✓ {} passed", count);
+        let passed_text = format!("✓ {count} passed");
         assert!(
             stdout.contains(&passed_text),
-            "Expected '{}' in stdout, but got:\n{}",
-            passed_text,
-            stdout
+            "Expected '{passed_text}' in stdout, but got:\n{stdout}"
         );
         self
     }
 
     fn assert_failed(&self, count: usize) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let failed_text = format!("✗ {} failed", count);
+        let failed_text = format!("✗ {count} failed");
         assert!(
             stdout.contains(&failed_text),
-            "Expected '{}' in stdout, but got:\n{}",
-            failed_text,
-            stdout
+            "Expected '{failed_text}' in stdout, but got:\n{stdout}"
         );
         self
     }
 
     fn assert_skipped(&self, count: usize) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let skipped_text = format!("○ {} skipped", count);
+        let skipped_text = format!("○ {count} skipped");
         assert!(
             stdout.contains(&skipped_text),
-            "Expected '{}' in stdout, but got:\n{}",
-            skipped_text,
-            stdout
+            "Expected '{skipped_text}' in stdout, but got:\n{stdout}"
         );
         self
     }
 
     fn assert_todo(&self, count: usize) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let skipped_text = format!("□ {} todo", count);
+        let skipped_text = format!("□ {count} todo");
         assert!(
             stdout.contains(&skipped_text),
-            "Expected '{}' in stdout, but got:\n{}",
-            skipped_text,
-            stdout
+            "Expected '{skipped_text}' in stdout, but got:\n{stdout}"
         );
         self
     }
 
     fn assert_test_passed(&self, name: &str) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let test_line = format!("✓ {}", name);
+        let test_line = format!("✓ {name}");
         assert!(
             stdout.contains(&test_line),
-            "Expected test '{}' to pass, but got:\n{}",
-            name,
-            stdout
+            "Expected test '{name}' to pass, but got:\n{stdout}"
         );
         self
     }
 
     fn assert_test_failed(&self, name: &str) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let test_line = format!("✗ {}", name);
+        let test_line = format!("✗ {name}");
         assert!(
             stdout.contains(&test_line),
-            "Expected test '{}' to fail, but got:\n{}",
-            name,
-            stdout
+            "Expected test '{name}' to fail, but got:\n{stdout}"
         );
         self
     }
@@ -144,9 +134,7 @@ impl TestOutputExt for TestSuccess {
         let stdout = strip_ansi(&self.get_stdout());
         assert!(
             stdout.contains(text),
-            "Expected '{}' in stdout, but got:\n{}",
-            text,
-            stdout
+            "Expected '{text}' in stdout, but got:\n{stdout}"
         );
         self
     }
@@ -155,9 +143,7 @@ impl TestOutputExt for TestSuccess {
         let stdout = strip_ansi(&self.get_stdout());
         assert!(
             !stdout.contains(text),
-            "Did not expect '{}' in stdout, but got:\n{}",
-            text,
-            stdout
+            "Did not expect '{text}' in stdout, but got:\n{stdout}"
         );
         self
     }
@@ -166,9 +152,7 @@ impl TestOutputExt for TestSuccess {
         let stderr = strip_ansi(&self.get_stderr());
         assert!(
             stderr.contains(text),
-            "Expected '{}' in stderr, but got:\n{}",
-            text,
-            stderr
+            "Expected '{text}' in stderr, but got:\n{stderr}"
         );
         self
     }
@@ -278,72 +262,60 @@ impl TestOutputExt for TestSuccess {
 impl TestOutputExt for TestFailure {
     fn assert_passed(&self, count: usize) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let passed_text = format!("✓ {} passed", count);
+        let passed_text = format!("✓ {count} passed");
         assert!(
             stdout.contains(&passed_text),
-            "Expected '{}' in stdout, but got:\n{}",
-            passed_text,
-            stdout
+            "Expected '{passed_text}' in stdout, but got:\n{stdout}"
         );
         self
     }
 
     fn assert_failed(&self, count: usize) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let failed_text = format!("✗ {} failed", count);
+        let failed_text = format!("✗ {count} failed");
         assert!(
             stdout.contains(&failed_text),
-            "Expected '{}' in stdout, but got:\n{}",
-            failed_text,
-            stdout
+            "Expected '{failed_text}' in stdout, but got:\n{stdout}"
         );
         self
     }
 
     fn assert_skipped(&self, count: usize) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let skipped_text = format!("○ {} skipped", count);
+        let skipped_text = format!("○ {count} skipped");
         assert!(
             stdout.contains(&skipped_text),
-            "Expected '{}' in stdout, but got:\n{}",
-            skipped_text,
-            stdout
+            "Expected '{skipped_text}' in stdout, but got:\n{stdout}"
         );
         self
     }
 
     fn assert_todo(&self, count: usize) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let skipped_text = format!("□ {} todo", count);
+        let skipped_text = format!("□ {count} todo");
         assert!(
             stdout.contains(&skipped_text),
-            "Expected '{}' in stdout, but got:\n{}",
-            skipped_text,
-            stdout
+            "Expected '{skipped_text}' in stdout, but got:\n{stdout}"
         );
         self
     }
 
     fn assert_test_passed(&self, name: &str) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let test_line = format!("✓ {}", name);
+        let test_line = format!("✓ {name}");
         assert!(
             stdout.contains(&test_line),
-            "Expected test '{}' to pass, but got:\n{}",
-            name,
-            stdout
+            "Expected test '{name}' to pass, but got:\n{stdout}"
         );
         self
     }
 
     fn assert_test_failed(&self, name: &str) -> &Self {
         let stdout = strip_ansi(&self.get_stdout());
-        let test_line = format!("✗ {}", name);
+        let test_line = format!("✗ {name}");
         assert!(
             stdout.contains(&test_line),
-            "Expected test '{}' to fail, but got:\n{}",
-            name,
-            stdout
+            "Expected test '{name}' to fail, but got:\n{stdout}"
         );
         self
     }
@@ -353,10 +325,7 @@ impl TestOutputExt for TestFailure {
         let stderr = strip_ansi(&self.get_stderr());
         assert!(
             stdout.contains(text) || stderr.contains(text),
-            "Expected '{}' in stdout/stderr, but got:\n{}\n{}",
-            text,
-            stdout,
-            stderr,
+            "Expected '{text}' in stdout/stderr, but got:\n{stdout}\n{stderr}",
         );
         self
     }
@@ -365,9 +334,7 @@ impl TestOutputExt for TestFailure {
         let stdout = strip_ansi(&self.get_stdout());
         assert!(
             !stdout.contains(text),
-            "Did not expect '{}' in stdout, but got:\n{}",
-            text,
-            stdout
+            "Did not expect '{text}' in stdout, but got:\n{stdout}"
         );
         self
     }
@@ -376,9 +343,7 @@ impl TestOutputExt for TestFailure {
         let stderr = strip_ansi(&self.get_stderr());
         assert!(
             stderr.contains(text),
-            "Expected '{}' in stderr, but got:\n{}",
-            text,
-            stderr
+            "Expected '{text}' in stderr, but got:\n{stderr}"
         );
         self
     }

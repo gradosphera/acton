@@ -169,6 +169,7 @@ impl ProjectBuilder {
     ///     ("utils", Some("embed_code"), Some("customFunc"), None),
     /// ])
     /// ```
+    #[allow(clippy::type_complexity)]
     pub fn contract_with_detailed_deps(
         mut self,
         name: &str,
@@ -223,7 +224,7 @@ impl ProjectBuilder {
     /// ```
     pub fn script_file(mut self, name: &str, code: &str) -> Self {
         self.files
-            .push((format!("scripts/{}", name), code.to_string()));
+            .push((format!("scripts/{name}"), code.to_string()));
         self
     }
 
@@ -257,7 +258,7 @@ impl ProjectBuilder {
         let project_path = self.temp_dir.path().join(&self.name);
         fs::create_dir_all(&project_path).expect("Failed to create project dir");
 
-        Self::copy_lib_to(&self.temp_dir.path());
+        Self::copy_lib_to(self.temp_dir.path());
 
         let contracts_dir = project_path.join("contracts");
         fs::create_dir_all(&contracts_dir).expect("Failed to create contracts dir");
@@ -287,12 +288,12 @@ impl ProjectBuilder {
 
         for (name, code) in &self.tests {
             let adjusted_code = Self::adjust_imports(code);
-            let file_path = tests_dir.join(format!("{}_test.tolk", name));
+            let file_path = tests_dir.join(format!("{name}_test.tolk"));
             fs::write(file_path, adjusted_code).expect("Failed to write test file");
         }
 
         for (path, code) in &self.files {
-            let file_path = project_path.join(format!("{}.tolk", path));
+            let file_path = project_path.join(format!("{path}.tolk"));
             if let Some(parent) = file_path.parent() {
                 fs::create_dir_all(parent).expect("Failed to create parent directories");
             }
@@ -338,19 +339,18 @@ impl ProjectBuilder {
         license: &Option<String>,
     ) {
         let license_line = if let Some(lic) = license {
-            format!("license = \"{}\"\n", lic)
+            format!("license = \"{lic}\"\n")
         } else {
             String::new()
         };
 
         let mut toml_content = format!(
             r#"[package]
-name = "{}"
+name = "{name}"
 description = "A test project"
 version = "0.1.0"
-{}
-"#,
-            name, license_line
+{license_line}
+"#
         );
 
         for contract in contracts {
@@ -389,13 +389,13 @@ version = "0.1.0"
                         } else {
                             toml_content.push_str(&format!("  {{ name = \"{}\"", dep.name));
                             if let Some(kind) = &dep.kind {
-                                toml_content.push_str(&format!(", kind = \"{}\"", kind));
+                                toml_content.push_str(&format!(", kind = \"{kind}\""));
                             }
                             if let Some(function) = &dep.function {
-                                toml_content.push_str(&format!(", function = \"{}\"", function));
+                                toml_content.push_str(&format!(", function = \"{function}\""));
                             }
                             if let Some(path) = &dep.path {
-                                toml_content.push_str(&format!(", path = \"{}\"", path));
+                                toml_content.push_str(&format!(", path = \"{path}\""));
                             }
                             toml_content.push_str(" },\n");
                         }
@@ -415,10 +415,10 @@ version = "0.1.0"
             }
 
             if let Some(output) = &contract.output {
-                toml_content.push_str(&format!("output = \"{}\"\n", output));
+                toml_content.push_str(&format!("output = \"{output}\"\n"));
             }
 
-            toml_content.push_str("\n");
+            toml_content.push('\n');
         }
 
         // Add [test] section if test_config is provided
@@ -426,7 +426,7 @@ version = "0.1.0"
             toml_content.push_str("[test]\n");
 
             if let Some(filter) = &config.filter {
-                toml_content.push_str(&format!("filter = \"{}\"\n", filter));
+                toml_content.push_str(&format!("filter = \"{filter}\"\n"));
             }
 
             if let Some(exclude_patterns) = &config.exclude_patterns {
@@ -434,7 +434,7 @@ version = "0.1.0"
                     "exclude = [{}]\n",
                     exclude_patterns
                         .iter()
-                        .map(|p| format!("\"{}\"", p))
+                        .map(|p| format!("\"{p}\""))
                         .collect::<Vec<_>>()
                         .join(", ")
                 ));
@@ -445,7 +445,7 @@ version = "0.1.0"
                     "include = [{}]\n",
                     include_patterns
                         .iter()
-                        .map(|p| format!("\"{}\"", p))
+                        .map(|p| format!("\"{p}\""))
                         .collect::<Vec<_>>()
                         .join(", ")
                 ));
@@ -456,41 +456,41 @@ version = "0.1.0"
                     "reporter = [{}]\n",
                     reporters
                         .iter()
-                        .map(|r| format!("\"{}\"", r))
+                        .map(|r| format!("\"{r}\""))
                         .collect::<Vec<_>>()
                         .join(", ")
                 ));
             }
 
             if let Some(debug) = config.debug {
-                toml_content.push_str(&format!("debug = {}\n", debug));
+                toml_content.push_str(&format!("debug = {debug}\n"));
             }
 
             if let Some(debug_port) = config.debug_port {
-                toml_content.push_str(&format!("debug-port = {}\n", debug_port));
+                toml_content.push_str(&format!("debug-port = {debug_port}\n"));
             }
 
             if let Some(backtrace) = &config.backtrace {
-                toml_content.push_str(&format!("backtrace = \"{}\"\n", backtrace));
+                toml_content.push_str(&format!("backtrace = \"{backtrace}\"\n"));
             }
 
             if let Some(coverage) = config.coverage {
-                toml_content.push_str(&format!("coverage = {}\n", coverage));
+                toml_content.push_str(&format!("coverage = {coverage}\n"));
             }
 
             if let Some(coverage_format) = &config.coverage_format {
-                toml_content.push_str(&format!("coverage-format = \"{}\"\n", coverage_format));
+                toml_content.push_str(&format!("coverage-format = \"{coverage_format}\"\n"));
             }
 
             if let Some(junit_path) = &config.junit_path {
-                toml_content.push_str(&format!("junit-path = \"{}\"\n", junit_path));
+                toml_content.push_str(&format!("junit-path = \"{junit_path}\"\n"));
             }
 
             if let Some(junit_merge) = config.junit_merge {
-                toml_content.push_str(&format!("junit-merge = {}\n", junit_merge));
+                toml_content.push_str(&format!("junit-merge = {junit_merge}\n"));
             }
 
-            toml_content.push_str("\n");
+            toml_content.push('\n');
         }
 
         let config_path = project_path.join("Acton.toml");

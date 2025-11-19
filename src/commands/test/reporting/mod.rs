@@ -95,7 +95,7 @@ pub trait TestReporter: Send + Sync {
     fn on_suite_started(
         &mut self,
         _file_path: &str,
-        _tests: &Vec<TestDescriptor>,
+        _tests: &[TestDescriptor],
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -169,7 +169,7 @@ impl ReporterManager {
     pub fn on_suite_started(
         &mut self,
         file_path: &str,
-        tests: &Vec<TestDescriptor>,
+        tests: &[TestDescriptor],
     ) -> anyhow::Result<()> {
         for reporter in &mut self.reporters {
             reporter.on_suite_started(file_path, tests)?;

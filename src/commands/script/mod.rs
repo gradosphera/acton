@@ -37,7 +37,7 @@ pub fn script_cmd(
 
     let metadata = fs::metadata(path)?;
     if !metadata.is_file() {
-        return Err(anyhow!("Path '{}' is not a file", path));
+        return Err(anyhow!("Path '{path}' is not a file"));
     }
 
     if !path.ends_with(".tolk") {
@@ -63,7 +63,7 @@ fn run_script_file(
 
     match tolkc::compile(Path::new(file_path), debug) {
         tolkc::CompilerResult::Success(result) => {
-            let code_cell = ArcCell::from_boc_b64(&*result.code_boc64)?;
+            let code_cell = ArcCell::from_boc_b64(&result.code_boc64)?;
             let data_cell = ArcCell::default();
 
             let script_result = execute_script(
@@ -206,17 +206,17 @@ fn print_script_result(result: ScriptResult) {
 fn contract_address(code: &ArcCell) -> anyhow::Result<TonAddress> {
     let state_init = CellBuilder::new()
         .store_bit(false)
-        .map_err(|e| anyhow!("Failed to store bounce flag: {}", e))?
+        .map_err(|e| anyhow!("Failed to store bounce flag: {e}"))?
         .store_bit(false)
-        .map_err(|e| anyhow!("Failed to store maybe libraries: {}", e))?
+        .map_err(|e| anyhow!("Failed to store maybe libraries: {e}"))?
         .store_ref_cell_optional(Some(code))
-        .map_err(|e| anyhow!("Failed to store code cell: {}", e))?
+        .map_err(|e| anyhow!("Failed to store code cell: {e}"))?
         .store_ref_cell_optional(Some(&ArcCell::default()))
-        .map_err(|e| anyhow!("Failed to store data cell: {}", e))?
+        .map_err(|e| anyhow!("Failed to store data cell: {e}"))?
         .store_bit(false)
-        .map_err(|e| anyhow!("Failed to store maybe tick/tock: {}", e))?
+        .map_err(|e| anyhow!("Failed to store maybe tick/tock: {e}"))?
         .build()
-        .map_err(|e| anyhow!("Failed to build state init cell: {}", e))?;
+        .map_err(|e| anyhow!("Failed to build state init cell: {e}"))?;
 
     let dest_address = TonAddress::new(0, state_init.cell_hash());
     Ok(dest_address)

@@ -76,7 +76,7 @@ pub fn poll_request(
                         let request: Request = serde_json::from_str(content).map_err(|e| {
                             ServerError::ParseError(DeserializationError::SerdeError(e))
                         })?;
-                        debug!("Received DAP request: {:?}", request);
+                        debug!("Received DAP request: {request:?}");
                         return Ok(Some(request));
                     }
                 }
@@ -104,13 +104,13 @@ impl DapTransport {
 }
 
 pub fn start_dap_server(port: u16) -> DapTransport {
-    let address = format!("127.0.0.1:{}", port);
+    let address = format!("127.0.0.1:{port}");
     let (req_sender, req_receiver) = unbounded::<Request>();
     let (dap_sender, dap_receiver) = unbounded::<DapMessage>();
 
     thread::spawn(move || {
         let listener = TcpListener::bind(&address).unwrap();
-        println!("Debugger server listening on {}", address);
+        println!("Debugger server listening on {address}");
 
         let stream = listener.incoming().next().unwrap().unwrap();
         println!("New connection established");
@@ -135,7 +135,7 @@ pub fn start_dap_server(port: u16) -> DapTransport {
                         break;
                     }
                     Err(e) => {
-                        warn!("Error handling DAP request: {}", e);
+                        warn!("Error handling DAP request: {e}");
                     }
                 }
             }

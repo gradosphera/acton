@@ -41,7 +41,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
         let found_contract = ctx.env.find_contract(name.as_str());
 
         if let Some(found_contract) = found_contract {
-            debug!("Found contract with info: {:?}", found_contract);
+            debug!("Found contract with info: {found_contract:?}");
             path = found_contract.src.clone()
         } else {
             ctx.asserts.fail(format!(
@@ -53,11 +53,11 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
 
     if let Some(cached) = ctx.build.build_cache.built.get(&path) {
         let elapsed = start_time.elapsed();
-        info!("Build {} from memory cache in {:?}", path, elapsed);
+        info!("Build {path} from memory cache in {elapsed:?}");
 
         let code_cell = try_ctx!(
             ctx,
-            ArcCell::from_boc_b64(&*cached.code_boc64),
+            ArcCell::from_boc_b64(&cached.code_boc64),
             "Failed to decode cached code BoC for {}: {}",
             path
         );
@@ -71,10 +71,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
             .get(&path, ctx.build.need_debug_info, 2, "1.2".to_string())
     {
         let elapsed = start_time.elapsed();
-        info!(
-            "Build {} from file cache (.acton/cache) in {:?}",
-            path, elapsed
-        );
+        info!("Build {path} from file cache (.acton/cache) in {elapsed:?}");
 
         ctx.build.build_cache.memoize(
             &name,
@@ -86,7 +83,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
 
         let code_cell = try_ctx!(
             ctx,
-            ArcCell::from_boc_b64(&*cached_entry.code_boc64),
+            ArcCell::from_boc_b64(&cached_entry.code_boc64),
             "Failed to decode cached code BoC for {}: {}",
             path
         );
@@ -102,8 +99,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
         tolkc::CompilerResult::Success(success) => {
             let total_elapsed = start_time.elapsed();
             info!(
-                "Build {} from source (compilation: {:?}, total: {:?})",
-                path, compile_time, total_elapsed
+                "Build {path} from source (compilation: {compile_time:?}, total: {total_elapsed:?})"
             );
 
             if let Err(err) = ctx.build.file_build_cache.put(
@@ -113,7 +109,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
                 2,
                 "1.2".to_string(),
             ) {
-                warn!("Failed to build cached code BoC for {}: {}", path, err);
+                warn!("Failed to build cached code BoC for {path}: {err}");
             }
 
             ctx.build.build_cache.memoize(
@@ -125,7 +121,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
             );
             let code_cell = try_ctx!(
                 ctx,
-                ArcCell::from_boc_b64(&*success.code_boc64),
+                ArcCell::from_boc_b64(&success.code_boc64),
                 "Failed to decode compiled code BoC for {}: {}",
                 path
             );
@@ -179,8 +175,8 @@ fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, _mode: BigInt, messag
     });
 
     let transaction_cells = successful_emulations
-        .filter_map(|emulation| ArcCell::from_boc_b64(&*emulation.raw_transaction).ok())
-        .map(|tx| TupleItem::Cell(tx))
+        .filter_map(|emulation| ArcCell::from_boc_b64(&emulation.raw_transaction).ok())
+        .map(TupleItem::Cell)
         .collect::<Vec<_>>();
     stack.push(TupleItem::Tuple(Tuple(transaction_cells)));
 }
@@ -265,7 +261,7 @@ fn send_message_from_impl(
 
     let transaction_cells = successful_emulations
         .filter_map(|emulation| {
-            let Ok(tx) = ArcCell::from_boc_b64(&*emulation.raw_transaction) else {
+            let Ok(tx) = ArcCell::from_boc_b64(&emulation.raw_transaction) else {
                 return None;
             };
             let child_txs = Tuple(
@@ -300,7 +296,7 @@ fn send_message_from_impl(
                         let boc = Boc::encode_base64(&cell);
                         ArcCell::from_boc_b64(&boc).ok()
                     })
-                    .map(|cell| TupleItem::Cell(cell))
+                    .map(TupleItem::Cell)
                     .collect::<Vec<_>>(),
             );
 
@@ -317,10 +313,10 @@ fn send_message_from_impl(
                     .externals
                     .iter()
                     .filter_map(|ext_cell| {
-                        let boc = Boc::encode_base64(&ext_cell);
+                        let boc = Boc::encode_base64(ext_cell);
                         ArcCell::from_boc_b64(&boc).ok()
                     })
-                    .map(|cell| TupleItem::Cell(cell))
+                    .map(TupleItem::Cell)
                     .collect::<Vec<_>>(),
             );
 
@@ -552,7 +548,7 @@ fn find_transaction_by_params_impl(
     params: Tuple,
     txs: Tuple,
 ) {
-    if txs.0.len() == 0 {
+    if txs.0.is_empty() {
         stack.push(TupleItem::Null);
         return;
     }
@@ -565,15 +561,14 @@ fn find_transaction_by_params_impl(
         }
     };
 
-    let found = parsed_txs.iter().filter_map(|tx| {
+    let found = parsed_txs.iter().filter(|tx| {
         if let Some(expected_deploy) = params.deploy {
-            if expected_deploy {
-                if tx.orig_status != AccountStatus::NotExists
-                    || tx.end_status != AccountStatus::Active
-                {
-                    // We expect to deploy contract but we don't
-                    return None;
-                }
+            if expected_deploy
+                && (tx.orig_status != AccountStatus::NotExists
+                    || tx.end_status != AccountStatus::Active)
+            {
+                // We expect to deploy contract but we don't
+                return false;
             }
         }
 
@@ -582,25 +577,25 @@ fn find_transaction_by_params_impl(
             && let MsgInfo::Int(info) = &in_msg.info
         {
             if let Some(expected_opcode) = &params.opcode {
-                let mut slice = in_msg.body.clone();
+                let mut slice = in_msg.body;
                 let Ok(opcode) = slice.load_u32() else {
                     // No opcode at all
-                    return None;
+                    return false;
                 };
                 if *expected_opcode != opcode {
                     if params.bounced == Some(true) {
                         // if bounced, try to match opcode after 0xFFFFFFFF
                         let Ok(bounced_opcode) = slice.load_u32() else {
                             // No bounced opcode at all
-                            return None;
+                            return false;
                         };
                         if *expected_opcode != bounced_opcode {
                             // Bounced opcode mismatch
-                            return None;
+                            return false;
                         }
                     } else {
                         // Opcode mismatch
-                        return None;
+                        return false;
                     }
                 }
             }
@@ -608,34 +603,34 @@ fn find_transaction_by_params_impl(
             if let Some(expected_bounced) = &params.bounced {
                 if *expected_bounced != info.bounced {
                     // Bounced value mismatch
-                    return None;
+                    return false;
                 }
             }
 
             if let Some(expected_from_addr) = &params.from {
                 if (*expected_from_addr).to_string() != info.src.to_string() {
                     // Source address mismatch
-                    return None;
+                    return false;
                 }
             }
 
             if let Some(expected_to_addr) = &params.to {
                 if (*expected_to_addr).to_string() != info.dst.to_string() {
                     // Destination address mismatch
-                    return None;
+                    return false;
                 }
             }
         };
 
         let TxInfo::Ordinary(info) = tx.load_info().unwrap() else {
-            return None;
+            return false;
         };
 
         if let Some(expected_compute_skipped) = params.compute_phase_skipped {
             let is_skipped = matches!(info.compute_phase, ComputePhase::Skipped(_));
             if expected_compute_skipped != is_skipped {
                 // Compute phase skipped mismatch
-                return None;
+                return false;
             }
         }
 
@@ -643,11 +638,11 @@ fn find_transaction_by_params_impl(
             if let Some(action_phase) = &info.action_phase {
                 if action_phase.result_code != expected_action_exit_code {
                     // Action exit code mismatch
-                    return None;
+                    return false;
                 }
             } else {
                 // Action phase is missing but expected
-                return None;
+                return false;
             }
         }
 
@@ -655,12 +650,12 @@ fn find_transaction_by_params_impl(
             if let Some(expected_exit_code) = params.exit_code {
                 if compute.exit_code != expected_exit_code as i32 {
                     // Exit code mismatch
-                    return None;
+                    return false;
                 }
             }
         }
 
-        return Some(tx);
+        true
     });
 
     let txs = found.collect::<Vec<_>>();
@@ -719,9 +714,7 @@ fn run_get_method_impl(
         code: code.to_boc_b64(false).unwrap().to_string(),
         data: Boc::encode_base64(data),
         verbosity: ExecutorVerbosity::FullLocationStackVerbose,
-        libs: libs_root
-            .map(|root| Boc::encode_base64(root))
-            .unwrap_or("".to_string()),
+        libs: libs_root.map(Boc::encode_base64).unwrap_or("".to_string()),
         address: dest_address.to_string(),
         unixtime: 0,
         balance: "10".to_string(),
@@ -859,13 +852,8 @@ fn get_address_code(account: &ShardAccount) -> Option<ArcCell> {
         return None;
     };
 
-    let Some(code) = state.code else {
-        return None;
-    };
-
-    let Ok(cell) = ArcCell::from_boc_b64(&Boc::encode_base64(code)) else {
-        return None;
-    };
+    let code = state.code?;
+    let cell = ArcCell::from_boc_b64(&Boc::encode_base64(code)).ok()?;
 
     Some(cell)
 }

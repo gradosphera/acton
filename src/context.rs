@@ -97,6 +97,12 @@ pub struct BuildCache {
     pub built: HashMap<String, CompilationResult>,
 }
 
+impl Default for BuildCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BuildCache {
     pub fn new() -> Self {
         Self {
@@ -106,18 +112,18 @@ impl BuildCache {
 
     pub fn memoize(
         &mut self,
-        name: &String,
-        path: &String,
-        code: &String,
-        code_hash: &String,
+        name: &str,
+        path: &str,
+        code: &str,
+        code_hash: &str,
         source_map: SourceMap,
     ) {
         self.built.insert(
-            path.clone(),
+            path.to_owned(),
             CompilationResult {
-                name: name.clone(),
-                code_boc64: code.clone(),
-                code_hash: code_hash.clone(),
+                name: name.to_owned(),
+                code_boc64: code.to_owned(),
+                code_hash: code_hash.to_owned(),
                 source_map,
             },
         );
@@ -149,6 +155,12 @@ pub struct KnownAddress {
 #[derive(Debug, Clone)]
 pub struct KnownAddresses {
     pub addresses: HashMap<IntAddr, KnownAddress>,
+}
+
+impl Default for KnownAddresses {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl KnownAddresses {
@@ -208,6 +220,12 @@ pub struct Emulations {
     pub get_results: Vec<GetMethodResultSuccess>,
 }
 
+impl Default for Emulations {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Emulations {
     pub fn new() -> Self {
         Self {
@@ -217,10 +235,10 @@ impl Emulations {
     }
 
     pub fn find_tx_by_lt(&self, lt: u64) -> Option<&SendMessageResult> {
-        self.results.iter().flatten().find(|res| match res {
-            SendMessageResult::Success(res) if res.transaction.lt == lt => true,
-            _ => false,
-        })
+        self.results
+            .iter()
+            .flatten()
+            .find(|res| matches!(res, SendMessageResult::Success(res) if res.transaction.lt == lt))
     }
 
     pub fn find_tx_logs(&self, lt: u64) -> Option<String> {
@@ -288,10 +306,7 @@ pub enum DebugCtx<'a> {
 impl<'a> Env<'a> {
     pub fn find_contract(&self, name: &str) -> Option<ContractConfig> {
         let contracts = self.config.contracts.clone().unwrap_or_default().contracts;
-        let Some((_, config)) = contracts.iter().find(|(_, config)| config.name == name) else {
-            return None;
-        };
-
+        let (_, config) = contracts.iter().find(|(_, config)| config.name == name)?;
         Some(config.clone())
     }
 }
@@ -312,7 +327,7 @@ impl<'a> ChainContext<'a> {
 
     pub fn build_libs_with_hash_owner(&self, owner: &HashBytes) -> Dict<HashBytes, LibDescr> {
         let mut libs = Dict::<HashBytes, LibDescr>::new();
-        for lib in self.libraries.iter().cloned() {
+        for lib in self.libraries.iter() {
             let mut publishers = Dict::new();
             publishers.add(owner, ()).ok();
 

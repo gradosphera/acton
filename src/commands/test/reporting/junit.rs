@@ -74,7 +74,7 @@ impl JUnitReporter {
                 let message = test
                     .details
                     .as_ref()
-                    .map(|d| format!("TODO: {}", d))
+                    .map(|d| format!("TODO: {d}"))
                     .unwrap_or_else(|| "TODO".to_string());
                 status.set_message(message);
                 status
@@ -143,7 +143,7 @@ impl JUnitReporter {
 
         report
             .serialize(&mut file)
-            .map_err(|e| anyhow::anyhow!("Failed to serialize JUnit report: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to serialize JUnit report: {e}"))?;
 
         Ok(())
     }
@@ -158,7 +158,7 @@ impl TestReporter for JUnitReporter {
     fn on_suite_started(
         &mut self,
         file_path: &str,
-        _tests: &Vec<TestDescriptor>,
+        _tests: &[TestDescriptor],
     ) -> anyhow::Result<()> {
         let suite_name = extract_suite_name(file_path);
         self.current_suite = Some(suite_name.clone());
@@ -218,7 +218,7 @@ impl TestReporter for JUnitReporter {
 
             report
                 .serialize(&mut file)
-                .map_err(|e| anyhow::anyhow!("Failed to serialize JUnit report: {}", e))?;
+                .map_err(|e| anyhow::anyhow!("Failed to serialize JUnit report: {e}"))?;
         }
 
         Ok(())

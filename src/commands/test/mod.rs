@@ -223,7 +223,7 @@ impl<'a> TestRunner<'a> {
             },
             build: BuildContext {
                 build_cache: &mut self.build_cache,
-                file_build_cache: &mut self.file_build_cache,
+                file_build_cache: self.file_build_cache,
                 known_addresses: &mut self.known_addresses,
                 known_code_cells: &mut self.known_code_cells,
                 need_debug_info: self.config.debug
@@ -309,11 +309,11 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
             .map(|p| p.to_string_lossy().to_string())
             .collect()
     } else {
-        anyhow::bail!("Path '{}' is neither a file nor a directory", path);
+        anyhow::bail!("Path '{path}' is neither a file nor a directory");
     };
 
     let mut global_reporter = ReporterManager::new();
-    TestRunner::setup_reporters(&mut global_reporter, &config);
+    TestRunner::setup_reporters(&mut global_reporter, config);
     global_reporter.init()?;
     global_reporter.on_testing_started()?;
 
@@ -329,7 +329,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     let mut coverages = vec![];
 
     for (index, file) in test_files.iter().enumerate() {
-        let result = run_tests_for_file(&file, &config, &mut file_cache, &mut global_reporter);
+        let result = run_tests_for_file(file, config, &mut file_cache, &mut global_reporter);
         match result {
             Ok(stats) => {
                 total_passed += stats.passed;
@@ -375,18 +375,14 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
                 "lcov" => {
                     let lcov_path = "lcov.info";
                     if let Err(err) = generate_lcov_file(&merged_coverage, lcov_path) {
-                        eprintln!(
-                            "Warning: Failed to generate LCOV file '{}': {}",
-                            lcov_path, err
-                        );
+                        eprintln!("Warning: Failed to generate LCOV file '{lcov_path}': {err}");
                     } else {
-                        println!("LCOV file saved in {}", lcov_path);
+                        println!("LCOV file saved in {lcov_path}");
                     }
                 }
                 _ => {
                     eprintln!(
-                        "Warning: Unknown coverage format '{}'. Supported formats: lcov",
-                        format_type
+                        "Warning: Unknown coverage format '{format_type}'. Supported formats: lcov"
                     );
                 }
             }
@@ -535,7 +531,7 @@ fn run_tests_for_file(
     let content = match fs::read_to_string(file) {
         Ok(content) => content,
         Err(err) => {
-            return Err(anyhow!("Error reading file '{}': {}", file, err));
+            return Err(anyhow!("Error reading file '{file}': {err}"));
         }
     };
 
@@ -554,11 +550,11 @@ fn run_tests_for_file(
     let compilation_result = compile_test_file(file_cache, &tmp_test_filename, need_debug_info)?;
     debug!("Test file '{file}' compilation time: {:?}", now.elapsed());
 
-    let result = match compilation_result {
+    match compilation_result {
         tolkc::CompilerResult::Success(result) => {
             let _ = fs::remove_file(&tmp_test_filename);
 
-            let code_cell = ArcCell::from_boc_b64(&*result.code_boc64)?;
+            let code_cell = ArcCell::from_boc_b64(&result.code_boc64)?;
 
             let mut runner = TestRunner::new(config.clone(), file_cache, reporter_manager);
             let stats = run_file_tests(
@@ -577,9 +573,7 @@ fn run_tests_for_file(
             let trimmed_message = normalized_filepath.trim();
             Err(anyhow!(trimmed_message.to_string()))
         }
-    }?;
-
-    result
+    }?
 }
 
 fn run_file_tests(
@@ -594,7 +588,7 @@ fn run_file_tests(
         let regex = match Regex::new(pattern) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("Invalid regex pattern '{}': {}", pattern, e);
+                eprintln!("Invalid regex pattern '{pattern}': {e}");
                 return Ok(TestStats {
                     passed: 0,
                     failed: 0,
@@ -616,7 +610,7 @@ fn run_file_tests(
         .reporter_manager
         .on_suite_started(file_path, &filtered_tests)?;
 
-    let dest_address = contract_address(&code_cell);
+    let dest_address = contract_address(code_cell);
 
     let mut passed = 0;
     let mut failed = 0;
@@ -658,7 +652,7 @@ fn run_file_tests(
         }
 
         let start_time = Instant::now();
-        let result = match runner.execute_test(test, &code_cell, &dest_address, abi, source_map) {
+        let result = match runner.execute_test(test, code_cell, &dest_address, abi, source_map) {
             Ok(result) => result,
             Err(err) => {
                 println!(
@@ -691,7 +685,7 @@ fn run_file_tests(
         };
 
         let expected_exit_code = dyn_expected_exit_code
-            .or_else(|| test.expected_exit_code)
+            .or(test.expected_exit_code)
             .unwrap_or(0);
         let mut test_passed = exit_code == expected_exit_code;
 
@@ -731,11 +725,10 @@ fn run_file_tests(
                 test_report.details = failure.location();
             } else if expected_exit_code != 0 {
                 test_report.message = Some(format!(
-                    "Expected exit_code={}, got={}",
-                    expected_exit_code, exit_code
+                    "Expected exit_code={expected_exit_code}, got={exit_code}"
                 ));
             } else {
-                test_report.message = Some(format!("exit_code={}", exit_code));
+                test_report.message = Some(format!("exit_code={exit_code}"));
             }
 
             failed += 1;
@@ -749,7 +742,7 @@ fn run_file_tests(
                 runner.emulations.get_results.push(get_result);
                 runner.build_cache.memoize(
                     &test.name,
-                    &file_path.to_string(),
+                    file_path,
                     &code_cell
                         .to_boc_b64(false)
                         .expect("Failed to encode code cell to BoC"),
@@ -798,7 +791,7 @@ fn contract_address(code: &Arc<Cell>) -> TonAddress {
         .expect("Failed to store bounce flag")
         .store_bit(false)
         .expect("Failed to store maybe libraries")
-        .store_ref_cell_optional(Some(&code))
+        .store_ref_cell_optional(Some(code))
         .expect("Failed to store code cell")
         .store_ref_cell_optional(Some(&ArcCell::default()))
         .expect("Failed to store data cell")
@@ -807,8 +800,7 @@ fn contract_address(code: &Arc<Cell>) -> TonAddress {
         .build()
         .expect("Failed to build state init cell");
 
-    let dest_address = TonAddress::new(0, state_init.cell_hash());
-    dest_address
+    TonAddress::new(0, state_init.cell_hash())
 }
 
 #[derive(Debug)]
@@ -822,7 +814,7 @@ pub struct TestDescriptor {
 }
 
 fn find_all_test(content: &String) -> Vec<TestDescriptor> {
-    let Ok(tree) = tolk_parser::parser::parse(&content) else {
+    let Ok(tree) = tolk_parser::parser::parse(content) else {
         return vec![];
     };
     let root_node = tree.root_node();
@@ -846,7 +838,7 @@ fn find_all_test(content: &String) -> Vec<TestDescriptor> {
 
                 // get fun `test-foo`() or get fun test_foo()
                 if name.starts_with("test-") || name.starts_with("test_") {
-                    let id = (CRC16.checksum(name.as_bytes()) & 0xff_ff) as i32 | 0x1_00_00;
+                    let id = CRC16.checksum(name.as_bytes()) as i32 | 0x1_00_00;
                     let test_annotations = annotations::find_test_annotations(content, child);
 
                     return vec![TestDescriptor {

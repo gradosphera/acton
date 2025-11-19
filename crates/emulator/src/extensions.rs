@@ -41,7 +41,7 @@ macro_rules! extension {
     ($fn_name:ident in ($ctx_ty:ty) with ($an:ident : $ty:ty) using $body:expr) => {
         unsafe extern "C" fn $fn_name(ctx: *mut std::os::raw::c_void, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
             unsafe {
-                let ctx = std::mem::transmute::<*mut std::os::raw::c_void, &mut $ctx_ty>(ctx);
+                let ctx = &mut *(ctx as *mut $ctx_ty);
                 $crate::extensions::with_tuple(ptr, |__t: &mut tvmffi::stack::Tuple| {
                     match (|| -> Result<$ty, tvmffi::from_stack::ArgError> {
                         $crate::extensions::pop_arg::<$ty>(__t)
@@ -60,7 +60,7 @@ macro_rules! extension {
     ($fn_name:ident in ($ctx_ty:ty) with ($($an:ident : $ty:ty),+ $(,)?) using $body:expr) => {
         unsafe extern "C" fn $fn_name(ctx: *mut std::os::raw::c_void, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
             unsafe {
-                let ctx = std::mem::transmute::<*mut std::os::raw::c_void, &mut $ctx_ty>(ctx);
+                let ctx = &mut *(ctx as *mut $ctx_ty);
                 $crate::extensions::with_tuple(ptr, |__t: &mut tvmffi::stack::Tuple| {
                     match (|| -> Result<($($ty),*), tvmffi::from_stack::ArgError> {
                         pop_args!(__t, $($ty),*)

@@ -11,7 +11,7 @@ impl CompilationOrder {
         let mut positions = HashMap::new();
         let compiled = extract_compiled_contracts(stdout);
         for contract in compiled {
-            if let Some(pos) = stdout.find(&format!("Compiling {}", contract)) {
+            if let Some(pos) = stdout.find(&format!("Compiling {contract}")) {
                 positions.insert(contract, pos);
             }
         }
@@ -23,19 +23,15 @@ impl CompilationOrder {
         let first_pos = self
             .positions
             .get(first)
-            .unwrap_or_else(|| panic!("Contract '{}' was not compiled", first));
+            .unwrap_or_else(|| panic!("Contract '{first}' was not compiled"));
         let second_pos = self
             .positions
             .get(second)
-            .unwrap_or_else(|| panic!("Contract '{}' was not compiled", second));
+            .unwrap_or_else(|| panic!("Contract '{second}' was not compiled"));
 
         assert!(
             first_pos < second_pos,
-            "{} (at {}) should be compiled before {} (at {})",
-            first,
-            first_pos,
-            second,
-            second_pos
+            "{first} (at {first_pos}) should be compiled before {second} (at {second_pos})"
         );
     }
 

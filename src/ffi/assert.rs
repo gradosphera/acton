@@ -21,6 +21,7 @@ fn assert_fail_impl(ctx: &mut Context, _stack: &mut Tuple, location: String, mes
 }
 
 extension!(assert_bin in (Context) with (location: String, message: String, right: Tuple, right_name: String, left: Tuple, left_name: String, operator: String) using assert_bin_impl);
+#[allow(clippy::too_many_arguments)]
 fn assert_bin_impl(
     ctx: &mut Context,
     stack: &mut Tuple,
@@ -44,31 +45,30 @@ fn assert_bin_impl(
         return;
     }
 
-    if operator == "<" || operator == ">" || operator == "<=" || operator == ">=" {
-        if let Some(TupleItem::Int(left_int)) = left.0.first()
-            && let Some(TupleItem::Int(right_int)) = right.0.first()
+    if (operator == "<" || operator == ">" || operator == "<=" || operator == ">=")
+        && let Some(TupleItem::Int(left_int)) = left.0.first()
+        && let Some(TupleItem::Int(right_int)) = right.0.first()
+    {
+        if operator == "<" && left_int < right_int
+            || operator == ">" && left_int > right_int
+            || operator == "<=" && left_int <= right_int
+            || operator == ">=" && left_int >= right_int
         {
-            if operator == "<" && left_int < right_int
-                || operator == ">" && left_int > right_int
-                || operator == "<=" && left_int <= right_int
-                || operator == ">=" && left_int >= right_int
-            {
-                stack.push_bool(true);
-                return;
-            }
-
-            *ctx.asserts.assert_failure = Some(AssertFailure::Bin(AssertBinFailure {
-                operator,
-                left,
-                right,
-                left_type: left_name,
-                right_type: right_name,
-                message: Some(message),
-                location: Some(location),
-            }));
-            stack.push_bool(false);
+            stack.push_bool(true);
             return;
         }
+
+        *ctx.asserts.assert_failure = Some(AssertFailure::Bin(AssertBinFailure {
+            operator,
+            left,
+            right,
+            left_type: left_name,
+            right_type: right_name,
+            message: Some(message),
+            location: Some(location),
+        }));
+        stack.push_bool(false);
+        return;
     }
 
     *ctx.asserts.assert_failure = Some(AssertFailure::Bin(AssertBinFailure {

@@ -119,7 +119,7 @@ impl FormatterContext {
             if let Some(addr) = &addr {
                 let contract_type = self.get_contract_type(addr);
                 if let Some(contract_type) = contract_type {
-                    return format!("{} ({})", address.to_string(), contract_type);
+                    return format!("{address} ({contract_type})");
                 }
             }
 
@@ -262,14 +262,13 @@ impl FormatterContext {
         let mut processed = std::collections::HashSet::new();
 
         for (lt, result) in &lt_to_result {
-            if result.parent_lt.is_none()
-                || !lt_to_result.contains_key(&result.parent_lt.unwrap_or(-1))
+            if (result.parent_lt.is_none()
+                || !lt_to_result.contains_key(&result.parent_lt.unwrap_or(-1)))
+                && !processed.contains(lt)
             {
-                if !processed.contains(lt) {
-                    let node = self.build_node_recursive(*lt, &lt_to_result, &mut processed);
-                    if let Some(node) = node {
-                        roots.push(node);
-                    }
+                let node = Self::build_node_recursive(*lt, &lt_to_result, &mut processed);
+                if let Some(node) = node {
+                    roots.push(node);
                 }
             }
         }
@@ -279,7 +278,6 @@ impl FormatterContext {
 
     /// Recursively build transaction tree node
     fn build_node_recursive(
-        &self,
         lt: i64,
         lt_to_result: &HashMap<i64, SendResult>,
         processed: &mut std::collections::HashSet<i64>,
@@ -293,7 +291,7 @@ impl FormatterContext {
 
         let mut children = Vec::new();
         for child_lt in &result.children_ids {
-            if let Some(child_node) = self.build_node_recursive(*child_lt, lt_to_result, processed)
+            if let Some(child_node) = Self::build_node_recursive(*child_lt, lt_to_result, processed)
             {
                 children.push(child_node);
             }
@@ -383,6 +381,7 @@ impl FormatterContext {
     }
 
     /// Format a single transaction
+    #[allow(clippy::too_many_arguments)]
     fn format_single_transaction(
         &self,
         send_result: &SendResult,
@@ -456,7 +455,7 @@ impl FormatterContext {
     ) -> String {
         let RelaxedMsgInfo::Int(info) = &in_msg.info else {
             if let RelaxedMsgInfo::ExtOut(_) = &in_msg.info {
-                let Some(msg_info) = self.format_ext_out_message(&in_msg) else {
+                let Some(msg_info) = self.format_ext_out_message(in_msg) else {
                     return "".to_string();
                 };
 
@@ -472,13 +471,13 @@ impl FormatterContext {
         }
 
         if let Some(src) = &info.src {
-            result += &self.format_address_with_letter(&src, contract_letters, show_full_names);
+            result += &self.format_address_with_letter(src, contract_letters, show_full_names);
         }
         if show_full_names {
             result += " -> ".dimmed().to_string().as_str();
         }
 
-        let opcode = self.extract_opcode(&in_msg);
+        let opcode = self.extract_opcode(in_msg);
         let message_name = self.get_message_name(opcode);
         result += &message_name;
         result += " ";
@@ -493,15 +492,16 @@ impl FormatterContext {
 
     fn format_ton_tokens(&self, tokens: Tokens) -> String {
         let amount = tokens.into_inner() as f64 / 1e9;
-        format!("{} TON", amount.to_string()).green().to_string()
+        format!("{amount} TON").green().to_string()
     }
 
     fn format_ton(&self, amount: &BigInt) -> String {
         let amount = amount.to_f64().unwrap_or(0.0) / 1e9;
-        format!("{} TON", amount.to_string()).green().to_string()
+        format!("{amount} TON").green().to_string()
     }
 
     /// Format transaction execution info (gas, exit code, account changes)
+    #[allow(clippy::too_many_arguments)]
     fn format_transaction_info(
         &self,
         tx: &Transaction,
@@ -597,7 +597,7 @@ impl FormatterContext {
                                                 format!(
                                                     "{:<width$} {}",
                                                     func_name.green(),
-                                                    format!("at {}", location).dimmed(),
+                                                    format!("at {location}").dimmed(),
                                                     width = max_function_name_len
                                                 )
                                             })
@@ -605,7 +605,7 @@ impl FormatterContext {
 
                                     for line in backtrace_lines {
                                         backtrace_result +=
-                                            format!("{}       {}\n", child_prefix, line).as_str();
+                                            format!("{child_prefix}       {line}\n").as_str();
                                     }
                                 }
 
@@ -700,7 +700,7 @@ impl FormatterContext {
             extra_infos.push(msg_info);
         }
 
-        if extra_infos.len() > 0 {
+        if !extra_infos.is_empty() {
             result += "\n";
         }
 
@@ -728,7 +728,7 @@ impl FormatterContext {
             return None;
         };
 
-        let opcode = self.extract_opcode(&msg);
+        let opcode = self.extract_opcode(msg);
         let message_name = self.get_message_name(opcode);
 
         let msg_info = if let Some(ext_addr) = &info.dst {
@@ -738,7 +738,7 @@ impl FormatterContext {
                 "ext-out".blue(),
                 message_name,
                 "->".dimmed(),
-                format!("0x{}", hex_data).cyan(),
+                format!("0x{hex_data}").cyan(),
                 format!("({} bits)", ext_addr.data_bit_len).dimmed(),
             )
         } else {
@@ -758,10 +758,10 @@ impl FormatterContext {
         child_prefix: &str,
         tx: &Transaction,
         installed_actions: InstalledActions,
-        logs: &String,
+        logs: &str,
         contract_letters: &HashMap<IntAddr, String>,
     ) -> String {
-        let actions = retrace::extract_actions_from_executor_logs(&logs);
+        let actions = retrace::extract_actions_from_executor_logs(logs);
 
         if actions.is_empty() {
             return String::new();
@@ -775,7 +775,7 @@ impl FormatterContext {
                     hash,
                     remaining_balance,
                 } => {
-                    let message = installed_actions.find_message(&hash);
+                    let message = installed_actions.find_message(hash);
 
                     let (loc, formated) = if let Some(message) = message {
                         let msg = message.message();
@@ -807,7 +807,7 @@ impl FormatterContext {
                     changed_remaining_balance,
                     ..
                 } => {
-                    let reserve_action = installed_actions.find_reserve(*mode, &reserve);
+                    let reserve_action = installed_actions.find_reserve(*mode, reserve);
 
                     let loc = if let Some(action) = reserve_action {
                         self.find_source_loc(tx, &action.loc_hash, action.loc_offset)
@@ -878,7 +878,7 @@ impl FormatterContext {
     fn find_source_loc(
         &self,
         tx: &Transaction,
-        loc_hash: &String,
+        loc_hash: &str,
         loc_offset: i32,
     ) -> Option<SourceLocation> {
         let in_msg = tx.load_in_msg().ok()??;
@@ -927,7 +927,7 @@ impl FormatterContext {
 
     /// Extract opcode from message body
     fn extract_opcode(&self, in_msg: &RelaxedMessage) -> u32 {
-        let mut body = in_msg.body.clone();
+        let mut body = in_msg.body;
         let mut opcode = body.load_u32().unwrap_or(0);
         if opcode == 0xFFFFFFFF {
             // if bounce read another 32 bit to get actual opcode
@@ -949,7 +949,7 @@ impl FormatterContext {
         } else if opcode == 0 {
             "empty".purple().bold().to_string()
         } else {
-            format!("0x{:x}", opcode).purple().bold().to_string()
+            format!("0x{opcode:x}").purple().bold().to_string()
         }
     }
 
@@ -969,9 +969,7 @@ impl FormatterContext {
             let state = account.account.load().ok()?.0?.state;
             let code_hash = match state {
                 AccountState::Uninit => None,
-                AccountState::Active(state) => state
-                    .code
-                    .and_then(|code| Some(code.repr_hash().to_string())),
+                AccountState::Active(state) => state.code.map(|code| code.repr_hash().to_string()),
                 AccountState::Frozen(_) => None,
             };
 
@@ -990,17 +988,11 @@ impl FormatterContext {
         }
 
         let addr_str = addr.to_string();
-        let account = self.accounts.get(&addr_str);
-        let Some(account) = account else {
-            return None;
-        };
+        let account = self.accounts.get(&addr_str)?;
 
-        let account_data = account.load_account();
-        let Ok(Some(data)) = account_data else {
-            return None;
-        };
+        let account_data = account.load_account().ok()??;
 
-        let AccountState::Active(info) = data.state else {
+        let AccountState::Active(info) = account_data.state else {
             return None;
         };
 
@@ -1038,7 +1030,7 @@ impl FormatterContext {
 
     /// Format any TupleItem with rich formatting
     pub fn format(&self, item: &TupleItem) -> String {
-        let formatted = match item {
+        match item {
             TupleItem::TypedTuple {
                 type_name,
                 inner: items,
@@ -1075,7 +1067,7 @@ impl FormatterContext {
                     } else if value == &num_bigint::BigInt::from(18446744073709551615u64) {
                         "true".to_string()
                     } else {
-                        format!("{}", value)
+                        format!("{value}")
                     };
                 }
 
@@ -1083,15 +1075,15 @@ impl FormatterContext {
                     return self.format(&items[0]);
                 }
 
-                format!("{}", self.format_tuple(items))
+                self.format_tuple(items).to_string()
             }
             TupleItem::Slice(cell) => {
-                if cell.bit_len() == 0 && cell.references().len() == 0 {
+                if cell.bit_len() == 0 && cell.references().is_empty() {
                     return "empty slice".to_string();
                 }
 
                 if let Some(string) = Tuple::parse_snake_string(cell) {
-                    return format!("\"{}\"", string);
+                    return format!("\"{string}\"");
                 }
 
                 self.format_slice(cell)
@@ -1100,10 +1092,10 @@ impl FormatterContext {
                 if *value == BigInt::from(18446744073709551615u64) {
                     return "-1".to_string();
                 }
-                return format!("{}", value);
+                format!("{value}")
             }
-            TupleItem::Null => return "null".to_string(),
-            TupleItem::Nan => return "NaN".to_string(),
+            TupleItem::Null => "null".to_string(),
+            TupleItem::Nan => "NaN".to_string(),
             TupleItem::Cell(cell) => cell
                 .to_boc_hex(false)
                 .unwrap_or("<invalid cell>".to_string()),
@@ -1123,11 +1115,9 @@ impl FormatterContext {
                     write!(res, "{}", self.format(item)).ok();
                 }
                 write!(res, ")").ok();
-                return res;
+                res
             }
-        };
-
-        formatted
+        }
     }
 
     fn format_structure(
@@ -1138,7 +1128,7 @@ impl FormatterContext {
     ) -> String {
         let mut f = "".to_string();
 
-        write!(f, "{} {{\n", struct_desc.name).ok();
+        writeln!(f, "{} {{", struct_desc.name).ok();
 
         for (i, field) in struct_desc.fields.iter().enumerate() {
             let field_type = field.type_info.human_readable.clone();
@@ -1155,7 +1145,7 @@ impl FormatterContext {
             if i < struct_desc.fields.len() - 1 {
                 write!(f, ",").ok();
             }
-            write!(f, "\n").ok();
+            writeln!(f).ok();
 
             if items.is_empty() {
                 break;
@@ -1169,7 +1159,7 @@ impl FormatterContext {
         fn add_indent_to_lines(text: &str, indent: usize) -> String {
             let indent_str = " ".repeat(indent);
             text.lines()
-                .map(|line| format!("{}{}", indent_str, line))
+                .map(|line| format!("{indent_str}{line}"))
                 .collect::<Vec<_>>()
                 .join("\n")
         }
@@ -1201,7 +1191,7 @@ impl FormatterContext {
                 if idx == 0 {
                     line.to_string()
                 } else {
-                    format!("{}{}", indent_str, line)
+                    format!("{indent_str}{line}")
                 }
             })
             .collect::<Vec<_>>()
@@ -1223,7 +1213,7 @@ impl FormatterContext {
         };
 
         let TupleItem::TypedTuple { inner: items, .. } = txs else {
-            return Self::format_addr_hash(&addr);
+            return Self::format_addr_hash(addr);
         };
 
         let send_results = self.parse_send_results(items);
@@ -1234,7 +1224,7 @@ impl FormatterContext {
 
         let contract_type = self.get_contract_type(addr);
 
-        let letter = contract_letters.get(&addr);
+        let letter = contract_letters.get(addr);
         if let Some(contract_type) = contract_type {
             builder += format!("{} ", contract_type.cyan()).as_str();
         }
@@ -1243,7 +1233,7 @@ impl FormatterContext {
             builder += format!("{} ", letter.bold()).as_str();
         }
 
-        builder += Self::format_addr_hash(&addr).dimmed().to_string().as_str();
+        builder += Self::format_addr_hash(addr).dimmed().to_string().as_str();
 
         builder
     }
@@ -1271,7 +1261,7 @@ impl FormatterContext {
         let abi = self.contract_abi.find_type(&left_type.to_string());
         if let Some(struct_desc) = abi {
             if left_items.len() == struct_desc.fields.len() {
-                let mut result = format!("{} {{\n", left_type);
+                let mut result = format!("{left_type} {{\n");
 
                 for (field, (left_item, right_item)) in struct_desc
                     .fields
@@ -1300,7 +1290,7 @@ impl FormatterContext {
                     }
                 }
 
-                result.push_str("}");
+                result.push('}');
                 result
             } else {
                 format!(
@@ -1336,7 +1326,7 @@ impl FormatterContext {
                 }
             }
 
-            result.push_str(")");
+            result.push(')');
             result
         }
     }
@@ -1406,9 +1396,9 @@ impl FormatterContext {
             let opcode_type = abi.find_type_by_opcode(BigInt::from(opcode));
             params.push(format!(
                 "  opcode={} {}",
-                format!("0x{:x}", opcode).green(),
+                format!("0x{opcode:x}").green(),
                 opcode_type
-                    .and_then(|typ| Some(typ.name.clone()))
+                    .map(|typ| typ.name.clone())
                     .unwrap_or(if opcode == 0 {
                         "empty".to_string()
                     } else {

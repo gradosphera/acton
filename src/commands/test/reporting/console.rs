@@ -116,7 +116,7 @@ impl TestReporter for ConsoleReporter {
     fn on_suite_started(
         &mut self,
         _file_path: &str,
-        tests: &Vec<TestDescriptor>,
+        tests: &[TestDescriptor],
     ) -> anyhow::Result<()> {
         self.count_suites += 1;
 
@@ -128,7 +128,7 @@ impl TestReporter for ConsoleReporter {
         println!(
             " {} {} {}",
             ">".dimmed(),
-            relative_path.display().to_string(),
+            relative_path.display(),
             format!(
                 "({} test{})",
                 tests.len(),
@@ -237,17 +237,14 @@ impl TestReporter for ConsoleReporter {
                             );
 
                             for line in diff_output.lines() {
-                                println!("        {}", line);
+                                println!("        {line}");
                             }
                         }
 
                         if let AssertFailure::Bin(assert_failure) = &assert_failure
                             && assert_failure.operator == "!="
                         {
-                            println!(
-                                "       {}",
-                                "Values are equal but expected to be different:"
-                            );
+                            println!("       Values are equal but expected to be different:");
                             let value = formatter.format_tuple_value(
                                 &assert_failure.left,
                                 &assert_failure.left_type,
@@ -293,7 +290,7 @@ impl TestReporter for ConsoleReporter {
                             );
 
                             for line in diff_output.lines() {
-                                println!("        {}", line);
+                                println!("        {line}");
                             }
                         }
 
@@ -312,12 +309,12 @@ impl TestReporter for ConsoleReporter {
                                     &assert_failure.txs,
                                     &assert_failure.params.to,
                                 ),
-                                if params.len() != 0 { "with:\n" } else { "" },
+                                if !params.is_empty() { "with:\n" } else { "" },
                                 params.join("\n"),
                             );
 
                             for line in diff_output.lines() {
-                                println!("        {}", line);
+                                println!("        {line}");
                             }
                         }
 
@@ -326,108 +323,92 @@ impl TestReporter for ConsoleReporter {
                                 println!("      {} at {}", "└─".dimmed(), location.dimmed());
                             }
                         }
+                    } else if exec.expected_exit_code != 0 {
+                        println!(
+                            "    {} Expected exit_code={}, got={}",
+                            "└─".dimmed(),
+                            exec.expected_exit_code.to_string().green(),
+                            exit_code.to_string().bright_red()
+                        );
                     } else {
-                        if exec.expected_exit_code != 0 {
-                            println!(
-                                "    {} Expected exit_code={}, got={}",
-                                "└─".dimmed(),
-                                exec.expected_exit_code.to_string().green(),
-                                exit_code.to_string().bright_red()
-                            );
-                        } else {
-                            println!(
-                                "    {} exit_code={}",
-                                "└─".dimmed(),
-                                exit_code.to_string().yellow()
-                            );
+                        println!(
+                            "    {} exit_code={}",
+                            "└─".dimmed(),
+                            exit_code.to_string().yellow()
+                        );
 
-                            if let Some(info) = &exit_code_info {
-                                if let Some(loc) = &info.loc {
-                                    println!(
-                                        "      {} at {}",
-                                        "├─".dimmed(),
-                                        format!(
-                                            "{}:{}:{}",
-                                            SourceLocation::normalize_path(&loc.file),
-                                            loc.line + 1,
-                                            loc.column + 2
-                                        )
-                                        .dimmed(),
-                                    );
-                                    if !info.backtrace.is_empty() {
-                                        let max_function_name_len = info
-                                            .backtrace
-                                            .iter()
-                                            .filter_map(|loc| loc.context.event_function.as_ref())
-                                            .map(|name| name.len() + 2)
-                                            .max()
-                                            .unwrap_or(0);
+                        if let Some(info) = &exit_code_info {
+                            if let Some(loc) = &info.loc {
+                                println!(
+                                    "      {} at {}",
+                                    "├─".dimmed(),
+                                    format!(
+                                        "{}:{}:{}",
+                                        SourceLocation::normalize_path(&loc.file),
+                                        loc.line + 1,
+                                        loc.column + 2
+                                    )
+                                    .dimmed(),
+                                );
+                                if !info.backtrace.is_empty() {
+                                    let max_function_name_len = info
+                                        .backtrace
+                                        .iter()
+                                        .filter_map(|loc| loc.context.event_function.as_ref())
+                                        .map(|name| name.len() + 2)
+                                        .max()
+                                        .unwrap_or(0);
 
-                                        let backtrace_lines =
-                                            info.backtrace.iter().rev().filter_map(|loc| {
-                                                loc.context.event_function.as_ref().map(
-                                                    |func_name| {
-                                                        let location = format!(
-                                                            "{}:{}:{}",
-                                                            SourceLocation::normalize_path(
-                                                                &loc.loc.file
-                                                            ),
-                                                            loc.loc.line + 1,
-                                                            loc.loc.column + 2
-                                                        );
-                                                        format!(
-                                                            "{:<width$} at {}",
-                                                            func_name.green(),
-                                                            location.dimmed(),
-                                                            width = max_function_name_len
-                                                        )
-                                                    },
+                                    let backtrace_lines =
+                                        info.backtrace.iter().rev().filter_map(|loc| {
+                                            loc.context.event_function.as_ref().map(|func_name| {
+                                                let location = format!(
+                                                    "{}:{}:{}",
+                                                    SourceLocation::normalize_path(&loc.loc.file),
+                                                    loc.loc.line + 1,
+                                                    loc.loc.column + 2
+                                                );
+                                                format!(
+                                                    "{:<width$} at {}",
+                                                    func_name.green(),
+                                                    location.dimmed(),
+                                                    width = max_function_name_len
                                                 )
-                                            });
+                                            })
+                                        });
 
-                                        for line in backtrace_lines {
-                                            println!("      {}     {}", "│".dimmed(), line);
-                                        }
+                                    for line in backtrace_lines {
+                                        println!("      {}     {}", "│".dimmed(), line);
                                     }
-                                } else if test.backtrace.is_none() {
-                                    println!(
-                                        "      {} Re-run with {} to get more information",
-                                        "├─".dimmed(),
-                                        "--backtrace full".yellow()
-                                    );
                                 }
-                                if !info.description.is_empty() {
-                                    println!(
-                                        "      {} {}",
-                                        "├─".dimmed(),
-                                        info.description.dimmed()
-                                    );
-                                }
+                            } else if test.backtrace.is_none() {
+                                println!(
+                                    "      {} Re-run with {} to get more information",
+                                    "├─".dimmed(),
+                                    "--backtrace full".yellow()
+                                );
                             }
+                            if !info.description.is_empty() {
+                                println!("      {} {}", "├─".dimmed(), info.description.dimmed());
+                            }
+                        }
 
-                            if let Some(info) = exit_codes::get_exit_code_info(exit_code) {
-                                if exit_code_info.is_none() {
-                                    // Don't show duplicate info
-                                    println!(
-                                        "      {} {}",
-                                        "├─".dimmed(),
-                                        info.description.dimmed()
-                                    );
-                                }
-                                println!("      {} Phase: {}", "└─".dimmed(), info.phase.dimmed());
-                            } else if exit_code == 678 {
-                                println!(
-                                    "      {} {}",
-                                    "└─".dimmed(),
-                                    "Cannot run method of not deployed contract"
-                                );
-                            } else if exit_code == 679 {
-                                println!(
-                                    "      {} {}",
-                                    "└─".dimmed(),
-                                    "Cannot run method of contract without code"
-                                );
+                        if let Some(info) = exit_codes::get_exit_code_info(exit_code) {
+                            if exit_code_info.is_none() {
+                                // Don't show duplicate info
+                                println!("      {} {}", "├─".dimmed(), info.description.dimmed());
                             }
+                            println!("      {} Phase: {}", "└─".dimmed(), info.phase.dimmed());
+                        } else if exit_code == 678 {
+                            println!(
+                                "      {} Cannot run method of not deployed contract",
+                                "└─".dimmed()
+                            );
+                        } else if exit_code == 679 {
+                            println!(
+                                "      {} Cannot run method of contract without code",
+                                "└─".dimmed()
+                            );
                         }
                     }
                 }
@@ -473,7 +454,7 @@ impl TestReporter for ConsoleReporter {
                 if !exec.stdout.trim().is_empty() {
                     println!("    {} Test output:", "└─".dimmed());
                     for line in exec.stdout.trim().lines() {
-                        println!("       {}", line);
+                        println!("       {line}");
                     }
                 }
 

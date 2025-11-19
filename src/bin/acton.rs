@@ -189,8 +189,8 @@ fn example_test_usage() -> StyledStr {
 
     const USAGE_SEP: &str = "\n     ";
     for (name, value) in exampled_command.iter() {
-        let _ = write!(writer, "{USAGE_SEP}{named}# {}{named:#}", name);
-        let _ = write!(writer, "{USAGE_SEP}{example}{}{example:#}\n", value);
+        let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
+        let _ = writeln!(writer, "{USAGE_SEP}{example}{value}{example:#}");
     }
 
     writer
@@ -237,13 +237,13 @@ fn example_build_usage() -> StyledStr {
         writer,
         "\n     {named}# Configure contracts in Acton.toml{named:#}"
     );
-    let _ = write!(writer, "\n     {}", config_example);
+    let _ = write!(writer, "\n     {config_example}");
     let _ = write!(writer, "\n\n{header}Examples:{header:#}");
 
     const USAGE_SEP: &str = "\n     ";
     for (name, value) in build_examples.iter() {
-        let _ = write!(writer, "{USAGE_SEP}{named}# {}{named:#}", name);
-        let _ = write!(writer, "{USAGE_SEP}{literal}{}{literal:#}\n", value);
+        let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
+        let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
     }
 
     writer
@@ -293,8 +293,7 @@ fn main() {
                     "dot" => report_formats.push(ReportFormat::Dot),
                     _ => {
                         eprintln!(
-                            "Warning: Unknown report format '{}'. Supported formats: console, teamcity, junit, dot",
-                            format_str
+                            "Warning: Unknown report format '{format_str}'. Supported formats: console, teamcity, junit, dot"
                         );
                     }
                 }
@@ -406,6 +405,7 @@ fn setup_logging() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_test_config(
     filter: Option<String>,
     debug: bool,

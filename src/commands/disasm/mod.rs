@@ -32,13 +32,13 @@ pub fn disasm_cmd(
     let disassembler = Disassembler::new();
     let code = disassembler.decompile_cell(&cell)?;
 
-    let output = format!("{}", code);
+    let output = format!("{code}");
 
     if let Some(output_path) = output_file {
         fs::write(&output_path, &output)?;
-        println!("Disassembled code written to {}", output_path);
+        println!("Disassembled code written to {output_path}");
     } else {
-        println!("{}", output);
+        println!("{output}");
     }
 
     Ok(())

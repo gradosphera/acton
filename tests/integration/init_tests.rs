@@ -37,7 +37,7 @@ fn test_init_empty_directory() {
     let content = fs::read_to_string(&acton_file).expect("Should read Acton.toml file");
 
     assertion().eq(
-        normalize_output(content.as_str(), &project.path().to_path_buf()),
+        normalize_output(content.as_str(), project.path()),
         snapbox::file!("snapshots/test_init_empty_directory.toml.gen"),
     );
 
@@ -76,7 +76,7 @@ fn test_init_with_no_contracts() {
     let content = fs::read_to_string(&acton_file).expect("Should read Acton.toml file");
 
     assertion().eq(
-        normalize_output(content.as_str(), &project.path().to_path_buf()),
+        normalize_output(content.as_str(), project.path()),
         snapbox::file!("snapshots/test_init_with_no_contracts.toml.gen"),
     );
 }
@@ -104,7 +104,7 @@ fn test_init_discovers_single_contract() {
     let content = fs::read_to_string(&acton_file).expect("Should read Acton.toml file");
 
     assertion().eq(
-        normalize_output(content.as_str(), &project.path().to_path_buf()),
+        normalize_output(content.as_str(), project.path()),
         snapbox::file!("snapshots/test_init_discovers_single_contract.toml.gen"),
     );
 }

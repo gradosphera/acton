@@ -125,16 +125,10 @@ impl FileBuildCache {
         tolk_version: String,
     ) -> Option<CacheEntry> {
         let key = self.compute_key(file_path, with_debug_info, optimization_level, tolk_version);
-
-        let Some(entry) = self.entries.get(&key) else {
-            return None;
-        };
+        let entry = self.entries.get(&key)?;
 
         if let Ok(dependencies) = self.get_dependencies(file_path) {
-            debug!(
-                "Check hash `{file_path}` with dependencies: {:?}",
-                dependencies
-            );
+            debug!("Check hash `{file_path}` with dependencies: {dependencies:?}");
             if let Ok(current_hash) = self.compute_dependencies_hash(&dependencies) {
                 if current_hash == entry.dependencies_hash {
                     return Some(entry.clone());
@@ -154,10 +148,7 @@ impl FileBuildCache {
         tolk_version: String,
     ) -> Result<()> {
         let dependencies = self.get_dependencies(file_path)?;
-        debug!(
-            "Put new cache entry `{file_path}` with dependencies: {:?}",
-            dependencies
-        );
+        debug!("Put new cache entry `{file_path}` with dependencies: {dependencies:?}");
 
         let dependencies_hash = self.compute_dependencies_hash(&dependencies)?;
 
@@ -175,7 +166,7 @@ impl FileBuildCache {
         };
 
         let key = self.compute_key(file_path, with_debug_info, optimization_level, tolk_version);
-        let cache_file = self.cache_dir.join(format!("{}.json", key));
+        let cache_file = self.cache_dir.join(format!("{key}.json"));
 
         let content = serde_json::to_string_pretty(&entry)?;
         let tmp = cache_file.with_extension("json.tmp");
@@ -209,9 +200,9 @@ impl FileBuildCache {
 
     fn get_dependencies(&self, file_path: &str) -> Result<Vec<String>> {
         let file_deps = abi::get_file_dependencies(file_path, true)
-            .map_err(|e| anyhow!("Failed to get file dependencies: {}", e))?;
+            .map_err(|e| anyhow!("Failed to get file dependencies: {e}"))?;
 
-        let file_path = fs::canonicalize(&file_path).unwrap_or(PathBuf::from(&file_path));
+        let file_path = fs::canonicalize(file_path).unwrap_or(PathBuf::from(&file_path));
         let contracts = self.config.contracts.clone().unwrap_or_default().contracts;
         let Some((_, contract_info)) = contracts.iter().find(|(_, config)| {
             fs::canonicalize(&config.src).unwrap_or(PathBuf::from(&config.src)) == file_path
@@ -222,7 +213,7 @@ impl FileBuildCache {
         let has_deps = contract_info
             .depends
             .as_ref()
-            .map_or(false, |deps| !deps.is_empty());
+            .is_some_and(|deps| !deps.is_empty());
         if !has_deps {
             debug!(
                 "Skipping deps processing for `{}` in `get_dependencies`",
@@ -239,7 +230,7 @@ impl FileBuildCache {
                 let dep_name = dep.name();
                 let contract_config = contracts
                     .get(dep_name)
-                    .ok_or_else(|| anyhow!("Contract '{}' not found in Acton.toml", dep_name))?;
+                    .ok_or_else(|| anyhow!("Contract '{dep_name}' not found in Acton.toml"))?;
 
                 result.append(&mut self.get_dependencies(contract_config.src.as_str())?);
             }
@@ -259,7 +250,7 @@ impl FileBuildCache {
         normalized_deps.dedup();
 
         for dep_path in &normalized_deps {
-            if let Ok(_) = fs::metadata(dep_path) {
+            if fs::metadata(dep_path).is_ok() {
                 hasher.update(Self::sha256_file(dep_path)?);
                 hasher.update(dep_path.as_bytes());
             } else {

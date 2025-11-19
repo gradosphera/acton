@@ -255,7 +255,7 @@ fn test_compile_base64_only() {
 
     #[allow(deprecated)]
     let decoded = base64::decode(&stdout).expect("Decoding failed");
-    assert!(decoded.len() > 0);
+    assert!(!decoded.is_empty());
 }
 
 // ========================================

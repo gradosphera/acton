@@ -46,14 +46,14 @@ pub fn build_cmd(
     let total_start = Instant::now();
 
     if let Some(filter) = &contract_filter {
-        if contracts.iter().find(|(key, _)| key == &filter).is_none() {
-            return Err(anyhow!("Contract '{}' not found in Acton.toml", filter));
+        if !contracts.iter().any(|(key, _)| key == filter) {
+            return Err(anyhow!("Contract '{filter}' not found in Acton.toml"));
         }
     }
 
     let flatten_contracts = contracts.iter().collect::<Vec<_>>();
     let compilation_order = dep_graph::build_dependency_graph(&flatten_contracts)?;
-    debug!("Compilation order: {:?}", compilation_order);
+    debug!("Compilation order: {compilation_order:?}");
 
     let filtered_compilation_order = if let Some(filter) = &contract_filter {
         dep_graph::filter_compilation_order_for_contract(filter, &compilation_order, contracts)?
@@ -61,7 +61,7 @@ pub fn build_cmd(
         compilation_order
     };
 
-    debug!("Build next contracts: {:?}", filtered_compilation_order);
+    debug!("Build next contracts: {filtered_compilation_order:?}");
 
     if let Some(graph_path) = &graph_output {
         let output_path = if graph_path.is_empty() {
@@ -82,12 +82,7 @@ pub fn build_cmd(
         let contract_config = contracts.get(&contract_key).unwrap();
         let contract_path = &contract_config.src;
 
-        generate_dependency_files(
-            &contract_key,
-            &contract_config,
-            &compiled_contracts,
-            &config,
-        )?;
+        generate_dependency_files(&contract_key, contract_config, &compiled_contracts, &config)?;
 
         let code_boc64 = process_contract(&mut file_cache, contract_config, contract_path)?;
 
@@ -121,29 +116,26 @@ fn process_contract(
     contract_path: &String,
 ) -> anyhow::Result<String> {
     let code_boc64 = if contract_path.ends_with(".boc") {
-        debug!("Loading BoC file: {}", contract_path);
+        debug!("Loading BoC file: {contract_path}");
         match fs::read(contract_path) {
             Ok(boc_data) => match Boc::decode(&boc_data) {
-                Ok(boc) => {
-                    let boc_base64 = Boc::encode_base64(&boc);
-                    boc_base64
-                }
+                Ok(boc) => Boc::encode_base64(&boc),
                 Err(e) => {
-                    anyhow::bail!("Failed to decode BoC file {}: {}", contract_path, e);
+                    anyhow::bail!("Failed to decode BoC file {contract_path}: {e}");
                 }
             },
             Err(e) => {
-                anyhow::bail!("Failed to read BoC file {}: {}", contract_path, e);
+                anyhow::bail!("Failed to read BoC file {contract_path}: {e}");
             }
         }
     } else {
         let cached_result = file_cache.get(contract_path, false, 2, "1.2".to_string());
 
         if let Some(cached_result) = cached_result {
-            debug!("Cache hit, use cached result for '{}'", contract_path);
+            debug!("Cache hit, use cached result for '{contract_path}'");
             cached_result.code_boc64
         } else {
-            debug!("Cache miss, recompile '{}'", contract_path);
+            debug!("Cache miss, recompile '{contract_path}'");
             let compile_start = Instant::now();
             println!("   {} {}", "Compiling".green().bold(), contract_config.name);
 
@@ -183,7 +175,7 @@ fn save_boc_file(contract_config: &ContractConfig, code_boc64: &str) -> anyhow::
 }
 
 pub(crate) fn generate_dependency_files(
-    key: &String,
+    key: &str,
     config: &ContractConfig,
     compiled_contracts: &HashMap<String, String>, // contract_key -> boc_base64
     acton_config: &ActonConfig,
@@ -220,9 +212,7 @@ fn generate_single_dependency_file(
     let dependency_key = dependency.name();
     let boc_base64 = compiled_contracts.get(dependency_key).ok_or_else(|| {
         anyhow!(
-            "[INTERNAL ERROR] Dependency '{}' must be compiled before '{}'",
-            dependency_key,
-            contract_key
+            "[INTERNAL ERROR] Dependency '{dependency_key}' must be compiled before '{contract_key}'"
         )
     })?;
 
@@ -232,10 +222,7 @@ fn generate_single_dependency_file(
         .unwrap_or_else(|| format_valid_function_name(dependency_key));
 
     let dep_kind = dependency.kind();
-    debug!(
-        "Generating dependency file for '{}' with kind {:?}",
-        dependency_key, dep_kind
-    );
+    debug!("Generating dependency file for '{dependency_key}' with kind {dep_kind:?}");
     let content = generate_tolk_dependency_content(
         &func_name,
         boc_base64,
@@ -248,7 +235,7 @@ fn generate_single_dependency_file(
         .compiled_code_out_path()
         .unwrap_or(
             gen_dir
-                .join(format!("{}_code.tolk", dependency_key))
+                .join(format!("{dependency_key}_code.tolk"))
                 .to_str()
                 .unwrap(),
         )
@@ -273,10 +260,10 @@ fn format_valid_function_name(dependency_key: &str) -> String {
         .replace(" ", "_");
 
     if !name.chars().next().unwrap_or(' ').is_alphabetic() {
-        name = format!("contract_{}", name);
+        name = format!("contract_{name}");
     }
 
-    format!("{}CompiledCode", name)
+    format!("{name}CompiledCode")
 }
 
 fn generate_tolk_dependency_content(
@@ -288,34 +275,32 @@ fn generate_tolk_dependency_content(
 ) -> String {
     let asm_code = match kind {
         DependencyKind::EmbedCode => {
-            format!("    \"{}\" base64>B B>boc PUSHREF", boc_base64)
+            format!("    \"{boc_base64}\" base64>B B>boc PUSHREF")
         }
         DependencyKind::LibraryRef => {
             format!(
-                "    \"{}\" base64>B B>boc hashu <b 2 8 u, swap 256 u, b>spec PUSHREF",
-                boc_base64
+                "    \"{boc_base64}\" base64>B B>boc hashu <b 2 8 u, swap 256 u, b>spec PUSHREF"
             )
         }
     };
 
     let license_header = if let Some(license) = &acton_config.package.license {
-        format!("// SPDX-License-Identifier: {}\n", license)
+        format!("// SPDX-License-Identifier: {license}\n")
     } else {
         String::new()
     };
 
     format!(
-        "{}// Auto-generated dependency code for contract '{}'
-// Provides compiled BoC data for the '{}' contract
+        "{license_header}// Auto-generated dependency code for contract '{dependency_key}'
+// Provides compiled BoC data for the '{dependency_key}' contract
 //
 // This file is automatically generated by 'acton build'
 // Do not edit manually — changes will be overwritten
 
 @pure
-fun {}(): cell asm \"\"\"
-{}
+fun {func_name}(): cell asm \"\"\"
+{asm_code}
 \"\"\"
-",
-        license_header, dependency_key, dependency_key, func_name, asm_code
+"
     )
 }

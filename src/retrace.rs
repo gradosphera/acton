@@ -15,22 +15,20 @@ pub struct ExceptionInfo {
     pub backtrace: Vec<DebugLocation>,
 }
 
-pub fn find_exception_info(vm_logs: &String, source_map: &SourceMap) -> Option<ExceptionInfo> {
-    let lines = vmlogs::parser::parse_lines(vm_logs.as_str());
+pub fn find_exception_info(vm_logs: &str, source_map: &SourceMap) -> Option<ExceptionInfo> {
+    let lines = vmlogs::parser::parse_lines(vm_logs);
 
-    let exception = lines.iter().rfind(|line| match line {
-        Ok(VmLine::VmException { .. }) => true,
-        _ => false,
-    });
+    let exception = lines
+        .iter()
+        .rfind(|line| matches!(line, Ok(VmLine::VmException { .. })));
     let description = match exception {
         Some(Ok(VmLine::VmException { message, .. })) => message.to_string(),
         _ => "".to_string(),
     };
 
-    let location = lines.iter().rfind(|line| match line {
-        Ok(VmLine::VmLoc { .. }) => true,
-        _ => false,
-    });
+    let location = lines
+        .iter()
+        .rfind(|line| matches!(line, Ok(VmLine::VmLoc { .. })));
 
     let (hash, offset) = match location {
         Some(Ok(VmLine::VmLoc { hash, offset })) => (hash.to_string(), offset.parse().unwrap_or(0)),
@@ -83,19 +81,14 @@ fn find_backtrace(
     stack.iter().map(|loc| (**loc).clone()).collect::<Vec<_>>()
 }
 
-pub fn find_source_loc(
-    source_map: &SourceMap,
-    hash: &String,
-    offset: i32,
-) -> Option<SourceLocation> {
+pub fn find_source_loc(source_map: &SourceMap, hash: &str, offset: i32) -> Option<SourceLocation> {
     if source_map.high_level.locations.is_empty() {
         // `--backtrace full` is not enabled
         return None;
     }
 
-    let locs =
-        vmtrace::low_level_loc_to_debug_locations(source_map, hash.as_str(), offset, false, true)?;
-    locs.last().and_then(|l| Some(l.loc.clone()))
+    let locs = vmtrace::low_level_loc_to_debug_locations(source_map, hash, offset, false, true)?;
+    locs.last().map(|l| l.loc.clone())
 }
 
 pub struct InstalledActions {
@@ -153,8 +146,8 @@ impl InstalledSendMessageAction {
     }
 }
 
-pub fn find_installed_actions(vm_logs: &String) -> InstalledActions {
-    let lines = vmlogs::parser::parse_lines(vm_logs.as_str());
+pub fn find_installed_actions(vm_logs: &str) -> InstalledActions {
+    let lines = vmlogs::parser::parse_lines(vm_logs);
 
     let actions = lines
         .iter()
@@ -179,7 +172,7 @@ pub fn find_installed_actions(vm_logs: &String) -> InstalledActions {
                     else {
                         return None;
                     };
-                    let cell = Boc::decode_hex(msg_cell.to_string()).ok()?;
+                    let cell = Boc::decode_hex(msg_cell).ok()?;
 
                     return Some(InstalledAction::Message(InstalledSendMessageAction {
                         msg_hash: cell.repr_hash().to_string().to_ascii_uppercase(),
@@ -202,7 +195,7 @@ pub fn find_installed_actions(vm_logs: &String) -> InstalledActions {
                     if parsed.len() < 2 {
                         return None;
                     }
-                    let Some(VmStackValue::Integer(mode)) = parsed.get(parsed.len() - 1) else {
+                    let Some(VmStackValue::Integer(mode)) = parsed.last() else {
                         return None;
                     };
                     let Some(VmStackValue::Integer(amount)) = parsed.get(parsed.len() - 2) else {
@@ -239,7 +232,7 @@ pub enum ExecutedAction {
     },
 }
 
-pub fn extract_actions_from_executor_logs(logs: &String) -> Vec<ExecutedAction> {
+pub fn extract_actions_from_executor_logs(logs: &str) -> Vec<ExecutedAction> {
     let parsed_lines = parse_executor_lines(logs);
     let mut actions = Vec::new();
 

@@ -25,9 +25,7 @@ pub(crate) fn build_dependency_graph(
             let dep_name = dep.name();
             if !graph.contains_key(dep_name) {
                 return Err(anyhow!(
-                    "Contract '{}' depends on '{}' which is not defined in Acton.toml",
-                    key,
-                    dep_name
+                    "Contract '{key}' depends on '{dep_name}' which is not defined in Acton.toml"
                 ));
             }
 
@@ -91,7 +89,7 @@ pub(crate) fn collect_dependencies_for_contract(
 
         let contract_config = contracts
             .get(&current)
-            .ok_or_else(|| anyhow!("Contract '{}' not found in Acton.toml", current))?;
+            .ok_or_else(|| anyhow!("Contract '{current}' not found in Acton.toml"))?;
 
         if let Some(deps) = &contract_config.depends {
             for dep in deps {
@@ -141,10 +139,10 @@ pub(crate) fn generate_dependency_graph_svg(
             continue;
         };
         let label = format!("{}\\n({})", config.name, key);
-        dot_content.push_str(&format!("    \"{}\" [label=\"{}\"];\n", key, label));
+        dot_content.push_str(&format!("    \"{key}\" [label=\"{label}\"];\n"));
     }
 
-    dot_content.push_str("\n");
+    dot_content.push('\n');
 
     for key in compilation_order {
         let Some(config) = contracts.get(key) else {
@@ -161,8 +159,7 @@ pub(crate) fn generate_dependency_graph_svg(
                 };
 
                 dot_content.push_str(&format!(
-                    "    \"{}\" -> \"{}\" [label=\"{}\", labeldistance=3];\n",
-                    key, dep_name, label
+                    "    \"{key}\" -> \"{dep_name}\" [label=\"{label}\", labeldistance=3];\n"
                 ));
             }
         }
@@ -183,7 +180,7 @@ pub(crate) fn generate_dependency_graph_svg(
 
             if !svg_output.status.success() {
                 let error_msg = String::from_utf8_lossy(&svg_output.stderr);
-                return Err(anyhow!("Failed to generate SVG: {}", error_msg));
+                return Err(anyhow!("Failed to generate SVG: {error_msg}"));
             }
 
             let _ = fs::remove_file(dot_path);
@@ -218,15 +215,15 @@ fn format_cycle_error(remaining: &[String], graph: &HashMap<String, Vec<String>>
     let mut cycle_path = Vec::new();
 
     for node in remaining {
-        if !visited.contains(node) {
-            if find_cycle_dfs(node, graph, &mut visited, &mut rec_stack, &mut cycle_path) {
-                break;
-            }
+        if !visited.contains(node)
+            && find_cycle_dfs(node, graph, &mut visited, &mut rec_stack, &mut cycle_path)
+        {
+            break;
         }
     }
 
     if cycle_path.is_empty() {
-        format!("{}", remaining.join(", "))
+        remaining.join(", ").to_string()
     } else {
         cycle_path.reverse();
         format!("{} → {}", cycle_path.join(" → "), cycle_path[0])

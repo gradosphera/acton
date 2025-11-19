@@ -18,6 +18,12 @@ pub struct CommandRegistry {
     commands: HashMap<String, Box<dyn Command>>,
 }
 
+impl Default for CommandRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CommandRegistry {
     pub fn new() -> Self {
         Self {
@@ -33,7 +39,7 @@ impl CommandRegistry {
         if let Some(command) = self.commands.get(name) {
             command.execute(args)
         } else {
-            Err(format!("Unknown command: {}", name))
+            Err(format!("Unknown command: {name}"))
         }
     }
 

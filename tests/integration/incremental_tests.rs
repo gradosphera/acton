@@ -523,15 +523,14 @@ fn test_incremental_multiple_changes() {
     // Modify multiple contracts
     for i in 1..=2 {
         fs::write(
-            project.path().join(format!("contracts/contract{}.tolk", i)),
+            project.path().join(format!("contracts/contract{i}.tolk")),
             format!(
                 r#"
                     fun onInternalMessage(in: InMessage) {{
-                        // Modified {}
+                        // Modified {i}
                     }}
                     fun onBouncedMessage(_: InMessageBounced) {{}}
-                "#,
-                i
+                "#
             ),
         )
         .expect("Write contract");

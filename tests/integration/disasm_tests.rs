@@ -195,7 +195,7 @@ fn test_disasm_output_file_created() {
 
     let content = fs::read_to_string(&output_file).unwrap();
     assertion().eq(
-        normalize_output(&content, &project.path().to_path_buf()),
+        normalize_output(&content, project.path()),
         snapbox::file!("snapshots/test_disasm_output_file_created.tasm.gen"),
     );
 }
@@ -221,7 +221,7 @@ fn test_disasm_overwrite_existing_file() {
     let content = fs::read_to_string(&output_file).unwrap();
     assert_ne!(content, "old content");
     assertion().eq(
-        normalize_output(&content, &project.path().to_path_buf()),
+        normalize_output(&content, project.path()),
         snapbox::file!("snapshots/test_disasm_overwrite_existing_file.tasm.gen"),
     );
 }

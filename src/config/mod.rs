@@ -90,8 +90,8 @@ impl Default for ActonConfig {
 impl std::fmt::Display for ContractDependency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ContractDependency::Simple(name) => write!(f, "{}", name),
-            ContractDependency::Detailed { name, .. } => write!(f, "{}", name),
+            ContractDependency::Simple(name) => write!(f, "{name}"),
+            ContractDependency::Detailed { name, .. } => write!(f, "{name}"),
         }
     }
 }
@@ -165,6 +165,69 @@ impl ActonConfig {
 
     pub fn get_contract(&self, name: &str) -> Option<&ContractConfig> {
         self.contracts.as_ref()?.contracts.get(name)
+    }
+}
+
+impl TestSettings {
+    #[allow(clippy::too_many_arguments)]
+    pub fn to_test_config(
+        &self,
+        filter_override: Option<String>,
+        report_formats: Vec<ReportFormat>,
+        debug_override: Option<bool>,
+        debug_port_override: Option<u16>,
+        backtrace_override: Option<String>,
+        coverage_override: Option<bool>,
+        coverage_format_override: Option<String>,
+        exclude_override: Option<Vec<String>>,
+        include_override: Option<Vec<String>>,
+        clear_cache_override: Option<bool>,
+        junit_path_override: Option<String>,
+        junit_merge_override: bool,
+    ) -> TestConfig {
+        let mut final_report_formats = Vec::new();
+
+        if report_formats.is_empty() {
+            // process config reporters only if no cli reporters provided
+            if let Some(reporters) = &self.reporter {
+                for reporter in reporters {
+                    match reporter.to_lowercase().as_str() {
+                        "console" => final_report_formats.push(ReportFormat::Console),
+                        "teamcity" => final_report_formats.push(ReportFormat::TeamCity),
+                        "junit" => final_report_formats.push(ReportFormat::JUnit),
+                        "dot" => final_report_formats.push(ReportFormat::Dot),
+                        _ => {} // skip unknown reporters
+                    }
+                }
+            }
+        } else {
+            final_report_formats = report_formats.clone();
+        }
+
+        TestConfig {
+            filter: filter_override.or_else(|| self.filter.clone()),
+            report_formats: final_report_formats,
+            debug: debug_override.unwrap_or_else(|| self.debug.unwrap_or(false)),
+            debug_port: debug_port_override.unwrap_or_else(|| self.debug_port.unwrap_or(12345)),
+            backtrace: backtrace_override.or_else(|| self.backtrace.clone()),
+            coverage: coverage_override.unwrap_or_else(|| self.coverage.unwrap_or(false)),
+            coverage_format: coverage_format_override.or_else(|| self.coverage_format.clone()),
+            exclude_patterns: exclude_override
+                .unwrap_or_else(|| self.exclude.clone().unwrap_or_default()),
+            include_patterns: include_override
+                .unwrap_or_else(|| self.include.clone().unwrap_or_default()),
+            clear_cache: clear_cache_override.unwrap_or(false),
+            junit_path: if self.junit_path != Some("test-results".to_owned()) {
+                Some(
+                    self.junit_path
+                        .clone()
+                        .unwrap_or(junit_path_override.unwrap_or("".to_owned())),
+                )
+            } else {
+                junit_path_override
+            },
+            junit_merge: junit_merge_override || self.junit_merge.unwrap_or(false),
+        }
     }
 }
 
@@ -250,67 +313,5 @@ junit-merge = true
         assert_eq!(test_settings.include, Some(vec!["**/unit/**".to_string()]));
         assert_eq!(test_settings.junit_path, Some("custom-reports".to_string()));
         assert_eq!(test_settings.junit_merge, Some(true));
-    }
-}
-
-impl TestSettings {
-    pub fn to_test_config(
-        &self,
-        filter_override: Option<String>,
-        report_formats: Vec<ReportFormat>,
-        debug_override: Option<bool>,
-        debug_port_override: Option<u16>,
-        backtrace_override: Option<String>,
-        coverage_override: Option<bool>,
-        coverage_format_override: Option<String>,
-        exclude_override: Option<Vec<String>>,
-        include_override: Option<Vec<String>>,
-        clear_cache_override: Option<bool>,
-        junit_path_override: Option<String>,
-        junit_merge_override: bool,
-    ) -> TestConfig {
-        let mut final_report_formats = Vec::new();
-
-        if report_formats.is_empty() {
-            // process config reporters only if no cli reporters provided
-            if let Some(reporters) = &self.reporter {
-                for reporter in reporters {
-                    match reporter.to_lowercase().as_str() {
-                        "console" => final_report_formats.push(ReportFormat::Console),
-                        "teamcity" => final_report_formats.push(ReportFormat::TeamCity),
-                        "junit" => final_report_formats.push(ReportFormat::JUnit),
-                        "dot" => final_report_formats.push(ReportFormat::Dot),
-                        _ => {} // skip unknown reporters
-                    }
-                }
-            }
-        } else {
-            final_report_formats = report_formats.clone();
-        }
-
-        TestConfig {
-            filter: filter_override.or_else(|| self.filter.clone()),
-            report_formats: final_report_formats,
-            debug: debug_override.unwrap_or_else(|| self.debug.unwrap_or(false)),
-            debug_port: debug_port_override.unwrap_or_else(|| self.debug_port.unwrap_or(12345)),
-            backtrace: backtrace_override.or_else(|| self.backtrace.clone()),
-            coverage: coverage_override.unwrap_or_else(|| self.coverage.unwrap_or(false)),
-            coverage_format: coverage_format_override.or_else(|| self.coverage_format.clone()),
-            exclude_patterns: exclude_override
-                .unwrap_or_else(|| self.exclude.clone().unwrap_or_default()),
-            include_patterns: include_override
-                .unwrap_or_else(|| self.include.clone().unwrap_or_default()),
-            clear_cache: clear_cache_override.unwrap_or(false),
-            junit_path: if self.junit_path != Some("test-results".to_owned()) {
-                Some(
-                    self.junit_path
-                        .clone()
-                        .unwrap_or(junit_path_override.unwrap_or("".to_owned())),
-                )
-            } else {
-                junit_path_override
-            },
-            junit_merge: junit_merge_override || self.junit_merge.unwrap_or(false),
-        }
     }
 }

@@ -108,14 +108,13 @@ impl TestReporter for TeamCityReporter {
     fn on_suite_started(
         &mut self,
         _file_path: &str,
-        _tests: &Vec<TestDescriptor>,
+        _tests: &[TestDescriptor],
     ) -> anyhow::Result<()> {
         let suite_name = extract_suite_name(_file_path);
         let escaped_name = self.escape_name(&suite_name);
 
         println!(
-            "##teamcity[testSuiteStarted name='{}' nodeId='suite_{}' parentNodeId='0' nodeType='file' locationHint='file://{}']",
-            escaped_name, escaped_name, _file_path
+            "##teamcity[testSuiteStarted name='{escaped_name}' nodeId='suite_{escaped_name}' parentNodeId='0' nodeType='file' locationHint='file://{_file_path}']"
         );
         Ok(())
     }
@@ -129,8 +128,7 @@ impl TestReporter for TeamCityReporter {
         let escaped_name = self.escape_name(&suite_name);
 
         println!(
-            "##teamcity[testSuiteFinished name='{}' nodeId='suite_{}']",
-            escaped_name, escaped_name
+            "##teamcity[testSuiteFinished name='{escaped_name}' nodeId='suite_{escaped_name}']"
         );
         Ok(())
     }
@@ -141,8 +139,7 @@ impl TestReporter for TeamCityReporter {
         let location = format!("{}:{}", test.file_path, test.name);
 
         println!(
-            "##teamcity[testStarted name='{}' nodeId='test_{}' parentNodeId='suite_{}' locationHint='tolk_qn://{}']",
-            test_name, test_name, suite_name, location
+            "##teamcity[testStarted name='{test_name}' nodeId='test_{test_name}' parentNodeId='suite_{suite_name}' locationHint='tolk_qn://{location}']"
         );
         Ok(())
     }
@@ -180,16 +177,14 @@ impl TestReporter for TeamCityReporter {
             }
             TestStatus::Skipped | TestStatus::Ignored | TestStatus::Todo => {
                 println!(
-                    "##teamcity[testIgnored name='{}' nodeId='test_{}' duration='{}']",
-                    test_name, test_name, duration_ms
+                    "##teamcity[testIgnored name='{test_name}' nodeId='test_{test_name}' duration='{duration_ms}']"
                 );
             }
             TestStatus::Passed => {}
         }
 
         println!(
-            "##teamcity[testFinished name='{}' nodeId='test_{}' duration='{}' parentNodeId='suite_{}']",
-            test_name, test_name, duration_ms, suite_name
+            "##teamcity[testFinished name='{test_name}' nodeId='test_{test_name}' duration='{duration_ms}' parentNodeId='suite_{suite_name}']"
         );
 
         Ok(())

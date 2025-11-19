@@ -15,9 +15,9 @@ fn println_impl(ctx: &mut Context, _stack: &mut Tuple, arg: TupleItem, type_name
 
     if ctx.io.capture_output {
         ctx.io.stdout_buffer.push_str(&formatted);
-        ctx.io.stdout_buffer.push_str("\n");
+        ctx.io.stdout_buffer.push('\n');
     } else {
-        println!("{}", formatted);
+        println!("{formatted}");
     }
 }
 
@@ -25,9 +25,9 @@ extension!(eprintln in (Context) with (s: String) using eprintln_impl);
 fn eprintln_impl(ctx: &mut Context, _stack: &mut Tuple, s: String) {
     if ctx.io.capture_output {
         ctx.io.stderr_buffer.push_str(&s);
-        ctx.io.stderr_buffer.push_str("\n");
+        ctx.io.stderr_buffer.push('\n');
     } else {
-        eprintln!("{}", s);
+        eprintln!("{s}");
     }
 }
 
@@ -54,6 +54,7 @@ fn format2_impl(
 }
 
 extension!(format3 in (Context) with (arg3: TupleItem, type3: String, arg2: TupleItem, type2: String, arg1: TupleItem, type1: String, fmt: String) using format3_impl);
+#[allow(clippy::too_many_arguments)]
 fn format3_impl(
     ctx: &mut Context,
     stack: &mut Tuple,
@@ -71,6 +72,7 @@ fn format3_impl(
 }
 
 extension!(format4 in (Context) with (arg4: TupleItem, type4: String, arg3: TupleItem, type3: String, arg2: TupleItem, type2: String, arg1: TupleItem, type1: String, fmt: String) using format4_impl);
+#[allow(clippy::too_many_arguments)]
 fn format4_impl(
     ctx: &mut Context,
     stack: &mut Tuple,
@@ -90,6 +92,7 @@ fn format4_impl(
 }
 
 extension!(format5 in (Context) with (arg5: TupleItem, type5: String, arg4: TupleItem, type4: String, arg3: TupleItem, type3: String, arg2: TupleItem, type2: String, arg1: TupleItem, type1: String, fmt: String) using format5_impl);
+#[allow(clippy::too_many_arguments)]
 fn format5_impl(
     ctx: &mut Context,
     stack: &mut Tuple,
@@ -124,7 +127,7 @@ fn format_args(ctx: &mut Context, mut fmt: String, args: Vec<(String, TupleItem)
             && args.len() == 1
             && let TupleItem::Int(typed_arg) = &args[0]
         {
-            let formatted_arg = format!("{:x}", typed_arg);
+            let formatted_arg = format!("{typed_arg:x}");
             fmt.replace_range(pos..pos + 4, formatted_arg.as_str());
             continue;
         }

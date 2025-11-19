@@ -194,7 +194,7 @@ fn test_build_gen_file_content() {
     let content = fs::read_to_string(&gen_file).expect("Should read gen file");
 
     assertion().eq(
-        normalize_output(content.as_str(), &project.path().to_path_buf()),
+        normalize_output(content.as_str(), project.path()),
         snapbox::file!("snapshots/test_build_gen_file_content.tolk.gen"),
     )
 }

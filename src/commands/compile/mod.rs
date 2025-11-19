@@ -26,7 +26,7 @@ pub fn compile_cmd(
 
     let metadata = fs::metadata(path)?;
     if !metadata.is_file() {
-        return Err(anyhow!("Path '{}' is not a file", path));
+        return Err(anyhow!("Path '{path}' is not a file"));
     }
 
     if !path.ends_with(".tolk") {
@@ -37,10 +37,7 @@ pub fn compile_cmd(
 
     if let Some(cached_entry) = file_cache.get(path, false, 2, "1.2".to_string()) {
         let elapsed = start_time.elapsed();
-        info!(
-            "Compile {} from file cache (.acton/cache) in {:?}",
-            path, elapsed
-        );
+        info!("Compile {path} from file cache (.acton/cache) in {elapsed:?}");
 
         handle_compilation_result(
             cached_entry.code_boc64,
@@ -68,13 +65,12 @@ pub fn compile_cmd(
         tolkc::CompilerResult::Success(result) => {
             let total_elapsed = start_time.elapsed();
             info!(
-                "Compile {} from source (compilation: {:?}, total: {:?})",
-                path, compile_time, total_elapsed
+                "Compile {path} from source (compilation: {compile_time:?}, total: {total_elapsed:?})"
             );
 
             if let Err(e) = file_cache.put(path, &result, false, 2, "1.2".to_string()) {
                 if !json {
-                    eprintln!("Warning: Failed to cache compilation result: {}", e);
+                    eprintln!("Warning: Failed to cache compilation result: {e}");
                 }
             }
 
@@ -115,6 +111,7 @@ pub fn compile_cmd(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_compilation_result(
     code_boc64: String,
     code_hash_hex: String,
@@ -140,7 +137,7 @@ fn handle_compilation_result(
     }
 
     if base64_only {
-        println!("{}", code_boc64);
+        println!("{code_boc64}");
     } else if json {
         let json_output = serde_json::json!({
             "success": true,
@@ -154,7 +151,7 @@ fn handle_compilation_result(
             println!("{}", "✓ Compilation successful (from cache)".green().bold());
         } else {
             let elapsed_msg = elapsed
-                .map(|e| format!(" ({})", format!("compiled in {:?}", e).dimmed()))
+                .map(|e| format!(" ({})", format!("compiled in {e:?}").dimmed()))
                 .unwrap_or_default();
             println!(
                 "{}{}",

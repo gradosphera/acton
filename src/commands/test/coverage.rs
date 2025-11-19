@@ -23,7 +23,7 @@ pub struct FileCoverage {
 }
 
 pub fn collect_coverage(emulations: &Emulations, build_cache: &BuildCache) -> Coverage {
-    let all_results = emulations.results.iter().flat_map(|result| result);
+    let all_results = emulations.results.iter().flatten();
     let successful_results = all_results.filter_map(|result| match result {
         SendMessageResult::Success(result) => Some(result),
         SendMessageResult::Error(_) => None,
@@ -79,9 +79,7 @@ pub fn collect_coverage(emulations: &Emulations, build_cache: &BuildCache) -> Co
     for loc in &whole_trace {
         let file = &loc.loc.file;
         let line = loc.loc.line;
-        let entry = line_hits_per_file
-            .entry(file.clone())
-            .or_insert_with(HashMap::new);
+        let entry = line_hits_per_file.entry(file.clone()).or_default();
         *entry.entry(line).or_insert(0) += 1;
     }
 
@@ -145,9 +143,7 @@ fn build_executable_lines_per_file(
             continue;
         }
 
-        let entry = executable_lines_per_file
-            .entry(file)
-            .or_insert_with(HashSet::new);
+        let entry = executable_lines_per_file.entry(file).or_default();
         entry.insert(loc.loc.line);
     }
 
@@ -226,7 +222,7 @@ pub fn print_coverage_summary(coverage: &Coverage) {
                 .set_alignment(CellAlignment::Right)
                 .fg(total_covered_color),
             TableCell::new(total_executable_lines.to_string()).set_alignment(CellAlignment::Right),
-            TableCell::new(format!("{:.1}%", total_percentage))
+            TableCell::new(format!("{total_percentage:.1}%"))
                 .set_alignment(CellAlignment::Right)
                 .fg(total_percentage_color),
         ]);
@@ -270,13 +266,13 @@ pub fn print_coverage_summary(coverage: &Coverage) {
                 .fg(covered_color),
             TableCell::new(file_coverage.executable_lines.to_string())
                 .set_alignment(CellAlignment::Right),
-            TableCell::new(format!("{:.1}%", percentage))
+            TableCell::new(format!("{percentage:.1}%"))
                 .set_alignment(CellAlignment::Right)
                 .fg(percentage_color),
         ]);
     }
 
-    println!("{}", table);
+    println!("{table}");
 }
 
 pub fn generate_lcov_file(coverage: &Coverage, output_path: &str) -> Result<(), std::io::Error> {
