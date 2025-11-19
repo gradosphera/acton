@@ -14,6 +14,12 @@ pub struct Disassembler {
     list: Vec<InstructionWithRange>,
 }
 
+impl Default for Disassembler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Disassembler {
     pub fn new() -> Disassembler {
         let spec: Specification =
@@ -106,6 +112,7 @@ impl Disassembler {
                     let code = self.decompile_slice(&mut value).ok()?;
                     Some(Method {
                         id,
+                        source: slice_to_cell(&value),
                         instructions: code.instructions,
                     })
                 })
@@ -145,12 +152,17 @@ impl Disassembler {
 
         while slice.size_refs() > 0 {
             let ref_cell = slice.load_reference()?;
+            let ref_cell_clone = dyn_cell_to_cell(ref_cell);
             let code = self.decompile_dyn_cell(ref_cell)?;
             // ref is a special pseudo-instruction that denotes code placed in reference
             result.push(Instruction {
                 name: "ref".to_string(),
                 instr: None,
-                args: smallvec![ArgValue::Code(Box::new(code))],
+                args: smallvec![ArgValue::Code {
+                    code: Box::new(code),
+                    source: ref_cell_clone,
+                    offset: 0,
+                }],
             });
         }
 
@@ -221,17 +233,26 @@ impl Disassembler {
             Arg::RefCodeSliceArg(_) => {
                 let val = slice.load_reference()?;
                 let code = self.decompile_dyn_cell(val)?;
-                args.push(ArgValue::Code(Box::new(code)));
+                args.push(ArgValue::Code {
+                    code: Box::new(code),
+                    source: dyn_cell_to_cell(val),
+                    offset: 0,
+                });
             }
             Arg::InlineCodeSliceArg(inline_code) => {
                 let Arg::UintArg(bits) = &*inline_code.bits else {
                     panic!("expected uint bits")
                 };
+                let offset = slice.offset_bits();
                 let y = slice.load_uint(bits.len as u16)?;
                 let real_length = y * 8;
                 let mut r = slice.load_prefix(real_length as u16, 0)?;
                 let code = self.decompile_slice(&mut r)?;
-                args.push(ArgValue::Code(Box::new(code)));
+                args.push(ArgValue::Code {
+                    code: Box::new(code),
+                    source: dyn_cell_to_cell(slice.cell()),
+                    offset,
+                });
             }
             Arg::CodeSliceArg(code_slice) => {
                 let Arg::UintArg(bits) = &*code_slice.bits else {
@@ -241,6 +262,7 @@ impl Disassembler {
                     panic!("expected uint refs")
                 };
 
+                let offset = slice.offset_bits();
                 let count_refs = slice.load_uint(refs.len as u16)?;
                 let y = slice.load_uint(bits.len as u16)?;
                 let real_length = y * 8;
@@ -249,7 +271,11 @@ impl Disassembler {
                 if count_refs == 0 {
                     // optimization to not build a cell
                     let code = self.decompile_slice(&mut r)?;
-                    args.push(ArgValue::Code(Box::new(code)));
+                    args.push(ArgValue::Code {
+                        code: Box::new(code),
+                        source: slice_to_cell(&r),
+                        offset,
+                    });
                     return Ok(());
                 }
 
@@ -259,7 +285,11 @@ impl Disassembler {
                     builder.store_reference(dyn_cell_to_cell(slice.load_reference()?))?;
                 }
                 let code = self.decompile_cell(&builder.build()?)?;
-                args.push(ArgValue::Code(Box::new(code)));
+                args.push(ArgValue::Code {
+                    code: Box::new(code),
+                    source: slice_to_cell(&r),
+                    offset,
+                });
             }
             Arg::SliceArg(slice_arg) => {
                 let slice_val = Self::load_slice(slice, slice_arg)?;
@@ -339,6 +369,14 @@ fn dyn_cell_to_cell(cell: &DynCell) -> Cell {
     builder.build().unwrap()
 }
 
+fn slice_to_cell(slice: &CellSlice) -> Cell {
+    let mut builder = CellBuilder::new();
+    slice
+        .store_into(&mut builder, Cell::empty_context())
+        .expect("Failed to store data into cell builder");
+    builder.build().expect("Failed to build cell from builder")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,7 +391,7 @@ mod tests {
             .decompile_cell(&code)
             .expect("Failed to decompile cell");
 
-        let res = format!("{}", code);
+        let res = code.print(Default::default());
         assert_eq!(res.len(), 132511)
     }
 }

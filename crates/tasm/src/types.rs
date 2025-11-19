@@ -1,5 +1,7 @@
+use crate::printer::FormatOptions;
 use crate::spec::SpecInstruction;
 use num_bigint::{BigInt, BigUint};
+use std::fmt::Write;
 use tycho_types::cell::Cell;
 
 #[derive(Debug, Clone)]
@@ -36,18 +38,21 @@ pub struct Code {
     pub instructions: Vec<Instruction>,
 }
 
-impl std::fmt::Display for Code {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Code {
+    pub fn print(&self, options: FormatOptions) -> String {
+        let mut s = String::new();
         for instruction in &self.instructions {
-            writeln!(f, "{}", instruction.print(0))?;
+            s.write_str(instruction.print(0, options).as_str()).ok();
+            s.write_str("\n").ok();
         }
-        Ok(())
+        s
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Method {
     pub id: u64,
+    pub source: Cell,
     pub instructions: Vec<Instruction>,
 }
 
@@ -63,12 +68,10 @@ pub enum ArgValue {
     Control(Control),
     StackRegister(StackRegister),
     Cell(Cell),
-    Code(Box<Code>),
+    Code {
+        code: Box<Code>,
+        source: Cell,
+        offset: u16,
+    },
     CodeDictionary(CodeDictionary),
-}
-
-impl std::fmt::Display for Instruction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.print(0))
-    }
 }

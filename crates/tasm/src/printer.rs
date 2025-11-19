@@ -1,8 +1,20 @@
 use crate::types::{ArgValue, Instruction};
 use tycho_types::boc::Boc;
 
+#[derive(Clone, Copy, Default)]
+pub struct FormatOptions {
+    pub show_hashes: bool,
+}
+
+impl FormatOptions {
+    pub fn with_show_hashes(mut self, show_hashes: bool) -> Self {
+        self.show_hashes = show_hashes;
+        self
+    }
+}
+
 impl Instruction {
-    pub fn print(&self, depth: usize) -> String {
+    pub fn print(&self, depth: usize, opts: FormatOptions) -> String {
         let indent = "    ".repeat(depth);
         let mut builder = String::new();
         builder.push_str(&indent);
@@ -10,7 +22,7 @@ impl Instruction {
         builder.push(' ');
 
         for (i, arg) in self.args.iter().enumerate() {
-            builder.push_str(&format_arg(arg, depth));
+            builder.push_str(&format_arg(arg, depth, opts));
             if i < self.args.len() - 1 {
                 builder.push(' ');
             }
@@ -23,28 +35,28 @@ impl Instruction {
 impl ArgValue {
     pub fn string(&self) -> String {
         match self {
-            ArgValue::Control(c) => format!("{}", c),
-            ArgValue::StackRegister(s) => format!("{}", s),
-            ArgValue::Int(b) => format!("{}", b),
-            _ => panic!("unhandled value: {:?}", self),
+            ArgValue::Control(c) => format!("{c}"),
+            ArgValue::StackRegister(s) => format!("{s}"),
+            ArgValue::Int(b) => format!("{b}"),
+            _ => panic!("unhandled value: {self:?}"),
         }
     }
 }
 
 fn normalize_name(name: &str) -> String {
-    if name.starts_with('2') {
-        format!("{}2", &name[1..])
+    if let Some(stripped) = name.strip_prefix('2') {
+        format!("{stripped}2")
     } else {
         name.replace('#', "_")
     }
 }
 
-fn format_arg(arg: &ArgValue, depth: usize) -> String {
+fn format_arg(arg: &ArgValue, depth: usize, opts: FormatOptions) -> String {
     let indent = "    ".repeat(depth);
     match arg {
-        ArgValue::Control(c) => format!("{}", c),
-        ArgValue::StackRegister(s) => format!("{}", s),
-        ArgValue::Int(b) => format!("{}", b),
+        ArgValue::Control(c) => format!("{c}"),
+        ArgValue::StackRegister(s) => format!("{s}"),
+        ArgValue::Int(b) => format!("{b}"),
         ArgValue::Cell(s) => {
             let slice = s.as_slice().unwrap();
             if slice.size_refs() == 0 {
@@ -53,11 +65,19 @@ fn format_arg(arg: &ArgValue, depth: usize) -> String {
                 format!("boc{{{}}}", Boc::encode_hex(s))
             }
         }
-        ArgValue::Code(code) => {
+        ArgValue::Code {
+            code,
+            source,
+            offset,
+        } => {
             let mut builder = String::new();
-            builder.push_str("{\n");
+            builder.push('{');
+            if opts.show_hashes {
+                builder.push_str(&format!(" // {} offset {}", source.repr_hash(), offset));
+            }
+            builder.push('\n');
             for instruction in &code.instructions {
-                builder.push_str(&instruction.print(depth + 1));
+                builder.push_str(&instruction.print(depth + 1, opts));
                 builder.push('\n');
             }
             builder.push_str(&indent);
@@ -69,9 +89,14 @@ fn format_arg(arg: &ArgValue, depth: usize) -> String {
             builder.push_str("[\n");
             for method in &dict.methods {
                 builder.push_str(&indent);
-                builder.push_str(&format!("    {} => {{\n", method.id));
+                builder.push_str(&format!("    {} => ", method.id));
+                builder.push_str("{");
+                if opts.show_hashes {
+                    builder.push_str(&format!(" // {}", method.source.repr_hash()));
+                }
+                builder.push('\n');
                 for instruction in &method.instructions {
-                    builder.push_str(&instruction.print(depth + 2));
+                    builder.push_str(&instruction.print(depth + 2, opts));
                     builder.push('\n');
                 }
                 builder.push_str("    ");
@@ -82,6 +107,6 @@ fn format_arg(arg: &ArgValue, depth: usize) -> String {
             builder.push(']');
             builder
         }
-        ArgValue::UInt(v) => format!("{}", v),
+        ArgValue::UInt(v) => format!("{v}"),
     }
 }

@@ -1,12 +1,14 @@
 use anyhow;
 use std::fs;
 use tasm::decompile::Disassembler;
+use tasm::printer::FormatOptions;
 use tycho_types::boc::Boc;
 
 pub fn disasm_cmd(
     boc_file: Option<String>,
     boc_string: Option<String>,
     output_file: Option<String>,
+    opts: FormatOptions,
 ) -> anyhow::Result<()> {
     let boc_data = if let Some(string) = boc_string {
         string
@@ -32,7 +34,7 @@ pub fn disasm_cmd(
     let disassembler = Disassembler::new();
     let code = disassembler.decompile_cell(&cell)?;
 
-    let output = format!("{code}");
+    let output = code.print(opts);
 
     if let Some(output_path) = output_file {
         fs::write(&output_path, &output)?;

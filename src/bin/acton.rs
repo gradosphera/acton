@@ -13,6 +13,7 @@ use emulator_rs::config::ActonConfig;
 use owo_colors::OwoColorize;
 use std::fs::OpenOptions;
 use std::{fs, process};
+use tasm::printer::FormatOptions;
 
 #[derive(Parser)]
 #[command(name = "acton")]
@@ -134,6 +135,8 @@ enum Commands {
         string: Option<String>,
         #[arg(short, long, help = "Output file (if not specified, output to stdout)")]
         output: Option<String>,
+        #[arg(long, help = "Show cell hashes and offsets for each cell")]
+        show_hashes: bool,
     },
 }
 
@@ -371,8 +374,9 @@ fn main() {
             boc_file,
             string,
             output,
+            show_hashes,
         } => {
-            let result = disasm_cmd(boc_file, string, output);
+            let result = disasm_cmd(boc_file, string, output, FormatOptions { show_hashes });
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
                 process::exit(1)
