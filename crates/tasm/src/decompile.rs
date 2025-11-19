@@ -130,6 +130,7 @@ impl Disassembler {
         Ok(Instruction {
             name: instruction.name.clone(),
             instr: Some(Box::new((*instruction).clone())),
+            source_cell: Some(dyn_cell_to_cell(slice.cell())),
             args,
         })
     }
@@ -178,6 +179,7 @@ impl Disassembler {
                     source: ref_cell_clone,
                     offset: 0,
                 }],
+                source_cell: Some(dyn_cell_to_cell(slice.cell())),
             });
             offsets.push(slice.offset_bits());
         }

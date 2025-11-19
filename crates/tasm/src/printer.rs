@@ -1,28 +1,19 @@
 use crate::types::{ArgValue, Instruction};
+use tolkc::source_map::SourceMap;
 use tycho_types::boc::Boc;
+use tycho_types::cell::Cell;
 
 const OFFSET_PADDING: &str = "    │ ";
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub struct FormatOptions {
     pub show_hashes: bool,
     pub show_offsets: bool,
-}
-
-impl FormatOptions {
-    pub fn with_show_hashes(mut self, show_hashes: bool) -> Self {
-        self.show_hashes = show_hashes;
-        self
-    }
-
-    pub fn with_show_offset(mut self, show_offset: bool) -> Self {
-        self.show_offsets = show_offset;
-        self
-    }
+    pub source_map: Option<Box<SourceMap>>,
 }
 
 impl Instruction {
-    pub fn print(&self, depth: usize, opts: FormatOptions, offset: Option<u16>) -> String {
+    pub fn print(&self, depth: usize, opts: &FormatOptions, offset: Option<u16>) -> String {
         let indent = "    ".repeat(depth);
         let mut builder = String::new();
 
@@ -45,8 +36,64 @@ impl Instruction {
             }
         }
 
-        builder.trim_end().to_string()
+        let result = builder.trim_end().to_string();
+        let padding = 100_usize.saturating_sub(builder.len());
+
+        if let Some(source_map) = &opts.source_map
+            && let Some(off) = offset
+        {
+            if let Some(locations) =
+                get_source_locations(&source_map, self.source_cell.as_ref(), off as i32)
+                && !locations.is_empty()
+            {
+                let loc_strings = locations.iter().map(|loc| loc.format()).collect::<Vec<_>>();
+                return format!("{}{:>padding$} // {}", result, "", loc_strings.join(", "));
+            }
+        }
+
+        result
     }
+}
+
+fn get_source_locations<'a>(
+    source_map: &'a SourceMap,
+    cell: Option<&Cell>,
+    offset: i32,
+) -> Option<Vec<&'a tolkc::source_map::SourceLocation>> {
+    if let Some(cell) = cell {
+        let hash = cell.repr_hash().to_string().to_uppercase();
+        if let Some(marks) = source_map.debug_marks.get(&hash) {
+            let debug_ids: Vec<i64> = marks
+                .iter()
+                .filter_map(|(mark_offset, debug_id)| {
+                    if *mark_offset == offset {
+                        Some(*debug_id as i64)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            if !debug_ids.is_empty() {
+                let locations: Vec<&tolkc::source_map::SourceLocation> = debug_ids
+                    .iter()
+                    .filter_map(|debug_id| {
+                        source_map
+                            .high_level
+                            .locations
+                            .iter()
+                            .find(|loc| loc.idx == *debug_id)
+                            .map(|loc| &loc.loc)
+                    })
+                    .collect();
+
+                if !locations.is_empty() {
+                    return Some(locations);
+                }
+            }
+        }
+    }
+    None
 }
 
 impl ArgValue {
@@ -68,7 +115,7 @@ fn normalize_name(name: &str) -> String {
     }
 }
 
-fn format_arg(arg: &ArgValue, depth: usize, opts: FormatOptions) -> String {
+fn format_arg(arg: &ArgValue, depth: usize, opts: &FormatOptions) -> String {
     let indent = "    ".repeat(depth);
     match arg {
         ArgValue::Control(c) => format!("{c}"),

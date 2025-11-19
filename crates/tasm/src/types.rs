@@ -8,6 +8,7 @@ use tycho_types::cell::Cell;
 pub struct Instruction {
     pub name: String,
     pub instr: Option<Box<SpecInstruction>>,
+    pub source_cell: Option<Cell>,
     pub args: smallvec::SmallVec<[ArgValue; 3]>,
 }
 
@@ -40,7 +41,7 @@ pub struct Code {
 }
 
 impl Code {
-    pub fn print(&self, options: FormatOptions) -> String {
+    pub fn print(&self, options: &FormatOptions) -> String {
         let mut s = String::new();
 
         if options.show_offsets {
