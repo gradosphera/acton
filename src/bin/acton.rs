@@ -144,6 +144,13 @@ enum Commands {
         show_offsets: bool,
         #[arg(long, help = "Source map file for showing Tolk source locations")]
         source_map: Option<String>,
+        #[arg(
+            long,
+            help = "Contract address to fetch from blockchain (e.g., UQA_ftKIJsHEAE_UgtFOUK15hPzycZooFuUr8duyY9T3kwwM)"
+        )]
+        address: Option<String>,
+        #[arg(long, help = "TonCenter API key (optional)")]
+        api_key: Option<String>,
     },
 }
 
@@ -385,6 +392,8 @@ fn main() {
             show_hashes,
             show_offsets,
             source_map,
+            address,
+            api_key,
         } => {
             let source_map_data = if let Some(source_map_path) = source_map {
                 let content =
@@ -405,6 +414,8 @@ fn main() {
                     show_offsets,
                     source_map: source_map_data,
                 },
+                address,
+                api_key,
             );
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);

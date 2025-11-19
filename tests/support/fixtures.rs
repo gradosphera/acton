@@ -113,6 +113,8 @@ impl FixtureProject {
             build_graph: None,
             disasm_string: None,
             disasm_output: None,
+            disasm_address: None,
+            disasm_api_key: None,
             compile_json: false,
             compile_base64_only: false,
             compile_boc: None,

@@ -1,7 +1,8 @@
 use crate::common::assertion;
 use crate::support::snapshots::normalize_output;
 use crate::support::{ProjectBuilder, TestOutputExt};
-use std::fs;
+use std::time::Duration;
+use std::{fs, thread};
 
 const SIMPLE_CONTRACT: &str = r#"
 fun onInternalMessage(in: InMessage) {}
@@ -131,7 +132,7 @@ fn test_disasm_no_input_provided() {
         .disasm()
         .run()
         .failure()
-        .assert_stderr_contains("Either --string/-s or boc_file must be provided");
+        .assert_stderr_contains("Either --string/-s, --address or boc_file must be provided");
 }
 
 #[test]
@@ -224,4 +225,73 @@ fn test_disasm_overwrite_existing_file() {
         normalize_output(&content, project.path()),
         snapbox::file!("snapshots/test_disasm_overwrite_existing_file.tasm.gen"),
     );
+}
+
+// We don't usually want to store keys this way, but without keys it's almost
+// impossible to use API calls :(
+fn toncenter_api_key() -> &'static str {
+    option_env!("TONCENTER_API_KEY")
+        .unwrap_or("49efa980ccdcd018fd09d387e63537afd9db4dbb8509d69e7bc2303ca2b2c860")
+}
+
+#[test]
+fn test_disasm_from_blockchain_mainnet_address() {
+    thread::sleep(Duration::from_secs(1)); // rate limit
+    let project = ProjectBuilder::new("disasm-blockchain-mainnet").build();
+
+    project
+        .acton()
+        .disasm()
+        .with_address("UQA_ftKIJsHEAE_UgtFOUK15hPzycZooFuUr8duyY9T3kwwM")
+        .with_api_key(toncenter_api_key())
+        .run()
+        .success()
+        .assert_contains("PUSHINT")
+        .assert_contains("POP");
+}
+
+#[test]
+fn test_disasm_from_blockchain_testnet_address() {
+    thread::sleep(Duration::from_secs(1)); // rate limit
+    let project = ProjectBuilder::new("disasm-blockchain-testnet").build();
+
+    project
+        .acton()
+        .disasm()
+        .with_address("kQAlDMBKCT8WJ4nwdwNRp0lvKMP4vUnHYspFPhEnyR36cg44")
+        .with_api_key(toncenter_api_key())
+        .run()
+        .success()
+        .assert_contains("PUSHINT")
+        .assert_contains("POP");
+}
+
+#[test]
+fn test_disasm_from_blockchain_invalid_address() {
+    thread::sleep(Duration::from_secs(1)); // rate limit
+    let project = ProjectBuilder::new("disasm-blockchain-invalid").build();
+
+    project
+        .acton()
+        .disasm()
+        .with_address("invalid-address")
+        .with_api_key(toncenter_api_key())
+        .run()
+        .failure()
+        .assert_stderr_contains("Contract not found");
+}
+
+#[test]
+fn test_disasm_from_blockchain_with_wrong_api_key() {
+    thread::sleep(Duration::from_secs(1)); // rate limit
+    let project = ProjectBuilder::new("disasm-blockchain-api-key").build();
+
+    project
+        .acton()
+        .disasm()
+        .with_address("UQA_ftKIJsHEAE_UgtFOUK15hPzycZooFuUr8duyY9T3kwwM")
+        .with_api_key("wrong-test-api-key")
+        .run()
+        .failure()
+        .assert_contains("Contract not found on both mainnet and testnet");
 }

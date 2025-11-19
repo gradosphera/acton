@@ -518,6 +518,8 @@ impl Project {
             build_graph: None,
             disasm_string: None,
             disasm_output: None,
+            disasm_address: None,
+            disasm_api_key: None,
             compile_json: false,
             compile_base64_only: false,
             compile_boc: None,
@@ -546,6 +548,8 @@ pub struct ActonCommand {
     pub(crate) build_graph: Option<Option<String>>,
     pub(crate) disasm_string: Option<String>,
     pub(crate) disasm_output: Option<String>,
+    pub(crate) disasm_address: Option<String>,
+    pub(crate) disasm_api_key: Option<String>,
     pub(crate) compile_json: bool,
     pub(crate) compile_base64_only: bool,
     pub(crate) compile_boc: Option<String>,
@@ -634,6 +638,28 @@ impl ActonCommand {
     /// ```
     pub fn with_output(mut self, output_path: &str) -> Self {
         self.disasm_output = Some(output_path.to_string());
+        self
+    }
+
+    /// Specify contract address for blockchain disasm
+    ///
+    /// # Examples
+    /// ```
+    /// .disasm().with_address("UQA_ftKIJsHEAE_UgtFOUK15hPzycZooFuUr8duyY9T3kwwM")
+    /// ```
+    pub fn with_address(mut self, address: &str) -> Self {
+        self.disasm_address = Some(address.to_string());
+        self
+    }
+
+    /// Specify API key for TonCenter requests
+    ///
+    /// # Examples
+    /// ```
+    /// .disasm().with_address("...").with_api_key("your-api-key")
+    /// ```
+    pub fn with_api_key(mut self, api_key: &str) -> Self {
+        self.disasm_api_key = Some(api_key.to_string());
         self
     }
 
@@ -816,6 +842,14 @@ impl ActonCommand {
 
         if let Some(output_file) = self.disasm_output {
             self.cmd = self.cmd.arg("--output").arg(output_file);
+        }
+
+        if let Some(address) = self.disasm_address {
+            self.cmd = self.cmd.arg("--address").arg(address);
+        }
+
+        if let Some(api_key) = self.disasm_api_key {
+            self.cmd = self.cmd.arg("--api-key").arg(api_key);
         }
 
         if self.compile_json {

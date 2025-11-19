@@ -1,23 +1,30 @@
-use anyhow;
+use anyhow::Context;
+use serde::Deserialize;
 use std::fs;
 use tasm::decompile::Disassembler;
 use tasm::printer::FormatOptions;
 use tycho_types::boc::Boc;
+
+mod toncenter;
 
 pub fn disasm_cmd(
     boc_file: Option<String>,
     boc_string: Option<String>,
     output_file: Option<String>,
     opts: FormatOptions,
+    address: Option<String>,
+    api_key: Option<String>,
 ) -> anyhow::Result<()> {
     let boc_data = if let Some(string) = boc_string {
         string
     } else if let Some(file_path) = boc_file {
         let binary_data = fs::read(&file_path)?;
         hex::encode(binary_data)
+    } else if let Some(addr) = address {
+        toncenter::fetch_contract_boc(&addr, api_key.as_deref())?
     } else {
         return Err(anyhow::anyhow!(
-            "Either --string/-s or boc_file must be provided"
+            "Either --string/-s, --address or boc_file must be provided"
         ));
     };
 
