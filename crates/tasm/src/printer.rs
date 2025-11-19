@@ -90,7 +90,11 @@ fn format_arg(arg: &ArgValue, depth: usize, opts: FormatOptions) -> String {
             let mut builder = String::new();
             builder.push('{');
             if opts.show_hashes {
-                builder.push_str(&format!(" // {} offset {}", source.repr_hash(), offset));
+                builder.push_str(&format!(
+                    " // {} offset {}",
+                    source.repr_hash().to_string().to_uppercase(),
+                    offset
+                ));
             }
             builder.push('\n');
             for (i, instruction) in code.instructions.iter().enumerate() {
@@ -119,7 +123,10 @@ fn format_arg(arg: &ArgValue, depth: usize, opts: FormatOptions) -> String {
                 builder.push_str(&format!("    {} => ", method.id));
                 builder.push_str("{");
                 if opts.show_hashes {
-                    builder.push_str(&format!(" // {}", method.source.repr_hash()));
+                    builder.push_str(&format!(
+                        " // {}",
+                        method.source.repr_hash().to_string().to_uppercase()
+                    ));
                 }
                 builder.push('\n');
                 for (i, instruction) in method.instructions.iter().enumerate() {

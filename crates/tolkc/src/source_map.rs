@@ -272,7 +272,7 @@ pub fn parse_marks_dict(
         } else if real_code_hashes.contains_key(&hash) {
             real_code_hashes.get(&hash).unwrap().0.clone()
         } else {
-            return;
+            hash.clone() // TODO: or return?
         };
 
         let dict_inner = Dict::<u32, CellSlice>::load_from(&mut slice).unwrap();

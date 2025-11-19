@@ -56634,6 +56634,56 @@
       }
     },
     {
+      "name": "EXTCALL",
+      "category": "debug",
+      "sub_category": "",
+      "description": {
+        "short": "",
+        "long": "",
+        "tags": [],
+        "operands": ["t"],
+        "gas": [
+          {
+            "value": 58,
+            "description": "Base gas consumption"
+          }
+        ]
+      },
+      "layout": {
+        "min": 16515072,
+        "max": 16515328,
+        "checkLen": 16,
+        "skipLen": 48,
+        "args": [
+          {
+            "$": "uint",
+            "name": "t",
+            "len": 32,
+            "range": {
+              "min": "0",
+              "max": "1000000"
+            }
+          }
+        ],
+        "exec": "(_1, _2, _3, _4) => exec_extcall(_1, _2, 1, _4)",
+        "kind": "ext",
+        "prefix": 64512,
+        "prefix_str": "FC00",
+        "tlb": "#fc00 t: (## 32)"
+      },
+      "signature": {
+        "stack_string": "∅ -> ∅",
+        "inputs": {
+          "stack": [],
+          "registers": []
+        },
+        "outputs": {
+          "stack": [],
+          "registers": []
+        }
+      }
+    },
+    {
       "name": "CALLREF",
       "category": "continuation",
       "sub_category": "continuation_jump",

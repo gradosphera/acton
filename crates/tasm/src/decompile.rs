@@ -1,6 +1,6 @@
 use crate::spec::*;
 use crate::types::{ArgValue, Code, CodeDictionary, Control, Instruction, Method, StackRegister};
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use num_bigint::{BigInt, BigUint};
 use num_traits::ToPrimitive;
 use smallvec::smallvec;
@@ -150,7 +150,14 @@ impl Disassembler {
 
         while slice.size_bits() > 0 {
             let offset = slice.offset_bits();
-            result.push(self.load_instruction(slice)?);
+            let instruction = self.load_instruction(slice).with_context(|| {
+                format!(
+                    "cannot load instruction at offset {offset} in x{{{}}}",
+                    slice.cell().display_data()
+                )
+            });
+
+            result.push(instruction?);
             offsets.push(offset);
         }
 
@@ -336,7 +343,9 @@ impl Disassembler {
         let mut length = 0usize;
         for i in (0..real_length).rev() {
             let byte_idx = i / 8;
-            let data_byte = r.get_u8(byte_idx)?;
+            let Ok(data_byte) = r.get_u8(byte_idx) else {
+                break;
+            };
             let bit_shift = (i % 8) as u32;
             let bit = data_byte & (1 << (7 - bit_shift));
             if bit == 0 {
