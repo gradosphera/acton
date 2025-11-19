@@ -1,9 +1,12 @@
 use crate::types::{ArgValue, Instruction};
 use tycho_types::boc::Boc;
 
+const OFFSET_PADDING: &str = "    │ ";
+
 #[derive(Clone, Copy, Default)]
 pub struct FormatOptions {
     pub show_hashes: bool,
+    pub show_offsets: bool,
 }
 
 impl FormatOptions {
@@ -11,12 +14,26 @@ impl FormatOptions {
         self.show_hashes = show_hashes;
         self
     }
+
+    pub fn with_show_offset(mut self, show_offset: bool) -> Self {
+        self.show_offsets = show_offset;
+        self
+    }
 }
 
 impl Instruction {
-    pub fn print(&self, depth: usize, opts: FormatOptions) -> String {
+    pub fn print(&self, depth: usize, opts: FormatOptions, offset: Option<u16>) -> String {
         let indent = "    ".repeat(depth);
         let mut builder = String::new();
+
+        if opts.show_offsets {
+            if let Some(off) = offset {
+                builder.push_str(&format!("{:<4}│ ", off));
+            } else {
+                builder.push_str("     │");
+            }
+        }
+
         builder.push_str(&indent);
         builder.push_str(&normalize_name(&self.name));
         builder.push(' ');
@@ -76,10 +93,16 @@ fn format_arg(arg: &ArgValue, depth: usize, opts: FormatOptions) -> String {
                 builder.push_str(&format!(" // {} offset {}", source.repr_hash(), offset));
             }
             builder.push('\n');
-            for instruction in &code.instructions {
-                builder.push_str(&instruction.print(depth + 1, opts));
+            for (i, instruction) in code.instructions.iter().enumerate() {
+                let instr_offset = code.offsets.as_ref().and_then(|offs| offs.get(i).copied());
+                builder.push_str(&instruction.print(depth + 1, opts, instr_offset));
                 builder.push('\n');
             }
+
+            if opts.show_offsets {
+                builder.push_str("    │ ");
+            }
+
             builder.push_str(&indent);
             builder.push('}');
             builder
@@ -88,6 +111,10 @@ fn format_arg(arg: &ArgValue, depth: usize, opts: FormatOptions) -> String {
             let mut builder = String::new();
             builder.push_str("[\n");
             for method in &dict.methods {
+                if opts.show_offsets {
+                    builder.push_str(OFFSET_PADDING);
+                }
+
                 builder.push_str(&indent);
                 builder.push_str(&format!("    {} => ", method.id));
                 builder.push_str("{");
@@ -95,14 +122,28 @@ fn format_arg(arg: &ArgValue, depth: usize, opts: FormatOptions) -> String {
                     builder.push_str(&format!(" // {}", method.source.repr_hash()));
                 }
                 builder.push('\n');
-                for instruction in &method.instructions {
-                    builder.push_str(&instruction.print(depth + 2, opts));
+                for (i, instruction) in method.instructions.iter().enumerate() {
+                    let instr_offset = method
+                        .offsets
+                        .as_ref()
+                        .and_then(|offs| offs.get(i).copied());
+                    builder.push_str(&instruction.print(depth + 2, opts, instr_offset));
                     builder.push('\n');
                 }
+
+                if opts.show_offsets {
+                    builder.push_str(OFFSET_PADDING);
+                }
+
                 builder.push_str("    ");
                 builder.push_str(&indent);
                 builder.push_str("}\n");
             }
+
+            if opts.show_offsets {
+                builder.push_str(OFFSET_PADDING);
+            }
+
             builder.push_str(&indent);
             builder.push(']');
             builder

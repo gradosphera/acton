@@ -105,15 +105,16 @@ impl Disassembler {
 
             let methods = dict
                 .iter()
-                .filter_map(|kv| {
-                    let (key, mut value) = kv.ok()?;
+                .flatten()
+                .filter_map(|(key, mut value)| {
                     let mut key_slice = key.as_data_slice();
                     let id = key_slice.load_uint(key_length as u16).ok()?;
                     let code = self.decompile_slice(&mut value).ok()?;
                     Some(Method {
                         id,
-                        source: slice_to_cell(&value),
+                        source: dyn_cell_to_cell(value.cell()),
                         instructions: code.instructions,
+                        offsets: code.offsets,
                     })
                 })
                 .collect();
@@ -145,9 +146,12 @@ impl Disassembler {
 
     pub fn decompile_slice(&self, slice: &mut CellSlice) -> anyhow::Result<Code> {
         let mut result = Vec::with_capacity(32);
+        let mut offsets = Vec::with_capacity(32);
 
         while slice.size_bits() > 0 {
+            let offset = slice.offset_bits();
             result.push(self.load_instruction(slice)?);
+            offsets.push(offset);
         }
 
         while slice.size_refs() > 0 {
@@ -164,10 +168,12 @@ impl Disassembler {
                     offset: 0,
                 }],
             });
+            offsets.push(slice.offset_bits());
         }
 
         Ok(Code {
             instructions: result,
+            offsets: Some(offsets),
         })
     }
 

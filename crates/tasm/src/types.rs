@@ -36,13 +36,23 @@ impl std::fmt::Display for StackRegister {
 #[derive(Debug, Clone)]
 pub struct Code {
     pub instructions: Vec<Instruction>,
+    pub offsets: Option<Vec<u16>>,
 }
 
 impl Code {
     pub fn print(&self, options: FormatOptions) -> String {
         let mut s = String::new();
-        for instruction in &self.instructions {
-            s.write_str(instruction.print(0, options).as_str()).ok();
+
+        if options.show_offsets {
+            s.write_str("off │ instruction\n").ok();
+            s.write_str("────┼───────────────────────────────────────\n")
+                .ok();
+        }
+
+        for (i, instruction) in self.instructions.iter().enumerate() {
+            let offset = self.offsets.as_ref().and_then(|offs| offs.get(i).copied());
+            s.write_str(instruction.print(0, options, offset).as_str())
+                .ok();
             s.write_str("\n").ok();
         }
         s
@@ -54,6 +64,7 @@ pub struct Method {
     pub id: u64,
     pub source: Cell,
     pub instructions: Vec<Instruction>,
+    pub offsets: Option<Vec<u16>>,
 }
 
 #[derive(Debug, Clone)]

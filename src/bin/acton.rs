@@ -137,6 +137,8 @@ enum Commands {
         output: Option<String>,
         #[arg(long, help = "Show cell hashes and offsets for each cell")]
         show_hashes: bool,
+        #[arg(long, help = "Show instruction offsets in left column")]
+        show_offsets: bool,
     },
 }
 
@@ -375,8 +377,17 @@ fn main() {
             string,
             output,
             show_hashes,
+            show_offsets,
         } => {
-            let result = disasm_cmd(boc_file, string, output, FormatOptions { show_hashes });
+            let result = disasm_cmd(
+                boc_file,
+                string,
+                output,
+                FormatOptions {
+                    show_hashes,
+                    show_offsets,
+                },
+            );
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
                 process::exit(1)
