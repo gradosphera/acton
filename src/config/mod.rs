@@ -184,6 +184,8 @@ impl TestSettings {
         clear_cache_override: Option<bool>,
         junit_path_override: Option<String>,
         junit_merge_override: bool,
+        snapshot_override: Option<String>,
+        baseline_gas_override: Option<String>,
     ) -> TestConfig {
         let mut final_report_formats = Vec::new();
 
@@ -227,6 +229,8 @@ impl TestSettings {
                 junit_path_override
             },
             junit_merge: junit_merge_override || self.junit_merge.unwrap_or(false),
+            snapshot: snapshot_override,
+            baseline_snapshot: baseline_gas_override,
         }
     }
 }

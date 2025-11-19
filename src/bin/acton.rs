@@ -86,6 +86,10 @@ enum Commands {
         junit_path: Option<String>,
         #[arg(long, help = "Merge all test suites into a single JUnit XML file")]
         junit_merge: bool,
+        #[arg(long, help = "Create JSON snapshot of gas usage statistics")]
+        snapshot: Option<String>,
+        #[arg(long, help = "Compare gas usage with baseline snapshot file")]
+        baseline_snapshot: Option<String>,
     },
     #[command(about = "Execute a Tolk script file")]
     Script {
@@ -299,6 +303,8 @@ fn main() {
             clear_cache,
             junit_path,
             junit_merge,
+            snapshot,
+            baseline_snapshot,
         } => {
             let mut report_formats = Vec::new();
 
@@ -329,6 +335,8 @@ fn main() {
                 report_formats,
                 junit_path,
                 junit_merge,
+                snapshot,
+                baseline_snapshot,
             );
             let result = test_cmd(path, &config);
             if let Err(err) = result {
@@ -463,6 +471,8 @@ fn create_test_config(
     report_formats: Vec<ReportFormat>,
     junit_path: Option<String>,
     junit_merge: bool,
+    snapshot: Option<String>,
+    baseline_snapshot: Option<String>,
 ) -> TestConfig {
     let acton_config = ActonConfig::load().ok();
 
@@ -490,6 +500,8 @@ fn create_test_config(
             None,
             junit_path,
             junit_merge,
+            snapshot,
+            baseline_snapshot,
         );
     }
 
@@ -506,5 +518,7 @@ fn create_test_config(
         report_formats,
         junit_path,
         junit_merge,
+        snapshot,
+        baseline_snapshot,
     }
 }

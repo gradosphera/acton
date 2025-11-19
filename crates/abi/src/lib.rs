@@ -234,6 +234,11 @@ fn collect_imported_files_recursive(
             continue;
         };
 
+        if resolved.contains(".acton/") || resolved.contains("lib/") {
+            // skip Acton files
+            continue;
+        }
+
         if processed.contains(&resolved) {
             // recursive dependency, already processed
             continue;

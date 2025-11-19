@@ -1,5 +1,3 @@
-use anyhow::Context;
-use serde::Deserialize;
 use std::fs;
 use tasm::decompile::Disassembler;
 use tasm::printer::FormatOptions;

@@ -48,6 +48,7 @@ use walkdir::WalkDir;
 mod annotations;
 mod coverage;
 mod instrumentation;
+mod profiling;
 mod reporting;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
@@ -74,6 +75,8 @@ pub struct TestConfig {
     pub clear_cache: bool,
     pub junit_path: Option<String>,
     pub junit_merge: bool,
+    pub snapshot: Option<String>,
+    pub baseline_snapshot: Option<String>,
 }
 
 #[derive(Debug)]
@@ -768,6 +771,17 @@ fn run_file_tests(
     runner
         .reporter_manager
         .on_suite_finished(file_path, &suite_stats)?;
+
+    match profiling::collect_profile(runner, abi) {
+        Ok(_) => {}
+        Err(err) => {
+            eprintln!(
+                "{}: Cannot collect profiling result: {}",
+                "Error".red(),
+                err
+            );
+        }
+    };
 
     let coverage = if runner.config.coverage {
         Some(collect_coverage(&runner.emulations, &runner.build_cache))

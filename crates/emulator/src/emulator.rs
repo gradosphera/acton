@@ -7,7 +7,8 @@ use tycho_types::boc::Boc;
 use tycho_types::cell::Cell;
 use tycho_types::dict::Dict;
 use tycho_types::models::{
-    IntAddr, LibDescr, Message, MsgInfo, RelaxedMessage, RelaxedMsgInfo, ShardAccount, Transaction,
+    ComputePhase, IntAddr, LibDescr, Message, MsgInfo, RelaxedMessage, RelaxedMsgInfo,
+    ShardAccount, Transaction, TxInfo,
 };
 use tycho_types::prelude::HashBytes;
 
@@ -58,6 +59,30 @@ pub struct SendMessageResultSuccess {
     pub actions: Option<String>,
     pub code: Option<Cell>,
     pub externals: Vec<Cell>,
+}
+
+impl SendMessageResultSuccess {
+    pub fn opcode(&self) -> Option<u32> {
+        let in_msg = self.transaction.in_msg.clone()?;
+        let mut in_msg = in_msg.parse::<RelaxedMessage>().ok()?;
+        let opcode = in_msg.body.load_u32().ok()?;
+        if opcode == 0xFFFFFFFF {
+            let opcode = in_msg.body.load_u32().ok()?;
+            return Some(opcode);
+        }
+        Some(opcode)
+    }
+
+    pub fn used_gas(&self) -> Option<u64> {
+        let info = self.transaction.info.load().ok()?;
+        let TxInfo::Ordinary(info) = info else {
+            return None;
+        };
+        let ComputePhase::Executed(info) = info.compute_phase else {
+            return None;
+        };
+        Some(info.gas_used.into())
+    }
 }
 
 impl Emulator {
