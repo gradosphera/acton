@@ -145,6 +145,7 @@ export default defineConfig({
           items: [
             {slug: "compile", label: "compile"},
             {slug: "disasm", label: "disasm"},
+            {slug: "test", label: "test"},
           ],
         },
         {
