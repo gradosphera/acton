@@ -125,6 +125,8 @@ enum Commands {
         boc: Option<String>,
         #[arg(long, help = "Output Fift code to file")]
         fift: Option<String>,
+        #[arg(long, help = "Output source map to file (enables debug compilation)")]
+        source_map: Option<String>,
         #[arg(long, help = "Clear compilation cache before running")]
         clear_cache: bool,
     },
@@ -356,9 +358,10 @@ fn main() {
             base64_only,
             boc,
             fift,
+            source_map,
             clear_cache,
         } => {
-            let result = compile_cmd(&path, json, base64_only, boc, fift, clear_cache);
+            let result = compile_cmd(&path, json, base64_only, boc, fift, source_map, clear_cache);
             if let Err(err) = result {
                 if json {
                     println!(

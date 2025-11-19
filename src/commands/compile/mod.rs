@@ -14,6 +14,7 @@ pub fn compile_cmd(
     base64_only: bool,
     boc: Option<String>,
     fift: Option<String>,
+    source_map: Option<String>,
     clear_cache: bool,
 ) -> anyhow::Result<()> {
     if clear_cache {
@@ -53,12 +54,9 @@ pub fn compile_cmd(
         return Ok(());
     }
 
-    if !json && !base64_only {
-        println!("  {} {}", "Compiling".bold().cyan(), path.dimmed());
-    }
-
     let compile_start = Instant::now();
-    let compilation_result = tolkc::compile(Path::new(path), false);
+    let with_debug_info = source_map.is_some();
+    let compilation_result = tolkc::compile(Path::new(path), with_debug_info);
     let compile_time = compile_start.elapsed();
 
     match compilation_result {
@@ -68,9 +66,25 @@ pub fn compile_cmd(
                 "Compile {path} from source (compilation: {compile_time:?}, total: {total_elapsed:?})"
             );
 
-            if let Err(e) = file_cache.put(path, &result, false, 2, "1.2".to_string()) {
+            if let Err(e) = file_cache.put(path, &result, with_debug_info, 2, "1.2".to_string()) {
                 if !json {
                     eprintln!("Warning: Failed to cache compilation result: {e}");
+                }
+            }
+
+            if let Some(source_map_path) = &source_map {
+                if let Some(source_map_data) = &result.source_map {
+                    if let Ok(json_string) = serde_json::to_string_pretty(source_map_data) {
+                        if let Err(e) = fs::write(source_map_path, json_string) {
+                            eprintln!(
+                                "Warning: Failed to write source map to {source_map_path}: {e}"
+                            );
+                        }
+                    } else {
+                        eprintln!("Warning: Failed to serialize source map");
+                    }
+                } else if !json && !base64_only {
+                    eprintln!("Warning: No source map data available");
                 }
             }
 
