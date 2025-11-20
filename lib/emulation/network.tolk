@@ -406,6 +406,9 @@ fun net.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, args: Args? 
 
     val args_to_send = args == null ? createEmptyTuple() : args.toTuple();
     val res = ffi.runGetMethod(addr.toCell(), code, id, Ret.typeName(), args_to_send);
+    if (res == null) {
+        Assert.fail(format1("Get method {} failed", id))
+    }
     return Ret.fromTuple(res);
 }
 
@@ -518,7 +521,7 @@ fun __treasuryCode(): cell asm """
 
 fun ffi.sendMessage(msg: cell, mode: int): TransactionList? asm "7 EXTCALL"
 fun ffi.sendMessageFrom(msg: cell, from: cell, mode: int): SendResultList? asm "9 EXTCALL"
-fun ffi.runGetMethod(addr: cell, code: cell, id: int, return_type: slice, args: tuple): tuple asm "8 EXTCALL"
+fun ffi.runGetMethod(addr: cell, code: cell, id: int, return_type: slice, args: tuple): tuple? asm "8 EXTCALL"
 fun ffi.isDeployed(addr: cell): bool asm "11 EXTCALL"
 fun ffi.getDeployedCode(addr: cell): cell? asm "12 EXTCALL"
 fun ffi.registerAddress(address: cell, name: slice): void asm "15 EXTCALL"

@@ -267,6 +267,21 @@ fn test_disasm_from_blockchain_testnet_address() {
 }
 
 #[test]
+fn test_disasm_from_blockchain_mainnet_address_with_exotic_cell_lib() {
+    thread::sleep(Duration::from_secs(1)); // rate limit
+    let project = ProjectBuilder::new("disasm-blockchain-testnet").build();
+
+    project
+        .acton()
+        .disasm()
+        .with_address("EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot")
+        .with_api_key(toncenter_api_key())
+        .run()
+        .success()
+        .assert_snapshot_matches("integration/snapshots/test_disasm_from_blockchain_mainnet_address_with_exotic_cell_lib.stdout.txt");
+}
+
+#[test]
 fn test_disasm_from_blockchain_invalid_address() {
     thread::sleep(Duration::from_secs(1)); // rate limit
     let project = ProjectBuilder::new("disasm-blockchain-invalid").build();

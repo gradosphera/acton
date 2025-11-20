@@ -2,7 +2,7 @@ use crate::types::{ArgValue, Instruction};
 use std::fs;
 use tolkc::source_map::SourceMap;
 use tycho_types::boc::Boc;
-use tycho_types::cell::Cell;
+use tycho_types::cell::{Cell, CellBuilder, CellSlice};
 
 const OFFSET_PADDING: &str = "    │ ";
 
@@ -26,13 +26,39 @@ impl Instruction {
             }
         }
 
+        if let Instruction::Ref(instr) = self {
+            builder.push_str(&indent);
+            builder.push_str("ref ");
+            builder.push_str(&format_arg(&instr.code, depth, opts));
+            return builder.trim_end().to_string();
+        }
+
+        if let Instruction::ExoticCell(instr) = self {
+            builder.push_str(&indent);
+            builder.push_str("exotic ");
+
+            let mut slice = instr.cell.as_slice_allow_exotic();
+            let typ = slice.load_u8().unwrap_or(0);
+            if typ == 2 {
+                builder.push_str("library ");
+                builder.push_str(&format_slice(&slice));
+            } else {
+                builder.push_str(&format_cell(&instr.cell));
+            }
+            return builder.trim_end().to_string();
+        }
+
+        let Instruction::Plain(instr) = self else {
+            return builder;
+        };
+
         builder.push_str(&indent);
-        builder.push_str(&normalize_name(&self.name));
+        builder.push_str(&normalize_name(&instr.name));
         builder.push(' ');
 
-        for (i, arg) in self.args.iter().enumerate() {
+        for (i, arg) in instr.args.iter().enumerate() {
             builder.push_str(&format_arg(arg, depth, opts));
-            if i < self.args.len() - 1 {
+            if i < instr.args.len() - 1 {
                 builder.push(' ');
             }
         }
@@ -44,7 +70,7 @@ impl Instruction {
             && let Some(off) = offset
         {
             if let Some(locations) =
-                get_source_locations(&source_map, self.source_cell.as_ref(), off as i32)
+                get_source_locations(&source_map, instr.source_cell.as_ref(), off as i32)
                 && !locations.is_empty()
             {
                 let source_contexts: Vec<String> = locations
@@ -180,14 +206,7 @@ fn format_arg(arg: &ArgValue, depth: usize, opts: &FormatOptions) -> String {
         ArgValue::Control(c) => format!("{c}"),
         ArgValue::StackRegister(s) => format!("{s}"),
         ArgValue::Int(b) => format!("{b}"),
-        ArgValue::Cell(s) => {
-            let slice = s.as_slice().unwrap();
-            if slice.size_refs() == 0 {
-                format!("x{{{}}}", slice.display_data().to_string())
-            } else {
-                format!("boc{{{}}}", Boc::encode_hex(s))
-            }
-        }
+        ArgValue::Cell(s) => format_cell(s),
         ArgValue::Code {
             code,
             source,
@@ -262,5 +281,23 @@ fn format_arg(arg: &ArgValue, depth: usize, opts: &FormatOptions) -> String {
             builder
         }
         ArgValue::UInt(v) => format!("{v}"),
+    }
+}
+
+fn format_cell(s: &Cell) -> String {
+    let slice = s.as_slice().unwrap();
+    format_slice(&slice)
+}
+
+fn format_slice(slice: &CellSlice) -> String {
+    if slice.size_refs() == 0 {
+        format!("x{{{}}}", slice.display_data().to_string())
+    } else {
+        let mut builder = CellBuilder::new();
+        builder.store_slice(slice).ok();
+        let Ok(cell) = builder.build() else {
+            return "".to_owned();
+        };
+        format!("boc{{{}}}", Boc::encode_hex(cell))
     }
 }

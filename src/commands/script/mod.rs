@@ -1,11 +1,12 @@
 use crate::config::ActonConfig;
 use crate::context::{
-    AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx, Emulations, Env,
-    IoContext, KnownAddresses,
+    AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
+    Emulations, Env, IoContext, KnownAddresses,
 };
 use crate::debugger::debug_context::DebugContext;
 use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
+use crate::formatter::FormatterContext;
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use emulator::AnyExecutor;
@@ -71,7 +72,7 @@ fn run_script_file(
             let code_cell = ArcCell::from_boc_b64(&result.code_boc64)?;
             let data_cell = ArcCell::default();
 
-            let script_result = execute_script(
+            execute_script(
                 &code_cell,
                 &data_cell,
                 &abi,
@@ -81,8 +82,7 @@ fn run_script_file(
                 ExecutorVerbosity::FullLocationStackVerbose,
                 fork_net,
                 api_key,
-            );
-            print_script_result(script_result?);
+            )?;
             Ok(())
         }
         tolkc::CompilerResult::Error(error) => {
@@ -95,7 +95,8 @@ struct ScriptResult {
     result: GetMethodResult,
 }
 
-fn execute_script(
+#[allow(clippy::too_many_arguments)]
+fn execute_script<'a>(
     code_cell: &ArcCell,
     data_cell: &ArcCell,
     abi: &ContractAbi,
@@ -105,7 +106,7 @@ fn execute_script(
     verbosity: ExecutorVerbosity,
     fork_net: Option<String>,
     api_key: Option<String>,
-) -> anyhow::Result<ScriptResult> {
+) -> anyhow::Result<()> {
     let dest_address = contract_address(code_cell)?;
 
     let params = GetMethodParams {
@@ -187,17 +188,19 @@ fn execute_script(
         ctx.debug.ctx().process_incoming_requests(true)?;
 
         let result = executor.finish_get_method(&params.code);
-        return Ok(ScriptResult { result });
+        print_script_result(&mut ctx, ScriptResult { result }, abi);
+        return Ok(());
     }
 
     let mut executor = GetExecutor::new(params.clone());
     ffi::register(&mut executor, &mut ctx);
 
     let result = executor.run_get_method(Tuple::empty(), params);
-    Ok(ScriptResult { result })
+    print_script_result(&mut ctx, ScriptResult { result }, abi);
+    Ok(())
 }
 
-fn print_script_result(result: ScriptResult) {
+fn print_script_result(ctx: &mut Context, result: ScriptResult, abi: &ContractAbi) {
     match &result.result {
         GetMethodResult::Success(success_result) => {
             let exit_code = success_result.vm_exit_code;

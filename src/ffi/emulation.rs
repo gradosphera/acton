@@ -802,6 +802,15 @@ fn run_get_method_impl(
                 "Failed to deserialize tuple: {}"
             );
 
+            if result.vm_exit_code != 0 && result.vm_exit_code != 1 {
+                ctx.asserts.fail(format!(
+                    "Cannot execute get method {id}: exit code {}",
+                    result.vm_exit_code
+                ));
+                stack.push(TupleItem::Null);
+                return;
+            }
+
             stack.push(TupleItem::TypedTuple {
                 type_name: return_type_name,
                 inner: tuple,

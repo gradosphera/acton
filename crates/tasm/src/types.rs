@@ -5,9 +5,28 @@ use std::fmt::Write;
 use tycho_types::cell::Cell;
 
 #[derive(Debug, Clone)]
-pub struct Instruction {
+pub enum Instruction {
+    Plain(PlainInstruction),
+    Ref(RefInstruction),
+    ExoticCell(ExoticCellInstruction),
+}
+
+#[derive(Debug, Clone)]
+pub struct ExoticCellInstruction {
+    pub source_cell: Option<Cell>,
+    pub cell: Cell,
+}
+
+#[derive(Debug, Clone)]
+pub struct RefInstruction {
+    pub source_cell: Option<Cell>,
+    pub code: ArgValue,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlainInstruction {
     pub name: String,
-    pub instr: Option<Box<SpecInstruction>>,
+    pub instr: Box<SpecInstruction>,
     pub source_cell: Option<Cell>,
     pub args: smallvec::SmallVec<[ArgValue; 3]>,
 }

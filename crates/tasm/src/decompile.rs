@@ -1,9 +1,11 @@
 use crate::spec::*;
-use crate::types::{ArgValue, Code, CodeDictionary, Control, Instruction, Method, StackRegister};
+use crate::types::{
+    ArgValue, Code, CodeDictionary, Control, ExoticCellInstruction, Instruction, Method,
+    PlainInstruction, RefInstruction, StackRegister,
+};
 use anyhow::{Context, anyhow};
 use num_bigint::{BigInt, BigUint};
 use num_traits::ToPrimitive;
-use smallvec::smallvec;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, CellSlice, DynCell, Store};
 use tycho_types::dict::RawDict;
 
@@ -127,21 +129,31 @@ impl Disassembler {
             }
         }
 
-        Ok(Instruction {
+        Ok(Instruction::Plain(PlainInstruction {
             name: instruction.name.clone(),
-            instr: Some(Box::new((*instruction).clone())),
+            instr: Box::new((*instruction).clone()),
             source_cell: Some(dyn_cell_to_cell(slice.cell())),
             args,
-        })
+        }))
     }
 
     pub fn decompile_cell(&self, cell: &Cell) -> anyhow::Result<Code> {
-        let mut slice = cell.as_slice()?;
+        if cell.is_exotic() {
+            return Ok(Code {
+                instructions: vec![Instruction::ExoticCell(ExoticCellInstruction {
+                    source_cell: Some(cell.clone()),
+                    cell: cell.clone(),
+                })],
+                offsets: Some(vec![0]),
+            });
+        }
+
+        let mut slice = cell.as_slice().unwrap();
         self.decompile_slice(&mut slice, None)
     }
 
     pub fn decompile_dyn_cell(&self, cell: &DynCell) -> anyhow::Result<Code> {
-        let mut slice = cell.as_slice()?;
+        let mut slice = cell.as_slice().unwrap();
         self.decompile_slice(&mut slice, None)
     }
 
@@ -171,16 +183,14 @@ impl Disassembler {
             let ref_cell_clone = dyn_cell_to_cell(ref_cell);
             let code = self.decompile_dyn_cell(ref_cell)?;
             // ref is a special pseudo-instruction that denotes code placed in reference
-            result.push(Instruction {
-                name: "ref".to_string(),
-                instr: None,
-                args: smallvec![ArgValue::Code {
+            result.push(Instruction::Ref(RefInstruction {
+                code: ArgValue::Code {
                     code: Box::new(code),
                     source: ref_cell_clone,
                     offset: 0,
-                }],
+                },
                 source_cell: Some(dyn_cell_to_cell(slice.cell())),
-            });
+            }));
             offsets.push(slice.offset_bits());
         }
 
