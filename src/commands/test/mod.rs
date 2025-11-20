@@ -199,7 +199,6 @@ impl<'a> TestRunner<'a> {
 
         let mut emulator = Emulator::new(verbosity);
         let mut blockchain = Blockchain::new();
-        let mut libraries = vec![];
 
         let mut assert_failure = None;
         let mut expected_exit_code = None;
@@ -223,7 +222,6 @@ impl<'a> TestRunner<'a> {
                 blockchain: &mut blockchain,
                 emulator: &mut emulator,
                 emulations: &mut self.emulations,
-                libraries: &mut libraries,
             },
             build: BuildContext {
                 build_cache: &mut self.build_cache,

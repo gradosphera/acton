@@ -240,7 +240,6 @@ pub struct ChainContext<'a> {
     pub blockchain: &'a mut Blockchain,
     pub emulator: &'a mut Emulator,
     pub emulations: &'a mut Emulations,
-    pub libraries: &'a mut Vec<Cell>,
 }
 
 pub struct BuildContext<'a> {
@@ -282,7 +281,7 @@ impl<'a> ChainContext<'a> {
 
     pub fn build_libs_with_hash_owner(&self, owner: &HashBytes) -> Dict<HashBytes, LibDescr> {
         let mut libs = Dict::<HashBytes, LibDescr>::new();
-        for lib in self.libraries.iter() {
+        for lib in self.blockchain.libs().iter() {
             let mut publishers = Dict::new();
             publishers.add(owner, ()).ok();
 

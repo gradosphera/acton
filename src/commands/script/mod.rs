@@ -124,7 +124,6 @@ fn execute_script(
     let mut known_addresses = KnownAddresses::new();
     let mut known_code_cell = HashMap::new();
     let mut emulations = Emulations::new();
-    let mut libraries = vec![];
 
     let mut assert_failure = None;
     let mut expected_exit_code = None;
@@ -148,7 +147,6 @@ fn execute_script(
             blockchain: &mut blockchain,
             emulator: &mut emulator,
             emulations: &mut emulations,
-            libraries: &mut libraries,
         },
         build: BuildContext {
             build_cache: &mut build_cache,

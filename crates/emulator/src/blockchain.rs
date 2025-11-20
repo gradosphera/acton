@@ -17,6 +17,7 @@ pub fn account_code(accounts: &HashMap<String, ShardAccount>, addr: String) -> O
 pub struct Blockchain {
     accounts: HashMap<String, ShardAccount>,
     current_lt: BigInt,
+    libraries: Vec<Cell>,
 }
 
 impl Blockchain {
@@ -24,6 +25,7 @@ impl Blockchain {
         Self {
             accounts: HashMap::new(),
             current_lt: BigInt::from(0),
+            libraries: vec![],
         }
     }
 
@@ -59,5 +61,13 @@ impl Blockchain {
     pub fn get_lt(&mut self) -> BigInt {
         self.current_lt += BigInt::from(1_000_000);
         self.current_lt.clone()
+    }
+
+    pub fn libs(&self) -> Vec<Cell> {
+        self.libraries.clone()
+    }
+
+    pub fn register_lib(&mut self, lib: Cell) {
+        self.libraries.push(lib);
     }
 }

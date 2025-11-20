@@ -996,7 +996,7 @@ fn register_lib_impl(ctx: &mut Context, _stack: &mut Tuple, lib: ArcCell) {
         Boc::decode_base64(lib_boc),
         "Failed to decode lib from BoC: {}"
     );
-    ctx.chain.libraries.push(cell)
+    ctx.chain.blockchain.register_lib(cell)
 }
 
 pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context) {
