@@ -1,10 +1,14 @@
+use emulator::remote;
 use std::fs;
 use tasm::decompile::Disassembler;
 use tasm::printer::FormatOptions;
+use tasm::types::Instruction;
 use tycho_types::boc::Boc;
+use tycho_types::cell::HashBytes;
 
 mod toncenter;
 
+#[allow(clippy::too_many_arguments)]
 pub fn disasm_cmd(
     boc_file: Option<String>,
     boc_string: Option<String>,
@@ -12,6 +16,8 @@ pub fn disasm_cmd(
     opts: FormatOptions,
     address: Option<String>,
     api_key: Option<String>,
+    net: String,
+    follow_libraries: bool,
 ) -> anyhow::Result<()> {
     let boc_data = if let Some(string) = boc_string {
         string
@@ -37,8 +43,31 @@ pub fn disasm_cmd(
     };
 
     let disassembler = Disassembler::new();
-    let code = disassembler.decompile_cell(&cell)?;
+    let mut final_cell = cell;
 
+    // In --follow-libraries mode for code like
+    // exotic library x{...}
+    // we look up for library and disassemble actual code instead of just cell reference
+    if follow_libraries {
+        let code = disassembler.decompile_cell(&final_cell)?;
+        let instructions = code.instructions;
+
+        if instructions.len() == 1 {
+            if let Some(lib_hash) = extract_library_hash_from_instruction(&instructions[0]) {
+                match remote::get_library_by_hash(&net, &lib_hash.to_string(), api_key.clone()) {
+                    Ok(lib_cell) => {
+                        final_cell = lib_cell;
+                    }
+                    Err(err) => {
+                        eprintln!("Warning: Failed to load library {lib_hash}: {err}");
+                        eprintln!("Showing original code instead");
+                    }
+                }
+            }
+        }
+    }
+
+    let code = disassembler.decompile_cell(&final_cell)?;
     let output = code.print(&opts);
 
     if let Some(output_path) = output_file {
@@ -49,4 +78,21 @@ pub fn disasm_cmd(
     }
 
     Ok(())
+}
+
+fn extract_library_hash_from_instruction(instruction: &Instruction) -> Option<HashBytes> {
+    match instruction {
+        Instruction::ExoticCell(instr) => {
+            let mut slice = instr.cell.as_slice_allow_exotic();
+            let typ = slice.load_u8().ok()?;
+            if typ == 2 {
+                let hash = slice.load_u256().ok()?;
+                return Some(hash);
+            }
+
+            None
+        }
+        Instruction::Plain(_) => None,
+        Instruction::Ref(_) => None,
+    }
 }

@@ -520,6 +520,8 @@ impl Project {
             disasm_output: None,
             disasm_address: None,
             disasm_api_key: None,
+            disasm_net: None,
+            disasm_follow_libraries: false,
             compile_json: false,
             compile_base64_only: false,
             compile_boc: None,
@@ -550,6 +552,8 @@ pub struct ActonCommand {
     pub(crate) disasm_output: Option<String>,
     pub(crate) disasm_address: Option<String>,
     pub(crate) disasm_api_key: Option<String>,
+    pub(crate) disasm_net: Option<String>,
+    pub(crate) disasm_follow_libraries: bool,
     pub(crate) compile_json: bool,
     pub(crate) compile_base64_only: bool,
     pub(crate) compile_boc: Option<String>,
@@ -660,6 +664,28 @@ impl ActonCommand {
     /// ```
     pub fn with_api_key(mut self, api_key: &str) -> Self {
         self.disasm_api_key = Some(api_key.to_string());
+        self
+    }
+
+    /// Specify network for library fetching (testnet or mainnet)
+    ///
+    /// # Examples
+    /// ```
+    /// .disasm().with_address("...").with_net("mainnet")
+    /// ```
+    pub fn with_net(mut self, net: &str) -> Self {
+        self.disasm_net = Some(net.to_string());
+        self
+    }
+
+    /// Enable following library references
+    ///
+    /// # Examples
+    /// ```
+    /// .disasm().with_address("...").follow_libraries()
+    /// ```
+    pub fn follow_libraries(mut self) -> Self {
+        self.disasm_follow_libraries = true;
         self
     }
 
@@ -850,6 +876,14 @@ impl ActonCommand {
 
         if let Some(api_key) = self.disasm_api_key {
             self.cmd = self.cmd.arg("--api-key").arg(api_key);
+        }
+
+        if let Some(net) = self.disasm_net {
+            self.cmd = self.cmd.arg("--net").arg(net);
+        }
+
+        if self.disasm_follow_libraries {
+            self.cmd = self.cmd.arg("--follow-libraries");
         }
 
         if self.compile_json {

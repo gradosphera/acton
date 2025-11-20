@@ -146,4 +146,16 @@ impl Blockchain {
     pub fn register_lib(&mut self, lib: Cell) {
         self.libraries.push(lib);
     }
+
+    pub fn load_library_by_hash(&mut self, hash: &str) -> anyhow::Result<()> {
+        let network = self.fork_net.as_deref().unwrap_or("testnet");
+        let api_key = self.api_key.clone().or_else(|| {
+            // Fallback to env var if not provided via config/cli
+            env::var("TONCENTER_API_KEY").ok()
+        });
+
+        let lib_cell = remote::get_library_by_hash(network, hash, api_key)?;
+        self.libraries.push(lib_cell);
+        Ok(())
+    }
 }

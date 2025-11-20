@@ -75,6 +75,57 @@ fn toncenter_url(network: &str) -> anyhow::Result<&str> {
     Ok(base_url)
 }
 
+pub fn get_library_by_hash(
+    network: &str,
+    hash: &str,
+    api_key: Option<String>,
+) -> anyhow::Result<Cell> {
+    let base_url = toncenter_url(network)?;
+    let url = format!("{}/api/v2/getLibraries", base_url);
+
+    let client = reqwest::blocking::Client::new();
+    let mut request = client.get(&url).header("User-Agent", "acton-cli");
+
+    if let Some(key) = api_key {
+        request = request.header("X-API-Key", key);
+    }
+
+    let response = request
+        .query(&[("libraries", hash)])
+        .send()
+        .context("Failed to send request to TonCenter for library")?;
+
+    if !response.status().is_success() {
+        anyhow::bail!("TonCenter API returned status: {}", response.status());
+    }
+
+    #[derive(Deserialize)]
+    struct TonCenterLibrariesResponse {
+        ok: bool,
+        result: TonCenterLibrariesResult,
+    }
+
+    #[derive(Deserialize)]
+    struct TonCenterLibrariesResult {
+        result: Vec<TonCenterLibraryData>,
+    }
+
+    #[derive(Deserialize)]
+    struct TonCenterLibraryData {
+        data: String,
+    }
+
+    let data: TonCenterLibrariesResponse = response
+        .json()
+        .context("Failed to parse TonCenter libraries response")?;
+
+    if !data.ok || data.result.result.is_empty() {
+        anyhow::bail!("Library with hash {} not found", hash);
+    }
+
+    Boc::decode_base64(&data.result.result[0].data).context("Failed to decode library BOC data")
+}
+
 pub fn decode_optional_cell(cell_data: &String) -> anyhow::Result<Option<Cell>> {
     if cell_data.is_empty() {
         return Ok(None);

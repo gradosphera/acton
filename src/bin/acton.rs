@@ -246,6 +246,17 @@ enum Commands {
         address: Option<String>,
         #[arg(long, help = "TonCenter API key (optional)")]
         api_key: Option<String>,
+        #[arg(
+            long,
+            help = "Network to use for fetching libraries (testnet or mainnet)",
+            default_value = "mainnet"
+        )]
+        net: String,
+        #[arg(
+            long,
+            help = "Follow library references and disassemble the actual library code instead of showing library hash"
+        )]
+        follow_libraries: bool,
     },
 }
 
@@ -499,6 +510,8 @@ fn main() {
             source_map,
             address,
             api_key,
+            net,
+            follow_libraries,
         } => {
             let source_map_data = if let Some(source_map_path) = source_map {
                 let content =
@@ -521,6 +534,8 @@ fn main() {
                 },
                 address,
                 api_key,
+                net,
+                follow_libraries,
             );
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
