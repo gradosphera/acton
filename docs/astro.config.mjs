@@ -159,6 +159,7 @@ export default defineConfig({
                 {slug: "test-runner/tests/test-attributes"},
                 {slug: "test-runner/tests/test-configuration"},
                 {slug: "test-runner/tests/code-coverage"},
+                {slug: "test-runner/tests/cookbook"},
               ],
             },
           ],
