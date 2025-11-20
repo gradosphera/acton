@@ -492,15 +492,23 @@ fun net.getAccountState(addr: address): AccountInfo? {
     return typed_cell.load()
 }
 
-/// Convert a slice with string representation of address to an address type.
-/// 
-/// Example:
-/// ```
-/// val address = net.convertAddress("kQCPFJYFqhowz0BRAfqNPdLOC1_Rlupki_0BezWU6rHk5lbt");
-/// ```
-fun net.convertAddress(addr: slice): address {
-    val cell = ffi.convertAddress(addr);
-    return cell.beginParse() as address
+/// Load library from the real blockchain by hash.
+///
+/// Returns null if library is not found.
+fun net.loadLibrary(hash: slice): cell? {
+    return ffi.loadLibrary(hash)
+}
+
+/// Load library from the real blockchain by hash and register it in current blockchain.
+///
+/// Returns false if library is not found.
+fun net.registerLibrary(hash: slice): bool {
+    val cell = net.loadLibrary(hash);
+    if (cell == null) {
+        return false
+    }
+    vm.registerLibrary(cell);
+    return true
 }
 
 /// Calculate the CRC16 checksum of a slice.
@@ -530,4 +538,4 @@ fun ffi.findTransactionByParams(txs: tuple, params: tuple): cell? asm "10 EXTCAL
 fun ffi.failToFindTransactionByParams(location: slice, message: slice, txs: tuple, params: tuple): tuple? asm "103 EXTCALL"
 fun ffi.failToNotFindTransactionByParams(location: slice, message: slice, txs: tuple, params: tuple): tuple? asm "104 EXTCALL"
 fun ffi.getAccountState(addr: cell): cell? asm "17 EXTCALL"
-fun ffi.convertAddress(addr: slice): cell asm "19 EXTCALL"
+fun ffi.loadLibrary(hash: slice): cell? asm "21 EXTCALL"

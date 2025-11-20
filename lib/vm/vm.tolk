@@ -66,4 +66,21 @@ fun vm.registerLibrary(cell: cell) {
     ffi.register_library(cell)
 }
 
+/// Convert a slice with string representation of address to an address type.
+///
+/// Example:
+/// ```
+/// val address = net.convertAddress("kQCPFJYFqhowz0BRAfqNPdLOC1_Rlupki_0BezWU6rHk5lbt");
+/// ```
+fun vm.convertAddress(addr: slice): address {
+    val cell = ffi.convertAddress(addr);
+    return cell.beginParse() as address
+}
+
+fun vm.cellFromHex(cell_hex: slice): cell {
+    return ffi.cellFromHex(cell_hex)
+}
+
 fun ffi.register_library(cell: cell): void asm "18 EXTCALL"
+fun ffi.convertAddress(addr: slice): cell asm "19 EXTCALL"
+fun ffi.cellFromHex(cell_hex: slice): cell asm "20 EXTCALL"

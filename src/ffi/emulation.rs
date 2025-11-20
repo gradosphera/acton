@@ -11,7 +11,7 @@ use emulator::get_executor::{GetExecutor, GetMethodParams, GetMethodResult};
 use emulator::step_executor::StepExecutor;
 use emulator::step_get_executor::StepGetExecutor;
 use emulator::traits::BaseExecutor;
-use emulator::{AnyExecutor, extension, pop_args, register_ext_methods, try_ctx};
+use emulator::{AnyExecutor, extension, pop_args, register_ext_methods, remote, try_ctx};
 use log::{debug, info, warn};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
@@ -1026,6 +1026,35 @@ fn convert_address_impl(ctx: &mut Context, stack: &mut Tuple, address: String) {
     stack.push(TupleItem::Cell(cell.to_arc()))
 }
 
+extension!(cell_from_hex in (Context) with (cell_hex: String) using cell_from_hex_impl);
+fn cell_from_hex_impl(ctx: &mut Context, stack: &mut Tuple, cell_hex: String) {
+    let cell = try_ctx!(
+        ctx,
+        ArcCell::from_boc_hex(cell_hex.as_str()),
+        "Failed to decode cell hex {cell_hex}: {}"
+    );
+
+    stack.push(TupleItem::Cell(cell))
+}
+
+extension!(load_library_by_hash in (Context) with (hash: String) using load_library_by_hash_impl);
+fn load_library_by_hash_impl(ctx: &mut Context, stack: &mut Tuple, hash: String) {
+    let lib = remote::get_library_by_hash("mainnet", hash.as_str(), None);
+    match lib {
+        Ok(lib) => {
+            let lib_b64 = Boc::encode_base64(lib);
+            let lib_cell = try_ctx!(
+                ctx,
+                ArcCell::from_boc_b64(&lib_b64),
+                "Failed to decode lib from BoC: {}"
+            );
+
+            stack.push(TupleItem::Cell(lib_cell))
+        }
+        Err(_) => stack.push(TupleItem::Null),
+    }
+}
+
 pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         6 => build,
@@ -1042,5 +1071,7 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         17 => account_state,
         18 => register_lib,
         19 => convert_address,
+        20 => cell_from_hex,
+        21 => load_library_by_hash,
     });
 }
