@@ -3,6 +3,7 @@ use emulator::traits::BaseExecutor;
 use emulator::{extension, pop_args, register_ext_methods};
 use inquire::{Confirm, Select, Text};
 use num_bigint::BigInt;
+use num_traits::ToPrimitive;
 use tvmffi::from_stack::FromStack;
 use tvmffi::stack::{Tuple, TupleItem};
 
@@ -129,6 +130,18 @@ fn format_args(ctx: &mut Context, mut fmt: String, args: Vec<(String, TupleItem)
         {
             let formatted_arg = format!("{typed_arg:x}");
             fmt.replace_range(pos..pos + 4, formatted_arg.as_str());
+            continue;
+        }
+
+        // Special formatting for TON amount
+        if let Some(pos) = fmt.find("{:ton}")
+            && let TupleItem::Tuple(args) = &arg
+            && args.len() == 1
+            && let TupleItem::Int(typed_arg) = &args[0]
+        {
+            let amount = typed_arg.to_f64().unwrap_or(0.0) / 1e9;
+            let formatted_arg = format!("{amount} TON");
+            fmt.replace_range(pos..pos + 6, formatted_arg.as_str());
             continue;
         }
 
