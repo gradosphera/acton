@@ -1,7 +1,7 @@
 use crate::config::ActonConfig;
 use crate::context::{
-    AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
-    Emulations, Env, IoContext, KnownAddresses,
+    AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx, Emulations, Env,
+    IoContext, KnownAddresses,
 };
 use crate::debugger::debug_context::DebugContext;
 use crate::ffi;
@@ -96,7 +96,7 @@ struct ScriptResult {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn execute_script<'a>(
+fn execute_script(
     code_cell: &ArcCell,
     data_cell: &ArcCell,
     abi: &ContractAbi,
@@ -188,7 +188,7 @@ fn execute_script<'a>(
         ctx.debug.ctx().process_incoming_requests(true)?;
 
         let result = executor.finish_get_method(&params.code);
-        print_script_result(&mut ctx, ScriptResult { result }, abi);
+        print_script_result(&mut ctx, ScriptResult { result });
         return Ok(());
     }
 
@@ -196,14 +196,37 @@ fn execute_script<'a>(
     ffi::register(&mut executor, &mut ctx);
 
     let result = executor.run_get_method(Tuple::empty(), params);
-    print_script_result(&mut ctx, ScriptResult { result }, abi);
+    print_script_result(&mut ctx, ScriptResult { result });
     Ok(())
 }
 
-fn print_script_result(ctx: &mut Context, result: ScriptResult, abi: &ContractAbi) {
+fn print_script_result(ctx: &mut Context, result: ScriptResult) {
     match &result.result {
         GetMethodResult::Success(success_result) => {
             let exit_code = success_result.vm_exit_code;
+
+            if exit_code != 0
+                && let Some(assert_failure) = ctx.asserts.assert_failure
+            {
+                if let Some(message) = &assert_failure.message() {
+                    if !message.is_empty() {
+                        let highlighted_message =
+                            FormatterContext::highlight_actual_expected(message);
+                        println!("{} {}", "Error:".bright_red(), highlighted_message);
+                    } else {
+                        println!("{}", "└─".dimmed());
+                    }
+                } else {
+                    println!("{}", "└─".dimmed());
+                }
+
+                if let Some(location) = &assert_failure.location()
+                    && !location.is_empty()
+                {
+                    println!("{} at {}", "└─".dimmed(), location.dimmed());
+                }
+            }
+
             std::process::exit(exit_code);
         }
         GetMethodResult::Error(error) => {
