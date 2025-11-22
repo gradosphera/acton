@@ -1,0 +1,47 @@
+Step 1 (before):
+  Code:
+      2| global foo: int;
+      3| 
+      4| fun main() {
+      5|     foo = 100;
+             ^
+      6|     match (foo) {
+      7|         100 => {
+      8|             return 10
+
+Step 2 (step_over):
+  Code:
+      3| 
+      4| fun main() {
+      5|     foo = 100;
+      6|     match (foo) {
+             ^
+      7|         100 => {
+      8|             return 10
+      9|         }
+
+Step 3 (step_over):
+  Code:
+      4| fun main() {
+      5|     foo = 100;
+      6|     match (foo) {
+      7|         100 => {
+                 ^
+      8|             return 10
+      9|         }
+     10|         200 => {
+  Variables:
+    g_foo = 100
+
+Step 4 (step_over):
+  Code:
+      5|     foo = 100;
+      6|     match (foo) {
+      7|         100 => {
+      8|             return 10
+                     ^
+      9|         }
+     10|         200 => {
+     11|             return 20
+  Variables:
+    '5 = null

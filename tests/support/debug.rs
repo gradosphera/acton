@@ -1,0 +1,327 @@
+use crate::debugging::{DebuggerClient, SourcePosition, run_script_file};
+use crate::support::snapshots::normalize_output;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::thread;
+use std::thread::JoinHandle;
+use std::time::Duration;
+use tempfile::TempDir;
+
+use super::project::ProjectRef;
+
+pub struct DebugBuilder {
+    name: String,
+    temp_dir: TempDir,
+    code: String,
+    debug_port: Option<u16>,
+}
+
+impl DebugBuilder {
+    pub fn new(name: &str) -> Self {
+        let mut temp_dir = TempDir::new().expect("Failed to create temp dir");
+        temp_dir.disable_cleanup(true);
+        Self {
+            name: name.to_string(),
+            temp_dir,
+            code: String::new(),
+            debug_port: None,
+        }
+    }
+
+    pub fn code(mut self, code: &str) -> Self {
+        self.code = code.to_string();
+        self
+    }
+
+    pub fn debug_port(mut self, port: u16) -> Self {
+        self.debug_port = Some(port);
+        self
+    }
+
+    pub fn build(self) -> DebugSession {
+        let project_path = self.temp_dir.path().join(&self.name);
+        fs::create_dir_all(&project_path).expect("Failed to create project dir");
+
+        let code_path = project_path.join("debug_script.tolk");
+        fs::write(&code_path, &self.code).expect("Failed to write debug script");
+
+        let debug_port = self.debug_port.unwrap_or_else(find_available_port);
+
+        let project_ref = Arc::new(ProjectRef { path: project_path });
+
+        DebugSession {
+            project_ref,
+            code_path,
+            debug_port,
+            _temp_dir: self.temp_dir,
+            client_handle: None,
+        }
+    }
+}
+
+fn find_available_port() -> u16 {
+    use std::net::TcpListener;
+
+    for port in 42070..43000 {
+        if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    }
+    panic!("No available debug ports found");
+}
+
+pub struct DebugSession {
+    project_ref: Arc<ProjectRef>,
+    code_path: PathBuf,
+    debug_port: u16,
+    _temp_dir: TempDir,
+    client_handle: Option<JoinHandle<()>>,
+}
+
+impl DebugSession {
+    pub fn start(mut self) -> DebugClient {
+        let code = self.code_path.to_string_lossy().to_string();
+        let port = self.debug_port;
+
+        let source_content = fs::read_to_string(&code).expect("Failed to read code file");
+        let source_lines: Vec<String> = source_content.lines().map(|s| s.to_string()).collect();
+
+        let handle = thread::spawn(move || {
+            let result =
+                run_script_file(&code, &source_content, port).expect("Failed to run debug script");
+            println!("Debug execution finished: {}", result);
+        });
+
+        thread::sleep(Duration::from_millis(1000));
+
+        let address = format!("127.0.0.1:{}", port);
+        let client = DebuggerClient::connect(&address).expect("Failed to connect to debug server");
+
+        self.client_handle = Some(handle);
+
+        DebugClient {
+            client: Some(client),
+            session: self,
+            trace: ExecutionTrace::new(source_lines),
+        }
+    }
+
+    pub fn join(mut self) -> anyhow::Result<()> {
+        if let Some(handle) = self.client_handle.take() {
+            handle.join().map_err(|_| anyhow::anyhow!("Join error"))?;
+        }
+        Ok(())
+    }
+}
+
+pub struct DebugClient {
+    client: Option<DebuggerClient>,
+    pub session: DebugSession,
+    trace: ExecutionTrace,
+}
+
+impl DebugClient {
+    pub fn execute<F>(&mut self, actions: F) -> anyhow::Result<DebugResult>
+    where
+        F: FnOnce(&mut DebugActionExecutor) -> anyhow::Result<()>,
+    {
+        let mut executor = DebugActionExecutor {
+            client: self.client.as_mut().unwrap(),
+            trace: &mut self.trace,
+            current_action: "callback".to_string(),
+        };
+        executor.record_state_with_action("before".to_owned())?;
+
+        actions(&mut executor)?;
+
+        Ok(DebugResult {
+            trace: self.trace.clone(),
+            project_path: self.session.project_ref.path.clone(),
+        })
+    }
+
+    pub fn terminate(mut self) -> anyhow::Result<()> {
+        if let Some(mut client) = self.client.take() {
+            client.terminate()
+        } else {
+            Ok(())
+        }
+    }
+}
+
+pub struct DebugActionExecutor<'a> {
+    client: &'a mut DebuggerClient,
+    trace: &'a mut ExecutionTrace,
+    current_action: String,
+}
+
+impl<'a> DebugActionExecutor<'a> {
+    pub fn record_state(&mut self) -> anyhow::Result<()> {
+        self.record_state_with_action("record".to_string())
+    }
+
+    fn record_state_with_action(&mut self, action: String) -> anyhow::Result<()> {
+        let thread_id = 1; // Default thread
+        let positions = self.client.stack_trace(thread_id)?;
+        let variables = self.client.variables(thread_id)?;
+
+        self.trace.add_step(positions, variables, action);
+        Ok(())
+    }
+
+    pub fn step_in(&mut self) -> anyhow::Result<()> {
+        self.client.step_in(1)?;
+        self.record_state_with_action("step_in".to_string())
+    }
+
+    pub fn step_over(&mut self) -> anyhow::Result<()> {
+        self.client.step_over(1)?;
+        self.record_state_with_action("step_over".to_string())
+    }
+
+    pub fn step_out(&mut self) -> anyhow::Result<()> {
+        self.client.step_out(1)?;
+        self.record_state_with_action("step_out".to_string())
+    }
+
+    pub fn continue_execution(&mut self) -> anyhow::Result<()> {
+        self.client.continue_execution(1)?;
+        Ok(())
+        // self.record_state_with_action("continue".to_string())
+    }
+
+    pub fn assert_position(&mut self, expected: &SourcePosition) -> anyhow::Result<()> {
+        self.client.assert_position(1, expected)
+    }
+}
+
+pub struct DebugResult {
+    trace: ExecutionTrace,
+    project_path: PathBuf,
+}
+
+impl DebugResult {
+    pub fn assert_trace_snapshot_matches(&self, path: &str) -> &Self {
+        let serialized = self.trace.serialize();
+        let normalized = normalize_output(&serialized, &self.project_path);
+        let assertion = crate::common::assertion();
+
+        let mut snapshot_path = std::env::current_dir().expect("Failed to get current dir");
+        snapshot_path.push("tests");
+        snapshot_path.push(path);
+
+        let expected = snapbox::Data::read_from(&snapshot_path, None);
+        assertion.eq(normalized, expected);
+        self
+    }
+
+    pub fn trace(&self) -> &ExecutionTrace {
+        &self.trace
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ExecutionTrace {
+    pub steps: Vec<ExecutionStep>,
+    pub source_code: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExecutionStep {
+    pub step_number: usize,
+    pub positions: Vec<SourcePosition>,
+    pub variables: Vec<dap::types::Variable>,
+    pub action: String,
+    pub code_context: Vec<String>,
+}
+
+impl ExecutionTrace {
+    fn new(source_code: Vec<String>) -> Self {
+        Self {
+            steps: Vec::new(),
+            source_code,
+        }
+    }
+
+    fn add_step(
+        &mut self,
+        positions: Vec<SourcePosition>,
+        variables: Vec<dap::types::Variable>,
+        action: String,
+    ) {
+        let step_number = self.steps.len() + 1;
+        let code_context = self.get_code_context(&positions);
+        self.steps.push(ExecutionStep {
+            step_number,
+            positions,
+            variables,
+            action,
+            code_context,
+        });
+    }
+
+    fn get_code_context(&self, positions: &[SourcePosition]) -> Vec<String> {
+        if let Some(pos) = positions.first() {
+            let line_idx = (pos.line - 1) as usize;
+            if line_idx < self.source_code.len() {
+                let start_line = line_idx.saturating_sub(3);
+                let end_line = (line_idx + 4).min(self.source_code.len());
+                let mut context = Vec::new();
+
+                for i in start_line..end_line {
+                    let line_num = i + 1;
+                    context.push(format!("{:3}| {}", line_num, self.source_code[i]));
+                }
+
+                if line_idx >= start_line && line_idx < end_line {
+                    let line_relative_idx = line_idx - start_line;
+                    let col = (pos.column - 1) as usize;
+                    let code_line = &self.source_code[line_idx];
+
+                    let mut pointer_line = String::new();
+                    pointer_line.push_str(&" ".repeat(5));
+
+                    if col < code_line.len() {
+                        pointer_line.push_str(&" ".repeat(col));
+                        pointer_line.push('^');
+                    }
+
+                    context.insert(line_relative_idx + 1, pointer_line);
+                }
+
+                context
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn serialize(&self) -> String {
+        let mut result = String::new();
+
+        for step in &self.steps {
+            result.push_str(&format!("Step {} ({}):\n", step.step_number, step.action));
+
+            if !step.code_context.is_empty() {
+                result.push_str("  Code:\n");
+                for line in &step.code_context {
+                    result.push_str(&format!("    {}\n", line));
+                }
+            }
+
+            if !step.variables.is_empty() {
+                result.push_str("  Variables:\n");
+                for var in &step.variables {
+                    result.push_str(&format!("    {} = {}\n", var.name, var.value));
+                }
+            }
+
+            result.push('\n');
+        }
+
+        result.trim_end().to_string()
+    }
+}

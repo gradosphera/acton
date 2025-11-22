@@ -21,9 +21,8 @@ use emulator_rs::{debugger, ffi};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::thread::JoinHandle;
 use std::time::Duration;
-use std::{env, fs, thread};
+use std::{env, fs};
 use tasm::printer::FormatOptions;
 use tolkc::CompilerResult;
 use tolkc::source_map::SourceMap;
@@ -159,80 +158,6 @@ fn wait_for_initialized(client: &mut DapClient) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_debugging() -> anyhow::Result<()> {
-    let code = "
-global foo: int;
-
-fun main() {
-    foo = 100;
-    if (foo > 10) {
-        foo = 200;
-    }
-    return foo
-}
-    ";
-
-    let (mut client, _) = prepare_test(code)?;
-
-    let positions = client.stack_trace(1)?;
-    let initial_pos = positions.first().expect("unexpected empty stack");
-    println!("Initial position: {}", initial_pos);
-
-    for i in 0..40 {
-        client.step_in(1)?;
-        let positions = client.stack_trace(1)?;
-        let pos = positions.first().unwrap();
-        println!("Step {}: {}", i + 4, pos);
-
-        let variables = client.variables(1)?;
-        println!("Variables: {:?}", variables);
-    }
-
-    client.terminate()?;
-    Ok(())
-}
-
-#[test]
-fn test_can_continue_execution() -> anyhow::Result<()> {
-    let code = "
-global foo: int;
-
-fun main() {
-    foo = 100;
-    if (foo > 10) {
-        foo = 300;
-    }
-    return foo
-}
-    ";
-
-    let (mut client, handle) = prepare_test(code)?;
-
-    client.continue_execution(1)?;
-
-    handle
-        .join()
-        .expect("failed to join thread with debug execution");
-
-    Ok(())
-}
-
-fn prepare_test(code: &str) -> anyhow::Result<(DebuggerClient, JoinHandle<()>)> {
-    fs::write("script2.tolk", code)?;
-
-    let code = code.to_owned();
-    let handle = thread::spawn(move || {
-        let result = run_script_file("script2.tolk", code.as_str(), 42069).expect("");
-        println!("{result}");
-    });
-
-    thread::sleep(Duration::from_millis(1000));
-    let address = "127.0.0.1:42069".to_string();
-    let client = DebuggerClient::connect(&address)?;
-    Ok((client, handle))
-}
-
 fn wait_for_stopped(client: &mut DapClient) -> anyhow::Result<()> {
     loop {
         if let Ok(Some(event)) = client.try_receive_event(Duration::from_millis(100))
@@ -243,7 +168,11 @@ fn wait_for_stopped(client: &mut DapClient) -> anyhow::Result<()> {
     }
 }
 
-fn run_script_file(file_path: &str, content: &str, debug_port: u16) -> anyhow::Result<String> {
+pub(crate) fn run_script_file(
+    file_path: &str,
+    content: &str,
+    debug_port: u16,
+) -> anyhow::Result<String> {
     let abi = contract_abi(content, file_path);
 
     match tolkc::compile(Path::new(file_path), true) {
@@ -418,90 +347,3 @@ fn contract_address(code: &ArcCell) -> anyhow::Result<TonAddress> {
     let dest_address = TonAddress::new(0, state_init.cell_hash());
     Ok(dest_address)
 }
-
-const CODE: &str = "
-        global a: int;
-
-        struct (0x1) Msg {
-            a: int32,
-            b: int64,
-        }
-
-        struct (0x2) Msg2 {
-            a: int64,
-            b: int16,
-        }
-
-        type AnyMsg = Msg | Msg2;
-
-        @inline_ref
-        fun ref_func(b: int) {
-            return b + 10
-        }
-
-        @noinline
-        fun get_tuple(a: int, b: int) {
-            return [a, b]
-        }
-
-        fun main() {
-            val cell = Msg { a: 10, b: 11 }.toCell();
-            a = 200;
-            var b = a;
-
-            val msg = lazy AnyMsg.fromCell(cell);
-
-            val [c, d] = get_tuple(a, b);
-
-            match (msg) {
-            	Msg => {
-                    b = msg.a;
-                    ref_func(b);
-                    debug.print(b);
-                    b += msg.b;
-            	}
-            	Msg2 => {
-                    a = 2;
-            	}
-            	else => {
-                    a = 3;
-            	}
-            }
-
-            var builder = beginCell();
-
-            a = 101;
-            if (a > 100) {
-                a = 200;
-                builder.storeUint(32, 32);
-            }
-
-            match (a) {
-                10 => {
-                    a = 20;
-                }
-                200 => {
-                    a = 300
-                }
-            }
-
-            match (a) {
-                10 => {
-                    a = 20;
-                }
-                201 => {
-                    a = 300
-                }
-                else => {
-                    a = 400
-                }
-            }
-
-            repeat(10) {
-                a += 1;
-                builder.storeUint(a, 32);
-            }
-
-            return a + b + c + d;
-        }
-";
