@@ -2,7 +2,7 @@ use crossbeam_channel::{Receiver, Sender, unbounded};
 use dap::errors::{DeserializationError, ServerError};
 use dap::events::Event;
 use dap::prelude::{Request, Response, Server};
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use std::io::{BufRead, BufReader, BufWriter, Cursor, Read};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
@@ -173,10 +173,16 @@ pub fn start_dap_server(port: u16) -> DapTransport {
             }
         }
 
-        reader_thread
+        let error = reader_thread
             .join()
-            .expect("[INTERNAL ERROR] DAP thread panicked")
-            .expect("[INTERNAL ERROR] Cannot send DAP message");
+            .expect("[INTERNAL ERROR] DAP thread panicked");
+
+        match error {
+            Ok(_) => {}
+            Err(err) => {
+                error!("[INTERNAL ERROR] DAP thread error: {err}");
+            }
+        }
 
         println!("Connection closed");
         Ok(())

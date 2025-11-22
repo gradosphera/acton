@@ -380,8 +380,16 @@ impl DebugContext {
     pub fn process_incoming_requests(&mut self, terminate_at_end: bool) -> anyhow::Result<()> {
         for req in self.transport.req_receiver.clone().iter() {
             if let Command::Disconnect(args) = &req.command {
-                println!("Disconnecting: {args:?}");
+                println!("Disconnecting");
+                debug!("Disconnecting: {args:?}");
                 let rsp = req.success(ResponseBody::Disconnect);
+                self.send_response(rsp)?;
+                break;
+            }
+            if let Command::Terminate(args) = &req.command {
+                println!("Terminating");
+                debug!("Terminating: {args:?}");
+                let rsp = req.success(ResponseBody::Terminate);
                 self.send_response(rsp)?;
                 break;
             }
@@ -721,7 +729,9 @@ impl DebugContext {
             .enumerate()
             .rev()
             .map(|(idx, frame)| {
-                let function_name = if let Some(prev) = callstack.get(idx - 1) {
+                let function_name = if idx > 0
+                    && let Some(prev) = callstack.get(idx - 1)
+                {
                     prev.function_name.clone()
                 } else {
                     self.get_root_function_name(thread_id)
@@ -953,5 +963,5 @@ fn get_locations(executor: &AnyExecutor, source_map: &SourceMap) -> Option<Vec<D
     let pos = executor.get_code_pos();
     let (hash, offset) = pos.split_once(":")?;
     let offset = offset.parse::<i32>().ok()?;
-    crate::vmtrace::low_level_loc_to_debug_locations(source_map, hash, offset, false, false)
+    crate::vmtrace::low_level_loc_to_debug_locations(source_map, hash, offset, true, false)
 }
