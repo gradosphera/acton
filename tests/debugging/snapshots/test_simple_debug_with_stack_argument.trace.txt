@@ -1,0 +1,82 @@
+Step 1 (before):
+  Code:
+      2| global result: int;
+      3| 
+      4| fun main(arg: int) {
+      5|     result = arg * 2;
+             ^
+      6|     return result;
+      7| }
+  Variables:
+    arg = 21
+
+Step 2 (step_in):
+  Code:
+      2| global result: int;
+      3| 
+      4| fun main(arg: int) {
+      5|     result = arg * 2;
+                      ^
+      6|     return result;
+      7| }
+  Variables:
+    arg = 21
+
+Step 3 (step_in):
+  Code:
+      2| global result: int;
+      3| 
+      4| fun main(arg: int) {
+      5|     result = arg * 2;
+                            ^
+      6|     return result;
+      7| }
+  Variables:
+    arg = 21
+
+Step 4 (step_in):
+  Code:
+      2| global result: int;
+      3| 
+      4| fun main(arg: int) {
+      5|     result = arg * 2;
+                      ^
+      6|     return result;
+      7| }
+  Variables:
+    arg = 21
+
+Step 5 (step_in):
+  Code:
+      2| global result: int;
+      3| 
+      4| fun main(arg: int) {
+      5|     result = arg * 2;
+                      ^
+      6|     return result;
+      7| }
+  Variables:
+    '3 = 42
+
+Step 6 (step_in):
+  Code:
+      2| global result: int;
+      3| 
+      4| fun main(arg: int) {
+      5|     result = arg * 2;
+             ^
+      6|     return result;
+      7| }
+  Variables:
+    '1 = 42
+
+Step 7 (step_in):
+  Code:
+      3| 
+      4| fun main(arg: int) {
+      5|     result = arg * 2;
+      6|     return result;
+             ^
+      7| }
+  Variables:
+    g_result = 42

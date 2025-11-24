@@ -199,6 +199,7 @@ pub(crate) fn run_script_file(
     file_path: &str,
     content: &str,
     debug_port: u16,
+    stack: Tuple,
 ) -> anyhow::Result<String> {
     let abi = contract_abi(content, file_path);
 
@@ -232,6 +233,7 @@ pub(crate) fn run_script_file(
                 &result.source_map.unwrap_or(Default::default()),
                 debug_port,
                 ExecutorVerbosity::FullLocationStackVerbose,
+                stack,
             )?;
             get_script_result(script_result, ctx, formatter)
         }
@@ -248,6 +250,7 @@ fn execute_script(
     source_map: &SourceMap,
     debug_port: u16,
     verbosity: ExecutorVerbosity,
+    stack: Tuple,
 ) -> anyhow::Result<(GetMethodResult, IoContext, FormatterContext)> {
     let dest_address = contract_address(code_cell)?;
 
@@ -310,7 +313,7 @@ fn execute_script(
         debug: DebugCtx::Disabled,
     };
 
-    let mut executor = StepGetExecutor::new(Tuple::empty(), params.clone());
+    let mut executor = StepGetExecutor::new(stack.clone(), params.clone());
     ffi::register(&mut executor, &mut ctx);
 
     let transport = debugger::start_dap_server(debug_port);
@@ -324,7 +327,7 @@ fn execute_script(
 
     ctx.debug = DebugCtx::new(&mut dbg_ctx);
 
-    executor.prepare_get_method(0, Tuple::empty());
+    executor.prepare_get_method(0, stack);
 
     ctx.debug.ctx().process_incoming_requests(true)?;
 

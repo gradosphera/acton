@@ -7,6 +7,7 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use tempfile::TempDir;
+use tvmffi::stack::{Tuple, TupleItem};
 
 pub struct ProjectRef {
     pub path: PathBuf,
@@ -17,6 +18,7 @@ pub struct DebugBuilder {
     temp_dir: TempDir,
     code: String,
     debug_port: Option<u16>,
+    stack: Option<Tuple>,
 }
 
 impl DebugBuilder {
@@ -28,11 +30,24 @@ impl DebugBuilder {
             temp_dir,
             code: String::new(),
             debug_port: None,
+            stack: None,
         }
     }
 
     pub fn code(mut self, code: &str) -> Self {
         self.code = code.to_string();
+        self
+    }
+
+    pub fn stack(mut self, stack: Tuple) -> Self {
+        self.stack = Some(stack);
+        self
+    }
+
+    pub fn accept_int(mut self, value: i32) -> Self {
+        let mut tuple = Tuple::empty();
+        tuple.push(TupleItem::Int(value.into()));
+        self.stack = Some(tuple);
         self
     }
 
@@ -46,11 +61,13 @@ impl DebugBuilder {
         let debug_port = self.debug_port.unwrap_or_else(find_available_port);
 
         let project_ref = Arc::new(ProjectRef { path: project_path });
+        let stack = self.stack.unwrap_or_else(Tuple::empty);
 
         DebugSession {
             project_ref,
             code_path,
             debug_port,
+            stack,
             _temp_dir: self.temp_dir,
             client_handle: None,
         }
@@ -72,6 +89,7 @@ pub struct DebugSession {
     project_ref: Arc<ProjectRef>,
     code_path: PathBuf,
     debug_port: u16,
+    stack: Tuple,
     _temp_dir: TempDir,
     client_handle: Option<JoinHandle<()>>,
 }
@@ -84,9 +102,10 @@ impl DebugSession {
         let source_content = fs::read_to_string(&code).expect("Failed to read code file");
         let source_lines: Vec<String> = source_content.lines().map(|s| s.to_string()).collect();
 
+        let stack = self.stack.clone();
         let handle = thread::spawn(move || {
-            let result =
-                run_script_file(&code, &source_content, port).expect("Failed to run debug script");
+            let result = run_script_file(&code, &source_content, port, stack)
+                .expect("Failed to run debug script");
             println!("Debug execution finished: {}", result);
         });
 
