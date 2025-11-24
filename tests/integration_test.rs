@@ -10,7 +10,7 @@ fn test_acton_help() {
         .arg("--help")
         .assert()
         .success()
-        .stdout_eq(snapbox::file!["testsuite/acton/stdout.txt"])
+        .stdout_eq(snapbox::file!["snapshots/acton/stdout.txt"])
         .stderr_eq(snapbox::str![""]);
 }
 
@@ -21,6 +21,6 @@ fn test_acton_build_help() {
         .arg("--help")
         .assert()
         .success()
-        .stdout_eq(snapbox::file!["testsuite/build/stdout.txt"])
+        .stdout_eq(snapbox::file!["snapshots/build/stdout.txt"])
         .stderr_eq(snapbox::str![""]);
 }
