@@ -252,7 +252,7 @@ impl TestOutputExt for TestSuccess {
 
         let expected = Data::read_from(&snapshot_full_path, None);
         assertion.eq(
-            normalize_output(&file_content, &PathBuf::from(file_path)),
+            normalize_output(&file_content, &PathBuf::from(self.project_path.clone())),
             expected,
         );
         self

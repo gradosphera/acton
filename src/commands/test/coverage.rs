@@ -308,3 +308,100 @@ pub fn generate_lcov_file(coverage: &Coverage, output_path: &str) -> Result<(), 
 
     fs::write(output_path, lcov_content)
 }
+
+pub fn generate_text_file(coverage: &Coverage, output_path: &str) -> Result<(), std::io::Error> {
+    let text_content = generate_text_report(coverage);
+    fs::write(output_path, text_content)
+}
+
+fn generate_text_report(coverage: &Coverage) -> String {
+    let mut result = String::new();
+
+    let total_lines: i64 = coverage.files.iter().map(|f| f.executable_lines).sum();
+    let covered_lines: i64 = coverage.files.iter().map(|f| f.covered_lines).sum();
+    let coverage_percentage = if total_lines > 0 {
+        (covered_lines as f64 / total_lines as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    result.push_str("Coverage Summary:\n");
+    result.push_str(&format!(
+        "Lines: {}/{} ({:.2}%)\n",
+        covered_lines, total_lines, coverage_percentage
+    ));
+
+    let mut total_hits = 0u64;
+    for file_coverage in &coverage.files {
+        for &hits in file_coverage.line_hits.values() {
+            total_hits += hits;
+        }
+    }
+
+    result.push_str(&format!("Total Hits: {}\n", total_hits));
+    result.push('\n');
+
+    for file_coverage in &coverage.files {
+        if file_coverage.line_hits.is_empty() {
+            continue;
+        }
+
+        result.push_str(&format!("File: {}\n", file_coverage.file));
+
+        if let Ok(source_content) = fs::read_to_string(&file_coverage.file) {
+            let lines: Vec<&str> = source_content.lines().collect();
+            let max_line_number_width = lines.len().to_string().len();
+
+            let max_line_length = lines.iter().map(|line| line.len()).max().unwrap_or(0);
+            let code_width = (max_line_length + 10).min(100); // Add some padding, max 100
+
+            result.push_str("Annotated Code:\n");
+
+            for (line_idx, line) in lines.iter().enumerate() {
+                let line_number = line_idx + 1;
+                let line_number_padded =
+                    format!("{:>width$}", line_number, width = max_line_number_width);
+
+                let is_executable = file_coverage
+                    .executable_line_numbers
+                    .contains(&(line_idx as i64));
+
+                if is_executable {
+                    let hits = file_coverage
+                        .line_hits
+                        .get(&(line_idx as i64))
+                        .copied()
+                        .unwrap_or(0);
+                    let status = if hits > 0 { "✓ " } else { "✗ " };
+                    let hits_info = format!(" hits:{}", hits);
+
+                    let padding = " ".repeat(code_width.saturating_sub(line.len()));
+                    result.push_str(&format!(
+                        "{} {}| {}{}|{}\n",
+                        line_number_padded, status, line, padding, hits_info
+                    ));
+                } else {
+                    let padding = " ".repeat(code_width.saturating_sub(line.len()));
+                    result.push_str(&format!(
+                        "{}   | {}{}|\n",
+                        line_number_padded, line, padding
+                    ));
+                }
+            }
+        } else {
+            result.push_str("  (Could not read source file)\n");
+            result.push_str(&format!(
+                "  Executable lines: {}\n",
+                file_coverage.executable_lines
+            ));
+            result.push_str(&format!(
+                "  Covered lines: {}\n",
+                file_coverage.covered_lines
+            ));
+        }
+
+        result.push('\n');
+    }
+
+    result
+}

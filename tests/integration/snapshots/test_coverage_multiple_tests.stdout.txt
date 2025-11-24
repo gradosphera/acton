@@ -19,3 +19,5 @@
 ──────────────────────────────────────────────────────────────
  All files                          3             4     75.0% 
  code/calculator.tolk               3             4     75.0% 
+
+Text coverage file saved in coverage.txt

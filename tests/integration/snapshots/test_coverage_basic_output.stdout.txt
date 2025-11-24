@@ -18,3 +18,5 @@
 ────────────────────────────────────────────────────────
  All files                    4             4    100.0% 
  code/math.tolk               4             4    100.0% 
+
+Text coverage file saved in coverage.txt

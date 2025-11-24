@@ -92,7 +92,7 @@ enum Commands {
         coverage: bool,
         #[arg(
             long,
-            help = "Output coverage profile in specified format (lcov)",
+            help = "Output coverage profile in specified format (lcov, text)",
             help_heading = "Coverage"
         )]
         format: Option<String>,

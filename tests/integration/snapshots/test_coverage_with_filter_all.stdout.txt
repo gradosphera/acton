@@ -19,3 +19,5 @@
 ───────────────────────────────────────────────────────────
  All files                       2             2    100.0% 
  code/helpers.tolk               2             2    100.0% 
+
+Text coverage file saved in coverage.txt

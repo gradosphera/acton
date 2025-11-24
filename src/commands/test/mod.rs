@@ -1,6 +1,7 @@
 use crate::commands::build::build_cmd;
 use crate::commands::test::coverage::{
-    Coverage, collect_coverage, generate_lcov_file, merge_coverages, print_coverage_summary,
+    Coverage, collect_coverage, generate_lcov_file, generate_text_file, merge_coverages,
+    print_coverage_summary,
 };
 use crate::commands::test::instrumentation::inject_locations_into_expect_calls;
 use crate::commands::test::reporting::console::{ConsoleConfig, ConsoleReporter};
@@ -383,9 +384,19 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
                         println!("LCOV file saved in {lcov_path}");
                     }
                 }
+                "text" => {
+                    let text_path = "coverage.txt";
+                    if let Err(err) = generate_text_file(&merged_coverage, text_path) {
+                        eprintln!(
+                            "Warning: Failed to generate text coverage file '{text_path}': {err}"
+                        );
+                    } else {
+                        println!("Text coverage file saved in {text_path}");
+                    }
+                }
                 _ => {
                     eprintln!(
-                        "Warning: Unknown coverage format '{format_type}'. Supported formats: lcov"
+                        "Warning: Unknown coverage format '{format_type}'. Supported formats: lcov, text"
                     );
                 }
             }

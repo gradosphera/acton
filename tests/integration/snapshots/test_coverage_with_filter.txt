@@ -1,0 +1,16 @@
+Coverage Summary:
+Lines: 1/2 (50.00%)
+Total Hits: 5
+
+File: [ROOT]/code/helpers.tolk
+Annotated Code:
+1   |                                                |
+2   |             fun double(x: int): int {          |
+3 ✓ |                 return x * 2;                  | hits:4
+4   |             }                                  |
+5   |                                                |
+6   |             fun triple(x: int): int {          |
+7 ✗ |                 return x * 3;                  | hits:0
+8   |             }                                  |
+9   |                                                |
+

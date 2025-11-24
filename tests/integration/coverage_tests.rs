@@ -51,13 +51,17 @@ fn test_coverage_basic_output() {
     project
         .acton()
         .test()
-        .with_coverage()
+        .with_coverage_format("text")
         .run()
         .success()
         .assert_passed(1)
         .assert_contains(" COVERAGE ")
         .assert_contains("math.tolk")
-        .assert_snapshot_matches("integration/snapshots/test_coverage_basic_output.stdout.txt");
+        .assert_snapshot_matches("integration/snapshots/test_coverage_basic_output.stdout.txt")
+        .assert_file_snapshot_matches(
+            "coverage.txt",
+            "integration/snapshots/test_coverage_basic_output.txt",
+        );
 }
 
 #[test]
@@ -101,13 +105,17 @@ fn test_coverage_multiple_tests() {
     project
         .acton()
         .test()
-        .with_coverage()
+        .with_coverage_format("text")
         .run()
         .success()
         .assert_passed(2)
         .assert_contains(" COVERAGE ")
         .assert_contains("calculator.tolk")
-        .assert_snapshot_matches("integration/snapshots/test_coverage_multiple_tests.stdout.txt");
+        .assert_snapshot_matches("integration/snapshots/test_coverage_multiple_tests.stdout.txt")
+        .assert_file_snapshot_matches(
+            "coverage.txt",
+            "integration/snapshots/test_coverage_multiple_tests.txt",
+        );
 }
 
 #[test]
@@ -147,7 +155,7 @@ fn test_coverage_with_failing_tests() {
     project
         .acton()
         .test()
-        .with_coverage()
+        .with_coverage_format("text")
         .run()
         .failure()
         .assert_passed(1)
@@ -156,6 +164,10 @@ fn test_coverage_with_failing_tests() {
         .assert_contains("validator.tolk")
         .assert_snapshot_matches(
             "integration/snapshots/test_coverage_with_failing_tests.stdout.txt",
+        )
+        .assert_file_snapshot_matches(
+            "coverage.txt",
+            "integration/snapshots/test_coverage_with_failing_tests.txt",
         );
 }
 
@@ -197,25 +209,33 @@ fn test_coverage_with_filter() {
     project
         .acton()
         .test()
-        .with_coverage()
+        .with_coverage_format("text")
         .run()
         .success()
         .assert_passed(2)
         .assert_contains(" COVERAGE ")
         .assert_contains("helpers.tolk")
-        .assert_snapshot_matches("integration/snapshots/test_coverage_with_filter_all.stdout.txt");
+        .assert_snapshot_matches("integration/snapshots/test_coverage_with_filter_all.stdout.txt")
+        .assert_file_snapshot_matches(
+            "coverage.txt",
+            "integration/snapshots/test_coverage_with_filter_all.txt",
+        );
 
     project
         .acton()
         .test()
         .filter("test-unit-.*")
-        .with_coverage()
+        .with_coverage_format("text")
         .run()
         .success()
         .assert_passed(1)
         .assert_contains(" COVERAGE ")
         .assert_contains("helpers.tolk")
-        .assert_snapshot_matches("integration/snapshots/test_coverage_with_filter.stdout.txt");
+        .assert_snapshot_matches("integration/snapshots/test_coverage_with_filter.stdout.txt")
+        .assert_file_snapshot_matches(
+            "coverage.txt",
+            "integration/snapshots/test_coverage_with_filter.txt",
+        );
 }
 
 #[test]
