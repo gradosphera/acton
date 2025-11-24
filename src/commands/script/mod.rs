@@ -183,11 +183,11 @@ fn execute_script(
 
         ctx.debug = DebugCtx::new(&mut dbg_ctx);
 
-        executor.prepare_get_method(0, Tuple::empty());
+        executor.prepare(0, Tuple::empty());
 
         ctx.debug.ctx().process_incoming_requests(true)?;
 
-        let result = executor.finish_get_method(&params.code);
+        let result = executor.finish(&params.code);
         print_script_result(&mut ctx, ScriptResult { result });
         return Ok(());
     }

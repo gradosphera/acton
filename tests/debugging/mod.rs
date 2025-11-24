@@ -327,11 +327,11 @@ fn execute_script(
 
     ctx.debug = DebugCtx::new(&mut dbg_ctx);
 
-    executor.prepare_get_method(0, stack);
+    executor.prepare(0, stack);
 
     ctx.debug.ctx().process_incoming_requests(true)?;
 
-    let result = executor.finish_get_method(&params.code);
+    let result = executor.finish(&params.code);
     let formatter = FormatterContext::from_context(&ctx);
     let io = ctx.io;
     Ok((result, io, formatter))

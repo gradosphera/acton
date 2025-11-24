@@ -407,7 +407,7 @@ fun net.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, args: Args? 
     val args_to_send = args == null ? createEmptyTuple() : args.toTuple();
     val res = ffi.runGetMethod(addr.toCell(), code, id, Ret.typeName(), args_to_send);
     if (res == null) {
-        Assert.fail(format1("Get method {} failed", id))
+        Assert.fail(format1("Get method 0x{:x} failed", id))
     }
     return Ret.fromTuple(res);
 }

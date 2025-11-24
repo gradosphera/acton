@@ -735,7 +735,7 @@ fn run_get_method_impl(
     };
 
     let result = if ctx.debug.is_enabled() {
-        let step_get_executor = StepGetExecutor::new(Default::default(), params.clone());
+        let step_executor = StepGetExecutor::new(args.clone(), params.clone());
 
         let source_map = ctx
             .build
@@ -749,14 +749,14 @@ fn run_get_method_impl(
         dbg_ctx
             .begin_thread(
                 2,
-                AnyExecutor::Get(step_get_executor.clone()),
+                AnyExecutor::Get(step_executor.clone()),
                 source_map,
                 "Send internal message".to_string(),
                 dbg_ctx.need_to_stop_child_thread_on_start(),
             )
             .expect("Cannot send response");
 
-        step_get_executor.prepare_get_method(method_id, Default::default());
+        step_executor.prepare(method_id, args);
 
         // Step to update internal state
         if dbg_ctx.need_to_stop_child_thread_on_start() {
@@ -779,7 +779,7 @@ fn run_get_method_impl(
             dbg_ctx.step(StepMode::StepIn);
         }
 
-        step_get_executor.finish_get_method(&params.code)
+        step_executor.finish(&params.code)
     } else {
         let executor = GetExecutor::new(params.clone());
         executor.run_get_method(args, params)

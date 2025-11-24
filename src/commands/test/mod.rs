@@ -255,11 +255,11 @@ impl<'a> TestRunner<'a> {
 
                 ctx.debug = DebugCtx::new(&mut dbg_ctx);
 
-                executor.prepare_get_method(test.id, Default::default());
+                executor.prepare(test.id, Default::default());
 
                 ctx.debug.ctx().process_incoming_requests(true)?;
 
-                let get_result = executor.finish_get_method(&params.code);
+                let get_result = executor.finish(&params.code);
 
                 (
                     get_result,
