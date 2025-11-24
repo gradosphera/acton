@@ -1,5 +1,6 @@
 use crate::debugging::support::assertions::{DebugTestOutput, DebugTestOutputExt};
 use crate::debugging::support::debug::DebugBuilder;
+use tvmffi::stack::{Tuple, TupleItem};
 
 #[test]
 fn test_if_over_numbers_with_first_matching() -> anyhow::Result<()> {
@@ -106,6 +107,137 @@ fun main() {
     let debug_output = DebugTestOutput::new(result);
     debug_output.assert_trace_snapshot_matches(
         "debugging/snapshots/if/over_numbers_with_else_matching.trace.txt",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_if_return_with_nullable_true_step_over() -> anyhow::Result<()> {
+    let code = r#"
+fun main(foo: int?) {
+    if (foo == null) {
+        return
+    }
+
+    debug.print("aaa");
+}
+"#;
+
+    let session = DebugBuilder::new("debug-callback")
+        .code(code)
+        .stack(Tuple(vec![TupleItem::Null]))
+        .build();
+
+    let mut client = session.start();
+
+    let result = client.execute(|executor| {
+        // TODO: doesn't stop on return
+        // executor.step_over()?;
+        Ok(())
+    })?;
+
+    let debug_output = DebugTestOutput::new(result);
+    debug_output.assert_trace_snapshot_matches(
+        "debugging/snapshots/if/return_with_nullable_true_step_over.trace.txt",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_if_return_with_nullable_false_step_over() -> anyhow::Result<()> {
+    let code = r#"
+fun main(foo: int?) {
+    if (foo == null) {
+        return
+    }
+
+    debug.print("aaa");
+}
+"#;
+
+    let session = DebugBuilder::new("debug-callback")
+        .code(code)
+        .accept_int(100)
+        .build();
+
+    let mut client = session.start();
+
+    let result = client.execute(|executor| {
+        // TODO: doesn't stop on debug.print()
+        // executor.step_over()?;
+        Ok(())
+    })?;
+
+    let debug_output = DebugTestOutput::new(result);
+    debug_output.assert_trace_snapshot_matches(
+        "debugging/snapshots/if/return_with_nullable_false_step_over.trace.txt",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_if_return_with_nullable_true() -> anyhow::Result<()> {
+    let code = r#"
+fun main(foo: int?) {
+    if (foo == null) {
+        return
+    }
+
+    debug.print("aaa");
+}
+"#;
+
+    let session = DebugBuilder::new("debug-callback")
+        .code(code)
+        .stack(Tuple(vec![TupleItem::Null]))
+        .build();
+
+    let mut client = session.start();
+
+    let result = client.execute(|executor| {
+        executor.step_in()?;
+        Ok(())
+    })?;
+
+    let debug_output = DebugTestOutput::new(result);
+    debug_output.assert_trace_snapshot_matches(
+        "debugging/snapshots/if/return_with_nullable_true.trace.txt",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_if_return_with_nullable_false() -> anyhow::Result<()> {
+    let code = r#"
+fun main(foo: int?) {
+    if (foo == null) {
+        return
+    }
+
+    debug.print("aaa");
+}
+"#;
+
+    let session = DebugBuilder::new("debug-callback")
+        .code(code)
+        .accept_int(100)
+        .build();
+
+    let mut client = session.start();
+
+    let result = client.execute(|executor| {
+        executor.step_in()?;
+        executor.step_in()?;
+        Ok(())
+    })?;
+
+    let debug_output = DebugTestOutput::new(result);
+    debug_output.assert_trace_snapshot_matches(
+        "debugging/snapshots/if/return_with_nullable_false.trace.txt",
     );
 
     Ok(())
