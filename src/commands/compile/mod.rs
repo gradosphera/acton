@@ -165,7 +165,7 @@ fn handle_compilation_result(
             println!("{}", "✓ Compilation successful (from cache)".green().bold());
         } else {
             let elapsed_msg = elapsed
-                .map(|e| format!(" ({})", format!("compiled in {e:?}").dimmed()))
+                .map(|e| format!(" (compiled in {e:?})").dimmed().to_string())
                 .unwrap_or_default();
             println!(
                 "{}{}",

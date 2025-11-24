@@ -4,10 +4,7 @@ use crate::debugging::support::debug::DebugBuilder;
 #[test]
 fn test_match_over_numbers_with_first_matching() -> anyhow::Result<()> {
     let code = r#"
-global foo: int;
-
-fun main() {
-    foo = 100;
+fun main(foo: int) {
     match (foo) {
         100 => {
             return 10
@@ -21,12 +18,14 @@ fun main() {
 }
 "#;
 
-    let session = DebugBuilder::new("debug-callback").code(code).build();
+    let session = DebugBuilder::new("debug-callback")
+        .code(code)
+        .accept_int(100)
+        .build();
 
     let mut client = session.start();
 
     let result = client.execute(|executor| {
-        executor.step_over()?;
         executor.step_over()?;
         executor.step_over()?;
         Ok(())
@@ -43,10 +42,7 @@ fun main() {
 #[test]
 fn test_match_over_numbers_with_second_matching() -> anyhow::Result<()> {
     let code = r#"
-global foo: int;
-
-fun main() {
-    foo = 200;
+fun main(foo: int) {
     match (foo) {
         100 => {
             return 10
@@ -60,13 +56,15 @@ fun main() {
 }
 "#;
 
-    let session = DebugBuilder::new("debug-callback").code(code).build();
+    let session = DebugBuilder::new("debug-callback")
+        .code(code)
+        .accept_int(200)
+        .build();
 
     let mut client = session.start();
 
     // TODO
     let result = client.execute(|executor| {
-        executor.step_over()?;
         executor.step_over()?;
         executor.step_over()?;
         executor.step_over()?;
