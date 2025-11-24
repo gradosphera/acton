@@ -34,11 +34,6 @@ impl DebugBuilder {
         self
     }
 
-    pub fn debug_port(mut self, port: u16) -> Self {
-        self.debug_port = Some(port);
-        self
-    }
-
     pub fn build(self) -> DebugSession {
         let project_path = self.temp_dir.path().join(&self.name);
         fs::create_dir_all(&project_path).expect("Failed to create project dir");
@@ -63,7 +58,7 @@ impl DebugBuilder {
 fn find_available_port() -> u16 {
     use std::net::TcpListener;
 
-    for port in 42070..43000 {
+    for port in 42075..43000 {
         if TcpListener::bind(("127.0.0.1", port)).is_ok() {
             return port;
         }
@@ -93,10 +88,9 @@ impl DebugSession {
             println!("Debug execution finished: {}", result);
         });
 
-        thread::sleep(Duration::from_millis(1000));
-
         let address = format!("127.0.0.1:{}", port);
-        let client = DebuggerClient::connect(&address).expect("Failed to connect to debug server");
+        let client = DebuggerClient::connect_with_retry(&address, Duration::from_millis(2000))
+            .expect("Failed to connect to debug server");
 
         self.client_handle = Some(handle);
 
@@ -129,7 +123,6 @@ impl DebugClient {
         let mut executor = DebugActionExecutor {
             client: self.client.as_mut().unwrap(),
             trace: &mut self.trace,
-            current_action: "callback".to_string(),
         };
         executor.record_state_with_action("before".to_owned())?;
 
@@ -153,14 +146,9 @@ impl DebugClient {
 pub struct DebugActionExecutor<'a> {
     client: &'a mut DebuggerClient,
     trace: &'a mut ExecutionTrace,
-    current_action: String,
 }
 
 impl<'a> DebugActionExecutor<'a> {
-    pub fn record_state(&mut self) -> anyhow::Result<()> {
-        self.record_state_with_action("record".to_string())
-    }
-
     fn record_state_with_action(&mut self, action: String) -> anyhow::Result<()> {
         let thread_id = 1; // Default thread
         let positions = self.client.stack_trace(thread_id)?;

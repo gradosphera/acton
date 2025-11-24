@@ -113,19 +113,30 @@ impl DapClient {
                     debug!("Received JSON: {}", content_str);
 
                     let json_value: serde_json::Value = serde_json::from_str(content_str)?;
+                    let msg_type = json_value.get("type").and_then(|v| v.as_str());
 
-                    if json_value.get("type")
-                        == Some(&serde_json::Value::String("response".to_string()))
-                    {
-                        let response: Response = serde_json::from_value(json_value)?;
-                        return Ok(Some(DapMessage::Response(response)));
-                    } else if json_value.get("type")
-                        == Some(&serde_json::Value::String("event".to_string()))
-                    {
-                        let event: Event = serde_json::from_value(json_value)?;
-                        return Ok(Some(DapMessage::Event(event)));
-                    } else {
-                        return Err(anyhow!("Unknown message type: {}", content_str));
+                    match msg_type {
+                        Some("response") => {
+                            let response: Response = serde_json::from_value(json_value)?;
+                            return Ok(Some(DapMessage::Response(response)));
+                        }
+                        Some("event") => {
+                            let event: Event = serde_json::from_value(json_value)?;
+                            return Ok(Some(DapMessage::Event(event)));
+                        }
+                        Some("request") => {
+                            debug!("Ignoring server->client request: {}", content_str);
+                            content_length = None;
+                            continue;
+                        }
+                        other => {
+                            debug!(
+                                "Unknown DAP message type {:?}, ignoring message: {}",
+                                other, content_str
+                            );
+                            content_length = None;
+                            continue;
+                        }
                     }
                 }
                 continue;

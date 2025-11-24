@@ -22,7 +22,7 @@ use owo_colors::OwoColorize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use std::{env, fs};
+use std::{env, fs, thread};
 use tasm::printer::FormatOptions;
 use tolkc::CompilerResult;
 use tolkc::source_map::SourceMap;
@@ -31,6 +31,8 @@ use tonlib_core::cell::{ArcCell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::Tuple;
 use tycho_types::boc::Boc;
+
+mod debug_tests;
 
 pub struct DebuggerClient {
     client: DapClient,
@@ -47,6 +49,29 @@ impl DebuggerClient {
         wait_for_stopped(&mut client)?;
 
         Ok(Self { client })
+    }
+
+    pub fn connect_with_retry(address: &str, timeout: Duration) -> anyhow::Result<DebuggerClient> {
+        use std::time::Instant;
+
+        let deadline = Instant::now() + timeout;
+        loop {
+            return match DebuggerClient::connect(address) {
+                Ok(client) => Ok(client),
+                Err(e) => {
+                    if let Some(io_err) = e.downcast_ref::<std::io::Error>()
+                        && io_err.kind() == std::io::ErrorKind::ConnectionRefused
+                    {
+                        if Instant::now() >= deadline {
+                            return Err(e);
+                        }
+                        thread::sleep(Duration::from_millis(100));
+                        continue;
+                    }
+                    Err(e)
+                }
+            };
+        }
     }
 
     pub fn step_in(&mut self, thread_id: i64) -> anyhow::Result<()> {
@@ -214,7 +239,7 @@ pub(crate) fn run_script_file(
     }
 }
 
-fn execute_script<'a>(
+fn execute_script(
     code_cell: &ArcCell,
     data_cell: &ArcCell,
     abi: &ContractAbi,
@@ -244,7 +269,7 @@ fn execute_script<'a>(
     let mut blockchain = Blockchain::new(None, None);
     let mut build_cache = BuildCache::new();
     let mut file_build_cache =
-        FileBuildCache::new(None).expect("Failed to create file cache for script execution");
+        FileBuildCache::dummy().expect("Failed to create file cache for script execution");
     let mut known_addresses = KnownAddresses::new();
     let mut known_code_cell = HashMap::new();
     let mut emulations = Emulations::new();
