@@ -86,3 +86,5 @@ Run debugger tests:
 ```
 cargo test --test debug_test -- --test-threads 1 
 ```
+
+To update snapshots set `SNAPSHOTS=overwrite`.
