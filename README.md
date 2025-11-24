@@ -7,6 +7,20 @@ Rust.
 
 ## Building
 
+Clone TON monorepo fork:
+
+```
+git clone https://github.com/i582/ton/tree/pmakhnev/acton
+```
+
+Build and copy artefacts to `./objs`:
+
+```
+sh assembly/native/build-macos-static.sh -a && cp ./artifacts/libemulator.a ./artifacts/libtolk.a ../acton/objs
+```
+
+Run Rust compilation:
+
 ```
 cargo build --bin acton
 ```
@@ -14,7 +28,7 @@ cargo build --bin acton
 In release mode:
 
 ```
-cargo build --bin acton --profile release
+cargo build --bin acton --release
 ```
 
 ## Run
@@ -58,3 +72,17 @@ acton compile file.tolk
 ```
 
 The command outputs the compiled bytecode in base64 format and its hash.
+
+## Development
+
+Run integration tests:
+
+```
+cargo test --test integration_test
+```
+
+Run debugger tests:
+
+```
+cargo test --test debug_test -- --test-threads 1 
+```
