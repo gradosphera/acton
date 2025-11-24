@@ -34,6 +34,7 @@ use tycho_types::boc::Boc;
 
 mod debug_test;
 mod support;
+mod tests;
 
 pub struct DebuggerClient {
     client: DapClient,

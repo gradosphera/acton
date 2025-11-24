@@ -2,13 +2,17 @@ use crate::debugging::support::assertions::{DebugTestOutput, DebugTestOutputExt}
 use crate::debugging::support::debug::DebugBuilder;
 
 #[test]
-fn test_simple_step_by_step_execution() -> anyhow::Result<()> {
+fn test_if_over_numbers_with_first_matching() -> anyhow::Result<()> {
     let code = r#"
 global foo: int;
 
 fun main() {
     foo = 100;
-    return foo;
+    if (foo == 100) {
+        return 10;
+    }
+
+    return 0;
 }
 "#;
 
@@ -17,31 +21,33 @@ fun main() {
     let mut client = session.start();
 
     let result = client.execute(|executor| {
-        executor.step_in()?;
-        executor.step_in()?;
-        executor.step_in()?;
-        executor.step_in()?;
+        executor.step_over()?;
+        executor.step_over()?;
         Ok(())
     })?;
 
     let debug_output = DebugTestOutput::new(result);
-    debug_output.assert_trace_steps(5);
     debug_output.assert_trace_snapshot_matches(
-        "debugging/snapshots/test_simple_step_by_step_execution.trace.txt",
+        "debugging/snapshots/if/over_numbers_with_first_matching.trace.txt",
     );
 
     Ok(())
 }
 
 #[test]
-fn test_simple_step_by_step_execution_with_step_over() -> anyhow::Result<()> {
+fn test_if_over_numbers_with_second_matching() -> anyhow::Result<()> {
     let code = r#"
 global foo: int;
 
 fun main() {
-    foo = 100;
     foo = 200;
-    return foo;
+    if (foo == 100) {
+        return 10;
+    } else if (foo == 200) {
+        return 20
+    }
+
+    return 0;
 }
 "#;
 
@@ -52,26 +58,35 @@ fun main() {
     let result = client.execute(|executor| {
         executor.step_over()?;
         executor.step_over()?;
+        executor.step_over()?;
+        executor.step_over()?;
         Ok(())
     })?;
 
     let debug_output = DebugTestOutput::new(result);
-    debug_output.assert_trace_steps(3);
     debug_output.assert_trace_snapshot_matches(
-        "debugging/snapshots/test_simple_step_by_step_execution_with_step_over.trace.txt",
+        "debugging/snapshots/if/over_numbers_with_second_matching.trace.txt",
     );
 
     Ok(())
 }
 
 #[test]
-fn test_can_continue() -> anyhow::Result<()> {
+fn test_if_over_numbers_with_else_matching() -> anyhow::Result<()> {
     let code = r#"
 global foo: int;
 
 fun main() {
-    foo = 100;
-    return foo;
+    foo = 300;
+    if (foo == 100) {
+        return 10;
+    } else if (foo == 200) {
+        return 20
+    } else {
+        return 30
+    }
+
+    return 0;
 }
 "#;
 
@@ -80,14 +95,18 @@ fun main() {
     let mut client = session.start();
 
     let result = client.execute(|executor| {
-        executor.continue_execution()?;
+        executor.step_over()?;
+        executor.step_over()?;
+        executor.step_over()?;
+        executor.step_over()?;
+        executor.step_over()?;
         Ok(())
     })?;
 
     let debug_output = DebugTestOutput::new(result);
-
-    // Continue doesn't add any steps, so we expect zero + 1 for initial state
-    debug_output.assert_trace_steps(1);
+    debug_output.assert_trace_snapshot_matches(
+        "debugging/snapshots/if/over_numbers_with_else_matching.trace.txt",
+    );
 
     Ok(())
 }
