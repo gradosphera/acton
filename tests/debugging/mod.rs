@@ -32,7 +32,8 @@ use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::Tuple;
 use tycho_types::boc::Boc;
 
-mod debug_tests;
+mod debug_test;
+mod support;
 
 pub struct DebuggerClient {
     client: DapClient,

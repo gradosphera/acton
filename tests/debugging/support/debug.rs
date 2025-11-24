@@ -8,7 +8,9 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use tempfile::TempDir;
 
-use super::project::ProjectRef;
+pub struct ProjectRef {
+    pub path: PathBuf,
+}
 
 pub struct DebugBuilder {
     name: String,

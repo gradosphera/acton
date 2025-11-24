@@ -1,5 +1,5 @@
-use crate::support::assertions::{DebugTestOutput, DebugTestOutputExt};
-use crate::support::debug::DebugBuilder;
+use crate::debugging::support::assertions::{DebugTestOutput, DebugTestOutputExt};
+use crate::debugging::support::debug::DebugBuilder;
 
 #[test]
 fn test_simple_step_by_step_execution() -> anyhow::Result<()> {

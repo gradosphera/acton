@@ -1,6 +1,5 @@
 pub mod assertions;
 pub mod compilation;
-pub mod debug;
 pub mod fixtures;
 pub mod project;
 pub mod snapshots;
