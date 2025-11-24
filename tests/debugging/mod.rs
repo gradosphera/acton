@@ -1,4 +1,13 @@
 use abi::{ContractAbi, contract_abi};
+use acton::config::ActonConfig;
+use acton::context::{
+    AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx, Emulations, Env,
+    IoContext, KnownAddresses,
+};
+use acton::debugger::debug_context::DebugContext;
+use acton::file_build_cache::FileBuildCache;
+use acton::formatter::FormatterContext;
+use acton::{debugger, ffi};
 use anyhow::anyhow;
 use dap::events::Event;
 use dap::responses::ContinueResponse;
@@ -9,15 +18,6 @@ use emulator::emulator::Emulator;
 use emulator::executor::ExecutorVerbosity;
 use emulator::get_executor::{GetMethodParams, GetMethodResult};
 use emulator::step_get_executor::StepGetExecutor;
-use emulator_rs::config::ActonConfig;
-use emulator_rs::context::{
-    AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx, Emulations, Env,
-    IoContext, KnownAddresses,
-};
-use emulator_rs::debugger::debug_context::DebugContext;
-use emulator_rs::file_build_cache::FileBuildCache;
-use emulator_rs::formatter::FormatterContext;
-use emulator_rs::{debugger, ffi};
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

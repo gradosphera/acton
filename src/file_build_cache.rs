@@ -12,7 +12,6 @@ use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
-use tempfile::TempDir;
 use tolkc::compiler::CompilerResultSuccess;
 use tolkc::source_map::SourceMap;
 
@@ -78,7 +77,7 @@ impl FileBuildCache {
     }
 
     pub fn dummy() -> Result<Self> {
-        let tmp_dir = TempDir::new()?;
+        let tmp_dir = tempfile::TempDir::new()?;
         let config = ActonConfig::load().unwrap_or_default();
 
         let lock_file_path = tmp_dir.path().join(".lock");
