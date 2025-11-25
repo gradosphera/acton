@@ -333,9 +333,9 @@ impl ExecutionTrace {
                     let end_col = if let Some(end_column) = pos.end_column
                         && pos.end_line == Some(pos.line)
                     {
-                        end_column as usize
+                        (end_column - 1) as usize
                     } else {
-                        col + 1
+                        col
                     };
                     let code_line = &content[line_idx];
 

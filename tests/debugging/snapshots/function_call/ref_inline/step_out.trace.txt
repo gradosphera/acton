@@ -75,7 +75,7 @@ Step 6 (step_out):
     '5 = 600
 
 Step 7 (step_over):
-  Bytecode position: EC01CE16285426F559239DC9497FD73339BE1AC71D5BB440D20333B67BFE4EC4:120
+  Bytecode position: EC01CE16285426F559239DC9497FD73339BE1AC71D5BB440D20333B67BFE4EC4:112
   Code:
       9| fun main() {
      10|     foo = 300;
@@ -84,4 +84,5 @@ Step 7 (step_over):
                     ^^^^^^^^^^^^
      13| }
   Variables:
-    '7 = 900
+    g_foo = 300
+    result = 600

@@ -227,6 +227,11 @@ fn test_real_counter_contract_tests() -> anyhow::Result<()> {
         executor.step_over()?;
         executor.step_over()?;
         executor.step_over()?;
+        executor.step_over()?;
+        executor.step_over()?;
+        executor.step_over()?;
+        executor.step_over()?;
+        executor.step_over()?;
         Ok(())
     })?;
 

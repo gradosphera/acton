@@ -30,6 +30,12 @@ pub fn normalize_output(stdout: &str, project_path: &Path) -> String {
     redactions
         .insert("[ROOT]", "/private".to_owned() + tmp_dir.as_str())
         .unwrap();
+    redactions
+        .insert("[BOC_HEX]", regex!("b5ee[\\d\\w]*"))
+        .unwrap();
+    redactions
+        .insert("[MAYBE_UNIX_TIME_VALUE]", regex!(" = 176\\d+"))
+        .unwrap();
 
     redactions.redact(&content)
 }
