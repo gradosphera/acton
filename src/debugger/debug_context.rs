@@ -654,6 +654,10 @@ impl DebugContext {
                 }));
                 self.send_response(rsp)?;
             }
+            Command::Attach(_) => {
+                let rsp = req.success(ResponseBody::Attach);
+                self.send_response(rsp)?;
+            }
             _ => {
                 eprintln!("Unhandled command: {:?}", req.command);
                 return Err(anyhow!("Unhandled command: {:?}", req.command));
