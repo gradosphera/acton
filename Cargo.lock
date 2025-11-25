@@ -55,6 +55,7 @@ dependencies = [
  "tonlib-core",
  "tree-sitter",
  "tvmffi",
+ "tvmffi-macros",
  "tycho-types",
  "urlencoding",
  "vmlogs",
@@ -2323,9 +2324,9 @@ checksum = "df8b2b54733674ad286d16267dcfc7a71ed5c776e4ac7aa3c3e2561f7c637bf2"
 
 [[package]]
 name = "tonlib-core"
-version = "0.26.2"
+version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1243f834c41e73475f2ebdbe8e5aa3737b96ad6b57d714e61ad4f6f84e7e056f"
+checksum = "ae4e6b0bf51cc24cedf0a297f13dbaec19e6b0e7845057606a1bcb66b8ab37e1"
 dependencies = [
  "async-trait",
  "base64",
@@ -2454,6 +2455,18 @@ dependencies = [
  "num-traits",
  "owo-colors",
  "thiserror 2.0.17",
+ "tonlib-core",
+ "tycho-types",
+]
+
+[[package]]
+name = "tvmffi-macros"
+version = "0.1.0"
+dependencies = [
+ "num-bigint",
+ "proc-macro2",
+ "quote",
+ "syn",
  "tonlib-core",
  "tycho-types",
 ]

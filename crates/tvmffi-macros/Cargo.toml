@@ -1,0 +1,23 @@
+[package]
+name = "tvmffi-macros"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "2.0", features = ["full"] }
+num-bigint = "0.4.6"
+tonlib-core = "0.26.4"
+tycho-types = "0.3.0"
+
+[dev-dependencies]
+tvmffi = { path = "../tvmffi" }
+
+num-bigint = "0.4.6"
+num-traits = "0.2.19"
+tonlib-core = "0.26.1"
+tycho-types = "0.3.0"
