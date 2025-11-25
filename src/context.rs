@@ -50,6 +50,7 @@ pub struct TransactionNotFoundParams {
     pub opcode: Option<u32>,
     pub action_exit_code: Option<i32>,
     pub compute_phase_skipped: Option<bool>,
+    pub body: Option<Cell>,
 }
 
 #[derive(Debug, Clone)]

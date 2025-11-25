@@ -629,6 +629,16 @@ fn find_transaction_by_params_impl(
                 // Destination address mismatch
                 return false;
             }
+
+            if let Some(expected_body) = &params.body {
+                let expected_hash = expected_body.repr_hash();
+                let body_cell = in_msg.body.to_cell();
+                let actual_hash = body_cell.repr_hash();
+                if expected_hash != actual_hash {
+                    // Message body hash mismatch
+                    return false;
+                }
+            }
         };
 
         let Ok(TxInfo::Ordinary(info)) = tx.load_info() else {

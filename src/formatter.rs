@@ -1465,6 +1465,9 @@ impl FormatterContext {
                 }
             ))
         }
+        if let Some(body) = &assert_failure.params.body {
+            params.push(format!("  body={}", Boc::encode_hex(body)))
+        }
         params
     }
 

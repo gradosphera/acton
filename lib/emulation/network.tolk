@@ -172,13 +172,15 @@ struct SearchParams {
     action_exit_code: int32? = null
     /// Whether the compute phase was skipped.
     compute_phase_skipped: bool? = null
+    /// Body of the in message (compared by hash).
+    body: cell? = null
 }
 
 struct ExternalOutSearchParams {
     /// Source address of the external-out message.
     from: address? = null
     /// Destination address of the external-out message.
-    to: address? = null // TODO: Change to `address_any` after TVM v12 update.
+    to: any_address? = null
 }
 
 fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>(self, params: ExternalOutSearchParams = {}): bool {

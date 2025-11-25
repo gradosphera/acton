@@ -102,6 +102,11 @@ fn fail_to_find_transaction_by_params_impl(
     //     from: address? = null,
     //     exit_code: int32? = null,
     //     deploy: bool? = null,
+    //     bounced: bool? = null,
+    //     opcode: int32? = null,
+    //     action_exit_code: int32? = null,
+    //     compute_phase_skipped: bool? = null,
+    //     body: cell? = null,
     // }
 
     let (params, parsed_txs) = match process_txs_and_search_params(&txs, params) {
@@ -134,6 +139,11 @@ fn fail_to_not_find_transaction_by_params_impl(
     //     from: address? = null,
     //     exit_code: int32? = null,
     //     deploy: bool? = null,
+    //     bounced: bool? = null,
+    //     opcode: int32? = null,
+    //     action_exit_code: int32? = null,
+    //     compute_phase_skipped: bool? = null,
+    //     body: cell? = null,
     // }
 
     let (params, parsed_txs) = match process_txs_and_search_params(&txs, params) {
@@ -165,6 +175,7 @@ pub fn process_txs_and_search_params(
     params: Tuple,
 ) -> Option<(TransactionNotFoundParams, Vec<Transaction>)> {
     let mut params_reader = params.clone().0;
+    let raw_body = params_reader.pop();
     let raw_compute_phase_skipped = params_reader.pop();
     let raw_action_exit_code = params_reader.pop();
     let raw_opcode = params_reader.pop();
@@ -183,6 +194,7 @@ pub fn process_txs_and_search_params(
         opcode: None,
         action_exit_code: None,
         compute_phase_skipped: None,
+        body: None,
     };
 
     if let Some(raw_opcode) = raw_opcode {
@@ -263,6 +275,15 @@ pub fn process_txs_and_search_params(
             params.compute_phase_skipped = None
         } else if let TupleItem::Int(num) = raw_compute_phase_skipped {
             params.compute_phase_skipped = Some(num == BigInt::from(18446744073709551615u64))
+        }
+    }
+    if let Some(raw_body) = raw_body {
+        if let TupleItem::Null = raw_body {
+            params.body = None
+        } else if let TupleItem::Cell(cell) = raw_body {
+            let boc = cell.to_boc_b64(false).ok()?;
+            let decoded_cell = Boc::decode_base64(&boc).ok()?;
+            params.body = Some(decoded_cell);
         }
     }
 
