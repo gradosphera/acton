@@ -237,3 +237,28 @@ fn test_real_counter_contract_tests() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_real_counter_contract_step_in() -> anyhow::Result<()> {
+    let session = setup_counter_project();
+    let mut client = session.start();
+
+    let result = client.execute(|executor| {
+        executor.step_in()?;
+        executor.step_in()?;
+        executor.step_in()?;
+        executor.step_in()?;
+
+        for _ in 0..55 {
+            executor.step_over()?;
+        }
+        Ok(())
+    })?;
+
+    let debug_output = DebugTestOutput::new(result);
+    debug_output.assert_trace_snapshot_matches(
+        "debugging/snapshots/counter/test_real_counter_step_in.trace.txt",
+    );
+
+    Ok(())
+}

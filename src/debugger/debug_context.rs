@@ -1,5 +1,6 @@
 use crate::debugger::dap::{DapMessage, DapTransport};
 use crate::formatter::FormatterContext;
+use crate::vmtrace::SkipBlocksMode;
 use anyhow::anyhow;
 use dap::events::{Event, StoppedEventBody, ThreadEventBody};
 use dap::prelude::{Command, Request, Response, ResponseBody};
@@ -17,7 +18,7 @@ use log::debug;
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
-use tolkc::source_map::{BytecodeLocation, DebugLocation, SourceMap};
+use tolkc::source_map::{BytecodeLocation, DebugLocation, EntryContextDescription, SourceMap};
 use tvmffi::stack::TupleItem;
 use tycho_types::models::{OutAction, OwnedRelaxedMessage, RelaxedMsgInfo, StateInit};
 
@@ -692,12 +693,35 @@ impl DebugContext {
             .unwrap_or("unknown.tolk")
             .to_string();
 
+        let (line, column) = if let EntryContextDescription::Basic { ast_kind } =
+            &loc.context.description
+            && ast_kind == "ast_block_statement"
+        {
+            // For blocks set position to closing bracket
+            // TODO: maybe we want to setup it this way for any position with line != end_line
+            (loc.loc.end_line + 1, loc.loc.end_column + 2)
+        } else {
+            (loc.loc.line + 1, loc.loc.column + 2)
+        };
+
+        let end_line = if loc.loc.end_line == 0 {
+            None
+        } else {
+            Some(loc.loc.end_line + 1)
+        };
+
+        let end_column = if loc.loc.end_column == 0 {
+            None
+        } else {
+            Some(loc.loc.end_column + 2)
+        };
+
         StackFrame {
             name: function_name,
-            line: loc.loc.line + 1,
-            column: loc.loc.column + 2,
-            end_line: Some(loc.loc.end_line + 1),
-            end_column: Some(loc.loc.end_column + 1),
+            line,
+            column,
+            end_line,
+            end_column,
             source: Some(Source {
                 name: Some(file_name),
                 path: Some(file_path),
@@ -821,7 +845,45 @@ impl DebugContext {
 
         let stepper = &mut self.stepper;
 
-        let current_line = stepper.get_current_step_line();
+        // Step over performs a step as follows:
+        // 1. If the current position describes a (inlined) function call, then this call
+        //    is skipped entirely, including nested calls, and execution stops at the instruction
+        //    immediately after the function finishes execution.
+        // 2. If the current position describes a regular instruction, execution continues
+        //    until a new position with a line number different from the line number before
+        //    the step is reached.
+
+        let Some(current_step) = stepper.current_step.clone() else {
+            debug!("cannot execute step over since current step is None");
+            return false;
+        };
+        let current_line = current_step.loc.as_ref().map(|loc| loc.loc.line);
+
+        // First step, we skip function if current step describes a function call
+        let (skipped, is_end) = match &current_step.kind {
+            StepKind::SyntheticEnterInlined(func) => (true, skip_inlined_function(stepper, func)),
+            StepKind::SyntheticEnterFunction(func) => (true, skip_function(stepper, func)),
+            _ => (false, false),
+        };
+
+        if is_end {
+            // For now, if execution is completed, return true immediately
+            return true;
+        }
+
+        // After skipping function (for example `__null()`) current line can be the same before stepping
+        // since step over should change the line, execute another step
+        if current_line != stepper.get_current_step_line() {
+            // fast path, line changed, end step over
+            return false;
+        }
+
+        if skipped {
+            // If we skipped some call, don't execute any other steps for now
+            return false;
+        }
+
+        let mut current_line = stepper.get_current_step_line();
 
         loop {
             let step = match stepper.next_step() {
@@ -831,39 +893,37 @@ impl DebugContext {
 
             match &step.kind {
                 StepKind::UnmappedAdvance => continue,
-                StepKind::SyntheticEnterInlined(func) => {
-                    let is_end = skip_inlined_function(stepper, func.clone());
-                    if is_end {
-                        return true;
-                    }
-
-                    if current_line != stepper.get_current_step_line() {
+                StepKind::SyntheticEnterInlined(_) | StepKind::SyntheticEnterFunction(_) => {
+                    if skipped {
+                        // Call is already skipped, but the next step is another call, we don't
+                        // want to skip it, since this way we can actually step in, which can be unexpected
                         return false;
                     }
-                }
-                StepKind::SyntheticEnterFunction(func) => {
-                    let is_end = skip_function(stepper, func.clone());
-                    if is_end {
-                        return true;
-                    }
 
-                    if current_line != stepper.get_current_step_line() {
-                        return false;
-                    }
+                    // But if call is not skipped, we don't want to skip it as well :)
+                    return false;
                 }
                 StepKind::Mapped => {
-                    if let Some(cur_line) = current_line
-                        && let Some(loc) = &step.loc
-                    {
-                        if loc.loc.line != cur_line {
-                            return false;
-                        }
-                    } else {
+                    let Some(loc) = &step.loc else {
+                        // step.loc is None only for Unmapped
+                        return false;
+                    };
+
+                    let Some(current_line) = current_line else {
+                        // unexpected None, so return for now
+                        return false;
+                    };
+
+                    if loc.loc.line != current_line {
+                        // found step with different line
                         return false;
                     }
                 }
                 _ => {}
             }
+
+            // new step still doesn't satisfy condition, so setup current line again
+            current_line = stepper.get_current_step_line()
         }
     }
 
@@ -929,7 +989,7 @@ impl DebugContext {
     }
 }
 
-fn skip_inlined_function(stepper: &mut Stepper, func_name: String) -> bool {
+fn skip_inlined_function(stepper: &mut Stepper, func_name: &String) -> bool {
     let mut depth = 1;
 
     loop {
@@ -939,22 +999,30 @@ fn skip_inlined_function(stepper: &mut Stepper, func_name: String) -> bool {
         };
 
         match &step.kind {
-            StepKind::SyntheticEnterInlined(f) if f == &func_name => {
+            StepKind::SyntheticEnterInlined(f) if f == func_name => {
                 depth += 1;
             }
-            StepKind::SyntheticLeaveInlined(f) if f == &func_name => {
+            StepKind::SyntheticLeaveInlined(f) if f == func_name => {
                 depth -= 1;
                 if depth == 0 {
-                    stepper.buffer.push_front(step.clone());
                     return false;
                 }
             }
-            _ => {}
+            StepKind::UnmappedAdvance => {}
+            _ => {
+                // let loc = step.loc.unwrap();
+                // println!(
+                //     "skipping {}, event: {:?} {:?}",
+                //     loc.loc.format(),
+                //     loc.context.event,
+                //     loc.context.event_function
+                // );
+            }
         }
     }
 }
 
-fn skip_function(stepper: &mut Stepper, func_name: String) -> bool {
+fn skip_function(stepper: &mut Stepper, func_name: &String) -> bool {
     let mut depth = 1;
 
     loop {
@@ -964,13 +1032,12 @@ fn skip_function(stepper: &mut Stepper, func_name: String) -> bool {
         };
 
         match &step.kind {
-            StepKind::SyntheticEnterFunction(f) if f == &func_name => {
+            StepKind::SyntheticEnterFunction(f) if f == func_name => {
                 depth += 1;
             }
-            StepKind::SyntheticAfterFunctionCall(f) if f == &func_name => {
+            StepKind::SyntheticAfterFunctionCall(f) if f == func_name => {
                 depth -= 1;
                 if depth == 0 {
-                    stepper.buffer.push_front(step.clone());
                     return false;
                 }
             }
@@ -981,7 +1048,13 @@ fn skip_function(stepper: &mut Stepper, func_name: String) -> bool {
 
 fn get_locations(executor: &AnyExecutor, source_map: &SourceMap) -> Option<Vec<DebugLocation>> {
     let (hash, offset) = get_code_pos(executor)?;
-    crate::vmtrace::low_level_loc_to_debug_locations(source_map, hash.as_str(), offset, true, false)
+    crate::vmtrace::low_level_loc_to_debug_locations(
+        source_map,
+        hash.as_str(),
+        offset,
+        SkipBlocksMode::None,
+        false,
+    )
 }
 
 fn get_code_pos(executor: &AnyExecutor) -> Option<(String, i32)> {

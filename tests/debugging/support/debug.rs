@@ -1,6 +1,7 @@
 use crate::debugging::{DebuggerClient, SourcePosition, run_script_file};
 use crate::support::snapshots::normalize_output;
 use dap::types::StackFrame;
+use std::cmp::max;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -345,10 +346,10 @@ impl ExecutionTrace {
                         pointer_line.push_str(&" ".repeat(col));
 
                         if pos.end_line == Some(pos.line)
-                            && end_col > col
+                            && end_col >= col
                             && end_col <= code_line.len()
                         {
-                            let underline_len = end_col - col;
+                            let underline_len = max(end_col - col, 1);
                             pointer_line.push_str(&"^".repeat(underline_len));
                         } else {
                             pointer_line.push('^');

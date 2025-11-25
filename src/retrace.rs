@@ -1,4 +1,5 @@
 use crate::vmtrace;
+use crate::vmtrace::SkipBlocksMode;
 use num_bigint::BigInt;
 use num_traits::Zero;
 use tolkc::source_map::{DebugLocation, SourceLocation, SourceMap};
@@ -87,7 +88,13 @@ pub fn find_source_loc(source_map: &SourceMap, hash: &str, offset: i32) -> Optio
         return None;
     }
 
-    let locs = vmtrace::low_level_loc_to_debug_locations(source_map, hash, offset, false, true)?;
+    let locs = vmtrace::low_level_loc_to_debug_locations(
+        source_map,
+        hash,
+        offset,
+        SkipBlocksMode::None,
+        true,
+    )?;
     locs.last().map(|l| l.loc.clone())
 }
 
