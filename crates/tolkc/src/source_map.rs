@@ -62,7 +62,7 @@ pub struct GlobalVariable {
     pub loc: SourceLocation,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct SourceLocation {
     pub file: String,
     pub line: i64,
@@ -131,7 +131,7 @@ pub struct Variable {
     pub possible_qualifier_types: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct EntryContext {
     pub description: EntryContextDescription,
     pub inlining: InliningInfo,
@@ -159,7 +159,15 @@ pub enum EntryContextDescription {
     },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+impl Default for EntryContextDescription {
+    fn default() -> Self {
+        EntryContextDescription::Basic {
+            ast_kind: "".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct InliningInfo {
     pub inlined_to_func: Option<String>,
     pub containing_func_inline_mode: i64,
