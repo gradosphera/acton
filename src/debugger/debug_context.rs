@@ -44,6 +44,7 @@ pub enum StepMode {
     StepOver,
     StepOut,
     Continue,
+    ContinueWithoutBreakpoints, // used for disconnect and terminate
 }
 
 #[derive(Debug, Clone)]
@@ -397,6 +398,7 @@ impl DebugContext {
                 debug!("Disconnecting: {args:?}");
                 let rsp = req.success(ResponseBody::Disconnect);
                 self.send_response(rsp)?;
+                self.step(StepMode::ContinueWithoutBreakpoints);
                 break;
             }
             if let Command::Terminate(args) = &req.command {
@@ -404,6 +406,7 @@ impl DebugContext {
                 debug!("Terminating: {args:?}");
                 let rsp = req.success(ResponseBody::Terminate);
                 self.send_response(rsp)?;
+                self.step(StepMode::ContinueWithoutBreakpoints);
                 break;
             }
             let is_end = self.on_request(req.clone())?;
@@ -823,6 +826,7 @@ impl DebugContext {
             StepMode::StepOver => self.step_over_impl(),
             StepMode::StepOut => self.step_out_impl(),
             StepMode::Continue => self.continue_impl(),
+            StepMode::ContinueWithoutBreakpoints => self.stop_impl(),
         }
     }
 
@@ -989,6 +993,17 @@ impl DebugContext {
 
                 return false;
             }
+        }
+    }
+
+    fn stop_impl(&mut self) -> bool {
+        self.performing_step = Some(StepMode::ContinueWithoutBreakpoints);
+
+        loop {
+            match self.stepper.next_step() {
+                Some(_) => continue,
+                None => return true,
+            };
         }
     }
 }

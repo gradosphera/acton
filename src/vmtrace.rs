@@ -1,7 +1,7 @@
 use tolkc::source_map::{DebugLocation, EntryContextDescription, SourceMap};
 use vmlogs::parser::VmLine;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum SkipBlocksMode {
     None = 0,
     Before = 1,
@@ -10,12 +10,13 @@ pub enum SkipBlocksMode {
 
 pub fn build_vm_trace(vm_logs: &str, source_map: &SourceMap) -> Vec<DebugLocation> {
     let lines = vmlogs::parser::parse_lines(vm_logs);
-    build_vm_trace_from_lines(lines, source_map)
+    build_vm_trace_from_lines(lines, source_map, SkipBlocksMode::After)
 }
 
 pub fn build_vm_trace_from_lines(
     lines: Vec<Result<VmLine, String>>,
     source_map: &SourceMap,
+    skip_block_mode: SkipBlocksMode,
 ) -> Vec<DebugLocation> {
     lines
         .iter()
@@ -33,7 +34,7 @@ pub fn build_vm_trace_from_lines(
                 .filter(|(mark_offset, _)| *mark_offset == offset)
                 .collect::<Vec<_>>();
 
-            find_locations_by_debug_marks(source_map, debug_pairs, SkipBlocksMode::After)
+            find_locations_by_debug_marks(source_map, debug_pairs, skip_block_mode)
         })
         .collect::<Vec<_>>()
 }
@@ -82,7 +83,7 @@ pub fn low_level_loc_to_debug_locations(
 fn find_locations_by_debug_marks(
     source_map: &SourceMap,
     debug_pairs: Vec<&(i32, i32)>,
-    skip_block_statements: SkipBlocksMode,
+    skip_block_mode: SkipBlocksMode,
 ) -> Vec<DebugLocation> {
     let locs = source_map
         .high_level
@@ -101,7 +102,7 @@ fn find_locations_by_debug_marks(
         .cloned()
         .collect::<Vec<_>>();
 
-    if skip_block_statements != SkipBlocksMode::None
+    if skip_block_mode != SkipBlocksMode::None
         && locs.iter().any(|loc| {
             matches!(
                 &loc.context.description,
@@ -109,7 +110,7 @@ fn find_locations_by_debug_marks(
             )
         })
     {
-        let actual_locs = if skip_block_statements == SkipBlocksMode::Before {
+        let actual_locs = if skip_block_mode == SkipBlocksMode::Before {
             locs.iter()
                 .take_while(|el| {
                     !matches!(

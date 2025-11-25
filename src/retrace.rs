@@ -51,7 +51,8 @@ fn find_backtrace(
     source_map: &SourceMap,
     lines: Vec<Result<VmLine, String>>,
 ) -> Vec<DebugLocation> {
-    let execution_path = vmtrace::build_vm_trace_from_lines(lines, source_map);
+    let execution_path =
+        vmtrace::build_vm_trace_from_lines(lines, source_map, SkipBlocksMode::None);
 
     let mut stack = vec![];
 
