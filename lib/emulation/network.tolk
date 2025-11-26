@@ -1,4 +1,5 @@
 import "@stdlib/common"
+import "@stdlib/gas-payments"
 import "../build/build"
 import "../ffi/ffi"
 import "../fmt"
@@ -66,7 +67,7 @@ fun ExtOutList.atOrNull<Msg>(self, index: int): ExtMessageRelaxed<Msg>? {
             // opcode mismatch
             return null;
         }
-        
+
         // other errors are not expected
         throw e;
     }
@@ -492,6 +493,18 @@ fun net.getAccountState(addr: address): AccountInfo? {
     }
     val typed_cell = cell as Cell<AccountInfo>;
     return typed_cell.load()
+}
+
+/// Returns storage fee for address for specified amount of seconds.
+///
+/// Returns `null` if the contract with given address is not deployed.
+fun net.getAccountStorageFee(addr: address, seconds: int) {
+    val state = net.getAccountState(addr);
+    if (state == null) {
+        return null;
+    }
+    val used_storage = state.storage_stat.used;
+    return calculateStorageFee(BASECHAIN, seconds, used_storage.bits, used_storage.cells);
 }
 
 /// Load library from the real blockchain by hash.

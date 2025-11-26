@@ -1,3 +1,4 @@
+import "fmt"
 import "ffi/ffi"
 
 /// Prints the given value to the standard output.
@@ -14,6 +15,16 @@ import "ffi/ffi"
 /// ```
 fun println<T>(value: T): void {
     ffi.println(value.typeNameOfObject(), value.toTuple());
+}
+
+/// Prints the given value to the standard output formatted according to format string.
+///
+/// Example:
+/// ```tolk
+/// println("Hello, 0x{:x}", 10);
+/// ```
+fun println1<T>(fmt: slice, value: T): void {
+    println(format1(fmt, value))
 }
 
 /// Prints the given slice string to the standard error output.

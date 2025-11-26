@@ -20,3 +20,10 @@ fun Maybe<X>.unwrap(self): X {
     }
     return self.value;
 }
+
+fun Maybe<X>.unwrap_or(self, default: X): X {
+    if (self is None) {
+        return default
+    }
+    return self.value;
+}

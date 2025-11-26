@@ -83,6 +83,28 @@ fun Transaction.getUsedGas(self) {
     }
 }
 
+/// Returns fee for action phase of the transaction.
+fun Transaction.getActionFee(self): Maybe<coins> {
+    val descr = self.description.load();
+    if (descr is TransOrd) {
+        val action = descr.action;
+        if (action is None) {
+            return None{}
+        }
+        val action_ph = action.value.load();
+        return action_ph.total_action_fees
+    }
+    if (descr is TransTickTock) {
+        val action = descr.action;
+        if (action is None) {
+            return None{}
+        }
+        val action_ph = action.value.load();
+        return action_ph.total_action_fees
+    }
+    return None{}
+}
+
 /// Return address of account of this transaction.
 fun Transaction.getAccountAddress(self, workchain: int = BASECHAIN) {
     return address.fromValidBuilder(
