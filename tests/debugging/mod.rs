@@ -20,7 +20,7 @@ use emulator::executor::ExecutorVerbosity;
 use emulator::get_executor::{GetMethodParams, GetMethodResult};
 use emulator::step_get_executor::StepGetExecutor;
 use owo_colors::OwoColorize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{env, fs, thread};
@@ -282,11 +282,15 @@ fn execute_script(
     let mut assert_failure = None;
     let mut expected_exit_code = None;
 
+    let config = ActonConfig::load()?;
+
     let mut ctx = Context {
         env: Env {
-            config: &ActonConfig::load()?,
+            config: &config,
             abi,
             default_log_level: verbosity,
+            wallets: config.wallets.as_ref(),
+            open_wallets: BTreeMap::new(),
         },
         io: IoContext {
             stdout_buffer: "".to_string(),
@@ -311,6 +315,8 @@ fn execute_script(
             backtrace: None,
         },
         debug: DebugCtx::Disabled,
+        is_broadcasting: false,
+        network: "testnet".to_string(),
     };
 
     let mut executor = StepGetExecutor::new(stack.clone(), params.clone());

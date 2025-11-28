@@ -331,6 +331,34 @@ fun net.treasury(name: slice): Treasury {
     return Treasury { address };
 }
 
+struct Wallet {
+    address: address
+}
+
+/// Creates a new wallet for use in scripts. Unlike `net.treasury`, the wallet
+/// can refer to a real wallet described in Acton.toml, and therefore can be used
+/// in scripts with `--broadcast` to execute transactions on the real blockchain.
+///
+/// Without `--broadcast`, the wallet refers to an internal wallet, created in the
+/// same way as in `net.treasury`.
+///
+/// Note: in tests, use `net.treasury`.
+fun net.wallet(name: slice): Wallet {
+    if (ffi.isBroadcasting()) {
+        val address_cell = ffi.getWalletByName(name);
+        if (address_cell == null) {
+            Assert.fail(format1("Cannot find wallet with name '{}'", name));
+            throw 1;
+        }
+        val address = address_cell.beginParse().loadAddress();
+        return Wallet { address }
+    }
+
+    return Wallet {
+        address: net.treasury(name).address,
+    }
+}
+
 /// Run a get method of a contract by its name.
 /// 
 /// Imagine you have the following get method in the contract:
@@ -554,3 +582,5 @@ fun ffi.failToFindTransactionByParams(location: slice, message: slice, txs: tupl
 fun ffi.failToNotFindTransactionByParams(location: slice, message: slice, txs: tuple, params: tuple): tuple? asm "104 EXTCALL"
 fun ffi.getAccountState(addr: cell): cell? asm "17 EXTCALL"
 fun ffi.loadLibrary(hash: slice): cell? asm "21 EXTCALL"
+fun ffi.isBroadcasting(): bool asm "23 EXTCALL"
+fun ffi.getWalletByName(name: slice): cell? asm "24 EXTCALL"

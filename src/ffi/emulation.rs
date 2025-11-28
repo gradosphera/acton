@@ -1,4 +1,4 @@
-use crate::context::{AssertFailure, Context, FailAssertFailure, KnownAddress};
+use crate::context::{AssertFailure, Context, FailAssertFailure, KnownAddress, Wallet};
 use crate::debugger::debug_context::StepMode;
 use crate::ffi::assert::process_txs_and_search_params;
 use crc::{CRC_16_XMODEM, Crc};
@@ -18,7 +18,8 @@ use num_traits::ToPrimitive;
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use ton_api::{Network, TonApiClient};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
@@ -232,6 +233,12 @@ fn send_message_from_impl(
         }
     };
 
+    if let Some(wallet) = ctx.env.find_wallet_by_address(&src_addr) {
+        let result = send_wallet_message(stack, message, wallet, &ctx.network);
+        try_ctx!(ctx, result, "Failed to send message to real network: {}");
+        return;
+    }
+
     let libs = ctx.chain.build_libs(&src_addr);
     let blockchain = &mut ctx.chain.blockchain;
 
@@ -333,6 +340,30 @@ fn send_message_from_impl(
         })
         .collect::<Vec<_>>();
     stack.push(TupleItem::Tuple(Tuple(transaction_cells)));
+}
+
+fn send_wallet_message(
+    stack: &mut Tuple,
+    message: ArcCell,
+    wallet: Wallet,
+    network: &str,
+) -> anyhow::Result<()> {
+    let expired_at_time = std::time::SystemTime::now() + Duration::from_secs(600);
+    let expire_at = expired_at_time
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs() as u32;
+
+    let seqno = wallet.seqno(network)?;
+    let external = wallet
+        .wallet
+        .create_external_msg(expire_at, seqno, false, vec![message])?;
+
+    let network = Network::from_str(network)?;
+    let client = TonApiClient::new(network, None);
+    client.send_boc(&external.to_boc_b64(false)?)?;
+
+    stack.push(TupleItem::Tuple(Tuple(vec![])));
+    Ok(())
 }
 
 fn send_message_debug(
@@ -1063,6 +1094,26 @@ fn load_library_by_hash_impl(ctx: &mut Context, stack: &mut Tuple, hash: String)
     }
 }
 
+extension!(is_broadcasting in (Context) using is_broadcasting_impl);
+fn is_broadcasting_impl(ctx: &mut Context, stack: &mut Tuple) {
+    stack.push_bool(ctx.is_broadcasting)
+}
+
+extension!(get_wallet_by_name in (Context) with (name: String) using get_wallet_by_name_impl);
+fn get_wallet_by_name_impl(ctx: &mut Context, stack: &mut Tuple, name: String) {
+    if let Some(wallet) = ctx.env.open_wallets.get(&name) {
+        let address_cell = try_ctx!(
+            ctx,
+            wallet.wallet.address.to_msg_address().to_cell(),
+            "Cannot build cell from wallet address: {}"
+        );
+        stack.push(TupleItem::Cell(address_cell.to_arc()));
+        return;
+    }
+
+    stack.push(TupleItem::Null);
+}
+
 pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         6 => build,
@@ -1081,5 +1132,7 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         19 => convert_address,
         20 => cell_from_hex,
         21 => load_library_by_hash,
+        23 => is_broadcasting,
+        24 => get_wallet_by_name,
     });
 }

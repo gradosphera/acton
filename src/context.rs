@@ -1,4 +1,4 @@
-use crate::config::{ActonConfig, ContractConfig};
+use crate::config::{ActonConfig, ContractConfig, WalletsConfig};
 use crate::debugger::debug_context::DebugContext;
 use crate::file_build_cache::FileBuildCache;
 use abi::ContractAbi;
@@ -7,8 +7,10 @@ use emulator::emulator::{Emulator, SendMessageResult};
 use emulator::executor::ExecutorVerbosity;
 use emulator::get_executor::GetMethodResultSuccess;
 use num_bigint::BigInt;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use tolkc::source_map::SourceMap;
+use ton_api::{Network, TonApiClient};
+use tonlib_core::wallet::ton_wallet::TonWallet;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::cell::{Cell, HashBytes};
 use tycho_types::dict::Dict;
@@ -209,10 +211,27 @@ impl Emulations {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Wallet {
+    pub name: String,
+    pub wallet: TonWallet,
+    pub seqno: Option<u32>,
+}
+
+impl Wallet {
+    pub fn seqno(&self, net: &str) -> anyhow::Result<u32> {
+        let network = Network::from_str(net)?;
+        let client = TonApiClient::new(network, None);
+        client.get_wallet_seqno(&self.wallet.address.to_base64_std())
+    }
+}
+
 pub struct Env<'a> {
     pub config: &'a ActonConfig,
     pub abi: &'a ContractAbi,
     pub default_log_level: ExecutorVerbosity,
+    pub wallets: Option<&'a WalletsConfig>,
+    pub open_wallets: BTreeMap<String, Wallet>,
 }
 
 pub struct Context<'a> {
@@ -223,6 +242,8 @@ pub struct Context<'a> {
     pub chain: ChainContext<'a>,
     pub build: BuildContext<'a>,
     pub debug: DebugCtx<'a>,
+    pub is_broadcasting: bool,
+    pub network: String,
 }
 
 #[derive(Debug, Clone)]
@@ -262,6 +283,19 @@ impl<'a> Env<'a> {
         let contracts = self.config.contracts.clone().unwrap_or_default().contracts;
         let (_, config) = contracts.iter().find(|(_, config)| config.name == name)?;
         Some(config.clone())
+    }
+
+    pub fn find_wallet_by_address(&self, addr: &IntAddr) -> Option<Wallet> {
+        let found = self
+            .open_wallets
+            .iter()
+            .find(|(_, w)| w.wallet.address.to_hex() == addr.to_string())?;
+
+        Some(found.1.clone())
+    }
+
+    pub fn find_wallet(&self, name: &str) -> Option<&crate::config::WalletConfig> {
+        self.wallets?.wallets.get(name)
     }
 }
 

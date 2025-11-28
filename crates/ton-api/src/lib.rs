@@ -1,0 +1,375 @@
+use anyhow::{Context, anyhow};
+use num_bigint::{BigInt, ToBigInt};
+use serde::Deserialize;
+use tycho_types::boc::Boc;
+use tycho_types::cell::Cell;
+
+#[derive(Debug, Clone)]
+pub enum Network {
+    Mainnet,
+    Testnet,
+}
+
+impl Network {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Network::Mainnet => "mainnet",
+            Network::Testnet => "testnet",
+        }
+    }
+
+    pub fn from_str(s: &str) -> anyhow::Result<Self> {
+        match s.to_lowercase().as_str() {
+            "mainnet" => Ok(Network::Mainnet),
+            "testnet" => Ok(Network::Testnet),
+            _ => Err(anyhow!(
+                "Unsupported network: {}. Supported: mainnet, testnet",
+                s
+            )),
+        }
+    }
+
+    pub fn toncenter_url(&self) -> &'static str {
+        match self {
+            Network::Mainnet => "https://toncenter.com",
+            Network::Testnet => "https://testnet.toncenter.com",
+        }
+    }
+}
+
+pub struct TonApiClient {
+    client: reqwest::blocking::Client,
+    network: Network,
+    api_key: Option<String>,
+}
+
+impl TonApiClient {
+    pub fn new(network: Network, api_key: Option<String>) -> Self {
+        Self {
+            client: reqwest::blocking::Client::new(),
+            network,
+            api_key,
+        }
+    }
+
+    pub fn with_network(mut self, network: Network) -> Self {
+        self.network = network;
+        self
+    }
+
+    pub fn with_api_key(mut self, api_key: String) -> Self {
+        self.api_key = Some(api_key);
+        self
+    }
+
+    fn build_request(&self, url: &str) -> reqwest::blocking::RequestBuilder {
+        let mut request = self.client.get(url).header("User-Agent", "acton-cli");
+
+        if let Some(ref key) = self.api_key {
+            request = request.header("X-API-Key", key);
+        }
+
+        request
+    }
+
+    fn build_post_request(&self, url: &str) -> reqwest::blocking::RequestBuilder {
+        let mut request = self.client.post(url).header("User-Agent", "acton-cli");
+
+        if let Some(ref key) = self.api_key {
+            request = request.header("X-API-Key", key);
+        }
+
+        request
+    }
+
+    /// Get account state from TonCenter
+    pub fn get_account_state(&self, address: &str) -> anyhow::Result<AccountState> {
+        let url = format!(
+            "{}/api/v3/accountStates?address={}",
+            self.network.toncenter_url(),
+            urlencoding::encode(address)
+        );
+
+        let response = self
+            .build_request(&url)
+            .send()
+            .context("Failed to send request to TonCenter")?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "TonCenter API returned status: {}",
+                response.status()
+            ));
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterResponse {
+            accounts: Vec<AccountState>,
+        }
+
+        let data: TonCenterResponse = response
+            .json()
+            .context("Failed to parse TonCenter response")?;
+
+        if data.accounts.is_empty() {
+            return Err(anyhow!("Account not found"));
+        }
+
+        Ok(data.accounts[0].clone())
+    }
+
+    /// Get contract BOC from TonCenter (tries mainnet first, then testnet)
+    pub fn get_contract_boc(&self, address: &str) -> anyhow::Result<String> {
+        let state = self.get_account_state(address)?;
+
+        if state.status != "active" {
+            return Err(anyhow!("Contract is not active (status: {})", state.status));
+        }
+
+        state
+            .code_boc
+            .ok_or_else(|| anyhow!("Contract has no code"))
+    }
+
+    /// Run get method on contract
+    pub fn run_get_method(
+        &self,
+        address: &str,
+        method: &str,
+        stack: Vec<serde_json::Value>,
+    ) -> anyhow::Result<GetMethodResult> {
+        let url = format!("{}/api/v2/jsonRPC", self.network.toncenter_url());
+
+        let json = serde_json::json!({
+            "id": "1",
+            "jsonrpc": "2.0",
+            "method": "runGetMethod",
+            "params": {
+                "address": address,
+                "method": method,
+                "stack": stack
+            }
+        });
+
+        let response = self
+            .build_post_request(&url)
+            .json(&json)
+            .send()
+            .context("Failed to send runGetMethod request")?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "TonCenter API returned status: {}",
+                response.status()
+            ));
+        }
+
+        #[derive(Deserialize)]
+        struct JsonRpcResponse {
+            result: GetMethodResult,
+        }
+
+        let result: JsonRpcResponse = response
+            .json()
+            .context("Failed to parse runGetMethod response")?;
+
+        Ok(result.result)
+    }
+
+    /// Get wallet seqno
+    pub fn get_wallet_seqno(&self, address: &str) -> anyhow::Result<u32> {
+        let result = self.run_get_method(address, "seqno", vec![])?;
+
+        if let Some(first) = result.stack.first() {
+            if first.len() == 2 && first[0] == "num" {
+                let seqno = u32::from_str_radix(first[1].trim_start_matches("0x"), 16)?;
+                return Ok(seqno);
+            }
+        }
+
+        Ok(0)
+    }
+
+    /// Send BOC to network
+    pub fn send_boc(&self, boc: &str) -> anyhow::Result<()> {
+        let url = format!("{}/api/v2/sendBoc", self.network.toncenter_url());
+
+        let json = serde_json::json!({ "boc": boc });
+
+        let response = self
+            .build_post_request(&url)
+            .json(&json)
+            .send()
+            .context("Failed to send BOC")?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "TonCenter API returned status: {}",
+                response.status()
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn get_last_block_seqno(&self) -> anyhow::Result<u64> {
+        let url = format!("{}/api/v2/getMasterchainInfo", self.network.toncenter_url());
+
+        let response = self
+            .build_request(&url)
+            .send()
+            .context("Failed to send request to TonCenter")?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("TonCenter API returned status: {}", response.status());
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterMasterchainInfoResponse {
+            pub result: TonCenterMasterchainInfoResult,
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterMasterchainInfoResult {
+            pub last: TonCenterMasterchainInfoLastBlock,
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterMasterchainInfoLastBlock {
+            pub seqno: u64,
+        }
+
+        let data: TonCenterMasterchainInfoResponse = response
+            .json()
+            .context("Failed to parse TonCenter response")?;
+
+        Ok(data.result.last.seqno)
+    }
+
+    pub fn get_account_info(
+        &self,
+        seqno: Option<u64>,
+        address: &String,
+    ) -> anyhow::Result<TonCenterAccountInfoResult> {
+        let url = format!(
+            "{}/api/v2/getAddressInformation?address={}{}",
+            self.network.toncenter_url(),
+            urlencoding::encode(address),
+            seqno
+                .map(|seqno| format!("&seqno={seqno}"))
+                .unwrap_or("".to_owned()),
+        );
+
+        let response = self
+            .build_request(&url)
+            .send()
+            .context("Failed to send request to TonCenter")?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("TonCenter API returned status: {}", response.status());
+        }
+
+        #[derive(Deserialize, Debug)]
+        struct TonCenterAccountInfoResponse {
+            pub result: TonCenterAccountInfoResult,
+        }
+
+        let data: TonCenterAccountInfoResponse = response
+            .json()
+            .context("Failed to parse TonCenter response")?;
+
+        Ok(data.result)
+    }
+
+    pub fn get_library_by_hash(&self, hash: &str) -> anyhow::Result<Cell> {
+        let url = format!("{}/api/v2/getLibraries", self.network.toncenter_url(),);
+
+        let response = self
+            .build_request(&url)
+            .query(&[("libraries", hash)])
+            .send()
+            .context("Failed to send request to TonCenter for library")?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("TonCenter API returned status: {}", response.status());
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterLibrariesResponse {
+            ok: bool,
+            result: TonCenterLibrariesResult,
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterLibrariesResult {
+            result: Vec<TonCenterLibraryData>,
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterLibraryData {
+            data: String,
+        }
+
+        let data: TonCenterLibrariesResponse = response
+            .json()
+            .context("Failed to parse TonCenter libraries response")?;
+
+        if !data.ok || data.result.result.is_empty() {
+            anyhow::bail!("Library with hash {} not found", hash);
+        }
+
+        Boc::decode_base64(&data.result.result[0].data).context("Failed to decode library BOC data")
+    }
+
+    pub fn decode_optional_cell(cell_data: &String) -> anyhow::Result<Option<Cell>> {
+        if cell_data.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(Boc::decode_base64(cell_data)?))
+    }
+}
+
+#[derive(Deserialize, Clone)]
+pub struct AccountState {
+    pub code_boc: Option<String>,
+    pub status: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct GetMethodResult {
+    pub stack: Vec<Vec<String>>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct TonCenterAccountInfoResult {
+    pub balance: StringOrNumber,
+    pub code: String,
+    pub data: String,
+    pub state: String,
+    pub frozen_hash: String,
+    pub last_transaction_id: TonCenterAccountInfoLastTransactionId,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct TonCenterAccountInfoLastTransactionId {
+    pub lt: String,
+    pub hash: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum StringOrNumber {
+    Str(String),
+    Num(i64),
+}
+
+impl StringOrNumber {
+    pub fn to_bigint(&self) -> anyhow::Result<BigInt> {
+        match self {
+            StringOrNumber::Str(str) => str.parse::<BigInt>().map_err(Into::into),
+            StringOrNumber::Num(num) => num
+                .to_bigint()
+                .ok_or_else(|| anyhow!("cannot convert {num} to bigint")),
+        }
+    }
+}

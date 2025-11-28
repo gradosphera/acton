@@ -32,6 +32,7 @@ pub struct ActonConfig {
     pub package: PackageConfig,
     pub test: Option<TestSettings>,
     pub contracts: Option<ContractsConfig>,
+    pub wallets: Option<WalletsConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +69,27 @@ pub struct ContractsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletKeys {
+    #[serde(rename = "mnemonic-env")]
+    pub mnemonic_env: Option<String>,
+    #[serde(rename = "mnemonic-file")]
+    pub mnemonic_file: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletConfig {
+    pub kind: String,
+    pub workchain: Option<i32>,
+    pub keys: WalletKeys,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WalletsConfig {
+    #[serde(flatten)]
+    pub wallets: BTreeMap<String, WalletConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContractConfig {
     pub name: String,
     pub src: String,
@@ -86,6 +108,7 @@ impl Default for ActonConfig {
             },
             test: None,
             contracts: None,
+            wallets: None,
         }
     }
 }
@@ -168,6 +191,14 @@ impl ActonConfig {
 
     pub fn get_contract(&self, name: &str) -> Option<&ContractConfig> {
         self.contracts.as_ref()?.contracts.get(name)
+    }
+
+    pub fn wallets(&self) -> Option<&BTreeMap<String, WalletConfig>> {
+        self.wallets.as_ref().map(|w| &w.wallets)
+    }
+
+    pub fn get_wallet(&self, name: &str) -> Option<&WalletConfig> {
+        self.wallets.as_ref()?.wallets.get(name)
     }
 }
 
@@ -326,5 +357,47 @@ junit-merge = true
         assert_eq!(test_settings.include, Some(vec!["**/unit/**".to_string()]));
         assert_eq!(test_settings.junit_path, Some("custom-reports".to_string()));
         assert_eq!(test_settings.junit_merge, Some(true));
+    }
+
+    #[test]
+    fn test_wallet_config_parsing() -> Result<()> {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[wallets.deployer]
+kind = "v4R2"
+workchain = 0
+keys = { mnemonic-env = "DEPLOYER_MNEMONIC" }
+
+[wallets.user]
+kind = "v5R1"
+workchain = -1
+keys = { mnemonic-file = "user-keys.txt" }
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content)?;
+
+        let wallets = config.wallets().unwrap();
+        assert_eq!(wallets.len(), 2);
+
+        let deployer = config.get_wallet("deployer").unwrap();
+        assert_eq!(deployer.kind, "v4R2");
+        assert_eq!(deployer.workchain, Some(0));
+        assert_eq!(
+            deployer.keys.mnemonic_env,
+            Some("DEPLOYER_MNEMONIC".to_string())
+        );
+        assert_eq!(deployer.keys.mnemonic_file, None);
+
+        let user = config.get_wallet("user").unwrap();
+        assert_eq!(user.kind, "v5R1");
+        assert_eq!(user.workchain, Some(-1));
+        assert_eq!(user.keys.mnemonic_file, Some("user-keys.txt".to_string()));
+        assert_eq!(user.keys.mnemonic_env, None);
+
+        Ok(())
     }
 }

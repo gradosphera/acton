@@ -7,6 +7,7 @@ use crate::debugger::debug_context::DebugContext;
 use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
 use crate::formatter::FormatterContext;
+use crate::wallets;
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use emulator::AnyExecutor;
@@ -25,6 +26,7 @@ use tonlib_core::cell::{ArcCell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::Tuple;
 
+#[allow(clippy::too_many_arguments)]
 pub fn script_cmd(
     path: &String,
     debug: bool,
@@ -32,6 +34,8 @@ pub fn script_cmd(
     clear_cache: bool,
     fork_net: Option<String>,
     api_key: Option<String>,
+    broadcast: bool,
+    net: String,
 ) -> anyhow::Result<()> {
     if clear_cache {
         let mut file_cache = FileBuildCache::new(None)?;
@@ -49,7 +53,9 @@ pub fn script_cmd(
     }
 
     let content = fs::read_to_string(path)?;
-    run_script_file(path, &content, debug, debug_port, fork_net, api_key)
+    run_script_file(
+        path, &content, debug, debug_port, fork_net, api_key, broadcast, net,
+    )
 }
 
 /// A script is essentially a regular smart contract with a `main` function,
@@ -64,6 +70,8 @@ fn run_script_file(
     debug_port: u16,
     fork_net: Option<String>,
     api_key: Option<String>,
+    broadcast: bool,
+    net: String,
 ) -> anyhow::Result<()> {
     let abi = contract_abi(content, file_path);
 
@@ -82,6 +90,8 @@ fn run_script_file(
                 ExecutorVerbosity::FullLocationStackVerbose,
                 fork_net,
                 api_key,
+                broadcast,
+                net,
             )?;
             Ok(())
         }
@@ -106,6 +116,8 @@ fn execute_script(
     verbosity: ExecutorVerbosity,
     fork_net: Option<String>,
     api_key: Option<String>,
+    broadcast: bool,
+    net: String,
 ) -> anyhow::Result<()> {
     let dest_address = contract_address(code_cell)?;
 
@@ -137,11 +149,16 @@ fn execute_script(
     let mut assert_failure = None;
     let mut expected_exit_code = None;
 
+    let config = ActonConfig::load()?;
+    let open_wallets = wallets::open_wallets(&config, broadcast)?;
+
     let mut ctx = Context {
         env: Env {
-            config: &ActonConfig::load()?,
+            config: &config,
             abi,
             default_log_level: verbosity,
+            wallets: config.wallets.as_ref(),
+            open_wallets,
         },
         io: IoContext {
             stdout_buffer: "".to_string(),
@@ -166,6 +183,8 @@ fn execute_script(
             backtrace: None,
         },
         debug: DebugCtx::Disabled,
+        is_broadcasting: broadcast,
+        network: net,
     };
 
     if debug {

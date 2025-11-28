@@ -19,8 +19,8 @@ use crate::context::{
 };
 use crate::debugger::dap::DapTransport;
 use crate::debugger::debug_context::DebugContext;
-use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
+use crate::{ffi, wallets};
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use emulator::AnyExecutor;
@@ -208,11 +208,16 @@ impl<'a> TestRunner<'a> {
         let mut assert_failure = None;
         let mut expected_exit_code = None;
 
+        let config = ActonConfig::load()?;
+        let open_wallets = wallets::open_wallets(&config, false)?;
+
         let mut ctx = Context {
             env: Env {
-                config: &ActonConfig::load()?,
+                config: &config,
                 abi,
                 default_log_level: verbosity,
+                wallets: config.wallets.as_ref(),
+                open_wallets,
             },
             io: IoContext {
                 stdout_buffer: "".to_string(),
@@ -239,6 +244,8 @@ impl<'a> TestRunner<'a> {
                 backtrace: self.config.backtrace.clone(),
             },
             debug: DebugCtx::Disabled,
+            is_broadcasting: false,
+            network: "testnet".to_string(),
         };
 
         let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) =

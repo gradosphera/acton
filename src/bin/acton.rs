@@ -10,6 +10,7 @@ use clap::ColorChoice;
 use clap::builder::styling::Style;
 use clap::builder::{StyledStr, Styles};
 use clap::{Parser, Subcommand, arg};
+use dotenvy::dotenv;
 use owo_colors::OwoColorize;
 use std::fs::OpenOptions;
 use std::{fs, process};
@@ -198,6 +199,18 @@ enum Commands {
             help_heading = "Remote"
         )]
         api_key: Option<String>,
+
+        // Broadcasting
+        #[arg(long, help = "Enable broadcasting mode", help_heading = "Broadcasting")]
+        broadcast: bool,
+
+        #[arg(
+            long,
+            help = "Network to use for broadcasting (mainnet, testnet)",
+            default_value = "testnet",
+            help_heading = "Broadcasting"
+        )]
+        net: String,
     },
     #[command(
         about = "Build all contracts",
@@ -379,6 +392,7 @@ fn example_build_usage() -> StyledStr {
 }
 
 fn main() {
+    dotenv().ok();
     setup_logging().expect("Failed to set up logging");
     let cli = Cli::parse();
 
@@ -465,8 +479,19 @@ fn main() {
             clear_cache,
             fork_net,
             api_key,
+            broadcast,
+            net,
         } => {
-            let result = script_cmd(&path, debug, debug_port, clear_cache, fork_net, api_key);
+            let result = script_cmd(
+                &path,
+                debug,
+                debug_port,
+                clear_cache,
+                fork_net,
+                api_key,
+                broadcast,
+                net,
+            );
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
                 process::exit(1)

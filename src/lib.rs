@@ -7,3 +7,4 @@ pub mod file_build_cache;
 pub mod formatter;
 pub mod retrace;
 pub mod vmtrace;
+pub mod wallets;

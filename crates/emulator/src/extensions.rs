@@ -38,6 +38,16 @@ macro_rules! pop_args {
 
 #[macro_export]
 macro_rules! extension {
+    ($fn_name:ident in ($ctx_ty:ty) using $body:expr) => {
+        unsafe extern "C" fn $fn_name(ctx: *mut std::os::raw::c_void, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
+            unsafe {
+                let ctx = &mut *(ctx as *mut $ctx_ty);
+                $crate::extensions::with_tuple(ptr, |__t: &mut tvmffi::stack::Tuple| {
+                    $body(ctx, __t)
+                })
+            }
+        }
+    };
     ($fn_name:ident in ($ctx_ty:ty) with ($an:ident : $ty:ty) using $body:expr) => {
         unsafe extern "C" fn $fn_name(ctx: *mut std::os::raw::c_void, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
             unsafe {

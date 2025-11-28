@@ -1,12 +1,12 @@
-use emulator::remote;
 use std::fs;
 use tasm::decompile::Disassembler;
 use tasm::printer::FormatOptions;
 use tasm::types::Instruction;
+use ton_api::{Network, TonApiClient};
 use tycho_types::boc::Boc;
 use tycho_types::cell::HashBytes;
 
-mod toncenter;
+mod remote;
 
 #[allow(clippy::too_many_arguments)]
 pub fn disasm_cmd(
@@ -25,7 +25,7 @@ pub fn disasm_cmd(
         let binary_data = fs::read(&file_path)?;
         hex::encode(binary_data)
     } else if let Some(addr) = address {
-        toncenter::fetch_contract_boc(&addr, api_key.as_deref())?
+        remote::fetch_contract_boc(&addr, api_key.as_deref())?
     } else {
         return Err(anyhow::anyhow!(
             "Either --string/-s, --address or boc_file must be provided"
@@ -55,7 +55,9 @@ pub fn disasm_cmd(
         if instructions.len() == 1
             && let Some(lib_hash) = extract_library_hash_from_instruction(&instructions[0])
         {
-            match remote::get_library_by_hash(&net, &lib_hash.to_string(), api_key.clone()) {
+            let network = Network::from_str(&net)?;
+            let client = TonApiClient::new(network, api_key.map(|s| s.to_string()));
+            match client.get_library_by_hash(&lib_hash.to_string()) {
                 Ok(lib_cell) => {
                     final_cell = lib_cell;
                 }
