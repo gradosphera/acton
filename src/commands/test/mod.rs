@@ -209,7 +209,7 @@ impl<'a> TestRunner<'a> {
         let mut expected_exit_code = None;
 
         let config = ActonConfig::load()?;
-        let open_wallets = wallets::open_wallets(&config, false)?;
+        let open_wallets = wallets::open_wallets(&config, "testnet", false)?;
 
         let mut ctx = Context {
             env: Env {

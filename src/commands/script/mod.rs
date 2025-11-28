@@ -150,7 +150,7 @@ fn execute_script(
     let mut expected_exit_code = None;
 
     let config = ActonConfig::load()?;
-    let open_wallets = wallets::open_wallets(&config, broadcast)?;
+    let open_wallets = wallets::open_wallets(&config, &net, broadcast)?;
 
     let mut ctx = Context {
         env: Env {
