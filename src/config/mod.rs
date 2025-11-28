@@ -77,10 +77,20 @@ pub struct WalletKeys {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletExpectedAddresses {
+    #[serde(rename = "address-mainnet")]
+    pub address_mainnet: Option<String>,
+    #[serde(rename = "address-testnet")]
+    pub address_testnet: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletConfig {
     pub kind: String,
     pub workchain: Option<i32>,
     pub keys: WalletKeys,
+    #[serde(default)]
+    pub expected: Option<WalletExpectedAddresses>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -360,7 +370,7 @@ junit-merge = true
     }
 
     #[test]
-    fn test_wallet_config_parsing() -> Result<()> {
+    fn test_wallet_config_parsing() -> anyhow::Result<()> {
         let toml_content = r#"
 [package]
 name = "test-project"
@@ -371,6 +381,10 @@ version = "0.1.0"
 kind = "v4R2"
 workchain = 0
 keys = { mnemonic-env = "DEPLOYER_MNEMONIC" }
+
+[wallets.deployer.expected]
+address-mainnet = "EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot"
+address-testnet = "EQD_testnet_address_here"
 
 [wallets.user]
 kind = "v5R1"
@@ -392,11 +406,23 @@ keys = { mnemonic-file = "user-keys.txt" }
         );
         assert_eq!(deployer.keys.mnemonic_file, None);
 
+        // Check expected addresses
+        let expected = deployer.expected.as_ref().unwrap();
+        assert_eq!(
+            expected.address_mainnet,
+            Some("EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot".to_string())
+        );
+        assert_eq!(
+            expected.address_testnet,
+            Some("EQD_testnet_address_here".to_string())
+        );
+
         let user = config.get_wallet("user").unwrap();
         assert_eq!(user.kind, "v5R1");
         assert_eq!(user.workchain, Some(-1));
         assert_eq!(user.keys.mnemonic_file, Some("user-keys.txt".to_string()));
         assert_eq!(user.keys.mnemonic_env, None);
+        assert!(user.expected.is_none()); // No expected addresses for user wallet
 
         Ok(())
     }

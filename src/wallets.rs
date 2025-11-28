@@ -3,6 +3,8 @@ use crate::context::Wallet;
 use anyhow::anyhow;
 use std::collections::BTreeMap;
 use std::fs;
+use std::str::FromStr;
+use tonlib_core::TonAddress;
 use tonlib_core::wallet::ton_wallet::TonWallet;
 use tonlib_core::wallet::versioned::{
     DEFAULT_WALLET_ID, DEFAULT_WALLET_ID_V5R1, DEFAULT_WALLET_ID_V5R1_TESTNET,
@@ -44,18 +46,56 @@ pub fn open_wallets(
         let wallet_version = parse_wallet_version(&wallet.kind)?;
         let wallet_id = wallet_id(wallet_version, net);
 
-        let wallet = TonWallet::new_with_params(
+        let ton_wallet = TonWallet::new_with_params(
             wallet_version,
             mnemonic.to_key_pair()?,
             wallet.workchain.unwrap_or(0),
             wallet_id,
         )?;
 
+        if let Some(expected) = &wallet.expected {
+            let expected_address = match net {
+                "mainnet" => expected
+                    .address_mainnet
+                    .as_ref()
+                    .map(|a| TonAddress::from_str(&a.to_string())),
+                "testnet" => expected
+                    .address_testnet
+                    .as_ref()
+                    .map(|a| TonAddress::from_str(&a.to_string())),
+                _ => None,
+            };
+
+            if let Some(expected_addr) = expected_address {
+                match expected_addr {
+                    Ok(expected_addr) => {
+                        if ton_wallet.address != expected_addr {
+                            anyhow::bail!(
+                                "Wallet address mismatch for '{name}' on '{net}':\n  Expected: {expected_addr}\n  Derived:  {}\n\nPossible causes:\n  - Wrong mnemonic/private key\n  - Incorrect 'kind' or 'workchain'\n  - Keys rotated but expected.address-{net} not updated",
+                                ton_wallet.address.to_base64_std(),
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        let expected_address = match net {
+                            "mainnet" => expected.address_mainnet.as_deref(),
+                            "testnet" => expected.address_testnet.as_deref(),
+                            _ => None,
+                        }
+                        .unwrap_or("<unknown>");
+                        anyhow::bail!(
+                            "Wallet address {expected_address} for {net} is not a valid address: {err}"
+                        );
+                    }
+                }
+            }
+        }
+
         open_wallets.insert(
             name.clone(),
             Wallet {
-                wallet,
-                name,
+                name: name.clone(),
+                wallet: ton_wallet,
                 seqno: None,
             },
         );
