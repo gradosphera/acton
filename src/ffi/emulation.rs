@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 use ton_api::{Network, TonApiClient};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
-use tonlib_core::tlb_types::block::msg_address::MsgAddrIntStd;
+use tonlib_core::tlb_types::block::msg_address::{MsgAddrIntStd, MsgAddress};
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
@@ -900,14 +900,8 @@ fn get_deployed_code_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell
 }
 
 fn cell_address_to_raw(address: ArcCell) -> anyhow::Result<String> {
-    let address_boc = address.to_boc_hex(false)?;
-    let address_std = MsgAddrIntStd::from_boc_hex(address_boc.as_str())?;
-    let dst_addr_str = format!(
-        "{}:{}",
-        &address_std.workchain,
-        hex::encode(&address_std.address)
-    );
-    Ok(dst_addr_str)
+    let address_std = TonAddress::from_msg_address(MsgAddress::from_cell(&address)?)?;
+    Ok(address_std.to_hex())
 }
 
 fn get_address_code(account: &ShardAccount) -> Option<ArcCell> {
