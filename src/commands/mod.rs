@@ -5,6 +5,7 @@ pub mod init;
 pub mod new;
 pub mod script;
 pub mod test;
+pub mod test_gen;
 
 use std::collections::HashMap;
 

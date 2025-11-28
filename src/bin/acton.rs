@@ -5,6 +5,7 @@ use acton::commands::init::init_cmd;
 use acton::commands::new::new_cmd;
 use acton::commands::script::script_cmd;
 use acton::commands::test::{ReportFormat, TestConfig, test_cmd};
+use acton::commands::test_gen::test_gen_cmd;
 use acton::config::ActonConfig;
 use clap::ColorChoice;
 use clap::builder::styling::Style;
@@ -161,6 +162,15 @@ enum Commands {
             help_heading = "Remote"
         )]
         api_key: Option<String>,
+    },
+    #[command(about = "Generate test wrapper and test file for a contract")]
+    TestGen {
+        #[arg(help = "Contract ID from Acton.toml")]
+        contract_id: String,
+        #[arg(long, help = "Output path for wrapper file")]
+        wrapper_output: Option<String>,
+        #[arg(long, help = "Output path for test file")]
+        test_output: Option<String>,
     },
     #[command(about = "Execute a Tolk script file")]
     Script {
@@ -467,6 +477,17 @@ fn main() {
                 api_key,
             );
             let result = test_cmd(path, &config);
+            if let Err(err) = result {
+                eprintln!("{} {}", "Error:".red(), err);
+                process::exit(1)
+            }
+        }
+        Commands::TestGen {
+            contract_id,
+            wrapper_output,
+            test_output,
+        } => {
+            let result = test_gen_cmd(&contract_id, wrapper_output, test_output);
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);
                 process::exit(1)

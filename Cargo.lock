@@ -40,6 +40,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "owo-colors",
+ "pathdiff",
  "quick-junit",
  "regex",
  "reqwest 0.12.24",
@@ -1559,6 +1560,12 @@ dependencies = [
  "rand_core",
  "subtle",
 ]
+
+[[package]]
+name = "pathdiff"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df94ce210e5bc13cb6651479fa48d14f601d9858cfe0467f43ae157023b938d3"
 
 [[package]]
 name = "pbkdf2"

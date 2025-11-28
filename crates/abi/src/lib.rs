@@ -49,6 +49,7 @@ pub struct TypeAbi {
     pub opcode: Option<u32>,
     pub opcode_width: Option<usize>,
     pub fields: Vec<Field>,
+    pub pos: Option<Pos>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -183,6 +184,84 @@ pub fn contract_abi(content: &str, file_path: &str) -> ContractAbi {
         messages: abi_info.messages,
         types: abi_info.types,
     }
+}
+
+pub fn extract_handled_messages(content: &str, file_path: &str) -> Vec<String> {
+    let tree = match tolk_parser::parser::parse(content) {
+        Ok(tree) => tree,
+        Err(_) => return Vec::new(),
+    };
+
+    let root_node = tree.root_node();
+    let files = collect_imported_files(&root_node, content, file_path);
+
+    let mut handled_messages = Vec::new();
+
+    for file_info in files {
+        let messages = extract_messages_from_match(&file_info.tree.root_node(), &file_info.content);
+        handled_messages.extend(messages);
+    }
+
+    handled_messages
+}
+
+fn extract_messages_from_match(node: &tree_sitter::Node, content: &str) -> Vec<String> {
+    let mut messages = Vec::new();
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "function_declaration" {
+            let Some(name_node) = child.child_by_field_name("name") else {
+                continue;
+            };
+
+            let func_name = name_node
+                .utf8_text(content.as_bytes())
+                .unwrap_or("")
+                .to_string();
+
+            if func_name == "onInternalMessage" {
+                if let Some(body) = child.child_by_field_name("body") {
+                    messages.extend(find_match_patterns(&body, content));
+                }
+            }
+        }
+    }
+
+    messages
+}
+
+fn find_match_patterns(node: &tree_sitter::Node, content: &str) -> Vec<String> {
+    let mut patterns = Vec::new();
+
+    if node.kind() == "match_expression" {
+        if let Some(body_node) = node.child_by_field_name("body") {
+            if body_node.kind() == "match_body" {
+                let mut cursor = body_node.walk();
+                for child in body_node.children(&mut cursor) {
+                    if child.kind() == "match_arm" {
+                        if let Some(pattern_type_node) = child.child_by_field_name("pattern_type") {
+                            let pattern_text = pattern_type_node
+                                .utf8_text(content.as_bytes())
+                                .unwrap_or("")
+                                .to_string();
+
+                            if !pattern_text.is_empty() {
+                                patterns.push(pattern_text);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        patterns.extend(find_match_patterns(&child, content));
+    }
+
+    patterns
 }
 
 fn collect_imported_files(
@@ -414,9 +493,28 @@ fn extract_get_method(
 
     let parameters = extract_parameters(func_node, content, file_path);
 
-    let return_type = TypeInfo {
-        base: BaseTypeInfo::Void,
-        human_readable: "void".to_string(),
+    let return_type = if let Some(return_type_node) = func_node.child_by_field_name("return_type") {
+        let type_text = return_type_node
+            .utf8_text(content.as_bytes())
+            .unwrap_or("")
+            .to_string();
+
+        if type_text.is_empty() {
+            TypeInfo {
+                base: BaseTypeInfo::Void,
+                human_readable: "void".to_string(),
+            }
+        } else {
+            TypeInfo {
+                base: BaseTypeInfo::Void,
+                human_readable: type_text,
+            }
+        }
+    } else {
+        TypeInfo {
+            base: BaseTypeInfo::Void,
+            human_readable: "void".to_string(),
+        }
     };
 
     Some(GetMethod {
@@ -483,11 +581,18 @@ fn extract_struct_abi(
         }
     }
 
+    let pos = Pos {
+        row: name_node.start_position().row,
+        column: name_node.start_position().column,
+        uri: file_path.to_string(),
+    };
+
     Some(TypeAbi {
         name: struct_name,
         opcode,
         opcode_width,
         fields,
+        pos: Some(pos),
     })
 }
 
