@@ -7,6 +7,30 @@ use std::path::Path;
 
 static LIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/lib");
 static TOLK_STDLIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/crates/tolkc/assets/tolk-stdlib");
+const BASE_GITIGNORE: &str = "
+# Acton main directory
+.acton/
+
+.DS_Store
+node_modules/
+
+# VS Code
+.vscode/*
+.history/
+*.vsix
+
+# IDEA files
+.idea
+
+# Vim
+Session.vim
+.vim/
+
+# Other private editor folders
+.nvim/
+.emacs/
+.helix/
+";
 
 pub fn new_cmd(path: &str) -> anyhow::Result<()> {
     let project_path = if path == "." {
@@ -25,7 +49,7 @@ pub fn new_cmd(path: &str) -> anyhow::Result<()> {
     }
 
     if !project_path.exists() {
-        std::fs::create_dir_all(&project_path)?;
+        fs::create_dir_all(&project_path)?;
     }
 
     let default_name = project_path
@@ -79,6 +103,8 @@ pub fn new_cmd(path: &str) -> anyhow::Result<()> {
 
     fs::create_dir_all("contracts/")?;
     fs::create_dir_all("tests/")?;
+
+    fs::write(".gitignore", BASE_GITIGNORE.trim_start())?;
 
     println!("{}", "✓ Created new Acton project".green().bold());
     println!(

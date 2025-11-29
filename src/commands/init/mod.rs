@@ -44,6 +44,17 @@ pub fn init_cmd() -> anyhow::Result<()> {
     TOLK_STDLIB_DIR.extract(".acton/tolk-stdlib")?;
 
     println!("{}", "✓ Initialized new Acton project".green().bold());
+
+    if fs::exists(".gitignore").unwrap_or(false) {
+        // Add .acton/ to gitignore automatically
+        let content = fs::read_to_string(".gitignore")?;
+        fs::write(
+            ".gitignore",
+            content + "\n# Acton main directory\n.acton/\n",
+        )?;
+        println!("Patched {} with .acton/ directory", ".gitignore".cyan());
+    }
+
     println!("Created {} with project configuration", "Acton.toml".cyan());
     println!(
         "Created {} directory with standard library",
