@@ -1,6 +1,7 @@
 use crate::context::{AssertFailure, Context, FailAssertFailure, KnownAddress, Wallet};
 use crate::debugger::debug_context::StepMode;
 use crate::ffi::assert::process_txs_and_search_params;
+use crate::formatter::FormatterContext;
 use crc::{CRC_16_XMODEM, Crc};
 use emulator::config::DEFAULT_CONFIG;
 use emulator::emulator::{Emulator, SendMessageResult, SendMessageResultSuccess};
@@ -724,12 +725,14 @@ fn find_transaction_by_params_impl(
     stack.push(TupleItem::Cell(tx_cell));
 }
 
-extension!(run_get_method in (Context) with (args: Tuple, return_type_name: String, id: BigInt, code: ArcCell, address: ArcCell) using run_get_method_impl);
+extension!(run_get_method in (Context) with (args: Tuple, return_type_name: String, name: String, id: BigInt, code: ArcCell, address: ArcCell) using run_get_method_impl);
+#[allow(clippy::too_many_arguments)]
 fn run_get_method_impl(
     ctx: &mut Context,
     stack: &mut Tuple,
     args: Tuple,
     return_type_name: String,
+    name: String,
     id: BigInt,
     code: ArcCell,
     address: ArcCell,
@@ -842,10 +845,43 @@ fn run_get_method_impl(
             );
 
             if result.vm_exit_code != 0 && result.vm_exit_code != 1 {
-                ctx.asserts.fail(format!(
-                    "Cannot execute get method {id}: exit code {}",
-                    result.vm_exit_code
-                ));
+                let get_method = ctx.env.abi.find_get_method_by_id(&id);
+                let get_method_presentation = if let Some(get_method) = get_method {
+                    format!("'{}' ({id})", get_method.name)
+                } else {
+                    format!("'{}' ({id})", name)
+                };
+
+                if result.vm_exit_code == 11 {
+                    // TODO: right now get methods can not include all get methods
+                    let get_methods: Vec<&str> = ctx
+                        .env
+                        .abi
+                        .get_methods
+                        .iter()
+                        .map(|m| m.name.as_str())
+                        .collect();
+                    let suggested_name = suggest_name(&name, &get_methods);
+
+                    if let Some(suggested_name) = suggested_name {
+                        ctx.asserts.fail(format!(
+                            "Cannot execute unknown get method {get_method_presentation}, did you mean '{suggested_name}'",
+                        ));
+                    } else {
+                        ctx.asserts.fail(format!(
+                            "Cannot execute unknown get method {get_method_presentation}",
+                        ));
+                    }
+                } else if result.vm_exit_code == 2 {
+                    ctx.asserts.fail(format!(
+                        "Get method {get_method_presentation} failed due to stack underflow. Make sure you passed all parameters to the get method.",
+                    ));
+                } else {
+                    ctx.asserts.fail(format!(
+                        "Cannot execute get method {get_method_presentation}: exit code {}",
+                        FormatterContext::format_exit_code(result.vm_exit_code)
+                    ));
+                }
                 stack.push(TupleItem::Null);
                 return;
             }
@@ -859,6 +895,21 @@ fn run_get_method_impl(
             println!("Error: {}", result.error);
         }
     };
+}
+
+fn suggest_name<'a>(input: &str, candidates: &'a [&'a str]) -> Option<&'a str> {
+    let mut best = None;
+    let mut best_dist = usize::MAX;
+
+    for &cand in candidates {
+        let d = strsim::levenshtein(input, cand);
+        if d < best_dist {
+            best_dist = d;
+            best = Some(cand);
+        }
+    }
+
+    if best_dist <= 3 { best } else { None }
 }
 
 extension!(is_deployed in (Context) with (address: ArcCell) using is_deployed_impl);
@@ -926,7 +977,7 @@ fn crc16_impl(_ctx: &mut Context, stack: &mut Tuple, data: String) {
 
 extension!(type_name_by_opcode in (Context) with (id: BigInt) using type_name_by_opcode_impl);
 fn type_name_by_opcode_impl(ctx: &mut Context, stack: &mut Tuple, id: BigInt) {
-    let type_abi = ctx.env.abi.find_type_by_opcode(id);
+    let type_abi = ctx.env.abi.find_type_by_opcode(&id);
     match type_abi {
         None => {
             stack.push(TupleItem::Null);

@@ -49,6 +49,7 @@ dependencies = [
  "sha2",
  "snapbox",
  "strip-ansi-escapes",
+ "strsim",
  "tasm",
  "tempfile",
  "tolk_parser",

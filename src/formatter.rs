@@ -1400,7 +1400,7 @@ impl FormatterContext {
     ) -> Vec<String> {
         let mut params = vec![];
         if let Some(opcode) = assert_failure.params.opcode {
-            let opcode_type = abi.find_type_by_opcode(BigInt::from(opcode));
+            let opcode_type = abi.find_type_by_opcode(&BigInt::from(opcode));
             params.push(format!(
                 "  opcode={} {}",
                 format!("0x{opcode:x}").green(),
@@ -1477,5 +1477,13 @@ impl FormatterContext {
             .replace("<expected>", &"expected".green().to_string());
 
         result.to_string()
+    }
+
+    pub fn format_exit_code(code: i32) -> String {
+        if let Some(info) = get_exit_code_info(code as i64) {
+            return info.name.to_owned();
+        }
+
+        code.to_string()
     }
 }

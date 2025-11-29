@@ -89,10 +89,17 @@ impl ContractAbi {
         self.types.iter().find(|typ| typ.name == *name).cloned()
     }
 
-    pub fn find_type_by_opcode(&self, id: BigInt) -> Option<TypeAbi> {
+    pub fn find_type_by_opcode(&self, id: &BigInt) -> Option<TypeAbi> {
         self.types
             .iter()
-            .find(|typ| typ.opcode.is_some() && BigInt::from(typ.opcode.unwrap() as u64) == id)
+            .find(|typ| typ.opcode.is_some() && &BigInt::from(typ.opcode.unwrap() as u64) == id)
+            .cloned()
+    }
+
+    pub fn find_get_method_by_id(&self, id: &BigInt) -> Option<GetMethod> {
+        self.get_methods
+            .iter()
+            .find(|typ| &BigInt::from(typ.id) == id)
             .cloned()
     }
 }

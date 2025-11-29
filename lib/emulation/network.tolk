@@ -411,7 +411,7 @@ fun net.wallet(name: slice): Wallet {
 /// If you need to run a get method by its ID, use [Network.runGetMethodById] instead.
 fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? = null): Ret {
     val method_id = (crc16(name) & 0xffff) | 0x10000;
-    return net.runGetMethodById(addr, method_id, args);
+    return impl.runGetMethodById(addr, method_id, name, args)
 }
 
 /// Run a get method of a contract by its ID.
@@ -426,21 +426,7 @@ fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? 
 /// See [Network.runGetMethod] for more information.
 @noinline
 fun net.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, args: Args? = null): Ret {
-    if (!net.isDeployed(addr)) {
-        throw CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT;
-    }
-
-    val code = net.getDeployedCode(addr);
-    if (code == null) {
-        throw CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE;
-    }
-
-    val args_to_send = args == null ? createEmptyTuple() : args.toTuple();
-    val res = ffi.runGetMethod(addr.toCell(), code, id, Ret.typeName(), args_to_send);
-    if (res == null) {
-        Assert.fail(format1("Get method 0x{:x} failed", id))
-    }
-    return Ret.fromTuple(res);
+    return impl.runGetMethodById(addr, id, "", args)
 }
 
 /// Check if a contract with a specified address is deployed.
@@ -566,13 +552,42 @@ fun tuple.fromTuple(data: tuple): tuple {
     return data;
 }
 
+struct impl
+
+fun impl.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, name: slice, args: Args? = null): Ret {
+    if (!net.isDeployed(addr)) {
+        throw CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT;
+    }
+
+    val code = net.getDeployedCode(addr);
+    if (code == null) {
+        throw CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE;
+    }
+
+    val args_to_send = args == null ? createEmptyTuple() : args.toTuple();
+    val res = ffi.runGetMethod(addr.toCell(), code, id, name, Ret.typeName(), args_to_send);
+    if (res == null) {
+        // actual error will be processed by test framework, just halt execution
+        throw 0
+    }
+    try {
+        return Ret.fromTuple(res);
+    } catch (e) {
+        if (e == 7) {
+            Assert.fail(format3("Get method '{}' returned '{}' that cannot be deserialized to '{}'. Make sure you passed all parameters to the get method.", name, res, Ret.typeName()))
+        }
+
+        throw e
+    }
+}
+
 fun __treasuryCode(): cell asm """
     "te6cckEBBAEARQABFP8A9KQT9LzyyAsBAgEgAwIAWvLT/+1E0NP/0RK68qL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmWwAE0jD+omUe" base64>B B>boc PUSHREF
 """
 
 fun ffi.sendMessage(msg: cell, mode: int): TransactionList? asm "7 EXTCALL"
 fun ffi.sendMessageFrom(msg: cell, from: cell, mode: int): SendResultList? asm "9 EXTCALL"
-fun ffi.runGetMethod(addr: cell, code: cell, id: int, return_type: slice, args: tuple): tuple? asm "8 EXTCALL"
+fun ffi.runGetMethod(addr: cell, code: cell, id: int, name: slice, return_type: slice, args: tuple): tuple? asm "8 EXTCALL"
 fun ffi.isDeployed(addr: cell): bool asm "11 EXTCALL"
 fun ffi.getDeployedCode(addr: cell): cell? asm "12 EXTCALL"
 fun ffi.registerAddress(address: cell, name: slice): void asm "15 EXTCALL"
