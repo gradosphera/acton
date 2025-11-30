@@ -121,7 +121,7 @@ struct FileInfo {
     tree: tree_sitter::Tree,
 }
 
-pub fn get_file_dependencies(file_path: &str, include_itself: bool) -> Result<Vec<String>, String> {
+pub fn get_file_dependencies(file_path: &str, include_itself: bool) -> anyhow::Result<Vec<String>> {
     if file_path.ends_with(".boc") {
         if include_itself {
             return Ok(vec![file_path.to_owned()]);
@@ -132,12 +132,12 @@ pub fn get_file_dependencies(file_path: &str, include_itself: bool) -> Result<Ve
 
     let content = match fs::read_to_string(file_path) {
         Ok(content) => content,
-        Err(e) => return Err(format!("Failed to read file '{}': {}", file_path, e)),
+        Err(e) => anyhow::bail!("Failed to read file '{}': {}", file_path, e),
     };
 
     let tree = match tolk_parser::parser::parse(&content) {
         Ok(tree) => tree,
-        Err(e) => return Err(format!("Failed to parse file '{}': {:?}", file_path, e)),
+        Err(e) => anyhow::bail!("Failed to parse file '{}': {:?}", file_path, e),
     };
 
     let root_node = tree.root_node();

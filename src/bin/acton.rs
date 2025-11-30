@@ -6,6 +6,7 @@ use acton::commands::new::new_cmd;
 use acton::commands::script::script_cmd;
 use acton::commands::test::{ReportFormat, TestConfig, test_cmd};
 use acton::commands::test_gen::test_gen_cmd;
+use acton::commands::verify::verify_cmd;
 use acton::config::ActonConfig;
 use clap::ColorChoice;
 use clap::builder::styling::Style;
@@ -297,6 +298,36 @@ enum Commands {
             help = "Follow library references and disassemble the actual library code instead of showing library hash"
         )]
         follow_libraries: bool,
+    },
+    #[command(about = "Verify contract source code on verifier.ton.org")]
+    Verify {
+        #[arg(help = "Contract ID from Acton.toml (optional, will prompt if not provided)")]
+        contract: Option<String>,
+        #[arg(
+            long,
+            help = "Deployed contract address (optional, will prompt if not provided)"
+        )]
+        address: Option<String>,
+        #[arg(
+            long,
+            help = "Network to use (mainnet or testnet)",
+            default_value = "testnet"
+        )]
+        net: String,
+        #[arg(
+            long,
+            help = "Wallet from Acton.toml to use for verification (optional, will use default if only one wallet configured)"
+        )]
+        wallet: Option<String>,
+        #[arg(
+            long,
+            help = "Tolk compiler version to use on verifier side (optional)"
+        )]
+        compiler_version: Option<String>,
+        #[arg(long, help = "Run verification without sending the final transaction")]
+        dry_run: bool,
+        #[arg(long, help = "TonCenter API key for blockchain queries")]
+        api_key: Option<String>,
     },
 }
 
@@ -603,6 +634,29 @@ fn main() {
                 api_key,
                 net,
                 follow_libraries,
+            );
+            if let Err(err) = result {
+                eprintln!("{} {}", "Error:".red(), err);
+                process::exit(1)
+            }
+        }
+        Commands::Verify {
+            contract,
+            address,
+            net,
+            wallet,
+            compiler_version,
+            dry_run,
+            api_key,
+        } => {
+            let result = verify_cmd(
+                contract,
+                address,
+                net,
+                wallet,
+                compiler_version,
+                dry_run,
+                api_key,
             );
             if let Err(err) = result {
                 eprintln!("{} {}", "Error:".red(), err);

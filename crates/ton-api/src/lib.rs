@@ -181,9 +181,15 @@ impl TonApiClient {
         let result = self.run_get_method(address, "seqno", vec![])?;
 
         if let Some(first) = result.stack.first() {
-            if first.len() == 2 && first[0] == "num" {
-                let seqno = u32::from_str_radix(first[1].trim_start_matches("0x"), 16)?;
-                return Ok(seqno);
+            if first.len() == 2 {
+                if let (StackItem::Str(type_str), StackItem::Str(value_str)) =
+                    (&first[0], &first[1])
+                {
+                    if type_str == "num" {
+                        let seqno = u32::from_str_radix(value_str.trim_start_matches("0x"), 16)?;
+                        return Ok(seqno);
+                    }
+                }
             }
         }
 
@@ -336,8 +342,15 @@ pub struct AccountState {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum StackItem {
+    Str(String),
+    Obj(serde_json::Value),
+}
+
+#[derive(Deserialize, Debug)]
 pub struct GetMethodResult {
-    pub stack: Vec<Vec<String>>,
+    pub stack: Vec<Vec<StackItem>>,
 }
 
 #[derive(Deserialize, Debug)]
