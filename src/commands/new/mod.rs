@@ -30,6 +30,8 @@ Session.vim
 .nvim/
 .emacs/
 .helix/
+
+.env
 ";
 
 pub fn new_cmd(path: &str) -> anyhow::Result<()> {
