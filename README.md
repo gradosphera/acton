@@ -44,34 +44,11 @@ See [Documentation](https://i582.github.io/acton/test-runner/your-first-unit-tes
 
 ## Scripts
 
-Execute Tolk scripts:
-
-```
-acton script script.tolk
-```
-
-Execute standalone Tolk scripts with a `main()` function:
-
-```tolk
-import "lib/io"
-
-fun main() {
-    println("Hello, World!");
-    println("This is a Tolk script!");
-}
-```
-
-Scripts exit with the same exit code as the `main()` function finishes.
+See [Documentation](https://i582.github.io/acton/scripting/overview/).
 
 ## Compilation
 
-Compile Tolk files to TVM bytecode:
-
-```
-acton compile file.tolk
-```
-
-The command outputs the compiled bytecode in base64 format and its hash.
+See [Documentation](https://i582.github.io/acton/compile/).
 
 ## Development
 
