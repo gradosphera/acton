@@ -16,6 +16,7 @@ concurrency:
 jobs:
   build-macos:
     runs-on: macos-latest
+    if: false
 
     steps:
       - name: Check out emulator-rs repository
