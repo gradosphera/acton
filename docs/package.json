@@ -46,6 +46,7 @@
     "useTabs": false
   },
   "dependencies": {
+    "@expressive-code/plugin-collapsible-sections": "^0.41.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   }

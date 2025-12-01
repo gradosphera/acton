@@ -10,6 +10,7 @@ import remarkHeadingId from "remark-custom-heading-id"
 import {rehypeHeadingIds} from "@astrojs/markdown-remark"
 import rehypeAutolinkHeadings from "rehype-autolink-headings"
 import starlightLinksValidator from "starlight-links-validator"
+import {pluginCollapsibleSections} from '@expressive-code/plugin-collapsible-sections';
 
 import react from "@astrojs/react"
 
@@ -112,6 +113,9 @@ export default defineConfig({
             () => JSON.parse(fs.readFileSync("grammars/grammar-tasm.json", "utf-8")),
           ],
         },
+        plugins: [
+          pluginCollapsibleSections(),
+        ],
       },
       customCss: [
         // To adjust Starlight colors and styles
@@ -171,6 +175,14 @@ export default defineConfig({
           items: [
             {slug: "build-system/overview", label: "Overview"},
             {slug: "build-system/configuration-reference", label: "Reference"},
+          ],
+        },
+        {
+          label: "Scripting",
+          items: [
+            {slug: "scripting/overview", label: "Overview"},
+            {slug: "scripting/setup-wallets", label: "Wallet Setup"},
+            {slug: "scripting/blockchain-interaction", label: "Blockchain Interaction"},
           ],
         },
       ],

@@ -223,7 +223,11 @@ enum Commands {
         api_key: Option<String>,
 
         // Broadcasting
-        #[arg(long, help = "Enable broadcasting mode", help_heading = "Broadcasting")]
+        #[arg(
+            long,
+            help = "Send transactions to the blockchain instead of emulating them",
+            help_heading = "Broadcasting"
+        )]
         broadcast: bool,
 
         #[arg(
