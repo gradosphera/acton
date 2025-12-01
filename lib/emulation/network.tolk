@@ -153,6 +153,56 @@ fun SendResultList.at(self, index: int): SendResult {
     return SendResult.fromTuple(tuple);
 }
 
+/// Wait for the transaction to be applied on the blockchain.
+///
+/// This method is useful when broadcasting transactions to the real network.
+/// It polls the network until the transaction is applied or the maximum number of attempts is reached.
+///
+/// In emulation mode (without `--broadcast`), this method returns immediately with `true`.
+///
+/// Returns `true` if transaction is found and `false` otherwise.
+///
+/// Example:
+/// ```
+/// val result = net.send(wallet.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val success = result.wait();
+/// if (success) {
+///     println("Transaction applied successfully");
+/// }
+/// ```
+///
+/// Example with custom parameters:
+/// ```
+/// val result = net.send(wallet.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val success = result.wait(true, 30, 3000); // quiet mode, 30 attempts, 3 seconds delay
+/// ```
+fun SendResultList.wait(
+    self,
+    quiet: bool = false,
+    attempts: int = 20,
+    sleepDuration: int = 2000,
+): bool {
+    if (!net.isBroadcasting()) {
+        // in emulation mode we don't need to wait for anything
+        return true
+    }
+
+    if (self.size() == 0) {
+        // unexpected
+        return false
+    }
+
+    val res = self.at(0);
+    val tx = res.tx.load();
+    val in_msg_cell = tx.messages.load().in_msg.unwrap();
+    val in_msg = in_msg_cell.load();
+    var body = in_msg.body;
+    body.skipBits(1); // skip Either bit
+    val body_hash = body.hash();
+    val body_hash_slice = beginCell().storeUint(body_hash, 256).toSlice();
+    return net.waitForTransaction(in_msg.info.dest, body_hash_slice, quiet, attempts, sleepDuration)
+}
+
 /// Represents a set of parameters to search for a transaction in the transaction list.
 struct SearchParams {
     /// Destination address of the transaction.
@@ -359,6 +409,24 @@ fun net.wallet(name: slice): Wallet {
     }
 }
 
+/// Check if the script is running in broadcasting mode.
+///
+/// Returns `true` if the script was run with `--broadcast` flag, `false` otherwise.
+///
+/// This is useful for writing scripts that behave differently in emulation and broadcasting modes.
+///
+/// Example:
+/// ```
+/// if (net.isBroadcasting()) {
+///     println("Running on real network");
+/// } else {
+///     println("Running in emulation mode");
+/// }
+/// ```
+fun net.isBroadcasting(): bool {
+    return ffi.isBroadcasting()
+}
+
 /// Run a get method of a contract by its name.
 ///
 /// Imagine you have the following get method in the contract:
@@ -453,16 +521,18 @@ fun net.getDeployedCode(addr: address): cell? {
 /// val messageHash = "abc123...";
 /// net.waitForTransaction(wallet.address, messageHash, 20, 2000);
 /// ```
+///
+/// See [SendResultList.wait] for high-level API.
 fun net.waitForTransaction(
     addr: address,
-    messageHash: slice,
+    messageBodyHash: slice,
     quiet: bool = false,
     attempts: int = 20,
     sleepDuration: int = 2000,
 ): bool {
     return ffi.waitForTransaction(
         addr.toCell(),
-        messageHash.toCell(),
+        messageBodyHash.toCell(),
         quiet,
         attempts,
         sleepDuration
@@ -627,4 +697,4 @@ fun ffi.getAccountState(addr: cell): cell? asm "17 EXTCALL"
 fun ffi.loadLibrary(hash: slice): cell? asm "21 EXTCALL"
 fun ffi.isBroadcasting(): bool asm "23 EXTCALL"
 fun ffi.getWalletByName(name: slice): cell? asm "24 EXTCALL"
-fun ffi.waitForTransaction(addr: cell, messageHash: cell, quiet: bool, attempts: int, sleepDuration: int): bool asm "25 EXTCALL"
+fun ffi.waitForTransaction(addr: cell, messageBodyHash: cell, quiet: bool, attempts: int, sleepDuration: int): bool asm "25 EXTCALL"

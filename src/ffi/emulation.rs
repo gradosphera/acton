@@ -2,7 +2,6 @@ use crate::context::{AssertFailure, Context, FailAssertFailure, KnownAddress, Wa
 use crate::debugger::debug_context::StepMode;
 use crate::ffi::assert::process_txs_and_search_params;
 use crate::formatter::FormatterContext;
-use anyhow::anyhow;
 use base64::Engine;
 use crc::{CRC_16_XMODEM, Crc};
 use emulator::config::DEFAULT_CONFIG;
@@ -30,11 +29,12 @@ use tonlib_core::tlb_types::block::msg_address::{MsgAddrIntStd, MsgAddress};
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Load, Store};
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Lazy, Load, Store};
 use tycho_types::dict::Dict;
 use tycho_types::models::{
-    AccountState, AccountStatus, ComputePhase, IntAddr, LibDescr, MsgInfo, RelaxedMessage,
-    RelaxedMsgInfo, ShardAccount, Transaction, TxInfo,
+    AccountState, AccountStatus, ComputePhase, ComputePhaseSkipReason, HashUpdate, IntAddr,
+    LibDescr, MsgInfo, OrdinaryTxInfo, RelaxedMessage, RelaxedMsgInfo, ShardAccount,
+    SkippedComputePhase, Transaction, TxInfo,
 };
 
 extension!(build in (Context) with (path: String, name: String) using build_impl);
@@ -238,8 +238,63 @@ fn send_message_from_impl(
     };
 
     if let Some(wallet) = ctx.env.find_wallet_by_address(&src_addr) {
-        let result = send_wallet_message(stack, message, wallet, &ctx.network);
+        let result = send_wallet_message(&message, wallet, &ctx.network);
         try_ctx!(ctx, result, "Failed to send message to real network: {}");
+
+        // Add pseudo transaction to the result list to wait on it
+        let tx = Transaction {
+            account: Default::default(),
+            lt: 0,
+            prev_trans_hash: Default::default(),
+            prev_trans_lt: 0,
+            now: 0,
+            out_msg_count: Default::default(),
+            orig_status: AccountStatus::Uninit,
+            end_status: AccountStatus::Uninit,
+            in_msg: Some(
+                Boc::decode_hex(
+                    message
+                        .to_boc_hex(false)
+                        .expect("Unreachable, cannot encode valid message cell"),
+                )
+                .expect("Unreachable, cannot decode/encode message cell"),
+            ),
+            out_msgs: Default::default(),
+            total_fees: Default::default(),
+            state_update: Lazy::new(&HashUpdate {
+                old: Default::default(),
+                new: Default::default(),
+            })
+            .expect("Invalid state update"),
+            info: Lazy::new(&TxInfo::Ordinary(OrdinaryTxInfo {
+                credit_first: false,
+                storage_phase: None,
+                credit_phase: None,
+                compute_phase: ComputePhase::Skipped(SkippedComputePhase {
+                    reason: ComputePhaseSkipReason::NoState,
+                }),
+                action_phase: None,
+                aborted: false,
+                bounce_phase: None,
+                destroyed: false,
+            }))
+            .expect("Invalid transaction info"),
+        };
+
+        let tx_cell = tx.to_cell();
+        let tx_cell = ArcCell::from_boc_hex(&Boc::encode_hex(tx_cell))
+            .expect("Unreachable, cannot decode/encode cell");
+
+        let transaction_cells = vec![TupleItem::Tuple(Tuple(vec![
+            TupleItem::Cell(tx_cell),
+            TupleItem::Tuple(Tuple::empty()),
+            TupleItem::Null,
+            TupleItem::Cell(ArcCell::default()),
+            TupleItem::Tuple(Tuple::empty()),
+            TupleItem::Int(BigInt::from(0)),
+            TupleItem::Tuple(Tuple::empty()),
+        ]))];
+        stack.push(TupleItem::Tuple(Tuple(transaction_cells)));
         return;
     }
 
@@ -346,27 +401,22 @@ fn send_message_from_impl(
     stack.push(TupleItem::Tuple(Tuple(transaction_cells)));
 }
 
-fn send_wallet_message(
-    stack: &mut Tuple,
-    message: ArcCell,
-    wallet: Wallet,
-    network: &str,
-) -> anyhow::Result<()> {
+fn send_wallet_message(message: &ArcCell, wallet: Wallet, network: &str) -> anyhow::Result<()> {
     let expired_at_time = std::time::SystemTime::now() + Duration::from_secs(600);
     let expire_at = expired_at_time
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs() as u32;
 
     let seqno = wallet.seqno(network)?;
-    let external = wallet
-        .wallet
-        .create_external_msg(expire_at, seqno, false, vec![message])?;
+    let external =
+        wallet
+            .wallet
+            .create_external_msg(expire_at, seqno, false, vec![message.clone()])?;
 
     let network = Network::from_str(network)?;
     let client = TonApiClient::new(network, None);
     client.send_boc(&external.to_boc_b64(false)?)?;
 
-    stack.push(TupleItem::Tuple(Tuple(vec![])));
     Ok(())
 }
 
@@ -1217,7 +1267,7 @@ fn wait_for_transaction_impl(
             }
         };
 
-        for tx in txs.iter().rev() {
+        for tx in txs {
             if let Some(in_msg) = &tx.in_msg
                 && let Some(body_hash) = &in_msg.body_hash
             {
@@ -1229,12 +1279,11 @@ fn wait_for_transaction_impl(
 
                 if msg_hash_bytes == ext_message_hash_bytes {
                     if !quiet {
-                        println!(
-                            "Transaction {} successfully applied!",
-                            HashBytes::from_slice(ext_message_hash_bytes)
-                                .to_string()
-                                .dimmed()
-                        );
+                        let hex = base64::engine::general_purpose::STANDARD
+                            .decode(tx.transaction_id.hash.clone())
+                            .map(hex::encode)
+                            .unwrap_or(tx.transaction_id.hash.clone());
+                        println!("Transaction {} successfully applied!", hex.dimmed());
                     }
                     stack.push_bool(true);
                     return;
