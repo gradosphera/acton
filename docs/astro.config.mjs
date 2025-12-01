@@ -156,18 +156,13 @@ export default defineConfig({
         {
           label: "Test Runner",
           items: [
-            {
-              label: "Tests",
-              items: [
-                {slug: "test-runner/tests/your-first-unit-test-in-tolk"},
-                {slug: "test-runner/tests/your-first-integration-test-in-tolk"},
-                {slug: "test-runner/tests/test-attributes"},
-                {slug: "test-runner/tests/test-configuration"},
-                {slug: "test-runner/tests/fork-testing"},
-                {slug: "test-runner/tests/code-coverage"},
-                {slug: "test-runner/tests/cookbook"},
-              ],
-            },
+            {slug: "test-runner/your-first-unit-test-in-tolk"},
+            {slug: "test-runner/your-first-integration-test-in-tolk"},
+            {slug: "test-runner/test-attributes"},
+            {slug: "test-runner/test-configuration"},
+            {slug: "test-runner/fork-testing"},
+            {slug: "test-runner/code-coverage"},
+            {slug: "test-runner/cookbook"},
           ],
         },
         {

@@ -40,7 +40,7 @@ target/debug/acton test foo_test.tolk
 
 ## Testing
 
-See [Documentation](https://i582.github.io/acton/test-runner/tests/your-first-unit-test-in-tolk/).
+See [Documentation](https://i582.github.io/acton/test-runner/your-first-unit-test-in-tolk/).
 
 ## Scripts
 
@@ -84,7 +84,7 @@ cargo test --test integration_test
 Run debugger tests:
 
 ```
-cargo test --test debug_test -- --test-threads 1 
+cargo test --test debug_test -- --test-threads 1
 ```
 
 To update snapshots set `SNAPSHOTS=overwrite`.
