@@ -2980,8 +2980,10 @@ __metadata:
     fumadocs-mdx: "npm:^14.0.4"
     fumadocs-ui: "npm:^16.2.2"
     geist: "npm:^1.5.1"
+    gsap: "npm:^3.13.0"
     lucide-react: "npm:^0.555.0"
     next: "npm:16.0.6"
+    ogl: "npm:^1.0.11"
     react: "npm:19.2.0"
     react-dom: "npm:19.2.0"
     remark-directive: "npm:^4.0.0"
@@ -4104,6 +4106,13 @@ __metadata:
   version: 1.4.0
   resolution: "graphemer@npm:1.4.0"
   checksum: 10c0/e951259d8cd2e0d196c72ec711add7115d42eb9a8146c8eeda5b8d3ac91e5dd816b9cd68920726d9fd4490368e7ed86e9c423f40db87e2d8dfafa00fa17c3a31
+  languageName: node
+  linkType: hard
+
+"gsap@npm:^3.13.0":
+  version: 3.13.0
+  resolution: "gsap@npm:3.13.0"
+  checksum: 10c0/a42dd2e02467a4abe96409aaf6cd0e5d697c72e05ec13c18c2271330493983aa63cc717c9dd0740fda2f884d0f56c7b98fc18b13500f0c1da94864985840da7c
   languageName: node
   linkType: hard
 
@@ -5927,6 +5936,13 @@ __metadata:
     define-properties: "npm:^1.2.1"
     es-object-atoms: "npm:^1.0.0"
   checksum: 10c0/3c47814fdc64842ae3d5a74bc9d06bdd8d21563c04d9939bf6716a9c00596a4ebc342552f8934013d1ec991c74e3671b26710a0c51815f0b603795605ab6b2c9
+  languageName: node
+  linkType: hard
+
+"ogl@npm:^1.0.11":
+  version: 1.0.11
+  resolution: "ogl@npm:1.0.11"
+  checksum: 10c0/93cf2195da1c06a190c30cb8664231dd2d5fb06c5120d517754e11a22ab37fcb001361f9d2163dbac9f754a2aa2beb59ba82df37f972d6a674d6ebf9a2a089b8
   languageName: node
   linkType: hard
 

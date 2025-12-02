@@ -1,4 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority';
+import { cn } from '@/lib/cn';
 
 const variants = {
   primary: 'bg-fd-primary text-fd-primary-foreground hover:bg-fd-primary/80',
@@ -13,10 +14,10 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: variants,
-      // fumadocs use `color` instead of `variant`
       color: variants,
       size: {
         sm: 'gap-1 px-2 py-1.5 text-xs',
+        lg: 'gap-2 px-6 py-3 text-base',
         icon: 'p-1.5 [&_svg]:size-5',
         'icon-sm': 'p-1.5 [&_svg]:size-4.5',
         'icon-xs': 'p-1 [&_svg]:size-4',
@@ -25,4 +26,15 @@ export const buttonVariants = cva(
   },
 );
 
-export type ButtonProps = VariantProps<typeof buttonVariants>;
+export type ButtonProps = VariantProps<typeof buttonVariants> & {
+  children?: React.ReactNode;
+  className?: string;
+};
+
+export function Button({ children, variant, color, size, className }: ButtonProps) {
+  return (
+    <button className={cn(buttonVariants({ variant, color, size }), className)}>
+      {children}
+    </button>
+  );
+}
