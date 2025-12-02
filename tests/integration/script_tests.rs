@@ -273,3 +273,121 @@ fn test_script_output_snapshot() {
         .code(0)
         .assert_snapshot_matches("integration/snapshots/test_script_output_snapshot.stdout.txt");
 }
+
+// ========================================
+// Additional Error Handling Tests
+// ========================================
+
+#[test]
+fn test_script_invalid_network() {
+    let project = ProjectBuilder::new("script-invalid-net")
+        .script_file(
+            "test",
+            r#"
+            import "../../lib/io"
+
+            fun main() {
+                println("Test");
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/test.tolk")
+        .with_net("invalid-network-name")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_script_invalid_network.stderr.txt",
+        );
+}
+
+#[test]
+fn test_script_empty_script_file() {
+    let project = ProjectBuilder::new("script-empty")
+        .script_file("empty", "")
+        .build();
+
+    project
+        .acton()
+        .script("scripts/empty.tolk")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_script_empty_script_file.stderr.txt",
+        );
+}
+
+#[test]
+fn test_script_no_main_function() {
+    let project = ProjectBuilder::new("script-no-main")
+        .script_file(
+            "no_main",
+            r#"
+            import "../../lib/io"
+
+            fun not_main() {
+                println("This is not main!");
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/no_main.tolk")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_script_no_main_function.stderr.txt",
+        );
+}
+
+#[test]
+fn test_script_empty_path() {
+    let project = ProjectBuilder::new("script-empty-path").build();
+
+    project
+        .acton()
+        .script("")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches("integration/snapshots/test_script_empty_path.stderr.txt");
+}
+
+#[test]
+fn test_script_file_without_read_permission() {
+    let project = ProjectBuilder::new("script-no-read")
+        .script_file(
+            "secret",
+            r#"
+            import "../../lib/io"
+
+            fun main() {
+                println("Secret script");
+            }
+        "#,
+        )
+        .build();
+
+    // Make the file unreadable (on Unix systems)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let file_path = project.path().join("scripts/secret.tolk");
+        let mut perms = fs::metadata(&file_path).unwrap().permissions();
+        perms.set_mode(0o000); // no permissions
+        fs::set_permissions(&file_path, perms).unwrap();
+    }
+
+    project
+        .acton()
+        .script("scripts/secret.tolk")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_script_file_without_read_permission.stderr.txt",
+        );
+}

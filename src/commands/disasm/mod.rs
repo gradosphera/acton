@@ -1,4 +1,5 @@
 use crate::commands::common::error_fmt;
+use anyhow::anyhow;
 use owo_colors::OwoColorize;
 use std::fs;
 use std::path::Path;
@@ -35,13 +36,21 @@ pub fn disasm_cmd(
             anyhow::bail!(error_fmt::file_not_found(&path));
         }
 
-        let metadata = fs::metadata(&path)?;
+        let metadata = fs::metadata(&path).map_err(|err| {
+            anyhow!(color_print::cformat!(
+                "Cannot access <yellow>{path}</>: {err}"
+            ))
+        })?;
         if !metadata.is_file() {
             anyhow::bail!("{} is not a file", path.yellow());
         }
 
         // BoC file can be binary file or file with hex/base64 encoded data
-        let binary_data = fs::read(&path)?;
+        let binary_data = fs::read(&path).map_err(|err| {
+            anyhow!(color_print::cformat!(
+                "Cannot access <yellow>{path}</>: {err}"
+            ))
+        })?;
         if let Ok(cell) = Boc::decode_base64(binary_data.trim_ascii()) {
             Boc::encode_hex(cell)
         } else if let Ok(cell) = Boc::decode_hex(binary_data.trim_ascii()) {

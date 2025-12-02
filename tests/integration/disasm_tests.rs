@@ -502,3 +502,43 @@ fn test_disasm_empty_string() {
             "integration/snapshots/test_disasm_empty_string.stderr.txt",
         );
 }
+
+#[test]
+fn test_disasm_file_without_read_permission() {
+    let project = ProjectBuilder::new("disasm-no-read")
+        .raw_file("secret.boc", "some boc data")
+        .build();
+
+    // Make the file unreadable (on Unix systems)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let file_path = project.path().join("secret.boc");
+        let mut perms = fs::metadata(&file_path).unwrap().permissions();
+        perms.set_mode(0o000); // no permissions
+        fs::set_permissions(&file_path, perms).unwrap();
+    }
+
+    project
+        .acton()
+        .disasm_file("secret.boc")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_disasm_file_without_read_permission.stderr.txt",
+        );
+}
+
+#[test]
+fn test_disasm_empty_file_path() {
+    let project = ProjectBuilder::new("disasm-empty-path").build();
+
+    project
+        .acton()
+        .disasm_file("")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_disasm_empty_file_path.stderr.txt",
+        );
+}

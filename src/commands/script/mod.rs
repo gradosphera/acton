@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use tolkc::source_map::SourceMap;
+use ton_api::Network;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
@@ -57,7 +58,13 @@ pub fn script_cmd(
         anyhow::bail!("Script file must end with {}", ".tolk".yellow());
     }
 
-    let content = fs::read_to_string(path)?;
+    Network::from_str(&net)?; // validate network
+
+    let content = fs::read_to_string(path).map_err(|err| {
+        anyhow!(color_print::cformat!(
+            "Cannot access <yellow>{path}</>: {err}"
+        ))
+    })?;
     run_script_file(
         path, &content, debug, debug_port, fork_net, api_key, broadcast, net,
     )
