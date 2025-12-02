@@ -555,6 +555,8 @@ impl Project {
             compile_source_map: None,
             test_reporters: Vec::new(),
             junit_merge: false,
+            test_exclude_patterns: Vec::new(),
+            test_include_patterns: Vec::new(),
         }
     }
 
@@ -588,6 +590,8 @@ pub struct ActonCommand {
     pub(crate) compile_source_map: Option<String>,
     pub(crate) test_reporters: Vec<String>,
     pub(crate) junit_merge: bool,
+    pub(crate) test_exclude_patterns: Vec<String>,
+    pub(crate) test_include_patterns: Vec<String>,
 }
 
 impl ActonCommand {
@@ -776,6 +780,16 @@ impl ActonCommand {
         self
     }
 
+    pub fn exclude_pattern(mut self, pattern: &str) -> Self {
+        self.test_exclude_patterns.push(pattern.to_string());
+        self
+    }
+
+    pub fn include_pattern(mut self, pattern: &str) -> Self {
+        self.test_include_patterns.push(pattern.to_string());
+        self
+    }
+
     /// Enable backtrace output
     ///
     /// # Examples
@@ -882,6 +896,14 @@ impl ActonCommand {
 
         if self.junit_merge {
             self.cmd = self.cmd.arg("--junit-merge");
+        }
+
+        for pattern in &self.test_exclude_patterns {
+            self.cmd = self.cmd.arg("--exclude").arg(pattern);
+        }
+
+        for pattern in &self.test_include_patterns {
+            self.cmd = self.cmd.arg("--include").arg(pattern);
         }
 
         if let Some(contract) = self.build_contract {

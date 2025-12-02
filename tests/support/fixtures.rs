@@ -124,6 +124,8 @@ impl FixtureProject {
             compile_source_map: None,
             test_reporters: vec![],
             junit_merge: false,
+            test_exclude_patterns: vec![],
+            test_include_patterns: vec![],
         }
     }
 

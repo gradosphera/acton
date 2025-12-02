@@ -397,7 +397,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
                 }
             }
             Err(err) => {
-                println!("{} {}", "Error:".red(), err);
+                eprintln!("{} {}", "Error:".red(), err);
                 total_failed += 1;
             }
         }
@@ -586,7 +586,7 @@ fn run_tests_for_file(
     config: &TestConfig,
     file_cache: &mut FileBuildCache,
     reporter_manager: &mut ReporterManager,
-) -> Result<TestStats, anyhow::Error> {
+) -> anyhow::Result<TestStats> {
     let content = match fs::read_to_string(file) {
         Ok(content) => content,
         Err(err) => {
@@ -623,16 +623,16 @@ fn run_tests_for_file(
                 &code_cell,
                 &abi,
                 &result.source_map.unwrap_or(Default::default()),
-            );
+            )?;
             Ok(stats)
         }
         tolkc::CompilerResult::Error(error) => {
             let _ = fs::remove_file(&tmp_test_filename);
             let normalized_filepath = error.message.replace(&tmp_test_filename, file);
             let trimmed_message = normalized_filepath.trim();
-            Err(anyhow!(trimmed_message.to_string()))
+            anyhow::bail!(trimmed_message.to_string())
         }
-    }?
+    }
 }
 
 fn run_file_tests(
@@ -647,14 +647,9 @@ fn run_file_tests(
         let regex = match Regex::new(pattern) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("Invalid regex pattern '{pattern}': {e}");
-                return Ok(TestStats {
-                    passed: 0,
-                    failed: 0,
-                    skipped: 0,
-                    todo: 0,
-                    coverage: None,
-                });
+                anyhow::bail!(color_print::cformat!(
+                    "Invalid regex pattern <yellow>{pattern}</>: {e}"
+                ));
             }
         };
         tests

@@ -480,3 +480,43 @@ fn test_compile_source_map_write_error() {
             "integration/snapshots/test_compile_source_map_write_error.stderr.txt",
         );
 }
+
+#[test]
+fn test_compile_invalid_boc_output_path() {
+    let project = ProjectBuilder::new("compile-invalid-boc-path")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    // Create a directory where we want to create boc file
+    fs::create_dir(project.path().join("output.boc")).expect("Create dir blocking boc output");
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_boc_output("output.boc")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_compile_invalid_boc_output_path.stderr.txt",
+        );
+}
+
+#[test]
+fn test_compile_invalid_fift_output_path() {
+    let project = ProjectBuilder::new("compile-invalid-fift-path")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    // Create a directory where we want to create fift file
+    fs::create_dir(project.path().join("output.fif")).expect("Create dir blocking fift output");
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_fift_output("output.fif")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_compile_invalid_fift_output_path.stderr.txt",
+        );
+}

@@ -154,3 +154,177 @@ fn test_no_arg_get_method_call_2() {
         .failure()
         .assert_snapshot_matches("integration/snapshots/test_no_arg_get_method_call_2.stdout.txt");
 }
+
+#[test]
+fn test_test_file_not_found() {
+    let project = ProjectBuilder::new("test-not-found").build();
+
+    project
+        .acton()
+        .test()
+        .path("nonexistent_test.tolk")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_test_file_not_found.stderr.txt",
+        );
+}
+
+#[test]
+fn test_test_directory_not_found() {
+    let project = ProjectBuilder::new("test-dir-not-found").build();
+
+    project
+        .acton()
+        .test()
+        .path("nonexistent_directory")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_test_directory_not_found.stderr.txt",
+        );
+}
+
+#[test]
+fn test_test_invalid_file_extension() {
+    let project = ProjectBuilder::new("test-invalid-ext")
+        .contract("simple", SIMPLE_CONTRACT)
+        .raw_file("invalid.txt", "some content")
+        .build();
+
+    project
+        .acton()
+        .test()
+        .path("invalid.txt")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_test_invalid_file_extension.stderr.txt",
+        );
+}
+
+#[test]
+fn test_test_invalid_filter_regex() {
+    let project = ProjectBuilder::new("test-invalid-regex")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            get fun `test-foo`() {
+                // test
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .filter("[invalid regex")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_test_invalid_filter_regex.stderr.txt",
+        );
+}
+
+#[test]
+fn test_test_invalid_exclude_pattern() {
+    let project = ProjectBuilder::new("test-invalid-exclude")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            get fun `test-foo`() {
+                // test
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .exclude_pattern("[invalid glob")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_test_invalid_exclude_pattern.stderr.txt",
+        );
+}
+
+#[test]
+fn test_test_invalid_include_pattern() {
+    let project = ProjectBuilder::new("test-invalid-include")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            get fun `test-foo`() {
+                // test
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .include_pattern("[invalid glob")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_test_invalid_include_pattern.stderr.txt",
+        );
+}
+
+#[test]
+fn test_test_invalid_coverage_format() {
+    let project = ProjectBuilder::new("test-invalid-coverage-format")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            get fun `test-foo`() {
+                // test
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("invalid-format")
+        .run()
+        .success()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_test_invalid_coverage_format.stderr.txt",
+        );
+}
+
+#[test]
+fn test_test_invalid_reporter() {
+    let project = ProjectBuilder::new("test-invalid-reporter")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            get fun `test-foo`() {
+                // test
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .with_reporter("invalid-reporter")
+        .run()
+        .success()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_test_invalid_reporter.stderr.txt",
+        );
+}
