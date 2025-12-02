@@ -1,0 +1,16 @@
+{
+  "pages": [
+    "--- Getting started ---",
+    "installation.mdx",
+    "quickstart.mdx",
+    "--- First steps ---",
+    "init-project.mdx",
+    "deploy-contract.mdx",
+    "verify-contract.mdx",
+    "--- Documentation ---",
+    "commands",
+    "build-system",
+    "test-runner",
+    "scripting"
+  ]
+}

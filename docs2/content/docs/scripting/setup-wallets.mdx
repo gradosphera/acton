@@ -1,0 +1,175 @@
+---
+title: "Setting up wallets"
+description: "Learn how to configure wallets for use in scripts and contract verification"
+---
+
+Wallets are essential for interacting with the real blockchain in Acton. They enable you to deploy contracts, send transactions, and verify smart contract source code. This guide walks you through configuring wallets in your project.
+
+**What you'll learn:**
+- How to define wallets in configuration
+- Different ways to provide mnemonic phrases
+- Wallet version selection
+- Address verification for safety
+
+## Wallet Configuration
+
+Wallets are defined in the `Acton.toml` configuration file under the `[wallets]` section. Each wallet gets a unique name that you'll use to reference it in scripts and verification commands.
+
+Here's a basic wallet configuration:
+
+```toml title="Acton.toml"
+[wallets.deployer]
+kind = "v5r1"
+workchain = 0
+keys = { mnemonic-env = "WALLET_MNEMONIC" }
+```
+
+This configuration creates a wallet named `deployer` that:
+- Uses the V5R1 wallet version
+- Operates in workchain 0 (the basechain)
+- Reads the mnemonic from the `WALLET_MNEMONIC` environment variable
+
+## Providing Mnemonic Phrases
+
+Acton supports two secure methods for providing wallet mnemonics. Never hardcode mnemonics directly in your configuration files.
+
+### Environment Variables (Recommended)
+
+The recommended approach is to store mnemonics in environment variables:
+
+```toml title="Acton.toml"
+[wallets.deployer]
+kind = "v5r1"
+workchain = 0
+keys = { mnemonic-env = "WALLET_MNEMONIC" }
+```
+
+Set the environment variable before running your script:
+
+```bash
+export WALLET_MNEMONIC="word1 word2 word3 ... word24"
+acton script deploy.tolk --broadcast
+```
+
+Or use `.env` file:
+
+```text title=".env"
+WALLET_MNEMONIC="word1 word2 word3 ... word24"
+```
+
+<Callout type="error">
+Never commit your `.env` file to version control. Always add it to your `.gitignore` file.
+</Callout>
+
+### File References
+
+Alternatively, store the mnemonic in a file and reference it:
+
+```toml title="Acton.toml"
+[wallets.deployer]
+kind = "v5r1"
+workchain = 0
+keys = { mnemonic-file = ".secrets/deployer.txt" }
+```
+
+Make sure to add the secrets directory to `.gitignore`:
+
+```txt title=".gitignore"
+.secrets/
+```
+
+## Wallet Versions
+
+Acton supports all standard TON wallet versions. Choose the version that matches your existing wallet:
+
+```toml
+kind = "v5r1"  # Wallet V5R1 (newest, recommended)
+kind = "v4r2"  # Wallet V4R2 (widely supported)
+kind = "v3r2"  # Wallet V3R2 (legacy)
+```
+
+Supported versions include: `v1r1`, `v1r2`, `v1r3`, `v2r1`, `v2r2`, `v3r1`, `v3r2`, `v4r1`, `v4r2`, `v5r1`, and highload variants (`highloadv1r1`, `highloadv1r2`, `highloadv2`, `highloadv2r1`, `highloadv2r2`).
+
+<Callout type="info">
+Use the same wallet version (`kind`) as your actual wallet. Using a different version will generate a different address, even with the same mnemonic.
+</Callout>
+
+## Address Safety Checks
+
+To prevent accidental use of wrong wallets, configure expected addresses:
+
+```toml title="Acton.toml"
+[wallets.deployer]
+kind = "v5r1"
+workchain = 0
+keys = { mnemonic-env = "WALLET_MNEMONIC" }
+
+[wallets.deployer.expected]
+address-testnet = "0QD36XRy1ISfSB8zmlSQKBsa5bmeixAWwD6vUUhOXXur8ZLd"
+address-mainnet = "UQD36XRy1ISfSB8zmlSQKBsa5bmeixAWwD6vUUhOXXur8XSS"
+```
+
+Before executing any operations, Acton verifies that the wallet derived from your mnemonic matches the expected address. If they don't match, you'll get a detailed error.
+
+This safety check helps catch configuration mistakes before spending real TON.
+
+## Multiple Wallets
+
+You can configure multiple wallets for different purposes:
+
+```toml title="Acton.toml"
+[wallets.deployer]
+kind = "v5r1"
+workchain = 0
+keys = { mnemonic-env = "DEPLOYER_MNEMONIC" }
+
+[wallets.deployer.expected]
+address-testnet = "0QD36XRy1ISfSB8zmlSQKBsa5bmeixAWwD6vUUhOXXur8ZLd"
+
+[wallets.admin]
+kind = "v4r2"
+workchain = 0
+keys = { mnemonic-env = "ADMIN_MNEMONIC" }
+
+[wallets.admin.expected]
+address-testnet = "0QABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr8XYZ"
+```
+
+## Using Wallets in Scripts
+
+Once configured, reference wallets by name in your scripts using `net.wallet()`:
+
+```tolk title="deploy.tolk"
+import "lib/emulation/network"
+import "lib/io"
+
+fun main() {
+    val deployer = net.wallet("deployer");
+    println1("Deployer address: {}", deployer.address);
+
+    // Use deployer.address for contract deployment
+    // ...
+}
+```
+
+Run the script with the `--broadcast` flag to use the real wallet:
+
+```bash
+acton script deploy.tolk --broadcast
+```
+
+Without `--broadcast`, `net.wallet()` creates a local test wallet with the same name, perfect for testing scripts locally before running them on the real blockchain.
+
+## Security Best Practices
+
+1. **Never commit mnemonics**: Always use environment variables or files listed in `.gitignore`
+2. **Use expected addresses**: Configure `expected.address-testnet` and `expected.address-mainnet` to catch configuration errors
+3. **Test first**: Run scripts without `--broadcast` to test locally before interacting with the real blockchain
+4. **Separate wallets**: Use different wallets for testnet and mainnet operations
+5. **Start with testnet**: Always test your scripts on testnet before running them on mainnet
+
+## Next Steps
+
+- Read the [script command reference](/acton/script/) for all available options
+- Learn about [blockchain interaction](/acton/scripting/blockchain-interaction/) to deploy contracts and send transactions
+- Explore [contract verification](/acton/verify/) to verify your deployed contracts

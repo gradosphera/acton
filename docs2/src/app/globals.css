@@ -1,0 +1,24 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/style.css';
+
+:root {
+  --headless-color: #4b2ce8;
+  --ui-color: #cc8b00;
+
+  --color-fd-primary: var(--ui-color);
+}
+
+.dark {
+  --headless-color: #a9f;
+  --ui-color: #fff383;
+}
+
+body {
+  /*font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;*/
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  -webkit-font-smoothing: antialiased;
+}
+
+code, pre {
+  font-family: var(--font-geist-mono), 'Courier New', monospace;
+}

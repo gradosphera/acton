@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "compile",
+    "disasm",
+    "test",
+    "script",
+    "verify",
+    "shell-completions"
+  ]
+}
+
