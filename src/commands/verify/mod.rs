@@ -9,7 +9,7 @@ use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use ton_api::{StackItem, TonApiClient};
+use ton_api::{Network, StackItem, TonApiClient};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::coins::{CurrencyCollection, Grams};
@@ -36,14 +36,20 @@ pub fn verify_cmd(
     let contract_path =
         fs::canonicalize(contract.src.clone()).unwrap_or(PathBuf::from(contract.src.clone()));
 
+    Network::from_str(&network)?; // validate
+
     println!("  {} Contract: {}", "→".blue().bold(), contract_key.cyan());
 
     if contract_path.extension() == Some("boc".as_ref()) {
-        anyhow::bail!("Cannot verify precompiled .boc files. Please specify a .tolk source file.");
+        anyhow::bail!(color_print::cformat!(
+            "Cannot verify precompiled <yellow>.boc</> files. Please specify a <yellow>.tolk</> source file."
+        ));
     }
 
     if contract_path.extension() != Some("tolk".as_ref()) {
-        anyhow::bail!("Contract source must be a .tolk file");
+        anyhow::bail!(color_print::cformat!(
+            "Contract source must be a <yellow>.tolk</> file"
+        ));
     }
 
     println!("  {} Compiling contract", "→".blue().bold());
@@ -55,7 +61,10 @@ pub fn verify_cmd(
             result.code_boc64
         }
         tolkc::CompilerResult::Error(error) => {
-            anyhow::bail!("Compilation failed: {}", error.message);
+            anyhow::bail!(
+                "{}\nFix compilation error first to verify contract",
+                error.message
+            );
         }
     };
 

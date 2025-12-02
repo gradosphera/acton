@@ -126,6 +126,10 @@ impl FixtureProject {
             junit_merge: false,
             test_exclude_patterns: vec![],
             test_include_patterns: vec![],
+            verify_contract: None,
+            verify_address: None,
+            verify_wallet: None,
+            verify_network: None,
         }
     }
 

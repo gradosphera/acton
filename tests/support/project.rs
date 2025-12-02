@@ -557,6 +557,10 @@ impl Project {
             junit_merge: false,
             test_exclude_patterns: Vec::new(),
             test_include_patterns: Vec::new(),
+            verify_contract: None,
+            verify_address: None,
+            verify_wallet: None,
+            verify_network: None,
         }
     }
 
@@ -592,6 +596,10 @@ pub struct ActonCommand {
     pub(crate) junit_merge: bool,
     pub(crate) test_exclude_patterns: Vec<String>,
     pub(crate) test_include_patterns: Vec<String>,
+    pub(crate) verify_contract: Option<String>,
+    pub(crate) verify_address: Option<String>,
+    pub(crate) verify_wallet: Option<String>,
+    pub(crate) verify_network: Option<String>,
 }
 
 impl ActonCommand {
@@ -854,6 +862,31 @@ impl ActonCommand {
         self
     }
 
+    pub fn verify(mut self) -> Self {
+        self.cmd = self.cmd.arg("verify").current_dir(&self.project.path);
+        self
+    }
+
+    pub fn verify_contract(mut self, name: &str) -> Self {
+        self.verify_contract = Some(name.to_string());
+        self
+    }
+
+    pub fn verify_address(mut self, address: &str) -> Self {
+        self.verify_address = Some(address.to_string());
+        self
+    }
+
+    pub fn wallet(mut self, wallet: &str) -> Self {
+        self.verify_wallet = Some(wallet.to_string());
+        self
+    }
+
+    pub fn network(mut self, network: &str) -> Self {
+        self.verify_network = Some(network.to_string());
+        self
+    }
+
     /// Clear compilation cache (for build and script commands)
     ///
     /// # Examples
@@ -908,6 +941,22 @@ impl ActonCommand {
 
         if let Some(contract) = self.build_contract {
             self.cmd = self.cmd.arg(contract);
+        }
+
+        if let Some(contract) = self.verify_contract {
+            self.cmd = self.cmd.arg(contract);
+        }
+
+        if let Some(address) = self.verify_address {
+            self.cmd = self.cmd.arg("--address").arg(address);
+        }
+
+        if let Some(wallet) = self.verify_wallet {
+            self.cmd = self.cmd.arg("--wallet").arg(wallet);
+        }
+
+        if let Some(network) = self.verify_network {
+            self.cmd = self.cmd.arg("--net").arg(network);
         }
 
         if self.build_clear_cache {
