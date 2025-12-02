@@ -9,9 +9,9 @@ use acton::commands::test::{ReportFormat, TestConfig, test_cmd};
 use acton::commands::test_gen::test_gen_cmd;
 use acton::commands::verify::verify_cmd;
 use acton::config::ActonConfig;
-use clap::ColorChoice;
 use clap::builder::styling::Style;
 use clap::builder::{StyledStr, Styles};
+use clap::{ColorChoice, CommandFactory};
 use clap::{Parser, Subcommand, arg};
 use commands::common::error_fmt;
 use dotenvy::dotenv;
@@ -338,6 +338,14 @@ enum Commands {
         #[arg(long, help = "TonCenter API key for blockchain queries")]
         api_key: Option<String>,
     },
+    #[command(
+        about = "Generate shell completions for selected shell",
+        after_help = "For installation instructions, see https://acton.dev/acton/shell-completions/"
+    )]
+    Completions {
+        #[clap(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 fn example_test_usage() -> StyledStr {
@@ -663,6 +671,10 @@ fn main() {
             dry_run,
             api_key,
         ),
+        Commands::Completions { shell } => {
+            clap_complete::generate(shell, &mut Cli::command(), "acton", &mut std::io::stdout());
+            Ok(())
+        }
     };
 
     if let Err(err) = result {

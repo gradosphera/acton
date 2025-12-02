@@ -152,6 +152,7 @@ export default defineConfig({
             {slug: "test", label: "test"},
             {slug: "script", label: "script"},
             {slug: "verify", label: "verify"},
+            {slug: "shell-completions", label: "completions"},
           ],
         },
         {

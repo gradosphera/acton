@@ -63,6 +63,7 @@ tempfile = "3.23.0"# testing
 dotenvy = "0.15.7"
 pathdiff = "0.2.3"
 strsim = "0.11.1"
+clap_complete = "4.5.61"
 
 [dev-dependencies]
 snapbox = { version = "0.6.23", features = ["regex", "cmd", "dir"] }
