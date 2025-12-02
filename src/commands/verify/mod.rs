@@ -1,3 +1,4 @@
+use crate::commands::common::error_fmt;
 use crate::config::ActonConfig;
 use crate::wallets::open_wallets;
 use anyhow::{Context, anyhow};
@@ -31,7 +32,7 @@ pub fn verify_cmd(
     let contract_key = select_contract(contract_id, &config)?;
     let contract = config
         .get_contract(&contract_key)
-        .ok_or_else(|| anyhow!("Contract '{}' not found in Acton.toml", contract_key))?;
+        .ok_or_else(|| anyhow!(error_fmt::contract_not_found(&config, &contract_key)))?;
     let contract_path =
         fs::canonicalize(contract.src.clone()).unwrap_or(PathBuf::from(contract.src.clone()));
 
@@ -70,14 +71,14 @@ pub fn verify_cmd(
     let contract_address = if let Some(addr) = address {
         TonAddress::from_base64_url(&addr)
             .or_else(|_| TonAddress::from_hex_str(&addr))
-            .context("Invalid contract address")?
+            .with_context(|| error_fmt::invalid_address(&addr))?
     } else {
         let addr_input = inquire::Text::new("Enter deployed contract address:")
             .prompt()
             .context("Failed to read address")?;
         TonAddress::from_base64_url(&addr_input)
             .or_else(|_| TonAddress::from_hex_str(&addr_input))
-            .context("Invalid contract address")?
+            .with_context(|| error_fmt::invalid_address(&addr_input))?
     };
 
     println!(
@@ -91,7 +92,7 @@ pub fn verify_cmd(
     let mut wallets = open_wallets(&config, &network, true)?;
     let wallet = wallets
         .remove(&wallet_name)
-        .ok_or_else(|| anyhow!("Wallet '{}' not found in Acton.toml", wallet_name))?;
+        .ok_or_else(|| anyhow!(error_fmt::wallet_not_found(&config, &wallet_name)))?;
 
     println!(
         "  {} Using wallet: {} {}",
@@ -568,7 +569,10 @@ fn get_backend_info(network: &str, config: &BackendsConfig) -> anyhow::Result<Ba
             backends: config.backends_testnet.clone(),
             id: "orbs-testnet".to_string(),
         }),
-        _ => Err(anyhow!("Unsupported network: {}", network)),
+        _ => anyhow::bail!(
+            "Unsupported network: {}. Supported networks: mainnet, testnet",
+            network
+        ),
     }
 }
 

@@ -32,7 +32,7 @@ fn test_compile_file_not_found() {
         .compile("nonexistent.tolk")
         .run()
         .failure()
-        .assert_contains("No such file or directory");
+        .assert_contains("Cannot find file or directory");
 }
 
 #[test]

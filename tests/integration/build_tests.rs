@@ -38,7 +38,7 @@ fn test_build_with_dependency() {
             "parent",
             r#"
             import "../gen/child_code.tolk"
-            
+
             fun onInternalMessage(in: InMessage) {
                 val code = childCompiledCode();
             }
@@ -180,7 +180,7 @@ fn test_build_gen_file_content() {
             "main",
             r#"
             import "../gen/dependency_code.tolk"
-            
+
             fun onInternalMessage(in: InMessage) {}
             fun onBouncedMessage(_: InMessageBounced) {}
         "#,
@@ -323,7 +323,7 @@ fn test_build_no_contracts() {
         .build()
         .run()
         .success()
-        .assert_contains("No contracts found in Acton.toml");
+        .assert_contains("No contracts section found in Acton.toml.");
 }
 
 #[test]
@@ -561,7 +561,7 @@ fn test_build_dependency_embed_code() {
             "parent",
             r#"
             import "../gen/child_code.tolk"
-            
+
             fun onInternalMessage(in: InMessage) {
                 val code = childCompiledCode();
             }
@@ -594,7 +594,7 @@ fn test_build_dependency_library_ref() {
             "main",
             r#"
             import "../gen/lib_code.tolk"
-            
+
             fun onInternalMessage(in: InMessage) {
                 val code = libCompiledCode();
             }
@@ -629,7 +629,7 @@ fn test_build_dependency_mixed_kinds() {
             r#"
             import "../gen/embed_dep_code.tolk"
             import "../gen/lib_dep_code.tolk"
-            
+
             fun onInternalMessage(in: InMessage) {
                 val code1 = embed_depCompiledCode();
                 val code2 = lib_depCompiledCode();
@@ -672,7 +672,7 @@ fn test_build_dependency_custom_function_name() {
             "parent",
             r#"
             import "../gen/child_code.tolk"
-            
+
             fun onInternalMessage(in: InMessage) {
                 val code = myCustomFunction();
             }
@@ -705,7 +705,7 @@ fn test_build_dependency_custom_output_path() {
             "parent",
             r#"
             import "../custom/mypath.tolk"
-            
+
             fun onInternalMessage(in: InMessage) {}
             fun onBouncedMessage(_: InMessageBounced) {}
         "#,
@@ -733,7 +733,7 @@ fn test_build_dependency_all_custom_options() {
             "main",
             r#"
             import "../output/library.tolk"
-            
+
             fun onInternalMessage(in: InMessage) {
                 val code = getLibCode();
             }

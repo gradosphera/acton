@@ -1,4 +1,5 @@
 use crate::commands::build::build_cmd;
+use crate::commands::common::error_fmt;
 use crate::commands::test::coverage::{
     Coverage, collect_coverage, generate_lcov_file, generate_text_file, merge_coverages,
     print_coverage_summary,
@@ -330,10 +331,19 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     // If path is omitted, default to current directory
     let path = path.unwrap_or_else(|| ".".to_string());
 
-    let metadata = fs::metadata(&path)?;
+    if !fs::exists(&path).unwrap_or(false) {
+        anyhow::bail!(error_fmt::file_not_found(&path));
+    }
+
+    let metadata = match fs::metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(err) => {
+            anyhow::bail!("Cannot access '{path}': {err}")
+        }
+    };
     let test_files = if metadata.is_file() {
         if !path.ends_with("_test.tolk") {
-            anyhow::bail!("Test file must end with _test.tolk");
+            anyhow::bail!("Test file must end with {}", "_test.tolk".yellow());
         }
         vec![
             fs::canonicalize(&path)
@@ -356,7 +366,8 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     global_reporter.on_testing_started()?;
 
     // hacky init VM with debug enabled due to global variables :/
-    tolkc::compile("./testdata/simple.tolk".as_ref(), true);
+    let dummy_contract: &'static str = include_str!("./testdata/simple.tolk");
+    tolkc::compile(dummy_contract.as_ref(), true);
 
     let mut file_cache = FileBuildCache::new(None)?;
 

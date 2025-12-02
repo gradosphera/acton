@@ -22,10 +22,7 @@ impl Network {
         match s.to_lowercase().as_str() {
             "mainnet" => Ok(Network::Mainnet),
             "testnet" => Ok(Network::Testnet),
-            _ => Err(anyhow!(
-                "Unsupported network: {}. Supported: mainnet, testnet",
-                s
-            )),
+            _ => anyhow::bail!("Unsupported network: {}. Supported: mainnet, testnet", s),
         }
     }
 

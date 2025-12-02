@@ -1,5 +1,5 @@
+use crate::commands::common::error_fmt;
 use crate::file_build_cache::FileBuildCache;
-use anyhow::anyhow;
 use log::info;
 use owo_colors::OwoColorize;
 use serde_json;
@@ -25,13 +25,17 @@ pub fn compile_cmd(
 
     let start_time = Instant::now();
 
+    if !fs::exists(path).unwrap_or(false) {
+        anyhow::bail!(error_fmt::file_not_found(path));
+    }
+
     let metadata = fs::metadata(path)?;
     if !metadata.is_file() {
-        return Err(anyhow!("Path '{path}' is not a file"));
+        anyhow::bail!("{} is not a file", path.yellow());
     }
 
     if !path.ends_with(".tolk") {
-        return Err(anyhow!("File must end with .tolk"));
+        anyhow::bail!("File must end with {}", ".tolk".yellow());
     }
 
     let mut file_cache = FileBuildCache::new(None)?;

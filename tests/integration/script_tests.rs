@@ -8,7 +8,7 @@ fn test_script_simple_execution() {
             "hello",
             r#"
             import "../../lib/io"
-            
+
             fun main() {
                 println("Hello from script!");
             }
@@ -28,7 +28,7 @@ fn test_script_with_calculations() {
             "calc",
             r#"
             import "../../lib/io"
-            
+
             fun main() {
                 val result = 2 + 2 * 2;
                 println("Result: ");
@@ -56,7 +56,7 @@ fn test_script_file_not_found() {
         .script("scripts/nonexistent.tolk")
         .run()
         .failure()
-        .assert_stderr_contains("No such file");
+        .assert_stderr_contains("Cannot find file or directory");
 }
 
 #[test]
@@ -145,7 +145,7 @@ fn test_script_with_multiple_operations() {
             "multi",
             r#"
             import "../../lib/io"
-            
+
             fun main() {
                 println("Step 1");
                 val a = 10;
@@ -256,7 +256,7 @@ fn test_script_output_snapshot() {
             "output",
             r#"
             import "../../lib/io"
-            
+
             fun main() {
                 println("Line 1");
                 println("Line 2");

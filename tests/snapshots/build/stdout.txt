@@ -1,9 +1,9 @@
 Build all contracts
 
-Usage: acton build [OPTIONS] [CONTRACT]
+Usage: acton build [OPTIONS] [CONTRACT_ID]
 
 Arguments:
-  [CONTRACT]  Contract name to build (builds all if not specified)
+  [CONTRACT_ID]  Contract name to build (builds all if not specified)
 
 Options:
       --clear-cache    Clear compilation cache before building

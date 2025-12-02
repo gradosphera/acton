@@ -1,3 +1,4 @@
+use crate::commands::common::error_fmt;
 use crate::config::ActonConfig;
 use crate::context::{
     AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx, Emulations, Env,
@@ -43,13 +44,17 @@ pub fn script_cmd(
         println!("  {} Cache cleared", "✓".green().bold());
     }
 
+    if !fs::exists(path).unwrap_or(false) {
+        anyhow::bail!(error_fmt::file_not_found(path));
+    }
+
     let metadata = fs::metadata(path)?;
     if !metadata.is_file() {
-        return Err(anyhow!("Path '{path}' is not a file"));
+        anyhow::bail!("{} is not a file", path.yellow());
     }
 
     if !path.ends_with(".tolk") {
-        return Err(anyhow!("File must end with .tolk"));
+        anyhow::bail!("Script file must end with {}", ".tolk".yellow());
     }
 
     let content = fs::read_to_string(path)?;

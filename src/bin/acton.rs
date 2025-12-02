@@ -1,3 +1,4 @@
+use acton::commands;
 use acton::commands::build::build_cmd;
 use acton::commands::compile::compile_cmd;
 use acton::commands::disasm::disasm_cmd;
@@ -12,6 +13,7 @@ use clap::ColorChoice;
 use clap::builder::styling::Style;
 use clap::builder::{StyledStr, Styles};
 use clap::{Parser, Subcommand, arg};
+use commands::common::error_fmt;
 use dotenvy::dotenv;
 use owo_colors::OwoColorize;
 use std::fs::OpenOptions;
@@ -270,7 +272,10 @@ enum Commands {
         #[arg(long, help = "Clear compilation cache before running")]
         clear_cache: bool,
     },
-    #[command(about = "Disassemble TVM bitcode to human-readable TASM")]
+    #[command(
+        about = "Disassemble TVM bitcode to human-readable TASM",
+        after_help = example_disasm_usage()
+    )]
     Disasm {
         #[arg(help = "Binary/Hex/Base64 BoC file to disassemble (use -s flag to pass a string)")]
         boc_file: Option<String>,
@@ -447,6 +452,51 @@ fn example_build_usage() -> StyledStr {
     writer
 }
 
+fn example_disasm_usage() -> StyledStr {
+    use std::fmt::Write as _;
+
+    let mut writer = StyledStr::new();
+    let styled = Styles::styled();
+
+    let disasm_examples = Vec::from([
+        ("Disassemble from BoC file", "acton disasm contract.boc"),
+        (
+            "Disassemble from hex/base64 string",
+            "acton disasm -s \"b5ee9c72010104...0840f01c700f2f4\"",
+        ),
+        (
+            "Disassemble from blockchain address",
+            "acton disasm --address UQA...wwM",
+        ),
+        (
+            "Disassemble with output to file",
+            "acton disasm contract.boc -o output.tasm",
+        ),
+        (
+            "Disassemble with cell hashes and offsets",
+            "acton disasm contract.boc --show-hashes --show-offsets",
+        ),
+        (
+            "Disassemble from testnet address",
+            "acton disasm --address kQAl...g44 --net testnet",
+        ),
+    ]);
+
+    let header = styled.get_header();
+    let named = Style::new().dimmed();
+    let literal = styled.get_literal();
+
+    let _ = write!(writer, "{header}Examples:{header:#}");
+
+    const USAGE_SEP: &str = "\n     ";
+    for (name, value) in disasm_examples.iter() {
+        let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
+        let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
+    }
+
+    writer
+}
+
 fn main() {
     dotenv().ok();
     setup_logging().expect("Failed to set up logging");
@@ -579,32 +629,23 @@ fn main() {
             api_key,
             net,
             follow_libraries,
-        } => {
-            let source_map_data = if let Some(source_map_path) = source_map {
-                let content =
-                    fs::read_to_string(source_map_path).expect("Failed to read source map file");
-                let result: SourceMap = serde_json::from_str(content.as_str())
-                    .expect("Failed to parse source map JSON");
-                Some(Box::new(result))
-            } else {
-                None
-            };
-
-            disasm_cmd(
+        } => match read_source_map(source_map) {
+            Ok(source_map) => disasm_cmd(
                 boc_file,
                 string,
                 output,
                 FormatOptions {
                     show_hashes,
                     show_offsets,
-                    source_map: source_map_data,
+                    source_map,
                 },
                 address,
                 api_key,
                 net,
                 follow_libraries,
-            )
-        }
+            ),
+            Err(err) => Err(err),
+        },
         Commands::Verify {
             contract,
             address,
@@ -628,6 +669,27 @@ fn main() {
         eprintln!("{} {}", "Error:".red(), err);
         process::exit(1)
     }
+}
+
+fn read_source_map(source_map: Option<String>) -> anyhow::Result<Option<Box<SourceMap>>> {
+    let source_map_data = if let Some(path) = source_map {
+        if !fs::exists(&path).unwrap_or(false) {
+            anyhow::bail!(error_fmt::file_not_found(&path));
+        }
+
+        let metadata = fs::metadata(&path)?;
+        if !metadata.is_file() {
+            anyhow::bail!("{} is not a file", path.yellow());
+        }
+
+        let content = fs::read_to_string(path).expect("Failed to read source map file");
+        let result: SourceMap =
+            serde_json::from_str(content.as_str()).expect("Failed to parse source map JSON");
+        Some(Box::new(result))
+    } else {
+        None
+    };
+    Ok(source_map_data)
 }
 
 fn setup_logging() -> anyhow::Result<()> {

@@ -165,7 +165,7 @@ fn test_disasm_file_not_found() {
         .disasm_file("nonexistent.boc")
         .run()
         .failure()
-        .assert_stderr_contains("No such file");
+        .assert_stderr_contains("Cannot find file or director");
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn test_disasm_invalid_boc_data() {
         .disasm_file("data/invalid.boc")
         .run()
         .failure()
-        .assert_stderr_contains("Failed to decode BOC");
+        .assert_stderr_contains("Failed to decode BoC");
 }
 
 #[test]
@@ -192,7 +192,7 @@ fn test_disasm_invalid_hex_string() {
         .disasm_string("not_valid_hex_or_base64")
         .run()
         .failure()
-        .assert_stderr_contains("Failed to decode BOC");
+        .assert_stderr_contains("Failed to decode BoC");
 }
 
 #[test]
@@ -204,7 +204,7 @@ fn test_disasm_no_input_provided() {
         .disasm()
         .run()
         .failure()
-        .assert_stderr_contains("Either --string/-s, --address or boc_file must be provided");
+        .assert_stderr_contains(" Either --string/-s, --address or BOC_FILE argument must be provided, run with --help for more information");
 }
 
 #[test]
@@ -382,7 +382,7 @@ fn test_disasm_from_blockchain_invalid_address() {
         .with_api_key(toncenter_api_key())
         .run()
         .failure()
-        .assert_stderr_contains("Contract not found");
+        .assert_stderr_contains("Address invalid-address is not a valid address.");
 }
 
 #[test]
@@ -397,5 +397,5 @@ fn test_disasm_from_blockchain_with_wrong_api_key() {
         .with_api_key("wrong-test-api-key")
         .run()
         .failure()
-        .assert_contains("Contract not found on both mainnet and testnet");
+        .assert_contains("Contract with address UQA_ftKIJsHEAE_UgtFOUK15hPzycZooFuUr8duyY9T3kwwM not found on both mainnet and testnet");
 }
