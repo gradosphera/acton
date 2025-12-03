@@ -59,11 +59,12 @@ urlencoding = "2.1"
 base64 = "0.22.1"
 rand = "0.8"
 
-tempfile = "3.23.0"# testing
+tempfile = "3.23.0" # testing
 dotenvy = "0.15.7"
 pathdiff = "0.2.3"
 strsim = "0.11.1"
 clap_complete = "4.5.61"
+human-panic = "2.0.4" # better panic handling
 
 [dev-dependencies]
 snapbox = { version = "0.6.23", features = ["regex", "cmd", "dir"] }

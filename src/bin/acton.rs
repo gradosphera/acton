@@ -15,6 +15,7 @@ use clap::{ColorChoice, CommandFactory};
 use clap::{Parser, Subcommand, arg};
 use commands::common::error_fmt;
 use dotenvy::dotenv;
+use human_panic::{Metadata, setup_panic};
 use owo_colors::OwoColorize;
 use std::fs::OpenOptions;
 use std::{fs, process};
@@ -512,6 +513,11 @@ fn example_disasm_usage() -> StyledStr {
 }
 
 fn main() {
+    setup_panic!(
+        Metadata::new("Acton", env!("CARGO_PKG_VERSION"))
+            .authors("TON Core")
+            .homepage("https://github.com/i582/acton")
+    );
     dotenv().ok();
     setup_logging().expect("Failed to set up logging");
     let cli = Cli::parse();
