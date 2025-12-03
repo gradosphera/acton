@@ -328,3 +328,189 @@ fn test_test_invalid_reporter() {
             "integration/snapshots/test_test_invalid_reporter.stderr.txt",
         );
 }
+
+#[test]
+fn test_invalid_test_file_syntax() {
+    let project = ProjectBuilder::new("test-invalid-syntax")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            get fun `test-foo`() {
+                let a = 10;
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_invalid_test_file_syntax.stderr.txt",
+        );
+}
+
+#[test]
+fn test_build_unknown_file() {
+    let project = ProjectBuilder::new("test-unknown-file")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/build/build"
+
+            get fun `test-foo`() {
+                val cell = build("counter", "unknown.tolk")
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches("integration/snapshots/test_build_unknown_file.stdout.txt");
+}
+
+#[test]
+fn test_run_get_method_of_not_deployed_contract() {
+    let project = ProjectBuilder::new("test-get")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/io"
+            import "../../lib/build/build"
+            import "../../lib/emulation/network"
+
+            get fun `test-foo`() {
+                val address = address("EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot");
+                val res: int = net.runGetMethod(address, "counter");
+                println(res);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_run_get_method_of_not_deployed_contract.stdout.txt",
+        );
+}
+
+#[test]
+fn test_run_get_method_of_not_deployed_contract_with_backtrace_full() {
+    let project = ProjectBuilder::new("test-get")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/io"
+            import "../../lib/build/build"
+            import "../../lib/emulation/network"
+
+            get fun `test-foo`() {
+                val address = address("EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot");
+                val res: int = net.runGetMethod(address, "counter");
+                println(res);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .with_backtrace("full")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_run_get_method_of_not_deployed_contract_with_backtrace_full.stdout.txt",
+        );
+}
+
+#[test]
+fn test_send_message_to_not_deployed_contract() {
+    let project = ProjectBuilder::new("test-get")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/io"
+            import "../../lib/build/build"
+            import "../../lib/emulation/network"
+
+            get fun `test-foo`() {
+                val sender = net.treasury("treasury");
+                val address = address("EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot");
+
+                val msg = createMessage({
+                    dest: address,
+                    body: createEmptyCell(),
+                    bounce: false,
+                    value: ton("1"),
+                });
+                val res = net.send(sender.address, msg, 0);
+                println(res);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_send_message_to_not_deployed_contract.stdout.txt",
+        );
+}
+
+#[test]
+fn test_send_message_to_not_deployed_contract_with_register() {
+    let project = ProjectBuilder::new("test-get")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/io"
+            import "../../lib/build/build"
+            import "../../lib/emulation/network"
+
+            get fun `test-foo`() {
+                val sender = net.treasury("treasury");
+                val address = address("EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot");
+                net.registerAddress(address, "some unknown contract");
+
+                val msg = createMessage({
+                    dest: address,
+                    body: createEmptyCell(),
+                    bounce: false,
+                    value: ton("1"),
+                });
+                val res = net.send(sender.address, msg, 0);
+                println(res);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_send_message_to_not_deployed_contract_with_register.stdout.txt",
+        );
+}

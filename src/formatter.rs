@@ -935,9 +935,13 @@ impl FormatterContext {
     /// Extract opcode from message body
     fn extract_opcode(&self, in_msg: &RelaxedMessage) -> u32 {
         let mut body = in_msg.body;
+        let bounced = match &in_msg.info {
+            RelaxedMsgInfo::Int(info) => info.bounced,
+            RelaxedMsgInfo::ExtOut(_) => false,
+        };
         let mut opcode = body.load_u32().unwrap_or(0);
-        if opcode == 0xFFFFFFFF {
-            // if bounce read another 32 bit to get actual opcode
+        if bounced {
+            // if bounced read another 32 bit to get the actual opcode
             opcode = body.load_u32().unwrap_or(0);
         }
         opcode
@@ -951,13 +955,15 @@ impl FormatterContext {
             .iter()
             .find(|msg| msg.opcode != Some(0) && msg.opcode == Some(opcode));
 
-        if let Some(message_abi) = message_abi {
-            message_abi.name.as_str().purple().bold().to_string()
+        let name = if let Some(message_abi) = message_abi {
+            message_abi.name.as_str()
         } else if opcode == 0 {
-            "empty".purple().bold().to_string()
+            "empty"
         } else {
-            format!("0x{opcode:x}").purple().bold().to_string()
-        }
+            &format!("0x{opcode:x}")
+        };
+
+        name.purple().bold().to_string()
     }
 
     /// Get contract type for address
@@ -968,8 +974,8 @@ impl FormatterContext {
             .iter()
             .find(|(address, _info)| address.to_string() == addr.to_string());
 
-        if let Some(known_address) = known_address {
-            return Some(known_address.1.name.clone());
+        if let Some((_, known_address)) = known_address {
+            return Some(known_address.name.clone());
         }
 
         if let Some(account) = self.accounts.get(&addr.to_string()) {
@@ -1069,10 +1075,10 @@ impl FormatterContext {
                 if let TupleItem::Int(value) = &items[0]
                     && type_name == "bool"
                 {
-                    return if value == &num_bigint::BigInt::from(0) {
-                        "false".to_string()
-                    } else if value == &num_bigint::BigInt::from(18446744073709551615u64) {
-                        "true".to_string()
+                    return if value == &BigInt::from(0) {
+                        "false".to_owned()
+                    } else if value == &BigInt::from(18446744073709551615u64) {
+                        "true".to_owned()
                     } else {
                         format!("{value}")
                     };
@@ -1086,7 +1092,7 @@ impl FormatterContext {
             }
             TupleItem::Slice(cell) => {
                 if cell.bit_len() == 0 && cell.references().is_empty() {
-                    return "empty slice".to_string();
+                    return "empty slice".to_owned();
                 }
 
                 if let Some(string) = Tuple::parse_snake_string(cell) {
@@ -1097,23 +1103,23 @@ impl FormatterContext {
             }
             TupleItem::Int(value) => {
                 if *value == BigInt::from(18446744073709551615u64) {
-                    return "-1".to_string();
+                    return "-1".to_owned();
                 }
                 format!("{value}")
             }
-            TupleItem::Null => "null".to_string(),
-            TupleItem::Nan => "NaN".to_string(),
+            TupleItem::Null => "null".to_owned(),
+            TupleItem::Nan => "NaN".to_owned(),
             TupleItem::Cell(cell) => cell
                 .to_boc_hex(false)
-                .unwrap_or("<invalid cell>".to_string()),
+                .unwrap_or("<invalid cell>".to_owned()),
             TupleItem::Builder(cell) => cell
                 .to_boc_hex(false)
-                .unwrap_or("<invalid builder>".to_string()),
+                .unwrap_or("<invalid builder>".to_owned()),
             TupleItem::Tuple(items) => {
                 if items.len() == 1 {
                     return self.format(&items[0]);
                 }
-                let mut res = "".to_string();
+                let mut res = "".to_owned();
                 write!(res, "(").ok();
                 for (i, item) in items.iter().enumerate() {
                     if i > 0 {

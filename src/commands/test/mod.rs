@@ -20,8 +20,8 @@ use crate::context::{
 };
 use crate::debugger::dap::DapTransport;
 use crate::debugger::debug_context::DebugContext;
+use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
-use crate::{ffi, wallets};
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use emulator::AnyExecutor;
@@ -100,6 +100,7 @@ pub struct TestResult {
 #[derive(Debug)]
 pub struct TestRunner<'a> {
     config: TestConfig,
+    acton_config: ActonConfig,
     build_cache: BuildCache,
     file_build_cache: &'a mut FileBuildCache,
     known_addresses: KnownAddresses,
@@ -111,6 +112,7 @@ pub struct TestRunner<'a> {
 
 impl<'a> TestRunner<'a> {
     pub fn new(
+        acton_config: ActonConfig,
         config: TestConfig,
         cache: &'a mut FileBuildCache,
         reporter_manager: &'a mut ReporterManager,
@@ -123,6 +125,7 @@ impl<'a> TestRunner<'a> {
 
         Self {
             config,
+            acton_config,
             build_cache: BuildCache::new(),
             file_build_cache: cache,
             known_addresses: KnownAddresses::new(),
@@ -185,20 +188,17 @@ impl<'a> TestRunner<'a> {
         let params = GetMethodParams {
             code: code_cell
                 .to_boc_b64(false)
-                .expect("Failed to encode code cell to BoC")
+                .map_err(|err| anyhow!("Failed to encode code cell to BoC: {err}"))?
                 .to_string(),
-            data: ArcCell::default()
-                .to_boc_b64(false)
-                .expect("Failed to encode data cell to BoC")
-                .to_string(),
+            data: ArcCell::default().to_boc_b64(false)?.to_string(), // for tests, we use empty cell as a data
             verbosity,
-            libs: "".to_string(),
+            libs: Default::default(),
             address: dest_address.to_string(),
             unixtime: 0,
-            balance: "10".to_string(),
+            balance: "10".to_owned(),
             rand_seed: "0000000000000000000000000000000000000000000000000000000000000000"
-                .to_string(),
-            gas_limit: "0".to_string(),
+                .to_owned(),
+            gas_limit: "0".to_owned(),
             method_id: test.id,
             debug_enabled: true,
             extra_currencies: HashMap::new(),
@@ -212,20 +212,17 @@ impl<'a> TestRunner<'a> {
         let mut assert_failure = None;
         let mut expected_exit_code = None;
 
-        let config = ActonConfig::load()?;
-        let open_wallets = wallets::open_wallets(&config, "testnet", false)?;
-
         let mut ctx = Context {
             env: Env {
-                config: &config,
+                config: &self.acton_config,
                 abi,
                 default_log_level: verbosity,
-                wallets: config.wallets.as_ref(),
-                open_wallets,
+                wallets: self.acton_config.wallets.as_ref(),
+                open_wallets: Default::default(), // in tests, we never use real wallets
             },
             io: IoContext {
-                stdout_buffer: "".to_string(),
-                stderr_buffer: "".to_string(),
+                stdout_buffer: "".to_owned(),
+                stderr_buffer: "".to_owned(),
                 capture_output: true,
             },
             asserts: AssertsContext {
@@ -243,13 +240,13 @@ impl<'a> TestRunner<'a> {
                 known_addresses: &mut self.known_addresses,
                 known_code_cells: &mut self.known_code_cells,
                 need_debug_info: self.config.debug
-                    || self.config.backtrace == Some("full".to_string())
+                    || self.config.backtrace == Some("full".to_owned())
                     || self.config.coverage,
                 backtrace: self.config.backtrace.clone(),
             },
             debug: DebugCtx::Disabled,
             is_broadcasting: false,
-            network: "testnet".to_string(),
+            network: "testnet".to_owned(),
         };
 
         let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) =
@@ -273,7 +270,7 @@ impl<'a> TestRunner<'a> {
                 let get_result = executor.finish(&params.code);
 
                 if let Some(trace_dir) = &self.config.save_test_trace {
-                    trace::cave_test_transactions(
+                    trace::dump_test_transactions(
                         test,
                         ctx.build.build_cache,
                         &ctx.chain.emulations.results,
@@ -295,7 +292,7 @@ impl<'a> TestRunner<'a> {
                 let get_result = executor.run_get_method(Default::default(), params);
 
                 if let Some(trace_dir) = &self.config.save_test_trace {
-                    trace::cave_test_transactions(
+                    trace::dump_test_transactions(
                         test,
                         ctx.build.build_cache,
                         &ctx.chain.emulations.results,
@@ -360,6 +357,8 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         anyhow::bail!("Path '{path}' is neither a file nor a directory");
     };
 
+    let acton_config = ActonConfig::load()?;
+
     let mut global_reporter = ReporterManager::new();
     TestRunner::setup_reporters(&mut global_reporter, config);
     global_reporter.init()?;
@@ -378,7 +377,13 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     let mut coverages = vec![];
 
     for (index, file) in test_files.iter().enumerate() {
-        let result = run_tests_for_file(file, config, &mut file_cache, &mut global_reporter);
+        let result = run_tests_for_file(
+            file,
+            &acton_config,
+            config,
+            &mut file_cache,
+            &mut global_reporter,
+        );
         match result {
             Ok(stats) => {
                 total_passed += stats.passed;
@@ -397,7 +402,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
                 }
             }
             Err(err) => {
-                eprintln!("{} {}", "Error:".red(), err);
+                eprintln!("{err}");
                 total_failed += 1;
             }
         }
@@ -583,6 +588,7 @@ fn compile_test_file(
 
 fn run_tests_for_file(
     file: &str,
+    acton_config: &ActonConfig,
     config: &TestConfig,
     file_cache: &mut FileBuildCache,
     reporter_manager: &mut ReporterManager,
@@ -615,7 +621,12 @@ fn run_tests_for_file(
 
             let code_cell = ArcCell::from_boc_b64(&result.code_boc64)?;
 
-            let mut runner = TestRunner::new(config.clone(), file_cache, reporter_manager);
+            let mut runner = TestRunner::new(
+                acton_config.clone(),
+                config.clone(),
+                file_cache,
+                reporter_manager,
+            );
             let stats = run_file_tests(
                 &mut runner,
                 file,
@@ -639,7 +650,7 @@ fn run_file_tests(
     runner: &mut TestRunner,
     file_path: &str,
     tests: Vec<TestDescriptor>,
-    code_cell: &Arc<Cell>,
+    code_cell: &ArcCell,
     abi: &ContractAbi,
     source_map: &SourceMap,
 ) -> anyhow::Result<TestStats> {
@@ -709,7 +720,7 @@ fn run_file_tests(
         let result = match runner.execute_test(test, code_cell, &dest_address, abi, source_map) {
             Ok(result) => result,
             Err(err) => {
-                println!(
+                eprintln!(
                     "{}: Cannot execute test '{}': {}",
                     "Error".red(),
                     test.name,
@@ -738,10 +749,15 @@ fn run_file_tests(
             GetMethodResult::Error(_) => (999, 0),
         };
 
+        let mut test_passed: bool = true; // assume that test is passed
+
         let expected_exit_code = dyn_expected_exit_code
             .or(test.expected_exit_code)
             .unwrap_or(0);
-        let mut test_passed = exit_code == expected_exit_code;
+
+        if exit_code != expected_exit_code {
+            test_passed = false;
+        }
 
         if let Some(limit) = test.gas_limit
             && gas_used > limit
@@ -794,17 +810,12 @@ fn run_file_tests(
             // For coverage, we need to process test logs as well, so register it here
             if let GetMethodResult::Success(get_result) = get_result {
                 runner.emulations.get_results.push(get_result);
+                // TODO: remove this memoize somehow
                 runner.build_cache.memoize(
                     &test.name,
                     file_path,
-                    &code_cell
-                        .to_boc_b64(false)
-                        .expect("Failed to encode code cell to BoC"),
-                    &code_cell
-                        .cell_hash()
-                        .expect("Failed to get code cell hash")
-                        .to_hex()
-                        .to_ascii_uppercase(),
+                    &code_cell.to_boc_b64(false)?,
+                    &code_cell.cell_hash()?.to_hex().to_ascii_uppercase(),
                     source_map.clone(),
                 )
             }

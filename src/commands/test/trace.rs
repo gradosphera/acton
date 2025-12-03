@@ -43,7 +43,7 @@ pub struct TransactionInfo {
     pub dest_contract_info: Option<String>,
 }
 
-pub fn cave_test_transactions(
+pub fn dump_test_transactions(
     test: &TestDescriptor,
     build_cache: &BuildCache,
     txs: &[Vec<SendMessageResult>],

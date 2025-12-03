@@ -1,4 +1,4 @@
-use crate::context::{AssertFailure, Context, FailAssertFailure, KnownAddress, Wallet};
+use crate::context::{Context, KnownAddress, Wallet};
 use crate::debugger::debug_context::StepMode;
 use crate::ffi::assert::process_txs_and_search_params;
 use crate::formatter::FormatterContext;
@@ -140,10 +140,8 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
                 path, total_elapsed, error.message
             );
 
-            *ctx.asserts.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
-                message: Some(format!("Compilation failed: {}", error.message)),
-                location: None,
-            }));
+            ctx.asserts
+                .fail(format!("Compilation failed: {}", error.message));
             stack.push(TupleItem::Null);
         }
     };

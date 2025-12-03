@@ -14,7 +14,15 @@ pub fn normalize_output(stdout: &str, project_path: &Path) -> String {
     let mut redactions = assert1.redactions().clone();
 
     let tmp_dir = project_path.to_string_lossy().to_string();
+    let lib_dir = Path::new(tmp_dir.as_str()).parent().unwrap().join("lib");
     redactions.insert("[ROOT]", tmp_dir.clone()).unwrap();
+    redactions.insert("[ACTON_LIB]", lib_dir.clone()).unwrap();
+    redactions
+        .insert(
+            "[ACTON_LIB]",
+            "/private".to_owned() + lib_dir.to_str().unwrap(),
+        )
+        .unwrap();
     redactions
         .insert(
             "[DATE]",

@@ -401,8 +401,9 @@ impl TestReporter for ConsoleReporter {
                             println!("      {} Phase: {}", "└─".dimmed(), info.phase.dimmed());
                         } else if exit_code == 678 {
                             println!(
-                                "      {} Cannot run method of not deployed contract",
-                                "└─".dimmed()
+                                "      {} Cannot run method of not deployed contract, make sure you're deployed contract first or passed {}",
+                                "└─".dimmed(),
+                                "--fork-net".yellow(),
                             );
                         } else if exit_code == 679 {
                             println!(
