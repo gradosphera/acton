@@ -6,6 +6,7 @@
     "test-configuration",
     "fork-testing",
     "code-coverage",
+    "writing-your-own-matchers",
     "cookbook"
   ]
 }

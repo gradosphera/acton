@@ -13,6 +13,8 @@
     "test-runner",
     "scripting",
     "--- Advanced ---",
-    "advanced/libraries"
+    "advanced/libraries",
+    "--- Miscellaneous ---",
+    "miscellaneous/ide-support.mdx"
   ]
 }
