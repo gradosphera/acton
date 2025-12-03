@@ -21,8 +21,12 @@ fun println<T>(value: T): void {
 ///
 /// Example:
 /// ```tolk
-/// println("Hello, 0x{:x}", 10);
+/// println1("Hello, 0x{:x}", 10);
 /// ```
+///
+/// Format supports following format soecifiers:
+/// - `{:x}` — formats a number as hexadecimal without `0x` prefix
+/// - `{:ton}` — formats a number as TON value (e.g `0.11 TON`)
 fun println1<T>(fmt: slice, value: T): void {
     println(format1(fmt, value))
 }

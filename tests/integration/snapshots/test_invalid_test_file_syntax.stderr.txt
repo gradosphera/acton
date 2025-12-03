@@ -1,0 +1,3 @@
+[ROOT]/tests/test_test.tolk_test[LINE]: error: expected `;`, got `a`
+   3 |                 let a = 10;
+     |                     ^

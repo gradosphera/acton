@@ -1,0 +1,15 @@
+   Compiling contracts
+   Compiling simple
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+
+ TEST  [ROOT]
+
+ > ./tests/test_test.tolk (1 test)
+  ✗ foo [TIME]
+    └─ Error: Cannot find contract counter in Acton.toml, add it or provide an explicit path to the entry point
+
+ ✗ 1 failed in 1 file
+
+Some tests failed.

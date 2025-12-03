@@ -51,7 +51,7 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
             path = found_contract.src.clone()
         } else {
             ctx.asserts.fail(format!(
-                "Cannot find contract {name} in Acton.toml, please add it or provide an explicit path to the entry point"
+                "Cannot find contract {name} in Acton.toml, add it or provide an explicit path to the entry point"
             ));
             return;
         }

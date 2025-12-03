@@ -378,6 +378,30 @@ fn test_build_unknown_file() {
 }
 
 #[test]
+fn test_build_unknown_contract() {
+    let project = ProjectBuilder::new("test-unknown-file")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/build/build"
+
+            get fun `test-foo`() {
+                val cell = build("counter")
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches("integration/snapshots/test_build_unknown_contract.stdout.txt");
+}
+
+#[test]
 fn test_run_get_method_of_not_deployed_contract() {
     let project = ProjectBuilder::new("test-get")
         .contract("simple", SIMPLE_CONTRACT)
