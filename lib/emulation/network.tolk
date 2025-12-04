@@ -318,11 +318,6 @@ fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams = {})
     return Maybe<Transaction>.some(tx_cell.load());
 }
 
-/// Internal method, don't use it directly.
-fun net.sendFromNull(message: OutMessage, mode: int): TransactionList {
-    return ffi.sendMessage(message.messageCell, mode)!;
-}
-
 /// Send a message from a specified address with specified mode.
 ///
 /// Example:
@@ -368,6 +363,7 @@ fun net.treasury(name: slice): Treasury {
         data: beginCell().storeSlice(name).endCell(),
     };
 
+    val deployer = address("0:0000000000000000000000000000000000000000000000000000000000000000");
     val address = AutoDeployAddress { stateInit: state_init }.calculateAddress();
     net.registerAddress(address, name);
 
@@ -377,7 +373,7 @@ fun net.treasury(name: slice): Treasury {
         dest: { workchain: 0, stateInit: state_init },
     });
     // Deploy treasury
-    net.sendFromNull(msg, SEND_MODE_PAY_FEES_SEPARATELY);
+    net.send(deployer, msg, SEND_MODE_PAY_FEES_SEPARATELY);
     return Treasury { address };
 }
 
@@ -716,7 +712,6 @@ fun __treasuryCode(): cell asm """
     "te6cckEBBAEARQABFP8A9KQT9LzyyAsBAgEgAwIAWvLT/+1E0NP/0RK68qL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmWwAE0jD+omUe" base64>B B>boc PUSHREF
 """
 
-fun ffi.sendMessage(msg: cell, mode: int): TransactionList? asm "7 EXTCALL"
 fun ffi.sendMessageFrom(msg: cell, from: cell, mode: int): SendResultList? asm "9 EXTCALL"
 fun ffi.runGetMethod(addr: cell, code: cell, id: int, name: slice, return_type: slice, args: tuple): tuple? asm "8 EXTCALL"
 fun ffi.isDeployed(addr: cell): bool asm "11 EXTCALL"

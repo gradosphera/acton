@@ -147,46 +147,8 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
     };
 }
 
-extension!(send_message in (Context) with (mode: BigInt, message: ArcCell) using send_message_impl);
-fn send_message_impl(ctx: &mut Context, stack: &mut Tuple, _mode: BigInt, message: ArcCell) {
-    let blockchain = &mut ctx.chain.blockchain;
-    let emulator = &ctx.chain.emulator;
-
-    let msg_b64 = try_ctx!(
-        ctx,
-        message.to_boc_b64(false),
-        "Failed to encode message to BoC: {}"
-    );
-    let msg_cell = try_ctx!(
-        ctx,
-        Boc::decode_base64(msg_b64),
-        "Failed to decode message from BoC: {}"
-    );
-
-    // Send from null address for now
-    let src_addr = IntAddr::default();
-    let emulations = emulator.send_message(
-        blockchain,
-        msg_cell,
-        &Dict::default(),
-        Some(src_addr),
-        Some(ctx.env.default_log_level),
-    );
-
-    let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
-        SendMessageResult::Success(res) => Some(res),
-        SendMessageResult::Error(_) => None,
-    });
-
-    let transaction_cells = successful_emulations
-        .filter_map(|emulation| ArcCell::from_boc_b64(&emulation.raw_transaction).ok())
-        .map(TupleItem::Cell)
-        .collect::<Vec<_>>();
-    stack.push(TupleItem::Tuple(Tuple(transaction_cells)));
-}
-
-extension!(send_message_from in (Context) with (mode: BigInt, from: ArcCell, message: ArcCell) using send_message_from_impl);
-fn send_message_from_impl(
+extension!(send_message in (Context) with (mode: BigInt, from: ArcCell, message: ArcCell) using send_message_impl);
+fn send_message_impl(
     ctx: &mut Context,
     stack: &mut Tuple,
     _mode: BigInt,
@@ -1314,9 +1276,8 @@ fn disable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) {
 pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         6 => build,
-        7 => send_message,
         8 => run_get_method,
-        9 => send_message_from,
+        9 => send_message,
         10 => find_transaction_by_params,
         11 => is_deployed,
         12 => get_deployed_code,
