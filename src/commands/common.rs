@@ -5,8 +5,9 @@ pub mod error_fmt {
     pub fn contract_not_found(config: &ActonConfig, name: &str) -> String {
         let available = available_contracts(config);
         format!(
-            "Contract '{}' not found in Acton.toml\nAvailable contracts:\n{}",
-            name, available
+            "Contract {} not found in Acton.toml\nAvailable contracts:\n{}",
+            name.yellow(),
+            available
         )
     }
 
@@ -41,8 +42,9 @@ pub mod error_fmt {
             })
             .unwrap_or_else(|| "none".to_string());
         format!(
-            "Wallet '{}' not found in Acton.toml\nAvailable wallets:\n{}",
-            name, available
+            "Wallet {} not found in Acton.toml\nAvailable wallets:\n{}",
+            name.yellow(),
+            available
         )
     }
 

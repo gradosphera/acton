@@ -1,3 +1,4 @@
+use crate::commands::common::error_fmt;
 use crate::context::{Context, KnownAddress, Wallet};
 use crate::debugger::debug_context::StepMode;
 use crate::ffi::assert::process_txs_and_search_params;
@@ -38,7 +39,7 @@ use tycho_types::models::{
 };
 
 extension!(build in (Context) with (path: String, name: String) using build_impl);
-fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: String) {
+fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, mut name: String) {
     debug!("Building {name}");
     let start_time = Instant::now();
 
@@ -48,11 +49,11 @@ fn build_impl(ctx: &mut Context, stack: &mut Tuple, mut path: String, name: Stri
 
         if let Some(found_contract) = found_contract {
             debug!("Found contract with info: {found_contract:?}");
-            path = found_contract.src.clone()
+            name = found_contract.name; // use actual name instead of id
+            path = found_contract.src.clone();
         } else {
-            ctx.asserts.fail(format!(
-                "Cannot find contract {name} in Acton.toml, add it or provide an explicit path to the entry point"
-            ));
+            ctx.asserts
+                .fail(error_fmt::contract_not_found(ctx.env.config, &name));
             return;
         }
     }

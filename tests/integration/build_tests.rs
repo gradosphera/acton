@@ -434,7 +434,7 @@ fn test_build_with_contract_nonexistent() {
         .contract("nonexistent")
         .run()
         .failure()
-        .assert_contains("Contract 'nonexistent' not found");
+        .assert_contains("Contract nonexistent not found in Acton.toml");
 }
 
 #[test]

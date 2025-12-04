@@ -8,7 +8,9 @@
 
  > ./tests/test_test.tolk (1 test)
   ✗ foo [TIME]
-    └─ Error: Cannot find contract counter in Acton.toml, add it or provide an explicit path to the entry point
+    └─ Error: Contract counter not found in Acton.toml
+Available contracts:
+ simple
 
  ✗ 1 failed in 1 file
 

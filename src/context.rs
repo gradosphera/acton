@@ -333,9 +333,8 @@ pub enum DebugCtx<'a> {
 
 impl<'a> Env<'a> {
     pub fn find_contract(&self, name: &str) -> Option<ContractConfig> {
-        let contracts = self.config.contracts.clone().unwrap_or_default().contracts;
-        let (_, config) = contracts.iter().find(|(_, config)| config.name == name)?;
-        Some(config.clone())
+        let contracts = self.config.contracts.clone()?.contracts;
+        contracts.get(name).cloned()
     }
 
     pub fn find_wallet_by_address(&self, addr: &IntAddr) -> Option<Wallet> {

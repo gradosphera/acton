@@ -17,7 +17,7 @@ struct Counter {
 
 fun Counter.fromStorage(storage: Storage) {
     val init = ContractState {
-        code: build("Counter"),
+        code: build("counter"),
         data: storage.toCell(),
     };
     val address = AutoDeployAddress { stateInit: init }.calculateAddress();

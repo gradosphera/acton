@@ -374,11 +374,7 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
     let mut code = String::new();
     let method_name = format!("send{}", message_type.name);
 
-    let fields: Vec<_> = message_type
-        .fields
-        .iter()
-        .filter(|f| f.name != "queryId")
-        .collect();
+    let fields: Vec<_> = message_type.fields.iter().collect();
 
     let params = fields
         .iter()
@@ -450,13 +446,26 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
             .parameters
             .iter()
             .map(|p| p.name.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
+            .collect::<Vec<_>>();
 
-        code.push_str(&format!(
-            "    return net.runGetMethod(self.address, \"{}\", {})\n",
-            method_name, args
-        ));
+        if args.is_empty() {
+            code.push_str(&format!(
+                "    return net.runGetMethod(self.address, \"{}\")\n",
+                method_name
+            ));
+        } else if args.len() == 1 {
+            code.push_str(&format!(
+                "    return net.runGetMethod(self.address, \"{}\", {})\n",
+                method_name, args[0]
+            ));
+        } else {
+            let args = args.join(", ");
+
+            code.push_str(&format!(
+                "    return net.runGetMethod(self.address, \"{}\", [{}] as tuple)\n",
+                method_name, args
+            ));
+        }
     }
 
     code.push_str("}\n");
