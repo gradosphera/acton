@@ -1,9 +1,9 @@
-use crate::config::DEFAULT_CONFIG;
 use crate::executor::{ExecutorVerbosity, ExtFunc};
 use crate::traits::{BaseExecutor, RegisterExtMethodCallback};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::{CString, c_void};
+use std::ptr::null_mut;
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::Tuple;
 use tycho_types::boc::Boc;
@@ -39,10 +39,21 @@ impl GetExecutor {
         }
     }
 
-    pub fn run_get_method(&self, stack: Tuple, params: GetMethodParams) -> GetMethodResult {
+    pub fn run_get_method(
+        &self,
+        stack: Tuple,
+        params: GetMethodParams,
+        config: Option<&str>,
+    ) -> GetMethodResult {
         let params_str = serde_json::to_string(&params).unwrap();
-        let config_cstr = CString::new(DEFAULT_CONFIG)
-            .expect("Cannot convert Config string to CString, should not happen");
+
+        let config_ptr = config
+            .map(|c| {
+                CString::new(c)
+                    .expect("Cannot convert Config string to CString, should not happen")
+                    .into_raw()
+            })
+            .unwrap_or(null_mut());
 
         let stack = stack.serialize().unwrap();
         let stack_b64 = stack.to_boc_b64(false).unwrap();
@@ -56,7 +67,7 @@ impl GetExecutor {
                 self.inner,
                 params_cstr.into_raw(),
                 stack_b64_cstr.into_raw(),
-                config_cstr.into_raw(),
+                config_ptr,
             )
         };
 

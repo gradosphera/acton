@@ -132,7 +132,7 @@ impl FormatterContext {
     }
 
     fn arc_cell_to_addr(slice: &ArcCell) -> Option<IntAddr> {
-        let cell = Boc::decode_hex(slice.to_boc_hex(false).ok()?).ok()?;
+        let cell = Boc::decode(slice.to_boc(false).ok()?).ok()?;
         let mut slice = cell.as_slice().ok()?;
         let addr = IntAddr::load_from(&mut slice);
         addr.ok()
@@ -167,8 +167,8 @@ impl FormatterContext {
                         TupleItem::Tuple(out_messages),
                         TupleItem::Tuple(externals),
                     ) => {
-                        let result = tx.to_boc_b64(false).ok()?;
-                        let tx_cell: Cell = Boc::decode_base64(&result).ok()?;
+                        let result = tx.to_boc(false).ok()?;
+                        let tx_cell: Cell = Boc::decode(&result).ok()?;
                         let tx = tx_cell.parse::<Transaction>().ok()?;
                         Some(SendResult {
                             tx,
@@ -196,8 +196,8 @@ impl FormatterContext {
                                 .iter()
                                 .filter_map(|ext| match ext {
                                     TupleItem::Cell(cell) => {
-                                        let boc = cell.to_boc_b64(false).ok()?;
-                                        let cell = Boc::decode_base64(&boc).ok()?;
+                                        let boc = cell.to_boc(false).ok()?;
+                                        let cell = Boc::decode(&boc).ok()?;
                                         Some(cell)
                                     }
                                     _ => None,

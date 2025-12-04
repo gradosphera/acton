@@ -227,7 +227,7 @@ fn execute_script(
     let mut executor = GetExecutor::new(params.clone());
     ffi::register(&mut executor, &mut ctx);
 
-    let result = executor.run_get_method(Tuple::empty(), params);
+    let result = executor.run_get_method(Tuple::empty(), params, None);
     print_script_result(&mut ctx, ScriptResult { result });
     Ok(())
 }

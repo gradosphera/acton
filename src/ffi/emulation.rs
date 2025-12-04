@@ -159,23 +159,23 @@ fn send_message_impl(
 
     let msg_b64 = try_ctx!(
         ctx,
-        message.to_boc_b64(false),
+        message.to_boc(false),
         "Failed to encode message to BoC: {}"
     );
     let msg_cell = try_ctx!(
         ctx,
-        Boc::decode_base64(msg_b64),
+        Boc::decode(msg_b64),
         "Failed to decode message from BoC: {}"
     );
 
     let from_b64 = try_ctx!(
         ctx,
-        from.to_boc_b64(false),
+        from.to_boc(false),
         "Failed to encode from address to BoC: {}"
     );
     let from_cell = try_ctx!(
         ctx,
-        Boc::decode_base64(from_b64),
+        Boc::decode(from_b64),
         "Failed to decode from address from BoC: {}"
     );
     let mut from_slice = try_ctx!(
@@ -212,9 +212,9 @@ fn send_message_impl(
             orig_status: AccountStatus::Uninit,
             end_status: AccountStatus::Uninit,
             in_msg: Some(
-                Boc::decode_hex(
+                Boc::decode(
                     message
-                        .to_boc_hex(false)
+                        .to_boc(false)
                         .expect("Unreachable, cannot encode valid message cell"),
                 )
                 .expect("Unreachable, cannot decode/encode message cell"),
@@ -309,8 +309,8 @@ fn send_message_impl(
                 None => ArcCell::default(),
             };
 
-            let result = tx.to_boc_b64(false).ok()?;
-            let tx_cell: Cell = Boc::decode_base64(&result).ok()?;
+            let result = tx.to_boc(false).ok()?;
+            let tx_cell = Boc::decode(&result).ok()?;
             let mut tx_slice = tx_cell.as_slice().ok()?;
             let parsed_tx = Transaction::load_from(&mut tx_slice).ok()?;
 
@@ -663,14 +663,14 @@ fn find_transaction_by_params_impl(
             }
 
             if let Some(expected_from_addr) = &params.from
-                && (*expected_from_addr).to_string() != info.src.to_string()
+                && (*expected_from_addr) != info.src
             {
                 // Source address mismatch
                 return false;
             }
 
             if let Some(expected_to_addr) = &params.to
-                && (*expected_to_addr).to_string() != info.dst.to_string()
+                && (*expected_to_addr) != info.dst
             {
                 // Destination address mismatch
                 return false;
@@ -779,7 +779,7 @@ fn run_get_method_impl(
     let params = GetMethodParams {
         code: code.to_boc_b64(false).unwrap(),
         data: Boc::encode_base64(data),
-        verbosity: ExecutorVerbosity::FullLocationStackVerbose,
+        verbosity: ctx.env.default_log_level,
         libs: libs_root.map(Boc::encode_base64).unwrap_or("".to_string()),
         address: dest_address.to_string(),
         unixtime: 0,
@@ -798,9 +798,7 @@ fn run_get_method_impl(
         let source_map = ctx
             .build
             .build_cache
-            .result_for_code(&Some(
-                Boc::decode_base64(code.to_boc_b64(false).unwrap()).unwrap(),
-            ))
+            .result_for_code(&Some(Boc::decode(code.to_boc(false).unwrap()).unwrap()))
             .map(|res| res.1.source_map);
 
         let dbg_ctx = ctx.debug.ctx();
@@ -840,7 +838,7 @@ fn run_get_method_impl(
         step_executor.finish(&params.code)
     } else {
         let executor = GetExecutor::new(params.clone());
-        executor.run_get_method(args, params)
+        executor.run_get_method(args, params, None)
     };
 
     match result {
@@ -1006,12 +1004,12 @@ extension!(register_address in (Context) with (name: String, address: ArcCell) u
 fn register_address_impl(ctx: &mut Context, _stack: &mut Tuple, name: String, address: ArcCell) {
     let address_boc = try_ctx!(
         ctx,
-        address.to_boc_b64(false),
+        address.to_boc(false),
         "Failed to encode address to BoC: {}"
     );
     let address_cell = try_ctx!(
         ctx,
-        Boc::decode_base64(address_boc),
+        Boc::decode(address_boc),
         "Failed to decode address from BoC: {}"
     );
 
@@ -1037,12 +1035,12 @@ extension!(account_state in (Context) with (address: ArcCell) using account_stat
 fn account_state_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell) {
     let address_boc = try_ctx!(
         ctx,
-        address.to_boc_b64(false),
+        address.to_boc(false),
         "Failed to encode address to BoC: {}"
     );
     let address_cell = try_ctx!(
         ctx,
-        Boc::decode_base64(address_boc),
+        Boc::decode(address_boc),
         "Failed to decode address from BoC: {}"
     );
     let addr = try_ctx!(
@@ -1094,14 +1092,10 @@ fn account_state_impl(ctx: &mut Context, stack: &mut Tuple, address: ArcCell) {
 
 extension!(register_lib in (Context) with (lib: ArcCell) using register_lib_impl);
 fn register_lib_impl(ctx: &mut Context, _stack: &mut Tuple, lib: ArcCell) {
-    let lib_boc = try_ctx!(
-        ctx,
-        lib.to_boc_b64(false),
-        "Failed to encode lib to BoC: {}"
-    );
+    let lib_boc = try_ctx!(ctx, lib.to_boc(false), "Failed to encode lib to BoC: {}");
     let cell = try_ctx!(
         ctx,
-        Boc::decode_base64(lib_boc),
+        Boc::decode(lib_boc),
         "Failed to decode lib from BoC: {}"
     );
     ctx.chain.blockchain.register_lib(cell)

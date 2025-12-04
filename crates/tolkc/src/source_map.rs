@@ -231,7 +231,7 @@ fn get_final_slice(dc: &Cell, key: &str) -> Cell {
 }
 
 fn dyn_cell_to_cell(cell: &DynCell) -> Cell {
-    Boc::decode_base64(Boc::encode_base64(cell)).unwrap()
+    Boc::decode(Boc::encode(cell)).unwrap()
 }
 
 fn get_real_code_hashes(code: &Cell) -> HashMap<String, (String, i32)> {
@@ -271,11 +271,11 @@ pub fn parse_marks_dict(
     marks_boc64: &String,
     code_boc64: &String,
 ) -> HashMap<String, Vec<(i32, i32)>> {
-    let code_cell = Boc::decode_base64(&*code_boc64).unwrap();
+    let code_cell = Boc::decode_base64(code_boc64).unwrap();
 
     let real_code_hashes = get_real_code_hashes(&code_cell);
 
-    let debug_marks_cell = Boc::decode_base64(&*marks_boc64).unwrap();
+    let debug_marks_cell = Boc::decode_base64(marks_boc64).unwrap();
 
     let dict = RawDict::<256>::from(Some(debug_marks_cell));
     let mut marks = HashMap::<String, Vec<(i32, i32)>>::new();

@@ -240,10 +240,10 @@ impl DebugContext {
 
         if let TupleItem::Cell(c5_tuple) = parse_tuple_item(&mut c5_slice)? {
             let c5_boc = c5_tuple
-                .to_boc_b64(false)
+                .to_boc(false)
                 .map_err(|e| anyhow!("Failed to encode c5 tuple to BoC: {e}"))?;
-            let c5_cell = &Boc::decode_base64(&c5_boc)
-                .map_err(|e| anyhow!("Failed to decode c5 BoC: {e}"))?;
+            let c5_cell =
+                &Boc::decode(&c5_boc).map_err(|e| anyhow!("Failed to decode c5 BoC: {e}"))?;
             let c5_slice = c5_cell.as_slice()?;
 
             let out_actions = OutActionsRevIter::new(c5_slice)

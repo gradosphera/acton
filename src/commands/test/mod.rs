@@ -289,7 +289,7 @@ impl<'a> TestRunner<'a> {
                 let mut executor = GetExecutor::new(params.clone());
                 ffi::register(&mut executor, &mut ctx);
 
-                let get_result = executor.run_get_method(Default::default(), params);
+                let get_result = executor.run_get_method(Default::default(), params, None);
 
                 if let Some(trace_dir) = &self.config.save_test_trace {
                     trace::dump_test_transactions(

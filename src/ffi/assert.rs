@@ -248,14 +248,14 @@ pub fn process_txs_and_search_params(
         } else if let TupleItem::Tuple(raw_from) = &raw_from
             && let TupleItem::Slice(cell) = &raw_from[0]
         {
-            let cell = Boc::decode_base64(cell.to_boc_b64(false).unwrap()).unwrap();
-            let mut slice = cell.as_slice().unwrap();
+            let cell = Boc::decode(cell.to_boc(false).ok()?).ok()?;
+            let mut slice = cell.as_slice().ok()?;
             if let Ok(address) = IntAddr::load_from(&mut slice) {
                 params.from = Some(address);
             }
         } else if let TupleItem::Slice(cell) = raw_from {
-            let cell = Boc::decode_base64(cell.to_boc_b64(false).unwrap()).unwrap();
-            let mut slice = cell.as_slice().unwrap();
+            let cell = Boc::decode(cell.to_boc(false).ok()?).ok()?;
+            let mut slice = cell.as_slice().ok()?;
             if let Ok(address) = IntAddr::load_from(&mut slice) {
                 params.from = Some(address);
             }
@@ -267,14 +267,14 @@ pub fn process_txs_and_search_params(
         } else if let TupleItem::Tuple(raw_to) = &raw_to
             && let TupleItem::Slice(cell) = &raw_to[0]
         {
-            let cell = Boc::decode_base64(cell.to_boc_b64(false).unwrap()).unwrap();
-            let mut slice = cell.as_slice().unwrap();
+            let cell = Boc::decode(cell.to_boc(false).ok()?).ok()?;
+            let mut slice = cell.as_slice().ok()?;
             if let Ok(address) = IntAddr::load_from(&mut slice) {
                 params.to = Some(address);
             }
         } else if let TupleItem::Slice(cell) = raw_to {
-            let cell = Boc::decode_base64(cell.to_boc_b64(false).unwrap()).unwrap();
-            let mut slice = cell.as_slice().unwrap();
+            let cell = Boc::decode(cell.to_boc(false).ok()?).ok()?;
+            let mut slice = cell.as_slice().ok()?;
             if let Ok(address) = IntAddr::load_from(&mut slice) {
                 params.to = Some(address);
             }
@@ -298,8 +298,8 @@ pub fn process_txs_and_search_params(
         if let TupleItem::Null = raw_body {
             params.body = None
         } else if let TupleItem::Cell(cell) = raw_body {
-            let boc = cell.to_boc_b64(false).ok()?;
-            let decoded_cell = Boc::decode_base64(&boc).ok()?;
+            let boc = cell.to_boc(false).ok()?;
+            let decoded_cell = Boc::decode(&boc).ok()?;
             params.body = Some(decoded_cell);
         }
     }
@@ -315,8 +315,8 @@ pub fn process_txs_and_search_params(
             _ => None,
         })
         .filter_map(|x| {
-            let result = x.to_boc_b64(false).ok()?;
-            let tx_cell: tycho_types::cell::Cell = Boc::decode_base64(&result).ok()?;
+            let result = x.to_boc(false).ok()?;
+            let tx_cell = Boc::decode(&result).ok()?;
             let mut tx_slice = tx_cell.as_slice().ok()?;
             Transaction::load_from(&mut tx_slice).ok()
         })
