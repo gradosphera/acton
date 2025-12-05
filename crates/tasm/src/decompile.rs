@@ -417,7 +417,7 @@ mod tests {
             .decompile_cell(&code)
             .expect("Failed to decompile cell");
 
-        let res = code.print(Default::default());
+        let res = code.print(&Default::default());
         assert_eq!(res.len(), 132511)
     }
 }

@@ -52,6 +52,12 @@ See [Documentation](https://i582.github.io/acton/compile/).
 
 ## Development
 
+Run all tests:
+
+```
+just test
+```
+
 Run integration tests:
 
 ```
@@ -65,3 +71,5 @@ cargo test --test debug_test -- --test-threads 1
 ```
 
 To update snapshots set `SNAPSHOTS=overwrite`.
+
+See also: [justfile](justfile) for commands.
