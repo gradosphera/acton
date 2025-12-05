@@ -1,4 +1,4 @@
-<img width="150px" src="docs/img/logo.png">
+<img width="150px" src="docs/public/logo.png">
 
 # Acton
 
