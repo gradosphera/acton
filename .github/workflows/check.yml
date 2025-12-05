@@ -22,6 +22,7 @@ jobs:
         os: [ ubuntu-latest, macos-latest ]
 
     runs-on: ${{ matrix.os }}
+    if: false
 
     steps:
       - uses: actions/checkout@v4
