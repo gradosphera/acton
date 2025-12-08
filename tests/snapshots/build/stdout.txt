@@ -15,7 +15,7 @@ Configuration:
      # Configure contracts in Acton.toml
      [contracts.wallet]
      name = "Wallet Contract"
-     root = "contracts/wallet.tolk"
+     src = "contracts/wallet.tolk"
      output = "wallet.boc"
      depends = ["child"]
      # or as library with custom function name and output path

@@ -434,7 +434,11 @@ pub enum LibraryCommand {
         disasm: bool,
         #[arg(long, help = "TonCenter API key for blockchain queries")]
         api_key: Option<String>,
-        #[arg(long, short, help = "Output file for fetched code (BoC or Base64)")]
+        #[arg(
+            long,
+            short,
+            help = "Output file for fetched code (BoC, base64 or TASM if --disasm provided)"
+        )]
         output: Option<String>,
         #[arg(
             long,
@@ -516,7 +520,7 @@ fn example_build_usage() -> StyledStr {
     let config_example = color_print::cformat!(
         r#"<dim>[</>contracts.wallet<dim>]</>
      name<dim> = </><green>"Wallet Contract"</>
-     root<dim> = </><green>"contracts/wallet.tolk"</>
+     src<dim> = </><green>"contracts/wallet.tolk"</>
      output<dim> = </><green>"wallet.boc"</>
      depends<dim> = [</><green>"child"</><dim>]</>
      <dim># or as library with custom function name and output path</>
