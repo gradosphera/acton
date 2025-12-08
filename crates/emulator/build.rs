@@ -8,7 +8,13 @@ fn main() {
     println!("cargo:rustc-link-lib=static=emulator");
 
     #[cfg(target_os = "macos")]
-    println!("cargo:rustc-link-lib=dylib=c++");
-    #[cfg(target_os = "macos")]
-    println!("cargo:rustc-link-lib=dylib=c++abi");
+    {
+        println!("cargo:rustc-link-lib=dylib=c++");
+        println!("cargo:rustc-link-lib=dylib=c++abi");
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        println!("cargo:rustc-link-lib=dylib=stdc++");
+    }
 }
