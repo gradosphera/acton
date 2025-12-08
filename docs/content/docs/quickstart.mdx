@@ -1,7 +1,290 @@
 ---
 title: "Quickstart"
-description: "Build and deploy your first contract with Acton"
+description: "Build, test, and deploy your first Tolk smart contract with Acton"
 icon: Sparkle
 ---
 
-Stub page.
+import { Callout } from "fumadocs-ui/components/callout";
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+In this guide, we will explore Acton's capabilities and develop a simple smart contract. We'll write tests, deploy it to the testnet, and verify its source code.
+
+<Callout>
+    We won't dive deep into the specific details of the contract logic here. To learn more about Tolk and smart contract development, check out [Your first smart contract](https://docs.ton.org/contract-dev/first-smart-contract) in the official documentation.
+</Callout>
+
+## Contract
+
+We will work with the following `Counter` contract:
+
+```tolk title="contracts/counter.tolk"
+import "types"
+
+type AllowedMessage = IncreaseCounter | ResetCounter
+
+fun onInternalMessage(in: InMessage) {
+    val msg = lazy AllowedMessage.fromSlice(in.body);
+
+    match (msg) {
+        IncreaseCounter => {
+            var storage = lazy Storage.load();
+            storage.counter += msg.increaseBy;
+            storage.save();
+        }
+        ResetCounter => {
+            var storage = lazy Storage.load();
+            storage.counter = 0;
+            storage.save();
+        }
+        else => {
+            assert (in.body.isEmpty()) throw 0xFFFF;
+        }
+    }
+}
+
+fun onBouncedMessage(in: InMessageBounced) {}
+
+get fun currentCounter(): int {
+    val storage = lazy Storage.load();
+    return storage.counter;
+}
+```
+
+```tolk title="contracts/types.tolk"
+struct Storage {
+    id: uint32
+    counter: uint32
+}
+
+fun Storage.load() {
+    return Storage.fromCell(contract.getData());
+}
+
+fun Storage.save(self) {
+    contract.setData(self.toCell());
+}
+
+struct (0x7e8764ef) IncreaseCounter {
+    increaseBy: uint32
+}
+
+struct (0x3a752f06) ResetCounter
+```
+
+This contract implements simple logic where anyone can increment the counter or reset its value to zero.
+
+## Get started
+
+
+<Steps>
+    <Step title="Initialize new project">
+        First, let's create a directory for our project. Acton provides the `acton new` command to scaffold a new project:
+
+        ```bash
+        acton new first_counter
+        ```
+
+        Follow the prompts to enter the name, description, and license. You should see output similar to this:
+
+        ```
+        $ acton new first_counter
+        > Project name: first_counter
+        > Description: My cool project
+        > License: MIT
+        ✓ Created new Acton project
+          Project name: first_counter
+          Description: My cool project
+          License: MIT
+
+        Created Acton.toml with project configuration
+        Created .acton/ directory with standard library
+        Created .acton/tolk-stdlib directory with Tolk standard library
+        ```
+
+        Navigate to the project folder:
+
+        ```bash
+        cd first_counter
+        ```
+
+        Now, copy the `contracts/counter.tolk` and `contracts/types.tolk` files shown above into your project's `contracts/` directory.
+    </Step>
+
+    <Step title="Setup contract">
+        To make Acton aware of our contract, we need to register it in the `Acton.toml` configuration file.
+
+        Add the following section to the end of `Acton.toml`:
+
+        ```toml title="Acton.toml"
+        [contracts.counter]
+        name = "Counter"
+        src = "contracts/counter.tolk"
+        ```
+
+        This defines the contract name and the path to its root source file.
+    </Step>
+
+    <Step title="Build contract">
+        With the contract configured, you can now build it using the `acton build` command:
+
+        ```bash
+        acton build counter
+        ```
+
+        This command compiles the contract and places the build artifacts (including a JSON report) in the `build/` folder.
+
+        ```json title="build/counter.json"
+        {
+          "code_boc64": "te6ccgEBBAEAbwABFP8A9KQT9Lzy...",
+          "hash": "1F6548A25E04497496242AD7804B653E6DA9A47E474DC17436313FFA04E15F18"
+        }
+        ```
+
+        Congratulations! You've successfully built your first contract with Acton.
+    </Step>
+
+    <Step title="Test contract">
+        Acton includes a powerful test runner that allows you to write tests in **Tolk**, the same language as your contract. This eliminates the need for context switching and simplifies the testing workflow compared to TypeScript.
+
+        Use `acton test-gen` to generate the necessary wrappers and a test skeleton:
+
+        ```bash
+        acton test-gen counter
+        ```
+
+        This creates a wrapper at `tests/wrappers/Counter.tolk` and a basic test file at `tests/counter_test.tolk`. The generated wrapper abstracts away message creation.
+
+        Open `tests/counter_test.tolk` and look at the generated code:
+
+        ```tolk title="tests/counter_test.tolk"
+        import "../.acton/emulation/network"
+        import "../.acton/testing/expect"
+        import "../.acton/testing/transaction_expect"
+        import "wrappers/Counter"
+
+        get fun `test-basic-flow`() {
+            val (contract, deployer, not_deployer) = setupTest();
+
+            // TODO: Add your test logic here
+        }
+
+        fun setupTest() {
+            val contract = Counter.fromStorage({ id: 0, counter: 0 });
+
+            val deployer = net.treasury("deployer");
+            val msg = createMessage({
+                bounce: false,
+                value: ton("1.0"),
+                dest: {
+                    stateInit: contract.init,
+                },
+            });
+
+            val res = net.send(deployer.address, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+            expect(res).toHaveSuccessfulDeploy({ to: contract.address });
+
+            val not_deployer = net.treasury("not_deployer");
+
+            return (contract, deployer, not_deployer)
+        }
+        ```
+
+        The `setupTest` helper simplifies initialization by deploying the contract to a local blockchain instance.
+
+        Let's implement a test to verify the increment functionality:
+
+        ```tolk title="tests/counter_test.tolk"
+        get fun `test-can-increment-counter`() {
+            val (contract, deployer, not_deployer) = setupTest();
+
+            val res = contract.sendIncreaseCounter(deployer.address, 123);
+            expect(res).toHaveSuccessfulTx({ from: deployer.address, to: contract.address });
+
+            expect(contract.currentCounter()).toEqual(123);
+        }
+        ```
+
+        Run the tests:
+
+        ```bash
+        acton test
+        ```
+
+        Output:
+
+        ```
+        $ acton test
+           Compiling contracts
+            Finished in 726.375µs
+             Running tests
+
+         TEST  <root>/first_counter
+
+         > ./tests/counter_test.tolk (1 test)
+          ✓ can increment counter 4ms
+
+         ✓ 1 passed in 1 file
+        ```
+
+        Acton also supports **coverage analysis**:
+
+        ```bash
+        acton test --coverage
+        ```
+
+        And **mutation testing** to find gaps in your tests:
+
+        ```bash
+        acton test --mutate --mutate-contract counter
+        ```
+
+        If you run mutation testing, you might see a warning about the `ResetCounter` logic not being covered. Let's fix that by adding a test case:
+
+        ```tolk title="tests/counter_test.tolk"
+        get fun `test-reset-counter`() {
+            val (contract, deployer, not_deployer) = setupTest();
+
+            val res = contract.sendIncreaseCounter(deployer.address, 123);
+            expect(res).toHaveSuccessfulTx({ from: deployer.address, to: contract.address });
+
+            expect(contract.currentCounter()).toEqual(123);
+
+            val res2 = contract.sendResetCounter(deployer.address);
+            expect(res2).toHaveSuccessfulTx({ from: deployer.address, to: contract.address });
+
+            expect(contract.currentCounter()).toEqual(0);
+        }
+        ```
+    </Step>
+
+    <Step title="Deploying contract">
+        Now that our contract is tested, we can deploy it to the testnet. We'll need a deployment script and a wallet with testnet TONs.
+
+        Create a script file `scripts/deploy_script.tolk`:
+
+        ```tolk title="scripts/deploy_script.tolk"
+        import "../.acton/io"
+        import "../.acton/emulation/network"
+        import "../.acton/build/build"
+
+        import "../tests/wrappers/Counter"
+        import "../contracts/types"
+
+        fun main() {
+            val deployer = net.wallet("deployer");
+            val counter = Counter.fromStorage(Storage {
+                id: 6,
+                counter: 0,
+            });
+            val res = counter.deploy(deployer.address, { value: ton("0.005") });
+            res.wait();
+            println1("Deployed counter to {}", counter.address);
+        }
+        ```
+
+        This script uses the same convenient wrappers as our tests.
+    </Step>
+</Steps>
+
+
+TODO: finish
