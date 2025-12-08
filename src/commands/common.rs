@@ -1,3 +1,7 @@
+use crate::config::ActonConfig;
+use anyhow::{Context, anyhow};
+use inquire::Select;
+
 pub mod error_fmt {
     use crate::config::ActonConfig;
     use owo_colors::OwoColorize;
@@ -72,4 +76,67 @@ pub mod error_fmt {
             "Address <yellow>{addr}</> is not a valid address. {hint}Enter valid address in user-friendly <green>EQ...</> or raw format <green>0:abcd...</>"
         )
     }
+}
+
+pub fn select_contract(
+    contract_id: Option<String>,
+    config: &ActonConfig,
+) -> anyhow::Result<String> {
+    let contract_key = match contract_id {
+        Some(id) => id,
+        None => {
+            let contracts = config.contracts().ok_or_else(|| {
+                anyhow!(
+                    "No contracts configured in Acton.toml. Please add a contract configuration."
+                )
+            })?;
+
+            let contract_keys: Vec<&String> = contracts.keys().collect();
+            match contract_keys.len() {
+                0 => anyhow::bail!(
+                    "No contracts configured in Acton.toml. Please add a contract configuration."
+                ),
+                1 => contract_keys[0].clone(),
+                _ => {
+                    let contract_key = Select::new(
+                        "Multiple contracts found. Please select which contract to verify:",
+                        contract_keys,
+                    )
+                    .prompt()
+                    .context("Failed to select contract")?;
+                    contract_key.clone()
+                }
+            }
+        }
+    };
+    Ok(contract_key)
+}
+
+pub fn select_wallet(wallet_name: Option<String>, config: &ActonConfig) -> anyhow::Result<String> {
+    let wallet_name = match wallet_name {
+        Some(name) => name,
+        None => {
+            let wallets_config = config.wallets().ok_or_else(|| {
+                anyhow!("No wallets configured in Acton.toml. Please add a wallet configuration.")
+            })?;
+
+            let wallet_names: Vec<&String> = wallets_config.keys().collect();
+            match wallet_names.len() {
+                0 => anyhow::bail!(
+                    "No wallets configured in Acton.toml. Please add a wallet configuration."
+                ),
+                1 => wallet_names[0].clone(),
+                _ => {
+                    let wallet_name = Select::new(
+                        "Multiple wallets configured. Please select which wallet to use:",
+                        wallet_names,
+                    )
+                    .prompt()
+                    .context("Failed to select wallet")?;
+                    wallet_name.clone()
+                }
+            }
+        }
+    };
+    Ok(wallet_name)
 }

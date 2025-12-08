@@ -907,6 +907,36 @@ impl ActonCommand {
         self
     }
 
+    pub fn library(mut self) -> Self {
+        self.cmd = self.cmd.arg("library").current_dir(&self.project.path);
+        self
+    }
+
+    pub fn fetch(mut self, hash: &str) -> Self {
+        self.cmd = self.cmd.arg("fetch").arg(hash);
+        self
+    }
+
+    pub fn publish(mut self) -> Self {
+        self.cmd = self.cmd.arg("publish");
+        self
+    }
+
+    pub fn with_code(mut self, code: &str) -> Self {
+        self.cmd = self.cmd.arg("--code").arg(code);
+        self
+    }
+
+    pub fn with_duration(mut self, duration: &str) -> Self {
+        self.cmd = self.cmd.arg("--duration").arg(duration);
+        self
+    }
+
+    pub fn with_disasm_flag(mut self) -> Self {
+        self.cmd = self.cmd.arg("--disasm");
+        self
+    }
+
     /// Clear compilation cache (for build and script commands)
     ///
     /// # Examples

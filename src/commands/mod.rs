@@ -3,6 +3,7 @@ pub mod common;
 pub mod compile;
 pub mod disasm;
 pub mod init;
+pub mod library;
 pub mod new;
 pub mod script;
 pub mod test;

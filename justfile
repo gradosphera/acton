@@ -7,11 +7,9 @@ build-release:
     cargo build --release
 
 i-test:
-    # run integration tests and auto update snapshots
     cargo test --test integration_test
 
 d-test:
-    # run debugger tests and auto update snapshots
     cargo test --test debug_test -- --test-threads 1
 
 test:

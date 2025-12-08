@@ -3,6 +3,7 @@ use acton::commands::build::build_cmd;
 use acton::commands::compile::compile_cmd;
 use acton::commands::disasm::disasm_cmd;
 use acton::commands::init::init_cmd;
+use acton::commands::library::{fetch_cmd, publish_cmd};
 use acton::commands::new::new_cmd;
 use acton::commands::script::script_cmd;
 use acton::commands::test::{ReportFormat, TestConfig, mutation, test_cmd};
@@ -383,6 +384,11 @@ enum Commands {
         #[arg(long, help = "TonCenter API key for blockchain queries")]
         api_key: Option<String>,
     },
+    #[command(about = "Manage TON libraries")]
+    Library {
+        #[command(subcommand)]
+        command: LibraryCommand,
+    },
     #[command(
         about = "Generate shell completions for selected shell",
         after_help = "For installation instructions, see https://acton.dev/acton/shell-completions/"
@@ -390,6 +396,54 @@ enum Commands {
     Completions {
         #[clap(value_enum)]
         shell: clap_complete::Shell,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum LibraryCommand {
+    #[command(about = "Publish a library to the blockchain")]
+    Publish {
+        #[arg(help = "Contract ID from Acton.toml to publish (see --code to pass arbitrary code)")]
+        contract_id: Option<String>,
+        #[arg(long, help = "Code to use instead of compiling contract")]
+        code: Option<String>,
+        #[arg(
+            long,
+            help = "Duration to publish the library for (e.g. 100d, 1y) (optional, will prompt if not provided)"
+        )]
+        duration: Option<String>,
+        #[arg(
+            long,
+            help = "Wallet to use for publishing (optional, will prompt if not provided)"
+        )]
+        wallet: Option<String>,
+        #[arg(long, help = "TonCenter API key for blockchain queries")]
+        api_key: Option<String>,
+        #[arg(
+            long,
+            help = "Network to use (mainnet or testnet)",
+            default_value = "testnet"
+        )]
+        net: String,
+    },
+    #[command(about = "Fetch a library from the blockchain")]
+    Fetch {
+        #[arg(help = "Library hash to fetch")]
+        hash: String,
+        #[arg(long, help = "Disassemble fetched library code")]
+        disasm: bool,
+        #[arg(long, help = "TonCenter API key for blockchain queries")]
+        api_key: Option<String>,
+        #[arg(long, short, help = "Output file for fetched code (BoC or Base64)")]
+        output: Option<String>,
+        #[arg(
+            long,
+            help = "Network to use (mainnet or testnet)",
+            default_value = "testnet"
+        )]
+        net: String,
+        #[arg(long, help = "Output result as JSON")]
+        json: bool,
     },
 }
 
@@ -737,6 +791,39 @@ fn main() {
             dry_run,
             api_key,
         ),
+        Commands::Library { command } => match command {
+            LibraryCommand::Publish {
+                contract_id,
+                code,
+                duration,
+                wallet,
+                api_key,
+                net,
+            } => publish_cmd(contract_id, code, duration, wallet, api_key, net),
+            LibraryCommand::Fetch {
+                hash,
+                disasm,
+                api_key,
+                output,
+                net,
+                json,
+            } => {
+                let result = fetch_cmd(hash, disasm, api_key, output, net, json);
+                if json {
+                    if let Err(err) = result {
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "success": false,
+                                "error": err.to_string()
+                            })
+                        );
+                    }
+                    return;
+                }
+                result
+            }
+        },
         Commands::Completions { shell } => {
             clap_complete::generate(shell, &mut Cli::command(), "acton", &mut std::io::stdout());
             Ok(())
