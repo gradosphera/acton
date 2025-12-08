@@ -4,6 +4,21 @@ description = "All-in-one toolkit for TON Blockchain smartcontract development"
 version = "0.1.0"
 license = "MIT"
 
+[contracts.counter]
+name = "Counter"
+src = "counter.tolk"
+depends = []
+
+[contracts.jetton-minter]
+name = "Minter"
+src = ".jetton/contracts/jetton-minter-contract.tolk"
+depends = ["jetton-wallet"]
+
+[contracts.jetton-wallet]
+name = "Wallet"
+src = ".jetton/contracts/jetton-wallet-contract.tolk"
+depends = []
+
 [wallets.deployer]
 kind = "v5r1"
 workchain = 0
