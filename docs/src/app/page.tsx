@@ -62,7 +62,6 @@ const FEATURES: Feature[] = [
   }
 ];
 
-
 export default function Home() {
   return (
     <div className="relative min-h-screen flex flex-col bg-black text-white overflow-x-hidden z-0">
@@ -134,15 +133,15 @@ export default function Home() {
               <InstallationCodeBlock/>
 
               <div className="flex flex-wrap gap-6 justify-center">
-                <Link href="/docs/installation">
+                <Link href="/docs/welcome">
                   <Button size="lg"
-                          className="glass-button h-12 px-20 rounded-2xl text-base bg-white/10 text-white border border-white/10">
+                          className="glass-button h-12 px-20 rounded-2xl text-base hover:cursor-pointer bg-white/10 text-white border border-white/10">
                     Get Started
                   </Button>
                 </Link>
                 <Link href="https://github.com" target="_blank">
                   <Button size="lg" variant="outline"
-                          className="glass-button-outline h-12 px-20 rounded-2xl text-base border-white/10 hover:bg-white/5">
+                          className="glass-button-outline h-12 px-20 rounded-2xl text-base hover:cursor-pointer border-white/10 hover:bg-white/5">
                     <Github className="w-4 h-4 mr-2"/>
                     GitHub
                   </Button>
@@ -182,7 +181,7 @@ export default function Home() {
             <InstallationCodeBlock/>
 
             <div className="flex flex-wrap gap-6 justify-center pt-12">
-              <Link href="/docs/installation">
+              <Link href="/docs/welcome">
                 <Button size="lg"
                         className="glass-button h-12 px-20 rounded-2xl text-base bg-white/10 text-white border border-white/10">
                   Get Started

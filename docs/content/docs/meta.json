@@ -1,6 +1,7 @@
 {
   "pages": [
-    "--- Getting started ---",
+    "--- Get started ---",
+    "welcome.mdx",
     "installation.mdx",
     "quickstart.mdx",
     "--- First steps ---",
