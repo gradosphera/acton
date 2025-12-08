@@ -14,7 +14,7 @@ Cargo.lock
 
 docs/.astro
 docs/node_modules
-docs/dist
+docs/out
 
 # OS files
 .DS_Store

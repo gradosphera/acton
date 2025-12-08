@@ -487,7 +487,7 @@ fn test_build_with_graph_default_path() {
 
     let content = fs::read_to_string(&svg_file).expect("Should read SVG");
     assertion().eq(
-        content,
+        normalize_output(&content, project.path()),
         snapbox::file!("snapshots/test_build_with_graph_default_path.svg.gen"),
     );
 }
@@ -514,7 +514,7 @@ fn test_build_with_graph_custom_path() {
 
     let content = fs::read_to_string(&svg_file).expect("Should read SVG");
     assertion().eq(
-        content,
+        normalize_output(&content, project.path()),
         snapbox::file!("snapshots/test_build_with_graph_custom_path.svg.gen"),
     );
 }
