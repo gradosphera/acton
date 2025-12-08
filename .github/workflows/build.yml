@@ -21,6 +21,9 @@ jobs:
     runs-on: macos-latest
     if: true
 
+    outputs:
+      arch: ${{ steps.detect-arch.outputs.arch }}
+
     steps:
       - name: Check out Acton repository
         uses: actions/checkout@v4
@@ -28,9 +31,20 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install sccache
+        run: |
+          cargo install sccache
+
+      - name: Cache sccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/sccache
+          key: ${{ runner.os }}-sccache-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-sccache-
+
       - name: Install required system dependencies
         run: |
-          brew update
           brew install ccache ninja libsodium libmicrohttpd pkg-config automake libtool autoconf gnutls llvm@16
 
       - name: Clone TON repository
@@ -97,9 +111,18 @@ jobs:
           cp ton-repo/artifacts/libemulator.a objs/
           cp ton-repo/artifacts/libtolk.a objs/
 
+      - name: Detect architecture
+        id: detect-arch
+        run: echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
+
       - name: Build acton binary
+        env:
+          RUSTC_WRAPPER: sccache
         run: |
           cargo build --release --bin acton
+
+      - name: Show sccache stats
+        run: sccache --show-stats || true
 
       - name: Test acton binary
         run: |
@@ -258,7 +281,7 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: binaries/macos/acton
-          asset_name: acton
+          asset_name: acton-${{ steps.nightly-tag.outputs.tag }}-darwin-${{ needs.build-macos.outputs.arch }}
           asset_content_type: application/octet-stream
         env:
           GITHUB_TOKEN: ${{ secrets.ACTON_TOKEN }}

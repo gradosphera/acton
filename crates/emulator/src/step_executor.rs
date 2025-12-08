@@ -140,11 +140,3 @@ pub struct PrepareResult {
     pub success: bool,
     pub skipped: bool,
 }
-
-#[derive(Deserialize)]
-struct EmulationInternalResult {
-    #[allow(dead_code)]
-    pub output: EmulationResult,
-    #[allow(dead_code)]
-    pub logs: String,
-}
