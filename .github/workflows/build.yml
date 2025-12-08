@@ -16,10 +16,10 @@ concurrency:
 jobs:
   build-macos:
     runs-on: macos-latest
-    if: false
+    if: true
 
     steps:
-      - name: Check out emulator-rs repository
+      - name: Check out Acton repository
         uses: actions/checkout@v4
 
       - name: Install Rust
@@ -113,7 +113,7 @@ jobs:
     if: false
 
     steps:
-      - name: Check out emulator-rs repository
+      - name: Check out Acton repository
         uses: actions/checkout@v4
 
       - name: Install Rust
@@ -248,7 +248,7 @@ jobs:
           draft: false
           prerelease: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ACTON_TOKEN }}
 
       - name: Upload macOS binary to release
         uses: actions/upload-release-asset@v1
@@ -258,4 +258,4 @@ jobs:
           asset_name: acton
           asset_content_type: application/octet-stream
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ACTON_TOKEN }}
