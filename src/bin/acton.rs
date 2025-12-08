@@ -24,7 +24,7 @@ use tasm::printer::FormatOptions;
 use tolkc::source_map::SourceMap;
 
 #[derive(Parser)]
-#[command(name = "acton")]
+#[command(name = "acton", version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), ")"))]
 #[command(about = "TON blockchain development tool")]
 #[command(color = ColorChoice::Auto)]
 struct Cli {
