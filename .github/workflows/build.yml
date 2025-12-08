@@ -145,6 +145,9 @@ jobs:
     runs-on: ubuntu-latest
     if: true
 
+    outputs:
+      arch: ${{ steps.detect-arch.outputs.arch }}
+
     steps:
       - name: Check out Acton repository
         uses: actions/checkout@v4
@@ -254,7 +257,7 @@ jobs:
           path: target/release/acton
 
   create-canary-release:
-    needs: [ build-macos ]
+    needs: [ build-macos, build-linux ]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master'
 
@@ -268,15 +271,28 @@ jobs:
           name: acton-macos-binary
           path: binaries/macos/
 
+      - name: Download Linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: acton-linux-binary
+          path: binaries/linux/
+
       - name: Make binaries executable
         run: |
           chmod +x binaries/macos/acton
+          chmod +x binaries/linux/acton
 
       - name: Create macOS archive
         run: |
           mkdir -p dist
           tar -czf dist/acton-darwin-${{ needs.build-macos.outputs.arch }}.tar.gz \
             -C binaries/macos acton
+
+      - name: Create Linux archive
+        run: |
+          mkdir -p dist
+          tar -czf dist/acton-linux-${{ needs.build-linux.outputs.arch }}.tar.gz \
+            -C binaries/linux acton
 
       - name: Delete previous canary release and tag
         env:
@@ -298,7 +314,9 @@ jobs:
             Automated canary build of Acton.
 
             ## Archives
-            - `acton-canary-darwin-${{ needs.build-macos.outputs.arch }}.tar.gz` - macOS archive
+
+            - `acton-canary-darwin-${{ needs.build-macos.outputs.arch }}.tar.gz` — macOS archive
+            - `acton-canary-linux-${{ needs.build-linux.outputs.arch }}.tar.gz` — Linux archive
 
             Built from commit: ${{ github.sha }}
           draft: false
@@ -312,6 +330,16 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: dist/acton-darwin-${{ needs.build-macos.outputs.arch }}.tar.gz
           asset_name: acton-canary-darwin-${{ needs.build-macos.outputs.arch }}.tar.gz
+          asset_content_type: application/gzip
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACTON_TOKEN }}
+
+      - name: Upload Linux archive to release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: dist/acton-linux-${{ needs.build-linux.outputs.arch }}.tar.gz
+          asset_name: acton-canary-linux-${{ needs.build-linux.outputs.arch }}.tar.gz
           asset_content_type: application/gzip
         env:
           GITHUB_TOKEN: ${{ secrets.ACTON_TOKEN }}
