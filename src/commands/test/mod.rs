@@ -256,7 +256,7 @@ impl<'a> TestRunner<'a> {
             },
             debug: DebugCtx::Disabled,
             is_broadcasting: false,
-            network: "testnet".to_owned(),
+            network: self.config.fork_net.clone().unwrap_or("testnet".to_owned()),
         };
 
         let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) =

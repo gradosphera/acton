@@ -1138,7 +1138,7 @@ fn cell_from_hex_impl(ctx: &mut Context, stack: &mut Tuple, cell_hex: String) {
 
 extension!(load_library_by_hash in (Context) with (hash: String) using load_library_by_hash_impl);
 fn load_library_by_hash_impl(ctx: &mut Context, stack: &mut Tuple, hash: String) {
-    let lib = remote::get_library_by_hash("mainnet", hash.as_str(), None);
+    let lib = remote::get_library_by_hash(&ctx.network, hash.as_str(), None);
     match lib {
         Ok(lib) => {
             let lib_b64 = Boc::encode_base64(lib);

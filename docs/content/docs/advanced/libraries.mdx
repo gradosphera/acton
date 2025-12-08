@@ -107,3 +107,19 @@ acton library fetch <LIBRARY_HASH> --disasm -o library.tasm
 <Callout title="Command Reference">
   For a complete list of options and flags, see the [Library Command Reference](/docs/commands/library).
 </Callout>
+
+## Working with libraries in tests and scripts
+
+Acton provides handy functions for working with libraries:
+
+### `net.loadLibrary(hash: slice): cell?`
+
+Loads a library by its hash and returns its code as a cell. Returns null if the library is not found.
+
+### `vm.registerLibrary(cell: cell): void`
+
+Registers a library in the current test blockchain. After this call, contracts can use this library.
+
+### `net.fetchAndRegisterLibrary(hash: slice): bool`
+
+Fetches a library by its hash and registers it in the current test blockchain. Returns true if the library is found and registered, false otherwise.
