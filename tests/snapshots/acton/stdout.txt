@@ -9,6 +9,7 @@ Commands:
   test-gen     Generate test wrapper and test file for a contract
   script       Execute a Tolk script file
   build        Build the specified contract or all contracts
+  run          Run a script defined in Acton.toml
   compile      Compile a Tolk file
   disasm       Disassemble TVM bitcode to human-readable TASM
   verify       Verify contract source code on verifier.ton.org

@@ -72,7 +72,7 @@ pub fn test_gen_cmd(
             &contract_name,
             &abi,
             &handled_messages,
-            &contract_config.name,
+            contract_id,
             Some(&types_file_path),
             &wrapper_path,
             Some(&types_file_path),
@@ -96,7 +96,7 @@ pub fn test_gen_cmd(
             &contract_name,
             &abi,
             &handled_messages,
-            &contract_config.name,
+            contract_id,
             storage_file_path.as_ref(),
             &wrapper_path,
             None,
@@ -299,8 +299,11 @@ fn generate_wrapper(
 
     code.push('\n');
 
+    code.push_str("/// Configuration for sending messages to the contract\n");
     code.push_str("struct SendMessageConfig {\n");
+    code.push_str("    /// The amount of TON to send with the message (default: 0.1 TON)\n");
     code.push_str("    value: coins = ton(\"0.1\")\n");
+    code.push_str("    /// Whether to bounce the message if the contract does not exist or fails (default: false)\n");
     code.push_str("    bounce: bool = false\n");
     code.push_str("}\n\n");
 
@@ -317,6 +320,9 @@ fn generate_wrapper(
         ));
         code.push('\n');
     }
+
+    code.push_str(&generate_deploy(contract_name));
+    code.push('\n');
 
     for message_name in handled_messages {
         if let Some(message_type) = abi.messages.iter().find(|m| &m.name == message_name) {
@@ -340,6 +346,7 @@ fn generate_from_storage(
 ) -> String {
     let mut code = String::new();
 
+    code.push_str("/// Creates a contract wrapper instance from the storage data\n");
     code.push_str(&format!(
         "fun {}.fromStorage(storage: Storage) {{\n",
         contract_name
@@ -356,6 +363,26 @@ fn generate_from_storage(
         "    return {} {{ address, init }}\n",
         contract_name
     ));
+    code.push_str("}\n");
+
+    code
+}
+
+fn generate_deploy(contract_name: &str) -> String {
+    let mut code = String::new();
+
+    code.push_str("/// Deploys the contract to the blockchain\n");
+    code.push_str(&format!(
+        "fun {contract_name}.deploy(self, from: address, config: SendMessageConfig = {{}}): SendResultList {{\n",
+    ));
+    code.push_str("    val msg = createMessage({\n");
+    code.push_str("        bounce: config.bounce,\n");
+    code.push_str("        value: config.value,\n");
+    code.push_str("        dest: {\n");
+    code.push_str("            stateInit: self.init,\n");
+    code.push_str("        },\n");
+    code.push_str("    });\n");
+    code.push_str("    return net.send(from, msg, SEND_MODE_PAY_FEES_SEPARATELY)\n");
     code.push_str("}\n");
 
     code
@@ -558,7 +585,20 @@ fn get_relative_import_from_wrapper(wrapper_path: &Path, storage_path: &Path) ->
 fn generate_setup_test(contract_name: &str, abi: &ContractAbi) -> String {
     let mut code = String::new();
 
+    code.push_str(
+        "/// Initializes the test environment, creating a fresh instance of the contract.\n",
+    );
+    code.push_str("/// Returns the contract wrapper and two treasury accounts (`deployer` and `not_deployer`).\n");
     code.push_str("fun setupTest() {\n");
+
+    code.push_str("    // Create a treasury account for deployment (typically the owner)\n");
+    code.push_str("    val deployer = net.treasury(\"deployer\");\n");
+    code.push_str(
+        "    // Create another treasury account for testing interactions from other users\n",
+    );
+    code.push_str("    val not_deployer = net.treasury(\"not_deployer\");\n");
+    code.push('\n');
+    code.push_str("    // Initialize and deploy the contract with default values\n");
 
     if let Some(storage) = &abi.storage {
         code.push_str(&format!(
@@ -585,22 +625,8 @@ fn generate_setup_test(contract_name: &str, abi: &ContractAbi) -> String {
         ));
     }
 
-    code.push('\n');
-    code.push_str("    val deployer = net.treasury(\"deployer\");\n");
-    code.push_str("    val msg = createMessage({\n");
-    code.push_str("        bounce: false,\n");
-    code.push_str("        value: ton(\"1.0\"),\n");
-    code.push_str("        dest: {\n");
-    code.push_str("            stateInit: contract.init,\n");
-    code.push_str("        },\n");
-    code.push_str("    });\n");
-    code.push('\n');
-    code.push_str(
-        "    val res = net.send(deployer.address, msg, SEND_MODE_PAY_FEES_SEPARATELY);\n",
-    );
+    code.push_str("    val res = contract.deploy(deployer.address, { value: ton(\"1\") });\n");
     code.push_str("    expect(res).toHaveSuccessfulDeploy({ to: contract.address });\n");
-    code.push('\n');
-    code.push_str("    val not_deployer = net.treasury(\"not_deployer\");\n");
     code.push('\n');
     code.push_str("    return (contract, deployer, not_deployer)\n");
     code.push_str("}\n");
@@ -624,10 +650,14 @@ fn get_default_value(type_name: &str) -> &str {
 fn generate_example_test(_contract_name: &str) -> String {
     let mut code = String::new();
 
+    code.push_str("/// Example test case demonstrating the basic flow\n");
     code.push_str("get fun `test-basic-flow`() {\n");
     code.push_str("    val (contract, deployer, not_deployer) = setupTest();\n");
     code.push('\n');
-    code.push_str("    // TODO: Add your test logic here\n");
+    code.push_str("    // TODO: Implement your test logic here\n");
+    code.push_str("    // Example:\n");
+    code.push_str("    // val res = contract.sendMsg(deployer.address, ...);\n");
+    code.push_str("    // expect(res).toHaveTransaction({ ... });\n");
     code.push_str("}\n");
 
     code
