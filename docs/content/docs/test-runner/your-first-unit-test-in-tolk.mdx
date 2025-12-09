@@ -3,23 +3,19 @@ title: "Writing your first unit test in Tolk"
 description: "Learn how to write unit tests in Tolk that test individual functions in isolation without contract deployment"
 ---
 
+import {Callout} from "fumadocs-ui/components/callout";
+
 In this article, we'll explore how to write unit tests in Tolk. Unit tests focus on testing individual functions in isolation, without involving contract deployment or message sending.
 
 If you've written tests in TypeScript for smart contracts, you know that unit testing individual functions is challenging because you need to somehow expose the function being tested to call it from a TypeScript test.
 
 Writing unit tests in Tolk frees you from these problems.
 
-**What you'll learn:**
-- How to structure unit tests in Tolk
-- How to use the expect API for assertions
-- How to create custom matchers
-- How to run unit tests
-
 Let's write our first unit test in Tolk.
 
 ## 1. Tolk Test Structure
 
-All test files have the `_test.tolk` extension, for example, `wallet_test.tolk`, which allows you to quickly identify test files among others. 
+All test files have the `_test.tolk` extension, for example, `wallet_test.tolk`, which allows you to quickly identify test files among others.
 To create a new test, write getter methods with names starting with `test_` or `test-`.
 
 The simplest unit test looks like this:
@@ -33,7 +29,9 @@ get fun `test-unit`() {
 ```
 
 <Callout type="warn">
-Test functions must be getter methods (using `get fun`) and their names must start with `test_` or `test-`, otherwise the test runner will just ignore them.
+    Test functions must be getter methods (using `get fun`) and their names must
+    start with `test_` or `test-`, otherwise the test runner will just ignore
+    them.
 </Callout>
 
 Unit tests use an API very similar to what is used in TypeScript. `expect()` creates a matcher object with the passed value, `toEqual()` is one of the matcher methods that compares two values for equality. The standard library provides a full range of necessary matchers for different types. Moreover, creating your own matchers is trivial—we'll look at this further.
@@ -83,9 +81,13 @@ get fun `test-unit`() {
 As you can see, instead of a standalone function, we added a new method directly to the type that `expect()` returns. Now using your matcher is no different from standard ones.
 
 <Callout type="info">
-Custom matchers are a powerful way to create reusable validation logic. They keep your tests clean and focused on the business logic rather than implementation details.
+    Custom matchers are a powerful way to create reusable validation logic. They
+    keep your tests clean and focused on the business logic rather than
+    implementation details.
 
-Read the [complete guide to custom matchers](/docs/test-runner/writing-your-own-matchers/) for detailed examples and best practices.
+    Read the [complete guide to custom
+    matchers](/docs/test-runner/writing-your-own-matchers/) for detailed
+    examples and best practices.
 </Callout>
 
 ## Summary
