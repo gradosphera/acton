@@ -232,6 +232,9 @@ enum Commands {
         #[arg(help = "Script file to execute")]
         path: String,
 
+        #[arg(help = "Arguments to pass to the script")]
+        args: Vec<String>,
+
         // Debugging
         #[arg(long, help = "Enable debug mode", help_heading = "Debugging")]
         debug: bool,
@@ -712,6 +715,7 @@ fn main() {
         } => test_gen_cmd(&contract_id, wrapper_output, test_output),
         Commands::Script {
             path,
+            args,
             debug,
             debug_port,
             clear_cache,
@@ -721,6 +725,7 @@ fn main() {
             net,
         } => script_cmd(
             &path,
+            args,
             debug,
             debug_port,
             clear_cache,

@@ -1,5 +1,6 @@
 {
   "pages": [
+    "passing-arguments",
     "setup-wallets",
     "blockchain-interaction"
   ]

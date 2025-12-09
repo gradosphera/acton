@@ -649,6 +649,11 @@ impl ActonCommand {
         self
     }
 
+    pub fn arg(mut self, arg: &str) -> Self {
+        self.cmd = self.cmd.arg(arg);
+        self
+    }
+
     /// Start disasm command (without input - use with disasm_file or disasm_string)
     ///
     /// # Examples

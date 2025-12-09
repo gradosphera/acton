@@ -93,6 +93,7 @@ pub enum VmStackValue<'a> {
     Continuation(&'a str),
     Builder(&'a str),
     CellSlice(CellSlice<'a>),
+    String(&'a str),
     Unknown,
 }
 
@@ -116,6 +117,7 @@ impl<'a> VmStackValue<'a> {
             VmStackValue::Continuation(s) => format!("Cont{{{}}}", s),
             VmStackValue::Builder(s) => format!("BC{{{}}}", s),
             VmStackValue::CellSlice(cs) => cs.to_string(),
+            VmStackValue::String(s) => format!("\"{}\"", s),
             VmStackValue::Unknown => "???".to_string(),
         }
     }
@@ -193,8 +195,9 @@ fn tag(i: &mut I, mut s: &'static str) -> PResult<()> {
 // Null / NaN / Integer
 fn null_val<'a>(i: &mut I<'a>) -> PResult<VmStackValue<'a>> {
     alt((
-        delimited("(", ws0, delimited("", ws0, ")")).value(VmStackValue::Null), // "()" с пробелами
+        delimited("(", ws0, delimited("", ws0, ")")).value(VmStackValue::Null),
         "(null)".value(VmStackValue::Null),
+        "null".value(VmStackValue::Null),
     ))
     .parse_next(i)
     .or_else(|_| "NaN".value(VmStackValue::NaN).parse_next(i))
@@ -289,11 +292,17 @@ fn cell_slice<'a>(i: &mut I<'a>) -> PResult<VmStackValue<'a>> {
     .parse_next(i)
 }
 
+fn string_literal<'a>(i: &mut I<'a>) -> PResult<VmStackValue<'a>> {
+    delimited("\"", take_while(0.., |c: char| c != '"'), "\"")
+        .map(VmStackValue::String)
+        .parse_next(i)
+}
+
 fn unknown_val<'a>(i: &mut I<'a>) -> PResult<VmStackValue<'a>> {
     "???".value(VmStackValue::Unknown).parse_next(i)
 }
 
-fn vm_stack_value<'a>(i: &mut I<'a>) -> PResult<VmStackValue<'a>> {
+pub fn vm_stack_value<'a>(i: &mut I<'a>) -> PResult<VmStackValue<'a>> {
     preceded(
         ws0,
         alt((
@@ -308,6 +317,7 @@ fn vm_stack_value<'a>(i: &mut I<'a>) -> PResult<VmStackValue<'a>> {
                 CellLike::Cell(_) => unreachable!(),
             }),
             cell_slice,
+            string_literal,
             unknown_val,
         )),
     )

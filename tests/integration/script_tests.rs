@@ -2,6 +2,8 @@ use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 
 use std::fs;
+use tycho_types::boc::Boc;
+use tycho_types::cell::CellBuilder;
 
 #[test]
 fn test_script_simple_execution() {
@@ -88,6 +90,355 @@ fn test_script_wrong_extension() {
         .run()
         .failure()
         .assert_stderr_contains("must end with .tolk");
+}
+
+#[test]
+fn test_script_with_args() {
+    let project = ProjectBuilder::new("script-args")
+        .script_file(
+            "args",
+            r#"
+            import "../../lib/io"
+
+            fun main(a: int, b: int) {
+                println("Arg A:");
+                println(a);
+                println("Arg B:");
+                println(b);
+                println("Sum:");
+                println(a + b);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/args.tolk")
+        .arg("10")
+        .arg("20")
+        .run()
+        .success()
+        .assert_contains("Arg A:")
+        .assert_contains("10")
+        .assert_contains("Arg B:")
+        .assert_contains("20")
+        .assert_contains("Sum:")
+        .assert_contains("30");
+}
+
+#[test]
+fn test_script_with_tuple_args() {
+    let project = ProjectBuilder::new("script-tuple-args")
+        .script_file(
+            "tuple",
+            r#"
+            import "../../lib/io"
+
+            fun main(t: tuple) {
+                val a: int = t.get(0);
+                val b: int = t.get(1);
+                println("Tuple A:");
+                println(a);
+                println("Tuple B:");
+                println(b);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/tuple.tolk")
+        .arg("[(10 20)]")
+        .run()
+        .success()
+        .assert_contains("Tuple A:")
+        .assert_contains("10")
+        .assert_contains("Tuple B:")
+        .assert_contains("20");
+}
+
+#[test]
+fn test_script_with_tensor_args_and_struct() {
+    let project = ProjectBuilder::new("script-tensor-args")
+        .script_file(
+            "tensor",
+            r#"
+            import "../../lib/io"
+
+            struct Abc {
+                a: int,
+                b: int,
+                c: int,
+            }
+
+            fun main(a: Abc) {
+                println1("a: {}", a.a);
+                println1("b: {}", a.b);
+                println1("c: {}", a.c);
+            }
+
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/tensor.tolk")
+        .arg("[ 10 20 30 ]")
+        .run()
+        .success()
+        .assert_contains("a: 10")
+        .assert_contains("b: 20")
+        .assert_contains("c: 30");
+}
+
+#[test]
+fn test_script_with_args_and_struct() {
+    let project = ProjectBuilder::new("script-tensor-args")
+        .script_file(
+            "tensor",
+            r#"
+            import "../../lib/io"
+
+            struct Abc {
+                a: int,
+                b: int,
+                c: int,
+            }
+
+            fun main(a: Abc) {
+                println1("a: {}", a.a);
+                println1("b: {}", a.b);
+                println1("c: {}", a.c);
+            }
+
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/tensor.tolk")
+        .arg("10")
+        .arg("20")
+        .arg("30")
+        .run()
+        .success()
+        .assert_contains("a: 10")
+        .assert_contains("b: 20")
+        .assert_contains("c: 30");
+}
+
+#[test]
+fn test_script_with_null_arg() {
+    let project = ProjectBuilder::new("script-tuple-args")
+        .script_file(
+            "tuple",
+            r#"
+            import "../../lib/io"
+
+            fun main(a: int?) {
+                println1("a: {}", a);
+            }
+
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/tuple.tolk")
+        .arg("null")
+        .run()
+        .success()
+        .assert_contains("a: null");
+
+    project
+        .acton()
+        .script("scripts/tuple.tolk")
+        .arg("10")
+        .run()
+        .success()
+        .assert_contains("a: 10");
+}
+
+#[test]
+fn test_script_with_cell_arg() {
+    let project = ProjectBuilder::new("script-cell-args")
+        .script_file(
+            "cell",
+            r#"
+            import "../../lib/io"
+
+            fun main(a: cell) {
+                var slice = a.beginParse();
+                println1("a: {}", slice.loadUint(32));
+            }
+
+        "#,
+        )
+        .build();
+
+    let mut builder = CellBuilder::new();
+    builder.store_uint(999, 32).ok();
+    let cell = builder.build().ok().unwrap_or_default();
+    let cell_hex = Boc::encode_hex(cell);
+
+    project
+        .acton()
+        .script("scripts/cell.tolk")
+        .arg(&format!("C{{{cell_hex}}}"))
+        .run()
+        .success()
+        .assert_contains("a: 999");
+}
+
+#[test]
+fn test_script_with_slice_arg() {
+    let project = ProjectBuilder::new("script-cell-args")
+        .script_file(
+            "cell",
+            r#"
+            import "../../lib/io"
+
+            fun main(a: slice) {
+                println1("a: {}", a.loadUint(32));
+            }
+
+        "#,
+        )
+        .build();
+
+    let mut builder = CellBuilder::new();
+    builder.store_uint(999, 32).ok();
+    let cell = builder.build().ok().unwrap_or_default();
+    let cell_hex = Boc::encode_hex(cell);
+
+    project
+        .acton()
+        .script("scripts/cell.tolk")
+        .arg(&format!("CS{{{cell_hex}}}"))
+        .run()
+        .success()
+        .assert_contains("a: 999");
+}
+
+#[test]
+fn test_script_with_string_arg() {
+    let project = ProjectBuilder::new("script-string-args")
+        .script_file(
+            "string",
+            r#"
+            import "../../lib/io"
+
+            fun main(a: slice) {
+                println1("a: {}", a);
+            }
+
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/string.tolk")
+        .arg(r#""hello world""#)
+        .run()
+        .success()
+        .assert_contains("a: hello world");
+}
+
+#[test]
+fn test_script_with_long_string_arg() {
+    let project = ProjectBuilder::new("script-string-args")
+        .script_file(
+            "string",
+            r#"
+            import "../../lib/io"
+
+            fun main(a: slice) {
+                println1("a: {}", a);
+            }
+
+        "#,
+        )
+        .build();
+
+    let string = "hello world ".repeat(1000);
+    project
+        .acton()
+        .script("scripts/string.tolk")
+        .arg(&format!("\"{string}\""))
+        .run()
+        .success()
+        .assert_contains(&format!("a: {string}"));
+}
+
+#[test]
+fn test_script_with_invalid_arg() {
+    let project = ProjectBuilder::new("script-cell-args")
+        .script_file(
+            "cell",
+            r#"
+            import "../../lib/io"
+
+            fun main(a: int) {
+                println1("a: {}", a);
+            }
+
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/cell.tolk")
+        .arg("[ 10")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_script_with_invalid_arg.stderr.txt",
+        );
+}
+
+#[test]
+fn test_script_to_calculate_storage_fee() {
+    let project = ProjectBuilder::new("script-cell-args")
+        .script_file(
+            "cell",
+            r#"
+            import "../../lib/io"
+
+            import "@stdlib/gas-payments"
+
+            fun main(libraryCode: cell, duration: int) {
+                val gasConsumedBeforeCalculation = getGasConsumedAtTheMoment();
+                val (libraryRefs, libraryBits, _) = libraryCode.calculateSizeStrict(2048);
+                val gasConsumedForCalculation = getGasConsumedAtTheMoment() - gasConsumedBeforeCalculation;
+
+                val toReserve = calculateGasFeeWithoutFlatPrice(MASTERCHAIN, gasConsumedForCalculation)
+                    + calculateStorageFee(MASTERCHAIN, duration, libraryBits, libraryRefs);
+                println1("{:ton}", toReserve);
+            }
+        "#,
+        )
+        .build();
+
+    let mut builder = CellBuilder::new();
+    builder.store_uint(999, 32).ok();
+    let cell = builder.build().ok().unwrap_or_default();
+    let cell_hex = Boc::encode_hex(cell);
+
+    project
+        .acton()
+        .script("scripts/cell.tolk")
+        .arg(&format!("C{{{cell_hex}}}"))
+        .arg(&(60 * 60 * 24 * 365).to_string())
+        .run()
+        .success()
+        .assert_contains("0.258139024 TON");
 }
 
 // ========================================
