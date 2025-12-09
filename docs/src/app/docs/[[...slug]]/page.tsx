@@ -1,4 +1,4 @@
-import {source} from '../../../../lib/source';
+import {source} from '@/lib/source';
 import {
   DocsBody,
   DocsDescription,
@@ -10,6 +10,7 @@ import {getMDXComponents} from '../../../../mdx-components';
 import type {Metadata} from 'next';
 import {createRelativeLink} from 'fumadocs-ui/mdx';
 import {LLMCopyButton, ViewOptions} from "@/components/page-actions";
+import {getLLMText} from "@/lib/get-llm-text";
 
 interface PageProps {
   params: Promise<{ slug?: string[] }>;
@@ -22,12 +23,14 @@ export default async function Page(props: PageProps) {
 
   const MDX = page.data.body;
 
+  const llmText = getLLMText(page);
+
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription className="mb-2">{page.data.description}</DocsDescription>
       <div className="flex flex-row flex-wrap gap-2 items-center border-b pb-6">
-        <LLMCopyButton markdownUrl={`${page.url}.mdx`}/>
+        <LLMCopyButton content={llmText} />
         <ViewOptions
           markdownUrl={`${page.url}.mdx`}
           githubUrl={`https://github.com/ton-blockchain/emulator-rs/blob/main/docs2/content/docs/${page.path}`}

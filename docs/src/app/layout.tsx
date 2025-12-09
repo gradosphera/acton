@@ -1,5 +1,5 @@
 import React from "react";
-import { RootProvider } from 'fumadocs-ui/provider/next';
+import { Provider } from './provider';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import "./globals.css";
@@ -15,7 +15,7 @@ export default function RootLayout({
           // required styles
           className="flex flex-col min-h-screen"
       >
-      <RootProvider>{children}</RootProvider>
+      <Provider>{children}</Provider>
       </body>
       </html>
   );

@@ -10,6 +10,7 @@
     "deploy": "rm -rf out .next && next build && echo '' > out/.nojekyll && bun x gh-pages -d out --dotfiles"
   },
   "dependencies": {
+    "@orama/orama": "^3.1.16",
     "@types/mdx": "^2.0.13",
     "class-variance-authority": "^0.7.1",
     "fumadocs-core": "^16.2.2",
