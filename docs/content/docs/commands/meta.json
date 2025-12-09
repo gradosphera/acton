@@ -4,6 +4,7 @@
     "disasm",
     "test",
     "script",
+    "run",
     "verify",
     "library",
     "shell-completions"

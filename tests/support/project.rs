@@ -12,6 +12,7 @@ pub struct ProjectBuilder {
     tests: Vec<(String, String)>,
     files: Vec<(String, String)>,
     raw_files: Vec<(String, String)>,
+    scripts: Vec<(String, String)>,
     test_config: Option<TestConfig>,
     license: Option<String>,
     create_acton_toml: bool,
@@ -67,6 +68,7 @@ impl ProjectBuilder {
             tests: Vec::new(),
             files: Vec::new(),
             raw_files: Vec::new(),
+            scripts: Vec::new(),
             test_config: None,
             license: Some("MIT".to_string()),
             create_acton_toml: true,
@@ -88,6 +90,11 @@ impl ProjectBuilder {
     /// ```
     pub fn with_license(mut self, license: Option<&str>) -> Self {
         self.license = license.map(|s| s.to_string());
+        self
+    }
+
+    pub fn script_config(mut self, name: &str, command: &str) -> Self {
+        self.scripts.push((name.to_string(), command.to_string()));
         self
     }
 
@@ -329,6 +336,7 @@ impl ProjectBuilder {
                 &project_path,
                 &self.name,
                 &self.contracts,
+                &self.scripts,
                 &self.test_config,
                 &self.license,
             );
@@ -359,6 +367,7 @@ impl ProjectBuilder {
         project_path: &Path,
         name: &str,
         contracts: &[ContractDef],
+        scripts: &[(String, String)],
         test_config: &Option<TestConfig>,
         license: &Option<String>,
     ) {
@@ -442,6 +451,14 @@ version = "0.1.0"
                 toml_content.push_str(&format!("output = \"{output}\"\n"));
             }
 
+            toml_content.push('\n');
+        }
+
+        if !scripts.is_empty() {
+            toml_content.push_str("[scripts]\n");
+            for (name, cmd) in scripts {
+                toml_content.push_str(&format!("{} = \"{}\"\n", name, cmd));
+            }
             toml_content.push('\n');
         }
 
@@ -645,6 +662,15 @@ impl ActonCommand {
             .cmd
             .arg("script")
             .arg(script_path)
+            .current_dir(&self.project.path);
+        self
+    }
+
+    pub fn run_script_cmd(mut self, script_name: &str) -> Self {
+        self.cmd = self
+            .cmd
+            .arg("run")
+            .arg(script_name)
             .current_dir(&self.project.path);
         self
     }

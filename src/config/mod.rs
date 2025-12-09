@@ -33,6 +33,7 @@ pub struct ActonConfig {
     pub test: Option<TestSettings>,
     pub contracts: Option<ContractsConfig>,
     pub wallets: Option<WalletsConfig>,
+    pub scripts: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,6 +128,7 @@ impl Default for ActonConfig {
             test: None,
             contracts: None,
             wallets: None,
+            scripts: None,
         }
     }
 }

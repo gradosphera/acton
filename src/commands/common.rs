@@ -76,6 +76,42 @@ pub mod error_fmt {
             "Address <yellow>{addr}</> is not a valid address. {hint}Enter valid address in user-friendly <green>EQ...</> or raw format <green>0:abcd...</>"
         )
     }
+
+    pub fn script_not_found(config: &ActonConfig, name: &str) -> String {
+        let available = available_scripts(config);
+        format!(
+            "Script {} not found in Acton.toml\nAvailable scripts:\n{}",
+            name.yellow(),
+            available
+        )
+    }
+
+    pub fn available_scripts(config: &ActonConfig) -> String {
+        let scripts = match &config.scripts {
+            Some(scripts) => scripts,
+            None => return "no scripts defined".to_string(),
+        };
+
+        if scripts.is_empty() {
+            return "no scripts defined".to_string();
+        }
+
+        scripts
+            .keys()
+            .map(|s| format!(" {}", s.yellow()))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    pub fn no_scripts_section() -> String {
+        format!(
+            "No {} section found in Acton.toml.\nTo add a script add the following section to Acton.toml:\n\n{}\n{}\n{}\n\nSee https://i582.github.io/acton/docs/commands/run/ for more information",
+            "[scripts]".yellow(),
+            "[scripts]".green(),
+            "deploy = \"acton script scripts/deploy.tolk --broadcast\"".green(),
+            "test = \"acton test tests/unit\"".green()
+        )
+    }
 }
 
 pub fn select_contract(

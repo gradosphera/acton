@@ -5,6 +5,7 @@ use acton::commands::disasm::disasm_cmd;
 use acton::commands::init::init_cmd;
 use acton::commands::library::{fetch_cmd, publish_cmd};
 use acton::commands::new::new_cmd;
+use acton::commands::run::run_cmd;
 use acton::commands::script::script_cmd;
 use acton::commands::test::{ReportFormat, TestConfig, mutation, test_cmd};
 use acton::commands::test_gen::test_gen_cmd;
@@ -304,6 +305,17 @@ enum Commands {
             help = "Output directory for build artifacts"
         )]
         out_dir: Option<String>,
+    },
+    #[command(about = "Run a script defined in Acton.toml")]
+    Run {
+        #[arg(help = "Name of the script to run")]
+        script: String,
+        #[arg(
+            help = "Arguments to pass to the script",
+            trailing_var_arg = true,
+            allow_hyphen_values = true
+        )]
+        args: Vec<String>,
     },
     #[command(about = "Compile a Tolk file")]
     Compile {
@@ -708,6 +720,7 @@ fn main() {
                 test_cmd(path, &config)
             }
         }
+        Commands::Run { script, args } => run_cmd(&script, &args),
         Commands::TestGen {
             contract_id,
             wrapper_output,
