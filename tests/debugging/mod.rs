@@ -207,7 +207,7 @@ fn execute_script(
     };
 
     let mut emulator = Emulator::new(verbosity);
-    let mut blockchain = Blockchain::new(None, None);
+    let mut blockchain = Blockchain::new(None, None, None);
     let mut build_cache = BuildCache::new();
     let mut file_build_cache =
         FileBuildCache::dummy().expect("Failed to create file cache for script execution");

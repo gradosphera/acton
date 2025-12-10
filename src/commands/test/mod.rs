@@ -85,6 +85,7 @@ pub struct TestConfig {
     pub baseline_snapshot: Option<String>,
     pub fork_net: Option<String>,
     pub api_key: Option<String>,
+    pub fork_block_number: Option<u64>,
     pub save_test_trace: Option<String>,
     pub mutate: bool,
     pub mutate_overrides: Option<String>,
@@ -215,8 +216,11 @@ impl<'a> TestRunner<'a> {
         };
 
         let mut emulator = Emulator::new(verbosity);
-        let mut blockchain =
-            Blockchain::new(self.config.fork_net.clone(), self.config.api_key.clone());
+        let mut blockchain = Blockchain::new(
+            self.config.fork_net.clone(),
+            self.config.fork_block_number,
+            self.config.api_key.clone(),
+        );
 
         let mut assert_failure = None;
         let mut expected_exit_code = None;

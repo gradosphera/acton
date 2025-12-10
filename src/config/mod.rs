@@ -61,6 +61,7 @@ pub struct TestSettings {
     pub junit_merge: Option<bool>,
     pub fork_net: Option<String>,
     pub api_key: Option<String>,
+    pub fork_block_number: Option<u64>,
     pub mutation: Option<MutationConfig>,
     pub fail_fast: Option<bool>,
 }
@@ -243,6 +244,7 @@ impl TestSettings {
         baseline_gas_override: Option<String>,
         fork_net_override: Option<String>,
         api_key_override: Option<String>,
+        fork_block_number_override: Option<u64>,
         save_test_trace_override: Option<String>,
         mutate_override: bool,
         mutate_overrides_override: Option<String>,
@@ -297,6 +299,7 @@ impl TestSettings {
             baseline_snapshot: baseline_gas_override,
             fork_net: fork_net_override.or_else(|| self.fork_net.clone()),
             api_key: api_key_override.or_else(|| self.api_key.clone()),
+            fork_block_number: fork_block_number_override.or(self.fork_block_number),
             save_test_trace: save_test_trace_override,
             mutate: mutate_override,
             mutate_overrides: mutate_overrides_override,

@@ -26,16 +26,22 @@ pub struct Blockchain {
     libraries: Vec<Cell>,
     fork_net: Option<String>,
     api_key: Option<String>,
+    fork_block_number: Option<u64>,
 }
 
 impl Blockchain {
-    pub fn new(fork_net: Option<String>, api_key: Option<String>) -> Self {
+    pub fn new(
+        fork_net: Option<String>,
+        fork_block_number: Option<u64>,
+        api_key: Option<String>,
+    ) -> Self {
         Self {
             accounts: HashMap::new(),
             current_lt: BigInt::from(0),
             libraries: vec![],
             fork_net,
             api_key,
+            fork_block_number,
         }
     }
 
@@ -94,7 +100,7 @@ impl Blockchain {
             .clone()
             .or_else(|| env::var("TONCENTER_API_KEY").ok());
 
-        let info = remote::get_account_info(None, address, network, api_key)?;
+        let info = remote::get_account_info(self.fork_block_number, address, network, api_key)?;
 
         let balance = info
             .balance

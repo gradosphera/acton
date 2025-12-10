@@ -182,6 +182,13 @@ enum Commands {
         fork_net: Option<String>,
         #[arg(
             long,
+            help = "Block sequence number to fork from (for historical state)",
+            value_name = "SEQNO",
+            help_heading = "Remote"
+        )]
+        fork_block_number: Option<u64>,
+        #[arg(
+            long,
             help = "TonCenter API key for blockchain queries",
             help_heading = "Remote"
         )]
@@ -270,6 +277,13 @@ enum Commands {
             help_heading = "Remote"
         )]
         fork_net: Option<String>,
+        #[arg(
+            long,
+            help = "Block sequence number to fork from (for historical state)",
+            value_name = "SEQNO",
+            help_heading = "Remote"
+        )]
+        fork_block_number: Option<u64>,
         #[arg(
             long,
             help = "TonCenter API key for blockchain queries",
@@ -685,6 +699,7 @@ fn main() {
             mutate_contract,
             disable_rule,
             fail_fast,
+            fork_block_number,
         } => {
             let mut report_formats = Vec::new();
 
@@ -720,6 +735,7 @@ fn main() {
                 baseline_snapshot,
                 fork_net,
                 api_key,
+                fork_block_number,
                 save_test_trace,
                 mutate,
                 mutate_overrides,
@@ -748,6 +764,7 @@ fn main() {
             clear_cache,
             fork_net,
             api_key,
+            fork_block_number,
             broadcast,
             net,
         } => script_cmd(
@@ -758,6 +775,7 @@ fn main() {
             clear_cache,
             fork_net,
             api_key,
+            fork_block_number,
             broadcast,
             net,
         ),
@@ -951,6 +969,7 @@ fn create_test_config(
     baseline_snapshot: Option<String>,
     fork_net: Option<String>,
     api_key: Option<String>,
+    fork_block_number: Option<u64>,
     save_test_trace: Option<String>,
     mutate: bool,
     mutate_overrides: Option<String>,
@@ -989,6 +1008,7 @@ fn create_test_config(
             baseline_snapshot,
             fork_net,
             api_key,
+            fork_block_number,
             save_test_trace,
             mutate,
             mutate_overrides,
@@ -1016,6 +1036,7 @@ fn create_test_config(
         baseline_snapshot,
         fork_net,
         api_key,
+        fork_block_number,
         save_test_trace,
         mutate,
         mutate_overrides,

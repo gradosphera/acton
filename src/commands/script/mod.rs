@@ -40,6 +40,7 @@ pub fn script_cmd(
     clear_cache: bool,
     fork_net: Option<String>,
     api_key: Option<String>,
+    fork_block_number: Option<u64>,
     broadcast: bool,
     net: String,
 ) -> anyhow::Result<()> {
@@ -73,7 +74,16 @@ pub fn script_cmd(
     let stack = parse_stack_args(args)?;
 
     run_script_file(
-        path, &content, stack, debug, debug_port, fork_net, api_key, broadcast, net,
+        path,
+        &content,
+        stack,
+        debug,
+        debug_port,
+        fork_net,
+        api_key,
+        fork_block_number,
+        broadcast,
+        net,
     )
 }
 
@@ -91,6 +101,7 @@ fn run_script_file(
     debug_port: u16,
     fork_net: Option<String>,
     api_key: Option<String>,
+    fork_block_number: Option<u64>,
     broadcast: bool,
     net: String,
 ) -> anyhow::Result<()> {
@@ -112,6 +123,7 @@ fn run_script_file(
                 ExecutorVerbosity::FullLocationStackVerbose,
                 fork_net,
                 api_key,
+                fork_block_number,
                 broadcast,
                 net,
             )?;
@@ -139,6 +151,7 @@ fn execute_script(
     verbosity: ExecutorVerbosity,
     fork_net: Option<String>,
     api_key: Option<String>,
+    fork_block_number: Option<u64>,
     broadcast: bool,
     net: String,
 ) -> anyhow::Result<()> {
@@ -161,7 +174,7 @@ fn execute_script(
     };
 
     let mut emulator = Emulator::new(verbosity);
-    let mut blockchain = Blockchain::new(fork_net.clone(), api_key.clone());
+    let mut blockchain = Blockchain::new(fork_net.clone(), fork_block_number, api_key.clone());
     let mut build_cache = BuildCache::new();
     let mut file_build_cache =
         FileBuildCache::new(None).expect("Failed to create file cache for script execution");
