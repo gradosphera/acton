@@ -8,9 +8,9 @@ use acton::commands::new::new_cmd;
 use acton::commands::run::run_cmd;
 use acton::commands::script::script_cmd;
 use acton::commands::test::{ReportFormat, TestConfig, mutation, test_cmd};
-use acton::commands::test_gen::test_gen_cmd;
 use acton::commands::up::up_cmd;
 use acton::commands::verify::verify_cmd;
+use acton::commands::wrapper::wrapper_cmd;
 use acton::config::ActonConfig;
 use clap::builder::styling::Style;
 use clap::builder::{StyledStr, Styles};
@@ -219,8 +219,8 @@ enum Commands {
         )]
         disable_rule: Vec<String>,
     },
-    #[command(about = "Generate test wrapper and test file for a contract")]
-    TestGen {
+    #[command(about = "Generate wrapper and test file for a contract")]
+    Wrapper {
         #[arg(help = "Contract ID from Acton.toml")]
         contract_id: String,
         #[arg(long, help = "Output path for wrapper file")]
@@ -721,11 +721,11 @@ fn main() {
             }
         }
         Commands::Run { script, args } => run_cmd(&script, &args),
-        Commands::TestGen {
+        Commands::Wrapper {
             contract_id,
             wrapper_output,
             test_output,
-        } => test_gen_cmd(&contract_id, wrapper_output, test_output),
+        } => wrapper_cmd(&contract_id, wrapper_output, test_output),
         Commands::Script {
             path,
             args,

@@ -3,14 +3,28 @@ use crate::config::ActonConfig;
 use abi::{ContractAbi, TypeAbi};
 use anyhow::anyhow;
 use owo_colors::OwoColorize;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub fn test_gen_cmd(
+struct WrapperModel {
+    project_root: PathBuf,
+    contract_id: String,
+    contract_name: String,
+    contract_path: PathBuf,
+    abi: ContractAbi,
+    handled_messages: Vec<String>,
+    storage_path: Option<PathBuf>,
+    message_paths: Vec<PathBuf>,
+    wrapper_path: PathBuf,
+    test_path: PathBuf,
+}
+
+fn build_model(
     contract_id: &str,
     wrapper_output: Option<String>,
     test_output: Option<String>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<WrapperModel> {
     let project_root = find_project_root_from_current_dir().ok_or_else(|| {
         anyhow!(
             "Could not find Acton.toml in project root. Make sure you're in a project directory."
@@ -45,80 +59,82 @@ pub fn test_gen_cmd(
         .unwrap_or(contract_id);
 
     let contract_name = to_pascal_case(file_stem);
-    let original_contract_name = contract_id;
 
-    let (wrapper_path, test_path) = determine_output_paths(
-        &project_root,
-        wrapper_output,
-        test_output,
-        &contract_name,
-        original_contract_name,
-    );
+    let storage_file_path = abi.storage.as_ref().map(|typ| PathBuf::from(&typ.pos.uri));
+    let message_paths = abi
+        .messages
+        .iter()
+        .map(|typ| typ.pos.uri.clone())
+        .collect::<HashSet<_>>();
 
-    if let Some(parent) = wrapper_path.parent() {
+    let default_wrapper = project_root
+        .join("tests")
+        .join("wrappers")
+        .join(format!("{}.tolk", contract_name));
+
+    let default_test = project_root
+        .join("tests")
+        .join(format!("{}_test.tolk", contract_id));
+
+    let wrapper_path = wrapper_output.map(PathBuf::from).unwrap_or(default_wrapper);
+    let test_path = test_output.map(PathBuf::from).unwrap_or(default_test);
+
+    Ok(WrapperModel {
+        project_root,
+        contract_id: contract_id.to_owned(),
+        contract_name,
+        contract_path,
+        abi,
+        handled_messages,
+        storage_path: storage_file_path,
+        message_paths: message_paths.iter().map(PathBuf::from).collect(),
+        wrapper_path,
+        test_path,
+    })
+}
+
+pub fn wrapper_cmd(
+    contract_id: &str,
+    wrapper_output: Option<String>,
+    test_output: Option<String>,
+) -> anyhow::Result<()> {
+    let model = build_model(contract_id, wrapper_output, test_output)?;
+
+    if let Some(parent) = model.wrapper_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| anyhow!("Failed to create directory {}: {}", parent.display(), e))?;
     }
 
-    let storage_file_path = abi.storage.as_ref().map(|typ| PathBuf::from(&typ.pos.uri));
+    let types_in_contract_file = is_types_in_contract_file(&model);
 
-    let types_in_same_file = check_types_in_same_file(&contract_path, &storage_file_path, &abi);
+    let (wrapper_code, test_code) = if types_in_contract_file {
+        let types_file_path = create_types_file(&model.contract_path)?;
+        print_types_warning(&model.contract_path, &types_file_path, &model.abi);
 
-    if types_in_same_file {
-        let types_file_path = create_types_file(&contract_path)?;
-        print_types_warning(&contract_path, &types_file_path, &abi);
-
-        let wrapper_code = generate_wrapper(
-            &contract_name,
-            &abi,
-            &handled_messages,
-            contract_id,
-            Some(&types_file_path),
-            &wrapper_path,
-            Some(&types_file_path),
-            true,
-        );
-
-        fs::write(&wrapper_path, wrapper_code)
-            .map_err(|e| anyhow!("Failed to write wrapper file: {}", e))?;
-
-        let test_code = generate_test(
-            &contract_name,
-            &abi,
-            &wrapper_path,
-            &project_root,
-            Some(&types_file_path),
-        );
-        fs::write(&test_path, test_code)
-            .map_err(|e| anyhow!("Failed to write test file: {}", e))?;
+        let wrapper_code = generate_wrapper(&model, Some(&types_file_path));
+        let test_code = generate_test(&model, Some(&types_file_path));
+        (wrapper_code, test_code)
     } else {
-        let wrapper_code = generate_wrapper(
-            &contract_name,
-            &abi,
-            &handled_messages,
-            contract_id,
-            storage_file_path.as_ref(),
-            &wrapper_path,
-            None,
-            false,
-        );
+        let wrapper_code = generate_wrapper(&model, None);
+        let test_code = generate_test(&model, None);
+        (wrapper_code, test_code)
+    };
 
-        fs::write(&wrapper_path, wrapper_code)
-            .map_err(|e| anyhow!("Failed to write wrapper file: {}", e))?;
+    fs::write(&model.wrapper_path, wrapper_code)
+        .map_err(|e| anyhow!("Failed to write wrapper file: {}", e))?;
+    fs::write(&model.test_path, test_code)
+        .map_err(|e| anyhow!("Failed to write test file: {}", e))?;
 
-        let test_code = generate_test(&contract_name, &abi, &wrapper_path, &project_root, None);
-        fs::write(&test_path, test_code)
-            .map_err(|e| anyhow!("Failed to write test file: {}", e))?;
-    }
-
-    let wrapper_relative = wrapper_path
-        .strip_prefix(&project_root)
-        .unwrap_or(&wrapper_path)
+    let wrapper_relative = model
+        .wrapper_path
+        .strip_prefix(&model.project_root)
+        .unwrap_or(&model.wrapper_path)
         .to_string_lossy();
 
-    let test_relative = test_path
-        .strip_prefix(&project_root)
-        .unwrap_or(&test_path)
+    let test_relative = model
+        .test_path
+        .strip_prefix(&model.project_root)
+        .unwrap_or(&model.test_path)
         .to_string_lossy();
 
     println!("   {} {}", "Generated".green().bold(), wrapper_relative);
@@ -127,25 +143,16 @@ pub fn test_gen_cmd(
     Ok(())
 }
 
-fn check_types_in_same_file(
-    contract_path: &Path,
-    storage_file_path: &Option<PathBuf>,
-    abi: &ContractAbi,
-) -> bool {
-    let contract_path_str = contract_path.to_string_lossy().to_string();
+fn is_types_in_contract_file(model: &WrapperModel) -> bool {
+    let storage_in_contract_file =
+        matches!(&model.storage_path, Some(storage_path) if storage_path == &model.contract_path);
 
-    let storage_in_same_file = if let Some(storage_path) = storage_file_path {
-        storage_path.to_string_lossy() == contract_path_str
-    } else {
-        false
-    };
-
-    let messages_in_same_file = abi
-        .messages
+    let messages_in_contract_file = model
+        .message_paths
         .iter()
-        .any(|msg| msg.pos.uri == contract_path_str);
+        .any(|msg| msg == &model.contract_path);
 
-    storage_in_same_file || messages_in_same_file
+    storage_in_contract_file || messages_in_contract_file
 }
 
 fn create_types_file(contract_path: &Path) -> anyhow::Result<PathBuf> {
@@ -242,40 +249,7 @@ fn to_pascal_case(s: &str) -> String {
     result
 }
 
-fn determine_output_paths(
-    project_root: &Path,
-    wrapper_output: Option<String>,
-    test_output: Option<String>,
-    contract_name: &str,
-    original_contract_name: &str,
-) -> (PathBuf, PathBuf) {
-    let default_wrapper = project_root
-        .join("tests")
-        .join("wrappers")
-        .join(format!("{}.tolk", contract_name));
-
-    let default_test = project_root
-        .join("tests")
-        .join(format!("{}_test.tolk", original_contract_name));
-
-    let wrapper_path = wrapper_output.map(PathBuf::from).unwrap_or(default_wrapper);
-
-    let test_path = test_output.map(PathBuf::from).unwrap_or(default_test);
-
-    (wrapper_path, test_path)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn generate_wrapper(
-    contract_name: &str,
-    abi: &ContractAbi,
-    handled_messages: &[String],
-    contract_build_name: &str,
-    storage_file_path: Option<&PathBuf>,
-    wrapper_path: &Path,
-    types_file_path: Option<&PathBuf>,
-    needs_types_file: bool,
-) -> String {
+fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> String {
     let mut code = String::new();
 
     code.push_str("import \"@stdlib/gas-payments\"\n");
@@ -284,16 +258,16 @@ fn generate_wrapper(
     code.push_str("import \"../../.acton/testing/expect\"\n");
     code.push_str("import \"../../.acton/types/message\"\n");
 
-    if needs_types_file {
-        if let Some(types_path) = types_file_path {
-            let types_import = get_relative_import_from_wrapper(wrapper_path, types_path);
-            code.push_str(&format!(
-                "import \"{}\"  // TODO: Move Storage and message types here\n",
-                types_import
-            ));
-        }
-    } else if let Some(storage_path) = storage_file_path {
-        let storage_import = get_relative_import_from_wrapper(wrapper_path, storage_path);
+    if let Some(types_path) = types_file_path {
+        let types_import = get_relative_import_from_wrapper(&model.wrapper_path, types_path);
+        code.push_str(&format!(
+            "import \"{}\"  // TODO: Move Storage and message types here\n",
+            types_import
+        ));
+    }
+
+    if let Some(storage_path) = &model.storage_path {
+        let storage_import = get_relative_import_from_wrapper(&model.wrapper_path, storage_path);
         code.push_str(&format!("import \"{}\"\n", storage_import));
     }
 
@@ -307,32 +281,32 @@ fn generate_wrapper(
     code.push_str("    bounce: bool = false\n");
     code.push_str("}\n\n");
 
-    code.push_str(&format!("struct {} {{\n", contract_name));
+    code.push_str(&format!("struct {} {{\n", model.contract_name));
     code.push_str("    address: address\n");
     code.push_str("    init: ContractState\n");
     code.push_str("}\n\n");
 
-    if let Some(storage) = &abi.storage {
+    if let Some(storage) = &model.abi.storage {
         code.push_str(&generate_from_storage(
-            contract_name,
+            &model.contract_name,
             storage,
-            contract_build_name,
+            &model.contract_id,
         ));
         code.push('\n');
     }
 
-    code.push_str(&generate_deploy(contract_name));
+    code.push_str(&generate_deploy(&model.contract_name));
     code.push('\n');
 
-    for message_name in handled_messages {
-        if let Some(message_type) = abi.messages.iter().find(|m| &m.name == message_name) {
-            code.push_str(&generate_send_method(contract_name, message_type));
+    for message_name in &model.handled_messages {
+        if let Some(message_type) = model.abi.messages.iter().find(|m| &m.name == message_name) {
+            code.push_str(&generate_send_method(&model.contract_name, message_type));
             code.push('\n');
         }
     }
 
-    for get_method in &abi.get_methods {
-        code.push_str(&generate_get_method(contract_name, get_method));
+    for get_method in &model.abi.get_methods {
+        code.push_str(&generate_get_method(&model.contract_name, get_method));
         code.push('\n');
     }
 
@@ -491,13 +465,7 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
     code
 }
 
-fn generate_test(
-    contract_name: &str,
-    abi: &ContractAbi,
-    wrapper_path: &Path,
-    project_root: &Path,
-    types_file_override: Option<&PathBuf>,
-) -> String {
+fn generate_test(model: &WrapperModel, types_file_override: Option<&PathBuf>) -> String {
     let mut code = String::new();
 
     code.push_str("import \"@stdlib/gas-payments\"\n");
@@ -506,18 +474,18 @@ fn generate_test(
     code.push_str("import \"../.acton/testing/transaction_expect\"\n");
 
     if let Some(types_path) = types_file_override {
-        let types_import = get_relative_import_from_test_to_types(types_path, project_root);
+        let types_import = get_relative_import_from_test_to_types(types_path, &model.project_root);
         code.push_str(&format!("import \"{}\"\n", types_import));
     }
 
-    let wrapper_import = get_relative_import_for_test(wrapper_path);
+    let wrapper_import = get_relative_import_for_test(&model.wrapper_path);
     code.push_str(&format!("import \"{}\"\n", wrapper_import));
     code.push('\n');
 
-    code.push_str(&generate_example_test(contract_name));
+    code.push_str(&generate_example_test(&model.contract_name));
     code.push('\n');
 
-    code.push_str(&generate_setup_test(contract_name, abi));
+    code.push_str(&generate_setup_test(&model.contract_name, &model.abi));
 
     code
 }
@@ -661,4 +629,10 @@ fn generate_example_test(_contract_name: &str) -> String {
     code.push_str("}\n");
 
     code
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_generate_wrapper_for_simple_contract() {}
 }

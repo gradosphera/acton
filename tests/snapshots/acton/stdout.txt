@@ -6,7 +6,7 @@ Commands:
   init         Initialize a new project in the current directory
   new          Create a new project in the specified directory
   test         Execute tests in file or directory
-  test-gen     Generate test wrapper and test file for a contract
+  wrapper      Generate wrapper and test file for a contract
   script       Execute a Tolk script file
   build        Build the specified contract or all contracts
   run          Run a script defined in Acton.toml
