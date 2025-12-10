@@ -4,6 +4,7 @@ use inquire::{Select, Text};
 use owo_colors::OwoColorize;
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 
 mod licenses;
@@ -168,6 +169,15 @@ pub fn new_cmd(
 
     fs::write(".gitignore", BASE_GITIGNORE.trim_start())?;
 
+    if is_git_available() {
+        initialize_git_repository()?;
+    } else {
+        println!(
+            "  {} git command not found, skipping git repository initialization",
+            "Warning:".yellow().bold(),
+        );
+    }
+
     println!("{}", "✓ Created new Acton project".green().bold());
     println!(
         "  {} {}",
@@ -205,4 +215,25 @@ fn get_git_user_name() -> Option<String> {
                 None
             }
         })
+}
+
+fn is_git_available() -> bool {
+    std::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
+fn initialize_git_repository() -> anyhow::Result<()> {
+    print!("{} ", ">".green().bold());
+    std::io::stdout().flush()?;
+    std::process::Command::new("git")
+        .arg("init")
+        .status()?
+        .success()
+        .then_some(())
+        .ok_or_else(|| anyhow::anyhow!("Failed to initialize git repository"))?;
+
+    Ok(())
 }

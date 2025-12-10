@@ -134,3 +134,33 @@ fn test_new_empty_project_in_existed_directory_with_acton_toml() {
             "integration/snapshots/test_new_empty_project_in_existed_directory_with_acton_toml.stderr.txt",
         );
 }
+
+#[test]
+fn test_new_project_with_git_initialization() {
+    let project = ProjectBuilder::new("new-git").without_acton_toml().build();
+
+    project
+        .acton()
+        .arg("new")
+        .arg(
+            &project
+                .path()
+                .join("test-git-project")
+                .display()
+                .to_string(),
+        )
+        .arg("--name")
+        .arg("git-test-project")
+        .arg("--description")
+        .arg("git test description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .run()
+        .success()
+        .assert_contains("Created new Acton project");
+
+    let project_dir = project.path().join("test-git-project");
+    assert!(project_dir.join(".git").exists());
+}
