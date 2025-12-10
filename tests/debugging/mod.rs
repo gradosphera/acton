@@ -253,7 +253,7 @@ fn execute_script(
         },
         debug: DebugCtx::Disabled,
         is_broadcasting: false,
-        network: "testnet".to_string(),
+        network: None,
     };
 
     let mut executor = StepGetExecutor::new(stack.clone(), params.clone());

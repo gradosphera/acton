@@ -588,6 +588,7 @@ impl Project {
             verify_network: None,
             script_broadcast: false,
             test_fail_fast: false,
+            script_fork_net: None,
         }
     }
 
@@ -630,6 +631,7 @@ pub struct ActonCommand {
     pub(crate) verify_network: Option<String>,
     pub(crate) script_broadcast: bool,
     pub(crate) test_fail_fast: bool,
+    pub(crate) script_fork_net: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -955,8 +957,13 @@ impl ActonCommand {
         self
     }
 
-    pub fn network(mut self, network: &str) -> Self {
+    pub fn verify_network(mut self, network: &str) -> Self {
         self.verify_network = Some(network.to_string());
+        self
+    }
+
+    pub fn fork_net(mut self, network: &str) -> Self {
+        self.script_fork_net = Some(network.to_string());
         self
     }
 
@@ -1087,6 +1094,10 @@ impl ActonCommand {
 
         if let Some(network) = self.verify_network {
             self.cmd = self.cmd.arg("--net").arg(network);
+        }
+
+        if let Some(network) = self.script_fork_net {
+            self.cmd = self.cmd.arg("--fork-net").arg(network);
         }
 
         if self.build_clear_cache {

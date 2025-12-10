@@ -82,7 +82,7 @@ Step 7 (step_over):
      55|     val deployer = net.treasury("deployer");
      56|     val msg = createMessage({
   Variables:
-    '13 = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
+    '13 = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     '15 = [BOC_HEX]
     '14 = [BOC_HEX]
 
@@ -98,7 +98,7 @@ Step 8 (step_over):
      57|         bounce: false,
      58|         value: ton("1.0"),
   Variables:
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     counter.init.data = [BOC_HEX]
     counter.init.code = [BOC_HEX]
 
@@ -115,7 +115,7 @@ Step 9 (step_over):
      58|         value: ton("1.0"),
   Variables:
     '59 = "deployer"
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     counter.init.data = [BOC_HEX]
     counter.init.code = [BOC_HEX]
 
@@ -131,8 +131,8 @@ Step 10 (step_over):
      57|         bounce: false,
      58|         value: ton("1.0"),
   Variables:
-    '60 = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
+    '60 = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     counter.init.data = [BOC_HEX]
     counter.init.code = [BOC_HEX]
 
@@ -148,8 +148,8 @@ Step 11 (step_over):
      58|         value: ton("1.0"),
      59|         dest: {
   Variables:
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     counter.init.data = [BOC_HEX]
     counter.init.code = [BOC_HEX]
 
@@ -165,8 +165,8 @@ Step 12 (step_over):
      59|         dest: {
      60|             stateInit: counter.init,
   Variables:
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     counter.init.data = [BOC_HEX]
     counter.init.code = [BOC_HEX]
 
@@ -182,8 +182,8 @@ Step 13 (step_over):
      59|         dest: {
      60|             stateInit: counter.init,
   Variables:
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     counter.init.data = [BOC_HEX]
     counter.init.code = [BOC_HEX]
 
@@ -200,8 +200,8 @@ Step 14 (step_over):
      62|     });
   Variables:
     '189 = 1000000000
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     counter.init.data = [BOC_HEX]
     counter.init.code = [BOC_HEX]
 
@@ -218,8 +218,8 @@ Step 15 (step_over):
      59|         dest: {
   Variables:
     '189 = 1000000000
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     counter.init.data = [BOC_HEX]
     counter.init.code = [BOC_HEX]
 
@@ -236,8 +236,8 @@ Step 16 (step_over):
      59|         dest: {
   Variables:
     '189 = 1000000000
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     counter.init.data = [BOC_HEX]
     counter.init.code = [BOC_HEX]
 
@@ -254,8 +254,8 @@ Step 17 (step_over):
      59|         dest: {
   Variables:
     '261 = [BOC_HEX]
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 18 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:816
@@ -270,8 +270,8 @@ Step 18 (step_over):
      66|     return (counter, deployer)
   Variables:
     msg = [BOC_HEX]
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 19 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:824
@@ -287,8 +287,8 @@ Step 19 (step_over):
   Variables:
     '263 = 1
     msg = [BOC_HEX]
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 20 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:920
@@ -303,8 +303,8 @@ Step 20 (step_over):
      66|     return (counter, deployer)
   Variables:
     '264 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 21 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:936
@@ -320,8 +320,8 @@ Step 21 (step_over):
   Variables:
     '269 = empty slice
     res = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 22 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:952
@@ -338,8 +338,8 @@ Step 22 (step_over):
     '272 = empty slice
     '271 = "SendResultList"
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 23 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:960
@@ -355,8 +355,8 @@ Step 23 (step_over):
   Variables:
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 24 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:968
@@ -373,8 +373,8 @@ Step 24 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 25 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:968
@@ -391,8 +391,8 @@ Step 25 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 26 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:968
@@ -409,8 +409,8 @@ Step 26 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 27 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:968
@@ -427,8 +427,8 @@ Step 27 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 28 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:968
@@ -445,8 +445,8 @@ Step 28 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 29 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:968
@@ -463,8 +463,8 @@ Step 29 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 30 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:976
@@ -482,8 +482,8 @@ Step 30 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 31 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:976
@@ -501,8 +501,8 @@ Step 31 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 32 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:976
@@ -520,8 +520,8 @@ Step 32 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 33 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:976
@@ -539,8 +539,8 @@ Step 33 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 34 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:984
@@ -559,8 +559,8 @@ Step 34 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 35 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:984
@@ -579,8 +579,8 @@ Step 35 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 36 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:992
@@ -600,8 +600,8 @@ Step 36 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 37 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:992
@@ -621,8 +621,8 @@ Step 37 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 38 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:1000
@@ -643,8 +643,8 @@ Step 38 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 39 (step_over):
   Bytecode position: DC45F0812EF153B3726F62D255D352971B38206ABBFD1A2FC01369A968871FED:1000
@@ -665,8 +665,8 @@ Step 39 (step_over):
     '273 = null
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 40 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:864
@@ -680,8 +680,8 @@ Step 40 (step_over):
      66|     return (counter, deployer)
      67| }
   Variables:
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 41 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:864
@@ -695,8 +695,8 @@ Step 41 (step_over):
      68| 
      69| fun main() {
   Variables:
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 42 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:864
@@ -710,8 +710,8 @@ Step 42 (step_over):
      69| fun main() {
      70|     val (counter, deployer) = setupTest();
   Variables:
-    '4 = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    '7 = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    '4 = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    '7 = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 43 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:864
@@ -725,8 +725,8 @@ Step 43 (step_over):
      74| 
      75|     val info = net.getAccountState(counter.address)!;
   Variables:
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 44 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:992
@@ -741,8 +741,8 @@ Step 44 (step_over):
     512| }
   Variables:
     '303 = "currentCounter"
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 45 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:1000
@@ -758,8 +758,8 @@ Step 45 (step_over):
   Variables:
     '304 = null
     '303 = "currentCounter"
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 46 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:1000
@@ -775,8 +775,8 @@ Step 46 (step_over):
   Variables:
     '304 = null
     '303 = "currentCounter"
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 47 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:160
@@ -791,8 +791,8 @@ Step 47 (step_over):
      75|     val info = net.getAccountState(counter.address)!;
   Variables:
     '305 = 0
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 48 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:264
@@ -808,8 +808,8 @@ Step 48 (step_over):
   Variables:
     '313 = "Counter: {}"
     counterRes = 0
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 49 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:384
@@ -824,8 +824,8 @@ Step 49 (step_over):
      76|     println(format1("Balance: {:ton}", info.storage.balance.grams));
   Variables:
     '314 = "Counter: 0"
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 50 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:384
@@ -840,8 +840,8 @@ Step 50 (step_over):
      76|     println(format1("Balance: {:ton}", info.storage.balance.grams));
   Variables:
     '314 = "Counter: 0"
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 51 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:512
@@ -855,8 +855,8 @@ Step 51 (step_over):
      75|     val info = net.getAccountState(counter.address)!;
      76|     println(format1("Balance: {:ton}", info.storage.balance.grams));
   Variables:
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 52 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:512
@@ -870,8 +870,8 @@ Step 52 (step_over):
      77| 
      78|     val res = counter.sendIncrease(deployer.address, 100);
   Variables:
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 53 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:512
@@ -885,8 +885,8 @@ Step 53 (step_over):
      77| 
      78|     val res = counter.sendIncrease(deployer.address, 100);
   Variables:
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 54 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:536
@@ -912,9 +912,9 @@ Step 54 (step_over):
     'USlot1 = null
     '334 = 997
     '333 = 8
-    '332 = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    '332 = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 55 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:704
@@ -930,8 +930,8 @@ Step 55 (step_over):
   Variables:
     '345 = "Balance: {:ton}"
     info.storage.balance.grams = 999742800
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 56 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:840
@@ -946,8 +946,8 @@ Step 56 (step_over):
      79|     println(res);
   Variables:
     '346 = "Balance: 0.9997428 TON"
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 57 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:840
@@ -962,8 +962,8 @@ Step 57 (step_over):
      79|     println(res);
   Variables:
     '346 = "Balance: 0.9997428 TON"
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 58 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:968
@@ -977,8 +977,8 @@ Step 58 (step_over):
      78|     val res = counter.sendIncrease(deployer.address, 100);
      79|     println(res);
   Variables:
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 59 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:968
@@ -992,8 +992,8 @@ Step 59 (step_over):
      80| }
      81| 
   Variables:
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 60 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:968
@@ -1007,8 +1007,8 @@ Step 60 (step_over):
      80| }
      81| 
   Variables:
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 61 (step_over):
   Bytecode position: 6CAA5DB50957F554B3DD4069867DE7986ED05A86FF6920612C010E1A2ADBCB81:464

@@ -34,8 +34,8 @@ Step 3 (step_over):
      72|     val counterRes = net.runGetMethod<int, tuple>(counter.address, "currentCounter");
      73|     println(format1("Counter: {}", counterRes));
   Variables:
-    '4 = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    '7 = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    '4 = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    '7 = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 4 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:864
@@ -49,8 +49,8 @@ Step 4 (step_over):
      74| 
      75|     val info = net.getAccountState(counter.address)!;
   Variables:
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 5 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:992
@@ -65,8 +65,8 @@ Step 5 (step_over):
     512| }
   Variables:
     '303 = "currentCounter"
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 6 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:1000
@@ -82,8 +82,8 @@ Step 6 (step_over):
   Variables:
     '304 = null
     '303 = "currentCounter"
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 7 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:1000
@@ -99,8 +99,8 @@ Step 7 (step_over):
   Variables:
     '304 = null
     '303 = "currentCounter"
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 8 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:160
@@ -115,8 +115,8 @@ Step 8 (step_over):
      75|     val info = net.getAccountState(counter.address)!;
   Variables:
     '305 = 0
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
 Step 9 (step_over):
   Bytecode position: 1A95655081CE12B89CF942D7C0F5197BBB25694A232C331066F6F308F58C0B44:264
@@ -132,5 +132,5 @@ Step 9 (step_over):
   Variables:
     '313 = "Counter: {}"
     counterRes = 0
-    counter.address = EQC5pmNoIja6-8bIG7LsYHYwsJ-OIzV14UnM1IsMqeE8bAwW
-    deployer = EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ
+    counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
+    deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD

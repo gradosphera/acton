@@ -298,7 +298,7 @@ pub struct Context<'a> {
     pub build: BuildContext<'a>,
     pub debug: DebugCtx<'a>,
     pub is_broadcasting: bool,
-    pub network: String,
+    pub network: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -331,6 +331,12 @@ pub struct BuildContext<'a> {
 pub enum DebugCtx<'a> {
     Disabled,
     Enabled { inner: &'a mut DebugContext },
+}
+
+impl<'a> Context<'a> {
+    pub fn network(&self) -> String {
+        self.network.clone().unwrap_or("testnet".to_owned())
+    }
 }
 
 impl<'a> Env<'a> {

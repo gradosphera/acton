@@ -784,7 +784,7 @@ keys = { mnemonic-file = "mnemonic.txt" }
         .acton()
         .script("scripts/deploy.tolk")
         .broadcast()
-        .network("testnet")
+        .verify_network("testnet")
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
@@ -824,7 +824,7 @@ version = "0.1.0"
         .acton()
         .script("scripts/deploy.tolk")
         .broadcast()
-        .network("testnet")
+        .verify_network("testnet")
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
@@ -865,10 +865,130 @@ version = "0.1.0"
         .acton()
         .script("scripts/deploy.tolk")
         .broadcast()
-        .network("testnet")
+        .verify_network("testnet")
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
             "integration/snapshots/test_script_broadcast_with_nonexistent_wallet_empty_config.stderr.txt",
         );
+}
+
+#[test]
+fn test_script_address_print_default() {
+    let project = ProjectBuilder::new("script-simple")
+        .script_file(
+            "hello",
+            r#"
+            import "../../lib/io"
+
+            fun main() {
+                println(address("EQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHByMJ"));
+            }
+        "#,
+        )
+        .build();
+
+    let output = project.acton().script("scripts/hello.tolk").run().code(0);
+
+    output.assert_contains("kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD");
+}
+
+#[test]
+fn test_script_address_print_fork_testnet() {
+    let project = ProjectBuilder::new("script-simple")
+        .script_file(
+            "hello",
+            r#"
+            import "../../lib/io"
+
+            fun main() {
+                println(address("EQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHByMJ"));
+            }
+        "#,
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .script("scripts/hello.tolk")
+        .fork_net("testnet")
+        .run()
+        .success();
+
+    output.assert_contains("kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD");
+}
+
+#[test]
+fn test_script_address_print_fork_mainnet() {
+    let project = ProjectBuilder::new("script-simple")
+        .script_file(
+            "hello",
+            r#"
+            import "../../lib/io"
+
+            fun main() {
+                println(address("EQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHByMJ"));
+            }
+        "#,
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .script("scripts/hello.tolk")
+        .fork_net("mainnet")
+        .run()
+        .success();
+
+    output.assert_contains("EQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHByMJ");
+}
+
+#[test]
+fn test_script_address_print_broadcast_net_testnet() {
+    let project = ProjectBuilder::new("script-simple")
+        .script_file(
+            "hello",
+            r#"
+            import "../../lib/io"
+
+            fun main() {
+                println(address("EQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHByMJ"));
+            }
+        "#,
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .script("scripts/hello.tolk")
+        .with_net("testnet")
+        .run()
+        .success();
+
+    output.assert_contains("kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD");
+}
+
+#[test]
+fn test_script_address_print_broadcast_net_mainnet() {
+    let project = ProjectBuilder::new("script-simple")
+        .script_file(
+            "hello",
+            r#"
+            import "../../lib/io"
+
+            fun main() {
+                println(address("EQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHByMJ"));
+            }
+        "#,
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .script("scripts/hello.tolk")
+        .with_net("mainnet")
+        .run()
+        .success();
+
+    output.assert_contains("EQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHByMJ");
 }

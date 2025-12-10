@@ -206,7 +206,7 @@ fn send_message_impl(
     };
 
     if let Some(wallet) = ctx.env.find_wallet_by_address(&src_addr) {
-        let result = send_wallet_message(&message, wallet, &ctx.network);
+        let result = send_wallet_message(&message, wallet, &ctx.network());
         try_ctx!(ctx, result, "Failed to send message to real network: {}");
 
         // Add pseudo transaction to the result list to wait on it
@@ -1138,7 +1138,7 @@ fn cell_from_hex_impl(ctx: &mut Context, stack: &mut Tuple, cell_hex: String) {
 
 extension!(load_library_by_hash in (Context) with (hash: String) using load_library_by_hash_impl);
 fn load_library_by_hash_impl(ctx: &mut Context, stack: &mut Tuple, hash: String) {
-    let lib = remote::get_library_by_hash(&ctx.network, hash.as_str(), None);
+    let lib = remote::get_library_by_hash(&ctx.network(), hash.as_str(), None);
     match lib {
         Ok(lib) => {
             let lib_b64 = Boc::encode_base64(lib);
@@ -1207,7 +1207,7 @@ fn wait_for_transaction_impl(
 
     let network = try_ctx!(
         ctx,
-        Network::from_str(&ctx.network),
+        Network::from_str(&ctx.network()),
         "Failed to parse network: {}"
     );
 

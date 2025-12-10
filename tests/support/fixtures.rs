@@ -134,6 +134,7 @@ impl FixtureProject {
             verify_network: None,
             script_broadcast: false,
             test_fail_fast: false,
+            script_fork_net: None,
         }
     }
 

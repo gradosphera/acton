@@ -97,7 +97,7 @@ pub fn verify_cmd(
 
     let wallet_name = select_wallet(wallet_name, &config)?;
 
-    let mut wallets = open_wallets(&config, &network, true)?;
+    let mut wallets = open_wallets(&config, Some(&network), true)?;
     let wallet = wallets
         .remove(&wallet_name)
         .ok_or_else(|| anyhow!(error_fmt::wallet_not_found(&config, &wallet_name)))?;

@@ -60,7 +60,7 @@ fn test_verify_invalid_network() {
         .acton()
         .verify()
         .verify_contract("simple")
-        .network("invalid-network")
+        .verify_network("invalid-network")
         .run()
         .failure()
         .assert_stderr_snapshot_matches(

@@ -302,10 +302,9 @@ enum Commands {
         #[arg(
             long,
             help = "Network to use for broadcasting (mainnet, testnet)",
-            default_value = "testnet",
             help_heading = "Broadcasting"
         )]
-        net: String,
+        net: Option<String>,
     },
     #[command(
         about = "Build the specified contract or all contracts",

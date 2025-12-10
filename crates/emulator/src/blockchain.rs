@@ -167,4 +167,8 @@ impl Blockchain {
     pub fn get_api_key(&self) -> &Option<String> {
         &self.api_key
     }
+
+    pub fn get_fork_net(&self) -> &Option<String> {
+        &self.fork_net
+    }
 }

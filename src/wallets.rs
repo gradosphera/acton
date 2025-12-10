@@ -14,13 +14,14 @@ use tonlib_core::wallet::wallet_version::WalletVersion;
 
 pub fn open_wallets(
     config: &ActonConfig,
-    net: &str,
+    net: Option<&str>,
     broadcast: bool,
 ) -> anyhow::Result<BTreeMap<String, Wallet>> {
     if !broadcast {
         return Ok(BTreeMap::new());
     }
 
+    let net = net.unwrap_or("testnet");
     let wallets = config
         .wallets
         .as_ref()

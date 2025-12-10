@@ -192,6 +192,8 @@ impl TestReporter for ConsoleReporter {
                 known_addresses: exec.known_addresses.clone(),
                 known_code_cells: exec.known_code_cells.clone(),
                 backtrace: test.backtrace.clone(),
+                fork_net: None,
+                network: None,
             };
 
             match &exec.get_result {

@@ -42,7 +42,7 @@ pub fn script_cmd(
     api_key: Option<String>,
     fork_block_number: Option<u64>,
     broadcast: bool,
-    net: String,
+    net: Option<String>,
 ) -> anyhow::Result<()> {
     if clear_cache {
         let mut file_cache = FileBuildCache::new(None)?;
@@ -63,7 +63,9 @@ pub fn script_cmd(
         anyhow::bail!("Script file must end with {}", ".tolk".yellow());
     }
 
-    Network::from_str(&net)?; // validate network
+    if let Some(net) = &net {
+        Network::from_str(net)?; // validate network
+    }
 
     let content = fs::read_to_string(path).map_err(|err| {
         anyhow!(color_print::cformat!(
@@ -103,7 +105,7 @@ fn run_script_file(
     api_key: Option<String>,
     fork_block_number: Option<u64>,
     broadcast: bool,
-    net: String,
+    net: Option<String>,
 ) -> anyhow::Result<()> {
     let abi = contract_abi(content, file_path);
 
@@ -153,7 +155,7 @@ fn execute_script(
     api_key: Option<String>,
     fork_block_number: Option<u64>,
     broadcast: bool,
-    net: String,
+    net: Option<String>,
 ) -> anyhow::Result<()> {
     let dest_address = contract_address(code_cell)?;
 
@@ -186,7 +188,7 @@ fn execute_script(
     let mut expected_exit_code = None;
 
     let config = ActonConfig::load()?;
-    let open_wallets = wallets::open_wallets(&config, &net, broadcast)?;
+    let open_wallets = wallets::open_wallets(&config, net.as_deref(), broadcast)?;
 
     let mut ctx = Context {
         env: Env {

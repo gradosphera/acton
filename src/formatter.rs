@@ -10,6 +10,7 @@ use owo_colors::OwoColorize;
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Write;
 use tolkc::source_map::SourceLocation;
+use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::{Tuple, TupleItem};
@@ -65,6 +66,8 @@ pub struct FormatterContext {
     pub known_addresses: KnownAddresses,
     pub known_code_cells: HashMap<String, String>,
     pub backtrace: Option<String>,
+    pub fork_net: Option<String>,
+    pub network: Option<String>,
 }
 
 impl FormatterContext {
@@ -77,6 +80,8 @@ impl FormatterContext {
             known_addresses: KnownAddresses::new(),
             known_code_cells: HashMap::new(),
             backtrace: None,
+            fork_net: None,
+            network: None,
         }
     }
 
@@ -90,6 +95,8 @@ impl FormatterContext {
             known_addresses: ctx.build.known_addresses.clone(),
             known_code_cells: ctx.build.known_code_cells.clone(),
             backtrace: ctx.build.backtrace.clone(),
+            fork_net: ctx.chain.blockchain.get_fork_net().clone(),
+            network: ctx.network.clone(),
         }
     }
 
@@ -103,7 +110,7 @@ impl FormatterContext {
         if parser.remaining_bits() == 267
             && let Ok(address) = parser.load_address()
         {
-            return address.to_string();
+            return self.address_to_string(&address);
         }
 
         slice
@@ -111,19 +118,26 @@ impl FormatterContext {
             .unwrap_or("<invalid slice>".to_string())
     }
 
+    fn address_to_string(&self, address: &TonAddress) -> String {
+        let need_mainnet_address = self.fork_net.as_deref() == Some("mainnet")
+            || self.network.as_deref() == Some("mainnet");
+        address.to_base64_std_flags(false, !need_mainnet_address)
+    }
+
     fn format_address_slice(&self, slice: &ArcCell) -> String {
         let mut parser = slice.parser();
         if let Ok(address) = parser.load_address() {
             let addr = Self::arc_cell_to_addr(slice);
+            let address_base64 = self.address_to_string(&address);
 
             if let Some(addr) = &addr {
                 let contract_type = self.get_contract_type(addr);
                 if let Some(contract_type) = contract_type {
-                    return format!("{address} ({contract_type})");
+                    return format!("{address_base64} ({contract_type})");
                 }
             }
 
-            return address.to_string();
+            return address_base64;
         }
 
         slice
