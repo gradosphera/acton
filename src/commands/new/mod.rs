@@ -1,9 +1,13 @@
-use crate::config::ActonConfig;
+use crate::config::{ActonConfig, ContractConfig, ContractsConfig};
 use include_dir::{Dir, include_dir};
 use inquire::{Select, Text};
 use owo_colors::OwoColorize;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+
+mod licenses;
+mod template;
 
 static LIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/lib");
 static TOLK_STDLIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/crates/tolkc/assets/tolk-stdlib");
@@ -37,21 +41,26 @@ Session.vim
 .env
 ";
 
-pub fn new_cmd(path: &str) -> anyhow::Result<()> {
+pub fn new_cmd(
+    path: &str,
+    name: Option<String>,
+    description: Option<String>,
+    template: Option<String>,
+    license: Option<String>,
+) -> anyhow::Result<()> {
     let project_path = if path == "." {
         std::env::current_dir()?
     } else {
-        Path::new(path).to_path_buf()
+        let path = Path::new(path).to_path_buf();
+        if path.exists() {
+            anyhow::bail!(color_print::cformat!(
+                "Directory <yellow>{}</> is already exists, if you want to create a new project inside this directory run following commands:\n  <bold>cd {}</>\n  <bold>acton new .</>",
+                path.display(),
+                path.display()
+            ))
+        }
+        path
     };
-
-    let acton_toml_path = project_path.join("Acton.toml");
-    if acton_toml_path.exists() {
-        println!(
-            "{}",
-            "Acton.toml already exists in the target directory!".yellow()
-        );
-        return Ok(());
-    }
 
     if !project_path.exists() {
         fs::create_dir_all(&project_path)?;
@@ -62,15 +71,33 @@ pub fn new_cmd(path: &str) -> anyhow::Result<()> {
         .and_then(|n| n.to_str())
         .unwrap_or("my-acton-project");
 
-    let project_name = Text::new("Project name:")
-        .with_placeholder(default_name)
-        .with_default(default_name)
-        .prompt()?;
+    let project_name = if let Some(name) = name {
+        name
+    } else {
+        Text::new("Project name:")
+            .with_placeholder(default_name)
+            .with_default(default_name)
+            .prompt()?
+    };
 
-    let description = Text::new("Description:")
-        .with_placeholder("A TON blockchain project")
-        .with_default("A TON blockchain project")
-        .prompt()?;
+    let description = if let Some(description) = description {
+        description
+    } else {
+        Text::new("Description:")
+            .with_placeholder("A TON blockchain project")
+            .with_default("A TON blockchain project")
+            .prompt()?
+    };
+
+    let template_options = template::get_available_templates();
+    let template = if let Some(template) = template {
+        template
+    } else {
+        Select::new("Template:", template_options)
+            .with_starting_cursor(0)
+            .prompt()?
+            .to_string()
+    };
 
     let license_options = vec![
         "MIT",
@@ -82,16 +109,20 @@ pub fn new_cmd(path: &str) -> anyhow::Result<()> {
         "Other",
     ];
 
-    let license = Select::new("License:", license_options)
-        .with_starting_cursor(0)
-        .prompt()?;
-
-    let license = if license == "Other" {
-        Text::new("Enter license:")
-            .with_placeholder("MIT")
-            .prompt()?
+    let license = if let Some(license) = license {
+        license
     } else {
-        license.to_string()
+        let license_selection = Select::new("License:", license_options)
+            .with_starting_cursor(0)
+            .prompt()?;
+
+        if license_selection == "Other" {
+            Text::new("Enter license:")
+                .with_placeholder("MIT")
+                .prompt()?
+        } else {
+            license_selection.to_string()
+        }
     };
 
     let mut config = ActonConfig::default();
@@ -100,14 +131,40 @@ pub fn new_cmd(path: &str) -> anyhow::Result<()> {
     config.package.license = Some(license.clone());
 
     std::env::set_current_dir(&project_path)?;
+
+    if template == "empty" {
+        fs::create_dir_all("contracts/")?;
+        fs::create_dir_all("tests/")?;
+    } else {
+        // use `.` since we explicitly change current dir to project dir
+        template::create_project_from_template(&template, Path::new("."))?;
+
+        if template == "counter" {
+            let mut contracts = BTreeMap::new();
+            contracts.insert(
+                "counter".to_owned(),
+                ContractConfig {
+                    name: "counter".to_owned(),
+                    src: "contracts/counter.tolk".to_owned(),
+                    depends: Some(vec![]),
+                    output: None,
+                },
+            );
+            config.contracts = Some(ContractsConfig { contracts })
+        }
+    }
+
     config.save()?;
 
     fs::create_dir_all(".acton/tolk-stdlib")?;
     LIB_DIR.extract(".acton")?;
     TOLK_STDLIB_DIR.extract(".acton/tolk-stdlib")?;
 
-    fs::create_dir_all("contracts/")?;
-    fs::create_dir_all("tests/")?;
+    let author = get_git_user_name().unwrap_or_else(|| "Acton User".to_string());
+    let year = chrono::Local::now().format("%Y").to_string();
+    if let Some(license_text) = licenses::get_license_text(&license, &year, &author) {
+        fs::write("LICENSE", license_text)?;
+    }
 
     fs::write(".gitignore", BASE_GITIGNORE.trim_start())?;
 
@@ -118,6 +175,7 @@ pub fn new_cmd(path: &str) -> anyhow::Result<()> {
         project_name.cyan().bold()
     );
     println!("  {} {}", "Description:".bright_black(), description);
+    println!("  {} {}", "Template:".bright_black(), template.cyan());
     println!("  {} {}", "License:".bright_black(), license.cyan());
     println!();
     println!("Created {} with project configuration", "Acton.toml".cyan());
@@ -131,4 +189,20 @@ pub fn new_cmd(path: &str) -> anyhow::Result<()> {
     );
 
     Ok(())
+}
+
+fn get_git_user_name() -> Option<String> {
+    std::process::Command::new("git")
+        .args(["config", "--get", "user.name"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout)
+                    .ok()
+                    .map(|s| s.trim().to_string())
+            } else {
+                None
+            }
+        })
 }

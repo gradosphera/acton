@@ -1,0 +1,136 @@
+use crate::support::TestOutputExt;
+use crate::support::project::ProjectBuilder;
+use std::fs;
+
+#[test]
+fn test_new_empty_project_non_interactive() {
+    let project = ProjectBuilder::new("new-empty")
+        .without_acton_toml()
+        .build();
+
+    let output = project
+        .acton()
+        .arg("new")
+        .arg(&project.path().join("foobar").display().to_string())
+        .arg("--name")
+        .arg("test-project")
+        .arg("--description")
+        .arg("test description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .run()
+        .success();
+
+    output
+        .assert_contains("Created new Acton project")
+        .assert_contains("Project name: test-project")
+        .assert_contains("Template: empty")
+        .assert_contains("License: MIT");
+
+    let acton_toml = project.path().join("foobar/Acton.toml");
+    assert!(acton_toml.exists());
+
+    let content = fs::read_to_string(&acton_toml).unwrap();
+    assert!(content.contains(r#"name = "test-project""#));
+    assert!(content.contains(r#"description = "test description""#));
+    assert!(content.contains(r#"license = "MIT""#));
+
+    assert!(project.path().join("foobar/contracts").exists());
+    assert!(project.path().join("foobar/tests").exists());
+    assert!(project.path().join("foobar/LICENSE").exists());
+    assert!(project.path().join("foobar/.gitignore").exists());
+}
+
+#[test]
+fn test_new_counter_project_non_interactive() {
+    let project = ProjectBuilder::new("new-counter")
+        .without_acton_toml()
+        .build();
+
+    let output = project
+        .acton()
+        .arg("new")
+        .arg(&project.path().join("foobar").display().to_string())
+        .arg("--name")
+        .arg("counter-project")
+        .arg("--description")
+        .arg("counter description")
+        .arg("--template")
+        .arg("counter")
+        .arg("--license")
+        .arg("Apache-2.0")
+        .run()
+        .success();
+
+    output.assert_contains("Template: counter");
+
+    let acton_toml = project.path().join("foobar/Acton.toml");
+    let content = fs::read_to_string(&acton_toml).unwrap();
+    assert!(content.contains(r#"name = "counter-project""#));
+
+    assert!(
+        project
+            .path()
+            .join("foobar/contracts/counter.tolk")
+            .exists()
+    );
+    assert!(content.contains(r#"[contracts.counter]"#));
+}
+
+#[test]
+fn test_new_empty_project_in_existed_directory() {
+    let project = ProjectBuilder::new("foobar")
+        .contract("foo", "")
+        .without_acton_toml()
+        .build();
+
+    let dir = project.path().parent().expect("Should be parent directory");
+
+    let output = project
+        .acton()
+        .arg("new")
+        .arg(&dir.join("foobar").display().to_string())
+        .arg("--name")
+        .arg("test-project")
+        .arg("--description")
+        .arg("test description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .run()
+        .failure();
+
+    output.assert_stderr_snapshot_matches(
+        "integration/snapshots/test_new_empty_project_in_existed_directory.stderr.txt",
+    );
+}
+
+#[test]
+fn test_new_empty_project_in_existed_directory_with_acton_toml() {
+    let project = ProjectBuilder::new("foobar").contract("foo", "").build();
+
+    let dir = project.path().parent().expect("Should be parent directory");
+
+    let output = project
+        .acton()
+        .arg("new")
+        .arg(&dir.join("foobar").display().to_string())
+        .arg("--name")
+        .arg("test-project")
+        .arg("--description")
+        .arg("test description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .run()
+        .failure();
+
+    output
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_new_empty_project_in_existed_directory_with_acton_toml.stderr.txt",
+        );
+}

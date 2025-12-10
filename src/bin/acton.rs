@@ -51,6 +51,14 @@ enum Commands {
             help = "Directory to create the project in (use '.' to create a project in the current directory)"
         )]
         path: String,
+        #[arg(long, help = "Project name")]
+        name: Option<String>,
+        #[arg(long, help = "Project description")]
+        description: Option<String>,
+        #[arg(long, help = "Project template")]
+        template: Option<String>,
+        #[arg(long, help = "License")]
+        license: Option<String>,
     },
     #[command(
         about = "Execute tests in file or directory",
@@ -645,7 +653,13 @@ fn main() {
 
     let result = match cli.command {
         Commands::Init => init_cmd(),
-        Commands::New { path } => new_cmd(&path),
+        Commands::New {
+            path,
+            name,
+            description,
+            template,
+            license,
+        } => new_cmd(&path, name, description, template, license),
         Commands::Test {
             path,
             filter,
