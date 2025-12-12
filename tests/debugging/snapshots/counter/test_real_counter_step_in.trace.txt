@@ -731,14 +731,14 @@ Step 43 (step_over):
 Step 44 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:992
   Code:
-    506| /// ```
-    507| ///
-    508| /// If you need to run a get method by its ID, use [Network.runGetMethodById] instead.
-    509| fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? = null): Ret {
+    505| /// ```
+    506| ///
+    507| /// If you need to run a get method by its ID, use [Network.runGetMethodById] instead.
+    508| fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? = null): Ret {
                                                                                            ^^^^
-    510|     val method_id = (crc16(name) & 0xffff) | 0x10000;
-    511|     return impl.runGetMethodById(addr, method_id, name, args)
-    512| }
+    509|     val method_id = (crc16(name) & 0xffff) | 0x10000;
+    510|     return impl.runGetMethodById(addr, method_id, name, args)
+    511| }
   Variables:
     '303 = "currentCounter"
     counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
@@ -747,14 +747,14 @@ Step 44 (step_over):
 Step 45 (step_over):
   Bytecode position: 202467D6F0BBF0AFD21A40EC9E492A061ABCD136D3B3BD5418132254D4A6B075:1000
   Code:
-    506| /// ```
-    507| ///
-    508| /// If you need to run a get method by its ID, use [Network.runGetMethodById] instead.
-    509| fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? = null): Ret {
+    505| /// ```
+    506| ///
+    507| /// If you need to run a get method by its ID, use [Network.runGetMethodById] instead.
+    508| fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? = null): Ret {
                                                                                            ^^^^
-    510|     val method_id = (crc16(name) & 0xffff) | 0x10000;
-    511|     return impl.runGetMethodById(addr, method_id, name, args)
-    512| }
+    509|     val method_id = (crc16(name) & 0xffff) | 0x10000;
+    510|     return impl.runGetMethodById(addr, method_id, name, args)
+    511| }
   Variables:
     '304 = null
     '303 = "currentCounter"

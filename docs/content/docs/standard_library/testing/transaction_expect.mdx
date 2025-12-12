@@ -3,6 +3,9 @@ title: "transaction_expect"
 description: "transaction_expect.tolk standard library file"
 ---
 
+import { SourceCodeLink } from '@/components/SourceCodeLink';
+
+<span id="Expectation<SendResultList>.toHaveSuccessfulDeploy"></span>
 ## `Expectation<SendResultList>.toHaveSuccessfulDeploy`
 
 ```tolk
@@ -21,6 +24,9 @@ expect(txs).toHaveSuccessfulDeploy({
 });
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/transaction_expect.tolk#L19" />
+
+<span id="Expectation<SendResultList>.toHaveSuccessfulTx"></span>
 ## `Expectation<SendResultList>.toHaveSuccessfulTx`
 
 ```tolk
@@ -40,6 +46,9 @@ expect(txs).toHaveSuccessfulTx({
 });
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/transaction_expect.tolk#L48" />
+
+<span id="Expectation<SendResultList>.toHaveTx"></span>
 ## `Expectation<SendResultList>.toHaveTx`
 
 ```tolk
@@ -56,6 +65,9 @@ expect(txs).toHaveTx({
 });
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/transaction_expect.tolk#L75" />
+
+<span id="Expectation<SendResultList>.toNotHaveTx"></span>
 ## `Expectation<SendResultList>.toNotHaveTx`
 
 ```tolk
@@ -72,6 +84,9 @@ expect(txs).toNotHaveTx({
 });
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/transaction_expect.tolk#L99" />
+
+<span id="Expectation<SendResultList>.toHaveBouncedTx"></span>
 ## `Expectation<SendResultList>.toHaveBouncedTx`
 
 ```tolk
@@ -88,6 +103,9 @@ expect(txs).toHaveBouncedTx({
 });
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/transaction_expect.tolk#L123" />
+
+<span id="Expectation<SendResultList>.toHaveFailedTx"></span>
 ## `Expectation<SendResultList>.toHaveFailedTx`
 
 ```tolk
@@ -106,6 +124,9 @@ expect(txs).toHaveFailedTx({
 });
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/transaction_expect.tolk#L150" />
+
+<span id="Expectation<SendResultList>.toEmitExternalMessage"></span>
 ## `Expectation<SendResultList>.toEmitExternalMessage`
 
 ```tolk
@@ -119,6 +140,9 @@ Example:
 expect(txs).toEmitExternalMessage<IncreaseCounter>();
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/transaction_expect.tolk#L178" />
+
+<span id="Expectation<SendResult>.toConsumeLessThan"></span>
 ## `Expectation<SendResult>.toConsumeLessThan`
 
 ```tolk
@@ -132,4 +156,6 @@ Example:
 val result = net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
 expect(result.at(0)).toConsumeLessThan(1000);
 ```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/transaction_expect.tolk#L214" />
 

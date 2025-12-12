@@ -3,12 +3,18 @@ title: "maybe"
 description: "maybe.tolk standard library file"
 ---
 
+import { SourceCodeLink } from '@/components/SourceCodeLink';
+
+<span id="None"></span>
 ## `None`
 
 ```tolk
 struct (0b0) None
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/tlb/maybe.tolk#L1" />
+
+<span id="Value"></span>
 ## `Value`
 
 ```tolk
@@ -17,27 +23,41 @@ struct (0b1) Value<X> {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/tlb/maybe.tolk#L3" />
+
+<span id="Maybe<X>.none"></span>
 ## `Maybe<X>.none`
 
 ```tolk
 fun Maybe<X>.none(): Maybe<X>
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/tlb/maybe.tolk#L9" />
+
+<span id="Maybe<X>.some"></span>
 ## `Maybe<X>.some`
 
 ```tolk
 fun Maybe<X>.some(value: X): Maybe<X>
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/tlb/maybe.tolk#L13" />
+
+<span id="Maybe<X>.unwrap"></span>
 ## `Maybe<X>.unwrap`
 
 ```tolk
 fun Maybe<X>.unwrap(self): X
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/tlb/maybe.tolk#L17" />
+
+<span id="Maybe<X>.unwrap_or"></span>
 ## `Maybe<X>.unwrap_or`
 
 ```tolk
 fun Maybe<X>.unwrap_or(self, default: X): X
 ```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/tlb/maybe.tolk#L24" />
 

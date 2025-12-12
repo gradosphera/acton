@@ -1,6 +1,8 @@
 use anyhow::Result;
+use regex::Regex;
+use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tolk_parser::parser::parse;
 use tree_sitter::Node;
 
@@ -37,6 +39,15 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
 
     files.sort_by_key(|e| e.path().to_string_lossy().to_string());
 
+    struct FileDoc {
+        path: PathBuf,
+        file_stem: String,
+        symbols: Vec<SymbolInfo>,
+    }
+
+    let mut docs = Vec::new();
+    let mut symbol_map: HashMap<String, PathBuf> = HashMap::new();
+
     for entry in files {
         let path = entry.path();
         let path_string = path.to_string_lossy();
@@ -46,44 +57,95 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
 
         let content = fs::read_to_string(path)?;
         let relative_path = path.strip_prefix(lib_dir)?;
-        let file_stem = relative_path.file_stem().unwrap().to_string_lossy();
+        let file_stem = relative_path
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+
+        let tree = parse(&content)?;
+        let root_node = tree.root_node();
+
+        let symbols = extract_symbols(root_node, &content);
+        let symbols: Vec<_> = symbols.into_iter().filter(|s| !skip_symbol(s)).collect();
+
+        if !symbols.is_empty() {
+            let target_rel_path = relative_path.with_extension("");
+            for symbol in &symbols {
+                symbol_map.insert(symbol.name.clone(), target_rel_path.clone());
+            }
+
+            docs.push(FileDoc {
+                path: path.to_path_buf(),
+                file_stem,
+                symbols,
+            });
+        }
+    }
+
+    let link_regex = Regex::new(r"\[([a-zA-Z0-9_.]+)]")?;
+
+    for doc in docs {
+        let relative_path = doc.path.strip_prefix(lib_dir)?;
+        let current_file_stem_path = relative_path.with_extension("");
 
         let mut out_path = Path::new(&out_dir).to_path_buf();
         if let Some(parent) = relative_path.parent() {
             out_path.push(parent);
             fs::create_dir_all(&out_path)?;
         }
-        out_path.push(format!("{}.mdx", file_stem));
+        out_path.push(format!("{}.mdx", doc.file_stem));
 
-        let tree = parse(&content)?;
-        let root_node = tree.root_node();
+        let mut mdx_content = String::new();
+        mdx_content.push_str("---\n");
+        mdx_content.push_str(&format!("title: \"{}\"\n", doc.file_stem));
+        mdx_content.push_str(&format!(
+            "description: \"{}.tolk standard library file\"\n",
+            doc.file_stem
+        ));
+        mdx_content.push_str("---\n\n");
+        mdx_content.push_str("import { SourceCodeLink } from '@/components/SourceCodeLink';\n\n");
 
-        let symbols = extract_symbols(root_node, &content);
+        for symbol in doc.symbols {
+            mdx_content.push_str(&format!("<span id=\"{}\"></span>\n", symbol.name));
+            mdx_content.push_str(&format!("## `{}`\n\n", symbol.name));
 
-        let symbols: Vec<_> = symbols.into_iter().filter(|s| !skip_symbol(s)).collect();
+            let source_url = format!(
+                "https://github.com/i582/acton/blob/master/{}#L{}",
+                doc.path.to_string_lossy(),
+                symbol.start_line + 1
+            );
 
-        if !symbols.is_empty() {
-            let mut mdx_content = String::new();
-            mdx_content.push_str("---\n");
-            mdx_content.push_str(&format!("title: \"{}\"\n", file_stem));
-            mdx_content.push_str(&format!(
-                "description: \"{}.tolk standard library file\"\n",
-                file_stem
-            ));
-            mdx_content.push_str("---\n\n");
+            mdx_content.push_str("```tolk\n");
+            mdx_content.push_str(&symbol.signature);
+            mdx_content.push_str("\n```\n\n");
 
-            for symbol in symbols {
-                mdx_content.push_str(&format!("## `{}`\n\n", symbol.name));
-                mdx_content.push_str("```tolk\n");
-                mdx_content.push_str(&symbol.signature);
-                mdx_content.push_str("\n```\n\n");
+            if let Some(doc_text) = symbol.doc.as_ref() {
+                let processed_doc = link_regex.replace_all(doc_text, |caps: &regex::Captures| {
+                    let name = &caps[1];
+                    if let Some(target_path) = symbol_map.get(name) {
+                        if target_path == &current_file_stem_path {
+                            format!("[{}](#{})", name, name)
+                        } else {
+                            let relative_link_path =
+                                pathdiff::diff_paths(target_path, &current_file_stem_path)
+                                    .unwrap_or_else(|| target_path.clone());
 
-                if let Some(doc) = symbol.doc.as_ref() {
-                    mdx_content.push_str(&format!("{}\n\n", doc));
-                }
+                            let link = relative_link_path.to_string_lossy().replace('\\', "/");
+                            format!("[{}]({}/#{})", name, link, name)
+                        }
+                    } else {
+                        eprintln!("Warning: Symbol '{}' not found in documentation", name);
+                        name.to_string()
+                    }
+                });
+                mdx_content.push_str(&processed_doc);
+                mdx_content.push_str("\n\n");
             }
-            fs::write(out_path, mdx_content)?;
+
+            mdx_content.push_str(&format!("<SourceCodeLink href=\"{}\" />\n\n", source_url));
         }
+        fs::write(out_path, mdx_content)?;
     }
 
     Ok(())
@@ -114,6 +176,7 @@ struct SymbolInfo {
     name: String,
     signature: String,
     doc: Option<String>,
+    start_line: usize,
 }
 
 fn extract_symbols(root: Node, source: &str) -> Vec<SymbolInfo> {
@@ -150,12 +213,14 @@ fn parse_struct(node: Node, source: &str) -> Option<SymbolInfo> {
     let signature = node.utf8_text(source.as_bytes()).ok()?;
 
     let doc = extract_doc_comment(node, source);
+    let start_line = node.start_position().row;
 
     Some(SymbolInfo {
         kind: SymbolKind::Struct,
         name,
         signature: signature.to_owned(),
         doc,
+        start_line,
     })
 }
 
@@ -165,12 +230,14 @@ fn parse_constant(node: Node, source: &str) -> Option<SymbolInfo> {
 
     let full_text = node.utf8_text(source.as_bytes()).ok()?;
     let doc = extract_doc_comment(node, source);
+    let start_line = node.start_position().row;
 
     Some(SymbolInfo {
         kind: SymbolKind::Constant,
         name,
         signature: full_text.to_string(),
         doc,
+        start_line,
     })
 }
 
@@ -198,12 +265,14 @@ fn parse_function(node: Node, source: &str) -> Option<SymbolInfo> {
     };
 
     let doc = extract_doc_comment(node, source);
+    let start_line = node.start_position().row;
 
     Some(SymbolInfo {
         kind: SymbolKind::Function,
         name,
         signature,
         doc,
+        start_line,
     })
 }
 

@@ -3,6 +3,9 @@ title: "message"
 description: "message.tolk standard library file"
 ---
 
+import { SourceCodeLink } from '@/components/SourceCodeLink';
+
+<span id="MessageRelaxedGeneric"></span>
 ## `MessageRelaxedGeneric`
 
 ```tolk
@@ -13,7 +16,7 @@ struct MessageRelaxedGeneric {
 }
 ```
 
-Represents a generic relaxed message. Unlike [MessageRelaxed], this message does not
+Represents a generic relaxed message. Unlike [MessageRelaxed](#MessageRelaxed), this message does not
 load the body of the message. Instead body is represented as a slice and can be parsed
 later manually (for example to load the opcode).
 
@@ -28,6 +31,9 @@ if (action is OutActionSendMessage) {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L18" />
+
+<span id="MessageRelaxedGeneric.loadOpcode"></span>
 ## `MessageRelaxedGeneric.loadOpcode`
 
 ```tolk
@@ -36,7 +42,7 @@ fun MessageRelaxedGeneric.loadOpcode(self, skip_bounce: bool = false): int?
 
 Loads the opcode of the message.
 
-If [skip_bounce] is true, the 0xFFFFFFFF prefix is skipped.
+If skip_bounce is true, the 0xFFFFFFFF prefix is skipped.
 
 Example:
 ```tolk
@@ -49,6 +55,9 @@ if (action is OutActionSendMessage) {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L38" />
+
+<span id="ExtMessageRelaxedGeneric"></span>
 ## `ExtMessageRelaxedGeneric`
 
 ```tolk
@@ -59,10 +68,13 @@ struct ExtMessageRelaxedGeneric {
 }
 ```
 
-Represents a generic external message. Unlike [ExtMessageRelaxed], this message does not
+Represents a generic external message. Unlike [ExtMessageRelaxed](#ExtMessageRelaxed), this message does not
 load the body of the message. Instead body is represented as a slice and can be parsed
 later manually (for example to load the opcode).
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L45" />
+
+<span id="ExtMessageRelaxedGeneric.loadOpcode"></span>
 ## `ExtMessageRelaxedGeneric.loadOpcode`
 
 ```tolk
@@ -71,8 +83,11 @@ fun ExtMessageRelaxedGeneric.loadOpcode(self, skip_bounce: bool = false): int?
 
 Loads the opcode of the message.
 
-If [skip_bounce] is true, the 0xFFFFFFFF prefix is skipped.
+If skip_bounce is true, the 0xFFFFFFFF prefix is skipped.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L54" />
+
+<span id="MessageRelaxed"></span>
 ## `MessageRelaxed`
 
 ```tolk
@@ -84,7 +99,7 @@ struct MessageRelaxed<X> {
 }
 ```
 
-Represents a generic message. Unlike [MessageRelaxedGeneric], this message loads
+Represents a generic message. Unlike [MessageRelaxedGeneric](#MessageRelaxedGeneric), this message loads
 the body of the message with passed type.
 
 If actual message body has a different type, loading will fail with exit code 63.
@@ -100,6 +115,9 @@ if (action is OutActionSendMessage) {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L73" />
+
+<span id="MessageRelaxed<X>.loadBody"></span>
 ## `MessageRelaxed<X>.loadBody`
 
 ```tolk
@@ -121,6 +139,9 @@ if (action is OutActionSendMessage) {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L94" />
+
+<span id="ExtMessageRelaxed"></span>
 ## `ExtMessageRelaxed`
 
 ```tolk
@@ -132,11 +153,14 @@ struct ExtMessageRelaxed<X> {
 }
 ```
 
-Represents a generic external message. Unlike [ExtMessageRelaxedGeneric], this message
+Represents a generic external message. Unlike [ExtMessageRelaxedGeneric](#ExtMessageRelaxedGeneric), this message
 loads the body of the message with passed type.
 
 If actual message body has a different type, loading will fail with exit code 63.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L105" />
+
+<span id="ExtMessageRelaxed<X>.loadBody"></span>
 ## `ExtMessageRelaxed<X>.loadBody`
 
 ```tolk
@@ -147,6 +171,9 @@ Loads the body of the message.
 
 Note that if message type mismatch, loading will fail with exit code 63.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L115" />
+
+<span id="IntMsgInfoRelaxed"></span>
 ## `IntMsgInfoRelaxed`
 
 ```tolk
@@ -166,6 +193,9 @@ struct (0b0) IntMsgInfoRelaxed {
 
 Represents common message info for internal relaxed message.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L123" />
+
+<span id="ExtMsgInfoRelaxed"></span>
 ## `ExtMsgInfoRelaxed`
 
 ```tolk
@@ -179,6 +209,9 @@ struct (0b11) ExtMsgInfoRelaxed {
 
 Represents common message info for external relaxed message.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L137" />
+
+<span id="CurrencyCollection"></span>
 ## `CurrencyCollection`
 
 ```tolk
@@ -192,6 +225,9 @@ struct CurrencyCollection {
 
 Represents a currency collection as TON amount + extra currencies.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L145" />
+
+<span id="InternalMessage"></span>
 ## `InternalMessage`
 
 ```tolk
@@ -216,6 +252,9 @@ int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool
                created_lt:uint64 created_at:uint32 = CommonMsgInfo;
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L158" />
+
+<span id="ExternalInMessageInfo"></span>
 ## `ExternalInMessageInfo`
 
 ```tolk
@@ -231,6 +270,9 @@ ext_in_msg_info$10 src:MsgAddressExt dest:MsgAddressInt
                    import_fee:Grams = CommonMsgInfo;
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L175" />
+
+<span id="ExternalOutMessageInfo"></span>
 ## `ExternalOutMessageInfo`
 
 ```tolk
@@ -247,6 +289,9 @@ ext_out_msg_info$11 src:MsgAddressInt dest:MsgAddressExt
                     created_lt:uint64 created_at:uint32 = CommonMsgInfo;
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L185" />
+
+<span id="Message"></span>
 ## `Message`
 
 ```tolk
@@ -257,9 +302,14 @@ struct Message<TBody = RemainingBitsAndRefs, TInfo = CommonMessageInfo> {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L197" />
+
+<span id="Message<TBody, TInfo>.loadBody"></span>
 ## `Message<TBody, TInfo>.loadBody`
 
 ```tolk
 fun Message<TBody, TInfo>.loadBody(self): TBody
 ```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L203" />
 

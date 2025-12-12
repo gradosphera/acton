@@ -3,12 +3,18 @@ title: "assert"
 description: "assert.tolk standard library file"
 ---
 
+import { SourceCodeLink } from '@/components/SourceCodeLink';
+
+<span id="ASSERTION_FAILED"></span>
 ## `ASSERTION_FAILED`
 
 ```tolk
 const ASSERTION_FAILED = 567
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L5" />
+
+<span id="Assert"></span>
 ## `Assert`
 
 ```tolk
@@ -31,6 +37,9 @@ Example:
 expect(10).toEqual(10);
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L22" />
+
+<span id="Assert.equal"></span>
 ## `Assert.equal`
 
 ```tolk
@@ -46,6 +55,9 @@ be printed in the error message.
 This is a low-level function. Expectation API provides a higher-level interface
 with automatic location tracking.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L32" />
+
+<span id="Assert.notEqual"></span>
 ## `Assert.notEqual`
 
 ```tolk
@@ -61,6 +73,9 @@ be printed in the error message.
 This is a low-level function. Expectation API provides a higher-level interface
 with automatic location tracking.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L56" />
+
+<span id="Assert.fail"></span>
 ## `Assert.fail`
 
 ```tolk
@@ -73,6 +88,9 @@ Optional message can be provided to describe the failure.
 Optional location can be provided to specify the location of the failure to
 be printed in the error message.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L77" />
+
+<span id="Assert.consumesLessThan"></span>
 ## `Assert.consumesLessThan`
 
 ```tolk
@@ -98,6 +116,9 @@ If you need to pass arguments to the function, you can use the `consumesLessThan
 `consumesLessThan2` or `consumesLessThan3` functions which are similar to the `consumesLessThan`
 but accept arguments.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L100" />
+
+<span id="Assert.consumesLessThan1"></span>
 ## `Assert.consumesLessThan1`
 
 ```tolk
@@ -121,6 +142,9 @@ get fun test_gas_consumption() {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L124" />
+
+<span id="Assert.consumesLessThan2"></span>
 ## `Assert.consumesLessThan2`
 
 ```tolk
@@ -142,6 +166,9 @@ get fun test_gas_consumption() {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L146" />
+
+<span id="Assert.consumesLessThan3"></span>
 ## `Assert.consumesLessThan3`
 
 ```tolk
@@ -163,6 +190,9 @@ get fun test_gas_consumption() {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L168" />
+
+<span id="Assert.failWalletNotFound"></span>
 ## `Assert.failWalletNotFound`
 
 ```tolk
@@ -175,4 +205,6 @@ This function is used internally by the framework when a wallet is not found.
 It provides detailed information about available wallets and instructions on how to add them.
 
 NOT FOR PUBLIC USE.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L182" />
 

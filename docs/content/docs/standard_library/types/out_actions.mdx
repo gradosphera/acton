@@ -3,6 +3,9 @@ title: "out_actions"
 description: "out_actions.tolk standard library file"
 ---
 
+import { SourceCodeLink } from '@/components/SourceCodeLink';
+
+<span id="OutList"></span>
 ## `OutList`
 
 ```tolk
@@ -14,6 +17,9 @@ struct OutList {
 Represents a node in the out list.
 This is an internal type, you shouldn't use it directly.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L8" />
+
+<span id="OutActionSendMessage"></span>
 ## `OutActionSendMessage`
 
 ```tolk
@@ -30,6 +36,9 @@ struct (0x0ec3c86d) OutActionSendMessage {
 
 Represents send message action.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L13" />
+
+<span id="OutActionSendMessage.loadMessage"></span>
 ## `OutActionSendMessage.loadMessage`
 
 ```tolk
@@ -40,7 +49,7 @@ Loads the message from the out message cell.
 
 Note that you should provide the message type as a generic parameter.
 
-If you want to access the body of the message, use [OutActionSendMessage.loadBody] method.
+If you want to access the body of the message, use [OutActionSendMessage.loadBody](#OutActionSendMessage.loadBody) method.
 
 Example:
 ```
@@ -53,6 +62,9 @@ if (action is OutActionSendMessage) {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L39" />
+
+<span id="OutActionSendMessage.loadBody"></span>
 ## `OutActionSendMessage.loadBody`
 
 ```tolk
@@ -73,6 +85,9 @@ if (action is OutActionSendMessage) {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L56" />
+
+<span id="OutActionSendMessage.loadGenericMessage"></span>
 ## `OutActionSendMessage.loadGenericMessage`
 
 ```tolk
@@ -80,7 +95,7 @@ fun OutActionSendMessage.loadGenericMessage(self): MessageRelaxedGeneric
 ```
 
 Loads the generic message from the out message cell.
-Unlike [OutActionSendMessage.loadMessage], this method does not require type of the message to load.
+Unlike [OutActionSendMessage.loadMessage](#OutActionSendMessage.loadMessage), this method does not require type of the message to load.
 Instead it loads the message with body as a slice. Use this method if don't know the type of the message.
 
 Example:
@@ -94,6 +109,9 @@ if (action is OutActionSendMessage) {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L74" />
+
+<span id="OutActionSetCode"></span>
 ## `OutActionSetCode`
 
 ```tolk
@@ -106,6 +124,9 @@ struct (0xad4de08e) OutActionSetCode {
 
 Represents set code action.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L79" />
+
+<span id="OutActionReserveCurrency"></span>
 ## `OutActionReserveCurrency`
 
 ```tolk
@@ -120,6 +141,9 @@ struct (0x36e6b809) OutActionReserveCurrency {
 
 Represents reserve currency action.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L86" />
+
+<span id="OutActionChangeLibrary"></span>
 ## `OutActionChangeLibrary`
 
 ```tolk
@@ -134,6 +158,9 @@ struct (0x26fa1dd4) OutActionChangeLibrary {
 
 Represents change library action.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L95" />
+
+<span id="LibRefHash"></span>
 ## `LibRefHash`
 
 ```tolk
@@ -145,6 +172,9 @@ struct (0b0) LibRefHash {
 
 Represents library reference as a hash.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L104" />
+
+<span id="LibRefRef"></span>
 ## `LibRefRef`
 
 ```tolk
@@ -156,6 +186,9 @@ struct (0b1) LibRefRef {
 
 Represents library reference as a cell reference.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L110" />
+
+<span id="OutAction.kind"></span>
 ## `OutAction.kind`
 
 ```tolk
@@ -164,6 +197,9 @@ fun OutAction.kind(self): slice
 
 Returns the kind of the out action as a string.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L126" />
+
+<span id="OutActionList.at"></span>
 ## `OutActionList.at`
 
 ```tolk
@@ -181,6 +217,9 @@ val action = out_actions.at(0);
 println(action.kind());
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L158" />
+
+<span id="OutActionList.getSendMessageAt"></span>
 ## `OutActionList.getSendMessageAt`
 
 ```tolk
@@ -200,6 +239,9 @@ if (action != null) {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L175" />
+
+<span id="OutActionList.getSendMessageBodyAt"></span>
 ## `OutActionList.getSendMessageBodyAt`
 
 ```tolk
@@ -221,6 +263,9 @@ if (body != null) {
 }
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L197" />
+
+<span id="OutMessage.outActions"></span>
 ## `OutMessage.outActions`
 
 ```tolk
@@ -229,6 +274,9 @@ fun OutMessage.outActions(self, mode: int): OutActionList
 
 Returns the out actions for the message.
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L216" />
+
+<span id="vm.outActions"></span>
 ## `vm.outActions`
 
 ```tolk
@@ -243,6 +291,9 @@ val out_actions = vm.outActions();
 println(out_actions.size());
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L231" />
+
+<span id="vm.parseOutActions"></span>
 ## `vm.parseOutActions`
 
 ```tolk
@@ -257,21 +308,32 @@ val out_actions = vm.parseOutActions(vm.getC5());
 println(out_actions.size());
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L242" />
+
+<span id="LibRef.fromTuple"></span>
 ## `LibRef.fromTuple`
 
 ```tolk
 fun LibRef.fromTuple(data: tuple): LibRef
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L290" />
+
+<span id="OutAction.fromTuple"></span>
 ## `OutAction.fromTuple`
 
 ```tolk
 fun OutAction.fromTuple(data: tuple): OutAction
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L300" />
+
+<span id="OutActionChangeLibrary.toTuple"></span>
 ## `OutActionChangeLibrary.toTuple`
 
 ```tolk
 fun OutActionChangeLibrary.toTuple(self)
 ```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L316" />
 

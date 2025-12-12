@@ -20,7 +20,6 @@ fun vm.setC5(cell: cell): void
     asm "c5 POPCTR";
 
 /// Generic helper to get a single config parameter.
-@inline
 fun vm.getConfigParam<T>(index: int): T {
     var c7 = vm.getC7();
     var params: tuple = c7.get(0);
@@ -28,7 +27,6 @@ fun vm.getConfigParam<T>(index: int): T {
 }
 
 /// Generic helper to overwrite a single config parameter.
-@inline
 fun vm.setConfigParam<T>(value: T, index: int) {
     var c7 = vm.getC7();
     var params: tuple = c7.get(0);
@@ -38,25 +36,21 @@ fun vm.setConfigParam<T>(value: T, index: int) {
 }
 
 /// Override `blockchain.now()` for deterministic testing.
-@inline
 fun vm.setTime(now: int) {
     vm.setConfigParam(now, 3);
 }
 
 /// Override the **block** logical time.
-@inline
 fun vm.setBlockLogicalTime(blockLogicalTime: int) {
     vm.setConfigParam(blockLogicalTime, 4);
 }
 
 /// Override the **transaction** logical time.
-@inline
 fun vm.setLogicalTime(logicalTime: int) {
     vm.setConfigParam(logicalTime, 5);
 }
 
 /// Override the original balance of the contract.
-@inline
 fun vm.setOriginalBalance(balance: coins, extraCurrencies: dict = null) {
     vm.setConfigParam([balance, extraCurrencies], 7);
 }

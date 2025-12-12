@@ -3,15 +3,23 @@ title: "fs"
 description: "fs.tolk standard library file"
 ---
 
+import { SourceCodeLink } from '@/components/SourceCodeLink';
+
+<span id="fs"></span>
 ## `fs`
 
 ```tolk
 struct fs
 ```
 
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/fs.tolk#L1" />
+
+<span id="fs.readFile"></span>
 ## `fs.readFile`
 
 ```tolk
 fun fs.readFile(path: slice): slice | null asm "3 EXTCALL"
 ```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/fs.tolk#L3" />
 
