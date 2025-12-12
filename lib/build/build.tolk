@@ -5,14 +5,14 @@
 /// 
 /// Example:
 /// 
-/// ```
+/// ```tolk
 /// val cell = build("jetton-wallet");
 /// ```
 /// 
 /// If you want to build a contract from a specific path, provide the path as the second argument.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// val cell = build("jetton-wallet", "contracts/jetton-wallet-contract.tolk");
 /// ```
 fun build(name: slice, path: slice = ""): cell asm "6 EXTCALL"

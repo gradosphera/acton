@@ -2,6 +2,7 @@ pub mod build;
 pub mod common;
 pub mod compile;
 pub mod disasm;
+pub mod docgen;
 pub mod init;
 pub mod library;
 pub mod new;

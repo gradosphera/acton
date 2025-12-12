@@ -1,0 +1,130 @@
+---
+title: "vm"
+description: "vm.tolk standard library file"
+---
+
+## `vm`
+
+```tolk
+struct vm
+```
+
+Holds the methods to change the VM state.
+
+## `vm.getC7`
+
+```tolk
+fun vm.getC7(): tuple
+    asm "c7 PUSHCTR";
+```
+
+Read control register C7.
+
+## `vm.setC7`
+
+```tolk
+fun vm.setC7(c7: tuple): void
+    asm "c7 POPCTR";
+```
+
+Write a new value to control register C7.
+
+## `vm.getC5`
+
+```tolk
+fun vm.getC5(): cell
+    asm "c5 PUSHCTR";
+```
+
+Read control register C5.
+
+## `vm.setC5`
+
+```tolk
+fun vm.setC5(cell: cell): void
+    asm "c5 POPCTR";
+```
+
+Write a new value to control register C5.
+
+## `vm.getConfigParam`
+
+```tolk
+@inline
+fun vm.getConfigParam<T>(index: int): T
+```
+
+Generic helper to get a single config parameter.
+
+## `vm.setConfigParam`
+
+```tolk
+@inline
+fun vm.setConfigParam<T>(value: T, index: int)
+```
+
+Generic helper to overwrite a single config parameter.
+
+## `vm.setTime`
+
+```tolk
+@inline
+fun vm.setTime(now: int)
+```
+
+Override `blockchain.now()` for deterministic testing.
+
+## `vm.setBlockLogicalTime`
+
+```tolk
+@inline
+fun vm.setBlockLogicalTime(blockLogicalTime: int)
+```
+
+Override the **block** logical time.
+
+## `vm.setLogicalTime`
+
+```tolk
+@inline
+fun vm.setLogicalTime(logicalTime: int)
+```
+
+Override the **transaction** logical time.
+
+## `vm.setOriginalBalance`
+
+```tolk
+@inline
+fun vm.setOriginalBalance(balance: coins, extraCurrencies: dict = null)
+```
+
+Override the original balance of the contract.
+
+## `vm.registerLibrary`
+
+```tolk
+fun vm.registerLibrary(cell: cell)
+```
+
+Register a new library for current test.
+
+## `vm.convertAddress`
+
+```tolk
+fun vm.convertAddress(addr: slice): address
+```
+
+Convert a slice with string representation of address to an address type.
+
+Example:
+```
+val address = net.convertAddress("kQCPFJYFqhowz0BRAfqNPdLOC1_Rlupki_0BezWU6rHk5lbt");
+```
+
+## `vm.cellFromHex`
+
+```tolk
+fun vm.cellFromHex(cell_hex: slice): cell
+```
+

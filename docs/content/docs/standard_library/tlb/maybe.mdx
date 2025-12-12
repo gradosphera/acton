@@ -1,0 +1,43 @@
+---
+title: "maybe"
+description: "maybe.tolk standard library file"
+---
+
+## `None`
+
+```tolk
+struct (0b0) None
+```
+
+## `Value`
+
+```tolk
+struct (0b1) Value<X> {
+    value: X
+}
+```
+
+## `Maybe<X>.none`
+
+```tolk
+fun Maybe<X>.none(): Maybe<X>
+```
+
+## `Maybe<X>.some`
+
+```tolk
+fun Maybe<X>.some(value: X): Maybe<X>
+```
+
+## `Maybe<X>.unwrap`
+
+```tolk
+fun Maybe<X>.unwrap(self): X
+```
+
+## `Maybe<X>.unwrap_or`
+
+```tolk
+fun Maybe<X>.unwrap_or(self, default: X): X
+```
+

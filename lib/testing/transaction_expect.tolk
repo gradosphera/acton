@@ -208,7 +208,7 @@ fun Expectation<SendResultList>.toEmitExternalMessage<Msg>(self) {
 /// 
 /// Example:
 /// ```
-/// let result = net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val result = net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
 /// expect(result.at(0)).toConsumeLessThan(1000);
 /// ```
 fun Expectation<SendResult>.toConsumeLessThan(self, amount: int) {

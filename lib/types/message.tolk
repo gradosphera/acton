@@ -6,7 +6,7 @@ import "../tlb/maybe"
 /// later manually (for example to load the opcode).
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// val out_actions = vm.outActions();
 /// val action = out_actions.at(0);
 /// if (action is OutActionSendMessage) {
@@ -26,7 +26,7 @@ struct MessageRelaxedGeneric {
 /// If [skip_bounce] is true, the 0xFFFFFFFF prefix is skipped.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// val out_actions = vm.outActions();
 /// val action = out_actions.at(0);
 /// if (action is OutActionSendMessage) {
@@ -61,7 +61,7 @@ fun ExtMessageRelaxedGeneric.loadOpcode(self, skip_bounce: bool = false): int? {
 /// If actual message body has a different type, loading will fail with exit code 63.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// val out_actions = vm.outActions();
 /// val action = out_actions.at(0);
 /// if (action is OutActionSendMessage) {
@@ -82,7 +82,7 @@ struct MessageRelaxed<X> {
 /// Note that if message type mismatch, loading will fail with exit code 63.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// val out_actions = vm.outActions();
 /// val action = out_actions.at(0);
 /// if (action is OutActionSendMessage) {

@@ -1,0 +1,21 @@
+---
+title: "either"
+description: "either.tolk standard library file"
+---
+
+## `EitherLeft`
+
+```tolk
+struct (0b0) EitherLeft<X> {
+    value: X
+}
+```
+
+## `EitherRight`
+
+```tolk
+struct (0b1) EitherRight<X> {
+    value: X
+}
+```
+

@@ -163,7 +163,7 @@ fun SendResultList.at(self, index: int): SendResult {
 /// Returns `true` if transaction is found and `false` otherwise.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// val result = net.send(wallet.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
 /// val success = result.wait();
 /// if (success) {
@@ -172,7 +172,7 @@ fun SendResultList.at(self, index: int): SendResult {
 /// ```
 ///
 /// Example with custom parameters:
-/// ```
+/// ```tolk
 /// val result = net.send(wallet.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
 /// val success = result.wait(true, 30, 3000); // quiet mode, 30 attempts, 3 seconds delay
 /// ```
@@ -261,7 +261,7 @@ fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>
 /// Find a external-out message in the send result list by specified parameters.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// val tx = net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
 /// val result = tx.findExternalOutMessage<IncrementEvent>({ from: counter.address });
 /// expect(result).toBeDefined();
@@ -302,7 +302,7 @@ fun SendResultList.findExternalOutMessage<TBody = never>(self, params: ExternalO
 /// Find a transaction in the send result list by specified parameters.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// val tx = net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
 /// val result = tx.findTransaction({ to: counter.address });
 /// expect(result).toBeDefined();
@@ -321,7 +321,7 @@ fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams = {})
 /// Send a message from a specified address with specified mode.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// get fun `test-send-message`() {
 ///     // ...
 ///     val message = createMessage({
@@ -350,9 +350,8 @@ struct Treasury {
 /// Calling this method with same name will return the same treasury.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// get fun `test-mint`() {
-///     val net = accuireNet("net");
 ///     val treasury = net.treasury("treasury");
 ///     // ...
 /// }
@@ -412,7 +411,7 @@ fun net.wallet(name: slice): Wallet {
 /// This is useful for writing scripts that behave differently in emulation and broadcasting modes.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// if (net.isBroadcasting()) {
 ///     println("Running on real network");
 /// } else {
@@ -429,7 +428,7 @@ fun net.isBroadcasting(): bool {
 /// Useful for testing broadcasting logic in emulation mode.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// // Force broadcasting behavior even in emulation mode
 /// net.enableBroadcast();
 /// if (net.isBroadcasting()) {
@@ -445,7 +444,7 @@ fun net.enableBroadcast(): void {
 /// This function allows scripts to manually disable broadcasting behavior.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// // Disable broadcasting behavior
 /// net.disableBroadcast();
 /// if (!net.isBroadcasting()) {
@@ -459,12 +458,12 @@ fun net.disableBroadcast(): void {
 /// Run a get method of a contract by its name.
 ///
 /// Imagine you have the following get method in the contract:
-/// ```
+/// ```tolk
 /// get fun get_balance(): coins { ... }
 /// ```
 ///
 /// To call it, you can use the following code:
-/// ```
+/// ```tolk
 /// val balance = net.runGetMethod<coins>(wallet.address, "get_balance");
 /// ```
 /// Since this get method doesn't accept any arguments, third argument can be omitted.
@@ -472,34 +471,34 @@ fun net.disableBroadcast(): void {
 /// ## With argument
 ///
 /// If the get method accepts arguments, you can pass them as a third argument.
-/// ```
+/// ```tolk
 /// get fun get_wallet_address(ownerAddress: address): address { ... }
 /// ```
-/// ```
+/// ```tolk
 /// val address = net.runGetMethod<address>(wallet.address, "get_wallet_address", deployer.address);
 /// ```
 ///
 /// ## With struct return type
 ///
 /// If get method returns a struct, specify the type of the struct as a first type argument:
-/// ```
+/// ```tolk
 /// get fun get_jetton_data(): JettonDataReply { ... }
 /// ```
-/// ```
+/// ```tolk
 /// val data = net.runGetMethod<JettonDataReply>(wallet.address, "get_jetton_data");
 /// ```
 /// And provide glue method:
-/// ```
+/// ```tolk
 /// fun JettonDataReply.fromTuple(t: tuple): JettonDataReply asm "<count fields> UNTUPLE"
 /// ```
 ///
 /// ## With tensor return type
 ///
 /// If get method returns a tensor, specify tuple as a first type argument:
-/// ```
+/// ```tolk
 /// get fun get_all_data(): (int, slice) { ... }
 /// ```
-/// ```
+/// ```tolk
 /// val data: tuple = net.runGetMethod(wallet.address, "get_all_data");
 /// val first = data.get<int>(0);
 /// val second = data.get<int>(1);
@@ -516,7 +515,7 @@ fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? 
 /// If you need to run a get method by its name, use [Network.runGetMethod] instead.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// val data = net.runGetMethodById<JettonDataReply>(wallet.address, 0x17b02);
 /// ```
 ///
@@ -546,7 +545,7 @@ fun net.getDeployedCode(addr: address): cell? {
 /// Returns true if transaction is found and false otherwise.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// val messageHash = "abc123...";
 /// net.waitForTransaction(wallet.address, messageHash, 20, 2000);
 /// ```
@@ -574,7 +573,7 @@ fun net.waitForTransaction(
 /// This allows test runner to show the name instead of the address in the test output.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// val address = net.randomAddress("random_user");
 /// ```
 fun net.randomAddress(name: slice? = null): address {
@@ -606,7 +605,7 @@ fun net.randomAddress(name: slice? = null): address {
 /// likely want to call this method to register the address with a name.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// net.registerAddress(address, "my_address");
 /// ```
 fun net.registerAddress(addr: address, name: slice) {
@@ -619,7 +618,7 @@ fun net.registerAddress(addr: address, name: slice) {
 /// if the actual code of the contract is match to previously registered code.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// net.registerCodeCell(code, "my_code");
 /// ```
 fun net.registerCodeCell(code: cell, name: slice) {
@@ -670,7 +669,7 @@ fun net.fetchAndRegisterLibrary(hash: slice): bool {
 /// Calculate the CRC16 checksum of a slice.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// val crc = crc16("hello");
 /// ```
 fun crc16(data: slice): int asm "13 EXTCALL"

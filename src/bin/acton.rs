@@ -2,6 +2,7 @@ use acton::commands;
 use acton::commands::build::build_cmd;
 use acton::commands::compile::compile_cmd;
 use acton::commands::disasm::disasm_cmd;
+use acton::commands::docgen::docgen_cmd;
 use acton::commands::init::init_cmd;
 use acton::commands::library::{fetch_cmd, publish_cmd};
 use acton::commands::new::new_cmd;
@@ -442,6 +443,14 @@ enum Commands {
     Completions {
         #[clap(value_enum)]
         shell: clap_complete::Shell,
+    },
+    #[command(
+        about = "Internal command to generate MDX documentation from standard library",
+        hide = true
+    )]
+    Docgen {
+        #[arg(short, long, help = "Output directory path")]
+        output: Option<String>,
     },
 }
 
@@ -896,6 +905,7 @@ fn main() {
             clap_complete::generate(shell, &mut Cli::command(), "acton", &mut std::io::stdout());
             Ok(())
         }
+        Commands::Docgen { output } => docgen_cmd(output),
     };
 
     if let Err(err) = result {

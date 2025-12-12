@@ -16,6 +16,7 @@
     "--- Advanced ---",
     "advanced/libraries",
     "--- Miscellaneous ---",
-    "miscellaneous/ide-support.mdx"
+    "miscellaneous/ide-support.mdx",
+    "standard_library"
   ]
 }

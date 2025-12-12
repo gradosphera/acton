@@ -1,0 +1,54 @@
+---
+title: "io"
+description: "io.tolk standard library file"
+---
+
+## `println`
+
+```tolk
+fun println<T>(value: T): void
+```
+
+Prints the given value to the standard output.
+
+Example:
+```tolk
+println(10);
+println("Hello, world!");
+println((1, 2, 3));
+println(Data {
+    value: 10,
+    is_set: true
+});
+```
+
+## `println1`
+
+```tolk
+fun println1<T>(fmt: slice, value: T): void
+```
+
+Prints the given value to the standard output formatted according to format string.
+
+Example:
+```tolk
+println1("Hello, 0x{:x}", 10);
+```
+
+Format supports following format soecifiers:
+- `{:x}` — formats a number as hexadecimal without `0x` prefix
+- `{:ton}` — formats a number as TON value (e.g `0.11 TON`)
+
+## `eprintln`
+
+```tolk
+fun eprintln(str: slice): void
+```
+
+Prints the given slice string to the standard error output.
+
+Example:
+```tolk
+eprintln("Something went wrong");
+```
+

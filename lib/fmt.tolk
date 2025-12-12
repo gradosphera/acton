@@ -4,7 +4,7 @@ import "ffi/ffi"
 ///
 /// Example:
 /// ```tolk
-/// let msg = format1("Hello {}", "world");
+/// val msg = format1("Hello {}", "world");
 /// println(msg);  // prints "Hello world"
 /// ```
 ///
@@ -19,7 +19,7 @@ fun format1<T1>(fmt: slice, arg1: T1): slice {
 ///
 /// Example:
 /// ```tolk
-/// let msg = format2("{}: {}", "name", "John");
+/// val msg = format2("{}: {}", "name", "John");
 /// println(msg);  // prints "name: John"
 /// ```
 ///
@@ -34,7 +34,7 @@ fun format2<T1, T2>(fmt: slice, arg1: T1, arg2: T2): slice {
 ///
 /// Example:
 /// ```tolk
-/// let msg = format3("{} + {} = {}", 2, 3, 5);
+/// val msg = format3("{} + {} = {}", 2, 3, 5);
 /// println(msg);  // prints "2 + 3 = 5"
 /// ```
 ///
@@ -49,7 +49,7 @@ fun format3<T1, T2, T3>(fmt: slice, arg1: T1, arg2: T2, arg3: T3): slice {
 ///
 /// Example:
 /// ```tolk
-/// let msg = format4("{} {} {} {}", "a", "b", "c", "d");
+/// val msg = format4("{} {} {} {}", "a", "b", "c", "d");
 /// println(msg);  // prints "a b c d"
 /// ```
 ///
@@ -64,7 +64,7 @@ fun format4<T1, T2, T3, T4>(fmt: slice, arg1: T1, arg2: T2, arg3: T3, arg4: T4):
 ///
 /// Example:
 /// ```tolk
-/// let msg = format5("{} {} {} {} {}", 1, 2, 3, 4, 5);
+/// val msg = format5("{} {} {} {} {}", 1, 2, 3, 4, 5);
 /// println(msg);  // prints "1 2 3 4 5"
 /// ```
 ///
