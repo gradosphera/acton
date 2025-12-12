@@ -5,7 +5,6 @@ description: "outlist_expect.tolk standard library file"
 
 import { SourceCodeLink } from '@/components/SourceCodeLink';
 
-<span id="Expectation<OutActionList>.toBeNonEmpty"></span>
 ## `Expectation<OutActionList>.toBeNonEmpty`
 
 ```tolk
@@ -15,14 +14,13 @@ fun Expectation<OutActionList>.toBeNonEmpty(self)
 Expect the out action list to be non empty.
 
 Example:
-```
+```tolk
 val out_actions = vm.outActions();
 expect(out_actions).toBeNonEmpty();
 ```
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/outlist_expect.tolk#L15" />
 
-<span id="Expectation<OutActionList>.toBeEmpty"></span>
 ## `Expectation<OutActionList>.toBeEmpty`
 
 ```tolk
@@ -32,14 +30,13 @@ fun Expectation<OutActionList>.toBeEmpty(self)
 Expect the out action list to be empty.
 
 Example:
-```
+```tolk
 val out_actions = vm.outActions();
 expect(out_actions).toBeEmpty();
 ```
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/outlist_expect.tolk#L26" />
 
-<span id="Expectation<OutActionList>.toBeSendMessageAt"></span>
 ## `Expectation<OutActionList>.toBeSendMessageAt`
 
 ```tolk
@@ -49,7 +46,7 @@ fun Expectation<OutActionList>.toBeSendMessageAt<Msg>(self, index: int)
 Expect the out action at the given index to be a send message.
 
 Example:
-```
+```tolk
 val out_actions = vm.outActions();
 expect(out_actions).toBeSendMessageAt<IncreaseCounter>(0);
 ```

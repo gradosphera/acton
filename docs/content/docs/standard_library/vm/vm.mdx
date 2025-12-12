@@ -5,7 +5,6 @@ description: "vm.tolk standard library file"
 
 import { SourceCodeLink } from '@/components/SourceCodeLink';
 
-<span id="vm"></span>
 ## `vm`
 
 ```tolk
@@ -16,7 +15,6 @@ Holds the methods to change the VM state.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L4" />
 
-<span id="vm.getC7"></span>
 ## `vm.getC7`
 
 ```tolk
@@ -28,7 +26,6 @@ Read control register C7.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L7" />
 
-<span id="vm.setC7"></span>
 ## `vm.setC7`
 
 ```tolk
@@ -40,7 +37,6 @@ Write a new value to control register C7.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L11" />
 
-<span id="vm.getC5"></span>
 ## `vm.getC5`
 
 ```tolk
@@ -52,7 +48,6 @@ Read control register C5.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L15" />
 
-<span id="vm.setC5"></span>
 ## `vm.setC5`
 
 ```tolk
@@ -64,7 +59,6 @@ Write a new value to control register C5.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L19" />
 
-<span id="vm.getConfigParam"></span>
 ## `vm.getConfigParam`
 
 ```tolk
@@ -75,7 +69,6 @@ Generic helper to get a single config parameter.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L23" />
 
-<span id="vm.setConfigParam"></span>
 ## `vm.setConfigParam`
 
 ```tolk
@@ -86,7 +79,6 @@ Generic helper to overwrite a single config parameter.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L30" />
 
-<span id="vm.setTime"></span>
 ## `vm.setTime`
 
 ```tolk
@@ -97,7 +89,6 @@ Override `blockchain.now()` for deterministic testing.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L39" />
 
-<span id="vm.setBlockLogicalTime"></span>
 ## `vm.setBlockLogicalTime`
 
 ```tolk
@@ -108,7 +99,6 @@ Override the **block** logical time.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L44" />
 
-<span id="vm.setLogicalTime"></span>
 ## `vm.setLogicalTime`
 
 ```tolk
@@ -119,7 +109,6 @@ Override the **transaction** logical time.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L49" />
 
-<span id="vm.setOriginalBalance"></span>
 ## `vm.setOriginalBalance`
 
 ```tolk
@@ -130,7 +119,6 @@ Override the original balance of the contract.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L54" />
 
-<span id="vm.registerLibrary"></span>
 ## `vm.registerLibrary`
 
 ```tolk
@@ -141,7 +129,6 @@ Register a new library for current test.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L59" />
 
-<span id="vm.convertAddress"></span>
 ## `vm.convertAddress`
 
 ```tolk
@@ -151,13 +138,12 @@ fun vm.convertAddress(addr: slice): address
 Convert a slice with string representation of address to an address type.
 
 Example:
-```
+```tolk
 val address = net.convertAddress("kQCPFJYFqhowz0BRAfqNPdLOC1_Rlupki_0BezWU6rHk5lbt");
 ```
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/vm/vm.tolk#L69" />
 
-<span id="vm.cellFromHex"></span>
 ## `vm.cellFromHex`
 
 ```tolk

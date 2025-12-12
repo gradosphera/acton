@@ -8,7 +8,7 @@ import "../types/out_actions"
 /// Expect the out action list to be non empty.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// val out_actions = vm.outActions();
 /// expect(out_actions).toBeNonEmpty();
 /// ```
@@ -19,7 +19,7 @@ fun Expectation<OutActionList>.toBeNonEmpty(self) {
 /// Expect the out action list to be empty.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// val out_actions = vm.outActions();
 /// expect(out_actions).toBeEmpty();
 /// ```
@@ -30,7 +30,7 @@ fun Expectation<OutActionList>.toBeEmpty(self) {
 /// Expect the out action at the given index to be a send message.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// val out_actions = vm.outActions();
 /// expect(out_actions).toBeSendMessageAt<IncreaseCounter>(0);
 /// ```

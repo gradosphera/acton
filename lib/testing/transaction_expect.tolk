@@ -11,7 +11,7 @@ import "../types/transaction"
 /// 
 /// Example:
 /// 
-/// ```
+/// ```tolk
 /// expect(txs).toHaveSuccessfulDeploy({
 ///     to: counter.address,
 /// });
@@ -39,7 +39,7 @@ fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = never>(self, params
 /// can be overridden by the `exit_code` parameter.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// expect(txs).toHaveSuccessfulTx({
 ///     from: deployer.address,
 ///     to: counter.address,
@@ -66,7 +66,7 @@ fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = never>(self, params: Se
 /// Expect the transaction list to have a transaction with specified parameters.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// expect(txs).toHaveTx({
 ///     from: deployer.address,
 ///     to: counter.address,
@@ -90,7 +90,7 @@ fun Expectation<SendResultList>.toHaveTx<Msg = never>(self, params: SearchParams
 /// Expect the transaction list to NOT have a transaction with specified parameters.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// expect(txs).toNotHaveTx({
 ///     from: deployer.address,
 ///     to: counter.address,
@@ -114,7 +114,7 @@ fun Expectation<SendResultList>.toNotHaveTx<Msg = never>(self, params: SearchPar
 /// Expect the transaction list to have a **bounced** transaction.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// expect(txs).toHaveBouncedTx({
 ///     from: deployer.address,
 ///     to: counter.address,
@@ -140,7 +140,7 @@ fun Expectation<SendResultList>.toHaveBouncedTx<Msg = never>(self, params: Searc
 /// Exit code in parameters must be set to non zero value.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// expect(txs).toHaveFailedTx({
 ///     from: deployer.address,
 ///     to: counter.address,
@@ -172,7 +172,7 @@ fun Expectation<SendResultList>.toHaveFailedTx<Msg = never>(self, params: Search
 /// Expect the transaction to emit an external message of given type.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// expect(txs).toEmitExternalMessage<IncreaseCounter>();
 /// ```
 fun Expectation<SendResultList>.toEmitExternalMessage<Msg>(self) {
@@ -207,7 +207,7 @@ fun Expectation<SendResultList>.toEmitExternalMessage<Msg>(self) {
 /// Expect the transaction to consume less than the expected amount of gas.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// val result = net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
 /// expect(result.at(0)).toConsumeLessThan(1000);
 /// ```

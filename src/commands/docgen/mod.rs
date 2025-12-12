@@ -20,8 +20,8 @@ pub fn docgen_cmd(output: Option<String>) -> Result<()> {
     fs::write(
         &index_article,
         r#"---
-title: "Standart library"
-description: "Learn about available functions/struct/constants available in Acton standart library"
+title: "Standard library"
+description: "Learn about available functions/struct/constants available in Acton standard library"
 icon: FileCode
 ---
 
@@ -107,7 +107,6 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
         mdx_content.push_str("import { SourceCodeLink } from '@/components/SourceCodeLink';\n\n");
 
         for symbol in doc.symbols {
-            mdx_content.push_str(&format!("<span id=\"{}\"></span>\n", symbol.name));
             mdx_content.push_str(&format!("## `{}`\n\n", symbol.name));
 
             let source_url = format!(
@@ -125,14 +124,14 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
                     let name = &caps[1];
                     if let Some(target_path) = symbol_map.get(name) {
                         if target_path == &current_file_stem_path {
-                            format!("[{}](#{})", name, name)
+                            format!("[{}](#{})", name, normalize_symbol_link(name))
                         } else {
                             let relative_link_path =
                                 pathdiff::diff_paths(target_path, &current_file_stem_path)
                                     .unwrap_or_else(|| target_path.clone());
 
-                            let link = relative_link_path.to_string_lossy().replace('\\', "/");
-                            format!("[{}]({}/#{})", name, link, name)
+                            let link = relative_link_path.to_string_lossy().to_string();
+                            format!("[{}]({}/#{})", name, link, normalize_symbol_link(name))
                         }
                     } else {
                         eprintln!("Warning: Symbol '{}' not found in documentation", name);
@@ -149,6 +148,12 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
     }
 
     Ok(())
+}
+
+fn normalize_symbol_link(link: &str) -> String {
+    link.replace('\\', "/")
+        .replace('.', "")
+        .to_ascii_lowercase()
 }
 
 fn skip_symbol(s: &SymbolInfo) -> bool {

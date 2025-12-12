@@ -63,7 +63,7 @@ fun vm.registerLibrary(cell: cell) {
 /// Convert a slice with string representation of address to an address type.
 ///
 /// Example:
-/// ```
+/// ```tolk
 /// val address = net.convertAddress("kQCPFJYFqhowz0BRAfqNPdLOC1_Rlupki_0BezWU6rHk5lbt");
 /// ```
 fun vm.convertAddress(addr: slice): address {

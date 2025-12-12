@@ -5,7 +5,6 @@ description: "out_actions.tolk standard library file"
 
 import { SourceCodeLink } from '@/components/SourceCodeLink';
 
-<span id="OutList"></span>
 ## `OutList`
 
 ```tolk
@@ -19,7 +18,6 @@ This is an internal type, you shouldn't use it directly.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L8" />
 
-<span id="OutActionSendMessage"></span>
 ## `OutActionSendMessage`
 
 ```tolk
@@ -38,7 +36,6 @@ Represents send message action.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L13" />
 
-<span id="OutActionSendMessage.loadMessage"></span>
 ## `OutActionSendMessage.loadMessage`
 
 ```tolk
@@ -49,10 +46,10 @@ Loads the message from the out message cell.
 
 Note that you should provide the message type as a generic parameter.
 
-If you want to access the body of the message, use [OutActionSendMessage.loadBody](#OutActionSendMessage.loadBody) method.
+If you want to access the body of the message, use [OutActionSendMessage.loadBody](#outactionsendmessageloadbody) method.
 
 Example:
-```
+```tolk
 val out_actions = vm.outActions();
 val action = out_actions.at(0);
 if (action is OutActionSendMessage) {
@@ -64,7 +61,6 @@ if (action is OutActionSendMessage) {
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L39" />
 
-<span id="OutActionSendMessage.loadBody"></span>
 ## `OutActionSendMessage.loadBody`
 
 ```tolk
@@ -76,7 +72,7 @@ Loads the body of the message.
 Note that you should provide the message type as a generic parameter.
 
 Example:
-```
+```tolk
 val out_actions = vm.outActions();
 val action = out_actions.at(0);
 if (action is OutActionSendMessage) {
@@ -87,7 +83,6 @@ if (action is OutActionSendMessage) {
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L56" />
 
-<span id="OutActionSendMessage.loadGenericMessage"></span>
 ## `OutActionSendMessage.loadGenericMessage`
 
 ```tolk
@@ -95,11 +90,11 @@ fun OutActionSendMessage.loadGenericMessage(self): MessageRelaxedGeneric
 ```
 
 Loads the generic message from the out message cell.
-Unlike [OutActionSendMessage.loadMessage](#OutActionSendMessage.loadMessage), this method does not require type of the message to load.
+Unlike [OutActionSendMessage.loadMessage](#outactionsendmessageloadmessage), this method does not require type of the message to load.
 Instead it loads the message with body as a slice. Use this method if don't know the type of the message.
 
 Example:
-```
+```tolk
 val out_actions = vm.outActions();
 val action = out_actions.at(0);
 if (action is OutActionSendMessage) {
@@ -111,7 +106,6 @@ if (action is OutActionSendMessage) {
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L74" />
 
-<span id="OutActionSetCode"></span>
 ## `OutActionSetCode`
 
 ```tolk
@@ -126,7 +120,6 @@ Represents set code action.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L79" />
 
-<span id="OutActionReserveCurrency"></span>
 ## `OutActionReserveCurrency`
 
 ```tolk
@@ -143,7 +136,6 @@ Represents reserve currency action.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L86" />
 
-<span id="OutActionChangeLibrary"></span>
 ## `OutActionChangeLibrary`
 
 ```tolk
@@ -160,7 +152,6 @@ Represents change library action.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L95" />
 
-<span id="LibRefHash"></span>
 ## `LibRefHash`
 
 ```tolk
@@ -174,7 +165,6 @@ Represents library reference as a hash.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L104" />
 
-<span id="LibRefRef"></span>
 ## `LibRefRef`
 
 ```tolk
@@ -188,7 +178,6 @@ Represents library reference as a cell reference.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L110" />
 
-<span id="OutAction.kind"></span>
 ## `OutAction.kind`
 
 ```tolk
@@ -199,7 +188,6 @@ Returns the kind of the out action as a string.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L126" />
 
-<span id="OutActionList.at"></span>
 ## `OutActionList.at`
 
 ```tolk
@@ -211,7 +199,7 @@ Returns the out action at the given index.
 NOTE: this list is reversed, so the last action is at index 0.
 
 Example:
-```
+```tolk
 val out_actions = vm.outActions();
 val action = out_actions.at(0);
 println(action.kind());
@@ -219,7 +207,6 @@ println(action.kind());
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L158" />
 
-<span id="OutActionList.getSendMessageAt"></span>
 ## `OutActionList.getSendMessageAt`
 
 ```tolk
@@ -231,7 +218,7 @@ Returns the send message action at the given index.
 If the action is not a send message, returns null.
 
 Example:
-```
+```tolk
 val out_actions = vm.outActions();
 val action = out_actions.getSendMessageAt(0);
 if (action != null) {
@@ -241,7 +228,6 @@ if (action != null) {
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L175" />
 
-<span id="OutActionList.getSendMessageBodyAt"></span>
 ## `OutActionList.getSendMessageBodyAt`
 
 ```tolk
@@ -255,7 +241,7 @@ Note that you should provide the message type as a generic parameter.
 If the action is not a send message, returns null.
 
 Example:
-```
+```tolk
 val out_actions = vm.outActions();
 val body = out_actions.getSendMessageBodyAt<IncreaseCounter>(0);
 if (body != null) {
@@ -265,7 +251,6 @@ if (body != null) {
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L197" />
 
-<span id="OutMessage.outActions"></span>
 ## `OutMessage.outActions`
 
 ```tolk
@@ -276,7 +261,6 @@ Returns the out actions for the message.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L216" />
 
-<span id="vm.outActions"></span>
 ## `vm.outActions`
 
 ```tolk
@@ -286,14 +270,13 @@ fun vm.outActions(): OutActionList
 Returns the out actions from the control register C5 at that moment.
 
 Example:
-```
+```tolk
 val out_actions = vm.outActions();
 println(out_actions.size());
 ```
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L231" />
 
-<span id="vm.parseOutActions"></span>
 ## `vm.parseOutActions`
 
 ```tolk
@@ -303,14 +286,13 @@ fun vm.parseOutActions(cell: cell): OutActionList
 Parses the out actions from the raw cell (like C5 register).
 
 Example:
-```
+```tolk
 val out_actions = vm.parseOutActions(vm.getC5());
 println(out_actions.size());
 ```
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L242" />
 
-<span id="LibRef.fromTuple"></span>
 ## `LibRef.fromTuple`
 
 ```tolk
@@ -319,7 +301,6 @@ fun LibRef.fromTuple(data: tuple): LibRef
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L290" />
 
-<span id="OutAction.fromTuple"></span>
 ## `OutAction.fromTuple`
 
 ```tolk
@@ -328,7 +309,6 @@ fun OutAction.fromTuple(data: tuple): OutAction
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L300" />
 
-<span id="OutActionChangeLibrary.toTuple"></span>
 ## `OutActionChangeLibrary.toTuple`
 
 ```tolk

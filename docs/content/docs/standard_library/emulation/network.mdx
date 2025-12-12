@@ -5,7 +5,6 @@ description: "network.tolk standard library file"
 
 import { SourceCodeLink } from '@/components/SourceCodeLink';
 
-<span id="CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT"></span>
 ## `CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT`
 
 ```tolk
@@ -14,7 +13,6 @@ const CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT = 678
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L14" />
 
-<span id="CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE"></span>
 ## `CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE`
 
 ```tolk
@@ -23,7 +21,6 @@ const CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE = 679
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L15" />
 
-<span id="net"></span>
 ## `net`
 
 ```tolk
@@ -34,7 +31,6 @@ Abstraction representing a blockchain and methods of interacting with it.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L18" />
 
-<span id="SendParams"></span>
 ## `SendParams`
 
 ```tolk
@@ -48,7 +44,6 @@ Represents a set of parameters for creating a message.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L21" />
 
-<span id="ExtOutMsgInfo"></span>
 ## `ExtOutMsgInfo`
 
 ```tolk
@@ -68,7 +63,6 @@ Information about external outgoing message.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L27" />
 
-<span id="ExtOutList.at"></span>
 ## `ExtOutList.at`
 
 ```tolk
@@ -78,11 +72,10 @@ fun ExtOutList.at<Msg>(self, index: int): ExtMessageRelaxed<Msg>
 Returns the external outgoing message at the given index with given type.
 
 Note that if message is not a given type, loading will fail with exit code 63.
-If you want to handle this case, use [ExtOutList.atOrNull](#ExtOutList.atOrNull) instead.
+If you want to handle this case, use [ExtOutList.atOrNull](#extoutlistatornull) instead.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L51" />
 
-<span id="ExtOutList.atOrNull"></span>
 ## `ExtOutList.atOrNull`
 
 ```tolk
@@ -93,11 +86,10 @@ Returns the external outgoing message at the given index with given type or
 null if message is not a given type.
 
 Note that if message is not a given type, this method will return null instead
-of throwing an exception. Use [ExtOutList.at](#ExtOutList.at) if you don't want to handle null case.
+of throwing an exception. Use [ExtOutList.at](#extoutlistat) if you don't want to handle null case.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L61" />
 
-<span id="OutMessages.atCell"></span>
 ## `OutMessages.atCell`
 
 ```tolk
@@ -106,11 +98,10 @@ fun OutMessages.atCell(self, index: int): cell
 
 Returns the out message at the given index as a raw cell.
 
-To get parsed message, use [OutMessages.at](#OutMessages.at) method.
+To get parsed message, use [OutMessages.at](#outmessagesat) method.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L79" />
 
-<span id="OutMessages.at"></span>
 ## `OutMessages.at`
 
 ```tolk
@@ -119,13 +110,12 @@ fun OutMessages.at<Msg>(self, index: int): MessageRelaxed<Msg>
 
 Returns the out message at the given index as a parsed message of given type.
 
-To get raw cell, use [OutMessages.atCell](#OutMessages.atCell) method.
+To get raw cell, use [OutMessages.atCell](#outmessagesatcell) method.
 
 If actual message body has a different type, loading will fail.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L88" />
 
-<span id="SendResult"></span>
 ## `SendResult`
 
 ```tolk
@@ -149,11 +139,10 @@ struct SendResult {
 }
 ```
 
-Represents a single send result obtained from [net.send](#net.send) method.
+Represents a single send result obtained from [net.send](#netsend) method.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L119" />
 
-<span id="SendResult.allOutActions"></span>
 ## `SendResult.allOutActions`
 
 ```tolk
@@ -164,7 +153,6 @@ Returns all out actions produced by this transaction as a list.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L139" />
 
-<span id="SendResultList.at"></span>
 ## `SendResultList.at`
 
 ```tolk
@@ -175,7 +163,6 @@ Returns the send result at the given index.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L151" />
 
-<span id="SendResultList.wait"></span>
 ## `SendResultList.wait`
 
 ```tolk
@@ -213,7 +200,6 @@ val success = result.wait(true, 30, 3000); // quiet mode, 30 attempts, 3 seconds
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L179" />
 
-<span id="SearchParams"></span>
 ## `SearchParams`
 
 ```tolk
@@ -245,7 +231,6 @@ Represents a set of parameters to search for a transaction in the transaction li
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L207" />
 
-<span id="ExternalOutSearchParams"></span>
 ## `ExternalOutSearchParams`
 
 ```tolk
@@ -259,20 +244,24 @@ struct ExternalOutSearchParams {
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L230" />
 
-<span id="Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches"></span>
 ## `Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches`
 
 ```tolk
-fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>(self, params: ExternalOutSearchParams = {}): bool
+fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>(
+    self,
+    params: ExternalOutSearchParams = {}
+): bool
 ```
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L237" />
 
-<span id="SendResultList.findExternalOutMessage"></span>
 ## `SendResultList.findExternalOutMessage`
 
 ```tolk
-fun SendResultList.findExternalOutMessage<TBody = never>(self, params: ExternalOutSearchParams = {}): Maybe<Message<TBody, ExternalOutMessageInfo>>
+fun SendResultList.findExternalOutMessage<TBody = never>(
+    self,
+    params: ExternalOutSearchParams = {}
+): Maybe<Message<TBody, ExternalOutMessageInfo>>
 ```
 
 Find a external-out message in the send result list by specified parameters.
@@ -285,9 +274,8 @@ expect(result).toBeDefined();
 val tx = result.unwrap();
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L270" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L273" />
 
-<span id="SendResultList.findTransaction"></span>
 ## `SendResultList.findTransaction`
 
 ```tolk
@@ -304,9 +292,8 @@ expect(result).toBeDefined();
 val tx = result.unwrap();
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L311" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L317" />
 
-<span id="net.send"></span>
 ## `net.send`
 
 ```tolk
@@ -330,9 +317,8 @@ get fun `test-send-message`() {
 
 Returns a list of send results representing all transactions produced by this send call.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L337" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L343" />
 
-<span id="Treasury"></span>
 ## `Treasury`
 
 ```tolk
@@ -343,11 +329,10 @@ struct Treasury {
 
 Treasury is a special contract that is used to deploy other contracts.
 
-To create a treasury, use the `Network.treasury()` method.
+To create a treasury, use the [net.treasury](#nettreasury) method.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L344" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L350" />
 
-<span id="net.treasury"></span>
 ## `net.treasury`
 
 ```tolk
@@ -366,9 +351,8 @@ get fun `test-mint`() {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L359" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L365" />
 
-<span id="Wallet"></span>
 ## `Wallet`
 
 ```tolk
@@ -377,9 +361,8 @@ struct Wallet {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L379" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L385" />
 
-<span id="net.wallet"></span>
 ## `net.wallet`
 
 ```tolk
@@ -395,9 +378,8 @@ same way as in `net.treasury`.
 
 Note: in tests, use `net.treasury`.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L391" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L397" />
 
-<span id="net.isBroadcasting"></span>
 ## `net.isBroadcasting`
 
 ```tolk
@@ -419,9 +401,8 @@ if (net.isBroadcasting()) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L421" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L427" />
 
-<span id="net.enableBroadcast"></span>
 ## `net.enableBroadcast`
 
 ```tolk
@@ -442,9 +423,8 @@ if (net.isBroadcasting()) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L438" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L444" />
 
-<span id="net.disableBroadcast"></span>
 ## `net.disableBroadcast`
 
 ```tolk
@@ -464,9 +444,8 @@ if (!net.isBroadcasting()) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L454" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L460" />
 
-<span id="net.runGetMethod"></span>
 ## `net.runGetMethod`
 
 ```tolk
@@ -522,32 +501,29 @@ val first = data.get<int>(0);
 val second = data.get<int>(1);
 ```
 
-If you need to run a get method by its ID, use Network.runGetMethodById instead.
+If you need to run a get method by its ID, use [net.runGetMethodById](#netrungetmethodbyid) instead.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L508" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L514" />
 
-<span id="net.runGetMethodById"></span>
 ## `net.runGetMethodById`
 
 ```tolk
-@noinline
 fun net.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, args: Args? = null): Ret
 ```
 
 Run a get method of a contract by its ID.
 
-If you need to run a get method by its name, use Network.runGetMethod instead.
+If you need to run a get method by its name, use [net.runGetMethod](#netrungetmethod) instead.
 
 Example:
 ```tolk
 val data = net.runGetMethodById<JettonDataReply>(wallet.address, 0x17b02);
 ```
 
-See Network.runGetMethod for more information.
+See [net.runGetMethod](#netrungetmethod) for more information.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L523" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L529" />
 
-<span id="net.isDeployed"></span>
 ## `net.isDeployed`
 
 ```tolk
@@ -556,9 +532,8 @@ fun net.isDeployed(addr: address): bool
 
 Check if a contract with a specified address is deployed.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L529" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L534" />
 
-<span id="net.getDeployedCode"></span>
 ## `net.getDeployedCode`
 
 ```tolk
@@ -569,9 +544,8 @@ Get the code of a deployed contract by its address.
 
 If the contract is not deployed, returns null.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L536" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L541" />
 
-<span id="net.waitForTransaction"></span>
 ## `net.waitForTransaction`
 
 ```tolk
@@ -597,11 +571,10 @@ val messageHash = "abc123...";
 net.waitForTransaction(wallet.address, messageHash, 20, 2000);
 ```
 
-See [SendResultList.wait](#SendResultList.wait) for high-level API.
+See [SendResultList.wait](#sendresultlistwait) for high-level API.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L554" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L559" />
 
-<span id="net.randomAddress"></span>
 ## `net.randomAddress`
 
 ```tolk
@@ -618,9 +591,8 @@ Example:
 val address = net.randomAddress("random_user");
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L579" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L584" />
 
-<span id="net.registerAddress"></span>
 ## `net.registerAddress`
 
 ```tolk
@@ -640,9 +612,8 @@ Example:
 net.registerAddress(address, "my_address");
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L611" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L616" />
 
-<span id="net.registerCodeCell"></span>
 ## `net.registerCodeCell`
 
 ```tolk
@@ -659,9 +630,8 @@ Example:
 net.registerCodeCell(code, "my_code");
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L624" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L629" />
 
-<span id="net.getAccountState"></span>
 ## `net.getAccountState`
 
 ```tolk
@@ -670,9 +640,8 @@ fun net.getAccountState(addr: address): AccountInfo?
 
 Returns current account state for address or none if no information available.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L629" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L634" />
 
-<span id="net.getAccountStorageFee"></span>
 ## `net.getAccountStorageFee`
 
 ```tolk
@@ -683,9 +652,8 @@ Returns storage fee for address for specified amount of seconds.
 
 Returns `null` if the contract with given address is not deployed.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L641" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L646" />
 
-<span id="net.loadLibrary"></span>
 ## `net.loadLibrary`
 
 ```tolk
@@ -696,9 +664,8 @@ Load library from the real blockchain by hash.
 
 Returns null if library is not found.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L653" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L658" />
 
-<span id="net.fetchAndRegisterLibrary"></span>
 ## `net.fetchAndRegisterLibrary`
 
 ```tolk
@@ -709,9 +676,8 @@ Load library from the real blockchain by hash and register it in current blockch
 
 Returns false if library is not found.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L660" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L665" />
 
-<span id="crc16"></span>
 ## `crc16`
 
 ```tolk
@@ -725,14 +691,13 @@ Example:
 val crc = crc16("hello");
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L675" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L680" />
 
-<span id="tuple.fromTuple"></span>
 ## `tuple.fromTuple`
 
 ```tolk
 fun tuple.fromTuple(data: tuple): tuple
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L677" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L682" />
 

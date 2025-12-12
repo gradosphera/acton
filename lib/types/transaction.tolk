@@ -49,7 +49,7 @@ struct (0b0111) Transaction {
 /// Note that if message type mismatch, loading will fail with exit code 63.
 /// 
 /// Example:
-/// ```
+/// ```tolk
 /// val result = net.send(address, msg, SEND_MODE_PAY_FEES_SEPARATELY);
 /// val tx = result.findTransaction<IncreaseCounter>({ to: address }).unwrap();
 /// val body = tx.loadBody<IncreaseCounter>();

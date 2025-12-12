@@ -234,7 +234,10 @@ struct ExternalOutSearchParams {
     to: any_address? = null
 }
 
-fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>(self, params: ExternalOutSearchParams = {}): bool {
+fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>(
+    self,
+    params: ExternalOutSearchParams = {}
+): bool {
     if (params.from != null && self.info.src != params.from) {
         return false;
     }
@@ -267,7 +270,10 @@ fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>
 /// expect(result).toBeDefined();
 /// val tx = result.unwrap();
 /// ```
-fun SendResultList.findExternalOutMessage<TBody = never>(self, params: ExternalOutSearchParams = {}): Maybe<Message<TBody, ExternalOutMessageInfo>> {
+fun SendResultList.findExternalOutMessage<TBody = never>(
+    self,
+    params: ExternalOutSearchParams = {}
+): Maybe<Message<TBody, ExternalOutMessageInfo>> {
     var transactionIndex = 0;
     while (transactionIndex < self.size()) {
         val externals = self.at(transactionIndex).externals;
@@ -340,7 +346,7 @@ fun net.send(from: address, message: OutMessage, mode: int): SendResultList {
 
 /// Treasury is a special contract that is used to deploy other contracts.
 ///
-/// To create a treasury, use the `Network.treasury()` method.
+/// To create a treasury, use the [net.treasury] method.
 struct Treasury {
     address: address
 }
@@ -504,7 +510,7 @@ fun net.disableBroadcast(): void {
 /// val second = data.get<int>(1);
 /// ```
 ///
-/// If you need to run a get method by its ID, use [Network.runGetMethodById] instead.
+/// If you need to run a get method by its ID, use [net.runGetMethodById] instead.
 fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? = null): Ret {
     val method_id = (crc16(name) & 0xffff) | 0x10000;
     return impl.runGetMethodById(addr, method_id, name, args)
@@ -512,15 +518,14 @@ fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? 
 
 /// Run a get method of a contract by its ID.
 ///
-/// If you need to run a get method by its name, use [Network.runGetMethod] instead.
+/// If you need to run a get method by its name, use [net.runGetMethod] instead.
 ///
 /// Example:
 /// ```tolk
 /// val data = net.runGetMethodById<JettonDataReply>(wallet.address, 0x17b02);
 /// ```
 ///
-/// See [Network.runGetMethod] for more information.
-@noinline
+/// See [net.runGetMethod] for more information.
 fun net.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, args: Args? = null): Ret {
     return impl.runGetMethodById(addr, id, "", args)
 }

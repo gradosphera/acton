@@ -5,7 +5,6 @@ description: "assert.tolk standard library file"
 
 import { SourceCodeLink } from '@/components/SourceCodeLink';
 
-<span id="ASSERTION_FAILED"></span>
 ## `ASSERTION_FAILED`
 
 ```tolk
@@ -14,7 +13,6 @@ const ASSERTION_FAILED = 567
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L5" />
 
-<span id="Assert"></span>
 ## `Assert`
 
 ```tolk
@@ -39,7 +37,6 @@ expect(10).toEqual(10);
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L22" />
 
-<span id="Assert.equal"></span>
 ## `Assert.equal`
 
 ```tolk
@@ -57,7 +54,6 @@ with automatic location tracking.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L32" />
 
-<span id="Assert.notEqual"></span>
 ## `Assert.notEqual`
 
 ```tolk
@@ -75,7 +71,6 @@ with automatic location tracking.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L56" />
 
-<span id="Assert.fail"></span>
 ## `Assert.fail`
 
 ```tolk
@@ -90,7 +85,6 @@ be printed in the error message.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L77" />
 
-<span id="Assert.consumesLessThan"></span>
 ## `Assert.consumesLessThan`
 
 ```tolk
@@ -99,16 +93,12 @@ fun Assert.consumesLessThan<Ret>(fn: () -> Ret, expected: int)
 
 Asserts that the function without arguments consumes less than the expected amount of gas.
 
-Until Tolk supports anonymous functions, you need to pass the standalone function as a parameter.
-
 Example:
-```
-fun to_track_gas() {
-    // do something that consumes gas
-}
-
+```tolk
 get fun test_gas_consumption() {
-    Assert.consumesLessThan(to_track_gas, 100);
+    Assert.consumesLessThan(fun do_something() {
+        // do something that consumes gas
+    }, 100);
 }
 ```
 
@@ -116,9 +106,8 @@ If you need to pass arguments to the function, you can use the `consumesLessThan
 `consumesLessThan2` or `consumesLessThan3` functions which are similar to the `consumesLessThan`
 but accept arguments.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L100" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L96" />
 
-<span id="Assert.consumesLessThan1"></span>
 ## `Assert.consumesLessThan1`
 
 ```tolk
@@ -127,72 +116,81 @@ fun Assert.consumesLessThan1<Ret, Arg1>(fn: (Arg1) -> Ret, arg1: Arg1, expected:
 
 Asserts that the function with single argument consumes less than the expected amount of gas.
 
-Until Tolk supports anonymous functions, you need to pass the standalone function as a parameter.
-
 Example:
-```
-fun to_track_gas(a: int) {
-    // do something that consumes gas
-}
-
+```tolk
 get fun test_gas_consumption() {
-    Assert.consumesLessThan1(to_track_gas, 100, 100);
-//                                         ^^^ this argument will be passed
-//                                             to the function as the first argument
+    Assert.consumesLessThan1(fun do_something(a: int, b: int) {
+        // do something that consumes gas
+    }, 100, 100);
+//     ^^^  ^^^ this argument will be passed to the function as the second argument
+//     |
+//     this argument will be passed to the function as the first argument
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L124" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L117" />
 
-<span id="Assert.consumesLessThan2"></span>
 ## `Assert.consumesLessThan2`
 
 ```tolk
-fun Assert.consumesLessThan2<Ret, Arg1, Arg2>(fn: (Arg1, Arg2) -> Ret, arg1: Arg1, arg2: Arg2, expected: int)
+fun Assert.consumesLessThan2<Ret, Arg1, Arg2>(
+    fn: (Arg1, Arg2) -> Ret,
+    arg1: Arg1,
+    arg2: Arg2,
+    expected: int
+)
 ```
 
 Asserts that the function with two arguments consumes less than the expected amount of gas.
 
-Until Tolk supports anonymous functions, you need to pass the standalone function as a parameter.
-
 Example:
-```
-fun to_track_gas(a: int, b: int) {
-    // do something that consumes gas
-}
-
+```tolk
 get fun test_gas_consumption() {
-    Assert.consumesLessThan2(to_track_gas, 100, 100, 100);
+    Assert.consumesLessThan2(fun do_something(a: int, b: int) {
+        // do something that consumes gas
+    }, 100, 100, 100);
+//     ^^^  ^^^  ^^^ this argument will be passed to the function as the third argument
+//     |    |
+//     |    this argument will be passed to the function as the second argument
+//     |
+//     this argument will be passed to the function as the first argument
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L146" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L140" />
 
-<span id="Assert.consumesLessThan3"></span>
 ## `Assert.consumesLessThan3`
 
 ```tolk
-fun Assert.consumesLessThan3<Ret, Arg1, Arg2, Arg3>(fn: (Arg1, Arg2, Arg3) -> Ret, arg1: Arg1, arg2: Arg2, arg3: Arg3, expected: int)
+fun Assert.consumesLessThan3<Ret, Arg1, Arg2, Arg3>(
+    fn: (Arg1, Arg2, Arg3) -> Ret,
+    arg1: Arg1,
+    arg2: Arg2,
+    arg3: Arg3,
+    expected: int
+)
 ```
 
 Asserts that the function with three arguments consumes less than the expected amount of gas.
 
-Until Tolk supports anonymous functions, you need to pass the standalone function as a parameter.
-
 Example:
-```
-fun to_track_gas(a: int, b: int, c: int) {
-    // do something that consumes gas
-}
-
+```tolk
 get fun test_gas_consumption() {
-    Assert.consumesLessThan3(to_track_gas, 100, 100, 100, 100);
+    Assert.consumesLessThan3(fun do_something(a: int, b: int, c: int) {
+        // do something that consumes gas
+    }, 100, 100, 100, 100);
+//     ^^^  ^^^  ^^^  ^^^ this argument will be passed to the function as the fourth argument
+//     |    |    |
+//     |    |    this argument will be passed to the function as the third argument
+//     |    |
+//     |    this argument will be passed to the function as the second argument
+//     |
+//     this argument will be passed to the function as the first argument
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L168" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L170" />
 
-<span id="Assert.failWalletNotFound"></span>
 ## `Assert.failWalletNotFound`
 
 ```tolk
@@ -206,5 +204,5 @@ It provides detailed information about available wallets and instructions on how
 
 NOT FOR PUBLIC USE.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L182" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L190" />
 
