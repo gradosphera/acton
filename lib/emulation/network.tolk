@@ -266,10 +266,22 @@ fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>
 /// Example:
 /// ```tolk
 /// val tx = net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
-/// val result = tx.findExternalOutMessage<IncrementEvent>({ from: counter.address });
+/// val result = tx.findExternalOutMessage({ from: counter.address });
 /// expect(result).toBeDefined();
 /// val tx = result.unwrap();
 /// ```
+///
+/// You can specify an optional type argument, specifying the message type to search for;
+/// the function will also check that the opcode of the tx message matches the opcode of the
+/// given message.
+///
+/// Example:
+/// ```tolk
+/// tx.findExternalOutMessage<IncrementEvent>({ from: counter.address });
+/// //                        ^^^^^^^^^^^^^^ search for message with IncrementEvent opcode
+/// ```
+///
+/// If the message is not found, returns None.
 fun SendResultList.findExternalOutMessage<TBody = never>(
     self,
     params: ExternalOutSearchParams = {}
