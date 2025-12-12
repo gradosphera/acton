@@ -486,14 +486,22 @@ fun net.disableBroadcast(): void {
 /// ```
 /// Since this get method doesn't accept any arguments, third argument can be omitted.
 ///
-/// ## With argument
+/// ## With arguments
 ///
-/// If the get method accepts arguments, you can pass them as a third argument.
+/// If the get method accepts single argument, you can pass it as a third argument.
 /// ```tolk
 /// get fun get_wallet_address(ownerAddress: address): address { ... }
 /// ```
 /// ```tolk
 /// val address = net.runGetMethod<address>(wallet.address, "get_wallet_address", deployer.address);
+/// ```
+///
+/// If the get method accepts several arguments, you can pass them as a third argument in tuple.
+/// ```tolk
+/// get fun do_smth(owner: address, id: int): address { ... }
+/// ```
+/// ```tolk
+/// val address = net.runGetMethod<address>(wallet.address, "do_smth", [deployer.address, 10] as tuple);
 /// ```
 ///
 /// ## With struct return type
@@ -504,10 +512,6 @@ fun net.disableBroadcast(): void {
 /// ```
 /// ```tolk
 /// val data = net.runGetMethod<JettonDataReply>(wallet.address, "get_jetton_data");
-/// ```
-/// And provide glue method:
-/// ```tolk
-/// fun JettonDataReply.fromTuple(t: tuple): JettonDataReply asm "<count fields> UNTUPLE"
 /// ```
 ///
 /// ## With tensor return type
