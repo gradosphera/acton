@@ -687,6 +687,16 @@ fun net.fetchAndRegisterLibrary(hash: slice): bool {
     return true
 }
 
+/// Set the current Unix timestamp for time forwarding emulation.
+fun net.setNow(now: uint32) {
+    ffi.setNow(now);
+}
+
+/// Get the current Unix timestamp used in emulation.
+fun net.now(): uint32 {
+    return ffi.getNow();
+}
+
 /// Calculate the CRC16 checksum of a slice.
 ///
 /// Example:
@@ -748,3 +758,5 @@ fun ffi.getWalletByName(name: slice): cell? asm "24 EXTCALL"
 fun ffi.waitForTransaction(addr: cell, messageBodyHash: cell, quiet: bool, attempts: int, sleepDuration: int): bool asm "25 EXTCALL"
 fun ffi.enableBroadcast(): void asm "26 EXTCALL"
 fun ffi.disableBroadcast(): void asm "27 EXTCALL"
+fun ffi.setNow(now: int): void asm "28 EXTCALL"
+fun ffi.getNow(): int asm "29 EXTCALL"

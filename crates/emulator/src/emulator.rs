@@ -121,7 +121,7 @@ impl Emulator {
                 libs: libs.clone().into_root(),
                 verbosity: verbosity.unwrap_or(ExecutorVerbosity::Short),
                 shard_account: dest_account.clone(),
-                now: 0,
+                now: net.get_now(),
                 lt: net.get_lt(),
                 random_seed: None,
                 ignore_chksig: false,

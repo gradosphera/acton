@@ -694,6 +694,26 @@ Returns false if library is not found.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L681" />
 
+## `net.setNow`
+
+```tolk
+fun net.setNow(now: int)
+```
+
+Set the current Unix timestamp for time forwarding emulation.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L691" />
+
+## `net.now`
+
+```tolk
+fun net.now(): int
+```
+
+Get the current Unix timestamp used in emulation.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L696" />
+
 ## `crc16`
 
 ```tolk
@@ -707,7 +727,7 @@ Example:
 val crc = crc16("hello");
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L696" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L706" />
 
 ## `tuple.fromTuple`
 
@@ -715,5 +735,5 @@ val crc = crc16("hello");
 fun tuple.fromTuple(data: tuple): tuple
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L698" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L708" />
 

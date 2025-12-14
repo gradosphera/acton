@@ -23,6 +23,7 @@ pub fn account_code(accounts: &HashMap<String, ShardAccount>, addr: String) -> O
 pub struct Blockchain {
     accounts: HashMap<String, ShardAccount>,
     current_lt: BigInt,
+    current_now: u32,
     libraries: Vec<Cell>,
     fork_net: Option<String>,
     api_key: Option<String>,
@@ -38,6 +39,7 @@ impl Blockchain {
         Self {
             accounts: HashMap::new(),
             current_lt: BigInt::from(0),
+            current_now: 0,
             libraries: vec![],
             fork_net,
             api_key,
@@ -170,5 +172,13 @@ impl Blockchain {
 
     pub fn get_fork_net(&self) -> &Option<String> {
         &self.fork_net
+    }
+
+    pub fn set_now(&mut self, now: u32) {
+        self.current_now = now;
+    }
+
+    pub fn get_now(&self) -> u32 {
+        self.current_now
     }
 }

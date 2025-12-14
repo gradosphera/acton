@@ -215,7 +215,7 @@ fn send_message_impl(
             lt: 0,
             prev_trans_hash: Default::default(),
             prev_trans_lt: 0,
-            now: 0,
+            now: ctx.chain.blockchain.get_now(),
             out_msg_count: Default::default(),
             orig_status: AccountStatus::Uninit,
             end_status: AccountStatus::Uninit,
@@ -447,7 +447,7 @@ fn send_message_debug(
             libs: libs.clone().into_root(),
             verbosity: verbosity.unwrap_or(ExecutorVerbosity::FullLocation),
             shard_account: dest_account.clone(),
-            now: 0,
+            now: ctx.chain.blockchain.get_now(),
             lt: ctx.chain.blockchain.get_lt(),
             random_seed: None,
             ignore_chksig: false,
@@ -1274,6 +1274,18 @@ fn disable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) {
     ctx.is_broadcasting = false;
 }
 
+extension!(set_now in (Context) with (now: BigInt) using set_now_impl);
+fn set_now_impl(ctx: &mut Context, _stack: &mut Tuple, now: BigInt) {
+    let now_u32 = now.to_u32().unwrap_or(0);
+    ctx.chain.blockchain.set_now(now_u32);
+}
+
+extension!(get_now in (Context) using get_now_impl);
+fn get_now_impl(ctx: &mut Context, stack: &mut Tuple) {
+    let now = ctx.chain.blockchain.get_now();
+    stack.push(TupleItem::Int(BigInt::from(now)));
+}
+
 pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         6 => build,
@@ -1296,5 +1308,7 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         25 => wait_for_transaction,
         26 => enable_broadcast,
         27 => disable_broadcast,
+        28 => set_now,
+        29 => get_now,
     });
 }
