@@ -406,6 +406,23 @@ struct Wallet {
 /// same way as in `net.treasury`.
 ///
 /// Note: in tests, use `net.treasury`.
+///
+/// Example:
+/// ```tolk
+/// /// Script that deploys a counter contract using a wallet to real blockchain.
+/// fun main() {
+///    val deployer = net.wallet("deployer");
+///    val counter = Counter.fromStorage(Storage {
+///        id: 8,
+///        counter: 0,
+///    });
+///
+///    val result = counter.deploy(deployer.address, ton("0.05"));
+///    result.wait();
+///
+///    println1("Deployed counter to {}", counter.address);
+/// }
+/// ```
 fun net.wallet(name: slice): Wallet {
     if (ffi.isBroadcasting()) {
         val address_cell = ffi.getWalletByName(name);
@@ -547,6 +564,21 @@ fun net.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, args: Args? 
 }
 
 /// Check if a contract with a specified address is deployed.
+///
+/// Returns `true` if the contract is deployed, `false` otherwise.
+///
+/// Example:
+/// ```tolk
+/// fun JettonWallet.getJettonBalance(self): coins {
+///     if (!net.isDeployed(self.address)) {
+///         return 0 // return 0 if contract is not deployed
+///     }
+///     
+///     // and if deployed, actually run get method
+///     val result: JettonWalletDataReply = net.runGetMethod(self.address, "get_wallet_data");
+///     return result.jettonBalance
+/// }
+/// ```
 fun net.isDeployed(addr: address): bool {
     return ffi.isDeployed(addr.toCell());
 }
@@ -646,7 +678,21 @@ fun net.registerCodeCell(code: cell, name: slice) {
     ffi.registerCodeCell(code, name);
 }
 
-/// Returns current account state for address or none if no information available.
+/// Returns current account state for address or null if no information available or 
+/// contract is not deployed.
+///
+/// The account state includes balance, storage information, and other account data,
+/// see [AccountInfo] type for more information.
+///
+/// Example:
+/// ```tolk
+/// val state = net.getAccountState(contract.address);
+/// if (state != null) {
+///     println1("Balance: {:ton}", state.storage.balance.grams);
+/// } else {
+///     println("Account not found");
+/// }
+/// ```
 fun net.getAccountState(addr: address): AccountInfo? {
     val cell = ffi.getAccountState(addr.toCell());
     if (cell == null) {
@@ -659,6 +705,14 @@ fun net.getAccountState(addr: address): AccountInfo? {
 /// Returns storage fee for address for specified amount of seconds.
 ///
 /// Returns `null` if the contract with given address is not deployed.
+///
+/// Example:
+/// ```tolk
+/// val storage_fee = net.getAccountStorageFee(contract.address, 86400); // 1 day
+/// if (storage_fee != null) {
+///     println1("Daily storage fee: {:ton}", storage_fee);
+/// }
+/// ```
 fun net.getAccountStorageFee(addr: address, seconds: int) {
     val state = net.getAccountState(addr);
     if (state == null) {
@@ -688,11 +742,27 @@ fun net.fetchAndRegisterLibrary(hash: slice): bool {
 }
 
 /// Set the current Unix timestamp for time forwarding emulation.
+///
+/// This is useful for testing time-dependent contracts.
+///
+/// Example:
+/// ```tolk
+/// val future_time = net.now() + 1000; // 1000 seconds from now
+/// net.setNow(future_time);
+/// ```
 fun net.setNow(now: uint32) {
     ffi.setNow(now);
 }
 
 /// Get the current Unix timestamp used in emulation.
+///
+/// Returns the current time in the emulated blockchain.
+///
+/// Example:
+/// ```tolk
+/// val current_time = net.now();
+/// println1("Current emulation time: {}", current_time);
+/// ```
 fun net.now(): uint32 {
     return ffi.getNow();
 }
