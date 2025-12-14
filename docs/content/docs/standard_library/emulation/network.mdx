@@ -697,7 +697,7 @@ Returns false if library is not found.
 ## `net.setNow`
 
 ```tolk
-fun net.setNow(now: int)
+fun net.setNow(now: uint32)
 ```
 
 Set the current Unix timestamp for time forwarding emulation.
@@ -707,12 +707,45 @@ Set the current Unix timestamp for time forwarding emulation.
 ## `net.now`
 
 ```tolk
-fun net.now(): int
+fun net.now(): uint32
 ```
 
 Get the current Unix timestamp used in emulation.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L696" />
+
+## `net.topUp`
+
+```tolk
+fun net.topUp(to: address, amount: coins)
+```
+
+Topup an address with a specified amount of TON.
+
+Example:
+```tolk
+net.topUp(address, ton("10"));
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L706" />
+
+## `net.balance`
+
+```tolk
+fun net.balance(of: address): coins
+```
+
+Get the balance of an address.
+
+Returns 0 if the address is not deployed.
+
+Example:
+```tolk
+val balance = net.balance(address);
+println1("{:ton}", balance);
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L725" />
 
 ## `crc16`
 
@@ -727,7 +760,7 @@ Example:
 val crc = crc16("hello");
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L706" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L739" />
 
 ## `tuple.fromTuple`
 
@@ -735,5 +768,5 @@ val crc = crc16("hello");
 fun tuple.fromTuple(data: tuple): tuple
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L708" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L741" />
 
