@@ -12,7 +12,8 @@
 ///     // process json...
 /// }
 ///
-/// // Load a BoC file as a slice (note: readFile returns string, so binary data needs specific handling if not hex/base64 text)
+/// // Load a BoC file as a slice (note: readFile returns string, so binary
+/// // data needs specific handling if not hex/base64 text)
 /// // Typically used for text-based formats.
 /// val contractCodeHex = fs.readFile("build/contract.hex");
 /// ```

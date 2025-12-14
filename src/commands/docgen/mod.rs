@@ -351,9 +351,7 @@ fn extract_file_header_doc(source: &str) -> Option<String> {
             lines.push(content);
             has_content = true;
         } else if trimmed.is_empty() {
-            if parsing_doc {
-                lines.push("");
-            }
+            break;
         } else {
             // Found a non-comment, non-empty line. Stop.
             break;

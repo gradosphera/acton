@@ -19,12 +19,11 @@ if (configJson != null) {
     // process json...
 }
 
-// Load a BoC file as a slice (note: readFile returns string, so binary data needs specific handling if not hex/base64 text)
+// Load a BoC file as a slice (note: readFile returns string, so binary
+// data needs specific handling if not hex/base64 text)
 // Typically used for text-based formats.
 val contractCodeHex = fs.readFile("build/contract.hex");
 ```
-
-Namespace for file system operations.
 
 ## Definitions
 
@@ -36,7 +35,7 @@ struct fs
 
 Namespace for file system operations.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/fs.tolk#L21" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/fs.tolk#L22" />
 
 ## `fs.readFile`
 
@@ -60,5 +59,5 @@ if (content != null) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/fs.tolk#L38" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/fs.tolk#L39" />
 
