@@ -146,10 +146,10 @@ This contract implements simple logic where anyone can increment the counter or 
     <Step title="Test contract">
         Acton includes a powerful test runner that allows you to write tests in **Tolk**, the same language as your contract. This eliminates the need for context switching and simplifies the testing workflow compared to TypeScript.
 
-        Use `acton test-gen` to generate the necessary wrappers and a test skeleton:
+        Use `acton wrapper` to generate the necessary wrappers and a test skeleton:
 
         ```bash
-        acton test-gen counter
+        acton wrapper counter --test
         ```
 
         This creates a wrapper at `tests/wrappers/Counter.tolk` and a basic test file at `tests/counter_test.tolk`. The generated wrapper abstracts away message creation.
