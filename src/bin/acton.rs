@@ -239,16 +239,17 @@ enum Commands {
     Wrapper {
         #[arg(help = "Contract ID from Acton.toml")]
         contract_id: String,
-        #[arg(long, help = "Output path for wrapper file")]
-        wrapper_output: Option<String>,
+        #[arg(long, short, help = "Output path for wrapper file")]
+        output: Option<String>,
 
         #[arg(
             long,
-            help = "Generate stub test file for contract",
+            short,
+            help = "Generate a stub test file for contract",
             default_value = "false",
             help_heading = "Tests"
         )]
-        generate_test_stub: bool,
+        test: bool,
         #[arg(long, help = "Output path for test file", help_heading = "Tests")]
         test_output: Option<String>,
     },
@@ -769,15 +770,10 @@ fn main() {
         Commands::Run { script, args } => run_cmd(&script, &args),
         Commands::Wrapper {
             contract_id,
-            wrapper_output,
+            output: wrapper_output,
             test_output,
-            generate_test_stub,
-        } => wrapper_cmd(
-            &contract_id,
-            wrapper_output,
-            test_output,
-            generate_test_stub,
-        ),
+            test,
+        } => wrapper_cmd(&contract_id, wrapper_output, test_output, test),
         Commands::Script {
             path,
             args,

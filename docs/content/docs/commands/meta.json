@@ -1,6 +1,7 @@
 {
   "pages": [
     "compile",
+    "wrapper",
     "disasm",
     "test",
     "script",

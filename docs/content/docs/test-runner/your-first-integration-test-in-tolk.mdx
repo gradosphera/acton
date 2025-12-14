@@ -9,6 +9,10 @@ If you've written tests in TypeScript, you know that to write tests, you first n
 
 When writing tests in Tolk, this problem doesn't go away completely, but the necessary wrappers are written as your tests grow in complexity, and writing them is very clear and simple.
 
+<Callout type="tip">
+In this guide, we will write a wrapper manually to understand how it works under the hood. In real projects, you can generate wrappers automatically using the [`wrapper`](/docs/test-runner/generating-wrappers) command.
+</Callout>
+
 ## 1. Our Test Subject: Counter Contract
 
 Before we write tests, let's understand what we're testing. We'll work with a simple Counter contract that can be increased or reset:
