@@ -76,4 +76,3 @@ fun MyContract.sendAny(self, from: address, body: cell, config: MyContractSendMe
     });
     return net.send(from, msg, SEND_MODE_PAY_FEES_SEPARATELY)
 }
-

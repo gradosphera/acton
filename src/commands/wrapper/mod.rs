@@ -392,7 +392,7 @@ fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> 
         code.push('\n');
     }
 
-    code
+    format!("{}\n", code.trim())
 }
 
 fn generate_from_storage(
@@ -669,7 +669,7 @@ fn generate_test(model: &WrapperModel, types_file_override: Option<&PathBuf>) ->
 
     code.push_str(&generate_setup_test(&model.contract_name, &model.abi));
 
-    code
+    format!("{}\n", code.trim())
 }
 
 fn gen_import_path(path: PathBuf) -> String {

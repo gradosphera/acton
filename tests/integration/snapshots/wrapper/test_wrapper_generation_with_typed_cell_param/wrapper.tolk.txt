@@ -79,4 +79,3 @@ fun MyContract.sendAny(self, from: address, body: cell, config: MyContractSendMe
 fun MyContract.currentCounter(self, value: int32): void {
     return net.runGetMethod(self.address, "currentCounter", value.toCell())
 }
-
