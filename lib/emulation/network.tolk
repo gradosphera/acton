@@ -697,6 +697,39 @@ fun net.now(): uint32 {
     return ffi.getNow();
 }
 
+/// Topup an address with a specified amount of TON.
+///
+/// Example:
+/// ```tolk
+/// net.topUp(address, ton("10"));
+/// ```
+fun net.topUp(to: address, amount: coins) {
+    val treasury = net.treasury("treasury");
+    val topupMsg = createMessage({
+        bounce: BounceMode.NoBounce,
+        value: amount,
+        dest: to,
+    });
+    net.send(treasury.address, topupMsg, SEND_MODE_REGULAR);
+}
+
+/// Get the balance of an address.
+///
+/// Returns 0 if the address is not deployed.
+/// 
+/// Example:
+/// ```tolk
+/// val balance = net.balance(address);
+/// println1("{:ton}", balance);
+/// ```
+fun net.balance(of: address): coins {
+    val state = net.getAccountState(of);
+    if (state == null) {
+        return 0;
+    }
+    return state.storage.balance.grams
+}
+
 /// Calculate the CRC16 checksum of a slice.
 ///
 /// Example:
