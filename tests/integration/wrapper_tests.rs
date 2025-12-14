@@ -189,6 +189,229 @@ fn test_wrapper_generation_with_unknown_explicit_storage() {
 }
 
 #[test]
+fn test_wrapper_generation_with_typed_cell_field_in_storage() {
+    let project = ProjectBuilder::new("wrapper_types")
+        .contract(
+            "my_contract",
+            r#"
+                import "storage"
+                import "types"
+
+                fun onInternalMessage(in: InMessage) {
+                    val msg = lazy AllowedMessage.fromSlice(in.body);
+
+                    match (msg) {
+                        Increment => {}
+                        Decrement => {}
+                        else => {}
+                    }
+                }
+            "#,
+        )
+        .file(
+            "contracts/storage",
+            r#"
+                struct Storage {
+                    id: uint32
+                    counter: Cell<uint32>
+                }
+
+                fun Storage.load() {
+                    return Storage.fromCell(contract.getData());
+                }
+
+                fun Storage.save(self) {
+                    contract.setData(self.toCell());
+                }
+            "#,
+        )
+        .file(
+            "contracts/types",
+            r#"
+                struct (0x00000001) Increment {
+                    value: int32
+                }
+
+                struct (0x00000002) Decrement {
+                    value: int
+                }
+
+                type AllowedMessage = Increment | Decrement;
+            "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/wrapper/test_wrapper_generation_with_typed_cell_field_in_storage/output.txt",
+        )
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/wrappers/MyContract.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_typed_cell_field_in_storage/wrapper.tolk.txt",
+        ).assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/my_contract_test.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_typed_cell_field_in_storage/test.tolk.txt",
+        );
+}
+
+#[test]
+fn test_wrapper_generation_with_typed_cell_field() {
+    let project = ProjectBuilder::new("wrapper_types")
+        .contract(
+            "my_contract",
+            r#"
+                import "storage"
+                import "types"
+
+                fun onInternalMessage(in: InMessage) {
+                    val msg = lazy AllowedMessage.fromSlice(in.body);
+
+                    match (msg) {
+                        Increment => {}
+                        Decrement => {}
+                        else => {}
+                    }
+                }
+            "#,
+        )
+        .file(
+            "contracts/storage",
+            r#"
+                struct Storage {
+                    id: uint32
+                    counter: uint32
+                }
+
+                fun Storage.load() {
+                    return Storage.fromCell(contract.getData());
+                }
+
+                fun Storage.save(self) {
+                    contract.setData(self.toCell());
+                }
+            "#,
+        )
+        .file(
+            "contracts/types",
+            r#"
+                struct (0x00000001) Increment {
+                    value: Cell<int32>
+                }
+
+                struct (0x00000002) Decrement {
+                    value: int
+                }
+
+                type AllowedMessage = Increment | Decrement;
+            "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/wrapper/test_wrapper_generation_with_typed_cell_field/output.txt",
+        )
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/wrappers/MyContract.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_typed_cell_field/wrapper.tolk.txt",
+        );
+}
+
+#[test]
+fn test_wrapper_generation_with_typed_cell_param() {
+    let project = ProjectBuilder::new("wrapper_types")
+        .contract(
+            "my_contract",
+            r#"
+                import "storage"
+                import "types"
+
+                fun onInternalMessage(in: InMessage) {
+                    val msg = lazy AllowedMessage.fromSlice(in.body);
+
+                    match (msg) {
+                        Increment => {}
+                        Decrement => {}
+                        else => {}
+                    }
+                }
+
+                get fun currentCounter(value: Cell<int32>) {}
+            "#,
+        )
+        .file(
+            "contracts/storage",
+            r#"
+                struct Storage {
+                    id: uint32
+                    counter: uint32
+                }
+
+                fun Storage.load() {
+                    return Storage.fromCell(contract.getData());
+                }
+
+                fun Storage.save(self) {
+                    contract.setData(self.toCell());
+                }
+            "#,
+        )
+        .file(
+            "contracts/types",
+            r#"
+                struct (0x00000001) Increment {
+                    value: int32
+                }
+
+                struct (0x00000002) Decrement {
+                    value: int
+                }
+
+                type AllowedMessage = Increment | Decrement;
+            "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/wrapper/test_wrapper_generation_with_typed_cell_param/output.txt",
+        )
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/wrappers/MyContract.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_typed_cell_param/wrapper.tolk.txt",
+        );
+}
+
+#[test]
 fn test_wrapper_custom_output() {
     let project = ProjectBuilder::new("wrapper_custom")
         .contract("my_contract", SIMPLE_CONTRACT)

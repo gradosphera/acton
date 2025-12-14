@@ -469,7 +469,17 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
 
     let params = fields
         .iter()
-        .map(|f| format!("{}: {}", f.name, f.type_info.human_readable))
+        .map(|f| {
+            let type_name = if let abi::BaseTypeInfo::Cell {
+                inner_type: Some(inner),
+            } = &f.type_info.base
+            {
+                &inner.human_readable
+            } else {
+                &f.type_info.human_readable
+            };
+            format!("{}: {}", f.name, type_name)
+        })
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -492,7 +502,17 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
     } else {
         code.push_str(&format!("        body: {} {{\n", message_type.name));
         for field in &fields {
-            code.push_str(&format!("            {},\n", field.name));
+            if let abi::BaseTypeInfo::Cell {
+                inner_type: Some(_),
+            } = &field.type_info.base
+            {
+                code.push_str(&format!(
+                    "            {}: {}.toCell(),\n",
+                    field.name, field.name
+                ));
+            } else {
+                code.push_str(&format!("            {},\n", field.name));
+            }
         }
         code.push_str("        },\n");
     }
@@ -530,7 +550,17 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
     let params = get_method
         .parameters
         .iter()
-        .map(|p| format!("{}: {}", p.name, p.type_info.human_readable))
+        .map(|p| {
+            let type_name = if let abi::BaseTypeInfo::Cell {
+                inner_type: Some(inner),
+            } = &p.type_info.base
+            {
+                &inner.human_readable
+            } else {
+                &p.type_info.human_readable
+            };
+            format!("{}: {}", p.name, type_name)
+        })
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -563,12 +593,35 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
                 method_name
             ));
         } else if args.len() == 1 {
+            let arg_name = if let abi::BaseTypeInfo::Cell {
+                inner_type: Some(_),
+            } = &get_method.parameters[0].type_info.base
+            {
+                format!("{}.toCell()", args[0])
+            } else {
+                args[0].to_string()
+            };
+
             code.push_str(&format!(
                 "    return net.runGetMethod(self.address, \"{}\", {})\n",
-                method_name, args[0]
+                method_name, arg_name
             ));
         } else {
-            let args = args.join(", ");
+            let args = get_method
+                .parameters
+                .iter()
+                .map(|p| {
+                    if let abi::BaseTypeInfo::Cell {
+                        inner_type: Some(_),
+                    } = &p.type_info.base
+                    {
+                        format!("{}.toCell()", p.name)
+                    } else {
+                        p.name.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
 
             code.push_str(&format!(
                 "    return net.runGetMethod(self.address, \"{}\", [{}] as tuple)\n",
@@ -667,7 +720,15 @@ fn generate_setup_test(contract_name: &str, abi: &ContractAbi) -> String {
             .iter()
             .map(|f| {
                 let default_value = get_default_value(&f.type_info.human_readable);
-                format!(" {}: {}", f.name, default_value)
+                match &f.type_info.base {
+                    abi::BaseTypeInfo::Cell {
+                        inner_type: Some(inner),
+                    } => {
+                        let default_value = get_default_value(&inner.human_readable);
+                        format!(" {}: {}.toCell()", f.name, default_value)
+                    }
+                    _ => format!(" {}: {}", f.name, default_value),
+                }
             })
             .collect::<Vec<_>>()
             .join(",");

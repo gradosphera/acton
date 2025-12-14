@@ -519,22 +519,7 @@ fn extract_get_method(
     let parameters = extract_parameters(func_node, content, file_path);
 
     let return_type = if let Some(return_type_node) = func_node.child_by_field_name("return_type") {
-        let type_text = return_type_node
-            .utf8_text(content.as_bytes())
-            .unwrap_or("")
-            .to_string();
-
-        if type_text.is_empty() {
-            TypeInfo {
-                base: BaseTypeInfo::Void,
-                human_readable: "void".to_string(),
-            }
-        } else {
-            TypeInfo {
-                base: BaseTypeInfo::Void,
-                human_readable: type_text,
-            }
-        }
+        extract_type_info(&return_type_node, content)
     } else {
         TypeInfo {
             base: BaseTypeInfo::Void,
@@ -630,20 +615,47 @@ fn extract_field(field_node: &tree_sitter::Node, content: &str, _file_path: &str
         .unwrap_or("")
         .to_string();
 
-    let type_name = type_node
-        .utf8_text(content.as_bytes())
-        .unwrap_or("")
-        .to_string();
-
-    let type_info = TypeInfo {
-        base: BaseTypeInfo::Void,
-        human_readable: type_name.clone(),
-    };
+    let type_info = extract_type_info(&type_node, content);
 
     Some(Field {
         name: field_name,
         type_info,
     })
+}
+
+fn extract_type_info(type_node: &tree_sitter::Node, content: &str) -> TypeInfo {
+    let type_name = type_node
+        .utf8_text(content.as_bytes())
+        .unwrap_or("")
+        .to_string();
+
+    if type_node.kind() == "type_instantiatedTs" {
+        if let Some(name_node) = type_node.child_by_field_name("name") {
+            let name = name_node
+                .utf8_text(content.as_bytes())
+                .unwrap_or("")
+                .to_string();
+
+            if name == "Cell" {
+                if let Some(args_node) = type_node.child_by_field_name("arguments")
+                    && let Some(inner_type_node) = args_node.child_by_field_name("types")
+                {
+                    let inner_type_info = extract_type_info(&inner_type_node, content);
+                    return TypeInfo {
+                        base: BaseTypeInfo::Cell {
+                            inner_type: Some(Box::new(inner_type_info)),
+                        },
+                        human_readable: type_name,
+                    };
+                }
+            }
+        }
+    }
+
+    TypeInfo {
+        base: BaseTypeInfo::Void,
+        human_readable: type_name,
+    }
 }
 
 fn extract_parameters(func_node: &tree_sitter::Node, content: &str, file_path: &str) -> Vec<Field> {
