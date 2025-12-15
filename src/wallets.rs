@@ -1,11 +1,18 @@
 use crate::config::ActonConfig;
 use crate::context::Wallet;
 use anyhow::anyhow;
+use hmac::{Hmac, Mac};
 use owo_colors::OwoColorize;
+use pbkdf2::password_hash::Output;
+use pbkdf2::{Params, pbkdf2_hmac};
+use rand::Rng;
+use sha2::Sha512;
 use std::collections::BTreeMap;
 use std::fs;
 use std::str::FromStr;
 use tonlib_core::TonAddress;
+use tonlib_core::wallet::error::MnemonicError;
+use tonlib_core::wallet::mnemonic::WORDLIST_EN_SET;
 use tonlib_core::wallet::ton_wallet::TonWallet;
 use tonlib_core::wallet::versioned::{
     DEFAULT_WALLET_ID, DEFAULT_WALLET_ID_V5R1, DEFAULT_WALLET_ID_V5R1_TESTNET,
@@ -155,4 +162,72 @@ fn parse_wallet_version(kind: &str) -> anyhow::Result<WalletVersion> {
             kind
         )),
     }
+}
+
+pub fn new_mnemonic() -> anyhow::Result<Vec<String>> {
+    let mut result;
+
+    let wordlist = WORDLIST_EN_SET.keys().collect::<Vec<_>>();
+
+    loop {
+        result = vec![]; // reset value on new iteration
+
+        for _ in 0..24 {
+            let random: usize = rand::thread_rng().gen_range(0..24);
+            let Some(word) = wordlist.get(random) else {
+                anyhow::bail!("cannot find word with index {random}")
+            };
+            result.push(word.to_string());
+        }
+
+        let entropy = to_entropy(&result, &None)?;
+        if !is_basic_seed(entropy)? {
+            continue;
+        }
+
+        break;
+    }
+
+    Ok(result)
+}
+
+fn to_entropy(words: &[String], password: &Option<String>) -> Result<Vec<u8>, MnemonicError> {
+    let mut mac = Hmac::<Sha512>::new_from_slice(words.join(" ").as_bytes())?;
+    if let Some(s) = password {
+        mac.update(s.as_bytes());
+    }
+    let result = mac.finalize();
+    let code_bytes = result.into_bytes().to_vec();
+    Ok(code_bytes)
+}
+
+const PBKDF_ITERATIONS: u32 = 100000;
+
+fn is_basic_seed(entropy: Vec<u8>) -> anyhow::Result<bool> {
+    let seed = pbkdf2_sha512(
+        entropy,
+        "TON seed version",
+        1.max(PBKDF_ITERATIONS / 256),
+        64,
+    )?;
+    Ok(seed[0] == 0)
+}
+
+fn pbkdf2_sha512(
+    key: Vec<u8>,
+    salt: &str,
+    rounds: u32,
+    output_length: usize,
+) -> Result<Vec<u8>, MnemonicError> {
+    let params = Params {
+        rounds,
+        output_length,
+    };
+
+    let output = Output::init_with(params.output_length, |out| {
+        pbkdf2_hmac::<Sha512>(key.as_slice(), salt.as_bytes(), params.rounds, out);
+        Ok(())
+    })
+    .map_err(MnemonicError::PasswordHashError)?;
+    Ok(output.as_bytes().to_vec())
 }

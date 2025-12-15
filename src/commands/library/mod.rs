@@ -156,7 +156,7 @@ pub fn publish_cmd(
     let amount_to_send = (custom_ton * 1_000_000_000.0) as u128;
 
     let api_client = TonApiClient::new(network.clone(), api_key.clone());
-    let seqno = wallet.seqno(network.as_str())?;
+    let (seqno, need_state_init) = wallet.seqno(network.as_str())?;
 
     let expired_at_time = std::time::SystemTime::now() + std::time::Duration::from_secs(600);
     let expire_at = expired_at_time
@@ -183,10 +183,12 @@ pub fn publish_cmd(
     };
 
     let message_cell = message.to_cell()?;
-    let external =
-        wallet
-            .wallet
-            .create_external_msg(expire_at, seqno, false, vec![message_cell.to_arc()])?;
+    let external = wallet.wallet.create_external_msg(
+        expire_at,
+        seqno,
+        need_state_init,
+        vec![message_cell.to_arc()],
+    )?;
 
     api_client
         .send_boc(&external.to_boc_b64(false)?)

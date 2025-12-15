@@ -334,12 +334,12 @@ pub fn verify_cmd(
     let cell = Boc::decode(cell_data)?;
     let cell_boc64 = Boc::encode_base64(&cell);
 
-    let api_client = TonApiClient::new(ton_api::Network::from_str(&network)?, api_key.clone());
+    let api_client = TonApiClient::new(Network::from_str(&network)?, api_key.clone());
     let registry_address = get_verifier_address(&backend_info, &api_client)?;
 
     wait_for_rate_limit(&api_key);
 
-    let seqno = wallet.seqno(&network)?;
+    let (seqno, need_state_init) = wallet.seqno(&network)?;
 
     wait_for_rate_limit(&api_key);
 
@@ -371,10 +371,12 @@ pub fn verify_cmd(
 
     let message_cell = message.to_cell()?;
 
-    let external =
-        wallet
-            .wallet
-            .create_external_msg(expire_at, seqno, false, vec![message_cell.to_arc()])?;
+    let external = wallet.wallet.create_external_msg(
+        expire_at,
+        seqno,
+        need_state_init,
+        vec![message_cell.to_arc()],
+    )?;
 
     api_client
         .send_boc(&external.to_boc_b64(false)?)

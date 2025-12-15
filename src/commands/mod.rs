@@ -11,6 +11,7 @@ pub mod script;
 pub mod test;
 pub mod up;
 pub mod verify;
+pub mod wallet;
 pub mod wrapper;
 
 use std::collections::HashMap;

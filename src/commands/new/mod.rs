@@ -40,6 +40,7 @@ Session.vim
 .helix/
 
 .env
+*.mnemonic
 ";
 
 pub fn new_cmd(

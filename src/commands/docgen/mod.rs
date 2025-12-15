@@ -335,13 +335,11 @@ fn extract_doc_comment(node: Node, source: &str) -> Option<String> {
 
 fn extract_file_header_doc(source: &str) -> Option<String> {
     let mut lines = Vec::new();
-    let mut parsing_doc = false;
     let mut has_content = false;
 
     for line in source.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("///") {
-            parsing_doc = true;
             let content = trimmed.trim_start_matches("///");
             let content = if let Some(stripped) = content.strip_prefix(' ') {
                 stripped

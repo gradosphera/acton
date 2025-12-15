@@ -79,6 +79,10 @@ impl TonApiClient {
         request
     }
 
+    pub fn network(&self) -> Network {
+        self.network.clone()
+    }
+
     /// Get account state from TonCenter
     pub fn get_account_state(&self, address: &str) -> anyhow::Result<AccountState> {
         let url = format!(
@@ -174,8 +178,13 @@ impl TonApiClient {
     }
 
     /// Get wallet seqno
-    pub fn get_wallet_seqno(&self, address: &str) -> anyhow::Result<u32> {
+    pub fn get_wallet_seqno(&self, address: &str) -> anyhow::Result<(u32, bool)> {
         let result = self.run_get_method(address, "seqno", vec![])?;
+
+        if result.exit_code == -13 {
+            // likely uninit wallet
+            return Ok((0, true));
+        }
 
         if let Some(first) = result.stack.first() {
             if first.len() == 2 {
@@ -184,13 +193,13 @@ impl TonApiClient {
                 {
                     if type_str == "num" {
                         let seqno = u32::from_str_radix(value_str.trim_start_matches("0x"), 16)?;
-                        return Ok(seqno);
+                        return Ok((seqno, false));
                     }
                 }
             }
         }
 
-        Ok(0)
+        Ok((0, false))
     }
 
     /// Send BOC to network
@@ -393,6 +402,7 @@ pub enum StackItem {
 #[derive(Deserialize, Debug)]
 pub struct GetMethodResult {
     pub stack: Vec<Vec<StackItem>>,
+    pub exit_code: i32,
 }
 
 #[derive(Deserialize, Debug)]

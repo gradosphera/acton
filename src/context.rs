@@ -273,7 +273,7 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    pub fn seqno(&self, net: &str) -> anyhow::Result<u32> {
+    pub fn seqno(&self, net: &str) -> anyhow::Result<(u32, bool)> {
         let network = Network::from_str(net)?;
         let client = TonApiClient::new(network, None);
         client.get_wallet_seqno(&self.wallet.address.to_base64_std())

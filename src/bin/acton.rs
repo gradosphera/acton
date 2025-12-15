@@ -11,6 +11,7 @@ use acton::commands::script::script_cmd;
 use acton::commands::test::{ReportFormat, TestConfig, mutation, test_cmd};
 use acton::commands::up::up_cmd;
 use acton::commands::verify::verify_cmd;
+use acton::commands::wallet::{WalletCommand, wallet_cmd};
 use acton::commands::wrapper::wrapper_cmd;
 use acton::config::ActonConfig;
 use clap::builder::styling::Style;
@@ -60,6 +61,11 @@ enum Commands {
         template: Option<String>,
         #[arg(long, help = "License")]
         license: Option<String>,
+    },
+    #[command(about = "Manage wallets")]
+    Wallet {
+        #[command(subcommand)]
+        command: WalletCommand,
     },
     #[command(
         about = "Execute tests in file or directory",
@@ -686,6 +692,7 @@ fn main() {
 
     let result = match cli.command {
         Commands::Init => init_cmd(),
+        Commands::Wallet { command } => wallet_cmd(command),
         Commands::New {
             path,
             name,

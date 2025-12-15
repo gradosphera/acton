@@ -375,11 +375,11 @@ fn send_wallet_message(message: &ArcCell, wallet: Wallet, network: &str) -> anyh
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs() as u32;
 
-    let seqno = wallet.seqno(network)?;
+    let (seqno, need_state_init) = wallet.seqno(network)?;
     let external =
         wallet
             .wallet
-            .create_external_msg(expire_at, seqno, false, vec![message.clone()])?;
+            .create_external_msg(expire_at, seqno, need_state_init, vec![message.clone()])?;
 
     let network = Network::from_str(network)?;
     let client = TonApiClient::new(network, None);
