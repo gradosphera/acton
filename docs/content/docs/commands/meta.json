@@ -8,6 +8,7 @@
     "run",
     "verify",
     "library",
+    "wallet",
     "shell-completions"
   ]
 }
