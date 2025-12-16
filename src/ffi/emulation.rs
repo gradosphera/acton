@@ -295,78 +295,80 @@ fn send_message_impl(
     });
 
     let transaction_cells = successful_emulations
-        .filter_map(|emulation| {
-            let Ok(tx) = ArcCell::from_boc_b64(&emulation.raw_transaction) else {
-                return None;
-            };
-            let child_txs = Tuple(
-                emulation
-                    .child_transactions
-                    .iter()
-                    .map(|lt| TupleItem::Int(BigInt::from(*lt)))
-                    .collect::<Vec<_>>(),
-            );
-            let parent_lt = match &emulation.parent_transaction {
-                Some(parent_tx) => TupleItem::Int(BigInt::from(parent_tx.lt)),
-                None => TupleItem::Null,
-            };
-            let actions = match &emulation.actions {
-                Some(actions_b64) => {
-                    ArcCell::from_boc_b64(actions_b64).unwrap_or_else(|_| ArcCell::default())
-                }
-                None => ArcCell::default(),
-            };
-
-            let result = tx.to_boc(false).ok()?;
-            let tx_cell = Boc::decode(&result).ok()?;
-            let mut tx_slice = tx_cell.as_slice().ok()?;
-            let parsed_tx = Transaction::load_from(&mut tx_slice).ok()?;
-
-            let out_messages = Tuple(
-                parsed_tx
-                    .iter_out_msgs()
-                    .filter_map(|msg| msg.ok())
-                    .filter_map(|msg| {
-                        let cell = msg.to_cell();
-                        let boc = Boc::encode_base64(&cell);
-                        ArcCell::from_boc_b64(&boc).ok()
-                    })
-                    .map(TupleItem::Cell)
-                    .collect::<Vec<_>>(),
-            );
-
-            let gas_used = match parsed_tx.load_info() {
-                Ok(TxInfo::Ordinary(info)) => match info.compute_phase {
-                    ComputePhase::Executed(compute) => compute.gas_used.into(),
-                    _ => BigInt::from(0),
-                },
-                _ => BigInt::from(0),
-            };
-
-            let externals_tuple = Tuple(
-                emulation
-                    .externals
-                    .iter()
-                    .filter_map(|ext_cell| {
-                        let boc = Boc::encode_base64(ext_cell);
-                        ArcCell::from_boc_b64(&boc).ok()
-                    })
-                    .map(TupleItem::Cell)
-                    .collect::<Vec<_>>(),
-            );
-
-            Some(TupleItem::Tuple(Tuple(vec![
-                TupleItem::Cell(tx),
-                TupleItem::Tuple(child_txs),
-                parent_lt,
-                TupleItem::Cell(actions),
-                TupleItem::Tuple(out_messages),
-                TupleItem::Int(gas_used),
-                TupleItem::Tuple(externals_tuple),
-            ])))
-        })
+        .filter_map(|emulation| emulation_to_send_result(&emulation))
         .collect::<Vec<_>>();
     stack.push(TupleItem::Tuple(Tuple(transaction_cells)));
+}
+
+fn emulation_to_send_result(emulation: &SendMessageResultSuccess) -> Option<TupleItem> {
+    let Ok(tx) = ArcCell::from_boc_b64(&emulation.raw_transaction) else {
+        return None;
+    };
+    let child_txs = Tuple(
+        emulation
+            .child_transactions
+            .iter()
+            .map(|lt| TupleItem::Int(BigInt::from(*lt)))
+            .collect::<Vec<_>>(),
+    );
+    let parent_lt = match &emulation.parent_transaction {
+        Some(parent_tx) => TupleItem::Int(BigInt::from(parent_tx.lt)),
+        None => TupleItem::Null,
+    };
+    let actions = match &emulation.actions {
+        Some(actions_b64) => {
+            ArcCell::from_boc_b64(actions_b64).unwrap_or_else(|_| ArcCell::default())
+        }
+        None => ArcCell::default(),
+    };
+
+    let result = tx.to_boc(false).ok()?;
+    let tx_cell = Boc::decode(&result).ok()?;
+    let mut tx_slice = tx_cell.as_slice().ok()?;
+    let parsed_tx = Transaction::load_from(&mut tx_slice).ok()?;
+
+    let out_messages = Tuple(
+        parsed_tx
+            .iter_out_msgs()
+            .filter_map(|msg| msg.ok())
+            .filter_map(|msg| {
+                let cell = msg.to_cell();
+                let boc = Boc::encode_base64(&cell);
+                ArcCell::from_boc_b64(&boc).ok()
+            })
+            .map(TupleItem::Cell)
+            .collect::<Vec<_>>(),
+    );
+
+    let gas_used = match parsed_tx.load_info() {
+        Ok(TxInfo::Ordinary(info)) => match info.compute_phase {
+            ComputePhase::Executed(compute) => compute.gas_used.into(),
+            _ => BigInt::from(0),
+        },
+        _ => BigInt::from(0),
+    };
+
+    let externals_tuple = Tuple(
+        emulation
+            .externals
+            .iter()
+            .filter_map(|ext_cell| {
+                let boc = Boc::encode_base64(ext_cell);
+                ArcCell::from_boc_b64(&boc).ok()
+            })
+            .map(TupleItem::Cell)
+            .collect::<Vec<_>>(),
+    );
+
+    Some(TupleItem::Tuple(Tuple(vec![
+        TupleItem::Cell(tx),
+        TupleItem::Tuple(child_txs),
+        parent_lt,
+        TupleItem::Cell(actions),
+        TupleItem::Tuple(out_messages),
+        TupleItem::Int(gas_used),
+        TupleItem::Tuple(externals_tuple),
+    ])))
 }
 
 fn send_wallet_message(message: &ArcCell, wallet: Wallet, network: &str) -> anyhow::Result<()> {
@@ -376,10 +378,12 @@ fn send_wallet_message(message: &ArcCell, wallet: Wallet, network: &str) -> anyh
         .as_secs() as u32;
 
     let (seqno, need_state_init) = wallet.seqno(network)?;
-    let external =
-        wallet
-            .wallet
-            .create_external_msg(expire_at, seqno, need_state_init, vec![message.clone()])?;
+    let external = wallet.wallet.create_external_msg(
+        expire_at,
+        seqno,
+        need_state_init,
+        vec![message.clone()],
+    )?;
 
     let network = Network::from_str(network)?;
     let client = TonApiClient::new(network, None);
@@ -602,6 +606,82 @@ fn send_message_debug(
     }
 
     all_results
+}
+
+extension!(send_single_message in (Context) with (from: ArcCell, message: ArcCell) using send_single_message_impl);
+fn send_single_message_impl(ctx: &mut Context, stack: &mut Tuple, from: ArcCell, message: ArcCell) {
+    let emulator = &ctx.chain.emulator;
+
+    let msg_b64 = try_ctx!(
+        ctx,
+        message.to_boc(false),
+        "Failed to encode message to BoC: {}"
+    );
+    let msg_cell = try_ctx!(
+        ctx,
+        Boc::decode(msg_b64),
+        "Failed to decode message from BoC: {}"
+    );
+
+    let from_b64 = try_ctx!(
+        ctx,
+        from.to_boc(false),
+        "Failed to encode from address to BoC: {}"
+    );
+    let from_cell = try_ctx!(
+        ctx,
+        Boc::decode(from_b64),
+        "Failed to decode from address from BoC: {}"
+    );
+    let mut from_slice = try_ctx!(
+        ctx,
+        from_cell.as_slice(),
+        "Failed to create slice `from` from address cell: {}"
+    );
+    let src_addr = IntAddr::load_from(&mut from_slice);
+    let src_addr = match src_addr {
+        Ok(src_addr) => src_addr,
+        Err(err) => {
+            ctx.asserts.fail(format!(
+                "Failed to decode src address from x{{{}}} with length={}: {}",
+                from_slice.display_data(),
+                from_slice.size_bits(),
+                err
+            ));
+            return;
+        }
+    };
+
+    let libs = ctx.chain.build_libs(&src_addr);
+    let blockchain = &mut ctx.chain.blockchain;
+
+    let emulation = match emulator.send_single_message(
+        blockchain,
+        msg_cell,
+        &libs,
+        Some(src_addr),
+        Some(ctx.env.default_log_level),
+    ) {
+        Ok(res) => res,
+        Err(err) => {
+            ctx.asserts
+                .fail(format!("Cannot emulate transaction: {}", err));
+            return;
+        }
+    };
+
+    ctx.chain.emulations.results.push(vec![emulation.clone()]);
+
+    let SendMessageResult::Success(emulation) = emulation else {
+        stack.push(TupleItem::Null);
+        return;
+    };
+
+    let Some(send_result) = emulation_to_send_result(&emulation) else {
+        stack.push(TupleItem::Null);
+        return;
+    };
+    stack.push(send_result);
 }
 
 extension!(find_transaction_by_params in (Context) with (params: Tuple, txs: Tuple) using find_transaction_by_params_impl);
@@ -1310,5 +1390,6 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         27 => disable_broadcast,
         28 => set_now,
         29 => get_now,
+        30 => send_single_message,
     });
 }

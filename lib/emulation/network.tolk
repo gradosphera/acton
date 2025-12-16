@@ -372,8 +372,66 @@ fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams = {})
 /// ```
 ///
 /// Returns a list of send results representing all transactions produced by this send call.
+/// 
+/// See [net.sendSingle] if you need to send a single message without out message processing.
 fun net.send(from: address, message: OutMessage, mode: int): SendResultList {
     return ffi.sendMessageFrom(message.messageCell, from.toCell(), mode)!;
+}
+
+/// Send a single message from a specified address.
+/// 
+/// In contrast to [net.send], this method doesn't process out messages, but returns
+/// a single send result with this out messages.
+/// 
+/// This method is useful for bounce testing where you want to simulate a bounced message.
+/// 
+/// Example:
+/// ```tolk
+/// val bounced_msg = createMessage({
+///     bounce: false,
+///     value: ton("0.95"),
+///     dest: deployer_jetton_wallet.address,
+///     body: beginCell().storeUint(0xFFFFFFFF, 32).storeSlice(body.toCell().beginParse()).endCell(),
+/// }).bounced();
+/// 
+/// net.sendSingle(not_deployer_jetton_wallet.address, bounced_msg);
+/// ```
+/// 
+/// See [net.send] if you need to send a message and process out messages.
+fun net.sendSingle(from: address, message: OutMessage): SendResult {
+    val res = ffi.sendSingleMessage(message.messageCell, from.toCell())!;
+    return SendResult.fromTuple(res)
+}
+
+/// Transform the out message to a bounced message. Essentially, it sets the `bounced` flag to true.
+/// 
+/// Example:
+/// ```tolk
+/// val msg = createMessage({
+///     bounce: false,
+///     value: ton("1"),
+///     dest: counter.address,
+/// });
+/// val bouncedMsg = msg.bounced();
+/// ```
+/// 
+/// This is useful for testing single messages with [net.sendSingle] method.
+/// 
+/// Example:
+/// ```tolk
+/// val bounced_msg = createMessage({
+///     bounce: false,
+///     value: ton("0.95"),
+///     dest: deployer_jetton_wallet.address,
+///     body: beginCell().storeUint(0xFFFFFFFF, 32).storeSlice(body.toCell().beginParse()).endCell(),
+/// }).bounced();
+/// 
+/// net.sendSingle(not_deployer_jetton_wallet.address, bounced_msg);
+/// ```
+fun OutMessage.bounced(self): OutMessage {
+    var msg = (self.messageCell as Cell<MessageRelaxedGeneric>).load();
+    msg.info.bounced = true;
+    return { messageCell: msg.toCell() };
 }
 
 /// Treasury is a special contract that is used to deploy other contracts.
@@ -648,12 +706,13 @@ fun net.waitForTransaction(
 /// Example:
 /// ```tolk
 /// val address = net.randomAddress("random_user");
+/// val masterchain_address = net.randomAddress("random_user", -1);
 /// ```
-fun net.randomAddress(name: slice? = null): address {
+fun net.randomAddress(name: slice? = null, wc: int = 0): address {
     var builder = beginCell();
     builder.storeUint(0b10, 2);
     builder.storeUint(0b0, 1);
-    builder.storeUint(0b0, 8);
+    builder.storeInt(wc, 8);
 
     var i = 0;
     while (i < 32) {
@@ -866,6 +925,7 @@ fun __treasuryCode(): cell asm """
 """
 
 fun ffi.sendMessageFrom(msg: cell, from: cell, mode: int): SendResultList? asm "9 EXTCALL"
+fun ffi.sendSingleMessage(msg: cell, from: cell): tuple? asm "30 EXTCALL"
 fun ffi.runGetMethod(addr: cell, code: cell, id: int, name: slice, return_type: slice, args: tuple): tuple? asm "8 EXTCALL"
 fun ffi.isDeployed(addr: cell): bool asm "11 EXTCALL"
 fun ffi.getDeployedCode(addr: cell): cell? asm "12 EXTCALL"

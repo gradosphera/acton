@@ -1003,7 +1003,11 @@ impl ActonCommand {
     }
 
     pub fn wallet_new(mut self) -> Self {
-        self.cmd = self.cmd.arg("wallet").arg("new").current_dir(&self.project.path);
+        self.cmd = self
+            .cmd
+            .arg("wallet")
+            .arg("new")
+            .current_dir(&self.project.path);
         self
     }
 

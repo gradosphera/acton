@@ -96,20 +96,18 @@ impl Emulator {
         Self { executor }
     }
 
-    pub fn send_message(
+    pub fn send_single_message(
         &self,
         net: &mut Blockchain,
         message: Cell,
         libs: &Dict<HashBytes, LibDescr>,
         src_addr: Option<IntAddr>,
         verbosity: Option<ExecutorVerbosity>,
-    ) -> Vec<SendMessageResult> {
+    ) -> anyhow::Result<SendMessageResult> {
         let message = Emulator::patch_src_addr(message, src_addr);
-        let Ok(message_obj) = message.parse::<Message>() else {
-            return vec![];
-        };
+        let message_obj = message.parse::<Message>()?;
         let MsgInfo::Int(int_message) = &message_obj.info else {
-            return vec![];
+            anyhow::bail!("message is not an internal message")
         };
 
         let dest_account = net.get_account(&int_message.dst.to_string());
@@ -131,7 +129,7 @@ impl Emulator {
         );
         let result = match result {
             EmulationResult::Success(result) => result,
-            EmulationResult::Error(err) => return vec![SendMessageResult::Error(err)],
+            EmulationResult::Error(err) => return Ok(SendMessageResult::Error(err)),
         };
 
         let shard_account_after = &result.shard_account;
@@ -172,6 +170,24 @@ impl Emulator {
             externals: vec![],
         };
 
+        Ok(SendMessageResult::Success(send_result))
+    }
+
+    pub fn send_message(
+        &self,
+        net: &mut Blockchain,
+        message: Cell,
+        libs: &Dict<HashBytes, LibDescr>,
+        src_addr: Option<IntAddr>,
+        verbosity: Option<ExecutorVerbosity>,
+    ) -> Vec<SendMessageResult> {
+        let Ok(SendMessageResult::Success(send_result)) =
+            self.send_single_message(net, message, libs, src_addr, verbosity)
+        else {
+            return vec![];
+        };
+
+        let transaction = send_result.transaction.clone();
         let mut externals: Vec<Cell> = vec![];
 
         let mut all_results = std::iter::once(SendMessageResult::Success(send_result.clone()))

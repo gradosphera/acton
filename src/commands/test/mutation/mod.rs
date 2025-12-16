@@ -437,7 +437,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
         .filter(|r| !r.survived && !r.compile_failed)
         .count();
     let survived_count = results.iter().filter(|r| r.survived).count();
-    let executed_total = results.len().saturating_sub(compile_failed_count);
+    let executed_total = results.len();
     let mutation_score = if executed_total > 0 {
         ((killed_count + compile_failed_count) as f64 / executed_total as f64) * 100.0
     } else {

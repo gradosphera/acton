@@ -14,9 +14,15 @@ use tonlib_core::wallet::wallet_version::WalletVersion;
 pub enum WalletCommand {
     #[command(about = "Generate a new testnet wallet")]
     New {
-        #[arg(long, help = "Name of the wallet (optional, will prompt if not provided)")]
+        #[arg(
+            long,
+            help = "Name of the wallet (optional, will prompt if not provided)"
+        )]
         name: Option<String>,
-        #[arg(long, help = "Version of the wallet (optional, will prompt if not provided)")]
+        #[arg(
+            long,
+            help = "Version of the wallet (optional, will prompt if not provided)"
+        )]
         version: Option<String>,
     },
 }
