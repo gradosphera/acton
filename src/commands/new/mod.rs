@@ -134,50 +134,52 @@ pub fn new_cmd(
 
     std::env::set_current_dir(&project_path)?;
 
-    if template == "empty" {
-        fs::create_dir_all("contracts/")?;
-        fs::create_dir_all("tests/")?;
-    } else {
-        // use `.` since we explicitly change current dir to project dir
-        template::create_project_from_template(&template, Path::new("."))?;
+    // use `.` since we explicitly change current dir to project dir
+    template::create_project_from_template(&template, Path::new("."))?;
 
-        if template == "counter" {
-            let mut contracts = BTreeMap::new();
-            contracts.insert(
-                "counter".to_owned(),
-                ContractConfig {
-                    name: "counter".to_owned(),
-                    src: "contracts/counter.tolk".to_owned(),
-                    depends: Some(vec![]),
-                    output: None,
-                },
-            );
-            config.contracts = Some(ContractsConfig { contracts })
-        }
-        if template == "jetton" {
-            let mut contracts = BTreeMap::new();
-            contracts.insert(
-                "jetton_minter".to_owned(),
-                ContractConfig {
-                    name: "Minter".to_owned(),
-                    src: "contracts/jetton-minter-contract.tolk".to_owned(),
-                    depends: Some(vec![]),
-                    output: None,
-                },
-            );
-            contracts.insert(
-                "jetton_wallet".to_owned(),
-                ContractConfig {
-                    name: "Wallet".to_owned(),
-                    src: "contracts/jetton-wallet-contract.tolk".to_owned(),
-                    depends: Some(vec![]),
-                    output: None,
-                },
-            );
-            config.contracts = Some(ContractsConfig { contracts })
-        }
+    let mut contracts = BTreeMap::new();
+    if template == "empty" {
+        contracts.insert(
+            "empty".to_owned(),
+            ContractConfig {
+                name: "Empty".to_owned(),
+                src: "contracts/contract.tolk".to_owned(),
+                depends: Some(vec![]),
+                output: None,
+            },
+        );
+    } else if template == "counter" {
+        contracts.insert(
+            "counter".to_owned(),
+            ContractConfig {
+                name: "counter".to_owned(),
+                src: "contracts/counter.tolk".to_owned(),
+                depends: Some(vec![]),
+                output: None,
+            },
+        );
+    } else if template == "jetton" {
+        contracts.insert(
+            "jetton_minter".to_owned(),
+            ContractConfig {
+                name: "Minter".to_owned(),
+                src: "contracts/jetton-minter-contract.tolk".to_owned(),
+                depends: Some(vec![]),
+                output: None,
+            },
+        );
+        contracts.insert(
+            "jetton_wallet".to_owned(),
+            ContractConfig {
+                name: "Wallet".to_owned(),
+                src: "contracts/jetton-wallet-contract.tolk".to_owned(),
+                depends: Some(vec![]),
+                output: None,
+            },
+        );
     }
 
+    config.contracts = Some(ContractsConfig { contracts });
     config.save()?;
 
     fs::create_dir_all(".acton/tolk-stdlib")?;
