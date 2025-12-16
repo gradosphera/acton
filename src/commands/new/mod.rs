@@ -154,6 +154,28 @@ pub fn new_cmd(
             );
             config.contracts = Some(ContractsConfig { contracts })
         }
+        if template == "jetton" {
+            let mut contracts = BTreeMap::new();
+            contracts.insert(
+                "jetton_minter".to_owned(),
+                ContractConfig {
+                    name: "Minter".to_owned(),
+                    src: "contracts/jetton-minter-contract.tolk".to_owned(),
+                    depends: Some(vec![]),
+                    output: None,
+                },
+            );
+            contracts.insert(
+                "jetton_wallet".to_owned(),
+                ContractConfig {
+                    name: "Wallet".to_owned(),
+                    src: "contracts/jetton-wallet-contract.tolk".to_owned(),
+                    depends: Some(vec![]),
+                    output: None,
+                },
+            );
+            config.contracts = Some(ContractsConfig { contracts })
+        }
     }
 
     config.save()?;
