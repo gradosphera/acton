@@ -41,7 +41,7 @@ export function Header() {
           </span>
         </div>
         <div className="flex gap-8 items-center">
-          <Link href="/docs/installation/"
+          <Link href="/docs/welcome/"
                 className="text-sm font-medium text-white/70 hover:text-white transition-colors flex items-center gap-3">
             <BookOpen className="w-4 h-4"/>
             Documentation
