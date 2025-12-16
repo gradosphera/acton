@@ -1,4 +1,4 @@
-use crate::config::{ActonConfig, ContractConfig, WalletsConfig};
+use crate::config::{ActonConfig, ContractConfig, Explorer, WalletsConfig};
 use crate::debugger::debug_context::DebugContext;
 use crate::file_build_cache::FileBuildCache;
 use abi::ContractAbi;
@@ -287,6 +287,7 @@ pub struct Env<'a> {
     pub wallets: Option<&'a WalletsConfig>,
     pub open_wallets: BTreeMap<String, Wallet>,
     pub build_override: BTreeMap<String, ArcCell>, // contract ID -> code
+    pub explorer: Option<Explorer>,
 }
 
 pub struct Context<'a> {

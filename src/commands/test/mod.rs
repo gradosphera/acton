@@ -233,6 +233,7 @@ impl<'a> TestRunner<'a> {
                 wallets: self.acton_config.wallets.as_ref(),
                 open_wallets: Default::default(), // in tests, we never use real wallets
                 build_override: self.mutation_overrides.clone(),
+                explorer: None,
             },
             io: IoContext {
                 stdout_buffer: "".to_owned(),

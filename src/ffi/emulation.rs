@@ -1,4 +1,5 @@
 use crate::commands::common::error_fmt;
+use crate::config::Explorer;
 use crate::context::{Context, KnownAddress, Wallet};
 use crate::debugger::debug_context::StepMode;
 use crate::ffi::assert::process_txs_and_search_params;
@@ -23,7 +24,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
-use ton_api::{Network, TonApiClient};
+use ton_api::{Network, TonApiClient, TonCenterTransaction};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::block::msg_address::{MsgAddrIntStd, MsgAddress};
@@ -1324,7 +1325,10 @@ fn wait_for_transaction_impl(
                             .decode(tx.transaction_id.hash.clone())
                             .map(hex::encode)
                             .unwrap_or(tx.transaction_id.hash.clone());
-                        println!("Transaction {} successfully applied!", hex.dimmed());
+                        println!("Transaction successfully applied!");
+
+                        let url = get_transaction_link(ctx, address_str, tx, hex);
+                        println!("You can view it at {}", url.underline());
                     }
                     stack.push_bool(true);
                     return;
@@ -1342,6 +1346,37 @@ fn wait_for_transaction_impl(
             .to_owned(),
     );
     stack.push_bool(false);
+}
+
+fn get_transaction_link(
+    ctx: &mut Context,
+    address_str: String,
+    tx: TonCenterTransaction,
+    hex: String,
+) -> String {
+    let network_prefix = if ctx.network() == "testnet" {
+        "testnet."
+    } else {
+        ""
+    };
+    let explorer = ctx.env.explorer.unwrap_or(Explorer::Tonviewer);
+    match explorer {
+        Explorer::Tonscan => {
+            format!("https://{}tonscan.org/tx/{}", network_prefix, hex)
+        }
+        Explorer::Toncx => format!(
+            "https://{}ton.cx/tx/{}:{}:{}",
+            network_prefix, tx.transaction_id.lt, hex, address_str
+        ),
+        Explorer::Dton => format!(
+            "https://{}dton.io/tx/{}?time={}",
+            network_prefix, hex, tx.utime
+        ),
+        Explorer::Tonviewer => format!(
+            "https://{}tonviewer.com/transaction/{}",
+            network_prefix, hex
+        ),
+    }
 }
 
 extension!(enable_broadcast in (Context) using enable_broadcast_impl);

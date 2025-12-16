@@ -5,6 +5,14 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
+#[derive(clap::ValueEnum, Debug, Copy, Clone)]
+pub enum Explorer {
+    Tonscan,
+    Toncx,
+    Dton,
+    Tonviewer,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq, Default)]
 pub enum DependencyKind {
     #[serde(rename = "embed_code")]

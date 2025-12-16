@@ -1,5 +1,5 @@
 use crate::commands::common::error_fmt;
-use crate::config::ActonConfig;
+use crate::config::{ActonConfig, Explorer};
 use crate::context::{
     AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
     Emulations, Env, IoContext, KnownAddresses,
@@ -43,6 +43,7 @@ pub fn script_cmd(
     fork_block_number: Option<u64>,
     broadcast: bool,
     net: Option<String>,
+    explorer: Option<Explorer>,
 ) -> anyhow::Result<()> {
     if clear_cache {
         let mut file_cache = FileBuildCache::new(None)?;
@@ -86,6 +87,7 @@ pub fn script_cmd(
         fork_block_number,
         broadcast,
         net,
+        explorer,
     )
 }
 
@@ -106,6 +108,7 @@ fn run_script_file(
     fork_block_number: Option<u64>,
     broadcast: bool,
     net: Option<String>,
+    explorer: Option<Explorer>,
 ) -> anyhow::Result<()> {
     let abi = contract_abi(content, file_path);
 
@@ -128,6 +131,7 @@ fn run_script_file(
                 fork_block_number,
                 broadcast,
                 net,
+                explorer,
             )?;
             Ok(())
         }
@@ -156,6 +160,7 @@ fn execute_script(
     fork_block_number: Option<u64>,
     broadcast: bool,
     net: Option<String>,
+    explorer: Option<Explorer>,
 ) -> anyhow::Result<()> {
     let dest_address = contract_address(code_cell)?;
 
@@ -198,6 +203,7 @@ fn execute_script(
             wallets: config.wallets.as_ref(),
             open_wallets,
             build_override: BTreeMap::new(),
+            explorer,
         },
         io: IoContext {
             stdout_buffer: "".to_string(),

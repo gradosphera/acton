@@ -13,7 +13,7 @@ use acton::commands::up::up_cmd;
 use acton::commands::verify::verify_cmd;
 use acton::commands::wallet::{WalletCommand, wallet_cmd};
 use acton::commands::wrapper::wrapper_cmd;
-use acton::config::ActonConfig;
+use acton::config::{ActonConfig, Explorer};
 use clap::builder::styling::Style;
 use clap::builder::{StyledStr, Styles};
 use clap::{ColorChoice, CommandFactory};
@@ -323,6 +323,15 @@ enum Commands {
             help_heading = "Broadcasting"
         )]
         net: Option<String>,
+
+        #[arg(
+            value_enum,
+            long,
+            help = "Explorer to use for transaction links",
+            help_heading = "Broadcasting",
+            value_name = "NAME"
+        )]
+        explorer: Option<Explorer>,
     },
     #[command(
         about = "Build the specified contract or all contracts",
@@ -801,6 +810,7 @@ fn main() {
             fork_block_number,
             broadcast,
             net,
+            explorer,
         } => script_cmd(
             &path,
             args,
@@ -812,6 +822,7 @@ fn main() {
             fork_block_number,
             broadcast,
             net,
+            explorer,
         ),
         Commands::Build {
             contract_id,
