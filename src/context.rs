@@ -110,7 +110,7 @@ impl AssertFailure {
             color_print::cformat!(
                 "Wallet {} not found in Acton.toml. Wallets are not configured yet.
 
-To add wallets, add the following section to your Acton.toml:
+To add wallets, run {} or add the following section to your Acton.toml:
 
 <dim># Example wallet configuration</>
 [wallets.{}]
@@ -124,6 +124,7 @@ address-testnet = \"<<ADDRESS>>\"
 See https://i582.github.io/acton/docs/scripting/setup-wallets/ for more information
 ",
                 failure.wallet_name.yellow(),
+                "acton wallet new".green(),
                 failure.wallet_name
             )
         } else {
