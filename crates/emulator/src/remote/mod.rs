@@ -1,33 +1,9 @@
 use anyhow::{Context, anyhow};
 use num_bigint::{BigInt, ToBigInt};
+use reqwest::blocking::Response;
 use serde::Deserialize;
 use tycho_types::boc::Boc;
 use tycho_types::cell::Cell;
-
-pub fn get_last_block_seqno(network: &str, api_key: Option<String>) -> anyhow::Result<u64> {
-    let base_url = toncenter_url(network)?;
-    let url = format!("{}/api/v2/getMasterchainInfo", base_url);
-    let client = reqwest::blocking::Client::new();
-    let mut request = client.get(url).header("User-Agent", "acton-cli");
-
-    if let Some(key) = api_key {
-        request = request.header("X-API-Key", key);
-    }
-
-    let response = request
-        .send()
-        .context("Failed to send request to TonCenter")?;
-
-    if !response.status().is_success() {
-        anyhow::bail!("TonCenter API returned status: {}", response.status());
-    }
-
-    let data: TonCenterMasterchainInfoResponse = response
-        .json()
-        .context("Failed to parse TonCenter response")?;
-
-    Ok(data.result.last.seqno)
-}
 
 pub fn get_account_info(
     seqno: Option<u64>,
@@ -56,7 +32,7 @@ pub fn get_account_info(
         .context("Failed to send request to TonCenter")?;
 
     if !response.status().is_success() {
-        anyhow::bail!("TonCenter API returned status: {}", response.status());
+        return Err(handle_fail(response));
     }
 
     let data: TonCenterAccountInfoResponse = response
@@ -99,7 +75,7 @@ pub fn get_library_by_hash(
         .context("Failed to send request to TonCenter for library")?;
 
     if !response.status().is_success() {
-        anyhow::bail!("TonCenter API returned status: {}", response.status());
+        return Err(handle_fail(response));
     }
 
     #[derive(Deserialize)]
@@ -134,21 +110,6 @@ pub fn decode_optional_cell(cell_data: &String) -> anyhow::Result<Option<Cell>> 
         return Ok(None);
     }
     Ok(Some(Boc::decode_base64(cell_data)?))
-}
-
-#[derive(Deserialize)]
-struct TonCenterMasterchainInfoResponse {
-    pub result: TonCenterMasterchainInfoResult,
-}
-
-#[derive(Deserialize)]
-struct TonCenterMasterchainInfoResult {
-    pub last: TonCenterMasterchainInfoLastBlock,
-}
-
-#[derive(Deserialize)]
-struct TonCenterMasterchainInfoLastBlock {
-    pub seqno: u64,
 }
 
 #[derive(Deserialize, Debug)]
@@ -188,4 +149,27 @@ impl StringOrNumber {
                 .ok_or_else(|| anyhow!("cannot convert {num} to bigint")),
         }
     }
+}
+
+fn handle_fail(response: Response) -> anyhow::Error {
+    let status = response.status();
+    let data = match response.json::<TonCenterErrorResponse>() {
+        Ok(res) => res,
+        Err(_) => {
+            return anyhow!("TonCenter API returned status: {status}");
+        }
+    };
+
+    anyhow!(
+        data.error
+            .trim_start_matches("LITE_SERVER_UNKNOWN: ")
+            .to_owned()
+    )
+}
+
+#[derive(Deserialize)]
+struct TonCenterErrorResponse {
+    #[allow(dead_code)]
+    ok: bool,
+    error: String,
 }

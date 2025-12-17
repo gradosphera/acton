@@ -1,5 +1,6 @@
 use anyhow::{Context, anyhow};
 use num_bigint::{BigInt, ToBigInt};
+use reqwest::blocking::Response;
 use serde::Deserialize;
 use tycho_types::boc::Boc;
 use tycho_types::cell::Cell;
@@ -215,10 +216,7 @@ impl TonApiClient {
             .context("Failed to send BOC")?;
 
         if !response.status().is_success() {
-            return Err(anyhow!(
-                "TonCenter API returned status: {}",
-                response.status()
-            ));
+            return Err(Self::handle_fail(response));
         }
 
         Ok(())
@@ -233,7 +231,7 @@ impl TonApiClient {
             .context("Failed to send request to TonCenter")?;
 
         if !response.status().is_success() {
-            anyhow::bail!("TonCenter API returned status: {}", response.status());
+            return Err(Self::handle_fail(response));
         }
 
         #[derive(Deserialize)]
@@ -278,7 +276,7 @@ impl TonApiClient {
             .context("Failed to send request to TonCenter")?;
 
         if !response.status().is_success() {
-            anyhow::bail!("TonCenter API returned status: {}", response.status());
+            return Err(Self::handle_fail(response));
         }
 
         #[derive(Deserialize, Debug)]
@@ -303,7 +301,7 @@ impl TonApiClient {
             .context("Failed to send request to TonCenter for library")?;
 
         if !response.status().is_success() {
-            anyhow::bail!("TonCenter API returned status: {}", response.status());
+            return Err(Self::handle_fail(response));
         }
 
         #[derive(Deserialize)]
@@ -383,6 +381,22 @@ impl TonApiClient {
             .context("Failed to parse getTransactions response")?;
 
         Ok(data.result)
+    }
+
+    fn handle_fail(response: Response) -> anyhow::Error {
+        let status = response.status();
+        let data = match response.json::<TonCenterErrorResponse>() {
+            Ok(res) => res,
+            Err(_) => {
+                return anyhow!("TonCenter API returned status: {status}");
+            }
+        };
+
+        anyhow!(
+            data.error
+                .trim_start_matches("LITE_SERVER_UNKNOWN: ")
+                .to_owned()
+        )
     }
 }
 
@@ -471,4 +485,11 @@ pub struct TonCenterMessage {
     pub created_lt: Option<String>,
     pub body_hash: Option<String>,
     pub message: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct TonCenterErrorResponse {
+    #[allow(dead_code)]
+    ok: bool,
+    error: String,
 }
