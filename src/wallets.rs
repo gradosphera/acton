@@ -128,7 +128,7 @@ pub fn open_wallets(
     Ok(open_wallets)
 }
 
-fn wallet_id(wallet: WalletVersion, net: &str) -> i32 {
+pub fn wallet_id(wallet: WalletVersion, net: &str) -> i32 {
     match wallet {
         WalletVersion::V5R1 => {
             if net == "testnet" {

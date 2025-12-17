@@ -105,7 +105,9 @@ fn new_wallet(name: Option<String>, version: Option<String>) -> anyhow::Result<(
 
     let mnemonic = Mnemonic::from_str(&mnemonic_str, &None)?;
     let key_pair = mnemonic.to_key_pair()?;
-    let wallet = TonWallet::new(version, key_pair)?;
+
+    let wallet_id = wallets::wallet_id(version, "testnet");
+    let wallet = TonWallet::new_with_params(version, key_pair, 0, wallet_id)?;
 
     let mnemonic_file = format!("{}.mnemonic", name);
     if Path::new(&mnemonic_file).exists() {
