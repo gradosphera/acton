@@ -38,17 +38,9 @@ target/debug/acton test foo_test.tolk
 # or target/release/acton test foo_test.tolk
 ```
 
-## Testing
+## Documentation
 
-See [Documentation](https://i582.github.io/acton/test-runner/your-first-unit-test-in-tolk/).
-
-## Scripts
-
-See [Documentation](https://i582.github.io/acton/scripting/overview/).
-
-## Compilation
-
-See [Documentation](https://i582.github.io/acton/compile/).
+See [Documentation](https://i582.github.io/acton/docs/welcome/).
 
 ## Development
 
