@@ -23,7 +23,7 @@ use dotenvy::dotenv;
 use human_panic::{Metadata, setup_panic};
 use owo_colors::OwoColorize;
 use std::fs::OpenOptions;
-use std::{fs, process};
+use std::{env, fs, process};
 use tasm::printer::FormatOptions;
 use tolkc::source_map::SourceMap;
 
@@ -769,7 +769,7 @@ fn main() {
                 snapshot,
                 baseline_snapshot,
                 fork_net,
-                api_key,
+                api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
                 fork_block_number,
                 save_test_trace,
                 mutate,
@@ -818,7 +818,7 @@ fn main() {
             debug_port,
             clear_cache,
             fork_net,
-            api_key,
+            api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
             fork_block_number,
             broadcast,
             net,
@@ -877,7 +877,7 @@ fn main() {
                     source_map,
                 },
                 address,
-                api_key,
+                api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
                 net,
                 follow_libraries,
             ),
@@ -898,7 +898,7 @@ fn main() {
             wallet,
             compiler_version,
             dry_run,
-            api_key,
+            api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
         ),
         Commands::Library { command } => match command {
             LibraryCommand::Publish {
@@ -908,7 +908,14 @@ fn main() {
                 wallet,
                 api_key,
                 net,
-            } => publish_cmd(contract_id, code, duration, wallet, api_key, net),
+            } => publish_cmd(
+                contract_id,
+                code,
+                duration,
+                wallet,
+                api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
+                net,
+            ),
             LibraryCommand::Fetch {
                 hash,
                 disasm,
@@ -917,7 +924,14 @@ fn main() {
                 net,
                 json,
             } => {
-                let result = fetch_cmd(hash, disasm, api_key, output, net, json);
+                let result = fetch_cmd(
+                    hash,
+                    disasm,
+                    api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
+                    output,
+                    net,
+                    json,
+                );
                 if json {
                     if let Err(err) = result {
                         println!(
