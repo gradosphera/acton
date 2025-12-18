@@ -1,21 +1,14 @@
 import "@stdlib/gas-payments"
 import "../../.acton/build/build"
 import "../../.acton/emulation/network"
+import "../../.acton/testing/assert"
 import "../../.acton/testing/expect"
 import "../../.acton/types/message"
 import "../../contracts/storage"
 
-/// Configuration for sending messages to the contract
-struct MyContractSendMessageConfig {
-    /// The amount of TON to send with the message (default: 0.1 TON)
-    value: coins = ton("0.1")
-    /// Whether to bounce the message if the contract does not exist or fails (default: false)
-    bounce: bool = false
-}
-
 struct MyContract {
     address: address
-    init: ContractState
+    init: ContractState? = null
 }
 
 /// Creates a contract wrapper instance from the storage data
@@ -28,8 +21,16 @@ fun MyContract.fromStorage(storage: FirstStorage) {
     return MyContract { address, init }
 }
 
+/// Creates a contract wrapper instance from the address
+fun MyContract.fromAddress(address: address) {
+    return MyContract { address }
+}
+
 /// Deploys the contract to the blockchain
-fun MyContract.deploy(self, from: address, config: MyContractSendMessageConfig = {}): SendResultList {
+fun MyContract.deploy(self, from: address, config: SendParams = {}): SendResultList {
+    if (self.init == null) {
+        Assert.fail("Cannot deploy a contract created with 'fromAddress' because it lacks state init for deployment");
+    }
     val msg = createMessage({
         bounce: config.bounce,
         value: config.value,
@@ -41,7 +42,7 @@ fun MyContract.deploy(self, from: address, config: MyContractSendMessageConfig =
 }
 
 /// Send message to the contract with a custom body cell
-fun MyContract.sendAny(self, from: address, body: cell, config: MyContractSendMessageConfig = {}): SendResultList {
+fun MyContract.sendAny(self, from: address, body: cell, config: SendParams = {}): SendResultList {
     val msg = createMessage({
         bounce: config.bounce,
         value: config.value,

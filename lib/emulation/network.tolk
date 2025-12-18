@@ -40,7 +40,9 @@ struct net
 /// Represents a set of parameters for creating a message.
 struct SendParams {
     /// Value to send with the message.
-    value: coins
+    value: coins = ton("0.1")
+    /// Whether to bounce the message if the contract does not exist or fails (default: false)
+    bounce: bool = false
 }
 
 /// Information about external outgoing message.

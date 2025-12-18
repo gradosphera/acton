@@ -308,6 +308,7 @@ fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> 
     code.push_str("import \"@stdlib/gas-payments\"\n");
     code.push_str("import \"../../.acton/build/build\"\n");
     code.push_str("import \"../../.acton/emulation/network\"\n");
+    code.push_str("import \"../../.acton/testing/assert\"\n");
     code.push_str("import \"../../.acton/testing/expect\"\n");
     code.push_str("import \"../../.acton/types/message\"\n");
 
@@ -336,21 +337,9 @@ fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> 
 
     code.push('\n');
 
-    code.push_str("/// Configuration for sending messages to the contract\n");
-    // we need prefix this type name to prevent collisions when two wrapper imported in the same file
-    code.push_str(&format!(
-        "struct {}SendMessageConfig {{\n",
-        model.contract_name
-    ));
-    code.push_str("    /// The amount of TON to send with the message (default: 0.1 TON)\n");
-    code.push_str("    value: coins = ton(\"0.1\")\n");
-    code.push_str("    /// Whether to bounce the message if the contract does not exist or fails (default: false)\n");
-    code.push_str("    bounce: bool = false\n");
-    code.push_str("}\n\n");
-
     code.push_str(&format!("struct {} {{\n", model.contract_name));
     code.push_str("    address: address\n");
-    code.push_str("    init: ContractState\n");
+    code.push_str("    init: ContractState? = null\n");
     code.push_str("}\n\n");
 
     if model.abi.storage.is_some() {
@@ -373,6 +362,9 @@ fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> 
         ));
         code.push('\n');
     }
+
+    code.push_str(&generate_from_address(&model.contract_name));
+    code.push('\n');
 
     code.push_str(&generate_deploy(&model.contract_name));
     code.push('\n');
@@ -419,6 +411,21 @@ fn generate_from_storage(
     code
 }
 
+fn generate_from_address(contract_name: &str) -> String {
+    let mut code = String::new();
+
+    code.push_str("/// Creates a contract wrapper instance from the address\n");
+    code.push_str(&format!(
+        "fun {contract_name}.fromAddress(address: address) {{\n"
+    ));
+    code.push_str(&format!(
+        "    return {contract_name} {{ address }}\n",
+    ));
+    code.push_str("}\n");
+
+    code
+}
+
 fn generate_empty_from_storage(contract_name: &str, contract_build_name: &str) -> String {
     let mut code = String::new();
 
@@ -446,8 +453,11 @@ fn generate_deploy(contract_name: &str) -> String {
 
     code.push_str("/// Deploys the contract to the blockchain\n");
     code.push_str(&format!(
-        "fun {contract_name}.deploy(self, from: address, config: {contract_name}SendMessageConfig = {{}}): SendResultList {{\n",
+        "fun {contract_name}.deploy(self, from: address, config: SendParams = {{}}): SendResultList {{\n",
     ));
+    code.push_str("    if (self.init == null) {\n");
+    code.push_str("        Assert.fail(\"Cannot deploy a contract created with 'fromAddress' because it lacks state init for deployment\");\n");
+    code.push_str("    }\n");
     code.push_str("    val msg = createMessage({\n");
     code.push_str("        bounce: config.bounce,\n");
     code.push_str("        value: config.value,\n");
@@ -490,7 +500,7 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
     };
 
     code.push_str(&format!(
-        "fun {contract_name}.{method_name}(self, from: address, {params_str}config: {contract_name}SendMessageConfig = {{}}): SendResultList {{\n",
+        "fun {contract_name}.{method_name}(self, from: address, {params_str}config: SendParams = {{}}): SendResultList {{\n",
     ));
     code.push_str("    val msg = createMessage({\n");
     code.push_str("        bounce: config.bounce,\n");
@@ -529,7 +539,7 @@ fn generate_send_any_method(contract_name: &str) -> String {
 
     code.push_str("/// Send message to the contract with a custom body cell\n");
     code.push_str(&format!(
-        "fun {contract_name}.sendAny(self, from: address, body: cell, config: {contract_name}SendMessageConfig = {{}}): SendResultList {{\n",
+        "fun {contract_name}.sendAny(self, from: address, body: cell, config: SendParams = {{}}): SendResultList {{\n",
     ));
     code.push_str("    val msg = createMessage({\n");
     code.push_str("        bounce: config.bounce,\n");

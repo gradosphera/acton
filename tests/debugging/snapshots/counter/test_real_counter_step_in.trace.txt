@@ -343,14 +343,14 @@ Step 22 (step_over):
 Step 23 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:936
   Code:
-    228|     /// Destination address of the transaction.
-    229|     to: address? = null
-    230|     /// Source address of the transaction.
-    231|     from: address? = null
+    230|     /// Destination address of the transaction.
+    231|     to: address? = null
+    232|     /// Source address of the transaction.
+    233|     from: address? = null
                               ^^^^
-    232|     /// Exit code of the transaction.
-    233|     exit_code: int32? = null
-    234|     /// Whether the transaction is a deploy transaction.
+    234|     /// Exit code of the transaction.
+    235|     exit_code: int32? = null
+    236|     /// Whether the transaction is a deploy transaction.
   Variables:
     '272 = empty slice
     '270 = ([BOC_HEX], (), null, [BOC_HEX], (), 643, ())
@@ -360,14 +360,14 @@ Step 23 (step_over):
 Step 24 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:944
   Code:
-    228|     /// Destination address of the transaction.
-    229|     to: address? = null
-    230|     /// Source address of the transaction.
-    231|     from: address? = null
+    230|     /// Destination address of the transaction.
+    231|     to: address? = null
+    232|     /// Source address of the transaction.
+    233|     from: address? = null
                               ^^^^
-    232|     /// Exit code of the transaction.
-    233|     exit_code: int32? = null
-    234|     /// Whether the transaction is a deploy transaction.
+    234|     /// Exit code of the transaction.
+    235|     exit_code: int32? = null
+    236|     /// Whether the transaction is a deploy transaction.
   Variables:
     '277 = null
     '272 = empty slice
@@ -378,14 +378,14 @@ Step 24 (step_over):
 Step 25 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:944
   Code:
-    230|     /// Source address of the transaction.
-    231|     from: address? = null
-    232|     /// Exit code of the transaction.
-    233|     exit_code: int32? = null
+    232|     /// Source address of the transaction.
+    233|     from: address? = null
+    234|     /// Exit code of the transaction.
+    235|     exit_code: int32? = null
                                  ^^^^
-    234|     /// Whether the transaction is a deploy transaction.
-    235|     ///
-    236|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
+    236|     /// Whether the transaction is a deploy transaction.
+    237|     ///
+    238|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
   Variables:
     '277 = null
     '272 = empty slice
@@ -396,14 +396,14 @@ Step 25 (step_over):
 Step 26 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:944
   Code:
-    230|     /// Source address of the transaction.
-    231|     from: address? = null
-    232|     /// Exit code of the transaction.
-    233|     exit_code: int32? = null
+    232|     /// Source address of the transaction.
+    233|     from: address? = null
+    234|     /// Exit code of the transaction.
+    235|     exit_code: int32? = null
                                  ^^^^
-    234|     /// Whether the transaction is a deploy transaction.
-    235|     ///
-    236|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
+    236|     /// Whether the transaction is a deploy transaction.
+    237|     ///
+    238|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
   Variables:
     '277 = null
     '272 = empty slice
@@ -414,14 +414,14 @@ Step 26 (step_over):
 Step 27 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:944
   Code:
-    234|     /// Whether the transaction is a deploy transaction.
-    235|     ///
-    236|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
-    237|     deploy: bool? = null
+    236|     /// Whether the transaction is a deploy transaction.
+    237|     ///
+    238|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
+    239|     deploy: bool? = null
                              ^^^^
-    238|     /// Whether the transaction is a bounced transaction.
-    239|     bounced: bool? = null
-    240|     /// Opcode of the in message.
+    240|     /// Whether the transaction is a bounced transaction.
+    241|     bounced: bool? = null
+    242|     /// Opcode of the in message.
   Variables:
     '277 = null
     '272 = empty slice
@@ -432,14 +432,14 @@ Step 27 (step_over):
 Step 28 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:944
   Code:
-    234|     /// Whether the transaction is a deploy transaction.
-    235|     ///
-    236|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
-    237|     deploy: bool? = null
+    236|     /// Whether the transaction is a deploy transaction.
+    237|     ///
+    238|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
+    239|     deploy: bool? = null
                              ^^^^
-    238|     /// Whether the transaction is a bounced transaction.
-    239|     bounced: bool? = null
-    240|     /// Opcode of the in message.
+    240|     /// Whether the transaction is a bounced transaction.
+    241|     bounced: bool? = null
+    242|     /// Opcode of the in message.
   Variables:
     '277 = null
     '272 = empty slice
@@ -450,14 +450,14 @@ Step 28 (step_over):
 Step 29 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:944
   Code:
-    236|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
-    237|     deploy: bool? = null
-    238|     /// Whether the transaction is a bounced transaction.
-    239|     bounced: bool? = null
+    238|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
+    239|     deploy: bool? = null
+    240|     /// Whether the transaction is a bounced transaction.
+    241|     bounced: bool? = null
                               ^^^^
-    240|     /// Opcode of the in message.
-    241|     opcode: uint32? = null
-    242|     /// Action [EXIT_STATUS] of the transaction.
+    242|     /// Opcode of the in message.
+    243|     opcode: uint32? = null
+    244|     /// Action [EXIT_STATUS] of the transaction.
   Variables:
     '277 = null
     '272 = empty slice
@@ -468,14 +468,14 @@ Step 29 (step_over):
 Step 30 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:952
   Code:
-    236|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
-    237|     deploy: bool? = null
-    238|     /// Whether the transaction is a bounced transaction.
-    239|     bounced: bool? = null
+    238|     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
+    239|     deploy: bool? = null
+    240|     /// Whether the transaction is a bounced transaction.
+    241|     bounced: bool? = null
                               ^^^^
-    240|     /// Opcode of the in message.
-    241|     opcode: uint32? = null
-    242|     /// Action [EXIT_STATUS] of the transaction.
+    242|     /// Opcode of the in message.
+    243|     opcode: uint32? = null
+    244|     /// Action [EXIT_STATUS] of the transaction.
   Variables:
     '280 = null
     '277 = null
@@ -487,14 +487,14 @@ Step 30 (step_over):
 Step 31 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:952
   Code:
-    238|     /// Whether the transaction is a bounced transaction.
-    239|     bounced: bool? = null
-    240|     /// Opcode of the in message.
-    241|     opcode: uint32? = null
+    240|     /// Whether the transaction is a bounced transaction.
+    241|     bounced: bool? = null
+    242|     /// Opcode of the in message.
+    243|     opcode: uint32? = null
                                ^^^^
-    242|     /// Action [EXIT_STATUS] of the transaction.
-    243|     action_exit_code: int32? = null
-    244|     /// Whether the compute phase was skipped.
+    244|     /// Action [EXIT_STATUS] of the transaction.
+    245|     action_exit_code: int32? = null
+    246|     /// Whether the compute phase was skipped.
   Variables:
     '280 = null
     '277 = null
@@ -506,14 +506,14 @@ Step 31 (step_over):
 Step 32 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:952
   Code:
-    238|     /// Whether the transaction is a bounced transaction.
-    239|     bounced: bool? = null
-    240|     /// Opcode of the in message.
-    241|     opcode: uint32? = null
+    240|     /// Whether the transaction is a bounced transaction.
+    241|     bounced: bool? = null
+    242|     /// Opcode of the in message.
+    243|     opcode: uint32? = null
                                ^^^^
-    242|     /// Action [EXIT_STATUS] of the transaction.
-    243|     action_exit_code: int32? = null
-    244|     /// Whether the compute phase was skipped.
+    244|     /// Action [EXIT_STATUS] of the transaction.
+    245|     action_exit_code: int32? = null
+    246|     /// Whether the compute phase was skipped.
   Variables:
     '280 = null
     '277 = null
@@ -525,14 +525,14 @@ Step 32 (step_over):
 Step 33 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:952
   Code:
-    240|     /// Opcode of the in message.
-    241|     opcode: uint32? = null
-    242|     /// Action [EXIT_STATUS] of the transaction.
-    243|     action_exit_code: int32? = null
+    242|     /// Opcode of the in message.
+    243|     opcode: uint32? = null
+    244|     /// Action [EXIT_STATUS] of the transaction.
+    245|     action_exit_code: int32? = null
                                         ^^^^
-    244|     /// Whether the compute phase was skipped.
-    245|     compute_phase_skipped: bool? = null
-    246|     /// Body of the in message (compared by hash).
+    246|     /// Whether the compute phase was skipped.
+    247|     compute_phase_skipped: bool? = null
+    248|     /// Body of the in message (compared by hash).
   Variables:
     '280 = null
     '277 = null
@@ -544,14 +544,14 @@ Step 33 (step_over):
 Step 34 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:960
   Code:
-    240|     /// Opcode of the in message.
-    241|     opcode: uint32? = null
-    242|     /// Action [EXIT_STATUS] of the transaction.
-    243|     action_exit_code: int32? = null
+    242|     /// Opcode of the in message.
+    243|     opcode: uint32? = null
+    244|     /// Action [EXIT_STATUS] of the transaction.
+    245|     action_exit_code: int32? = null
                                         ^^^^
-    244|     /// Whether the compute phase was skipped.
-    245|     compute_phase_skipped: bool? = null
-    246|     /// Body of the in message (compared by hash).
+    246|     /// Whether the compute phase was skipped.
+    247|     compute_phase_skipped: bool? = null
+    248|     /// Body of the in message (compared by hash).
   Variables:
     '282 = null
     '280 = null
@@ -564,14 +564,14 @@ Step 34 (step_over):
 Step 35 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:960
   Code:
-    242|     /// Action [EXIT_STATUS] of the transaction.
-    243|     action_exit_code: int32? = null
-    244|     /// Whether the compute phase was skipped.
-    245|     compute_phase_skipped: bool? = null
+    244|     /// Action [EXIT_STATUS] of the transaction.
+    245|     action_exit_code: int32? = null
+    246|     /// Whether the compute phase was skipped.
+    247|     compute_phase_skipped: bool? = null
                                             ^^^^
-    246|     /// Body of the in message (compared by hash).
-    247|     body: cell? = null
-    248| }
+    248|     /// Body of the in message (compared by hash).
+    249|     body: cell? = null
+    250| }
   Variables:
     '282 = null
     '280 = null
@@ -584,14 +584,14 @@ Step 35 (step_over):
 Step 36 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:968
   Code:
-    242|     /// Action [EXIT_STATUS] of the transaction.
-    243|     action_exit_code: int32? = null
-    244|     /// Whether the compute phase was skipped.
-    245|     compute_phase_skipped: bool? = null
+    244|     /// Action [EXIT_STATUS] of the transaction.
+    245|     action_exit_code: int32? = null
+    246|     /// Whether the compute phase was skipped.
+    247|     compute_phase_skipped: bool? = null
                                             ^^^^
-    246|     /// Body of the in message (compared by hash).
-    247|     body: cell? = null
-    248| }
+    248|     /// Body of the in message (compared by hash).
+    249|     body: cell? = null
+    250| }
   Variables:
     '283 = null
     '282 = null
@@ -605,14 +605,14 @@ Step 36 (step_over):
 Step 37 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:968
   Code:
-    244|     /// Whether the compute phase was skipped.
-    245|     compute_phase_skipped: bool? = null
-    246|     /// Body of the in message (compared by hash).
-    247|     body: cell? = null
+    246|     /// Whether the compute phase was skipped.
+    247|     compute_phase_skipped: bool? = null
+    248|     /// Body of the in message (compared by hash).
+    249|     body: cell? = null
                            ^^^^
-    248| }
-    249| 
-    250| struct ExternalOutSearchParams {
+    250| }
+    251| 
+    252| struct ExternalOutSearchParams {
   Variables:
     '283 = null
     '282 = null
@@ -626,14 +626,14 @@ Step 37 (step_over):
 Step 38 (step_over):
   Bytecode position: AF07DE8F9940D09A9EC907B52617883CF92245DBD1DD7688E1EDF8F7364690AF:976
   Code:
-    244|     /// Whether the compute phase was skipped.
-    245|     compute_phase_skipped: bool? = null
-    246|     /// Body of the in message (compared by hash).
-    247|     body: cell? = null
+    246|     /// Whether the compute phase was skipped.
+    247|     compute_phase_skipped: bool? = null
+    248|     /// Body of the in message (compared by hash).
+    249|     body: cell? = null
                            ^^^^
-    248| }
-    249| 
-    250| struct ExternalOutSearchParams {
+    250| }
+    251| 
+    252| struct ExternalOutSearchParams {
   Variables:
     '284 = null
     '283 = null
@@ -730,14 +730,14 @@ Step 43 (step_over):
 Step 44 (step_over):
   Bytecode position: 745C4FC6D6E0396D88006D5B04E00736E4C41FEAEADEE844AF4A8CD9E3469ADD:976
   Code:
-    622| /// ```
-    623| ///
-    624| /// If you need to run a get method by its ID, use [net.runGetMethodById] instead.
-    625| fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? = null): Ret {
+    624| /// ```
+    625| ///
+    626| /// If you need to run a get method by its ID, use [net.runGetMethodById] instead.
+    627| fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? = null): Ret {
                                                                                            ^^^^
-    626|     val method_id = (crc16(name) & 0xffff) | 0x10000;
-    627|     return impl.runGetMethodById(addr, method_id, name, args)
-    628| }
+    628|     val method_id = (crc16(name) & 0xffff) | 0x10000;
+    629|     return impl.runGetMethodById(addr, method_id, name, args)
+    630| }
   Variables:
     '307 = "currentCounter"
     counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
@@ -746,14 +746,14 @@ Step 44 (step_over):
 Step 45 (step_over):
   Bytecode position: 745C4FC6D6E0396D88006D5B04E00736E4C41FEAEADEE844AF4A8CD9E3469ADD:984
   Code:
-    622| /// ```
-    623| ///
-    624| /// If you need to run a get method by its ID, use [net.runGetMethodById] instead.
-    625| fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? = null): Ret {
+    624| /// ```
+    625| ///
+    626| /// If you need to run a get method by its ID, use [net.runGetMethodById] instead.
+    627| fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: slice, args: Args? = null): Ret {
                                                                                            ^^^^
-    626|     val method_id = (crc16(name) & 0xffff) | 0x10000;
-    627|     return impl.runGetMethodById(addr, method_id, name, args)
-    628| }
+    628|     val method_id = (crc16(name) & 0xffff) | 0x10000;
+    629|     return impl.runGetMethodById(addr, method_id, name, args)
+    630| }
   Variables:
     '308 = null
     '307 = "currentCounter"
