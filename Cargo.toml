@@ -63,7 +63,7 @@ tempfile = "3.23.0" # testing
 dotenvy = "0.15.7"
 pathdiff = "0.2.3"
 strsim = "0.11.1"
-clap_complete = "4.5.61"
+clap_complete = { version = "4.5.61", features = ["unstable-dynamic"] }
 human-panic = "2.0.4" # better panic handling
 
 # acton up

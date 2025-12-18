@@ -18,6 +18,8 @@ use clap::builder::styling::Style;
 use clap::builder::{StyledStr, Styles};
 use clap::{ColorChoice, CommandFactory};
 use clap::{Parser, Subcommand, arg};
+use clap_complete::CompleteEnv;
+use clap_complete::engine::{ArgValueCompleter, CompletionCandidate};
 use commands::common::error_fmt;
 use dotenvy::dotenv;
 use human_panic::{Metadata, setup_panic};
@@ -28,7 +30,10 @@ use tasm::printer::FormatOptions;
 use tolkc::source_map::SourceMap;
 
 #[derive(Parser)]
-#[command(name = "acton", version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), ")"))]
+#[command(
+    name = "acton",
+    version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_HASH"), ")")
+)]
 #[command(about = "TON blockchain development tool")]
 #[command(color = ColorChoice::Auto)]
 struct Cli {
@@ -243,7 +248,7 @@ enum Commands {
     },
     #[command(about = "Generate wrapper and optionally stub test file for a contract")]
     Wrapper {
-        #[arg(help = "Contract ID from Acton.toml")]
+        #[arg(help = "Contract ID from Acton.toml", add = ArgValueCompleter::new(complete_contracts))]
         contract_id: String,
         #[arg(long, short, help = "Output path for wrapper file")]
         output: Option<String>,
@@ -338,7 +343,7 @@ enum Commands {
         after_help = example_build_usage()
     )]
     Build {
-        #[arg(help = "Contract name to build (builds all if not specified)")]
+        #[arg(help = "Contract name to build (builds all if not specified)", add = ArgValueCompleter::new(complete_contracts))]
         contract_id: Option<String>,
         #[arg(long, help = "Clear compilation cache before building")]
         clear_cache: bool,
@@ -420,8 +425,8 @@ enum Commands {
     },
     #[command(about = "Verify contract source code on verifier.ton.org")]
     Verify {
-        #[arg(help = "Contract ID from Acton.toml (optional, will prompt if not provided)")]
-        contract: Option<String>,
+        #[arg(help = "Contract ID from Acton.toml (optional, will prompt if not provided)", add = ArgValueCompleter::new(complete_contracts))]
+        contract_id: Option<String>,
         #[arg(
             long,
             help = "Deployed contract address (optional, will prompt if not provided)"
@@ -484,7 +489,7 @@ enum Commands {
 pub enum LibraryCommand {
     #[command(about = "Publish a library to the blockchain")]
     Publish {
-        #[arg(help = "Contract ID from Acton.toml to publish (see --code to pass arbitrary code)")]
+        #[arg(help = "Contract ID from Acton.toml to publish (see --code to pass arbitrary code)", add = ArgValueCompleter::new(complete_contracts))]
         contract_id: Option<String>,
         #[arg(long, help = "Code to use instead of compiling contract")]
         code: Option<String>,
@@ -591,6 +596,20 @@ fn example_test_usage() -> StyledStr {
     writer
 }
 
+fn complete_contracts(_current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
+    let Ok(config) = ActonConfig::load() else {
+        return vec![];
+    };
+
+    config
+        .contracts
+        .unwrap_or_default()
+        .contracts
+        .keys()
+        .map(CompletionCandidate::new)
+        .collect()
+}
+
 fn example_build_usage() -> StyledStr {
     use std::fmt::Write as _;
 
@@ -690,6 +709,8 @@ fn example_disasm_usage() -> StyledStr {
 }
 
 fn main() {
+    CompleteEnv::with_factory(Cli::command).complete();
+
     setup_panic!(
         Metadata::new("Acton", env!("CARGO_PKG_VERSION"))
             .authors("TON Core")
@@ -884,7 +905,7 @@ fn main() {
             Err(err) => Err(err),
         },
         Commands::Verify {
-            contract,
+            contract_id,
             address,
             net,
             wallet,
@@ -892,7 +913,7 @@ fn main() {
             dry_run,
             api_key,
         } => verify_cmd(
-            contract,
+            contract_id,
             address,
             net,
             wallet,

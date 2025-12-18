@@ -418,9 +418,7 @@ fn generate_from_address(contract_name: &str) -> String {
     code.push_str(&format!(
         "fun {contract_name}.fromAddress(address: address) {{\n"
     ));
-    code.push_str(&format!(
-        "    return {contract_name} {{ address }}\n",
-    ));
+    code.push_str(&format!("    return {contract_name} {{ address }}\n",));
     code.push_str("}\n");
 
     code

@@ -3,18 +3,43 @@ title: "Shell Completions"
 description: "Learn how to enable autocompletion for the acton CLI in your shell"
 ---
 
-The `completions` command generates shell completion scripts for the Acton CLI. This enables tab-completion of commands, options, and arguments in your terminal.
+The Acton CLI supports two types of shell completions: **Dynamic** (recommended) and **Static**.
 
-## Supported Shells
+## Dynamic Completions (Recommended)
 
-Acton supports autocompletion for the following shells:
-- Bash
-- Zsh
-- Fish
-- PowerShell
-- Elvish
+Dynamic completions are more powerful because they provide context-aware suggestions. For example, they can suggest contract names for `build`, `verify`, and other commands by analyzing your project structure.
 
-## Basic Usage
+To enable dynamic completions, add the following command to your shell configuration file.
+
+### Zsh
+
+Add this to your `~/.zshrc`:
+
+```bash
+source <(COMPLETE=zsh acton)
+```
+
+### Bash
+
+Add this to your `~/.bashrc`:
+
+```bash
+source <(COMPLETE=bash acton)
+```
+
+### Fish
+
+Add this to your `~/.config/fish/config.fish`:
+
+```fish
+COMPLETE=fish acton | source
+```
+
+## Static Completions
+
+Static completions are generated once and do not change until you regenerate them. They are faster but less powerful than dynamic completions, as they only support completion of fixed commands and flags.
+
+### Basic Usage
 
 ```bash
 acton completions <SHELL>
@@ -22,9 +47,18 @@ acton completions <SHELL>
 
 The command outputs the completion script to stdout. You need to save it to the appropriate location for your shell.
 
-## Installation Instructions
+### Supported Shells
 
-### Bash
+Acton supports static autocompletion for the following shells:
+- Bash
+- Zsh
+- Fish
+- PowerShell
+- Elvish
+
+### Installation Instructions
+
+#### Bash
 
 Add completions to your current session:
 
@@ -44,7 +78,7 @@ Or install to the system-wide completion directory:
 acton completions bash | sudo tee /usr/share/bash-completion/completions/acton
 ```
 
-### Zsh
+#### Zsh
 
 For Zsh, you need to add the completion script to a directory in your `$fpath`:
 
@@ -66,7 +100,7 @@ Then restart your shell or run:
 source ~/.zshrc
 ```
 
-### Fish
+#### Fish
 
 Fish shell stores completions in `~/.config/fish/completions/`:
 
@@ -76,7 +110,7 @@ acton completions fish > ~/.config/fish/completions/acton.fish
 
 The completions will be available immediately in new fish sessions.
 
-### PowerShell
+#### PowerShell
 
 Add to your PowerShell profile:
 
@@ -94,7 +128,7 @@ echo $PROFILE
 acton completions powershell >> $PROFILE
 ```
 
-### Elvish
+#### Elvish
 
 Add to your Elvish configuration (`~/.elvish/rc.elv`):
 
@@ -158,7 +192,7 @@ compinit
 
 ### Completions showing old commands
 
-Regenerate the completion script after updating Acton:
+Regenerate the completion script after updating Acton (for static completions):
 
 ```bash
 # For Zsh
