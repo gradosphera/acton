@@ -52,7 +52,7 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
     for entry in files {
         let path = entry.path();
         let path_string = path.to_string_lossy();
-        if path_string.contains("tests") || path_string.ends_with("_test.tolk") {
+        if path_string.contains("tests") || path_string.ends_with(".test.tolk") {
             continue;
         }
 

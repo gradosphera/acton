@@ -311,7 +311,7 @@ impl ProjectBuilder {
 
         for (name, code) in &self.tests {
             let adjusted_code = Self::adjust_imports(code);
-            let file_path = tests_dir.join(format!("{name}_test.tolk"));
+            let file_path = tests_dir.join(format!("{name}.test.tolk"));
             fs::write(file_path, adjusted_code).expect("Failed to write test file");
         }
 
@@ -852,7 +852,7 @@ impl ActonCommand {
     /// # Examples
     /// ```
     /// .test().path(".")                   // All tests (default)
-    /// .test().path("tests/my_test.tolk")  // Specific file
+    /// .test().path("tests/my.test.tolk")  // Specific file
     /// .test().path("tests/")              // Specific directory
     /// ```
     pub fn path(mut self, path: &str) -> Self {

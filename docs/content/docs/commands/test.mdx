@@ -3,7 +3,7 @@ title: "Running tests"
 description: "Learn how to run Tolk smart contract tests using the test command"
 ---
 
-The `test` command runs your Tolk smart contract tests. It discovers and executes test functions from files ending with `_test.tolk`, providing detailed output and various reporting options.
+The `test` command runs your Tolk smart contract tests. It discovers and executes test functions from files ending with `.test.tolk`, providing detailed output and various reporting options.
 
 ## Basic Usage
 
@@ -89,7 +89,7 @@ acton test
 acton test ./contracts
 
 # Run specific test file
-acton test my_contract_test.tolk
+acton test my_contract.test.tolk
 ```
 
 ### Filtering tests
@@ -138,7 +138,7 @@ acton test --backtrace full
 ## Test Discovery
 
 Acton automatically discovers test files by:
-- Finding files ending with `_test.tolk`
+- Finding files ending with `.test.tolk`
 - Searching in the specified directory and subdirectories
 
 ## Configuration

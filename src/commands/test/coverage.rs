@@ -126,7 +126,7 @@ fn build_executable_lines_per_file(
             || loc.loc.file.is_empty()
             || loc.loc.file.contains("/lib/")
             || loc.loc.file.contains("/.acton/")
-            || loc.loc.file.contains("_test.tolk")
+            || loc.loc.file.contains(".test.tolk")
         {
             continue;
         }

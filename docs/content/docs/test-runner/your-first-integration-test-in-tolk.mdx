@@ -86,7 +86,7 @@ struct (0x3a752f06) ResetCounter {}
 
 ## 2. Setting Up the Test File
 
-First, as in the case with unit tests, let's create a file **counter_test.tolk** and declare a new test there:
+First, as in the case with unit tests, let's create a file **counter.test.tolk** and declare a new test there:
 
 ```tolk
 get fun `test-should-deploy`() {
@@ -169,7 +169,7 @@ One of them, `toHaveSuccessfulDeploy`, checks that there is a successful contrac
 Now we have a full-fledged test that deploys our `Counter` contract! To run it and ensure the test passes, run the following command:
 
 ```bash
-acton test counter_test.tolk
+acton test counter.test.tolk
 ``` 
 
 The complete test code looks like this:
@@ -290,7 +290,7 @@ Perfect! Now we can use this method in our test to get the current counter value
 Let's run the test via:
 
 ```bash
-acton test counter_test.tolk --filter "test-should-increase-counter"
+acton test counter.test.tolk --filter "test-should-increase-counter"
 ```
 
 And we will see that our test failed:
@@ -298,14 +298,14 @@ And we will see that our test failed:
 ```tolk
  TEST  /Users/dev/counter
 
- > counter_test.tolk (1 tests)
+ > counter.test.tolk (1 tests)
   ✗ test-should-increase-counter 21ms
     └─ Error: expect(actual).toEqual(expected)
         (
             100,
             0
         )
-      └─ at counter_test.tolk:58:5
+      └─ at counter.test.tolk:58:5
 
  ✗ 1 failed in 1 file
 

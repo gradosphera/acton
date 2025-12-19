@@ -354,8 +354,8 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         }
     };
     let test_files = if metadata.is_file() {
-        if !path.ends_with("_test.tolk") {
-            anyhow::bail!("Test file must end with {}", "_test.tolk".yellow());
+        if !path.ends_with(".test.tolk") {
+            anyhow::bail!("Test file must end with {}", ".test.tolk".yellow());
         }
         vec![
             fs::canonicalize(&path)
@@ -536,11 +536,11 @@ pub fn find_test_files_recursively(
             let rel = path.strip_prefix(root).unwrap_or(path);
 
             if let Some(name) = rel.file_name().and_then(|s| s.to_str()) {
-                if name.ends_with("_test.tolk_test.tolk") {
+                if name.ends_with(".test.tolk.test.tolk") {
                     // skip temp test file
                     continue;
                 }
-                if !name.ends_with("_test.tolk") {
+                if !name.ends_with(".test.tolk") {
                     continue;
                 }
             } else {
@@ -625,7 +625,7 @@ fn run_tests_for_file(
     let abi = contract_abi(content.as_str(), file);
 
     let executable_code = inject_locations_into_expect_calls(&content, file);
-    let tmp_test_filename = file.to_owned() + "_test.tolk";
+    let tmp_test_filename = file.to_owned() + ".test.tolk";
 
     fs::write(&tmp_test_filename, executable_code)?;
 

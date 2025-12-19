@@ -83,7 +83,7 @@ impl SourceLocation {
     }
 
     pub fn normalize_path(file: &String) -> String {
-        let normalized = file.replace("_test.tolk_test.tolk", "_test.tolk");
+        let normalized = file.replace(".test.tolk.test.tolk", ".test.tolk");
 
         if let Ok(cwd) = std::env::current_dir() {
             let file_path = Path::new(&normalized);

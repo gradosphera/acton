@@ -107,7 +107,7 @@ fn build_model(
 
     let default_test = project_root
         .join("tests")
-        .join(format!("{}_test.tolk", contract_id));
+        .join(format!("{}.test.tolk", contract_id));
 
     let wrapper_path = wrapper_output.map(PathBuf::from).unwrap_or(default_wrapper);
     let test_path = test_output.map(PathBuf::from).unwrap_or(default_test);

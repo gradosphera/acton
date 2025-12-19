@@ -15,12 +15,12 @@ Let's write our first unit test in Tolk.
 
 ## 1. Tolk Test Structure
 
-All test files have the `_test.tolk` extension, for example, `wallet_test.tolk`, which allows you to quickly identify test files among others.
-To create a new test, write getter methods with names starting with `test_` or `test-`.
+All test files have the `.test.tolk` extension, for example, `wallet.test.tolk`, which allows you to quickly identify test files among others.
+To create a new test, write getter methods with names starting with `test `, `test_` or `test-`.
 
 The simplest unit test looks like this:
 
-```tolk title="unit_test.tolk"
+```tolk title="unit.test.tolk"
 import "lib/testing/expect"
 
 get fun `test-unit`() {
@@ -39,7 +39,7 @@ Unit tests use an API very similar to what is used in TypeScript. `expect()` cre
 Now that we've written our first unit test, let's run it with the command:
 
 ```bash
-acton test unit_test.tolk
+acton test unit.test.tolk
 ```
 
 The test should complete successfully.
@@ -95,7 +95,7 @@ As you can see, instead of a standalone function, we added a new method directly
 Congratulations! You've learned the fundamentals of unit testing in Tolk.
 
 **What we've covered:**
-1. Setting up unit test files with the `_test.tolk` extension
+1. Setting up unit test files with the `.test.tolk` extension
 2. Writing basic test functions using getter methods
 3. Using the `expect()` API with built-in matchers like `toEqual()`
 4. Running tests with the `acton test` command
@@ -105,7 +105,7 @@ Congratulations! You've learned the fundamentals of unit testing in Tolk.
 - Unit tests in Tolk use familiar JavaScript testing patterns
 - The `expect()` API supports chaining with various matchers
 - Custom matchers help keep complex validation logic reusable
-- Test files are easily identifiable with the `_test.tolk` suffix
+- Test files are easily identifiable with the `.test.tolk` suffix
 - Tests run with the simple `acton test` command
 
 **Next steps:**

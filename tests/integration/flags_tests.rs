@@ -36,7 +36,7 @@ fn test_run_specific_test_file() {
     project
         .acton()
         .test()
-        .path("tests/test1_test.tolk")
+        .path("tests/test1.test.tolk")
         .run()
         .success()
         .assert_passed(1)
@@ -146,7 +146,7 @@ fn test_combined_path_and_filter() {
     project
         .acton()
         .test()
-        .path("tests/unit_tests_test.tolk")
+        .path("tests/unit_tests.test.tolk")
         .filter(".*counter.*")
         .run()
         .success()

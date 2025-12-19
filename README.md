@@ -16,26 +16,26 @@ git clone https://github.com/i582/ton/tree/pmakhnev/acton
 Build and copy artifacts to `./objs`:
 
 ```
-sh assembly/native/build-macos-static.sh -a && ../acton/objs && cp ./artifacts/libemulator.a ./artifacts/libtolk.a ../acton/objs
+sh assembly/native/build-macos-static.sh -a && mkdir ../acton/objs && cp ./artifacts/libemulator.a ./artifacts/libtolk.a ../acton/objs
 ```
 
 Run Rust compilation:
 
 ```
-cargo build --bin acton
+cargo build
 ```
 
 In release mode:
 
 ```
-cargo build --bin acton --release
+cargo build --release
 ```
 
 ## Run
 
 ```
-target/debug/acton test foo_test.tolk
-# or target/release/acton test foo_test.tolk
+target/debug/acton test foo.test.tolk
+# or target/release/acton test foo.test.tolk
 ```
 
 ## Documentation

@@ -163,7 +163,7 @@ fn test_test_file_not_found() {
     project
         .acton()
         .test()
-        .path("nonexistent_test.tolk")
+        .path("nonexistent.test.tolk")
         .run()
         .failure()
         .assert_stderr_snapshot_matches(

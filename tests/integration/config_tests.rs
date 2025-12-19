@@ -303,7 +303,7 @@ fn test_config_with_specific_path() {
     project
         .acton()
         .test()
-        .path("tests/test1_test.tolk")
+        .path("tests/test1.test.tolk")
         .run()
         .success()
         .assert_passed(1)

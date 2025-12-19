@@ -33,7 +33,7 @@ fn test_wrapper_generation_defaults() {
         .assert_file_snapshot_matches(
             project
                 .path()
-                .join("tests/my_contract_test.tolk")
+                .join("tests/my_contract.test.tolk")
                 .to_str()
                 .expect(""),
             "integration/snapshots/wrapper/test_wrapper_generation_defaults/test.tolk.txt",
@@ -60,7 +60,7 @@ fn test_wrapper_generation_without_test_stub() {
         );
 
     assert!(
-        !project.path().join("tests/my_contract_test.tolk").exists(),
+        !project.path().join("tests/my_contract.test.tolk").exists(),
         "Test file should not exist"
     );
 }
@@ -260,7 +260,7 @@ fn test_wrapper_generation_with_typed_cell_field_in_storage() {
         ).assert_file_snapshot_matches(
             project
                 .path()
-                .join("tests/my_contract_test.tolk")
+                .join("tests/my_contract.test.tolk")
                 .to_str()
                 .expect(""),
             "integration/snapshots/wrapper/test_wrapper_generation_with_typed_cell_field_in_storage/test.tolk.txt",
@@ -556,7 +556,7 @@ fn test_with_several_files_contract() {
         .assert_file_snapshot_matches(
             project
                 .path()
-                .join("tests/my_contract_test.tolk")
+                .join("tests/my_contract.test.tolk")
                 .to_str()
                 .expect(""),
             "integration/snapshots/wrapper/test_with_several_files_contract/test.tolk.txt",
@@ -598,7 +598,7 @@ fn test_wrapper_with_storage_in_contract() {
         .assert_file_snapshot_matches(
             project
                 .path()
-                .join("tests/my_contract_test.tolk")
+                .join("tests/my_contract.test.tolk")
                 .to_str()
                 .expect(""),
             "integration/snapshots/wrapper/test_wrapper_with_storage_in_contract/test.tolk.txt",
@@ -640,7 +640,7 @@ fn test_wrapper_with_message_in_contract() {
         .assert_file_snapshot_matches(
             project
                 .path()
-                .join("tests/my_contract_test.tolk")
+                .join("tests/my_contract.test.tolk")
                 .to_str()
                 .expect(""),
             "integration/snapshots/wrapper/test_wrapper_with_message_in_contract/test.tolk.txt",

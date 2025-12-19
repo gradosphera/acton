@@ -20,7 +20,7 @@ Where `<CONTRACT_ID>` is the key defined in your `Acton.toml` (e.g., `[contract.
 | `<CONTRACT_ID>`              | The ID of the contract as defined in `Acton.toml`.                                                   |
 | `-o, --output <PATH>`        | Path where the wrapper file will be generated. Defaults to `tests/wrappers/<ContractName>.tolk`.     |
 | `--storage-struct <NAME>`    | Struct name to use for contract storage (if not named `Storage`).                                    |
-| `-t, --test`                 | If set, generates a test stub file at `tests/<contract_id>_test.tolk`.                               |
+| `-t, --test`                 | If set, generates a test stub file at `tests/<contract_id>.test.tolk`.                               |
 | `--test-output <PATH>`       | Path where the test stub file will be generated (requires `--test` flag).                            |
 
 ## Features
@@ -70,7 +70,7 @@ acton wrapper counter --test
 
 Generates:
 *   `tests/wrappers/Counter.tolk`
-*   `tests/counter_test.tolk` (ready to run with `acton test counter_test.tolk`)
+*   `tests/counter.test.tolk` (ready to run with `acton test counter.test.tolk`)
 
 ### Generate to custom locations
 

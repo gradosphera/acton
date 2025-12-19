@@ -67,11 +67,11 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
     </Step>
 
     <Step title="Test contract">
-        Acton includes a powerful test runner that allows you to write tests in **Tolk**. The template includes a test file `tests/counter_test.tolk` and generated wrappers in `tests/wrappers/`.
+        Acton includes a powerful test runner that allows you to write tests in **Tolk**. The template includes a test file `tests/counter.test.tolk` and generated wrappers in `tests/wrappers/`.
 
-        Let's look at the included test in `tests/counter_test.tolk`:
+        Let's look at the included test in `tests/counter.test.tolk`:
 
-        ```tolk title="tests/counter_test.tolk"
+        ```tolk title="tests/counter.test.tolk"
         get fun `test-increase-counter`() {
             val (contract, deployer, _) = setupTest();
 
@@ -101,7 +101,7 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
 
          TEST  <root>/first_counter
 
-         > ./tests/counter_test.tolk (3 tests)
+         > ./tests/counter.test.tolk (3 tests)
           ✓ increase-counter 4ms
           ✓ reset-counter 3ms
           ✓ unknown-message 2ms

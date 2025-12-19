@@ -25,7 +25,7 @@ Often when you start testing a contract, you need the same setup boilerplate: im
 acton wrapper counter --test
 ```
 
-This generates `tests/counter_test.tolk` with a `setupTest()` helper and an example test case:
+This generates `tests/counter.test.tolk` with a `setupTest()` helper and an example test case:
 
 ```tolk
 import "wrappers/Counter"
@@ -135,7 +135,7 @@ The generated wrapper provides a struct representing your contract and methods t
 
 The wrapper provides a static `fromStorage` method to create the initial state and a `deploy` method to put it on the chain.
 
-```tolk title="tests/counter_test.tolk"
+```tolk title="tests/counter.test.tolk"
 import "../wrappers/Counter"
 // Don't forget to import types for the storage struct!
 import "../contracts/types" 
@@ -194,7 +194,7 @@ You can customize the output paths:
 acton wrapper counter --output tests/my_wrapper.tolk
 
 # Generate a test file alongside the wrapper
-acton wrapper counter --test tests/my_test.tolk
+acton wrapper counter --test tests/my.test.tolk
 ```
 
 See the [wrapper command reference](/docs/commands/wrapper) for more details about CLI options.

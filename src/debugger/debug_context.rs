@@ -676,7 +676,7 @@ impl DebugContext {
 
     fn normalize_path(file: &String) -> String {
         file.to_string()
-            .replace("_test.tolk_test.tolk", "_test.tolk")
+            .replace(".test.tolk.test.tolk", ".test.tolk")
     }
 
     fn get_root_function_name(&self, thread_id: i64) -> String {
