@@ -54,6 +54,12 @@ pub fn normalize_output(stdout: &str, project_path: &Path) -> String {
         .insert("[WALLET_ADDRESS]", regex!("Wallet address is .*"))
         .unwrap();
     redactions
+        .insert("[GLOBAL_WALLET_ADDRESS]", regex!("global-wallet .*"))
+        .unwrap();
+    redactions
+        .insert("[LOCAL_WALLET_ADDRESS]", regex!("local-wallet .*"))
+        .unwrap();
+    redactions
         .insert("[WALLET_ADDRESS_TESTNET]", regex!("address-testnet = .*"))
         .unwrap();
     redactions

@@ -145,15 +145,11 @@ fn test_wallet_list() {
         .run()
         .success();
 
-    let output = project
+    project
         .acton()
         .env("HOME", home_path.to_str().unwrap())
         .wallet_list()
         .run()
-        .success();
-
-    output
-        .assert_contains("global-wallet (v5r1)")
-        .assert_contains("local-wallet (v4r2)")
+        .success()
         .assert_snapshot_matches("integration/snapshots/wallet/test_wallet_list.stdout.txt");
 }

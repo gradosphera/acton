@@ -4,6 +4,7 @@ use crate::wallets;
 use anyhow::{Context, anyhow};
 use clap::Subcommand;
 use inquire::{Select, Text};
+use log::error;
 use owo_colors::OwoColorize;
 use std::env;
 use std::fs::{self, OpenOptions};
@@ -75,21 +76,19 @@ fn list_wallets(balance: bool, api_key: Option<String>) -> anyhow::Result<()> {
 
     for (name, wallet_config) in wallets {
         let mut balance_info = String::new();
+        let Ok(address) = get_wallet_address(name, wallet_config) else {
+            error!("cannot get wallet address for {name}"); // very unlikely
+            continue;
+        };
 
         if balance {
-            balance_info = match get_wallet_address(name, wallet_config) {
-                Ok(address) => match client.get_address_balance(&address) {
-                    Ok(b) => {
-                        let balance_ton =
-                            b.to_string().parse::<f64>().unwrap_or(0.0) / 1_000_000_000.0;
-                        format!(" — {}", format!("{:.4} TON", balance_ton).green())
-                    }
-                    Err(e) => {
-                        format!(" — {}", format!("error: {}", e).red())
-                    }
-                },
+            balance_info = match client.get_address_balance(&address) {
+                Ok(b) => {
+                    let balance_ton = b.to_string().parse::<f64>().unwrap_or(0.0) / 1_000_000_000.0;
+                    format!(" — {}", format!("{:.4} TON", balance_ton).green())
+                }
                 Err(e) => {
-                    format!(" — {}", format!("could not determine address: {}", e).red())
+                    format!(" — {}", format!("error: {}", e).red())
                 }
             };
 
@@ -99,10 +98,10 @@ fn list_wallets(balance: bool, api_key: Option<String>) -> anyhow::Result<()> {
         }
 
         println!(
-            "  {} ({}){}",
+            "  {} {} {}{balance_info}",
             name.cyan().bold(),
-            wallet_config.kind,
-            balance_info
+            address,
+            format!("({})", wallet_config.kind).dimmed(),
         );
     }
 
