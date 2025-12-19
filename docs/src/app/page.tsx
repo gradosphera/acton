@@ -25,7 +25,7 @@ const gridBackgroundStyle = {
     radial-gradient(circle at 20% 25%, rgba(237, 231, 255, 0.6), transparent 32%),
     radial-gradient(circle at 80% 20%, rgba(224, 247, 255, 0.6), transparent 30%),
     radial-gradient(circle at 30% 80%, rgba(255, 241, 223, 0.7), transparent 34%),
-    url("data:image/svg+xml,%3Csvg width='288' height='288' viewBox='0 0 288 288' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M144 141v6M141 144h6' stroke='%23999999' stroke-width='1'/%3E%3C/svg%3E")
+    url("data:image/svg+xml,%3Csvg width='288' height='288' viewBox='0 0 288 288' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M144 141v6M141 144h6' stroke='%23000000' stroke-width='1'/%3E%3C/svg%3E")
   `,
   backgroundSize: '100% 100%, 100% 100%, 100% 100%, 288px 288px',
   backgroundPosition: 'center',
