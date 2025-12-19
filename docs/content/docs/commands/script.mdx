@@ -103,6 +103,7 @@ import "lib/emulation/network"
 import "lib/build/build"
 
 fun main() {
+    // 1. Load the configured wallet (searches wallets.toml and global wallets)
     val deployer = net.wallet("deployer");
     val counter = Counter.fromStorage(Storage {
         id: 8,

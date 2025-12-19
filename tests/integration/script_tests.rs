@@ -772,13 +772,16 @@ fn test_script_broadcast_with_nonexistent_wallet_with_wallets() {
 name = "script-broadcast-wallet-no-config"
 description = ""
 version = "0.1.0"
+"#;
+    fs::write(project.path().join("Acton.toml"), toml_content).unwrap();
 
+    let wallets_toml = r#"
 [wallets.deployer]
 kind = "v5r1"
 workchain = 0
 keys = { mnemonic-file = "mnemonic.txt" }
 "#;
-    fs::write(project.path().join("Acton.toml"), toml_content).unwrap();
+    fs::write(project.path().join("wallets.toml"), wallets_toml).unwrap();
 
     project
         .acton()

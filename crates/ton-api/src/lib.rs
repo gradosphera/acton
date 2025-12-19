@@ -383,6 +383,39 @@ impl TonApiClient {
         Ok(data.result)
     }
 
+    pub fn get_address_balance(&self, address: &str) -> anyhow::Result<BigInt> {
+        let url = format!(
+            "{}/api/v2/getAddressBalance?address={}",
+            self.network.toncenter_url(),
+            urlencoding::encode(address)
+        );
+
+        let response = self
+            .build_request(&url)
+            .send()
+            .context("Failed to send getAddressBalance request")?;
+
+        if !response.status().is_success() {
+            return Err(Self::handle_fail(response));
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterBalanceResponse {
+            ok: bool,
+            result: String,
+        }
+
+        let data: TonCenterBalanceResponse = response
+            .json()
+            .context("Failed to parse getAddressBalance response")?;
+
+        if !data.ok {
+            anyhow::bail!("TonCenter returned ok=false for getAddressBalance");
+        }
+
+        data.result.parse::<BigInt>().map_err(Into::into)
+    }
+
     fn handle_fail(response: Response) -> anyhow::Error {
         let status = response.status();
         let data = match response.json::<TonCenterErrorResponse>() {

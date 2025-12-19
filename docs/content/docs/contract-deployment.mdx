@@ -10,13 +10,13 @@ This approach provides maximum flexibility. Real-world contracts often require c
 
 ## Prerequisites
 
-Before deploying to the real network, you need to configure a wallet in your `Acton.toml`.
+Before deploying to the real network, you need to configure a wallet in your `wallets.toml` (or global configuration).
 
-```toml title="Acton.toml"
+```toml title="wallets.toml"
 [wallets.deployer]
 kind = "v5r1"
 workchain = 0
-keys = { mnemonic-env = "WALLET_MNEMONIC" }
+keys = { mnemonic = "word1 word2 word3 ... word24" }
 ```
 
 See the [Setting up wallets](/docs/scripting/setup-wallets/) guide for detailed instructions on configuring wallets safely.
@@ -39,7 +39,7 @@ import "../tests/wrappers/Counter" // Import your contract wrapper
 import "../contracts/types"        // Import types if needed
 
 fun main() {
-    // 1. Load the wallet configured in Acton.toml
+    // 1. Load the configured wallet (searches wallets.toml and global wallets)
     val deployer = net.wallet("deployer");
 
     // 2. Prepare the contract

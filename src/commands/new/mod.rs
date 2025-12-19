@@ -1,3 +1,4 @@
+use crate::commands::common::symlink_global_wallets;
 use crate::config::{ActonConfig, ContractConfig, ContractsConfig};
 use include_dir::{Dir, include_dir};
 use inquire::{Select, Text};
@@ -41,6 +42,8 @@ Session.vim
 
 .env
 *.mnemonic
+wallets.toml
+global.wallets.toml
 ";
 
 pub fn new_cmd(
@@ -193,6 +196,14 @@ pub fn new_cmd(
     }
 
     fs::write(".gitignore", BASE_GITIGNORE.trim_start())?;
+
+    if let Err(e) = symlink_global_wallets() {
+        println!(
+            "  {} Failed to symlink global wallets: {}",
+            "Warning:".yellow().bold(),
+            e
+        );
+    }
 
     if is_git_available() {
         initialize_git_repository()?;

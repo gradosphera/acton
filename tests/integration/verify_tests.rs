@@ -138,13 +138,15 @@ version = "0.1.0"
 [contracts.simple]
 name = "Simple"
 src = "contracts/simple.tolk"
+"#;
+    std::fs::write(project.path().join("Acton.toml"), toml_content).expect("Write Acton.toml");
 
-[wallets.deployer]
+    let wallets_toml = r#"[wallets.deployer]
 kind = "v5r1"
 workchain = 0
 keys = { mnemonic-file = "Acton.toml" }
 "#;
-    std::fs::write(project.path().join("Acton.toml"), toml_content).expect("Write Acton.toml");
+    std::fs::write(project.path().join("wallets.toml"), wallets_toml).expect("Write wallets.toml");
 
     project
         .acton()

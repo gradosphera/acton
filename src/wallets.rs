@@ -58,7 +58,7 @@ pub fn open_wallets(
                     .to_string(),
             )
         } else {
-            None
+            wallet.keys.mnemonic
         };
 
         let Some(mnemonic) = mnemonic else {

@@ -164,3 +164,43 @@ fn test_new_project_with_git_initialization() {
     let project_dir = project.path().join("test-git-project");
     assert!(project_dir.join(".git").exists());
 }
+
+#[test]
+fn test_new_project_symlinks_global_wallets() {
+    let project = ProjectBuilder::new("new-symlink")
+        .without_acton_toml()
+        .build();
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+
+    let global_wallets_dir = home_path.join(".acton").join("wallets");
+    fs::create_dir_all(&global_wallets_dir).unwrap();
+    let global_config = global_wallets_dir.join("global.wallets.toml");
+    fs::write(
+        &global_config,
+        "[wallets.global]\nkind=\"v5r1\"\nkeys={mnemonic=\"word1\"}",
+    )
+    .unwrap();
+
+    project
+        .acton()
+        .env("HOME", home_path.to_str().unwrap())
+        .arg("new")
+        .arg(&project.path().join("my-project").display().to_string())
+        .arg("--name")
+        .arg("symlink-project")
+        .arg("--description")
+        .arg("test")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .run()
+        .success();
+
+    let symlink = project
+        .path()
+        .join("my-project")
+        .join("global.wallets.toml");
+    assert!(symlink.exists());
+}

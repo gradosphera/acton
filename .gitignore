@@ -21,3 +21,5 @@ docs/out
 Thumbs.db
 
 *.mnemonic
+wallets.toml
+global.wallets.toml

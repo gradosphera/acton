@@ -126,13 +126,13 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
         To deploy to the blockchain, you need a wallet. Let's create a new one using the `wallet` command:
 
         ```bash
-        acton wallet new --name deployer
+        acton wallet new --name deployer --local
         ```
 
-        This will create a `deployer.mnemonic` file and update your `Acton.toml` configuration.
+        This will generate a new wallet and save it to `wallets.toml` in your project root. The mnemonic will be stored directly in this file.
 
         <Callout type="warn">
-            The mnemonic is stored in plain text. **Never commit it to git!**
+            `wallets.toml` contains your private mnemonic in plain text. **Never commit it to git!** Acton automatically adds it to `.gitignore`.
         </Callout>
 
         Since this is a testnet wallet, you'll need some testnet TONs. Get them from the **[Testnet Giver Bot](https://t.me/testgiver_ton_bot)** by sending your new wallet address.

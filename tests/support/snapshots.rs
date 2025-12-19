@@ -56,6 +56,24 @@ pub fn normalize_output(stdout: &str, project_path: &Path) -> String {
     redactions
         .insert("[WALLET_ADDRESS_TESTNET]", regex!("address-testnet = .*"))
         .unwrap();
+    redactions
+        .insert(
+            "[SECURITY_WARNING_MNEMONIC]",
+            regex!(r"  - The mnemonic is stored in plain text in .*"),
+        )
+        .unwrap();
+    redactions
+        .insert(
+            "[SYMLINK_CREATED]",
+            regex!(r"✓ Created symlink global.wallets.toml -> .*"),
+        )
+        .unwrap();
+    redactions
+        .insert(
+            "[WALLET_CREATED_ADDED]",
+            regex!(r"✓ Wallet successfully created and added to .*"),
+        )
+        .unwrap();
 
     redactions.redact(&content)
 }

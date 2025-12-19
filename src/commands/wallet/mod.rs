@@ -1,12 +1,15 @@
-use crate::config::ActonConfig;
+use crate::commands::common::create_symlink;
+use crate::config::{ActonConfig, WalletsFile, global_wallets_path};
 use crate::wallets;
 use anyhow::{Context, anyhow};
 use clap::Subcommand;
 use inquire::{Select, Text};
 use owo_colors::OwoColorize;
+use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use ton_api::{Network, TonApiClient};
 use tonlib_core::wallet::mnemonic::Mnemonic;
 use tonlib_core::wallet::ton_wallet::TonWallet;
 use tonlib_core::wallet::wallet_version::WalletVersion;
@@ -25,13 +28,117 @@ pub enum WalletCommand {
             help = "Version of the wallet (optional, will prompt if not provided)"
         )]
         version: Option<String>,
+        #[arg(long, help = "Save wallet to global config")]
+        global: bool,
+        #[arg(long, help = "Save wallet to local wallets.toml")]
+        local: bool,
+    },
+    #[command(about = "List available wallets")]
+    List {
+        #[arg(short, long, help = "Show wallet balance")]
+        balance: bool,
+        #[arg(long, help = "Toncenter API key")]
+        api_key: Option<String>,
     },
 }
 
 pub fn wallet_cmd(command: WalletCommand) -> anyhow::Result<()> {
     match command {
-        WalletCommand::New { name, version } => new_wallet(name, version),
+        WalletCommand::New {
+            name,
+            version,
+            global,
+            local,
+        } => new_wallet(name, version, global, local),
+        WalletCommand::List { balance, api_key } => list_wallets(balance, api_key),
     }
+}
+
+fn list_wallets(balance: bool, api_key: Option<String>) -> anyhow::Result<()> {
+    let config = ActonConfig::load()?;
+    let wallets = config
+        .wallets
+        .as_ref()
+        .map(|w| &w.wallets)
+        .ok_or_else(|| anyhow!("No wallets found"))?;
+
+    if wallets.is_empty() {
+        println!("No wallets found");
+        return Ok(());
+    }
+
+    let api_key = api_key.or_else(|| env::var("TONCENTER_API_KEY").ok());
+    let have_api_key = api_key.is_some();
+    let client = TonApiClient::new(Network::Testnet, api_key);
+
+    println!("Available wallets:");
+
+    for (name, wallet_config) in wallets {
+        let mut balance_info = String::new();
+
+        if balance {
+            balance_info = match get_wallet_address(name, wallet_config) {
+                Ok(address) => match client.get_address_balance(&address) {
+                    Ok(b) => {
+                        let balance_ton =
+                            b.to_string().parse::<f64>().unwrap_or(0.0) / 1_000_000_000.0;
+                        format!(" — {}", format!("{:.4} TON", balance_ton).green())
+                    }
+                    Err(e) => {
+                        format!(" — {}", format!("error: {}", e).red())
+                    }
+                },
+                Err(e) => {
+                    format!(" — {}", format!("could not determine address: {}", e).red())
+                }
+            };
+
+            if !have_api_key {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+
+        println!(
+            "  {} ({}){}",
+            name.cyan().bold(),
+            wallet_config.kind,
+            balance_info
+        );
+    }
+
+    Ok(())
+}
+
+fn get_wallet_address(name: &str, wallet: &crate::config::WalletConfig) -> anyhow::Result<String> {
+    if let Some(expected) = &wallet.expected
+        && let Some(addr) = &expected.address_testnet
+    {
+        return Ok(addr.clone());
+    }
+
+    let mnemonic_str = if let Some(env_var) = &wallet.keys.mnemonic_env {
+        env::var(env_var).context(format!("Env var {} not set", env_var))?
+    } else if let Some(file) = &wallet.keys.mnemonic_file {
+        fs::read_to_string(file)
+            .context(format!("Could not read mnemonic file {}", file))?
+            .trim()
+            .to_string()
+    } else if let Some(m) = &wallet.keys.mnemonic {
+        m.clone()
+    } else {
+        anyhow::bail!("No mnemonic or expected address for wallet {}", name);
+    };
+
+    let mnemonic = Mnemonic::from_str(&mnemonic_str, &None)?;
+    let version = parse_wallet_version(&wallet.kind)?;
+    let wallet_id = wallets::wallet_id(version, "testnet");
+    let ton_wallet = TonWallet::new_with_params(
+        version,
+        mnemonic.to_key_pair()?,
+        wallet.workchain.unwrap_or(0),
+        wallet_id,
+    )?;
+    Ok(ton_wallet.address.to_base64_std_flags(false, true))
 }
 
 fn wallet_version_to_string(v: &WalletVersion) -> String {
@@ -55,23 +162,69 @@ fn wallet_version_to_string(v: &WalletVersion) -> String {
     .to_string()
 }
 
-fn new_wallet(name: Option<String>, version: Option<String>) -> anyhow::Result<()> {
+fn new_wallet(
+    name: Option<String>,
+    version: Option<String>,
+    global_flag: bool,
+    local_flag: bool,
+) -> anyhow::Result<()> {
     let name = if let Some(n) = name {
         n
     } else {
         Text::new("Wallet name:").with_default("wallet").prompt()?
     };
 
-    let config = ActonConfig::load()?;
-    let wallets = config
-        .wallets
-        .as_ref()
-        .map(|w| w.wallets.clone())
-        .unwrap_or_default();
+    let _config = ActonConfig::load()?;
 
-    if wallets.contains_key(&name) {
-        anyhow::bail!("Wallet {} already exists", name.yellow());
-    }
+    let is_global = if global_flag {
+        true
+    } else if local_flag {
+        false
+    } else {
+        let options = vec![
+            "Local (wallets.toml)",
+            "Global (~/.acton/wallets/global.wallets.toml)",
+        ];
+        let selection = Select::new("Save wallet to:", options).prompt()?;
+        selection.starts_with("Global")
+    };
+
+    let config_path = if is_global {
+        let global_dir = global_wallets_path()
+            .ok_or_else(|| anyhow!("Could not determine global wallets path"))?
+            .parent()
+            .ok_or_else(|| anyhow!("Invalid global wallets path"))?
+            .to_path_buf();
+
+        fs::create_dir_all(&global_dir)?;
+
+        let config_path = global_dir.join("global.wallets.toml");
+
+        if config_path.exists() {
+            let content = fs::read_to_string(&config_path)?;
+            let wallets: WalletsFile = toml::from_str(&content)?;
+            if let Some(w) = wallets.wallets
+                && w.wallets.contains_key(&name)
+            {
+                anyhow::bail!("Wallet {} already exists in global config", name.yellow());
+            }
+        }
+
+        config_path
+    } else {
+        let config_path = PathBuf::from("wallets.toml");
+        if config_path.exists() {
+            let content = fs::read_to_string(&config_path)?;
+            let wallets: WalletsFile = toml::from_str(&content)?;
+            if let Some(w) = wallets.wallets
+                && w.wallets.contains_key(&name)
+            {
+                anyhow::bail!("Wallet {} already exists in local config", name.yellow());
+            }
+        }
+
+        config_path
+    };
 
     let version = if let Some(k) = version {
         parse_wallet_version(&k)?
@@ -109,44 +262,65 @@ fn new_wallet(name: Option<String>, version: Option<String>) -> anyhow::Result<(
     let wallet_id = wallets::wallet_id(version, "testnet");
     let wallet = TonWallet::new_with_params(version, key_pair, 0, wallet_id)?;
 
-    let mnemonic_file = format!("{}.mnemonic", name);
-    if Path::new(&mnemonic_file).exists() {
-        anyhow::bail!("File {} already exists", mnemonic_file);
-    }
-    fs::write(&mnemonic_file, &mnemonic_str).context("Failed to write mnemonic file")?;
-
     let wallet_address = wallet.address.to_base64_std_flags(false, true);
+
     let config_entry = format!(
-        "\n[wallets.{}]
+        "[wallets.{}]
 kind = \"{}\"
 workchain = 0
-keys = {{ mnemonic-file = \"{}\" }}
+keys = {{ mnemonic = \"{}\" }}
 
 [wallets.{}.expected]
 address-testnet = \"{}\"
-
 ",
         name,
         wallet_version_to_string(&version),
-        mnemonic_file,
+        mnemonic_str,
         name,
         wallet_address,
     );
 
+    let config_exists = config_path.exists();
     let mut file = OpenOptions::new()
         .append(true)
-        .open("Acton.toml")
-        .context("Failed to open Acton.toml")?;
+        .create(true)
+        .open(&config_path)
+        .context(format!("Failed to open {}", config_path.display()))?;
+
+    if config_exists {
+        // add separator between wallets if there are any
+        file.write_all(b"\n")
+            .context(format!("Failed to append to {}", config_path.display()))?;
+    }
 
     file.write_all(config_entry.as_bytes())
-        .context("Failed to append to Acton.toml")?;
+        .context(format!("Failed to append to {}", config_path.display()))?;
+
+    if is_global {
+        let symlink_path = Path::new("global.wallets.toml");
+        if !symlink_path.exists() {
+            if let Err(e) = create_symlink(&config_path, symlink_path) {
+                println!(
+                    "  {} Failed to create symlink: {}",
+                    "Warning:".yellow().bold(),
+                    e
+                );
+            } else {
+                println!(
+                    "{} Created symlink {} -> {}",
+                    "✓".green(),
+                    symlink_path.display(),
+                    config_path.display()
+                );
+            }
+        }
+    }
 
     println!(
         "{} Wallet successfully created and added to {}",
         "✓".green(),
-        "Acton.toml".cyan(),
+        config_path.display().cyan(),
     );
-    println!("{} Mnemonic saved to {}", "✓".green(), mnemonic_file.cyan());
     println!("{} Wallet address is {}", "✓".green(), wallet_address);
 
     println!(
@@ -161,7 +335,7 @@ address-testnet = \"{}\"
     println!("\n{}", "SECURITY WARNING:".red());
     println!(
         "  - The mnemonic is stored in plain text in {}",
-        mnemonic_file.cyan()
+        config_path.display().cyan()
     );
     println!("  - Do NOT commit this file to version control (already added to .gitignore)");
     println!("  - Keep your mnemonic safe and secret");

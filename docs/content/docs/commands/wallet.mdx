@@ -3,13 +3,18 @@ title: "Managing Wallets"
 description: "Learn how to create and manage testnet wallets for your Acton projects"
 ---
 
-The `wallet` command allows you to generate new wallets for testing purposes. It automatically creates a mnemonic file and updates your `Acton.toml` configuration.
+The `wallet` command allows you to generate new wallets for testing purposes and list existing ones. It automatically creates a wallet configuration and stores the mnemonic in configuration file.
 
 <Callout type="warn">
-  Wallets created by this command are configured for **testnet** by default. Coins in testnet have **NO VALUE**.
+    Wallets created by this command are configured for **testnet** by default.
+    Coins in testnet have **NO VALUE**.
 </Callout>
 
-## Basic Usage
+## Commands
+
+### `acton wallet new`
+
+Generates a new testnet wallet.
 
 ```bash
 acton wallet new
@@ -17,14 +22,14 @@ acton wallet new
 
 This command will start an interactive prompt to guide you through the wallet creation process.
 
-## Command Options
-
-### New Wallet Options
+#### Options
 
 | Option                | Type   | Description                                           |
 |-----------------------|--------|-------------------------------------------------------|
 | `--name <NAME>`       | String | Name of the wallet (default: prompts user)            |
 | `--version <VERSION>` | String | Version of the wallet (default: prompts user)         |
+| `--local`             | Flag   | Save wallet to local `wallets.toml`                   |
+| `--global`            | Flag   | Save wallet to global `global.wallets.toml`           |
 
 **Supported wallet versions:**
 - `v5r1` (Default)
@@ -33,9 +38,9 @@ This command will start an interactive prompt to guide you through the wallet cr
 - `highloadv2r2`
 - And other historical versions (`v1r1`-`v3r1`, `highloadv1r1`-`highloadv2r1`)
 
-## Examples
+#### Examples
 
-### Interactive Creation
+**Interactive Creation:**
 
 Simply run the command without arguments to use the interactive mode:
 
@@ -45,32 +50,54 @@ acton wallet new
 
 You will be prompted to:
 1. Enter a name for your wallet
-2. Select the wallet version from a list
+2. Choose where to save it (local or global)
+3. Select the wallet version from a list
 
-### Non-interactive Creation
-
-You can provide all necessary information via command-line flags to skip the interactive prompts:
+**Non-interactive Creation:**
 
 ```bash
-# Create a v5r1 wallet named "deployer"
-acton wallet new --name deployer --version v5r1
+# Create a v5r1 wallet named "deployer" locally
+acton wallet new --name deployer --version v5r1 --local
 
-# Create a highload wallet
-acton wallet new --name batch-sender --version highloadv2r2
+# Create a global highload wallet
+acton wallet new --name shared-sender --version highloadv2r2 --global
 ```
 
-## Output
+#### Output
 
-When you create a new wallet, two things happen:
-
-1.  **Mnemonic File**: A `{name}.mnemonic` file is created containing the 24-word secret phrase.
-2.  **Configuration**: The wallet is added to your `Acton.toml` file.
+When you create a new wallet, the configuration is added to either `wallets.toml` (local) or `~/.acton/wallets/global.wallets.toml` (global).
 
 ```toml
 [wallets.deployer]
 kind = "v5r1"
 workchain = 0
-keys = { mnemonic-file = "deployer.mnemonic" }
+keys = { mnemonic = "word1 word2 ... word24" }
+```
+
+---
+
+### `acton wallet list`
+
+Lists all available wallets (both local and global) and their versions.
+
+```bash
+acton wallet list
+```
+
+#### Options
+
+| Option         | Type   | Description                               |
+|----------------|--------|-------------------------------------------|
+| `-b/--balance` | Flag   | Fetch and show wallet balances on testnet |
+| `--api-key`    | String | Toncenter API key (optional)              |
+
+#### Example
+
+```
+$ acton wallet list --balance
+Available wallets:
+  deployer (v5r1) — 2.4457 TON
+  shared (v4r2) — 0.5000 TON
 ```
 
 ## Getting Testnet Coins
@@ -88,12 +115,15 @@ For more methods (like web-based faucets), check the [official documentation](ht
 ## Security
 
 <Callout type="error">
-  **SECURITY WARNING**
+    **SECURITY WARNING**
 
-  The generated mnemonic is stored in **plain text** in the `.mnemonic` file.
+    The generated mnemonic is stored in **plain text** directly in the
+    configuration file (`wallets.toml` or global config).
 
-  - **NEVER** commit mnemonic files to version control (git).
-  - Acton automatically adds `*.mnemonic` to your `.gitignore` when initializing a project, but you should verify this.
-  - These wallets are intended for **development and testing only**.
-  - Do not use these wallets for mainnet funds or valuable assets.
+    - **NEVER** commit `wallets.toml` or `global.wallets.toml` to version
+    control (git).
+    - Acton automatically adds these files to your `.gitignore` when
+    initializing a project, but you should verify this.
+    - These wallets are intended for **development and testing only**.
+    - Do NOT use these wallets for mainnet funds or valuable assets.
 </Callout>

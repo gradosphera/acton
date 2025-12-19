@@ -1,6 +1,7 @@
-use crate::config::ActonConfig;
+use crate::config::{ActonConfig, global_wallets_path};
 use anyhow::{Context, anyhow};
 use inquire::Select;
+use std::path::Path;
 
 pub mod error_fmt {
     use crate::config::ActonConfig;
@@ -175,4 +176,24 @@ pub fn select_wallet(wallet_name: Option<String>, config: &ActonConfig) -> anyho
         }
     };
     Ok(wallet_name)
+}
+
+pub fn create_symlink(original: &Path, link: &Path) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(original, link).context("Failed to create symlink")?;
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_file(original, link).context("Failed to create symlink")?;
+    Ok(())
+}
+
+pub fn symlink_global_wallets() -> anyhow::Result<()> {
+    if let Some(global_path) = global_wallets_path()
+        && global_path.exists()
+    {
+        let symlink_path = Path::new("global.wallets.toml");
+        if !symlink_path.exists() {
+            create_symlink(&global_path, symlink_path)?;
+        }
+    }
+    Ok(())
 }
