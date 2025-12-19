@@ -92,8 +92,12 @@ fn test_verify_base64_address() {
         .contract("simple", SIMPLE_CONTRACT)
         .build();
 
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+
     project
         .acton()
+        .env("HOME", home_path.to_str().unwrap())
         .verify()
         .verify_contract("simple")
         .verify_address("kQCPzICFdKkkWB7Bs4MSVzf8cHU52+MOyScFB2ARtaF37Vl5")
@@ -111,8 +115,12 @@ fn test_verify_wallet_not_found_without_wallets() {
         .contract("simple", SIMPLE_CONTRACT)
         .build();
 
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+
     project
         .acton()
+        .env("HOME", home_path.to_str().unwrap())
         .verify()
         .verify_contract("simple")
         .verify_address("EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot")

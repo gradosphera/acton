@@ -319,8 +319,12 @@ src = "contracts/simple.tolk"
 "#;
     fs::write(project.path().join("Acton.toml"), toml_content).expect("Write Acton.toml");
 
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+
     project
         .acton()
+        .env("HOME", home_path.to_str().unwrap())
         .library()
         .publish()
         .contract("simple")

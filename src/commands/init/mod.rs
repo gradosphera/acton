@@ -51,7 +51,8 @@ pub fn init_cmd() -> anyhow::Result<()> {
         let content = fs::read_to_string(".gitignore")?;
         fs::write(
             ".gitignore",
-            content + "\n# Acton main directory\n.acton/\n\n# Mnemonic and wallet files\n*.mnemonic\nwallets.toml\nglobal.wallets.toml\n",
+            content
+                + "\n# Acton main directory\n.acton/\n\n# Mnemonic and wallet files\n*.mnemonic\nwallets.toml\nglobal.wallets.toml\n",
         )?;
         println!("Patched {} with .acton/ directory", ".gitignore".cyan());
     }

@@ -823,8 +823,12 @@ version = "0.1.0"
 "#;
     fs::write(project.path().join("Acton.toml"), toml_content).unwrap();
 
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+
     project
         .acton()
+        .env("HOME", home_path.to_str().unwrap())
         .script("scripts/deploy.tolk")
         .broadcast()
         .verify_network("testnet")
@@ -864,8 +868,12 @@ version = "0.1.0"
 "#;
     fs::write(project.path().join("Acton.toml"), toml_content).unwrap();
 
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+
     project
         .acton()
+        .env("HOME", home_path.to_str().unwrap())
         .script("scripts/deploy.tolk")
         .broadcast()
         .verify_network("testnet")
