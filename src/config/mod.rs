@@ -1,5 +1,5 @@
 use crate::commands::test::{ReportFormat, TestConfig};
-use anyhow::{Result, anyhow};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -37,6 +37,8 @@ pub enum ContractDependency {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActonConfig {
+    #[serde(skip)] // set manually
+    pub path: PathBuf,
     pub package: PackageConfig,
     pub test: Option<TestSettings>,
     pub contracts: Option<ContractsConfig>,
@@ -135,6 +137,7 @@ pub struct ContractConfig {
 impl Default for ActonConfig {
     fn default() -> Self {
         Self {
+            path: PathBuf::from("Acton.toml"),
             package: PackageConfig {
                 name: "my-acton-project".to_string(),
                 description: "A TON blockchain project".to_string(),
@@ -202,16 +205,36 @@ impl ContractConfig {
 }
 
 impl ActonConfig {
-    pub fn load() -> Result<Self> {
-        let config_path = Path::new("Acton.toml");
-        if !config_path.exists() {
-            return Err(anyhow!(
-                "Acton.toml not found. Run 'acton init' to initialize Acton in the project."
-            ));
+    pub fn load() -> anyhow::Result<Self> {
+        let _cwd = std::env::current_dir()?;
+        let mut cwd_opt = Some(_cwd.as_path());
+
+        while let Some(cwd) = cwd_opt {
+            let file = cwd.join("Acton.toml");
+            if file.exists() {
+                return Self::load_file(cwd);
+            }
+
+            let file = cwd.join(".git");
+            if file.exists() {
+                // found .git/ directory, don't search further
+                anyhow::bail!("Acton.toml not found. Run 'acton init' to initialize Acton in the project.")
+            }
+
+            cwd_opt = cwd.parent();
         }
 
-        let content = fs::read_to_string(config_path)?;
+        anyhow::bail!("Acton.toml not found. Run 'acton init' to initialize Acton in the project.")
+    }
+
+    pub fn load_file(config_dir: &Path) -> anyhow::Result<Self> {
+        let config_path = config_dir.join("Acton.toml");
+        // existence checked in load()
+
+        debug!("Loading ActonConfig from {}", config_path.display());
+        let content = fs::read_to_string(&config_path)?;
         let mut config: ActonConfig = toml::from_str(&content)?;
+        config.path = config_path;
 
         // Merge wallets from different sources
         // Order of importance (later overrides earlier):
@@ -252,9 +275,9 @@ impl ActonConfig {
         Ok(config)
     }
 
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self) -> anyhow::Result<()> {
         let content = toml::to_string_pretty(self)?;
-        fs::write("Acton.toml", content)?;
+        fs::write(&self.path, content)?;
         Ok(())
     }
 

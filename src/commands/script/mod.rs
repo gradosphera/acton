@@ -269,6 +269,8 @@ fn print_script_result(ctx: &mut Context, result: ScriptResult) {
         GetMethodResult::Success(success_result) => {
             let exit_code = success_result.vm_exit_code;
 
+            println!("{}", success_result.vm_log);
+
             if exit_code != 0
                 && let Some(assert_failure) = ctx.asserts.assert_failure
             {

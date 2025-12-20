@@ -75,6 +75,12 @@ tar = "0.4.44"
 # acton wallet
 hmac = "0.12.1"
 pbkdf2 = "0.12.2"
+ton_lc = "0.1.0"
+ton_liteapi = "0.2.0"
+tokio = "1.48.0"
+adnl = "2.0.0"
+futures = "0.3"
+tl-proto = "0.4.12"
 
 [dev-dependencies]
 snapbox = { version = "0.6.23", features = ["regex", "cmd", "dir"] }

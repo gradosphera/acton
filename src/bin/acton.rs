@@ -708,7 +708,191 @@ fn example_disasm_usage() -> StyledStr {
     writer
 }
 
+use std::net::Ipv4Addr;
+use std::time::Instant;
+use tl_proto;
+use tl_proto::{TlRead, TlWrite};
+use tokio;
+use ton_liteapi::tl::common::{AccountId, Int256};
+use tycho_types::boc::Boc;
+use tycho_types::models::{Account, AccountState, OptionalAccount, ShardAccount, Transaction};
+
+/// Простейшая синхронная функция для подключения к LiteServer по ADNL
+/// и получения информации о мастерчейне.
+fn simple_adnl_masterchain_info() -> anyhow::Result<()> {
+    use adnl::AdnlPeer;
+    use futures::{SinkExt, StreamExt};
+    use ton_liteapi::tl::adnl::Message;
+    use ton_liteapi::tl::request::{LiteQuery, Request, WrappedRequest};
+    use ton_liteapi::tl::response::Response;
+
+    let ip_i32: i32 = 1844203589; // как в конфиге (signed 32-bit)
+    let ip_u32: u32 = ip_i32 as u32; // сохраняем те же 32 бита
+    let ip = Ipv4Addr::from(ip_u32); // интерпретация как IPv4 (a.b.c.d)
+    let port = 49913;
+    let server_pubkey_b64 = "AxFZRHVD1qIO9Fyva52P4vC3tRvk8ac1KKOG0c6IVio=";
+
+    use base64::prelude::*;
+    let server_public = BASE64_STANDARD.decode(server_pubkey_b64)?;
+
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+
+    rt.block_on(async {
+        let now = Instant::now();
+        println!("Connecting to {}:{} via ADNL...", ip, port);
+        let mut peer = AdnlPeer::connect(server_public, (ip, port))
+            .await
+            .map_err(|e| anyhow::anyhow!("ADNL connection error: {:?}", e))?;
+
+        println!("Connected in {:?}", now.elapsed());
+        let now = Instant::now();
+
+        #[derive(TlRead, TlWrite, Debug, Clone, PartialEq)]
+        #[tl(
+            boxed,
+            id = "liteServer.query",
+            scheme_inline = r##"liteServer.query data:bytes = Object;"##
+        )]
+        pub struct MyLiteQuery {
+            pub data: Vec<u8>,
+        }
+
+        #[derive(tl_proto::TlWrite)]
+        #[tl(boxed, id = 0xb48bf97a)] // adnl.message.query
+        struct MyAdnlQuery {
+            query_id: Int256,
+            query: Vec<u8>,
+        }
+
+        let mut data: Vec<u8> = vec![];
+        data.append(&mut vec![0x2e, 0xe6, 0xb5, 0x89]);
+
+        let lite_query_data = tl_proto::serialize(&MyLiteQuery { data });
+
+        let adnl_query = MyAdnlQuery {
+            query_id: Int256::random(),
+            query: lite_query_data,
+        };
+
+        let data = tl_proto::serialize(&adnl_query);
+        println!("Prepare data in {:?}", now.elapsed());
+
+        {
+            let now = Instant::now();
+            peer.send(data.into())
+                .await
+                .map_err(|e| anyhow::anyhow!("Send error: {:?}", e))?;
+
+            let resp_bytes = peer
+                .next()
+                .await
+                .ok_or_else(|| anyhow::anyhow!("No response from server"))?
+                .map_err(|e| anyhow::anyhow!("ADNL receive error: {:?}", e))?;
+
+            let resp_message: Message = tl_proto::deserialize(&resp_bytes)
+                .map_err(|e| anyhow::anyhow!("TL deserialization error: {:?}", e))?;
+            println!("Get response in {:?}", now.elapsed());
+
+            if let Message::Answer { answer, .. } = resp_message {
+                if let Response::MasterchainInfo(info) = answer {
+                    println!("Success! Masterchain seqno: {}", info.last.seqno);
+                    println!("Full info: {:?}", info);
+                } else {
+                    anyhow::bail!("Unexpected response type: {:?}", answer);
+                }
+            } else {
+                anyhow::bail!("Unexpected ADNL message: {:?}", resp_message);
+            }
+        }
+
+        Ok(())
+    })
+}
+
+// #[tokio::main]
 fn main() {
+    // Вызов нашей новой синхронной функции для теста
+    // if let Err(e) = simple_adnl_masterchain_info() {
+    //     eprintln!("Error: {}", e);
+    // }
+    //
+    // use ton_liteapi::client::LiteClient;
+    //
+    // let ip_i32: i32 = 1844203589; // как в конфиге (signed 32-bit)
+    // let ip_u32: u32 = ip_i32 as u32; // сохраняем те же 32 бита
+    // let addr = Ipv4Addr::from(ip_u32); // интерпретация как IPv4 (a.b.c.d)
+    // println!("{addr}"); // 51.195.189.59
+    //
+    // let server_public = base64::decode("AxFZRHVD1qIO9Fyva52P4vC3tRvk8ac1KKOG0c6IVio=").unwrap();
+    // let server_address = (addr, 49913);
+    // let mut liteclient = LiteClient::connect(server_address, server_public)
+    //     .await
+    //     .unwrap();
+    // let result = liteclient.get_time().await.unwrap();
+    // println!("{:?}", result);
+    //
+    // let info = liteclient.get_masterchain_info().await.unwrap();
+    // println!("{:?}", info);
+    //
+    //
+    // let account_id = AccountId {
+    //     id: Int256::from_hex(
+    //         "f7e97472d4849f481f339a5490281b1ae5b99e8b1016c03eaf51484e5d7babf1",
+    //     ).unwrap(),
+    //     workchain: 0,
+    // };
+    //
+    // let info = liteclient.get_account_state(info.last, account_id.clone()).await.unwrap();
+    // // println!("{:?}", info);
+    //
+    //
+    // let state_cell = Boc::decode(info.state).unwrap();
+    // let mut state_slice = state_cell.as_slice().unwrap();
+    // let state = ShardAccount::load_from(&mut state_slice).unwrap();
+    // println!("{:?}", state);
+    // println!("{}", state.account.display_root());
+    // let root_slice = state.account.as_ref().as_slice();
+    // let root_ref = root_slice.unwrap().load_reference().unwrap();
+    // println!("{}", root_ref.display_root());
+    // println!("{:?}", root_ref.parse::<OptionalAccount>().unwrap());
+    //
+    // // println!("{:x}", state_slice.load_u32().unwrap());
+    //
+    // let hash = state.last_trans_hash.to_string();
+    // let res = liteclient
+    //     .get_transactions(
+    //         // info.last,
+    //         1,
+    //         account_id,
+    //         // state.last_trans_lt,
+    //         // Int256::from_hex(&hash).unwrap(),
+    //         42618252000001,
+    //         Int256::from_hex("1ed6922dde2b71709a620a6de33cb3cce79decec9416e9d1d6980c500a17614e").unwrap()
+    //     )
+    //     .await
+    //     .unwrap();
+    //
+    // let cell = Boc::decode(res.transactions).unwrap();
+    //
+    // println!("{:?}", cell);
+    //
+    // use tycho_types::cell::Load;
+    //
+    // let mut slice = cell.parse().unwrap();
+    // let tx = Transaction::load_from(&mut slice);
+    // println!("{:?}", tx);
+
+    // let result = liteclient.get_time().await.unwrap();
+    // println!("{:?}", result);
+    // let result = liteclient.get_time().await.unwrap();
+    // println!("{:?}", result);
+
+    // if true {
+    //     return;
+    // }
+
     CompleteEnv::with_factory(Cli::command).complete();
 
     setup_panic!(

@@ -30,6 +30,11 @@ pub fn serialize_tuple_item(builder: &mut CellBuilder, src: &TupleItem) -> anyho
                 builder.store_int(64, value)?;
                 return Ok(());
             }
+            if value == &BigInt::from(18446744073709551615u64) {
+                builder.store_u16(15, 0x0100)?;
+                builder.store_int(257, &BigInt::from(-1))?;
+                return Ok(());
+            }
             // Use int257 for larger values
             builder.store_u16(15, 0x0100)?;
             builder.store_int(257, &value.clone().into())?;
@@ -263,6 +268,11 @@ mod tests {
         roundtrip_test(TupleItem::Int(BigInt::from(42u64)));
         // roundtrip_test(TupleItem::Int(BigInt::from(i64::MIN)));
         // roundtrip_test(TupleItem::Int(BigInt::from(i64::MAX)));
+    }
+
+    #[test]
+    fn test_minus_one_int_roundtrip() {
+        roundtrip_test(TupleItem::Int(BigInt::from(-1)));
     }
 
     #[test]
