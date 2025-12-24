@@ -1083,7 +1083,7 @@ impl FormatterContext {
                 {
                     return if value == &BigInt::from(0) {
                         "false".to_owned()
-                    } else if value == &BigInt::from(18446744073709551615u64) {
+                    } else if value == &BigInt::from(-1) {
                         "true".to_owned()
                     } else {
                         format!("{value}")
@@ -1108,9 +1108,6 @@ impl FormatterContext {
                 self.format_slice(cell)
             }
             TupleItem::Int(value) => {
-                if *value == BigInt::from(18446744073709551615u64) {
-                    return "-1".to_owned();
-                }
                 format!("{value}")
             }
             TupleItem::Null => "null".to_owned(),

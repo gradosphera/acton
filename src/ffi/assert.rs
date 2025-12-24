@@ -227,21 +227,21 @@ pub fn process_txs_and_search_params(
         if let TupleItem::Null = raw_bounced {
             params.bounced = None
         } else if let TupleItem::Int(num) = raw_bounced {
-            params.bounced = Some(num == BigInt::from(18446744073709551615u64))
+            params.bounced = Some(num == BigInt::from(-1))
         }
     }
     if let Some(raw_bounce) = raw_bounce {
         if let TupleItem::Null = raw_bounce {
             params.bounce = None
         } else if let TupleItem::Int(num) = raw_bounce {
-            params.bounce = Some(num == BigInt::from(18446744073709551615u64))
+            params.bounce = Some(num == BigInt::from(-1))
         }
     }
     if let Some(raw_deploy) = raw_deploy {
         if let TupleItem::Null = raw_deploy {
             params.deploy = None
         } else if let TupleItem::Int(num) = raw_deploy {
-            params.deploy = Some(num == BigInt::from(18446744073709551615u64))
+            params.deploy = Some(num == BigInt::from(-1))
         }
     }
     if let Some(raw_exit_code) = raw_exit_code {
@@ -300,7 +300,7 @@ pub fn process_txs_and_search_params(
         if let TupleItem::Null = raw_compute_phase_skipped {
             params.compute_phase_skipped = None
         } else if let TupleItem::Int(num) = raw_compute_phase_skipped {
-            params.compute_phase_skipped = Some(num == BigInt::from(18446744073709551615u64))
+            params.compute_phase_skipped = Some(num == BigInt::from(-1))
         }
     }
     if let Some(raw_body) = raw_body {
