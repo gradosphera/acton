@@ -39,7 +39,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::{fs, process};
 use tolkc::source_map::SourceMap;
 use tonlib_core::TonAddress;
@@ -195,6 +195,10 @@ impl<'a> TestRunner<'a> {
         source_map: &SourceMap,
     ) -> anyhow::Result<TestResult> {
         let verbosity = self.minimal_log_verbosity();
+
+        let now = std::time::SystemTime::now();
+        let duration_since_epoch = now.duration_since(UNIX_EPOCH).expect("Time went backwards");
+
         let params = GetMethodParams {
             code: code_cell
                 .to_boc_b64(false)
@@ -204,7 +208,7 @@ impl<'a> TestRunner<'a> {
             verbosity,
             libs: Default::default(),
             address: dest_address.to_string(),
-            unixtime: 0,
+            unixtime: duration_since_epoch.as_secs().try_into()?,
             balance: "10".to_owned(),
             rand_seed: "0000000000000000000000000000000000000000000000000000000000000000"
                 .to_owned(),
