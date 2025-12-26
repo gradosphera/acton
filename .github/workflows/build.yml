@@ -19,7 +19,7 @@ permissions:
 jobs:
   build-macos:
     runs-on: macos-latest
-    if: true
+    if: false
 
     outputs:
       arch: ${{ steps.detect-arch.outputs.arch }}
@@ -148,7 +148,7 @@ jobs:
 
   build-macos-intel:
     runs-on: macos-15-intel
-    if: true
+    if: false
 
     outputs:
       arch: ${{ steps.detect-arch.outputs.arch }}
