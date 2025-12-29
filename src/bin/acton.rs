@@ -6,6 +6,7 @@ use acton::commands::docgen::docgen_cmd;
 use acton::commands::init::init_cmd;
 use acton::commands::library::{fetch_cmd, publish_cmd};
 use acton::commands::new::new_cmd;
+use acton::commands::retrace::retrace_cmd;
 use acton::commands::run::run_cmd;
 use acton::commands::script::script_cmd;
 use acton::commands::test::{ReportFormat, TestConfig, mutation, test_cmd};
@@ -453,6 +454,23 @@ enum Commands {
         #[arg(long, help = "TonCenter API key for blockchain queries")]
         api_key: Option<String>,
     },
+    #[command(about = "Retrace a transaction by its hash")]
+    Retrace {
+        #[arg(help = "Transaction hash in hex format")]
+        hash: String,
+        #[arg(long, help = "Network to use (mainnet or testnet)")]
+        net: Option<String>,
+        #[arg(long, help = "TonCenter API key (optional)")]
+        api_key: Option<String>,
+        #[arg(
+            short,
+            long,
+            help = "Show full cell hex instead of hashes in out actions"
+        )]
+        verbose: bool,
+        #[arg(long, help = "Directory to save VM and executor logs")]
+        logs_dir: Option<String>,
+    },
     #[command(about = "Manage TON libraries")]
     Library {
         #[command(subcommand)]
@@ -807,6 +825,13 @@ fn main() {
             }
         }
         Commands::Run { script, args } => run_cmd(&script, &args),
+        Commands::Retrace {
+            hash,
+            net,
+            api_key,
+            verbose,
+            logs_dir,
+        } => retrace_cmd(hash, net, api_key, verbose, logs_dir),
         Commands::Wrapper {
             contract_id,
             output: wrapper_output,

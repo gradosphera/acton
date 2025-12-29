@@ -6,6 +6,7 @@ pub mod docgen;
 pub mod init;
 pub mod library;
 pub mod new;
+pub mod retrace;
 pub mod run;
 pub mod script;
 pub mod test;

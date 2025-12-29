@@ -482,20 +482,13 @@ pub(crate) fn compute_final_data(
 
     let compute_info = match info.compute_phase {
         tycho_types::models::ComputePhase::Skipped(_) => ComputeInfo::Skipped,
-        tycho_types::models::ComputePhase::Executed(exec) => {
-            let exit_code = if exec.exit_code == 0 {
-                info.action_phase.map(|a| a.result_code).unwrap_or(0)
-            } else {
-                exec.exit_code
-            };
-            ComputeInfo::Success {
-                success: exec.success,
-                exit_code,
-                vm_steps: exec.vm_steps,
-                gas_used: u64::from(exec.gas_used),
-                gas_fees: u128::from(exec.gas_fees) as u64,
-            }
-        }
+        tycho_types::models::ComputePhase::Executed(exec) => ComputeInfo::Success {
+            success: exec.success,
+            exit_code: exec.exit_code,
+            vm_steps: exec.vm_steps,
+            gas_used: u64::from(exec.gas_used),
+            gas_fees: u128::from(exec.gas_fees) as u64,
+        },
     };
 
     let money = TraceMoneyResult {

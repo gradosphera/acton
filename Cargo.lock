@@ -63,6 +63,7 @@ dependencies = [
  "tar",
  "tasm",
  "tempfile",
+ "tokio",
  "tolk_parser",
  "tolkc",
  "toml",
