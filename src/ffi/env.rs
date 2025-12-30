@@ -1,9 +1,9 @@
 use crate::context::Context;
-use emulator::utils::BaseExecutor;
 use emulator::{extension, register_ext_methods};
 use num_bigint::BigInt;
 use std::env;
 use std::str::FromStr;
+use ton_executor::BaseExecutor;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;

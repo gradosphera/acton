@@ -1,6 +1,6 @@
 use crate::context::Context;
-use emulator::utils::BaseExecutor;
 use emulator::{extension, register_ext_methods};
+use ton_executor::BaseExecutor;
 use tvmffi::stack::{Tuple, TupleItem};
 
 extension!(read_file in (Context) with (path: String) using read_file_impl);

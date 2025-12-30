@@ -33,6 +33,19 @@ clippy:
 
 check: fmt clippy test
 
+coverage-setup:
+    cargo install cargo-llvm-cov
+    rustup component add llvm-tools-preview
+
+coverage:
+    cargo llvm-cov --workspace --all-features --all-targets --lcov --output-path lcov.info -- --test-threads 1
+
+coverage-html:
+    cargo llvm-cov --workspace --all-features --all-targets --open -- --test-threads 1
+
+coverage-clean:
+    cargo llvm-cov clean
+
 clean:
     cargo clean
 

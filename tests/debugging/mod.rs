@@ -4,6 +4,7 @@ use acton::context::{
     AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx, Emulations, Env,
     IoContext, KnownAddresses,
 };
+use acton::debugger::any_executor::AnyExecutor;
 use acton::debugger::debug_context::DebugContext;
 use acton::file_build_cache::FileBuildCache;
 use acton::formatter::FormatterContext;
@@ -12,10 +13,8 @@ use dap::events::Event;
 use dap::responses::ContinueResponse;
 use dap::types::StackFrame;
 use dap_client::DapClient;
-use emulator::AnyExecutor;
 use emulator::blockchain::Blockchain;
 use emulator::emulator::Emulator;
-use emulator::step_get_executor::StepGetExecutor;
 use owo_colors::OwoColorize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -24,11 +23,13 @@ use std::{fs, thread};
 use tasm::printer::FormatOptions;
 use tolkc::CompilerResult;
 use tolkc::source_map::SourceMap;
-use ton_executor::ExecutorVerbosity;
+use ton_executor::get::step::StepGetExecutor;
 use ton_executor::get::{GetMethodResult, RunGetMethodArgs};
+use ton_executor::{DEFAULT_CONFIG, ExecutorVerbosity};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
+use tvmffi::serde::serialize_tuple;
 use tvmffi::stack::Tuple;
 use tycho_types::boc::Boc;
 
@@ -257,7 +258,9 @@ fn execute_script(
         network: None,
     };
 
-    let mut executor = StepGetExecutor::new(stack.clone(), params.clone());
+    let stack = serialize_tuple(&stack)?.to_boc_b64(false)?;
+
+    let mut executor = StepGetExecutor::new(&stack, &params, Some(DEFAULT_CONFIG))?;
     ffi::register(&mut executor, &mut ctx);
 
     let transport = debugger::start_dap_server(debug_port);
@@ -271,11 +274,11 @@ fn execute_script(
 
     ctx.debug = DebugCtx::new(&mut dbg_ctx);
 
-    executor.prepare(0, stack);
+    executor.prepare(0, &stack)?;
 
     ctx.debug.ctx().process_incoming_requests(true)?;
 
-    let result = executor.finish(&params.code);
+    let result = executor.finish(&params.code)?;
     let formatter = FormatterContext::from_context(&ctx);
     let io = ctx.io;
     Ok((result, io, formatter))

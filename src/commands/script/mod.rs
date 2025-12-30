@@ -4,6 +4,7 @@ use crate::context::{
     AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
     Emulations, Env, IoContext, KnownAddresses,
 };
+use crate::debugger::any_executor::AnyExecutor;
 use crate::debugger::debug_context::DebugContext;
 use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
@@ -11,11 +12,8 @@ use crate::formatter::FormatterContext;
 use crate::wallets;
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
-use emulator::AnyExecutor;
 use emulator::blockchain::Blockchain;
-use emulator::config::DEFAULT_CONFIG;
 use emulator::emulator::Emulator;
-use emulator::step_get_executor::StepGetExecutor;
 use log::error;
 use owo_colors::OwoColorize;
 use std::collections::{BTreeMap, HashMap};
@@ -23,8 +21,9 @@ use std::fs;
 use std::path::Path;
 use tolkc::source_map::SourceMap;
 use ton_api::Network;
-use ton_executor::ExecutorVerbosity;
+use ton_executor::get::step::StepGetExecutor;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
+use ton_executor::{DEFAULT_CONFIG, ExecutorVerbosity};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
@@ -234,7 +233,8 @@ fn execute_script(
     };
 
     if debug {
-        let mut executor = StepGetExecutor::new(stack.clone(), params.clone());
+        let stack = serialize_tuple(&stack)?.to_boc_b64(false)?;
+        let mut executor = StepGetExecutor::new(&stack, &params, Some(DEFAULT_CONFIG))?;
         ffi::register(&mut executor, &mut ctx);
 
         let transport = crate::debugger::start_dap_server(debug_port);
@@ -248,11 +248,11 @@ fn execute_script(
 
         ctx.debug = DebugCtx::new(&mut dbg_ctx);
 
-        executor.prepare(0, stack);
+        executor.prepare(0, &stack)?;
 
         ctx.debug.ctx().process_incoming_requests(true)?;
 
-        let result = executor.finish(&params.code);
+        let result = executor.finish(&params.code)?;
         print_script_result(&mut ctx, ScriptResult { result });
         return Ok(());
     }

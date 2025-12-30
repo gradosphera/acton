@@ -42,3 +42,25 @@ impl Serialize for ExecutorVerbosity {
 /// return the original `stack` pointer.
 pub type ExtMethodCallback<Ctx = c_void> =
     unsafe extern "C" fn(ctx: *mut Ctx, stack: *const c_char) -> *const c_char;
+
+/// Base trait for all TON executors.
+///
+/// Provides common functionality shared between standard and step-by-step executors.
+pub trait BaseExecutor {
+    /// Registers a custom extension method (external opcode) for the TVM.
+    ///
+    /// This allows extending the TVM with custom logic that can be invoked from
+    /// the contract code using the `EXTCALL <ID>` instruction.
+    ///
+    /// # Arguments
+    ///
+    /// * `id`  — The unique identifier for the extension method.
+    /// * `ctx` — User-defined context that will be passed back to the callback.
+    /// * `cb`  — The function to be called when the extension method is invoked.
+    fn register_ext_method<Ctx>(
+        &mut self,
+        id: i32,
+        ctx: &mut Ctx,
+        cb: ExtMethodCallback<Ctx>,
+    ) -> anyhow::Result<()>;
+}

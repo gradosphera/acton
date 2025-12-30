@@ -59,6 +59,7 @@
 //! # }
 //! ```
 
+pub mod step;
 mod tests;
 pub mod types;
 
@@ -66,9 +67,9 @@ use core::ffi::{c_char, c_int};
 use std::collections::HashSet;
 pub use types::*;
 
-use crate::ExtMethodCallback;
 use crate::common::ExecutorVerbosity;
 use crate::config::DEFAULT_CONFIG;
+use crate::{BaseExecutor, ExtMethodCallback};
 use anyhow::Context;
 use std::ffi::{CStr, CString, c_void};
 use std::marker::PhantomData;
@@ -246,6 +247,17 @@ impl Drop for Executor {
         // TODO: change this behaviour in C++?
         // SAFETY: self.inner is always valid non-null pointer
         // unsafe { destroy_emulator(self.inner.as_ptr()) }
+    }
+}
+
+impl BaseExecutor for Executor {
+    fn register_ext_method<Ctx>(
+        &mut self,
+        id: i32,
+        ctx: &mut Ctx,
+        callback: ExtMethodCallback<Ctx>,
+    ) -> anyhow::Result<()> {
+        self.register_ext_method(id, ctx, callback)
     }
 }
 

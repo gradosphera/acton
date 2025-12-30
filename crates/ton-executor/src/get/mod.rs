@@ -42,13 +42,14 @@
 //! Like the transaction executor, the get-method emulator uses global variables
 //! and is **not thread-safe**. All executions must be run in a single thread.
 
+pub mod step;
 mod tests;
 pub mod types;
 
 use core::ffi::{c_char, c_int, c_void};
 pub use types::*;
 
-use crate::ExtMethodCallback;
+use crate::{BaseExecutor, ExtMethodCallback};
 use anyhow::Context;
 use std::collections::HashSet;
 use std::ffi::{CStr, CString};
@@ -203,6 +204,17 @@ impl GetExecutor {
         };
 
         Ok(())
+    }
+}
+
+impl BaseExecutor for GetExecutor {
+    fn register_ext_method<Ctx>(
+        &mut self,
+        id: i32,
+        ctx: &mut Ctx,
+        callback: ExtMethodCallback<Ctx>,
+    ) -> anyhow::Result<()> {
+        self.register_ext_method(id, ctx, callback)
     }
 }
 

@@ -1,9 +1,8 @@
 use crate::context::{BuildCache, Emulations, KnownAddresses, TransactionGenericAssertFailure};
+use crate::exit_codes::get_exit_code_info;
 use crate::retrace;
 use crate::retrace::{ExecutedAction, InstalledActions};
 use abi::{ContractAbi, TypeAbi};
-use emulator::blockchain::account_code;
-use emulator::exit_codes::get_exit_code_info;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
@@ -587,7 +586,7 @@ impl FormatterContext {
                         && let Ok(Some(in_msg)) = &in_msg
                         && let MsgInfo::Int(info) = &in_msg.info
                     {
-                        let code = account_code(&self.accounts, info.dst.to_string());
+                        let code = Self::account_code(&self.accounts, info.dst.to_string());
                         let result = self.build_cache.result_for_code(&code);
 
                         if let Some(result) = result {
@@ -904,7 +903,7 @@ impl FormatterContext {
     ) -> Option<SourceLocation> {
         let in_msg = tx.load_in_msg().ok()??;
         if let MsgInfo::Int(info) = &in_msg.info {
-            let code = account_code(&self.accounts, info.dst.to_string());
+            let code = Self::account_code(&self.accounts, info.dst.to_string());
             let result = self.build_cache.result_for_code(&code);
 
             if let Some(result) = result {
@@ -1504,5 +1503,15 @@ impl FormatterContext {
         }
 
         code.to_string()
+    }
+
+    pub fn account_code(accounts: &HashMap<String, ShardAccount>, addr: String) -> Option<Cell> {
+        let account = accounts.get(&addr);
+        let state = account?.account.load().ok()?.0?.state;
+        match state {
+            AccountState::Uninit => None,
+            AccountState::Active(state) => state.code,
+            AccountState::Frozen(_) => None,
+        }
     }
 }

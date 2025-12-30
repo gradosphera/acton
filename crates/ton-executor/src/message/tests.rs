@@ -1,6 +1,8 @@
 #![cfg(test)]
 
 use crate::common::ExecutorVerbosity;
+use crate::get::RunGetMethodArgs;
+use crate::get::step::StepGetExecutor;
 use crate::message::Executor;
 use crate::message::types::RunTransactionArgs;
 use std::ffi::c_char;
@@ -136,3 +138,34 @@ fn test_executor_with_ext_method() -> anyhow::Result<()> {
     assert!(result.is_ok());
     Ok(())
 }
+
+// #[test]
+// fn test_step_executor_run() -> anyhow::Result<()> {
+//     let msg = "te6ccgEBAQEAXAAAs2gA3hg/j9iig2aTi8NU/hguuHV4Mf1mEUmqqnI9JLMCjg8ACW3KjJfr/ID5Nkj7xB33xCZD+wzKhEVCVM/gq78qkGEQF9eEAAAAAAAAAAAAAAAAAAAAAAAAwA==";
+//     let shard_account = "te6ccgEBAgEAZQABUEIAo/QUie4HOlbbq3s8tbZIXLyq3iMgXy2Ih0e2fuJ7AAAAAAAtxsABAG/AAltyoyX6/yA+TZI+8Qd98QmQ/sMyoRFQlTP4Ku/KpBhCAl3DSqAZUAAAAAAAtxsFgEC6F1wABA==";
+//
+//     let exec = StepExecutor::new()?;
+//
+//     let prepare_result = exec.prepare_transaction(
+//         msg,
+//         RunTransactionArgs {
+//             shard_account: shard_account.to_owned(),
+//             ..Default::default()
+//         },
+//     )?;
+//
+//     assert!(prepare_result.success);
+//
+//     let mut steps = 0;
+//     while !exec.step() {
+//         steps += 1;
+//         let _pos = exec.get_code_pos();
+//         let _stack = exec.get_stack();
+//     }
+//     assert!(steps > 0);
+//
+//     let res = exec.finish_transaction()?;
+//     assert!(matches!(res, EmulationResult::Success(_)));
+//
+//     Ok(())
+// }

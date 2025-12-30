@@ -1,6 +1,5 @@
-use crate::step_executor::StepExecutor;
-use crate::step_get_executor::StepGetExecutor;
-use crate::utils::BaseExecutor;
+use ton_executor::get::step::StepGetExecutor;
+use ton_executor::message::step::StepExecutor;
 
 #[derive(Clone)]
 pub enum AnyExecutor {

@@ -46,6 +46,7 @@ dependencies = [
  "log",
  "num-bigint",
  "num-traits",
+ "once_cell",
  "owo-colors",
  "pathdiff",
  "pbkdf2",

@@ -39,7 +39,7 @@ macro_rules! pop_args {
 #[macro_export]
 macro_rules! extension {
     ($fn_name:ident in ($ctx_ty:ty) using $body:expr) => {
-        unsafe extern "C" fn $fn_name(ctx: *mut std::os::raw::c_void, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
+        unsafe extern "C" fn $fn_name(ctx: *mut $ctx_ty, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
             unsafe {
                 let ctx = &mut *(ctx as *mut $ctx_ty);
                 $crate::extensions::with_tuple(ptr, |__t: &mut tvmffi::stack::Tuple| {
@@ -49,7 +49,7 @@ macro_rules! extension {
         }
     };
     ($fn_name:ident in ($ctx_ty:ty) with ($an:ident : $ty:ty) using $body:expr) => {
-        unsafe extern "C" fn $fn_name(ctx: *mut std::os::raw::c_void, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
+        unsafe extern "C" fn $fn_name(ctx: *mut $ctx_ty, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
             unsafe {
                 let ctx = &mut *(ctx as *mut $ctx_ty);
                 $crate::extensions::with_tuple(ptr, |__t: &mut tvmffi::stack::Tuple| {
@@ -66,7 +66,7 @@ macro_rules! extension {
         }
     };
     ($fn_name:ident in ($ctx_ty:ty) with ($($an:ident : $ty:ty),+ $(,)?) using $body:expr) => {
-        unsafe extern "C" fn $fn_name(ctx: *mut std::os::raw::c_void, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
+        unsafe extern "C" fn $fn_name(ctx: *mut $ctx_ty, ptr: *const std::os::raw::c_char) -> *const std::os::raw::c_char {
             unsafe {
                 let ctx = &mut *(ctx as *mut $ctx_ty);
                 $crate::extensions::with_tuple(ptr, |__t: &mut tvmffi::stack::Tuple| {
@@ -117,7 +117,7 @@ pub unsafe fn with_tuple(ptr: *const c_char, f: impl FnOnce(&mut Tuple)) -> *con
 macro_rules! register_ext_methods {
     ($executor:expr, $ctx:expr, { $($id:expr => $fname:ident),+ $(,)? }) => {{
         $(
-            $executor.register_ext_method($id, ($ctx) as *mut _ as *mut std::ffi::c_void, $fname);
+            $executor.register_ext_method($id, ($ctx), $fname).expect(&format!("cannot register extension with id: {}", $id));
         )+
     }};
 }

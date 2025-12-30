@@ -18,16 +18,15 @@ use crate::context::{
     AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
     Emulations, Env, IoContext, KnownAddresses,
 };
+use crate::debugger::any_executor::AnyExecutor;
 use crate::debugger::dap::DapTransport;
 use crate::debugger::debug_context::DebugContext;
 use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
-use emulator::AnyExecutor;
 use emulator::blockchain::Blockchain;
 use emulator::emulator::Emulator;
-use emulator::step_get_executor::StepGetExecutor;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, error};
 use num_traits::ToPrimitive;
@@ -41,6 +40,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::{fs, process};
 use tolkc::source_map::SourceMap;
 use ton_executor::ExecutorVerbosity;
+use ton_executor::get::step::StepGetExecutor;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
@@ -272,7 +272,8 @@ impl<'a> TestRunner<'a> {
 
         let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) =
             if self.config.debug {
-                let mut executor = StepGetExecutor::new(Default::default(), params.clone());
+                let stack = serialize_tuple(&Tuple::empty())?.to_boc_b64(false)?;
+                let mut executor = StepGetExecutor::new(&stack, &params, None)?;
                 ffi::register(&mut executor, &mut ctx);
 
                 let mut dbg_ctx = DebugContext::new(
@@ -284,11 +285,11 @@ impl<'a> TestRunner<'a> {
 
                 ctx.debug = DebugCtx::new(&mut dbg_ctx);
 
-                executor.prepare(test.id, Default::default());
+                executor.prepare(test.id, &stack)?;
 
                 ctx.debug.ctx().process_incoming_requests(true)?;
 
-                let get_result = executor.finish(&params.code);
+                let get_result = executor.finish(&params.code)?;
 
                 if let Some(trace_dir) = &self.config.save_test_trace {
                     trace::dump_test_transactions(
@@ -310,8 +311,7 @@ impl<'a> TestRunner<'a> {
                 let mut executor = GetExecutor::new(&params)?;
                 ffi::register(&mut executor, &mut ctx);
 
-                let stack = Tuple::empty();
-                let stack = serialize_tuple(&stack)?.to_boc_b64(false)?;
+                let stack = serialize_tuple(&Tuple::empty())?.to_boc_b64(false)?;
                 let get_result = executor.run_get_method(&stack, &params, None)?;
 
                 if let Some(trace_dir) = &self.config.save_test_trace {

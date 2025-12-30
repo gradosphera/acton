@@ -1,5 +1,6 @@
 use crate::blockchain::Blockchain;
 use crate::utils::StoreExt;
+use anyhow::Context;
 use ton_executor::ExecutorVerbosity;
 use ton_executor::message::{
     EmulationResult, Executor, RunTransactionArgs, RunTransactionResultError,
@@ -135,19 +136,19 @@ impl Emulator {
         };
 
         let shard_account_after = &result.shard_account;
-        let shard_account_cell =
-            Boc::decode_base64(shard_account_after).expect("Failed to decode shard account BoC");
+        let shard_account_cell = Boc::decode_base64(shard_account_after)
+            .context("Failed to decode shard account BoC")?;
         let shard_account = shard_account_cell
             .parse::<ShardAccount>()
-            .expect("Failed to load shard account from slice");
+            .context("Failed to load shard account from slice")?;
 
         net.update_account(&dst_addr, &shard_account);
 
         let tx_cell =
-            Boc::decode_base64(&result.transaction).expect("Failed to decode transaction BoC");
+            Boc::decode_base64(&result.transaction).context("Failed to decode transaction BoC")?;
         let transaction = tx_cell
             .parse::<Transaction>()
-            .expect("Failed to parse transaction BoC");
+            .context("Failed to parse transaction BoC")?;
 
         let out_messages = transaction
             .iter_out_msgs()

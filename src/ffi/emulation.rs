@@ -1,16 +1,15 @@
 use crate::commands::common::error_fmt;
 use crate::config::Explorer;
 use crate::context::{Context, KnownAddress, Wallet};
+use crate::debugger::any_executor::AnyExecutor;
 use crate::debugger::debug_context::StepMode;
 use crate::ffi::assert::process_txs_and_search_params;
 use crate::formatter::FormatterContext;
 use base64::Engine;
 use crc::{CRC_16_XMODEM, Crc};
 use emulator::emulator::{Emulator, SendMessageResult, SendMessageResultSuccess};
-use emulator::step_executor::StepExecutor;
-use emulator::step_get_executor::StepGetExecutor;
-use emulator::utils::{BaseExecutor, StoreExt};
-use emulator::{AnyExecutor, extension, pop_args, register_ext_methods, remote, try_ctx};
+use emulator::utils::StoreExt;
+use emulator::{extension, pop_args, register_ext_methods, remote, try_ctx};
 use log::{debug, info, warn};
 use num_bigint::BigInt;
 use num_traits::{ToPrimitive, Zero};
@@ -21,7 +20,10 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 use ton_api::{Network, TonApiClient, TonCenterTransaction};
+use ton_executor::BaseExecutor;
+use ton_executor::get::step::StepGetExecutor;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
+use ton_executor::message::step::StepExecutor;
 use ton_executor::message::{EmulationResult, RunTransactionArgs};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
@@ -437,7 +439,7 @@ fn send_message_debug(
         .get_account(&int_message.dst.to_string());
     let code = Emulator::get_code_cell(&message_obj, &dest_account);
 
-    let step_executor = StepExecutor::new();
+    let step_executor = StepExecutor::new().expect("Failed to create executor");
     let source_map = ctx
         .build
         .build_cache
@@ -458,22 +460,23 @@ fn send_message_debug(
         .expect("Cannot send response");
 
     let msg_cell = Emulator::patch_src_addr(msg_cell.clone(), src_addr.clone());
-    let prepare_result = step_executor.prepare_transaction(
-        msg_cell.clone(),
-        BigInt::from(0),
-        RunTransactionArgs {
-            libs: libs.clone().into_root().map(Boc::encode_base64),
-            shard_account: Boc::encode_base64(dest_account.to_cell()),
-            now: ctx.chain.blockchain.get_now(),
-            lt: ctx.chain.blockchain.get_lt(),
-            random_seed: None,
-            ignore_chksig: false,
-            debug_enabled: true,
-            prev_blocks_info: None,
-            is_tick_tock: None,
-            is_tock: None,
-        },
-    );
+    let prepare_result = step_executor
+        .prepare_transaction(
+            &Boc::encode_base64(msg_cell),
+            RunTransactionArgs {
+                libs: libs.clone().into_root().map(Boc::encode_base64),
+                shard_account: Boc::encode_base64(dest_account.to_cell()),
+                now: ctx.chain.blockchain.get_now(),
+                lt: ctx.chain.blockchain.get_lt(),
+                random_seed: None,
+                ignore_chksig: false,
+                debug_enabled: true,
+                prev_blocks_info: None,
+                is_tick_tock: None,
+                is_tock: None,
+            },
+        )
+        .expect("Prepare transaction failed");
     if !prepare_result.success {
         panic!("Failed to prepare Emulator in debug mode");
     }
@@ -501,7 +504,9 @@ fn send_message_debug(
             .expect("Cannot send response");
     }
 
-    let result = step_executor.finish_transaction();
+    let result = step_executor
+        .finish_transaction()
+        .expect("Cannot finish transaction");
 
     ctx.debug
         .ctx()
@@ -901,7 +906,12 @@ fn run_get_method_impl(
     };
 
     let result = if ctx.debug.is_enabled() {
-        let step_executor = StepGetExecutor::new(args.clone(), params.clone());
+        let args = serialize_tuple(&args)
+            .map(|t| t.to_boc_b64(false))
+            .expect("Cannot serialize tuple")
+            .expect("Cannot serialize tuple");
+        let step_executor =
+            StepGetExecutor::new(&args, &params, None).expect("Cannot create get executor");
 
         let source_map = ctx
             .build
@@ -920,7 +930,9 @@ fn run_get_method_impl(
             )
             .expect("Cannot send response");
 
-        step_executor.prepare(method_id, args);
+        step_executor
+            .prepare(method_id, &args)
+            .expect("Cannot prepare get method");
 
         // Step to update internal state
         if dbg_ctx.need_to_stop_child_thread_on_start() {
@@ -943,7 +955,9 @@ fn run_get_method_impl(
             dbg_ctx.step(StepMode::StepIn);
         }
 
-        step_executor.finish(&params.code)
+        step_executor
+            .finish(&params.code)
+            .expect("Cannot run get method")
     } else {
         let executor = GetExecutor::new(&params).expect("Cannot create get executor");
         let args = serialize_tuple(&args)
