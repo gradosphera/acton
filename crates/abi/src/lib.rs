@@ -1,3 +1,5 @@
+pub mod serde;
+
 use num_bigint::BigInt;
 use std::collections::HashSet;
 use std::fs;
@@ -20,21 +22,23 @@ pub struct Field {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BaseTypeInfo {
-    Void,
+    Unserializable,
     Int { width: usize },
     UInt { width: usize },
     Coins,
     Bool,
     Address,
+    AnyAddress,
+    RemainingBitsAndRefs,
     Bits { width: usize },
-    Cell { inner_type: Option<Box<TypeInfo>> },
-    Slice,
+    Bytes { width: usize },
+    Cell { inner: Option<Box<TypeInfo>> },
     VarInt16,
     VarInt32,
     VarUInt16,
     VarUInt32,
-    Struct { struct_name: String },
-    AnonStruct { fields: Vec<TypeInfo> },
+    Nullable { inner: Box<TypeInfo> },
+    Struct { name: String },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -250,10 +254,10 @@ fn extract_messages_from_match(node: &tree_sitter::Node, content: &str) -> Vec<S
                 .unwrap_or("")
                 .to_string();
 
-            if func_name == "onInternalMessage" {
-                if let Some(body) = child.child_by_field_name("body") {
-                    messages.extend(find_match_patterns(&body, content));
-                }
+            if func_name == "onInternalMessage"
+                && let Some(body) = child.child_by_field_name("body")
+            {
+                messages.extend(find_match_patterns(&body, content));
             }
         }
     }
@@ -264,23 +268,22 @@ fn extract_messages_from_match(node: &tree_sitter::Node, content: &str) -> Vec<S
 fn find_match_patterns(node: &tree_sitter::Node, content: &str) -> Vec<String> {
     let mut patterns = Vec::new();
 
-    if node.kind() == "match_expression" {
-        if let Some(body_node) = node.child_by_field_name("body")
-            && body_node.kind() == "match_body"
-        {
-            let mut cursor = body_node.walk();
-            for child in body_node.children(&mut cursor) {
-                if child.kind() == "match_arm" {
-                    if let Some(pattern_type_node) = child.child_by_field_name("pattern_type") {
-                        let pattern_text = pattern_type_node
-                            .utf8_text(content.as_bytes())
-                            .unwrap_or("")
-                            .to_string();
+    if node.kind() == "match_expression"
+        && let Some(body_node) = node.child_by_field_name("body")
+        && body_node.kind() == "match_body"
+    {
+        let mut cursor = body_node.walk();
+        for child in body_node.children(&mut cursor) {
+            if child.kind() == "match_arm"
+                && let Some(pattern_type_node) = child.child_by_field_name("pattern_type")
+            {
+                let pattern_text = pattern_type_node
+                    .utf8_text(content.as_bytes())
+                    .unwrap_or("")
+                    .to_string();
 
-                        if !pattern_text.is_empty() {
-                            patterns.push(pattern_text);
-                        }
-                    }
+                if !pattern_text.is_empty() {
+                    patterns.push(pattern_text);
                 }
             }
         }
@@ -522,7 +525,7 @@ fn extract_get_method(
         extract_type_info(&return_type_node, content)
     } else {
         TypeInfo {
-            base: BaseTypeInfo::Void,
+            base: BaseTypeInfo::Unserializable,
             human_readable: "void".to_string(),
         }
     };
@@ -629,31 +632,130 @@ fn extract_type_info(type_node: &tree_sitter::Node, content: &str) -> TypeInfo {
         .unwrap_or("")
         .to_string();
 
-    if type_node.kind() == "type_instantiatedTs" {
-        if let Some(name_node) = type_node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(content.as_bytes())
-                .unwrap_or("")
-                .to_string();
+    if type_node.kind() == "type_instantiatedTs"
+        && let Some(name_node) = type_node.child_by_field_name("name")
+    {
+        let name = name_node
+            .utf8_text(content.as_bytes())
+            .unwrap_or("")
+            .to_string();
 
-            if name == "Cell" {
-                if let Some(args_node) = type_node.child_by_field_name("arguments")
-                    && let Some(inner_type_node) = args_node.child_by_field_name("types")
-                {
-                    let inner_type_info = extract_type_info(&inner_type_node, content);
-                    return TypeInfo {
-                        base: BaseTypeInfo::Cell {
-                            inner_type: Some(Box::new(inner_type_info)),
-                        },
-                        human_readable: type_name,
-                    };
-                }
-            }
+        if name == "Cell"
+            && let Some(args_node) = type_node.child_by_field_name("arguments")
+            && let Some(inner_type_node) = args_node.child_by_field_name("types")
+        {
+            let inner_type_info = extract_type_info(&inner_type_node, content);
+            return TypeInfo {
+                base: BaseTypeInfo::Cell {
+                    inner: Some(Box::new(inner_type_info)),
+                },
+                human_readable: type_name,
+            };
+        }
+
+        if name == "map" {
+            // for now treat map<K, V> as cell?
+            return TypeInfo {
+                base: BaseTypeInfo::Nullable {
+                    inner: Box::new(TypeInfo {
+                        base: BaseTypeInfo::Cell { inner: None },
+                        human_readable: "dict".to_owned(),
+                    }),
+                },
+                human_readable: type_name,
+            };
         }
     }
 
+    if type_node.kind() == "tensor_type"
+        || type_node.kind() == "tuple_type"
+        || type_node.kind() == "fun_callable_type"
+        || type_node.kind() == "union_type"
+        || type_node.kind() == "null_literal"
+    {
+        return TypeInfo {
+            base: BaseTypeInfo::Unserializable,
+            human_readable: type_name,
+        };
+    }
+
+    if type_node.kind() == "nullable_type" {
+        let inner_node = type_node.child_by_field_name("inner");
+        if let Some(inner_node) = inner_node {
+            let inner = extract_type_info(&inner_node, content);
+            return TypeInfo {
+                base: BaseTypeInfo::Nullable {
+                    inner: Box::new(inner),
+                },
+                human_readable: type_name,
+            };
+        }
+    }
+
+    let base = match type_name.as_str() {
+        "void" => BaseTypeInfo::Unserializable,
+        "never" => BaseTypeInfo::Unserializable,
+        "null" => BaseTypeInfo::Unserializable,
+        "tuple" => BaseTypeInfo::Unserializable,
+        "continuation" => BaseTypeInfo::Unserializable,
+        "slice" => BaseTypeInfo::Unserializable,
+        "builder" => BaseTypeInfo::Unserializable,
+        "int" => BaseTypeInfo::Unserializable,
+        "coins" => BaseTypeInfo::Coins,
+        "bool" => BaseTypeInfo::Bool,
+        "cell" => BaseTypeInfo::Cell { inner: None },
+        "address" => BaseTypeInfo::Address,
+        "any_address" => BaseTypeInfo::AnyAddress,
+        "dict" => BaseTypeInfo::Nullable {
+            inner: Box::new(TypeInfo {
+                base: BaseTypeInfo::Cell { inner: None },
+                human_readable: "dict".to_owned(),
+            }),
+        },
+        "RemainingBitsAndRefs" => BaseTypeInfo::RemainingBitsAndRefs,
+        // TODO: real type alias resolving
+        "ForwardPayloadRemainder" => BaseTypeInfo::RemainingBitsAndRefs,
+        _ if type_name.starts_with("int") && type_name.len() > 3 => {
+            let width = type_name[3..].parse::<usize>().unwrap_or(0);
+            BaseTypeInfo::Int { width }
+        }
+        _ if type_name.starts_with("uint") && type_name.len() > 4 => {
+            let width = type_name[4..].parse::<usize>().unwrap_or(0);
+            BaseTypeInfo::UInt { width }
+        }
+        _ if type_name.starts_with("varint") && type_name.len() > 6 => {
+            let width = type_name[6..].parse::<usize>().unwrap_or(0);
+            if width == 16 {
+                BaseTypeInfo::VarInt16
+            } else if width == 32 {
+                BaseTypeInfo::VarInt32
+            } else {
+                BaseTypeInfo::Unserializable
+            }
+        }
+        _ if type_name.starts_with("varuint") && type_name.len() > 7 => {
+            let width = type_name[7..].parse::<usize>().unwrap_or(0);
+            if width == 16 {
+                BaseTypeInfo::VarUInt16
+            } else if width == 32 {
+                BaseTypeInfo::VarUInt32
+            } else {
+                BaseTypeInfo::Unserializable
+            }
+        }
+        _ if type_name.starts_with("bits") && type_name.len() > 4 => {
+            let width = type_name[4..].parse::<usize>().unwrap_or(0);
+            BaseTypeInfo::Bits { width }
+        }
+        _ if type_name.starts_with("bytes") && type_name.len() > 5 => {
+            let width = type_name[5..].parse::<usize>().unwrap_or(0);
+            BaseTypeInfo::Bytes { width }
+        }
+        &_ => BaseTypeInfo::Unserializable,
+    };
+
     TypeInfo {
-        base: BaseTypeInfo::Void,
+        base,
         human_readable: type_name,
     }
 }
