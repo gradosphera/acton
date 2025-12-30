@@ -1,5 +1,4 @@
 //! This module provides a thin wrapper over the C++ TON transaction emulator.
-//! It allows for high-performance emulation of TON transactions within a Rust environment.
 //!
 //! # Core Components
 //!
@@ -64,6 +63,7 @@ mod tests;
 pub mod types;
 
 use core::ffi::{c_char, c_int};
+use std::collections::HashSet;
 pub use types::*;
 
 use crate::ExtMethodCallback;
@@ -81,6 +81,7 @@ use std::rc::Rc;
 /// `Executor` should exist at a time, and it must be used from a single thread.
 pub struct Executor {
     inner: NonNull<c_void>,
+    ext_methods: HashSet<i32>, // track extension methods to catch redefinitions
     phantom: PhantomData<Rc<()>>, // mark as !Send and !Sync
 }
 
@@ -105,6 +106,7 @@ impl Executor {
 
         Ok(Executor {
             inner,
+            ext_methods: HashSet::new(),
             phantom: PhantomData,
         })
     }
@@ -217,7 +219,11 @@ impl Executor {
         id: i32,
         ctx: &mut Ctx,
         callback: ExtMethodCallback<Ctx>,
-    ) {
+    ) -> anyhow::Result<()> {
+        if !self.ext_methods.insert(id) {
+            anyhow::bail!("Extension method with id {id} already registered");
+        }
+
         unsafe {
             transaction_emulator_register_extmethod(
                 self.inner.as_ptr(),
@@ -229,6 +235,8 @@ impl Executor {
                 >(callback),
             );
         };
+
+        Ok(())
     }
 }
 

@@ -114,9 +114,10 @@ impl From<&RunTransactionArgs> for EmulationInternalParams {
             None => String::new(),
         };
 
-        let prev_blocks_info = args.prev_blocks_info.as_ref().map(|_| {
-            panic!("TODO: Implement prev_blocks_info serialization")
-        });
+        let prev_blocks_info = args
+            .prev_blocks_info
+            .as_ref()
+            .map(|_| panic!("TODO: Implement prev_blocks_info serialization"));
 
         Self {
             utime: args.now,

@@ -478,14 +478,12 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
     let params = fields
         .iter()
         .map(|f| {
-            let type_name = if let abi::BaseTypeInfo::Cell {
-                inner_type: Some(inner),
-            } = &f.type_info.base
-            {
-                &inner.human_readable
-            } else {
-                &f.type_info.human_readable
-            };
+            let type_name =
+                if let abi::BaseTypeInfo::Cell { inner: Some(inner) } = &f.type_info.base {
+                    &inner.human_readable
+                } else {
+                    &f.type_info.human_readable
+                };
             format!("{}: {}", f.name, type_name)
         })
         .collect::<Vec<_>>()
@@ -510,10 +508,7 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
     } else {
         code.push_str(&format!("        body: {} {{\n", message_type.name));
         for field in &fields {
-            if let abi::BaseTypeInfo::Cell {
-                inner_type: Some(_),
-            } = &field.type_info.base
-            {
+            if let abi::BaseTypeInfo::Cell { inner: Some(_) } = &field.type_info.base {
                 code.push_str(&format!(
                     "            {}: {}.toCell(),\n",
                     field.name, field.name
@@ -559,14 +554,12 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
         .parameters
         .iter()
         .map(|p| {
-            let type_name = if let abi::BaseTypeInfo::Cell {
-                inner_type: Some(inner),
-            } = &p.type_info.base
-            {
-                &inner.human_readable
-            } else {
-                &p.type_info.human_readable
-            };
+            let type_name =
+                if let abi::BaseTypeInfo::Cell { inner: Some(inner) } = &p.type_info.base {
+                    &inner.human_readable
+                } else {
+                    &p.type_info.human_readable
+                };
             format!("{}: {}", p.name, type_name)
         })
         .collect::<Vec<_>>()
@@ -601,9 +594,8 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
                 method_name
             ));
         } else if args.len() == 1 {
-            let arg_name = if let abi::BaseTypeInfo::Cell {
-                inner_type: Some(_),
-            } = &get_method.parameters[0].type_info.base
+            let arg_name = if let abi::BaseTypeInfo::Cell { inner: Some(_) } =
+                &get_method.parameters[0].type_info.base
             {
                 format!("{}.toCell()", args[0])
             } else {
@@ -619,10 +611,7 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
                 .parameters
                 .iter()
                 .map(|p| {
-                    if let abi::BaseTypeInfo::Cell {
-                        inner_type: Some(_),
-                    } = &p.type_info.base
-                    {
+                    if let abi::BaseTypeInfo::Cell { inner: Some(_) } = &p.type_info.base {
                         format!("{}.toCell()", p.name)
                     } else {
                         p.name.clone()
@@ -729,9 +718,7 @@ fn generate_setup_test(contract_name: &str, abi: &ContractAbi) -> String {
             .map(|f| {
                 let default_value = get_default_value(&f.type_info.human_readable);
                 match &f.type_info.base {
-                    abi::BaseTypeInfo::Cell {
-                        inner_type: Some(inner),
-                    } => {
+                    abi::BaseTypeInfo::Cell { inner: Some(inner) } => {
                         let default_value = get_default_value(&inner.human_readable);
                         format!(" {}: {}.toCell()", f.name, default_value)
                     }
