@@ -31,8 +31,9 @@ fn simple_struct_to_tuple() {
         addr,
     };
 
-    let tuple = s.to_tuple();
+    let tuple = s
+        .to_tuple(tvmffi::to_stack::SerializationOptions::default())
+        .unwrap();
 
-    // Тут уже проверяем количество элементов и их содержание
     assert_eq!(tuple.0.len(), 6);
 }

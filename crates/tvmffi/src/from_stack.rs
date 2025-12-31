@@ -3,8 +3,12 @@
 //! This module is mostly used for defining FFI functions that are called from the TVM emulator.
 use crate::stack::{Tuple, TupleItem};
 use num_bigint::BigInt;
+use num_traits::ToPrimitive;
 use thiserror::Error;
 use tonlib_core::cell::ArcCell;
+use tonlib_core::tlb_types::tlb::TLB;
+use tycho_types::cell::Load;
+use tycho_types::models::IntAddr;
 
 /// An error type for converting TupleItem to a Rust type.
 #[derive(Debug, Error, PartialEq)]
@@ -15,6 +19,18 @@ pub enum ArgError {
     TypeMismatch { expected: &'static str },
     #[error("cell parse error")]
     CellParse,
+    #[error("tuple size mismatch: expected {expected}, got {actual}")]
+    TupleSizeMismatch { expected: usize, actual: usize },
+    #[error("extra elements in tuple: expected {expected}, got {actual}")]
+    ExtraElements { expected: usize, actual: usize },
+    #[error("missing elements in tuple: expected {expected}, got {actual}")]
+    MissingElements { expected: usize, actual: usize },
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DeserializationOptions {
+    pub allow_extra: bool,
+    pub allow_missing: bool,
 }
 
 /// A trait for converting TupleItem to a Rust type.
@@ -54,6 +70,24 @@ impl FromStack for BigInt {
     }
 }
 
+impl FromStack for i32 {
+    fn from_item(item: TupleItem) -> Result<Self, ArgError> {
+        match item {
+            TupleItem::Int(i) => i.to_i32().ok_or(ArgError::TypeMismatch { expected: "i32" }),
+            _ => Err(ArgError::TypeMismatch { expected: "Int" }),
+        }
+    }
+}
+
+impl FromStack for u32 {
+    fn from_item(item: TupleItem) -> Result<Self, ArgError> {
+        match item {
+            TupleItem::Int(i) => i.to_u32().ok_or(ArgError::TypeMismatch { expected: "u32" }),
+            _ => Err(ArgError::TypeMismatch { expected: "Int" }),
+        }
+    }
+}
+
 /// Convert a TupleItem to a bool.
 ///
 /// Note that in the TVM true is -1 and false is 0.
@@ -71,6 +105,7 @@ impl FromStack for bool {
                     Ok(true)
                 }
             }
+            TupleItem::Null => Ok(false),
             _ => Err(ArgError::TypeMismatch {
                 expected: "Int(-1/0) as bool",
             }),
@@ -94,6 +129,32 @@ impl FromStack for ArcCell {
         match item {
             TupleItem::Cell(c) => Ok(c),
             _ => Err(ArgError::TypeMismatch { expected: "Cell" }),
+        }
+    }
+}
+
+impl FromStack for IntAddr {
+    fn from_item(item: TupleItem) -> Result<Self, ArgError> {
+        match item {
+            TupleItem::Cell(cell) => {
+                let boc = cell.to_boc(false).map_err(|_| ArgError::CellParse)?;
+                let cell_parsed =
+                    tycho_types::boc::Boc::decode(&boc).map_err(|_| ArgError::CellParse)?;
+                let mut slice = cell_parsed.as_slice().map_err(|_| ArgError::CellParse)?;
+                IntAddr::load_from(&mut slice).map_err(|_| ArgError::CellParse)
+            }
+            _ => Err(ArgError::TypeMismatch {
+                expected: "Cell(IntAddr)",
+            }),
+        }
+    }
+}
+
+impl<T: FromStack> FromStack for Option<T> {
+    fn from_item(item: TupleItem) -> Result<Self, ArgError> {
+        match item {
+            TupleItem::Null => Ok(None),
+            _ => Ok(Some(T::from_item(item)?)),
         }
     }
 }
@@ -288,7 +349,7 @@ mod tests {
         // Test string with odd number of bits (not divisible by 8)
         let mut builder = CellBuilder::new();
         builder.store_bits(7, &[0xFF]).unwrap(); // 7 bits, not divisible by 8
-        let cell = tonlib_core::cell::ArcCell::from(builder.build().unwrap());
+        let cell = ArcCell::from(builder.build().unwrap());
 
         let result = String::from_item(TupleItem::Slice(cell));
         assert!(matches!(result, Err(ArgError::CellParse)));

@@ -6,10 +6,12 @@ version = 4
 name = "abi"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "crc",
  "num-bigint",
  "tolk_parser",
  "tree-sitter",
+ "tycho-types",
 ]
 
 [[package]]
