@@ -1,7 +1,7 @@
 //! This module provides functionality for converting TupleItem to Rust types.
 //!
 //! This module is mostly used for defining FFI functions that are called from the TVM emulator.
-use crate::stack::{Tuple, TupleItem};
+use crate::stack::{Flattened, FlattenedOption, Tuple, TupleItem};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use thiserror::Error;
@@ -35,8 +35,26 @@ pub struct DeserializationOptions {
 
 /// A trait for converting TupleItem to a Rust type.
 pub trait FromStack: Sized {
+    /// Number of items this type consumes on the stack when flattened.
+    const FIELD_COUNT: usize = 1;
+
     /// Convert a TupleItem to a Rust type.
     fn from_item(item: TupleItem) -> Result<Self, ArgError>;
+
+    /// Convert from a tuple at a specific offset.
+    /// By default, it just takes one item.
+    fn from_tuple(
+        tuple: &Tuple,
+        offset: &mut usize,
+        _options: DeserializationOptions,
+    ) -> Result<Self, ArgError> {
+        let item = tuple
+            .get(*offset)
+            .cloned()
+            .ok_or(ArgError::StackUnderflow)?;
+        *offset += 1;
+        Self::from_item(item)
+    }
 }
 
 /// Convert a TupleItem to a TupleItem.
@@ -135,18 +153,20 @@ impl FromStack for ArcCell {
 
 impl FromStack for IntAddr {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
-        match item {
-            TupleItem::Cell(cell) => {
-                let boc = cell.to_boc(false).map_err(|_| ArgError::CellParse)?;
-                let cell_parsed =
-                    tycho_types::boc::Boc::decode(&boc).map_err(|_| ArgError::CellParse)?;
-                let mut slice = cell_parsed.as_slice().map_err(|_| ArgError::CellParse)?;
-                IntAddr::load_from(&mut slice).map_err(|_| ArgError::CellParse)
+        let cell = match item {
+            TupleItem::Cell(cell) => cell,
+            TupleItem::Slice(cell) => cell,
+            _ => {
+                return Err(ArgError::TypeMismatch {
+                    expected: "Cell or Slice(IntAddr)",
+                });
             }
-            _ => Err(ArgError::TypeMismatch {
-                expected: "Cell(IntAddr)",
-            }),
-        }
+        };
+
+        let boc = cell.to_boc(false).map_err(|_| ArgError::CellParse)?;
+        let cell_parsed = tycho_types::boc::Boc::decode(&boc).map_err(|_| ArgError::CellParse)?;
+        let mut slice = cell_parsed.as_slice().map_err(|_| ArgError::CellParse)?;
+        IntAddr::load_from(&mut slice).map_err(|_| ArgError::CellParse)
     }
 }
 
@@ -155,6 +175,52 @@ impl<T: FromStack> FromStack for Option<T> {
         match item {
             TupleItem::Null => Ok(None),
             _ => Ok(Some(T::from_item(item)?)),
+        }
+    }
+}
+
+impl<T: FromStack> FromStack for Flattened<T> {
+    const FIELD_COUNT: usize = T::FIELD_COUNT;
+
+    fn from_item(item: TupleItem) -> Result<Self, ArgError> {
+        T::from_item(item).map(Flattened)
+    }
+
+    fn from_tuple(
+        tuple: &Tuple,
+        offset: &mut usize,
+        options: DeserializationOptions,
+    ) -> Result<Self, ArgError> {
+        T::from_tuple(tuple, offset, options).map(Flattened)
+    }
+}
+
+impl<T: FromStack> FromStack for FlattenedOption<T> {
+    const FIELD_COUNT: usize = T::FIELD_COUNT + 1;
+
+    fn from_item(_item: TupleItem) -> Result<Self, ArgError> {
+        Err(ArgError::TypeMismatch {
+            expected: "FlattenedOption (multiple items)",
+        })
+    }
+
+    fn from_tuple(
+        tuple: &Tuple,
+        offset: &mut usize,
+        options: DeserializationOptions,
+    ) -> Result<Self, ArgError> {
+        let flag_pos = *offset + T::FIELD_COUNT;
+        let flag_item = tuple.get(flag_pos).cloned().ok_or(ArgError::StackUnderflow)?;
+
+        let is_some = bool::from_item(flag_item)?;
+
+        if is_some {
+            let val = T::from_tuple(tuple, offset, options)?;
+            *offset += 1; // consume flag
+            Ok(FlattenedOption(Some(val)))
+        } else {
+            *offset += T::FIELD_COUNT + 1;
+            Ok(FlattenedOption(None))
         }
     }
 }

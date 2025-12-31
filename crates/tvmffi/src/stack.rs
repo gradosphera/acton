@@ -142,3 +142,25 @@ impl Default for TupleItem {
         TupleItem::Null
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Flattened<T>(pub T);
+
+impl<T> Deref for Flattened<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlattenedOption<T>(pub Option<T>);
+
+impl<T> Deref for FlattenedOption<T> {
+    type Target = Option<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}

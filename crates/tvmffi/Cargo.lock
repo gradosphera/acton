@@ -11,6 +11,7 @@ dependencies = [
  "num-bigint",
  "tolk_parser",
  "tree-sitter",
+ "tycho-types",
 ]
 
 [[package]]

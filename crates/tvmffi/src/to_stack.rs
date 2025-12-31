@@ -1,4 +1,4 @@
-use crate::stack::{Tuple, TupleItem};
+use crate::stack::{Flattened, FlattenedOption, Tuple, TupleItem};
 use num_bigint::BigInt;
 use thiserror::Error;
 use tonlib_core::cell::ArcCell;
@@ -15,7 +15,18 @@ pub enum SerializationError {
 pub struct SerializationOptions {}
 
 pub trait ToStack {
+    const FIELD_COUNT: usize = 1;
+
     fn to_item(&self) -> Result<TupleItem, SerializationError>;
+
+    fn to_tuple(
+        &self,
+        tuple: &mut Tuple,
+        _options: SerializationOptions,
+    ) -> Result<(), SerializationError> {
+        tuple.push(self.to_item()?);
+        Ok(())
+    }
 }
 
 impl ToStack for TupleItem {
@@ -71,6 +82,17 @@ impl ToStack for tycho_types::models::IntAddr {
     }
 }
 
+impl ToStack for String {
+    fn to_item(&self) -> Result<TupleItem, SerializationError> {
+        let mut tuple = Tuple::empty();
+        tuple.push_string(self);
+        tuple
+            .0
+            .pop()
+            .ok_or(SerializationError::CellBuild) // Should not happen
+    }
+}
+
 impl<T: ToStack> ToStack for Option<T> {
     fn to_item(&self) -> Result<TupleItem, SerializationError> {
         match self {
@@ -83,5 +105,49 @@ impl<T: ToStack> ToStack for Option<T> {
 impl ToStack for Tuple {
     fn to_item(&self) -> Result<TupleItem, SerializationError> {
         Ok(TupleItem::Tuple(self.clone()))
+    }
+}
+
+impl<T: ToStack> ToStack for Flattened<T> {
+    const FIELD_COUNT: usize = T::FIELD_COUNT;
+
+    fn to_item(&self) -> Result<TupleItem, SerializationError> {
+        self.0.to_item()
+    }
+
+    fn to_tuple(
+        &self,
+        tuple: &mut Tuple,
+        options: SerializationOptions,
+    ) -> Result<(), SerializationError> {
+        self.0.to_tuple(tuple, options)
+    }
+}
+
+impl<T: ToStack> ToStack for FlattenedOption<T> {
+    const FIELD_COUNT: usize = T::FIELD_COUNT + 1;
+
+    fn to_item(&self) -> Result<TupleItem, SerializationError> {
+        Err(SerializationError::CellBuild)
+    }
+
+    fn to_tuple(
+        &self,
+        tuple: &mut Tuple,
+        options: SerializationOptions,
+    ) -> Result<(), SerializationError> {
+        match &self.0 {
+            Some(val) => {
+                val.to_tuple(tuple, options)?;
+                tuple.push_bool(true);
+            }
+            None => {
+                for _ in 0..T::FIELD_COUNT {
+                    tuple.push(TupleItem::Null);
+                }
+                tuple.push_bool(false);
+            }
+        }
+        Ok(())
     }
 }
