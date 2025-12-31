@@ -1597,3 +1597,65 @@ fn test_build_artifacts_created_with_cache() {
         "File content should be byte-for-byte identical"
     );
 }
+
+#[test]
+fn test_build_with_info_flag() {
+    let project = ProjectBuilder::new("build-info")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .build()
+        .with_info()
+        .run()
+        .success()
+        .assert_snapshot_matches("integration/snapshots/test_build_with_info_flag.stdout.txt");
+}
+
+#[test]
+fn test_build_with_info_flag_from_cache() {
+    let project = ProjectBuilder::new("build-info")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .build()
+        .with_info()
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_build_with_info_flag_from_cache_before.stdout.txt",
+        );
+
+    // Build form cache
+    project
+        .acton()
+        .build()
+        .with_info()
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_build_with_info_flag_from_cache_after.stdout.txt",
+        );
+}
+
+#[test]
+fn test_build_with_info_flag_for_several_contracts() {
+    let project = ProjectBuilder::new("build-info")
+        .contract("simple", SIMPLE_CONTRACT)
+        .contract("simple2", SIMPLE_CONTRACT)
+        .contract("simple3", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .build()
+        .with_info()
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_build_with_info_flag_for_several_contracts.stdout.txt",
+        );
+}

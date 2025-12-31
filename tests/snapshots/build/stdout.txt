@@ -9,6 +9,7 @@ Options:
       --clear-cache        Clear compilation cache before building
       --graph <GRAPH>      Generate dependency graph as SVG file (requires graphviz)
       --out-dir <OUT_DIR>  Output directory for build artifacts [default: build]
+      --info               Show compiled contract info
   -h, --help               Print help
 
 Configuration:

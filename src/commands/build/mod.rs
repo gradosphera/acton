@@ -20,6 +20,7 @@ pub fn build_cmd(
     clear_cache: bool,
     graph_output: Option<String>,
     out_dir: Option<String>,
+    show_info: bool,
 ) -> anyhow::Result<()> {
     // Due to global variables, we need to enable debug mode for emulator as early as possible
     // since first compilation WITHOUT debug mode will set debug=false forever
@@ -101,6 +102,7 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
 
     let mut compiled_contracts: HashMap<String, String> = HashMap::new();
     let mut compile_errors = BTreeMap::new();
+    let mut build_info = Vec::new();
 
     for contract_key in filtered_compilation_order {
         let Some(contract_config) = contracts.get(&contract_key) else {
@@ -122,6 +124,14 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
 
         compiled_contracts.insert(contract_key.clone(), code_boc64.clone());
 
+        if show_info {
+            build_info.push((
+                contract_config.name.clone(),
+                code_boc64.clone(),
+                code_hash.clone(),
+            ));
+        }
+
         if let Err(e) = save_build_artifact(&out_dir, &contract_key, &code_boc64, &code_hash) {
             eprintln!(
                 "Warning: Failed to save build artifact file for {}: {}",
@@ -141,6 +151,16 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
 
     if failure_count == 0 {
         println!("    {} in {:?}", "Finished".green().bold(), total_elapsed);
+
+        if !build_info.is_empty() {
+            for (name, code, hash) in build_info {
+                println!();
+                println!("   {} of {}", "Artifacts".green().bold(), name);
+                println!("        {} {}", "Code".cyan(), code.dimmed());
+                println!("        {} {}", "Hash".cyan(), hash.dimmed());
+            }
+        }
+
         Ok(())
     } else {
         let mut whole_error = "".to_owned();

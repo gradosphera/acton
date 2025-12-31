@@ -1,0 +1,20 @@
+   Compiling contracts
+   Compiling simple
+    Finished in [TIME]
+   Compiling simple2
+    Finished in [TIME]
+   Compiling simple3
+    Finished in [TIME]
+    Finished in [TIME]
+
+   Artifacts of simple
+        Code te6ccgEBAgEAFAABFP8A9KQT9LzyyAsBAArTMPiR3A==
+        Hash E67EEC3BD481C7910C87A061E60CA509E82EDD687A0E1C8BF1B437E6DE3E6973
+
+   Artifacts of simple2
+        Code te6ccgEBAgEAFAABFP8A9KQT9LzyyAsBAArTMPiR3A==
+        Hash E67EEC3BD481C7910C87A061E60CA509E82EDD687A0E1C8BF1B437E6DE3E6973
+
+   Artifacts of simple3
+        Code te6ccgEBAgEAFAABFP8A9KQT9LzyyAsBAArTMPiR3A==
+        Hash E67EEC3BD481C7910C87A061E60CA509E82EDD687A0E1C8BF1B437E6DE3E6973

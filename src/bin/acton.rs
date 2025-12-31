@@ -359,6 +359,8 @@ enum Commands {
             help = "Output directory for build artifacts"
         )]
         out_dir: Option<String>,
+        #[arg(long, help = "Show compiled contract info")]
+        info: bool,
     },
     #[command(about = "Run a script defined in Acton.toml")]
     Run {
@@ -875,7 +877,8 @@ fn main() {
             clear_cache,
             graph,
             out_dir,
-        } => build_cmd(contract_id, clear_cache, graph, out_dir),
+            info,
+        } => build_cmd(contract_id, clear_cache, graph, out_dir, info),
         Commands::Compile {
             path,
             json,

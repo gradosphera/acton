@@ -589,6 +589,7 @@ impl Project {
             script_broadcast: false,
             test_fail_fast: false,
             script_fork_net: None,
+            build_info: false,
         }
     }
 
@@ -632,6 +633,7 @@ pub struct ActonCommand {
     pub(crate) script_broadcast: bool,
     pub(crate) test_fail_fast: bool,
     pub(crate) script_fork_net: Option<String>,
+    pub(crate) build_info: bool,
 }
 
 #[allow(dead_code)]
@@ -1066,6 +1068,12 @@ impl ActonCommand {
         self
     }
 
+    /// Enable info output for build command
+    pub fn with_info(mut self) -> Self {
+        self.build_info = true;
+        self
+    }
+
     /// Enable broadcast mode for script execution (only for script command)
     ///
     /// # Examples
@@ -1152,6 +1160,10 @@ impl ActonCommand {
 
         if let Some(out_dir) = self.build_out_dir {
             self.cmd = self.cmd.arg("--out-dir").arg(out_dir);
+        }
+
+        if self.build_info {
+            self.cmd = self.cmd.arg("--info");
         }
 
         if let Some(boc_string) = self.disasm_string {
