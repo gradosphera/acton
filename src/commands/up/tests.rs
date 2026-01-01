@@ -17,7 +17,15 @@ fn test_update_stable_to_stable_upgrade() -> Result<()> {
     let asset = MockReleaseClient::create_asset("0.2.0");
     client.set_latest("0.2.0", vec![asset]);
 
-    workflow::run_update(&client, &bin_path, current_version, None, false, true)?;
+    workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        false,
+        true,
+        false,
+    )?;
 
     let content = fs::read_to_string(&bin_path)?;
     assert_eq!(content, "binary-data-0.2.0");
@@ -34,7 +42,15 @@ fn test_update_stable_already_latest() -> Result<()> {
     let asset = MockReleaseClient::create_asset("0.2.0");
     client.set_latest("0.2.0", vec![asset]);
 
-    workflow::run_update(&client, &bin_path, current_version, None, false, true)?;
+    workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        false,
+        true,
+        false,
+    )?;
 
     let content = fs::read_to_string(&bin_path)?;
     assert_eq!(content, "old_binary");
@@ -51,7 +67,15 @@ fn test_update_stable_from_canary() -> Result<()> {
     let asset = MockReleaseClient::create_asset("0.2.0");
     client.set_latest("0.2.0", vec![asset]);
 
-    workflow::run_update(&client, &bin_path, current_version, None, false, true)?;
+    workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        false,
+        true,
+        false,
+    )?;
 
     let content = fs::read_to_string(&bin_path)?;
     assert_eq!(content, "binary-data-0.2.0");
@@ -70,7 +94,15 @@ fn test_update_canary_to_canary() -> Result<()> {
     let asset = MockReleaseClient::create_asset("canary");
     client.set_canary(vec![asset]);
 
-    workflow::run_update(&client, &bin_path, current_version, None, true, false)?;
+    workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        true,
+        false,
+        false,
+    )?;
 
     let content = fs::read_to_string(&bin_path)?;
     assert_eq!(content, "binary-data-canary");
@@ -96,6 +128,7 @@ fn test_downgrade() -> Result<()> {
         Some("0.2.0".to_owned()),
         false,
         false,
+        false,
     )?;
 
     let content = fs::read_to_string(&bin_path)?;
@@ -114,7 +147,15 @@ fn test_network_error() -> Result<()> {
     let mut client = MockReleaseClient::new();
     client.should_fail = true;
 
-    let result = workflow::run_update(&client, &bin_path, current_version, None, false, true);
+    let result = workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        false,
+        true,
+        false,
+    );
 
     assert!(result.is_err());
     assert_eq!(
@@ -140,6 +181,7 @@ fn test_custom_version() -> Result<()> {
         Some("0.0.5".to_string()),
         false,
         false,
+        false,
     )?;
 
     let content = fs::read_to_string(&bin_path)?;
@@ -160,7 +202,15 @@ fn test_install_canary_version_and_then_stable() -> Result<()> {
     client.set_latest("0.3.0", vec![MockReleaseClient::create_asset("0.3.0")]);
     client.set_canary(vec![MockReleaseClient::create_asset("canary")]);
 
-    workflow::run_update(&client, &bin_path, current_version, None, true, false)?;
+    workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        true,
+        false,
+        false,
+    )?;
 
     let content = fs::read_to_string(&bin_path)?;
     assert_eq!(content, "binary-data-canary");
@@ -168,7 +218,15 @@ fn test_install_canary_version_and_then_stable() -> Result<()> {
     assert_backup_created(&bin_path, current_version, "old_binary")?;
 
     let current_version = "canary";
-    workflow::run_update(&client, &bin_path, current_version, None, false, true)?;
+    workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        false,
+        true,
+        false,
+    )?;
 
     let content = fs::read_to_string(&bin_path)?;
     assert_eq!(content, "binary-data-0.3.0");
@@ -186,7 +244,15 @@ fn test_install_versions() -> Result<()> {
     let mut client = MockReleaseClient::new();
     client.set_latest("0.2.0", vec![MockReleaseClient::create_asset("0.2.0")]);
 
-    workflow::run_update(&client, &bin_path, current_version, None, false, false)?;
+    workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        false,
+        false,
+        false,
+    )?;
 
     let content = fs::read_to_string(&bin_path)?;
     assert_eq!(content, "binary-data-0.2.0");
@@ -197,7 +263,15 @@ fn test_install_versions() -> Result<()> {
     client.set_latest("0.3.0", vec![MockReleaseClient::create_asset("0.3.0")]);
 
     let current_version = "0.2.0";
-    workflow::run_update(&client, &bin_path, current_version, None, false, false)?;
+    workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        false,
+        false,
+        false,
+    )?;
 
     let content = fs::read_to_string(&bin_path)?;
     assert_eq!(content, "binary-data-0.3.0");
@@ -217,7 +291,15 @@ fn test_install_canary_versions() -> Result<()> {
         "canary", "canary-1",
     )]);
 
-    workflow::run_update(&client, &bin_path, current_version, None, true, false)?;
+    workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        true,
+        false,
+        false,
+    )?;
 
     let content = fs::read_to_string(&bin_path)?;
     assert_eq!(content, "binary-data-canary: canary-1");
@@ -228,7 +310,15 @@ fn test_install_canary_versions() -> Result<()> {
     )]);
 
     let current_version = "canary";
-    workflow::run_update(&client, &bin_path, current_version, None, true, false)?;
+    workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        true,
+        false,
+        false,
+    )?;
 
     let content = fs::read_to_string(&bin_path)?;
     assert_eq!(content, "binary-data-canary: canary-2");
@@ -247,7 +337,15 @@ fn test_backup_is_created_correctly() -> Result<()> {
     let asset = MockReleaseClient::create_asset("0.2.0");
     client.set_latest("0.2.0", vec![asset]);
 
-    workflow::run_update(&client, &bin_path, current_version, None, false, true)?;
+    workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        None,
+        false,
+        true,
+        false,
+    )?;
 
     assert_backup_created(&bin_path, current_version, "old_binary")?;
 

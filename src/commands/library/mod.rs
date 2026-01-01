@@ -24,6 +24,7 @@ use tonlib_core::tlb_types::primitives::reference::Ref;
 use tonlib_core::tlb_types::tlb::TLB;
 use tycho_types::boc::Boc;
 
+#[allow(clippy::too_many_arguments)]
 pub fn publish_cmd(
     contract_id: Option<String>,
     code_arg: Option<String>,
