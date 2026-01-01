@@ -40,10 +40,15 @@ Session.vim
 .emacs/
 .helix/
 
+# Acton related
 .env
 *.mnemonic
 wallets.toml
 global.wallets.toml
+
+# coverage
+lcov.info
+gen/
 ";
 
 pub fn new_cmd(
