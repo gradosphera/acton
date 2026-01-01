@@ -91,6 +91,21 @@ acton wallet new --name deployer --local
 acton wallet new --name shared --global
 ```
 
+### Importing an Existing Wallet
+
+If you already have a mnemonic phrase, you can import it using the `acton wallet import` command:
+
+```bash
+# Import a local wallet
+acton wallet import --name deployer --local "word1 word2 ... word24"
+```
+
+You can also run it without arguments for an interactive import:
+
+```bash
+acton wallet import
+```
+
 ### Listing Wallets
 
 To see all available wallets (local and global) and their types:

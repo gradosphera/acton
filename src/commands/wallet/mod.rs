@@ -34,6 +34,25 @@ pub enum WalletCommand {
         #[arg(long, help = "Save wallet to local wallets.toml")]
         local: bool,
     },
+    #[command(about = "Import an existing wallet from mnemonic")]
+    Import {
+        #[arg(
+            long,
+            help = "Name of the wallet (optional, will prompt if not provided)"
+        )]
+        name: Option<String>,
+        #[arg(help = "Mnemonic words of the wallet")]
+        mnemonics: Vec<String>,
+        #[arg(
+            long,
+            help = "Version of the wallet (optional, will prompt if not provided)"
+        )]
+        version: Option<String>,
+        #[arg(long, help = "Save wallet to global config")]
+        global: bool,
+        #[arg(long, help = "Save wallet to local wallets.toml")]
+        local: bool,
+    },
     #[command(about = "List available wallets")]
     List {
         #[arg(short, long, help = "Show wallet balance")]
@@ -51,6 +70,13 @@ pub fn wallet_cmd(command: WalletCommand) -> anyhow::Result<()> {
             global,
             local,
         } => new_wallet(name, version, global, local),
+        WalletCommand::Import {
+            name,
+            mnemonics,
+            version,
+            global,
+            local,
+        } => import_wallet(name, mnemonics, version, global, local),
         WalletCommand::List { balance, api_key } => list_wallets(balance, api_key),
     }
 }
@@ -161,49 +187,46 @@ fn wallet_version_to_string(v: &WalletVersion) -> String {
     .to_string()
 }
 
-fn new_wallet(
-    name: Option<String>,
-    version: Option<String>,
-    global_flag: bool,
-    local_flag: bool,
-) -> anyhow::Result<()> {
-    let name = match name {
+fn get_or_prompt_name(name: Option<String>) -> anyhow::Result<String> {
+    match name {
         Some(n) => {
             let normalized = normalize_wallet_name(&n);
             if normalized.is_empty() {
                 anyhow::bail!("Wallet name '{}' is invalid", n);
             }
-            normalized
+            Ok(normalized)
         }
         None => loop {
             let n = Text::new("Wallet name:").with_default("wallet").prompt()?;
             let normalized = normalize_wallet_name(&n);
             if !normalized.is_empty() {
-                break normalized;
+                break Ok(normalized);
             }
             println!(
                 "{}",
                 "Wallet name is invalid. Please try again.".yellow().bold()
             );
         },
-    };
+    }
+}
 
-    let _config = ActonConfig::load()?;
-
-    let is_global = if global_flag {
-        true
+fn get_is_global(global_flag: bool, local_flag: bool) -> anyhow::Result<bool> {
+    if global_flag {
+        Ok(true)
     } else if local_flag {
-        false
+        Ok(false)
     } else {
         let options = vec![
             "Local (wallets.toml)",
             "Global (~/.acton/wallets/global.wallets.toml)",
         ];
         let selection = Select::new("Save wallet to:", options).prompt()?;
-        selection.starts_with("Global")
-    };
+        Ok(selection.starts_with("Global"))
+    }
+}
 
-    let config_path = if is_global {
+fn get_config_path(name: &str, is_global: bool) -> anyhow::Result<PathBuf> {
+    if is_global {
         let global_dir = global_wallets_path()
             .ok_or_else(|| anyhow!("Could not determine global wallets path"))?
             .parent()
@@ -218,30 +241,32 @@ fn new_wallet(
             let content = fs::read_to_string(&config_path)?;
             let wallets: WalletsFile = toml::from_str(&content)?;
             if let Some(w) = wallets.wallets
-                && w.wallets.contains_key(&name)
+                && w.wallets.contains_key(name)
             {
                 anyhow::bail!("Wallet {} already exists in global config", name.yellow());
             }
         }
 
-        config_path
+        Ok(config_path)
     } else {
         let config_path = PathBuf::from("wallets.toml");
         if config_path.exists() {
             let content = fs::read_to_string(&config_path)?;
             let wallets: WalletsFile = toml::from_str(&content)?;
             if let Some(w) = wallets.wallets
-                && w.wallets.contains_key(&name)
+                && w.wallets.contains_key(name)
             {
                 anyhow::bail!("Wallet {} already exists in local config", name.yellow());
             }
         }
 
-        config_path
-    };
+        Ok(config_path)
+    }
+}
 
-    let version = if let Some(k) = version {
-        parse_wallet_version(&k)?
+fn get_or_prompt_version(version: Option<String>) -> anyhow::Result<WalletVersion> {
+    if let Some(k) = version {
+        parse_wallet_version(&k)
     } else {
         let versions = [
             WalletVersion::V5R1,
@@ -264,20 +289,18 @@ fn new_wallet(
         let selected_str = Select::new("Wallet type:", versions_str)
             .with_starting_cursor(0)
             .prompt()?;
-        parse_wallet_version(&selected_str)?
-    };
+        parse_wallet_version(&selected_str)
+    }
+}
 
-    let mnemonic_words = wallets::new_mnemonic()?;
-    let mnemonic_str = mnemonic_words.join(" ");
-
-    let mnemonic = Mnemonic::from_str(&mnemonic_str, &None)?;
-    let key_pair = mnemonic.to_key_pair()?;
-
-    let wallet_id = wallets::wallet_id(version, "testnet");
-    let wallet = TonWallet::new_with_params(version, key_pair, 0, wallet_id)?;
-
-    let wallet_address = wallet.address.to_base64_std_flags(false, true);
-
+fn save_wallet_to_config(
+    config_path: &Path,
+    name: &str,
+    version: WalletVersion,
+    mnemonic_str: &str,
+    wallet_address: &str,
+    is_global: bool,
+) -> anyhow::Result<()> {
     let config_entry = format!(
         "[wallets.{}]
 kind = \"{}\"
@@ -298,7 +321,7 @@ address-testnet = \"{}\"
     let mut file = OpenOptions::new()
         .append(true)
         .create(true)
-        .open(&config_path)
+        .open(config_path)
         .context(format!("Failed to open {}", config_path.display()))?;
 
     if config_exists {
@@ -313,7 +336,7 @@ address-testnet = \"{}\"
     if is_global {
         let symlink_path = Path::new("global.wallets.toml");
         if !symlink_path.exists() {
-            if let Err(e) = create_symlink(&config_path, symlink_path) {
+            if let Err(e) = create_symlink(config_path, symlink_path) {
                 println!(
                     "  {} Failed to create symlink: {}",
                     "Warning:".yellow().bold(),
@@ -329,6 +352,41 @@ address-testnet = \"{}\"
             }
         }
     }
+
+    Ok(())
+}
+
+fn new_wallet(
+    name: Option<String>,
+    version: Option<String>,
+    global_flag: bool,
+    local_flag: bool,
+) -> anyhow::Result<()> {
+    let _ = ActonConfig::load()?;
+    let name = get_or_prompt_name(name)?;
+    let is_global = get_is_global(global_flag, local_flag)?;
+    let config_path = get_config_path(&name, is_global)?;
+    let version = get_or_prompt_version(version)?;
+
+    let mnemonic_words = wallets::new_mnemonic()?;
+    let mnemonic_str = mnemonic_words.join(" ");
+
+    let mnemonic = Mnemonic::from_str(&mnemonic_str, &None)?;
+    let key_pair = mnemonic.to_key_pair()?;
+
+    let wallet_id = wallets::wallet_id(version, "testnet");
+    let wallet = TonWallet::new_with_params(version, key_pair, 0, wallet_id)?;
+
+    let wallet_address = wallet.address.to_base64_std_flags(false, true);
+
+    save_wallet_to_config(
+        &config_path,
+        &name,
+        version,
+        &mnemonic_str,
+        &wallet_address,
+        is_global,
+    )?;
 
     println!(
         "{} Wallet successfully created and added to {}",
@@ -354,6 +412,61 @@ address-testnet = \"{}\"
     println!("  - Do NOT commit this file to version control (already added to .gitignore)");
     println!("  - Keep your mnemonic safe and secret");
 
+    Ok(())
+}
+
+fn import_wallet(
+    name: Option<String>,
+    mnemonics: Vec<String>,
+    version: Option<String>,
+    global_flag: bool,
+    local_flag: bool,
+) -> anyhow::Result<()> {
+    let _ = ActonConfig::load()?;
+    let name = get_or_prompt_name(name)?;
+    let is_global = get_is_global(global_flag, local_flag)?;
+    let config_path = get_config_path(&name, is_global)?;
+
+    let mnemonic_str = if mnemonics.is_empty() {
+        Text::new("Enter mnemonic (24 words):").prompt()?
+    } else {
+        mnemonics.join(" ")
+    };
+
+    let mnemonic =
+        Mnemonic::from_str(mnemonic_str.trim(), &None).context("Invalid mnemonic phrase")?;
+    let key_pair = mnemonic.to_key_pair()?;
+
+    let version = get_or_prompt_version(version)?;
+
+    let wallet_id = wallets::wallet_id(version, "testnet");
+    let wallet = TonWallet::new_with_params(version, key_pair, 0, wallet_id)?;
+
+    let wallet_address = wallet.address.to_base64_std_flags(false, true);
+
+    save_wallet_to_config(
+        &config_path,
+        &name,
+        version,
+        &mnemonic_str,
+        &wallet_address,
+        is_global,
+    )?;
+
+    println!(
+        "\n{} Wallet successfully created and added to {}",
+        "✓".green(),
+        config_path.display().cyan(),
+    );
+    println!("{} Wallet address is {}", "✓".green(), wallet_address);
+
+    println!("\n{}", "SECURITY WARNING:".red());
+    println!(
+        "  - The mnemonic is stored in plain text in {}",
+        config_path.display().cyan()
+    );
+    println!("  - Do NOT commit this file to version control (already added to .gitignore)");
+    println!("  - Keep your mnemonic safe and secret");
     Ok(())
 }
 

@@ -76,6 +76,47 @@ keys = { mnemonic = "word1 word2 ... word24" }
 
 ---
 
+### `acton wallet import`
+
+Imports an existing wallet from a mnemonic phrase.
+
+```bash
+acton wallet import <MNEMONICS>...
+```
+
+This command allows you to import an existing wallet by providing its mnemonic phrase.
+
+#### Options
+
+| Option                | Type   | Description                                           |
+|-----------------------|--------|-------------------------------------------------------|
+| `--name <NAME>`       | String | Name of the wallet (default: prompts user)            |
+| `--version <VERSION>` | String | Version of the wallet (default: prompts user)         |
+| `--local`             | Flag   | Save wallet to local `wallets.toml`                   |
+| `--global`            | Flag   | Save wallet to global `global.wallets.toml`           |
+
+#### Examples
+
+**Interactive Import:**
+
+```bash
+acton wallet import
+```
+
+You will be prompted to enter your mnemonic phrase, choose a name, and select where to save it.
+
+**Non-interactive Import:**
+
+```bash
+# Import a wallet named "my-wallet" locally
+acton wallet import --name my-wallet --local "word1 word2 ... word24"
+
+# Import a wallet with specific version
+acton wallet import --name deployer --version v4r2 --local "word1 word2 ... word24"
+```
+
+---
+
 ### `acton wallet list`
 
 Lists all available wallets (both local and global) and their versions.

@@ -1013,6 +1013,15 @@ impl ActonCommand {
         self
     }
 
+    pub fn wallet_import(mut self) -> Self {
+        self.cmd = self
+            .cmd
+            .arg("wallet")
+            .arg("import")
+            .current_dir(&self.project.path);
+        self
+    }
+
     pub fn wallet_list(mut self) -> Self {
         self.cmd = self
             .cmd

@@ -228,3 +228,81 @@ fn test_wallet_list() {
         .success()
         .assert_snapshot_matches("integration/snapshots/wallet/test_wallet_list.stdout.txt");
 }
+
+#[test]
+fn test_wallet_import_local() {
+    let project = ProjectBuilder::new("wallet-import-local").build();
+    let mnemonic = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later";
+
+    let output = project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("imported-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(mnemonic)
+        .run()
+        .success();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_import_local.stdout.txt",
+    );
+    output.assert_file_snapshot_matches(
+        "wallets.toml",
+        "integration/snapshots/wallet/test_wallet_import_local.wallets.toml.txt",
+    );
+}
+
+#[test]
+fn test_wallet_import_invalid_mnemonic() {
+    let project = ProjectBuilder::new("wallet-import-invalid").build();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("invalid-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("invalid mnemonic phrase")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/wallet/test_wallet_import_invalid_mnemonic.stderr.txt",
+        );
+}
+
+#[test]
+fn test_wallet_import_already_exists() {
+    let project = ProjectBuilder::new("wallet-import-exists").build();
+    let mnemonic = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later";
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("my-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(mnemonic)
+        .run()
+        .success();
+
+    let output = project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("my-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(mnemonic)
+        .run()
+        .failure();
+
+    output.assert_contains("Wallet my-wallet already exists in local config");
+}
