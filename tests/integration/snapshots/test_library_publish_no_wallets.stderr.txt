@@ -4,6 +4,6 @@ To add a wallet use acton wallet new or add the following to wallets.toml manual
 [wallets.deployer]
 kind = "v5r1"
 workchain = 0
-keys = { mnemonic = "..." }
+keys = { [MNEMONIC] }
 
 See https://i582.github.io/acton/docs/scripting/setup-wallets/ for more information

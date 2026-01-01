@@ -1,0 +1,18 @@
+# This is a global comment
+[wallets.existing]
+# This is a comment for existing wallet
+kind = "v4r2"
+workchain = 0
+keys = { [MNEMONIC] }
+
+# This is a comment before expected
+[wallets.existing.expected]
+[WALLET_ADDRESS_TESTNET]
+
+[wallets.new-wallet]
+kind = "v5r1"
+workchain = 0
+keys = { [MNEMONIC] }
+
+[wallets.new-wallet.expected]
+[WALLET_ADDRESS_TESTNET]

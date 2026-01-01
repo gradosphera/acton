@@ -7,9 +7,9 @@ use inquire::{Select, Text};
 use log::error;
 use owo_colors::OwoColorize;
 use std::env;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
+use toml_edit::{DocumentMut, Item, Table, value};
 use ton_api::{Network, TonApiClient};
 use tonlib_core::wallet::mnemonic::Mnemonic;
 use tonlib_core::wallet::ton_wallet::TonWallet;
@@ -301,37 +301,49 @@ fn save_wallet_to_config(
     wallet_address: &str,
     is_global: bool,
 ) -> anyhow::Result<()> {
-    let config_entry = format!(
-        "[wallets.{}]
-kind = \"{}\"
-workchain = 0
-keys = {{ mnemonic = \"{}\" }}
+    let mut doc = if config_path.exists() {
+        let content = fs::read_to_string(config_path)
+            .with_context(|| format!("Failed to read {}", config_path.display()))?;
+        content
+            .parse::<DocumentMut>()
+            .with_context(|| format!("Failed to parse {} as TOML", config_path.display()))?
+    } else {
+        DocumentMut::new()
+    };
 
-[wallets.{}.expected]
-address-testnet = \"{}\"
-",
-        name,
-        wallet_version_to_string(&version),
-        mnemonic_str,
-        name,
-        wallet_address,
-    );
+    let wallets = doc
+        .entry("wallets")
+        .or_insert({
+            let mut t = Table::new();
+            t.set_implicit(true);
+            Item::Table(t)
+        })
+        .as_table_mut()
+        .context("wallets is not a table")?;
 
-    let config_exists = config_path.exists();
-    let mut file = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(config_path)
-        .context(format!("Failed to open {}", config_path.display()))?;
+    let wallet = wallets
+        .entry(name)
+        .or_insert(Item::Table(Table::new()))
+        .as_table_mut()
+        .with_context(|| format!("wallets.{} is not a table", name))?;
 
-    if config_exists {
-        // add separator between wallets if there are any
-        file.write_all(b"\n")
-            .context(format!("Failed to append to {}", config_path.display()))?;
-    }
+    wallet["kind"] = value(wallet_version_to_string(&version));
+    wallet["workchain"] = value(0i64);
 
-    file.write_all(config_entry.as_bytes())
-        .context(format!("Failed to append to {}", config_path.display()))?;
+    let mut keys = toml_edit::InlineTable::new();
+    keys.insert("mnemonic", mnemonic_str.into());
+    wallet["keys"] = value(keys);
+
+    let expected = wallet
+        .entry("expected")
+        .or_insert(Item::Table(Table::new()))
+        .as_table_mut()
+        .with_context(|| format!("wallets.{}.expected is not a table", name))?;
+
+    expected["address-testnet"] = value(wallet_address);
+
+    fs::write(config_path, doc.to_string())
+        .with_context(|| format!("Failed to write to {}", config_path.display()))?;
 
     if is_global {
         let symlink_path = Path::new("global.wallets.toml");

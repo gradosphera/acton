@@ -306,3 +306,39 @@ fn test_wallet_import_already_exists() {
 
     output.assert_contains("Wallet my-wallet already exists in local config");
 }
+
+#[test]
+fn test_wallet_preserves_comments() {
+    let project = ProjectBuilder::new("wallet-comments")
+        .raw_file(
+            "wallets.toml",
+            r#"# This is a global comment
+[wallets.existing]
+# This is a comment for existing wallet
+kind = "v4r2"
+workchain = 0
+keys = { mnemonic = "word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14 word15 word16 word17 word18 word19 word20 word21 word22 word23 word24" }
+
+# This is a comment before expected
+[wallets.existing.expected]
+address-testnet = "EQD_existing_address"
+"#,
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("new-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .run()
+        .success();
+
+    output.assert_file_snapshot_matches(
+        "wallets.toml",
+        "integration/snapshots/wallet/test_wallet_preserves_comments.wallets.toml.txt",
+    );
+}

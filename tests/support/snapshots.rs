@@ -66,6 +66,9 @@ pub fn normalize_output(stdout: &str, project_path: &Path) -> String {
         .insert("[WALLET_ADDRESS_TESTNET]", regex!("address-testnet = .*"))
         .unwrap();
     redactions
+        .insert("[MNEMONIC]", regex!(r#"mnemonic = "[^"]*""#))
+        .unwrap();
+    redactions
         .insert(
             "[SECURITY_WARNING_MNEMONIC]",
             regex!(r"  - The mnemonic is stored in plain text in .*"),
