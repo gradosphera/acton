@@ -87,7 +87,22 @@ pub mod error_fmt {
     }
 
     pub fn script_not_found(config: &ActonConfig, name: &str) -> String {
-        let available = available_scripts(config);
+        let Some(available) = available_scripts(config) else {
+            return format!(
+                "Script {} not found in Acton.toml. No scripts defined yet.
+
+To define a new script add the following to Acton.toml:
+
+{}
+
+See https://i582.github.io/acton/docs/commands/run/ for more information",
+                name.yellow(),
+                "[scripts]
+script-name = \"command invocation\""
+                    .green()
+            );
+        };
+
         format!(
             "Script {} not found in Acton.toml\nAvailable scripts:\n{}",
             name.yellow(),
@@ -95,21 +110,23 @@ pub mod error_fmt {
         )
     }
 
-    pub fn available_scripts(config: &ActonConfig) -> String {
+    pub fn available_scripts(config: &ActonConfig) -> Option<String> {
         let scripts = match &config.scripts {
             Some(scripts) => scripts,
-            None => return "no scripts defined".to_string(),
+            None => return None,
         };
 
         if scripts.is_empty() {
-            return "no scripts defined".to_string();
+            return None;
         }
 
-        scripts
-            .keys()
-            .map(|s| format!(" {}", s.yellow()))
-            .collect::<Vec<_>>()
-            .join("\n")
+        Some(
+            scripts
+                .keys()
+                .map(|s| format!(" {}", s.yellow()))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
     }
 
     pub fn no_scripts_section() -> String {

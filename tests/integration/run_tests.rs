@@ -1,5 +1,6 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
+use std::fs;
 
 #[test]
 #[cfg_attr(not(unix), ignore)]
@@ -43,8 +44,31 @@ fn test_run_unknown_script() {
         .acton()
         .run_script_cmd("unknown")
         .run()
-        .code(1)
+        .failure()
         .assert_stderr_contains("Script unknown not found in Acton.toml");
+}
+
+#[test]
+fn test_run_empty_scripts_section() {
+    let project = ProjectBuilder::new("run-no-scripts").build();
+
+    let toml_content = r#"[package]
+name = "run-no-scripts"
+description = ""
+version = "0.1.0"
+
+[scripts]
+"#;
+    fs::write(project.path().join("Acton.toml"), toml_content).expect("Write Acton.toml");
+
+    project
+        .acton()
+        .run_script_cmd("unknown")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_run_empty_scripts_section.stderr.txt",
+        );
 }
 
 #[test]
@@ -55,7 +79,7 @@ fn test_run_no_scripts_section() {
         .acton()
         .run_script_cmd("unknown")
         .run()
-        .code(1)
+        .failure()
         .assert_stderr_contains("No [scripts] section found in Acton.toml");
 }
 
@@ -66,5 +90,5 @@ fn test_run_failing_script() {
         .script_config("fail", "exit 1")
         .build();
 
-    project.acton().run_script_cmd("fail").run().code(1);
+    project.acton().run_script_cmd("fail").run().failure();
 }
