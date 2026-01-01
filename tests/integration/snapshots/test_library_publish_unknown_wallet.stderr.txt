@@ -1,0 +1,3 @@
+Error: Wallet unknown not found in wallets.toml and global.wallets.toml
+Available wallets:
+ wallet

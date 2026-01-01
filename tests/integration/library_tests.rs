@@ -337,3 +337,62 @@ src = "contracts/simple.tolk"
             "integration/snapshots/test_library_publish_wallet_not_found.stderr.txt",
         );
 }
+
+#[test]
+fn test_library_publish_no_wallets() {
+    let project = ProjectBuilder::new("library-publish-invalid-net")
+        .contract("simple", "fun main() {}")
+        .build();
+
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+
+    project
+        .acton()
+        .env("HOME", home_path.to_str().unwrap())
+        .library()
+        .publish()
+        .contract("simple")
+        .with_net("testnet")
+        .with_duration("1d")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_library_publish_no_wallets.stderr.txt",
+        );
+}
+
+#[test]
+fn test_library_publish_unknown_wallet() {
+    let project = ProjectBuilder::new("library-publish-invalid-net")
+        .contract("simple", "fun main() {}")
+        .build();
+
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+
+    let toml_content = r#"[wallets.wallet]
+kind = "v5r1"
+workchain = 0
+keys = { mnemonic = "number bone assume survey solar debris liquid destroy minute end edge fine exhaust ginger mirror tongue proof guide blossom parrot mechanic style dad dynamic" }
+
+[wallets.wallet.expected]
+address-testnet = "kQBBSo2ccLuHuGiTn1z9Lei17LfBVOPewQmFR8pA2dAv2ixT"
+"#;
+    fs::write(project.path().join("wallets.toml"), toml_content).expect("Write wallets.toml");
+
+    project
+        .acton()
+        .env("HOME", home_path.to_str().unwrap())
+        .library()
+        .publish()
+        .contract("simple")
+        .with_net("testnet")
+        .with_duration("1d")
+        .wallet("unknown")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_library_publish_unknown_wallet.stderr.txt",
+        );
+}

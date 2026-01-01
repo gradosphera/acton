@@ -36,7 +36,7 @@ pub mod error_fmt {
     pub fn wallet_not_found(config: &ActonConfig, name: &str) -> String {
         let wallets = config.wallets();
         if wallets.is_none() || wallets.as_ref().map(|c| c.is_empty()).unwrap_or(false) {
-            return "no wallets defined yet".to_string();
+            return format!("Wallet {} not found. {}", name.yellow(), no_wallets_found());
         }
         let available = wallets
             .map(|contracts| {
@@ -48,7 +48,7 @@ pub mod error_fmt {
             })
             .unwrap_or_else(|| "none".to_string());
         format!(
-            "Wallet {} not found in Acton.toml\nAvailable wallets:\n{}",
+            "Wallet {} not found in wallets.toml and global.wallets.toml\nAvailable wallets:\n{}",
             name.yellow(),
             available
         )
@@ -138,6 +138,19 @@ script-name = \"command invocation\""
             "test = \"acton test tests/unit\"".green()
         )
     }
+
+    pub fn no_wallets_found() -> String {
+        format!(
+            "No wallets configured in {} or global.wallets.toml.\nTo add a wallet use {} or add the following to {} manually:\n\n{}\n{}\n{}\n{}\n\nSee https://i582.github.io/acton/docs/scripting/setup-wallets/ for more information",
+            "wallets.toml".yellow(),
+            "acton wallet new".yellow(),
+            "wallets.toml".green(),
+            "[wallets.deployer]".green(),
+            "kind = \"v5r1\"".green(),
+            "workchain = 0".green(),
+            "keys = { mnemonic = \"...\" }".green()
+        )
+    }
 }
 
 pub fn select_contract(
@@ -178,15 +191,13 @@ pub fn select_wallet(wallet_name: Option<String>, config: &ActonConfig) -> anyho
     let wallet_name = match wallet_name {
         Some(name) => name,
         None => {
-            let wallets_config = config.wallets().ok_or_else(|| {
-                anyhow!("No wallets configured in Acton.toml. Please add a wallet configuration.")
-            })?;
+            let wallets_config = config
+                .wallets()
+                .ok_or_else(|| anyhow!(error_fmt::no_wallets_found()))?;
 
             let wallet_names: Vec<&String> = wallets_config.keys().collect();
             match wallet_names.len() {
-                0 => anyhow::bail!(
-                    "No wallets configured in Acton.toml. Please add a wallet configuration."
-                ),
+                0 => anyhow::bail!(error_fmt::no_wallets_found()),
                 1 => wallet_names[0].clone(),
                 _ => {
                     let wallet_name = Select::new(
