@@ -173,7 +173,7 @@ pub fn new_mnemonic() -> anyhow::Result<Vec<String>> {
         result = vec![]; // reset value on new iteration
 
         for _ in 0..24 {
-            let random: usize = rand::thread_rng().gen_range(0..24);
+            let random: usize = rand::thread_rng().gen_range(0..2048);
             let Some(word) = wordlist.get(random) else {
                 anyhow::bail!("cannot find word with index {random}")
             };
