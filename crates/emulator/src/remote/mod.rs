@@ -25,6 +25,11 @@ pub fn get_account_info(
     network: &str,
     api_key: Option<String>,
 ) -> anyhow::Result<TonCenterAccountInfoResult> {
+    if api_key.is_none() {
+        // we need to wait for TonCenter rate limit
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+    }
+
     let base_url = toncenter_url(network)?;
     let url = format!(
         "{}/api/v2/getAddressInformation?address={}{}",

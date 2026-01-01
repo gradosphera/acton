@@ -20,9 +20,6 @@
 //! - **State Management**: Integrates with [`WorldState`] to track account states across
 //!   multiple transactions.
 //!
-//! - **Address Patching**: Automatically sets the source address of messages if missing,
-//!   simplifying testing of contract-to-contract interactions.
-//!
 //! # Examples
 //!
 //! ```rust

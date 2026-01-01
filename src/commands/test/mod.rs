@@ -26,7 +26,9 @@ use crate::file_build_cache::FileBuildCache;
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use emulator::emulator::Emulator;
-use emulator::world_state::{AccountsState, LocalAccountsState, RemoteAccountState, WorldState};
+use emulator::world_state::{
+    AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,
+};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, error};
 use num_traits::ToPrimitive;
@@ -118,6 +120,7 @@ pub struct TestRunner<'a> {
     transport: DapTransport,
     reporter_manager: &'a mut ReporterManager,
     mutation_overrides: BTreeMap<String, ArcCell>,
+    remote_cache: RemoteSnapshotCache,
 }
 
 impl<'a> TestRunner<'a> {
@@ -145,6 +148,7 @@ impl<'a> TestRunner<'a> {
             transport,
             reporter_manager,
             mutation_overrides,
+            remote_cache: RemoteSnapshotCache::new(),
         }
     }
 
@@ -222,15 +226,16 @@ impl<'a> TestRunner<'a> {
         };
 
         let mut emulator = Emulator::new(verbosity, None)?;
-        let resolver = match &self.config.fork_net {
+        let state = match &self.config.fork_net {
             Some(net) => AccountsState::Remote(RemoteAccountState::new(
                 net.clone(),
                 self.config.fork_block_number,
                 self.config.api_key.clone(),
+                self.remote_cache.clone(),
             )),
             None => AccountsState::Local(LocalAccountsState::new()),
         };
-        let mut world_state = WorldState::new(resolver);
+        let mut world_state = WorldState::new(state);
 
         let mut assert_failure = None;
         let mut expected_exit_code = None;

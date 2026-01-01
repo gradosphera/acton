@@ -7,8 +7,10 @@
 use crate::remote;
 use anyhow::anyhow;
 use num_traits::cast::ToPrimitive;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
+use std::rc::Rc;
 use std::str::FromStr;
 use tycho_types::cell::{Cell, HashBytes, Lazy};
 use tycho_types::models::{
@@ -96,6 +98,34 @@ impl LocalAccountsState {
     }
 }
 
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct RemoteCacheKey {
+    fork_block_number: Option<u64>,
+    fork_net: String,
+    address: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct RemoteSnapshotCache {
+    inner: Rc<RefCell<HashMap<RemoteCacheKey, ShardAccount>>>,
+}
+
+impl RemoteSnapshotCache {
+    pub fn new() -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(HashMap::new())),
+        }
+    }
+
+    pub fn get(&self, key: &RemoteCacheKey) -> Option<ShardAccount> {
+        self.inner.borrow().get(key).cloned()
+    }
+
+    pub fn insert(&self, key: RemoteCacheKey, val: ShardAccount) {
+        self.inner.borrow_mut().insert(key, val);
+    }
+}
+
 /// A state implementation that fetches missing accounts from a remote network.
 pub struct RemoteAccountState {
     /// Local cache and overrides for accounts.
@@ -106,16 +136,24 @@ pub struct RemoteAccountState {
     pub fork_block_number: Option<u64>,
     /// Optional API key for TonCenter.
     pub api_key: Option<String>,
+    /// Cache for less network queries in subsequent tests.
+    cache: RemoteSnapshotCache,
 }
 
 impl RemoteAccountState {
     /// Creates a new remote state for the given network.
-    pub fn new(fork_net: String, fork_block_number: Option<u64>, api_key: Option<String>) -> Self {
+    pub fn new(
+        fork_net: String,
+        fork_block_number: Option<u64>,
+        api_key: Option<String>,
+        cache: RemoteSnapshotCache,
+    ) -> Self {
         Self {
             accounts: HashMap::new(),
             fork_net,
             fork_block_number,
             api_key,
+            cache,
         }
     }
 
@@ -129,7 +167,12 @@ impl RemoteAccountState {
                 self.accounts.insert(address.to_string(), acc.clone());
                 acc
             }
-            Err(_) => {
+            Err(err) => {
+                eprintln!(
+                    "Failed to resolve address {} for account {}: {err}",
+                    address, current_lt
+                );
+
                 // don't cache account on error
                 ShardAccount {
                     account: Lazy::new(&OptionalAccount(None))
@@ -146,10 +189,20 @@ impl RemoteAccountState {
     }
 
     fn resolve_remote_account(
-        &self,
+        &mut self,
         address: &str,
         current_lt: u64,
     ) -> anyhow::Result<ShardAccount> {
+        // return cached version if it already resolved earlier in current suite
+        let cache_key = RemoteCacheKey {
+            fork_block_number: self.fork_block_number,
+            fork_net: self.fork_net.clone(),
+            address: address.to_owned(),
+        };
+        if let Some(cached) = self.cache.get(&cache_key) {
+            return Ok(cached.clone());
+        }
+
         let network = &self.fork_net;
         let api_key = self
             .api_key
@@ -188,6 +241,7 @@ impl RemoteAccountState {
             last_trans_hash: HashBytes::ZERO,
             last_trans_lt: current_lt.to_u64().unwrap_or(0),
         };
+        self.cache.insert(cache_key, acc.clone());
         Ok(acc)
     }
 }

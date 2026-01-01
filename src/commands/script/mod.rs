@@ -13,7 +13,9 @@ use crate::wallets;
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use emulator::emulator::Emulator;
-use emulator::world_state::{AccountsState, LocalAccountsState, RemoteAccountState, WorldState};
+use emulator::world_state::{
+    AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,
+};
 use log::error;
 use owo_colors::OwoColorize;
 use std::collections::{BTreeMap, HashMap};
@@ -186,6 +188,7 @@ fn execute_script(
             net.clone(),
             fork_block_number,
             api_key.clone(),
+            RemoteSnapshotCache::new(),
         )),
         None => AccountsState::Local(LocalAccountsState::new()),
     };
