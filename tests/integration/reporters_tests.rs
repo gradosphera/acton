@@ -51,7 +51,7 @@ fn test_teamcity_reporter_with_skipped_test() {
         .with_reporter("console")
         .with_reporter("teamcity")
         .run()
-        .success()
+        .failure()
         .assert_passed(0)
         .assert_contains("##teamcity[testSuiteStarted")
         .assert_contains("##teamcity[testSuiteFinished")

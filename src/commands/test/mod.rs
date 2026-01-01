@@ -442,8 +442,10 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         }
     }
 
+    let total_tests = total_passed + total_failed + total_skipped + total_todo;
+
     let global_stats = TestSuiteStats {
-        total: total_passed + total_failed + total_skipped + total_todo,
+        total: total_tests,
         passed: total_passed,
         failed: total_failed,
         skipped: total_skipped,
@@ -488,6 +490,19 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     }
 
     global_reporter.finalize()?;
+
+    if let Some(filter) = &config.filter
+        && total_tests == 0
+    {
+        // there is some `--filter` and no test ran, likely something is wrong
+        println!(
+            "{}",
+            color_print::cformat!(
+                "\nNo tests matched filter <yellow>{filter}</>, please check the filter spelling/pattern."
+            )
+        );
+        process::exit(1);
+    }
 
     if total_failed > 0 {
         process::exit(1)

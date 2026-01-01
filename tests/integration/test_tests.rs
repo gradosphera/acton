@@ -590,3 +590,52 @@ fn test_debug_logs_in_contract() {
         .success()
         .assert_snapshot_matches("integration/snapshots/test_debug_logs_in_contract.stdout.txt");
 }
+
+#[test]
+fn test_filter_all_test() {
+    ProjectBuilder::new("simple")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+                get fun `test-foo`() {}
+                get fun `test-bar`() {}
+            "#,
+        )
+        .build()
+        .acton()
+        .test()
+        .filter("1111111")
+        .run()
+        .failure()
+        .assert_snapshot_matches("integration/snapshots/test_filter_all_test.stdout.txt");
+}
+
+#[test]
+fn test_filter_all_test_with_several_test_files() {
+    ProjectBuilder::new("simple")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+                get fun `test-foo`() {}
+                get fun `test-bar`() {}
+            "#,
+        )
+        .test_file(
+            "test2",
+            r#"
+                get fun `test-baz`() {}
+                get fun `test-qux`() {}
+            "#,
+        )
+        .build()
+        .acton()
+        .test()
+        .filter("1111111")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_filter_all_test_with_several_test_files.stdout.txt",
+        );
+}

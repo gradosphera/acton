@@ -175,7 +175,7 @@ fn test_filter_with_no_matches() {
         .test()
         .filter("non-existent-test")
         .run()
-        .success()
+        .failure()
         .assert_passed(0);
 }
 
