@@ -303,18 +303,21 @@ fn to_pascal_case(s: &str) -> String {
 }
 
 fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> String {
+    let proot = &model.project_root;
+    let root = &model.wrapper_path;
+    let contract = &model.contract_name;
+
     let mut code = String::new();
 
     code.push_str("import \"@stdlib/gas-payments\"\n");
-    code.push_str("import \"../../.acton/build/build\"\n");
-    code.push_str("import \"../../.acton/emulation/network\"\n");
-    code.push_str("import \"../../.acton/testing/assert\"\n");
-    code.push_str("import \"../../.acton/testing/expect\"\n");
-    code.push_str("import \"../../.acton/types/message\"\n");
+    code.push_str(&import_stdlib(proot, root, ".acton/build/build"));
+    code.push_str(&import_stdlib(proot, root, ".acton/emulation/network"));
+    code.push_str(&import_stdlib(proot, root, ".acton/testing/assert"));
+    code.push_str(&import_stdlib(proot, root, ".acton/testing/expect"));
+    code.push_str(&import_stdlib(proot, root, ".acton/types/message"));
 
     if let Some(types_path) = types_file_path {
-        let types_import =
-            get_relative_import(&model.project_root, &model.wrapper_path, types_path);
+        let types_import = get_relative_import(proot, root, types_path);
         code.push_str(&gen_import_path(types_import));
     }
 
@@ -322,8 +325,7 @@ fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> 
         && Some(storage_path) != types_file_path
     {
         // add storage file import only if it different from types file
-        let storage_import =
-            get_relative_import(&model.project_root, &model.wrapper_path, storage_path);
+        let storage_import = get_relative_import(proot, root, storage_path);
         code.push_str(&gen_import_path(storage_import));
     }
 
@@ -340,21 +342,20 @@ fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> 
             continue;
         }
 
-        let types_import =
-            get_relative_import(&model.project_root, &model.wrapper_path, messages_path);
+        let types_import = get_relative_import(proot, root, messages_path);
         code.push_str(&gen_import_path(types_import));
     }
 
     code.push('\n');
 
-    code.push_str(&format!("struct {} {{\n", model.contract_name));
+    code.push_str(&format!("struct {} {{\n", contract));
     code.push_str("    address: address\n");
     code.push_str("    init: ContractState? = null\n");
     code.push_str("}\n\n");
 
     if model.abi.storage.is_some() {
         code.push_str(&generate_from_storage(
-            &model.contract_name,
+            contract,
             &model.contract_id,
             model
                 .abi
@@ -366,31 +367,28 @@ fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> 
         ));
         code.push('\n');
     } else {
-        code.push_str(&generate_empty_from_storage(
-            &model.contract_name,
-            &model.contract_id,
-        ));
+        code.push_str(&generate_empty_from_storage(contract, &model.contract_id));
         code.push('\n');
     }
 
-    code.push_str(&generate_from_address(&model.contract_name));
+    code.push_str(&generate_from_address(contract));
     code.push('\n');
 
-    code.push_str(&generate_deploy(&model.contract_name));
+    code.push_str(&generate_deploy(contract));
     code.push('\n');
 
     for message_name in &model.handled_messages {
         if let Some(message_type) = model.abi.messages.iter().find(|m| &m.name == message_name) {
-            code.push_str(&generate_send_method(&model.contract_name, message_type));
+            code.push_str(&generate_send_method(contract, message_type));
             code.push('\n');
         }
     }
 
-    code.push_str(&generate_send_any_method(&model.contract_name));
+    code.push_str(&generate_send_any_method(contract));
     code.push('\n');
 
     for get_method in &model.abi.get_methods {
-        code.push_str(&generate_get_method(&model.contract_name, get_method));
+        code.push_str(&generate_get_method(contract, get_method));
         code.push('\n');
     }
 
@@ -643,15 +641,23 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
 }
 
 fn generate_test(model: &WrapperModel, types_file_override: Option<&PathBuf>) -> String {
+    let proot = &model.project_root;
+    let root = &model.test_path;
+    let contract = &model.contract_name;
+
     let mut code = String::new();
 
     code.push_str("import \"@stdlib/gas-payments\"\n");
-    code.push_str("import \"../.acton/emulation/network\"\n");
-    code.push_str("import \"../.acton/testing/expect\"\n");
-    code.push_str("import \"../.acton/testing/transaction_expect\"\n");
+    code.push_str(&import_stdlib(proot, root, ".acton/emulation/network"));
+    code.push_str(&import_stdlib(proot, root, ".acton/testing/expect"));
+    code.push_str(&import_stdlib(
+        proot,
+        root,
+        ".acton/testing/transaction_expect",
+    ));
 
     if let Some(types_path) = types_file_override {
-        let types_import = get_relative_import(&model.project_root, &model.test_path, types_path);
+        let types_import = get_relative_import(proot, root, types_path);
         code.push_str(&gen_import_path(types_import));
     }
 
@@ -666,22 +672,25 @@ fn generate_test(model: &WrapperModel, types_file_override: Option<&PathBuf>) ->
             continue;
         }
 
-        let types_import =
-            get_relative_import(&model.project_root, &model.test_path, messages_path);
+        let types_import = get_relative_import(proot, root, messages_path);
         code.push_str(&gen_import_path(types_import));
     }
 
-    let wrapper_import =
-        get_relative_import(&model.project_root, &model.test_path, &model.wrapper_path);
+    let wrapper_import = get_relative_import(proot, root, &model.wrapper_path);
     code.push_str(&gen_import_path(wrapper_import));
     code.push('\n');
 
-    code.push_str(&generate_example_test(&model.contract_name));
+    code.push_str(&generate_example_test(contract));
     code.push('\n');
 
-    code.push_str(&generate_setup_test(&model.contract_name, &model.abi));
+    code.push_str(&generate_setup_test(contract, &model.abi));
 
     format!("{}\n", code.trim())
+}
+
+fn import_stdlib(project_root: &Path, where_: &Path, path: &str) -> String {
+    let types_import = get_relative_import(project_root, where_, Path::new(path));
+    gen_import_path(types_import)
 }
 
 fn gen_import_path(path: PathBuf) -> String {
