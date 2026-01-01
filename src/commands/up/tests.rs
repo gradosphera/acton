@@ -433,6 +433,7 @@ impl MockReleaseClient {
 
         Asset {
             name: format!("acton-{}-{}.tar.gz", os, arch),
+            url: format!("http://api.mock.url/v{}/acton.tar.gz", version),
             version: version.to_owned(),
             content: None,
             browser_download_url: format!("http://mock.url/v{}/acton.tar.gz", version),
@@ -454,6 +455,7 @@ impl MockReleaseClient {
 
         Asset {
             name: format!("acton-{}-{}.tar.gz", os, arch),
+            url: format!("http://api.mock.url/v{}/acton.tar.gz", version),
             version: version.to_owned(),
             content: Some(content.to_owned()),
             browser_download_url: format!("http://mock.url/v{}/acton.tar.gz", version),
@@ -487,12 +489,29 @@ impl ReleaseClient for MockReleaseClient {
             if let Some(release) = self.releases.get(&alt) {
                 return Ok(release.clone());
             }
-            bail!("Release not found");
+            bail!("Release not found: {}", v);
         }
 
         self.latest_release
             .clone()
             .ok_or_else(|| anyhow::anyhow!("No latest release found"))
+    }
+
+    fn list_releases(&self) -> Result<Vec<String>> {
+        if self.should_fail {
+            bail!("Mock network failure");
+        }
+
+        let mut tags: Vec<String> = self.releases.keys().cloned().collect();
+        if let Some(latest) = &self.latest_release {
+            tags.push(latest.tag_name.clone());
+        }
+        if let Some(canary) = &self.canary_release {
+            tags.push(canary.tag_name.clone());
+        }
+        tags.sort();
+        tags.dedup();
+        Ok(tags)
     }
 
     fn download_asset(&self, asset: &Asset) -> Result<PathBuf> {

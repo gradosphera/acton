@@ -27,9 +27,9 @@ pub fn run_update<C: ReleaseClient>(
     let should_install = if version.is_some() || canary {
         // in case of explicit version we always use it despite be canary or not
         if canary {
-            println!("Installing canary release...");
+            println!("  {} canary release", "Installing".green().bold());
         } else {
-            println!("Installing version {}...", release.tag_name);
+            println!("  {} {}", "Installing".green().bold(), release.tag_name);
         }
         true
     } else if stable {
@@ -38,20 +38,27 @@ pub fn run_update<C: ReleaseClient>(
             Ok(target_version) => {
                 if current_version_str == "canary" {
                     // when we use canary and user provide `--stable`, update to latest stable version
-                    println!("Installing stable version {target_version} (current: canary)...");
+                    println!(
+                        "   {} stable version {} (current: canary)",
+                        "Installing".green().bold(),
+                        target_version
+                    );
                     true
                 } else if let Ok(current_version) = &current_version
                     && &target_version != current_version
                 {
                     // if we on stable release, install new stable version
                     println!(
-                        "Installing stable version {} (current: {})...",
-                        target_version, current_version
+                        "   {} stable version {} (current: {})",
+                        "Installing".green().bold(),
+                        target_version,
+                        current_version
                     );
                     true
                 } else {
                     println!(
-                        "Acton is already at the latest stable version ({}).",
+                        "   {} Acton is already at the latest stable version ({})",
+                        "Up to date".green().bold(),
                         current_version?
                     );
                     false
@@ -59,14 +66,15 @@ pub fn run_update<C: ReleaseClient>(
             }
             Err(_) => {
                 println!(
-                    "Latest release tag '{}' is not a valid semver. Skipping auto-update.",
+                    "   {} Latest release tag '{}' is not a valid semver. Skipping auto-update.",
+                    "Skipping".yellow().bold(),
                     release.tag_name
                 );
                 return Ok(());
             }
         }
     } else if current_version_str == "canary" {
-        println!("Installing latest canary release...");
+        println!("   {} latest canary release", "Installing".green().bold());
         true
     } else {
         let current_version = current_version.context("Cannot parse current version")?;
@@ -75,23 +83,33 @@ pub fn run_update<C: ReleaseClient>(
             Ok(target_version) => {
                 if target_version > current_version {
                     println!(
-                        "New version available: {} (current: {})",
-                        target_version.green(),
+                        "   {} version {} (current: {})",
+                        "Updating".green().bold(),
+                        target_version,
                         current_version
                     );
                     true
                 } else if target_version == current_version {
                     // If versions match, we're up to date
-                    println!("Acton is up to date (version {}).", current_version);
+                    println!(
+                        "   {} Acton is up to date (version {})",
+                        "Up to date".green().bold(),
+                        current_version
+                    );
                     return Ok(());
                 } else {
-                    println!("Acton is up to date (version {}).", current_version);
+                    println!(
+                        "   {} Acton is up to date (version {})",
+                        "Up to date".green().bold(),
+                        current_version
+                    );
                     return Ok(());
                 }
             }
             Err(_) => {
                 println!(
-                    "Latest release tag '{}' is not a valid semver. Skipping auto-update.",
+                    "   {} Latest release tag '{}' is not a valid semver. Skipping auto-update.",
+                    "Skipping".yellow().bold(),
                     release.tag_name
                 );
                 return Ok(());
@@ -104,17 +122,13 @@ pub fn run_update<C: ReleaseClient>(
     }
 
     let asset = find_asset(&release)?;
-    println!("Found asset: {}", asset.name);
+    // println!("Found asset: {}", asset.name);
 
     let tarball_path = client.download_asset(asset)?;
 
     install_binary(&tarball_path, current_exe, current_version_str)?;
 
-    println!(
-        "{} updated successfully to {}",
-        "Acton".green(),
-        release.tag_name
-    );
+    println!("     {} to {}", "Updated".green().bold(), release.tag_name);
 
     Ok(())
 }
@@ -200,24 +214,35 @@ fn install_binary(tarball_path: &Path, current_exe: &Path, current_version: &str
     let backup_name = format!("acton-{}", current_version);
     let backup_path = bin_dir.join(&backup_name);
 
-    if let Err(e) = fs::rename(current_exe, &backup_path) {
+    // 1. Create backup by copying current binary
+    if let Err(e) = fs::copy(current_exe, &backup_path) {
         eprintln!(
             "Warning: Failed to create backup at {}: {}",
             backup_path.display(),
             e
         );
-        fs::copy(current_exe, &backup_path).context("Failed to copy current binary to backup")?;
     }
 
-    fs::copy(&new_bin_path, current_exe).context("Failed to install new binary")?;
+    // 2. Prepare new binary in a temporary file in the same directory to ensure atomic rename
+    let temp_file = tempfile::NamedTempFile::new_in(bin_dir)
+        .context("Failed to create temporary file for new binary")?;
 
+    fs::copy(&new_bin_path, temp_file.path())
+        .context("Failed to copy new binary to temporary file")?;
+
+    // 3. Set permissions on the temporary file
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(current_exe)?.permissions();
+        let mut perms = fs::metadata(temp_file.path())?.permissions();
         perms.set_mode(0o755);
-        fs::set_permissions(current_exe, perms)?;
+        fs::set_permissions(temp_file.path(), perms)?;
     }
+
+    // 4. Atomically replace the current binary
+    temp_file
+        .persist(current_exe)
+        .context("Failed to atomically replace current binary")?;
 
     let _ = fs::remove_file(tarball_path);
 

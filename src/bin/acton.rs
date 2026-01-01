@@ -474,6 +474,8 @@ enum Commands {
         stable: bool,
         #[arg(short, long, help = "Skip confirmation prompts")]
         yes: bool,
+        #[arg(long, help = "List available versions")]
+        list: bool,
     },
     #[command(
         about = "Generate shell completions for selected shell",
@@ -970,7 +972,8 @@ fn main() {
             canary,
             stable,
             yes,
-        } => up_cmd(version, canary, stable, yes),
+            list,
+        } => up_cmd(version, canary, stable, yes, list),
         Commands::Completions { shell } => {
             clap_complete::generate(shell, &mut Cli::command(), "acton", &mut std::io::stdout());
             Ok(())
