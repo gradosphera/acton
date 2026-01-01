@@ -1,0 +1,13 @@
+   Compiling contracts
+   Compiling simple
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+
+ TEST  [ROOT]
+
+ > ./tests/test.test.tolk (0 tests)
+
+ ✓ 0 passed in 1 file
+
+No tests matched filter 1111111, please check the filter spelling/pattern.

@@ -318,13 +318,23 @@ fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> 
         code.push_str(&gen_import_path(types_import));
     }
 
-    if let Some(storage_path) = &model.storage_path {
+    if let Some(storage_path) = &model.storage_path
+        && Some(storage_path) != types_file_path
+    {
+        // add storage file import only if it different from types file
         let storage_import =
             get_relative_import(&model.project_root, &model.wrapper_path, storage_path);
         code.push_str(&gen_import_path(storage_import));
     }
 
     for messages_path in &model.message_paths {
+        if Some(messages_path) == types_file_path
+            || Some(messages_path) == model.storage_path.as_ref()
+        {
+            // don't add duplicate import
+            continue;
+        }
+
         if messages_path == &model.contract_path {
             // never import file with contract itself since this will break all
             continue;
@@ -646,6 +656,11 @@ fn generate_test(model: &WrapperModel, types_file_override: Option<&PathBuf>) ->
     }
 
     for messages_path in &model.message_paths {
+        if Some(messages_path) == types_file_override {
+            // don't add duplicate import
+            continue;
+        }
+
         if messages_path == &model.contract_path {
             // never import file with contract itself since this will break all
             continue;

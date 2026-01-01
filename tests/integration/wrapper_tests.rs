@@ -66,6 +66,81 @@ fn test_wrapper_generation_without_test_stub() {
 }
 
 #[test]
+fn test_wrapper_generation_with_types_and_storage_in_the_same_file() {
+    let project = ProjectBuilder::new("wrapper_simple")
+        .contract(
+            "my_contract",
+            r#"
+                import "types"
+
+                fun onInternalMessage(in: InMessage) {
+                    val msg = lazy AllowedMessage.fromSlice(in.body);
+
+                    match (msg) {
+                        Increment => {}
+                        Decrement => {}
+                        else => {}
+                    }
+                }
+            "#,
+        )
+        .file(
+            "contracts/types",
+            r#"
+                struct Storage {
+                    id: uint32
+                    counter: uint32
+                }
+
+                fun Storage.load() {
+                    return Storage.fromCell(contract.getData());
+                }
+
+                fun Storage.save(self) {
+                    contract.setData(self.toCell());
+                }
+
+                struct (0x00000001) Increment {
+                    value: int32
+                }
+
+                struct (0x00000002) Decrement {
+                    value: int
+                }
+
+                type AllowedMessage = Increment | Decrement;
+            "#,
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .run()
+        .success();
+
+    output
+        .assert_contains("Generated")
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/wrappers/MyContract.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_types_and_storage_in_the_same_file/wrapper.tolk.txt",
+        )
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/my_contract.test.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_types_and_storage_in_the_same_file/test.tolk.txt",
+        );
+}
+
+#[test]
 fn test_wrapper_generation_with_several_storages() {
     let project = ProjectBuilder::new("wrapper_simple")
         .contract(
