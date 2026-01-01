@@ -167,10 +167,25 @@ fn new_wallet(
     global_flag: bool,
     local_flag: bool,
 ) -> anyhow::Result<()> {
-    let name = if let Some(n) = name {
-        n
-    } else {
-        Text::new("Wallet name:").with_default("wallet").prompt()?
+    let name = match name {
+        Some(n) => {
+            let normalized = normalize_wallet_name(&n);
+            if normalized.is_empty() {
+                anyhow::bail!("Wallet name '{}' is invalid", n);
+            }
+            normalized
+        }
+        None => loop {
+            let n = Text::new("Wallet name:").with_default("wallet").prompt()?;
+            let normalized = normalize_wallet_name(&n);
+            if !normalized.is_empty() {
+                break normalized;
+            }
+            println!(
+                "{}",
+                "Wallet name is invalid. Please try again.".yellow().bold()
+            );
+        },
     };
 
     let _config = ActonConfig::load()?;
@@ -363,5 +378,33 @@ fn parse_wallet_version(kind: &str) -> anyhow::Result<WalletVersion> {
             "Unsupported wallet version {}. Supported versions: v1r1, v1r2, v1r3, v2r1, v2r2, v3r1, v3r2, v4r1, v4r2, v5r1, highloadv1r1, highloadv1r2, highloadv2, highloadv2r1, highloadv2r2",
             kind.yellow()
         )),
+    }
+}
+
+fn normalize_wallet_name(name: &str) -> String {
+    name.trim()
+        .to_lowercase()
+        .replace(' ', "-")
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+        .collect()
+}
+
+#[cfg(test)]
+mod wallet_name_tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_wallet_name() {
+        assert_eq!(normalize_wallet_name("My Wallet"), "my-wallet");
+        assert_eq!(normalize_wallet_name("  Trim Me  "), "trim-me");
+        assert_eq!(normalize_wallet_name("Keep_Underscore"), "keep_underscore");
+        assert_eq!(normalize_wallet_name("Remove!@#$%Symbols"), "removesymbols");
+        assert_eq!(
+            normalize_wallet_name("Multiple   Spaces"),
+            "multiple---spaces"
+        );
+        assert_eq!(normalize_wallet_name("v5r1"), "v5r1");
+        assert_eq!(normalize_wallet_name("!!!"), "");
     }
 }

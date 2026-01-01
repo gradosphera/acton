@@ -116,6 +116,81 @@ fn test_wallet_new_unknown_kind() {
 }
 
 #[test]
+fn test_wallet_new_normalized_name() {
+    let project = ProjectBuilder::new("wallet-normalized").build();
+
+    let output = project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("My Wallet 123!")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .run()
+        .success();
+
+    let wallets_toml = fs::read_to_string(project.path().join("wallets.toml")).unwrap();
+    // "My Wallet 123!" -> "my-wallet-123"
+    assert!(wallets_toml.contains("[wallets.my-wallet-123]"));
+    assert!(wallets_toml.contains("[wallets.my-wallet-123.expected]"));
+
+    output.assert_contains("Wallet successfully created and added to wallets.toml");
+}
+
+#[test]
+fn test_wallet_new_normalization_variants() {
+    let project = ProjectBuilder::new("wallet-variants").build();
+
+    project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("Test.Wallet_Name")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .run()
+        .success();
+
+    let wallets_toml = fs::read_to_string(project.path().join("wallets.toml")).unwrap();
+    // "Test.Wallet_Name" -> "testwallet_name" (dot is removed, underscore kept)
+    assert!(wallets_toml.contains("[wallets.testwallet_name]"));
+
+    project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("Too   Many   Spaces")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .run()
+        .success();
+
+    let wallets_toml = fs::read_to_string(project.path().join("wallets.toml")).unwrap();
+    assert!(wallets_toml.contains("[wallets.too---many---spaces]"));
+}
+
+#[test]
+fn test_wallet_new_invalid_name() {
+    let project = ProjectBuilder::new("wallet-invalid").build();
+
+    let output = project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("!!!")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .run()
+        .failure();
+
+    output.assert_contains("Wallet name '!!!' is invalid");
+}
+
+#[test]
 fn test_wallet_list() {
     let project = ProjectBuilder::new("wallet-list").build();
     let home_temp = tempfile::TempDir::new().unwrap();
