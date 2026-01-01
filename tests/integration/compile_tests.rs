@@ -265,6 +265,52 @@ fn test_compile_base64_only() {
 // ========================================
 
 #[test]
+fn test_compile_with_source_map_output() {
+    let project = ProjectBuilder::new("compile-boc-out")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_source_map("source_map.json")
+        .run()
+        .success();
+
+    let source_map_file = project.path().join("source_map.json");
+    assert!(
+        source_map_file.exists(),
+        "Source map file should be created"
+    );
+
+    let content = fs::read(&source_map_file).unwrap();
+    assert!(!content.is_empty(), "Source map file should not be empty");
+}
+
+#[test]
+fn test_compile_with_source_map_output_to_nonexistent_directory() {
+    let project = ProjectBuilder::new("compile-boc-out")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_source_map("some/dir/here/source_map.json")
+        .run()
+        .success();
+
+    let source_map_file = project.path().join("some/dir/here/source_map.json");
+    assert!(
+        source_map_file.exists(),
+        "Source map file should be created"
+    );
+
+    let content = fs::read(&source_map_file).unwrap();
+    assert!(!content.is_empty(), "Source map file should not be empty");
+}
+
+#[test]
 fn test_compile_with_boc_output() {
     let project = ProjectBuilder::new("compile-boc-out")
         .contract("simple", SIMPLE_CONTRACT)
@@ -285,6 +331,26 @@ fn test_compile_with_boc_output() {
 }
 
 #[test]
+fn test_compile_with_boc_output_to_nonexistent_directory() {
+    let project = ProjectBuilder::new("compile-boc-out")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_boc_output("some/dir/here/output.boc")
+        .run()
+        .success();
+
+    let boc_file = project.path().join("some/dir/here/output.boc");
+    assert!(boc_file.exists(), "BoC file should be created");
+
+    let content = fs::read(&boc_file).unwrap();
+    assert!(!content.is_empty(), "BoC file should not be empty");
+}
+
+#[test]
 fn test_compile_with_fift_output() {
     let project = ProjectBuilder::new("compile-fift-out")
         .contract("simple", SIMPLE_CONTRACT)
@@ -298,6 +364,26 @@ fn test_compile_with_fift_output() {
         .success();
 
     let fift_file = project.path().join("output.fif");
+    assert!(fift_file.exists(), "Fift file should be created");
+
+    let content = fs::read_to_string(&fift_file).unwrap();
+    assert!(!content.is_empty(), "Fift file should not be empty");
+}
+
+#[test]
+fn test_compile_with_fift_output_to_nonexistent_directory() {
+    let project = ProjectBuilder::new("compile-fift-out")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_fift_output("some/dir/here/output.fif")
+        .run()
+        .success();
+
+    let fift_file = project.path().join("some/dir/here/output.fif");
     assert!(fift_file.exists(), "Fift file should be created");
 
     let content = fs::read_to_string(&fift_file).unwrap();

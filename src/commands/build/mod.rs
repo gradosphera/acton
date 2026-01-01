@@ -243,6 +243,16 @@ fn process_contract(
 
 fn save_boc_file(contract_config: &ContractConfig, code_boc64: &str) -> anyhow::Result<()> {
     if let Some(output_path) = &contract_config.output {
+        if let Some(parent_dir) = Path::new(&output_path).parent()
+            && let Err(err) = fs::create_dir_all(parent_dir)
+        {
+            anyhow::bail!(
+                "Failed to create directory for BoC file {}: {}",
+                parent_dir.display(),
+                err
+            );
+        }
+
         let code = Boc::decode_base64(code_boc64)?;
         fs::write(output_path, Boc::encode(code))?;
     }

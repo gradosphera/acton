@@ -317,6 +317,26 @@ fn test_build_with_boc_output() {
 }
 
 #[test]
+fn test_build_with_boc_output_to_nonexistent_directory() {
+    let project = ProjectBuilder::new("build-boc-output")
+        .contract_with_output("simple", SIMPLE_CONTRACT, "nested/dir/simple.boc")
+        .build();
+
+    project.acton().build().run().success();
+
+    let boc_file = project.path().join("nested").join("dir").join("simple.boc");
+    assert!(boc_file.exists(), "BoC file should be created");
+
+    let content = fs::read(&boc_file).expect("Should read boc file");
+    let hex = Boc::encode_hex(Boc::decode(content).expect("Should decode boc file"));
+
+    assertion().eq(
+        hex,
+        snapbox::file!("snapshots/test_build_with_boc_output_to_nonexistent_directory.boc.gen"),
+    );
+}
+
+#[test]
 fn test_build_no_contracts() {
     let project = ProjectBuilder::new("build-empty").build();
 

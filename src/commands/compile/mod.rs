@@ -134,6 +134,16 @@ fn handle_compilation_result(
     let code_hex = Boc::encode_hex(&code);
 
     if let Some(source_map_path) = &source_map_path {
+        if let Some(parent_dir) = Path::new(&source_map_path).parent()
+            && let Err(err) = fs::create_dir_all(parent_dir)
+        {
+            anyhow::bail!(
+                "Failed to create directory for source map file {}: {}",
+                parent_dir.display(),
+                err
+            );
+        }
+
         if let Some(source_map_data) = &source_map {
             if let Ok(json_string) = serde_json::to_string_pretty(source_map_data) {
                 fs::write(source_map_path, json_string).map_err(|err| {
@@ -150,6 +160,16 @@ fn handle_compilation_result(
     }
 
     if let Some(fift_path) = &fift {
+        if let Some(parent_dir) = Path::new(&fift_path).parent()
+            && let Err(err) = fs::create_dir_all(parent_dir)
+        {
+            anyhow::bail!(
+                "Failed to create directory for Fift file {}: {}",
+                parent_dir.display(),
+                err
+            );
+        }
+
         fs::write(fift_path, &fift_code).map_err(|err| {
             anyhow!(color_print::cformat!(
                 "Failed to save Fift file <yellow>{fift_path}</>: {err}"
@@ -158,6 +178,16 @@ fn handle_compilation_result(
     }
 
     if let Some(boc_path) = &boc {
+        if let Some(parent_dir) = Path::new(&boc_path).parent()
+            && let Err(err) = fs::create_dir_all(parent_dir)
+        {
+            anyhow::bail!(
+                "Failed to create directory for BoC file {}: {}",
+                parent_dir.display(),
+                err
+            );
+        }
+
         let bytes = Boc::encode(code);
         fs::write(boc_path, bytes).map_err(|err| {
             anyhow!(color_print::cformat!(
