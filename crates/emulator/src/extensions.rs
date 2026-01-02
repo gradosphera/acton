@@ -42,7 +42,7 @@ macro_rules! extension {
                 $crate::extensions::with_tuple(ptr, |__t: &mut tvmffi::stack::Tuple| {
                     let r: anyhow::Result<()> = $body(ctx, __t);
                     if let Err(e) = r {
-                        ctx.asserts.fail(e.to_string());
+                        ctx.asserts.fail(format!("{:#}", e));
                         __t.push(tvmffi::stack::TupleItem::Null);
                     }
                 })
@@ -58,7 +58,7 @@ macro_rules! extension {
                         Ok($an) => {
                             let r: anyhow::Result<()> = $body(ctx, __t, $an);
                             if let Err(e) = r {
-                                ctx.asserts.fail(e.to_string());
+                                ctx.asserts.fail(format!("{:#}", e));
                                 __t.push(tvmffi::stack::TupleItem::Null);
                             }
                         }
@@ -83,7 +83,7 @@ macro_rules! extension {
                             let ($($an, )*) = __vals;
                             let r: anyhow::Result<()> = $body(ctx, __t, $($an, )*);
                             if let Err(e) = r {
-                                ctx.asserts.fail(e.to_string());
+                                ctx.asserts.fail(format!("{:#}", e));
                                 __t.push(tvmffi::stack::TupleItem::Null);
                             }
                         }
