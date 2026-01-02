@@ -6,7 +6,7 @@
 
  TEST  [ROOT]
 
- > ./tests/test.test.tolk (0 tests)
+ > tests/test.test.tolk (0 tests)
 
  ✓ 0 passed in 1 file
 

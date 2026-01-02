@@ -7,8 +7,8 @@
  TEST  [ROOT]
 
 ##teamcity[testingStarted]
- > ./tests/counter.test.tolk (0 tests)
-##teamcity[testSuiteStarted name='counter.test.tolk' nodeId='suite_counter.test.tolk' parentNodeId='0' nodeType='file' locationHint='file://./tests/counter.test.tolk']
+ > tests/counter.test.tolk (0 tests)
+##teamcity[testSuiteStarted name='counter.test.tolk' nodeId='suite_counter.test.tolk' parentNodeId='0' nodeType='file' locationHint='file://[ROOT]/tests/counter.test.tolk']
 ##teamcity[testSuiteFinished name='counter.test.tolk' nodeId='suite_counter.test.tolk']
 
  ✓ 0 passed in 1 file

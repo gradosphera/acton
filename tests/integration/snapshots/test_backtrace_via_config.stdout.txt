@@ -6,7 +6,7 @@
 
  TEST  [ROOT]
 
- > ./tests/test.test.tolk (1 test)
+ > tests/test.test.tolk (1 test)
   ✗ with-error [TIME]
     └─ exit_code=42
       ├─ at tests/test.test[LINE]

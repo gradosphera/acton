@@ -745,6 +745,7 @@ fn run_file_tests(
     abi: &ContractAbi,
     source_map: &SourceMap,
 ) -> anyhow::Result<TestStats> {
+    let abs_file_path = fs::canonicalize(file_path).unwrap_or(PathBuf::from(file_path));
     let filtered_tests = if let Some(pattern) = &runner.config.filter {
         let regex = match Regex::new(pattern) {
             Ok(r) => r,
@@ -764,7 +765,7 @@ fn run_file_tests(
 
     runner
         .reporter_manager
-        .on_suite_started(file_path, &filtered_tests)?;
+        .on_suite_started(&abs_file_path, &filtered_tests)?;
 
     let dest_address = contract_address(code_cell)?;
 
@@ -774,7 +775,7 @@ fn run_file_tests(
     let mut todo = 0;
 
     for test in filtered_tests.iter() {
-        let suite_name = extract_suite_name(file_path);
+        let suite_name = extract_suite_name(&abs_file_path);
         let mut test_report = TestReport {
             name: test.name.clone(),
             suite_name: suite_name.clone(),
@@ -929,7 +930,7 @@ fn run_file_tests(
     };
     runner
         .reporter_manager
-        .on_suite_finished(file_path, &suite_stats)?;
+        .on_suite_finished(&abs_file_path, &suite_stats)?;
 
     if runner.config.snapshot.is_some() {
         match profiling::collect_profile(runner, abi) {

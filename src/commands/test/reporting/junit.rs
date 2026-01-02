@@ -3,7 +3,7 @@ use crate::commands::test::TestDescriptor;
 use quick_junit::{NonSuccessKind, Report, TestCase, TestCaseStatus, TestSuite};
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
@@ -28,7 +28,7 @@ impl Default for JUnitConfig {
 #[derive(Debug)]
 struct JUnitTestSuite {
     name: String,
-    file_path: String,
+    file_path: PathBuf,
     tests: Vec<TestReport>,
     stats: TestSuiteStats,
     timestamp: SystemTime,
@@ -112,7 +112,7 @@ impl JUnitReporter {
             test_suite.set_timestamp(timestamp.fixed_offset());
         }
 
-        test_suite.add_property(("file.path", suite.file_path.as_str()));
+        test_suite.add_property(("file.path", suite.file_path.display().to_string().as_str()));
 
         for test in &suite.tests {
             let test_case = self.convert_test_to_testcase(test);
@@ -157,7 +157,7 @@ impl TestReporter for JUnitReporter {
 
     fn on_suite_started(
         &mut self,
-        file_path: &str,
+        file_path: &Path,
         _tests: &[TestDescriptor],
     ) -> anyhow::Result<()> {
         let suite_name = extract_suite_name(file_path);
@@ -165,7 +165,7 @@ impl TestReporter for JUnitReporter {
 
         let suite = JUnitTestSuite {
             name: suite_name.clone(),
-            file_path: file_path.to_string(),
+            file_path: file_path.to_owned(),
             tests: Vec::new(),
             stats: TestSuiteStats::default(),
             timestamp: SystemTime::now(),
@@ -177,7 +177,7 @@ impl TestReporter for JUnitReporter {
 
     fn on_suite_finished(
         &mut self,
-        _file_path: &str,
+        _file_path: &Path,
         stats: &TestSuiteStats,
     ) -> anyhow::Result<()> {
         if let Some(ref suite_name) = self.current_suite {

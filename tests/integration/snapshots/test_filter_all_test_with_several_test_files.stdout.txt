@@ -6,8 +6,8 @@
 
  TEST  [ROOT]
 
- > ./tests/test.test.tolk (0 tests)
- > ./tests/test2.test.tolk (0 tests)
+ > tests/test.test.tolk (0 tests)
+ > tests/test2.test.tolk (0 tests)
 
  ✓ 0 passed in 2 files
 

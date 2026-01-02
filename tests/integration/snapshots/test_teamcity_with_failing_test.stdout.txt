@@ -7,8 +7,8 @@
  TEST  [ROOT]
 
 ##teamcity[testingStarted]
- > ./tests/counter.test.tolk (2 tests)
-##teamcity[testSuiteStarted name='counter.test.tolk' nodeId='suite_counter.test.tolk' parentNodeId='0' nodeType='file' locationHint='file://./tests/counter.test.tolk']
+ > tests/counter.test.tolk (2 tests)
+##teamcity[testSuiteStarted name='counter.test.tolk' nodeId='suite_counter.test.tolk' parentNodeId='0' nodeType='file' locationHint='file://[ROOT]/tests/counter.test.tolk']
 ##teamcity[testStarted name='test-should-increase-counter' nodeId='test_test-should-increase-counter' parentNodeId='suite_counter.test.tolk' locationHint='tolk_qn://./tests/counter.test.tolk:test-should-increase-counter']
   ✗ should-increase-counter [TIME]
     └─ Error: expect(actual).toHaveSuccessfulTx(expected)

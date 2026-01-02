@@ -6,7 +6,7 @@
 
  TEST  [ROOT]
 
- > ./tests/test.test.tolk (1 test)
+ > tests/test.test.tolk (1 test)
   ✗ fail [TIME]
     └─ Error: expect(actual).toEqual(expected)
         (

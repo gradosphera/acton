@@ -94,7 +94,7 @@ pub trait TestReporter: Send + Sync {
 
     fn on_suite_started(
         &mut self,
-        _file_path: &str,
+        _file_path: &Path,
         _tests: &[TestDescriptor],
     ) -> anyhow::Result<()> {
         Ok(())
@@ -102,7 +102,7 @@ pub trait TestReporter: Send + Sync {
 
     fn on_suite_finished(
         &mut self,
-        _file_path: &str,
+        _file_path: &Path,
         _stats: &TestSuiteStats,
     ) -> anyhow::Result<()> {
         Ok(())
@@ -168,7 +168,7 @@ impl ReporterManager {
 
     pub fn on_suite_started(
         &mut self,
-        file_path: &str,
+        file_path: &Path,
         tests: &[TestDescriptor],
     ) -> anyhow::Result<()> {
         for reporter in &mut self.reporters {
@@ -179,7 +179,7 @@ impl ReporterManager {
 
     pub fn on_suite_finished(
         &mut self,
-        file_path: &str,
+        file_path: &Path,
         stats: &TestSuiteStats,
     ) -> anyhow::Result<()> {
         for reporter in &mut self.reporters {
@@ -210,11 +210,11 @@ impl ReporterManager {
     }
 }
 
-pub(crate) fn extract_suite_name(file_path: &str) -> String {
-    Path::new(file_path)
+pub(crate) fn extract_suite_name(file_path: &Path) -> String {
+    file_path
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or(file_path)
+        .unwrap_or(file_path.to_str().unwrap_or(""))
         .to_string()
 }
 

@@ -2,6 +2,7 @@ use super::{TestReport, TestReporter, TestStatus, TestSuiteStats, extract_suite_
 use crate::commands::test::TestDescriptor;
 use crate::context::AssertFailure;
 use crate::formatter::FormatterContext;
+use std::path::Path;
 
 pub struct TeamCityReporter {
     formatter: Option<FormatterContext>,
@@ -110,21 +111,22 @@ impl TestReporter for TeamCityReporter {
 
     fn on_suite_started(
         &mut self,
-        _file_path: &str,
+        file_path: &Path,
         _tests: &[TestDescriptor],
     ) -> anyhow::Result<()> {
-        let suite_name = extract_suite_name(_file_path);
+        let suite_name = extract_suite_name(file_path);
         let escaped_name = self.escape_name(&suite_name);
 
         println!(
-            "##teamcity[testSuiteStarted name='{escaped_name}' nodeId='suite_{escaped_name}' parentNodeId='0' nodeType='file' locationHint='file://{_file_path}']"
+            "##teamcity[testSuiteStarted name='{escaped_name}' nodeId='suite_{escaped_name}' parentNodeId='0' nodeType='file' locationHint='file://{}']",
+            file_path.display()
         );
         Ok(())
     }
 
     fn on_suite_finished(
         &mut self,
-        file_path: &str,
+        file_path: &Path,
         _stats: &TestSuiteStats,
     ) -> anyhow::Result<()> {
         let suite_name = extract_suite_name(file_path);
@@ -138,7 +140,7 @@ impl TestReporter for TeamCityReporter {
 
     fn on_test_started(&mut self, test: &TestReport) -> anyhow::Result<()> {
         let test_name = self.escape_name(&test.name);
-        let suite_name = self.escape_name(&extract_suite_name(&test.file_path));
+        let suite_name = self.escape_name(&extract_suite_name(Path::new(&test.file_path)));
         let location = format!("{}:{}", test.file_path, test.name);
 
         println!(
@@ -149,7 +151,7 @@ impl TestReporter for TeamCityReporter {
 
     fn on_test_finished(&mut self, test: &TestReport) -> anyhow::Result<()> {
         let test_name = self.escape_name(&test.name);
-        let suite_name = self.escape_name(&extract_suite_name(&test.file_path));
+        let suite_name = self.escape_name(&extract_suite_name(Path::new(&test.file_path)));
         let duration_ms = test.duration.as_millis();
 
         match test.status {

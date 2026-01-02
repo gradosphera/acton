@@ -114,7 +114,7 @@ impl TestReporter for ConsoleReporter {
 
     fn on_suite_started(
         &mut self,
-        _file_path: &str,
+        _file_path: &Path,
         tests: &[TestDescriptor],
     ) -> anyhow::Result<()> {
         self.count_suites += 1;
@@ -141,7 +141,7 @@ impl TestReporter for ConsoleReporter {
 
     fn on_suite_finished(
         &mut self,
-        _file_path: &str,
+        _file_path: &Path,
         _stats: &TestSuiteStats,
     ) -> anyhow::Result<()> {
         Ok(())

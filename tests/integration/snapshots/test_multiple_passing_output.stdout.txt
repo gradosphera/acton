@@ -6,7 +6,7 @@
 
  TEST  [ROOT]
 
- > ./tests/test.test.tolk (2 tests)
+ > tests/test.test.tolk (2 tests)
   ✓ pass-1 [TIME]
   ✓ pass-2 [TIME]
 
