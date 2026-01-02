@@ -1,5 +1,5 @@
 use crate::commands::common::symlink_global_wallets;
-use crate::config::{ActonConfig, ContractConfig, ContractsConfig};
+use crate::config::{ActonConfig, ContractConfig, ContractsConfig, TestSettings};
 use include_dir::{Dir, include_dir};
 use inquire::{Select, Text};
 use owo_colors::OwoColorize;
@@ -188,6 +188,11 @@ pub fn new_cmd(
     }
 
     config.contracts = Some(ContractsConfig { contracts });
+
+    config.test = Some(TestSettings {
+        ..Default::default()
+    });
+
     config.save()?;
 
     fs::create_dir_all(".acton/tolk-stdlib")?;

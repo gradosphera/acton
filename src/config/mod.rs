@@ -54,11 +54,11 @@ pub enum ContractDependency {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActonConfig {
     pub package: PackageConfig,
-    pub test: Option<TestSettings>,
     pub contracts: Option<ContractsConfig>,
+    pub test: Option<TestSettings>,
+    pub scripts: Option<BTreeMap<String, String>>,
     #[serde(skip)] // we build wallets manually
     pub wallets: Option<WalletsConfig>,
-    pub scripts: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,7 +69,7 @@ pub struct PackageConfig {
     pub license: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct TestSettings {
     pub filter: Option<String>,
