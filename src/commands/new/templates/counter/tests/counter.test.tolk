@@ -6,7 +6,7 @@ import "wrappers/Counter"
 
 import "../contracts/types"
 
-get fun `test-increase-counter`() {
+get fun `test increase counter`() {
     val (contract, deployer, _) = setupTest();
 
     val res = contract.sendIncreaseCounter(deployer.address, 123);
@@ -15,7 +15,7 @@ get fun `test-increase-counter`() {
     expect(contract.currentCounter()).toEqual(123)
 }
 
-get fun `test-reset-counter`() {
+get fun `test reset counter`() {
     val (contract, deployer, _) = setupTest();
 
     val res = contract.sendIncreaseCounter(deployer.address, 123);
@@ -29,7 +29,7 @@ get fun `test-reset-counter`() {
     expect(contract.currentCounter()).toEqual(0);
 }
 
-get fun `test-unknown-message`() {
+get fun `test unknown message`() {
     val (contract, deployer, _) = setupTest();
 
     // non-empty message
