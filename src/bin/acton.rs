@@ -360,7 +360,7 @@ enum Commands {
     },
     #[command(about = "Run a script defined in Acton.toml")]
     Run {
-        #[arg(help = "Name of the script to run")]
+        #[arg(help = "Name of the script to run", add = ArgValueCompleter::new(complete_scripts))]
         script: String,
         #[arg(
             help = "Arguments to pass to the script",
@@ -608,6 +608,19 @@ fn complete_contracts(_current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
         .contracts
         .unwrap_or_default()
         .contracts
+        .keys()
+        .map(CompletionCandidate::new)
+        .collect()
+}
+
+fn complete_scripts(_current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
+    let Ok(config) = ActonConfig::load() else {
+        return vec![];
+    };
+
+    config
+        .scripts
+        .unwrap_or_default()
         .keys()
         .map(CompletionCandidate::new)
         .collect()
