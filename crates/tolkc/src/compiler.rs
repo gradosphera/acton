@@ -281,7 +281,7 @@ pub struct CompilerResultError {
 }
 
 /// We embed the whole standard library of Tolk and Fift in binary for easier distribution.
-static TOLK_STDLIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/tolk-stdlib");
+pub static TOLK_STDLIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/tolk-stdlib");
 static FIFT_STDLIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/fift");
 
 fn read_stdlib_file(path: &str) -> Option<&'static str> {

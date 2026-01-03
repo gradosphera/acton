@@ -2,8 +2,7 @@ Discovered 2 contracts:
   Contract1 (contract1)
   Contract2 (contract2)
 
+  Installing standard library v0.1.0
 ✓ Initialized new Acton project
 Patched .gitignore with Acton patterns
 Created Acton.toml with project configuration
-Created .acton/ directory with standard library
-Created .acton/tolk-stdlib directory with Tolk standard library

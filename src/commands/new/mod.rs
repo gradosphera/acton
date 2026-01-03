@@ -1,6 +1,6 @@
 use crate::commands::common::symlink_global_wallets;
 use crate::config::{ActonConfig, ContractConfig, ContractsConfig, TestSettings};
-use include_dir::{Dir, include_dir};
+use crate::stdlib;
 use inquire::{Select, Text};
 use owo_colors::OwoColorize;
 use std::collections::BTreeMap;
@@ -11,8 +11,6 @@ use std::path::Path;
 mod licenses;
 mod template;
 
-static LIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/lib");
-static TOLK_STDLIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/crates/tolkc/assets/tolk-stdlib");
 const BASE_GITIGNORE: &str = "
 # Acton main directory
 .acton/
@@ -214,9 +212,7 @@ pub fn new_cmd(
 
     config.save()?;
 
-    fs::create_dir_all(".acton/tolk-stdlib")?;
-    LIB_DIR.extract(".acton")?;
-    TOLK_STDLIB_DIR.extract(".acton/tolk-stdlib")?;
+    stdlib::ensure_latest(Path::new("."))?;
 
     let author = get_git_user_name().unwrap_or_else(|| "Acton User".to_string());
     let year = chrono::Local::now().format("%Y").to_string();
@@ -255,14 +251,6 @@ pub fn new_cmd(
     println!("  {} {}", "License:".bright_black(), license.cyan());
     println!();
     println!("Created {} with project configuration", "Acton.toml".cyan());
-    println!(
-        "Created {} directory with standard library",
-        ".acton/".cyan()
-    );
-    println!(
-        "Created {} directory with Tolk standard library",
-        ".acton/tolk-stdlib".cyan()
-    );
     println!();
     println!("Next steps:");
     println!();

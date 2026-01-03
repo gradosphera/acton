@@ -1,17 +1,15 @@
 use crate::commands::common::symlink_global_wallets;
 use crate::config::{ActonConfig, ContractConfig, ContractsConfig};
-use include_dir::{Dir, include_dir};
+use crate::stdlib;
 use owo_colors::OwoColorize;
 use std::collections::BTreeMap;
 use std::fs;
+use std::path::Path;
 use tree_sitter::Node;
 use walkdir::WalkDir;
 
-static LIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/lib");
-static TOLK_STDLIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/crates/tolkc/assets/tolk-stdlib");
-
 pub fn init_cmd() -> anyhow::Result<()> {
-    if std::path::Path::new("Acton.toml").exists() {
+    if Path::new("Acton.toml").exists() {
         println!("{}", "Acton.toml already exists!".yellow());
         return Ok(());
     }
@@ -40,9 +38,7 @@ pub fn init_cmd() -> anyhow::Result<()> {
 
     config.save()?;
 
-    fs::create_dir_all(".acton/tolk-stdlib")?;
-    LIB_DIR.extract(".acton")?;
-    TOLK_STDLIB_DIR.extract(".acton/tolk-stdlib")?;
+    stdlib::ensure_latest(Path::new("."))?;
 
     println!("{}", "✓ Initialized new Acton project".green().bold());
 
@@ -57,14 +53,6 @@ pub fn init_cmd() -> anyhow::Result<()> {
     }
 
     println!("Created {} with project configuration", "Acton.toml".cyan());
-    println!(
-        "Created {} directory with standard library",
-        ".acton/".cyan()
-    );
-    println!(
-        "Created {} directory with Tolk standard library",
-        ".acton/tolk-stdlib".cyan()
-    );
 
     Ok(())
 }

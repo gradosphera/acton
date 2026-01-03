@@ -15,6 +15,7 @@ mod new_tests;
 mod reporters_tests;
 mod run_tests;
 mod script_tests;
+mod stdlib_tests;
 mod test_tests;
 mod verify_tests;
 mod wallet_tests;

@@ -31,7 +31,7 @@ fn test_init_empty_directory() {
     output
         .assert_contains("Initialized new Acton project")
         .assert_contains("Acton.toml")
-        .assert_contains(".acton/");
+        .assert_contains("Installing standard library");
 
     let acton_file = project.path().join("Acton.toml");
     assert!(acton_file.exists());

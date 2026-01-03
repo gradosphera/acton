@@ -6,10 +6,10 @@ use crate::context::{
 };
 use crate::debugger::any_executor::AnyExecutor;
 use crate::debugger::debug_context::DebugContext;
-use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
 use crate::formatter::FormatterContext;
 use crate::wallets;
+use crate::{ffi, stdlib};
 use abi::{ContractAbi, contract_abi};
 use anyhow::anyhow;
 use emulator::emulator::Emulator;
@@ -49,6 +49,8 @@ pub fn script_cmd(
     net: Option<String>,
     explorer: Option<Explorer>,
 ) -> anyhow::Result<()> {
+    stdlib::ensure_latest(Path::new("."))?;
+
     if clear_cache {
         let mut file_cache = FileBuildCache::new(None)?;
         file_cache.clear()?;

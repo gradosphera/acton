@@ -1,6 +1,7 @@
 use crate::commands::common::error_fmt;
 use crate::config::{ActonConfig, ContractConfig, ContractDependency, DependencyKind};
 use crate::file_build_cache::FileBuildCache;
+use crate::stdlib;
 use anyhow::anyhow;
 use log::debug;
 use owo_colors::OwoColorize;
@@ -22,6 +23,8 @@ pub fn build_cmd(
     out_dir: Option<String>,
     show_info: bool,
 ) -> anyhow::Result<()> {
+    stdlib::ensure_latest(Path::new("."))?;
+
     // Due to global variables, we need to enable debug mode for emulator as early as possible
     // since first compilation WITHOUT debug mode will set debug=false forever
     enable_emulator_debug_mode()?;
