@@ -457,19 +457,19 @@ struct Treasury {
 /// }
 /// ```
 fun net.treasury(name: slice): Treasury {
-    val state_init: ContractState = {
+    val stateInit: ContractState = {
         code: __treasuryCode(),
         data: beginCell().storeSlice(name).endCell(),
     };
 
     val deployer = address("0:0000000000000000000000000000000000000000000000000000000000000000");
-    val address = AutoDeployAddress { stateInit: state_init }.calculateAddress();
+    val address = AutoDeployAddress { stateInit }.calculateAddress();
     net.registerAddress(address, name);
 
     val msg = createMessage({
         bounce: false,
         value: ton("10000"),
-        dest: { workchain: 0, stateInit: state_init },
+        dest: { workchain: 0, stateInit },
     });
     // Deploy treasury
     net.send(deployer, msg, SEND_MODE_PAY_FEES_SEPARATELY);
