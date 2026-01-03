@@ -195,8 +195,7 @@ fn execute_script(
     };
     let mut world_state = WorldState::new(resolver);
     let mut build_cache = BuildCache::new();
-    let mut file_build_cache =
-        FileBuildCache::new(None).expect("Failed to create file cache for script execution");
+    let mut file_build_cache = FileBuildCache::new(None)?;
     let mut known_addresses = KnownAddresses::new();
     let mut known_code_cell = HashMap::new();
     let mut emulations = Emulations::new();

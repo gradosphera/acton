@@ -93,7 +93,7 @@ fn build_model(
         }
     }
 
-    let storage_file_path = abi.storage.as_ref().map(|typ| PathBuf::from(&typ.pos.uri));
+    let storage_path = abi.storage.as_ref().map(|typ| PathBuf::from(&typ.pos.uri));
     let message_paths = abi
         .messages
         .iter()
@@ -122,7 +122,7 @@ fn build_model(
         contract_path,
         abi,
         handled_messages,
-        storage_path: storage_file_path,
+        storage_path,
         message_paths,
         wrapper_path,
         test_path,
