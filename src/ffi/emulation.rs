@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::str::FromStr;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 use ton_api::{Network, TonApiClient, TonCenterTransaction};
 use ton_executor::BaseExecutor;
 use ton_executor::get::step::StepGetExecutor;
@@ -794,13 +794,17 @@ fn run_get_method_impl(
     let libs_root = libs.clone().into_root();
 
     let method_id = id.to_i32().unwrap_or(0);
+
+    let now = std::time::SystemTime::now();
+    let duration_since_epoch = now.duration_since(UNIX_EPOCH).expect("Time went backwards");
+
     let params = RunGetMethodArgs {
         code: code.to_boc_b64(false)?,
         data: Boc::encode_base64(data),
         verbosity: ctx.env.default_log_level,
         libs: libs_root.map(Boc::encode_base64).unwrap_or("".to_string()),
         address: dest_address.to_string(),
-        unixtime: 0,
+        unixtime: duration_since_epoch.as_secs().try_into()?,
         balance: "10".to_string(),
         rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
         gas_limit: "0".to_string(),

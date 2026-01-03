@@ -22,6 +22,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::Path;
 use std::str::FromStr;
+use std::time::UNIX_EPOCH;
 use ton_api::Network;
 use ton_executor::get::step::StepGetExecutor;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
@@ -167,13 +168,16 @@ fn execute_script(
 ) -> anyhow::Result<()> {
     let dest_address = contract_address(code_cell)?;
 
+    let now = std::time::SystemTime::now();
+    let duration_since_epoch = now.duration_since(UNIX_EPOCH).expect("Time went backwards");
+
     let params = RunGetMethodArgs {
         code: code_cell.to_boc_b64(false)?.to_string(),
         data: data_cell.to_boc_b64(false)?.to_string(),
         verbosity,
         libs: "".to_string(),
         address: dest_address.to_string(),
-        unixtime: 0,
+        unixtime: duration_since_epoch.as_secs().try_into()?,
         balance: "10".to_string(),
         rand_seed: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
         gas_limit: "0".to_string(),
