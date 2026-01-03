@@ -123,3 +123,47 @@ To download Acton binaries directly, visit the [releases page on GitHub](https:/
         Standard Linux x64 binary
     </Card>
 </Cards>
+
+## Updating
+
+Once Acton is installed, you can use the built-in `acton up` command to update to the latest version or switch between versions.
+
+### Update to latest stable
+
+To update to the latest stable version, simply run:
+
+```bash
+acton up
+```
+
+### List available versions
+
+To see all available versions, including canary releases:
+
+```bash
+acton up --list
+```
+
+### Install a specific version
+
+To install a specific version:
+
+```bash
+acton up 0.1.5
+```
+
+### Switch to canary
+
+If you want to try the latest features before they are officially released, you can install the canary version:
+
+```bash
+acton up --canary
+```
+
+## Uninstall
+
+To completely uninstall Acton and remove all associated data (including downloaded compilers and global wallets), remove the `.acton` directory in your home folder:
+
+```bash
+rm -rf ~/.acton
+```
