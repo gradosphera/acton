@@ -102,3 +102,4 @@ base64 = "0.22.1"
 [profile.release-size]
 inherits = "release"
 lto = "fat"
+codegen-units = 1
