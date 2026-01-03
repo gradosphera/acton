@@ -206,6 +206,195 @@ fn test_new_project_symlinks_global_wallets() {
 }
 
 #[test]
+fn test_new_empty_project_full_flow() {
+    let project = ProjectBuilder::new("new-empty-full")
+        .without_acton_toml()
+        .build();
+
+    let dir = project.path();
+    let project_dir = project.path().join("foobar");
+
+    // 1. Create project
+    project
+        .acton()
+        .arg("new")
+        .arg(&dir.join("foobar").display().to_string())
+        .arg("--name")
+        .arg("test-project")
+        .arg("--description")
+        .arg("test description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_empty_project_full_flow_new.stdout.txt",
+        );
+
+    // 2. Build project
+    project
+        .acton()
+        .current_dir(&project_dir)
+        .arg("build")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_empty_project_full_flow_build.stdout.txt",
+        );
+
+    // 3. Run tests
+    project
+        .acton()
+        .current_dir(&project_dir)
+        .arg("test")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_empty_project_full_flow_test.stdout.txt",
+        );
+
+    // 4. Run deploy script in emulation mode
+    project
+        .acton()
+        .current_dir(&project_dir)
+        .arg("script")
+        .arg("scripts/deploy.tolk")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_empty_project_full_flow_script.stdout.txt",
+        );
+}
+
+#[test]
+fn test_new_counter_project_full_flow() {
+    let project = ProjectBuilder::new("new-counter-full")
+        .without_acton_toml()
+        .build();
+
+    let dir = project.path();
+    let project_dir = project.path().join("foobar");
+
+    // 1. Create project
+    project
+        .acton()
+        .arg("new")
+        .arg(&dir.join("foobar").display().to_string())
+        .arg("--name")
+        .arg("test-project")
+        .arg("--description")
+        .arg("test description")
+        .arg("--template")
+        .arg("counter")
+        .arg("--license")
+        .arg("MIT")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_counter_project_full_flow_new.stdout.txt",
+        );
+
+    // 2. Build project
+    project
+        .acton()
+        .current_dir(&project_dir)
+        .arg("build")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_counter_project_full_flow_build.stdout.txt",
+        );
+
+    // 3. Run tests
+    project
+        .acton()
+        .current_dir(&project_dir)
+        .arg("test")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_counter_project_full_flow_test.stdout.txt",
+        );
+
+    // 4. Run deploy script in emulation mode
+    project
+        .acton()
+        .current_dir(&project_dir)
+        .arg("script")
+        .arg("scripts/deploy.tolk")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_counter_project_full_flow_script.stdout.txt",
+        );
+}
+
+#[test]
+fn test_new_jetton_project_full_flow() {
+    let project = ProjectBuilder::new("new-jetton-full")
+        .without_acton_toml()
+        .build();
+
+    let dir = project.path();
+    let project_dir = project.path().join("foobar");
+
+    // 1. Create project
+    project
+        .acton()
+        .arg("new")
+        .arg(&dir.join("foobar").display().to_string())
+        .arg("--name")
+        .arg("test-project")
+        .arg("--description")
+        .arg("test description")
+        .arg("--template")
+        .arg("jetton")
+        .arg("--license")
+        .arg("MIT")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_jetton_project_full_flow_new.stdout.txt",
+        );
+
+    // 2. Build project
+    project
+        .acton()
+        .current_dir(&project_dir)
+        .arg("build")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_jetton_project_full_flow_build.stdout.txt",
+        );
+
+    // 3. Run tests
+    project
+        .acton()
+        .current_dir(&project_dir)
+        .arg("test")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_jetton_project_full_flow_test.stdout.txt",
+        );
+
+    // 4. Run deploy script in emulation mode
+    project
+        .acton()
+        .current_dir(&project_dir)
+        .arg("script")
+        .arg("scripts/deploy.tolk")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_new_jetton_project_full_flow_script.stdout.txt",
+        );
+}
+
+#[test]
 fn test_new_empty_project_with_dot_env() {
     let project = ProjectBuilder::new("new-dot-env")
         .without_acton_toml()

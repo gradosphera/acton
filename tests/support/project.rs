@@ -721,6 +721,11 @@ impl ActonCommand {
         self
     }
 
+    pub fn current_dir(mut self, path: impl AsRef<Path>) -> Self {
+        self.cmd = self.cmd.current_dir(path);
+        self
+    }
+
     /// Start disasm command (without input - use with disasm_file or disasm_string)
     ///
     /// # Examples

@@ -1,0 +1,19 @@
+> Initialized empty Git repository in [ROOT]/foobar/.git/
+✓ Created new Acton project
+  Project name: test-project
+  Description: test description
+  Template: jetton
+  License: MIT
+
+Created Acton.toml with project configuration
+Created .acton/ directory with standard library
+Created .acton/tolk-stdlib directory with Tolk standard library
+
+Next steps:
+
+  # Navigate to project
+  cd [ROOT]/foobar
+  # Build your contract
+  acton build
+  # Run tests
+  acton test

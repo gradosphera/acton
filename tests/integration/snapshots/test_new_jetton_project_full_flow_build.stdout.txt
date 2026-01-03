@@ -1,0 +1,6 @@
+   Compiling contracts
+   Compiling Minter
+    Finished in [TIME]
+   Compiling Wallet
+    Finished in [TIME]
+    Finished in [TIME]

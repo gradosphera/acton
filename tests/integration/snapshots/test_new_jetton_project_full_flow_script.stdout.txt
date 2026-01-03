@@ -1,0 +1,9 @@
+Deploying Jetton with JettonInfo {
+    name: "SomeJetton",
+    description: "Sone jetton",
+    symbol: "JTTT",
+    image: "https://ton.org/download/ton_symbol.svg"
+}
+Deploying Jetton contract...
+Minting tokens: 1000000000
+Succesfully minted and transfered 1000000000 tokens to kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD (deployer)

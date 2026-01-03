@@ -1,6 +1,3 @@
-import "../tests/wrappers/Counter"
-import "../contracts/types"
-
 import "../.acton/io"
 import "../.acton/emulation/network"
 import "../.acton/build/build"
