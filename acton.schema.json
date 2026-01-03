@@ -23,12 +23,15 @@
           "description": "The current version of the project",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-.*)?$"
         },
+        "repository": {
+          "type": "string",
+          "description": "The URL of the project's repository"
+        },
         "license": {
           "type": "string",
           "description": "The project's license (e.g., MIT, Apache-2.0)"
         }
-      },
-      "additionalProperties": false
+      }
     },
     "test": {
       "type": "object",
@@ -120,15 +123,13 @@
                 "type": "string"
               }
             }
-          },
-          "additionalProperties": false
+          }
         },
         "fail-fast": {
           "type": "boolean",
           "description": "Stop test execution after the first failure"
         }
-      },
-      "additionalProperties": false
+      }
     },
     "contracts": {
       "type": "object",
@@ -177,8 +178,7 @@
                       "type": "string",
                       "description": "Custom output path for the generated code file"
                     }
-                  },
-                  "additionalProperties": false
+                  }
                 }
               ]
             }
@@ -187,8 +187,7 @@
             "type": "string",
             "description": "Path where the compiled .boc should be saved"
           }
-        },
-        "additionalProperties": false
+        }
       }
     },
     "scripts": {
@@ -198,6 +197,5 @@
         "type": "string"
       }
     }
-  },
-  "additionalProperties": false
+  }
 }

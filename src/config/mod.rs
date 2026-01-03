@@ -66,6 +66,7 @@ pub struct PackageConfig {
     pub name: String,
     pub description: String,
     pub version: String,
+    pub repository: Option<String>,
     pub license: Option<String>,
 }
 
@@ -89,6 +90,8 @@ pub struct TestSettings {
     pub fork_block_number: Option<u64>,
     pub mutation: Option<MutationConfig>,
     pub fail_fast: Option<bool>,
+    #[serde(flatten)]
+    pub metadata: BTreeMap<String, toml::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -155,6 +158,7 @@ impl Default for ActonConfig {
                 name: "my-acton-project".to_string(),
                 description: "A TON blockchain project".to_string(),
                 version: "0.1.0".to_string(),
+                repository: None,
                 license: Some("MIT".to_string()),
             },
             test: None,
