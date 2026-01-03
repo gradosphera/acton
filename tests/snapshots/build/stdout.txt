@@ -36,3 +36,5 @@ Examples:
 
      # Generate dependency graph as SVG file
      acton build --graph deps.svg
+
+For more information, see https://i582.github.io/acton/docs/build-system

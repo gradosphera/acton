@@ -54,7 +54,8 @@ enum Commands {
     Init,
     #[command(
         about = "Create a new project in a specified directory",
-        long_about = "Create a new project in a specified directory. This will create a new directory with a basic project template."
+        long_about = "Create a new project in a specified directory. This will create a new directory with a basic project template.",
+        after_help = example_new_usage()
     )]
     New {
         #[arg(help = "Directory to create the project in (use '.' for the current directory)")]
@@ -68,7 +69,10 @@ enum Commands {
         #[arg(long, help = "License")]
         license: Option<String>,
     },
-    #[command(about = "Manage wallets")]
+    #[command(
+        about = "Manage wallets",
+        after_help = example_wallet_usage()
+    )]
     Wallet {
         #[command(subcommand)]
         command: WalletCommand,
@@ -243,7 +247,10 @@ enum Commands {
         )]
         disable_rule: Vec<String>,
     },
-    #[command(about = "Generate wrapper and optionally stub test file for a contract")]
+    #[command(
+        about = "Generate wrapper and optionally stub test file for a contract",
+        after_help = example_wrapper_usage()
+    )]
     Wrapper {
         #[arg(help = "Contract ID to generate wrapper", value_name = "CONTRACT_ID", add = ArgValueCompleter::new(complete_contracts))]
         contract_id: String,
@@ -263,7 +270,10 @@ enum Commands {
         #[arg(long, help = "Storage struct name to use for wrapper generation")]
         storage_struct: Option<String>,
     },
-    #[command(about = "Execute a Tolk script file")]
+    #[command(
+        about = "Execute a Tolk script file",
+        after_help = example_script_usage()
+    )]
     Script {
         #[arg(help = "Script file to execute")]
         path: String,
@@ -358,7 +368,10 @@ enum Commands {
         #[arg(long, help = "Show compiled contract info")]
         info: bool,
     },
-    #[command(about = "Run a script defined in Acton.toml")]
+    #[command(
+        about = "Run a script defined in Acton.toml",
+        after_help = example_run_usage()
+    )]
     Run {
         #[arg(help = "Name of the script to run", add = ArgValueCompleter::new(complete_scripts))]
         script: String,
@@ -369,7 +382,10 @@ enum Commands {
         )]
         args: Vec<String>,
     },
-    #[command(about = "Compile a Tolk file")]
+    #[command(
+        about = "Compile a Tolk file",
+        after_help = example_compile_usage()
+    )]
     Compile {
         #[arg(help = "Tolk file to compile")]
         path: String,
@@ -422,7 +438,10 @@ enum Commands {
         )]
         follow_libraries: bool,
     },
-    #[command(about = "Verify contract source code on verifier.ton.org")]
+    #[command(
+        about = "Verify contract source code on verifier.ton.org",
+        after_help = example_verify_usage()
+    )]
     Verify {
         #[arg(help = "Contract ID to verify (prompts if not provided)", value_name = "CONTRACT_ID", add = ArgValueCompleter::new(complete_contracts))]
         contract_id: Option<String>,
@@ -442,7 +461,10 @@ enum Commands {
         #[arg(long, help = "TonCenter API key for blockchain queries")]
         api_key: Option<String>,
     },
-    #[command(about = "Retrace a transaction by its hash")]
+    #[command(
+        about = "Retrace a transaction by its hash",
+        after_help = example_retrace_usage()
+    )]
     Retrace {
         #[arg(help = "Transaction hash in hex format to retrace")]
         hash: String,
@@ -459,12 +481,18 @@ enum Commands {
         #[arg(long, help = "Directory to save VM and executor logs")]
         logs_dir: Option<String>,
     },
-    #[command(about = "Manage TON libraries")]
+    #[command(
+        about = "Manage TON libraries",
+        after_help = example_library_usage()
+    )]
     Library {
         #[command(subcommand)]
         command: LibraryCommand,
     },
-    #[command(about = "Manage Acton versions")]
+    #[command(
+        about = "Manage Acton versions",
+        after_help = example_up_usage()
+    )]
     Up {
         #[arg(help = "Specific version to install")]
         version: Option<String>,
@@ -481,7 +509,7 @@ enum Commands {
     },
     #[command(
         about = "Generate shell completions for selected shell",
-        after_help = "For installation instructions, see https://acton.dev/acton/shell-completions/"
+        after_help = example_completions_usage()
     )]
     Completions {
         #[clap(value_enum)]
@@ -598,6 +626,11 @@ fn example_test_usage() -> StyledStr {
         let _ = writeln!(writer, "{USAGE_SEP}{example}{value}{example:#}");
     }
 
+    let _ = write!(
+        writer,
+        "\nFor more information, see https://i582.github.io/acton/docs/test-runner"
+    );
+
     writer
 }
 
@@ -678,6 +711,11 @@ fn example_build_usage() -> StyledStr {
         let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
     }
 
+    let _ = write!(
+        writer,
+        "\nFor more information, see https://i582.github.io/acton/docs/build-system"
+    );
+
     writer
 }
 
@@ -723,7 +761,178 @@ fn example_disasm_usage() -> StyledStr {
         let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
     }
 
+    let _ = write!(
+        writer,
+        "\nFor more information, see https://i582.github.io/acton/docs/commands/disasm"
+    );
+
     writer
+}
+
+fn format_examples(examples: &[(&str, &str)], link: &str) -> StyledStr {
+    use std::fmt::Write as _;
+
+    let mut writer = StyledStr::new();
+    let styled = Styles::styled();
+
+    let header = styled.get_header();
+    let named = Style::new().dimmed();
+    let literal = styled.get_literal();
+
+    let _ = write!(writer, "{header}Examples:{header:#}");
+
+    const USAGE_SEP: &str = "\n     ";
+    for (name, value) in examples.iter() {
+        let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
+        let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
+    }
+
+    if !link.is_empty() {
+        let _ = write!(writer, "\nFor more information, see {link}");
+    }
+
+    writer
+}
+
+fn example_new_usage() -> StyledStr {
+    format_examples(
+        &[
+            (
+                "Create a new project named my-project",
+                "acton new my-project",
+            ),
+            (
+                "Create a project non-interactively with all metadata",
+                "acton new my-project --name \"My Project\" --description \"Cool description\" --template counter --license MIT",
+            ),
+        ],
+        "https://i582.github.io/acton/docs/commands/new",
+    )
+}
+
+fn example_wallet_usage() -> StyledStr {
+    format_examples(
+        &[
+            (
+                "Create a new wallet named my-wallet",
+                "acton wallet new my-wallet",
+            ),
+            (
+                "List all configured wallets with balances",
+                "acton wallet list -b",
+            ),
+        ],
+        "https://i582.github.io/acton/docs/commands/wallet",
+    )
+}
+
+fn example_wrapper_usage() -> StyledStr {
+    format_examples(
+        &[
+            ("Generate wrapper for minter", "acton wrapper minter"),
+            (
+                "Generate wrapper and stub test for minter",
+                "acton wrapper minter --test",
+            ),
+        ],
+        "https://i582.github.io/acton/docs/test-runner/generating-wrappers",
+    )
+}
+
+fn example_script_usage() -> StyledStr {
+    format_examples(
+        &[
+            (
+                "Execute a deploy script in local emulator",
+                "acton script scripts/deploy.tolk",
+            ),
+            (
+                "Execute a deploy script and broadcast to testnet network",
+                "acton script scripts/deploy.tolk --net testnet",
+            ),
+            (
+                "Execute a deploy script and broadcast to mainnet network",
+                "acton script scripts/deploy.tolk --net mainnet",
+            ),
+        ],
+        "https://i582.github.io/acton/docs/scripting",
+    )
+}
+
+fn example_run_usage() -> StyledStr {
+    format_examples(
+        &[(
+            "Run a custom script named 'deploy' with arguments",
+            "acton run deploy 1 2 3",
+        )],
+        "https://i582.github.io/acton/docs/commands/run",
+    )
+}
+
+fn example_compile_usage() -> StyledStr {
+    format_examples(
+        &[(
+            "Compile a Tolk contract and save as BOC",
+            "acton compile contracts/main.tolk --boc main.boc",
+        )],
+        "https://i582.github.io/acton/docs/commands/compile",
+    )
+}
+
+fn example_verify_usage() -> StyledStr {
+    format_examples(
+        &[(
+            "Verify a contract with a specific address",
+            "acton verify minter --address UQA...wwM",
+        )],
+        "https://i582.github.io/acton/docs/contract-verification",
+    )
+}
+
+fn example_retrace_usage() -> StyledStr {
+    format_examples(
+        &[(
+            "Retrace a transaction by its hash",
+            "acton retrace 287f...9e0",
+        )],
+        "",
+    )
+}
+
+fn example_library_usage() -> StyledStr {
+    format_examples(
+        &[
+            (
+                "Publish a contract as a library",
+                "acton library publish minter",
+            ),
+            ("Fetch a library by its hash", "acton library fetch <HASH>"),
+        ],
+        "https://i582.github.io/acton/docs/advanced/libraries",
+    )
+}
+
+fn example_up_usage() -> StyledStr {
+    format_examples(
+        &[
+            ("Upgrade Acton to the latest stable version", "acton up"),
+            ("List all available versions", "acton up --list"),
+        ],
+        "https://i582.github.io/acton/docs/installation",
+    )
+}
+
+fn example_completions_usage() -> StyledStr {
+    format_examples(
+        &[
+            (
+                "Generate dynamic Bash completions",
+                "source <(COMPLETE=bash acton)",
+            ),
+            ("Generate static Zsh completions", "acton completions zsh"),
+        ],
+        "https://i582.github.io/acton/docs/commands/shell-completions",
+    )
 }
 
 fn main() {
