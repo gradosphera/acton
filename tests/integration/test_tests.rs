@@ -639,3 +639,68 @@ fn test_filter_all_test_with_several_test_files() {
             "integration/snapshots/test_filter_all_test_with_several_test_files.stdout.txt",
         );
 }
+
+#[test]
+fn test_auto_register_refs_if_any() {
+    let project = ProjectBuilder::new("dep-lib")
+        .contract("lib", SIMPLE_CONTRACT)
+        .contract_with_detailed_deps(
+            "main",
+            r#"
+            import "../gen/lib_code.tolk"
+
+            fun onInternalMessage(in: InMessage) {
+                 val address = AutoDeployAddress {
+                    stateInit: ContractState {
+                        code: libCompiledCode(),
+                        data: createEmptyCell(),
+                    },
+                };
+
+                val outMsg = createMessage({
+                    bounce: BounceMode.NoBounce,
+                    value: ton("0.1"),
+                    dest: address,
+                });
+                outMsg.send(SEND_MODE_PAY_FEES_SEPARATELY);
+            }
+        "#,
+            vec![("lib", Some("library_ref"), None, None)],
+        )
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/testing/expect"
+            import "../../lib/build/build"
+            import "../../lib/io"
+            import "../../lib/emulation/network"
+            import "../../lib/testing/transaction_expect"
+
+            get fun `test-action-fail`() {
+                val deployer = net.treasury("deployer");
+                val address = AutoDeployAddress {
+                    stateInit: ContractState {
+                        code: build("main"),
+                        data: createEmptyCell(),
+                    },
+                };
+
+                // Trigger internal message that will cause action fail
+                val triggerMsg = createMessage({
+                    bounce: false,
+                    value: ton("0.2"),
+                    dest: address,
+                });
+
+                val res = net.send(deployer.address, triggerMsg, SEND_MODE_PAY_FEES_SEPARATELY);
+                println(res);
+            }
+        "#,
+        )
+        .build();
+
+    let output = project.acton().test().run().success();
+
+    output
+        .assert_snapshot_matches("integration/snapshots/test_auto_register_refs_if_any.stdout.txt");
+}

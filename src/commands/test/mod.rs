@@ -13,7 +13,7 @@ use crate::commands::test::reporting::{
     ReporterManager, TestExecutionContext, TestReport, TestStatus, TestSuiteStats,
     extract_suite_name,
 };
-use crate::config::{ActonConfig, Network};
+use crate::config::{ActonConfig, ContractDependency, DependencyKind, Network};
 use crate::context::{
     AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
     Emulations, Env, IoContext, KnownAddresses,
@@ -30,7 +30,7 @@ use emulator::world_state::{
     AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,
 };
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use log::{debug, error};
+use log::{debug, error, warn};
 use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
 use regex::Regex;
@@ -49,6 +49,7 @@ use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::serde::serialize_tuple;
 use tvmffi::stack::Tuple;
+use tycho_types::boc::Boc;
 use tycho_types::models::ShardAccount;
 use walkdir::WalkDir;
 
@@ -150,6 +151,9 @@ pub struct TestRunner<'a> {
     reporter_manager: &'a mut ReporterManager,
     mutation_overrides: BTreeMap<String, ArcCell>,
     remote_cache: RemoteSnapshotCache,
+    /// Contracts used as `library_ref` dependency. We need to register it for correct
+    /// work of dependent contracts.
+    ref_contracts: BTreeMap<String, tycho_types::cell::Cell>,
 }
 
 impl<'a> TestRunner<'a> {
@@ -166,6 +170,48 @@ impl<'a> TestRunner<'a> {
             DapTransport::dummy()
         };
 
+        let mut ref_contracts = BTreeMap::new();
+        if let Some(contracts) = acton_config.contracts() {
+            // collect contracts used as a `library_ref` dependency
+            let mut contracts_by_ref = vec![];
+            for contract in contracts.values() {
+                let Some(depends) = &contract.depends else {
+                    continue;
+                };
+
+                for depend in depends {
+                    if let ContractDependency::Detailed { name, kind, .. } = depend
+                        && kind == &DependencyKind::LibraryRef
+                    {
+                        contracts_by_ref.push(name.clone())
+                    }
+                }
+            }
+
+            // extract code of that contracts to later register in `WorldState`
+            for contract in contracts_by_ref {
+                let Some(contract_info) = contracts.get(&contract) else {
+                    continue;
+                };
+
+                let Some(cached) =
+                    cache.get(&contract_info.src, config.debug, 2, "1.2".to_string())
+                else {
+                    warn!("No build cache for contract {}", &contract_info.src);
+                    continue;
+                };
+
+                let Ok(cell) = Boc::decode_base64(&cached.code_boc64) else {
+                    warn!(
+                        "Cannot deserialize code of {}: {}",
+                        &contract_info.src, cached.code_boc64
+                    );
+                    continue;
+                };
+                ref_contracts.insert(contract, cell);
+            }
+        }
+
         Self {
             config,
             acton_config,
@@ -177,6 +223,7 @@ impl<'a> TestRunner<'a> {
             transport,
             reporter_manager,
             mutation_overrides,
+            ref_contracts,
             remote_cache: RemoteSnapshotCache::new(),
         }
     }
@@ -265,6 +312,11 @@ impl<'a> TestRunner<'a> {
             None => AccountsState::Local(LocalAccountsState::new()),
         };
         let mut world_state = WorldState::new(state);
+
+        // Register all ref dependency to correct work
+        for cell in self.ref_contracts.values() {
+            world_state.register_lib(cell.clone());
+        }
 
         let mut assert_failure = None;
         let mut expected_exit_code = None;
