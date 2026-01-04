@@ -1060,6 +1060,10 @@ impl FormatterContext {
                     return type_name.clone();
                 }
 
+                if type_name.ends_with("?") {
+                    return self.format_nullable(item);
+                }
+
                 if type_name == "SendResultList" {
                     return self.format_transaction_list(items);
                 }
@@ -1136,6 +1140,39 @@ impl FormatterContext {
                 res
             }
         }
+    }
+
+    fn format_nullable(&self, item: &TupleItem) -> String {
+        let TupleItem::TypedTuple { type_name, inner } = item else {
+            return "".to_owned();
+        };
+
+        // From Tolk compiler:
+        // pass `null` to `T?` when T is wide (stores some nulls and UTag=0 at runtime)
+        // - `null` to `(int, int)?`
+        // - `null` to `int | slice | null`
+        // to represent a non-primitive null value, we need N nulls + 1 null flag (UTag=0, type_id of TypeDataNullLiteral)
+        //
+        // So we can just check if the last element is zero to understand if whole tuple represents null.
+        if inner.last() == Some(&TupleItem::Int(0.into())) {
+            return "null".to_owned();
+        }
+
+        let inner_type = &type_name[..type_name.len() - 1];
+
+        // map<K, V> and (null, X) -> empty map
+        if inner_type.starts_with("map<")
+            && inner.len() == 2
+            && inner.first() == Some(&TupleItem::Null)
+            && matches!(inner.last(), Some(&TupleItem::Int(_)))
+        {
+            return format!("{inner_type}{{}}");
+        }
+
+        self.format(&TupleItem::TypedTuple {
+            type_name: inner_type.to_owned(),
+            inner: inner.clone(),
+        })
     }
 
     fn format_structure(

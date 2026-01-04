@@ -1177,3 +1177,55 @@ fn test_script_env_or_vars() {
         .assert_contains("slice: default")
         .assert_contains("address: kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD");
 }
+
+#[test]
+fn test_println_nullable_values() {
+    let project = ProjectBuilder::new("script-nullable-values")
+        .script_file(
+            "env",
+            r#"
+            import "../../lib/io"
+
+            struct Foo {
+                a: int,
+                b: int,
+            }
+
+            fun print_option<T>(a: T?) {
+                println(a);
+            }
+
+            fun main() {
+                // primitive types
+                print_option(10);
+                print_option(null as int?);
+                print_option("slice");
+                print_option(null as slice?);
+
+                // complex types
+                print_option(Foo {
+                    a: 0,
+                    b: 1,
+                });
+                print_option(null as Foo?);
+                print_option(null as [int, int]?);
+                print_option(null as (int, int)?);
+                print_option(null as ()?);
+
+                // empty map
+                print_option(createEmptyMap<int32, int32>() as map<int32, int32>?);
+                print_option(createEmptyMap<int32, int34>() as map<int32, int34>?);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/env.tolk")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_println_nullable_values.stderr.txt",
+        );
+}
