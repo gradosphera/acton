@@ -107,25 +107,31 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
     let mut compile_errors = BTreeMap::new();
     let mut build_info = Vec::new();
 
-    for contract_key in filtered_compilation_order {
-        let Some(contract_config) = contracts.get(&contract_key) else {
+    for parent_contract in filtered_compilation_order {
+        let Some(contract_config) = contracts.get(&parent_contract) else {
             continue;
         };
         let contract_path = &contract_config.src;
 
-        generate_dependency_files(&contract_key, contract_config, &compiled_contracts, &config)?;
+        generate_dependency_files(
+            &parent_contract,
+            contract_config,
+            &compiled_contracts,
+            &compile_errors,
+            &config,
+        )?;
 
         let (code_boc64, code_hash) =
             match process_contract(&mut file_cache, contract_config, contract_path) {
                 Ok((code, hash)) => (code, hash),
                 Err(err) => {
                     failure_count += 1;
-                    compile_errors.insert(contract_key.clone(), err);
+                    compile_errors.insert(parent_contract.clone(), err);
                     continue;
                 }
             };
 
-        compiled_contracts.insert(contract_key.clone(), code_boc64.clone());
+        compiled_contracts.insert(parent_contract.clone(), code_boc64.clone());
 
         if show_info {
             build_info.push((
@@ -135,7 +141,7 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
             ));
         }
 
-        if let Err(e) = save_build_artifact(&out_dir, &contract_key, &code_boc64, &code_hash) {
+        if let Err(e) = save_build_artifact(&out_dir, &parent_contract, &code_boc64, &code_hash) {
             eprintln!(
                 "Warning: Failed to save build artifact file for {}: {}",
                 contract_config.name, e
@@ -283,9 +289,10 @@ fn save_build_artifact(
 }
 
 pub(crate) fn generate_dependency_files(
-    key: &str,
+    parent_contract: &str,
     config: &ContractConfig,
     compiled_contracts: &HashMap<String, String>, // contract_key -> boc_base64
+    failed_contracts: &BTreeMap<String, anyhow::Error>,
     acton_config: &ActonConfig,
 ) -> anyhow::Result<()> {
     let Some(depends) = &config.depends else {
@@ -296,7 +303,13 @@ pub(crate) fn generate_dependency_files(
     }
 
     for dep in depends {
-        generate_single_dependency_file(key, dep, compiled_contracts, acton_config)?;
+        generate_single_dependency_file(
+            parent_contract,
+            dep,
+            compiled_contracts,
+            failed_contracts,
+            acton_config,
+        )?;
     }
 
     Ok(())
@@ -311,30 +324,37 @@ fn create_gen_dir<'a>() -> anyhow::Result<&'a Path> {
 }
 
 fn generate_single_dependency_file(
-    contract_key: &str,
+    parent_contract: &str,
     dependency: &ContractDependency,
     compiled_contracts: &HashMap<String, String>,
+    failed_contracts: &BTreeMap<String, anyhow::Error>,
     acton_config: &ActonConfig,
 ) -> anyhow::Result<()> {
     let gen_dir = create_gen_dir()?;
-    let dependency_key = dependency.name();
-    let boc_base64 = compiled_contracts.get(dependency_key).ok_or_else(|| {
+    let dependency_contract = dependency.name();
+
+    if failed_contracts.get(dependency_contract).is_some() {
+        // contract depends on other contract with compilation error, don't do anything
+        return Ok(());
+    }
+
+    let boc_base64 = compiled_contracts.get(dependency_contract).ok_or_else(|| {
         anyhow!(
-            "[INTERNAL ERROR] Dependency '{dependency_key}' must be compiled before '{contract_key}'"
+            "[INTERNAL ERROR] Dependency '{dependency_contract}' must be compiled before '{parent_contract}'"
         )
     })?;
 
     let func_name = dependency
         .compiled_code_function()
         .map(|s| s.to_string())
-        .unwrap_or_else(|| format_valid_function_name(dependency_key));
+        .unwrap_or_else(|| format_valid_function_name(dependency_contract));
 
     let dep_kind = dependency.kind();
-    debug!("Generating dependency file for '{dependency_key}' with kind {dep_kind:?}");
+    debug!("Generating dependency file for '{dependency_contract}' with kind {dep_kind:?}");
     let content = generate_tolk_dependency_content(
         &func_name,
         boc_base64,
-        dependency_key,
+        dependency_contract,
         dep_kind,
         acton_config,
     );
@@ -343,7 +363,7 @@ fn generate_single_dependency_file(
         .compiled_code_out_path()
         .unwrap_or(
             gen_dir
-                .join(format!("{dependency_key}_code.tolk"))
+                .join(format!("{dependency_contract}_code.tolk"))
                 .to_str()
                 .ok_or_else(|| anyhow!("Path.to_str() failed"))?,
         )

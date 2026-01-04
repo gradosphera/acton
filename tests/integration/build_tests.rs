@@ -1705,3 +1705,38 @@ fn test_build_with_info_flag_for_several_contracts() {
             "integration/snapshots/test_build_with_info_flag_for_several_contracts.stdout.txt",
         );
 }
+
+#[test]
+fn test_build_with_dependency_with_compilation_error() {
+    let project = ProjectBuilder::new("build-with-dep")
+        .contract(
+            "child",
+            r#"
+                fun onInternalMessage(in: InMessage) {
+                    let a = 10;
+                }
+            "#,
+        )
+        .contract_with_deps(
+            "parent",
+            r#"
+                import "../gen/child_code.tolk"
+
+                fun onInternalMessage(in: InMessage) {
+                    val code = childCompiledCode();
+                }
+                fun onBouncedMessage(_: InMessageBounced) {}
+            "#,
+            vec!["child"],
+        )
+        .build();
+
+    project
+        .acton()
+        .build()
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_build_with_dependency_with_compilation_error.stderr.txt",
+        );
+}
