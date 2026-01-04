@@ -213,6 +213,28 @@ fun Assert.failWalletNotFound(wallet_name: slice, location: slice = ""): never {
     throw ASSERTION_FAILED;
 }
 
+/// Asserts that two values are equal as decimals with given precision.
+///
+/// Optional message can be provided to describe the assertion.
+/// Optional location can be provided to specify the location of the assertion to
+/// be printed in the error message.
+///
+/// This is a low-level function. Expectation API provides a higher-level interface
+/// with automatic location tracking.
+fun Assert.equalDecimal<T>(left: T, right: T, decimals: int, message: slice = "", location: slice = "") {
+    if (
+        !ffi.assert_decimal(
+            location,
+            message,
+            decimals,
+            right,
+            left
+        )
+    ) {
+        throw ASSERTION_FAILED;
+    }
+}
+
 /// Internal function to assert that the function consumed less than the expected amount of gas.
 /// 
 /// NOT FOR PUBLIC USE.
@@ -248,6 +270,9 @@ fun ffi.assert_fail(message: slice = "", location: slice = ""): bool
 /// NOT FOR PUBLIC USE.
 fun ffi.fail_wallet_not_found(wallet_name: slice, location: slice = ""): bool
     asm "105 EXTCALL"
+
+fun ffi.assert_decimal<T>(location: slice, message: slice, decimals: int, right: T, left: T): bool
+    asm "106 EXTCALL"
 
 fun ffi.type_name_by_opcode(id: int): slice?
     asm "14 EXTCALL"

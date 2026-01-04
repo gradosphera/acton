@@ -1097,3 +1097,50 @@ fn test_test_all_successful_tx_matcher_without_fail() {
             "integration/snapshots/test_test_all_successful_tx_matcher_without_fail.stdout.txt",
         );
 }
+
+#[test]
+fn test_expect_to_equal_decimal_success() {
+    ProjectBuilder::new("decimal-success")
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/testing/expect"
+
+            get fun `test-foo`() {
+                expect(1500000000).toEqualDecimal(1500000000, 9);
+                expect(-1500000000).toEqualDecimal(-1500000000, 9);
+                expect(100).toEqualDecimal(100, 0);
+                expect(100).toEqualDecimal(100, 2);
+            }
+        "#,
+        )
+        .build()
+        .acton()
+        .test()
+        .run()
+        .success();
+}
+
+#[test]
+fn test_expect_to_equal_decimal_failure() {
+    ProjectBuilder::new("decimal-failure")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/testing/expect"
+
+            get fun `test-foo`() {
+                expect(1500000000).toEqualDecimal(1600000000, 9);
+            }
+        "#,
+        )
+        .build()
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_expect_to_equal_decimal_failure.stdout.txt",
+        );
+}

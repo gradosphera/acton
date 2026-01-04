@@ -90,6 +90,74 @@ fn assert_bin_impl(
     Ok(())
 }
 
+fn format_decimal(value: &BigInt, decimals: u32) -> String {
+    let s = value.to_string();
+    let is_negative = s.starts_with('-');
+    let abs_s = if is_negative { &s[1..] } else { &s };
+    let decimals = decimals as usize;
+
+    let mut result = if abs_s.len() <= decimals {
+        let mut res = "0.".to_string();
+        res.push_str(&"0".repeat(decimals - abs_s.len()));
+        res.push_str(abs_s);
+        res
+    } else {
+        let mut res = abs_s.to_string();
+        res.insert(abs_s.len() - decimals, '.');
+        res
+    };
+
+    if result.contains('.') {
+        result = result.trim_end_matches('0').to_string();
+        if result.ends_with('.') {
+            result.push('0');
+        }
+    }
+
+    if is_negative {
+        format!("-{}", result)
+    } else {
+        result
+    }
+}
+
+extension!(assert_decimal in (Context) with (left: BigInt, right: BigInt, decimals: BigInt, message: String, location: String) using assert_decimal_impl);
+fn assert_decimal_impl(
+    ctx: &mut Context,
+    stack: &mut Tuple,
+    left: BigInt,
+    right: BigInt,
+    decimals: BigInt,
+    message: String,
+    location: String,
+) -> anyhow::Result<()> {
+    if left == right {
+        stack.push_bool(true);
+        return Ok(());
+    }
+
+    let decimals_u32 = decimals.to_u32().unwrap_or(0);
+    let left_str = format_decimal(&left, decimals_u32);
+    let right_str = format_decimal(&right, decimals_u32);
+
+    let message = if message.is_empty() {
+        format!(
+            "expect(<actual>).toEqualDecimal(<expected>)\n       Actual:   {}\n       Expected: {}",
+            left_str, right_str
+        )
+    } else {
+        message
+    };
+
+    *ctx.asserts.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
+        message: Some(message),
+        location: Some(location),
+    }));
+
+    stack.push_bool(false);
+    Ok(())
+}
+
 extension!(expect_to_end_with_exit_code in (Context) with (code: BigInt) using expect_to_end_with_exit_code_impl);
 fn expect_to_end_with_exit_code_impl(
     ctx: &mut Context,
@@ -375,5 +443,6 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         103 => fail_to_find_transaction_by_params,
         104 => fail_to_not_find_transaction_by_params,
         105 => fail_wallet_not_found,
+        106 => assert_decimal,
     });
 }

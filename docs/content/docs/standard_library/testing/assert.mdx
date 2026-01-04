@@ -229,3 +229,20 @@ NOT FOR PUBLIC USE.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L211" />
 
+## `Assert.equalDecimal`
+
+```tolk
+fun Assert.equalDecimal(left: int, right: int, decimals: int, message: slice = "", location: slice = "")
+```
+
+Asserts that two values are equal as decimals with given precision.
+
+Optional message can be provided to describe the assertion.
+Optional location can be provided to specify the location of the assertion to
+be printed in the error message.
+
+This is a low-level function. Expectation API provides a higher-level interface
+with automatic location tracking.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/testing/assert.tolk#L224" />
+

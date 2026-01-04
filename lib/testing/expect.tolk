@@ -69,6 +69,16 @@ fun Expectation<T>.toEqual<U>(self, expected: U) {
     Assert.equal(self.value, expected, "expect(<actual>).toEqual(<expected>)", self.location);
 }
 
+/// Asserts that actual value is equal to expected value as decimal with given precision.
+/// 
+/// Example:
+/// ```tolk
+/// expect(ton("1.5")).toEqualDecimal(ton("1.5"), 9);
+/// ```
+fun Expectation<T>.toEqualDecimal(self, expected: T, decimals: int) {
+    Assert.equalDecimal(self.value, expected, decimals, "", self.location);
+}
+
 /// Asserts that actual value is not equal to expected value.
 /// 
 /// Example:
