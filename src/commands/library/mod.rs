@@ -165,7 +165,7 @@ pub fn publish_cmd(
 
     let amount_to_send = (custom_ton * 1_000_000_000.0) as u128;
 
-    let api_client = TonApiClient::new(network.clone(), api_key.clone());
+    let api_client = TonApiClient::new(network.clone(), api_key.clone())?;
     let (seqno, need_state_init) = wallet.seqno(network.as_str())?;
 
     let expired_at_time = std::time::SystemTime::now() + std::time::Duration::from_secs(600);
@@ -223,7 +223,7 @@ pub fn fetch_cmd(
     json: bool,
 ) -> anyhow::Result<()> {
     let network = Network::from_str(&net)?;
-    let client = TonApiClient::new(network, api_key);
+    let client = TonApiClient::new(network, api_key)?;
 
     if !json {
         println!("  {} Fetching library: {}", "→".blue().bold(), hash);

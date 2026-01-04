@@ -91,7 +91,7 @@ pub fn disasm_cmd(
         if instructions.len() == 1
             && let Some(lib_hash) = extract_library_hash_from_instruction(&instructions[0])
         {
-            let client = TonApiClient::new(network, api_key.map(|s| s.to_string()));
+            let client = TonApiClient::new(network, api_key.map(|s| s.to_string()))?;
             match client.get_library_by_hash(&lib_hash.to_string()) {
                 Ok(lib_cell) => {
                     final_cell = lib_cell;

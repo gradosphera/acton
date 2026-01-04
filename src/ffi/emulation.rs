@@ -358,7 +358,7 @@ fn send_wallet_message(
     }
 
     let network = Network::from_str(network)?;
-    let client = TonApiClient::new(network, api_key.clone());
+    let client = TonApiClient::new(network, api_key.clone())?;
     client.send_boc(&external.to_boc_b64(false)?)?;
 
     Ok(())
@@ -1194,7 +1194,7 @@ fn wait_for_transaction_impl(
     let network = Network::from_str(&ctx.network()).context("Failed to parse network")?;
 
     let api_key = ctx.env.api_key.clone();
-    let api_client = TonApiClient::new(network, api_key.clone());
+    let api_client = TonApiClient::new(network, api_key.clone())?;
 
     let ext_message_hash_bytes = ext_message_hash.data();
 

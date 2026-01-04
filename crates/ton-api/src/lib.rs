@@ -47,12 +47,14 @@ pub struct TonApiClient {
 }
 
 impl TonApiClient {
-    pub fn new(network: Network, api_key: Option<String>) -> Self {
-        Self {
-            client: reqwest::blocking::Client::new(),
+    pub fn new(network: Network, api_key: Option<String>) -> anyhow::Result<TonApiClient> {
+        Ok(TonApiClient {
+            client: reqwest::blocking::ClientBuilder::new()
+                .build()
+                .context("Cannot create HTTP client, please check if network is available")?,
             network,
             api_key,
-        }
+        })
     }
 
     pub fn with_network(mut self, network: Network) -> Self {

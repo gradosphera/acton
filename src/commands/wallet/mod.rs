@@ -126,7 +126,7 @@ fn list_wallets(balance: bool, api_key: Option<String>) -> anyhow::Result<()> {
 
     let api_key = api_key.or_else(|| env::var("TONCENTER_API_KEY").ok());
     let have_api_key = api_key.is_some();
-    let client = TonApiClient::new(Network::Testnet, api_key);
+    let client = TonApiClient::new(Network::Testnet, api_key)?;
 
     println!("Available wallets:");
 
