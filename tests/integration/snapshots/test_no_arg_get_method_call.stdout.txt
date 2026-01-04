@@ -9,7 +9,7 @@
 
  > tests/test.test.tolk (1 test)
   ✗ foo [TIME]
-    └─ Error: Get method 'currentCounter2' returned '()' that cannot be deserialized to 'int'. Make sure you passed all parameters to the get method.
+    └─ Error: Get method 'currentCounter2' returned '[]' that cannot be deserialized to 'int'. Make sure you passed all parameters to the get method.
 
  ✗ 1 failed in 1 file
 

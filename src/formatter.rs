@@ -126,20 +126,26 @@ impl FormatterContext {
         address.to_base64_std_flags(false, !need_mainnet_address)
     }
 
-    fn format_address_slice(&self, slice: &ArcCell) -> String {
+    fn format_address_slice(&self, slice: &ArcCell, colorize: bool) -> String {
         let mut parser = slice.parser();
         if let Ok(address) = parser.load_address() {
             let addr = Self::arc_cell_to_addr(slice);
             let address_base64 = self.address_to_string(&address);
 
+            let addr_str = if colorize {
+                address_base64.cyan().to_string()
+            } else {
+                address_base64
+            };
+
             if let Some(addr) = &addr {
                 let contract_type = self.get_contract_type(addr);
                 if let Some(contract_type) = contract_type {
-                    return format!("{address_base64} ({contract_type})");
+                    return format!("{addr_str} ({contract_type})");
                 }
             }
 
-            return address_base64;
+            return addr_str;
         }
 
         slice
@@ -1032,36 +1038,60 @@ impl FormatterContext {
         None
     }
 
-    pub fn format_tuple(&self, tuple: &Tuple) -> String {
+    pub fn format_tuple(&self, tuple: &Tuple, root: bool, colorize: bool) -> String {
+        self.format_tuple_with_brackets(tuple, root, colorize, '[', ']')
+    }
+
+    pub fn format_tensor(&self, tuple: &Tuple, root: bool, colorize: bool) -> String {
+        self.format_tuple_with_brackets(tuple, root, colorize, '(', ')')
+    }
+
+    fn format_tuple_with_brackets(
+        &self,
+        tuple: &Tuple,
+        root: bool,
+        colorize: bool,
+        open: char,
+        close: char,
+    ) -> String {
         if tuple.0.len() == 1 {
-            return self.format(&tuple.0[0]);
+            return self.format_internal(&tuple.0[0], root, colorize);
         }
 
         let mut res = "".to_string();
-        write!(res, "(").ok();
+        write!(res, "{}", open).ok();
         for (i, item) in tuple.0.iter().enumerate() {
             if i > 0 {
                 write!(res, ", ").ok();
             }
-            write!(res, "{}", self.format(item)).ok();
+            write!(res, "{}", self.format_internal(item, false, colorize)).ok();
         }
-        write!(res, ")").ok();
+        write!(res, "{}", close).ok();
         res
     }
 
     /// Format any TupleItem with rich formatting
     pub fn format(&self, item: &TupleItem) -> String {
+        self.format_internal(item, true, false)
+    }
+
+    /// Format any TupleItem with rich formatting and colors
+    pub fn format_with_color(&self, item: &TupleItem) -> String {
+        self.format_internal(item, true, true)
+    }
+
+    fn format_internal(&self, item: &TupleItem, root: bool, colorize: bool) -> String {
         match item {
             TupleItem::TypedTuple {
                 type_name,
                 inner: items,
             } => {
                 if items.is_empty() {
-                    return type_name.clone();
+                    return format!("{}()", type_name);
                 }
 
                 if type_name.ends_with("?") {
-                    return self.format_nullable(item);
+                    return self.format_nullable(item, root, colorize);
                 }
 
                 if type_name == "SendResultList" {
@@ -1076,31 +1106,38 @@ impl FormatterContext {
                         struct_desc,
                         0,
                         &mut VecDeque::from(items.0.clone()),
+                        colorize,
                     );
                 }
 
                 if let TupleItem::Slice(cell) = &items[0]
                     && type_name == "address"
                 {
-                    return self.format_address_slice(cell);
+                    return self.format_address_slice(cell, colorize);
                 }
                 if let TupleItem::Int(value) = &items[0]
                     && type_name == "bool"
                 {
-                    return if value == &BigInt::from(0) {
+                    let s = if value == &BigInt::from(0) {
                         "false".to_owned()
                     } else if value == &BigInt::from(-1) {
                         "true".to_owned()
                     } else {
                         format!("{value}")
                     };
+                    return if colorize { s.yellow().to_string() } else { s };
                 }
 
                 if let TupleItem::Slice(_) = &items[0] {
-                    return self.format(&items[0]);
+                    return self.format_internal(&items[0], root, colorize);
                 }
 
-                self.format_tuple(items).to_string()
+                if type_name.starts_with('(') {
+                    // (int, slice, etc.) tensor
+                    return self.format_tensor(items, root, colorize);
+                }
+
+                self.format_tuple(items, root, colorize).to_string()
             }
             TupleItem::Slice(cell) => {
                 if cell.bit_len() == 0 && cell.references().is_empty() {
@@ -1108,41 +1145,46 @@ impl FormatterContext {
                 }
 
                 if let Some(string) = Tuple::parse_snake_string(cell) {
-                    return format!("\"{string}\"");
+                    if root {
+                        // for `println("hello")` show `hello`
+                        return string;
+                    }
+
+                    let s = format!("\"{string}\"");
+                    return if colorize { s.green().to_string() } else { s };
                 }
 
                 self.format_slice(cell)
             }
             TupleItem::Int(value) => {
-                format!("{value}")
+                let s = format!("{value}");
+                if colorize { s.yellow().to_string() } else { s }
             }
-            TupleItem::Null => "null".to_owned(),
+            TupleItem::Null => {
+                if colorize {
+                    "null".bold().to_string()
+                } else {
+                    "null".to_owned()
+                }
+            }
             TupleItem::Nan => "NaN".to_owned(),
-            TupleItem::Cell(cell) => cell
-                .to_boc_hex(false)
-                .unwrap_or("<invalid cell>".to_owned()),
-            TupleItem::Builder(cell) => cell
-                .to_boc_hex(false)
-                .unwrap_or("<invalid builder>".to_owned()),
-            TupleItem::Tuple(items) => {
-                if items.len() == 1 {
-                    return self.format(&items[0]);
-                }
-                let mut res = "".to_owned();
-                write!(res, "(").ok();
-                for (i, item) in items.iter().enumerate() {
-                    if i > 0 {
-                        write!(res, ", ").ok();
-                    }
-                    write!(res, "{}", self.format(item)).ok();
-                }
-                write!(res, ")").ok();
-                res
+            TupleItem::Cell(cell) => {
+                let s = cell
+                    .to_boc_hex(false)
+                    .unwrap_or("<invalid cell>".to_owned());
+                if colorize { s.dimmed().to_string() } else { s }
             }
+            TupleItem::Builder(cell) => {
+                let s = cell
+                    .to_boc_hex(false)
+                    .unwrap_or("<invalid builder>".to_owned());
+                if colorize { s.dimmed().to_string() } else { s }
+            }
+            TupleItem::Tuple(items) => self.format_tuple(items, root, colorize).to_string(),
         }
     }
 
-    fn format_nullable(&self, item: &TupleItem) -> String {
+    fn format_nullable(&self, item: &TupleItem, root: bool, colorize: bool) -> String {
         let TupleItem::TypedTuple { type_name, inner } = item else {
             return "".to_owned();
         };
@@ -1155,7 +1197,11 @@ impl FormatterContext {
         //
         // So we can just check if the last element is zero to understand if whole tuple represents null.
         if inner.last() == Some(&TupleItem::Int(0.into())) {
-            return "null".to_owned();
+            return if colorize {
+                "null".bold().to_string()
+            } else {
+                "null".to_owned()
+            };
         }
 
         let inner_type = &type_name[..type_name.len() - 1];
@@ -1169,10 +1215,14 @@ impl FormatterContext {
             return format!("{inner_type}{{}}");
         }
 
-        self.format(&TupleItem::TypedTuple {
-            type_name: inner_type.to_owned(),
-            inner: inner.clone(),
-        })
+        self.format_internal(
+            &TupleItem::TypedTuple {
+                type_name: inner_type.to_owned(),
+                inner: inner.clone(),
+            },
+            root,
+            colorize,
+        )
     }
 
     fn format_structure(
@@ -1180,18 +1230,23 @@ impl FormatterContext {
         struct_desc: TypeAbi,
         level: usize,
         items: &mut VecDeque<TupleItem>,
+        colorize: bool,
     ) -> String {
         let mut f = "".to_string();
 
-        writeln!(f, "{} {{", struct_desc.name).ok();
+        if colorize {
+            writeln!(f, "{} {}", struct_desc.name.magenta(), "{".dimmed()).ok();
+        } else {
+            writeln!(f, "{} {{", struct_desc.name).ok();
+        }
 
         for (i, field) in struct_desc.fields.iter().enumerate() {
             let field_type = field.type_info.human_readable.clone();
             let field_value = if let Some(abi) = self.contract_abi.find_any_type(&field_type) {
-                let result = self.format_structure(abi, level, items);
+                let result = self.format_structure(abi, level, items, colorize);
                 Self::add_indent_to_lines_except_first(result.as_str(), (level + 1) * 4)
             } else if let Some(field_value) = items.pop_front() {
-                self.format(&field_value.to_typed(&field_type))
+                self.format_internal(&field_value.to_typed(&field_type), false, colorize)
             } else {
                 "<unknown value>".to_string()
             };
@@ -1206,7 +1261,12 @@ impl FormatterContext {
                 break;
             }
         }
-        write!(f, "}}").ok();
+
+        if colorize {
+            write!(f, "{}", "}".dimmed()).ok();
+        } else {
+            write!(f, "}}").ok();
+        }
         f
     }
 
@@ -1308,8 +1368,8 @@ impl FormatterContext {
         if left_type != right_type {
             return format!(
                 "{} != {}",
-                self.format_tuple(left),
-                self.format_tuple(right)
+                self.format_tuple(left, false, false),
+                self.format_tuple(right, false, false)
             );
         }
 
@@ -1350,8 +1410,8 @@ impl FormatterContext {
             } else {
                 format!(
                     "{} != {}",
-                    self.format_tuple(left),
-                    self.format_tuple(right)
+                    self.format_tuple(left, false, false),
+                    self.format_tuple(right, false, false)
                 )
             }
         } else {

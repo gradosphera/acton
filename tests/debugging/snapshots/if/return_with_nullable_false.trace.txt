@@ -34,4 +34,4 @@ Step 3 (step_in):
              ^^^^^^^^^^^^^^^^^^
       8| }
   Variables:
-    '2 = "aaa"
+    '2 = aaa

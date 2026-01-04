@@ -303,7 +303,7 @@ fn get_script_result(
             let cell = ArcCell::from_boc_b64(&result.stack)?;
 
             let tuple = Tuple::deserialize(&cell)?;
-            let tuple_str = formatter.format_tuple(&tuple);
+            let tuple_str = formatter.format_tuple(&tuple, false, false);
 
             Ok(tuple_str + io.stdout_buffer.as_str() + io.stderr_buffer.as_str())
         }

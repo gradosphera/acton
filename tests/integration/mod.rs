@@ -12,6 +12,7 @@ mod incremental_tests;
 mod init_tests;
 mod library_tests;
 mod new_tests;
+mod println_tests;
 mod reporters_tests;
 mod run_tests;
 mod script_tests;

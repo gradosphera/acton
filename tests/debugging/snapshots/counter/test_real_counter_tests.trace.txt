@@ -64,7 +64,7 @@ Step 5 (step_over):
     631|     return impl.runGetMethodById(addr, method_id, name, args)
     632| }
   Variables:
-    '309 = "currentCounter"
+    '309 = currentCounter
     counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
@@ -81,7 +81,7 @@ Step 6 (step_over):
     632| }
   Variables:
     '310 = null
-    '309 = "currentCounter"
+    '309 = currentCounter
     counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
@@ -98,7 +98,7 @@ Step 7 (step_over):
      75|     val info = net.getAccountState(counter.address)!;
   Variables:
     '310 = null
-    '309 = "currentCounter"
+    '309 = currentCounter
     counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD
 
@@ -130,7 +130,7 @@ Step 9 (step_over):
      75|     val info = net.getAccountState(counter.address)!;
      76|     println(format1("Balance: {:ton}", info.storage.balance.grams));
   Variables:
-    '319 = "Counter: {}"
+    '319 = Counter: {}
     counterRes = 0
     counter.address = kQC5pmNoIja6+8bIG7LsYHYwsJ+OIzV14UnM1IsMqeE8bLec
     deployer = kQBvDB/H7FFBs0nF4ap/DBdcOrwY/rMIpNVVOR6SWYFHB5iD

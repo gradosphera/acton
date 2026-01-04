@@ -1,5 +1,5 @@
 use crate::common::{assertion, strip_ansi};
-use crate::support::snapshots::normalize_output;
+use crate::support::snapshots::{normalize_output, normalize_output_keep_ansi};
 use snapbox::Data;
 use snapbox::cmd::OutputAssert;
 use std::path::PathBuf;
@@ -66,8 +66,10 @@ pub trait TestOutputExt {
     fn get_stdout(&self) -> String;
     fn get_stderr(&self) -> String;
     fn get_normalized_stdout(&self) -> String;
+    fn get_normalized_stdout_keep_ansi(&self) -> String;
     fn get_normalized_stderr(&self) -> String;
     fn assert_snapshot_matches(&self, path: &str) -> &Self;
+    fn assert_stdout_svg_snapshot_matches(&self, path: &str) -> &Self;
     fn assert_stderr_snapshot_matches(&self, path: &str) -> &Self;
     fn assert_file_exists(&self, path: &str) -> &Self;
     fn assert_file_contains(&self, path: &str, content: &str) -> &Self;
@@ -176,6 +178,10 @@ impl TestOutputExt for TestSuccess {
         normalize_output(&self.get_stdout(), &self.project_path)
     }
 
+    fn get_normalized_stdout_keep_ansi(&self) -> String {
+        normalize_output_keep_ansi(&self.get_stdout(), &self.project_path)
+    }
+
     fn get_normalized_stderr(&self) -> String {
         normalize_output(&self.get_stderr(), &self.project_path)
     }
@@ -190,6 +196,23 @@ impl TestOutputExt for TestSuccess {
 
         let expected = Data::read_from(&snapshot_path, None);
         assertion.eq(normalized, expected);
+        self
+    }
+
+    fn assert_stdout_svg_snapshot_matches(&self, path: &str) -> &Self {
+        let normalized = self.get_normalized_stdout_keep_ansi();
+        let assertion = assertion();
+
+        let mut snapshot_path = std::env::current_dir().expect("Failed to get current dir");
+        snapshot_path.push("tests");
+        snapshot_path.push(path);
+
+        let expected = Data::read_from(&snapshot_path, Some(snapbox::data::DataFormat::TermSvg));
+
+        assertion.eq(
+            Data::from(normalized).coerce_to(snapbox::data::DataFormat::TermSvg),
+            expected,
+        );
         self
     }
 
@@ -367,6 +390,10 @@ impl TestOutputExt for TestFailure {
         normalize_output(&self.get_stdout(), &self.project_path)
     }
 
+    fn get_normalized_stdout_keep_ansi(&self) -> String {
+        normalize_output_keep_ansi(&self.get_stdout(), &self.project_path)
+    }
+
     fn get_normalized_stderr(&self) -> String {
         normalize_output(&self.get_stderr(), &self.project_path)
     }
@@ -381,6 +408,23 @@ impl TestOutputExt for TestFailure {
 
         let expected = Data::read_from(&snapshot_path, None);
         assertion.eq(normalized, expected);
+        self
+    }
+
+    fn assert_stdout_svg_snapshot_matches(&self, path: &str) -> &Self {
+        let normalized = self.get_normalized_stdout_keep_ansi();
+        let assertion = assertion();
+
+        let mut snapshot_path = std::env::current_dir().expect("Failed to get current dir");
+        snapshot_path.push("tests");
+        snapshot_path.push(path);
+
+        let expected = Data::read_from(&snapshot_path, Some(snapbox::data::DataFormat::TermSvg));
+
+        assertion.eq(
+            Data::from(normalized).coerce_to(snapbox::data::DataFormat::TermSvg),
+            expected,
+        );
         self
     }
 

@@ -5,7 +5,21 @@ use snapbox::filter::Filter;
 use std::path::Path;
 
 pub fn normalize_output(stdout: &str, project_path: &Path) -> String {
-    let content = strip_ansi(stdout).into_data();
+    normalize_output_internal(stdout, project_path, true)
+}
+
+#[allow(dead_code)]
+pub fn normalize_output_keep_ansi(stdout: &str, project_path: &Path) -> String {
+    normalize_output_internal(stdout, project_path, false)
+}
+
+fn normalize_output_internal(stdout: &str, project_path: &Path, strip: bool) -> String {
+    let content = if strip {
+        strip_ansi(stdout)
+    } else {
+        stdout.to_string()
+    };
+    let content = content.into_data();
     let content = snapbox::filter::FilterPaths.filter(content.into_data());
     let content = snapbox::filter::FilterNewlines.filter(content);
     let content = content.render().expect("came in as a String");

@@ -17,7 +17,7 @@ fn println_impl(
     let typed_arg = arg.unwrap_single().to_typed(&type_name);
 
     let formatter = crate::formatter::FormatterContext::from_context(ctx);
-    let formatted = strip_quotes(formatter.format(&typed_arg));
+    let formatted = formatter.format_with_color(&typed_arg);
 
     if ctx.io.capture_output {
         ctx.io.stdout_buffer.push_str(&formatted);
@@ -166,21 +166,13 @@ fn format_args(ctx: &mut Context, mut fmt: String, args: Vec<(String, TupleItem)
         let typed_arg = arg.to_typed(&type_name);
 
         let formatter = crate::formatter::FormatterContext::from_context(ctx);
-        let formatted = strip_quotes(formatter.format(&typed_arg));
+        let formatted = formatter.format(&typed_arg);
 
         if let Some(pos) = fmt.find("{}") {
             fmt.replace_range(pos..pos + 2, formatted.as_str());
         }
     }
     fmt
-}
-
-fn strip_quotes(formatted: String) -> String {
-    if formatted.starts_with("\"") && formatted.ends_with("\"") {
-        formatted[1..formatted.len() - 1].to_string()
-    } else {
-        formatted
-    }
 }
 
 extension!(prompt in (Context) with (placeholder: String, message: String) using prompt_impl);

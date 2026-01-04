@@ -1225,7 +1225,5 @@ fn test_println_nullable_values() {
         .script("scripts/env.tolk")
         .run()
         .success()
-        .assert_snapshot_matches(
-            "integration/snapshots/test_println_nullable_values.stderr.txt",
-        );
+        .assert_snapshot_matches("integration/snapshots/test_println_nullable_values.stderr.txt");
 }
