@@ -246,7 +246,7 @@ fn send_message_impl(
     let emulations = if ctx.debug.is_enabled() {
         send_message_debug(ctx, &msg_cell, &libs, Some(src_addr))?
     } else {
-        emulator.send_message(world_state, msg_cell, &libs, Some(src_addr))
+        emulator.send_message(world_state, msg_cell, &libs, Some(src_addr))?
     };
 
     let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {

@@ -541,6 +541,139 @@ fn test_send_message_to_not_deployed_contract_with_register() {
 }
 
 #[test]
+fn test_run_get_method_of_deployed_contract_with_null_code() {
+    let project = ProjectBuilder::new("test-get")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/io"
+            import "../../lib/build/build"
+            import "../../lib/emulation/network"
+
+            get fun `test-foo`() {
+                val deployer = net.treasury("deployer");
+                val address = AutoDeployAddress {
+                    stateInit: beginCell()
+                        .storeBool(false) // fixed_prefix_length:(Maybe (## 5))
+                        .storeBool(false) // special:(Maybe TickTock)
+                        .storeBool(false) // code:(Maybe ^Cell)
+                        .storeBool(false) // data:(Maybe ^Cell)
+                        .storeBool(false) // library:(Maybe ^Cell)
+                        .endCell(),
+                };
+
+                val outMsg = createMessage({
+                    bounce: BounceMode.NoBounce,
+                    value: ton("0.1"),
+                    dest: address,
+                });
+                net.send(deployer.address, outMsg, SEND_MODE_PAY_FEES_SEPARATELY);
+
+                val res: int = net.runGetMethod(address.calculateAddress(), "counter");
+                println(res);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_run_get_method_of_deployed_contract_with_null_code.stdout.txt",
+        );
+}
+
+#[test]
+fn test_run_get_method_of_deployed_contract_with_null_code_with_backtrace_full() {
+    let project = ProjectBuilder::new("test-get")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/io"
+            import "../../lib/build/build"
+            import "../../lib/emulation/network"
+
+            get fun `test-foo`() {
+                val deployer = net.treasury("deployer");
+                val address = AutoDeployAddress {
+                    stateInit: beginCell()
+                        .storeBool(false) // fixed_prefix_length:(Maybe (## 5))
+                        .storeBool(false) // special:(Maybe TickTock)
+                        .storeBool(false) // code:(Maybe ^Cell)
+                        .storeBool(false) // data:(Maybe ^Cell)
+                        .storeBool(false) // library:(Maybe ^Cell)
+                        .endCell(),
+                };
+
+                val outMsg = createMessage({
+                    bounce: BounceMode.NoBounce,
+                    value: ton("0.1"),
+                    dest: address,
+                });
+                net.send(deployer.address, outMsg, SEND_MODE_PAY_FEES_SEPARATELY);
+
+                val res: int = net.runGetMethod(address.calculateAddress(), "counter");
+                println(res);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .with_backtrace("full")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_run_get_method_of_deployed_contract_with_null_code_with_backtrace_full.stdout.txt",
+        );
+}
+
+#[test]
+fn test_send_invalid_message() {
+    let project = ProjectBuilder::new("test-get")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/io"
+            import "../../lib/build/build"
+            import "../../lib/emulation/network"
+
+            get fun `test-foo`() {
+                val deployer = net.treasury("deployer");
+                val address = AutoDeployAddress {
+                    stateInit: beginCell()
+                        .storeBool(false) // fixed_prefix_length:(Maybe (## 5))
+                        .endCell(),
+                };
+
+                val outMsg = createMessage({
+                    bounce: BounceMode.NoBounce,
+                    value: ton("0.1"),
+                    dest: address,
+                });
+                net.send(deployer.address, outMsg, SEND_MODE_PAY_FEES_SEPARATELY);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches("integration/snapshots/test_send_invalid_message.stdout.txt");
+}
+
+#[test]
 fn test_debug_logs_in_contract() {
     let project = ProjectBuilder::new("test-get")
         .contract(

@@ -34,7 +34,7 @@
 //! let libs = Dict::new();
 //!
 //! // Send a message and process all resulting internal messages
-//! let results = emulator.send_message(state, msg, &libs, None);
+//! let results = emulator.send_message(state, msg, &libs, None)?;
 //!
 //! for result in results {
 //!     match result {
@@ -187,20 +187,17 @@ impl Emulator {
         message: Cell,
         libs: &Dict<HashBytes, LibDescr>,
         from: Option<IntAddr>,
-    ) -> Vec<SendMessageResult> {
+    ) -> anyhow::Result<Vec<SendMessageResult>> {
         let mut results = Vec::new();
 
         // 1. Process the initial message
-        let initial_res = match self.send_transaction(state, message, libs, from) {
-            Ok(res) => res,
-            Err(_) => return results,
-        };
+        let initial_res = self.send_transaction(state, message, libs, from)?;
 
         results.push(initial_res.clone());
 
         // If the initial transaction failed, or we didn't get a success, stop here
         let SendMessageResult::Success(main_res) = initial_res else {
-            return results;
+            return Ok(results);
         };
 
         let mut externals = Vec::new();
@@ -218,7 +215,7 @@ impl Emulator {
                     externals.push(out_msg_cell);
                 }
                 MsgInfo::Int(_) => {
-                    let mut sub_results = self.send_message(state, out_msg_cell, libs, None);
+                    let mut sub_results = self.send_message(state, out_msg_cell, libs, None)?;
                     for sub_res in &mut sub_results {
                         if let SendMessageResult::Success(res) = sub_res {
                             res.parent_transaction = Some(main_tx.lt);
@@ -237,7 +234,7 @@ impl Emulator {
             res.child_transactions = child_lts;
         }
 
-        results
+        Ok(results)
     }
 
     /// Set custom `src` address if it is None.

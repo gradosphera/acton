@@ -8,6 +8,9 @@ use std::path::Path;
 use ton_executor::get::GetMethodResult;
 use ton_source_map::SourceLocation;
 
+const CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT: i64 = 678;
+const CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE: i64 = 679;
+
 #[derive(Debug, Clone)]
 pub struct ConsoleConfig {
     pub show_output: bool,
@@ -401,13 +404,13 @@ impl TestReporter for ConsoleReporter {
                                 println!("      {} {}", "├─".dimmed(), info.description.dimmed());
                             }
                             println!("      {} Phase: {}", "└─".dimmed(), info.phase.dimmed());
-                        } else if exit_code == 678 {
+                        } else if exit_code == CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT {
                             println!(
                                 "      {} Cannot run method of not deployed contract, make sure you're deployed contract first or passed {}",
                                 "└─".dimmed(),
                                 "--fork-net".yellow(),
                             );
-                        } else if exit_code == 679 {
+                        } else if exit_code == CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE {
                             println!(
                                 "      {} Cannot run method of contract without code",
                                 "└─".dimmed()

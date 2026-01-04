@@ -1,0 +1,18 @@
+  Installing standard library v0.1.0
+   Compiling contracts
+   Compiling simple
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+
+ TEST  [ROOT]
+
+ > tests/test.test.tolk (1 test)
+  ✗ foo [TIME]
+    └─ exit_code=679
+      ├─ Re-run with --backtrace full to get more information
+      └─ Cannot run method of contract without code
+
+ ✗ 1 failed in 1 file
+
+Some tests failed.

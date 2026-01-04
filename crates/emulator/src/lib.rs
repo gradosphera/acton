@@ -41,7 +41,7 @@
 //! let emulator = Emulator::new(ExecutorVerbosity::Short, None)?;
 //!
 //! // 3. Emulate a message flow
-//! let results = emulator.send_message(&mut state, msg, &Default::default(), None);
+//! let results = emulator.send_message(&mut state, msg, &Default::default(), None)?;
 //!
 //! for result in results {
 //!     // Process transaction results...
