@@ -195,6 +195,34 @@ fn test_compile_with_clear_cache() {
         .assert_not_contains("from cache");
 }
 
+#[test]
+fn test_compile_simple_contract_with_recursive_dependency() {
+    let project = ProjectBuilder::new("compile-simple")
+        .contract_with_deps("simple1", SIMPLE_CONTRACT, vec!["simple2"])
+        .contract_with_deps("simple2", SIMPLE_CONTRACT, vec!["simple1"])
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple1.tolk")
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_contains("Code in base64")
+        .assert_contains("Code in hex")
+        .assert_contains("Code hash hex");
+
+    project
+        .acton()
+        .compile("contracts/simple2.tolk")
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_contains("Code in base64")
+        .assert_contains("Code in hex")
+        .assert_contains("Code hash hex");
+}
+
 // ========================================
 // Output Format Tests
 // ========================================

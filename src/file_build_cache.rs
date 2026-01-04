@@ -5,7 +5,7 @@ use fs2::FileExt;
 use log::debug;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -142,7 +142,7 @@ impl FileBuildCache {
         let key = self.compute_key(file_path, with_debug_info, optimization_level, tolk_version);
         let entry = self.entries.get(&key)?;
 
-        if let Ok(dependencies) = self.get_dependencies(file_path) {
+        if let Ok(dependencies) = self.get_dependencies(file_path, &mut HashSet::new()) {
             debug!("Check hash `{file_path}` with dependencies: {dependencies:?}");
             if let Ok(current_hash) = self.compute_dependencies_hash(&dependencies)
                 && current_hash == entry.dependencies_hash
@@ -162,7 +162,7 @@ impl FileBuildCache {
         optimization_level: usize,
         tolk_version: String,
     ) -> Result<()> {
-        let dependencies = self.get_dependencies(file_path)?;
+        let dependencies = self.get_dependencies(file_path, &mut HashSet::new())?;
         debug!("Put new cache entry `{file_path}` with dependencies: {dependencies:?}");
 
         let dependencies_hash = self.compute_dependencies_hash(&dependencies)?;
@@ -213,7 +213,11 @@ impl FileBuildCache {
         hex::encode(result)
     }
 
-    fn get_dependencies(&self, file_path: &str) -> Result<Vec<String>> {
+    fn get_dependencies(
+        &self,
+        file_path: &str,
+        visited: &mut HashSet<String>,
+    ) -> Result<Vec<String>> {
         let file_deps = abi::get_file_dependencies(file_path, true)
             .map_err(|e| anyhow!("Failed to get file dependencies: {e}"))?;
 
@@ -244,11 +248,17 @@ impl FileBuildCache {
         if let Some(deps) = &contract_info.depends {
             for dep in deps {
                 let dep_name = dep.name();
+
+                if !visited.insert(dep_name.to_owned()) {
+                    // already visited
+                    continue;
+                }
+
                 let contract_config = contracts
                     .get(dep_name)
                     .ok_or_else(|| anyhow!("Contract '{dep_name}' not found in Acton.toml"))?;
 
-                result.append(&mut self.get_dependencies(contract_config.src.as_str())?);
+                result.append(&mut self.get_dependencies(contract_config.src.as_str(), visited)?);
             }
         }
 
