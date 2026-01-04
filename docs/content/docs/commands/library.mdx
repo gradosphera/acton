@@ -24,14 +24,14 @@ This command initiates the publication process for the specified contract. If no
 
 ### Command Options
 
-| Option                  | Type      | Description                                                                 |
-|-------------------------|-----------|-----------------------------------------------------------------------------|
-| `[CONTRACT_ID]`         | Argument  | The ID of the contract in `Acton.toml` to publish                           |
-| `--code <CODE>`         | String    | Base64 or Hex code to publish instead of compiling a contract               |
-| `--duration <DURATION>` | String    | Duration to store the library (e.g., `100d`, `1y`, `31536000s`)             |
-| `--wallet <WALLET>`     | String    | Name of the wallet to use for the transaction                               |
-| `--net <NET>`           | String    | Network to use (`testnet` or `mainnet`), defaults to `testnet`              |
-| `--api-key <KEY>`       | String    | TonCenter API key for blockchain interactions                               |
+| Option                  | Type     | Description                                                     |
+|-------------------------|----------|-----------------------------------------------------------------|
+| `[CONTRACT_ID]`         | Argument | The ID of the contract in `Acton.toml` to publish               |
+| `--code <CODE>`         | String   | Base64 or Hex code to publish instead of compiling a contract   |
+| `--duration <DURATION>` | String   | Duration to store the library (e.g., `100d`, `1y`, `31536000s`) |
+| `--wallet <WALLET>`     | String   | Name of the wallet to use for the transaction                   |
+| `--net <NET>`           | String   | Network to use (`testnet` or `mainnet`), defaults to `testnet`  |
+| `--api-key <KEY>`       | String   | TonCenter API key for blockchain interactions                   |
 
 ### Examples
 
@@ -65,14 +65,14 @@ acton library fetch <HASH>
 
 ### Command Options
 
-| Option                  | Type      | Description                                                                 |
-|-------------------------|-----------|-----------------------------------------------------------------------------|
-| `<HASH>`                | Argument  | The SHA-256 hash of the library code                                        |
-| `--disasm`              | Flag      | Disassemble the fetched code and print TASM                                 |
-| `-o, --output <FILE>`   | File path | Save fetched code to file (binary if `.boc` extension, else Base64)         |
-| `--json`                | Flag      | Output result as JSON                                                       |
-| `--net <NET>`           | String    | Network to use (`testnet` or `mainnet`), defaults to `testnet`              |
-| `--api-key <KEY>`       | String    | TonCenter API key for blockchain interactions                               |
+| Option                | Type      | Description                                                         |
+|-----------------------|-----------|---------------------------------------------------------------------|
+| `<HASH>`              | Argument  | The SHA-256 hash of the library code                                |
+| `--disasm`            | Flag      | Disassemble the fetched code and print TASM                         |
+| `-o, --output <FILE>` | File path | Save fetched code to file (binary if `.boc` extension, else Base64) |
+| `--json`              | Flag      | Output result as JSON                                               |
+| `--net <NET>`         | String    | Network to use (`testnet` or `mainnet`), defaults to `testnet`      |
+| `--api-key <KEY>`     | String    | TonCenter API key for blockchain interactions                       |
 
 ### Examples
 

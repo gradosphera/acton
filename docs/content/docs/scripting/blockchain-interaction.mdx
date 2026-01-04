@@ -57,9 +57,9 @@ Here's a complete example of deploying a counter contract to the blockchain:
 import "counter_wrapper"
 import "types"
 
-import "lib/io"
-import "lib/emulation/network"
-import "lib/build/build"
+import "../.acton/io"
+import "../.acton/emulation/network"
+import "../.acton/build/build"
 
 fun main() {
     val deployer = net.wallet("deployer");
@@ -79,8 +79,8 @@ The `counter_wrapper.tolk` file provides a convenient wrapper around the counter
 
 ```tolk collapse={2-3, 10-17, 30-42} title="counter_wrapper.tolk"
 import "types"
-import "lib/build/build"
-import "lib/emulation/network"
+import "../.acton/build/build"
+import "../.acton/emulation/network"
 
 struct Counter {
     address: address

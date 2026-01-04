@@ -159,8 +159,8 @@ keys = { mnemonic-env = "ADMIN_MNEMONIC" }
 Once configured, reference wallets by name in your scripts using `net.wallet()`:
 
 ```tolk title="deploy.tolk"
-import "lib/emulation/network"
-import "lib/io"
+import "../.acton/emulation/network"
+import "../.acton/io"
 
 fun main() {
     val deployer = net.wallet("deployer");

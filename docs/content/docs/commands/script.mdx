@@ -26,7 +26,7 @@ This command executes `my_script.tolk` in the local emulator environment.
 | Option                 | Type   | Description                                            |
 |------------------------|--------|--------------------------------------------------------|
 | `--broadcast`          | Flag   | Execute transactions on real blockchain                |
-| `--net <NETWORK>`      | String | Target network: "testnet" (default) or "mainnet"       |
+| `--net <NET>`          | String | Target network: "testnet" (default) or "mainnet"       |
 | `--fork-net <NETWORK>` | String | Fork blockchain state from network for local execution |
 | `--api-key <API_KEY>`  | String | TonCenter API key for blockchain queries               |
 
@@ -98,9 +98,9 @@ Example deployment script:
 import "counter_wrapper"
 import "types"
 
-import "lib/io"
-import "lib/emulation/network"
-import "lib/build/build"
+import "../.acton/io"
+import "../.acton/emulation/network"
+import "../.acton/build/build"
 
 fun main() {
     // 1. Load the configured wallet (searches wallets.toml and global wallets)
@@ -132,8 +132,8 @@ acton script query.tolk --fork-net mainnet --api-key YOUR_API_KEY
 Example query script:
 
 ```tolk title="query.tolk"
-import "lib/io"
-import "lib/emulation/network"
+import "../.acton/io"
+import "../.acton/emulation/network"
 
 fun main() {
     val contractAddress = address("EQDt7LL...");
