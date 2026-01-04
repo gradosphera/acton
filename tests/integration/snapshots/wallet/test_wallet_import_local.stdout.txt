@@ -4,5 +4,5 @@
 
 SECURITY WARNING:
 [SECURITY_WARNING_MNEMONIC]
-  - Do NOT commit this file to version control (already added to .gitignore)
-  - Keep your mnemonic safe and secret
+- Do NOT commit this file to version control (already added to .gitignore)
+- Keep your mnemonic safe and secret
