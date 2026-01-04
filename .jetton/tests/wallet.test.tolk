@@ -53,7 +53,7 @@ get fun `test minter admin should be able to mint jettons`() {
     expect(mint_result).toHaveSuccessfulTx({ from: minter.address, to: wallet.address });
 
     // excesses
-    expect(mint_result).toHaveSuccessfulTx({ from: wallet.address, to: minter.address, exit_code: 65535 });
+    expect(mint_result).toHaveTx({ from: wallet.address, to: minter.address, exit_code: 65535 });
 
     // check state
     expect(wallet.getJettonBalance()).toEqual(initial_jetton_balance);
@@ -70,7 +70,7 @@ get fun `test minter admin should be able to mint jettons`() {
 
     expect(mint_result_2).toHaveSuccessfulTx({ from: minter.address, to:  wallet.address });
 
-    expect(mint_result_2).toHaveSuccessfulTx({
+    expect(mint_result_2).toHaveTx({
         from:  wallet.address,
         to: minter.address,
         exit_code: 65535
@@ -90,7 +90,7 @@ get fun `test minter admin should be able to mint jettons`() {
 
     expect(mint_result_3).toHaveSuccessfulTx({ from: minter.address, to: not_deployer_wallet.address });
 
-    expect(mint_result_3).toHaveSuccessfulTx({
+    expect(mint_result_3).toHaveTx({
         from: not_deployer_wallet.address,
         to: minter.address,
         exit_code: 65535

@@ -837,3 +837,158 @@ fn test_auto_register_refs_if_any() {
     output
         .assert_snapshot_matches("integration/snapshots/test_auto_register_refs_if_any.stdout.txt");
 }
+
+#[test]
+fn test_test_success_search_param_for_tx_with_compute_exit_code_10() {
+    let project = ProjectBuilder::new("test-get")
+        .contract(
+            "simple",
+            r#"
+            fun onInternalMessage(in: InMessage) {
+                throw 10
+            }
+            "#,
+        )
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/io"
+            import "../../lib/build/build"
+            import "../../lib/emulation/network"
+            import "../../lib/testing/expect"
+            import "../../lib/testing/transaction_expect"
+
+            get fun `test-foo`() {
+                val init = ContractState {
+                    code: build("simple"),
+                    data: createEmptyCell(),
+                };
+                val address = AutoDeployAddress {
+                    stateInit: init,
+                };
+
+                val sender = net.treasury("sender");
+                val msg = createMessage({
+                    bounce: false,
+                    value: ton("1"),
+                    dest: address,
+                    body: beginCell().storeUint(1, 32).endCell(),
+                });
+                val res = net.send(sender.address, msg, 0);
+                expect(res).toHaveSuccessfulTx();
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches("integration/snapshots/test_test_success_search_param_for_tx_with_compute_exit_code_10.stdout.txt");
+}
+
+#[test]
+fn test_test_success_search_param_for_tx_with_action_exit_code_37() {
+    let project = ProjectBuilder::new("test-get")
+        .contract(
+            "simple",
+            r#"
+            fun onInternalMessage(in: InMessage) {
+                reserveToncoinsOnBalance(ton("100"), RESERVE_MODE_BOUNCE_ON_ACTION_FAIL);
+            }
+            "#,
+        )
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/io"
+            import "../../lib/build/build"
+            import "../../lib/emulation/network"
+            import "../../lib/testing/expect"
+            import "../../lib/testing/transaction_expect"
+
+            get fun `test-foo`() {
+                val init = ContractState {
+                    code: build("simple"),
+                    data: createEmptyCell(),
+                };
+                val address = AutoDeployAddress {
+                    stateInit: init,
+                };
+
+                val sender = net.treasury("sender");
+                val msg = createMessage({
+                    bounce: false,
+                    value: ton("1"),
+                    dest: address,
+                    body: beginCell().storeUint(1, 32).endCell(),
+                });
+                val res = net.send(sender.address, msg, 0);
+                expect(res).toHaveSuccessfulTx();
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches("integration/snapshots/test_test_success_search_param_for_tx_with_action_exit_code_37.stdout.txt")
+        .assert_stdout_svg_snapshot_matches("integration/snapshots/test_test_success_search_param_for_tx_with_action_exit_code_37.stdout.svg");
+}
+
+#[test]
+fn test_test_success_search_param_for_tx_with_both_compute_and_action_exit_code() {
+    let project = ProjectBuilder::new("test-get")
+        .contract(
+            "simple",
+            r#"
+            fun onInternalMessage(in: InMessage) {
+                reserveToncoinsOnBalance(ton("100"), RESERVE_MODE_BOUNCE_ON_ACTION_FAIL);
+                throw 10
+            }
+            "#,
+        )
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/io"
+            import "../../lib/build/build"
+            import "../../lib/emulation/network"
+            import "../../lib/testing/expect"
+            import "../../lib/testing/transaction_expect"
+
+            get fun `test-foo`() {
+                val init = ContractState {
+                    code: build("simple"),
+                    data: createEmptyCell(),
+                };
+                val address = AutoDeployAddress {
+                    stateInit: init,
+                };
+
+                val sender = net.treasury("sender");
+                val msg = createMessage({
+                    bounce: false,
+                    value: ton("1"),
+                    dest: address,
+                    body: beginCell().storeUint(1, 32).endCell(),
+                });
+                val res = net.send(sender.address, msg, 0);
+                expect(res).toHaveSuccessfulTx();
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches("integration/snapshots/test_test_success_search_param_for_tx_with_both_compute_and_action_exit_code.stdout.txt");
+}

@@ -19,6 +19,7 @@
         
         Cannot find transaction from deployer A EQBvDB..FHByMJ to Counter B EQANZp..QQ5GsV
         with:
+          success=true
           exit_code=0
       └─ at ./tests/counter.test[LINE]
 ##teamcity[testFailed name='test-should-increase-counter' nodeId='test_test-should-increase-counter' [DURATION] message='expect(<actual>).toHaveSuccessfulTx(<expected>)' details='./tests/counter.test[LINE]']
@@ -32,6 +33,7 @@
         
         Cannot find transaction from deployer A EQBvDB..FHByMJ to Counter B EQANZp..QQ5GsV
         with:
+          success=true
           exit_code=0
       └─ at ./tests/counter.test[LINE]
 ##teamcity[testFailed name='test-should-reset-counter' nodeId='test_test-should-reset-counter' [DURATION] message='expect(<actual>).toHaveSuccessfulTx(<expected>)' details='./tests/counter.test[LINE]']

@@ -723,12 +723,27 @@ fn find_transaction_by_params_impl(
             }
         }
 
-        if let ComputePhase::Executed(compute) = info.compute_phase
+        if let ComputePhase::Executed(compute) = &info.compute_phase
             && let Some(expected_exit_code) = params.exit_code
             && compute.exit_code != expected_exit_code as i32
         {
             // Exit code mismatch
             return false;
+        }
+
+        if let Some(expected_success) = params.success {
+            let action_phase_success = if let Some(action_phase) = &info.action_phase {
+                action_phase.success
+            } else {
+                false // np action phase, no success
+            };
+
+            if let ComputePhase::Executed(compute) = &info.compute_phase
+                && (action_phase_success && compute.success) != expected_success
+            {
+                // Success mismatch
+                return false;
+            }
         }
 
         true

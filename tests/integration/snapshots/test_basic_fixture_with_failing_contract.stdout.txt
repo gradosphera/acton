@@ -16,6 +16,7 @@
         
         Cannot find transaction from deployer A EQBvDB..FHByMJ to Counter B EQANZp..QQ5GsV
         with:
+          success=true
           exit_code=0
       └─ at ./tests/counter.test[LINE]
   ✗ should-reset-counter [TIME]
@@ -26,6 +27,7 @@
         
         Cannot find transaction from deployer A EQBvDB..FHByMJ to Counter B EQANZp..QQ5GsV
         with:
+          success=true
           exit_code=0
       └─ at ./tests/counter.test[LINE]
 

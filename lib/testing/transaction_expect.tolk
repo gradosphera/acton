@@ -47,7 +47,7 @@ import "../types/transaction"
 /// ```
 fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = never>(self, params: SearchParams = {}) {
     params.opcode = Msg.getDeclaredPackPrefix();
-    params.exit_code = 0;
+    params.success = true;
     params.deploy = true;
 
     val tx = ffi.findTransactionByParams(self.value, params.toTuple());
@@ -76,6 +76,7 @@ fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = never>(self, params
 /// ```
 fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = never>(self, params: SearchParams = {}) {
     params.opcode = Msg.getDeclaredPackPrefix();
+    params.success = true;
     if (params.exit_code == null) {
         params.exit_code = 0;
     }
@@ -178,7 +179,7 @@ fun Expectation<SendResultList>.toHaveBouncedTx<Msg = never>(self, params: Searc
 /// ```
 fun Expectation<SendResultList>.toHaveFailedTx<Msg = never>(self, params: SearchParams = {}) {
     params.opcode = Msg.getDeclaredPackPrefix();
-
+    params.success = false;
     if (params.exit_code == null) {
         Assert.fail("expect(<actual>).toHaveFailedTx(params) must have not null exit_code parameter in params");
     }

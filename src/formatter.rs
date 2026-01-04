@@ -1553,6 +1553,16 @@ impl FormatterContext {
                 }
             ))
         }
+        if let Some(success) = assert_failure.params.success {
+            params.push(format!(
+                "  success={}",
+                if success {
+                    "true".green().to_string()
+                } else {
+                    "false".red().to_string()
+                }
+            ))
+        }
         if let Some(exit_code) = assert_failure.params.exit_code {
             params.push(format!(
                 "  exit_code={}",
