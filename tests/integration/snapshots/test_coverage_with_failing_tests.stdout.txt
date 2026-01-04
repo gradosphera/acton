@@ -12,8 +12,8 @@
   ✗ failing [TIME]
     └─ Error: expect(actual).toEqual(expected)
         (
-            -1,
-            0
+            true,
+            false
         )
       └─ at ./tests/test.test[LINE]
 

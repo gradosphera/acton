@@ -5,6 +5,7 @@ mod build_tests;
 mod compile_tests;
 mod config_tests;
 mod coverage_tests;
+mod diff_tests;
 mod disasm_tests;
 mod fixture_tests;
 mod flags_tests;

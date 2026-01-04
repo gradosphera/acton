@@ -1375,67 +1375,31 @@ impl FormatterContext {
 
         let abi = self.contract_abi.find_any_type(&left_type.to_string());
         if let Some(struct_desc) = abi {
-            if left_items.len() == struct_desc.fields.len() {
-                let mut result = format!("{left_type} {{\n");
-
-                for (field, (left_item, right_item)) in struct_desc
-                    .fields
-                    .iter()
-                    .zip(left_items.iter().zip(right_items.iter()))
-                {
-                    if left_item != right_item {
-                        result.push_str(&format!(
-                            "    {}: {}\n",
-                            field.name.yellow(),
-                            self.format(left_item).red()
-                        ));
-                        result.push_str(&format!(
-                            "    {:<width$}  {}\n",
-                            "",
-                            self.format(right_item).green(),
-                            width = field.name.len()
-                        ));
-                    } else {
-                        result.push_str(&format!(
-                            "    {}{} {}\n",
-                            field.name.dimmed(),
-                            ":".dimmed(),
-                            self.format(left_item).dimmed()
-                        ));
-                    }
-                }
-
-                result.push('}');
-                result
-            } else {
-                format!(
-                    "{} != {}",
-                    self.format_tuple(left, false, false),
-                    self.format_tuple(right, false, false)
-                )
-            }
+            let mut left_queue = VecDeque::from(left_items.clone());
+            let mut right_queue = VecDeque::from(right_items.clone());
+            self.format_structure_diff(struct_desc, 0, &mut left_queue, &mut right_queue)
         } else {
             let mut result = "(\n".to_string();
             let max_len = left_items.len().max(right_items.len());
 
             for i in 0..max_len {
-                let left_val = left_items.get(i);
-                let right_val = right_items.get(i);
+                let left_val = left_items.get(i).map(|i| i.to_typed(left_type));
+                let right_val = right_items.get(i).map(|i| i.to_typed(right_type));
 
                 match (left_val, right_val) {
                     (Some(left_val), Some(right_val)) => {
                         if left_val != right_val {
-                            result.push_str(&format!("    {},\n", self.format(left_val).red()));
-                            result.push_str(&format!("    {}\n", self.format(right_val).green()));
+                            result.push_str(&format!("    {},\n", self.format(&left_val).red()));
+                            result.push_str(&format!("    {}\n", self.format(&right_val).green()));
                         } else {
-                            result.push_str(&format!("    {},\n", self.format(left_val).dimmed()));
+                            result.push_str(&format!("    {},\n", self.format(&left_val).dimmed()));
                         }
                     }
                     (Some(left_val), None) => {
-                        result.push_str(&format!("    {},\n", self.format(left_val).red()));
+                        result.push_str(&format!("    {},\n", self.format(&left_val).red()));
                     }
                     (None, Some(right_val)) => {
-                        result.push_str(&format!("    {}\n", self.format(right_val).green()));
+                        result.push_str(&format!("    {}\n", self.format(&right_val).green()));
                     }
                     (None, None) => {}
                 }
@@ -1444,6 +1408,106 @@ impl FormatterContext {
             result.push(')');
             result
         }
+    }
+
+    fn format_structure_diff(
+        &self,
+        struct_desc: TypeAbi,
+        level: usize,
+        left_items: &mut VecDeque<TupleItem>,
+        right_items: &mut VecDeque<TupleItem>,
+    ) -> String {
+        let mut f = "".to_string();
+
+        writeln!(f, "{} {{", struct_desc.name).ok();
+
+        for (i, field) in struct_desc.fields.iter().enumerate() {
+            let field_type = field.type_info.human_readable.clone();
+
+            if let Some(abi) = self.contract_abi.find_any_type(&field_type) {
+                let result = self.format_structure_diff(abi, level, left_items, right_items);
+                let has_diff = result.contains("\x1b[31m") || result.contains("\x1b[32m");
+
+                let field_name = if has_diff {
+                    field.name.to_string()
+                } else {
+                    field.name.dimmed().to_string()
+                };
+                let colon = if has_diff {
+                    ": ".to_string()
+                } else {
+                    ": ".dimmed().to_string()
+                };
+
+                let field_value =
+                    Self::add_indent_to_lines_except_first(result.as_str(), (level + 1) * 4);
+                write!(f, "    {}{}{}", field_name, colon, field_value).ok();
+            } else {
+                let left_val = left_items.pop_front();
+                let right_val = right_items.pop_front();
+
+                match (left_val, right_val) {
+                    (Some(l), Some(r)) => {
+                        let l_typed = l.to_typed(&field_type);
+                        let r_typed = r.to_typed(&field_type);
+
+                        if l_typed != r_typed {
+                            writeln!(f, "    {}: {}", field.name, self.format(&l_typed).red()).ok();
+                            write!(
+                                f,
+                                "    {:<width$}  {}",
+                                "",
+                                self.format(&r_typed).green(),
+                                width = field.name.len()
+                            )
+                            .ok();
+                        } else {
+                            write!(
+                                f,
+                                "    {}{}{}",
+                                field.name.dimmed(),
+                                ": ".dimmed(),
+                                self.format(&l_typed).dimmed()
+                            )
+                            .ok();
+                        }
+                    }
+                    (Some(l), None) => {
+                        write!(
+                            f,
+                            "    {}: {}",
+                            field.name,
+                            self.format(&l.to_typed(&field_type)).red()
+                        )
+                        .ok();
+                    }
+                    (None, Some(r)) => {
+                        writeln!(f, "    {}:", field.name.yellow()).ok();
+                        write!(
+                            f,
+                            "    {:<width$}  {}",
+                            "",
+                            self.format(&r.to_typed(&field_type)).green(),
+                            width = field.name.len()
+                        )
+                        .ok();
+                    }
+                    (None, None) => {}
+                }
+            }
+
+            if i < struct_desc.fields.len() - 1 {
+                write!(f, "{}", ",".dimmed()).ok();
+            }
+            writeln!(f).ok();
+
+            if left_items.is_empty() && right_items.is_empty() {
+                break;
+            }
+        }
+
+        write!(f, "}}").ok();
+        f
     }
 
     pub fn format_send_msg_flags(flags: SendMsgFlags) -> String {

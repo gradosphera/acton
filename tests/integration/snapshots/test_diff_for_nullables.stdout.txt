@@ -1,0 +1,18 @@
+  Installing standard library v0.1.0
+   Compiling contracts
+   Compiling simple
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+
+ TEST  [ROOT]
+
+ > tests/simple.test.tolk (1 test)
+  ✗ diff [TIME]
+    └─ Error: expect(actual).toEqual(expected)
+        10 != null
+      └─ at ./tests/simple.test[LINE]
+
+ ✗ 1 failed in 1 file
+
+Some tests failed.
