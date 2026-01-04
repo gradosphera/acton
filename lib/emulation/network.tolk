@@ -235,6 +235,8 @@ struct SearchParams {
     exit_code: int32? = null
     /// Whether the transaction is succesfull (both compute and action phase).
     success: bool? = null,
+    /// Whether the compute phase of transaction was aborted and transaction was reverted.
+    aborted: bool? = null,
     /// Whether the transaction is a deploy transaction.
     ///
     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".

@@ -214,6 +214,7 @@ pub fn process_txs_and_search_params(
     let raw_bounced = params_reader.pop();
     let raw_bounce = params_reader.pop();
     let raw_deploy = params_reader.pop();
+    let raw_aborted = params_reader.pop();
     let raw_success = params_reader.pop();
     let raw_exit_code = params_reader.pop();
     let raw_from = params_reader.pop();
@@ -224,6 +225,7 @@ pub fn process_txs_and_search_params(
         from: None,
         exit_code: None,
         success: None,
+        aborted: None,
         deploy: None,
         bounce: None,
         bounced: None,
@@ -273,6 +275,13 @@ pub fn process_txs_and_search_params(
             params.success = None
         } else if let TupleItem::Int(num) = raw_success {
             params.success = Some(num == BigInt::from(-1))
+        }
+    }
+    if let Some(raw_aborted) = raw_aborted {
+        if let TupleItem::Null = raw_aborted {
+            params.aborted = None
+        } else if let TupleItem::Int(num) = raw_aborted {
+            params.aborted = Some(num == BigInt::from(-1))
         }
     }
     if let Some(raw_from) = raw_from {

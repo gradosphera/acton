@@ -711,6 +711,13 @@ fn find_transaction_by_params_impl(
             }
         }
 
+        if let Some(expected_aborted) = params.aborted
+            && expected_aborted != info.aborted
+        {
+            // Aborted mismatch
+            return false;
+        }
+
         if let Some(expected_action_exit_code) = params.action_exit_code {
             if let Some(action_phase) = &info.action_phase {
                 if action_phase.result_code != expected_action_exit_code {

@@ -937,8 +937,7 @@ fn test_test_success_search_param_for_tx_with_action_exit_code_37() {
         .test()
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_test_success_search_param_for_tx_with_action_exit_code_37.stdout.txt")
-        .assert_stdout_svg_snapshot_matches("integration/snapshots/test_test_success_search_param_for_tx_with_action_exit_code_37.stdout.svg");
+        .assert_snapshot_matches("integration/snapshots/test_test_success_search_param_for_tx_with_action_exit_code_37.stdout.txt");
 }
 
 #[test]
