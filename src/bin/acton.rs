@@ -600,7 +600,10 @@ pub enum LibraryCommand {
         wallet: Option<String>,
         #[arg(long, help = "TonCenter API key for blockchain queries")]
         api_key: Option<String>,
-        #[arg(long, help = "Amount of TON to send (overrides duration-based calculation)")]
+        #[arg(
+            long,
+            help = "Amount of TON to send (overrides duration-based calculation)"
+        )]
         amount: Option<String>,
         #[arg(short, long, help = "Skip confirmation prompts")]
         yes: bool,

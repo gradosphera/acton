@@ -32,6 +32,10 @@ This command initiates the publication process for the specified contract. If no
 | `--wallet <WALLET>`     | String   | Name of the wallet to use for the transaction                   |
 | `--net <NET>`           | String   | Network to use (`testnet` or `mainnet`), defaults to `testnet`  |
 | `--api-key <KEY>`       | String   | TonCenter API key for blockchain interactions                   |
+| `--amount <AMOUNT>`     | String   | Explicit TON amount to send (overrides suggested calculation)   |
+| `-y, --yes`             | Flag     | Skip confirmation prompts                                       |
+| `--local`               | Flag     | Save library info to local `libraries.toml`                     |
+| `--global`              | Flag     | Save library info to global `global.libraries.toml`             |
 
 ### Examples
 
@@ -118,4 +122,64 @@ Error output:
   "success": false,
   "error": "Library not found"
 }
+```
+
+## Library Info
+
+The `info` subcommand displays detailed information about a deployed library, including its configuration, on-chain balance, and estimated remaining storage time.
+
+### Basic Usage
+
+```bash
+acton library info [LIBRARY_NAME]
+```
+
+If `LIBRARY_NAME` is not provided, it will show a selection list of available libraries.
+
+### Command Options
+
+| Option            | Type     | Description                                   |
+|-------------------|----------|-----------------------------------------------|
+| `[LIBRARY_NAME]`  | Argument | Name of the library to show info for          |
+| `--api-key <KEY>` | String   | TonCenter API key for balance check           |
+
+### Examples
+
+```bash
+acton library info math
+```
+
+## Library Top-up
+
+The `topup` subcommand allows you to extend the storage life of a library by sending TON to its account.
+
+### Basic Usage
+
+```bash
+acton library topup [LIBRARY_NAME]
+```
+
+### Command Options
+
+| Option                  | Type     | Description                                                     |
+|-------------------------|----------|-----------------------------------------------------------------|
+| `[LIBRARY_NAME]`        | Argument | Name of the library to top up                                   |
+| `--duration <DURATION>` | String   | Duration to extend storage for (e.g., `100d`, `1y`)             |
+| `--amount <AMOUNT>`     | String   | Explicit TON amount to send (overrides duration calculation)    |
+| `--wallet <WALLET>`     | String   | Name of the wallet to use for the transaction                   |
+| `--api-key <KEY>`       | String   | TonCenter API key for blockchain interactions                   |
+| `-y, --yes`             | Flag     | Skip confirmation prompts                                       |
+
+### Examples
+
+#### Top up for 1 year (interactive)
+
+```bash
+acton library topup math --duration 1y
+```
+
+#### Send specific amount
+
+```bash
+acton library topup math --amount 5.5 --wallet my-wallet
 ```

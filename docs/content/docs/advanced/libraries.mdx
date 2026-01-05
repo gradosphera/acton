@@ -44,8 +44,9 @@ The CLI will guide you through the process:
 
 1.  **Compiling**: Acton will compile your contract to get the code cell.
 2.  **Duration**: You'll be asked how long you want to store the library (e.g., `365d` for 1 year).
-3.  **Wallet**: Select a wallet to pay for the deployment.
-4.  **Payment**: Confirm the transaction amount.
+3.  **Cost Estimation**: Acton will automatically calculate the required storage fee based on the code size and duration.
+4.  **Wallet**: Select a wallet to pay for the deployment.
+5.  **Payment**: Confirm the transaction amount. The CLI suggests a safe amount (120% of storage fee + gas).
 
 <Callout type="info">
   Libraries are always stored on the Masterchain (workchain -1) to be accessible from all other chains.
@@ -55,7 +56,8 @@ Upon success, you will see the **Library Hash**. This hash is what you'll use to
 
 ```text
 ...
-> Send 0.1000 TON to publish library? Note that any extra TON will be refunded. Yes
+> Enter amount in TON (at least 0.1124 TON for 1 year):
+> Send 0.1124 TON to publish library? Note that any extra TON will be refunded. Yes
   ✓ Transaction sent successfully
   → Library should be available soon at hash: b993c68c596425f05d1bc492d7c03e2979ab669901ed5a57e35e6dd4d6089d27
 ```
@@ -71,6 +73,33 @@ acton library publish --code "te6cckEBAQEAAgAAAEysuc0="
 # Non-interactive mode
 acton library publish math --duration 100d --wallet my-wallet --net mainnet
 ```
+
+## Monitoring Library Status
+
+Once a library is published, it's important to monitor its balance to ensure it doesn't get frozen due to lack of TON for storage fees. Acton provides the `info` command for this:
+
+```bash
+acton library info math
+```
+
+This command shows:
+- **Balance**: Current balance of the library account.
+- **Remaining**: Estimated time until the library account runs out of funds, based on current Masterchain storage prices.
+- **Hash and Account**: The library's unique hash and its on-chain address.
+
+## Extending Library Lifetime
+
+If a library is running low on funds, you can top it up using the `topup` command. You can either specify a duration or a direct TON amount:
+
+```bash
+# Top up for another 2 years
+acton library topup math --duration 2y
+
+# Top up with a specific amount
+acton library topup math --amount 5.0
+```
+
+The `topup` command uses the same cost estimation logic as `publish`, ensuring you send enough funds for the desired period.
 
 ## Fetching a Library
 
