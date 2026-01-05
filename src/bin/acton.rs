@@ -553,7 +553,7 @@ pub enum LibraryCommand {
         #[arg(long, help = "Network to use", default_value = "testnet")]
         net: Network,
         #[arg(long, help = "Amount of TON to send for publication")]
-        amount: Option<f64>,
+        amount: Option<String>,
         #[arg(short, long, help = "Skip confirmation prompts")]
         yes: bool,
         #[arg(long, help = "Save library info to local libraries.toml")]
@@ -586,6 +586,24 @@ pub enum LibraryCommand {
         name: Option<String>,
         #[arg(long, help = "TonCenter API key for blockchain queries")]
         api_key: Option<String>,
+    },
+    #[command(about = "Top up a library's account for storage")]
+    Topup {
+        #[arg(help = "Library name to top up", value_name = "LIBRARY_NAME")]
+        name: Option<String>,
+        #[arg(
+            long,
+            help = "Duration to top up for (e.g. 100d, 1y); prompts if not provided"
+        )]
+        duration: Option<String>,
+        #[arg(long, help = "Wallet to use for topping up (prompts if not provided)")]
+        wallet: Option<String>,
+        #[arg(long, help = "TonCenter API key for blockchain queries")]
+        api_key: Option<String>,
+        #[arg(long, help = "Amount of TON to send (overrides duration-based calculation)")]
+        amount: Option<String>,
+        #[arg(short, long, help = "Skip confirmation prompts")]
+        yes: bool,
     },
 }
 
@@ -926,6 +944,14 @@ fn example_library_usage() -> StyledStr {
                 "acton library publish minter",
             ),
             ("Fetch a library by its hash", "acton library fetch <HASH>"),
+            (
+                "Show information about a library",
+                "acton library info my-lib",
+            ),
+            (
+                "Top up a library for 1 year",
+                "acton library topup my-lib --duration 1y",
+            ),
         ],
         "https://i582.github.io/acton/docs/advanced/libraries",
     )
@@ -1208,6 +1234,21 @@ fn main() {
             LibraryCommand::Info { name, api_key } => {
                 info_cmd(name, api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()))
             }
+            LibraryCommand::Topup {
+                name,
+                duration,
+                wallet,
+                api_key,
+                amount,
+                yes,
+            } => commands::library::topup_cmd(
+                name,
+                duration,
+                wallet,
+                api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
+                amount,
+                yes,
+            ),
         },
         Commands::Up {
             version,

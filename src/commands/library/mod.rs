@@ -37,7 +37,7 @@ pub fn publish_cmd(
     wallet_name: Option<String>,
     api_key: Option<String>,
     net: String,
-    amount_arg: Option<f64>,
+    amount_arg: Option<String>,
     yes: bool,
     local: bool,
     global: bool,
@@ -156,35 +156,34 @@ pub fn publish_cmd(
     let cell_price = 500_000u128;
     let bits_part = (bits as u128 * bit_price * duration_seconds as u128) >> 16;
     let cells_part = (cells as u128 * cell_price * duration_seconds as u128) >> 16;
-    let storage_fee_nanotons = bits_part + cells_part;
+    let storage_fee_nanoton = bits_part + cells_part;
 
-    // 120% of storage fee + 0.05 TON for gas/fees
-    let suggested_amount = (storage_fee_nanotons as f64 * 1.2 / 1_000_000_000.0) + 0.06;
+    // Suggest 120% of storage fee + 0.06 TON for gas/fees
+    let suggested_nanoton = (storage_fee_nanoton * 120 / 100) + 60_000_000;
 
-    let custom_ton = if let Some(amount) = amount_arg {
-        amount
+    let amount_to_send_nanoton = if let Some(amount_str) = amount_arg {
+        parse_ton_to_nanoton(&amount_str)?
     } else {
         let prompt = format!(
-            "Enter amount in TON (at least {:.4} TON for {}):",
-            suggested_amount,
+            "Enter amount in TON (at least {} TON for {}):",
+            format_ton(suggested_nanoton),
             format_duration(duration_seconds)
         );
-        let amount_to_send = Text::new(&prompt).prompt()?;
+        let amount_str = Text::new(&prompt)
+            .with_default(&format_ton(suggested_nanoton))
+            .prompt()?;
 
-        if amount_to_send.trim().is_empty() {
+        if amount_str.trim().is_empty() {
             return Ok(());
         }
 
-        amount_to_send
-            .trim()
-            .parse()
-            .context("Invalid TON amount")?
+        parse_ton_to_nanoton(amount_str.trim())?
     };
 
     if !yes {
         let confirm_custom = inquire::Confirm::new(&format!(
-            "Send {:.4} TON to publish library? Note that any extra TON will be refunded.",
-            custom_ton
+            "Send {} TON to publish library? Note that any extra TON will be refunded.",
+            format_ton(amount_to_send_nanoton)
         ))
         .with_default(true)
         .prompt()?;
@@ -193,8 +192,6 @@ pub fn publish_cmd(
             return Ok(());
         }
     }
-
-    let amount_to_send = (custom_ton * 1_000_000_000.0) as u128;
 
     let api_client = TonApiClient::new(network.clone(), api_key.clone())?;
     let (seqno, need_state_init) = wallet.seqno(network.as_str())?;
@@ -210,7 +207,7 @@ pub fn publish_cmd(
         bounced: false,
         src: wallet.wallet.address.to_msg_address(),
         dest: publisher_address.to_msg_address(),
-        value: CurrencyCollection::new(BigUint::from(amount_to_send)),
+        value: CurrencyCollection::new(BigUint::from(amount_to_send_nanoton)),
         ihr_fee: Grams::new(BigUint::from(0u64)),
         fwd_fee: Grams::new(BigUint::from(0u64)),
         created_at: 0,
@@ -409,9 +406,9 @@ pub fn info_cmd(name: Option<String>, api_key: Option<String>) -> anyhow::Result
 
     if let Some(balance_u128) = balance_u128 {
         println!(
-            "{:<w$} {:.4} TON",
+            "{:<w$} {} TON",
             "Balance:".dimmed(),
-            balance_u128 as f64 / 1_000_000_000.0
+            format_ton(balance_u128)
         );
     }
 
@@ -431,6 +428,146 @@ pub fn info_cmd(name: Option<String>, api_key: Option<String>) -> anyhow::Result
         "Size:".dimmed(),
         lib.bits,
         lib.cells
+    );
+    Ok(())
+}
+
+pub fn topup_cmd(
+    name: Option<String>,
+    duration_arg: Option<String>,
+    wallet_name: Option<String>,
+    api_key: Option<String>,
+    amount_arg: Option<String>,
+    yes: bool,
+) -> anyhow::Result<()> {
+    let config = ActonConfig::load()?;
+    let libraries = config
+        .libraries()
+        .ok_or_else(|| anyhow!(error_fmt::no_libraries_found()))?;
+
+    if libraries.is_empty() {
+        anyhow::bail!(error_fmt::no_libraries_found());
+    }
+
+    let lib_name = if let Some(n) = name {
+        n
+    } else {
+        let names = libraries.keys().cloned().collect::<Vec<_>>();
+        Select::new("Select library to top up:", names).prompt()?
+    };
+
+    let lib = libraries
+        .get(&lib_name)
+        .ok_or_else(|| anyhow!(error_fmt::library_not_found(&config, &lib_name)))?;
+
+    let wallet_name = select_wallet(wallet_name, &config)?;
+    let network = Network::from_str(&lib.network.to_string())?;
+    let mut wallets = open_wallets(&config, Some(network.as_str()), true)?;
+    let wallet = wallets
+        .remove(&wallet_name)
+        .ok_or_else(|| anyhow!(error_fmt::wallet_not_found(&config, &wallet_name)))?;
+
+    println!(
+        "  {} Using wallet: {} {}",
+        "→".blue().bold(),
+        wallet_name.cyan(),
+        wallet
+            .wallet
+            .address
+            .to_base64_url_flags(true, lib.network == crate::config::Network::Testnet)
+            .dimmed()
+    );
+
+    let amount_to_send_nanoton = if let Some(amount_str) = amount_arg {
+        parse_ton_to_nanoton(&amount_str)?
+    } else {
+        let duration_seconds = if let Some(d) = duration_arg {
+            parse_duration(&d)?
+        } else {
+            let input = Text::new("Enter duration to top up for (e.g., 100d, 1y):")
+                .with_default("365d")
+                .prompt()?;
+            parse_duration(&input)?
+        };
+
+        // Storage cost calculation (config 18)
+        let bit_price = 1_000u128;
+        let cell_price = 500_000u128;
+        let bits_part = (lib.bits as u128 * bit_price * duration_seconds as u128) >> 16;
+        let cells_part = (lib.cells as u128 * cell_price * duration_seconds as u128) >> 16;
+        let storage_fee_nanoton = bits_part + cells_part;
+
+        let suggested_nanoton = storage_fee_nanoton * 120 / 100;
+
+        let prompt = format!(
+            "Enter amount in TON (at least {} TON for {}):",
+            format_ton(suggested_nanoton),
+            format_duration(duration_seconds)
+        );
+        let amount_str = Text::new(&prompt)
+            .with_default(&format_ton(suggested_nanoton))
+            .prompt()?;
+
+        parse_ton_to_nanoton(amount_str.trim())?
+    };
+
+    if !yes {
+        let confirm = inquire::Confirm::new(&format!(
+            "Send {} TON to top-up library?",
+            format_ton(amount_to_send_nanoton),
+        ))
+        .with_default(true)
+        .prompt()?;
+
+        if !confirm {
+            return Ok(());
+        }
+    }
+
+    let api_client = TonApiClient::new(network.clone(), api_key)?;
+    let (seqno, need_state_init) = wallet.seqno(network.as_str())?;
+
+    let expired_at_time = std::time::SystemTime::now() + std::time::Duration::from_secs(600);
+    let expire_at = expired_at_time
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs() as u32;
+
+    let dest_address = TonAddress::from_str(&lib.account)?;
+    let message_info = IntMsgInfo {
+        ihr_disabled: true,
+        bounce: true,
+        bounced: false,
+        src: wallet.wallet.address.to_msg_address(),
+        dest: dest_address.to_msg_address(),
+        value: CurrencyCollection::new(BigUint::from(amount_to_send_nanoton)),
+        ihr_fee: Grams::new(BigUint::from(0u64)),
+        fwd_fee: Grams::new(BigUint::from(0u64)),
+        created_at: 0,
+        created_lt: 0,
+    };
+
+    let message = Message {
+        info: CommonMsgInfo::Int(message_info),
+        init: None,
+        body: EitherRef::new(ArcCell::default()),
+    };
+
+    let message_cell = message.to_cell()?;
+    let external = wallet.wallet.create_external_msg(
+        expire_at,
+        seqno,
+        need_state_init,
+        vec![message_cell.to_arc()],
+    )?;
+
+    println!("  {} Sending transaction...", "→".blue().bold());
+    api_client
+        .send_boc(&external.to_boc_b64(false)?)
+        .context("Failed to send top-up transaction")?;
+
+    println!(
+        "  {} Top-up transaction sent successfully",
+        "✓".green().bold()
     );
     Ok(())
 }
@@ -507,6 +644,48 @@ fn format_relative_time(timestamp_str: &str) -> String {
     }
     let years = duration.num_days() / 365;
     format!("{} year{} ago", years, if years > 1 { "s" } else { "" })
+}
+
+pub fn format_ton(nanoton: u128) -> String {
+    let ton = nanoton / 1_000_000_000;
+    let fraction = nanoton % 1_000_000_000;
+
+    if fraction == 0 {
+        return ton.to_string();
+    }
+
+    let fraction_str = format!("{:09}", fraction);
+    let trimmed_fraction = fraction_str.trim_end_matches('0');
+    format!("{}.{}", ton, trimmed_fraction)
+}
+
+pub fn parse_ton_to_nanoton(s: &str) -> anyhow::Result<u128> {
+    let s = s.trim();
+    let parts: Vec<&str> = s.split('.').collect();
+    if parts.len() > 2 {
+        anyhow::bail!("Invalid TON format: multiple dots");
+    }
+
+    let int_part: u128 = parts[0]
+        .parse()
+        .context("Invalid integer part of TON amount")?;
+    let mut nanoton = int_part
+        .checked_mul(1_000_000_000)
+        .ok_or_else(|| anyhow::anyhow!("TON amount too large"))?;
+
+    if parts.len() == 2 {
+        let mut frac_str = parts[1].to_string();
+        if frac_str.len() > 9 {
+            frac_str.truncate(9);
+        }
+        let frac_val: u128 = frac_str
+            .parse()
+            .context("Invalid fractional part of TON amount")?;
+        let multiplier = 10u128.pow(9 - frac_str.len() as u32);
+        nanoton += frac_val * multiplier;
+    }
+
+    Ok(nanoton)
 }
 
 #[allow(clippy::too_many_arguments)]
