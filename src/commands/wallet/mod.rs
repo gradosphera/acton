@@ -6,6 +6,7 @@ use clap::Subcommand;
 use inquire::{Confirm, Select, Text};
 use log::error;
 use owo_colors::OwoColorize;
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -76,6 +77,8 @@ pub enum WalletCommand {
             num_args = 0..=1
         )]
         secure: Option<bool>,
+        #[arg(long, help = "Output result as JSON")]
+        json: bool,
     },
     #[command(about = "Import an existing wallet from mnemonic")]
     Import {
@@ -96,6 +99,8 @@ pub enum WalletCommand {
             num_args = 0..=1
         )]
         secure: Option<bool>,
+        #[arg(long, help = "Output result as JSON")]
+        json: bool,
     },
     #[command(about = "List available wallets")]
     List {
@@ -103,6 +108,8 @@ pub enum WalletCommand {
         balance: bool,
         #[arg(long, help = "TonCenter API key for blockchain queries")]
         api_key: Option<String>,
+        #[arg(long, help = "Output result as JSON")]
+        json: bool,
     },
     #[command(about = "Get wallet mnemonic")]
     Get {
@@ -119,7 +126,8 @@ pub fn wallet_cmd(command: WalletCommand) -> anyhow::Result<()> {
             global,
             local,
             secure,
-        } => new_wallet(name, version, global, local, secure),
+            json,
+        } => new_wallet(name, version, global, local, secure, json),
         WalletCommand::Import {
             name,
             mnemonics,
@@ -127,8 +135,13 @@ pub fn wallet_cmd(command: WalletCommand) -> anyhow::Result<()> {
             global,
             local,
             secure,
-        } => import_wallet(name, mnemonics, version, global, local, secure),
-        WalletCommand::List { balance, api_key } => list_wallets(balance, api_key),
+            json,
+        } => import_wallet(name, mnemonics, version, global, local, secure, json),
+        WalletCommand::List {
+            balance,
+            api_key,
+            json,
+        } => list_wallets(balance, api_key, json),
         WalletCommand::Get { name } => get_mnemonic(name),
     }
 }
@@ -150,14 +163,41 @@ fn get_mnemonic(name: Option<String>) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn list_wallets(balance: bool, api_key: Option<String>) -> anyhow::Result<()> {
+fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::Result<()> {
     let config = ActonConfig::load()?;
+
+    let mut wallets_info = Vec::new();
+
+    let global_path = global_wallets_path();
+    let global_wallets: HashSet<String> = if let Some(path) = &global_path
+        && path.exists()
+    {
+        let content = fs::read_to_string(path)?;
+        let wallets: WalletsFile = toml::from_str(&content)?;
+        wallets
+            .wallets
+            .map(|w| w.wallets.keys().cloned().collect())
+            .unwrap_or_default()
+    } else {
+        Default::default()
+    };
+
     let wallets = config
         .wallets()
         .ok_or_else(|| anyhow!(error_fmt::no_wallets_found()))?;
 
     if wallets.is_empty() {
-        println!("No wallets found");
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "success": true,
+                    "wallets": []
+                }))?
+            );
+        } else {
+            println!("No wallets found");
+        }
         return Ok(());
     }
 
@@ -165,23 +205,29 @@ fn list_wallets(balance: bool, api_key: Option<String>) -> anyhow::Result<()> {
     let have_api_key = api_key.is_some();
     let client = TonApiClient::new(Network::Testnet, api_key)?;
 
-    println!("Available wallets:");
+    if !json {
+        println!("Available wallets:");
+    }
 
     for (name, wallet_config) in wallets {
+        let is_global = global_wallets.contains(name);
         let mut balance_info = String::new();
+        let mut balance_val = None;
+
         let Ok(address) = get_wallet_address(name, wallet_config) else {
             error!("cannot get wallet address for {name}"); // very unlikely
             continue;
         };
 
         if balance {
-            balance_info = match client.get_address_balance(&address) {
+            match client.get_address_balance(&address) {
                 Ok(b) => {
                     let balance_ton = b.to_string().parse::<f64>().unwrap_or(0.0) / 1_000_000_000.0;
-                    format!(" — {}", format!("{:.4} TON", balance_ton).green())
+                    balance_val = Some(balance_ton);
+                    balance_info = format!(" — {}", format!("{:.4} TON", balance_ton).green());
                 }
                 Err(e) => {
-                    format!(" — {}", format!("error: {}", e).red())
+                    balance_info = format!(" — {}", format!("error: {}", e).red());
                 }
             };
 
@@ -190,11 +236,36 @@ fn list_wallets(balance: bool, api_key: Option<String>) -> anyhow::Result<()> {
             }
         }
 
+        if json {
+            wallets_info.push(serde_json::json!({
+                "name": name,
+                "address": address,
+                "kind": wallet_config.kind,
+                "is_global": is_global,
+                "balance": balance_val,
+            }));
+        } else {
+            println!(
+                "  {} {} {} {} {balance_info}",
+                name.cyan().bold(),
+                address,
+                format!("({})", wallet_config.kind).dimmed(),
+                if is_global {
+                    "[global]".blue().to_string()
+                } else {
+                    "[local]".yellow().to_string()
+                },
+            );
+        }
+    }
+
+    if json {
         println!(
-            "  {} {} {}{balance_info}",
-            name.cyan().bold(),
-            address,
-            format!("({})", wallet_config.kind).dimmed(),
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "success": true,
+                "wallets": wallets_info
+            }))?
         );
     }
 
@@ -436,6 +507,7 @@ fn new_wallet(
     global_flag: bool,
     local_flag: bool,
     secure: Option<bool>,
+    json: bool,
 ) -> anyhow::Result<()> {
     let config = ActonConfig::load().ok();
     let name = get_or_prompt_name(name)?;
@@ -475,31 +547,44 @@ fn new_wallet(
         is_global,
     )?;
 
-    println!(
-        "{} Wallet successfully created and added to {}",
-        "✓".green(),
-        config_path.display().cyan(),
-    );
-    println!("{} Wallet address is {}", "✓".green(), wallet_address);
-
-    if use_secure_store {
+    if json {
         println!(
-            "{} The mnemonic is securely stored in your system's keyring",
-            "✓".green()
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "success": true,
+                "name": name,
+                "address": wallet_address,
+                "kind": wallet_version_to_string(&version),
+                "is_global": is_global,
+            }))?
         );
-    }
+    } else {
+        println!(
+            "{} Wallet successfully created and added to {}",
+            "✓".green(),
+            config_path.display().cyan(),
+        );
+        println!("{} Wallet address is {}", "✓".green(), wallet_address);
 
-    println!(
-        "\n{}",
-        "NOTE: This is a testnet wallet. Coins in testnet have NO VALUE.".yellow()
-    );
-    println!(
-        "\nTo get testnet coins, check official documentation: {}",
-        "https://docs.ton.org/ecosystem/wallet-apps/get-coins#how-to-get-coins-on-testnet"
-            .underline(),
-    );
-    if !use_secure_store {
-        show_security_warning(config_path);
+        if use_secure_store {
+            println!(
+                "{} The mnemonic is securely stored in your system's keyring",
+                "✓".green()
+            );
+        }
+
+        println!(
+            "\n{}",
+            "NOTE: This is a testnet wallet. Coins in testnet have NO VALUE.".yellow()
+        );
+        println!(
+            "\nTo get testnet coins, check official documentation: {}",
+            "https://docs.ton.org/ecosystem/wallet-apps/get-coins#how-to-get-coins-on-testnet"
+                .underline(),
+        );
+        if !use_secure_store {
+            show_security_warning(config_path);
+        }
     }
 
     Ok(())
@@ -536,6 +621,7 @@ fn import_wallet(
     global_flag: bool,
     local_flag: bool,
     secure: Option<bool>,
+    json: bool,
 ) -> anyhow::Result<()> {
     let config = ActonConfig::load().ok();
     let name = get_or_prompt_name(name)?;
@@ -580,21 +666,34 @@ fn import_wallet(
         is_global,
     )?;
 
-    println!(
-        "\n{} Wallet successfully created and added to {}",
-        "✓".green(),
-        config_path.display().cyan(),
-    );
-    println!("{} Wallet address is {}", "✓".green(), wallet_address);
-    if use_secure_store {
+    if json {
         println!(
-            "\n{} The mnemonic is securely stored in your system's keyring.",
-            "✓".green()
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "success": true,
+                "name": name,
+                "address": wallet_address,
+                "kind": wallet_version_to_string(&version),
+                "is_global": is_global,
+            }))?
         );
-    }
+    } else {
+        println!(
+            "\n{} Wallet successfully created and added to {}",
+            "✓".green(),
+            config_path.display().cyan(),
+        );
+        println!("{} Wallet address is {}", "✓".green(), wallet_address);
+        if use_secure_store {
+            println!(
+                "\n{} The mnemonic is securely stored in your system's keyring.",
+                "✓".green()
+            );
+        }
 
-    if !use_secure_store {
-        show_security_warning(config_path);
+        if !use_secure_store {
+            show_security_warning(config_path);
+        }
     }
     Ok(())
 }

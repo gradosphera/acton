@@ -1,5 +1,6 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
+use serde_json::Value;
 use std::fs;
 
 #[test]
@@ -382,5 +383,93 @@ fn test_wallet_get_not_found() {
         .run()
         .failure();
 
-    output.assert_contains("Wallet non-existent not found in wallets.toml and global.wallets.toml");
+    output.assert_contains("Wallet non-existent not found");
+}
+
+#[test]
+fn test_wallet_new_json() {
+    let project = ProjectBuilder::new("wallet-new-json").build();
+
+    let output = project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("json-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--json")
+        .run()
+        .success();
+
+    let stdout = output.get_stdout();
+    let json: Value = serde_json::from_str(&stdout).unwrap();
+
+    assert_eq!(json["success"], true);
+    assert_eq!(json["name"], "json-wallet");
+    assert!(json["address"].is_string());
+    assert_eq!(json["kind"], "v5r1");
+    assert_eq!(json["is_global"], false);
+}
+
+#[test]
+fn test_wallet_import_json() {
+    let project = ProjectBuilder::new("wallet-import-json").build();
+    let mnemonic = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later";
+
+    let output = project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("imported-json")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--json")
+        .arg(mnemonic)
+        .run()
+        .success();
+
+    let stdout = output.get_stdout();
+    let json: Value = serde_json::from_str(&stdout).unwrap();
+
+    assert_eq!(json["success"], true);
+    assert_eq!(json["name"], "imported-json");
+    assert!(json["address"].is_string());
+    assert_eq!(json["kind"], "v5r1");
+    assert_eq!(json["is_global"], false);
+}
+
+#[test]
+fn test_wallet_list_json() {
+    let project = ProjectBuilder::new("wallet-list-json").build();
+
+    // Create a wallet first
+    project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("list-json-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .run()
+        .success();
+
+    let output = project.acton().wallet_list().arg("--json").run().success();
+
+    let stdout = output.get_stdout();
+    let json: Value = serde_json::from_str(&stdout).unwrap();
+
+    assert_eq!(json["success"], true);
+    let wallets = json["wallets"].as_array().unwrap();
+    assert!(wallets.iter().any(|w| w["name"] == "list-json-wallet"));
+
+    let wallet = wallets
+        .iter()
+        .find(|w| w["name"] == "list-json-wallet")
+        .unwrap();
+    assert!(wallet["address"].is_string());
+    assert_eq!(wallet["kind"], "v5r1");
+    assert_eq!(wallet["is_global"], false);
 }

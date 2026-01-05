@@ -1,10 +1,10 @@
-pub mod internal;
 pub mod build;
 pub mod common;
 pub mod compile;
 pub mod disasm;
 pub mod docgen;
 pub mod init;
+pub mod internal;
 pub mod library;
 pub mod new;
 pub mod retrace;

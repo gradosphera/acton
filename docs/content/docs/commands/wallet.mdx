@@ -31,6 +31,7 @@ This command will start an interactive prompt to guide you through the wallet cr
 | `--local`             | Flag   | Save wallet to local `wallets.toml`                            |
 | `--global`            | Flag   | Save wallet to global `global.wallets.toml`                    |
 | `--secure`            | Bool   | Use secure native store (Keyring) (default: true if available) |
+| `--json`              | Flag   | Output result as JSON                                          |
 
 **Supported wallet versions:**
 - `v5r1` (Default)
@@ -106,6 +107,7 @@ This command allows you to import an existing wallet by providing its mnemonic p
 | `--local`             | Flag   | Save wallet to local `wallets.toml`                            |
 | `--global`            | Flag   | Save wallet to global `global.wallets.toml`                    |
 | `--secure`            | Bool   | Use secure native store (Keyring) (default: true if available) |
+| `--json`              | Flag   | Output result as JSON                                          |
 
 #### Examples
 
@@ -143,6 +145,7 @@ acton wallet list
 |----------------|--------|-------------------------------------------|
 | `-b/--balance` | Flag   | Fetch and show wallet balances on testnet |
 | `--api-key`    | String | Toncenter API key (optional)              |
+| `--json`       | Flag   | Output result as JSON                     |
 
 #### Example
 
