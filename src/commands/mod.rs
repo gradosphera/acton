@@ -1,3 +1,4 @@
+pub mod internal;
 pub mod build;
 pub mod common;
 pub mod compile;

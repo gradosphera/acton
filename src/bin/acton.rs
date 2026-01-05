@@ -4,6 +4,7 @@ use acton::commands::compile::compile_cmd;
 use acton::commands::disasm::disasm_cmd;
 use acton::commands::docgen::docgen_cmd;
 use acton::commands::init::init_cmd;
+use acton::commands::internal::internal_register_contract;
 use acton::commands::library::{fetch_cmd, publish_cmd};
 use acton::commands::new::new_cmd;
 use acton::commands::retrace::retrace_cmd;
@@ -522,6 +523,13 @@ enum Commands {
     Docgen {
         #[arg(short, long, help = "Output directory path")]
         output: Option<String>,
+    },
+    #[command(name = "internal-register-contract", hide = true)]
+    InternalRegisterContract {
+        #[arg(help = "Path to the contract file")]
+        path: String,
+        #[arg(long, help = "Contract ID")]
+        id: Option<String>,
     },
 }
 
@@ -1203,6 +1211,7 @@ fn main() {
             Ok(())
         }
         Commands::Docgen { output } => docgen_cmd(output),
+        Commands::InternalRegisterContract { path, id } => internal_register_contract(&path, id),
     };
 
     if let Err(err) = result {
