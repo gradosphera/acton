@@ -584,6 +584,8 @@ pub enum LibraryCommand {
     Info {
         #[arg(help = "Library name to show info for")]
         name: Option<String>,
+        #[arg(long, help = "TonCenter API key for blockchain queries")]
+        api_key: Option<String>,
     },
 }
 
@@ -1203,7 +1205,9 @@ fn main() {
                 }
                 result
             }
-            LibraryCommand::Info { name } => info_cmd(name),
+            LibraryCommand::Info { name, api_key } => {
+                info_cmd(name, api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()))
+            }
         },
         Commands::Up {
             version,

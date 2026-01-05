@@ -341,7 +341,7 @@ pub fn fetch_cmd(
     Ok(())
 }
 
-pub fn info_cmd(name: Option<String>) -> anyhow::Result<()> {
+pub fn info_cmd(name: Option<String>, api_key: Option<String>) -> anyhow::Result<()> {
     let config = ActonConfig::load()?;
     let libraries = config
         .libraries()
@@ -362,8 +362,40 @@ pub fn info_cmd(name: Option<String>) -> anyhow::Result<()> {
         .get(&lib_name)
         .ok_or_else(|| anyhow!(error_fmt::library_not_found(&config, &lib_name)))?;
 
+    let network = Network::from_str(&lib.network.to_string())?;
+    let api_client = TonApiClient::new(network, api_key)?;
+
+    let mut balance_u128: Option<u128> = None;
+    let mut remaining_seconds: Option<u128> = None;
+
+    if let Ok(balance) = api_client.get_address_balance(&lib.account) {
+        balance_u128 = Some(balance.to_string().parse().unwrap_or(0));
+
+        // Storage cost calculation (config 18)
+        // See https://tonviewer.com/config#18
+        let bit_price = 1_000u128;
+        let cell_price = 500_000u128;
+
+        let cost_per_second_x65536 =
+            (lib.bits as u128 * bit_price) + (lib.cells as u128 * cell_price);
+
+        if cost_per_second_x65536 > 0
+            && let Some(balance_u128) = balance_u128
+        {
+            remaining_seconds = Some((balance_u128 * 65536) / cost_per_second_x65536);
+        }
+    }
+
     let w = 12;
     println!("{:<w$} {}", "Library:".dimmed(), lib_name.cyan().bold());
+
+    println!(
+        "{:<w$} {} ({})",
+        "Deployed at:".dimmed(),
+        lib.timestamp,
+        format_relative_time(&lib.timestamp),
+        w = w
+    );
     println!("{:<w$} {}", "Contract:".dimmed(), lib.name);
     println!("{:<w$} {}", "Network:".dimmed(), lib.network);
     println!("{:<w$} {}", "Hash:".dimmed(), lib.hash.yellow());
@@ -374,21 +406,32 @@ pub fn info_cmd(name: Option<String>) -> anyhow::Result<()> {
         format_duration(lib.duration),
         lib.duration
     );
-    println!(
-        "{:<w$} {} ({})",
-        "Deployed at:".dimmed(),
-        lib.timestamp,
-        format_relative_time(&lib.timestamp),
-        w = w
-    );
+
+    if let Some(balance_u128) = balance_u128 {
+        println!(
+            "{:<w$} {:.4} TON",
+            "Balance:".dimmed(),
+            balance_u128 as f64 / 1_000_000_000.0
+        );
+    }
+
+    if let Some(remaining_seconds) = remaining_seconds {
+        println!(
+            "{:<w$} ~{} ({}s)",
+            "Remaining:".dimmed(),
+            format_duration(remaining_seconds as u64),
+            remaining_seconds
+        );
+    }
+
+    println!("{:<w$} {}", "Code:".dimmed(), lib.code.magenta());
+
     println!(
         "{:<w$} {} bits, {} cells",
         "Size:".dimmed(),
         lib.bits,
         lib.cells
     );
-    println!("{:<w$} {}", "Code:".dimmed(), lib.code.magenta());
-
     Ok(())
 }
 
