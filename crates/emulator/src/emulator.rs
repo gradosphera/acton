@@ -107,12 +107,18 @@ impl Emulator {
     ) -> anyhow::Result<SendMessageResult> {
         let msg_cell = Self::patch_src_addr(message, from)?;
         let msg_b64 = Boc::encode_base64(&msg_cell);
-        let msg = msg_cell.parse::<Message>()?;
+        let msg = msg_cell
+            .parse::<Message>()
+            .context("Failed to parse message")?;
 
-        let MsgInfo::Int(int_message) = &msg.info else {
-            anyhow::bail!("Send transaction only support internal messages")
+        let dst = match &msg.info {
+            MsgInfo::Int(addr) => addr.dst.clone(),
+            MsgInfo::ExtIn(addr) => addr.dst.clone(),
+            MsgInfo::ExtOut(_) => {
+                anyhow::bail!("Send transaction only support internal and external-in messages")
+            }
         };
-        let dst_addr = int_message.dst.to_string();
+        let dst_addr = dst.to_string();
 
         let shard_account_before = state.get_account(&dst_addr);
         let code = Self::get_code_cell(&msg, &shard_account_before);
@@ -197,7 +203,7 @@ impl Emulator {
 
         // If the initial transaction failed, or we didn't get a success, stop here
         let SendMessageResult::Success(main_res) = initial_res else {
-            return Ok(results);
+            return Ok(vec![initial_res]);
         };
 
         let mut externals = Vec::new();
@@ -243,19 +249,19 @@ impl Emulator {
             return Ok(message_cell);
         };
 
-        let mut message = message_cell
-            .parse::<RelaxedMessage>()
-            .context("Failed to parse message for patching")?;
+        if let Ok(mut message) = message_cell.parse::<RelaxedMessage>() {
+            match &mut message.info {
+                RelaxedMsgInfo::Int(info) if info.src.is_none() => info.src = Some(from),
+                _ => {}
+            }
 
-        match &mut message.info {
-            RelaxedMsgInfo::Int(info) if info.src.is_none() => info.src = Some(from),
-            _ => {}
+            // For some reason this set to wrong value
+            message.layout = None;
+
+            return to_cell(&message);
         }
 
-        // For some reason this set to wrong value
-        message.layout = None;
-
-        to_cell(&message)
+        Ok(message_cell)
     }
 
     fn get_address_code_cell(account: &ShardAccount) -> Option<Cell> {

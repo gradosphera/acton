@@ -217,6 +217,7 @@ type CommonMessageInfo =
     | ExternalInMessageInfo
     | ExternalOutMessageInfo
 
+@overflow1023_policy("suppress")
 struct Message<TBody = RemainingBitsAndRefs, TInfo = CommonMessageInfo> {
     info: TInfo
     init: Maybe<Either<StateInit, Cell<StateInit>>>

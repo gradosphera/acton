@@ -249,6 +249,13 @@ fn send_message_impl(
         emulator.send_message(world_state, msg_cell, &libs, Some(src_addr))?
     };
 
+    if let [SendMessageResult::Error(error), ..] = &emulations[..]
+        && emulations.len() == 1
+    {
+        ctx.asserts
+            .fail(format!("Cannot send message: {}", error.error))
+    }
+
     let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
         SendMessageResult::Success(res) => Some(res),
         SendMessageResult::Error(_) => None,
