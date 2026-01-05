@@ -25,7 +25,8 @@ pub(crate) fn build_dependency_graph(
             let dep_name = dep.name();
             if !graph.contains_key(dep_name) {
                 return Err(anyhow!(
-                    "Contract '{key}' depends on '{dep_name}' which is not defined in Acton.toml"
+                    "Contract '{key}' depends on '{dep_name}' which is not defined in {}",
+                    crate::config::get_config_path().display()
                 ));
             }
 
@@ -92,9 +93,12 @@ pub(crate) fn collect_dependencies_for_contract(
         }
         visited.insert(current.clone());
 
-        let contract_config = contracts
-            .get(&current)
-            .ok_or_else(|| anyhow!("Contract '{current}' not found in Acton.toml"))?;
+        let contract_config = contracts.get(&current).ok_or_else(|| {
+            anyhow!(
+                "Contract '{current}' not found in {}",
+                crate::config::get_config_path().display()
+            )
+        })?;
 
         if let Some(deps) = &contract_config.depends {
             for dep in deps {

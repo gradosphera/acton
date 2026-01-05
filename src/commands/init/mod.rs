@@ -9,7 +9,8 @@ use tree_sitter::Node;
 use walkdir::WalkDir;
 
 pub fn init_cmd() -> anyhow::Result<()> {
-    let acton_toml_exists = Path::new("Acton.toml").exists();
+    let config_path = crate::config::get_config_path();
+    let acton_toml_exists = config_path.exists();
 
     if !acton_toml_exists {
         let mut config = ActonConfig::default();
@@ -39,13 +40,15 @@ pub fn init_cmd() -> anyhow::Result<()> {
 
         config.save()?;
         println!(
-            "     {} Acton.toml with project configuration",
-            "Created".green().bold()
+            "     {} {} with project configuration",
+            "Created".green().bold(),
+            config_path.display()
         );
     } else {
         println!(
-            "    {} Acton.toml project configuration",
-            "Skipping".green().bold()
+            "    {} {} project configuration",
+            "Skipping".green().bold(),
+            config_path.display()
         );
     }
 

@@ -590,6 +590,7 @@ impl Project {
             test_fail_fast: false,
             script_fork_net: None,
             build_info: false,
+            config_path: None,
         }
     }
 
@@ -634,12 +635,18 @@ pub struct ActonCommand {
     pub(crate) test_fail_fast: bool,
     pub(crate) script_fork_net: Option<String>,
     pub(crate) build_info: bool,
+    pub(crate) config_path: Option<String>,
 }
 
 #[allow(dead_code)]
 impl ActonCommand {
     pub fn build(mut self) -> Self {
         self.cmd = self.cmd.arg("build").current_dir(&self.project.path);
+        self
+    }
+
+    pub fn config_path(mut self, path: &str) -> Self {
+        self.config_path = Some(path.to_string());
         self
     }
 
@@ -1114,6 +1121,10 @@ impl ActonCommand {
 
     /// Run the command and return output
     pub fn run(mut self) -> TestOutput {
+        if let Some(config_path) = self.config_path {
+            self.cmd = self.cmd.arg("--config-path").arg(config_path);
+        }
+
         if let Some(path) = self.test_path {
             self.cmd = self.cmd.arg(path);
         }

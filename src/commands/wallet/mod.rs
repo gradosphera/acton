@@ -713,9 +713,13 @@ fn get_or_prompt_use_keystore(secure: Option<bool>) -> anyhow::Result<bool> {
         if let Some(s) = secure {
             s
         } else {
+            let help_message = format!(
+                "This will store your mnemonic in the system keychain instead of plain text in {}",
+                crate::config::get_config_path().display()
+            );
             Confirm::new("Store mnemonic in secure native store?")
                 .with_default(true)
-                .with_help_message("This will store your mnemonic in the system keychain instead of plain text in Acton.toml")
+                .with_help_message(&help_message)
                 .prompt()?
         }
     } else {

@@ -4,15 +4,20 @@ use std::path::Path;
 use toml_edit::{DocumentMut, Item, Table, value};
 
 pub fn internal_register_contract(path: &str, id: Option<String>) -> Result<()> {
-    let config_path = Path::new("Acton.toml");
+    let config_path = crate::config::get_config_path();
     if !config_path.exists() {
-        anyhow::bail!("Acton.toml not found");
+        anyhow::bail!("{} not found", config_path.display());
     }
 
     let content = fs::read_to_string(config_path)?;
-    let mut doc = content
-        .parse::<DocumentMut>()
-        .map_err(|e| anyhow::anyhow!("Failed to parse Acton.toml: {}\nContent:\n{}", e, content))?;
+    let mut doc = content.parse::<DocumentMut>().map_err(|e| {
+        anyhow::anyhow!(
+            "Failed to parse {}: {}\nContent:\n{}",
+            config_path.display(),
+            e,
+            content
+        )
+    })?;
 
     let contracts = doc
         .entry("contracts")

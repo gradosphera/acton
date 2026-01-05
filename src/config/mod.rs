@@ -1,9 +1,20 @@
 use crate::commands::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
 use anyhow::{Result, anyhow};
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+static CONFIG_PATH: OnceCell<PathBuf> = OnceCell::new();
+
+pub fn set_config_path<P: AsRef<Path>>(path: P) {
+    let _ = CONFIG_PATH.set(path.as_ref().to_path_buf());
+}
+
+pub fn get_config_path() -> &'static Path {
+    CONFIG_PATH.get_or_init(|| PathBuf::from("Acton.toml"))
+}
 
 #[derive(clap::ValueEnum, Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -225,10 +236,15 @@ impl ContractConfig {
 
 impl ActonConfig {
     pub fn load() -> Result<Self> {
-        let config_path = Path::new("Acton.toml");
+        Self::load_from(get_config_path())
+    }
+
+    pub fn load_from<P: AsRef<Path>>(config_path: P) -> Result<Self> {
+        let config_path = config_path.as_ref();
         if !config_path.exists() {
             return Err(anyhow!(
-                "Acton.toml not found. Run 'acton init' to initialize Acton in the project."
+                "{} not found. Run 'acton init' to initialize Acton in the project.",
+                config_path.display()
             ));
         }
 
@@ -275,8 +291,12 @@ impl ActonConfig {
     }
 
     pub fn save(&self) -> Result<()> {
+        Self::save_to(self, get_config_path())
+    }
+
+    pub fn save_to<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let content = toml::to_string_pretty(self)?;
-        fs::write("Acton.toml", content)?;
+        fs::write(path, content)?;
         Ok(())
     }
 

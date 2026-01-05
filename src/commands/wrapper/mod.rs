@@ -26,13 +26,16 @@ fn build_model(
     test_output: Option<String>,
     storage_struct_name: Option<String>,
 ) -> anyhow::Result<WrapperModel> {
+    let config_path = crate::config::get_config_path();
     let project_root = find_project_root_from_current_dir().ok_or_else(|| {
         anyhow!(
-            "Could not find Acton.toml in project root. Make sure you're in a project directory."
+            "Could not find {} in project root. Make sure you're in a project directory.",
+            config_path.display()
         )
     })?;
 
-    let config = ActonConfig::load().map_err(|e| anyhow!("Failed to load Acton.toml: {}", e))?;
+    let config = ActonConfig::load()
+        .map_err(|e| anyhow!("Failed to load {}: {}", config_path.display(), e))?;
 
     let contract_config = config
         .get_contract(contract_id)

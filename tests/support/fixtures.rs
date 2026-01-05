@@ -136,6 +136,7 @@ impl FixtureProject {
             test_fail_fast: false,
             script_fork_net: None,
             build_info: false,
+            config_path: None,
         }
     }
 

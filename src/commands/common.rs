@@ -10,9 +10,11 @@ pub mod error_fmt {
 
     pub fn contract_not_found(config: &ActonConfig, name: &str) -> String {
         let available = available_contracts(config);
+        let config_path = crate::config::get_config_path();
         format!(
-            "Contract {} not found in Acton.toml\nAvailable contracts:\n{}",
+            "Contract {} not found in {}\nAvailable contracts:\n{}",
             name.yellow(),
+            config_path.display().to_string().yellow(),
             available
         )
     }
@@ -87,16 +89,19 @@ pub mod error_fmt {
     }
 
     pub fn script_not_found(config: &ActonConfig, name: &str) -> String {
+        let config_path = crate::config::get_config_path();
         let Some(available) = available_scripts(config) else {
             return format!(
-                "Script {} not found in Acton.toml. No scripts defined yet.
+                "Script {} not found in {}. No scripts defined yet.
 
-To define a new script add the following to Acton.toml:
+To define a new script add the following to {}:
 
 {}
 
 See https://i582.github.io/acton/docs/commands/run/ for more information",
                 name.yellow(),
+                config_path.display().to_string().yellow(),
+                config_path.display(),
                 "[scripts]
 script-name = \"command invocation\""
                     .green()
@@ -104,8 +109,9 @@ script-name = \"command invocation\""
         };
 
         format!(
-            "Script {} not found in Acton.toml\nAvailable scripts:\n{}",
+            "Script {} not found in {}\nAvailable scripts:\n{}",
             name.yellow(),
+            config_path.display().to_string().yellow(),
             available
         )
     }
@@ -130,9 +136,12 @@ script-name = \"command invocation\""
     }
 
     pub fn no_scripts_section() -> String {
+        let config_path = crate::config::get_config_path();
         format!(
-            "No {} section found in Acton.toml.\nTo add a script add the following section to Acton.toml:\n\n{}\n{}\n{}\n\nSee https://i582.github.io/acton/docs/commands/run/ for more information",
+            "No {} section found in {}.\nTo add a script add the following section to {}:\n\n{}\n{}\n{}\n\nSee https://i582.github.io/acton/docs/commands/run/ for more information",
             "[scripts]".yellow(),
+            config_path.display().to_string().yellow(),
+            config_path.display(),
             "[scripts]".green(),
             "deploy = \"acton script scripts/deploy.tolk --broadcast\"".green(),
             "test = \"acton test tests/unit\"".green()
@@ -140,11 +149,16 @@ script-name = \"command invocation\""
     }
 
     pub fn no_wallets_found() -> String {
+        let config_path = crate::config::get_config_path();
+        let wallets_toml = config_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("wallets.toml");
         format!(
             "No wallets configured in {} or global.wallets.toml.\nTo add a wallet use {} or add the following to {} manually:\n\n{}\n{}\n{}\n{}\n\nSee https://i582.github.io/acton/docs/scripting/setup-wallets/ for more information",
-            "wallets.toml".yellow(),
+            wallets_toml.display().to_string().yellow(),
             "acton wallet new".yellow(),
-            "wallets.toml".green(),
+            wallets_toml.display().to_string().green(),
             "[wallets.deployer]".green(),
             "kind = \"v5r1\"".green(),
             "workchain = 0".green(),
@@ -157,19 +171,22 @@ pub fn select_contract(
     contract_id: Option<String>,
     config: &ActonConfig,
 ) -> anyhow::Result<String> {
+    let config_path = crate::config::get_config_path();
     let contract_key = match contract_id {
         Some(id) => id,
         None => {
             let contracts = config.contracts().ok_or_else(|| {
                 anyhow!(
-                    "No contracts configured in Acton.toml. Please add a contract configuration."
+                    "No contracts configured in {}. Please add a contract configuration.",
+                    config_path.display()
                 )
             })?;
 
             let contract_keys: Vec<&String> = contracts.keys().collect();
             match contract_keys.len() {
                 0 => anyhow::bail!(
-                    "No contracts configured in Acton.toml. Please add a contract configuration."
+                    "No contracts configured in {}. Please add a contract configuration.",
+                    config_path.display()
                 ),
                 1 => contract_keys[0].clone(),
                 _ => {
@@ -226,9 +243,13 @@ pub fn symlink_global_wallets() -> anyhow::Result<()> {
     if let Some(global_path) = global_wallets_path()
         && global_path.exists()
     {
-        let symlink_path = Path::new("global.wallets.toml");
+        let config_path = crate::config::get_config_path();
+        let symlink_path = config_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("global.wallets.toml");
         if !symlink_path.exists() {
-            create_symlink(&global_path, symlink_path)?;
+            create_symlink(&global_path, &symlink_path)?;
         }
     }
     Ok(())

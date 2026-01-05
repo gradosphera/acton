@@ -41,6 +41,13 @@ use ton_source_map::SourceMap;
 #[command(about = "TON blockchain development tool")]
 #[command(color = ColorChoice::Auto)]
 struct Cli {
+    #[arg(
+        long,
+        help = "Custom path to Acton.toml configuration file",
+        global = true
+    )]
+    config_path: Option<String>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -952,8 +959,13 @@ fn main() {
             .homepage("https://github.com/i582/acton")
     );
     dotenv().ok();
-    setup_logging().expect("Failed to set up logging");
     let cli = Cli::parse();
+
+    if let Some(config_path) = &cli.config_path {
+        acton::config::set_config_path(config_path);
+    }
+
+    setup_logging().expect("Failed to set up logging");
 
     let result = match cli.command {
         Commands::Init => init_cmd(),

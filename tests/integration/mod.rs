@@ -4,6 +4,7 @@ mod basic_unit_tests;
 mod build_tests;
 mod compile_tests;
 mod config_tests;
+mod config_path_tests;
 mod coverage_tests;
 mod diff_tests;
 mod disasm_tests;

@@ -254,9 +254,12 @@ impl FileBuildCache {
                     continue;
                 }
 
-                let contract_config = contracts
-                    .get(dep_name)
-                    .ok_or_else(|| anyhow!("Contract '{dep_name}' not found in Acton.toml"))?;
+                let contract_config = contracts.get(dep_name).ok_or_else(|| {
+                    anyhow!(
+                        "Contract '{dep_name}' not found in {}",
+                        crate::config::get_config_path().display()
+                    )
+                })?;
 
                 result.append(&mut self.get_dependencies(contract_config.src.as_str(), visited)?);
             }

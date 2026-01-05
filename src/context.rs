@@ -110,12 +110,13 @@ impl AssertFailure {
     pub fn format_wallet_not_found_message(failure: &WalletNotFoundFailure, env: &Env) -> String {
         let has_wallets_config = env.wallets.is_some();
         let available_wallets = env.open_wallets.keys().cloned().collect::<Vec<_>>();
+        let config_path = crate::config::get_config_path();
 
         if !has_wallets_config || available_wallets.is_empty() {
             color_print::cformat!(
-                "Wallet {} not found in Acton.toml. Wallets are not configured yet.
+                "Wallet {} not found in {}. Wallets are not configured yet.
 
-To add wallets, run {} or add the following section to your Acton.toml:
+To add wallets, run {} or add the following section to your {}:
 
 <dim># Example wallet configuration</>
 [wallets.{}]
@@ -129,7 +130,9 @@ address-testnet = \"<<ADDRESS>>\"
 See https://i582.github.io/acton/docs/scripting/setup-wallets/ for more information
 ",
                 failure.wallet_name.yellow(),
+                config_path.display().to_string().yellow(),
                 "acton wallet new".green(),
+                config_path.display(),
                 failure.wallet_name
             )
         } else {
@@ -144,8 +147,9 @@ See https://i582.github.io/acton/docs/scripting/setup-wallets/ for more informat
             };
 
             format!(
-                "Wallet {} not found in Acton.toml\nAvailable wallets:\n{}",
+                "Wallet {} not found in {}\nAvailable wallets:\n{}",
                 failure.wallet_name.yellow(),
+                config_path.display().to_string().yellow(),
                 available
             )
         }

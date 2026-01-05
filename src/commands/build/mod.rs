@@ -48,16 +48,19 @@ pub fn build_cmd(
     let contracts = match config.contracts() {
         Some(contracts) => contracts,
         None => {
+            let config_path = crate::config::get_config_path();
             println!(
-                "No contracts section found in Acton.toml. Add at least one contract.
-To add a contract add the following section to Acton.toml:
+                "No contracts section found in {}. Add at least one contract.
+To add a contract add the following section to {}:
 
 [contracts.my-contract]
 name = \"MyContract\"
 src = \"contracts/my-contract.tolk\"
 depends = []
 
-See https://i582.github.io/acton/docs/build-system/configuration-reference/#contracts-section for more information"
+See https://i582.github.io/acton/docs/build-system/configuration-reference/#contracts-section for more information",
+                config_path.display(),
+                config_path.display()
             );
             return Ok(());
         }

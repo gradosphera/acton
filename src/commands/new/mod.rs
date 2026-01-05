@@ -240,6 +240,7 @@ pub fn new_cmd(
         );
     }
 
+    let config_path = crate::config::get_config_path();
     println!("{}", "✓ Created new Acton project".green().bold());
     println!(
         "  {} {}",
@@ -250,7 +251,10 @@ pub fn new_cmd(
     println!("  {} {}", "Template:".bright_black(), template.cyan());
     println!("  {} {}", "License:".bright_black(), license.cyan());
     println!();
-    println!("Created {} with project configuration", "Acton.toml".cyan());
+    println!(
+        "Created {} with project configuration",
+        config_path.display().cyan()
+    );
     println!();
     println!("Next steps:");
     println!();
