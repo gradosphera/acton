@@ -248,6 +248,20 @@ enum Commands {
             value_name = "RULE"
         )]
         disable_rule: Vec<String>,
+        #[arg(
+            long,
+            help = "Open test results in a browser",
+            help_heading = "Reporting"
+        )]
+        ui: bool,
+        #[arg(
+            long,
+            help = "UI server port",
+            default_value = "12344",
+            help_heading = "Reporting",
+            value_name = "PORT"
+        )]
+        ui_port: u16,
     },
     #[command(
         about = "Generate wrapper and optionally stub test file for a contract",
@@ -1056,6 +1070,8 @@ fn main() {
             disable_rule,
             fail_fast,
             fork_block_number,
+            ui,
+            ui_port,
         } => {
             let config = create_test_config(
                 filter,
@@ -1076,12 +1092,20 @@ fn main() {
                 fork_net,
                 api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
                 fork_block_number,
-                save_test_trace,
+                save_test_trace.or_else(|| {
+                    if ui {
+                        Some(".acton/traces".to_owned())
+                    } else {
+                        None
+                    }
+                }),
                 mutate,
                 mutate_overrides,
                 mutate_contract,
                 disable_rule,
                 Some(fail_fast),
+                ui,
+                ui_port,
             );
 
             if mutate {
@@ -1391,6 +1415,8 @@ fn create_test_config(
     mutate_contract: Option<String>,
     disable_rules: Vec<String>,
     fail_fast: Option<bool>,
+    ui: bool,
+    ui_port: u16,
 ) -> TestConfig {
     let acton_config = ActonConfig::load().ok();
 
@@ -1430,6 +1456,8 @@ fn create_test_config(
             mutate_contract,
             disable_rules,
             fail_fast,
+            ui,
+            Some(ui_port),
         );
     }
 
@@ -1458,5 +1486,7 @@ fn create_test_config(
         mutate_contract,
         disable_rules,
         fail_fast: fail_fast.unwrap_or(false),
+        ui,
+        ui_port,
     }
 }

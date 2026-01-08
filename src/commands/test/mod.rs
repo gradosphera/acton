@@ -9,6 +9,7 @@ use crate::commands::test::reporting::console::{ConsoleConfig, ConsoleReporter};
 use crate::commands::test::reporting::dot::DotReporter;
 use crate::commands::test::reporting::junit::{JUnitConfig, JUnitReporter};
 use crate::commands::test::reporting::teamcity::TeamCityReporter;
+use crate::commands::test::reporting::ui::{UiReporter, start_ui_server};
 use crate::commands::test::reporting::{
     ReporterManager, TestExecutionContext, TestReport, TestStatus, TestSuiteStats,
     extract_suite_name,
@@ -16,7 +17,7 @@ use crate::commands::test::reporting::{
 use crate::config::{ActonConfig, ContractDependency, DependencyKind, Network};
 use crate::context::{
     AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
-    Emulations, Env, IoContext, KnownAddresses,
+    EmulationsState, Env, IoContext, KnownAddresses,
 };
 use crate::debugger::any_executor::AnyExecutor;
 use crate::debugger::dap::DapTransport;
@@ -63,17 +64,19 @@ mod trace;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 
-#[derive(clap::ValueEnum, Debug, Clone, PartialEq)]
+#[derive(clap::ValueEnum, Debug, Clone, PartialEq, Default)]
 #[clap(rename_all = "lowercase")]
 pub enum ReportFormat {
+    #[default]
     Console,
     TeamCity,
     JUnit,
     Dot,
 }
 
-#[derive(clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub enum CoverageFormat {
+    #[default]
     Lcov,
     Text,
 }
@@ -87,8 +90,9 @@ impl std::fmt::Display for CoverageFormat {
     }
 }
 
-#[derive(clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub enum BacktraceMode {
+    #[default]
     Full,
 }
 
@@ -100,7 +104,7 @@ impl std::fmt::Display for BacktraceMode {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TestConfig {
     pub report_formats: Vec<ReportFormat>,
     pub debug: bool,
@@ -126,6 +130,8 @@ pub struct TestConfig {
     pub mutate_contract: Option<String>,
     pub disable_rules: Vec<String>,
     pub fail_fast: bool,
+    pub ui: bool,
+    pub ui_port: u16,
 }
 
 #[derive(Debug)]
@@ -146,7 +152,7 @@ pub struct TestRunner<'a> {
     file_build_cache: &'a mut FileBuildCache,
     known_addresses: KnownAddresses,
     known_code_cells: HashMap<String, String>,
-    emulations: Emulations,
+    emulations: EmulationsState,
     transport: DapTransport,
     reporter_manager: &'a mut ReporterManager,
     mutation_overrides: BTreeMap<String, ArcCell>,
@@ -219,7 +225,7 @@ impl<'a> TestRunner<'a> {
             file_build_cache: cache,
             known_addresses: KnownAddresses::new(),
             known_code_cells: HashMap::new(),
-            emulations: Emulations::new(),
+            emulations: EmulationsState::new(),
             transport,
             reporter_manager,
             mutation_overrides,
@@ -228,12 +234,20 @@ impl<'a> TestRunner<'a> {
         }
     }
 
-    fn setup_reporters(reporter_manager: &mut ReporterManager, config: &TestConfig) {
+    fn setup_reporters(
+        reporter_manager: &mut ReporterManager,
+        config: &TestConfig,
+        ui_reporter: Option<UiReporter>,
+    ) {
         if config.report_formats.is_empty()
             || config.report_formats.contains(&ReportFormat::Console)
         {
             let console_config = ConsoleConfig { show_output: true };
             reporter_manager.add_reporter(Box::new(ConsoleReporter::new(console_config)));
+        }
+
+        if let Some(ui_reporter) = ui_reporter {
+            reporter_manager.add_reporter(Box::new(ui_reporter));
         }
 
         if config.report_formats.contains(&ReportFormat::TeamCity) {
@@ -332,6 +346,7 @@ impl<'a> TestRunner<'a> {
                 explorer: None,
                 api_key: self.config.api_key.clone(),
                 fork_net: self.config.fork_net.as_ref().map(|n| n.to_string()),
+                running_id: test.name.clone(),
             },
             io: IoContext {
                 stdout_buffer: "".to_owned(),
@@ -383,11 +398,14 @@ impl<'a> TestRunner<'a> {
 
                 let get_result = executor.finish(&params.code)?;
 
-                if let Some(trace_dir) = &self.config.save_test_trace {
+                if let Some(trace_dir) = &self.config.save_test_trace
+                    && let Some(emulations) = ctx.chain.emulations.results_of(&test.name)
+                {
                     trace::dump_test_transactions(
                         test,
                         ctx.build.build_cache,
-                        &ctx.chain.emulations.results,
+                        ctx.build.known_addresses,
+                        emulations,
                         trace_dir,
                     )?;
                 }
@@ -406,11 +424,14 @@ impl<'a> TestRunner<'a> {
                 let stack = serialize_tuple(&Tuple::empty())?.to_boc_b64(false)?;
                 let get_result = executor.run_get_method(&stack, &params, None)?;
 
-                if let Some(trace_dir) = &self.config.save_test_trace {
+                if let Some(trace_dir) = &self.config.save_test_trace
+                    && let Some(emulations) = ctx.chain.emulations.results_of(&test.name)
+                {
                     trace::dump_test_transactions(
                         test,
                         ctx.build.build_cache,
-                        &ctx.chain.emulations.results,
+                        ctx.build.known_addresses,
+                        emulations,
                         trace_dir,
                     )?;
                 }
@@ -474,8 +495,16 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
 
     let acton_config = ActonConfig::load()?;
 
+    let ui_reporter = if config.ui {
+        Some(UiReporter::new())
+    } else {
+        None
+    };
+
+    let reports_for_ui = ui_reporter.as_ref().map(|r| r.get_reports_arc());
+
     let mut global_reporter = ReporterManager::new();
-    TestRunner::setup_reporters(&mut global_reporter, config);
+    TestRunner::setup_reporters(&mut global_reporter, config, ui_reporter);
     global_reporter.init()?;
     global_reporter.on_testing_started()?;
 
@@ -566,6 +595,17 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     }
 
     global_reporter.finalize()?;
+
+    if config.ui
+        && let Some(reports) = reports_for_ui
+    {
+        let reports = reports.lock().expect("cannot lock mutex").clone();
+        let trace_dir = config.save_test_trace.clone();
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
+        rt.block_on(async { start_ui_server(reports, trace_dir, config.ui_port).await })?;
+    }
 
     if let Some(filter) = &config.filter
         && total_tests == 0
@@ -831,7 +871,9 @@ fn run_file_tests(
         let mut test_report = TestReport {
             name: test.name.clone(),
             suite_name: suite_name.clone(),
-            file_path: file_path.to_string(),
+            file_path: abs_file_path.to_string_lossy().to_string(),
+            row: test.pos.row,
+            column: test.pos.column,
             duration: Duration::default(),
             gas_limit: test.gas_limit,
             status: TestStatus::Passed,
@@ -841,6 +883,11 @@ fn run_file_tests(
             source_map: source_map.clone(),
             backtrace: runner.config.backtrace.as_ref().map(|b| b.to_string()),
             execution: None,
+            trace_path: runner
+                .config
+                .save_test_trace
+                .as_ref()
+                .map(|_| format!("{}_trace.json", test.name)),
         };
 
         runner.reporter_manager.on_test_started(&test_report)?;
@@ -953,14 +1000,16 @@ fn run_file_tests(
         if runner.config.coverage {
             // For coverage, we need to process test logs as well, so register it here
             if let GetMethodResult::Success(get_result) = get_result {
-                runner.emulations.get_results.push(get_result);
+                runner.emulations.save_get_method(&test.name, get_result);
                 // TODO: remove this memoize somehow
+                let content = fs::read_to_string(file_path).unwrap_or_default();
                 runner.build_cache.memoize(
                     &test.name,
                     file_path,
                     &code_cell.to_boc_b64(false)?,
                     &code_cell.cell_hash()?.to_hex().to_ascii_uppercase(),
                     source_map.clone(),
+                    Some(contract_abi(&content, file_path)),
                 )
             }
         }

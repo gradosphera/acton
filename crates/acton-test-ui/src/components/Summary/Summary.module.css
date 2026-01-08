@@ -1,0 +1,29 @@
+.summary {
+  display: flex;
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+}
+
+.count {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.passed {
+  color: var(--color-passed);
+}
+
+.failed {
+  color: var(--color-failed);
+}

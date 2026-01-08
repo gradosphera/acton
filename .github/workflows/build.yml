@@ -128,10 +128,14 @@ jobs:
         id: detect-arch
         run: echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
       - name: Build acton binary
         env:
           RUSTC_WRAPPER: sccache
         run: |
+          just build-ui
           cargo build --release --bin acton
 
       - name: Show sccache stats
@@ -262,10 +266,14 @@ jobs:
         id: detect-arch
         run: echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
       - name: Build acton binary
         env:
           RUSTC_WRAPPER: sccache
         run: |
+          just build-ui
           cargo build --release --bin acton
 
       - name: Show sccache stats
@@ -394,11 +402,16 @@ jobs:
         id: detect-arch
         run: echo "arch=$(uname -m)" >> $GITHUB_OUTPUT
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
       - name: Build acton binary
         env:
           CC: gcc
           CXX: g++
-        run: cargo build --release --bin acton
+        run: |
+          just build-ui
+          cargo build --profile release-size --bin acton
 
       - name: Test acton binary
         run: |
