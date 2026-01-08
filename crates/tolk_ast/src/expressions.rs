@@ -118,7 +118,6 @@ pub enum Expression<'tree> {
     NullLiteral(NullLiteral<'tree>),
     Underscore(Underscore<'tree>),
     Ident(Ident<'tree>),
-    NumericIndex(NumericIndex<'tree>),
     Unmapped(RawNode<'tree>),
 }
 
@@ -153,7 +152,6 @@ impl<'tree> Expression<'tree> {
             Expression::NullLiteral(n) => n.0,
             Expression::Underscore(n) => n.0,
             Expression::Ident(n) => n.0,
-            Expression::NumericIndex(n) => n.0,
             Expression::Unmapped(n) => n.0,
         }
     }
@@ -188,7 +186,6 @@ impl<'t> From<Node<'t>> for Expression<'t> {
             "null_literal" => Expression::NullLiteral(NullLiteral(node)),
             "underscore" => Expression::Underscore(Underscore(node)),
             "identifier" => Expression::Ident(Ident(node)),
-            "numeric_index" => Expression::NumericIndex(NumericIndex(node)),
             _ => Expression::Unmapped(RawNode::new(node)),
         }
     }
@@ -580,7 +577,7 @@ impl<'tree> TensorExpression<'tree> {
         let mut cursor = self.0.walk();
         self.0
             .children(&mut cursor)
-            .filter(|n| n.is_named())
+            .filter(|n| n.is_named() && n.kind() != "comment")
             .map(|n| n.into())
             .collect()
     }
@@ -591,7 +588,7 @@ impl<'tree> TypedTuple<'tree> {
         let mut cursor = self.0.walk();
         self.0
             .children(&mut cursor)
-            .filter(|n| n.is_named())
+            .filter(|n| n.is_named() && n.kind() != "comment")
             .map(|n| n.into())
             .collect()
     }
@@ -617,10 +614,13 @@ impl<'t> From<Node<'t>> for LambdaExpression<'t> {
 
 impl<'tree> LambdaExpression<'tree> {
     pub fn parameters(&self) -> Vec<LambdaParameter<'tree>> {
-        let mut cursor = self.0.walk();
-        self.0
-            .children(&mut cursor)
-            .filter(|n| n.kind() == "lambda_parameter")
+        let Some(list) = self.0.child_by_field_name("parameters") else {
+            return vec![];
+        };
+
+        let mut cursor = list.walk();
+        list.children(&mut cursor)
+            .filter(|n| n.kind() == "parameter_declaration" || n.kind() == "lambda_parameter")
             .map(LambdaParameter)
             .collect()
     }
