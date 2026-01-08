@@ -10,12 +10,6 @@ members = ["crates/*"]
 [workspace.package]
 rust-version = "1.90.0"
 
-# experimental projects
-exclude = [
-    "crates/txtracer-mcp",
-    "crates/txtracer-tui",
-]
-
 [dependencies]
 # local creates
 abi = { path = "crates/abi" }
