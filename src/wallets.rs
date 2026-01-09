@@ -1,5 +1,6 @@
-use crate::config::ActonConfig;
 use crate::context::Wallet;
+use acton_config::config;
+use acton_config::config::ActonConfig;
 use anyhow::{Context, anyhow};
 use hmac::{Hmac, Mac};
 use keyring::Entry;
@@ -54,7 +55,7 @@ pub fn is_keyring_supported() -> bool {
     }
 }
 
-pub fn load_mnemonic(wallet: &crate::config::WalletConfig) -> anyhow::Result<String> {
+pub fn load_mnemonic(wallet: &config::WalletConfig) -> anyhow::Result<String> {
     if let Some(env) = &wallet.keys.mnemonic_env {
         std::env::var(env).map_err(|err| {
             anyhow!(
