@@ -1094,6 +1094,44 @@ mod tests {
     }
 
     #[test]
+    fn test_inline_comments_grouping_for_statements() {
+        check(
+            "fun main() {
+                 val a = 100; // comment
+
+                 val bbb = 20000; // comment 2
+            }",
+            expect![[r#"
+                fun main() {
+                    val a = 100; // comment
+
+                    val bbb = 20000; // comment 2
+                }"#]],
+        );
+    }
+
+    #[test]
+    fn test_inline_comments_grouping_for_statements_2() {
+        check(
+            "fun main() {
+                 val a = 100; // comment
+                 val bb = 100; // comment 2
+
+                 val c = 20000; // comment 3
+                 val ddddd = 20000; // comment 4
+            }",
+            expect![[r#"
+                fun main() {
+                    val a = 100;  // comment
+                    val bb = 100; // comment 2
+
+                    val c = 20000;     // comment 3
+                    val ddddd = 20000; // comment 4
+                }"#]],
+        );
+    }
+
+    #[test]
     fn test_comments_for_statements() {
         check_with_width(
             r#"

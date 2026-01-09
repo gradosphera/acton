@@ -547,6 +547,27 @@ mod tests {
     }
 
     #[test]
+    fn test_enum_comments_alignment_with_new_lines() {
+        check(
+            r#"enum BounceMode {
+                NoBounce               // a message will just disappear on error
+                Only256BitsOfBody      // `in.bouncedBody` will be "0xFFFFFFFF" and the first 256 bits of outgoing body (most cheap)
+
+                RichBounce             // `in.bouncedBody` will be struct RichBounceBody (most expensive, but allows accessing all data sent)
+                RichBounceOnlyRootCell // `in.bouncedBody` will be struct RichBounceBody without refs in `originalBody`
+            }"#,
+            expect![[r#"
+                enum BounceMode {
+                    NoBounce          // a message will just disappear on error
+                    Only256BitsOfBody // `in.bouncedBody` will be "0xFFFFFFFF" and the first 256 bits of outgoing body (most cheap)
+
+                    RichBounce             // `in.bouncedBody` will be struct RichBounceBody (most expensive, but allows accessing all data sent)
+                    RichBounceOnlyRootCell // `in.bouncedBody` will be struct RichBounceBody without refs in `originalBody`
+                }"#]],
+        );
+    }
+
+    #[test]
     fn test_struct_comments_alignment() {
         check(
             r#"struct Config {

@@ -39,6 +39,14 @@ impl<'a> ListOptions<'a> {
     }
 }
 
+struct ItemDocInfo<'tree, 'a, 'ctx> {
+    doc: RcDoc<'a>,
+    comments: Option<&'ctx Vec<comments::Comment<'tree>>>,
+    node: Node<'tree>,
+    ignored: bool,
+    group_max_width: usize,
+}
+
 pub fn print_list<'a, 'tree, T, F, N, P>(
     ctx: &Context<'tree>,
     items: &[T],
@@ -85,8 +93,9 @@ where
         (RcDoc::line(), RcDoc::line())
     };
 
-    let mut item_docs_with_info = Vec::with_capacity(items.len());
-    let mut max_width = 0;
+    let mut item_docs_with_info: Vec<ItemDocInfo<'tree, 'a, '_>> = Vec::with_capacity(items.len());
+    let mut current_group_start = 0;
+    let mut current_group_max_width = 0;
 
     let sep_width = doc_width(&options.separator);
 
@@ -94,9 +103,32 @@ where
         let node = node_extractor(item);
         let comments = ctx.comments.get(&node);
 
+        // check if we need to start a new group for alignment
+        if i > 0 {
+            let prev_node = node_extractor(&items[i - 1]);
+            if empty_lines_between(ctx, &prev_node, &node) > 1 {
+                // new group started, backfill previous group with their max width
+                for info in item_docs_with_info
+                    .iter_mut()
+                    .take(i)
+                    .skip(current_group_start)
+                {
+                    info.group_max_width = current_group_max_width;
+                }
+                current_group_start = i;
+                current_group_max_width = 0;
+            }
+        }
+
         if comments::has_fmt_ignore(ctx, comments) {
             let doc = print_original_node_text(ctx, &node);
-            item_docs_with_info.push((doc, None, node, true));
+            item_docs_with_info.push(ItemDocInfo {
+                doc,
+                comments: None,
+                node,
+                ignored: true,
+                group_max_width: 0,
+            });
             continue;
         }
 
@@ -116,9 +148,25 @@ where
             comments.is_some_and(|cs| cs.iter().any(|c| c.kind == CommentKind::Inline));
 
         if has_inline && is_multiline {
-            max_width = max_width.max(width);
+            current_group_max_width = current_group_max_width.max(width);
         }
-        item_docs_with_info.push((doc, comments, node, false));
+        item_docs_with_info.push(ItemDocInfo {
+            doc,
+            comments,
+            node,
+            ignored: false,
+            group_max_width: 0,
+        });
+    }
+
+    // fill max width for the last group
+    let len = item_docs_with_info.len();
+    for info in item_docs_with_info
+        .iter_mut()
+        .take(len)
+        .skip(current_group_start)
+    {
+        info.group_max_width = current_group_max_width;
     }
 
     let mut docs = vec![if is_multiline {
@@ -129,17 +177,16 @@ where
         RcDoc::line_()
     }];
 
-    let len = item_docs_with_info.len();
-    for (i, (item_doc, comments, node, ignored)) in item_docs_with_info.into_iter().enumerate() {
+    for (i, info) in item_docs_with_info.into_iter().enumerate() {
         let is_last = i == len - 1;
 
-        if !ignored {
-            comments::print_leading_comments(ctx, &mut docs, comments);
+        if !info.ignored {
+            comments::print_leading_comments(ctx, &mut docs, info.comments);
         }
 
-        docs.push(item_doc);
+        docs.push(info.doc);
 
-        if !ignored {
+        if !info.ignored {
             if !is_last {
                 docs.push(options.separator.clone());
             } else {
@@ -147,15 +194,20 @@ where
             }
 
             if is_multiline {
-                comments::print_inline_comments_with_alignment(ctx, &mut docs, comments, max_width);
+                comments::print_inline_comments_with_alignment(
+                    ctx,
+                    &mut docs,
+                    info.comments,
+                    info.group_max_width,
+                );
             } else {
-                comments::print_inline_comments(ctx, &mut docs, comments);
+                comments::print_inline_comments(ctx, &mut docs, info.comments);
             }
         }
 
         if is_last {
             if is_multiline {
-                if !ignored {
+                if !info.ignored {
                     docs.push(RcDoc::hardline());
                 }
             } else if options.single_line_edge_space {
@@ -163,17 +215,17 @@ where
             } else {
                 docs.push(RcDoc::line_());
             }
-        } else if !ignored {
+        } else if !info.ignored {
             docs.push(item_separator.clone());
         }
 
-        if !ignored {
-            comments::print_trailing_comments(ctx, &mut docs, comments);
+        if !info.ignored {
+            comments::print_trailing_comments(ctx, &mut docs, info.comments);
         }
 
         // Preserve empty lines between items
         if let Some(next) = items.get(i + 1)
-            && empty_lines_between(ctx, &node, &node_extractor(next)) > 1
+            && empty_lines_between(ctx, &info.node, &node_extractor(next)) > 1
         {
             docs.push(RcDoc::hardline());
         }
