@@ -1,5 +1,4 @@
-use crate::common::print_comment_node;
-use crate::{Context, comments, common, exprs};
+use crate::{Context, common, exprs};
 use pretty::RcDoc;
 use tolk_ast::*;
 
@@ -9,86 +8,21 @@ pub fn print_block_statement<'a>(ctx: &Context, block: &BlockStatement) -> Optio
         .iter()
         .filter(|stmt| !matches!(stmt, Statement::Unmapped(_) | Statement::EmptyStatement(_)))
         .collect::<Vec<_>>();
-    if statements.is_empty() {
-        let mut lonely_comments = raw_statements
-            .iter()
-            .filter(|stmt| stmt.raw_node().kind() == "comment")
-            .peekable();
-        if lonely_comments.peek().is_some() {
-            // There are some comments in empty block statement like:
-            //
-            // {
-            //     // comment here
-            // }
-            let mut docs = vec![RcDoc::hardline()];
 
-            for comment in lonely_comments {
-                docs.push(print_comment_node(ctx, &comment.raw_node()));
-                docs.push(RcDoc::hardline());
-            }
-
-            let result = RcDoc::concat([
-                RcDoc::text("{"),
-                RcDoc::concat(docs).nest(4),
-                RcDoc::text("}"),
-            ]);
-            return Some(result);
-        }
-
-        return Some(RcDoc::text("{}"));
-    }
-
-    // When printing statements, we need to consider that there may be empty lines between them that
-    // we want to normalize to one empty line, not remove them completely:
-    //
-    // ```
-    // let a = 100;
-    //
-    // let b = 200;
-    // ```
-    // Should remain as is.
-    // To insert empty lines, we need to know if there were empty lines in the original code
-    // between two statements.
-
-    let mut docs = vec![RcDoc::hardline()];
-
-    for (i, stmt) in statements.iter().enumerate() {
-        let node = stmt.raw_node();
-        let comments = ctx.comments.get(&node);
-
-        if comments::has_fmt_ignore(ctx, comments) {
-            docs.push(common::print_original_node_text(ctx, &node));
-        } else {
-            comments::print_leading_comments(ctx, &mut docs, comments);
-
-            let Some(doc) = print_statement(ctx, stmt) else {
-                continue;
-            };
-
-            docs.push(doc);
-
-            comments::print_inline_comments(ctx, &mut docs, comments);
-            docs.push(RcDoc::hardline());
-            comments::print_trailing_comments(ctx, &mut docs, comments);
-        }
-
-        // If there is another statement after this statement, there is a chance that we need
-        // an additional empty line to preserve empty lines according to the rules.
-        //
-        // If there is more than one empty line between two statements, we add an empty line.
-        if let Some(next_stmt) = statements.get(i + 1)
-            && common::empty_lines_between(ctx, &node, &next_stmt.raw_node()) > 1
-        {
-            docs.push(RcDoc::hardline());
-        }
-    }
-
-    let result = RcDoc::concat([
-        RcDoc::text("{"),
-        RcDoc::concat(docs).nest(4),
-        RcDoc::text("}"),
-    ]);
-    Some(result)
+    common::print_list(
+        ctx,
+        &statements,
+        |ctx, stmt| print_statement(ctx, stmt),
+        |stmt| stmt.raw_node(),
+        |_| {
+            raw_statements
+                .iter()
+                .filter(|stmt| stmt.raw_node().kind() == "comment")
+                .map(|stmt| stmt.raw_node())
+                .collect()
+        },
+        common::ListOptions::curly_bracket_body(),
+    )
 }
 
 fn print_statement<'a>(ctx: &Context, stmt: &Statement) -> Option<RcDoc<'a>> {
@@ -433,6 +367,7 @@ fn print_tensor_tuple_lhs<'a>(
         &vars,
         print_var_declaration_lhs,
         |v| *v.raw_node(),
+        |_| vec![],
         common::ListOptions {
             brackets: (RcDoc::text(open_quote), RcDoc::text(close_quote)),
             ..Default::default()

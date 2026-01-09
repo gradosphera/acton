@@ -288,6 +288,7 @@ pub fn print_struct_body<'a>(ctx: &Context, body: &StructBody) -> Option<RcDoc<'
         &body.fields(),
         print_struct_field_declaration,
         |f| f.0,
+        |_| vec![],
         common::ListOptions::curly_bracket_body(),
     )
 }
@@ -348,6 +349,7 @@ pub fn print_enum_body<'a>(ctx: &Context, body: &EnumBody) -> Option<RcDoc<'a>> 
         &body.members(),
         print_enum_member_declaration,
         |m| m.0,
+        |_| vec![],
         common::ListOptions::curly_bracket_body(),
     )
 }
@@ -593,6 +595,7 @@ where
         params,
         print_parameter_declaration,
         P::raw_node,
+        |_| vec![],
         common::ListOptions::default(),
     )
 }
@@ -639,6 +642,7 @@ pub fn print_annotation_arguments<'a>(ctx: &Context, a: &AnnotationArguments) ->
         &a.arguments(),
         exprs::print_expression,
         Expression::raw_node,
+        |_| vec![],
         common::ListOptions::default(),
     )
 }
@@ -649,6 +653,7 @@ pub fn print_type_parameters<'a>(ctx: &Context, tp: &TypeParameters) -> Option<R
         &tp.parameters(),
         print_type_parameter,
         |p| p.0,
+        |_| vec![],
         common::ListOptions::triangle_bracket_list(),
     )
 }

@@ -240,6 +240,7 @@ pub fn print_argument_list<'a>(ctx: &Context, args: &[CallArgument]) -> Option<R
         args,
         print_call_argument,
         |arg| arg.0,
+        |_| vec![],
         common::ListOptions::default(),
     )
 }
@@ -269,6 +270,7 @@ pub fn print_generic_instantiation<'a>(
         &types,
         types::print_type,
         Type::raw_node,
+        |_| vec![],
         common::ListOptions::triangle_bracket_list(),
     )?;
 
@@ -319,6 +321,7 @@ pub fn print_match_body<'a>(ctx: &Context, body: &MatchBody) -> Option<RcDoc<'a>
         &body.arms(),
         print_match_arm,
         |arm| arm.0,
+        |_| vec![],
         common::ListOptions {
             brackets: (RcDoc::text("{"), RcDoc::text("}")),
             separator: RcDoc::nil(), // handled by print_match_arm itself
@@ -381,6 +384,7 @@ pub fn print_object_literal_body<'a>(
         args,
         print_instance_argument,
         |arg| arg.0,
+        |_| vec![],
         common::ListOptions {
             brackets: (RcDoc::text("{"), RcDoc::text("}")),
             multiline_threshold: 2,
@@ -438,6 +442,7 @@ fn print_tuple_tensor<'a>(
         &elements,
         print_expression,
         Expression::raw_node,
+        |_| vec![],
         common::ListOptions {
             brackets: (RcDoc::text(open_quote), RcDoc::text(close_quote)),
             ..Default::default()

@@ -1062,6 +1062,38 @@ mod tests {
     // Comments tests
 
     #[test]
+    fn test_empty_block_with_comment() {
+        check(
+            "fun main() {
+                {
+                    // comment
+                }
+            }",
+            expect![[r#"
+                fun main() {
+                    {
+                        // comment
+                    }
+                }"#]],
+        );
+    }
+
+    #[test]
+    fn test_inline_comments_for_statements() {
+        check(
+            "fun main() {
+                 val a = 100; // comment
+                 val bbb = 20000; // comment 2
+            }",
+            expect![[r#"
+                fun main() {
+                    val a = 100;     // comment
+                    val bbb = 20000; // comment 2
+                }"#]],
+        );
+    }
+
+    #[test]
     fn test_comments_for_statements() {
         check_with_width(
             r#"

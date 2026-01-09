@@ -39,21 +39,36 @@ impl<'a> ListOptions<'a> {
     }
 }
 
-pub fn print_list<'a, 'tree, T, F, N>(
+pub fn print_list<'a, 'tree, T, F, N, P>(
     ctx: &Context<'tree>,
     items: &[T],
     item_printer: F,
     node_extractor: N,
+    lonely_comments_extractor: P,
     options: ListOptions<'a>,
 ) -> Option<RcDoc<'a>>
 where
     F: Fn(&Context<'tree>, &T) -> Option<RcDoc<'a>>,
     N: Fn(&T) -> Node<'tree>,
+    P: FnOnce(&Context<'tree>) -> Vec<Node<'tree>>,
 {
     if items.is_empty() {
+        let lonely_comments = lonely_comments_extractor(ctx);
+
+        if lonely_comments.is_empty() {
+            return Some(RcDoc::concat([options.brackets.0, options.brackets.1]));
+        }
+
+        let mut docs = vec![RcDoc::hardline()];
+        for comment in lonely_comments {
+            docs.push(print_comment_node(ctx, &comment));
+            docs.push(RcDoc::hardline());
+        }
+
         return Some(RcDoc::concat([
-            options.brackets.0.clone(),
-            options.brackets.1.clone(),
+            options.brackets.0,
+            RcDoc::concat(docs).nest(4),
+            options.brackets.1,
         ]));
     }
 
@@ -81,7 +96,7 @@ where
 
         if comments::has_fmt_ignore(ctx, comments) {
             let doc = print_original_node_text(ctx, &node);
-            item_docs_with_info.push((doc, comments, node));
+            item_docs_with_info.push((doc, None, node, true));
             continue;
         }
 
@@ -103,7 +118,7 @@ where
         if has_inline && is_multiline {
             max_width = max_width.max(width);
         }
-        item_docs_with_info.push((doc, comments, node));
+        item_docs_with_info.push((doc, comments, node, false));
     }
 
     let mut docs = vec![if is_multiline {
@@ -115,38 +130,46 @@ where
     }];
 
     let len = item_docs_with_info.len();
-    for (i, (item_doc, comments, node)) in item_docs_with_info.into_iter().enumerate() {
+    for (i, (item_doc, comments, node, ignored)) in item_docs_with_info.into_iter().enumerate() {
         let is_last = i == len - 1;
 
-        comments::print_leading_comments(ctx, &mut docs, comments);
+        if !ignored {
+            comments::print_leading_comments(ctx, &mut docs, comments);
+        }
 
         docs.push(item_doc);
 
-        if !is_last {
-            docs.push(options.separator.clone());
-        } else {
-            docs.push(RcDoc::flat_alt(options.separator.clone(), RcDoc::nil()));
-        }
+        if !ignored {
+            if !is_last {
+                docs.push(options.separator.clone());
+            } else {
+                docs.push(RcDoc::flat_alt(options.separator.clone(), RcDoc::nil()));
+            }
 
-        if is_multiline {
-            comments::print_inline_comments_with_alignment(ctx, &mut docs, comments, max_width);
-        } else {
-            comments::print_inline_comments(ctx, &mut docs, comments);
+            if is_multiline {
+                comments::print_inline_comments_with_alignment(ctx, &mut docs, comments, max_width);
+            } else {
+                comments::print_inline_comments(ctx, &mut docs, comments);
+            }
         }
 
         if is_last {
             if is_multiline {
-                docs.push(RcDoc::hardline());
+                if !ignored {
+                    docs.push(RcDoc::hardline());
+                }
             } else if options.single_line_edge_space {
                 docs.push(RcDoc::line());
             } else {
                 docs.push(RcDoc::line_());
             }
-        } else {
+        } else if !ignored {
             docs.push(item_separator.clone());
         }
 
-        comments::print_trailing_comments(ctx, &mut docs, comments);
+        if !ignored {
+            comments::print_trailing_comments(ctx, &mut docs, comments);
+        }
 
         // Preserve empty lines between items
         if let Some(next) = items.get(i + 1)

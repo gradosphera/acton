@@ -134,6 +134,7 @@ fn print_tuple_tensor_type<'a>(
         &elements,
         print_type,
         Type::raw_node,
+        |_| vec![],
         common::ListOptions {
             brackets: (RcDoc::text(open_quote), RcDoc::text(close_quote)),
             ..Default::default()
@@ -165,6 +166,7 @@ pub fn print_type_instantiated_ts<'a>(
         &types,
         print_type,
         Type::raw_node,
+        |_| vec![],
         common::ListOptions::triangle_bracket_list(),
     )?;
 
