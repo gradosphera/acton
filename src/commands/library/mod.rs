@@ -128,7 +128,9 @@ pub fn publish_cmd(
     println!(
         "  {} Publisher address: {}",
         "→".blue().bold(),
-        publisher_address.to_base64_std().dimmed()
+        publisher_address
+            .to_base64_url_flags(true, net == "testnet")
+            .dimmed()
     );
 
     let wallet_name = select_wallet(wallet_name, &config)?;

@@ -1,6 +1,6 @@
 use crate::commands::common::{create_symlink, error_fmt, select_wallet};
 use crate::config::{ActonConfig, WalletsFile, global_wallets_path};
-use crate::wallets;
+use crate::{config, wallets};
 use anyhow::{Context, anyhow};
 use clap::Subcommand;
 use inquire::{Confirm, Select, Text};
@@ -214,7 +214,7 @@ fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::R
         let mut balance_info = String::new();
         let mut balance_val = None;
 
-        let Ok(address) = get_wallet_address(name, wallet_config) else {
+        let Ok(address) = get_wallet_address(wallet_config) else {
             error!("cannot get wallet address for {name}"); // very unlikely
             continue;
         };
@@ -272,7 +272,7 @@ fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::R
     Ok(())
 }
 
-fn get_wallet_address(_name: &str, wallet: &crate::config::WalletConfig) -> anyhow::Result<String> {
+fn get_wallet_address(wallet: &config::WalletConfig) -> anyhow::Result<String> {
     if let Some(expected) = &wallet.expected
         && let Some(addr) = &expected.address_testnet
     {
@@ -290,7 +290,7 @@ fn get_wallet_address(_name: &str, wallet: &crate::config::WalletConfig) -> anyh
         wallet.workchain.unwrap_or(0),
         wallet_id,
     )?;
-    Ok(ton_wallet.address.to_base64_std_flags(false, true))
+    Ok(ton_wallet.address.to_base64_url_flags(false, true))
 }
 
 fn wallet_version_to_string(v: &WalletVersion) -> String {
@@ -524,7 +524,7 @@ fn new_wallet(
     let wallet_id = wallets::wallet_id(version, "testnet");
     let wallet = TonWallet::new_with_params(version, key_pair, 0, wallet_id)?;
 
-    let wallet_address = wallet.address.to_base64_std_flags(false, true);
+    let wallet_address = wallet.address.to_base64_url_flags(false, true);
 
     let use_secure_store = get_or_prompt_use_keystore(secure)?;
 
@@ -643,7 +643,7 @@ fn import_wallet(
     let wallet_id = wallets::wallet_id(version, "testnet");
     let wallet = TonWallet::new_with_params(version, key_pair, 0, wallet_id)?;
 
-    let wallet_address = wallet.address.to_base64_std_flags(false, true);
+    let wallet_address = wallet.address.to_base64_url_flags(false, true);
 
     let use_secure_store = get_or_prompt_use_keystore(secure)?;
 

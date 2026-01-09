@@ -90,7 +90,9 @@ pub fn verify_cmd(
     println!(
         "  {} Contract address: {}",
         "→".blue().bold(),
-        contract_address.to_base64_std().dimmed()
+        contract_address
+            .to_base64_url_flags(true, network == "testnet")
+            .dimmed()
     );
 
     let wallet_name = select_wallet(wallet_name, &config)?;
@@ -104,7 +106,11 @@ pub fn verify_cmd(
         "  {} Using wallet: {} {}",
         "→".blue().bold(),
         wallet_name.cyan(),
-        wallet.wallet.address.to_base64_std().dimmed()
+        wallet
+            .wallet
+            .address
+            .to_base64_url_flags(true, network == "testnet")
+            .dimmed()
     );
 
     println!("  {} Fetching backends configuration", "→".blue().bold());
@@ -177,8 +183,11 @@ pub fn verify_cmd(
     let contract_hash = base64::engine::general_purpose::STANDARD.encode(code_hash);
     let sources_object = SourcesObject {
         known_contract_hash: contract_hash.clone(),
-        known_contract_address: contract_address.to_base64_std(),
-        sender_address: wallet.wallet.address.to_base64_std(),
+        known_contract_address: contract_address.to_base64_url_flags(true, network == "testnet"),
+        sender_address: wallet
+            .wallet
+            .address
+            .to_base64_url_flags(true, network == "testnet"),
         sources: sources_meta,
         compiler: CompilerSettings::Tolk {
             compiler_settings: TolkCompilerSettings {
@@ -542,7 +551,7 @@ fn show_verifier_link(network: &str, contract_address: TonAddress) {
         "View at: {}",
         format!(
             "https://verifier.ton.org/{}{}",
-            contract_address.to_base64_url(),
+            contract_address.to_base64_url_flags(true, network == "testnet"),
             if network == "testnet" { "?testnet" } else { "" }
         )
         .blue()

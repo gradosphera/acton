@@ -133,7 +133,9 @@ pub fn open_wallets(
                         if ton_wallet.address != expected_addr {
                             anyhow::bail!(
                                 "Wallet address mismatch for '{name}' on '{net}':\n  Expected: {expected_addr}\n  Derived:  {}\n\nPossible causes:\n  - Wrong mnemonic/private key\n  - Incorrect 'kind' or 'workchain'\n  - Keys rotated but expected.address-{net} not updated",
-                                ton_wallet.address.to_base64_std(),
+                                ton_wallet
+                                    .address
+                                    .to_base64_url_flags(true, net == "testnet"),
                             );
                         }
                     }
