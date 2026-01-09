@@ -31,6 +31,41 @@
   --font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "Fira Code", "Source Code Pro", Menlo, Monaco, Consolas, "Courier New", monospace;
+
+  --font-size-xsss: 0.55rem;
+  --font-size-xss: 0.65rem;
+  --font-size-xs: 0.75rem;
+  --font-size-xsm: 0.82rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --spacing-xss: 0.1rem;
+  --spacing-xs: 0.25rem;
+  --spacing-sms: 0.35rem;
+  --spacing-sm: 0.5rem;
+  --spacing-mds: 0.75rem;
+  --spacing-md: 1rem;
+  --spacing-lmd: 1.25rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+
+  --border-radius-sm: 0.25rem;
+  --border-radius-md: 0.5rem;
+  --border-radius-lg: 0.75rem;
+  --border-radius-full: 9999px;
+
+  --transition-duration-fast: 0.15s;
+  --transition-duration-normal: 0.3s;
 }
 
 :root.dark-theme {
@@ -62,6 +97,8 @@
 
   --hover-bg: rgba(255, 255, 255, 0.06);
   --divider-color: rgba(255, 255, 255, 0.04);
+
+  --color-background-primary: #1c1c1e;
 }
 
 .variables {

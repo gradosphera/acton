@@ -58,7 +58,6 @@ export function TransactionDetails({
     }
   }
   const opcodeName = typeAbi?.name
-  const knownExitCodes = targetContract?.abi?.exitCodes
 
   const sentTotal = Array.from(tx.transaction.outMessages.values()).reduce(
     (acc, msg) => acc + (msg.info.type === "internal" ? msg.info.value.coins : 0n),
@@ -136,7 +135,7 @@ export function TransactionDetails({
             <div className={styles.multiColumnItem}>
               <div className={styles.multiColumnItemTitle}>Opcode</div>
               <div className={styles.multiColumnItemValue}>
-                <OpcodeChip opcode={opcode} abiName={opcodeName} />
+                <OpcodeChip opcode={opcode} abiName={opcodeName} showOpcode={true} />
               </div>
             </div>
           </div>
@@ -191,7 +190,7 @@ export function TransactionDetails({
               <div className={styles.multiColumnItem}>
                 <div className={styles.multiColumnItemTitle}>Exit Code</div>
                 <div className={styles.multiColumnItemValue}>
-                  <ExitCodeChip exitCode={computePhase.exitCode} exitCodes={knownExitCodes} />
+                  <ExitCodeChip exitCode={computePhase.exitCode} abi={targetContract?.abi} />
                 </div>
               </div>
               <div className={styles.multiColumnItem}>

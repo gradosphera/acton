@@ -1,24 +1,48 @@
-.chip {
+.opcodeChip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background-color: var(--hover-bg);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+  position: relative;
+  transition: background-color 0.2s ease;
 }
 
-.name {
-  font-weight: bold;
-  color: var(--color-todo);
+.opcodeText {
+  color: var(--text-primary);
+  white-space: nowrap;
 }
 
-.hex {
+.opcodeSubText {
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
-.empty {
-  color: var(--text-muted);
-  font-style: italic;
+.copyButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background-color: var(--card-bg);
+  opacity: 0;
+  border-radius: 2px;
+  padding: 0;
+}
+
+.opcodeChip:hover .copyButton {
+  opacity: 1;
+}
+
+.copyButton:active {
+  transform: scale(0.95);
+}
+
+.copyButton svg {
+  width: 12px;
+  height: 12px;
 }
