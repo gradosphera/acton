@@ -202,6 +202,7 @@ impl Compiler {
             Ok(CompilerInternalResult::Success(result)) => {
                 let debug_marks = if with_debug_info {
                     parse_marks_dict(&result.debug_mark_base64, &result.code_boc64)
+                        .unwrap_or_default()
                 } else {
                     HashMap::new()
                 };
