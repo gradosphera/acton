@@ -1,11 +1,15 @@
 use crate::commands::test::reporting::{TestReport, TestReporter};
+use crate::commands::test::trace::ContractInfo;
+use crate::vmtrace::HighLevelTrace;
 use axum::{
     Router,
-    extract::{Path as AxumPath, State},
+    extract::{Path as AxumPath, Query, State},
     http::StatusCode,
     response::{IntoResponse, Json},
-    routing::get,
+    routing::{get, post},
 };
+use retrace::trace::Trace;
+use serde::Deserialize;
 #[cfg(not(debug_assertions))]
 use include_dir::{Dir, include_dir};
 use owo_colors::OwoColorize;
@@ -69,7 +73,9 @@ pub async fn start_ui_server(
     let app = Router::new()
         .route("/api/reports", get(handle_api_reports))
         .route("/api/trace/{name}", get(handle_api_trace))
-        .route("/api/contract/{name}", get(handle_api_contract));
+        .route("/api/contract/{name}", get(handle_api_contract))
+        .route("/api/file", get(handle_api_file))
+        .route("/api/high-level-trace", post(handle_api_high_level_trace));
 
     // In debug mode, serve UI assets directly from the filesystem for faster development.
     #[cfg(debug_assertions)]
@@ -226,4 +232,52 @@ async fn handle_api_contract(
         },
         Err(_) => (StatusCode::NOT_FOUND, "Contract not found").into_response(),
     }
+}
+
+#[derive(Deserialize)]
+struct FileQuery {
+    path: String,
+}
+
+async fn handle_api_file(Query(query): Query<FileQuery>) -> impl IntoResponse {
+    match tokio::fs::read_to_string(&query.path).await {
+        Ok(content) => content.into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, "File not found").into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct HighLevelTraceRequest {
+    contract_name: String,
+    vm_log: String,
+}
+
+async fn handle_api_high_level_trace(
+    State(state): State<Arc<UiServerState>>,
+    Json(payload): Json<HighLevelTraceRequest>,
+) -> impl IntoResponse {
+    let Some(trace_dir) = &state.trace_dir else {
+        return (StatusCode::NOT_FOUND, "Traces not enabled").into_response();
+    };
+
+    let contract_path = PathBuf::from(trace_dir)
+        .join("contracts")
+        .join(format!("{}.json", payload.contract_name));
+
+    let contract_info: ContractInfo = match tokio::fs::read_to_string(contract_path).await {
+        Ok(content) => match serde_json::from_str(&content) {
+            Ok(info) => info,
+            Err(_) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Invalid contract JSON").into_response();
+            }
+        },
+        Err(_) => return (StatusCode::NOT_FOUND, "Contract not found").into_response(),
+    };
+
+    let vm_log = vmlogs::convert_from_diff_logs(&payload.vm_log);
+
+    let trace = Trace::new(&vm_log, Some(1_000_000));
+    let high_level_trace = HighLevelTrace::new(trace, &contract_info.source_map);
+
+    Json(high_level_trace).into_response()
 }

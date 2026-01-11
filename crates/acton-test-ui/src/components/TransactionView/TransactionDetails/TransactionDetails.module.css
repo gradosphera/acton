@@ -155,6 +155,27 @@
   font-weight: 500;
 }
 
+.traceButton {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+
+.traceButton:hover {
+  background-color: var(--hover-bg);
+  border-color: var(--text-muted);
+}
+
 @media (max-width: 768px) {
   .detailRow,
   .labeledSectionRow {

@@ -1,0 +1,350 @@
+.container {
+  width: 100%;
+  height: 100%;
+  background-color: var(--card-bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.header {
+  height: 44px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.showMappedLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.closeButton:hover {
+  background-color: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.stepsList {
+  width: 350px;
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-secondary);
+  flex-shrink: 0;
+  transition: width 0.2s ease;
+}
+
+.stepsListHeader {
+  height: 36px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.stepsListTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stepsScroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.paneToggleButton {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  background-color: var(--bg-primary);
+}
+
+.paneToggleButton:hover {
+  background-color: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.step {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--divider-color);
+  cursor: pointer;
+  transition: all 0.1s;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.step:hover {
+  background-color: var(--hover-bg);
+}
+
+.stepActive {
+  background-color: var(--color-todo-bg);
+  border-left: 3px solid var(--color-todo);
+}
+
+.stepHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.instr {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.gas {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.loc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unmapped {
+  opacity: 0.6;
+}
+
+.editorContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background-color: var(--bg-primary);
+}
+
+.fileHeader {
+  height: 36px;
+  padding: 0 16px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.editor {
+  flex: 1;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 16px 0;
+}
+
+.line {
+  display: flex;
+  padding: 0 16px;
+  min-width: fit-content;
+}
+
+.lineNumber {
+  width: 40px;
+  text-align: right;
+  padding-right: 16px;
+  color: var(--text-tertiary);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.lineContent {
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.rangeHighlighted {
+  background-color: var(--color-todo-bg);
+  color: var(--color-todo-text);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--color-todo);
+}
+
+.lineHighlighted {
+  background-color: var(--color-todo-bg);
+  opacity: 0.8;
+  position: relative;
+}
+
+.lineHighlighted::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: var(--color-todo);
+  z-index: 5;
+}
+
+.stackView {
+  width: 300px;
+  border-left: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.2s ease;
+}
+
+.stackHeader {
+  height: 36px;
+  padding: 0 16px 0 8px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.stackTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stackContentWrapper {
+  flex: 1;
+  overflow: hidden;
+}
+
+.collapsedPane {
+  width: 0 !important;
+  border: none !important;
+}
+
+.toggleBtnOverlay {
+  position: absolute;
+  top: 44px;
+  width: 24px;
+  height: 32px;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 100;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow);
+  transition: all 0.2s;
+}
+
+.toggleBtnOverlay:hover {
+  background-color: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.toggleStepsBtn {
+  left: 0;
+  border-left: none;
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.toggleStackBtn {
+  right: 0;
+  border-right: none;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.loading, .error, .noSelection {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.error {
+  color: var(--color-failed);
+  padding: 20px;
+  text-align: center;
+}
+
+.noSelection {
+  color: var(--text-tertiary);
+  font-style: italic;
+}

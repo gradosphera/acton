@@ -56,3 +56,56 @@ export interface BackendContractInfo {
   readonly source_map: unknown
   readonly abi?: Abi
 }
+
+export interface SourceLocation {
+  readonly file: string
+  readonly line: number
+  readonly column: number
+  readonly end_line: number
+  readonly end_column: number
+}
+
+export interface DebugLocation {
+  readonly idx: number
+  readonly loc: SourceLocation
+}
+
+export interface TraceStepExecute {
+  readonly type: "execute"
+  readonly instr: string
+  readonly stack: string
+  readonly offset: number
+  readonly hash: string
+  readonly gas: number
+}
+
+export interface TraceStepException {
+  readonly type: "exception"
+  readonly errno: string
+  readonly message: string
+  readonly handled: boolean
+}
+
+export interface TraceStepFinalC5 {
+  readonly type: "final_c5"
+  readonly cell: string
+}
+
+export type TraceStep = TraceStepExecute | TraceStepException | TraceStepFinalC5
+
+export interface HighLevelTraceStepMapped {
+  readonly type: "mapped"
+  readonly inner: TraceStep
+  readonly locs: DebugLocation[]
+}
+
+export interface HighLevelTraceStepUnmapped {
+  readonly type: "unmapped"
+  readonly inner: TraceStep
+}
+
+export type HighLevelTraceStep = HighLevelTraceStepMapped | HighLevelTraceStepUnmapped
+
+export interface HighLevelTrace {
+  readonly steps: HighLevelTraceStep[]
+}

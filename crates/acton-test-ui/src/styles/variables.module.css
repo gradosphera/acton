@@ -66,6 +66,34 @@
 
   --transition-duration-fast: 0.15s;
   --transition-duration-normal: 0.3s;
+
+  --stack-item-null-bg: #f2f2f2;
+  --stack-item-null-text: #666;
+  --stack-item-nan-bg: #f2f2f2;
+  --stack-item-nan-text: #666;
+  --stack-item-integer-bg: #e3f2fd;
+  --stack-item-integer-text: #0d47a1;
+  --stack-item-cell-bg: #e8f5e9;
+  --stack-item-cell-text: #1b5e20;
+  --stack-item-slice-bg: #fff3e0;
+  --stack-item-slice-text: #e65100;
+  --stack-item-builder-bg: #f3e5f5;
+  --stack-item-builder-text: #6a1b9a;
+  --stack-item-continuation-bg: #e1f5fe;
+  --stack-item-continuation-text: #01579b;
+  --stack-item-address-bg: #e8eaf6;
+  --stack-item-address-text: #283593;
+  --stack-item-tuple-bg: #ffebee;
+  --stack-item-tuple-text: #c62828;
+  --stack-item-unknown-bg: #fafafa;
+  --stack-item-unknown-text: #616161;
+  --stack-item-hover-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+  --stack-item-expanded-bg: rgba(255, 255, 255, 0.5);
+  --stack-item-index-bg: #eee;
+  --stack-item-index-text: var(--text-secondary);
+  --stack-item-label-text: var(--text-secondary);
+  --stack-item-details-text: var(--text-secondary);
+  --stack-item-border: var(--divider-color);
 }
 
 :root.dark-theme {
@@ -99,6 +127,31 @@
   --divider-color: rgba(255, 255, 255, 0.04);
 
   --color-background-primary: #1c1c1e;
+
+  --stack-item-null-bg: #3a3a3c;
+  --stack-item-null-text: #aeaeb2;
+  --stack-item-nan-bg: #3a3a3c;
+  --stack-item-nan-text: #aeaeb2;
+  --stack-item-integer-bg: #002b4d;
+  --stack-item-integer-text: #79baff;
+  --stack-item-cell-bg: #0c3d13;
+  --stack-item-cell-text: #8ae098;
+  --stack-item-slice-bg: #4d2a00;
+  --stack-item-slice-text: #ffb766;
+  --stack-item-builder-bg: #38004d;
+  --stack-item-builder-text: #d279ff;
+  --stack-item-continuation-bg: #003252;
+  --stack-item-continuation-text: #66cfff;
+  --stack-item-address-bg: #1a237e;
+  --stack-item-address-text: #a7b0ff;
+  --stack-item-tuple-bg: #5c1313;
+  --stack-item-tuple-text: #ff8a8a;
+  --stack-item-unknown-bg: #2c2c2e;
+  --stack-item-unknown-text: #c7c7c7;
+  --stack-item-hover-shadow: 0 1px 3px rgb(0 0 0 / 30%);
+  --stack-item-expanded-bg: rgba(0, 0, 0, 0.3);
+  --stack-item-index-bg: #303034;
+  --stack-item-border: var(--divider-color);
 }
 
 .variables {

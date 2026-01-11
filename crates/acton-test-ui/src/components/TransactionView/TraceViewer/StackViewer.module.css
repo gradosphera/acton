@@ -1,0 +1,194 @@
+.stackViewer {
+  margin: 0;
+  border-radius: var(--border-radius-sm);
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.stackTitle {
+  margin: 0 0 var(--spacing-xs) 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.stackContainer {
+  border-radius: var(--border-radius-sm);
+  background-color: var(--bg-primary);
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.emptyStack {
+  padding: var(--spacing-md);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.stackItems {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.stackElement {
+  display: flex;
+  border-bottom: 1px solid var(--stack-item-border);
+  padding: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+}
+
+.stackElement:last-child {
+  border-bottom: none;
+}
+
+.stackIndex {
+  min-width: 24px;
+  height: 24px;
+  background-color: var(--stack-item-index-bg);
+  color: var(--stack-item-index-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--border-radius-sm);
+  margin-right: var(--spacing-xs);
+  font-size: 10px;
+}
+
+.stackItem {
+  position: relative;
+  flex: 1;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.stackItem:hover {
+  background-color: var(--hover-bg);
+  box-shadow: var(--stack-item-hover-shadow);
+}
+
+.stackItem:hover .copyButton {
+  opacity: 1;
+}
+
+.stackItemLabel {
+  font-weight: 700;
+  margin-bottom: 2px;
+  font-size: 10px;
+  color: var(--stack-item-label-text);
+  text-transform: uppercase;
+}
+
+.stackItemValue {
+  font-family: var(--font-mono);
+  word-break: break-all;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.stackItemDetails {
+  font-size: 10px;
+  color: var(--stack-item-details-text);
+  margin-top: 2px;
+}
+
+.copyButton {
+  opacity: 0;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.copyButton:hover {
+  color: var(--text-primary);
+  background-color: var(--hover-bg);
+}
+
+.nullItem {
+  background-color: var(--stack-item-null-bg);
+  color: var(--stack-item-null-text);
+}
+
+.nanItem {
+  background-color: var(--stack-item-nan-bg);
+  color: var(--stack-item-nan-text);
+}
+
+.integerItem {
+  background-color: var(--stack-item-integer-bg);
+  color: var(--stack-item-integer-text);
+}
+
+.integerItemHexValue {
+  opacity: 0.6;
+}
+
+.cellItem {
+  background-color: var(--stack-item-cell-bg);
+  color: var(--stack-item-cell-text);
+}
+
+.sliceItem {
+  background-color: var(--stack-item-slice-bg);
+  color: var(--stack-item-slice-text);
+}
+
+.builderItem {
+  background-color: var(--stack-item-builder-bg);
+  color: var(--stack-item-builder-text);
+}
+
+.continuationItem {
+  background-color: var(--stack-item-continuation-bg);
+  color: var(--stack-item-continuation-text);
+}
+
+.addressItem {
+  background-color: var(--stack-item-address-bg);
+  color: var(--stack-item-address-text);
+}
+
+.tupleItem {
+  background-color: var(--stack-item-tuple-bg);
+  color: var(--stack-item-tuple-text);
+}
+
+.unknownItem {
+  background-color: var(--stack-item-unknown-bg);
+  color: var(--stack-item-unknown-text);
+}
+
+.tupleElement {
+  margin-left: var(--spacing-md);
+  margin-bottom: var(--spacing-xs);
+  padding-left: var(--spacing-xs);
+  border-left: 2px solid var(--stack-item-border);
+}
+
+.truncatedMiddle {
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+  display: inline-block;
+}
+
+.ellipsis {
+  font-weight: 700;
+  margin: 0 2px;
+}

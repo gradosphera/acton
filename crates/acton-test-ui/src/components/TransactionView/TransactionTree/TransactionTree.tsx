@@ -37,6 +37,7 @@ interface TransactionTreeProps {
   readonly transactions: TransactionInfo[]
   readonly contracts: Map<string, ContractData>
   readonly allContracts: readonly BackendContractInfo[]
+  readonly onViewTrace: (contractName: string, vmLog: string) => void
 }
 
 function TransactionTooltipContent({ data }: { data: TransactionTooltipData }): React.JSX.Element {
@@ -92,6 +93,7 @@ export function TransactionTree({
   transactions,
   contracts,
   allContracts,
+  onViewTrace,
 }: TransactionTreeProps): React.JSX.Element {
   const {
     tooltip,
@@ -556,6 +558,7 @@ export function TransactionTree({
             tx={selectedTransaction}
             contracts={contracts}
             allContracts={allContracts}
+            onViewTrace={onViewTrace}
           />
         </div>
       )}

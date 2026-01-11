@@ -1,5 +1,5 @@
 import React, { type JSX, useState } from "react"
-import { FiChevronDown, FiChevronUp } from "react-icons/fi"
+import { FiChevronDown, FiChevronUp, FiCpu } from "react-icons/fi"
 import type { BackendContractInfo } from "../../../types"
 import type { ContractData, TransactionInfo } from "../../../types/transaction"
 import { formatCurrency, formatNumber } from "../../../utils/format"
@@ -8,6 +8,7 @@ import { ContractChip } from "../ContractChip/ContractChip"
 import { ExitCodeChip } from "../ExitCodeChip/ExitCodeChip"
 import { OpcodeChip } from "../OpcodeChip/OpcodeChip"
 import { SendModeViewer } from "../SendModeViewer/SendModeViewer"
+import { TraceViewer } from "../TraceViewer/TraceViewer"
 import { ActionsSummary } from "./ActionsSummary"
 import styles from "./TransactionDetails.module.css"
 
@@ -15,12 +16,14 @@ export interface TransactionDetailsProps {
   readonly tx: TransactionInfo
   readonly contracts: Map<string, ContractData>
   readonly allContracts: readonly BackendContractInfo[]
+  readonly onViewTrace: (contractName: string, vmLog: string) => void
 }
 
 export function TransactionDetails({
   tx,
   contracts,
   allContracts,
+  onViewTrace,
 }: TransactionDetailsProps): React.JSX.Element {
   const [showActions, setShowActions] = useState(false)
 
@@ -209,6 +212,21 @@ export function TransactionDetails({
                   {formatCurrency(computePhase.gasFees)}
                 </div>
               </div>
+              {tx.contractName && tx.vmLogDiff && (
+                <div className={styles.multiColumnItem}>
+                  <div className={styles.multiColumnItemTitle}>Trace</div>
+                  <div className={styles.multiColumnItemValue}>
+                    <button
+                      type="button"
+                      className={styles.traceButton}
+                      onClick={() => onViewTrace(tx.contractName!, tx.vmLogDiff)}
+                    >
+                      <FiCpu size={14} />
+                      View Trace
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

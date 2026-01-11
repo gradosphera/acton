@@ -10,6 +10,7 @@ import type { ContractData } from "../../types/transaction"
 import { formatAddress } from "../../utils/format"
 import { processTransactions } from "../../utils/transaction"
 import { DataBlock } from "../common/DataBlock/DataBlock"
+import { TraceViewer } from "../TransactionView/TraceViewer/TraceViewer"
 import { TransactionTree } from "../TransactionView/TransactionTree/TransactionTree"
 import styles from "./TestDetails.module.css"
 
@@ -29,6 +30,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace }) => {
     const saved = localStorage.getItem("activeTab")
     return (saved as "vm" | "executor" | "transactions") || "transactions"
   })
+  const [viewTraceData, setViewTraceData] = useState<{ contractName: string; vmLog: string } | null>(null)
   const [selectedTraceIndex, setSelectedTraceIndex] = useState<number>(() => {
     const saved = localStorage.getItem(`selectedTraceIndex:${test.suite_name}::${test.name}`)
     return saved ? Number.parseInt(saved, 10) : 0
@@ -178,6 +180,16 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace }) => {
   }
 
   const renderLogs = () => {
+    if (viewTraceData) {
+      return (
+        <TraceViewer
+          contractName={viewTraceData.contractName}
+          vmLog={viewTraceData.vmLog}
+          onClose={() => setViewTraceData(null)}
+        />
+      )
+    }
+
     if (!trace) return <div className={styles.empty}>No trace data available</div>
     const currentTraceList = trace.traces[selectedTraceIndex]
     if (!currentTraceList) return <div className={styles.empty}>Trace not found</div>
@@ -192,6 +204,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace }) => {
             transactions={parsedTransactions}
             contracts={contracts}
             allContracts={allContracts}
+            onViewTrace={(contractName, vmLog) => setViewTraceData({ contractName, vmLog })}
           />
         </div>
       )

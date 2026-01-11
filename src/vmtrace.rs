@@ -1,8 +1,9 @@
 use retrace::trace::Trace;
+use serde::{Deserialize, Serialize};
 use ton_source_map::{DebugLocation, EntryContextDescription, OffsetAndId, SourceMap};
 use vmlogs::parser::VmLine;
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SkipBlocksMode {
     None = 0,
     Before = 1,
@@ -135,20 +136,27 @@ fn find_locations_by_debug_marks(
     locs
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HighLevelTrace {
     pub steps: Vec<HighLevelTraceStep>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum HighLevelTraceStep {
+    #[serde(rename = "mapped")]
     Mapped(HighLevelTraceStepMapped),
+    #[serde(rename = "unmapped")]
     Unmapped(HighLevelTraceStepUnmapped),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HighLevelTraceStepMapped {
     pub inner: retrace::trace::TraceStep,
     pub locs: Vec<DebugLocation>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HighLevelTraceStepUnmapped {
     pub inner: retrace::trace::TraceStep,
 }
