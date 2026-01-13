@@ -1056,7 +1056,8 @@ fn crc16_impl(_ctx: &mut Context, stack: &mut Tuple, data: String) -> anyhow::Re
 
 extension!(type_name_by_opcode in (Context) with (id: BigInt) using type_name_by_opcode_impl);
 fn type_name_by_opcode_impl(ctx: &mut Context, stk: &mut Tuple, id: BigInt) -> anyhow::Result<()> {
-    let type_abi = ctx.env.abi.find_type_by_opcode(&id);
+    let id = u32::try_from(&id).context("ID is too big for uint32 opcode")?;
+    let type_abi = ctx.env.abi.find_type_by_opcode(id);
     match type_abi {
         None => {
             stk.push(TupleItem::Null);

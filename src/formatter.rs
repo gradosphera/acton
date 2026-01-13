@@ -971,7 +971,7 @@ impl FormatterContext {
     }
 
     fn get_message_name(&self, opcode: u32) -> String {
-        let message_abi = self.contract_abi.find_type_by_opcode(&BigInt::from(opcode));
+        let message_abi = self.contract_abi.find_type_by_opcode(opcode);
         let name = if let Some(message_abi) = &message_abi {
             message_abi.name.as_str()
         } else if opcode == 0 {
@@ -1574,7 +1574,7 @@ impl FormatterContext {
     ) -> Vec<String> {
         let mut params = vec![];
         if let Some(opcode) = assert_failure.params.opcode {
-            let opcode_type = abi.find_type_by_opcode(&BigInt::from(opcode));
+            let opcode_type = abi.find_type_by_opcode(opcode);
             params.push(format!(
                 "  opcode={} {}",
                 format!("0x{opcode:x}").green(),

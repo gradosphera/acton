@@ -2,8 +2,8 @@ use crate::commands::test::TestRunner;
 use abi::ContractAbi;
 use chrono;
 use comfy_table::{Cell as TableCell, CellAlignment, Color, ContentArrangement, Table};
-use num_bigint::BigInt;
 use owo_colors::OwoColorize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -15,13 +15,13 @@ pub fn collect_profile(runner: &TestRunner, abi: &ContractAbi) -> anyhow::Result
         let Some(opcode) = result.opcode() else {
             continue;
         };
-        let Some(msg_abi) = abi.find_type_by_opcode(&BigInt::from(opcode)) else {
+        let Some(msg_abi) = abi.find_type_by_opcode(opcode) else {
             continue;
         };
-
         let Some(used_gas) = result.used_gas() else {
             continue;
         };
+
         gas_per_opcode
             .entry(msg_abi.name)
             .or_insert_with(Vec::new)
@@ -236,13 +236,13 @@ fn load_gas_snapshot(filename: &str) -> anyhow::Result<GasSnapshot> {
     Ok(snapshot)
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GasSnapshot {
     pub timestamp: u64,
     pub opcodes: HashMap<String, OpcodeGasStats>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpcodeGasStats {
     pub min_gas: u64,
     pub max_gas: u64,

@@ -41,7 +41,7 @@ fn find_expect_calls(
     let callee_node = node.child_by_field_name("callee")?;
 
     if callee_node.kind() == "identifier"
-        && callee_node.utf8_text(content.as_bytes()).unwrap_or("") == "expect"
+        && callee_node.utf8_text(content.as_bytes()) == Ok("expect")
     {
         let args_node = node.child_by_field_name("arguments")?;
 

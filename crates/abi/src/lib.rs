@@ -118,11 +118,11 @@ impl ContractAbi {
         self.types.iter().find(|typ| typ.name == *name).cloned()
     }
 
-    pub fn find_type_by_opcode(&self, id: &BigInt) -> Option<TypeAbi> {
+    pub fn find_type_by_opcode(&self, id: u32) -> Option<TypeAbi> {
         self.types
             .iter()
             .filter(|typ| !typ.is_from_acton_lib())
-            .find(|typ| typ.opcode.is_some() && &BigInt::from(typ.opcode.unwrap() as u64) == id)
+            .find(|typ| typ.opcode == Some(id))
             .cloned()
     }
 
