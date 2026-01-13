@@ -7,9 +7,9 @@ use abi::{ContractAbi, TypeAbi};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Write;
-use ton_source_map::SourceLocation;
+use ton_source_map::{DebugLocation, SourceLocation};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::tlb::TLB;
@@ -17,8 +17,9 @@ use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
 use tycho_types::models::{
-    AccountState, AccountStatus, ComputePhase, IntAddr, MsgInfo, RelaxedMessage, RelaxedMsgInfo,
-    ReserveCurrencyFlags, SendMsgFlags, ShardAccount, Transaction, TxInfo,
+    AccountState, AccountStatus, ComputePhase, ExecutedComputePhase, IntAddr, MsgInfo,
+    RelaxedMessage, RelaxedMsgInfo, ReserveCurrencyFlags, SendMsgFlags, ShardAccount, Transaction,
+    TxInfo,
 };
 use tycho_types::num::Tokens;
 
@@ -175,7 +176,7 @@ impl FormatterContext {
                         TupleItem::Tuple(externals),
                     ) => {
                         let result = tx.to_boc(false).ok()?;
-                        let tx_cell: Cell = Boc::decode(&result).ok()?;
+                        let tx_cell = Boc::decode(&result).ok()?;
                         let tx = tx_cell.parse::<Transaction>().ok()?;
                         Some(SendResult {
                             tx,
@@ -224,17 +225,22 @@ impl FormatterContext {
         let mut known_contracts: Vec<IntAddr> = vec![];
 
         for send_result in send_results {
-            let Ok(in_msg) = send_result.tx.load_in_msg() else {
+            let Ok(Some(in_msg)) = send_result.tx.load_in_msg() else {
                 continue;
             };
 
-            if let Some(in_msg) = &in_msg
-                && let MsgInfo::Int(info) = &in_msg.info
-            {
+            if let MsgInfo::Int(info) = &in_msg.info {
                 // It's O(N) but we need order, and we don't have many (thousands) transactions
                 if !known_contracts.contains(&info.src) {
                     known_contracts.push(info.src.clone());
                 }
+                if !known_contracts.contains(&info.dst) {
+                    known_contracts.push(info.dst.clone());
+                }
+            }
+
+            #[allow(clippy::collapsible_if)]
+            if let MsgInfo::ExtIn(info) = &in_msg.info {
                 if !known_contracts.contains(&info.dst) {
                     known_contracts.push(info.dst.clone());
                 }
@@ -273,12 +279,15 @@ impl FormatterContext {
         }
 
         let mut roots = Vec::new();
-        let mut processed = std::collections::HashSet::new();
+        let mut processed = HashSet::new();
 
         for (lt, result) in &lt_to_result {
-            if (result.parent_lt.is_none()
-                || !lt_to_result.contains_key(&result.parent_lt.unwrap_or(-1)))
-                && !processed.contains(lt)
+            if processed.contains(lt) {
+                continue;
+            }
+
+            if result.parent_lt.is_none()
+                || !lt_to_result.contains_key(&result.parent_lt.unwrap_or(-1))
             {
                 let node = Self::build_node_recursive(*lt, &lt_to_result, &mut processed);
                 if let Some(node) = node {
@@ -294,19 +303,18 @@ impl FormatterContext {
     fn build_node_recursive(
         lt: i64,
         lt_to_result: &HashMap<i64, SendResult>,
-        processed: &mut std::collections::HashSet<i64>,
+        processed: &mut HashSet<i64>,
     ) -> Option<TransactionNode> {
-        if processed.contains(&lt) {
+        if !processed.insert(lt) {
             return None;
         }
 
         let result = lt_to_result.get(&lt)?;
-        processed.insert(lt);
 
         let mut children = Vec::new();
         for child_lt in &result.children_ids {
-            if let Some(child_node) = Self::build_node_recursive(*child_lt, lt_to_result, processed)
-            {
+            let child_node = Self::build_node_recursive(*child_lt, lt_to_result, processed);
+            if let Some(child_node) = child_node {
                 children.push(child_node);
             }
         }
@@ -379,7 +387,6 @@ impl FormatterContext {
             result.push_str(&tx_formatted);
             result.push('\n');
 
-            // Recursively format children
             if !node.children.is_empty() {
                 let children_formatted = self.format_transaction_tree(
                     &node.children,
@@ -491,7 +498,7 @@ impl FormatterContext {
             result += " -> ".dimmed().to_string().as_str();
         }
 
-        let opcode = self.extract_opcode(in_msg);
+        let opcode = Self::extract_opcode(in_msg);
         let message_name = self.get_message_name(opcode);
         result += &message_name;
         result += " ";
@@ -562,75 +569,12 @@ impl FormatterContext {
                 }
 
                 if compute.exit_code != 0 {
-                    result += &format!(" exit_code={}", compute.exit_code)
-                        .red()
-                        .to_string();
-
-                    if let Some(info) = exit_codes::find(compute.exit_code) {
-                        extra_infos.push(format!(
-                            "Compute phase failed: {}",
-                            info.description.to_string().yellow()
-                        ));
-                    }
-
-                    // Trying to retrace exit code to find out exact Tolk source location
-                    let logs = self.emulations.find_tx_logs(tx.lt);
-                    let in_msg = tx.load_in_msg();
-                    if let Some(logs) = logs
-                        && let Ok(Some(in_msg)) = &in_msg
-                        && let MsgInfo::Int(info) = &in_msg.info
-                    {
-                        let code = Self::account_code(&self.accounts, info.dst.to_string());
-                        let result = self.build_cache.result_for_code(&code);
-
-                        if let Some(result) = result {
-                            let info = retrace::find_exception_info(logs, &result.1.source_map);
-                            if let Some(info) = info
-                                && let Some(loc) = info.loc
-                            {
-                                let mut backtrace_result = "".to_string();
-
-                                if !info.backtrace.is_empty() {
-                                    let max_function_name_len = info
-                                        .backtrace
-                                        .iter()
-                                        .filter_map(|loc| loc.context.event_function.as_ref())
-                                        .map(|name| name.len() + 2)
-                                        .max()
-                                        .unwrap_or(0);
-
-                                    let backtrace_lines =
-                                        info.backtrace.iter().rev().filter_map(|loc| {
-                                            loc.context.event_function.as_ref().map(|func_name| {
-                                                let location = format!(
-                                                    "{}:{}:{}",
-                                                    SourceLocation::normalize_path(&loc.loc.file),
-                                                    loc.loc.line + 1,
-                                                    loc.loc.column + 2
-                                                );
-                                                format!(
-                                                    "{:<width$} {}",
-                                                    func_name.green(),
-                                                    format!("at {location}").dimmed(),
-                                                    width = max_function_name_len
-                                                )
-                                            })
-                                        });
-
-                                    for line in backtrace_lines {
-                                        backtrace_result +=
-                                            format!("{child_prefix}       {line}\n").as_str();
-                                    }
-                                }
-
-                                extra_infos.push(format!(
-                                    "at {}\n{}",
-                                    loc.format().dimmed(),
-                                    backtrace_result
-                                ));
-                            }
-                        }
-                    }
+                    result += &self.format_transaction_exit_code(
+                        tx,
+                        child_prefix,
+                        &mut extra_infos,
+                        &compute,
+                    );
                 }
             }
             _ => {
@@ -737,12 +681,101 @@ impl FormatterContext {
         result
     }
 
+    fn format_transaction_exit_code(
+        &self,
+        tx: &Transaction,
+        child_prefix: &str,
+        extra_infos: &mut Vec<String>,
+        compute: &ExecutedComputePhase,
+    ) -> String {
+        let mut result = String::new();
+        result += &format!(" exit_code={}", compute.exit_code)
+            .red()
+            .to_string();
+
+        if let Some(info) = exit_codes::find(compute.exit_code) {
+            extra_infos.push(format!(
+                "Compute phase failed: {}",
+                info.description.to_string().yellow()
+            ));
+        }
+
+        self.format_transaction_backtrace(tx, child_prefix, extra_infos);
+
+        result
+    }
+
+    fn format_transaction_backtrace(
+        &self,
+        tx: &Transaction,
+        child_prefix: &str,
+        extra_infos: &mut Vec<String>,
+    ) -> Option<()> {
+        // Trying to retrace exit code to find out exact Tolk source location
+        let logs = self.emulations.find_tx_logs(tx.lt)?;
+        let in_msg = tx.load_in_msg().ok()??;
+
+        let dst = match in_msg.info {
+            MsgInfo::Int(info) => info.dst,
+            MsgInfo::ExtIn(info) => info.dst,
+            MsgInfo::ExtOut(_) => return None,
+        };
+
+        let code = Self::account_code(&self.accounts, dst.to_string());
+        let result = self.build_cache.result_for_code(&code)?;
+
+        let info = retrace::find_exception_info(logs, &result.1.source_map)?;
+        let loc = info.loc?;
+
+        let backtrace_result = Self::format_backtrace(&info.backtrace)
+            .iter()
+            .map(|line| format!("{child_prefix}       {line}"))
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        extra_infos.push(format!(
+            "at {}\n{}",
+            loc.format().dimmed(),
+            backtrace_result
+        ));
+
+        Some(())
+    }
+
+    pub fn format_backtrace(backtrace: &[DebugLocation]) -> Vec<String> {
+        let max_function_name_len = backtrace
+            .iter()
+            .filter_map(|loc| loc.context.event_function.as_ref())
+            .map(|name| name.len() + 2)
+            .max()
+            .unwrap_or(0);
+
+        let backtrace_lines = backtrace.iter().rev().filter_map(|loc| {
+            let func_name = loc.context.event_function.as_ref()?;
+
+            let location = format!(
+                "{}:{}:{}",
+                SourceLocation::normalize_path(&loc.loc.file),
+                loc.loc.line + 1,
+                loc.loc.column + 2
+            );
+            Some(format!(
+                "{:<width$} at {}",
+                func_name.green(),
+                location.dimmed(),
+                width = max_function_name_len
+            ))
+        });
+
+        backtrace_lines.collect()
+    }
+
     fn format_ext_out_message(&self, msg: &RelaxedMessage) -> Option<String> {
         let RelaxedMsgInfo::ExtOut(info) = &msg.info else {
             return None;
         };
 
-        let opcode = self.extract_opcode(msg);
+        let opcode = Self::extract_opcode(msg);
         let message_name = self.get_message_name(opcode);
 
         let msg_info = if let Some(ext_addr) = &info.dst {
@@ -939,7 +972,7 @@ impl FormatterContext {
         }
     }
 
-    fn extract_opcode(&self, in_msg: &RelaxedMessage) -> u32 {
+    fn extract_opcode(in_msg: &RelaxedMessage) -> u32 {
         let mut body = in_msg.body;
         let bounced = match &in_msg.info {
             RelaxedMsgInfo::Int(info) => info.bounced,
@@ -977,7 +1010,9 @@ impl FormatterContext {
             return Some(known_address.name.clone());
         }
 
-        if let Some(account) = self.accounts.get(&addr.to_string()) {
+        let addr_str = addr.to_string();
+
+        if let Some(account) = self.accounts.get(&addr_str) {
             let state = account.account.load().ok()?.0?.state;
             let code_hash = match state {
                 AccountState::Uninit => None,
@@ -990,34 +1025,25 @@ impl FormatterContext {
                 .iter()
                 .find(|(hash, _info)| code_hash == Some((*hash).clone()));
 
-            if let Some(known_code_cell) = known_code_cell {
-                return Some(known_code_cell.1.clone());
+            if let Some((_, known_code_cell)) = known_code_cell {
+                return Some(known_code_cell.clone());
             }
         }
 
-        if let Some(known_address) = known_address {
-            return Some(known_address.1.name.clone());
-        }
+        let shard_account = self.accounts.get(&addr_str)?;
+        let account = shard_account.load_account().ok()??;
 
-        let addr_str = addr.to_string();
-        let account = self.accounts.get(&addr_str)?;
-
-        let account_data = account.load_account().ok()??;
-
-        let AccountState::Active(info) = account_data.state else {
+        let AccountState::Active(info) = account.state else {
             return None;
         };
 
-        let Some(code) = &info.code else {
-            return None;
-        };
-
-        let compilation_result = self.build_cache.built.iter().find(|(_name, result)| {
+        let code = info.code?;
+        let compilation_result = self.build_cache.built.iter().find(|(_, result)| {
             result.code_hash.to_ascii_lowercase() == code.repr_hash().to_string()
         });
 
-        if let Some(result) = compilation_result {
-            return Some(result.1.name.clone());
+        if let Some((_, result)) = compilation_result {
+            return Some(result.name.clone());
         }
 
         None
@@ -1039,13 +1065,13 @@ impl FormatterContext {
         open: char,
         close: char,
     ) -> String {
-        if tuple.0.len() == 1 {
-            return self.format_internal(&tuple.0[0], root, colorize);
+        if tuple.len() == 1 {
+            return self.format_internal(&tuple[0], root, colorize);
         }
 
         let mut res = "".to_string();
         write!(res, "{}", open).ok();
-        for (i, item) in tuple.0.iter().enumerate() {
+        for (i, item) in tuple.iter().enumerate() {
             if i > 0 {
                 write!(res, ", ").ok();
             }
@@ -1320,15 +1346,14 @@ impl FormatterContext {
         let known_contracts = self.collect_known_contracts(&send_results);
         let contract_letters = self.create_contract_letters(&known_contracts);
 
-        let mut builder = "".to_string();
+        let mut builder = String::new();
 
         let contract_type = self.get_contract_type(addr);
-
-        let letter = contract_letters.get(addr);
         if let Some(contract_type) = contract_type {
             builder += format!("{} ", contract_type.cyan()).as_str();
         }
 
+        let letter = contract_letters.get(addr);
         if let Some(letter) = letter {
             builder += format!("{} ", letter.bold()).as_str();
         }

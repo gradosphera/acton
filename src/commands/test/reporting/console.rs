@@ -6,7 +6,7 @@ use crate::{exit_codes, retrace};
 use owo_colors::OwoColorize;
 use std::path::Path;
 use ton_executor::get::{GetMethodResult, GetMethodResultSuccess};
-use ton_source_map::{DebugLocation, SourceLocation};
+use ton_source_map::SourceLocation;
 
 const CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT: i32 = 678;
 const CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE: i32 = 679;
@@ -406,7 +406,7 @@ fn process_nonzero_exit_code(test: &TestReport, result: &GetMethodResultSuccess,
                 .dimmed(),
             );
 
-            let backtrace_lines = format_backtrace(&info.backtrace);
+            let backtrace_lines = FormatterContext::format_backtrace(&info.backtrace);
             for line in backtrace_lines {
                 println!("      {}     {}", "│".dimmed(), line);
             }
@@ -444,32 +444,4 @@ fn process_nonzero_exit_code(test: &TestReport, result: &GetMethodResultSuccess,
             "└─".dimmed()
         );
     }
-}
-
-fn format_backtrace(backtrace: &[DebugLocation]) -> Vec<String> {
-    let max_function_name_len = backtrace
-        .iter()
-        .filter_map(|loc| loc.context.event_function.as_ref())
-        .map(|name| name.len() + 2)
-        .max()
-        .unwrap_or(0);
-
-    let backtrace_lines = backtrace.iter().rev().filter_map(|loc| {
-        let func_name = loc.context.event_function.as_ref()?;
-
-        let location = format!(
-            "{}:{}:{}",
-            SourceLocation::normalize_path(&loc.loc.file),
-            loc.loc.line + 1,
-            loc.loc.column + 2
-        );
-        Some(format!(
-            "{:<width$} at {}",
-            func_name.green(),
-            location.dimmed(),
-            width = max_function_name_len
-        ))
-    });
-
-    backtrace_lines.collect()
 }

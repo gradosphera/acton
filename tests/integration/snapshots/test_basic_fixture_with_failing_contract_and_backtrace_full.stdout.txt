@@ -16,7 +16,6 @@
                    __throw             at contracts/counter[LINE]
                    onInternalMessage   at contracts/counter[LINE]
         
-        
         Cannot find transaction from deployer A EQBvDB..FHByMJ to Counter B EQANZp..QQ5GsV
         with:
           success=true
@@ -30,7 +29,6 @@
             └── at contracts/counter[LINE]
                    __throw             at contracts/counter[LINE]
                    onInternalMessage   at contracts/counter[LINE]
-        
         
         Cannot find transaction from deployer A EQBvDB..FHByMJ to Counter B EQANZp..QQ5GsV
         with:
