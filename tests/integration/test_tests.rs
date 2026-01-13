@@ -710,7 +710,7 @@ fn test_debug_logs_in_contract() {
                     body: beginCell().storeUint(1, 32).endCell(),
                 });
                 val res = net.send(sender.address, msg, 0);
-                println(res);
+                println(sender.address);
             }
         "#,
         )

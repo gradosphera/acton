@@ -41,9 +41,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::{fs, process};
-use ton_executor::ExecutorVerbosity;
 use ton_executor::get::step::StepGetExecutor;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
+use ton_executor::{DEFAULT_CONFIG, ExecutorVerbosity};
 use ton_source_map::SourceMap;
 use tonlib_core::TonAddress;
 use tonlib_core::cell::{ArcCell, Cell, CellBuilder};
@@ -310,7 +310,7 @@ impl<'a> TestRunner<'a> {
         let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) =
             if self.config.debug {
                 let stack = serialize_tuple(&Tuple::empty())?.to_boc_b64(false)?;
-                let mut executor = StepGetExecutor::new(&stack, &params, None)?;
+                let mut executor = StepGetExecutor::new(&stack, &params, Some(DEFAULT_CONFIG))?;
                 ffi::register(&mut executor, &mut ctx);
 
                 let mut dbg_ctx = DebugContext::new(
@@ -352,7 +352,7 @@ impl<'a> TestRunner<'a> {
                 ffi::register(&mut executor, &mut ctx);
 
                 let stack = serialize_tuple(&Tuple::empty())?.to_boc_b64(false)?;
-                let get_result = executor.run_get_method(&stack, &params, None)?;
+                let get_result = executor.run_get_method(&stack, &params, Some(DEFAULT_CONFIG))?;
 
                 if let Some(trace_dir) = &self.config.save_test_trace
                     && let Some(emulations) = ctx.chain.emulations.results_of(&test.name)
