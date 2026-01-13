@@ -51,8 +51,9 @@ fn build_model(
     let content = fs::read_to_string(&contract_path)
         .map_err(|e| anyhow!("Failed to read contract file: {}", e))?;
 
-    let mut abi = abi::contract_abi(&content, contract_path.to_str().unwrap());
-    let handled_messages = abi::extract_handled_messages(&content, contract_path.to_str().unwrap());
+    let contract_path_str = contract_path.to_str().unwrap_or_default();
+    let mut abi = abi::contract_abi(&content, contract_path_str);
+    let handled_messages = abi::extract_handled_messages(&content, contract_path_str);
 
     let file_stem = contract_path
         .file_stem()

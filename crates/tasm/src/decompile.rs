@@ -232,7 +232,7 @@ impl Disassembler {
                 args.push(ArgValue::UInt(value));
             }
             Arg::TinyIntArg(_) => {
-                let value = ((slice.load_uint(4)?.to_i64().unwrap() + 5) & 15) - 5;
+                let value = ((slice.load_uint(4)?.to_i64().unwrap_or(0) + 5) & 15) - 5;
                 args.push(ArgValue::Int(BigInt::from(value)));
             }
             Arg::LargeIntArg(_) => {
@@ -328,7 +328,7 @@ impl Disassembler {
                 args.push(ArgValue::Cell(slice_val));
             }
             Arg::DebugstrArg(_) => {
-                let y = slice.load_uint(4)?.to_u64().unwrap();
+                let y = slice.load_uint(4)?.to_u64().unwrap_or(0);
                 let real_length = (y + 1) * 8;
                 let r = slice.load_prefix(real_length as u16, 0)?;
                 let mut builder = CellBuilder::new();
@@ -354,7 +354,7 @@ impl Disassembler {
             panic!("expected uint for bits")
         };
 
-        let y = slice.load_uint(bits.len as u16)?.to_i64().unwrap();
+        let y = slice.load_uint(bits.len as u16)?.to_i64().unwrap_or(0);
         let real_length = (y * 8 + arg.pad) as u16;
         let mut r = slice.load_prefix(real_length, 0)?;
 

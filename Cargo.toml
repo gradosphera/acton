@@ -114,3 +114,6 @@ base64 = "0.22.1"
 inherits = "release"
 lto = "fat"
 codegen-units = 1
+
+[lints.clippy]
+unwrap-used = "deny"

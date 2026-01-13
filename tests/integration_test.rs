@@ -1,5 +1,8 @@
+#[cfg(test)]
 mod common;
+#[cfg(test)]
 mod integration;
+#[cfg(test)]
 mod support;
 
 use common::ActonCommandExt;

@@ -29,7 +29,7 @@ static MIN_LITERAL_REDACTIONS: &[(&str, &str)] = &[
 
 pub fn assert_ui() -> snapbox::Assert {
     let mut subs = snapbox::Redactions::new();
-    subs.extend(MIN_LITERAL_REDACTIONS.iter().cloned()).unwrap();
+    subs.extend(MIN_LITERAL_REDACTIONS.iter().cloned()).ok();
     add_regex_redactions(&mut subs);
 
     snapbox::Assert::new()
@@ -38,10 +38,10 @@ pub fn assert_ui() -> snapbox::Assert {
 }
 
 fn add_regex_redactions(subs: &mut snapbox::Redactions) {
-    subs.insert("[TIME]", regex!(r"(\d+\.)?\d+ms")).unwrap();
-    subs.insert("[TIME]", regex!(r"(\d+\.)?\d+µs")).unwrap();
-    subs.insert("[TIME]", regex!(r"(\d+\.)?\d+μs")).unwrap();
-    subs.insert("[LINE]", regex!(r"(\.tolk):\d+:\d+")).unwrap();
+    subs.insert("[TIME]", regex!(r"(\d+\.)?\d+ms")).ok();
+    subs.insert("[TIME]", regex!(r"(\d+\.)?\d+µs")).ok();
+    subs.insert("[TIME]", regex!(r"(\d+\.)?\d+μs")).ok();
+    subs.insert("[LINE]", regex!(r"(\.tolk):\d+:\d+")).ok();
 }
 
 #[allow(dead_code)]
@@ -66,7 +66,7 @@ impl ActonCommandExt for snapbox::cmd::Command {
 
 pub fn strip_ansi(s: &str) -> String {
     let bytes = strip_ansi_escapes::strip(s.as_bytes());
-    String::from_utf8(bytes).unwrap()
+    String::from_utf8(bytes).unwrap_or_else(|_| s.to_owned())
 }
 
 pub fn assertion() -> snapbox::Assert {

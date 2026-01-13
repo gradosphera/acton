@@ -456,6 +456,9 @@ fn string_to_slice(s: &str) -> anyhow::Result<ArcCell> {
         next_cell = Some(ArcCell::from(b.build()?));
     }
 
-    let root_cell = next_cell.unwrap();
-    Ok(root_cell)
+    if let Some(root_cell) = next_cell {
+        return Ok(root_cell);
+    }
+
+    anyhow::bail!("No root cell for string");
 }

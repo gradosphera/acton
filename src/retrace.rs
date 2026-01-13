@@ -95,6 +95,5 @@ pub fn find_source_loc(source_map: &SourceMap, hash: &str, offset: u16) -> Optio
 }
 
 pub fn find_installed_actions(vm_logs: &str) -> InstalledActions {
-    let trace = retrace::trace::Trace::new(vm_logs, None);
-    trace.actions()
+    retrace::trace::Trace::new(vm_logs, None).actions()
 }

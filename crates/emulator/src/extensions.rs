@@ -114,7 +114,12 @@ pub unsafe fn with_tuple(ptr: *const c_char, f: impl FnOnce(&mut Tuple)) -> *con
     let c = unsafe { CStr::from_ptr(ptr) };
     let boc = match c.to_str() {
         Ok(s) => s,
-        Err(_) => return CString::new("").unwrap().into_raw().cast_const(),
+        Err(_) => {
+            return CString::new("")
+                .expect("cannot create empty CString")
+                .into_raw()
+                .cast_const();
+        }
     };
 
     let mut tuple = ArcCell::from_boc_b64(boc)

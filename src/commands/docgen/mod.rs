@@ -60,7 +60,7 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
         let relative_path = path.strip_prefix(lib_dir)?;
         let file_stem = relative_path
             .file_stem()
-            .unwrap()
+            .unwrap_or_default()
             .to_string_lossy()
             .to_string();
 
