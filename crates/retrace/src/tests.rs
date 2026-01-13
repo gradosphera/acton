@@ -128,7 +128,7 @@ async fn assert_retrace(
     expected_success: bool,
     expected_hash_ok: bool,
 ) {
-    // well...
+    // SAFETY: well...
     unsafe {
         std::env::set_var(
             "TONCENTER_API_KEY",

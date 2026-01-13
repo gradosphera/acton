@@ -11,3 +11,6 @@ hex = "0.4.3"
 
 [build-dependencies]
 pkg-config = "0.3.32"
+
+[lints]
+workspace = true

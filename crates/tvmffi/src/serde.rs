@@ -62,8 +62,12 @@ pub fn serialize_tuple_item(builder: &mut CellBuilder, src: &TupleItem) -> anyho
 
                 if i > 1 {
                     let mut bc = CellBuilder::new();
-                    bc.store_reference(tail.as_ref().unwrap())?;
-                    bc.store_reference(head.as_ref().unwrap())?;
+                    if let Some(tail) = tail.as_ref() {
+                        bc.store_reference(tail)?;
+                    }
+                    if let Some(head) = head.as_ref() {
+                        bc.store_reference(head)?;
+                    }
                     head = Some(ArcCell::new(bc.build()?));
                 }
 

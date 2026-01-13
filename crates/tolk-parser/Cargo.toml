@@ -7,3 +7,6 @@ edition = "2024"
 tree-sitter = "0.25.10"
 tree-sitter-tolk = "0.0.2"
 anyhow = "1.0.100"
+
+[lints]
+workspace = true

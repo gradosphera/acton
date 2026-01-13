@@ -68,6 +68,7 @@ impl Compiler {
         })
         .expect("Critical error, cannot serializer path to JSON, should not happen");
 
+        // SAFETY: we're calling safe C function
         let compilation_result = unsafe {
             unsafe extern "C" fn read_callback(
                 kind: std::os::raw::c_int,
@@ -92,6 +93,7 @@ impl Compiler {
                 match kind {
                     0 => {
                         let mut relative_path = "".to_string();
+                        // SAFETY: `data_ptr` is valid not-null pointer
                         let relative_path_raw = unsafe {
                             CStr::from_ptr(data_ptr)
                                 .to_str()
@@ -115,6 +117,7 @@ impl Compiler {
                             Err(err) => {
                                 let raw_str = CString::new(err.to_string())
                                     .expect("Failed to create C string");
+                                // SAFETY: `dest_error` is valid not-null pointer
                                 unsafe {
                                     *dest_error = raw_str.into_raw();
                                 }
@@ -124,9 +127,11 @@ impl Compiler {
 
                         let raw_str = CString::new(abs_path)
                             .expect("Failed to create C string from absolute path");
+                        // SAFETY: `dest_contents` is valid not-null pointer
                         unsafe { *dest_contents = raw_str.into_raw() }
                     }
                     1 => {
+                        // SAFETY: `data_ptr` is valid not-null pointer
                         let file_path = unsafe {
                             CStr::from_ptr(data_ptr)
                                 .to_str()
@@ -142,6 +147,7 @@ impl Compiler {
                                         "Cannot read standard library file, file not found",
                                     )
                                     .expect("Failed to create C string");
+                                    // SAFETY: `dest_error` is valid not-null pointer
                                     unsafe {
                                         *dest_error = raw_str.into_raw();
                                     }
@@ -157,6 +163,7 @@ impl Compiler {
                                         "Cannot read Fift standard library file, file not found",
                                     )
                                     .expect("Failed to create C string");
+                                    // SAFETY: `dest_error` is valid not-null pointer
                                     unsafe {
                                         *dest_error = raw_str.into_raw();
                                     }
@@ -169,6 +176,7 @@ impl Compiler {
                                 Err(error) => {
                                     let raw_str = CString::new(error.to_string())
                                         .expect("Failed to create C string from error");
+                                    // SAFETY: `dest_error` is valid not-null pointer
                                     unsafe {
                                         *dest_error = raw_str.into_raw();
                                     }
@@ -179,6 +187,7 @@ impl Compiler {
 
                         let raw_str =
                             CString::new(content).expect("Failed to create C string from content");
+                        // SAFETY: `dest_contents` is valid not-null pointer
                         unsafe { *dest_contents = raw_str.into_raw() }
                     }
                     _ => {}
@@ -190,6 +199,7 @@ impl Compiler {
             tolk_compile(config_cstr.as_ptr(), Some(read_callback))
         };
 
+        // SAFETY: we assume that `compilation_result` is valid C string
         let compilation_result_str = unsafe {
             CString::from_raw(compilation_result.cast_mut())
                 .to_string_lossy()

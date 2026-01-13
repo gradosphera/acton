@@ -282,7 +282,7 @@ fn format_arg(arg: &ArgValue, depth: usize, opts: &FormatOptions) -> String {
 }
 
 fn format_cell(s: &Cell) -> String {
-    let slice = s.as_slice().unwrap();
+    let slice = s.as_slice_allow_exotic();
     format_slice(&slice)
 }
 

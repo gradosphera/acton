@@ -396,11 +396,10 @@ struct InstructionWithRange {
 
 fn dyn_cell_to_cell(cell: &DynCell) -> Cell {
     let mut builder = CellBuilder::new();
-    cell.as_slice()
-        .unwrap()
+    cell.as_slice_allow_exotic()
         .store_into(&mut builder, Cell::empty_context())
         .expect("Cell after encoding must be correct");
-    builder.build().unwrap()
+    builder.build().expect("Cannot build cell from builder")
 }
 
 #[cfg(test)]

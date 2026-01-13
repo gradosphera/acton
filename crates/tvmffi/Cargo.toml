@@ -4,12 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-abi = { path = "../abi" }
-
 num-bigint = "0.4.6"
 num-traits = "0.2.19"
 tonlib-core = "0.26.2"
 anyhow = "1.0.100"
 thiserror = "2.0.17"
 tycho-types = {version =  "0.3.0", features = ["bigint"] }
-owo-colors = "4.2.3"
+
+[lints]
+workspace = true

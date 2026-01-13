@@ -111,6 +111,7 @@ fn cell_to_ffi_boc64(cell: ArcCell) -> *const c_char {
 ///
 /// Well...
 pub unsafe fn with_tuple(ptr: *const c_char, f: impl FnOnce(&mut Tuple)) -> *const c_char {
+    // SAFETY: We assume ptr is always valid C string
     let c = unsafe { CStr::from_ptr(ptr) };
     let boc = match c.to_str() {
         Ok(s) => s,

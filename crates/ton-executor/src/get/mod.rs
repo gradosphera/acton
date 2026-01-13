@@ -70,6 +70,7 @@ impl GetExecutor {
         let params_str = serde_json::to_string(args).context("Failed to serialize args to JSON")?;
         let params_cstr = CString::new(params_str).context("Args JSON contains null bytes")?;
 
+        // SAFETY: `create_tvm_emulator` is safe function
         let emulator_ptr = unsafe { create_tvm_emulator(params_cstr.as_ptr()) };
         let inner = NonNull::new(emulator_ptr).context("create_tvm_emulator returned null")?;
 
@@ -103,6 +104,7 @@ impl GetExecutor {
             .transpose()?;
         let config_ptr = config_cstr.as_ref().map_or(null(), |c| c.as_ptr());
 
+        // SAFETY: `tvm_emulator_set_gas_limit` and `run_get_method` are safe functions
         let run_result_ptr = unsafe {
             // We set a very high gas limit by default for get-methods,
             // as they are typically executed off-chain and for some reason,
@@ -191,6 +193,7 @@ impl GetExecutor {
             anyhow::bail!("Extension method with id {id} already registered");
         }
 
+        // SAFETY: `transaction_emulator_register_extmethod` is safe function
         unsafe {
             tvm_emulator_register_extmethod(
                 self.inner.as_ptr(),

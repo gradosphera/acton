@@ -74,6 +74,7 @@ impl StepExecutor {
     pub fn new() -> anyhow::Result<Self> {
         let config_cstr =
             CString::new(DEFAULT_CONFIG).context("DEFAULT_CONFIG contains null bytes")?;
+        // SAFETY: `create_emulator` is safe function
         let emulator_ptr = unsafe { create_emulator(config_cstr.as_ptr(), 5) };
         let inner = NonNull::new(emulator_ptr).context("create_emulator returned null")?;
 
@@ -106,6 +107,7 @@ impl StepExecutor {
             serde_json::to_string(&internal_params).context("cannot serialize params to JSON")?;
         let params_cstr = CString::new(params_str).context("params string contains null bytes")?;
 
+        // SAFETY: `emulate_sbs` is safe function
         let result_ptr = unsafe {
             emulate_sbs(
                 self.inner.as_ptr(),
@@ -120,6 +122,7 @@ impl StepExecutor {
             anyhow::bail!("emulate_sbs returned null pointer");
         }
 
+        // SAFETY: `result_ptr` is valid non-null pointer
         let output_str = unsafe { CStr::from_ptr(result_ptr).to_string_lossy() };
         let result: PrepareResult = serde_json::from_str(&output_str).with_context(|| {
             format!(
@@ -133,54 +136,65 @@ impl StepExecutor {
 
     /// Executes the next step. Returns `true` if execution is finished, `false` otherwise.
     pub fn step(&self) -> bool {
+        // SAFETY: `em_sbs_c7` is safe function
         unsafe { em_sbs_step(self.inner.as_ptr()) }
     }
 
     /// Gets the current code position (Base64 BoC).
     pub fn get_code_pos(&self) -> String {
+        // SAFETY: `em_sbs_code_pos` is safe function
         let ptr = unsafe { em_sbs_code_pos(self.inner.as_ptr()) };
         if ptr.is_null() {
             return String::new();
         }
+        // SAFETY: `ptr` is valid non-null pointer
         unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
     }
 
     /// Gets the current stack (Base64 BoC).
     pub fn get_stack(&self) -> String {
+        // SAFETY: `em_sbs_stack` is safe function
         let ptr = unsafe { em_sbs_stack(self.inner.as_ptr()) };
         if ptr.is_null() {
             return String::new();
         }
+        // SAFETY: `ptr` is valid non-null pointer
         unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
     }
 
     /// Gets the current C7 register (Base64 BoC).
     pub fn get_c7(&self) -> String {
+        // SAFETY: `em_sbs_c7` is safe function
         let ptr = unsafe { em_sbs_c7(self.inner.as_ptr()) };
         if ptr.is_null() {
             return String::new();
         }
+        // SAFETY: `ptr` is valid non-null pointer
         unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
     }
 
     /// Gets a specific control register (Base64 BoC).
     pub fn get_control_register(&self, idx: usize) -> String {
+        // SAFETY: `transaction_emulator_sbs_get_control_register` is safe function
         let ptr = unsafe {
             transaction_emulator_sbs_get_control_register(self.inner.as_ptr(), idx as c_int)
         };
         if ptr.is_null() {
             return String::new();
         }
+        // SAFETY: `ptr` is valid non-null pointer
         unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
     }
 
     /// Finishes the transaction and returns the result.
     pub fn finish_transaction(&self) -> anyhow::Result<EmulationResult> {
+        // SAFETY: `em_sbs_result` is safe function
         let result_ptr = unsafe { em_sbs_result(self.inner.as_ptr()) };
         if result_ptr.is_null() {
             anyhow::bail!("em_sbs_result returned null pointer");
         }
 
+        // SAFETY: `result_ptr` is valid non-null pointer
         let output_str = unsafe { CStr::from_ptr(result_ptr).to_string_lossy() };
         let result = serde_json::from_str::<EmulationResult>(&output_str)
             .with_context(|| format!("Failed to parse emulation result JSON: {}", output_str))?;
@@ -198,6 +212,7 @@ impl StepExecutor {
             anyhow::bail!("Extension method with id {id} already registered");
         }
 
+        // SAFETY: `transaction_emulator_register_extmethod` is safe function
         unsafe {
             crate::message::transaction_emulator_register_extmethod(
                 self.inner.as_ptr(),

@@ -72,6 +72,7 @@ impl StepGetExecutor {
 
         let stack_b64_cstr = CString::new(stack_b64).context("Stack BoC contains null bytes")?;
 
+        // SAFETY: `setup_sbs_get_method` is safe function
         let emulator_ptr = unsafe {
             setup_sbs_get_method(params_cstr.as_ptr(), stack_b64_cstr.as_ptr(), config_ptr)
         };
@@ -88,6 +89,7 @@ impl StepGetExecutor {
     pub fn prepare(&self, method_id: i32, stack_b64: &str) -> anyhow::Result<()> {
         let stack_b64_cstr = CString::new(stack_b64).context("Stack BoC contains null bytes")?;
 
+        // SAFETY: `tvm_emulator_set_gas_limit` and `tvm_emulator_sbs_run_get_method` are safe function
         unsafe {
             // We set a very high gas limit by default for get-methods,
             // as they are typically executed off-chain and for some reason,
@@ -101,53 +103,64 @@ impl StepGetExecutor {
 
     /// Executes the next step. Returns `true` if execution is finished, `false` otherwise.
     pub fn step(&self) -> bool {
+        // SAFETY: `sbs_step` is safe function
         unsafe { sbs_step(self.inner.as_ptr()) }
     }
 
     /// Gets the current code position (Base64 BoC).
     pub fn get_code_pos(&self) -> String {
+        // SAFETY: `sbs_get_code_pos` is safe function
         let ptr = unsafe { sbs_get_code_pos(self.inner.as_ptr()) };
         if ptr.is_null() {
             return String::new();
         }
+        // SAFETY: `ptr` is valid non-null pointer
         unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
     }
 
     /// Gets the current stack (Base64 BoC).
     pub fn get_stack(&self) -> String {
+        // SAFETY: `sbs_get_stack` is safe function
         let ptr = unsafe { sbs_get_stack(self.inner.as_ptr()) };
         if ptr.is_null() {
             return String::new();
         }
+        // SAFETY: `ptr` is valid non-null pointer
         unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
     }
 
     /// Gets the current C7 register (Base64 BoC).
     pub fn get_c7(&self) -> String {
+        // SAFETY: `sbs_get_c7` is safe function
         let ptr = unsafe { sbs_get_c7(self.inner.as_ptr()) };
         if ptr.is_null() {
             return String::new();
         }
+        // SAFETY: `ptr` is valid non-null pointer
         unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
     }
 
     /// Gets a specific control register (Base64 BoC).
     pub fn get_control_register(&self, idx: usize) -> String {
+        // SAFETY: `tvm_emulator_sbs_get_control_register` is safe function
         let ptr =
             unsafe { tvm_emulator_sbs_get_control_register(self.inner.as_ptr(), idx as c_int) };
         if ptr.is_null() {
             return String::new();
         }
+        // SAFETY: `ptr` is valid non-null pointer
         unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
     }
 
     /// Finishes the get-method execution and returns the result.
     pub fn finish(&self, code: &str) -> anyhow::Result<GetMethodResult> {
+        // SAFETY: `sbs_get_method_result` is safe function
         let result_ptr = unsafe { sbs_get_method_result(self.inner.as_ptr()) };
         if result_ptr.is_null() {
             anyhow::bail!("sbs_get_method_result returned null pointer");
         }
 
+        // SAFETY: `result_ptr` is valid non-null pointer
         let output_str = unsafe { CStr::from_ptr(result_ptr).to_string_lossy() };
         let result: GetMethodResult = serde_json::from_str(&output_str)
             .with_context(|| format!("Failed to parse get method result JSON: {}", output_str))?;
@@ -174,6 +187,7 @@ impl StepGetExecutor {
             anyhow::bail!("Extension method with id {id} already registered");
         }
 
+        // SAFETY: `tvm_emulator_register_extmethod` is safe function
         unsafe {
             get::tvm_emulator_register_extmethod(
                 self.inner.as_ptr(),

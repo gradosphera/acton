@@ -109,6 +109,7 @@ fn test_executor_with_ext_method() -> anyhow::Result<()> {
     }
 
     unsafe extern "C" fn my_callback(ctx: *mut MyContext, _arg: *const c_char) -> *const c_char {
+        // SAFETY: `called_count` is valid non-null pointer
         unsafe {
             (*ctx).called_count += 1;
         }

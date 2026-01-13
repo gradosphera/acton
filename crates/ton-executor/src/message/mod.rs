@@ -225,6 +225,7 @@ impl Executor {
             anyhow::bail!("Extension method with id {id} already registered");
         }
 
+        // SAFETY: `transaction_emulator_register_extmethod` is safe function
         unsafe {
             transaction_emulator_register_extmethod(
                 self.inner.as_ptr(),

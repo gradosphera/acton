@@ -198,7 +198,9 @@ pub fn get_file_dependencies(file_path: &str, include_itself: bool) -> anyhow::R
 pub fn contract_abi(content: &str, file_path: &str) -> ContractAbi {
     let contract_name = get_contract_name_from_file_path(file_path);
 
-    let tree = tolk_parser::parser::parse(content).unwrap();
+    let Ok(tree) = tolk_parser::parser::parse(content) else {
+        return Default::default();
+    };
     let root_node = tree.root_node();
 
     let files = collect_imported_files(&root_node, content, file_path);
@@ -319,7 +321,9 @@ fn collect_imported_files(
     let mut files = Vec::new();
     let mut processed = HashSet::new();
 
-    let tree = tolk_parser::parser::parse(content).unwrap();
+    let Ok(tree) = tolk_parser::parser::parse(content) else {
+        return vec![];
+    };
     files.push(FileInfo {
         path: file_path.to_string(),
         content: content.to_string(),

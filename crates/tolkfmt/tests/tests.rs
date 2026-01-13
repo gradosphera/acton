@@ -8,7 +8,7 @@ pub fn check(code: &str, expect: Expect) {
 pub fn check_with_width(code: &str, expect: Expect, width: usize) {
     // unsafe { std::env::set_var("UPDATE_EXPECT", "1") }
 
-    let res = format_source(code, width).unwrap();
+    let res = format_source(code, width).expect("cannot format source");
 
     let res = res
         .lines()

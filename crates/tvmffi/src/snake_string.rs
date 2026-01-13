@@ -56,7 +56,10 @@ impl Tuple {
                 break;
             }
 
-            next_data_ref = parser.next_reference().unwrap()
+            next_data_ref = match parser.next_reference() {
+                Ok(cell) => cell,
+                Err(_) => break,
+            }
         }
 
         let result = String::from_utf8(all_bits).ok()?;
@@ -74,8 +77,10 @@ impl Tuple {
         if total_bits <= 1015 {
             // Fast path, the string fits in one cell
             let mut b = CellBuilder::new();
-            b.store_bits(total_bits, bytes).unwrap();
-            self.push(TupleItem::Slice(b.build().unwrap().into()));
+            b.store_bits(total_bits, bytes).ok();
+            self.push(TupleItem::Slice(
+                b.build().expect("cannot build cell").into(),
+            ));
             return;
         }
 
@@ -94,17 +99,18 @@ impl Tuple {
 
         for (chunk, bits) in cell_data.into_iter().rev() {
             let mut b = CellBuilder::new();
-            b.store_bits(bits, chunk).unwrap();
+            b.store_bits(bits, chunk).ok();
 
             if let Some(next) = next_cell {
-                b.store_reference(&next).unwrap();
+                b.store_reference(&next).ok();
             }
 
-            next_cell = Some(ArcCell::from(b.build().unwrap()));
+            next_cell = Some(ArcCell::from(b.build().expect("cannot build cell")));
         }
 
-        let root_cell = next_cell.unwrap();
-        self.push(TupleItem::Slice(root_cell));
+        if let Some(root_cell) = next_cell {
+            self.push(TupleItem::Slice(root_cell));
+        }
     }
 }
 
