@@ -59,8 +59,8 @@ fn find_expect_calls(
             let start = args_node.end_byte() - 1;
             let end = args_node.end_byte() - 1;
 
-            let lines: Vec<&str> = content[..start].lines().collect();
-            let line_number = lines.len();
+            let lines = content[..start].lines();
+            let line_number = lines.count();
 
             let location = format!(", \"{file_path}:{line_number}:{column}\"",);
             replacements.push((start, end, location));

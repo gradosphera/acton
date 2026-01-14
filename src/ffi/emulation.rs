@@ -149,7 +149,7 @@ fn build_impl(
                 &path,
                 &success.code_boc64,
                 &success.code_hash_hex,
-                success.source_map.unwrap_or(Default::default()),
+                success.source_map.unwrap_or_default(),
                 Some(contract_abi(&content, &path)),
             );
             let code_cell = ArcCell::from_boc_b64(&success.code_boc64).map_err(|e| {
@@ -820,7 +820,7 @@ fn run_get_method_impl(
         .map(|s| s.state);
 
     let data = if let Some(AccountState::Active(state)) = state {
-        state.data.unwrap_or(Cell::default())
+        state.data.unwrap_or_default()
     } else {
         Cell::default()
     };
@@ -1265,7 +1265,7 @@ fn wait_for_transaction_impl(
                         let hex = base64::engine::general_purpose::STANDARD
                             .decode(tx.transaction_id.hash.clone())
                             .map(hex::encode)
-                            .unwrap_or(tx.transaction_id.hash.clone());
+                            .unwrap_or_else(|_| tx.transaction_id.hash.clone());
                         println!("Transaction successfully applied!");
 
                         let url = get_transaction_link(ctx, address_str, tx, hex);

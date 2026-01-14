@@ -47,10 +47,10 @@ impl DebuggerClient {
         let mut client = DapClient::connect(address)?;
         client.start()?;
         client.initialize()?;
-        wait_for_initialized(&mut client)?;
+        wait_for_initialized(&client)?;
         client.configuration_done()?;
         client.launch()?;
-        wait_for_stopped(&mut client)?;
+        wait_for_stopped(&client)?;
 
         Ok(Self { client })
     }
@@ -120,7 +120,7 @@ impl DebuggerClient {
     }
 }
 
-fn wait_for_initialized(client: &mut DapClient) -> anyhow::Result<()> {
+fn wait_for_initialized(client: &DapClient) -> anyhow::Result<()> {
     loop {
         if let Ok(Some(event)) = client.try_receive_event(Duration::from_secs(1))
             && matches!(event, Event::Initialized)
@@ -131,7 +131,7 @@ fn wait_for_initialized(client: &mut DapClient) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn wait_for_stopped(client: &mut DapClient) -> anyhow::Result<()> {
+fn wait_for_stopped(client: &DapClient) -> anyhow::Result<()> {
     loop {
         if let Ok(Some(event)) = client.try_receive_event(Duration::from_millis(100))
             && matches!(event, Event::Stopped(_))
@@ -176,7 +176,7 @@ pub(crate) fn run_script_file(
                 &code_cell,
                 &data_cell,
                 &abi,
-                &result.source_map.unwrap_or(Default::default()),
+                &result.source_map.unwrap_or_default(),
                 debug_port,
                 ExecutorVerbosity::FullLocationStackVerbose,
                 stack,

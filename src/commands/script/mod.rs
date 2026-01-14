@@ -128,7 +128,7 @@ fn run_script_file(
                 &data_cell,
                 stack,
                 &abi,
-                &result.source_map.unwrap_or(Default::default()),
+                &result.source_map.unwrap_or_default(),
                 debug,
                 debug_port,
                 ExecutorVerbosity::FullLocationStackVerbose,

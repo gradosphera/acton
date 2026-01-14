@@ -409,7 +409,7 @@ impl DebugContext {
                     ext_info
                         .dst
                         .as_ref()
-                        .map_or("None".to_string(), ToString::to_string)
+                        .map_or_else(|| "None".to_owned(), ToString::to_string)
                 )
             }
         }

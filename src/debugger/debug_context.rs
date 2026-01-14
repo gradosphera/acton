@@ -176,7 +176,7 @@ impl Stepper {
                     .clone()
                     .context
                     .event_function
-                    .unwrap_or(loc.context.containing_function.to_string())
+                    .unwrap_or_else(|| loc.context.containing_function.to_owned())
                     .clone();
 
                 let step = match loc.context.event.as_deref() {
@@ -191,7 +191,7 @@ impl Stepper {
                             loc.clone()
                                 .context
                                 .event_function
-                                .unwrap_or(loc.context.containing_function.to_string())
+                                .unwrap_or_else(|| loc.context.containing_function.to_owned())
                                 .clone(),
                         ),
                         loc: Some(loc),
@@ -452,7 +452,10 @@ impl DebugContext {
                 self.send_response(rsp)?;
                 self.send_event(Event::Initialized)?;
 
-                println!("Client: {}", client_name.unwrap_or("Unknown".to_string()));
+                println!(
+                    "Client: {}",
+                    client_name.unwrap_or_else(|| "Unknown".to_owned())
+                );
             }
             Command::Launch(_args) => {
                 let rsp = req.success(ResponseBody::Launch);
@@ -752,7 +755,7 @@ impl DebugContext {
             stepper
                 .callstacks
                 .first()
-                .unwrap_or(stepper.get_callstack())
+                .unwrap_or_else(|| stepper.get_callstack())
         } else if stepper.thread_id > 1 {
             stepper.get_callstack()
         } else {

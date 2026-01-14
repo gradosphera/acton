@@ -89,7 +89,7 @@ pub mod error_fmt {
         }
         let path = Path::new(path);
 
-        let cwd = std::env::current_dir().unwrap_or(".".into());
+        let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
         let absolute_path = if path.is_absolute() {
             path.to_path_buf()
         } else {

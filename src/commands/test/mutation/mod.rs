@@ -386,10 +386,10 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
             continue;
         }
 
-        let exe = std::env::current_exe().unwrap_or(PathBuf::from("acton"));
+        let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("acton"));
         let mut cmd = process::Command::new(exe);
         cmd.arg("test")
-            .arg(path.as_ref().unwrap_or(&".".to_owned()))
+            .arg(path.as_deref().unwrap_or("."))
             .arg("--fail-fast")
             .arg("--mutate-overrides")
             .arg(format!("{mutate_contract}:{code_b64}"));
@@ -556,7 +556,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
 }
 
 fn compile_file(path: &str) -> anyhow::Result<String> {
-    let exe = std::env::current_exe().unwrap_or(PathBuf::from("acton"));
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("acton"));
     let mut cmd = process::Command::new(exe);
     let cmd = cmd.arg("compile").arg("--json").arg(path);
 

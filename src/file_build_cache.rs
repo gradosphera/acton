@@ -221,10 +221,11 @@ impl FileBuildCache {
         let file_deps = abi::get_file_dependencies(file_path, true)
             .map_err(|e| anyhow!("Failed to get file dependencies: {e}"))?;
 
-        let file_path = fs::canonicalize(file_path).unwrap_or(PathBuf::from(&file_path));
+        let file_path = fs::canonicalize(file_path).unwrap_or_else(|_| PathBuf::from(&file_path));
         let contracts = self.config.contracts.clone().unwrap_or_default().contracts;
         let Some((_, contract_info)) = contracts.iter().find(|(_, config)| {
-            fs::canonicalize(&config.src).unwrap_or(PathBuf::from(&config.src)) == file_path
+            fs::canonicalize(&config.src).unwrap_or_else(|_| PathBuf::from(&config.src))
+                == file_path
         }) else {
             return Ok(file_deps);
         };
@@ -278,11 +279,10 @@ impl FileBuildCache {
         for dep_path in &normalized_deps {
             if fs::metadata(dep_path).is_ok() {
                 hasher.update(Self::sha256_file(dep_path)?);
-                hasher.update(dep_path.as_bytes());
             } else {
                 hasher.update(b"FILE_NOT_FOUND:");
-                hasher.update(dep_path.as_bytes());
             }
+            hasher.update(dep_path.as_bytes());
         }
 
         let result = hasher.finalize();

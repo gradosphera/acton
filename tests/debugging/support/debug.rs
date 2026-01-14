@@ -366,7 +366,7 @@ impl ExecutionTrace {
                     .cloned()
                     .unwrap_or_default()
                     .instruction_pointer_reference
-                    .unwrap_or("<unknown-position>".to_owned())
+                    .unwrap_or_else(|| "<unknown-position>".to_owned())
             ));
 
             if !step.code_context.is_empty() {

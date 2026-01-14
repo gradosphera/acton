@@ -105,7 +105,7 @@ impl FormatterContext {
 
         slice
             .to_boc_hex(false)
-            .unwrap_or("<invalid slice>".to_string())
+            .unwrap_or_else(|_| "<invalid slice>".to_owned())
     }
 
     fn address_to_string(&self, address: &TonAddress) -> String {
@@ -138,7 +138,7 @@ impl FormatterContext {
 
         slice
             .to_boc_hex(false)
-            .unwrap_or("invalid address".to_string())
+            .unwrap_or_else(|_| "invalid address".to_owned())
     }
 
     fn arc_cell_to_addr(slice: &ArcCell) -> Option<IntAddr> {
@@ -274,10 +274,10 @@ impl FormatterContext {
     }
 
     /// Build transaction tree from `SendResult` list
-    fn build_transaction_tree(&self, mut send_results: Vec<SendResult>) -> Vec<TransactionNode> {
+    fn build_transaction_tree(&self, send_results: Vec<SendResult>) -> Vec<TransactionNode> {
         let mut lt_to_result: HashMap<i64, SendResult> = HashMap::new();
 
-        for result in send_results.drain(..) {
+        for result in send_results.into_iter() {
             lt_to_result.insert(result.tx.lt as i64, result);
         }
 
@@ -543,9 +543,10 @@ impl FormatterContext {
         let mut result = String::new();
         let mut extra_infos = vec![];
 
+        let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
+
         if let ComputePhase::Executed(compute) = info.compute_phase {
             // Add padding to align metadata
-            let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
             result += &" ".repeat(padding_len);
             result += &format!("gas={}", compute.gas_used.to_string().as_str())
                 .dimmed()
@@ -579,7 +580,6 @@ impl FormatterContext {
                 );
             }
         } else {
-            let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
             result += format!(
                 "{}{}",
                 " ".repeat(padding_len),
@@ -973,6 +973,7 @@ impl FormatterContext {
         }
     }
 
+    #[allow(clippy::useless_let_if_seq)]
     fn extract_opcode(in_msg: &RelaxedMessage) -> u32 {
         let mut body = in_msg.body;
         let bounced = match &in_msg.info {
@@ -1187,13 +1188,13 @@ impl FormatterContext {
             TupleItem::Cell(cell) => {
                 let s = cell
                     .to_boc_hex(false)
-                    .unwrap_or("<invalid cell>".to_owned());
+                    .unwrap_or_else(|_| "<invalid cell>".to_owned());
                 if colorize { s.dimmed().to_string() } else { s }
             }
             TupleItem::Builder(cell) => {
                 let s = cell
                     .to_boc_hex(false)
-                    .unwrap_or("<invalid builder>".to_owned());
+                    .unwrap_or_else(|_| "<invalid builder>".to_owned());
                 if colorize { s.dimmed().to_string() } else { s }
             }
             TupleItem::Tuple(items) => self.format_tuple(items, root, colorize),
@@ -1599,10 +1600,10 @@ impl FormatterContext {
                 format!("0x{opcode:x}").green(),
                 opcode_type
                     .map(|typ| typ.name)
-                    .unwrap_or(if opcode == 0 {
-                        "empty".to_string()
+                    .unwrap_or_else(|| if opcode == 0 {
+                        "empty".to_owned()
                     } else {
-                        "unknown".to_string()
+                        "unknown".to_owned()
                     })
                     .purple()
                     .bold()

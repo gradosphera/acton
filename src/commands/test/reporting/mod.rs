@@ -223,7 +223,7 @@ pub(super) fn extract_suite_name(file_path: &Path) -> String {
     file_path
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or(file_path.to_str().unwrap_or(""))
+        .unwrap_or_else(|| file_path.to_str().unwrap_or(""))
         .to_string()
 }
 

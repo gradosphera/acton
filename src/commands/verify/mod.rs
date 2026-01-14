@@ -33,8 +33,8 @@ pub fn verify_cmd(
     let contract = config
         .get_contract(&contract_key)
         .ok_or_else(|| anyhow!(error_fmt::contract_not_found(&config, &contract_key)))?;
-    let contract_path =
-        fs::canonicalize(contract.src.clone()).unwrap_or(PathBuf::from(contract.src.clone()));
+    let contract_path = fs::canonicalize(contract.src.clone())
+        .unwrap_or_else(|_| PathBuf::from(contract.src.clone()));
 
     Network::from_str(&network)?; // validate
 

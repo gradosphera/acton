@@ -427,7 +427,10 @@ pub enum DebugCtx<'a> {
 impl Context<'_> {
     #[must_use]
     pub fn network(&self) -> String {
-        self.env.fork_net.clone().unwrap_or("testnet".to_owned())
+        self.env
+            .fork_net
+            .clone()
+            .unwrap_or_else(|| "testnet".to_owned())
     }
 }
 

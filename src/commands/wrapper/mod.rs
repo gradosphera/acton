@@ -366,15 +366,13 @@ fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> 
                 .as_deref()
                 .unwrap_or("Storage"),
         ));
-        code.push('\n');
     } else {
         code.push_str(&generate_empty_from_storage(contract, &model.contract_id));
-        code.push('\n');
     }
 
+    code.push('\n');
     code.push_str(&generate_from_address(contract));
     code.push('\n');
-
     code.push_str(&generate_deploy(contract));
     code.push('\n');
 

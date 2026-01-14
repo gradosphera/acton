@@ -733,7 +733,7 @@ fn run_tests_for_file(runner: &mut TestRunner, file: &str) -> anyhow::Result<Tes
                 tests,
                 &code_cell,
                 &abi,
-                &result.source_map.unwrap_or(Default::default()),
+                &result.source_map.unwrap_or_default(),
             )?;
             Ok(stats)
         }
@@ -754,7 +754,7 @@ fn run_file_tests(
     abi: &ContractAbi,
     source_map: &SourceMap,
 ) -> anyhow::Result<TestStats> {
-    let abs_file_path = fs::canonicalize(file_path).unwrap_or(PathBuf::from(file_path));
+    let abs_file_path = fs::canonicalize(file_path).unwrap_or_else(|_| PathBuf::from(file_path));
     let filtered_tests = if let Some(pattern) = &runner.config.filter {
         let regex = match Regex::new(pattern) {
             Ok(r) => r,
