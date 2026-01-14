@@ -58,7 +58,7 @@
 //! # Ok(())
 //! # }
 //! ```
-
+#![allow(unsafe_code)]
 pub mod step;
 mod tests;
 pub mod types;

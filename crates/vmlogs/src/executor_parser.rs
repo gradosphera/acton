@@ -60,6 +60,7 @@ pub enum ExecutorLine<'a> {
     },
 }
 
+#[allow(unsafe_code)]
 fn number<'a>(i: &mut I<'a>) -> PResult<&'a str> {
     let start_ptr = i.as_ptr();
     let start = start_ptr as usize;

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 #[derive(Debug, Clone)]
-pub struct JUnitConfig {
+pub(crate) struct JUnitConfig {
     pub output_dir: PathBuf,
     pub merge_suites: bool,
     pub include_system_out: bool,
@@ -34,14 +34,14 @@ struct JUnitTestSuite {
     timestamp: SystemTime,
 }
 
-pub struct JUnitReporter {
+pub(crate) struct JUnitReporter {
     config: JUnitConfig,
     suites: BTreeMap<String, JUnitTestSuite>,
     current_suite: Option<String>,
 }
 
 impl JUnitReporter {
-    pub fn new(config: JUnitConfig) -> Self {
+    pub(crate) fn new(config: JUnitConfig) -> Self {
         Self {
             config,
             suites: BTreeMap::new(),

@@ -10,7 +10,7 @@ use tycho_types::boc::Boc;
 use tycho_types::models::IntAddr;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TestTrace {
+pub(super) struct TestTrace {
     pub name: String,
     pub pos: Pos,
     pub traces: Vec<TransactionList>,
@@ -19,12 +19,12 @@ pub struct TestTrace {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionList {
+pub(super) struct TransactionList {
     pub transactions: Vec<TransactionInfo>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ContractInfo {
+pub(super) struct ContractInfo {
     pub name: String,
     pub code_boc64: String,
     pub source_map: SourceMap,
@@ -32,7 +32,7 @@ pub struct ContractInfo {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionInfo {
+pub(super) struct TransactionInfo {
     pub lt: String,
     pub raw_transaction: String,
     pub parent_transaction: Option<String>,
@@ -45,7 +45,7 @@ pub struct TransactionInfo {
     pub dest_contract_info: Option<String>,
 }
 
-pub fn dump_test_transactions(
+pub(super) fn dump_test_transactions(
     test: &TestDescriptor,
     build_cache: &BuildCache,
     known_addresses: &KnownAddresses,

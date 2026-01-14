@@ -9,11 +9,11 @@ use ton_executor::get::GetMethodResult;
 use ton_source_map::SourceMap;
 use tycho_types::models::ShardAccount;
 
-pub mod console;
-pub mod dot;
-pub mod junit;
-pub mod teamcity;
-pub mod ui;
+pub(super) mod console;
+pub(super) mod dot;
+pub(super) mod junit;
+pub(super) mod teamcity;
+pub(super) mod ui;
 
 #[derive(Debug, Clone)]
 pub struct TestExecutionContext {

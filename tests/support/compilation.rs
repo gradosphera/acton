@@ -2,14 +2,14 @@ use std::collections::HashMap;
 
 /// Helper for checking compilation order in build output
 #[allow(dead_code)]
-pub struct CompilationOrder {
+pub(crate) struct CompilationOrder {
     positions: HashMap<String, usize>,
 }
 
 #[allow(dead_code)]
 impl CompilationOrder {
     /// Extract compilation order from build stdout
-    pub fn from_stdout(stdout: &str) -> Self {
+    pub(crate) fn from_stdout(stdout: &str) -> Self {
         let mut positions = HashMap::new();
         let compiled = extract_compiled_contracts(stdout);
         for contract in compiled {
@@ -21,7 +21,7 @@ impl CompilationOrder {
     }
 
     /// Assert that first contract was compiled before second
-    pub fn assert_before(&self, first: &str, second: &str) {
+    pub(crate) fn assert_before(&self, first: &str, second: &str) {
         let first_pos = self
             .positions
             .get(first)
@@ -38,26 +38,26 @@ impl CompilationOrder {
     }
 
     /// Assert that contracts were compiled in the given order
-    pub fn assert_chain(&self, contracts: &[&str]) {
+    pub(crate) fn assert_chain(&self, contracts: &[&str]) {
         for i in 0..contracts.len() - 1 {
             self.assert_before(contracts[i], contracts[i + 1]);
         }
     }
 
     /// Get number of compiled contracts
-    pub fn count(&self) -> usize {
+    pub(crate) fn count(&self) -> usize {
         self.positions.len()
     }
 
     /// Check if specific contract was compiled
-    pub fn contains(&self, contract: &str) -> bool {
+    pub(crate) fn contains(&self, contract: &str) -> bool {
         self.positions.contains_key(contract)
     }
 }
 
 /// Extract list of compiled contracts from build stdout
 #[allow(dead_code)]
-pub fn extract_compiled_contracts(stdout: &str) -> Vec<String> {
+pub(crate) fn extract_compiled_contracts(stdout: &str) -> Vec<String> {
     stdout
         .lines()
         .filter_map(|line| {

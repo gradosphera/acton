@@ -286,7 +286,7 @@ fn format_cell(s: &Cell) -> String {
     format_slice(&slice)
 }
 
-fn format_slice(slice: &CellSlice) -> String {
+fn format_slice(slice: &CellSlice<'_>) -> String {
     if slice.size_refs() == 0 {
         format!("x{{{}}}", slice.display_data())
     } else {

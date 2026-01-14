@@ -304,7 +304,7 @@ impl FileBuildCache {
     }
 
     pub fn clear(&mut self) -> Result<()> {
-        let _ = fs2::FileExt::unlock(&self._lock_file);
+        let _ = FileExt::unlock(&self._lock_file);
 
         if self.cache_dir.exists() {
             fs::remove_dir_all(&self.cache_dir)?;
@@ -339,7 +339,7 @@ impl FileBuildCache {
 
     fn sha256_file(path: &str) -> Result<[u8; 32]> {
         let mut h = Sha256::new();
-        let mut f = BufReader::new(fs::File::open(path)?);
+        let mut f = BufReader::new(File::open(path)?);
         let mut buf = [0u8; 64 * 1024];
         loop {
             let n = f.read(&mut buf)?;
@@ -354,7 +354,7 @@ impl FileBuildCache {
 
 impl Drop for FileBuildCache {
     fn drop(&mut self) {
-        let _ = fs2::FileExt::unlock(&self._lock_file);
+        let _ = FileExt::unlock(&self._lock_file);
     }
 }
 

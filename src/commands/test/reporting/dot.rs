@@ -2,12 +2,12 @@ use super::{TestReport, TestReporter, TestStatus};
 use owo_colors::OwoColorize;
 use std::io::{Write, stdout};
 
-pub struct DotReporter {
+pub(crate) struct DotReporter {
     tests: Vec<TestReport>,
 }
 
 impl DotReporter {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { tests: Vec::new() }
     }
 

@@ -4,12 +4,12 @@ use crate::context::AssertFailure;
 use crate::formatter::FormatterContext;
 use std::path::Path;
 
-pub struct TeamCityReporter {
+pub(crate) struct TeamCityReporter {
     formatter: Option<FormatterContext>,
 }
 
 impl TeamCityReporter {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { formatter: None }
     }
 

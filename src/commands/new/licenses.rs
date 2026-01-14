@@ -1,4 +1,4 @@
-pub fn get_license_text(license: &str, year: &str, author: &str) -> Option<String> {
+pub(super) fn get_license_text(license: &str, year: &str, author: &str) -> Option<String> {
     let text = match license {
         "MIT" => MIT_LICENSE,
         "Apache-2.0" => APACHE_2_0_LICENSE,

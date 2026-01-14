@@ -174,7 +174,7 @@ pub struct DebugInfo {
     pub line_off: String,
 }
 
-fn slice_to_string(slice: &mut CellSlice, len: usize) -> anyhow::Result<String> {
+fn slice_to_string(slice: &mut CellSlice<'_>, len: usize) -> anyhow::Result<String> {
     let mut out = String::new();
     for _ in 0..len {
         let bit = slice.load_bit()?;
@@ -183,7 +183,7 @@ fn slice_to_string(slice: &mut CellSlice, len: usize) -> anyhow::Result<String> 
     Ok(out)
 }
 
-fn read_label(slice: &mut CellSlice, m: usize) -> anyhow::Result<String> {
+fn read_label(slice: &mut CellSlice<'_>, m: usize) -> anyhow::Result<String> {
     if slice.load_bit()? {
         if slice.load_bit()? {
             let bit = slice.load_bit()?;
@@ -295,7 +295,7 @@ pub fn parse_marks_dict(
             hash.clone() // TODO: or return?
         };
 
-        let dict_inner = Dict::<u32, CellSlice>::load_from(&mut slice)?;
+        let dict_inner = Dict::<u32, CellSlice<'_>>::load_from(&mut slice)?;
 
         for kv in dict_inner.iter() {
             let Ok(mut kv) = kv else { continue };

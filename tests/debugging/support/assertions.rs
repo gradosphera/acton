@@ -1,16 +1,16 @@
 use crate::debugging::support::debug::DebugResult;
 
-pub struct DebugTestOutput {
+pub(crate) struct DebugTestOutput {
     pub result: DebugResult,
 }
 
 impl DebugTestOutput {
-    pub fn new(result: DebugResult) -> Self {
+    pub(crate) fn new(result: DebugResult) -> Self {
         Self { result }
     }
 }
 
-pub trait DebugTestOutputExt {
+pub(crate) trait DebugTestOutputExt {
     fn assert_trace_steps(&self, expected_count: usize) -> &Self;
     fn assert_variable_at_step(
         &self,

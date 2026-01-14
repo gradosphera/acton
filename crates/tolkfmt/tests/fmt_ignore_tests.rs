@@ -1,6 +1,6 @@
-mod tests;
+mod common;
 
-use crate::tests::check;
+use crate::common::check;
 use expect_test::expect;
 
 #[test]

@@ -136,7 +136,7 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
                     // skip if the symbol doc is exactly the same as the file header
                 } else {
                     let processed_doc =
-                        link_regex.replace_all(doc_text, |caps: &regex::Captures| {
+                        link_regex.replace_all(doc_text, |caps: &regex::Captures<'_>| {
                             let name = &caps[1];
                             if let Some(target_path) = symbol_map.get(name) {
                                 if target_path == &current_file_stem_path {
@@ -201,7 +201,7 @@ struct SymbolInfo {
     start_line: usize,
 }
 
-fn extract_symbols(root: Node, source: &str) -> Vec<SymbolInfo> {
+fn extract_symbols(root: Node<'_>, source: &str) -> Vec<SymbolInfo> {
     let mut symbols = Vec::new();
     let mut cursor = root.walk();
 
@@ -228,7 +228,7 @@ fn extract_symbols(root: Node, source: &str) -> Vec<SymbolInfo> {
     symbols
 }
 
-fn parse_struct(node: Node, source: &str) -> Option<SymbolInfo> {
+fn parse_struct(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
     let name_node = node.child_by_field_name("name")?;
     let name = name_node.utf8_text(source.as_bytes()).ok()?.to_string();
 
@@ -246,7 +246,7 @@ fn parse_struct(node: Node, source: &str) -> Option<SymbolInfo> {
     })
 }
 
-fn parse_constant(node: Node, source: &str) -> Option<SymbolInfo> {
+fn parse_constant(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
     let name_node = node.child_by_field_name("name")?;
     let name = name_node.utf8_text(source.as_bytes()).ok()?.to_string();
 
@@ -263,7 +263,7 @@ fn parse_constant(node: Node, source: &str) -> Option<SymbolInfo> {
     })
 }
 
-fn parse_function(node: Node, source: &str) -> Option<SymbolInfo> {
+fn parse_function(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
     let kind = node.kind();
 
     let name_node = node.child_by_field_name("name")?;
@@ -298,7 +298,7 @@ fn parse_function(node: Node, source: &str) -> Option<SymbolInfo> {
     })
 }
 
-fn extract_doc_comment(node: Node, source: &str) -> Option<String> {
+fn extract_doc_comment(node: Node<'_>, source: &str) -> Option<String> {
     let start_byte = node.start_byte();
     let prefix = &source[..start_byte];
 

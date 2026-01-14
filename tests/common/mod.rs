@@ -27,7 +27,7 @@ static MIN_LITERAL_REDACTIONS: &[(&str, &str)] = &[
     ("[EXIT_STATUS]", "exit code"),
 ];
 
-pub fn assert_ui() -> snapbox::Assert {
+pub(crate) fn assert_ui() -> snapbox::Assert {
     let mut subs = snapbox::Redactions::new();
     subs.extend(MIN_LITERAL_REDACTIONS.iter().cloned()).ok();
     add_regex_redactions(&mut subs);
@@ -45,7 +45,7 @@ fn add_regex_redactions(subs: &mut snapbox::Redactions) {
 }
 
 #[allow(dead_code)]
-pub fn acton_exe() -> PathBuf {
+pub(crate) fn acton_exe() -> PathBuf {
     if let Ok(exe) = std::env::var("CARGO_BIN_EXE_acton") {
         PathBuf::from(exe)
     } else {
@@ -54,7 +54,7 @@ pub fn acton_exe() -> PathBuf {
 }
 
 #[allow(dead_code)]
-pub trait ActonCommandExt {
+pub(crate) trait ActonCommandExt {
     fn acton_ui() -> Self;
 }
 
@@ -64,11 +64,11 @@ impl ActonCommandExt for snapbox::cmd::Command {
     }
 }
 
-pub fn strip_ansi(s: &str) -> String {
+pub(crate) fn strip_ansi(s: &str) -> String {
     let bytes = strip_ansi_escapes::strip(s.as_bytes());
     String::from_utf8(bytes).unwrap_or_else(|_| s.to_owned())
 }
 
-pub fn assertion() -> snapbox::Assert {
+pub(crate) fn assertion() -> snapbox::Assert {
     snapbox::Assert::new().action_env(snapbox::assert::DEFAULT_ACTION_ENV)
 }

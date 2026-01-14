@@ -4,12 +4,12 @@ use snapbox::IntoData;
 use snapbox::filter::Filter;
 use std::path::Path;
 
-pub fn normalize_output(stdout: &str, project_path: &Path) -> String {
+pub(crate) fn normalize_output(stdout: &str, project_path: &Path) -> String {
     normalize_output_internal(stdout, project_path, true)
 }
 
 #[allow(dead_code)]
-pub fn normalize_output_keep_ansi(stdout: &str, project_path: &Path) -> String {
+pub(crate) fn normalize_output_keep_ansi(stdout: &str, project_path: &Path) -> String {
     normalize_output_internal(stdout, project_path, false)
 }
 

@@ -1,5 +1,5 @@
 //! This module defines a simple DSL for defining extension functions for the emulator.
-
+#![allow(unsafe_code)]
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use tonlib_core::cell::ArcCell;

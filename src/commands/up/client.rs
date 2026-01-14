@@ -8,13 +8,13 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct Release {
+pub(super) struct Release {
     pub tag_name: String,
     pub assets: Vec<Asset>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct Asset {
+pub(super) struct Asset {
     pub name: String,
     pub url: String,
     pub browser_download_url: String,
@@ -26,19 +26,19 @@ pub struct Asset {
     pub content: Option<String>,
 }
 
-pub trait ReleaseClient {
+pub(super) trait ReleaseClient {
     fn get_release(&self, version: Option<&str>, canary: bool) -> Result<Release>;
     fn list_releases(&self) -> Result<Vec<String>>;
     fn download_asset(&self, asset: &Asset) -> Result<PathBuf>;
 }
 
-pub struct GitHubClient {
+pub(super) struct GitHubClient {
     client: Client,
     token: Option<String>,
 }
 
 impl GitHubClient {
-    pub fn new(token: Option<String>) -> Self {
+    pub(super) fn new(token: Option<String>) -> Self {
         Self {
             client: Client::new(),
             token,

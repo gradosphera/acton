@@ -45,7 +45,7 @@ impl StackDiff {
     }
 }
 
-fn compute_stack_diff(prev: &[VmStackValue], current: &[VmStackValue]) -> Vec<StackDiff> {
+fn compute_stack_diff(prev: &[VmStackValue<'_>], current: &[VmStackValue<'_>]) -> Vec<StackDiff> {
     let mut diffs = Vec::new();
     let min_len = prev.len().min(current.len());
 
@@ -115,7 +115,7 @@ fn apply_stack_diff(prev: &[String], diffs: &[StackDiff]) -> Vec<String> {
 
 pub fn convert_to_diff_logs(input: &str) -> String {
     let mut output = String::new();
-    let mut prev_stack: Option<Vec<VmStackValue>> = None;
+    let mut prev_stack: Option<Vec<VmStackValue<'_>>> = None;
 
     for line in input.lines() {
         if let Some(stack_content) = line.strip_prefix("stack: ") {

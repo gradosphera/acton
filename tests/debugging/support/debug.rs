@@ -11,11 +11,11 @@ use std::time::Duration;
 use tempfile::TempDir;
 use tvmffi::stack::{Tuple, TupleItem};
 
-pub struct ProjectRef {
+pub(crate) struct ProjectRef {
     pub path: PathBuf,
 }
 
-pub struct DebugBuilder {
+pub(crate) struct DebugBuilder {
     name: String,
     temp_dir: TempDir,
     code: String,
@@ -26,7 +26,7 @@ pub struct DebugBuilder {
 }
 
 impl DebugBuilder {
-    pub fn new(name: &str) -> Self {
+    pub(crate) fn new(name: &str) -> Self {
         let mut temp_dir = TempDir::new().expect("Failed to create temp dir");
         temp_dir.disable_cleanup(true);
         Self {
@@ -40,34 +40,34 @@ impl DebugBuilder {
         }
     }
 
-    pub fn code(mut self, code: &str) -> Self {
+    pub(crate) fn code(mut self, code: &str) -> Self {
         self.code = code.to_string();
         self
     }
 
-    pub fn project<P: AsRef<Path>>(mut self, path: P) -> Self {
+    pub(crate) fn project<P: AsRef<Path>>(mut self, path: P) -> Self {
         self.project_path = Some(path.as_ref().to_path_buf());
         self
     }
 
-    pub fn script_file(mut self, file_name: &str) -> Self {
+    pub(crate) fn script_file(mut self, file_name: &str) -> Self {
         self.script_file = Some(file_name.to_string());
         self
     }
 
-    pub fn stack(mut self, stack: Tuple) -> Self {
+    pub(crate) fn stack(mut self, stack: Tuple) -> Self {
         self.stack = Some(stack);
         self
     }
 
-    pub fn accept_int(mut self, value: i32) -> Self {
+    pub(crate) fn accept_int(mut self, value: i32) -> Self {
         let mut tuple = Tuple::empty();
         tuple.push(TupleItem::Int(value.into()));
         self.stack = Some(tuple);
         self
     }
 
-    pub fn build(self) -> DebugSession {
+    pub(crate) fn build(self) -> DebugSession {
         let project_path = if let Some(path) = &self.project_path {
             path.clone()
         } else {
@@ -118,7 +118,7 @@ fn find_available_port() -> u16 {
     panic!("No available debug ports found");
 }
 
-pub struct DebugSession {
+pub(crate) struct DebugSession {
     project_ref: Arc<ProjectRef>,
     code_path: PathBuf,
     debug_port: u16,
@@ -128,7 +128,7 @@ pub struct DebugSession {
 }
 
 impl DebugSession {
-    pub fn start(mut self) -> DebugClient {
+    pub(crate) fn start(mut self) -> DebugClient {
         let code = self.code_path.to_string_lossy().to_string();
         let port = self.debug_port;
 
@@ -155,14 +155,14 @@ impl DebugSession {
     }
 }
 
-pub struct DebugClient {
+pub(crate) struct DebugClient {
     client: Option<DebuggerClient>,
     pub session: DebugSession,
     trace: ExecutionTrace,
 }
 
 impl DebugClient {
-    pub fn execute<F>(&mut self, actions: F) -> anyhow::Result<DebugResult>
+    pub(crate) fn execute<F>(&mut self, actions: F) -> anyhow::Result<DebugResult>
     where
         F: FnOnce(&mut DebugActionExecutor) -> anyhow::Result<()>,
     {
@@ -181,7 +181,7 @@ impl DebugClient {
     }
 
     #[allow(dead_code)]
-    pub fn terminate(mut self) -> anyhow::Result<()> {
+    pub(crate) fn terminate(mut self) -> anyhow::Result<()> {
         if let Some(mut client) = self.client.take() {
             client.terminate()
         } else {
@@ -190,7 +190,7 @@ impl DebugClient {
     }
 }
 
-pub struct DebugActionExecutor<'a> {
+pub(crate) struct DebugActionExecutor<'a> {
     client: &'a mut DebuggerClient,
     trace: &'a mut ExecutionTrace,
 }
@@ -205,35 +205,35 @@ impl<'a> DebugActionExecutor<'a> {
         Ok(())
     }
 
-    pub fn step_in(&mut self) -> anyhow::Result<()> {
+    pub(crate) fn step_in(&mut self) -> anyhow::Result<()> {
         self.client.step_in(1)?;
         self.record_state_with_action("step_in".to_string())
     }
 
-    pub fn step_over(&mut self) -> anyhow::Result<()> {
+    pub(crate) fn step_over(&mut self) -> anyhow::Result<()> {
         self.client.step_over(1)?;
         self.record_state_with_action("step_over".to_string())
     }
 
-    pub fn step_out(&mut self) -> anyhow::Result<()> {
+    pub(crate) fn step_out(&mut self) -> anyhow::Result<()> {
         self.client.step_out(1)?;
         self.record_state_with_action("step_out".to_string())
     }
 
-    pub fn continue_execution(&mut self) -> anyhow::Result<()> {
+    pub(crate) fn continue_execution(&mut self) -> anyhow::Result<()> {
         self.client.continue_execution(1)?;
         Ok(())
         // self.record_state_with_action("continue".to_string())
     }
 }
 
-pub struct DebugResult {
+pub(crate) struct DebugResult {
     trace: ExecutionTrace,
     project_path: PathBuf,
 }
 
 impl DebugResult {
-    pub fn assert_trace_snapshot_matches(&self, path: &str) -> &Self {
+    pub(crate) fn assert_trace_snapshot_matches(&self, path: &str) -> &Self {
         let serialized = self.trace.serialize();
         let normalized = normalize_output(&serialized, &self.project_path);
         let assertion = crate::common::assertion();
@@ -247,18 +247,18 @@ impl DebugResult {
         self
     }
 
-    pub fn trace(&self) -> &ExecutionTrace {
+    pub(crate) fn trace(&self) -> &ExecutionTrace {
         &self.trace
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct ExecutionTrace {
+pub(crate) struct ExecutionTrace {
     pub steps: Vec<ExecutionStep>,
 }
 
 #[derive(Debug, Clone)]
-pub struct ExecutionStep {
+pub(crate) struct ExecutionStep {
     pub step_number: usize,
     pub positions: Vec<StackFrame>,
     pub variables: Vec<dap::types::Variable>,
@@ -353,7 +353,7 @@ impl ExecutionTrace {
         }
     }
 
-    pub fn serialize(&self) -> String {
+    pub(crate) fn serialize(&self) -> String {
         let mut result = String::new();
 
         for step in &self.steps {

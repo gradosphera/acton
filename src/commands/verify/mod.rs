@@ -156,7 +156,7 @@ pub fn verify_cmd(
         };
 
         form = form.part(
-            path.to_string(),
+            path.to_string_lossy().to_string(),
             reqwest::blocking::multipart::Part::bytes(file_content).file_name(filename.to_string()),
         );
     }

@@ -286,7 +286,7 @@ fn execute_script(
     Ok(())
 }
 
-fn print_script_result(ctx: &mut Context, result: ScriptResult) {
+fn print_script_result(ctx: &mut Context<'_>, result: ScriptResult) {
     match &result.result {
         GetMethodResult::Success(success_result) => {
             let exit_code = success_result.vm_exit_code;
@@ -382,7 +382,7 @@ fn parse_stack_args(args: Vec<String>) -> anyhow::Result<Tuple> {
     Ok(Tuple(items).unwrap_tuple())
 }
 
-fn convert_vm_value_to_tuple_item(value: VmStackValue) -> anyhow::Result<TupleItem> {
+fn convert_vm_value_to_tuple_item(value: VmStackValue<'_>) -> anyhow::Result<TupleItem> {
     match value {
         VmStackValue::Null => Ok(TupleItem::Null),
         VmStackValue::NaN => Ok(TupleItem::Nan),
@@ -414,7 +414,7 @@ fn convert_vm_value_to_tuple_item(value: VmStackValue) -> anyhow::Result<TupleIt
     }
 }
 
-fn convert_cell_like(cell_like: CellLike) -> anyhow::Result<ArcCell> {
+fn convert_cell_like(cell_like: CellLike<'_>) -> anyhow::Result<ArcCell> {
     match cell_like {
         CellLike::Cell(hex) => Ok(ArcCell::from_boc_hex(hex)?),
         CellLike::Builder(hex) => Ok(ArcCell::from_boc_hex(hex)?),

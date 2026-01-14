@@ -322,8 +322,8 @@ impl std::fmt::Display for ConstantType {
     }
 }
 impl std::str::FromStr for ConstantType {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> Result<Self, self::error::ConversionError> {
+    type Err = error::ConversionError;
+    fn from_str(value: &str) -> Result<Self, error::ConversionError> {
         match value {
             "Int" => Ok(Self::Int),
             "Null" => Ok(Self::Null),
@@ -332,20 +332,20 @@ impl std::str::FromStr for ConstantType {
     }
 }
 impl TryFrom<&str> for ConstantType {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: &str) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }
 impl TryFrom<&String> for ConstantType {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &String) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: &String) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }
 impl TryFrom<String> for ConstantType {
-    type Error = self::error::ConversionError;
-    fn try_from(value: String) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: String) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }
@@ -954,8 +954,8 @@ impl std::fmt::Display for LayoutKind {
     }
 }
 impl std::str::FromStr for LayoutKind {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> Result<Self, self::error::ConversionError> {
+    type Err = error::ConversionError;
+    fn from_str(value: &str) -> Result<Self, error::ConversionError> {
         match value {
             "ext" => Ok(Self::Ext),
             "ext-range" => Ok(Self::ExtRange),
@@ -967,20 +967,20 @@ impl std::str::FromStr for LayoutKind {
     }
 }
 impl TryFrom<&str> for LayoutKind {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: &str) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }
 impl TryFrom<&String> for LayoutKind {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &String) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: &String) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }
 impl TryFrom<String> for LayoutKind {
-    type Error = self::error::ConversionError;
-    fn try_from(value: String) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: String) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }
@@ -1140,8 +1140,8 @@ impl std::fmt::Display for PossibleValueTypesItem {
     }
 }
 impl std::str::FromStr for PossibleValueTypesItem {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> Result<Self, self::error::ConversionError> {
+    type Err = error::ConversionError;
+    fn from_str(value: &str) -> Result<Self, error::ConversionError> {
         match value {
             "Int" => Ok(Self::Int),
             "Bool" => Ok(Self::Bool),
@@ -1157,20 +1157,20 @@ impl std::str::FromStr for PossibleValueTypesItem {
     }
 }
 impl TryFrom<&str> for PossibleValueTypesItem {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: &str) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }
 impl TryFrom<&String> for PossibleValueTypesItem {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &String) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: &String) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }
 impl TryFrom<String> for PossibleValueTypesItem {
-    type Error = self::error::ConversionError;
-    fn try_from(value: String) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: String) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }
@@ -1230,8 +1230,8 @@ impl std::fmt::Display for RegisterName {
     }
 }
 impl std::str::FromStr for RegisterName {
-    type Err = self::error::ConversionError;
-    fn from_str(value: &str) -> Result<Self, self::error::ConversionError> {
+    type Err = error::ConversionError;
+    fn from_str(value: &str) -> Result<Self, error::ConversionError> {
         match value {
             "gas" => Ok(Self::Gas),
             "cstate" => Ok(Self::Cstate),
@@ -1241,20 +1241,20 @@ impl std::str::FromStr for RegisterName {
     }
 }
 impl TryFrom<&str> for RegisterName {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &str) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: &str) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }
 impl TryFrom<&String> for RegisterName {
-    type Error = self::error::ConversionError;
-    fn try_from(value: &String) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: &String) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }
 impl TryFrom<String> for RegisterName {
-    type Error = self::error::ConversionError;
-    fn try_from(value: String) -> Result<Self, self::error::ConversionError> {
+    type Error = error::ConversionError;
+    fn try_from(value: String) -> Result<Self, error::ConversionError> {
         value.parse()
     }
 }

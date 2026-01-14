@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub fn collect_profile(runner: &TestRunner, abi: &ContractAbi) -> anyhow::Result<()> {
+pub(super) fn collect_profile(runner: &TestRunner, abi: &ContractAbi) -> anyhow::Result<()> {
     let mut gas_per_opcode = HashMap::new();
 
     for result in runner.emulations.messages() {
@@ -237,13 +237,13 @@ fn load_gas_snapshot(filename: &str) -> anyhow::Result<GasSnapshot> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GasSnapshot {
+pub(super) struct GasSnapshot {
     pub timestamp: u64,
     pub opcodes: HashMap<String, OpcodeGasStats>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OpcodeGasStats {
+pub(super) struct OpcodeGasStats {
     pub min_gas: u64,
     pub max_gas: u64,
     pub avg_gas: u64,

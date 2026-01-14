@@ -140,7 +140,7 @@ mod tests {
         // Test invalid UTF-8 (should return CellParse error)
         let mut builder = CellBuilder::new();
         builder.store_bits(16, &[0xFF, 0xFF]).unwrap(); // Invalid UTF-8
-        let cell = tonlib_core::cell::ArcCell::from(builder.build().unwrap());
+        let cell = ArcCell::from(builder.build().unwrap());
 
         let result = String::from_item(TupleItem::Slice(cell));
         assert!(matches!(result, Err(ArgError::CellParse)));
@@ -213,7 +213,7 @@ mod tests {
         // Test successful cell conversion
         let mut builder = CellBuilder::new();
         builder.store_bits(8, b"test").unwrap();
-        let cell = tonlib_core::cell::ArcCell::from(builder.build().unwrap());
+        let cell = ArcCell::from(builder.build().unwrap());
 
         let result = ArcCell::from_item(TupleItem::Cell(cell.clone()));
         assert_eq!(result, Ok(cell));
@@ -288,7 +288,7 @@ mod tests {
         // Test string with odd number of bits (not divisible by 8)
         let mut builder = CellBuilder::new();
         builder.store_bits(7, &[0xFF]).unwrap(); // 7 bits, not divisible by 8
-        let cell = tonlib_core::cell::ArcCell::from(builder.build().unwrap());
+        let cell = ArcCell::from(builder.build().unwrap());
 
         let result = String::from_item(TupleItem::Slice(cell));
         assert!(matches!(result, Err(ArgError::CellParse)));

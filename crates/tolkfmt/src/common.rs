@@ -238,12 +238,12 @@ where
     ])))
 }
 
-pub fn print_comment_node<'a>(ctx: &Context, comment: &Node) -> RcDoc<'a> {
+pub fn print_comment_node<'a>(ctx: &Context<'_>, comment: &Node) -> RcDoc<'a> {
     let text = comment.utf8_text(ctx.code.as_ref().as_ref()).unwrap_or("");
     RcDoc::text(text.to_owned())
 }
 
-pub fn print_original_node_text<'a>(ctx: &Context, node: &Node) -> RcDoc<'a> {
+pub fn print_original_node_text<'a>(ctx: &Context<'_>, node: &Node) -> RcDoc<'a> {
     let mut docs = vec![];
     let comments = ctx.comments.get(node);
 
@@ -278,12 +278,12 @@ pub fn print_original_node_text<'a>(ctx: &Context, node: &Node) -> RcDoc<'a> {
     RcDoc::concat(docs)
 }
 
-pub fn print_node_text<'a>(ctx: &Context, ident: &Node) -> Option<RcDoc<'a>> {
+pub fn print_node_text<'a>(ctx: &Context<'_>, ident: &Node) -> Option<RcDoc<'a>> {
     let text = ident.utf8_text(ctx.code.as_ref().as_ref()).ok()?.to_owned();
     Some(RcDoc::text(text))
 }
 
-pub fn empty_lines_between(ctx: &Context, top: &Node, bottom: &Node) -> usize {
+pub fn empty_lines_between(ctx: &Context<'_>, top: &Node, bottom: &Node) -> usize {
     // [
     //
     // ] <- end   position of top
@@ -296,7 +296,7 @@ pub fn empty_lines_between(ctx: &Context, top: &Node, bottom: &Node) -> usize {
     botton_line.saturating_sub(top_line)
 }
 
-fn start_line(ctx: &Context, node: &Node) -> usize {
+fn start_line(ctx: &Context<'_>, node: &Node) -> usize {
     if let Some(comments) = ctx.comments.get(node) {
         let leading = comments.iter().find(|c| {
             matches!(

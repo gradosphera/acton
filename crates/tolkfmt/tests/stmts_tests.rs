@@ -1,6 +1,6 @@
-mod tests;
+mod common;
 
-use crate::tests::{check, check_with_width};
+use crate::common::{check, check_with_width};
 use expect_test::expect;
 
 // Healthy tests to check if nothing is broken while formatting

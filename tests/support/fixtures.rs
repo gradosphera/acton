@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
 
-pub struct FixtureProject {
+pub(crate) struct FixtureProject {
     _tmp_dir: TempDir,
     project_path: PathBuf,
     enabled_slots: HashMap<String, Vec<usize>>,
@@ -17,7 +17,7 @@ pub struct FixtureProject {
 #[allow(dead_code)]
 impl FixtureProject {
     /// Load a fixture project from tests/projects/{name}
-    pub fn load(name: &str) -> Self {
+    pub(crate) fn load(name: &str) -> Self {
         let tmp_dir = Self::copy_fixture_project(name);
         let project_path = tmp_dir.path().join(name);
         Self::patch_imports(&project_path);
@@ -36,7 +36,7 @@ impl FixtureProject {
     /// FixtureProject::load("basic")
     ///     .with_slot("contracts/counter.tolk", 1)
     /// ```
-    pub fn with_slot(mut self, file: &str, slot: usize) -> Self {
+    pub(crate) fn with_slot(mut self, file: &str, slot: usize) -> Self {
         let slots = self.enabled_slots.entry(file.to_string()).or_default();
         slots.push(slot);
         Self::enable_slot(&self.project_path, file, slot);
@@ -51,7 +51,7 @@ impl FixtureProject {
     ///     .with_slots("tests/counter.test.tolk", &[1, 2, 3])
     /// ```
     #[allow(dead_code)]
-    pub fn with_slots(mut self, file: &str, slots: &[usize]) -> Self {
+    pub(crate) fn with_slots(mut self, file: &str, slots: &[usize]) -> Self {
         for &slot in slots {
             let slot_list = self.enabled_slots.entry(file.to_string()).or_default();
             slot_list.push(slot);
@@ -61,24 +61,24 @@ impl FixtureProject {
     }
 
     /// Enable a slot in contract file (shorthand)
-    pub fn with_contract_slot(self, slot: usize) -> Self {
+    pub(crate) fn with_contract_slot(self, slot: usize) -> Self {
         self.with_slot("contracts/counter.tolk", slot)
     }
 
     /// Enable multiple contract slots (shorthand)
     #[allow(dead_code)]
-    pub fn with_contract_slots(self, slots: &[usize]) -> Self {
+    pub(crate) fn with_contract_slots(self, slots: &[usize]) -> Self {
         self.with_slots("contracts/counter.tolk", slots)
     }
 
     /// Enable a slot in test file (shorthand)
-    pub fn with_test_slot(self, slot: usize) -> Self {
+    pub(crate) fn with_test_slot(self, slot: usize) -> Self {
         self.with_slot("tests/counter.test.tolk", slot)
     }
 
     /// Enable multiple test slots (shorthand)
     #[allow(dead_code)]
-    pub fn with_test_slots(self, slots: &[usize]) -> Self {
+    pub(crate) fn with_test_slots(self, slots: &[usize]) -> Self {
         self.with_slots("tests/counter.test.tolk", slots)
     }
 
@@ -92,7 +92,7 @@ impl FixtureProject {
     ///     .with_template_vars(vars)
     /// ```
     #[allow(dead_code)]
-    pub fn with_template_vars(self, vars: HashMap<&str, &str>) -> Self {
+    pub(crate) fn with_template_vars(self, vars: HashMap<&str, &str>) -> Self {
         for (key, value) in vars {
             self.replace_in_all_files(&format!("{{{{ {key} }}}}"), value);
         }
@@ -100,7 +100,7 @@ impl FixtureProject {
     }
 
     /// Get ActonCommand builder for this project
-    pub fn acton(&self) -> ActonCommand {
+    pub(crate) fn acton(&self) -> ActonCommand {
         let cmd = snapbox::cmd::Command::new(acton_exe()).with_assert(assert_ui());
         ActonCommand {
             cmd,
@@ -141,7 +141,7 @@ impl FixtureProject {
 
     /// Get the project path
     #[allow(dead_code)]
-    pub fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.project_path
     }
 

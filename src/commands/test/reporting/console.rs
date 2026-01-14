@@ -12,7 +12,7 @@ const CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT: i32 = 678;
 const CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE: i32 = 679;
 
 #[derive(Debug, Clone)]
-pub struct ConsoleConfig {
+pub(crate) struct ConsoleConfig {
     pub show_output: bool,
 }
 
@@ -22,13 +22,13 @@ impl Default for ConsoleConfig {
     }
 }
 
-pub struct ConsoleReporter {
+pub(crate) struct ConsoleReporter {
     config: ConsoleConfig,
     count_suites: usize,
 }
 
 impl ConsoleReporter {
-    pub fn new(config: ConsoleConfig) -> Self {
+    pub(crate) fn new(config: ConsoleConfig) -> Self {
         Self {
             config,
             count_suites: 0,

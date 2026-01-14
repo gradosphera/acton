@@ -186,7 +186,7 @@ fn discover_contracts() -> BTreeMap<String, ContractConfig> {
     contracts
 }
 
-fn has_on_internal_message_function(root_node: &Node, content: &str) -> bool {
+fn has_on_internal_message_function(root_node: &Node<'_>, content: &str) -> bool {
     let mut cursor = root_node.walk();
     for child in root_node.children(&mut cursor) {
         if child.kind() == "function_declaration"

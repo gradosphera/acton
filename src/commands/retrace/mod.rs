@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use tycho_types::boc::Boc;
 use tycho_types::models::{IntAddr, OutAction, RelaxedMsgInfo};
 
+#[allow(unsafe_code)]
 pub fn retrace_cmd(
     hash: String,
     net: Option<String>,

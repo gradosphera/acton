@@ -1,13 +1,13 @@
 #[cfg(test)]
-pub mod assertions;
+pub(crate) mod assertions;
 #[cfg(test)]
-pub mod compilation;
+pub(crate) mod compilation;
 #[cfg(test)]
-pub mod fixtures;
+pub(crate) mod fixtures;
 #[cfg(test)]
-pub mod project;
+pub(crate) mod project;
 #[cfg(test)]
-pub mod snapshots;
+pub(crate) mod snapshots;
 
 #[allow(unused_imports)]
-pub use assertions::TestOutputExt;
+pub(crate) use assertions::TestOutputExt;

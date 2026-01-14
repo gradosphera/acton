@@ -109,7 +109,7 @@ impl Emulator {
         let msg_cell = Self::patch_message(message, from)?;
         let msg_b64 = Boc::encode_base64(&msg_cell);
         let msg = msg_cell
-            .parse::<Message>()
+            .parse::<Message<'_>>()
             .context("Failed to parse message")?;
 
         let dst = match &msg.info {
@@ -213,7 +213,7 @@ impl Emulator {
 
         // 2. Recursively process outgoing messages
         for out_msg_cell in main_res.out_messages {
-            let Ok(out_msg) = out_msg_cell.parse::<Message>() else {
+            let Ok(out_msg) = out_msg_cell.parse::<Message<'_>>() else {
                 continue;
             };
 
@@ -247,7 +247,7 @@ impl Emulator {
             return Ok(message_cell);
         };
 
-        if let Ok(mut message) = message_cell.parse::<RelaxedMessage>() {
+        if let Ok(mut message) = message_cell.parse::<RelaxedMessage<'_>>() {
             if let RelaxedMsgInfo::Int(info) = &mut message.info {
                 // Set src address as Node does
                 if info.src.is_none() {
@@ -356,7 +356,7 @@ impl SendMessageResultSuccess {
     /// following the initial 32-bit `0xffffffff` prefix.
     pub fn opcode(&self) -> Option<u32> {
         let in_msg = self.transaction.in_msg.as_deref()?;
-        let mut in_msg = in_msg.parse::<RelaxedMessage>().ok()?;
+        let mut in_msg = in_msg.parse::<RelaxedMessage<'_>>().ok()?;
         let opcode = in_msg.body.load_u32().ok()?;
         if let RelaxedMsgInfo::Int(info) = &in_msg.info
             && info.bounced

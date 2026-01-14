@@ -165,14 +165,15 @@ impl<'a> Display for CellSlice<'a> {
     }
 }
 
-fn ws0(i: &mut I) -> PResult<()> {
+fn ws0(i: &mut I<'_>) -> PResult<()> {
     space0.parse_next(i).map(|_| ())
 }
 
-fn ws1(i: &mut I) -> PResult<()> {
+fn ws1(i: &mut I<'_>) -> PResult<()> {
     space1.parse_next(i).map(|_| ())
 }
 
+#[allow(unsafe_code)]
 fn number<'a>(i: &mut I<'a>) -> PResult<&'a str> {
     let start_ptr = i.as_ptr();
     let start = start_ptr as usize;
@@ -195,7 +196,7 @@ fn until_eol<'a>(i: &mut I<'a>) -> PResult<&'a str> {
     take_while(0.., |c: char| c != '\n' && c != '\r').parse_next(i)
 }
 
-fn tag(i: &mut I, mut s: &'static str) -> PResult<()> {
+fn tag(i: &mut I<'_>, mut s: &'static str) -> PResult<()> {
     s.parse_next(i).map(|_: &str| ())
 }
 

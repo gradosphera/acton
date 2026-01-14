@@ -301,7 +301,7 @@ pub fn print_inline_comments_with_alignment(
     }
 }
 
-pub fn has_fmt_ignore(ctx: &Context, comments: Option<&Vec<Comment>>) -> bool {
+pub fn has_fmt_ignore(ctx: &Context<'_>, comments: Option<&Vec<Comment>>) -> bool {
     let Some(comments) = comments else {
         return false;
     };

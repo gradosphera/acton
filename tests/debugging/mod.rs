@@ -38,12 +38,12 @@ mod real_test;
 mod support;
 mod tests;
 
-pub struct DebuggerClient {
+pub(crate) struct DebuggerClient {
     client: DapClient,
 }
 
 impl DebuggerClient {
-    pub fn connect(address: &str) -> anyhow::Result<Self> {
+    pub(crate) fn connect(address: &str) -> anyhow::Result<Self> {
         let mut client = DapClient::connect(address)?;
         client.start()?;
         client.initialize()?;
@@ -55,7 +55,10 @@ impl DebuggerClient {
         Ok(Self { client })
     }
 
-    pub fn connect_with_retry(address: &str, timeout: Duration) -> anyhow::Result<DebuggerClient> {
+    pub(crate) fn connect_with_retry(
+        address: &str,
+        timeout: Duration,
+    ) -> anyhow::Result<DebuggerClient> {
         use std::time::Instant;
 
         let deadline = Instant::now() + timeout;
@@ -78,35 +81,41 @@ impl DebuggerClient {
         }
     }
 
-    pub fn step_in(&mut self, thread_id: i64) -> anyhow::Result<()> {
+    pub(crate) fn step_in(&mut self, thread_id: i64) -> anyhow::Result<()> {
         self.client.step_in(thread_id)
     }
 
-    pub fn continue_execution(&mut self, thread_id: i64) -> anyhow::Result<ContinueResponse> {
+    pub(crate) fn continue_execution(
+        &mut self,
+        thread_id: i64,
+    ) -> anyhow::Result<ContinueResponse> {
         self.client.continue_execution(thread_id)
     }
 
-    pub fn step_over(&mut self, thread_id: i64) -> anyhow::Result<()> {
+    pub(crate) fn step_over(&mut self, thread_id: i64) -> anyhow::Result<()> {
         self.client.step_over(thread_id)
     }
 
-    pub fn step_out(&mut self, thread_id: i64) -> anyhow::Result<()> {
+    pub(crate) fn step_out(&mut self, thread_id: i64) -> anyhow::Result<()> {
         self.client.step_out(thread_id)
     }
 
-    pub fn stack_trace(&mut self, thread_id: i64) -> anyhow::Result<Vec<StackFrame>> {
+    pub(crate) fn stack_trace(&mut self, thread_id: i64) -> anyhow::Result<Vec<StackFrame>> {
         let trace = self.client.stack_trace(thread_id)?;
         let positions = trace.stack_frames;
         Ok(positions)
     }
 
-    pub fn variables(&mut self, thread_id: i64) -> anyhow::Result<Vec<dap::types::Variable>> {
+    pub(crate) fn variables(
+        &mut self,
+        thread_id: i64,
+    ) -> anyhow::Result<Vec<dap::types::Variable>> {
         let variables = self.client.variables(thread_id)?;
         Ok(variables.variables)
     }
 
     #[allow(dead_code)]
-    pub fn terminate(&mut self) -> anyhow::Result<()> {
+    pub(crate) fn terminate(&mut self) -> anyhow::Result<()> {
         self.client.terminate()
     }
 }

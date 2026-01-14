@@ -10,14 +10,17 @@ use tar::Archive;
 use super::client::{Asset, Release, ReleaseClient};
 
 #[derive(serde::Serialize)]
-pub struct UpdateInfo {
+pub(super) struct UpdateInfo {
     pub success: bool,
     pub current_version: String,
     pub latest_version: String,
     pub update_available: bool,
 }
 
-pub fn check_update<C: ReleaseClient>(client: &C, current_version_str: &str) -> Result<UpdateInfo> {
+pub(super) fn check_update<C: ReleaseClient>(
+    client: &C,
+    current_version_str: &str,
+) -> Result<UpdateInfo> {
     let release = client.get_release(None, false)?;
     let latest_version = release.tag_name;
     let is_canary = current_version_str == "canary";
@@ -44,7 +47,7 @@ pub fn check_update<C: ReleaseClient>(client: &C, current_version_str: &str) -> 
     })
 }
 
-pub fn run_update<C: ReleaseClient>(
+pub(super) fn run_update<C: ReleaseClient>(
     client: &C,
     current_exe: &Path,
     current_version_str: &str,

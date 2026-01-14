@@ -12,12 +12,12 @@ use tycho_types::boc::Boc;
 use vmlogs::parser::{VmStack, VmStackValue};
 
 #[derive(Debug, Clone)]
-pub struct Coverage {
+pub(super) struct Coverage {
     pub files: Vec<FileCoverage>,
 }
 
 #[derive(Debug, Clone)]
-pub struct FileCoverage {
+pub(super) struct FileCoverage {
     pub file: String,
     pub covered_lines_count: usize,
     pub line_hits: BTreeMap<i64, u64>, // line number -> hit count
@@ -26,7 +26,7 @@ pub struct FileCoverage {
     pub branch_hits: HashMap<i64, BranchHits>,
 }
 
-pub fn collect_coverage(emulations: &EmulationsState, build_cache: &BuildCache) -> Coverage {
+pub(super) fn collect_coverage(emulations: &EmulationsState, build_cache: &BuildCache) -> Coverage {
     // To build coverage we need two things: source maps and virtual machine logs.
     //
     // The first provides us with the necessary information about which lines in the source code are
@@ -133,12 +133,12 @@ fn build_high_level_traces(data: &Vec<SourceMapAndLogs>) -> Vec<HighLevelTrace> 
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct BranchHits {
+pub(super) struct BranchHits {
     pub if_true: u64,
     pub if_false: u64,
 }
 
-pub struct ExecutedLinesForFile {
+pub(super) struct ExecutedLinesForFile {
     pub lines: HashMap<String, BTreeMap<i64, u64>>,
     pub branches: HashMap<String, HashMap<i64, BranchHits>>,
 }
@@ -279,7 +279,7 @@ fn build_executable_lines_per_file(
 }
 
 #[allow(dead_code)] // maybe for command like coverage merge
-pub fn merge_coverages(coverages: &Vec<Coverage>) -> Coverage {
+pub(super) fn merge_coverages(coverages: &Vec<Coverage>) -> Coverage {
     let mut merged_files: HashMap<String, FileCoverage> = HashMap::new();
 
     for coverage in coverages {
@@ -314,7 +314,7 @@ pub fn merge_coverages(coverages: &Vec<Coverage>) -> Coverage {
     }
 }
 
-pub fn print_coverage_summary(coverage: &Coverage) {
+pub(super) fn print_coverage_summary(coverage: &Coverage) {
     if coverage.files.is_empty() {
         // Empty coverage info, likely compilation error
         return;
@@ -407,7 +407,10 @@ pub fn print_coverage_summary(coverage: &Coverage) {
     println!("{table}");
 }
 
-pub fn generate_lcov_file(coverage: &Coverage, output_path: &str) -> Result<(), std::io::Error> {
+pub(super) fn generate_lcov_file(
+    coverage: &Coverage,
+    output_path: &str,
+) -> Result<(), std::io::Error> {
     let mut lcov_content = String::new();
 
     for file_coverage in &coverage.files {
@@ -448,7 +451,10 @@ pub fn generate_lcov_file(coverage: &Coverage, output_path: &str) -> Result<(), 
     fs::write(output_path, lcov_content)
 }
 
-pub fn generate_text_file(coverage: &Coverage, output_path: &str) -> Result<(), std::io::Error> {
+pub(super) fn generate_text_file(
+    coverage: &Coverage,
+    output_path: &str,
+) -> Result<(), std::io::Error> {
     let text_content = generate_text_report(coverage);
     fs::write(output_path, text_content)
 }

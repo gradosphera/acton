@@ -669,7 +669,9 @@ mod boc_ext {
         };
     }
 
-    pub fn decode_multi_root_base64<T: AsRef<[u8]>>(data: T) -> Result<Vec<Cell>, de::Error> {
+    pub(super) fn decode_multi_root_base64<T: AsRef<[u8]>>(
+        data: T,
+    ) -> Result<Vec<Cell>, de::Error> {
         fn decode_base64_impl(data: &[u8]) -> Result<Vec<Cell>, de::Error> {
             match general_purpose::STANDARD.decode(data) {
                 Ok(data) => decode_ext(data.as_slice(), Cell::empty_context()),
@@ -679,7 +681,10 @@ mod boc_ext {
         decode_base64_impl(data.as_ref())
     }
 
-    pub fn decode_ext(data: &[u8], context: &dyn CellContext) -> Result<Vec<Cell>, de::Error> {
+    pub(super) fn decode_ext(
+        data: &[u8],
+        context: &dyn CellContext,
+    ) -> Result<Vec<Cell>, de::Error> {
         let header = ok!(de::BocHeader::decode(
             data,
             &Options {

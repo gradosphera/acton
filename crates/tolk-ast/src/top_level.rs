@@ -578,7 +578,7 @@ impl<'t> From<Node<'t>> for Parameter<'t> {
 
 impl<'tree> Parameter<'tree> {
     pub fn mutate(&self) -> bool {
-        self.0.field::<Ident>("mutate").is_some()
+        self.0.field::<Ident<'_>>("mutate").is_some()
     }
 
     pub fn name(&self) -> Option<Ident<'tree>> {

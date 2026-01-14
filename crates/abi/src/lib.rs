@@ -255,7 +255,7 @@ pub fn extract_handled_messages(content: &str, file_path: &str) -> Vec<String> {
     handled_messages
 }
 
-fn extract_messages_from_match(node: &tree_sitter::Node, content: &str) -> Vec<String> {
+fn extract_messages_from_match(node: &tree_sitter::Node<'_>, content: &str) -> Vec<String> {
     let mut messages = Vec::new();
 
     let mut cursor = node.walk();
@@ -281,7 +281,7 @@ fn extract_messages_from_match(node: &tree_sitter::Node, content: &str) -> Vec<S
     messages
 }
 
-fn find_match_patterns(node: &tree_sitter::Node, content: &str) -> Vec<String> {
+fn find_match_patterns(node: &tree_sitter::Node<'_>, content: &str) -> Vec<String> {
     let mut patterns = Vec::new();
 
     if node.kind() == "match_expression"
@@ -314,7 +314,7 @@ fn find_match_patterns(node: &tree_sitter::Node, content: &str) -> Vec<String> {
 }
 
 fn collect_imported_files(
-    root_node: &tree_sitter::Node,
+    root_node: &tree_sitter::Node<'_>,
     content: &str,
     file_path: &str,
 ) -> Vec<FileInfo> {
@@ -337,7 +337,7 @@ fn collect_imported_files(
 }
 
 fn collect_imported_files_recursive(
-    node: &tree_sitter::Node,
+    node: &tree_sitter::Node<'_>,
     content: &str,
     file_path: &str,
     files: &mut Vec<FileInfo>,
@@ -442,7 +442,7 @@ fn merge_abi_info(target: &mut AbiInfo, source: AbiInfo) {
     }
 }
 
-fn collect_abi_info(node: &tree_sitter::Node, content: &str, file_path: &str) -> AbiInfo {
+fn collect_abi_info(node: &tree_sitter::Node<'_>, content: &str, file_path: &str) -> AbiInfo {
     let mut info = AbiInfo {
         get_methods: Vec::new(),
         messages: Vec::new(),
@@ -517,7 +517,7 @@ fn collect_abi_info(node: &tree_sitter::Node, content: &str, file_path: &str) ->
 }
 
 fn extract_get_method(
-    func_node: &tree_sitter::Node,
+    func_node: &tree_sitter::Node<'_>,
     content: &str,
     file_path: &str,
 ) -> Option<GetMethod> {
@@ -560,7 +560,7 @@ fn extract_get_method(
 }
 
 fn extract_struct_abi(
-    struct_node: &tree_sitter::Node,
+    struct_node: &tree_sitter::Node<'_>,
     content: &str,
     file_path: &str,
 ) -> Option<TypeAbi> {
@@ -629,7 +629,11 @@ fn extract_struct_abi(
     })
 }
 
-fn extract_field(field_node: &tree_sitter::Node, content: &str, _file_path: &str) -> Option<Field> {
+fn extract_field(
+    field_node: &tree_sitter::Node<'_>,
+    content: &str,
+    _file_path: &str,
+) -> Option<Field> {
     let name_node = field_node.child_by_field_name("name")?;
     let type_node = field_node.child_by_field_name("type")?;
 
@@ -646,7 +650,7 @@ fn extract_field(field_node: &tree_sitter::Node, content: &str, _file_path: &str
     })
 }
 
-fn extract_type_info(type_node: &tree_sitter::Node, content: &str) -> TypeInfo {
+fn extract_type_info(type_node: &tree_sitter::Node<'_>, content: &str) -> TypeInfo {
     let type_name = type_node
         .utf8_text(content.as_bytes())
         .unwrap_or("")
@@ -780,7 +784,11 @@ fn extract_type_info(type_node: &tree_sitter::Node, content: &str) -> TypeInfo {
     }
 }
 
-fn extract_parameters(func_node: &tree_sitter::Node, content: &str, file_path: &str) -> Vec<Field> {
+fn extract_parameters(
+    func_node: &tree_sitter::Node<'_>,
+    content: &str,
+    file_path: &str,
+) -> Vec<Field> {
     let mut parameters = Vec::new();
 
     let Some(params_node) = func_node.child_by_field_name("parameters") else {
@@ -800,7 +808,7 @@ fn extract_parameters(func_node: &tree_sitter::Node, content: &str, file_path: &
     parameters
 }
 
-fn get_explicit_method_id(func_node: &tree_sitter::Node, content: &str) -> Option<u32> {
+fn get_explicit_method_id(func_node: &tree_sitter::Node<'_>, content: &str) -> Option<u32> {
     let annotations = func_node.child_by_field_name("annotations")?;
     let mut cursor = annotations.walk();
 
@@ -843,7 +851,7 @@ fn get_explicit_method_id(func_node: &tree_sitter::Node, content: &str) -> Optio
 }
 
 fn get_contract_name_from_file_path(file_path: &str) -> String {
-    let file_name = std::path::Path::new(file_path)
+    let file_name = Path::new(file_path)
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("Unknown");

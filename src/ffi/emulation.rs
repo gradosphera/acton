@@ -358,9 +358,7 @@ fn send_wallet_message(
     api_key: &Option<String>,
 ) -> anyhow::Result<()> {
     let expired_at_time = std::time::SystemTime::now() + Duration::from_secs(600);
-    let expire_at = expired_at_time
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_secs() as u32;
+    let expire_at = expired_at_time.duration_since(UNIX_EPOCH)?.as_secs() as u32;
 
     let (seqno, need_state_init) = wallet.seqno(network)?;
     let external = wallet.wallet.create_external_msg(

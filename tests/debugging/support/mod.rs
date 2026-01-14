@@ -1,4 +1,4 @@
 #[cfg(test)]
-pub mod assertions;
+pub(super) mod assertions;
 #[cfg(test)]
-pub mod debug;
+pub(super) mod debug;

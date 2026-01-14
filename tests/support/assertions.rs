@@ -5,14 +5,14 @@ use snapbox::cmd::OutputAssert;
 use std::path::PathBuf;
 
 #[allow(dead_code)]
-pub struct TestOutput {
+pub(crate) struct TestOutput {
     pub output: OutputAssert,
     pub project_path: PathBuf,
 }
 
 #[allow(dead_code)]
 impl TestOutput {
-    pub fn success(self) -> TestSuccess {
+    pub(crate) fn success(self) -> TestSuccess {
         let output = self.output.success();
         TestSuccess {
             output,
@@ -20,7 +20,7 @@ impl TestOutput {
         }
     }
 
-    pub fn failure(self) -> TestFailure {
+    pub(crate) fn failure(self) -> TestFailure {
         let output = self.output.failure();
         TestFailure {
             output,
@@ -29,7 +29,7 @@ impl TestOutput {
     }
 
     /// Assert specific exit code
-    pub fn code(self, expected_code: i32) -> TestSuccess {
+    pub(crate) fn code(self, expected_code: i32) -> TestSuccess {
         let output = self.output.code(expected_code);
         TestSuccess {
             output,
@@ -39,19 +39,19 @@ impl TestOutput {
 }
 
 #[allow(dead_code)]
-pub struct TestSuccess {
+pub(crate) struct TestSuccess {
     output: OutputAssert,
     project_path: PathBuf,
 }
 
 #[allow(dead_code)]
-pub struct TestFailure {
+pub(crate) struct TestFailure {
     output: OutputAssert,
     project_path: PathBuf,
 }
 
 #[allow(dead_code)]
-pub trait TestOutputExt {
+pub(crate) trait TestOutputExt {
     fn assert_passed(&self, count: usize) -> &Self;
     fn assert_failed(&self, count: usize) -> &Self;
     fn assert_skipped(&self, count: usize) -> &Self;

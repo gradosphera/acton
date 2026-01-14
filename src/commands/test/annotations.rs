@@ -1,14 +1,14 @@
 use tree_sitter::Node;
 
 #[derive(Debug)]
-pub struct TestAnnotations {
+pub(super) struct TestAnnotations {
     pub annotations: Vec<String>,
     pub expected_exit_code: Option<i32>,
     pub gas_limit: Option<u64>,
     pub todo_description: Option<String>,
 }
 
-pub fn find_test_annotations(content: &str, child: Node) -> TestAnnotations {
+pub(super) fn find_test_annotations(content: &str, child: Node<'_>) -> TestAnnotations {
     let mut annotations = Vec::new();
     let mut expected_exit_code = None;
     let mut gas_limit = None;
@@ -81,7 +81,7 @@ pub fn find_test_annotations(content: &str, child: Node) -> TestAnnotations {
     }
 }
 
-fn parse_annotation_object(content: &str, object_node: Node) -> TestAnnotations {
+fn parse_annotation_object(content: &str, object_node: Node<'_>) -> TestAnnotations {
     let Some(arguments) = object_node.child_by_field_name("arguments") else {
         return TestAnnotations {
             annotations: Vec::new(),
@@ -165,7 +165,7 @@ fn parse_annotation_object(content: &str, object_node: Node) -> TestAnnotations 
     }
 }
 
-fn is_boolean_true(content: &str, node: Node) -> bool {
+fn is_boolean_true(content: &str, node: Node<'_>) -> bool {
     if node.kind() == "boolean_literal" {
         let text = node.utf8_text(content.as_bytes()).unwrap_or("");
         text == "true"
@@ -174,7 +174,7 @@ fn is_boolean_true(content: &str, node: Node) -> bool {
     }
 }
 
-fn parse_number_literal(content: &str, node: Node) -> Option<String> {
+fn parse_number_literal(content: &str, node: Node<'_>) -> Option<String> {
     if node.kind() == "number_literal" {
         let text = node.utf8_text(content.as_bytes()).unwrap_or("");
         Some(text.to_string())
@@ -183,7 +183,7 @@ fn parse_number_literal(content: &str, node: Node) -> Option<String> {
     }
 }
 
-fn parse_string_literal(content: &str, node: Node) -> Option<String> {
+fn parse_string_literal(content: &str, node: Node<'_>) -> Option<String> {
     if node.kind() == "string_literal" {
         let text = node.utf8_text(content.as_bytes()).unwrap_or("");
         let unquoted = text.trim_matches('"');

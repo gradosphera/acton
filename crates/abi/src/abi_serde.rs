@@ -30,7 +30,7 @@ pub struct DataField {
 }
 
 pub fn decode(
-    data: &mut CellSlice,
+    data: &mut CellSlice<'_>,
     abi: &Vec<TypeAbi>,
     type_abi: &TypeAbi,
 ) -> anyhow::Result<Data> {
@@ -65,7 +65,7 @@ pub fn decode(
 }
 
 fn decode_field(
-    data: &mut CellSlice,
+    data: &mut CellSlice<'_>,
     abi: &Vec<TypeAbi>,
     type_info: &TypeInfo,
 ) -> anyhow::Result<Data> {

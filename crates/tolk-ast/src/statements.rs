@@ -253,7 +253,7 @@ impl<'t> From<Node<'t>> for LocalVarsDeclaration<'t> {
 impl<'tree> LocalVarsDeclaration<'tree> {
     pub fn kind(&self) -> VarKind {
         self.0
-            .field::<Node>("kind")
+            .field::<Node<'_>>("kind")
             .map(VarKind::from)
             .unwrap_or(VarKind::Var)
     }
@@ -492,6 +492,6 @@ impl<'tree> VarDeclaration<'tree> {
     }
 
     pub fn is_redefinition(&self) -> bool {
-        self.0.field::<Ident>("redef").is_some()
+        self.0.field::<Ident<'_>>("redef").is_some()
     }
 }

@@ -452,7 +452,7 @@ impl<'tree> FunctionCall<'tree> {
     }
 
     pub fn arguments(&self) -> Vec<CallArgument<'tree>> {
-        let Some(args) = self.0.field::<ArgumentList>("arguments") else {
+        let Some(args) = self.0.field::<ArgumentList<'_>>("arguments") else {
             return vec![];
         };
         args.arguments()
@@ -556,7 +556,7 @@ impl<'tree> ObjectLiteral<'tree> {
     }
 
     pub fn arguments(&self) -> Vec<InstanceArgument<'tree>> {
-        let Some(body) = self.0.field::<ObjectLiteralBody>("arguments") else {
+        let Some(body) = self.0.field::<ObjectLiteralBody<'_>>("arguments") else {
             return vec![];
         };
         body.arguments()
@@ -653,7 +653,7 @@ impl<'tree> LambdaParameter<'tree> {
     }
 
     pub fn mutate(&self) -> bool {
-        self.0.field::<Ident>("mutate").is_some()
+        self.0.field::<Ident<'_>>("mutate").is_some()
     }
 }
 
@@ -795,7 +795,7 @@ impl<'tree> MatchArm<'tree> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum MatchArmBody<'tree> {
-    BlockStatement(crate::statements::BlockStatement<'tree>),
+    BlockStatement(BlockStatement<'tree>),
     ReturnStatement(crate::statements::ReturnStatement<'tree>),
     ThrowStatement(crate::statements::ThrowStatement<'tree>),
     Expression(Expression<'tree>),
@@ -804,9 +804,7 @@ pub enum MatchArmBody<'tree> {
 impl<'t> From<Node<'t>> for MatchArmBody<'t> {
     fn from(node: Node<'t>) -> Self {
         match node.kind() {
-            "block_statement" => {
-                MatchArmBody::BlockStatement(crate::statements::BlockStatement(node))
-            }
+            "block_statement" => MatchArmBody::BlockStatement(BlockStatement(node)),
             "return_statement" => {
                 MatchArmBody::ReturnStatement(crate::statements::ReturnStatement(node))
             }

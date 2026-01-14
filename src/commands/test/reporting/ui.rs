@@ -25,23 +25,23 @@ static OPEN_CHROME_SCRIPT: &str = include_str!(concat!(
     "/assets/open_chrome.applescript"
 ));
 
-pub struct UiServerState {
+pub(crate) struct UiServerState {
     pub reports: Arc<Vec<TestReport>>,
     pub trace_dir: Option<String>,
 }
 
-pub struct UiReporter {
+pub(crate) struct UiReporter {
     reports: Arc<Mutex<Vec<TestReport>>>,
 }
 
 impl UiReporter {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             reports: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
-    pub fn get_reports_arc(&self) -> Arc<Mutex<Vec<TestReport>>> {
+    pub(crate) fn get_reports_arc(&self) -> Arc<Mutex<Vec<TestReport>>> {
         Arc::clone(&self.reports)
     }
 }
@@ -56,7 +56,7 @@ impl TestReporter for UiReporter {
     }
 }
 
-pub async fn start_ui_server(
+pub(crate) async fn start_ui_server(
     reports: Vec<TestReport>,
     trace_dir: Option<String>,
     port: u16,

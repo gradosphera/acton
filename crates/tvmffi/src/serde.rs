@@ -93,7 +93,7 @@ pub fn serialize_tuple_item(builder: &mut CellBuilder, src: &TupleItem) -> anyho
 }
 
 /// Parse a tuple item from a cell parser
-pub fn parse_tuple_item(parser: &mut CellParser) -> Result<TupleItem, anyhow::Error> {
+pub fn parse_tuple_item(parser: &mut CellParser<'_>) -> Result<TupleItem, anyhow::Error> {
     let kind = parser.load_u8(8)?;
 
     match kind {

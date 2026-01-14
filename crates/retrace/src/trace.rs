@@ -118,7 +118,7 @@ impl InstalledSendMessageAction {
     /// }
     /// ```
     pub fn message(&self) -> Option<RelaxedMessage<'_>> {
-        self.msg_cell.parse::<RelaxedMessage>().ok()
+        self.msg_cell.parse::<RelaxedMessage<'_>>().ok()
     }
 }
 
@@ -247,7 +247,7 @@ impl Trace {
     ///
     /// * `lines` — A vector of results, each containing a parsed [`VmLine`] or an error string.
     /// * `start_gas` — Optional initial gas limit.
-    pub fn from_lines(lines: Vec<Result<VmLine, String>>, start_gas: Option<usize>) -> Trace {
+    pub fn from_lines(lines: Vec<Result<VmLine<'_>, String>>, start_gas: Option<usize>) -> Trace {
         let start_gas = start_gas.unwrap_or(1_000_000);
         let mut gas_remaining = start_gas;
 

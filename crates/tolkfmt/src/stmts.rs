@@ -2,7 +2,7 @@ use crate::{Context, common, exprs};
 use pretty::RcDoc;
 use tolk_ast::*;
 
-pub fn print_block_statement<'a>(ctx: &Context, block: &BlockStatement) -> Option<RcDoc<'a>> {
+pub fn print_block_statement<'a>(ctx: &Context<'_>, block: &BlockStatement) -> Option<RcDoc<'a>> {
     let raw_statements = block.statements();
     let statements = raw_statements
         .iter()
@@ -25,7 +25,7 @@ pub fn print_block_statement<'a>(ctx: &Context, block: &BlockStatement) -> Optio
     )
 }
 
-fn print_statement<'a>(ctx: &Context, stmt: &Statement) -> Option<RcDoc<'a>> {
+fn print_statement<'a>(ctx: &Context<'_>, stmt: &Statement) -> Option<RcDoc<'a>> {
     match stmt {
         Statement::BlockStatement(block) => print_block_statement(ctx, block),
         Statement::IfStatement(if_stmt) => print_if_statement(ctx, if_stmt),
@@ -54,7 +54,7 @@ fn print_statement<'a>(ctx: &Context, stmt: &Statement) -> Option<RcDoc<'a>> {
     }
 }
 
-fn print_if_statement<'a>(ctx: &Context, if_stmt: &IfStatement) -> Option<RcDoc<'a>> {
+fn print_if_statement<'a>(ctx: &Context<'_>, if_stmt: &IfStatement) -> Option<RcDoc<'a>> {
     let condition = if_stmt.condition()?;
     let body = if_stmt.body()?;
     let alternative = if_stmt.alternative();
@@ -87,7 +87,7 @@ fn print_if_statement<'a>(ctx: &Context, if_stmt: &IfStatement) -> Option<RcDoc<
     Some(RcDoc::concat(docs))
 }
 
-fn print_while_statement<'a>(ctx: &Context, while_stmt: &WhileStatement) -> Option<RcDoc<'a>> {
+fn print_while_statement<'a>(ctx: &Context<'_>, while_stmt: &WhileStatement) -> Option<RcDoc<'a>> {
     let condition = while_stmt.condition()?;
     let body = while_stmt.body()?;
 
@@ -105,7 +105,10 @@ fn print_while_statement<'a>(ctx: &Context, while_stmt: &WhileStatement) -> Opti
     ]))
 }
 
-fn print_repeat_statement<'a>(ctx: &Context, repeat_stmt: &RepeatStatement) -> Option<RcDoc<'a>> {
+fn print_repeat_statement<'a>(
+    ctx: &Context<'_>,
+    repeat_stmt: &RepeatStatement,
+) -> Option<RcDoc<'a>> {
     let count = repeat_stmt.count()?;
     let body = repeat_stmt.body()?;
 
@@ -123,7 +126,10 @@ fn print_repeat_statement<'a>(ctx: &Context, repeat_stmt: &RepeatStatement) -> O
     ]))
 }
 
-fn print_do_while_statement<'a>(ctx: &Context, do_while: &DoWhileStatement) -> Option<RcDoc<'a>> {
+fn print_do_while_statement<'a>(
+    ctx: &Context<'_>,
+    do_while: &DoWhileStatement,
+) -> Option<RcDoc<'a>> {
     let condition = do_while.condition()?;
     let body = do_while.body()?;
 
@@ -190,7 +196,10 @@ pub(crate) fn print_throw_statement<'a>(
     ]))
 }
 
-fn print_assert_statement<'a>(ctx: &Context, assert_stmt: &AssertStatement) -> Option<RcDoc<'a>> {
+fn print_assert_statement<'a>(
+    ctx: &Context<'_>,
+    assert_stmt: &AssertStatement,
+) -> Option<RcDoc<'a>> {
     let condition = assert_stmt.condition()?;
     let exc_no = assert_stmt.expression()?;
 
@@ -242,7 +251,7 @@ fn print_try_catch_statement<'a>(
     ]))
 }
 
-fn print_catch_clause<'a>(ctx: &Context, catch: &CatchClause) -> Option<RcDoc<'a>> {
+fn print_catch_clause<'a>(ctx: &Context<'_>, catch: &CatchClause) -> Option<RcDoc<'a>> {
     let body = catch.body()?;
     let var1 = catch.catch_var1();
     let var2 = catch.catch_var2();
@@ -269,7 +278,7 @@ fn print_catch_clause<'a>(ctx: &Context, catch: &CatchClause) -> Option<RcDoc<'a
     Some(RcDoc::concat([vars_doc, body_doc]))
 }
 
-fn print_match_statement<'a>(ctx: &Context, match_stmt: &MatchStatement) -> Option<RcDoc<'a>> {
+fn print_match_statement<'a>(ctx: &Context<'_>, match_stmt: &MatchStatement) -> Option<RcDoc<'a>> {
     let expr = match_stmt.expression()?;
     exprs::print_match_expression(ctx, &expr)
 }
@@ -328,7 +337,7 @@ pub(crate) fn print_local_variables<'a>(
     Some(result)
 }
 
-fn print_var_declaration_lhs<'a>(ctx: &Context, lhs: &VarDeclarationLhs) -> Option<RcDoc<'a>> {
+fn print_var_declaration_lhs<'a>(ctx: &Context<'_>, lhs: &VarDeclarationLhs) -> Option<RcDoc<'a>> {
     match lhs {
         VarDeclarationLhs::TupleVarsDeclaration(tuple) => {
             let vars = tuple.vars();

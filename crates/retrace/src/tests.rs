@@ -121,6 +121,7 @@ async fn test_retrace_v12() {
     .await;
 }
 
+#[allow(unsafe_code)]
 async fn assert_retrace(
     net: Network,
     hash: &str,

@@ -612,7 +612,7 @@ junit-merge = true
     }
 
     #[test]
-    fn test_wallet_config_parsing() -> anyhow::Result<()> {
+    fn test_wallet_config_parsing() -> Result<()> {
         let toml_content = r#"
 [wallets.deployer]
 kind = "v4R2"

@@ -42,6 +42,7 @@
 //! Like the transaction executor, the get-method emulator uses global variables
 //! and is **not thread-safe**. All executions must be run in a single thread.
 
+#![allow(unsafe_code)]
 pub mod step;
 mod tests;
 pub mod types;

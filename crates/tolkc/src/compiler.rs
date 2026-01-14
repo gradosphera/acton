@@ -1,3 +1,4 @@
+#![allow(unsafe_code)]
 use include_dir::{Dir, include_dir};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -292,8 +293,8 @@ pub struct CompilerResultError {
 }
 
 /// We embed the whole standard library of Tolk and Fift in binary for easier distribution.
-pub static TOLK_STDLIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/tolk-stdlib");
-static FIFT_STDLIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/assets/fift");
+pub static TOLK_STDLIB_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/assets/tolk-stdlib");
+static FIFT_STDLIB_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/assets/fift");
 
 fn read_stdlib_file(path: &str) -> Option<&'static str> {
     TOLK_STDLIB_DIR.get_file(path)?.contents_utf8()
