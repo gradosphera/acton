@@ -4,10 +4,10 @@ use crate::support::project::{ProjectBuilder, TestConfig};
 use crate::support::snapshots::normalize_output;
 use std::fs;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn test_coverage_basic_output() {
@@ -15,11 +15,11 @@ fn test_coverage_basic_output() {
         .contract("simple", SIMPLE_CONTRACT)
         .file(
             "code/math",
-            r#"
+            r"
             fun add(a: int, b: int): int {
                 return a + b;
             }
-            
+
             fun isPositive(x: int): bool {
                 if (x > 0) {
                     return true;
@@ -27,18 +27,18 @@ fn test_coverage_basic_output() {
                     return false;
                 }
             }
-        "#,
+        ",
         )
         .test_file(
             "test",
             r#"
             import "../../lib/testing/expect"
             import "../code/math"
-            
+
             get fun `test-coverage-example`() {
                 val result = add(1, 2);
                 expect(result).toEqual(3);
-                
+
                 val positive = isPositive(5);
                 expect(positive).toEqual(true);
 
@@ -72,30 +72,30 @@ fn test_coverage_multiple_tests() {
         .contract("simple", SIMPLE_CONTRACT)
         .file(
             "code/calculator",
-            r#"
+            r"
             fun multiply(a: int, b: int): int {
                 return a * b;
             }
-            
+
             fun divide(a: int, b: int): int {
                 if (b == 0) {
                     throw 100;
                 }
                 return a / b;
             }
-        "#,
+        ",
         )
         .test_file(
             "test",
             r#"
             import "../../lib/testing/expect"
             import "../code/calculator"
-            
+
             get fun `test-multiply`() {
                 val result = multiply(3, 4);
                 expect(result).toEqual(12);
             }
-            
+
             get fun `test-divide`() {
                 val result = divide(10, 2);
                 expect(result).toEqual(5);
@@ -127,26 +127,26 @@ fn test_coverage_with_failing_tests() {
         .contract("simple", SIMPLE_CONTRACT)
         .file(
             "code/validator",
-            r#"
+            r"
             fun validate(value: int): bool {
                 if (value > 0) {
                     return true;
                 }
                 return false;
             }
-        "#,
+        ",
         )
         .test_file(
             "test",
             r#"
             import "../../lib/testing/expect"
             import "../code/validator"
-            
+
             get fun `test-passing`() {
                 val result = validate(10);
                 expect(result).toEqual(true);
             }
-            
+
             get fun `test-failing`() {
                 val result = validate(10);
                 expect(result).toEqual(false); // This will fail
@@ -181,27 +181,27 @@ fn test_coverage_with_filter() {
         .contract("simple", SIMPLE_CONTRACT)
         .file(
             "code/helpers",
-            r#"
+            r"
             fun double(x: int): int {
                 return x * 2;
             }
-            
+
             fun triple(x: int): int {
                 return x * 3;
             }
-        "#,
+        ",
         )
         .test_file(
             "test",
             r#"
             import "../../lib/testing/expect"
             import "../code/helpers"
-            
+
             get fun `test-unit-double`() {
                 val result = double(5);
                 expect(result).toEqual(10);
             }
-            
+
             get fun `test-integration-triple`() {
                 val result = triple(5);
                 expect(result).toEqual(15);
@@ -250,26 +250,26 @@ fn test_coverage_lcov_snapshot() {
         .contract("simple", SIMPLE_CONTRACT)
         .file(
             "code/logic",
-            r#"
+            r"
             fun and(a: bool, b: bool): bool {
                 return a && b;
             }
-            
+
             fun or(a: bool, b: bool): bool {
                 return a || b;
             }
-        "#,
+        ",
         )
         .test_file(
             "test",
             r#"
             import "../../lib/testing/expect"
             import "../code/logic"
-            
+
             get fun `test-lcov-snapshot`() {
                 val result1 = and(true, true);
                 expect(result1).toEqual(true);
-                
+
                 val result2 = or(false, true);
                 expect(result2).toEqual(true);
             }
@@ -295,7 +295,7 @@ fn test_coverage_lcov_snapshot() {
     assertion().eq(
         normalize_output(lcov_content.as_str(), project.path()),
         snapbox::file!("snapshots/test_coverage_lcov_snapshot.lcov"),
-    )
+    );
 }
 
 #[test]
@@ -306,7 +306,7 @@ fn test_coverage_empty_no_tests() {
             "test",
             r#"
             import "../../lib/testing/expect"
-            
+
             // No test functions
         "#,
         )
@@ -327,7 +327,7 @@ fn test_coverage_text_custom_filename() {
         .contract("simple", SIMPLE_CONTRACT)
         .file(
             "code/logic",
-            r#"
+            r"
             fun and(a: bool, b: bool): bool {
                 return a && b;
             }
@@ -335,7 +335,7 @@ fn test_coverage_text_custom_filename() {
             fun or(a: bool, b: bool): bool {
                 return a || b;
             }
-        "#,
+        ",
         )
         .test_file(
             "test",
@@ -385,7 +385,7 @@ fn test_coverage_text_custom_filename_from_config() {
         .contract("simple", SIMPLE_CONTRACT)
         .file(
             "code/logic",
-            r#"
+            r"
             fun and(a: bool, b: bool): bool {
                 return a && b;
             }
@@ -393,7 +393,7 @@ fn test_coverage_text_custom_filename_from_config() {
             fun or(a: bool, b: bool): bool {
                 return a || b;
             }
-        "#,
+        ",
         )
         .test_file(
             "test",

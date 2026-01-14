@@ -7,7 +7,7 @@ pub(crate) struct DotReporter {
 }
 
 impl DotReporter {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self { tests: Vec::new() }
     }
 
@@ -16,7 +16,7 @@ impl DotReporter {
         stdout().flush().ok();
     }
 
-    fn get_status_char(&self, status: &TestStatus) -> char {
+    const fn get_status_char(&self, status: &TestStatus) -> char {
         match status {
             TestStatus::Passed => '·',
             TestStatus::Failed => 'x',

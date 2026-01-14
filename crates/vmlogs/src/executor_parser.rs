@@ -236,18 +236,19 @@ pub fn executor_line<'a>(i: &mut I<'a>) -> PResult<ExecutorLine<'a>> {
 
 // Parse executor log line, skipping the prefix before "     "
 pub fn parse_executor_line(input: &str) -> Result<ExecutorLine<'_>, String> {
-    let parts: Vec<&str> = input.splitn(2, "	").collect();
+    let parts: Vec<&str> = input.splitn(2, '\t').collect();
     if parts.len() != 2 {
-        return Err(format!("Invalid executor log format: {}", input));
+        return Err(format!("Invalid executor log format: {input}"));
     }
     let message_part = parts[1];
 
     match terminated(executor_line, opt(eof)).parse(message_part.as_ref()) {
         Ok(v) => Ok(v),
-        Err(e) => Err(format!("{e:?} @ {:?}", message_part)),
+        Err(e) => Err(format!("{e:?} @ {message_part:?}")),
     }
 }
 
+#[must_use]
 pub fn parse_executor_lines(input: &str) -> Vec<Result<ExecutorLine<'_>, String>> {
     input
         .split_inclusive('\n')
@@ -263,7 +264,7 @@ pub fn parse_executor_lines(input: &str) -> Vec<Result<ExecutorLine<'_>, String>
 mod tests {
     use super::*;
 
-    const TEST_EXECUTOR_LOGS: &str = r#"[ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	steps: 28 gas: used=1421, max=1000000, limit=1000000, credit=0
+    const TEST_EXECUTOR_LOGS: &str = "[ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	steps: 28 gas: used=1421, max=1000000, limit=1000000, credit=0
 [ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	out_of_gas=false, accepted=true, success=true, time=0.000000s, cpu_time=0.000000
 [ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	gas fees: 568400 = 26214400 * 1421 /2^16 ; price=26214400; flat rate=[40000 for 100]; remaining balance=998442400ng
 [ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	process send message 96444DE3098C2942729F6B0AD6D215138CF00724C38F3E560ED0C79D2ABF8EE7
@@ -271,7 +272,7 @@ mod tests {
 [ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	remaining balance 96968400ng
 [ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	action_reserve_currency: mode=0, reserve=10000ng, balance=96334000ng, original balance=999753200ng
 [ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	changed remaining balance to 96324000ng, reserved balance to 10000ng
-[ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	some unknown message here"#;
+[ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	some unknown message here";
 
     #[test]
     fn test_parse_executor_logs() {

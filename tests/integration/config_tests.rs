@@ -1,10 +1,10 @@
 use crate::support::TestOutputExt;
 use crate::support::project::{ProjectBuilder, TestConfig};
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn test_filter_via_config() {
@@ -14,15 +14,15 @@ fn test_filter_via_config() {
             "test",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-unit-1`() {
                 expect(1).toEqual(1);
             }
-            
+
             get fun `test-unit-2`() {
                 expect(2).toEqual(2);
             }
-            
+
             get fun `test-other`() {
                 expect(3).toEqual(3);
             }
@@ -60,18 +60,18 @@ fn test_coverage_via_config() {
         .contract("simple", SIMPLE_CONTRACT)
         .file(
             "code/math",
-            r#"
+            r"
             fun add(a: int, b: int): int {
                 return a + b;
             }
-        "#,
+        ",
         )
         .test_file(
             "test",
             r#"
             import "../../lib/testing/expect"
             import "../code/math"
-            
+
             get fun `test-addition`() {
                 val result = add(2, 3);
                 expect(result).toEqual(5);
@@ -111,7 +111,7 @@ fn test_backtrace_via_config() {
             "test",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-with-error`() {
                 throw 42;
             }
@@ -148,28 +148,28 @@ fn test_filter_and_coverage_via_config() {
         .contract("simple", SIMPLE_CONTRACT)
         .file(
             "code/utils",
-            r#"
+            r"
             @noinline
             fun div(x: int): int {
                 return 10 / x;
             }
-            
+
             fun triple(x: int): int {
                 return x * 3;
             }
-        "#,
+        ",
         )
         .test_file(
             "test",
             r#"
             import "../../lib/testing/expect"
             import "../code/utils"
-            
+
             get fun `test-unit-div`() {
                 val result = div(0);
                 expect(result).toEqual(0);
             }
-            
+
             get fun `test-integration-triple`() {
                 val result = triple(5);
                 expect(result).toEqual(15);
@@ -214,15 +214,15 @@ fn test_cli_overrides_config_filter() {
             "test",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-alpha`() {
                 expect(1).toEqual(1);
             }
-            
+
             get fun `test-beta`() {
                 expect(2).toEqual(2);
             }
-            
+
             get fun `test-gamma`() {
                 expect(3).toEqual(3);
             }
@@ -266,7 +266,7 @@ fn test_config_with_specific_path() {
             "test1",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-in-file-1`() {
                 expect(1).toEqual(1);
             }
@@ -276,7 +276,7 @@ fn test_config_with_specific_path() {
             "test2",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-in-file-2`() {
                 expect(2).toEqual(2);
             }
@@ -319,7 +319,7 @@ fn test_empty_config() {
             "test",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-simple`() {
                 expect(1).toEqual(1);
             }

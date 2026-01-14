@@ -2,18 +2,18 @@ use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use std::fs;
 
-const UNFORMATTED_TOLK: &str = r#"
+const UNFORMATTED_TOLK: &str = r"
 fun onInternalMessage(in:InMessage){
 val x=1;
     val y = 2;
 }
-"#;
+";
 
-const FORMATTED_TOLK: &str = r#"fun onInternalMessage(in: InMessage) {
+const FORMATTED_TOLK: &str = r"fun onInternalMessage(in: InMessage) {
     val x = 1;
     val y = 2;
 }
-"#;
+";
 
 #[test]
 fn test_fmt_simple() {
@@ -139,7 +139,7 @@ fn test_fmt_syntax_error() {
 #[test]
 fn test_fmt_custom_width() {
     let long_line = "val x = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];\n";
-    let code = format!("fun test() {{\n    {}\n}}\n", long_line);
+    let code = format!("fun test() {{\n    {long_line}\n}}\n");
 
     let project = ProjectBuilder::new("fmt-width")
         .contract("wide", &code)

@@ -11,6 +11,7 @@ pub struct ExceptionInfo {
     pub backtrace: Vec<DebugLocation>,
 }
 
+#[must_use]
 pub fn find_exception_info(vm_logs: &str, source_map: &SourceMap) -> Option<ExceptionInfo> {
     let lines = vmlogs::parser::parse_lines(vm_logs);
 
@@ -18,8 +19,8 @@ pub fn find_exception_info(vm_logs: &str, source_map: &SourceMap) -> Option<Exce
         .iter()
         .rfind(|line| matches!(line, Ok(VmLine::VmException { .. })));
     let description = match exception {
-        Some(Ok(VmLine::VmException { message, .. })) => message.to_string(),
-        _ => "".to_string(),
+        Some(Ok(VmLine::VmException { message, .. })) => (*message).to_string(),
+        _ => String::new(),
     };
 
     let location = lines
@@ -27,8 +28,10 @@ pub fn find_exception_info(vm_logs: &str, source_map: &SourceMap) -> Option<Exce
         .rfind(|line| matches!(line, Ok(VmLine::VmLoc { .. })));
 
     let (hash, offset) = match location {
-        Some(Ok(VmLine::VmLoc { hash, offset })) => (hash.to_string(), offset.parse().unwrap_or(0)),
-        _ => ("".to_string(), 0),
+        Some(Ok(VmLine::VmLoc { hash, offset })) => {
+            ((*hash).to_string(), offset.parse().unwrap_or(0))
+        }
+        _ => (String::new(), 0),
     };
 
     let loc = find_source_loc(source_map, &hash, offset);
@@ -78,6 +81,7 @@ fn find_backtrace(
     stack.iter().map(|loc| (**loc).clone()).collect::<Vec<_>>()
 }
 
+#[must_use]
 pub fn find_source_loc(source_map: &SourceMap, hash: &str, offset: u16) -> Option<SourceLocation> {
     if source_map.high_level.locations.is_empty() {
         // `--backtrace full` is not enabled
@@ -94,6 +98,7 @@ pub fn find_source_loc(source_map: &SourceMap, hash: &str, offset: u16) -> Optio
     locs.last().map(|l| l.loc.clone())
 }
 
+#[must_use]
 pub fn find_installed_actions(vm_logs: &str) -> InstalledActions {
     retrace::trace::Trace::new(vm_logs, None).actions()
 }

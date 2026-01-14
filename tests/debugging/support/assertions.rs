@@ -26,8 +26,7 @@ impl DebugTestOutputExt for DebugTestOutput {
         let actual_count = self.result.trace().steps.len();
         assert_eq!(
             actual_count, expected_count,
-            "Expected {} trace steps, but got {}",
-            expected_count, actual_count
+            "Expected {expected_count} trace steps, but got {actual_count}"
         );
         self
     }
@@ -43,13 +42,13 @@ impl DebugTestOutputExt for DebugTestOutput {
             .trace()
             .steps
             .get(step_index)
-            .unwrap_or_else(|| panic!("Step {} not found in trace", step_index));
+            .unwrap_or_else(|| panic!("Step {step_index} not found in trace"));
 
         let var = step
             .variables
             .iter()
             .find(|v| v.name == var_name)
-            .unwrap_or_else(|| panic!("Variable '{}' not found at step {}", var_name, step_index));
+            .unwrap_or_else(|| panic!("Variable '{var_name}' not found at step {step_index}"));
 
         assert_eq!(
             &var.value, expected_value,

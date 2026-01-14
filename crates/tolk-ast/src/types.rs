@@ -17,11 +17,13 @@ pub enum Type<'tree> {
 }
 
 impl<'tree> Type<'tree> {
+    #[must_use]
     pub fn text(&self, source: &'tree str) -> &'tree str {
         self.raw_node().utf8_text(source.as_bytes()).unwrap_or("")
     }
 
-    pub fn raw_node(&self) -> Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> Node<'tree> {
         match self {
             Type::TypeIdentifier(n) => n.0,
             Type::TypeInstantiatedTs(n) => n.0,
@@ -64,6 +66,7 @@ impl<'t> From<Node<'t>> for TypeIdentifier<'t> {
 }
 
 impl<'tree> TypeIdentifier<'tree> {
+    #[must_use]
     pub fn text(&self, source: &'tree str) -> &'tree str {
         self.0
             .utf8_text(source.as_bytes())
@@ -81,10 +84,12 @@ impl<'t> From<Node<'t>> for TypeInstantiatedTs<'t> {
 }
 
 impl<'tree> TypeInstantiatedTs<'tree> {
+    #[must_use]
     pub fn name(&self) -> Option<TypeIdentifier<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn arguments(&self) -> Option<InstantiationTList<'tree>> {
         self.0.field("arguments")
     }
@@ -104,7 +109,7 @@ impl<'tree> TensorType<'tree> {
         let mut cursor = self.0.walk();
         self.0
             .children(&mut cursor)
-            .filter(|n| n.is_named())
+            .filter(Node::is_named)
             .map(Into::into)
             .collect()
     }
@@ -124,7 +129,7 @@ impl<'tree> TupleType<'tree> {
         let mut cursor = self.0.walk();
         self.0
             .children(&mut cursor)
-            .filter(|n| n.is_named())
+            .filter(Node::is_named)
             .map(Into::into)
             .collect()
     }
@@ -140,6 +145,7 @@ impl<'t> From<Node<'t>> for ParenthesizedType<'t> {
 }
 
 impl<'tree> ParenthesizedType<'tree> {
+    #[must_use]
     pub fn inner(&self) -> Option<Type<'tree>> {
         self.0.field("inner")
     }
@@ -155,10 +161,12 @@ impl<'t> From<Node<'t>> for FunCallableType<'t> {
 }
 
 impl<'tree> FunCallableType<'tree> {
+    #[must_use]
     pub fn param_types(&self) -> Option<Type<'tree>> {
         self.0.field("param_types")
     }
 
+    #[must_use]
     pub fn return_type(&self) -> Option<Type<'tree>> {
         self.0.field("return_type")
     }
@@ -174,6 +182,7 @@ impl<'t> From<Node<'t>> for NullableType<'t> {
 }
 
 impl<'tree> NullableType<'tree> {
+    #[must_use]
     pub fn inner(&self) -> Option<Type<'tree>> {
         self.0.field("inner")
     }
@@ -189,10 +198,12 @@ impl<'t> From<Node<'t>> for UnionType<'t> {
 }
 
 impl<'tree> UnionType<'tree> {
+    #[must_use]
     pub fn lhs(&self) -> Option<Type<'tree>> {
         self.0.field("lhs")
     }
 
+    #[must_use]
     pub fn rhs(&self) -> Option<Type<'tree>> {
         self.0.field("rhs")
     }

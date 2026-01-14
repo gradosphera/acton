@@ -17,6 +17,7 @@ pub struct SourceMap {
 }
 
 impl SourceMap {
+    #[must_use]
     pub fn hash(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.high_level.version.hash(&mut hasher);
@@ -67,6 +68,7 @@ pub struct SourceLocation {
 }
 
 impl SourceLocation {
+    #[must_use]
     pub fn format(&self) -> String {
         format!(
             "{}:{}:{}",
@@ -76,6 +78,7 @@ impl SourceLocation {
         )
     }
 
+    #[must_use]
     pub fn normalize_path(file: &str) -> String {
         let normalized = file.replace(".test.tolk.test.tolk", ".test.tolk");
 
@@ -156,7 +159,7 @@ pub enum EntryContextDescription {
 impl Default for EntryContextDescription {
     fn default() -> Self {
         EntryContextDescription::Basic {
-            ast_kind: "".to_owned(),
+            ast_kind: String::new(),
         }
     }
 }
@@ -204,6 +207,7 @@ fn read_label(slice: &mut CellSlice<'_>, m: usize) -> anyhow::Result<String> {
     }
 }
 
+#[allow(clippy::useless_let_if_seq)]
 fn get_final_slice(dc: &Cell, key: &str) -> anyhow::Result<Cell> {
     let mut dict = dc.as_slice()?;
     let lbl = read_label(&mut dict, key.len())?;
@@ -253,7 +257,7 @@ fn get_real_code_hashes(code: &Cell) -> anyhow::Result<HashMap<String, (String, 
             v.repr_hash().to_string().to_uppercase(),
             (
                 final_slice.repr_hash().to_string().to_uppercase(),
-                (final_slice.bit_len() as i32 - original_slice.size_bits() as i32) as u16,
+                (i32::from(final_slice.bit_len()) - i32::from(original_slice.size_bits())) as u16,
             ),
         );
     }
@@ -279,9 +283,9 @@ pub fn parse_marks_dict(
             continue;
         };
 
-        let mut hash = format!("{:x}", hash).to_uppercase();
+        let mut hash = format!("{hash:x}").to_uppercase();
         if hash.len() < 64 {
-            hash = "0".repeat(64 - hash.len()) + hash.as_str()
+            hash = "0".repeat(64 - hash.len()) + hash.as_str();
         }
 
         let mut slice = kv.1;
@@ -306,22 +310,30 @@ pub fn parse_marks_dict(
 
             for kv in dict_marks_inner.iter() {
                 let Ok(kv) = kv else { continue };
+
+                #[allow(clippy::cast_possible_truncation)] // always safe, we load only 10 bits
                 let offset = kv.0.as_data_slice().load_uint(10)? as u16;
 
                 let adjusted_offset = offset
                     + (if is_normal {
                         0u16
                     } else {
-                        real_code_hashes.get(&hash).map(|r| r.1).unwrap_or(0)
+                        real_code_hashes.get(&hash).map_or(0, |r| r.1)
                     });
 
                 let old_value = marks.get_mut(&final_hash);
                 if let Some(old_value) = old_value {
-                    old_value.push(OffsetAndId(adjusted_offset, debug_id as i32))
+                    old_value.push(OffsetAndId(
+                        adjusted_offset,
+                        i32::try_from(debug_id).unwrap_or(0),
+                    ));
                 } else {
                     marks.insert(
                         final_hash.clone(),
-                        vec![OffsetAndId(adjusted_offset, debug_id as i32)],
+                        vec![OffsetAndId(
+                            adjusted_offset,
+                            i32::try_from(debug_id).unwrap_or(0),
+                        )],
                     );
                 }
             }

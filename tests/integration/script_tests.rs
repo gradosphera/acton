@@ -450,11 +450,11 @@ fn test_script_compilation_error() {
     let project = ProjectBuilder::new("script-compile-error")
         .script_file(
             "broken",
-            r#"
+            r"
             fun main() {
                 val x = nonexistent_function();
             }
-        "#,
+        ",
         )
         .build();
 
@@ -474,9 +474,9 @@ fn test_script_syntax_error() {
     let project = ProjectBuilder::new("script-syntax")
         .script_file(
             "syntax",
-            r#"
+            r"
             val x = {{{;
-        "#,
+        ",
         )
         .build();
 

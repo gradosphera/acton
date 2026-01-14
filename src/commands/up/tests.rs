@@ -356,7 +356,7 @@ fn assert_backup_created(bin_path: &Path, version: &str, expected_content: &str)
     let bin_dir = bin_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("No parent dir"))?;
-    let backup_name = format!("acton-{}", version);
+    let backup_name = format!("acton-{version}");
     let backup_path = bin_dir.join(&backup_name);
 
     if !backup_path.exists() {
@@ -365,11 +365,7 @@ fn assert_backup_created(bin_path: &Path, version: &str, expected_content: &str)
 
     let content = fs::read_to_string(&backup_path)?;
     if content != expected_content {
-        bail!(
-            "Backup content mismatch. Expected '{}', got '{}'",
-            expected_content,
-            content
-        );
+        bail!("Backup content mismatch. Expected '{expected_content}', got '{content}'");
     }
 
     Ok(())
@@ -393,7 +389,7 @@ impl MockReleaseClient {
     }
 
     fn add_release(&mut self, version: &str, assets: Vec<Asset>) {
-        let tag = format!("v{}", version);
+        let tag = format!("v{version}");
         let release = Release {
             tag_name: tag.clone(),
             assets,
@@ -403,9 +399,9 @@ impl MockReleaseClient {
     }
 
     fn set_latest(&mut self, version: &str, assets: Vec<Asset>) {
-        let tag = format!("v{}", version);
+        let tag = format!("v{version}");
         let release = Release {
-            tag_name: tag.clone(),
+            tag_name: tag,
             assets,
         };
         self.latest_release = Some(release);
@@ -432,11 +428,11 @@ impl MockReleaseClient {
         };
 
         Asset {
-            name: format!("acton-{}-{}.tar.gz", os, arch),
-            url: format!("http://api.mock.url/v{}/acton.tar.gz", version),
+            name: format!("acton-{os}-{arch}.tar.gz"),
+            url: format!("http://api.mock.url/v{version}/acton.tar.gz"),
             version: version.to_owned(),
             content: None,
-            browser_download_url: format!("http://mock.url/v{}/acton.tar.gz", version),
+            browser_download_url: format!("http://mock.url/v{version}/acton.tar.gz"),
             size: 1024,
         }
     }
@@ -454,11 +450,11 @@ impl MockReleaseClient {
         };
 
         Asset {
-            name: format!("acton-{}-{}.tar.gz", os, arch),
-            url: format!("http://api.mock.url/v{}/acton.tar.gz", version),
+            name: format!("acton-{os}-{arch}.tar.gz"),
+            url: format!("http://api.mock.url/v{version}/acton.tar.gz"),
             version: version.to_owned(),
             content: Some(content.to_owned()),
-            browser_download_url: format!("http://mock.url/v{}/acton.tar.gz", version),
+            browser_download_url: format!("http://mock.url/v{version}/acton.tar.gz"),
             size: 1024,
         }
     }
@@ -484,12 +480,12 @@ impl ReleaseClient for MockReleaseClient {
             let alt = if v.starts_with('v') {
                 v.trim_start_matches('v').to_string()
             } else {
-                format!("v{}", v)
+                format!("v{v}")
             };
             if let Some(release) = self.releases.get(&alt) {
                 return Ok(release.clone());
             }
-            bail!("Release not found: {}", v);
+            bail!("Release not found: {v}");
         }
 
         self.latest_release
@@ -533,8 +529,8 @@ impl ReleaseClient for MockReleaseClient {
             asset
                 .content
                 .as_ref()
-                .map(|c| format!(": {}", c))
-                .unwrap_or("".to_owned())
+                .map(|c| format!(": {c}"))
+                .unwrap_or_default()
         );
 
         let mut header = tar::Header::new_gnu();

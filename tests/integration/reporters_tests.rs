@@ -2,10 +2,10 @@ use crate::support::TestOutputExt;
 use crate::support::fixtures::FixtureProject;
 use crate::support::project::ProjectBuilder;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn test_teamcity_reporter_basic_passing() {
@@ -256,8 +256,8 @@ fn test_junit_reporter_with_merge() {
         .success()
         .assert_passed(2)
         .assert_file_exists("test-results/junit-results.xml")
-        .assert_file_contains("test-results/junit-results.xml", r#"<testsuites"#)
-        .assert_file_contains("test-results/junit-results.xml", r#"<testsuite"#)
+        .assert_file_contains("test-results/junit-results.xml", r"<testsuites")
+        .assert_file_contains("test-results/junit-results.xml", r"<testsuite")
         .assert_file_snapshot_matches(
             "test-results/junit-results.xml",
             "integration/snapshots/test_junit_with_merge.xml.gen",

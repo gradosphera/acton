@@ -77,7 +77,7 @@ impl Emulator {
     /// # Arguments
     ///
     /// * `verbosity` - The level of logging detail for the executor.
-    /// * `config_b64` - Optional Base64-encoded global configuration BoC.
+    /// * `config_b64` - Optional Base64-encoded global configuration `BoC`.
     pub fn new(verbosity: ExecutorVerbosity, config_b64: Option<&str>) -> anyhow::Result<Emulator> {
         let executor = Executor::new(verbosity, config_b64)?;
         Ok(Emulator { executor })
@@ -137,7 +137,7 @@ impl Emulator {
             is_tock: None,
         };
 
-        let (result, executor_logs) = self.executor.run_transaction(&msg_b64, args)?;
+        let (result, executor_logs) = self.executor.run_transaction(&msg_b64, &args)?;
 
         let result = match result {
             EmulationResult::Success(result) => result,
@@ -157,7 +157,7 @@ impl Emulator {
 
         let out_messages = transaction
             .iter_out_msgs()
-            .filter_map(|it| it.ok())
+            .filter_map(Result::ok)
             .map(|it| to_cell(&it))
             .collect::<anyhow::Result<Vec<_>>>()?;
 
@@ -229,7 +229,7 @@ impl Emulator {
                     }
                     results.extend(sub_results);
                 }
-                _ => {}
+                MsgInfo::ExtIn(_) => {}
             }
         }
 
@@ -251,7 +251,7 @@ impl Emulator {
             if let RelaxedMsgInfo::Int(info) = &mut message.info {
                 // Set src address as Node does
                 if info.src.is_none() {
-                    info.src = Some(from)
+                    info.src = Some(from);
                 }
 
                 // Set create_at as Node does
@@ -323,7 +323,7 @@ pub enum SendMessageResult {
 /// Detailed information about a successful transaction emulation.
 #[derive(Clone, Debug)]
 pub struct SendMessageResultSuccess {
-    /// Base64-encoded transaction BoC.
+    /// Base64-encoded transaction `BoC`.
     pub raw_transaction: String,
     /// The parsed transaction object.
     pub transaction: Transaction,
@@ -341,7 +341,7 @@ pub struct SendMessageResultSuccess {
     pub vm_log: String,
     /// High-level executor logs.
     pub executor_logs: String,
-    /// Base64-encoded outgoing actions BoC.
+    /// Base64-encoded outgoing actions `BoC`.
     pub actions: Option<String>,
     /// The code cell used for this transaction.
     pub code: Option<Cell>,
@@ -354,6 +354,7 @@ impl SendMessageResultSuccess {
     ///
     /// If the message is a bounced message, it tries to extract the opcode
     /// following the initial 32-bit `0xffffffff` prefix.
+    #[must_use]
     pub fn opcode(&self) -> Option<u32> {
         let in_msg = self.transaction.in_msg.as_deref()?;
         let mut in_msg = in_msg.parse::<RelaxedMessage<'_>>().ok()?;
@@ -368,6 +369,7 @@ impl SendMessageResultSuccess {
     }
 
     /// Returns the amount of gas used during the computation phase.
+    #[must_use]
     pub fn used_gas(&self) -> Option<u64> {
         let info = self.transaction.info.load().ok()?;
         let TxInfo::Ordinary(info) = info else {

@@ -11,13 +11,23 @@ use walkdir::WalkDir;
 pub fn init_cmd() -> anyhow::Result<()> {
     let acton_toml_exists = Path::new("Acton.toml").exists();
 
-    if !acton_toml_exists {
+    if acton_toml_exists {
+        println!(
+            "    {} Acton.toml project configuration",
+            "Skipping".green().bold()
+        );
+    } else {
         let mut config = ActonConfig::default();
 
         let discovered_contracts = discover_contracts();
         let contract_count = discovered_contracts.len();
 
-        if !discovered_contracts.is_empty() {
+        if discovered_contracts.is_empty() {
+            println!(
+                "       {} no contracts in the current directory",
+                "Found".green().bold()
+            );
+        } else {
             println!(
                 "  {} {} contract{}",
                 "Discovered".bold().green(),
@@ -30,22 +40,12 @@ pub fn init_cmd() -> anyhow::Result<()> {
             config.contracts = Some(ContractsConfig {
                 contracts: discovered_contracts,
             });
-        } else {
-            println!(
-                "       {} no contracts in the current directory",
-                "Found".green().bold()
-            );
         }
 
         config.save()?;
         println!(
             "     {} Acton.toml with project configuration",
             "Created".green().bold()
-        );
-    } else {
-        println!(
-            "    {} Acton.toml project configuration",
-            "Skipping".green().bold()
         );
     }
 
@@ -69,10 +69,10 @@ pub fn init_cmd() -> anyhow::Result<()> {
         );
     }
 
-    if !acton_toml_exists {
-        println!("\n{}", "✓ Initialized new Acton project".green().bold());
-    } else {
+    if acton_toml_exists {
         println!("\n{}", "✓ Updated Acton project".green().bold());
+    } else {
+        println!("\n{}", "✓ Initialized new Acton project".green().bold());
     }
 
     Ok(())
@@ -84,7 +84,7 @@ fn patch_or_create_gitignore() -> anyhow::Result<()> {
     } else {
         String::new()
     };
-    let lines = content.lines().map(|l| l.trim()).collect::<Vec<_>>();
+    let lines = content.lines().map(str::trim).collect::<Vec<_>>();
 
     let mut to_add = String::new();
 
@@ -133,7 +133,7 @@ fn discover_contracts() -> BTreeMap<String, ContractConfig> {
             !file_name.starts_with('.')
                 && !matches!(file_name, "node_modules" | "target" | ".git" | ".acton")
         })
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
     {
         if !entry.file_type().is_file() {
             continue;
@@ -170,7 +170,7 @@ fn discover_contracts() -> BTreeMap<String, ContractConfig> {
             .to_string_lossy()
             .to_string();
 
-        let contract_key = file_stem.replace("-", "_");
+        let contract_key = file_stem.replace('-', "_");
         let contract_name = format_contract_name(file_stem);
 
         let contract_config = ContractConfig {
@@ -207,7 +207,7 @@ fn format_contract_name(file_stem: &str) -> String {
         .map(|word| {
             let mut chars = word.chars();
             match chars.next() {
-                None => "".to_owned(),
+                None => String::new(),
                 Some(first) => first.to_uppercase().chain(chars.as_str().chars()).collect(),
             }
         })

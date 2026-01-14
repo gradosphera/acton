@@ -1,10 +1,10 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn test_skip_annotation_string_literal() {
@@ -151,7 +151,7 @@ fn test_todo_annotation_boolean() {
         .assert_contains("TODO");
 }
 
-/// Test @custom({ gas_limit: 100 }) annotation
+/// Test @custom({ `gas_limit`: 100 }) annotation
 #[test]
 fn test_gas_limit_annotation() {
     ProjectBuilder::new("gas-limit")
@@ -186,7 +186,7 @@ fn test_gas_limit_annotation() {
         .assert_contains("Gas limit exceeded");
 }
 
-/// Test @custom({ fail_with: 42 }) annotation
+/// Test @custom({ `fail_with`: 42 }) annotation
 #[test]
 fn test_fail_with_annotation() {
     ProjectBuilder::new("fail-with")
@@ -215,7 +215,7 @@ fn test_fail_with_annotation() {
         .assert_not_contains("Expected exit_code");
 }
 
-/// Test @custom({ fail_with: 42 }) annotation with wrong exit code
+/// Test @custom({ `fail_with`: 42 }) annotation with wrong exit code
 #[test]
 fn test_fail_with_annotation_wrong_code() {
     ProjectBuilder::new("fail-with-wrong")

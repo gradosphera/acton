@@ -130,7 +130,7 @@ pub fn verify_cmd(
     );
 
     if backend_info.backends.is_empty() {
-        anyhow::bail!("No backends found for network: {}", network);
+        anyhow::bail!("No backends found for network: {network}");
     }
 
     println!("  {} Collecting source files", "→".blue().bold());
@@ -148,7 +148,7 @@ pub fn verify_cmd(
 
     let mut form = reqwest::blocking::multipart::Form::new();
 
-    for path in source_files.iter() {
+    for path in &source_files {
         let path = PathBuf::from(path);
         let file_content = fs::read(&path).context("Failed to read source file")?;
         let Some(filename) = path.file_name().and_then(|it| it.to_str()) else {
@@ -211,7 +211,7 @@ pub fn verify_cmd(
 
     let client = reqwest::blocking::Client::new();
     let first_backend = remove_random(&mut backend_info.backends);
-    let source_url = format!("{}/source", first_backend);
+    let source_url = format!("{first_backend}/source");
 
     let response = client
         .post(&source_url)
@@ -223,7 +223,7 @@ pub fn verify_cmd(
         let error_text = response
             .text()
             .unwrap_or_else(|_| "Unknown error".to_string());
-        anyhow::bail!("Backend compilation failed: {}", error_text);
+        anyhow::bail!("Backend compilation failed: {error_text}");
     }
 
     let source_result: SourceResponse = response
@@ -245,7 +245,7 @@ pub fn verify_cmd(
             show_verifier_link(&network, contract_address);
             return Ok(());
         }
-        anyhow::bail!("Verification failed: {}", error_msg);
+        anyhow::bail!("Verification failed: {error_msg}");
     }
 
     println!("  {} Backend verification successful", "✓".green().bold());
@@ -273,7 +273,7 @@ pub fn verify_cmd(
             cur_backend.dimmed()
         );
 
-        let sign_url = format!("{}/sign", cur_backend);
+        let sign_url = format!("{cur_backend}/sign");
         let sign_request = serde_json::json!({
             "messageCell": msg_cell,
         });
@@ -305,11 +305,7 @@ pub fn verify_cmd(
     }
 
     if acquired_sigs < quorum {
-        anyhow::bail!(
-            "Failed to collect enough signatures ({}/{})",
-            acquired_sigs,
-            quorum
-        );
+        anyhow::bail!("Failed to collect enough signatures ({acquired_sigs}/{quorum})");
     }
 
     println!("  {} All signatures collected", "✓".green().bold());
@@ -526,10 +522,7 @@ fn get_backend_info(network: &str, config: &BackendsConfig) -> anyhow::Result<Ba
             backends: config.backends_testnet.clone(),
             id: "orbs-testnet".to_string(),
         }),
-        _ => anyhow::bail!(
-            "Unsupported network: {}. Supported networks: mainnet, testnet",
-            network
-        ),
+        _ => anyhow::bail!("Unsupported network: {network}. Supported networks: mainnet, testnet"),
     }
 }
 
@@ -565,7 +558,7 @@ fn get_verifier_address(
     let result = api_client.run_get_method(
         &backend_info.source_registry,
         "get_verifier_registry_address",
-        vec![],
+        &[],
     )?;
 
     let Some(address_stack) = result.stack.first() else {

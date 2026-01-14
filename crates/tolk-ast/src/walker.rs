@@ -1,8 +1,30 @@
-use crate::expressions::*;
-use crate::node::*;
-use crate::statements::*;
-use crate::top_level::*;
-use crate::types::*;
+use crate::expressions::{
+    Assignment, BinaryOperator, BooleanLiteral, CallArgument, CastAsOperator, DotAccess,
+    Expression, FunctionCall, GenericInstantiation, Ident, InstanceArgument, IsTypeOperator,
+    LambdaExpression, LambdaParameter, LazyExpression, MatchArm, MatchArmBody, MatchBody,
+    MatchExpr, MatchExpression, MatchPattern, NotNullOperator, NullLiteral, NumberLiteral,
+    NumericIndex, ObjectLiteral, ParenthesizedExpression, SetAssignment, StringLiteral,
+    TensorExpression, TernaryOperator, TypedTuple, UnaryOperator, Underscore,
+};
+use crate::node::SourceFile;
+use crate::statements::{
+    AssertStatement, BlockStatement, BreakStatement, CatchClause, ContinueStatement,
+    DoWhileStatement, ExpressionStatement, IfStatement, IfStatementAlternative,
+    LocalVarsDeclaration, MatchStatement, RepeatStatement, ReturnStatement, Statement,
+    TensorVarsDeclaration, ThrowStatement, TryCatchStatement, TupleVarsDeclaration, VarDeclaration,
+    VarDeclarationLhs, WhileStatement,
+};
+use crate::top_level::{
+    Annotation, AnnotationArguments, AnnotationList, AsmBody, ConstantDeclaration, EmptyStatement,
+    EnumBody, EnumDeclaration, EnumMemberDeclaration, Function, FunctionBody, GetMethodDeclaration,
+    GlobalVarDeclaration, Import, MethodDeclaration, MethodReceiver, Parameter, StructBody,
+    StructDeclaration, StructFieldDeclaration, TolkRequiredVersion, TopLevel, TypeAliasDeclaration,
+    TypeAliasUnderlyingType, TypeParameter, TypeParameters,
+};
+use crate::types::{
+    FunCallableType, InstantiationTList, NullableType, ParenthesizedType, TensorType, TupleType,
+    Type, TypeIdentifier, TypeInstantiatedTs, UnionType,
+};
 use tree_sitter::Node;
 
 pub trait Walker<'tree> {
@@ -717,8 +739,7 @@ pub trait Walker<'tree> {
         match body {
             FunctionBody::BlockStatement(block) => self.walk_block_statement(block),
             FunctionBody::AsmBody(asm) => self.walk_asm_body(asm),
-            FunctionBody::BuiltinSpecifier(_) => self.default_result(),
-            FunctionBody::Unmapped(_) => self.default_result(),
+            FunctionBody::BuiltinSpecifier(_) | FunctionBody::Unmapped(_) => self.default_result(),
         }
     }
 
@@ -833,7 +854,7 @@ pub trait Walker<'tree> {
         match node.pattern() {
             MatchPattern::Type(pattern) => self.walk_type(&pattern),
             MatchPattern::Expression(pattern) => self.walk_expression(&pattern),
-            _ => self.default_result(),
+            MatchPattern::Else => self.default_result(),
         };
 
         if let Some(body) = node.body() {
@@ -882,6 +903,7 @@ pub fn walk_ast<'tree, W: Walker<'tree>>(
     visitor.visit_source_file(source_file)
 }
 
+#[must_use]
 pub fn parent_of_type<'a>(node: &'a Node<'a>, target_kind: &str) -> Option<Node<'a>> {
     let mut current = node.parent();
     while let Some(parent) = current {

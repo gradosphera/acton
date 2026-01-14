@@ -15,7 +15,7 @@ pub enum GetMethodResult {
 pub struct GetMethodResultSuccess {
     /// Whether the execution was successful (always true in this variant).
     pub success: bool,
-    /// Base64 encoded stack BoC.
+    /// Base64 encoded stack `BoC`.
     pub stack: String,
     /// Gas consumed during execution (as a string).
     pub gas_used: String,
@@ -43,13 +43,13 @@ pub struct GetMethodResultError {
 /// Arguments for running a get-method.
 #[derive(Serialize, Clone, Debug)]
 pub struct RunGetMethodArgs {
-    /// Base64 encoded contract code BoC.
+    /// Base64 encoded contract code `BoC`.
     pub code: String,
-    /// Base64 encoded contract data BoC.
+    /// Base64 encoded contract data `BoC`.
     pub data: String,
     /// Verbosity level for the emulator logs.
     pub verbosity: ExecutorVerbosity,
-    /// Base64 encoded libraries BoC.
+    /// Base64 encoded libraries `BoC`.
     pub libs: String,
     /// Contract address (as a string).
     pub address: String,

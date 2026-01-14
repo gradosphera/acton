@@ -204,10 +204,10 @@ fn execute_script(
     let duration_since_epoch = now.duration_since(UNIX_EPOCH).expect("Time went backwards");
 
     let params = RunGetMethodArgs {
-        code: code_cell.to_boc_b64(false)?.to_string(),
-        data: data_cell.to_boc_b64(false)?.to_string(),
+        code: code_cell.to_boc_b64(false)?,
+        data: data_cell.to_boc_b64(false)?,
         verbosity,
-        libs: "".to_string(),
+        libs: String::new(),
         address: dest_address.to_string(),
         unixtime: duration_since_epoch.as_secs().try_into()?,
         balance: "10".to_string(),
@@ -247,8 +247,8 @@ fn execute_script(
             running_id: "script".to_owned(),
         },
         io: IoContext {
-            stdout_buffer: "".to_owned(),
-            stderr_buffer: "".to_owned(),
+            stdout_buffer: String::new(),
+            stderr_buffer: String::new(),
             capture_output: true,
         },
         asserts: AssertsContext {

@@ -50,7 +50,7 @@ fn normalize_output_internal(stdout: &str, project_path: &Path, strip: bool) -> 
         .insert("[TIME]", regex!(r#"time="\d+\.\d+""#))
         .unwrap();
     redactions
-        .insert("[TIMESTAMP]", regex!(r#"Timestamp: \d+"#))
+        .insert("[TIMESTAMP]", regex!(r"Timestamp: \d+"))
         .unwrap();
     redactions
         .insert("[ROOT]", "/private".to_owned() + tmp_dir.as_str())

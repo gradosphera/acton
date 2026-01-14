@@ -4,7 +4,7 @@ use tvmffi::stack::{Tuple, TupleItem};
 
 #[test]
 fn test_if_over_numbers_with_first_matching() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 fun main() {
@@ -15,7 +15,7 @@ fun main() {
 
     return 0;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -39,7 +39,7 @@ fun main() {
 
 #[test]
 fn test_if_over_numbers_with_second_matching() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 fun main() {
@@ -52,7 +52,7 @@ fun main() {
 
     return 0;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -76,7 +76,7 @@ fun main() {
 
 #[test]
 fn test_if_over_numbers_with_else_matching() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 fun main() {
@@ -91,7 +91,7 @@ fun main() {
 
     return 0;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 

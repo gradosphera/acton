@@ -1,10 +1,10 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn test_run_specific_test_file() {
@@ -14,7 +14,7 @@ fn test_run_specific_test_file() {
             "test1",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-in-file-1`() {
                 expect(1).toEqual(1);
             }
@@ -24,7 +24,7 @@ fn test_run_specific_test_file() {
             "test2",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-in-file-2`() {
                 expect(2).toEqual(2);
             }
@@ -52,15 +52,15 @@ fn test_filter_by_name() {
             "test",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-unit-1`() {
                 expect(1).toEqual(1);
             }
-            
+
             get fun `test-unit-2`() {
                 expect(2).toEqual(2);
             }
-            
+
             get fun `test-other`() {
                 expect(3).toEqual(3);
             }
@@ -86,15 +86,15 @@ fn test_filter_single_test() {
             "test",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-alpha`() {
                 expect(1).toEqual(1);
             }
-            
+
             get fun `test-beta`() {
                 expect(2).toEqual(2);
             }
-            
+
             get fun `test-gamma`() {
                 expect(3).toEqual(3);
             }
@@ -120,11 +120,11 @@ fn test_combined_path_and_filter() {
             "unit_tests",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-unit-counter-test`() {
                 expect(1).toEqual(1);
             }
-            
+
             get fun `test-unit-wallet-test`() {
                 expect(2).toEqual(2);
             }
@@ -134,7 +134,7 @@ fn test_combined_path_and_filter() {
             "integration_tests",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-integration-counter-test`() {
                 expect(3).toEqual(3);
             }
@@ -164,7 +164,7 @@ fn test_filter_with_no_matches() {
             "test",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-alpha`() {
                 expect(1).toEqual(1);
             }
@@ -187,15 +187,15 @@ fn test_fail_fast() {
             "test1",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-first-pass`() {
                 expect(1).toEqual(1);
             }
-            
+
             get fun `test-second-fail`() {
                 expect(1).toEqual(2);
             }
-            
+
             get fun `test-third-pass`() {
                 expect(1).toEqual(1);
             }
@@ -205,7 +205,7 @@ fn test_fail_fast() {
             "test2",
             r#"
             import "../../lib/testing/expect"
-            
+
             get fun `test-fourth-pass`() {
                 expect(1).toEqual(1);
             }

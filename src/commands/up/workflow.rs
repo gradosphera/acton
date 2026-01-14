@@ -72,44 +72,41 @@ pub(super) fn run_update<C: ReleaseClient>(
         true
     } else if stable {
         let clean_tag = release.tag_name.trim_start_matches('v');
-        match Version::parse(clean_tag) {
-            Ok(target_version) => {
-                if current_version_str == "canary" {
-                    // when we use canary and user provide `--stable`, update to latest stable version
-                    println!(
-                        "   {} stable version {} (current: canary)",
-                        "Installing".green().bold(),
-                        target_version
-                    );
-                    true
-                } else if let Ok(current_version) = &current_version
-                    && &target_version != current_version
-                {
-                    // if we on stable release, install new stable version
-                    println!(
-                        "   {} stable version {} (current: {})",
-                        "Installing".green().bold(),
-                        target_version,
-                        current_version
-                    );
-                    true
-                } else {
-                    println!(
-                        "   {} Acton is already at the latest stable version ({})",
-                        "Up to date".green().bold(),
-                        current_version?
-                    );
-                    false
-                }
-            }
-            Err(_) => {
+        if let Ok(target_version) = Version::parse(clean_tag) {
+            if current_version_str == "canary" {
+                // when we use canary and user provide `--stable`, update to latest stable version
                 println!(
-                    "   {} Latest release tag '{}' is not a valid semver. Skipping auto-update.",
-                    "Skipping".yellow().bold(),
-                    release.tag_name
+                    "   {} stable version {} (current: canary)",
+                    "Installing".green().bold(),
+                    target_version
                 );
-                return Ok(());
+                true
+            } else if let Ok(current_version) = &current_version
+                && &target_version != current_version
+            {
+                // if we on stable release, install new stable version
+                println!(
+                    "   {} stable version {} (current: {})",
+                    "Installing".green().bold(),
+                    target_version,
+                    current_version
+                );
+                true
+            } else {
+                println!(
+                    "   {} Acton is already at the latest stable version ({})",
+                    "Up to date".green().bold(),
+                    current_version?
+                );
+                false
             }
+        } else {
+            println!(
+                "   {} Latest release tag '{}' is not a valid semver. Skipping auto-update.",
+                "Skipping".yellow().bold(),
+                release.tag_name
+            );
+            return Ok(());
         }
     } else if current_version_str == "canary" {
         println!("   {} latest canary release", "Installing".green().bold());
@@ -117,41 +114,38 @@ pub(super) fn run_update<C: ReleaseClient>(
     } else {
         let current_version = current_version.context("Cannot parse current version")?;
         let clean_tag = release.tag_name.trim_start_matches('v');
-        match Version::parse(clean_tag) {
-            Ok(target_version) => {
-                if target_version > current_version {
-                    println!(
-                        "   {} version {} (current: {})",
-                        "Updating".green().bold(),
-                        target_version,
-                        current_version
-                    );
-                    true
-                } else if target_version == current_version {
-                    // If versions match, we're up to date
-                    println!(
-                        "   {} Acton is up to date (version {})",
-                        "Up to date".green().bold(),
-                        current_version
-                    );
-                    return Ok(());
-                } else {
-                    println!(
-                        "   {} Acton is up to date (version {})",
-                        "Up to date".green().bold(),
-                        current_version
-                    );
-                    return Ok(());
-                }
-            }
-            Err(_) => {
+        if let Ok(target_version) = Version::parse(clean_tag) {
+            if target_version > current_version {
                 println!(
-                    "   {} Latest release tag '{}' is not a valid semver. Skipping auto-update.",
-                    "Skipping".yellow().bold(),
-                    release.tag_name
+                    "   {} version {} (current: {})",
+                    "Updating".green().bold(),
+                    target_version,
+                    current_version
+                );
+                true
+            } else if target_version == current_version {
+                // If versions match, we're up to date
+                println!(
+                    "   {} Acton is up to date (version {})",
+                    "Up to date".green().bold(),
+                    current_version
+                );
+                return Ok(());
+            } else {
+                println!(
+                    "   {} Acton is up to date (version {})",
+                    "Up to date".green().bold(),
+                    current_version
                 );
                 return Ok(());
             }
+        } else {
+            println!(
+                "   {} Latest release tag '{}' is not a valid semver. Skipping auto-update.",
+                "Skipping".yellow().bold(),
+                release.tag_name
+            );
+            return Ok(());
         }
     };
 
@@ -203,13 +197,13 @@ fn find_asset(release: &Release) -> Result<&Asset> {
     let target_os = match os {
         "macos" => "darwin",
         "linux" => "linux",
-        _ => bail!("Unsupported OS: {}", os),
+        _ => bail!("Unsupported OS: {os}"),
     };
 
     let target_arch = match arch {
         "x86_64" => "x86_64",
         "aarch64" => "arm64",
-        _ => bail!("Unsupported architecture: {}", arch),
+        _ => bail!("Unsupported architecture: {arch}"),
     };
 
     release
@@ -219,7 +213,7 @@ fn find_asset(release: &Release) -> Result<&Asset> {
             let name = a.name.to_lowercase();
             name.contains(target_os) && name.contains(target_arch) && name.ends_with(".tar.gz")
         })
-        .ok_or_else(|| anyhow::anyhow!("No matching asset found for {}/{}", target_os, target_arch))
+        .ok_or_else(|| anyhow::anyhow!("No matching asset found for {target_os}/{target_arch}"))
 }
 
 fn install_binary(tarball_path: &Path, current_exe: &Path, current_version: &str) -> Result<()> {
@@ -247,7 +241,7 @@ fn install_binary(tarball_path: &Path, current_exe: &Path, current_version: &str
         .parent()
         .ok_or_else(|| anyhow::anyhow!("Could not determine binary directory"))?;
 
-    let backup_name = format!("acton-{}", current_version);
+    let backup_name = format!("acton-{current_version}");
     let backup_path = bin_dir.join(&backup_name);
 
     // 1. Create backup by copying current binary

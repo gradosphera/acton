@@ -102,12 +102,14 @@ impl StepGetExecutor {
     }
 
     /// Executes the next step. Returns `true` if execution is finished, `false` otherwise.
+    #[must_use]
     pub fn step(&self) -> bool {
         // SAFETY: `sbs_step` is safe function
         unsafe { sbs_step(self.inner.as_ptr()) }
     }
 
-    /// Gets the current code position (Base64 BoC).
+    /// Gets the current code position (Base64 `BoC`).
+    #[must_use]
     pub fn get_code_pos(&self) -> String {
         // SAFETY: `sbs_get_code_pos` is safe function
         let ptr = unsafe { sbs_get_code_pos(self.inner.as_ptr()) };
@@ -118,7 +120,8 @@ impl StepGetExecutor {
         unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
     }
 
-    /// Gets the current stack (Base64 BoC).
+    /// Gets the current stack (Base64 `BoC`).
+    #[must_use]
     pub fn get_stack(&self) -> String {
         // SAFETY: `sbs_get_stack` is safe function
         let ptr = unsafe { sbs_get_stack(self.inner.as_ptr()) };
@@ -129,7 +132,8 @@ impl StepGetExecutor {
         unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
     }
 
-    /// Gets the current C7 register (Base64 BoC).
+    /// Gets the current C7 register (Base64 `BoC`).
+    #[must_use]
     pub fn get_c7(&self) -> String {
         // SAFETY: `sbs_get_c7` is safe function
         let ptr = unsafe { sbs_get_c7(self.inner.as_ptr()) };
@@ -140,7 +144,8 @@ impl StepGetExecutor {
         unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
     }
 
-    /// Gets a specific control register (Base64 BoC).
+    /// Gets a specific control register (Base64 `BoC`).
+    #[must_use]
     pub fn get_control_register(&self, idx: usize) -> String {
         // SAFETY: `tvm_emulator_sbs_get_control_register` is safe function
         let ptr =
@@ -163,7 +168,7 @@ impl StepGetExecutor {
         // SAFETY: `result_ptr` is valid non-null pointer
         let output_str = unsafe { CStr::from_ptr(result_ptr).to_string_lossy() };
         let result: GetMethodResult = serde_json::from_str(&output_str)
-            .with_context(|| format!("Failed to parse get method result JSON: {}", output_str))?;
+            .with_context(|| format!("Failed to parse get method result JSON: {output_str}"))?;
 
         match result {
             GetMethodResult::Success(success) => {
@@ -192,7 +197,7 @@ impl StepGetExecutor {
             get::tvm_emulator_register_extmethod(
                 self.inner.as_ptr(),
                 id,
-                ctx as *mut Ctx as *mut c_void,
+                std::ptr::from_mut::<Ctx>(ctx).cast::<c_void>(),
                 std::mem::transmute::<
                     unsafe extern "C" fn(*mut Ctx, *const i8) -> *const i8,
                     unsafe extern "C" fn(*mut c_void, *const i8) -> *const i8,

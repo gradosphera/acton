@@ -685,7 +685,7 @@ fn example_test_usage() -> StyledStr {
     let _ = write!(writer, "{header}Examples:{header:#}",);
 
     const USAGE_SEP: &str = "\n     ";
-    for (name, value) in exampled_command.iter() {
+    for (name, value) in &exampled_command {
         let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
         let _ = writeln!(writer, "{USAGE_SEP}{example}{value}{example:#}");
     }
@@ -770,7 +770,7 @@ fn example_build_usage() -> StyledStr {
     let _ = write!(writer, "\n\n{header}Examples:{header:#}");
 
     const USAGE_SEP: &str = "\n     ";
-    for (name, value) in build_examples.iter() {
+    for (name, value) in &build_examples {
         let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
         let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
     }
@@ -820,7 +820,7 @@ fn example_disasm_usage() -> StyledStr {
     let _ = write!(writer, "{header}Examples:{header:#}");
 
     const USAGE_SEP: &str = "\n     ";
-    for (name, value) in disasm_examples.iter() {
+    for (name, value) in &disasm_examples {
         let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
         let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
     }
@@ -846,7 +846,7 @@ fn format_examples(examples: &[(&str, &str)], link: &str) -> StyledStr {
     let _ = write!(writer, "{header}Examples:{header:#}");
 
     const USAGE_SEP: &str = "\n     ";
-    for (name, value) in examples.iter() {
+    for (name, value) in examples {
         let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
         let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
     }
@@ -1382,7 +1382,7 @@ fn setup_logging() -> anyhow::Result<()> {
                 chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 record.level(),
                 message
-            ))
+            ));
         })
         .level(log::LevelFilter::Debug)
         .chain(log_file)
@@ -1435,15 +1435,15 @@ fn create_test_config(
             if coverage { Some(true) } else { None },
             coverage_format,
             coverage_file,
-            if !exclude.is_empty() {
+            if exclude.is_empty() {
+                None
+            } else {
                 Some(exclude)
-            } else {
-                None
             },
-            if !include.is_empty() {
-                Some(include)
-            } else {
+            if include.is_empty() {
                 None
+            } else {
+                Some(include)
             },
             None,
             junit_path,

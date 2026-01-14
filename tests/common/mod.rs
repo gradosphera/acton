@@ -29,7 +29,7 @@ static MIN_LITERAL_REDACTIONS: &[(&str, &str)] = &[
 
 pub(crate) fn assert_ui() -> snapbox::Assert {
     let mut subs = snapbox::Redactions::new();
-    subs.extend(MIN_LITERAL_REDACTIONS.iter().cloned()).ok();
+    subs.extend(MIN_LITERAL_REDACTIONS.iter().copied()).ok();
     add_regex_redactions(&mut subs);
 
     snapbox::Assert::new()

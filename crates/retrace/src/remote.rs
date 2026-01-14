@@ -1,4 +1,4 @@
-//! Internal HTTP clients for interacting with external TON APIs (TonCenter, TonHub, DTON).
+//! Internal HTTP clients for interacting with external TON APIs (`TonCenter`, `TonHub`, DTON).
 
 use crate::Network;
 use crate::types::{
@@ -7,7 +7,7 @@ use crate::types::{
 use reqwest::Client;
 use serde::Deserialize;
 
-/// Client for TonCenter V2/V3 API.
+/// Client for `TonCenter` V2/V3 API.
 ///
 /// Used for fetching transaction metadata, block information, and library cells.
 pub(crate) struct TonCenterClient {
@@ -17,7 +17,7 @@ pub(crate) struct TonCenterClient {
 }
 
 impl TonCenterClient {
-    /// Creates a new TonCenter client for the specified network.
+    /// Creates a new `TonCenter` client for the specified network.
     pub(crate) fn new(network: Network, api_key: Option<String>) -> Self {
         let base_url = match network {
             Network::Mainnet => "https://toncenter.com/api/v3".to_string(),
@@ -49,14 +49,10 @@ impl TonCenterClient {
         let status = response.status();
         let text = response.text().await?;
         if !status.is_success() {
-            anyhow::bail!("TonCenter V3 error {}: {}", status, text);
+            anyhow::bail!("TonCenter V3 error {status}: {text}");
         }
         let response_data: TransactionData = serde_json::from_str(&text).map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to decode TonCenter V3 response: {}. Body: {}",
-                e,
-                text
-            )
+            anyhow::anyhow!("Failed to decode TonCenter V3 response: {e}. Body: {text}")
         })?;
         Ok(response_data)
     }
@@ -85,19 +81,15 @@ impl TonCenterClient {
         let status = response.status();
         let text = response.text().await?;
         if !status.is_success() {
-            anyhow::bail!("TonCenter V3 error {}: {}", status, text);
+            anyhow::bail!("TonCenter V3 error {status}: {text}");
         }
         let response_data: BlocksResponse = serde_json::from_str(&text).map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to decode TonCenter V3 response: {}. Body: {}",
-                e,
-                text
-            )
+            anyhow::anyhow!("Failed to decode TonCenter V3 response: {e}. Body: {text}")
         })?;
         Ok(response_data)
     }
 
-    /// Fetches transactions for an account using TonCenter V2 JSON-RPC.
+    /// Fetches transactions for an account using `TonCenter` V2 JSON-RPC.
     ///
     /// Used as a fallback or for specific V2-only functionality.
     pub(crate) async fn get_transactions_toncenter(
@@ -133,7 +125,7 @@ impl TonCenterClient {
         let response: serde_json::Value = request.send().await?.json().await?;
 
         if let Some(error) = response.get("error") {
-            anyhow::bail!("TonCenter V2 error: {}", error);
+            anyhow::bail!("TonCenter V2 error: {error}");
         }
 
         let result = response.get("result").and_then(|v| v.as_array()).cloned();
@@ -156,7 +148,7 @@ impl TonCenterClient {
         let response: serde_json::Value = request.send().await?.json().await?;
 
         if let Some(error) = response.get("error") {
-            anyhow::bail!("TonCenter V2 error: {}", error);
+            anyhow::bail!("TonCenter V2 error: {error}");
         }
 
         let result = response
@@ -173,7 +165,7 @@ impl TonCenterClient {
     }
 }
 
-/// Client for TonHub (TON API v4).
+/// Client for `TonHub` (TON API v4).
 ///
 /// Used for fetching account snapshots and master-block configurations.
 pub(crate) struct TonHubClient {
@@ -182,7 +174,7 @@ pub(crate) struct TonHubClient {
 }
 
 impl TonHubClient {
-    /// Creates a new TonHub client for the specified network.
+    /// Creates a new `TonHub` client for the specified network.
     pub(crate) fn new(network: Network) -> Self {
         let base_url = match network {
             Network::Mainnet => "https://mainnet-v4.tonhubapi.com".to_string(),
@@ -194,7 +186,7 @@ impl TonHubClient {
         }
     }
 
-    /// Fetches full transaction details including BoC and blocks for a specific account/lt/hash.
+    /// Fetches full transaction details including `BoC` and blocks for a specific account/lt/hash.
     pub(crate) async fn get_account_transactions(
         &self,
         address: &str,
@@ -206,12 +198,10 @@ impl TonHubClient {
         let status = response.status();
         let text = response.text().await?;
         if !status.is_success() {
-            anyhow::bail!("TonHub API error {}: {}", status, text);
+            anyhow::bail!("TonHub API error {status}: {text}");
         }
-        let response_data: TransactionTransactionsResponse =
-            serde_json::from_str(&text).map_err(|e| {
-                anyhow::anyhow!("Failed to decode TonHub response: {}. Body: {}", e, text)
-            })?;
+        let response_data: TransactionTransactionsResponse = serde_json::from_str(&text)
+            .map_err(|e| anyhow::anyhow!("Failed to decode TonHub response: {e}. Body: {text}"))?;
         Ok(response_data)
     }
 
@@ -229,14 +219,13 @@ impl TonHubClient {
         let status = response.status();
         let text = response.text().await?;
         if !status.is_success() {
-            anyhow::bail!("TonHub API error {}: {}", status, text);
+            anyhow::bail!("TonHub API error {status}: {text}");
         }
-        let response_data: BlockResponse = serde_json::from_str(&text).map_err(|e| {
-            anyhow::anyhow!("Failed to decode TonHub response: {}. Body: {}", e, text)
-        })?;
+        let response_data: BlockResponse = serde_json::from_str(&text)
+            .map_err(|e| anyhow::anyhow!("Failed to decode TonHub response: {e}. Body: {text}"))?;
 
         if !response_data.exist {
-            anyhow::bail!("Block {} is out of scope", seqno);
+            anyhow::bail!("Block {seqno} is out of scope");
         }
         response_data
             .block
@@ -260,11 +249,10 @@ impl TonHubClient {
         let status = response.status();
         let text = response.text().await?;
         if !status.is_success() {
-            anyhow::bail!("TonHub API error {}: {}", status, text);
+            anyhow::bail!("TonHub API error {status}: {text}");
         }
-        let response_data: AccountResponse = serde_json::from_str(&text).map_err(|e| {
-            anyhow::anyhow!("Failed to decode TonHub response: {}. Body: {}", e, text)
-        })?;
+        let response_data: AccountResponse = serde_json::from_str(&text)
+            .map_err(|e| anyhow::anyhow!("Failed to decode TonHub response: {e}. Body: {text}"))?;
         Ok(response_data.account)
     }
 
@@ -286,11 +274,10 @@ impl TonHubClient {
         let status = response.status();
         let text = response.text().await?;
         if !status.is_success() {
-            anyhow::bail!("TonHub API error {}: {}", status, text);
+            anyhow::bail!("TonHub API error {status}: {text}");
         }
-        let response_data: ConfigResponse = serde_json::from_str(&text).map_err(|e| {
-            anyhow::anyhow!("Failed to decode TonHub response: {}. Body: {}", e, text)
-        })?;
+        let response_data: ConfigResponse = serde_json::from_str(&text)
+            .map_err(|e| anyhow::anyhow!("Failed to decode TonHub response: {e}. Body: {text}"))?;
         Ok(response_data.config.cell)
     }
 }

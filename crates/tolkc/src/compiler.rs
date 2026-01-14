@@ -25,10 +25,12 @@ use ton_source_map::{HighLevelSourceMap, SourceMap, parse_marks_dict};
 ///     }
 /// }
 /// ```
+#[must_use]
 pub fn compile(path: &Path, debug: bool) -> CompilerResult {
     Compiler::new(2).compile(path, debug)
 }
 
+#[must_use]
 pub fn compile_fast(path: &Path, debug: bool) -> CompilerResult {
     Compiler::new(0).compile(path, debug)
 }
@@ -46,12 +48,13 @@ pub struct Compiler {
 }
 
 impl Compiler {
-    pub fn new(opt_level: i64) -> Self {
+    #[must_use]
+    pub const fn new(opt_level: i64) -> Self {
         Self {
             opt_level,
             with_stack_comments: false,
             with_src_line_comments: false,
-            experimental_options: "".to_string(),
+            experimental_options: String::new(),
         }
     }
 
@@ -93,18 +96,18 @@ impl Compiler {
 
                 match kind {
                     0 => {
-                        let mut relative_path = "".to_string();
+                        let mut relative_path = String::new();
                         // SAFETY: `data_ptr` is valid not-null pointer
                         let relative_path_raw = unsafe {
                             CStr::from_ptr(data_ptr)
                                 .to_str()
                                 .expect("Invalid UTF-8 in relative path")
                         };
+
+                        relative_path.push_str(relative_path_raw);
+
                         if !relative_path_raw.ends_with(".tolk") {
-                            relative_path.push_str(relative_path_raw);
                             relative_path += ".tolk";
-                        } else {
-                            relative_path.push_str(relative_path_raw);
                         }
 
                         let result = realpath(
@@ -141,35 +144,37 @@ impl Compiler {
 
                         let content = if file_path.contains("@stdlib/") {
                             let filename = file_path.strip_prefix("@stdlib/").unwrap_or(file_path);
-                            match read_stdlib_file(filename).map(|s| s.to_string()) {
-                                Some(content) => content,
-                                None => {
-                                    let raw_str = CString::new(
-                                        "Cannot read standard library file, file not found",
-                                    )
-                                    .expect("Failed to create C string");
-                                    // SAFETY: `dest_error` is valid not-null pointer
-                                    unsafe {
-                                        *dest_error = raw_str.into_raw();
-                                    }
-                                    return;
+                            if let Some(content) =
+                                read_stdlib_file(filename).map(ToString::to_string)
+                            {
+                                content
+                            } else {
+                                let raw_str = CString::new(
+                                    "Cannot read standard library file, file not found",
+                                )
+                                .expect("Failed to create C string");
+                                // SAFETY: `dest_error` is valid not-null pointer
+                                unsafe {
+                                    *dest_error = raw_str.into_raw();
                                 }
+                                return;
                             }
                         } else if file_path.contains("@fiftlib/") {
                             let filename = file_path.strip_prefix("@fiftlib/").unwrap_or(file_path);
-                            match read_fift_stdlib_file(filename).map(|s| s.to_string()) {
-                                Some(content) => content,
-                                None => {
-                                    let raw_str = CString::new(
-                                        "Cannot read Fift standard library file, file not found",
-                                    )
-                                    .expect("Failed to create C string");
-                                    // SAFETY: `dest_error` is valid not-null pointer
-                                    unsafe {
-                                        *dest_error = raw_str.into_raw();
-                                    }
-                                    return;
+                            if let Some(content) =
+                                read_fift_stdlib_file(filename).map(ToString::to_string)
+                            {
+                                content
+                            } else {
+                                let raw_str = CString::new(
+                                    "Cannot read Fift standard library file, file not found",
+                                )
+                                .expect("Failed to create C string");
+                                // SAFETY: `dest_error` is valid not-null pointer
+                                unsafe {
+                                    *dest_error = raw_str.into_raw();
                                 }
+                                return;
                             }
                         } else {
                             match read_to_string(file_path) {

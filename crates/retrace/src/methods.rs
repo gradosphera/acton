@@ -13,8 +13,9 @@ use tycho_types::boc::Boc;
 use tycho_types::cell::Lazy;
 use tycho_types::dict::Dict;
 use tycho_types::models::{
-    Account, AccountState, CurrencyCollection, IntAddr, MsgInfo, OptionalAccount, OutAction,
-    OutActionsRevIter, ShardAccount, StdAddr, StorageExtra, StorageInfo, TxInfo,
+    Account, AccountState, CurrencyCollection, ExtraCurrencyCollection, IntAddr, MsgInfo,
+    OptionalAccount, OutAction, OutActionsRevIter, ShardAccount, StdAddr, StorageExtra,
+    StorageInfo, TxInfo,
 };
 use tycho_types::num::{Tokens, VarUint56};
 use tycho_types::prelude::{Cell, HashBytes};
@@ -39,7 +40,7 @@ pub async fn find_base_tx_by_hash(net: Network, hash: &str) -> anyhow::Result<Ba
     let resp = client.get_transactions(hash, 1).await?;
 
     let Some(raw_tx) = resp.transactions.first() else {
-        anyhow::bail!("Cannot find transaction in network {}", net);
+        anyhow::bail!("Cannot find transaction in network {net}");
     };
 
     let lt = raw_tx.lt.parse::<u64>()?;
@@ -62,8 +63,8 @@ pub async fn find_base_tx_by_hash(net: Network, hash: &str) -> anyhow::Result<Ba
 
 /// Returns full on-chain transaction information using a base handle.
 ///
-/// This function queries multiple blocks via TonHub API to find the complete
-/// record of the transaction, including its raw BoC.
+/// This function queries multiple blocks via `TonHub` API to find the complete
+/// record of the transaction, including its raw `BoC`.
 ///
 /// # Arguments
 ///
@@ -118,7 +119,7 @@ pub(crate) async fn find_shard_block_for_tx(
     // normalize potentially negative shard to positive one
     let shard_int = shard.shard.parse::<i64>()?;
     let shard_uint = shard_int as u64;
-    let shard_hex = format!("0x{:x}", shard_uint);
+    let shard_hex = format!("0x{shard_uint:x}");
 
     let api_key = std::env::var("TONCENTER_API_KEY").ok();
     let client = TonCenterClient::new(net, api_key);
@@ -314,7 +315,7 @@ pub(crate) fn create_shard_account_from_api(
                 special: None,
                 code,
                 data,
-                libraries: Default::default(),
+                libraries: Dict::default(),
             })
         }
         StateFromAPI::Frozen { state_hash } => {
@@ -352,7 +353,7 @@ pub(crate) fn create_shard_account_from_api(
         last_trans_lt,
         balance: CurrencyCollection {
             tokens: Tokens::new(coins),
-            other: Default::default(),
+            other: ExtraCurrencyCollection::default(),
         },
         state,
     };
@@ -390,7 +391,7 @@ pub(crate) fn find_final_actions(
     };
 
     let mut actions: Vec<OutAction> = OutActionsRevIter::new(slice)
-        .filter_map(|res| res.ok())
+        .filter_map(Result::ok)
         .collect();
 
     actions.reverse();
@@ -436,7 +437,7 @@ pub(crate) fn tx_opcode(tx: &tycho_types::models::Transaction) -> Option<u32> {
 /// # Returns
 ///
 /// Returns a tuple containing:
-/// (Source, Destination, Amount, MoneyResult, Transaction, ComputeInfo)
+/// (Source, Destination, Amount, `MoneyResult`, Transaction, `ComputeInfo`)
 #[allow(clippy::type_complexity)]
 pub(crate) fn compute_final_data(
     res: &RunTransactionResultSuccess,
@@ -453,8 +454,7 @@ pub(crate) fn compute_final_data(
     let shard_account: ShardAccount = shard_account_cell.parse()?;
     let end_balance = shard_account
         .load_account()?
-        .map(|a| a.balance.tokens)
-        .unwrap_or(Tokens::ZERO);
+        .map_or(Tokens::ZERO, |a| a.balance.tokens);
 
     let emulated_tx_cell = Boc::decode_base64(&res.transaction)?;
     let emulated_tx: tycho_types::models::Transaction = emulated_tx_cell.parse()?;
@@ -503,19 +503,18 @@ pub(crate) fn compute_final_data(
 
 /// Loads a library cell (T‑lib) by its 256‑bit hash.
 ///
-/// Attempts to fetch from TonCenter first, falling back to dton.io if needed.
+/// Attempts to fetch from `TonCenter` first, falling back to dton.io if needed.
 pub(crate) async fn get_library_by_hash(net: Network, hash: &str) -> anyhow::Result<Cell> {
     let api_key = std::env::var("TONCENTER_API_KEY").ok();
     let toncenter = TonCenterClient::new(net, api_key);
 
-    Ok(match toncenter.get_libraries(hash).await {
-        Ok(data) => Boc::decode_base64(data)?,
-        Err(_) => {
-            let dton_api_key = std::env::var("DTON_API_KEY").ok();
-            let dton = DtonClient::new(dton_api_key);
-            let data = dton.get_lib(net, hash).await?;
-            Boc::decode_base64(data)?
-        }
+    Ok(if let Ok(data) = toncenter.get_libraries(hash).await {
+        Boc::decode_base64(data)?
+    } else {
+        let dton_api_key = std::env::var("DTON_API_KEY").ok();
+        let dton = DtonClient::new(dton_api_key);
+        let data = dton.get_lib(net, hash).await?;
+        Boc::decode_base64(data)?
     })
 }
 
@@ -540,7 +539,7 @@ async fn add_maybe_exotic_library(
     }
 
     let lib_hash = cs.load_u256()?;
-    let lib_hash_hex = format!("{:X}", lib_hash);
+    let lib_hash_hex = format!("{lib_hash:X}");
     let actual_code = get_library_by_hash(net, &lib_hash_hex).await?;
     Ok(Some((lib_hash, actual_code)))
 }

@@ -3,12 +3,12 @@ use crate::debugging::support::debug::DebugBuilder;
 
 #[test]
 fn test_single_line_ternary_over_nullable_int_step_over() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 fun main(foo: int?) {
     val a = foo != null ? foo : 100;
     return a + 1;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback")
         .code(code)
@@ -32,12 +32,12 @@ fun main(foo: int?) {
 
 #[test]
 fn test_single_line_ternary_over_nullable_int_step_in() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 fun main(foo: int?) {
     val a = foo != null ? foo : 100;
     return a + 1;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback")
         .code(code)
@@ -65,14 +65,14 @@ fun main(foo: int?) {
 
 #[test]
 fn test_multi_line_ternary_over_nullable_int_step_over() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 fun main(foo: int?) {
     val a = foo != null
         ? foo
         : 100;
     return a + 1;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback")
         .code(code)
@@ -98,14 +98,14 @@ fun main(foo: int?) {
 
 #[test]
 fn test_multi_line_ternary_with_complex_condition_step_over_true() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 fun main(foo: int?) {
     val a = foo != null && foo == 100
         ? foo + 1
         : 100;
     return a + 1;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback")
         .code(code)
@@ -134,14 +134,14 @@ fun main(foo: int?) {
 
 #[test]
 fn test_multi_line_ternary_with_complex_condition_step_over_false() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 fun main(foo: int?) {
     val a = foo != null && foo == 100
         ? foo + 1
         : 100;
     return a + 1;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback")
         .code(code)
@@ -170,14 +170,14 @@ fun main(foo: int?) {
 
 #[test]
 fn test_multi_line_ternary_with_complex_condition_step_in_true() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 fun main(foo: int?) {
     val a = foo != null && foo == 100
         ? foo + 1
         : 100;
     return a + 1;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback")
         .code(code)

@@ -1,4 +1,5 @@
 //! This module contains functionality for working with snake strings.
+//!
 //! Since TVM doesn't have a separate string format and data is stored in cells
 //! of up to 1023 bits (~127 bytes) and up to 4 references to other cells, we have to split strings
 //! into chunks and store them as a linked list of cells.
@@ -21,6 +22,7 @@ impl Tuple {
     /// If the slice is not a snake string, returns `None`.
     /// This is tricky since we cannot be sure that the slice is a snake string and
     /// not some other data with 8-bit encoding that forms a valid UTF-8 string.
+    #[must_use]
     pub fn parse_snake_string(cell: &ArcCell) -> Option<String> {
         let mut all_bits = Vec::new();
 
@@ -179,7 +181,7 @@ mod tests {
                 let parsed = Tuple::parse_snake_string(slice);
                 assert_eq!(parsed, Some(test_string.to_string()));
             } else {
-                panic!("Expected slice item for string of length {}", expected_len);
+                panic!("Expected slice item for string of length {expected_len}");
             }
         }
     }
@@ -230,8 +232,7 @@ mod tests {
                 assert_eq!(
                     parsed,
                     Some(original.clone()),
-                    "Failed to parse: {}",
-                    original
+                    "Failed to parse: {original}"
                 );
             } else {
                 panic!("Expected slice item");
@@ -242,7 +243,7 @@ mod tests {
     #[test]
     fn test_push_string_direct() {
         let test_cases = vec![
-            ("".to_string(), 0, false),  // empty string, 0 bits, fits in one cell
+            (String::new(), 0, false),   // empty string, 0 bits, fits in one cell
             ("x".to_string(), 8, false), // single char, 8 bits, fits in one cell
             ("Hello World".to_string(), 88, false), // short string, fits in one cell
             ("a".repeat(126), 1008, false), // exactly 126 bytes = 1008 bits, fits in one cell
@@ -257,12 +258,11 @@ mod tests {
             assert_eq!(
                 tuple.0.len(),
                 1,
-                "Expected exactly one tuple item for string: {}",
-                test_string
+                "Expected exactly one tuple item for string: {test_string}"
             );
 
             let Some(TupleItem::Slice(cell)) = tuple.0.first() else {
-                panic!("Expected slice item for string: {}", test_string);
+                panic!("Expected slice item for string: {test_string}");
             };
 
             let actual_bits = cell.bit_len();
@@ -270,26 +270,22 @@ mod tests {
             if requires_multiple_cells {
                 assert_eq!(
                     actual_bits, 1008,
-                    "First cell should contain 1008 bits for multi-cell string: {}",
-                    test_string
+                    "First cell should contain 1008 bits for multi-cell string: {test_string}"
                 );
                 assert_eq!(
                     cell.references().len(),
                     1,
-                    "Multi-cell string should have 1 reference: {}",
-                    test_string
+                    "Multi-cell string should have 1 reference: {test_string}"
                 );
             } else {
                 assert_eq!(
                     actual_bits, expected_total_bits,
-                    "Bit count mismatch for single-cell string: {}",
-                    test_string
+                    "Bit count mismatch for single-cell string: {test_string}"
                 );
                 assert_eq!(
                     cell.references().len(),
                     0,
-                    "Single-cell string should have 0 references: {}",
-                    test_string
+                    "Single-cell string should have 0 references: {test_string}"
                 );
             }
         }

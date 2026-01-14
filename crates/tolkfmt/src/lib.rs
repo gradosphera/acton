@@ -41,9 +41,9 @@ pub fn format_source(source: &str, width: usize) -> anyhow::Result<String> {
         .ok_or_else(|| anyhow!("Failed to format source"))?;
     let mut out = Vec::new();
     doc.render(width, &mut out)
-        .map_err(|e| anyhow!("Failed to render: {}", e))?;
+        .map_err(|e| anyhow!("Failed to render: {e}"))?;
 
-    let res = String::from_utf8(out).map_err(|e| anyhow!("Invalid UTF-8: {}", e))?;
+    let res = String::from_utf8(out).map_err(|e| anyhow!("Invalid UTF-8: {e}"))?;
 
     // TODO: for some reason there are lines with whitespace only, trim manually for now
     Ok(res

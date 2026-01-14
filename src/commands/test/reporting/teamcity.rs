@@ -9,18 +9,18 @@ pub(crate) struct TeamCityReporter {
 }
 
 impl TeamCityReporter {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self { formatter: None }
     }
 
-    /// See https://www.jetbrains.com/help/teamcity/service-messages.html#Escaped+Values
+    /// See <https://www.jetbrains.com/help/teamcity/service-messages.html#Escaped+Values>
     fn escape_name(&self, name: &str) -> String {
-        name.replace("|", "||")
-            .replace("\n", "|n")
-            .replace("\r", "|r")
-            .replace("[", "|[")
-            .replace("]", "|]")
-            .replace("'", "|'")
+        name.replace('|', "||")
+            .replace('\n', "|n")
+            .replace('\r', "|r")
+            .replace('[', "|[")
+            .replace(']', "|]")
+            .replace('\'', "|'")
     }
 
     fn format_test_failure(

@@ -63,6 +63,7 @@ pub struct TypeAbi {
 }
 
 impl TypeAbi {
+    #[must_use]
     pub fn is_from_acton_lib(&self) -> bool {
         // TODO: remove lib/
         self.pos.uri.contains(".acton/") || self.pos.uri.contains("lib/")
@@ -80,6 +81,7 @@ pub struct GetMethod {
 }
 
 impl GetMethod {
+    #[must_use]
     pub fn is_from_acton_lib(&self) -> bool {
         // TODO: remove lib/
         self.pos.uri.contains(".acton/") || self.pos.uri.contains("lib/")
@@ -114,10 +116,12 @@ pub struct ContractAbi {
 }
 
 impl ContractAbi {
+    #[must_use]
     pub fn find_any_type(&self, name: &String) -> Option<TypeAbi> {
         self.types.iter().find(|typ| typ.name == *name).cloned()
     }
 
+    #[must_use]
     pub fn find_type_by_opcode(&self, id: u32) -> Option<TypeAbi> {
         self.types
             .iter()
@@ -126,6 +130,7 @@ impl ContractAbi {
             .cloned()
     }
 
+    #[must_use]
     pub fn find_get_method_by_id(&self, id: &BigInt) -> Option<GetMethod> {
         self.get_methods
             .iter()
@@ -134,6 +139,7 @@ impl ContractAbi {
             .cloned()
     }
 
+    #[must_use]
     pub fn storages(&self) -> Vec<&TypeAbi> {
         self.types
             .iter()
@@ -171,12 +177,12 @@ pub fn get_file_dependencies(file_path: &str, include_itself: bool) -> anyhow::R
 
     let content = match fs::read_to_string(file_path) {
         Ok(content) => content,
-        Err(e) => anyhow::bail!("Failed to read file '{}': {}", file_path, e),
+        Err(e) => anyhow::bail!("Failed to read file '{file_path}': {e}"),
     };
 
     let tree = match tolk_parser::parser::parse(&content) {
         Ok(tree) => tree,
-        Err(e) => anyhow::bail!("Failed to parse file '{}': {:?}", file_path, e),
+        Err(e) => anyhow::bail!("Failed to parse file '{file_path}': {e:?}"),
     };
 
     let root_node = tree.root_node();
@@ -195,11 +201,12 @@ pub fn get_file_dependencies(file_path: &str, include_itself: bool) -> anyhow::R
     Ok(dependencies)
 }
 
+#[must_use]
 pub fn contract_abi(content: &str, file_path: &str) -> ContractAbi {
     let contract_name = get_contract_name_from_file_path(file_path);
 
     let Ok(tree) = tolk_parser::parser::parse(content) else {
-        return Default::default();
+        return ContractAbi::default();
     };
     let root_node = tree.root_node();
 
@@ -236,10 +243,10 @@ pub fn contract_abi(content: &str, file_path: &str) -> ContractAbi {
     }
 }
 
+#[must_use]
 pub fn extract_handled_messages(content: &str, file_path: &str) -> Vec<String> {
-    let tree = match tolk_parser::parser::parse(content) {
-        Ok(tree) => tree,
-        Err(_) => return Vec::new(),
+    let Ok(tree) = tolk_parser::parser::parse(content) else {
+        return Vec::new();
     };
 
     let root_node = tree.root_node();
@@ -409,7 +416,7 @@ fn resolve_import_path(base_file: &str, import_path: &str) -> Option<String> {
         return Some(relative_path.to_string_lossy().to_string());
     }
 
-    let with_ext = format!("{}.tolk", import_path);
+    let with_ext = format!("{import_path}.tolk");
     let path_with_ext = base_path.join(with_ext);
     if path_with_ext.exists() {
         Some(path_with_ext.to_string_lossy().to_string())
@@ -422,7 +429,7 @@ fn add_tolk_extension_if_needed(path: String) -> String {
     if path.ends_with(".tolk") {
         return path;
     }
-    format!("{}.tolk", path)
+    format!("{path}.tolk")
 }
 
 fn merge_abi_info(target: &mut AbiInfo, source: AbiInfo) {
@@ -530,7 +537,7 @@ fn extract_get_method(
     let explicit_id = get_explicit_method_id(func_node, content);
     let method_id = match explicit_id {
         Some(id) => id,
-        None => (CRC16.checksum(func_name.as_bytes()) as u32 & 0xFFFF) | 0x10000,
+        None => (u32::from(CRC16.checksum(func_name.as_bytes())) & 0xFFFF) | 0x10000,
     };
 
     let pos = Pos {
@@ -609,7 +616,7 @@ fn extract_struct_abi(
             opcode_width = match radix {
                 16 => Some((clean_text.len() - 2) * 4),
                 2 => Some(clean_text.len() - 2),
-                _ => Some(format!("{:b}", val).len()),
+                _ => Some(format!("{val:b}").len()),
             };
         }
     }
@@ -717,14 +724,9 @@ fn extract_type_info(type_node: &tree_sitter::Node<'_>, content: &str) -> TypeIn
     }
 
     let base = match type_name.as_str() {
-        "void" => BaseTypeInfo::Unserializable,
-        "never" => BaseTypeInfo::Unserializable,
-        "null" => BaseTypeInfo::Unserializable,
-        "tuple" => BaseTypeInfo::Unserializable,
-        "continuation" => BaseTypeInfo::Unserializable,
-        "slice" => BaseTypeInfo::Unserializable,
-        "builder" => BaseTypeInfo::Unserializable,
-        "int" => BaseTypeInfo::Unserializable,
+        "void" | "never" | "null" | "tuple" | "continuation" | "slice" | "builder" | "int" => {
+            BaseTypeInfo::Unserializable
+        }
         "coins" => BaseTypeInfo::Coins,
         "bool" => BaseTypeInfo::Bool,
         "cell" => BaseTypeInfo::Cell { inner: None },
@@ -736,9 +738,8 @@ fn extract_type_info(type_node: &tree_sitter::Node<'_>, content: &str) -> TypeIn
                 human_readable: "dict".to_owned(),
             }),
         },
-        "RemainingBitsAndRefs" => BaseTypeInfo::RemainingBitsAndRefs,
         // TODO: real type alias resolving
-        "ForwardPayloadRemainder" => BaseTypeInfo::RemainingBitsAndRefs,
+        "RemainingBitsAndRefs" | "ForwardPayloadRemainder" => BaseTypeInfo::RemainingBitsAndRefs,
         _ if type_name.starts_with("int") && type_name.len() > 3 => {
             let width = type_name[3..].parse::<usize>().unwrap_or(0);
             BaseTypeInfo::Int { width }
@@ -865,7 +866,7 @@ mod tests {
 
     #[test]
     fn test_contract_abi_basic() {
-        let code = r#"
+        let code = r"
 struct Storage {
     balance: int;
 }
@@ -876,7 +877,7 @@ get fun get_balance(): int {
 
 fun onInternalMessage() {
 }
-"#;
+";
 
         let abi = contract_abi(code, "test.tolk");
 
@@ -886,18 +887,18 @@ fun onInternalMessage() {
         assert_eq!(abi.get_methods.len(), 1);
         assert_eq!(abi.get_methods[0].name, "get_balance");
 
-        let expected_id = (CRC16.checksum(b"get_balance") as u32 & 0xFFFF) | 0x10000;
+        let expected_id = (u32::from(CRC16.checksum(b"get_balance")) & 0xFFFF) | 0x10000;
         assert_eq!(abi.get_methods[0].id, expected_id);
     }
 
     #[test]
     fn test_contract_abi_explicit_method_id() {
-        let code = r#"
+        let code = r"
 @method_id(0x12345)
 get fun custom_method(): int {
     return 42;
 }
-"#;
+";
 
         let abi = contract_abi(code, "test.tolk");
 
@@ -908,7 +909,7 @@ get fun custom_method(): int {
 
     #[test]
     fn test_get_method_variants() {
-        let code = r#"
+        let code = r"
 // Get method with parameters and return type
 get fun get_balance(addr: address): int {
     return 0;
@@ -934,7 +935,7 @@ get simple_method(): int {
 get fun custom_id(): int {
     return 2;
 }
-"#;
+";
 
         let abi = contract_abi(code, "test.tolk");
 
@@ -957,7 +958,7 @@ get fun custom_id(): int {
 
     #[test]
     fn test_struct_variants() {
-        let code = r#"
+        let code = r"
 // Regular struct
 struct User {
     id: int;
@@ -985,7 +986,7 @@ struct (123) TokenInfo {
 struct (0b1010) BinaryData {
     flag: bool;
 }
-"#;
+";
 
         let abi = contract_abi(code, "test.tolk");
 
@@ -1020,7 +1021,7 @@ struct (0b1010) BinaryData {
 
     #[test]
     fn test_entry_points() {
-        let code = r#"
+        let code = r"
 fun onInternalMessage() {
     // Internal message handler
 }
@@ -1032,7 +1033,7 @@ fun onExternalMessage() {
 fun regular_function() {
     // Just a regular function
 }
-"#;
+";
 
         let abi = contract_abi(code, "test.tolk");
 
@@ -1057,7 +1058,7 @@ fun regular_function() {
 
     #[test]
     fn test_method_id_formats() {
-        let code = r#"
+        let code = r"
 // Decimal method ID
 @method_id(65537)
 get fun decimal_id(): int {
@@ -1075,7 +1076,7 @@ get fun hex_id(): int {
 get fun large_id(): int {
     return 3;
 }
-"#;
+";
 
         let abi = contract_abi(code, "test.tolk");
 
@@ -1101,7 +1102,7 @@ get fun large_id(): int {
 
     #[test]
     fn test_imports_support() {
-        let import_content = r#"
+        let import_content = r"
 struct ImportedStruct {
     value: int;
 }
@@ -1109,7 +1110,7 @@ struct ImportedStruct {
 get fun imported_method(): int {
     return 42;
 }
-"#;
+";
 
         let import_path = "test_import.tolk";
         fs::write(import_path, import_content).unwrap();
@@ -1145,7 +1146,7 @@ get fun main_method(): int {
     #[test]
     fn test_crc16_consistency() {
         let test_name = "get_balance";
-        let crc_value = CRC16.checksum(test_name.as_bytes()) as u32;
+        let crc_value = u32::from(CRC16.checksum(test_name.as_bytes()));
         let method_id = (crc_value & 0xFFFF) | 0x10000;
 
         assert!(crc_value > 0);

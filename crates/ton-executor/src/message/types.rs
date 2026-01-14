@@ -10,13 +10,13 @@ pub enum EmulationResult {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct RunTransactionResultSuccess {
-    /// Base64 encoded transaction BoC.
+    /// Base64 encoded transaction `BoC`.
     pub transaction: String,
-    /// Base64 encoded updated shard account BoC.
+    /// Base64 encoded updated shard account `BoC`.
     pub shard_account: String,
     /// Virtual Machine execution logs.
     pub vm_log: String,
-    /// Base64 encoded actions BoC (if any).
+    /// Base64 encoded actions `BoC` (if any).
     pub actions: Option<String>,
 }
 
@@ -39,9 +39,9 @@ pub struct PrevBlocksInfo {
 /// Arguments for running a transaction emulation.
 #[derive(Debug, Clone)]
 pub struct RunTransactionArgs {
-    /// Base64 encoded libraries BoC.
+    /// Base64 encoded libraries `BoC`.
     pub libs: Option<String>,
-    /// Base64 encoded shard account BoC.
+    /// Base64 encoded shard account `BoC`.
     pub shard_account: String,
     /// Current unix time.
     pub now: u32,

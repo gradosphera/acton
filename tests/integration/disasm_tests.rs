@@ -2,14 +2,13 @@ use crate::common::assertion;
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use crate::support::snapshots::normalize_output;
-
 use std::time::Duration;
 use std::{fs, thread};
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn test_disasm_from_boc_file() {
@@ -214,10 +213,10 @@ fn test_disasm_no_input_provided() {
 
 #[test]
 fn test_disasm_built_contract() {
-    let complex_contract = r#"
+    let complex_contract = r"
     fun onInternalMessage(in: InMessage) {}
     fun onBouncedMessage(_: InMessageBounced) {}
-    "#;
+    ";
 
     let project = ProjectBuilder::new("disasm-complex")
         .contract_with_output("complex", complex_contract, "complex.boc")

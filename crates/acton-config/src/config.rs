@@ -215,20 +215,22 @@ impl Default for ActonConfig {
 impl std::fmt::Display for ContractDependency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ContractDependency::Simple(name) => write!(f, "{name}"),
-            ContractDependency::Detailed { name, .. } => write!(f, "{name}"),
+            ContractDependency::Simple(name) | ContractDependency::Detailed { name, .. } => {
+                write!(f, "{name}")
+            }
         }
     }
 }
 
 impl ContractDependency {
+    #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            ContractDependency::Simple(name) => name,
-            ContractDependency::Detailed { name, .. } => name,
+            ContractDependency::Simple(name) | ContractDependency::Detailed { name, .. } => name,
         }
     }
 
+    #[must_use]
     pub fn kind(&self) -> DependencyKind {
         match self {
             ContractDependency::Simple(_) => DependencyKind::EmbedCode,
@@ -236,6 +238,7 @@ impl ContractDependency {
         }
     }
 
+    #[must_use]
     pub fn compiled_code_function(&self) -> Option<&str> {
         match self {
             ContractDependency::Simple(_) => None,
@@ -243,6 +246,7 @@ impl ContractDependency {
         }
     }
 
+    #[must_use]
     pub fn compiled_code_out_path(&self) -> Option<&str> {
         match self {
             ContractDependency::Simple(_) => None,
@@ -252,13 +256,15 @@ impl ContractDependency {
 }
 
 impl ContractConfig {
+    #[must_use]
     pub fn dependency_names(&self) -> Vec<&str> {
         self.depends
             .as_ref()
-            .map(|deps| deps.iter().map(|dep| dep.name()).collect())
+            .map(|deps| deps.iter().map(ContractDependency::name).collect())
             .unwrap_or_default()
     }
 
+    #[must_use]
     pub fn get_dependency(&self, name: &str) -> Option<&ContractDependency> {
         self.depends.as_ref()?.iter().find(|dep| dep.name() == name)
     }
@@ -353,31 +359,38 @@ impl ActonConfig {
         Ok(())
     }
 
+    #[must_use]
     pub fn contracts(&self) -> Option<&BTreeMap<String, ContractConfig>> {
         self.contracts.as_ref().map(|c| &c.contracts)
     }
 
+    #[must_use]
     pub fn get_contract(&self, name: &str) -> Option<&ContractConfig> {
         self.contracts.as_ref()?.contracts.get(name)
     }
 
+    #[must_use]
     pub fn wallets(&self) -> Option<&BTreeMap<String, WalletConfig>> {
         self.wallets.as_ref().map(|w| &w.wallets)
     }
 
+    #[must_use]
     pub fn get_wallet(&self, name: &str) -> Option<&WalletConfig> {
         self.wallets.as_ref()?.wallets.get(name)
     }
 
+    #[must_use]
     pub fn libraries(&self) -> Option<&BTreeMap<String, LibraryConfig>> {
         self.libraries.as_ref().map(|l| &l.libraries)
     }
 
+    #[must_use]
     pub fn get_library(&self, name: &str) -> Option<&LibraryConfig> {
         self.libraries.as_ref()?.libraries.get(name)
     }
 }
 
+#[must_use]
 pub fn global_wallets_path() -> Option<PathBuf> {
     #[cfg(windows)]
     let home = std::env::var("USERPROFILE").ok()?;
@@ -392,6 +405,7 @@ pub fn global_wallets_path() -> Option<PathBuf> {
     )
 }
 
+#[must_use]
 pub fn global_libraries_path() -> Option<PathBuf> {
     #[cfg(windows)]
     let home = std::env::var("USERPROFILE").ok()?;
@@ -408,6 +422,7 @@ pub fn global_libraries_path() -> Option<PathBuf> {
 
 impl TestSettings {
     #[allow(clippy::too_many_arguments)]
+    #[must_use]
     pub fn to_test_config(
         &self,
         filter_override: Option<String>,
@@ -453,7 +468,7 @@ impl TestSettings {
                 }
             }
         } else {
-            final_report_formats = report_formats.clone();
+            final_report_formats = report_formats;
         }
 
         TestConfig {
@@ -485,14 +500,14 @@ impl TestSettings {
             include_patterns: include_override
                 .unwrap_or_else(|| self.include.clone().unwrap_or_default()),
             clear_cache: clear_cache_override.unwrap_or(false),
-            junit_path: if self.junit_path != Some("test-results".to_owned()) {
+            junit_path: if self.junit_path == Some("test-results".to_owned()) {
+                junit_path_override
+            } else {
                 Some(
                     self.junit_path
                         .clone()
-                        .unwrap_or(junit_path_override.unwrap_or("".to_owned())),
+                        .unwrap_or_else(|| junit_path_override.unwrap_or_default()),
                 )
-            } else {
-                junit_path_override
             },
             junit_merge: junit_merge_override || self.junit_merge.unwrap_or(false),
             snapshot: snapshot_override,
@@ -512,13 +527,13 @@ impl TestSettings {
             mutate: mutate_override,
             mutate_overrides: mutate_overrides_override,
             mutate_contract: mutate_contract_override,
-            disable_rules: if !disable_rules_override.is_empty() {
-                disable_rules_override
-            } else {
+            disable_rules: if disable_rules_override.is_empty() {
                 self.mutation
                     .as_ref()
                     .and_then(|m| m.disable_rules.clone())
                     .unwrap_or_default()
+            } else {
+                disable_rules_override
             },
             fail_fast: fail_fast_override.unwrap_or_else(|| self.fail_fast.unwrap_or(false)),
             ui: ui_override || self.ui.unwrap_or(false),

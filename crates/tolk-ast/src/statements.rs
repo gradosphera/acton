@@ -24,11 +24,13 @@ pub enum Statement<'tree> {
 }
 
 impl<'tree> Statement<'tree> {
+    #[must_use]
     pub fn text(&self, source: &'tree str) -> &'tree str {
         self.raw_node().utf8_text(source.as_bytes()).unwrap_or("")
     }
 
-    pub fn raw_node(&self) -> Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> Node<'tree> {
         match self {
             Statement::BlockStatement(n) => n.0,
             Statement::IfStatement(n) => n.0,
@@ -119,7 +121,8 @@ impl<'t> From<Node<'t>> for IfStatementAlternative<'t> {
 }
 
 impl<'tree> IfStatementAlternative<'tree> {
-    pub fn raw_node(&self) -> &Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> &Node<'tree> {
         match self {
             IfStatementAlternative::IfStatement(if_stmt) => &if_stmt.0,
             IfStatementAlternative::BlockStatement(block_stmt) => &block_stmt.0,
@@ -128,14 +131,17 @@ impl<'tree> IfStatementAlternative<'tree> {
 }
 
 impl<'tree> IfStatement<'tree> {
+    #[must_use]
     pub fn condition(&self) -> Option<Expression<'tree>> {
         self.0.field("condition")
     }
 
+    #[must_use]
     pub fn body(&self) -> Option<BlockStatement<'tree>> {
         self.0.field("body")
     }
 
+    #[must_use]
     pub fn alternative(&self) -> Option<IfStatementAlternative<'tree>> {
         self.0.field("alternative")
     }
@@ -151,10 +157,12 @@ impl<'t> From<Node<'t>> for WhileStatement<'t> {
 }
 
 impl<'tree> WhileStatement<'tree> {
+    #[must_use]
     pub fn condition(&self) -> Option<Expression<'tree>> {
         self.0.field("condition")
     }
 
+    #[must_use]
     pub fn body(&self) -> Option<BlockStatement<'tree>> {
         self.0.field("body")
     }
@@ -170,10 +178,12 @@ impl<'t> From<Node<'t>> for RepeatStatement<'t> {
 }
 
 impl<'tree> RepeatStatement<'tree> {
+    #[must_use]
     pub fn count(&self) -> Option<Expression<'tree>> {
         self.0.field("count")
     }
 
+    #[must_use]
     pub fn body(&self) -> Option<BlockStatement<'tree>> {
         self.0.field("body")
     }
@@ -189,10 +199,12 @@ impl<'t> From<Node<'t>> for TryCatchStatement<'t> {
 }
 
 impl<'tree> TryCatchStatement<'tree> {
+    #[must_use]
     pub fn body(&self) -> Option<BlockStatement<'tree>> {
         self.0.field("try_body")
     }
 
+    #[must_use]
     pub fn catch(&self) -> Option<CatchClause<'tree>> {
         self.0.field("catch")
     }
@@ -208,11 +220,13 @@ impl<'t> From<Node<'t>> for ReturnStatement<'t> {
 }
 
 impl<'tree> ReturnStatement<'tree> {
+    #[must_use]
     pub fn expr(&self) -> Option<Expression<'tree>> {
         self.0.field("body")
     }
 
-    pub fn raw_node(&self) -> &Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> &Node<'tree> {
         &self.0
     }
 }
@@ -224,7 +238,8 @@ pub enum VarKind {
 }
 
 impl VarKind {
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
             VarKind::Var => "var",
             VarKind::Val => "val",
@@ -254,19 +269,21 @@ impl<'tree> LocalVarsDeclaration<'tree> {
     pub fn kind(&self) -> VarKind {
         self.0
             .field::<Node<'_>>("kind")
-            .map(VarKind::from)
-            .unwrap_or(VarKind::Var)
+            .map_or(VarKind::Var, VarKind::from)
     }
 
+    #[must_use]
     pub fn lhs(&self) -> Option<VarDeclarationLhs<'tree>> {
         self.0.field("lhs")
     }
 
+    #[must_use]
     pub fn assigned_val(&self) -> Option<Expression<'tree>> {
         self.0.field("assigned_val")
     }
 
-    pub fn raw_node(&self) -> &Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> &Node<'tree> {
         &self.0
     }
 }
@@ -281,10 +298,12 @@ impl<'t> From<Node<'t>> for DoWhileStatement<'t> {
 }
 
 impl<'tree> DoWhileStatement<'tree> {
+    #[must_use]
     pub fn body(&self) -> Option<BlockStatement<'tree>> {
         self.0.field("body")
     }
 
+    #[must_use]
     pub fn condition(&self) -> Option<Expression<'tree>> {
         self.0.field("condition")
     }
@@ -318,6 +337,7 @@ impl<'t> From<Node<'t>> for ThrowStatement<'t> {
 }
 
 impl<'tree> ThrowStatement<'tree> {
+    #[must_use]
     pub fn expression(&self) -> Option<Expression<'tree>> {
         self.0.field("excNo")
     }
@@ -333,10 +353,12 @@ impl<'t> From<Node<'t>> for AssertStatement<'t> {
 }
 
 impl<'tree> AssertStatement<'tree> {
+    #[must_use]
     pub fn condition(&self) -> Option<Expression<'tree>> {
         self.0.field("condition")
     }
 
+    #[must_use]
     pub fn expression(&self) -> Option<Expression<'tree>> {
         self.0.field("excNo")
     }
@@ -384,19 +406,23 @@ impl<'t> From<Node<'t>> for CatchClause<'t> {
 }
 
 impl<'tree> CatchClause<'tree> {
+    #[must_use]
     pub fn catch_var1(&self) -> Option<Ident<'tree>> {
         self.0.field("catch_var1")
     }
 
+    #[must_use]
     pub fn catch_var2(&self) -> Option<Ident<'tree>> {
         self.0.field("catch_var2")
     }
 
+    #[must_use]
     pub fn body(&self) -> Option<BlockStatement<'tree>> {
         self.0.field("catch_body")
     }
 
-    pub fn raw_node(&self) -> &Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> &Node<'tree> {
         &self.0
     }
 }
@@ -424,7 +450,8 @@ impl<'t> From<Node<'t>> for VarDeclarationLhs<'t> {
 }
 
 impl<'tree> VarDeclarationLhs<'tree> {
-    pub fn raw_node(&self) -> &Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> &Node<'tree> {
         match self {
             VarDeclarationLhs::TupleVarsDeclaration(t) => &t.0,
             VarDeclarationLhs::TensorVarsDeclaration(t) => &t.0,
@@ -483,14 +510,17 @@ impl<'t> From<Node<'t>> for VarDeclaration<'t> {
 }
 
 impl<'tree> VarDeclaration<'tree> {
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn typ(&self) -> Option<Type<'tree>> {
         self.0.field("type")
     }
 
+    #[must_use]
     pub fn is_redefinition(&self) -> bool {
         self.0.field::<Ident<'_>>("redef").is_some()
     }

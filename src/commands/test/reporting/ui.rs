@@ -89,8 +89,8 @@ pub(crate) async fn start_ui_server(
 
     let app = app.layer(CorsLayer::permissive()).with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
-    let url = format!("http://127.0.0.1:{}", port);
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await?;
+    let url = format!("http://127.0.0.1:{port}");
     println!("     {} UI server at {}", "Starting".green().bold(), url);
 
     open_browser(&url);
@@ -129,7 +129,7 @@ fn open_browser(url: &str) {
                         let _ = stdin.write_all(OPEN_CHROME_SCRIPT.as_bytes());
                     }
                     let status = child.wait().ok();
-                    if status.map(|s| s.success()).unwrap_or(false) {
+                    if status.is_some_and(|s| s.success()) {
                         return;
                     }
                 }
@@ -138,7 +138,7 @@ fn open_browser(url: &str) {
     }
 
     if let Err(e) = opener::open(url) {
-        eprintln!("Warning: Failed to open browser: {}", e);
+        eprintln!("Warning: Failed to open browser: {e}");
     }
 }
 
@@ -217,7 +217,7 @@ async fn handle_api_contract(
 
     let contract_path = PathBuf::from(trace_dir)
         .join("contracts")
-        .join(format!("{}.json", name));
+        .join(format!("{name}.json"));
 
     match tokio::fs::read_to_string(contract_path).await {
         Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {

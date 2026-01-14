@@ -3,14 +3,14 @@ use crate::debugging::support::debug::DebugBuilder;
 
 #[test]
 fn test_simple_step_by_step_execution() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 fun main() {
     foo = 100;
     return foo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -36,7 +36,7 @@ fun main() {
 
 #[test]
 fn test_simple_step_by_step_execution_with_step_over() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 fun main() {
@@ -44,7 +44,7 @@ fun main() {
     foo = 200;
     return foo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -67,14 +67,14 @@ fun main() {
 
 #[test]
 fn test_can_continue() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 fun main() {
     foo = 100;
     return foo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -95,14 +95,14 @@ fun main() {
 
 #[test]
 fn test_simple_debug_with_stack_argument() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global result: int;
 
 fun main(arg: int) {
     result = arg * 2;
     return result;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-with-stack")
         .code(code)

@@ -60,6 +60,7 @@ pub struct Code {
 }
 
 impl Code {
+    #[must_use]
     pub fn print(&self, options: &FormatOptions) -> String {
         let mut s = String::new();
 

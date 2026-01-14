@@ -55,14 +55,12 @@ pub fn run_cmd(script_name: &str, extra_args: &[String]) -> anyhow::Result<()> {
 
         let status = cmd
             .status()
-            .map_err(|e| anyhow!("Failed to execute script '{}': {}", script_name, e))?;
+            .map_err(|e| anyhow!("Failed to execute script '{script_name}': {e}"))?;
 
         if !status.success() {
             let code = status.code().unwrap_or(1);
             return Err(anyhow!(
-                "Script '{}' failed with exit code {}",
-                script_name,
-                code
+                "Script '{script_name}' failed with exit code {code}"
             ));
         }
 
@@ -137,7 +135,7 @@ fn shell_escape_posix(s: &str) -> String {
     {
         s.to_string()
     } else {
-        format!("'{}'", s.replace('\'', r#"'\''"#))
+        format!("'{}'", s.replace('\'', r"'\''"))
     }
 }
 

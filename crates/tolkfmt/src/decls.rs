@@ -1,7 +1,15 @@
 use crate::{Context, comments, common, exprs, stmts, types};
 use pretty::RcDoc;
-use tolk_ast::*;
+use tolk_ast::{
+    Annotation, AnnotationArguments, AnnotationList, AsmBody, ConstantDeclaration, EnumBody,
+    EnumDeclaration, EnumMemberDeclaration, Expression, Function, FunctionBody,
+    GetMethodDeclaration, GlobalVarDeclaration, Ident, Import, LambdaParameter, MethodDeclaration,
+    MethodReceiver, Parameter, SourceFile, StructBody, StructDeclaration, StructFieldDeclaration,
+    TolkRequiredVersion, TopLevel, Type, TypeAliasDeclaration, TypeAliasUnderlyingType,
+    TypeParameter, TypeParameters,
+};
 
+#[must_use]
 pub fn print_source_file<'a>(ctx: &Context<'_>, file: &SourceFile) -> Option<RcDoc<'a>> {
     let mut sections = vec![];
 
@@ -9,13 +17,10 @@ pub fn print_source_file<'a>(ctx: &Context<'_>, file: &SourceFile) -> Option<RcD
     let mut docs = vec![];
 
     // In theory, a file can have multiple Tolk versions, but we keep only one
-    let required_version = file
-        .top_levels_iter()
-        .filter_map(|decl| match decl {
-            TopLevel::TolkRequiredVersion(decl) => Some(decl),
-            _ => None,
-        })
-        .next();
+    let required_version = file.top_levels_iter().find_map(|decl| match decl {
+        TopLevel::TolkRequiredVersion(decl) => Some(decl),
+        _ => None,
+    });
 
     // Tolk version is always printed at the beginning of the file, before imports
     if let Some(required_version) = required_version {
@@ -135,6 +140,7 @@ pub fn print_source_file<'a>(ctx: &Context<'_>, file: &SourceFile) -> Option<RcD
     Some(common::print_sections(sections))
 }
 
+#[must_use]
 pub fn print_decl<'a>(ctx: &Context<'_>, decl: &TopLevel) -> Option<RcDoc<'a>> {
     match decl {
         TopLevel::TolkRequiredVersion(v) => print_tolk_required_version(ctx, v),
@@ -152,6 +158,7 @@ pub fn print_decl<'a>(ctx: &Context<'_>, decl: &TopLevel) -> Option<RcDoc<'a>> {
     }
 }
 
+#[must_use]
 pub fn print_tolk_required_version<'a>(
     ctx: &Context,
     v: &TolkRequiredVersion,
@@ -161,12 +168,14 @@ pub fn print_tolk_required_version<'a>(
     Some(RcDoc::concat([RcDoc::text("tolk "), value_doc]))
 }
 
+#[must_use]
 pub fn print_import<'a>(ctx: &Context<'_>, i: &Import) -> Option<RcDoc<'a>> {
     let path = i.path()?;
     let path_doc = common::print_node_text(ctx, &path.0)?;
     Some(RcDoc::concat([RcDoc::text("import "), path_doc]))
 }
 
+#[must_use]
 pub fn print_global_var_declaration<'a>(
     ctx: &Context,
     g: &GlobalVarDeclaration,
@@ -187,6 +196,7 @@ pub fn print_global_var_declaration<'a>(
     Some(RcDoc::concat(parts))
 }
 
+#[must_use]
 pub fn print_constant_declaration<'a>(
     ctx: &Context,
     constant: &ConstantDeclaration,
@@ -204,10 +214,9 @@ pub fn print_constant_declaration<'a>(
     if let Some(typ) = constant.typ() {
         parts.push(RcDoc::text(": "));
         parts.push(types::print_type(ctx, &typ)?);
-        parts.push(RcDoc::space());
-    } else {
-        parts.push(RcDoc::space());
     }
+
+    parts.push(RcDoc::space());
 
     if let Some(value) = constant.value() {
         parts.push(RcDoc::text("= "));
@@ -217,6 +226,7 @@ pub fn print_constant_declaration<'a>(
     Some(RcDoc::concat(parts))
 }
 
+#[must_use]
 pub fn print_type_alias_declaration<'a>(
     ctx: &Context,
     t: &TypeAliasDeclaration,
@@ -254,6 +264,7 @@ pub fn print_type_alias_declaration<'a>(
     Some(RcDoc::group(RcDoc::concat(parts)))
 }
 
+#[must_use]
 pub fn print_struct_declaration<'a>(ctx: &Context<'_>, s: &StructDeclaration) -> Option<RcDoc<'a>> {
     let name = s.name()?;
 
@@ -293,6 +304,7 @@ pub fn print_struct_body<'a>(ctx: &Context<'_>, body: &StructBody) -> Option<RcD
     )
 }
 
+#[must_use]
 pub fn print_struct_field_declaration<'a>(
     ctx: &Context,
     f: &StructFieldDeclaration,
@@ -320,6 +332,7 @@ pub fn print_struct_field_declaration<'a>(
     Some(RcDoc::concat(parts))
 }
 
+#[must_use]
 pub fn print_enum_declaration<'a>(ctx: &Context<'_>, e: &EnumDeclaration) -> Option<RcDoc<'a>> {
     let name = e.name()?;
 
@@ -354,6 +367,7 @@ pub fn print_enum_body<'a>(ctx: &Context<'_>, body: &EnumBody) -> Option<RcDoc<'
     )
 }
 
+#[must_use]
 pub fn print_enum_member_declaration<'a>(
     ctx: &Context,
     m: &EnumMemberDeclaration,
@@ -368,6 +382,7 @@ pub fn print_enum_member_declaration<'a>(
     Some(RcDoc::concat(parts))
 }
 
+#[must_use]
 pub fn print_function<'a>(ctx: &Context<'_>, func: &Function) -> Option<RcDoc<'a>> {
     let name = func.name()?;
     let parameters = func.parameters();
@@ -403,6 +418,7 @@ pub fn print_function<'a>(ctx: &Context<'_>, func: &Function) -> Option<RcDoc<'a
     Some(RcDoc::concat(parts))
 }
 
+#[must_use]
 pub fn print_method_declaration<'a>(ctx: &Context<'_>, m: &MethodDeclaration) -> Option<RcDoc<'a>> {
     let name = m.name()?;
     let parameters = m.parameters(ctx.code.as_ref().as_ref(), false);
@@ -443,6 +459,7 @@ pub fn print_method_declaration<'a>(ctx: &Context<'_>, m: &MethodDeclaration) ->
     Some(RcDoc::concat(parts))
 }
 
+#[must_use]
 pub fn print_get_method_declaration<'a>(
     ctx: &Context,
     g: &GetMethodDeclaration,
@@ -477,6 +494,7 @@ pub fn print_get_method_declaration<'a>(
     Some(RcDoc::concat(parts))
 }
 
+#[must_use]
 pub fn print_method_receiver<'a>(ctx: &Context<'_>, r: &MethodReceiver) -> Option<RcDoc<'a>> {
     let typ = r.typ()?;
     let typ_doc = types::print_type(ctx, &typ)?;
@@ -499,7 +517,7 @@ pub trait ParameterTrait {
         Self: 'tree;
 }
 
-impl<'tree> ParameterTrait for Parameter<'tree> {
+impl ParameterTrait for Parameter<'_> {
     fn raw_node<'t>(&self) -> tree_sitter::Node<'t>
     where
         Self: 't,
@@ -529,7 +547,7 @@ impl<'tree> ParameterTrait for Parameter<'tree> {
     }
 }
 
-impl<'tree> ParameterTrait for LambdaParameter<'tree> {
+impl ParameterTrait for LambdaParameter<'_> {
     fn raw_node<'t>(&self) -> tree_sitter::Node<'t>
     where
         Self: 't,
@@ -600,6 +618,7 @@ where
     )
 }
 
+#[must_use]
 pub fn print_annotation_list<'a>(ctx: &Context<'_>, a: &AnnotationList) -> Option<RcDoc<'a>> {
     let annotations = a.annotations();
 
@@ -625,6 +644,7 @@ pub fn print_annotation_list<'a>(ctx: &Context<'_>, a: &AnnotationList) -> Optio
     Some(RcDoc::concat(docs))
 }
 
+#[must_use]
 pub fn print_annotation<'a>(ctx: &Context<'_>, a: &Annotation) -> Option<RcDoc<'a>> {
     let mut parts = vec![RcDoc::text("@")];
     if let Some(name) = a.name() {
@@ -661,6 +681,7 @@ pub fn print_type_parameters<'a>(ctx: &Context<'_>, tp: &TypeParameters) -> Opti
     )
 }
 
+#[must_use]
 pub fn print_type_parameter<'a>(ctx: &Context<'_>, tp: &TypeParameter) -> Option<RcDoc<'a>> {
     let mut parts = vec![];
     let name = tp.name()?;
@@ -681,6 +702,7 @@ fn print_function_body<'a>(ctx: &Context<'_>, body: &FunctionBody) -> Option<RcD
     }
 }
 
+#[must_use]
 pub fn print_asm_body<'a>(ctx: &Context<'_>, asm: &AsmBody) -> Option<RcDoc<'a>> {
     let mut parts = vec![RcDoc::text("asm")];
 

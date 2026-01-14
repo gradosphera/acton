@@ -8,11 +8,13 @@ pub struct Tuple(pub Vec<TupleItem>);
 
 impl Tuple {
     /// Create an empty tuple.
-    pub fn empty() -> Tuple {
+    #[must_use]
+    pub const fn empty() -> Tuple {
         Tuple(vec![])
     }
 
     /// Creates wrapper over values with specified type.
+    #[must_use]
     pub fn to_typed(&self, type_name: &str) -> TupleItem {
         TupleItem::TypedTuple {
             type_name: type_name.to_owned(),
@@ -25,6 +27,7 @@ impl Tuple {
     /// ```text
     /// (()) -> ()
     /// ```
+    #[must_use]
     pub fn unwrap_empty(&self) -> Tuple {
         if let Some(TupleItem::Tuple(item)) = &self.0.first()
             && item.is_empty()
@@ -40,6 +43,7 @@ impl Tuple {
     /// ```text
     /// ((x)) -> (x)
     /// ```
+    #[must_use]
     pub fn unwrap_single(&self) -> Tuple {
         if let Some(TupleItem::Tuple(item)) = &self.0.first()
             && item.len() == 1
@@ -50,6 +54,7 @@ impl Tuple {
         (*self).clone()
     }
 
+    #[must_use]
     pub fn unwrap_tuple(&self) -> Tuple {
         if let Some(TupleItem::Tuple(item)) = &self.0.first() {
             return Tuple(item.0.clone());
@@ -65,7 +70,7 @@ impl Tuple {
         self.push(TupleItem::Int(if v {
             BigInt::from(-1)
         } else {
-            BigInt::from(0)
+            BigInt::ZERO
         }));
     }
 }
@@ -109,6 +114,7 @@ pub enum TupleItem {
 
 impl TupleItem {
     /// Creates wrapper over values with specified type.
+    #[must_use]
     pub fn to_typed(&self, type_name: &str) -> TupleItem {
         if let TupleItem::Tuple(item) = self {
             return TupleItem::TypedTuple {
@@ -128,6 +134,7 @@ impl TupleItem {
     /// ```text
     /// (x) -> x
     /// ```
+    #[must_use]
     pub fn unwrap_single(&self) -> TupleItem {
         let TupleItem::Tuple(items) = self else {
             return (*self).clone();

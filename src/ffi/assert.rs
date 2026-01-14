@@ -115,7 +115,7 @@ fn format_decimal(value: &BigInt, decimals: u32) -> String {
     }
 
     if is_negative {
-        format!("-{}", result)
+        format!("-{result}")
     } else {
         result
     }
@@ -142,8 +142,7 @@ fn assert_decimal_impl(
 
     let message = if message.is_empty() {
         format!(
-            "expect(<actual>).toEqualDecimal(<expected>)\n       Actual:   {}\n       Expected: {}",
-            left_str, right_str
+            "expect(<actual>).toEqualDecimal(<expected>)\n       Actual:   {left_str}\n       Expected: {right_str}"
         )
     } else {
         message
@@ -270,11 +269,12 @@ fn fail_wallet_not_found_impl(
     Ok(())
 }
 
+#[must_use]
 pub fn process_txs_and_search_params(
     txs: &Tuple,
     params: Tuple,
 ) -> Option<(TransactionNotFoundParams, Vec<Transaction>)> {
-    let mut params_reader = params.clone().0;
+    let mut params_reader = params.0;
     let raw_body = params_reader.pop();
     let raw_compute_phase_skipped = params_reader.pop();
     let raw_action_exit_code = params_reader.pop();
@@ -304,57 +304,57 @@ pub fn process_txs_and_search_params(
     };
 
     if let Some(raw_opcode) = raw_opcode {
-        if let TupleItem::Null = raw_opcode {
-            params.opcode = None
+        if raw_opcode == TupleItem::Null {
+            params.opcode = None;
         } else if let TupleItem::Int(num) = raw_opcode {
-            params.opcode = num.to_u32()
+            params.opcode = num.to_u32();
         }
     }
     if let Some(raw_bounced) = raw_bounced {
-        if let TupleItem::Null = raw_bounced {
-            params.bounced = None
+        if raw_bounced == TupleItem::Null {
+            params.bounced = None;
         } else if let TupleItem::Int(num) = raw_bounced {
-            params.bounced = Some(num == BigInt::from(-1))
+            params.bounced = Some(num == BigInt::from(-1));
         }
     }
     if let Some(raw_bounce) = raw_bounce {
-        if let TupleItem::Null = raw_bounce {
-            params.bounce = None
+        if raw_bounce == TupleItem::Null {
+            params.bounce = None;
         } else if let TupleItem::Int(num) = raw_bounce {
-            params.bounce = Some(num == BigInt::from(-1))
+            params.bounce = Some(num == BigInt::from(-1));
         }
     }
     if let Some(raw_deploy) = raw_deploy {
-        if let TupleItem::Null = raw_deploy {
-            params.deploy = None
+        if raw_deploy == TupleItem::Null {
+            params.deploy = None;
         } else if let TupleItem::Int(num) = raw_deploy {
-            params.deploy = Some(num == BigInt::from(-1))
+            params.deploy = Some(num == BigInt::from(-1));
         }
     }
     if let Some(raw_exit_code) = raw_exit_code {
-        if let TupleItem::Null = raw_exit_code {
-            params.exit_code = None
+        if raw_exit_code == TupleItem::Null {
+            params.exit_code = None;
         } else if let TupleItem::Int(num) = raw_exit_code {
-            params.exit_code = num.to_u32()
+            params.exit_code = num.to_u32();
         }
     }
     if let Some(raw_success) = raw_success {
-        if let TupleItem::Null = raw_success {
-            params.success = None
+        if raw_success == TupleItem::Null {
+            params.success = None;
         } else if let TupleItem::Int(num) = raw_success {
-            params.success = Some(num == BigInt::from(-1))
+            params.success = Some(num == BigInt::from(-1));
         }
     }
     if let Some(raw_aborted) = raw_aborted {
-        if let TupleItem::Null = raw_aborted {
-            params.aborted = None
+        if raw_aborted == TupleItem::Null {
+            params.aborted = None;
         } else if let TupleItem::Int(num) = raw_aborted {
-            params.aborted = Some(num == BigInt::from(-1))
+            params.aborted = Some(num == BigInt::from(-1));
         }
     }
     if let Some(raw_from) = raw_from {
-        if let TupleItem::Null = raw_from {
-            params.from = None
+        if raw_from == TupleItem::Null {
+            params.from = None;
         } else if let TupleItem::Tuple(raw_from) = &raw_from
             && let TupleItem::Slice(cell) = &raw_from[0]
         {
@@ -372,8 +372,8 @@ pub fn process_txs_and_search_params(
         }
     }
     if let Some(raw_to) = raw_to {
-        if let TupleItem::Null = raw_to {
-            params.to = None
+        if raw_to == TupleItem::Null {
+            params.to = None;
         } else if let TupleItem::Tuple(raw_to) = &raw_to
             && let TupleItem::Slice(cell) = &raw_to[0]
         {
@@ -391,22 +391,22 @@ pub fn process_txs_and_search_params(
         }
     }
     if let Some(raw_action_exit_code) = raw_action_exit_code {
-        if let TupleItem::Null = raw_action_exit_code {
-            params.action_exit_code = None
+        if raw_action_exit_code == TupleItem::Null {
+            params.action_exit_code = None;
         } else if let TupleItem::Int(num) = raw_action_exit_code {
-            params.action_exit_code = Some(num.to_i32().unwrap_or(0))
+            params.action_exit_code = Some(num.to_i32().unwrap_or(0));
         }
     }
     if let Some(raw_compute_phase_skipped) = raw_compute_phase_skipped {
-        if let TupleItem::Null = raw_compute_phase_skipped {
-            params.compute_phase_skipped = None
+        if raw_compute_phase_skipped == TupleItem::Null {
+            params.compute_phase_skipped = None;
         } else if let TupleItem::Int(num) = raw_compute_phase_skipped {
-            params.compute_phase_skipped = Some(num == BigInt::from(-1))
+            params.compute_phase_skipped = Some(num == BigInt::from(-1));
         }
     }
     if let Some(raw_body) = raw_body {
-        if let TupleItem::Null = raw_body {
-            params.body = None
+        if raw_body == TupleItem::Null {
+            params.body = None;
         } else if let TupleItem::Cell(cell) = raw_body {
             let boc = cell.to_boc(false).ok()?;
             let decoded_cell = Boc::decode(&boc).ok()?;

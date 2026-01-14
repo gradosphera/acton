@@ -49,7 +49,7 @@ pub fn fmt_cmd(paths: Vec<String>, check: bool) -> Result<()> {
                     let p = entry.path();
                     !ignore_set.is_match(p)
                 })
-                .filter_map(|e| e.ok());
+                .filter_map(std::result::Result::ok);
 
             for entry in iter {
                 let path = entry.path();
@@ -118,13 +118,9 @@ pub fn fmt_cmd(paths: Vec<String>, check: bool) -> Result<()> {
         if !unformatted_files.is_empty() {
             anyhow::bail!("Files are not formatted");
         } else if error_count > 0 {
-            anyhow::bail!(
-                "Formatting check failed due to syntax errors in {} files",
-                error_count
-            );
-        } else {
-            println!("{}", "All files are properly formatted".green());
+            anyhow::bail!("Formatting check failed due to syntax errors in {error_count} files");
         }
+        println!("{}", "All files are properly formatted".green());
     } else {
         if formatted_count > 0 {
             println!("\n{} {} files formatted", "Done:".green(), formatted_count);
@@ -133,10 +129,7 @@ pub fn fmt_cmd(paths: Vec<String>, check: bool) -> Result<()> {
         }
 
         if error_count > 0 {
-            anyhow::bail!(
-                "Failed to format {} files due to syntax errors",
-                error_count
-            );
+            anyhow::bail!("Failed to format {error_count} files due to syntax errors");
         }
     }
 

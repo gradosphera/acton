@@ -99,7 +99,7 @@ impl FixtureProject {
         self
     }
 
-    /// Get ActonCommand builder for this project
+    /// Get `ActonCommand` builder for this project
     pub(crate) fn acton(&self) -> ActonCommand {
         let cmd = snapbox::cmd::Command::new(acton_exe()).with_assert(assert_ui());
         ActonCommand {
@@ -175,9 +175,10 @@ impl FixtureProject {
 
     fn enable_slot(project_path: &Path, file: &str, index: usize) {
         let file_path = project_path.join(file);
-        if !file_path.exists() {
-            panic!("File {file} does not exist in fixture project");
-        }
+        assert!(
+            file_path.exists(),
+            "File {file} does not exist in fixture project"
+        );
 
         let content =
             fs::read_to_string(&file_path).unwrap_or_else(|_| panic!("Failed to read file {file}"));
@@ -192,7 +193,7 @@ impl FixtureProject {
 
         for entry in WalkDir::new(&self.project_path)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
         {
             if entry.file_type().is_file()
                 && let Some(ext) = entry.path().extension()

@@ -96,7 +96,7 @@ fn get_code_context(source: &str, result: &MutationResult, context_lines: usize)
                 MutationEdit::Remove => {
                     output.push_str(&format!(
                         "  {} {} {}\n",
-                        format!("{:4}", line_num).dimmed(),
+                        format!("{line_num:4}").dimmed(),
                         "│".red(),
                         line.red().strikethrough()
                     ));
@@ -128,7 +128,7 @@ fn get_code_context(source: &str, result: &MutationResult, context_lines: usize)
 
                     output.push_str(&format!(
                         "  {} {} {}\n",
-                        format!("{:4}", line_num).dimmed(),
+                        format!("{line_num:4}").dimmed(),
                         "│".dimmed(),
                         line_content
                     ));
@@ -152,7 +152,7 @@ fn get_code_context(source: &str, result: &MutationResult, context_lines: usize)
         } else {
             output.push_str(&format!(
                 "  {} {} {}\n",
-                format!("{:4}", line_num).dimmed(),
+                format!("{line_num:4}").dimmed(),
                 "│".dimmed(),
                 line.dimmed()
             ));
@@ -183,8 +183,7 @@ fn collect_mutations<'a>(
                         let capture_name = query
                             .capture_names()
                             .get(capture_match.index as usize)
-                            .map(|s| s.as_ref())
-                            .unwrap_or("");
+                            .map_or("", AsRef::as_ref);
 
                         if capture_name != *capture {
                             continue;
@@ -474,7 +473,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
         compile_failed_count.to_string().yellow()
     );
 
-    let score_str = format!("{:.1}%", mutation_score);
+    let score_str = format!("{mutation_score:.1}%");
     let (score_icon, score_label) = match mutation_score as u32 {
         0..=50 => (
             "◆".red().bold().to_string(),
@@ -532,8 +531,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
             let content = sources
                 .iter()
                 .find(|s| s.relative_path.to_string_lossy() == result.source_path)
-                .map(|s| s.content.as_str())
-                .unwrap_or("");
+                .map_or("", |s| s.content.as_str());
 
             println!("{}", get_code_context(content, result, 2));
             println!(
@@ -570,7 +568,7 @@ fn compile_file(path: &str) -> anyhow::Result<String> {
     };
     let success = success.as_bool().unwrap_or(false);
     if !success {
-        return Ok("".to_owned());
+        return Ok(String::new());
     }
     let Some(code_b64) = compilation_result.get("code_boc64") else {
         anyhow::bail!("No code boc64 found in compilation result")

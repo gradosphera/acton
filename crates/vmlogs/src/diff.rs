@@ -12,10 +12,10 @@ pub enum StackDiff {
 impl Display for StackDiff {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            StackDiff::Same(n) => write!(f, "={}", n),
-            StackDiff::Removed(n) => write!(f, "-{}", n),
-            StackDiff::Added(val) => write!(f, "+{}", val),
-            StackDiff::Changed { index, value } => write!(f, "~{}:{}", index, value),
+            StackDiff::Same(n) => write!(f, "={n}"),
+            StackDiff::Removed(n) => write!(f, "-{n}"),
+            StackDiff::Added(val) => write!(f, "+{val}"),
+            StackDiff::Changed { index, value } => write!(f, "~{index}:{value}"),
         }
     }
 }
@@ -131,7 +131,7 @@ pub fn convert_to_diff_logs(input: &str) -> String {
                     output.push_str(
                         &diffs
                             .iter()
-                            .map(|d| d.to_string())
+                            .map(ToString::to_string)
                             .collect::<Vec<_>>()
                             .join(" "),
                     );
@@ -178,7 +178,7 @@ pub fn convert_from_diff_logs(input: &str) -> String {
             {
                 let content = stack_content.trim();
                 let stack = VmStack::new(content);
-                current_stack = stack.parsed().iter().map(|v| v.to_string()).collect();
+                current_stack = stack.parsed().iter().map(ToString::to_string).collect();
             }
         }
     }
@@ -274,10 +274,10 @@ mod tests {
         let diff_logs = convert_to_diff_logs(input);
         let restored = convert_from_diff_logs(&diff_logs);
 
-        let original_lines: Vec<&str> = input.lines().collect();
-        let restored_lines: Vec<&str> = restored.lines().collect();
+        let original_lines = input.lines();
+        let restored_lines = restored.lines();
 
-        assert_eq!(original_lines.len(), restored_lines.len());
+        assert_eq!(original_lines.count(), restored_lines.count());
     }
 
     #[test]
@@ -296,10 +296,10 @@ mod tests {
             let diff_logs = convert_to_diff_logs(&input);
             let restored = convert_from_diff_logs(&diff_logs);
 
-            let original_lines: Vec<&str> = input.lines().collect();
-            let restored_lines: Vec<&str> = restored.lines().collect();
+            let original_lines = input.lines();
+            let restored_lines = restored.lines();
 
-            assert_eq!(original_lines.len(), restored_lines.len());
+            assert_eq!(original_lines.count(), restored_lines.count());
         }
     }
 }

@@ -76,7 +76,7 @@ fn test_new_counter_project_non_interactive() {
             .join("foobar/contracts/counter.tolk")
             .exists()
     );
-    assert!(content.contains(r#"[contracts.counter]"#));
+    assert!(content.contains(r"[contracts.counter]"));
 }
 
 #[test]

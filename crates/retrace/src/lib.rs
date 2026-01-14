@@ -19,10 +19,10 @@
 //!
 //! # Configuration
 //!
-//! This library requires an API key for TonCenter to fetch transaction data and libraries.
+//! This library requires an API key for `TonCenter` to fetch transaction data and libraries.
 //! You can also provide a Dton API key for alternative library resolution.
 //!
-//! *   `TONCENTER_API_KEY`: Your TonCenter V3 API key (required for most operations).
+//! *   `TONCENTER_API_KEY`: Your `TonCenter` V3 API key (required for most operations).
 //! *   `DTON_API_KEY`: (Optional) Your dton.io API key for fallback library lookups.
 //!
 //! # Main Entry Points

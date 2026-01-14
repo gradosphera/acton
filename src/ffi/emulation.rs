@@ -62,7 +62,7 @@ fn build_impl(
         if let Some(found_contract) = found_contract {
             debug!("Found contract with info: {found_contract:?}");
             name = found_contract.name; // use actual name instead of id
-            path = found_contract.src.clone();
+            path = found_contract.src;
             path = fs::canonicalize(&path)
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or(path);
@@ -83,7 +83,7 @@ fn build_impl(
         let binary_data =
             fs::read(&path).with_context(|| format!("Cannot read BoC file {path}"))?;
         let cell = ArcCell::from_boc(binary_data.as_slice())
-            .map_err(|e| anyhow::anyhow!("Failed to decode code BoC for {}: {}", path, e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to decode code BoC for {path}: {e}"))?;
         stk.push(TupleItem::Cell(cell));
         return Ok(());
     }
@@ -93,7 +93,7 @@ fn build_impl(
         info!("Build {path} from memory cache in {elapsed:?}");
 
         let code_cell = ArcCell::from_boc_b64(&cached.code_boc64)
-            .map_err(|e| anyhow::anyhow!("Failed to decode cached code BoC for {}: {}", path, e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to decode cached code BoC for {path}: {e}"))?;
         stk.push(TupleItem::Cell(code_cell));
         return Ok(());
     }
@@ -117,7 +117,7 @@ fn build_impl(
         );
 
         let code_cell = ArcCell::from_boc_b64(&cached_entry.code_boc64)
-            .map_err(|e| anyhow::anyhow!("Failed to decode cached code BoC for {}: {}", path, e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to decode cached code BoC for {path}: {e}"))?;
         stk.push(TupleItem::Cell(code_cell));
         return Ok(());
     }
@@ -153,9 +153,9 @@ fn build_impl(
                 Some(contract_abi(&content, &path)),
             );
             let code_cell = ArcCell::from_boc_b64(&success.code_boc64).map_err(|e| {
-                anyhow::anyhow!("Failed to decode compiled code BoC for {}: {}", path, e)
+                anyhow::anyhow!("Failed to decode compiled code BoC for {path}: {e}")
             })?;
-            stk.push(TupleItem::Cell(code_cell))
+            stk.push(TupleItem::Cell(code_cell));
         }
         tolkc::CompilerResult::Error(error) => {
             let total_elapsed = start_time.elapsed();
@@ -166,7 +166,7 @@ fn build_impl(
 
             anyhow::bail!("Compilation failed: {}", error.message);
         }
-    };
+    }
 
     Ok(())
 }
@@ -241,7 +241,7 @@ fn send_message_impl(
             TupleItem::Null,
             TupleItem::Cell(ArcCell::default()),
             TupleItem::Tuple(Tuple::empty()),
-            TupleItem::Int(BigInt::from(0)),
+            TupleItem::Int(BigInt::ZERO),
             TupleItem::Tuple(Tuple::empty()),
         ]))];
         stack.push(TupleItem::Tuple(Tuple(transaction_cells)));
@@ -261,7 +261,7 @@ fn send_message_impl(
         && emulations.len() == 1
     {
         ctx.asserts
-            .fail(format!("Cannot send message: {}", error.error))
+            .fail(format!("Cannot send message: {}", error.error));
     }
 
     let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
@@ -310,7 +310,7 @@ fn emulation_to_send_result(emulation: &SendMessageResultSuccess) -> Option<Tupl
     let out_messages = Tuple(
         parsed_tx
             .iter_out_msgs()
-            .filter_map(|msg| msg.ok())
+            .filter_map(Result::ok)
             .filter_map(|msg| {
                 let cell = to_cell(&msg);
                 let boc = Boc::encode_base64(&cell);
@@ -323,9 +323,9 @@ fn emulation_to_send_result(emulation: &SendMessageResultSuccess) -> Option<Tupl
     let gas_used = match parsed_tx.load_info() {
         Ok(TxInfo::Ordinary(info)) => match info.compute_phase {
             ComputePhase::Executed(compute) => compute.gas_used.into(),
-            _ => BigInt::from(0),
+            _ => BigInt::ZERO,
         },
-        _ => BigInt::from(0),
+        _ => BigInt::ZERO,
     };
 
     let externals_tuple = Tuple(
@@ -419,11 +419,11 @@ fn send_message_debug(
         )
         .expect("Cannot send response");
 
-    let msg_cell = Emulator::patch_message(msg_cell.clone(), src_addr.clone())?;
+    let msg_cell = Emulator::patch_message(msg_cell.clone(), src_addr)?;
     let prepare_result = step_executor
         .prepare_transaction(
             &Boc::encode_base64(msg_cell),
-            RunTransactionArgs {
+            &RunTransactionArgs {
                 libs: libs.clone().into_root().map(Boc::encode_base64),
                 shard_account: Boc::encode_base64(to_cell(&dest_account)),
                 now: ctx.chain.world_state.get_now(),
@@ -437,9 +437,10 @@ fn send_message_debug(
             },
         )
         .expect("Prepare transaction failed");
-    if !prepare_result.success {
-        panic!("Failed to prepare Emulator in debug mode");
-    }
+    assert!(
+        prepare_result.success,
+        "Failed to prepare Emulator in debug mode"
+    );
     if prepare_result.skipped {
         // Since compute phase is skipped, we don't need to run anything
         ctx.debug
@@ -505,7 +506,7 @@ fn send_message_debug(
 
     let out_messages = transaction
         .iter_out_msgs()
-        .filter_map(|it| it.ok())
+        .filter_map(Result::ok)
         .map(|it| to_cell(&it))
         .collect::<Vec<_>>();
 
@@ -516,11 +517,11 @@ fn send_message_debug(
         transaction: transaction.clone(),
         parent_transaction: None,
         child_transactions: vec![],
-        shard_account_before: dest_account.clone(),
+        shard_account_before: dest_account,
         shard_account,
         out_messages,
         vm_log: result.vm_log,
-        executor_logs: "".to_string(),
+        executor_logs: String::new(),
         actions: result.actions,
         code,
         externals: vec![],
@@ -528,14 +529,14 @@ fn send_message_debug(
 
     let mut externals: Vec<Cell> = vec![];
 
-    let mut all_results = std::iter::once(SendMessageResult::Success(send_result.clone()))
+    let mut all_results = std::iter::once(SendMessageResult::Success(send_result))
         .chain(transaction.iter_out_msgs().flat_map(|msg| {
             let Ok(msg) = msg else { return vec![] };
 
             if let MsgInfo::ExtOut(_) = &msg.info {
                 externals.push(to_cell(&msg));
                 return vec![];
-            };
+            }
 
             let mut send_results =
                 send_message_debug(ctx, &to_cell(&msg), libs, None).unwrap_or_default();
@@ -629,12 +630,11 @@ fn find_transaction_by_params_impl(
         return Ok(());
     }
 
-    let (params, parsed_txs) = match process_txs_and_search_params(&txs, params) {
-        Some(value) => value,
-        None => {
-            stack.push(TupleItem::Null);
-            return Ok(());
-        }
+    let (params, parsed_txs) = if let Some(value) = process_txs_and_search_params(&txs, params) {
+        value
+    } else {
+        stack.push(TupleItem::Null);
+        return Ok(());
     };
 
     let found = parsed_txs.iter().filter(|tx| {
@@ -712,7 +712,7 @@ fn find_transaction_by_params_impl(
                     return false;
                 }
             }
-        };
+        }
 
         let Ok(TxInfo::Ordinary(info)) = tx.load_info() else {
             return false;
@@ -827,8 +827,8 @@ fn run_get_method_impl(
 
     let libs = ctx
         .chain
-        .build_libs_with_hash_owner(&HashBytes::from_slice(address_hash.clone().as_slice()));
-    let libs_root = libs.clone().into_root();
+        .build_libs_with_hash_owner(&HashBytes::from_slice(address_hash.as_slice()));
+    let libs_root = libs.into_root();
 
     let method_id = id.to_i32().unwrap_or(0);
 
@@ -839,7 +839,7 @@ fn run_get_method_impl(
         code: code.to_boc_b64(false)?,
         data: Boc::encode_base64(data),
         verbosity: ctx.env.default_log_level,
-        libs: libs_root.map(Boc::encode_base64).unwrap_or("".to_string()),
+        libs: libs_root.map(Boc::encode_base64).unwrap_or_default(),
         address: dest_address.to_string(),
         unixtime: duration_since_epoch.as_secs().try_into()?,
         balance: "10".to_string(),
@@ -930,7 +930,7 @@ fn run_get_method_impl(
                 let get_method_presentation = if let Some(get_method) = get_method {
                     format!("'{}' ({id})", get_method.name)
                 } else {
-                    format!("'{}' ({id})", name)
+                    format!("'{name}' ({id})")
                 };
 
                 if result.vm_exit_code == 11 {
@@ -948,32 +948,28 @@ fn run_get_method_impl(
                         anyhow::bail!(
                             "Cannot execute unknown get method {get_method_presentation}, did you mean '{suggested_name}'",
                         );
-                    } else {
-                        anyhow::bail!(
-                            "Cannot execute unknown get method {get_method_presentation}",
-                        );
                     }
+                    anyhow::bail!("Cannot execute unknown get method {get_method_presentation}",);
                 } else if result.vm_exit_code == 2 {
                     anyhow::bail!(
                         "Get method {get_method_presentation} failed due to stack underflow. Make sure you passed all parameters to the get method.",
                     );
-                } else {
-                    anyhow::bail!(
-                        "Cannot execute get method {get_method_presentation}: exit code {}",
-                        FormatterContext::format_exit_code(result.vm_exit_code)
-                    );
                 }
+                anyhow::bail!(
+                    "Cannot execute get method {get_method_presentation}: exit code {}",
+                    FormatterContext::format_exit_code(result.vm_exit_code)
+                );
             }
 
             stack.push(TupleItem::TypedTuple {
                 type_name: return_type_name,
                 inner: tuple,
-            })
+            });
         }
         GetMethodResult::Error(result) => {
             println!("Error: {}", result.error);
         }
-    };
+    }
 
     Ok(())
 }
@@ -1014,12 +1010,11 @@ fn get_deployed_code_impl(ctx: &mut Context, stk: &mut Tuple, addr: ArcCell) -> 
     }
 
     let account = ctx.chain.world_state.get_account(&dst_addr_str);
-    let cell = match get_address_code(&account) {
-        Some(value) => value,
-        None => {
-            stk.push(TupleItem::Null);
-            return Ok(());
-        }
+    let cell = if let Some(value) = get_address_code(&account) {
+        value
+    } else {
+        stk.push(TupleItem::Null);
+        return Ok(());
     };
 
     stk.push(TupleItem::Cell(cell));
@@ -1115,7 +1110,7 @@ fn account_state_impl(ctx: &mut Context, stk: &mut Tuple, addr: ArcCell) -> anyh
         .get_account(&addr.to_string())
         .account
         .load()
-        .map_err(|e| anyhow::anyhow!("Failed to load account: {}", e))
+        .map_err(|e| anyhow::anyhow!("Failed to load account: {e}"))
     else {
         stk.push(TupleItem::Null);
         return Ok(());
@@ -1174,7 +1169,7 @@ fn load_library_by_hash_impl(
     match lib {
         Ok(lib) => {
             let cell = ArcCell::from_boc(&Boc::encode(lib))?;
-            stack.push(TupleItem::Cell(cell))
+            stack.push(TupleItem::Cell(cell));
         }
         Err(_) => stack.push(TupleItem::Null),
     }
@@ -1229,7 +1224,7 @@ fn wait_for_transaction_impl(
         anyhow::bail!("Attempt number must be positive");
     }
 
-    let address_str = cell_address_to_raw(address.clone()).context("Failed to decode address")?;
+    let address_str = cell_address_to_raw(address).context("Failed to decode address")?;
 
     let network = Network::from_str(&ctx.network()).context("Failed to parse network")?;
 
@@ -1244,15 +1239,15 @@ fn wait_for_transaction_impl(
 
     for attempt in 1..=attempts {
         if !quiet {
-            println!("Awaiting transaction... [Attempt {}/{}]", attempt, attempts);
+            println!("Awaiting transaction... [Attempt {attempt}/{attempts}]");
         }
 
-        let txs = match api_client.get_transactions(&address_str, Some(100), None, None) {
-            Ok(txs) => txs,
-            Err(_) => {
-                std::thread::sleep(Duration::from_millis(sleep_duration_ms));
-                continue;
-            }
+        let txs = if let Ok(txs) = api_client.get_transactions(&address_str, Some(100), None, None)
+        {
+            txs
+        } else {
+            std::thread::sleep(Duration::from_millis(sleep_duration_ms));
+            continue;
         };
 
         for tx in txs {
@@ -1309,7 +1304,7 @@ fn get_transaction_link(
     let explorer = ctx.env.explorer.unwrap_or(Explorer::Tonviewer);
     match explorer {
         Explorer::Tonscan => {
-            format!("https://{}tonscan.org/tx/{}", network_prefix, hex)
+            format!("https://{network_prefix}tonscan.org/tx/{hex}")
         }
         Explorer::Toncx => format!(
             "https://{}ton.cx/tx/{}:{}:{}",
@@ -1319,21 +1314,18 @@ fn get_transaction_link(
             "https://{}dton.io/tx/{}?time={}",
             network_prefix, hex, tx.utime
         ),
-        Explorer::Tonviewer => format!(
-            "https://{}tonviewer.com/transaction/{}",
-            network_prefix, hex
-        ),
+        Explorer::Tonviewer => format!("https://{network_prefix}tonviewer.com/transaction/{hex}"),
     }
 }
 
 extension!(enable_broadcast in (Context) using enable_broadcast_impl);
-fn enable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) -> anyhow::Result<()> {
+const fn enable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) -> anyhow::Result<()> {
     ctx.is_broadcasting = true;
     Ok(())
 }
 
 extension!(disable_broadcast in (Context) using disable_broadcast_impl);
-fn disable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) -> anyhow::Result<()> {
+const fn disable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) -> anyhow::Result<()> {
     ctx.is_broadcasting = false;
     Ok(())
 }

@@ -6,10 +6,10 @@ use crate::support::snapshots::normalize_output;
 use std::fs;
 use tycho_types::boc::Boc;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn test_build_simple_contract() {
@@ -154,12 +154,12 @@ fn test_build_compilation_error() {
     let project = ProjectBuilder::new("build-error")
         .contract(
             "broken",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 val x = nonexistent; // This will cause compilation error
             }
             fun onBouncedMessage(_: InMessageBounced) {}
-        "#,
+        ",
         )
         .build();
 
@@ -198,7 +198,7 @@ fn test_build_gen_file_content() {
     assertion().eq(
         normalize_output(content.as_str(), project.path()),
         snapbox::file!("snapshots/test_build_gen_file_content.tolk.gen"),
-    )
+    );
 }
 
 #[test]
@@ -1283,12 +1283,12 @@ fn test_build_contract_syntax_error() {
     let project = ProjectBuilder::new("syntax-error")
         .contract(
             "broken",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 val x = ;
             }
             fun onBouncedMessage(_: InMessageBounced) {}
-        "#,
+        ",
         )
         .build();
 
@@ -1307,21 +1307,21 @@ fn test_build_several_contracts_with_syntax_error() {
     let project = ProjectBuilder::new("syntax-error")
         .contract(
             "broken1",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 val x = ;
             }
             fun onBouncedMessage(_: InMessageBounced) {}
-        "#,
+        ",
         )
         .contract(
             "broken2",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 val x;
             }
             fun onBouncedMessage(_: InMessageBounced) {}
-        "#,
+        ",
         )
         .build();
 
@@ -1340,21 +1340,21 @@ fn test_build_good_and_bad_contracts_with_syntax_error() {
     let project = ProjectBuilder::new("syntax-error")
         .contract(
             "broken1",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 val x = 10;
             }
             fun onBouncedMessage(_: InMessageBounced) {}
-        "#,
+        ",
         )
         .contract(
             "ok2",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 val x =;
             }
             fun onBouncedMessage(_: InMessageBounced) {}
-        "#,
+        ",
         )
         .build();
 
@@ -1509,13 +1509,11 @@ fn test_build_multiple_contracts_artifacts() {
 
         assert!(
             json.get("code_boc64").is_some(),
-            "Should contain code_boc64 field for {}",
-            name
+            "Should contain code_boc64 field for {name}"
         );
         assert!(
             json.get("hash").is_some(),
-            "Should contain hash field for {}",
-            name
+            "Should contain hash field for {name}"
         );
     }
 }
@@ -1711,11 +1709,11 @@ fn test_build_with_dependency_with_compilation_error() {
     let project = ProjectBuilder::new("build-with-dep")
         .contract(
             "child",
-            r#"
+            r"
                 fun onInternalMessage(in: InMessage) {
                     let a = 10;
                 }
-            "#,
+            ",
         )
         .contract_with_deps(
             "parent",

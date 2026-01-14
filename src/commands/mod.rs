@@ -36,6 +36,7 @@ impl Default for CommandRegistry {
 }
 
 impl CommandRegistry {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             commands: HashMap::new(),
@@ -54,6 +55,7 @@ impl CommandRegistry {
         }
     }
 
+    #[must_use]
     pub fn list_commands(&self) -> Vec<(&str, &str)> {
         self.commands
             .iter()

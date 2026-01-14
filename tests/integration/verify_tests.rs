@@ -1,10 +1,10 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn test_verify_contract_not_found() {
@@ -174,12 +174,12 @@ fn test_verify_compilation_error() {
     let project = ProjectBuilder::new("verify-compilation-error")
         .contract(
             "broken",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 val x = nonexistent_symbol();
             }
             fun onBouncedMessage(_: InMessageBounced) {}
-        "#,
+        ",
         )
         .build();
 

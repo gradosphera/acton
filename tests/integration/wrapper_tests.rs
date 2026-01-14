@@ -2,10 +2,10 @@ use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use std::fs;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn test_wrapper_generation_defaults() {
@@ -86,7 +86,7 @@ fn test_wrapper_generation_with_types_and_storage_in_the_same_file() {
         )
         .file(
             "contracts/types",
-            r#"
+            r"
                 struct Storage {
                     id: uint32
                     counter: uint32
@@ -109,7 +109,7 @@ fn test_wrapper_generation_with_types_and_storage_in_the_same_file() {
                 }
 
                 type AllowedMessage = Increment | Decrement;
-            "#,
+            ",
         )
         .build();
 
@@ -154,7 +154,7 @@ fn test_wrapper_generation_with_several_storages() {
         )
         .file(
             "contracts/storage",
-            r#"
+            r"
                 struct FirstStorage {
                     id: uint32
                     counter: uint32
@@ -180,7 +180,7 @@ fn test_wrapper_generation_with_several_storages() {
                 fun SecondStorage.save(self) {
                     contract.setData(self.toCell());
                 }
-            "#,
+            ",
         )
         .build();
 
@@ -235,7 +235,7 @@ fn test_wrapper_generation_with_unknown_explicit_storage() {
         )
         .file(
             "contracts/storage",
-            r#"
+            r"
                 struct FirstStorage {
                     id: uint32
                     counter: uint32
@@ -248,7 +248,7 @@ fn test_wrapper_generation_with_unknown_explicit_storage() {
                 fun FirstStorage.save(self) {
                     contract.setData(self.toCell());
                 }
-            "#,
+            ",
         )
         .build();
 
@@ -285,7 +285,7 @@ fn test_wrapper_generation_with_typed_cell_field_in_storage() {
         )
         .file(
             "contracts/storage",
-            r#"
+            r"
                 struct Storage {
                     id: uint32
                     counter: Cell<uint32>
@@ -298,11 +298,11 @@ fn test_wrapper_generation_with_typed_cell_field_in_storage() {
                 fun Storage.save(self) {
                     contract.setData(self.toCell());
                 }
-            "#,
+            ",
         )
         .file(
             "contracts/types",
-            r#"
+            r"
                 struct (0x00000001) Increment {
                     value: int32
                 }
@@ -312,7 +312,7 @@ fn test_wrapper_generation_with_typed_cell_field_in_storage() {
                 }
 
                 type AllowedMessage = Increment | Decrement;
-            "#,
+            ",
         )
         .build();
 
@@ -364,7 +364,7 @@ fn test_wrapper_generation_with_typed_cell_field() {
         )
         .file(
             "contracts/storage",
-            r#"
+            r"
                 struct Storage {
                     id: uint32
                     counter: uint32
@@ -377,11 +377,11 @@ fn test_wrapper_generation_with_typed_cell_field() {
                 fun Storage.save(self) {
                     contract.setData(self.toCell());
                 }
-            "#,
+            ",
         )
         .file(
             "contracts/types",
-            r#"
+            r"
                 struct (0x00000001) Increment {
                     value: Cell<int32>
                 }
@@ -391,7 +391,7 @@ fn test_wrapper_generation_with_typed_cell_field() {
                 }
 
                 type AllowedMessage = Increment | Decrement;
-            "#,
+            ",
         )
         .build();
 
@@ -437,7 +437,7 @@ fn test_wrapper_generation_with_typed_cell_param() {
         )
         .file(
             "contracts/storage",
-            r#"
+            r"
                 struct Storage {
                     id: uint32
                     counter: uint32
@@ -450,11 +450,11 @@ fn test_wrapper_generation_with_typed_cell_param() {
                 fun Storage.save(self) {
                     contract.setData(self.toCell());
                 }
-            "#,
+            ",
         )
         .file(
             "contracts/types",
-            r#"
+            r"
                 struct (0x00000001) Increment {
                     value: int32
                 }
@@ -464,7 +464,7 @@ fn test_wrapper_generation_with_typed_cell_param() {
                 }
 
                 type AllowedMessage = Increment | Decrement;
-            "#,
+            ",
         )
         .build();
 
@@ -574,7 +574,7 @@ fn test_with_several_files_contract() {
         )
         .file(
             "contracts/storage",
-            r#"
+            r"
                 struct Storage {
                     id: uint32
                     counter: uint32
@@ -587,7 +587,7 @@ fn test_with_several_files_contract() {
                 fun Storage.save(self) {
                     contract.setData(self.toCell());
                 }
-            "#,
+            ",
         )
         .file(
             "contracts/types",
@@ -603,11 +603,11 @@ fn test_with_several_files_contract() {
         )
         .file(
             "contracts/types_other",
-            r#"
+            r"
                 struct (0x00000002) Decrement {
                     value: int
                 }
-            "#,
+            ",
         )
         .build();
 
@@ -643,13 +643,13 @@ fn test_wrapper_with_storage_in_contract() {
     let project = ProjectBuilder::new("wrapper_types")
         .contract(
             "my_contract",
-            r#"
+            r"
                 struct Storage {
                     some: int
                 }
 
                 fun onInternalMessage(in: InMessage) {}
-            "#,
+            ",
         )
         .build();
 
@@ -685,13 +685,13 @@ fn test_wrapper_with_message_in_contract() {
     let project = ProjectBuilder::new("wrapper_types")
         .contract(
             "my_contract",
-            r#"
+            r"
                 struct (0x00000001) Increment {
                     value: int
                 }
 
                 fun onInternalMessage(in: InMessage) {}
-            "#,
+            ",
         )
         .build();
 
@@ -745,7 +745,7 @@ fn test_wrapper_for_contract_without_file() {
         .build();
 
     let contract_path = project.path().join("contracts/my_contract.tolk");
-    fs::remove_file(contract_path.clone()).expect("should remove contract file");
+    fs::remove_file(contract_path).expect("should remove contract file");
 
     project
         .acton()

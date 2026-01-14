@@ -43,7 +43,7 @@ pub fn decode(
         && let Some(opcode_width) = type_abi.opcode_width
     {
         let actual_opcode = data.load_uint(opcode_width as u16)?;
-        if actual_opcode != opcode as u64 {
+        if actual_opcode != u64::from(opcode) {
             anyhow::bail!(
                 "Invalid opcode for type '{}': expected 0x{:x}, got 0x${:x}",
                 type_abi.name,
@@ -58,7 +58,7 @@ pub fn decode(
         object.fields.push(DataField {
             name: field.name.clone(),
             value,
-        })
+        });
     }
 
     Ok(Data::Object(object))
@@ -83,10 +83,6 @@ fn decode_field(
         }
         BaseTypeInfo::UInt { width } => {
             let num = data.load_bigint(*width as u16, true)?;
-            Ok(Data::Number(num))
-        }
-        BaseTypeInfo::Coins => {
-            let num = data.load_var_bigint(4, false)?;
             Ok(Data::Number(num))
         }
         BaseTypeInfo::Bool => {
@@ -138,7 +134,7 @@ fn decode_field(
             let value = decode_field(data, abi, inner_type.as_ref())?;
             Ok(value)
         }
-        BaseTypeInfo::VarInt16 => {
+        BaseTypeInfo::Coins | BaseTypeInfo::VarInt16 => {
             let num = data.load_var_bigint(4, true)?;
             Ok(Data::Number(num))
         }
@@ -156,7 +152,7 @@ fn decode_field(
         }
         BaseTypeInfo::Struct { name: struct_name } => {
             let Some(type_abi) = abi.iter().find(|ty| &ty.name == struct_name) else {
-                anyhow::bail!("Cannot find type '{}'", struct_name);
+                anyhow::bail!("Cannot find type '{struct_name}'");
             };
 
             let value = decode(data, abi, type_abi)?;
@@ -251,7 +247,7 @@ mod tests {
             pos: Pos {
                 row: 0,
                 column: 0,
-                uri: "".to_string(),
+                uri: String::new(),
             },
         };
 
@@ -267,7 +263,7 @@ mod tests {
 
         let result = decode(&mut slice, &abi.types, &abi_type).expect("decode failed");
         assert_eq!(
-            format!("{:?}", result),
+            format!("{result:?}"),
             "Object(DataObject { name: \"MyStruct\", fields: [DataField { name: \"is_deployed\", value: Bool(true) }, DataField { name: \"data\", value: Bits(([1, 2, 3], 24)) }, DataField { name: \"opt\", value: Number(888) }] })"
         );
     }

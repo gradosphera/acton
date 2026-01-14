@@ -15,6 +15,7 @@ use std::str::FromStr;
 use tycho_types::cell::{Cell, HashBytes, Lazy};
 use tycho_types::models::{
     Account, AccountState, CurrencyCollection, IntAddr, OptionalAccount, ShardAccount, StateInit,
+    StorageInfo,
 };
 
 /// Represents the source of the world state.
@@ -58,7 +59,8 @@ impl AccountsState {
     }
 
     /// Returns a reference to the underlying map of accounts.
-    pub fn accounts(&self) -> &HashMap<String, ShardAccount> {
+    #[must_use]
+    pub const fn accounts(&self) -> &HashMap<String, ShardAccount> {
         match self {
             Self::Local(r) => &r.accounts,
             Self::Remote(r) => &r.accounts,
@@ -79,6 +81,7 @@ impl Default for LocalAccountsState {
 
 impl LocalAccountsState {
     /// Creates a new empty local state.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             accounts: HashMap::new(),
@@ -123,12 +126,14 @@ impl Default for RemoteSnapshotCache {
 }
 
 impl RemoteSnapshotCache {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             inner: Rc::new(RefCell::new(HashMap::new())),
         }
     }
 
+    #[must_use]
     pub fn get(&self, key: &RemoteCacheKey) -> Option<ShardAccount> {
         self.inner.borrow().get(key).cloned()
     }
@@ -146,7 +151,7 @@ pub struct RemoteAccountState {
     pub fork_net: String,
     /// Optional block number to pin the state to.
     pub fork_block_number: Option<u64>,
-    /// Optional API key for TonCenter.
+    /// Optional API key for `TonCenter`.
     pub api_key: Option<String>,
     /// Cache for less network queries in subsequent tests.
     cache: RemoteSnapshotCache,
@@ -154,6 +159,7 @@ pub struct RemoteAccountState {
 
 impl RemoteAccountState {
     /// Creates a new remote state for the given network.
+    #[must_use]
     pub fn new(
         fork_net: String,
         fork_block_number: Option<u64>,
@@ -180,10 +186,7 @@ impl RemoteAccountState {
                 acc
             }
             Err(err) => {
-                eprintln!(
-                    "Failed to resolve address {} for account {}: {err}",
-                    address, current_lt
-                );
+                eprintln!("Failed to resolve address {address} for account {current_lt}: {err}");
 
                 // don't cache account on error
                 ShardAccount {
@@ -201,7 +204,7 @@ impl RemoteAccountState {
     }
 
     fn resolve_remote_account(
-        &mut self,
+        &self,
         address: &str,
         current_lt: u64,
     ) -> anyhow::Result<ShardAccount> {
@@ -212,7 +215,7 @@ impl RemoteAccountState {
             address: address.to_owned(),
         };
         if let Some(cached) = self.cache.get(&cache_key) {
-            return Ok(cached.clone());
+            return Ok(cached);
         }
 
         let network = &self.fork_net;
@@ -248,7 +251,7 @@ impl RemoteAccountState {
                 address: IntAddr::from_str(address)?,
                 last_trans_lt: info.last_transaction_id.lt.parse()?,
                 state: account_state,
-                storage_stat: Default::default(),
+                storage_stat: StorageInfo::default(),
             })))?,
             last_trans_hash: HashBytes::ZERO,
             last_trans_lt: current_lt.to_u64().unwrap_or(0),
@@ -286,7 +289,8 @@ pub struct WorldState {
 
 impl WorldState {
     /// Creates a new `WorldState` instance with the given initial state.
-    pub fn new(accounts_state: AccountsState) -> Self {
+    #[must_use]
+    pub const fn new(accounts_state: AccountsState) -> Self {
         Self {
             accounts_state,
             current_lt: 0,
@@ -296,7 +300,8 @@ impl WorldState {
     }
 
     /// Returns a reference to the map of accounts currently in the world state.
-    pub fn get_accounts(&self) -> &HashMap<String, ShardAccount> {
+    #[must_use]
+    pub const fn get_accounts(&self) -> &HashMap<String, ShardAccount> {
         self.accounts_state.accounts()
     }
 
@@ -331,12 +336,13 @@ impl WorldState {
     /// Increments and returns the current logical time.
     ///
     /// Each call increments the time by 1,000,000 to ensure enough gap for transactions.
-    pub fn get_lt(&mut self) -> u64 {
+    pub const fn get_lt(&mut self) -> u64 {
         self.current_lt += 1_000_000u64;
         self.current_lt
     }
 
     /// Returns a list of all registered global libraries.
+    #[must_use]
     pub fn libs(&self) -> Vec<Cell> {
         self.libraries.clone()
     }
@@ -347,17 +353,19 @@ impl WorldState {
     }
 
     /// Returns a reference to the current state source.
-    pub fn state(&self) -> &AccountsState {
+    #[must_use]
+    pub const fn state(&self) -> &AccountsState {
         &self.accounts_state
     }
 
     /// Sets the current unix time of the world state.
-    pub fn set_now(&mut self, now: u32) {
+    pub const fn set_now(&mut self, now: u32) {
         self.current_now = now;
     }
 
     /// Returns the current unix time of the world state.
-    pub fn get_now(&self) -> u32 {
+    #[must_use]
+    pub const fn get_now(&self) -> u32 {
         self.current_now
     }
 }

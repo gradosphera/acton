@@ -14,13 +14,13 @@ fn test_executor() -> anyhow::Result<()> {
 
     let result = exec.run_transaction(
         msg,
-        RunTransactionArgs {
+        &RunTransactionArgs {
             shard_account: shard_account.to_owned(),
             ..Default::default()
         },
     );
 
-    println!("{:?}", result);
+    println!("{result:?}");
     assert!(result.is_ok());
     Ok(())
 }
@@ -34,14 +34,14 @@ fn test_executor_with_bad_libs() -> anyhow::Result<()> {
 
     let result = exec.run_transaction(
         msg,
-        RunTransactionArgs {
-            libs: Some("".to_owned()), // not a valid cell
+        &RunTransactionArgs {
+            libs: Some(String::new()), // not a valid cell
             shard_account: shard_account.to_owned(),
             ..Default::default()
         },
     );
 
-    println!("{:?}", result);
+    println!("{result:?}");
 
     assert!(result.is_err());
     assert_eq!(
@@ -60,7 +60,7 @@ fn test_executor_fail_with_tick_tock() -> anyhow::Result<()> {
 
     let result = exec.run_transaction(
         msg,
-        RunTransactionArgs {
+        &RunTransactionArgs {
             shard_account: shard_account.to_owned(),
             is_tick_tock: Some(false),
             is_tock: Some(true),
@@ -68,7 +68,7 @@ fn test_executor_fail_with_tick_tock() -> anyhow::Result<()> {
         },
     );
 
-    println!("{:?}", result);
+    println!("{result:?}");
 
     assert!(result.is_err());
     assert_eq!(
@@ -87,7 +87,7 @@ fn test_executor_with_random_seed() -> anyhow::Result<()> {
 
     let result = exec.run_transaction(
         msg,
-        RunTransactionArgs {
+        &RunTransactionArgs {
             shard_account: shard_account.to_owned(),
             random_seed: Some(*&[
                 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4,
@@ -97,7 +97,7 @@ fn test_executor_with_random_seed() -> anyhow::Result<()> {
         },
     );
 
-    println!("{:?}", result);
+    println!("{result:?}");
     assert!(result.is_ok());
     Ok(())
 }
@@ -127,13 +127,13 @@ fn test_executor_with_ext_method() -> anyhow::Result<()> {
 
     let result = exec.run_transaction(
         msg,
-        RunTransactionArgs {
+        &RunTransactionArgs {
             shard_account: shard_account.to_owned(),
             ..Default::default()
         },
     );
 
-    println!("{:?}", result);
+    println!("{result:?}");
     assert!(result.is_ok());
     Ok(())
 }

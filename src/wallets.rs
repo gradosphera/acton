@@ -37,6 +37,7 @@ pub fn store_mnemonic_in_keyring(id: &str, mnemonic: &str) -> anyhow::Result<()>
         .with_context(|| format!("Failed to store mnemonic in keyring for {id}"))
 }
 
+#[must_use]
 pub fn is_keyring_supported() -> bool {
     // Try to perform a dummy operation to check if the keyring backend is functional.
     // Real native backends will succeed (or return NoEntry for get),
@@ -47,7 +48,7 @@ pub fn is_keyring_supported() -> bool {
     };
 
     match entry.set_password("test") {
-        Ok(_) => {
+        Ok(()) => {
             let _ = entry.delete_credential();
             true
         }
@@ -168,6 +169,7 @@ pub fn open_wallets(
     Ok(open_wallets)
 }
 
+#[must_use]
 pub fn wallet_id(wallet: WalletVersion, net: &str) -> i32 {
     match wallet {
         WalletVersion::V5R1 => {
@@ -198,8 +200,7 @@ fn parse_wallet_version(kind: &str) -> anyhow::Result<WalletVersion> {
         "highloadv2r1" => Ok(WalletVersion::HighloadV2R1),
         "highloadv2r2" => Ok(WalletVersion::HighloadV2R2),
         _ => Err(anyhow!(
-            "Unsupported wallet kind: {}. Supported kinds: v1r1, v1r2, v1r3, v2r1, v2r2, v3r1, v3r2, v4r1, v4r2, v5r1, highloadv1r1, highloadv1r2, highloadv2, highloadv2r1, highloadv2r2",
-            kind
+            "Unsupported wallet kind: {kind}. Supported kinds: v1r1, v1r2, v1r3, v2r1, v2r2, v3r1, v3r2, v4r1, v4r2, v5r1, highloadv1r1, highloadv1r2, highloadv2, highloadv2r1, highloadv2r2"
         )),
     }
 }
@@ -217,7 +218,7 @@ pub fn new_mnemonic() -> anyhow::Result<Vec<String>> {
             let Some(word) = wordlist.get(random) else {
                 anyhow::bail!("cannot find word with index {random}")
             };
-            result.push(word.to_string());
+            result.push((**word).to_string());
         }
 
         let entropy = to_entropy(&result, &None)?;

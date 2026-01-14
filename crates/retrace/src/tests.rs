@@ -1,5 +1,6 @@
 use crate::types::ComputeInfo;
 use crate::{Network, retrace};
+use std::collections::HashMap;
 
 #[tokio::test]
 async fn test_retrace_709() {
@@ -134,9 +135,9 @@ async fn assert_retrace(
         std::env::set_var(
             "TONCENTER_API_KEY",
             "49efa980ccdcd018fd09d387e63537afd9db4dbb8509d69e7bc2303ca2b2c860",
-        )
+        );
     }
-    let result = retrace(net, hash, Default::default())
+    let result = retrace(net, hash, HashMap::default())
         .await
         .expect("Retrace failed");
 
@@ -146,23 +147,20 @@ async fn assert_retrace(
         } => {
             assert_eq!(
                 exit_code, expected_exit_code,
-                "Exit code mismatch for hash {}",
-                hash
+                "Exit code mismatch for hash {hash}"
             );
             assert_eq!(
                 success, expected_success,
-                "Success status mismatch for hash {}",
-                hash
+                "Success status mismatch for hash {hash}"
             );
         }
         ComputeInfo::Skipped => {
-            panic!("Compute phase was skipped for hash {}", hash);
+            panic!("Compute phase was skipped for hash {hash}");
         }
     }
 
     assert_eq!(
         result.state_update_hash_ok, expected_hash_ok,
-        "State update hash OK mismatch for hash {}",
-        hash
+        "State update hash OK mismatch for hash {hash}"
     );
 }

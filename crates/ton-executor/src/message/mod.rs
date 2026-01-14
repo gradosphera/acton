@@ -7,12 +7,12 @@
 //! - [`RunTransactionArgs`]: A structure containing all necessary parameters for a
 //!   transaction, including the message, shard account state, and other parameters.
 //! - [`EmulationResult`]: The output of an emulation, containing the resulting transaction
-//!   BoC, updated shard account, VM logs, and actions.
+//!   `BoC`, updated shard account, VM logs, and actions.
 //!
 //! # Data Formats
 //!
 //! Most data exchanged with the emulator (messages, shard accounts, stacks) is encoded
-//! as **Base64 BoC (Bag of Cells)** strings.
+//! as **Base64 `BoC` (Bag of Cells)** strings.
 //!
 //! # Extension Methods (Custom Opcodes)
 //!
@@ -46,7 +46,7 @@
 //! // Run the transaction
 //! let (result, logs) = exec.run_transaction(
 //!     msg,
-//!     RunTransactionArgs {
+//!     &RunTransactionArgs {
 //!         shard_account: shard_account.to_owned(),
 //!         now: 1000,
 //!         lt: 1000,
@@ -116,7 +116,7 @@ impl Executor {
     ///
     /// # Arguments
     ///
-    /// * `message` – Base64 encoded message BoC.
+    /// * `message` – Base64 encoded message `BoC`.
     /// * `params` – Emulation parameters (shard account, current time, etc.).
     ///
     /// # Returns
@@ -125,7 +125,7 @@ impl Executor {
     pub fn run_transaction(
         &self,
         message: &str,
-        params: RunTransactionArgs,
+        params: &RunTransactionArgs,
     ) -> anyhow::Result<(EmulationResult, String)> {
         let message_cstr = CString::new(message).context("message string contains null bytes")?;
 
@@ -138,7 +138,7 @@ impl Executor {
             .transpose()?;
         let libs_ptr = libs_cstr.as_ref().map_or(null(), |c| c.as_ptr());
 
-        let internal_params = EmulationInternalParams::from(&params);
+        let internal_params = EmulationInternalParams::from(params);
         let params_str =
             serde_json::to_string(&internal_params).context("cannot serialize params to JSON")?;
         let params_cstr = CString::new(params_str).context("params string contains null bytes")?;
@@ -162,12 +162,12 @@ impl Executor {
         // SAFETY: pointer already checked for null. We assume the C++ side provides a valid C string.
         let output_str = unsafe { CStr::from_ptr(result_ptr).to_string_lossy() };
         let result: EmulationInternalResult = serde_json::from_str(&output_str)
-            .with_context(|| format!("Failed to parse emulator output JSON: {}", output_str))?;
+            .with_context(|| format!("Failed to parse emulator output JSON: {output_str}"))?;
 
         match result {
             EmulationInternalResult::Success { output, logs } => Ok((output, logs)),
             EmulationInternalResult::Fail { message, .. } => {
-                anyhow::bail!("Cannot run transaction: {}", message);
+                anyhow::bail!("Cannot run transaction: {message}");
             }
         }
     }
@@ -183,8 +183,8 @@ impl Executor {
     /// * `id`       — The unique identifier for the extension method.
     /// * `ctx`      — User-defined context that will be passed back to the callback.
     /// * `callback` — The function to be called when the extension method is invoked.
-    ///   The callback receives the `ctx` and the current `stack` (as a Base64 BoC string),
-    ///   and must return the new `stack` (also as a Base64 BoC string).
+    ///   The callback receives the `ctx` and the current `stack` (as a Base64 `BoC` string),
+    ///   and must return the new `stack` (also as a Base64 `BoC` string).
     ///   If the stack remains unchanged, the callback should return the original `stack`.
     ///
     /// # Examples
@@ -230,7 +230,7 @@ impl Executor {
             transaction_emulator_register_extmethod(
                 self.inner.as_ptr(),
                 id,
-                ctx as *mut Ctx as *mut c_void,
+                std::ptr::from_mut::<Ctx>(ctx).cast::<c_void>(),
                 std::mem::transmute::<
                     unsafe extern "C" fn(*mut Ctx, *const i8) -> *const i8,
                     unsafe extern "C" fn(*mut c_void, *const i8) -> *const i8,

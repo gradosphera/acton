@@ -1,8 +1,8 @@
 use tree_sitter::Node;
 
-pub(crate) fn inject_locations_into_expect_calls(content: &str, file_path: &str) -> String {
+pub(super) fn inject_locations_into_expect_calls(content: &str, file_path: &str) -> String {
     let Ok(tree) = tolk_parser::parser::parse(content) else {
-        return "".to_string();
+        return String::new();
     };
     let root_node = tree.root_node();
 
@@ -12,7 +12,7 @@ pub(crate) fn inject_locations_into_expect_calls(content: &str, file_path: &str)
     let mut result = content.to_string();
 
     if !has_entry_function(&root_node, &result) {
-        result += "\n\nfun main() {}"
+        result += "\n\nfun main() {}";
     }
 
     for (start, end, replacement) in replacements.into_iter().rev() {

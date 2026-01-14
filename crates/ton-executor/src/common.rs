@@ -34,11 +34,11 @@ impl Serialize for ExecutorVerbosity {
 /// # Arguments
 ///
 /// * `ctx`   — User-defined context.
-/// * `stack` — The current TVM stack, encoded as a Base64 BoC string.
+/// * `stack` — The current TVM stack, encoded as a Base64 `BoC` string.
 ///
 /// # Returns
 ///
-/// Must return the new stack as a Base64 BoC string. If the stack is not modified,
+/// Must return the new stack as a Base64 `BoC` string. If the stack is not modified,
 /// return the original `stack` pointer.
 pub type ExtMethodCallback<Ctx = c_void> =
     unsafe extern "C" fn(ctx: *mut Ctx, stack: *const c_char) -> *const c_char;

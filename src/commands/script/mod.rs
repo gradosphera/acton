@@ -174,10 +174,10 @@ fn execute_script(
     let duration_since_epoch = now.duration_since(UNIX_EPOCH).expect("Time went backwards");
 
     let params = RunGetMethodArgs {
-        code: code_cell.to_boc_b64(false)?.to_string(),
-        data: data_cell.to_boc_b64(false)?.to_string(),
+        code: code_cell.to_boc_b64(false)?,
+        data: data_cell.to_boc_b64(false)?,
         verbosity,
-        libs: "".to_string(),
+        libs: String::new(),
         address: dest_address.to_string(),
         unixtime: duration_since_epoch.as_secs().try_into()?,
         balance: "10".to_string(),
@@ -226,8 +226,8 @@ fn execute_script(
             running_id: "script".to_owned(),
         },
         io: IoContext {
-            stdout_buffer: "".to_owned(),
-            stderr_buffer: "".to_owned(),
+            stdout_buffer: String::new(),
+            stderr_buffer: String::new(),
             capture_output: false,
         },
         asserts: AssertsContext {
@@ -294,38 +294,33 @@ fn print_script_result(ctx: &mut Context<'_>, result: ScriptResult) {
             if exit_code != 0
                 && let Some(assert_failure) = ctx.asserts.assert_failure
             {
-                match assert_failure {
-                    AssertFailure::WalletNotFound(failure) => {
-                        let message =
-                            AssertFailure::format_wallet_not_found_message(failure, &ctx.env);
-                        let highlighted_message =
-                            FormatterContext::highlight_actual_expected(&message);
-                        eprintln!("{} {}", "Error:".bright_red(), highlighted_message);
+                if let AssertFailure::WalletNotFound(failure) = assert_failure {
+                    let message = AssertFailure::format_wallet_not_found_message(failure, &ctx.env);
+                    let highlighted_message = FormatterContext::highlight_actual_expected(&message);
+                    eprintln!("{} {}", "Error:".bright_red(), highlighted_message);
 
-                        if let Some(location) = &failure.location
-                            && !location.is_empty()
-                        {
-                            println!("{} at {}", "└─".dimmed(), location.dimmed());
-                        }
+                    if let Some(location) = &failure.location
+                        && !location.is_empty()
+                    {
+                        println!("{} at {}", "└─".dimmed(), location.dimmed());
                     }
-                    _ => {
-                        if let Some(message) = &assert_failure.message() {
-                            if !message.is_empty() {
-                                let highlighted_message =
-                                    FormatterContext::highlight_actual_expected(message);
-                                println!("{} {}", "Error:".bright_red(), highlighted_message);
-                            } else {
-                                println!("{}", "└─".dimmed());
-                            }
-                        } else {
+                } else {
+                    if let Some(message) = &assert_failure.message() {
+                        if message.is_empty() {
                             println!("{}", "└─".dimmed());
+                        } else {
+                            let highlighted_message =
+                                FormatterContext::highlight_actual_expected(message);
+                            println!("{} {}", "Error:".bright_red(), highlighted_message);
                         }
+                    } else {
+                        println!("{}", "└─".dimmed());
+                    }
 
-                        if let Some(location) = &assert_failure.location()
-                            && !location.is_empty()
-                        {
-                            println!("{} at {}", "└─".dimmed(), location.dimmed());
-                        }
+                    if let Some(location) = &assert_failure.location()
+                        && !location.is_empty()
+                    {
+                        println!("{} at {}", "└─".dimmed(), location.dimmed());
                     }
                 }
             }
@@ -371,8 +366,7 @@ fn parse_stack_args(args: Vec<String>) -> anyhow::Result<Tuple> {
 
         if !input.trim().is_empty() {
             return Err(anyhow!(
-                "Failed to parse argument '{}': trailing characters",
-                arg
+                "Failed to parse argument '{arg}': trailing characters"
             ));
         }
 
@@ -387,7 +381,7 @@ fn convert_vm_value_to_tuple_item(value: VmStackValue<'_>) -> anyhow::Result<Tup
         VmStackValue::Null => Ok(TupleItem::Null),
         VmStackValue::NaN => Ok(TupleItem::Nan),
         VmStackValue::Integer(s) => {
-            let bi = s.parse().map_err(|_| anyhow!("Invalid integer: {}", s))?;
+            let bi = s.parse().map_err(|_| anyhow!("Invalid integer: {s}"))?;
             Ok(TupleItem::Int(bi))
         }
         VmStackValue::Tuple(values) => {

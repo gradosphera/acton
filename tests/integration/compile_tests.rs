@@ -1,12 +1,11 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
-
 use std::fs;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn test_compile_simple_contract() {
@@ -85,12 +84,12 @@ fn test_compile_undefined_symbol() {
     let project = ProjectBuilder::new("compile-undefined")
         .contract(
             "undefined",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 val x = nonexistent();
             }
             fun onBouncedMessage(_: InMessageBounced) {}
-        "#,
+        ",
         )
         .build();
 
@@ -145,12 +144,12 @@ fn test_compile_cache_invalidation_on_change() {
 
     fs::write(
         project.path().join("contracts/test.tolk"),
-        r#"
+        r"
         fun onInternalMessage(in: InMessage) {
             // Modified
         }
         fun onBouncedMessage(_: InMessageBounced) {}
-    "#,
+    ",
     )
     .unwrap();
 

@@ -37,9 +37,9 @@ pub fn retrace_cmd(
             Ok(result) => {
                 if let Some(logs_dir) = &logs_dir {
                     std::fs::create_dir_all(logs_dir)?;
-                    std::fs::write(format!("{}/vm.log", logs_dir), &result.emulated_tx.vm_logs)?;
+                    std::fs::write(format!("{logs_dir}/vm.log"), &result.emulated_tx.vm_logs)?;
                     std::fs::write(
-                        format!("{}/executor.log", logs_dir),
+                        format!("{logs_dir}/executor.log"),
                         &result.emulated_tx.executor_logs,
                     )?;
                     println!("{} Logs saved to {}", "Success:".green(), logs_dir);
@@ -54,17 +54,16 @@ pub fn retrace_cmd(
     }
 
     if let Some(e) = last_error {
-        anyhow::bail!("Failed to retrace transaction in any network: {}", e);
-    } else {
-        anyhow::bail!("Failed to retrace transaction");
+        anyhow::bail!("Failed to retrace transaction in any network: {e}");
     }
+    anyhow::bail!("Failed to retrace transaction");
 }
 
 fn parse_network(net: &str) -> anyhow::Result<Network> {
     match net.to_lowercase().as_str() {
         "mainnet" => Ok(Network::Mainnet),
         "testnet" => Ok(Network::Testnet),
-        _ => anyhow::bail!("Unknown network: {}. Supported: mainnet, testnet", net),
+        _ => anyhow::bail!("Unknown network: {net}. Supported: mainnet, testnet"),
     }
 }
 
@@ -152,9 +151,10 @@ fn print_retrace_result(
     println!(
         "  {:<15} {}",
         "Time:".dimmed(),
-        chrono::DateTime::from_timestamp(tx.utime as i64, 0)
-            .map(|d| d.format("%d.%m.%Y, %H:%M:%S").to_string())
-            .unwrap_or_else(|| tx.utime.to_string())
+        chrono::DateTime::from_timestamp(tx.utime as i64, 0).map_or_else(
+            || tx.utime.to_string(),
+            |d| d.format("%d.%m.%Y, %H:%M:%S").to_string()
+        )
     );
 
     if let Some(amount) = result.in_msg.amount {
@@ -282,8 +282,7 @@ fn print_retrace_result(
                                     ext_info
                                         .dst
                                         .as_ref()
-                                        .map(|d| d.to_string())
-                                        .unwrap_or_else(|| "External".to_string())
+                                        .map_or_else(|| "External".to_string(), ToString::to_string)
                                         .cyan()
                                 );
                             }
@@ -335,7 +334,7 @@ fn print_retrace_result(
                     );
                 }
                 OutAction::ChangeLibrary { mode, lib } => {
-                    let mode_str = format!("{:?}", mode);
+                    let mode_str = format!("{mode:?}");
                     let clean_mode = mode_str
                         .strip_prefix("ChangeLibraryMode(")
                         .and_then(|s| s.strip_suffix(")"))

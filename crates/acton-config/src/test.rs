@@ -14,7 +14,7 @@ impl std::fmt::Display for BacktraceMode {
     }
 }
 
-#[derive(clap::ValueEnum, Debug, Clone, PartialEq, Default)]
+#[derive(clap::ValueEnum, Debug, Clone, PartialEq, Eq, Default)]
 #[clap(rename_all = "lowercase")]
 pub enum ReportFormat {
     #[default]

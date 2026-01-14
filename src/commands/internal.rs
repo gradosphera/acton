@@ -12,7 +12,7 @@ pub fn internal_register_contract(path: &str, id: Option<String>) -> Result<()> 
     let content = fs::read_to_string(config_path)?;
     let mut doc = content
         .parse::<DocumentMut>()
-        .map_err(|e| anyhow::anyhow!("Failed to parse Acton.toml: {}\nContent:\n{}", e, content))?;
+        .map_err(|e| anyhow::anyhow!("Failed to parse Acton.toml: {e}\nContent:\n{content}"))?;
 
     let contracts = doc
         .entry("contracts")
@@ -36,7 +36,7 @@ pub fn internal_register_contract(path: &str, id: Option<String>) -> Result<()> 
     let mut contract_id = base_id.clone();
     let mut counter = 1;
     while contracts.contains_key(&contract_id) {
-        contract_id = format!("{}{}", base_id, counter);
+        contract_id = format!("{base_id}{counter}");
         counter += 1;
     }
 
@@ -48,7 +48,7 @@ pub fn internal_register_contract(path: &str, id: Option<String>) -> Result<()> 
 
     fs::write(config_path, doc.to_string())?;
 
-    println!("Contract '{}' registered successfully", contract_id);
+    println!("Contract '{contract_id}' registered successfully");
 
     Ok(())
 }

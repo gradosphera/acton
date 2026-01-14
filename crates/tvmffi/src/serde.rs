@@ -86,7 +86,7 @@ pub fn serialize_tuple_item(builder: &mut CellBuilder, src: &TupleItem) -> anyho
             }
         }
         TupleItem::TypedTuple { inner: items, .. } => {
-            serialize_tuple_item(builder, &TupleItem::Tuple(items.clone()))?
+            serialize_tuple_item(builder, &TupleItem::Tuple(items.clone()))?;
         }
     }
     Ok(())
@@ -187,7 +187,7 @@ pub fn parse_tuple_item(parser: &mut CellParser<'_>) -> Result<TupleItem, anyhow
             // TODO: support continuation
             Ok(TupleItem::Null)
         }
-        _ => Err(anyhow!("Unsupported stack item kind: {}", kind)),
+        _ => Err(anyhow!("Unsupported stack item kind: {kind}")),
     }
 }
 
@@ -237,6 +237,7 @@ pub fn parse_tuple(src: &ArcCell) -> Result<Tuple, anyhow::Error> {
 mod tests {
     use super::*;
 
+    #[allow(clippy::needless_pass_by_value)]
     fn roundtrip_test(item: TupleItem) {
         let mut builder = CellBuilder::new();
         serialize_tuple_item(&mut builder, &item).unwrap();

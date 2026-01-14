@@ -41,7 +41,7 @@ struct TransactionNode {
     children: Vec<TransactionNode>,
 }
 
-/// Context for formatting TupleItems with rich information
+/// Context for formatting `TupleItems` with rich information
 #[derive(Debug, Clone)]
 pub struct FormatterContext {
     pub contract_abi: ContractAbi,
@@ -57,6 +57,7 @@ pub struct FormatterContext {
 }
 
 impl FormatterContext {
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             contract_abi: ContractAbi::default(),
@@ -73,6 +74,7 @@ impl FormatterContext {
     }
 
     /// Create formatter context from the main Context
+    #[must_use]
     pub fn from_context(ctx: &crate::context::Context) -> Self {
         Self {
             contract_abi: ctx.env.abi.clone(),
@@ -147,6 +149,7 @@ impl FormatterContext {
     }
 
     /// Format transaction list as a tree
+    #[must_use]
     pub fn format_transaction_list(&self, items: &[TupleItem]) -> String {
         let send_results = self.parse_send_results(items);
         let known_contracts = self.collect_known_contracts(&send_results);
@@ -156,7 +159,7 @@ impl FormatterContext {
         self.format_transaction_tree(&tree, &contract_letters, 0, "")
     }
 
-    /// Parse transaction items into SendResult structures
+    /// Parse transaction items into `SendResult` structures
     fn parse_send_results(&self, tx_items: &[TupleItem]) -> Vec<SendResult> {
         tx_items
             .iter()
@@ -270,7 +273,7 @@ impl FormatterContext {
         contract_letters
     }
 
-    /// Build transaction tree from SendResult list
+    /// Build transaction tree from `SendResult` list
     fn build_transaction_tree(&self, mut send_results: Vec<SendResult>) -> Vec<TransactionNode> {
         let mut lt_to_result: HashMap<i64, SendResult> = HashMap::new();
 
@@ -414,7 +417,7 @@ impl FormatterContext {
         is_root: bool,
     ) -> String {
         let tx = &send_result.tx;
-        let mut tx_builder = "".to_string();
+        let mut tx_builder = String::new();
 
         let main_part = self.format_message_part(tx, contract_letters, false);
         let main_part_visible_len = visible_len(&main_part);
@@ -460,10 +463,10 @@ impl FormatterContext {
         show_full_names: bool,
     ) -> String {
         let Some(in_msg) = &tx.in_msg else {
-            return "".to_string();
+            return String::new();
         };
         let Ok(in_msg) = in_msg.parse::<RelaxedMessage>() else {
-            return "".to_string();
+            return String::new();
         };
         self.format_single_message(&in_msg, contract_letters, show_full_names)
     }
@@ -477,15 +480,15 @@ impl FormatterContext {
         let RelaxedMsgInfo::Int(info) = &in_msg.info else {
             if let RelaxedMsgInfo::ExtOut(_) = &in_msg.info {
                 let Some(msg_info) = self.format_ext_out_message(in_msg) else {
-                    return "".to_string();
+                    return String::new();
                 };
 
                 return msg_info;
             }
-            return "".to_string();
+            return String::new();
         };
 
-        let mut result = "".to_string();
+        let mut result = String::new();
 
         if info.bounced {
             result += "(!) ".red().to_string().as_str();
@@ -540,52 +543,49 @@ impl FormatterContext {
         let mut result = String::new();
         let mut extra_infos = vec![];
 
-        match info.compute_phase {
-            ComputePhase::Executed(compute) => {
-                // Add padding to align metadata
-                let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
-                result += &" ".repeat(padding_len);
-                result += &format!("gas={}", compute.gas_used.to_string().as_str())
-                    .dimmed()
-                    .to_string();
+        if let ComputePhase::Executed(compute) = info.compute_phase {
+            // Add padding to align metadata
+            let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
+            result += &" ".repeat(padding_len);
+            result += &format!("gas={}", compute.gas_used.to_string().as_str())
+                .dimmed()
+                .to_string();
 
-                let debug_logs = self.emulations.find_tx_debug_logs(tx.lt);
+            let debug_logs = self.emulations.find_tx_debug_logs(tx.lt);
 
-                if let Some(debug_logs) = debug_logs
-                    && !debug_logs.is_empty()
-                {
-                    extra_infos.push(format!(
-                        "Debug logs:\n{}",
-                        debug_logs
-                            .lines()
-                            .map(|line| format!(
-                                "{}    {}",
-                                child_prefix,
-                                line.trim_start_matches("#DEBUG#: ").dimmed()
-                            ))
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    ));
-                }
-
-                if compute.exit_code != 0 {
-                    result += &self.format_transaction_exit_code(
-                        tx,
-                        child_prefix,
-                        &mut extra_infos,
-                        &compute,
-                    );
-                }
+            if let Some(debug_logs) = debug_logs
+                && !debug_logs.is_empty()
+            {
+                extra_infos.push(format!(
+                    "Debug logs:\n{}",
+                    debug_logs
+                        .lines()
+                        .map(|line| format!(
+                            "{}    {}",
+                            child_prefix,
+                            line.trim_start_matches("#DEBUG#: ").dimmed()
+                        ))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ));
             }
-            _ => {
-                let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
-                result += format!(
-                    "{}{}",
-                    " ".repeat(padding_len),
-                    "compute phase skipped".dimmed()
-                )
-                .as_str()
+
+            if compute.exit_code != 0 {
+                result += &self.format_transaction_exit_code(
+                    tx,
+                    child_prefix,
+                    &mut extra_infos,
+                    &compute,
+                );
             }
+        } else {
+            let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
+            result += format!(
+                "{}{}",
+                " ".repeat(padding_len),
+                "compute phase skipped".dimmed()
+            )
+            .as_str();
         }
 
         if info.aborted {
@@ -646,7 +646,7 @@ impl FormatterContext {
             }
         }
 
-        for ext_msg in send_result.externals.iter() {
+        for ext_msg in &send_result.externals {
             let Ok(msg) = ext_msg.parse::<RelaxedMessage>() else {
                 continue;
             };
@@ -742,6 +742,7 @@ impl FormatterContext {
         Some(())
     }
 
+    #[must_use]
     pub fn format_backtrace(backtrace: &[DebugLocation]) -> Vec<String> {
         let max_function_name_len = backtrace
             .iter()
@@ -894,10 +895,10 @@ impl FormatterContext {
         result.push_str("Executed actions:\n");
 
         for (idx, (message, balance, location)) in action_parts.iter().enumerate() {
-            if idx != actions.len() - 1 {
-                result.push_str(format!("{}    {} ", child_prefix, "├──".dimmed()).as_str());
-            } else {
+            if idx == actions.len() - 1 {
                 result.push_str(format!("{}    {} ", child_prefix, "└──".dimmed()).as_str());
+            } else {
+                result.push_str(format!("{}    {} ", child_prefix, "├──".dimmed()).as_str());
             }
 
             let message_padding =
@@ -959,7 +960,7 @@ impl FormatterContext {
                 result += &format!(" {} ", letter.bold());
                 result
             } else {
-                "".to_string()
+                String::new()
             }
         } else {
             // No letter assigned, show full address info
@@ -1049,10 +1050,12 @@ impl FormatterContext {
         None
     }
 
+    #[must_use]
     pub fn format_tuple(&self, tuple: &Tuple, root: bool, colorize: bool) -> String {
         self.format_tuple_with_brackets(tuple, root, colorize, '[', ']')
     }
 
+    #[must_use]
     pub fn format_tensor(&self, tuple: &Tuple, root: bool, colorize: bool) -> String {
         self.format_tuple_with_brackets(tuple, root, colorize, '(', ')')
     }
@@ -1069,24 +1072,26 @@ impl FormatterContext {
             return self.format_internal(&tuple[0], root, colorize);
         }
 
-        let mut res = "".to_string();
-        write!(res, "{}", open).ok();
+        let mut res = String::new();
+        write!(res, "{open}").ok();
         for (i, item) in tuple.iter().enumerate() {
             if i > 0 {
                 write!(res, ", ").ok();
             }
             write!(res, "{}", self.format_internal(item, false, colorize)).ok();
         }
-        write!(res, "{}", close).ok();
+        write!(res, "{close}").ok();
         res
     }
 
-    /// Format any TupleItem with rich formatting
+    /// Format any `TupleItem` with rich formatting
+    #[must_use]
     pub fn format(&self, item: &TupleItem) -> String {
         self.format_internal(item, true, false)
     }
 
-    /// Format any TupleItem with rich formatting and colors
+    /// Format any `TupleItem` with rich formatting and colors
+    #[must_use]
     pub fn format_with_color(&self, item: &TupleItem) -> String {
         self.format_internal(item, true, true)
     }
@@ -1098,10 +1103,10 @@ impl FormatterContext {
                 inner: items,
             } => {
                 if items.is_empty() {
-                    return format!("{}()", type_name);
+                    return format!("{type_name}()");
                 }
 
-                if type_name.ends_with("?") {
+                if type_name.ends_with('?') {
                     return self.format_nullable(item, root, colorize);
                 }
 
@@ -1129,7 +1134,7 @@ impl FormatterContext {
                 if let TupleItem::Int(value) = &items[0]
                     && type_name == "bool"
                 {
-                    let s = if value == &BigInt::from(0) {
+                    let s = if value == &BigInt::ZERO {
                         "false".to_owned()
                     } else if value == &BigInt::from(-1) {
                         "true".to_owned()
@@ -1148,7 +1153,7 @@ impl FormatterContext {
                     return self.format_tensor(items, root, colorize);
                 }
 
-                self.format_tuple(items, root, colorize).to_string()
+                self.format_tuple(items, root, colorize)
             }
             TupleItem::Slice(cell) => {
                 if cell.bit_len() == 0 && cell.references().is_empty() {
@@ -1191,13 +1196,13 @@ impl FormatterContext {
                     .unwrap_or("<invalid builder>".to_owned());
                 if colorize { s.dimmed().to_string() } else { s }
             }
-            TupleItem::Tuple(items) => self.format_tuple(items, root, colorize).to_string(),
+            TupleItem::Tuple(items) => self.format_tuple(items, root, colorize),
         }
     }
 
     fn format_nullable(&self, item: &TupleItem, root: bool, colorize: bool) -> String {
         let TupleItem::TypedTuple { type_name, inner } = item else {
-            return "".to_owned();
+            return String::new();
         };
 
         // From Tolk compiler:
@@ -1243,7 +1248,7 @@ impl FormatterContext {
         items: &mut VecDeque<TupleItem>,
         colorize: bool,
     ) -> String {
-        let mut f = "".to_string();
+        let mut f = String::new();
 
         if colorize {
             writeln!(f, "{} {}", struct_desc.name.magenta(), "{".dimmed()).ok();
@@ -1281,6 +1286,7 @@ impl FormatterContext {
         f
     }
 
+    #[must_use]
     pub fn format_tuple_value(&self, tuple: &Tuple, type_name: &String, indent: usize) -> String {
         fn add_indent_to_lines(text: &str, indent: usize) -> String {
             let indent_str = " ".repeat(indent);
@@ -1293,7 +1299,7 @@ impl FormatterContext {
         let item = tuple.to_typed(&type_name.to_string());
         let formatted = self.format(&item);
 
-        if !formatted.contains("\n") {
+        if !formatted.contains('\n') {
             // Fast path for values with single line
             return formatted;
         }
@@ -1305,7 +1311,7 @@ impl FormatterContext {
     }
 
     fn add_indent_to_lines_except_first(text: &str, indent: usize) -> String {
-        if !text.contains("\n") {
+        if !text.contains('\n') {
             // Fast path for values with single line
             return text.to_string();
         }
@@ -1333,6 +1339,7 @@ impl FormatterContext {
         raw[..6].to_string() + ".." + &raw[raw.len() - 6..]
     }
 
+    #[must_use]
     pub fn format_address(&self, txs: &TupleItem, addr: &Option<IntAddr>) -> String {
         let Some(addr) = addr else {
             return "<any>".cyan().to_string();
@@ -1365,6 +1372,7 @@ impl FormatterContext {
 }
 
 impl FormatterContext {
+    #[must_use]
     pub fn format_tuple_diff(
         &self,
         left: &Tuple,
@@ -1398,11 +1406,11 @@ impl FormatterContext {
 
                 match (left_val, right_val) {
                     (Some(left_val), Some(right_val)) => {
-                        if left_val != right_val {
+                        if left_val == right_val {
+                            result.push_str(&format!("    {},\n", self.format(&left_val).dimmed()));
+                        } else {
                             result.push_str(&format!("    {},\n", self.format(&left_val).red()));
                             result.push_str(&format!("    {}\n", self.format(&right_val).green()));
-                        } else {
-                            result.push_str(&format!("    {},\n", self.format(&left_val).dimmed()));
                         }
                     }
                     (Some(left_val), None) => {
@@ -1427,7 +1435,7 @@ impl FormatterContext {
         left_items: &mut VecDeque<TupleItem>,
         right_items: &mut VecDeque<TupleItem>,
     ) -> String {
-        let mut f = "".to_string();
+        let mut f = String::new();
 
         writeln!(f, "{} {{", struct_desc.name).ok();
 
@@ -1451,7 +1459,7 @@ impl FormatterContext {
 
                 let field_value =
                     Self::add_indent_to_lines_except_first(result.as_str(), (level + 1) * 4);
-                write!(f, "    {}{}{}", field_name, colon, field_value).ok();
+                write!(f, "    {field_name}{colon}{field_value}").ok();
             } else {
                 let left_val = left_items.pop_front();
                 let right_val = right_items.pop_front();
@@ -1461,7 +1469,16 @@ impl FormatterContext {
                         let l_typed = l.to_typed(&field_type);
                         let r_typed = r.to_typed(&field_type);
 
-                        if l_typed != r_typed {
+                        if l_typed == r_typed {
+                            write!(
+                                f,
+                                "    {}{}{}",
+                                field.name.dimmed(),
+                                ": ".dimmed(),
+                                self.format(&l_typed).dimmed()
+                            )
+                            .ok();
+                        } else {
                             writeln!(f, "    {}: {}", field.name, self.format(&l_typed).red()).ok();
                             write!(
                                 f,
@@ -1469,15 +1486,6 @@ impl FormatterContext {
                                 "",
                                 self.format(&r_typed).green(),
                                 width = field.name.len()
-                            )
-                            .ok();
-                        } else {
-                            write!(
-                                f,
-                                "    {}{}{}",
-                                field.name.dimmed(),
-                                ": ".dimmed(),
-                                self.format(&l_typed).dimmed()
                             )
                             .ok();
                         }
@@ -1520,6 +1528,7 @@ impl FormatterContext {
         f
     }
 
+    #[must_use]
     pub fn format_send_msg_flags(flags: SendMsgFlags) -> String {
         let mut flag_names = Vec::new();
 
@@ -1549,6 +1558,7 @@ impl FormatterContext {
         }
     }
 
+    #[must_use]
     pub fn format_reserve_currency_flags(flags: ReserveCurrencyFlags) -> String {
         let mut flag_names = Vec::new();
 
@@ -1575,6 +1585,7 @@ impl FormatterContext {
         }
     }
 
+    #[must_use]
     pub fn format_search_transaction_parameters(
         &self,
         assert_failure: &TransactionGenericAssertFailure,
@@ -1587,7 +1598,7 @@ impl FormatterContext {
                 "  opcode={} {}",
                 format!("0x{opcode:x}").green(),
                 opcode_type
-                    .map(|typ| typ.name.clone())
+                    .map(|typ| typ.name)
                     .unwrap_or(if opcode == 0 {
                         "empty".to_string()
                     } else {
@@ -1595,7 +1606,7 @@ impl FormatterContext {
                     })
                     .purple()
                     .bold()
-            ))
+            ));
         }
         if let Some(bounced) = assert_failure.params.bounced {
             params.push(format!(
@@ -1605,7 +1616,7 @@ impl FormatterContext {
                 } else {
                     "false".red().to_string()
                 }
-            ))
+            ));
         }
         if let Some(bounce) = assert_failure.params.bounce {
             params.push(format!(
@@ -1615,7 +1626,7 @@ impl FormatterContext {
                 } else {
                     "false".red().to_string()
                 }
-            ))
+            ));
         }
         if let Some(deploy) = assert_failure.params.deploy {
             params.push(format!(
@@ -1625,7 +1636,7 @@ impl FormatterContext {
                 } else {
                     "false".red().to_string()
                 }
-            ))
+            ));
         }
         if let Some(success) = assert_failure.params.success {
             params.push(format!(
@@ -1635,7 +1646,7 @@ impl FormatterContext {
                 } else {
                     "false".red().to_string()
                 }
-            ))
+            ));
         }
         if let Some(aborted) = assert_failure.params.aborted {
             params.push(format!(
@@ -1645,7 +1656,7 @@ impl FormatterContext {
                 } else {
                     "false".red().to_string()
                 }
-            ))
+            ));
         }
         if let Some(exit_code) = assert_failure.params.exit_code {
             params.push(format!(
@@ -1655,7 +1666,7 @@ impl FormatterContext {
                 } else {
                     exit_code.to_string().red().to_string()
                 }
-            ))
+            ));
         }
         if let Some(action_exit_code) = assert_failure.params.action_exit_code {
             params.push(format!(
@@ -1665,7 +1676,7 @@ impl FormatterContext {
                 } else {
                     action_exit_code.to_string().red().to_string()
                 }
-            ))
+            ));
         }
         if let Some(compute_phase_skipped) = assert_failure.params.compute_phase_skipped {
             params.push(format!(
@@ -1675,22 +1686,22 @@ impl FormatterContext {
                 } else {
                     "false".red().to_string()
                 }
-            ))
+            ));
         }
         if let Some(body) = &assert_failure.params.body {
-            params.push(format!("  body={}", Boc::encode_hex(body)))
+            params.push(format!("  body={}", Boc::encode_hex(body)));
         }
         params
     }
 
+    #[must_use]
     pub fn highlight_actual_expected(message: &str) -> String {
-        let result = message
+        message
             .replace("<actual>", &"actual".red().to_string())
-            .replace("<expected>", &"expected".green().to_string());
-
-        result.to_string()
+            .replace("<expected>", &"expected".green().to_string())
     }
 
+    #[must_use]
     pub fn format_exit_code(code: i32) -> String {
         if let Some(info) = exit_codes::find(code) {
             return info.name.to_owned();
@@ -1699,6 +1710,7 @@ impl FormatterContext {
         code.to_string()
     }
 
+    #[must_use]
     pub fn account_code(accounts: &HashMap<String, ShardAccount>, addr: String) -> Option<Cell> {
         let account = accounts.get(&addr);
         let state = account?.account.load().ok()?.0?.state;

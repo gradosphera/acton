@@ -185,7 +185,7 @@ fn prompt_impl(
     let text = Text::new(&message)
         .with_placeholder(&placeholder)
         .prompt()
-        .unwrap_or("".to_string());
+        .unwrap_or_default();
 
     stack.push_string(&text);
     Ok(())
@@ -205,7 +205,7 @@ fn select_impl(
 
     let variants = raw_variants
         .iter()
-        .flat_map(|var| {
+        .filter_map(|var| {
             let str = String::from_item((*var).clone());
             str.ok()
         })
@@ -214,7 +214,7 @@ fn select_impl(
     let result = Select::new(&message, variants)
         .with_starting_cursor(0)
         .prompt()
-        .unwrap_or("".to_string());
+        .unwrap_or_default();
 
     stack.push_string(&result);
     Ok(())
@@ -229,7 +229,7 @@ fn confirm_impl(
     message: String,
 ) -> anyhow::Result<()> {
     let res = Confirm::new(&message)
-        .with_default(default != BigInt::from(0))
+        .with_default(default != BigInt::ZERO)
         .with_help_message(&help_message)
         .prompt()
         .unwrap_or(false);

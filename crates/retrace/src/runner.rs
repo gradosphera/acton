@@ -103,7 +103,7 @@ pub async fn retrace(
             // default exception handler, terminating vm with exit code 9
 
             let lines = parse_lines(&result.emulated_tx.vm_logs);
-            let lines: Vec<_> = lines.into_iter().filter_map(|l| l.ok()).collect();
+            let lines: Vec<_> = lines.into_iter().filter_map(Result::ok).collect();
 
             if lines.len() < 6 {
                 return Ok(result);
@@ -164,7 +164,7 @@ async fn try_load_as_library(
     }
 
     let lib_hash = cs.load_u256()?;
-    let lib_hash_hex = format!("{:X}", lib_hash);
+    let lib_hash_hex = format!("{lib_hash:X}");
     let actual_code = methods::get_library_by_hash(net, &lib_hash_hex).await?;
     Ok(Some((lib_hash, actual_code)))
 }
@@ -221,7 +221,7 @@ pub async fn retrace_base_tx(
     let rand_seed_vec = general_purpose::STANDARD.decode(block.rand_seed)?;
     let mut rand_seed: [u8; 32] = [0; 32];
     for (i, el) in rand_seed.iter_mut().enumerate() {
-        *el = rand_seed_vec.get(i).cloned().unwrap_or(0)
+        *el = rand_seed_vec.get(i).copied().unwrap_or(0);
     }
 
     // load the complete master‑block object (includes the list of shard‑blocks)
@@ -278,8 +278,8 @@ pub async fn retrace_base_tx(
     // finally emulate the target transaction
     let (tx_res, executor_logs) = emulate(
         &our_tx,
-        block_config.clone(),
-        shard_account,
+        &block_config,
+        &shard_account,
         libs.as_ref(),
         rand_seed,
     )?;
@@ -304,7 +304,7 @@ pub async fn retrace_base_tx(
 
     Ok(TraceResult {
         state_update_hash_ok,
-        code_cell: loaded_code.or(code_cell.clone()),
+        code_cell: loaded_code.or_else(|| code_cell.clone()),
         original_code_cell: code_cell,
         in_msg: TraceInMessage {
             sender,
@@ -315,7 +315,7 @@ pub async fn retrace_base_tx(
         money,
         emulated_tx: TraceEmulatedTx {
             raw: our_tx,
-            utime: emulated_tx.now as u64,
+            utime: u64::from(emulated_tx.now),
             lt: emulated_tx.lt,
             compute_info,
             executor_logs,
@@ -344,13 +344,7 @@ fn emulate_previous_transactions(
     let mut shard_account = shard_account.clone();
 
     for prev_tx in prev_txs_in_block {
-        let (tx_res, _) = emulate(
-            prev_tx,
-            block_config.to_owned(),
-            shard_account.clone(),
-            libs,
-            rand_seed,
-        )?;
+        let (tx_res, _) = emulate(prev_tx, block_config, &shard_account, libs, rand_seed)?;
         let res = match tx_res {
             EmulationResult::Success(res) => res,
             EmulationResult::Error(err) => {
@@ -361,8 +355,7 @@ fn emulate_previous_transactions(
         shard_account = Boc::decode_base64(&res.shard_account)?.parse()?;
         balance = shard_account
             .load_account()?
-            .map(|a| a.balance.tokens)
-            .unwrap_or(Tokens::ZERO);
+            .map_or(Tokens::ZERO, |a| a.balance.tokens);
     }
     Ok((balance, shard_account))
 }
@@ -370,8 +363,8 @@ fn emulate_previous_transactions(
 /// Helper function to run a single transaction through the TVM executor.
 fn emulate(
     tx: &Transaction,
-    block_config: String,
-    shard_account: ShardAccount,
+    block_config: &str,
+    shard_account: &ShardAccount,
     libs: Option<&Cell>,
     rand_seed: [u8; 32],
 ) -> anyhow::Result<(EmulationResult, String)> {
@@ -381,13 +374,13 @@ fn emulate(
 
     let emulator = Executor::new(
         ExecutorVerbosity::FullLocationStackVerbose,
-        Some(&block_config),
+        Some(block_config),
     )?;
     let (tx_res, executor_logs) = emulator.run_transaction(
         &Boc::encode_base64(in_msg),
-        RunTransactionArgs {
+        &RunTransactionArgs {
             libs: libs.map(Boc::encode_base64),
-            shard_account: Boc::encode_base64(to_cell(&shard_account)),
+            shard_account: Boc::encode_base64(to_cell(shard_account)),
             now: tx.now,
             lt: tx.lt,
             random_seed: Some(rand_seed),

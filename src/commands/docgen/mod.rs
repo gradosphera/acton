@@ -31,7 +31,7 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
 
     let mut files: Vec<_> = walkdir::WalkDir::new(lib_dir)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| {
             e.file_type().is_file() && e.path().extension().is_some_and(|ext| ext == "tolk")
         })
@@ -150,7 +150,7 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
                                     format!("[{}]({}/#{})", name, link, normalize_symbol_link(name))
                                 }
                             } else {
-                                eprintln!("Warning: Symbol '{}' not found in documentation", name);
+                                eprintln!("Warning: Symbol '{name}' not found in documentation");
                                 name.to_string()
                             }
                         });
@@ -159,7 +159,7 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
                 }
             }
 
-            mdx_content.push_str(&format!("<SourceCodeLink href=\"{}\" />\n\n", source_url));
+            mdx_content.push_str(&format!("<SourceCodeLink href=\"{source_url}\" />\n\n"));
         }
         fs::write(out_path, mdx_content)?;
     }
@@ -274,7 +274,7 @@ fn parse_function(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
         && let Some(type_node) = receiver_node.child_by_field_name("receiver_type")
     {
         let type_name = type_node.utf8_text(source.as_bytes()).ok()?;
-        name = format!("{}.{}", type_name, name);
+        name = format!("{type_name}.{name}");
     }
 
     let full_text = node.utf8_text(source.as_bytes()).ok()?;
@@ -310,7 +310,6 @@ fn extract_doc_comment(node: Node<'_>, source: &str) -> Option<String> {
             if !lines.is_empty() {
                 break;
             }
-            continue;
         } else if trimmed.starts_with("///") {
             let content = trimmed.trim_start_matches("///");
             let content = if let Some(stripped) = content.strip_prefix(' ') {

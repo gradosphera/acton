@@ -11,6 +11,7 @@ pub fn parse(code: impl AsRef<[u8]>) -> anyhow::Result<tree_sitter::Tree> {
     Ok(tree)
 }
 
+#[must_use]
 pub fn language() -> Language {
     tree_sitter_tolk::LANGUAGE.into()
 }

@@ -1,7 +1,13 @@
 use crate::{Context, common, exprs};
 use pretty::RcDoc;
-use tolk_ast::*;
+use tolk_ast::{
+    AssertStatement, BlockStatement, CatchClause, DoWhileStatement, ExpressionStatement,
+    IfStatement, IfStatementAlternative, LocalVarsDeclaration, MatchStatement, RepeatStatement,
+    ReturnStatement, Statement, ThrowStatement, TryCatchStatement, VarDeclarationLhs,
+    WhileStatement,
+};
 
+#[must_use]
 pub fn print_block_statement<'a>(ctx: &Context<'_>, block: &BlockStatement) -> Option<RcDoc<'a>> {
     let raw_statements = block.statements();
     let statements = raw_statements
@@ -18,7 +24,7 @@ pub fn print_block_statement<'a>(ctx: &Context<'_>, block: &BlockStatement) -> O
             raw_statements
                 .iter()
                 .filter(|stmt| stmt.raw_node().kind() == "comment")
-                .map(|stmt| stmt.raw_node())
+                .map(Statement::raw_node)
                 .collect()
         },
         common::ListOptions::curly_bracket_body(),
@@ -158,8 +164,7 @@ pub(crate) fn print_return_statement<'a>(
     let in_match_arm = return_stmt
         .0
         .parent()
-        .map(|p| p.kind() == "match_arm")
-        .unwrap_or(false);
+        .is_some_and(|p| p.kind() == "match_arm");
     let end_semicolon = if in_match_arm { "" } else { ";" };
 
     if let Some(expr) = expr {
@@ -170,7 +175,7 @@ pub(crate) fn print_return_statement<'a>(
             RcDoc::text(end_semicolon),
         ]))
     } else {
-        Some(RcDoc::text(format!("return{}", end_semicolon)))
+        Some(RcDoc::text(format!("return{end_semicolon}")))
     }
 }
 
@@ -184,8 +189,7 @@ pub(crate) fn print_throw_statement<'a>(
     let in_match_arm = throw_stmt
         .0
         .parent()
-        .map(|p| p.kind() == "match_arm")
-        .unwrap_or(false);
+        .is_some_and(|p| p.kind() == "match_arm");
     let end_semicolon = if in_match_arm { "" } else { ";" };
 
     let expr_doc = exprs::print_expression(ctx, &expr)?;
@@ -307,8 +311,7 @@ pub(crate) fn print_local_variables<'a>(
     let is_match_expression = locals
         .0
         .parent()
-        .map(|p| p.kind() == "match_expression")
-        .unwrap_or(false);
+        .is_some_and(|p| p.kind() == "match_expression");
 
     if let Some(assigned_val) = assigned_val {
         let assigned_val_doc = exprs::print_expression(ctx, &assigned_val)?;
@@ -341,11 +344,11 @@ fn print_var_declaration_lhs<'a>(ctx: &Context<'_>, lhs: &VarDeclarationLhs) -> 
     match lhs {
         VarDeclarationLhs::TupleVarsDeclaration(tuple) => {
             let vars = tuple.vars();
-            print_tensor_tuple_lhs(ctx, vars, "[", "]")
+            print_tensor_tuple_lhs(ctx, &vars, "[", "]")
         }
         VarDeclarationLhs::TensorVarsDeclaration(tensor) => {
             let vars = tensor.vars();
-            print_tensor_tuple_lhs(ctx, vars, "(", ")")
+            print_tensor_tuple_lhs(ctx, &vars, "(", ")")
         }
         VarDeclarationLhs::VarDeclaration(var) => {
             let name = var.name()?;
@@ -367,13 +370,13 @@ fn print_var_declaration_lhs<'a>(ctx: &Context<'_>, lhs: &VarDeclarationLhs) -> 
 
 fn print_tensor_tuple_lhs<'a>(
     ctx: &Context,
-    vars: Vec<VarDeclarationLhs>,
+    vars: &[VarDeclarationLhs],
     open_quote: &'a str,
     close_quote: &'a str,
 ) -> Option<RcDoc<'a>> {
     common::print_list(
         ctx,
-        &vars,
+        vars,
         print_var_declaration_lhs,
         |v| *v.raw_node(),
         |_| vec![],

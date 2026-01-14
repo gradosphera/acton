@@ -86,7 +86,7 @@ impl GetExecutor {
     ///
     /// # Arguments
     ///
-    /// * `stack_b64` - Base64 encoded stack BoC.
+    /// * `stack_b64` - Base64 encoded stack `BoC`.
     /// * `args` - Execution arguments.
     /// * `config_b64` - Optional Base64 encoded blockchain configuration.
     pub fn run_get_method(
@@ -127,7 +127,7 @@ impl GetExecutor {
         // SAFETY: The C++ side is expected to return a valid null-terminated C string.
         let output_str = unsafe { CStr::from_ptr(run_result_ptr).to_string_lossy() };
         let result: GetInternalResult = serde_json::from_str(&output_str)
-            .with_context(|| format!("Failed to parse emulator output JSON: {}", output_str))?;
+            .with_context(|| format!("Failed to parse emulator output JSON: {output_str}"))?;
 
         match result {
             GetInternalResult::Success { output } => match output {
@@ -199,7 +199,7 @@ impl GetExecutor {
             tvm_emulator_register_extmethod(
                 self.inner.as_ptr(),
                 id,
-                ctx as *mut Ctx as *mut c_void,
+                std::ptr::from_mut::<Ctx>(ctx).cast::<c_void>(),
                 std::mem::transmute::<
                     unsafe extern "C" fn(*mut Ctx, *const i8) -> *const i8,
                     unsafe extern "C" fn(*mut c_void, *const i8) -> *const i8,

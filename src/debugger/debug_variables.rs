@@ -48,7 +48,7 @@ impl DebugContext {
                 .iter()
                 .rev()
                 .enumerate()
-                .flat_map(|(index, variable)| {
+                .filter_map(|(index, variable)| {
                     if index >= stack.len() {
                         return None;
                     }
@@ -204,7 +204,7 @@ impl DebugContext {
         }
     }
 
-    fn has_children(item: &TupleItem) -> bool {
+    const fn has_children(item: &TupleItem) -> bool {
         matches!(item, TupleItem::Tuple(_) | TupleItem::TypedTuple { .. })
     }
 
@@ -247,7 +247,7 @@ impl DebugContext {
             let c5_slice = c5_cell.as_slice()?;
 
             let out_actions = OutActionsRevIter::new(c5_slice)
-                .filter_map(|action| action.ok())
+                .filter_map(Result::ok)
                 .collect::<Vec<_>>()
                 .iter()
                 .rev()
@@ -409,7 +409,7 @@ impl DebugContext {
                     ext_info
                         .dst
                         .as_ref()
-                        .map_or("None".to_string(), |addr| addr.to_string())
+                        .map_or("None".to_string(), ToString::to_string)
                 )
             }
         }

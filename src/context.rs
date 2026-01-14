@@ -33,6 +33,7 @@ pub struct AssertBinFailure {
 }
 
 impl AssertBinFailure {
+    #[must_use]
     pub fn is_ord(&self) -> bool {
         self.operator == "<"
             || self.operator == ">"
@@ -88,6 +89,7 @@ pub enum AssertFailure {
 }
 
 impl AssertFailure {
+    #[must_use]
     pub fn message(&self) -> Option<String> {
         match self {
             AssertFailure::Bin(arg) => arg.message.clone(),
@@ -98,6 +100,7 @@ impl AssertFailure {
         }
     }
 
+    #[must_use]
     pub fn location(&self) -> Option<String> {
         match self {
             AssertFailure::Bin(arg) => arg.location.clone(),
@@ -108,6 +111,7 @@ impl AssertFailure {
         }
     }
 
+    #[must_use]
     pub fn format_wallet_not_found_message(failure: &WalletNotFoundFailure, env: &Env) -> String {
         let has_wallets_config = env.wallets.is_some();
         let available_wallets = env.open_wallets.keys().cloned().collect::<Vec<_>>();
@@ -165,6 +169,7 @@ impl Default for BuildCache {
 }
 
 impl BuildCache {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             built: HashMap::new(),
@@ -192,6 +197,7 @@ impl BuildCache {
         );
     }
 
+    #[must_use]
     pub fn result_for_code(&self, code: &Option<Cell>) -> Option<(String, CompilationResult)> {
         let Some(code) = code else { return None };
         let code_hash = code.repr_hash().to_string().to_uppercase();
@@ -228,6 +234,7 @@ impl Default for KnownAddresses {
 }
 
 impl KnownAddresses {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             addresses: HashMap::new(),
@@ -254,12 +261,14 @@ impl Default for EmulationsState {
 }
 
 impl EmulationsState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             results: HashMap::new(),
         }
     }
 
+    #[must_use]
     pub fn results_of(&self, id: &str) -> Option<&Emulations> {
         self.results.get(id)
     }
@@ -308,6 +317,7 @@ impl EmulationsState {
             .push(get_method);
     }
 
+    #[must_use]
     pub fn find_tx_by_lt(&self, lt: u64) -> Option<&SendMessageResultSuccess> {
         self.results
             .values()
@@ -315,10 +325,12 @@ impl EmulationsState {
             .find(|res| res.transaction.lt == lt)
     }
 
+    #[must_use]
     pub fn find_tx_logs(&self, lt: u64) -> Option<&str> {
         self.find_tx_by_lt(lt).map(|res| res.vm_log.as_ref())
     }
 
+    #[must_use]
     pub fn find_tx_debug_logs(&self, lt: u64) -> Option<String> {
         self.find_tx_by_lt(lt).map(|res| {
             res.vm_log
@@ -329,6 +341,7 @@ impl EmulationsState {
         })
     }
 
+    #[must_use]
     pub fn find_tx_executor_logs(&self, lt: u64) -> Option<&str> {
         self.find_tx_by_lt(lt).map(|res| res.executor_logs.as_ref())
     }
@@ -348,7 +361,8 @@ impl Wallet {
         client.get_wallet_seqno(&self.wallet.address.to_base64_url())
     }
 
-    pub fn address(&self) -> &TonAddress {
+    #[must_use]
+    pub const fn address(&self) -> &TonAddress {
         &self.wallet.address
     }
 }
@@ -410,18 +424,21 @@ pub enum DebugCtx<'a> {
     Enabled { inner: &'a mut DebugContext },
 }
 
-impl<'a> Context<'a> {
+impl Context<'_> {
+    #[must_use]
     pub fn network(&self) -> String {
         self.env.fork_net.clone().unwrap_or("testnet".to_owned())
     }
 }
 
-impl<'a> Env<'a> {
+impl Env<'_> {
+    #[must_use]
     pub fn find_contract(&self, name: &str) -> Option<ContractConfig> {
         let contracts = self.config.contracts.clone()?.contracts;
         contracts.get(name).cloned()
     }
 
+    #[must_use]
     pub fn find_wallet_by_address(&self, addr: &IntAddr) -> Option<Wallet> {
         let found = self
             .open_wallets
@@ -431,12 +448,13 @@ impl<'a> Env<'a> {
         Some(found.1.clone())
     }
 
+    #[must_use]
     pub fn find_wallet(&self, name: &str) -> Option<&config::WalletConfig> {
         self.wallets?.wallets.get(name)
     }
 }
 
-impl<'a> AssertsContext<'a> {
+impl AssertsContext<'_> {
     pub fn fail(&mut self, message: String) {
         *self.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
             message: Some(message),
@@ -445,15 +463,17 @@ impl<'a> AssertsContext<'a> {
     }
 }
 
-impl<'a> ChainContext<'a> {
+impl ChainContext<'_> {
+    #[must_use]
     pub fn build_libs(&self, owner: &IntAddr) -> Dict<HashBytes, LibDescr> {
         let std_address = owner.as_std().expect("VarAddr is unexpected");
         self.build_libs_with_hash_owner(&std_address.address)
     }
 
+    #[must_use]
     pub fn build_libs_with_hash_owner(&self, owner: &HashBytes) -> Dict<HashBytes, LibDescr> {
         let mut libs = Dict::<HashBytes, LibDescr>::new();
-        for lib in self.world_state.libs().iter() {
+        for lib in &self.world_state.libs() {
             let mut publishers = Dict::new();
             publishers.add(owner, ()).ok();
 
@@ -471,11 +491,12 @@ impl<'a> ChainContext<'a> {
 }
 
 impl<'a> DebugCtx<'a> {
-    pub fn new(inner: &'a mut DebugContext) -> DebugCtx<'a> {
+    pub const fn new(inner: &'a mut DebugContext) -> DebugCtx<'a> {
         DebugCtx::Enabled { inner }
     }
 
-    pub fn is_enabled(&self) -> bool {
+    #[must_use]
+    pub const fn is_enabled(&self) -> bool {
         matches!(self, DebugCtx::Enabled { .. })
     }
 

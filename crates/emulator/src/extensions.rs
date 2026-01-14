@@ -97,7 +97,7 @@ macro_rules! extension {
     };
 }
 
-fn cell_to_ffi_boc64(cell: ArcCell) -> *const c_char {
+fn cell_to_ffi_boc64(cell: &ArcCell) -> *const c_char {
     let s = cell
         .to_boc_b64(false)
         .expect("Failed to encode cell to BOC");
@@ -113,14 +113,11 @@ fn cell_to_ffi_boc64(cell: ArcCell) -> *const c_char {
 pub unsafe fn with_tuple(ptr: *const c_char, f: impl FnOnce(&mut Tuple)) -> *const c_char {
     // SAFETY: We assume ptr is always valid C string
     let c = unsafe { CStr::from_ptr(ptr) };
-    let boc = match c.to_str() {
-        Ok(s) => s,
-        Err(_) => {
-            return CString::new("")
-                .expect("cannot create empty CString")
-                .into_raw()
-                .cast_const();
-        }
+    let Ok(boc) = c.to_str() else {
+        return CString::new("")
+            .expect("cannot create empty CString")
+            .into_raw()
+            .cast_const();
     };
 
     let mut tuple = ArcCell::from_boc_b64(boc)
@@ -130,7 +127,7 @@ pub unsafe fn with_tuple(ptr: *const c_char, f: impl FnOnce(&mut Tuple)) -> *con
 
     f(&mut tuple);
 
-    cell_to_ffi_boc64(tvmffi::serde::serialize_tuple(&tuple).expect("Failed to serialize tuple"))
+    cell_to_ffi_boc64(&tvmffi::serde::serialize_tuple(&tuple).expect("Failed to serialize tuple"))
 }
 
 #[macro_export]

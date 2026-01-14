@@ -3,7 +3,7 @@ use crate::debugging::support::debug::DebugBuilder;
 
 #[test]
 fn test_inline_function_call_step_in() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 fun my_sum(a: int, b: int): int {
@@ -14,7 +14,7 @@ fun main() {
     foo = 300;
     return my_sum(foo, foo);
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -43,7 +43,7 @@ fun main() {
 
 #[test]
 fn test_inline_function_call_step_over() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 fun my_sum(a: int, b: int): int {
@@ -55,7 +55,7 @@ fun main() {
     val goo = my_sum(foo, foo);
     return foo + goo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -79,7 +79,7 @@ fun main() {
 
 #[test]
 fn test_inline_function_call_step_out() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 fun my_sum(a: int, b: int): int {
@@ -91,7 +91,7 @@ fun main() {
     val goo = my_sum(foo, foo);
     return foo + goo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -121,7 +121,7 @@ fun main() {
 
 #[test]
 fn test_inline_function_call_step_over_with_nested_calls() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 @inline
@@ -140,7 +140,7 @@ fun main() {
     val goo = my_sum(foo, foo);
     return foo + goo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -164,7 +164,7 @@ fun main() {
 
 #[test]
 fn test_inline_function_call_step_over_with_nested_inline_ref_calls() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 @inline_ref
@@ -183,7 +183,7 @@ fun main() {
     val goo = my_sum(foo, foo);
     return foo + goo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -207,7 +207,7 @@ fun main() {
 
 #[test]
 fn test_inline_function_call_step_over_with_nested_no_inline_calls() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 @noinline
@@ -226,7 +226,7 @@ fun main() {
     val goo = my_sum(foo, foo);
     return foo + goo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -250,7 +250,7 @@ fun main() {
 
 #[test]
 fn test_ref_inline_function_call_step_in() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 @inline_ref
@@ -262,7 +262,7 @@ fun main() {
     foo = 300;
     return my_sum(foo, foo);
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -291,7 +291,7 @@ fun main() {
 
 #[test]
 fn test_ref_inline_function_call_step_over() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 @inline_ref
@@ -304,7 +304,7 @@ fun main() {
     val result = my_sum(foo, foo);
     return result + foo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -328,7 +328,7 @@ fun main() {
 
 #[test]
 fn test_ref_inline_function_call_step_out() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 @inline_ref
@@ -341,7 +341,7 @@ fun main() {
     val result = my_sum(foo, foo);
     return result + foo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -367,7 +367,7 @@ fun main() {
 
 #[test]
 fn test_noinline_function_call_step_in() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 @method_id(123)
@@ -379,7 +379,7 @@ fun main() {
     foo = 300;
     return my_sum(foo, foo);
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -408,7 +408,7 @@ fun main() {
 
 #[test]
 fn test_noinline_function_call_step_over() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 @method_id(123)
@@ -421,7 +421,7 @@ fun main() {
     val res = my_sum(foo, foo);
     return res + foo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -445,7 +445,7 @@ fun main() {
 
 #[test]
 fn test_noinline_recursive_function_call_step_over() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 @method_id(123)
@@ -461,7 +461,7 @@ fun main() {
     val res = fib(foo);
     return res + foo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -485,7 +485,7 @@ fun main() {
 
 #[test]
 fn test_noinline_function_call_step_out() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 global foo: int;
 
 @method_id(123)
@@ -498,7 +498,7 @@ fun main() {
     val res = my_sum(foo, foo);
     return res + foo;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 

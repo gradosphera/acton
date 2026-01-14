@@ -41,7 +41,7 @@ pub(crate) struct JUnitReporter {
 }
 
 impl JUnitReporter {
-    pub(crate) fn new(config: JUnitConfig) -> Self {
+    pub(crate) const fn new(config: JUnitConfig) -> Self {
         Self {
             config,
             suites: BTreeMap::new(),
@@ -74,8 +74,7 @@ impl JUnitReporter {
                 let message = test
                     .details
                     .as_ref()
-                    .map(|d| format!("TODO: {d}"))
-                    .unwrap_or_else(|| "TODO".to_string());
+                    .map_or_else(|| "TODO".to_string(), |d| format!("TODO: {d}"));
                 status.set_message(message);
                 status
             }
@@ -129,10 +128,7 @@ impl JUnitReporter {
             return Ok(());
         }
 
-        let filename = format!(
-            "TEST-{}.xml",
-            suite.name.replace("/", "_").replace("\\", "_")
-        );
+        let filename = format!("TEST-{}.xml", suite.name.replace(['/', '\\'], "_"));
 
         let file_path = self.config.output_dir.join(filename);
         let mut file = File::create(&file_path)?;

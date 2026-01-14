@@ -121,6 +121,30 @@ unreachable_pub = "warn"
 unused_qualifications = "warn"
 
 [workspace.lints.clippy]
+#pedantic = { level = "warn", priority = -1 }
+#nursery = { level = "warn", priority = -1 }
+#perf = { level = "warn", priority = -1 }
+
+use_self = "allow"
+redundant_pub_crate = "allow"
+struct_excessive_bools = "allow"
+missing_errors_doc = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+too_many_lines = "allow"
+option_if_let_else = "allow"
+case_sensitive_file_extension_comparisons = "allow"
+cognitive_complexity = "allow"
+items_after_statements = "allow"
+missing_panics_doc = "allow"
+fallible_impl_from = "allow"
+unreadable_literal = "allow"
+similar_names = "allow"
+wildcard_imports = "allow"
+implicit_hasher = "allow"
+struct_field_names = "allow"
 unwrap-used = "deny"
 undocumented_unsafe_blocks = "deny"
 

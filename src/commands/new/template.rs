@@ -22,7 +22,7 @@ pub(super) fn create_project_from_template(
         "empty" => &EMPTY_TEMPLATE_DIR,
         "counter" => &COUNTER_TEMPLATE_DIR,
         "jetton" => &JETTON_TEMPLATE_DIR,
-        _ => anyhow::bail!("Unknown template name: {}", template_name),
+        _ => anyhow::bail!("Unknown template name: {template_name}"),
     };
 
     template.extract(target_dir)?;

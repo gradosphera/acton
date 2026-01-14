@@ -119,7 +119,7 @@ impl<'a> TestRunner<'a> {
                     if let ContractDependency::Detailed { name, kind, .. } = depend
                         && kind == &DependencyKind::LibraryRef
                     {
-                        contracts_by_ref.push(name.clone())
+                        contracts_by_ref.push(name.clone());
                     }
                 }
             }
@@ -228,9 +228,8 @@ impl<'a> TestRunner<'a> {
         let params = RunGetMethodArgs {
             code: code_cell
                 .to_boc_b64(false)
-                .map_err(|err| anyhow!("Failed to encode code cell to BoC: {err}"))?
-                .to_string(),
-            data: ArcCell::default().to_boc_b64(false)?.to_string(), // for tests, we use empty cell as a data
+                .map_err(|err| anyhow!("Failed to encode code cell to BoC: {err}"))?,
+            data: ArcCell::default().to_boc_b64(false)?, // for tests, we use empty cell as a data
             verbosity,
             libs: Default::default(),
             address: dest_address.to_string(),
@@ -275,12 +274,12 @@ impl<'a> TestRunner<'a> {
                 build_override: self.mutation_overrides.clone(),
                 explorer: None,
                 api_key: self.config.api_key.clone(),
-                fork_net: self.config.fork_net.as_ref().map(|n| n.to_string()),
+                fork_net: self.config.fork_net.as_ref().map(ToString::to_string),
                 running_id: test.name.clone(),
             },
             io: IoContext {
-                stdout_buffer: "".to_owned(),
-                stderr_buffer: "".to_owned(),
+                stdout_buffer: String::new(),
+                stderr_buffer: String::new(),
                 capture_output: true,
             },
             asserts: AssertsContext {
@@ -300,11 +299,11 @@ impl<'a> TestRunner<'a> {
                 need_debug_info: self.config.debug
                     || self.config.backtrace == Some(BacktraceMode::Full)
                     || self.config.coverage,
-                backtrace: self.config.backtrace.as_ref().map(|b| b.to_string()),
+                backtrace: self.config.backtrace.as_ref().map(ToString::to_string),
             },
             debug: DebugCtx::Disabled,
             is_broadcasting: false,
-            network: self.config.fork_net.as_ref().map(|n| n.to_string()),
+            network: self.config.fork_net.as_ref().map(ToString::to_string),
         };
 
         let (result, captured_stdout, captured_stderr, assert_failure, expected_exit_code) =
@@ -431,7 +430,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         None
     };
 
-    let reports_for_ui = ui_reporter.as_ref().map(|r| r.get_reports_arc());
+    let reports_for_ui = ui_reporter.as_ref().map(UiReporter::get_reports_arc);
 
     let mut global_reporter = ReporterManager::new();
     TestRunner::setup_reporters(&mut global_reporter, config, ui_reporter);
@@ -446,7 +445,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     let mut total_todo = 0;
 
     let mut runner = TestRunner::new(
-        acton_config.clone(),
+        acton_config,
         config.clone(),
         &mut file_cache,
         &mut global_reporter,
@@ -465,7 +464,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
                 if index + 1 < test_files.len()
                     && config.report_formats.contains(&ReportFormat::Console)
                 {
-                    println!()
+                    println!();
                 }
             }
             Err(err) => {
@@ -560,8 +559,8 @@ fn build_overrides_for_mutations(
     if let Some((name, code_b64)) = config
         .mutate_overrides
         .as_ref()
-        .unwrap_or(&"".to_owned())
-        .split_once(":")
+        .unwrap_or(&String::new())
+        .split_once(':')
     {
         let code_cell = ArcCell::from_boc_b64(code_b64)?;
         mutation_overrides.insert(name.to_owned(), code_cell);
@@ -588,14 +587,14 @@ pub fn find_test_files_recursively(
     }
     let excludes: GlobSet = exclude_builder.build()?;
 
-    let includes: Option<GlobSet> = if !include_patterns.is_empty() {
+    let includes: Option<GlobSet> = if include_patterns.is_empty() {
+        None
+    } else {
         let mut include_builder = GlobSetBuilder::new();
         for p in include_patterns {
             include_builder.add(Glob::new(p)?);
         }
         Some(include_builder.build()?)
-    } else {
-        None
     };
 
     let root = Path::new(dir_path);
@@ -687,9 +686,9 @@ fn compile_test_file(
         tolkc::CompilerResult::Success(result) => {
             let cache_result = file_cache.put(file, result, need_debug_info, 0, "1.2".to_string());
             match cache_result {
-                Ok(_) => {}
+                Ok(()) => {}
                 Err(err) => {
-                    error!("Cannot cache result of compilation {file}: {err}",)
+                    error!("Cannot cache result of compilation {file}: {err}",);
                 }
             }
         }
@@ -784,7 +783,7 @@ fn run_file_tests(
     let mut skipped = 0;
     let mut todo = 0;
 
-    for test in filtered_tests.iter() {
+    for test in &filtered_tests {
         let suite_name = extract_suite_name(&abs_file_path);
         let mut test_report = TestReport {
             name: test.name.clone(),
@@ -799,7 +798,7 @@ fn run_file_tests(
             details: None,
             abi: abi.clone(),
             source_map: source_map.clone(),
-            backtrace: runner.config.backtrace.as_ref().map(|b| b.to_string()),
+            backtrace: runner.config.backtrace.as_ref().map(ToString::to_string),
             execution: None,
             trace_path: runner
                 .config
@@ -875,7 +874,7 @@ fn run_file_tests(
         }
 
         if exit_code == 0 && assert_failure.is_some() {
-            test_passed = false
+            test_passed = false;
         }
 
         test_report.duration = duration;
@@ -929,7 +928,7 @@ fn run_file_tests(
                     &code_cell.cell_hash()?.to_hex().to_ascii_uppercase(),
                     source_map.clone(),
                     Some(contract_abi(&content, file_path)),
-                )
+                );
             }
         }
 
@@ -953,7 +952,7 @@ fn run_file_tests(
 
     if runner.config.snapshot.is_some() {
         match profiling::collect_profile(runner, abi) {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(err) => {
                 eprintln!(
                     "{}: Cannot collect profiling result: {}",
@@ -961,7 +960,7 @@ fn run_file_tests(
                     err
                 );
             }
-        };
+        }
     }
 
     Ok(TestStats {
@@ -1016,7 +1015,7 @@ fn find_all_test(file_path: &str, content: &str) -> Vec<TestDescriptor> {
                 let name_node = child.child_by_field_name("name")?;
                 let raw_name = name_node
                     .utf8_text(content.as_bytes())
-                    .map(|text| text.to_string())
+                    .map(ToString::to_string)
                     .ok()?;
 
                 let name = raw_name.trim_matches('`').to_string();
@@ -1026,12 +1025,12 @@ fn find_all_test(file_path: &str, content: &str) -> Vec<TestDescriptor> {
                     || name.starts_with("test_")
                     || name.starts_with("test ")
                 {
-                    let id = CRC16.checksum(name.as_bytes()) as i32 | 0x1_00_00;
+                    let id = i32::from(CRC16.checksum(name.as_bytes())) | 0x1_00_00;
                     let test_annotations = annotations::find_test_annotations(content, child);
 
                     return Some(TestDescriptor {
                         id,
-                        name: name.to_string(),
+                        name,
                         annotations: test_annotations.annotations,
                         expected_exit_code: test_annotations.expected_exit_code,
                         gas_limit: test_annotations.gas_limit,
@@ -1043,7 +1042,7 @@ fn find_all_test(file_path: &str, content: &str) -> Vec<TestDescriptor> {
                         },
                     });
                 }
-            };
+            }
 
             None
         })

@@ -56,7 +56,7 @@ pub struct TestReport {
     pub trace_path: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum TestStatus {
     Passed,
     Failed,
@@ -219,7 +219,7 @@ impl ReporterManager {
     }
 }
 
-pub(crate) fn extract_suite_name(file_path: &Path) -> String {
+pub(super) fn extract_suite_name(file_path: &Path) -> String {
     file_path
         .file_name()
         .and_then(|n| n.to_str())
@@ -227,7 +227,7 @@ pub(crate) fn extract_suite_name(file_path: &Path) -> String {
         .to_string()
 }
 
-pub(crate) fn escape_xml(input: &str) -> String {
+pub(super) fn escape_xml(input: &str) -> String {
     input
         .replace('&', "&amp;")
         .replace('<', "&lt;")

@@ -9,6 +9,7 @@ pub enum SkipBlocksMode {
     After = 2,
 }
 
+#[must_use]
 pub fn build_vm_trace_from_lines(
     lines: Vec<Result<VmLine, String>>,
     source_map: &SourceMap,
@@ -35,6 +36,7 @@ pub fn build_vm_trace_from_lines(
         .collect::<Vec<_>>()
 }
 
+#[must_use]
 pub fn low_level_loc_to_debug_locations(
     source_map: &SourceMap,
     hash: &str,
@@ -64,7 +66,7 @@ pub fn low_level_loc_to_debug_locations(
         {
             // If we don't find approx info but have marks info,
             // use first one to show at least some location to user
-            debug_pairs = vec![first_mark]
+            debug_pairs = vec![first_mark];
         }
     }
 
@@ -154,6 +156,7 @@ pub struct HighLevelTraceStepUnmapped {
 }
 
 impl HighLevelTrace {
+    #[must_use]
     pub fn new(trace: Trace, source_map: &SourceMap) -> HighLevelTrace {
         let steps = trace.steps.iter().map(|step| {
             match step {

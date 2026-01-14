@@ -1,4 +1,4 @@
-use crate::spec::*;
+use crate::spec::{Arg, SliceArg, SpecInstruction, Specification};
 use crate::types::{
     ArgValue, Code, CodeDictionary, Control, ExoticCellInstruction, Instruction, Method,
     PlainInstruction, RefInstruction, StackRegister,
@@ -23,12 +23,14 @@ impl Default for Disassembler {
 }
 
 impl Disassembler {
+    #[must_use]
     pub fn new() -> Disassembler {
         let spec: Specification =
             serde_json::from_str(SPEC).expect("Failed to parse built-in TVM specification JSON");
         Self::from_instructions(&spec.instructions)
     }
 
+    #[must_use]
     pub fn from_instructions(instructions: &[SpecInstruction]) -> Disassembler {
         let mut instruction_ranges: Vec<InstructionWithRange> = instructions
             .iter()
@@ -48,9 +50,10 @@ impl Disassembler {
         // This ensures binary search works correctly for all opcode values
         let mut upto = 0i64;
         for instr in instruction_ranges {
-            if instr.min >= instr.max || instr.min < upto || instr.max > top_opcode {
-                panic!("instruction list is invalid");
-            }
+            assert!(
+                !(instr.min >= instr.max || instr.min < upto || instr.max > top_opcode),
+                "instruction list is invalid"
+            );
             // add gap range if there's space between current position and next instruction
             if upto < instr.min {
                 list.push(InstructionWithRange {
@@ -365,7 +368,7 @@ impl Disassembler {
             let Ok(data_byte) = r.get_u8(byte_idx) else {
                 break;
             };
-            let bit_shift = (i % 8) as u32;
+            let bit_shift = u32::from(i % 8);
             let bit = data_byte & (1 << (7 - bit_shift));
             if bit == 0 {
                 continue;
@@ -405,6 +408,7 @@ fn dyn_cell_to_cell(cell: &DynCell) -> Cell {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::printer::FormatOptions;
     use tycho_types::boc::Boc;
 
     #[test]
@@ -416,7 +420,7 @@ mod tests {
             .decompile_cell(&code)
             .expect("Failed to decompile cell");
 
-        let res = code.print(&Default::default());
-        assert_eq!(res.len(), 132511)
+        let res = code.print(&FormatOptions::default());
+        assert_eq!(res.len(), 132_511);
     }
 }

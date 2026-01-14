@@ -110,8 +110,7 @@ fn parse_annotation_object(content: &str, object_node: Node<'_>) -> TestAnnotati
                 "skip" => {
                     let is_true = field
                         .child_by_field_name("value")
-                        .map(|value| is_boolean_true(content, value))
-                        .unwrap_or(true); // @custom({ skip }) -> true
+                        .is_none_or(|value| is_boolean_true(content, value)); // @custom({ skip }) -> true
 
                     if is_true {
                         annotations.push("skip".to_string());

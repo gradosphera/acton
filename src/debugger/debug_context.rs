@@ -90,6 +90,7 @@ pub struct Stepper {
 }
 
 impl Stepper {
+    #[must_use]
     pub fn new(
         executor: AnyExecutor,
         source_map: SourceMap,
@@ -135,7 +136,7 @@ impl Stepper {
         if self.current_executor_id > 0 {
             self.current_executor_id -= 1;
         }
-        self.terminated = false
+        self.terminated = false;
     }
 
     pub fn next_step(&mut self) -> Option<DebugStep> {
@@ -224,19 +225,22 @@ impl Stepper {
                 kind: StepKind::UnmappedAdvance,
                 loc: None,
                 thread_id: self.thread_id,
-                pos: pos.clone(),
+                pos,
             })
         }
     }
 
-    pub fn is_terminated(&self) -> bool {
+    #[must_use]
+    pub const fn is_terminated(&self) -> bool {
         self.terminated
     }
 
-    pub fn get_current_step(&self) -> Option<&DebugStep> {
+    #[must_use]
+    pub const fn get_current_step(&self) -> Option<&DebugStep> {
         self.current_step.as_ref()
     }
 
+    #[must_use]
     pub fn get_current_step_line(&self) -> Option<i64> {
         self.get_current_step()
             .as_ref()
@@ -244,7 +248,8 @@ impl Stepper {
             .map(|loc| loc.loc.line)
     }
 
-    pub fn get_callstack(&self) -> &Vec<CallFrame> {
+    #[must_use]
+    pub const fn get_callstack(&self) -> &Vec<CallFrame> {
         &self.callstack
     }
 
@@ -320,6 +325,7 @@ pub struct DebugContext {
 }
 
 impl DebugContext {
+    #[must_use]
     pub fn new(
         transport: DapTransport,
         executor: AnyExecutor,
@@ -392,7 +398,7 @@ impl DebugContext {
     }
 
     pub fn process_incoming_requests(&mut self, terminate_at_end: bool) -> anyhow::Result<()> {
-        for req in self.transport.req_receiver.clone().iter() {
+        for req in &self.transport.req_receiver.clone() {
             if let Command::Disconnect(args) = &req.command {
                 println!("Disconnecting");
                 debug!("Disconnecting: {args:?}");
@@ -670,7 +676,7 @@ impl DebugContext {
         Ok(false)
     }
 
-    fn current_thread_id(&self) -> i64 {
+    const fn current_thread_id(&self) -> i64 {
         self.stepper.thread_id
     }
 
@@ -798,6 +804,7 @@ impl DebugContext {
             .collect()
     }
 
+    #[must_use]
     pub fn need_to_stop_child_thread_on_start(&self) -> bool {
         self.performing_step == Some(StepMode::StepIn)
     }
@@ -840,7 +847,9 @@ impl DebugContext {
             };
 
             match step.kind {
-                StepKind::UnmappedAdvance => continue,
+                StepKind::UnmappedAdvance => {
+                    // next step
+                }
                 _ => {
                     return false;
                 }
@@ -931,7 +940,7 @@ impl DebugContext {
             }
 
             // new step still doesn't satisfy condition, so setup current line again
-            current_line = stepper.get_current_step_line()
+            current_line = stepper.get_current_step_line();
         }
     }
 
@@ -955,7 +964,9 @@ impl DebugContext {
             };
 
             match &step.kind {
-                StepKind::UnmappedAdvance => continue,
+                StepKind::UnmappedAdvance => {
+                    // next step
+                }
                 StepKind::SyntheticAfterFunctionCall(func) if func == &current_function => {
                     stepper.buffer.push_front(step.clone());
                     return false;
@@ -1001,9 +1012,11 @@ impl DebugContext {
 
         loop {
             match self.stepper.next_step() {
-                Some(_) => continue,
+                Some(_) => {
+                    // next step
+                }
                 None => return true,
-            };
+            }
         }
     }
 }
@@ -1078,7 +1091,7 @@ fn get_locations(executor: &AnyExecutor, source_map: &SourceMap) -> Option<Vec<D
 
 fn get_code_pos(executor: &AnyExecutor) -> Option<(String, u16)> {
     let pos = executor.get_code_pos();
-    let (hash, offset) = pos.split_once(":")?;
+    let (hash, offset) = pos.split_once(':')?;
     let offset = offset.parse::<u16>().ok()?;
     Some((hash.to_string(), offset))
 }

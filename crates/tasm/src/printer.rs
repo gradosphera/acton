@@ -14,13 +14,16 @@ pub struct FormatOptions {
 }
 
 impl Instruction {
+    #[must_use]
     pub fn print(&self, depth: usize, opts: &FormatOptions, offset: Option<u16>) -> String {
+        use std::fmt::Write as _;
+
         let indent = "    ".repeat(depth);
         let mut builder = String::new();
 
         if opts.show_offsets {
             if let Some(off) = offset {
-                builder.push_str(&format!("{:<4}│ ", off));
+                write!(builder, "{off:<4}│ ").ok();
             } else {
                 builder.push_str("     │");
             }
@@ -134,6 +137,8 @@ fn get_source_locations<'a>(
 }
 
 fn format_source_context(location: &SourceLocation) -> Option<String> {
+    use std::fmt::Write as _;
+
     let content = fs::read_to_string(&location.file).ok()?;
     let lines: Vec<&str> = content.lines().collect();
 
@@ -146,30 +151,30 @@ fn format_source_context(location: &SourceLocation) -> Option<String> {
     let end_line = (line_idx + 2).min(lines.len());
 
     let mut result = String::new();
-    result.push_str(&format!(
+    write!(
+        result,
         "{:<60} │  {}:{}:{}",
         " ",
         SourceLocation::normalize_path(&location.file),
         location.line + 1,
         location.column + 2
-    ));
+    )
+    .ok();
 
     for (i, line_content) in lines.iter().enumerate().take(end_line).skip(start_line) {
         let line_num = i + 1;
-        result.push_str(&format!(
-            "\n{:>60}{}│  {:>3}: {}",
-            "", " ", line_num, line_content
-        ));
+        write!(result, "\n{:>60} │  {:>3}: {}", "", line_num, line_content).ok();
 
         if i == line_idx + 1 {
             let cursor_pos = location.column as usize + 1;
-            result.push_str(&format!(
-                "\n{:>60} │  {:>3}  {}{}",
+            write!(
+                result,
+                "\n{:>60} │  {:>3}  {}^",
                 "",
                 "",
-                " ".repeat(cursor_pos),
-                "^"
-            ));
+                " ".repeat(cursor_pos)
+            )
+            .ok();
         }
     }
 
@@ -179,6 +184,7 @@ fn format_source_context(location: &SourceLocation) -> Option<String> {
 }
 
 impl ArgValue {
+    #[must_use]
     pub fn string(&self) -> String {
         match self {
             ArgValue::Control(c) => format!("{c}"),
@@ -209,14 +215,18 @@ fn format_arg(arg: &ArgValue, depth: usize, opts: &FormatOptions) -> String {
             source,
             offset,
         } => {
+            use std::fmt::Write as _;
+
             let mut builder = String::new();
             builder.push('{');
             if opts.show_hashes {
-                builder.push_str(&format!(
+                write!(
+                    builder,
                     " // {} offset {}",
                     source.repr_hash().to_string().to_uppercase(),
                     offset
-                ));
+                )
+                .ok();
             }
             builder.push('\n');
             for (i, instruction) in code.instructions.iter().enumerate() {
@@ -234,6 +244,8 @@ fn format_arg(arg: &ArgValue, depth: usize, opts: &FormatOptions) -> String {
             builder
         }
         ArgValue::CodeDictionary(dict) => {
+            use std::fmt::Write as _;
+
             let mut builder = String::new();
             builder.push_str("[\n");
             for method in &dict.methods {
@@ -242,13 +254,15 @@ fn format_arg(arg: &ArgValue, depth: usize, opts: &FormatOptions) -> String {
                 }
 
                 builder.push_str(&indent);
-                builder.push_str(&format!("    {} => ", method.id));
+                write!(builder, "    {} => ", method.id).ok();
                 builder.push('{');
                 if opts.show_hashes {
-                    builder.push_str(&format!(
+                    write!(
+                        builder,
                         " // {}",
                         method.source.repr_hash().to_string().to_uppercase()
-                    ));
+                    )
+                    .ok();
                 }
                 builder.push('\n');
                 for (i, instruction) in method.instructions.iter().enumerate() {
@@ -293,7 +307,7 @@ fn format_slice(slice: &CellSlice<'_>) -> String {
         let mut builder = CellBuilder::new();
         builder.store_slice(slice).ok();
         let Ok(cell) = builder.build() else {
-            return "".to_owned();
+            return String::new();
         };
         format!("boc{{{}}}", Boc::encode_hex(cell))
     }

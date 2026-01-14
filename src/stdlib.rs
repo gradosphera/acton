@@ -19,11 +19,11 @@ pub fn ensure_latest(project_root: &Path) -> anyhow::Result<()> {
     let version_path = acton_dir.join(".version");
     let current_version = env!("CARGO_PKG_VERSION");
 
-    let needs_update = if !version_path.exists() {
-        true
-    } else {
+    let needs_update = if version_path.exists() {
         let stored_version = fs::read_to_string(&version_path)?;
         stored_version.trim() != current_version
+    } else {
+        true
     };
 
     if needs_update {

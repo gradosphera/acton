@@ -333,6 +333,7 @@ impl FileBuildCache {
         Ok(())
     }
 
+    #[must_use]
     pub fn size(&self) -> usize {
         self.entries.len()
     }
@@ -423,7 +424,7 @@ mod tests {
     fn prepare_cache(temp_dir: &TempDir) -> Result<(FileBuildCache, PathBuf, PathBuf)> {
         let cache_dir = temp_dir.path().join("cache");
 
-        let mut cache = FileBuildCache::new(Some(cache_dir.clone()))?;
+        let mut cache = FileBuildCache::new(Some(cache_dir))?;
 
         let lib_path = temp_dir.path().join("lib.tolk");
         File::create(&lib_path)?.write_all(b"fun helper() { }")?;

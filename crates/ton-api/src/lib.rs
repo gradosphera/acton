@@ -19,20 +19,22 @@ impl FromStr for Network {
         match s.to_lowercase().as_str() {
             "mainnet" => Ok(Network::Mainnet),
             "testnet" => Ok(Network::Testnet),
-            _ => anyhow::bail!("Unsupported network: {}. Supported: mainnet, testnet", s),
+            _ => anyhow::bail!("Unsupported network: {s}. Supported: mainnet, testnet"),
         }
     }
 }
 
 impl Network {
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
             Network::Mainnet => "mainnet",
             Network::Testnet => "testnet",
         }
     }
 
-    pub fn toncenter_url(&self) -> &'static str {
+    #[must_use]
+    pub const fn toncenter_url(&self) -> &'static str {
         match self {
             Network::Mainnet => "https://toncenter.com",
             Network::Testnet => "https://testnet.toncenter.com",
@@ -57,11 +59,13 @@ impl TonApiClient {
         })
     }
 
-    pub fn with_network(mut self, network: Network) -> Self {
+    #[must_use]
+    pub const fn with_network(mut self, network: Network) -> Self {
         self.network = network;
         self
     }
 
+    #[must_use]
     pub fn with_api_key(mut self, api_key: String) -> Self {
         self.api_key = Some(api_key);
         self
@@ -87,21 +91,22 @@ impl TonApiClient {
         request
     }
 
+    #[must_use]
     pub fn network(&self) -> Network {
         self.network.clone()
     }
 
-    /// Get account state from TonCenter
+    /// Get account state from `TonCenter`
     pub fn get_account_state(&self, address: &str) -> anyhow::Result<AccountState> {
-        let accounts = self.get_account_states(vec![address])?;
+        let accounts = self.get_account_states(&[address])?;
         accounts
             .into_iter()
             .next()
             .ok_or_else(|| anyhow!("Account not found"))
     }
 
-    /// Get multiple account states from TonCenter
-    pub fn get_account_states(&self, addresses: Vec<&str>) -> anyhow::Result<Vec<AccountState>> {
+    /// Get multiple account states from `TonCenter`
+    pub fn get_account_states(&self, addresses: &[&str]) -> anyhow::Result<Vec<AccountState>> {
         if addresses.is_empty() {
             return Ok(vec![]);
         }
@@ -139,7 +144,7 @@ impl TonApiClient {
         Ok(data.accounts)
     }
 
-    /// Get contract BOC from TonCenter (tries mainnet first, then testnet)
+    /// Get contract BOC from `TonCenter` (tries mainnet first, then testnet)
     pub fn get_contract_boc(&self, address: &str) -> anyhow::Result<String> {
         let state = self.get_account_state(address)?;
 
@@ -157,7 +162,7 @@ impl TonApiClient {
         &self,
         address: &str,
         method: &str,
-        stack: Vec<serde_json::Value>,
+        stack: &[serde_json::Value],
     ) -> anyhow::Result<GetMethodResult> {
         let url = format!("{}/api/v2/jsonRPC", self.network.toncenter_url());
 
@@ -199,7 +204,7 @@ impl TonApiClient {
 
     /// Get wallet seqno
     pub fn get_wallet_seqno(&self, address: &str) -> anyhow::Result<(u32, bool)> {
-        let result = self.run_get_method(address, "seqno", vec![])?;
+        let result = self.run_get_method(address, "seqno", &[])?;
 
         if result.exit_code == -13 {
             // likely uninit wallet
@@ -286,7 +291,7 @@ impl TonApiClient {
             urlencoding::encode(address),
             seqno
                 .map(|seqno| format!("&seqno={seqno}"))
-                .unwrap_or("".to_owned()),
+                .unwrap_or_default(),
         );
 
         let response = self
@@ -344,7 +349,7 @@ impl TonApiClient {
             .context("Failed to parse TonCenter libraries response")?;
 
         if !data.ok || data.result.result.is_empty() {
-            anyhow::bail!("Library with hash {} not found", hash);
+            anyhow::bail!("Library with hash {hash} not found");
         }
 
         Boc::decode_base64(&data.result.result[0].data).context("Failed to decode library BOC data")
@@ -437,11 +442,8 @@ impl TonApiClient {
 
     fn handle_fail(response: Response) -> anyhow::Error {
         let status = response.status();
-        let data = match response.json::<TonCenterErrorResponse>() {
-            Ok(res) => res,
-            Err(_) => {
-                return anyhow!("TonCenter API returned status: {status}");
-            }
+        let Ok(data) = response.json::<TonCenterErrorResponse>() else {
+            return anyhow!("TonCenter API returned status: {status}");
         };
 
         anyhow!(

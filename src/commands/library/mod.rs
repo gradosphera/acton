@@ -157,8 +157,8 @@ pub fn publish_cmd(
     // See https://tonviewer.com/config#18
     let bit_price = 1_000u128;
     let cell_price = 500_000u128;
-    let bits_part = (bits as u128 * bit_price * duration_seconds as u128) >> 16;
-    let cells_part = (cells as u128 * cell_price * duration_seconds as u128) >> 16;
+    let bits_part = (u128::from(bits) * bit_price * u128::from(duration_seconds)) >> 16;
+    let cells_part = (u128::from(cells) * cell_price * u128::from(duration_seconds)) >> 16;
     let storage_fee_nanoton = bits_part + cells_part;
 
     // Suggest 120% of storage fee + 0.06 TON for gas/fees
@@ -196,7 +196,7 @@ pub fn publish_cmd(
         }
     }
 
-    let api_client = TonApiClient::new(network.clone(), api_key.clone())?;
+    let api_client = TonApiClient::new(network.clone(), api_key)?;
     let (seqno, need_state_init) = wallet.seqno(network.as_str())?;
 
     let expired_at_time = std::time::SystemTime::now() + std::time::Duration::from_secs(600);
@@ -260,7 +260,7 @@ pub fn publish_cmd(
 }
 
 fn calculate_cell_size(cell: &dyn CellImpl, seen: &mut HashSet<HashBytes>) -> (u64, u64) {
-    let mut bits = cell.bit_len() as u64;
+    let mut bits = u64::from(cell.bit_len());
     let mut cells = 0u64;
     for i in 0..4 {
         if let Some(r) = cell.reference(i) {
@@ -299,7 +299,7 @@ pub fn fetch_cmd(
     }
 
     if disasm {
-        let boc_hex = Boc::encode_hex(library_cell.clone());
+        let boc_hex = Boc::encode_hex(library_cell);
 
         disasm_cmd(
             None,
@@ -334,7 +334,7 @@ pub fn fetch_cmd(
             }
             println!("  {} Written to {}", "✓".green().bold(), path);
         } else {
-            println!("{}", boc_base64);
+            println!("{boc_base64}");
         }
     }
 
@@ -377,7 +377,7 @@ pub fn info_cmd(name: Option<String>, api_key: Option<String>) -> anyhow::Result
         let cell_price = 500_000u128;
 
         let cost_per_second_x65536 =
-            (lib.bits as u128 * bit_price) + (lib.cells as u128 * cell_price);
+            (u128::from(lib.bits) * bit_price) + (u128::from(lib.cells) * cell_price);
 
         if cost_per_second_x65536 > 0
             && let Some(balance_u128) = balance_u128
@@ -496,8 +496,8 @@ pub fn topup_cmd(
         // Storage cost calculation (config 18)
         let bit_price = 1_000u128;
         let cell_price = 500_000u128;
-        let bits_part = (lib.bits as u128 * bit_price * duration_seconds as u128) >> 16;
-        let cells_part = (lib.cells as u128 * cell_price * duration_seconds as u128) >> 16;
+        let bits_part = (u128::from(lib.bits) * bit_price * u128::from(duration_seconds)) >> 16;
+        let cells_part = (u128::from(lib.cells) * cell_price * u128::from(duration_seconds)) >> 16;
         let storage_fee_nanoton = bits_part + cells_part;
 
         let suggested_nanoton = storage_fee_nanoton * 120 / 100;
@@ -649,6 +649,7 @@ fn format_relative_time(timestamp_str: &str) -> String {
     format!("{} year{} ago", years, if years > 1 { "s" } else { "" })
 }
 
+#[must_use]
 pub fn format_ton(nanoton: u128) -> String {
     let ton = nanoton / 1_000_000_000;
     let fraction = nanoton % 1_000_000_000;
@@ -657,9 +658,9 @@ pub fn format_ton(nanoton: u128) -> String {
         return ton.to_string();
     }
 
-    let fraction_str = format!("{:09}", fraction);
+    let fraction_str = format!("{fraction:09}");
     let trimmed_fraction = fraction_str.trim_end_matches('0');
-    format!("{}.{}", ton, trimmed_fraction)
+    format!("{ton}.{trimmed_fraction}")
 }
 
 pub fn parse_ton_to_nanoton(s: &str) -> anyhow::Result<u128> {
@@ -748,10 +749,10 @@ fn save_library(
     let mut final_name = contract_name.to_string();
     if libraries.contains_key(&final_name) {
         let mut i = 1;
-        while libraries.contains_key(&format!("{}-{}", contract_name, i)) {
+        while libraries.contains_key(&format!("{contract_name}-{i}")) {
             i += 1;
         }
-        final_name = format!("{}-{}", contract_name, i);
+        final_name = format!("{contract_name}-{i}");
     }
 
     let mut lib_table = Table::new();

@@ -32,7 +32,7 @@ fn build_model(
         )
     })?;
 
-    let config = ActonConfig::load().map_err(|e| anyhow!("Failed to load Acton.toml: {}", e))?;
+    let config = ActonConfig::load().map_err(|e| anyhow!("Failed to load Acton.toml: {e}"))?;
 
     let contract_config = config
         .get_contract(contract_id)
@@ -49,7 +49,7 @@ fn build_model(
     }
 
     let content = fs::read_to_string(&contract_path)
-        .map_err(|e| anyhow!("Failed to read contract file: {}", e))?;
+        .map_err(|e| anyhow!("Failed to read contract file: {e}"))?;
 
     let contract_path_str = contract_path.to_str().unwrap_or_default();
     let mut abi = abi::contract_abi(&content, contract_path_str);
@@ -104,14 +104,14 @@ fn build_model(
     let default_wrapper = project_root
         .join("tests")
         .join("wrappers")
-        .join(format!("{}.tolk", contract_name));
+        .join(format!("{contract_name}.tolk"));
 
     let default_test = project_root
         .join("tests")
-        .join(format!("{}.test.tolk", contract_id));
+        .join(format!("{contract_id}.test.tolk"));
 
-    let wrapper_path = wrapper_output.map(PathBuf::from).unwrap_or(default_wrapper);
-    let test_path = test_output.map(PathBuf::from).unwrap_or(default_test);
+    let wrapper_path = wrapper_output.map_or(default_wrapper, PathBuf::from);
+    let test_path = test_output.map_or(default_test, PathBuf::from);
 
     let mut message_paths: Vec<PathBuf> = message_paths.iter().map(PathBuf::from).collect();
     message_paths.sort();
@@ -169,11 +169,11 @@ pub fn wrapper_cmd(
     };
 
     fs::write(&model.wrapper_path, wrapper_code)
-        .map_err(|e| anyhow!("Failed to write wrapper file: {}", e))?;
+        .map_err(|e| anyhow!("Failed to write wrapper file: {e}"))?;
 
     if generate_test_stub {
         fs::write(&model.test_path, test_code)
-            .map_err(|e| anyhow!("Failed to write test file: {}", e))?;
+            .map_err(|e| anyhow!("Failed to write test file: {e}"))?;
     }
 
     let wrapper_relative = model
@@ -219,7 +219,7 @@ fn create_types_file(contract_path: &Path) -> anyhow::Result<PathBuf> {
         let types_content =
             "// Auto-generated types file\n// Move your Storage struct and message types here\n\n";
         fs::write(&types_file_path, types_content)
-            .map_err(|e| anyhow!("Failed to create types.tolk: {}", e))?;
+            .map_err(|e| anyhow!("Failed to create types.tolk: {e}"))?;
     }
 
     Ok(types_file_path)
@@ -349,7 +349,7 @@ fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> 
 
     code.push('\n');
 
-    code.push_str(&format!("struct {} {{\n", contract));
+    code.push_str(&format!("struct {contract} {{\n"));
     code.push_str("    address: address\n");
     code.push_str("    stateInit: ContractState? = null\n");
     code.push_str("}\n\n");
@@ -442,13 +442,11 @@ fn generate_empty_from_storage(contract_name: &str, contract_build_name: &str) -
 
     code.push_str("/// Creates a contract wrapper instance from the storage data\n");
     code.push_str(&format!(
-        "fun {}.fromStorage(toShard: AddressShardingOptions? = null) {{\n",
-        contract_name
+        "fun {contract_name}.fromStorage(toShard: AddressShardingOptions? = null) {{\n"
     ));
     code.push_str("    val stateInit = ContractState {\n");
     code.push_str(&format!(
-        "        code: build(\"{}\"),\n",
-        contract_build_name
+        "        code: build(\"{contract_build_name}\"),\n"
     ));
     code.push_str("        data: createEmptyCell(),\n");
     code.push_str("    };\n");
@@ -456,8 +454,7 @@ fn generate_empty_from_storage(contract_name: &str, contract_build_name: &str) -
     code.push_str("        ? AutoDeployAddress { stateInit }.calculateAddress()\n");
     code.push_str("        : AutoDeployAddress { stateInit, toShard }.calculateAddress();\n");
     code.push_str(&format!(
-        "    return {} {{ address, stateInit }}\n",
-        contract_name
+        "    return {contract_name} {{ address, stateInit }}\n"
     ));
     code.push_str("}\n");
 
@@ -510,7 +507,7 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
     let params_str = if params.is_empty() {
         String::new()
     } else {
-        format!("{}, ", params)
+        format!("{params}, ")
     };
 
     code.push_str(&format!(
@@ -587,17 +584,14 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
 
     if params.is_empty() {
         code.push_str(&format!(
-            "fun {}.{}(self): {} {{\n",
-            contract_name, method_name, return_type
+            "fun {contract_name}.{method_name}(self): {return_type} {{\n"
         ));
         code.push_str(&format!(
-            "    return net.runGetMethod(self.address, \"{}\")\n",
-            method_name
+            "    return net.runGetMethod(self.address, \"{method_name}\")\n"
         ));
     } else {
         code.push_str(&format!(
-            "fun {}.{}(self, {}): {} {{\n",
-            contract_name, method_name, params, return_type
+            "fun {contract_name}.{method_name}(self, {params}): {return_type} {{\n"
         ));
 
         let args = get_method
@@ -608,8 +602,7 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
 
         if args.is_empty() {
             code.push_str(&format!(
-                "    return net.runGetMethod(self.address, \"{}\")\n",
-                method_name
+                "    return net.runGetMethod(self.address, \"{method_name}\")\n"
             ));
         } else if args.len() == 1 {
             let arg_name = if let abi::BaseTypeInfo::Cell { inner: Some(_) } =
@@ -621,8 +614,7 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
             };
 
             code.push_str(&format!(
-                "    return net.runGetMethod(self.address, \"{}\", {})\n",
-                method_name, arg_name
+                "    return net.runGetMethod(self.address, \"{method_name}\", {arg_name})\n"
             ));
         } else {
             let args = get_method
@@ -639,8 +631,7 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
                 .join(", ");
 
             code.push_str(&format!(
-                "    return net.runGetMethod(self.address, \"{}\", [{}] as tuple)\n",
-                method_name, args
+                "    return net.runGetMethod(self.address, \"{method_name}\", [{args}] as tuple)\n"
             ));
         }
     }
@@ -742,8 +733,7 @@ fn generate_setup_test(contract_name: &str, abi: &ContractAbi) -> String {
 
     if let Some(storage) = &abi.storage {
         code.push_str(&format!(
-            "    val contract = {}.fromStorage({{",
-            contract_name
+            "    val contract = {contract_name}.fromStorage({{"
         ));
 
         let storage_fields = storage
@@ -766,8 +756,7 @@ fn generate_setup_test(contract_name: &str, abi: &ContractAbi) -> String {
         code.push_str(" });\n");
     } else {
         code.push_str(&format!(
-            "    val contract = {}.fromStorage();\n",
-            contract_name
+            "    val contract = {contract_name}.fromStorage();\n"
         ));
     }
 

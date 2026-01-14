@@ -52,12 +52,9 @@ impl ReleaseClient for GitHubClient {
             let tag = if v.starts_with('v') {
                 v.to_string()
             } else {
-                format!("v{}", v)
+                format!("v{v}")
             };
-            format!(
-                "https://api.github.com/repos/i582/acton/releases/tags/{}",
-                tag
-            )
+            format!("https://api.github.com/repos/i582/acton/releases/tags/{tag}")
         } else if canary {
             "https://api.github.com/repos/i582/acton/releases/tags/canary".to_string()
         } else {
@@ -67,7 +64,7 @@ impl ReleaseClient for GitHubClient {
         let mut req = self.client.get(&url).header(USER_AGENT, "acton-cli");
 
         if let Some(token) = &self.token {
-            req = req.header("Authorization", format!("token {}", token));
+            req = req.header("Authorization", format!("token {token}"));
         }
 
         let resp = req
@@ -77,10 +74,9 @@ impl ReleaseClient for GitHubClient {
         if !resp.status().is_success() {
             if resp.status().as_u16() == 404 {
                 if let Some(v) = version {
-                    bail!("Release not found: {}", v);
-                } else {
-                    bail!("Release not found");
+                    bail!("Release not found: {v}");
                 }
+                bail!("Release not found");
             }
             bail!("GitHub API request failed: {}", resp.status());
         }
@@ -95,7 +91,7 @@ impl ReleaseClient for GitHubClient {
         let mut req = self.client.get(url).header(USER_AGENT, "acton-cli");
 
         if let Some(token) = &self.token {
-            req = req.header("Authorization", format!("token {}", token));
+            req = req.header("Authorization", format!("token {token}"));
         }
 
         let resp = req.send().context("Failed to fetch releases from GitHub")?;
@@ -128,7 +124,7 @@ impl ReleaseClient for GitHubClient {
                 .client
                 .get(&asset.url)
                 .header("Accept", "application/octet-stream")
-                .header("Authorization", format!("token {}", token));
+                .header("Authorization", format!("token {token}"));
         }
 
         let mut resp = req

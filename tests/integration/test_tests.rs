@@ -1,7 +1,7 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
 
@@ -9,7 +9,7 @@ get fun currentCounter(): int { return 0 }
 get fun currentCounter2(arg: int): int { return arg }
 get fun currentCounter3(arg: int): int { return arg + 10 }
 get fun getCell(): cell { return beginCell().storeInt(32, 32).endCell() }
-"#;
+";
 
 const TEST_PREPARE: &str = r#"
 import "../../lib/testing/expect"
@@ -210,11 +210,11 @@ fn test_test_invalid_filter_regex() {
         .contract("simple", SIMPLE_CONTRACT)
         .test_file(
             "test",
-            r#"
+            r"
             get fun `test-foo`() {
                 // test
             }
-        "#,
+        ",
         )
         .build();
 
@@ -235,11 +235,11 @@ fn test_test_invalid_exclude_pattern() {
         .contract("simple", SIMPLE_CONTRACT)
         .test_file(
             "test",
-            r#"
+            r"
             get fun `test-foo`() {
                 // test
             }
-        "#,
+        ",
         )
         .build();
 
@@ -260,11 +260,11 @@ fn test_test_invalid_include_pattern() {
         .contract("simple", SIMPLE_CONTRACT)
         .test_file(
             "test",
-            r#"
+            r"
             get fun `test-foo`() {
                 // test
             }
-        "#,
+        ",
         )
         .build();
 
@@ -285,11 +285,11 @@ fn test_test_invalid_coverage_format() {
         .contract("simple", SIMPLE_CONTRACT)
         .test_file(
             "test",
-            r#"
+            r"
             get fun `test-foo`() {
                 // test
             }
-        "#,
+        ",
         )
         .build();
 
@@ -311,11 +311,11 @@ fn test_test_invalid_reporter() {
         .contract("simple", SIMPLE_CONTRACT)
         .test_file(
             "test",
-            r#"
+            r"
             get fun `test-foo`() {
                 // test
             }
-        "#,
+        ",
         )
         .build();
 
@@ -336,11 +336,11 @@ fn test_invalid_test_file_syntax() {
         .contract("simple", SIMPLE_CONTRACT)
         .test_file(
             "test",
-            r#"
+            r"
             get fun `test-foo`() {
                 let a = 10;
             }
-        "#,
+        ",
         )
         .build();
 
@@ -678,13 +678,13 @@ fn test_debug_logs_in_contract() {
     let project = ProjectBuilder::new("test-get")
         .contract(
             "simple",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 debug.print(in.body);
                 debug.print(in.senderAddress);
             }
             fun onBouncedMessage(_: InMessageBounced) {}
-            "#,
+            ",
         )
         .test_file(
             "test",
@@ -730,10 +730,10 @@ fn test_filter_all_test() {
         .contract("simple", SIMPLE_CONTRACT)
         .test_file(
             "test",
-            r#"
+            r"
                 get fun `test-foo`() {}
                 get fun `test-bar`() {}
-            "#,
+            ",
         )
         .build()
         .acton()
@@ -750,17 +750,17 @@ fn test_filter_all_test_with_several_test_files() {
         .contract("simple", SIMPLE_CONTRACT)
         .test_file(
             "test",
-            r#"
+            r"
                 get fun `test-foo`() {}
                 get fun `test-bar`() {}
-            "#,
+            ",
         )
         .test_file(
             "test2",
-            r#"
+            r"
                 get fun `test-baz`() {}
                 get fun `test-qux`() {}
-            "#,
+            ",
         )
         .build()
         .acton()
@@ -843,11 +843,11 @@ fn test_test_success_search_param_for_tx_with_compute_exit_code_10() {
     let project = ProjectBuilder::new("test-get")
         .contract(
             "simple",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 throw 10
             }
-            "#,
+            ",
         )
         .test_file(
             "test",
@@ -997,11 +997,11 @@ fn test_test_all_successful_tx_matcher_with_fail() {
     let project = ProjectBuilder::new("test-get")
         .contract(
             "simple",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 throw 10
             }
-            "#,
+            ",
         )
         .test_file(
             "test",
@@ -1050,11 +1050,11 @@ fn test_test_all_successful_tx_matcher_without_fail() {
     let project = ProjectBuilder::new("test-get")
         .contract(
             "simple",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {
                 throw 0
             }
-            "#,
+            ",
         )
         .test_file(
             "test",

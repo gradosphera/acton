@@ -93,6 +93,7 @@ pub struct DapTransport {
 }
 
 impl DapTransport {
+    #[must_use]
     pub fn dummy() -> DapTransport {
         let (_, req_receiver) = unbounded::<Request>();
         let (dap_sender, _) = unbounded::<DapMessage>();
@@ -103,6 +104,7 @@ impl DapTransport {
     }
 }
 
+#[must_use]
 pub fn start_dap_server(port: u16) -> DapTransport {
     let address = format!("127.0.0.1:{port}");
     let (req_sender, req_receiver) = unbounded::<Request>();
@@ -148,7 +150,7 @@ pub fn start_dap_server(port: u16) -> DapTransport {
 
         // Server require an input, pass dummy one, that's safe since we never call `poll_request`
         // on server, since we use thread above.
-        let dummy_input = BufReader::new(Cursor::new("".as_bytes()));
+        let dummy_input = BufReader::new(Cursor::new(b""));
         let output_stream = stream;
         let output = BufWriter::new(output_stream);
         let mut server = Server::new(dummy_input, output);
@@ -168,7 +170,7 @@ pub fn start_dap_server(port: u16) -> DapTransport {
                 }
 
                 default(Duration::from_millis(10)) => {
-                    continue
+                    // ... waiting
                 }
             }
         }
@@ -178,7 +180,7 @@ pub fn start_dap_server(port: u16) -> DapTransport {
             .expect("[INTERNAL ERROR] DAP thread panicked");
 
         match error {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(err) => {
                 error!("[INTERNAL ERROR] DAP thread error: {err}");
             }

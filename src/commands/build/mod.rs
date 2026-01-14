@@ -172,10 +172,10 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
 
         Ok(())
     } else {
-        let mut whole_error = "".to_owned();
+        let mut whole_error = String::new();
 
         for (contract, err) in compile_errors {
-            whole_error += color_print::cformat!("In <yellow>{contract}</>:\n\n{err}\n").as_str()
+            whole_error += color_print::cformat!("In <yellow>{contract}</>:\n\n{err}\n").as_str();
         }
 
         whole_error.push_str(
@@ -281,7 +281,7 @@ fn save_build_artifact(
         "hash": code_hash
     });
 
-    let filename = format!("{}.json", contract_key);
+    let filename = format!("{contract_key}.json");
     let path = Path::new(out_dir).join(filename);
     fs::write(path, serde_json::to_string_pretty(&json_data)?)?;
 
@@ -344,10 +344,10 @@ fn generate_single_dependency_file(
         )
     })?;
 
-    let func_name = dependency
-        .compiled_code_function()
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| format_valid_function_name(dependency_contract));
+    let func_name = dependency.compiled_code_function().map_or_else(
+        || format_valid_function_name(dependency_contract),
+        ToString::to_string,
+    );
 
     let dep_kind = dependency.kind();
     debug!("Generating dependency file for '{dependency_contract}' with kind {dep_kind:?}");
@@ -382,10 +382,7 @@ fn generate_single_dependency_file(
 }
 
 fn format_valid_function_name(dependency_key: &str) -> String {
-    let mut name = dependency_key
-        .replace("-", "_")
-        .replace(".", "_")
-        .replace(" ", "_");
+    let mut name = dependency_key.replace(['-', '.', ' '], "_");
 
     if !name.chars().next().unwrap_or(' ').is_alphabetic() {
         name = format!("contract_{name}");

@@ -77,7 +77,7 @@ get fun double(a: int): int {
 }
 "#;
 
-const COUNTER_MESSAGES: &str = r#"
+const COUNTER_MESSAGES: &str = r"
 struct Storage {
     id: uint32
     counter: uint32
@@ -101,7 +101,7 @@ struct (0x3a752f06) ResetCounter {
 }
 
 struct ResetData {}
-"#;
+";
 
 const MAIN_CODE: &str = r#"
 import "../lib/io"

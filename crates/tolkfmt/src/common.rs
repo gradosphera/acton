@@ -10,7 +10,7 @@ pub struct ListOptions<'a> {
     pub single_line_edge_space: bool,
 }
 
-impl<'a> Default for ListOptions<'a> {
+impl Default for ListOptions<'_> {
     fn default() -> Self {
         Self {
             separator: RcDoc::text(","),
@@ -22,6 +22,7 @@ impl<'a> Default for ListOptions<'a> {
 }
 
 impl<'a> ListOptions<'a> {
+    #[must_use]
     pub fn curly_bracket_body() -> ListOptions<'a> {
         ListOptions {
             brackets: (RcDoc::text("{"), RcDoc::text("}")),
@@ -31,6 +32,7 @@ impl<'a> ListOptions<'a> {
         }
     }
 
+    #[must_use]
     pub fn triangle_bracket_list() -> ListOptions<'a> {
         ListOptions {
             brackets: (RcDoc::text("<"), RcDoc::text(">")),
@@ -133,16 +135,7 @@ where
         }
 
         let doc = item_printer(ctx, item)?;
-        let mut width = doc_width(&doc);
-
-        let is_last = i == items.len() - 1;
-        if !is_last {
-            width += sep_width;
-        } else {
-            // we don't know if it will be multiline or not here for width calculation purposes
-            // but alignment is only for multiline, so we should assume trailing comma width
-            width += sep_width;
-        }
+        let width = doc_width(&doc) + sep_width;
 
         let has_inline =
             comments.is_some_and(|cs| cs.iter().any(|c| c.kind == CommentKind::Inline));
@@ -187,10 +180,10 @@ where
         docs.push(info.doc);
 
         if !info.ignored {
-            if !is_last {
-                docs.push(options.separator.clone());
-            } else {
+            if is_last {
                 docs.push(RcDoc::flat_alt(options.separator.clone(), RcDoc::nil()));
+            } else {
+                docs.push(options.separator.clone());
             }
 
             if is_multiline {
@@ -238,11 +231,13 @@ where
     ])))
 }
 
+#[must_use]
 pub fn print_comment_node<'a>(ctx: &Context<'_>, comment: &Node) -> RcDoc<'a> {
     let text = comment.utf8_text(ctx.code.as_ref().as_ref()).unwrap_or("");
     RcDoc::text(text.to_owned())
 }
 
+#[must_use]
 pub fn print_original_node_text<'a>(ctx: &Context<'_>, node: &Node) -> RcDoc<'a> {
     let mut docs = vec![];
     let comments = ctx.comments.get(node);
@@ -278,11 +273,13 @@ pub fn print_original_node_text<'a>(ctx: &Context<'_>, node: &Node) -> RcDoc<'a>
     RcDoc::concat(docs)
 }
 
+#[must_use]
 pub fn print_node_text<'a>(ctx: &Context<'_>, ident: &Node) -> Option<RcDoc<'a>> {
     let text = ident.utf8_text(ctx.code.as_ref().as_ref()).ok()?.to_owned();
     Some(RcDoc::text(text))
 }
 
+#[must_use]
 pub fn empty_lines_between(ctx: &Context<'_>, top: &Node, bottom: &Node) -> usize {
     // [
     //
@@ -296,6 +293,7 @@ pub fn empty_lines_between(ctx: &Context<'_>, top: &Node, bottom: &Node) -> usiz
     botton_line.saturating_sub(top_line)
 }
 
+#[allow(clippy::branches_sharing_code)] // for readability
 fn start_line(ctx: &Context<'_>, node: &Node) -> usize {
     if let Some(comments) = ctx.comments.get(node) {
         let leading = comments.iter().find(|c| {
@@ -318,6 +316,8 @@ fn start_line(ctx: &Context<'_>, node: &Node) -> usize {
     }
 }
 
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
 pub fn print_sections(sections: Vec<Vec<RcDoc>>) -> RcDoc {
     let mut final_docs = Vec::with_capacity(sections.len());
     for (i, section) in sections.iter().enumerate() {
@@ -339,6 +339,7 @@ pub fn print_sections(sections: Vec<Vec<RcDoc>>) -> RcDoc {
     RcDoc::concat(final_docs)
 }
 
+#[must_use]
 pub fn doc_width(doc: &RcDoc) -> usize {
     struct MeasureWriter {
         last_line_len: usize,

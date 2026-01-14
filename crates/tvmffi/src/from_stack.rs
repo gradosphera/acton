@@ -1,4 +1,4 @@
-//! This module provides functionality for converting TupleItem to Rust types.
+//! This module provides functionality for converting `TupleItem` to Rust types.
 //!
 //! This module is mostly used for defining FFI functions that are called from the TVM emulator.
 use crate::stack::{Tuple, TupleItem};
@@ -6,8 +6,8 @@ use num_bigint::BigInt;
 use thiserror::Error;
 use tonlib_core::cell::ArcCell;
 
-/// An error type for converting TupleItem to a Rust type.
-#[derive(Debug, Error, PartialEq)]
+/// An error type for converting `TupleItem` to a Rust type.
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum ArgError {
     #[error("stack underflow")]
     StackUnderflow,
@@ -17,13 +17,13 @@ pub enum ArgError {
     CellParse,
 }
 
-/// A trait for converting TupleItem to a Rust type.
+/// A trait for converting `TupleItem` to a Rust type.
 pub trait FromStack: Sized {
-    /// Convert a TupleItem to a Rust type.
+    /// Convert a `TupleItem` to a Rust type.
     fn from_item(item: TupleItem) -> Result<Self, ArgError>;
 }
 
-/// Convert a TupleItem to a TupleItem.
+/// Convert a `TupleItem` to a `TupleItem`.
 /// This is a no-op to define the Any-like type in FFI functions.
 impl FromStack for TupleItem {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
@@ -31,7 +31,7 @@ impl FromStack for TupleItem {
     }
 }
 
-/// Convert a TupleItem to a String.
+/// Convert a `TupleItem` to a String.
 /// Note that this conversion is automatically handle snake strings.
 impl FromStack for String {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
@@ -44,7 +44,7 @@ impl FromStack for String {
     }
 }
 
-/// Convert a TupleItem to a BigInt.
+/// Convert a `TupleItem` to a `BigInt`.
 impl FromStack for BigInt {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
         match item {
@@ -54,7 +54,7 @@ impl FromStack for BigInt {
     }
 }
 
-/// Convert a TupleItem to a bool.
+/// Convert a `TupleItem` to a bool.
 ///
 /// Note that in the TVM true is -1 and false is 0.
 impl FromStack for bool {
@@ -64,7 +64,7 @@ impl FromStack for bool {
                 // TVM: true = -1, false = 0
                 if i == BigInt::from(-1) {
                     Ok(true)
-                } else if i == BigInt::from(0) {
+                } else if i == BigInt::ZERO {
                     Ok(false)
                 } else {
                     // Treat any other value as true
@@ -78,7 +78,7 @@ impl FromStack for bool {
     }
 }
 
-/// Convert a TupleItem to a Tuple.
+/// Convert a `TupleItem` to a Tuple.
 impl FromStack for Tuple {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
         match item {
@@ -88,7 +88,7 @@ impl FromStack for Tuple {
     }
 }
 
-/// Convert a TupleItem to a Cell.
+/// Convert a `TupleItem` to a Cell.
 impl FromStack for ArcCell {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
         match item {
@@ -124,7 +124,7 @@ mod tests {
         };
 
         let result = String::from_item(TupleItem::Slice(slice.clone()));
-        assert_eq!(result, Ok("".to_string()));
+        assert_eq!(result, Ok(String::new()));
 
         // Test large string (snake string)
         let large_string = "A".repeat(200);
@@ -159,7 +159,7 @@ mod tests {
         assert_eq!(result, Ok(big_int));
 
         // Test zero
-        let big_int = BigInt::from(0);
+        let big_int = BigInt::ZERO;
         let result = BigInt::from_item(TupleItem::Int(big_int.clone()));
         assert_eq!(result, Ok(big_int));
 
@@ -176,7 +176,7 @@ mod tests {
         assert_eq!(result, Ok(true));
 
         // Test false (0)
-        let result = bool::from_item(TupleItem::Int(BigInt::from(0)));
+        let result = bool::from_item(TupleItem::Int(BigInt::ZERO));
         assert_eq!(result, Ok(false));
 
         // Test other values treated as true

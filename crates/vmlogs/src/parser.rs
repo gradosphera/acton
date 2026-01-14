@@ -21,14 +21,14 @@ pub struct VmStack<'a> {
     raw_content: &'a str,
 }
 
-impl<'a> Display for VmStack<'a> {
+impl Display for VmStack<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "[ {} ]",
             self.parsed()
                 .iter()
-                .map(|v| v.to_string())
+                .map(ToString::to_string)
                 .collect::<Vec<_>>()
                 .join(" ")
         )
@@ -36,16 +36,19 @@ impl<'a> Display for VmStack<'a> {
 }
 
 impl<'a> VmStack<'a> {
-    pub fn new(content: &'a str) -> Self {
+    #[must_use]
+    pub const fn new(content: &'a str) -> Self {
         Self {
             raw_content: content,
         }
     }
 
-    pub fn raw(&self) -> &'a str {
+    #[must_use]
+    pub const fn raw(&self) -> &'a str {
         self.raw_content
     }
 
+    #[must_use]
     pub fn parsed(&self) -> Vec<VmStackValue<'a>> {
         parse_stack_content(self.raw_content)
     }
@@ -101,28 +104,28 @@ pub enum VmStackValue<'a> {
     Unknown,
 }
 
-impl<'a> Display for VmStackValue<'a> {
+impl Display for VmStackValue<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             VmStackValue::Null => write!(f, "()"),
             VmStackValue::NaN => write!(f, "NaN"),
-            VmStackValue::Integer(s) => write!(f, "{}", s),
+            VmStackValue::Integer(s) => write!(f, "{s}"),
             VmStackValue::Tuple(items) => {
                 write!(
                     f,
                     "[ {} ]",
                     items
                         .iter()
-                        .map(|v| v.to_string())
+                        .map(ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(" ")
                 )
             }
-            VmStackValue::Cell(cell) => write!(f, "{}", cell),
-            VmStackValue::Continuation(s) => write!(f, "Cont{{{}}}", s),
-            VmStackValue::Builder(s) => write!(f, "BC{{{}}}", s),
-            VmStackValue::CellSlice(cs) => write!(f, "{}", cs),
-            VmStackValue::String(s) => write!(f, "\"{}\"", s),
+            VmStackValue::Cell(cell) => write!(f, "{cell}"),
+            VmStackValue::Continuation(s) => write!(f, "Cont{{{s}}}"),
+            VmStackValue::Builder(s) => write!(f, "BC{{{s}}}"),
+            VmStackValue::CellSlice(cs) => write!(f, "{cs}"),
+            VmStackValue::String(s) => write!(f, "\"{s}\""),
             VmStackValue::Unknown => write!(f, "???"),
         }
     }
@@ -134,11 +137,11 @@ pub enum CellLike<'a> {
     Builder(&'a str), // BC{hex}
 }
 
-impl<'a> Display for CellLike<'a> {
+impl Display for CellLike<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            CellLike::Cell(s) => write!(f, "C{{{}}}", s),
-            CellLike::Builder(s) => write!(f, "BC{{{}}}", s),
+            CellLike::Cell(s) => write!(f, "C{{{s}}}"),
+            CellLike::Builder(s) => write!(f, "BC{{{s}}}"),
         }
     }
 }
@@ -150,7 +153,7 @@ pub struct CellSlice<'a> {
     pub refs: Option<(&'a str, &'a str)>,
 }
 
-impl<'a> Display for CellSlice<'a> {
+impl Display for CellSlice<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match (&self.bits, &self.refs) {
             (Some((bits_start, bits_end)), Some((refs_start, refs_end))) => {
@@ -429,6 +432,7 @@ pub fn vm_line<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
     .parse_next(i)
 }
 
+#[must_use]
 pub fn parse_lines(input: &str) -> Vec<Result<VmLine<'_>, String>> {
     input
         .split_inclusive('\n')
@@ -436,7 +440,7 @@ pub fn parse_lines(input: &str) -> Vec<Result<VmLine<'_>, String>> {
             let s = line.trim_end_matches(['\r', '\n', ' '].as_ref());
             match terminated(vm_line, opt(eof)).parse(s.as_ref()) {
                 Ok(v) => Ok(v),
-                Err(e) => Err(format!("{e:?} @ {:?}", line)),
+                Err(e) => Err(format!("{e:?} @ {line:?}")),
             }
         })
         .collect()
@@ -446,7 +450,7 @@ pub fn parse_lines(input: &str) -> Vec<Result<VmLine<'_>, String>> {
 mod tests {
     use super::*;
 
-    const TEST_LOGS: &str = r#"stack: [ 0 ]
+    const TEST_LOGS: &str = "stack: [ 0 ]
 code cell hash: C4252597808DE321E4DBEDFCF683B8D9A53BB1E5A77FDD44091B1163114468FA offset: 0
 execute PUSHINT 200
 gas remaining: 9999977
@@ -456,7 +460,7 @@ execute FITS 1
 gas remaining: 9999943
 stack: [ 0 NaN CS{DEAD} ]
 execute implicit RET
-gas remaining: 9999938"#;
+gas remaining: 9999938";
 
     #[test]
     fn test_parse_vm_logs() {
@@ -547,7 +551,7 @@ gas remaining: 9999938"#;
 
         match &results[0] {
             Ok(vm_line) => {
-                println!("Successfully parsed: {:?}", vm_line);
+                println!("Successfully parsed: {vm_line:?}");
                 if let VmLine::VmStack { stack } = vm_line {
                     let expected_raw = "[ 10000000000000 10000000000000 C{B5EE9C720101060100AB0002AF48000000000000000000000000000000000000000000000000000000000000000001001BC307F1FB14506CD271786A9FC305D70EAF063FACC22935554E47A4966051C1D8246139CA8000000000000000000000000000011901020114FF00F4A413F4BCF2C80B0300106465706C6F79657202012004050004D230005AF2D3FFED44D0D3FFD112BAF2A2F404D1F8007F8E16218010F4786FA5209802D307D43001FB009132E201B3E65B} CS{B5EE9C72010101010002000000} 0 ]";
                     assert_eq!(stack.raw(), expected_raw);
@@ -556,7 +560,7 @@ gas remaining: 9999938"#;
                 }
             }
             Err(e) => {
-                panic!("Failed to parse: {:?}", e);
+                panic!("Failed to parse: {e:?}");
             }
         }
     }

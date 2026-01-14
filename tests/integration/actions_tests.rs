@@ -6,16 +6,16 @@ fn test_action_fail() {
     let project = ProjectBuilder::new("action-fail")
         .contract(
             "child",
-            r#"
+            r"
             fun onInternalMessage(in: InMessage) {}
             fun onBouncedMessage(_: InMessageBounced) {}
-        "#,
+        ",
         )
         .contract_with_deps(
             "simple",
             r#"
             import "../gen/child_code.tolk"
-            
+
             fun onInternalMessage(in: InMessage) {
                  val addr = AutoDeployAddress {
                     stateInit: ContractState {
@@ -25,7 +25,7 @@ fn test_action_fail() {
                 }.calculateAddress();
 
                 reserveToncoinsOnBalance(ton("0.1"), RESERVE_MODE_BOUNCE_ON_ACTION_FAIL);
-            
+
                 val outMsg = createMessage({
                     dest: addr,
                     bounce: false,

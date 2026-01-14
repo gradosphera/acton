@@ -8,6 +8,7 @@ pub enum AnyExecutor {
 }
 
 impl AnyExecutor {
+    #[must_use]
     pub fn step(&self) -> bool {
         match self {
             AnyExecutor::Get(get) => get.step(),
@@ -15,6 +16,7 @@ impl AnyExecutor {
         }
     }
 
+    #[must_use]
     pub fn get_code_pos(&self) -> String {
         match self {
             AnyExecutor::Get(get) => get.get_code_pos(),
@@ -22,6 +24,7 @@ impl AnyExecutor {
         }
     }
 
+    #[must_use]
     pub fn get_stack(&self) -> String {
         match self {
             AnyExecutor::Get(get) => get.get_stack(),
@@ -29,6 +32,7 @@ impl AnyExecutor {
         }
     }
 
+    #[must_use]
     pub fn get_c7(&self) -> String {
         match self {
             AnyExecutor::Get(get) => get.get_c7(),
@@ -36,6 +40,7 @@ impl AnyExecutor {
         }
     }
 
+    #[must_use]
     pub fn get_control_register(&self, idx: usize) -> String {
         match self {
             AnyExecutor::Get(get) => get.get_control_register(idx),

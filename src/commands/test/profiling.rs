@@ -155,8 +155,8 @@ pub(super) fn collect_profile(runner: &TestRunner, abi: &ContractAbi) -> anyhow:
         let avg_values: Vec<u64> = opcode_gas_stats.iter().map(|(_, _, _, avg)| *avg).collect();
         let len = avg_values.len();
         if len > 0 {
-            let mut sorted_avgs = avg_values.clone();
-            sorted_avgs.sort();
+            let mut sorted_avgs = avg_values;
+            sorted_avgs.sort_unstable();
 
             for (opcode, min_gas, max_gas, avg_gas) in opcode_gas_stats {
                 table.add_row(vec![

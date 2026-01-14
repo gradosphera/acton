@@ -37,6 +37,7 @@ impl Hash for SourceFile {
 }
 
 impl SourceFile {
+    #[must_use]
     pub fn new(tree: Tree, source: String) -> SourceFile {
         SourceFile {
             tree,
@@ -80,10 +81,12 @@ impl<'t> From<Node<'t>> for RawNode<'t> {
 }
 
 impl<'tree> RawNode<'tree> {
-    pub fn new(node: Node<'tree>) -> Self {
+    #[must_use]
+    pub const fn new(node: Node<'tree>) -> Self {
         Self(node)
     }
 
+    #[must_use]
     pub fn text(&self, source: &'tree str) -> &'tree str {
         self.0
             .utf8_text(source.as_bytes())

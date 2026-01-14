@@ -13,13 +13,15 @@ impl<'t> From<Node<'t>> for Ident<'t> {
 }
 
 impl<'tree> Ident<'tree> {
+    #[must_use]
     pub fn text(&self, source: &'tree str) -> &'tree str {
         self.0
             .utf8_text(source.as_bytes())
             .unwrap_or("<invalid utf8>")
     }
 
-    pub fn raw_node(&self) -> &Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> &Node<'tree> {
         &self.0
     }
 }
@@ -34,12 +36,14 @@ impl<'t> From<Node<'t>> for StringLiteral<'t> {
 }
 
 impl<'tree> StringLiteral<'tree> {
+    #[must_use]
     pub fn text(&self, source: &'tree str) -> &'tree str {
         self.0
             .utf8_text(source.as_bytes())
             .unwrap_or("<invalid utf8>")
     }
 
+    #[must_use]
     pub fn content(&self, source: &'tree str) -> &'tree str {
         self.text(source).trim_matches('"')
     }
@@ -55,6 +59,7 @@ impl<'t> From<Node<'t>> for NumberLiteral<'t> {
 }
 
 impl<'tree> NumberLiteral<'tree> {
+    #[must_use]
     pub fn text(&self, source: &'tree str) -> &'tree str {
         self.0
             .utf8_text(source.as_bytes())
@@ -72,6 +77,7 @@ impl<'t> From<Node<'t>> for BooleanLiteral<'t> {
 }
 
 impl<'tree> BooleanLiteral<'tree> {
+    #[must_use]
     pub fn value(&self, source: &'tree str) -> bool {
         self.0.utf8_text(source.as_bytes()).unwrap_or("false") == "true"
     }
@@ -87,6 +93,7 @@ impl<'t> From<Node<'t>> for NumericIndex<'t> {
 }
 
 impl<'tree> NumericIndex<'tree> {
+    #[must_use]
     pub fn value(&self, source: &'tree str) -> &'tree str {
         self.0.utf8_text(source.as_bytes()).unwrap_or("")
     }
@@ -122,11 +129,13 @@ pub enum Expression<'tree> {
 }
 
 impl<'tree> Expression<'tree> {
+    #[must_use]
     pub fn text(&self, source: &'tree str) -> &'tree str {
         self.raw_node().utf8_text(source.as_bytes()).unwrap_or("")
     }
 
-    pub fn raw_node(&self) -> Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> Node<'tree> {
         match self {
             Expression::Assignment(n) => n.0,
             Expression::SetAssignment(n) => n.0,
@@ -201,10 +210,12 @@ impl<'t> From<Node<'t>> for Assignment<'t> {
 }
 
 impl<'tree> Assignment<'tree> {
+    #[must_use]
     pub fn left(&self) -> Option<Expression<'tree>> {
         self.0.field("left")
     }
 
+    #[must_use]
     pub fn right(&self) -> Option<Expression<'tree>> {
         self.0.field("right")
     }
@@ -220,10 +231,12 @@ impl<'t> From<Node<'t>> for SetAssignment<'t> {
 }
 
 impl<'tree> SetAssignment<'tree> {
+    #[must_use]
     pub fn left(&self) -> Option<Expression<'tree>> {
         self.0.field("left")
     }
 
+    #[must_use]
     pub fn operator_name(&self, source: &'tree str) -> &'tree str {
         let Some(op_child): Option<Node<'tree>> = self.0.field("operator_name") else {
             return "";
@@ -231,6 +244,7 @@ impl<'tree> SetAssignment<'tree> {
         op_child.utf8_text(source.as_bytes()).unwrap_or("")
     }
 
+    #[must_use]
     pub fn right(&self) -> Option<Expression<'tree>> {
         self.0.field("right")
     }
@@ -246,14 +260,17 @@ impl<'t> From<Node<'t>> for TernaryOperator<'t> {
 }
 
 impl<'tree> TernaryOperator<'tree> {
+    #[must_use]
     pub fn condition(&self) -> Option<Expression<'tree>> {
         self.0.field("condition")
     }
 
+    #[must_use]
     pub fn consequence(&self) -> Option<Expression<'tree>> {
         self.0.field("consequence")
     }
 
+    #[must_use]
     pub fn alternative(&self) -> Option<Expression<'tree>> {
         self.0.field("alternative")
     }
@@ -273,10 +290,12 @@ impl<'tree> BinaryOperator<'tree> {
         self.0.child(0).map(Into::into)
     }
 
+    #[must_use]
     pub fn operator(&self) -> Option<Node<'tree>> {
         self.0.field("operator_name")
     }
 
+    #[must_use]
     pub fn operator_name(&self, source: &'tree str) -> &'tree str {
         let Some(op_child): Option<Node<'tree>> = self.0.field("operator_name") else {
             return "";
@@ -299,10 +318,12 @@ impl<'t> From<Node<'t>> for UnaryOperator<'t> {
 }
 
 impl<'tree> UnaryOperator<'tree> {
+    #[must_use]
     pub fn operator(&self) -> Option<Node<'tree>> {
         self.0.field("operator_name")
     }
 
+    #[must_use]
     pub fn operator_name(&self, source: &'tree str) -> &'tree str {
         let Some(op_child): Option<Node<'tree>> = self.0.field("operator_name") else {
             return "";
@@ -310,6 +331,7 @@ impl<'tree> UnaryOperator<'tree> {
         op_child.utf8_text(source.as_bytes()).unwrap_or("")
     }
 
+    #[must_use]
     pub fn argument(&self) -> Option<Expression<'tree>> {
         self.0.field("argument")
     }
@@ -325,6 +347,7 @@ impl<'t> From<Node<'t>> for LazyExpression<'t> {
 }
 
 impl<'tree> LazyExpression<'tree> {
+    #[must_use]
     pub fn expr(&self) -> Option<Expression<'tree>> {
         self.0.field("argument")
     }
@@ -340,10 +363,12 @@ impl<'t> From<Node<'t>> for CastAsOperator<'t> {
 }
 
 impl<'tree> CastAsOperator<'tree> {
+    #[must_use]
     pub fn expr(&self) -> Option<Expression<'tree>> {
         self.0.field("expr")
     }
 
+    #[must_use]
     pub fn casted_to(&self) -> Option<Type<'tree>> {
         self.0.field("casted_to")
     }
@@ -359,14 +384,17 @@ impl<'t> From<Node<'t>> for IsTypeOperator<'t> {
 }
 
 impl<'tree> IsTypeOperator<'tree> {
+    #[must_use]
     pub fn expr(&self) -> Option<Expression<'tree>> {
         self.0.field("expr")
     }
 
+    #[must_use]
     pub fn operator(&self) -> Option<Node<'tree>> {
         self.0.field("operator")
     }
 
+    #[must_use]
     pub fn operator_name(&self, source: &'tree str) -> &'tree str {
         let Some(op_child): Option<Node<'tree>> = self.0.field("operator") else {
             return "";
@@ -374,6 +402,7 @@ impl<'tree> IsTypeOperator<'tree> {
         op_child.utf8_text(source.as_bytes()).unwrap_or("")
     }
 
+    #[must_use]
     pub fn rhs_type(&self) -> Option<Type<'tree>> {
         self.0.field("rhs_type")
     }
@@ -389,11 +418,13 @@ impl<'t> From<Node<'t>> for NotNullOperator<'t> {
 }
 
 impl<'tree> NotNullOperator<'tree> {
+    #[must_use]
     pub fn inner(&self) -> Option<Expression<'tree>> {
         self.0.field("inner")
     }
 
-    pub fn raw_node(&self) -> &Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> &Node<'tree> {
         &self.0
     }
 }
@@ -424,15 +455,18 @@ impl<'t> From<Node<'t>> for DotAccess<'t> {
 }
 
 impl<'tree> DotAccess<'tree> {
+    #[must_use]
     pub fn obj(&self) -> Option<Expression<'tree>> {
         self.0.field("obj")
     }
 
+    #[must_use]
     pub fn field(&self) -> Option<DotAccessField<'tree>> {
         self.0.field("field")
     }
 
-    pub fn raw_node(&self) -> &Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> &Node<'tree> {
         &self.0
     }
 }
@@ -447,10 +481,12 @@ impl<'t> From<Node<'t>> for FunctionCall<'t> {
 }
 
 impl<'tree> FunctionCall<'tree> {
+    #[must_use]
     pub fn callee(&self) -> Option<Expression<'tree>> {
         self.0.field("callee")
     }
 
+    #[must_use]
     pub fn arguments(&self) -> Vec<CallArgument<'tree>> {
         let Some(args) = self.0.field::<ArgumentList<'_>>("arguments") else {
             return vec![];
@@ -458,6 +494,7 @@ impl<'tree> FunctionCall<'tree> {
         args.arguments()
     }
 
+    #[must_use]
     pub fn callee_qualifier(&self) -> Option<Node<'tree>> {
         let callee = self.callee()?;
         match callee {
@@ -477,10 +514,12 @@ impl<'t> From<Node<'t>> for GenericInstantiation<'t> {
 }
 
 impl<'tree> GenericInstantiation<'tree> {
+    #[must_use]
     pub fn expr(&self) -> Option<Expression<'tree>> {
         self.0.field("expr")
     }
 
+    #[must_use]
     pub fn instantiation_ts(&self) -> Option<InstantiationTList<'tree>> {
         self.0.field("instantiationTs")
     }
@@ -496,6 +535,7 @@ impl<'t> From<Node<'t>> for ParenthesizedExpression<'t> {
 }
 
 impl<'tree> ParenthesizedExpression<'tree> {
+    #[must_use]
     pub fn inner(&self) -> Option<Expression<'tree>> {
         self.0.field("inner")
     }
@@ -528,15 +568,18 @@ impl<'t> From<Node<'t>> for MatchExpr<'t> {
 }
 
 impl<'tree> MatchExpression<'tree> {
+    #[must_use]
     pub fn expr(&self) -> Option<MatchExpr<'tree>> {
         self.0.field("expr")
     }
 
+    #[must_use]
     pub fn body(&self) -> Option<MatchBody<'tree>> {
         self.0.field("body")
     }
 
-    pub fn raw_node(&self) -> &Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> &Node<'tree> {
         &self.0
     }
 }
@@ -551,10 +594,12 @@ impl<'t> From<Node<'t>> for ObjectLiteral<'t> {
 }
 
 impl<'tree> ObjectLiteral<'tree> {
+    #[must_use]
     pub fn typ(&self) -> Option<Type<'tree>> {
         self.0.field("type")
     }
 
+    #[must_use]
     pub fn arguments(&self) -> Vec<InstanceArgument<'tree>> {
         let Some(body) = self.0.field::<ObjectLiteralBody<'_>>("arguments") else {
             return vec![];
@@ -573,23 +618,25 @@ impl<'t> From<Node<'t>> for TensorExpression<'t> {
 }
 
 impl<'tree> TensorExpression<'tree> {
+    #[must_use]
     pub fn elements(&self) -> Vec<Expression<'tree>> {
         let mut cursor = self.0.walk();
         self.0
             .children(&mut cursor)
             .filter(|n| n.is_named() && n.kind() != "comment")
-            .map(|n| n.into())
+            .map(Into::into)
             .collect()
     }
 }
 
 impl<'tree> TypedTuple<'tree> {
+    #[must_use]
     pub fn elements(&self) -> Vec<Expression<'tree>> {
         let mut cursor = self.0.walk();
         self.0
             .children(&mut cursor)
             .filter(|n| n.is_named() && n.kind() != "comment")
-            .map(|n| n.into())
+            .map(Into::into)
             .collect()
     }
 }
@@ -625,10 +672,12 @@ impl<'tree> LambdaExpression<'tree> {
             .collect()
     }
 
+    #[must_use]
     pub fn body(&self) -> Option<BlockStatement<'tree>> {
         self.0.field("body")
     }
 
+    #[must_use]
     pub fn return_type(&self) -> Option<Type<'tree>> {
         self.0.field("return_type")
     }
@@ -644,14 +693,17 @@ impl<'t> From<Node<'t>> for LambdaParameter<'t> {
 }
 
 impl<'tree> LambdaParameter<'tree> {
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn typ(&self) -> Option<Type<'tree>> {
         self.0.field("type")
     }
 
+    #[must_use]
     pub fn mutate(&self) -> bool {
         self.0.field::<Ident<'_>>("mutate").is_some()
     }
@@ -705,13 +757,12 @@ impl<'t> From<Node<'t>> for CallArgument<'t> {
 }
 
 impl<'tree> CallArgument<'tree> {
+    #[must_use]
     pub fn mutate(&self) -> bool {
-        self.0
-            .child(0)
-            .map(|n| n.kind() == "mutate")
-            .unwrap_or(false)
+        self.0.child(0).is_some_and(|n| n.kind() == "mutate")
     }
 
+    #[must_use]
     pub fn expr(&self) -> Option<Expression<'tree>> {
         self.0.field("expr")
     }
@@ -766,6 +817,7 @@ impl<'t> From<Node<'t>> for MatchArm<'t> {
 }
 
 impl<'tree> MatchArm<'tree> {
+    #[must_use]
     pub fn pattern(&self) -> MatchPattern<'tree> {
         if let Some(pattern_type) = self.0.field("pattern_type") {
             MatchPattern::Type(pattern_type)
@@ -776,6 +828,7 @@ impl<'tree> MatchArm<'tree> {
         }
     }
 
+    #[must_use]
     pub fn body(&self) -> Option<MatchArmBody<'tree>> {
         if let Some(block) = self.0.field("block") {
             return Some(MatchArmBody::BlockStatement(block));
@@ -846,10 +899,12 @@ impl<'t> From<Node<'t>> for InstanceArgument<'t> {
 }
 
 impl<'tree> InstanceArgument<'tree> {
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn value(&self) -> Option<Expression<'tree>> {
         self.0.field("value")
     }

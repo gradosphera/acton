@@ -1,6 +1,6 @@
 use crate::commands::common::{symlink_global_libraries, symlink_global_wallets};
 use crate::stdlib;
-use acton_config::config::{ActonConfig, ContractConfig, ContractsConfig, TestSettings};
+use acton_config::config::{ActonConfig, ContractConfig, ContractsConfig};
 use inquire::{Select, Text};
 use owo_colors::OwoColorize;
 use std::collections::BTreeMap;
@@ -195,9 +195,7 @@ pub fn new_cmd(
 
     config.contracts = Some(ContractsConfig { contracts });
 
-    config.test = Some(TestSettings {
-        ..Default::default()
-    });
+    config.test = Some(Default::default());
 
     let mut scripts = BTreeMap::new();
     scripts.insert(

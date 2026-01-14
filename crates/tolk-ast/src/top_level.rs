@@ -24,10 +24,12 @@ pub enum TopLevel<'tree> {
 }
 
 impl<'tree> TopLevel<'tree> {
+    #[must_use]
     pub fn text(&self, source: &'tree str) -> &'tree str {
         self.raw_node().utf8_text(source.as_bytes()).unwrap_or("")
     }
 
+    #[must_use]
     pub fn name(&self, source: &'tree str) -> &'tree str {
         let Some(name_node) = self.raw_node().child_by_field_name("name") else {
             return "";
@@ -38,12 +40,14 @@ impl<'tree> TopLevel<'tree> {
             .trim_matches('`')
     }
 
+    #[must_use]
     pub fn name_ident(&self) -> Option<Node<'_>> {
         let name_node = self.raw_node().child_by_field_name("name")?;
         Some(name_node)
     }
 
-    pub fn raw_node(&self) -> Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> Node<'tree> {
         match self {
             TopLevel::TolkRequiredVersion(n) => n.0,
             TopLevel::Import(n) => n.0,
@@ -87,11 +91,13 @@ pub enum TypeAliasUnderlyingType<'tree> {
 }
 
 impl<'tree> TypeAliasUnderlyingType<'tree> {
+    #[must_use]
     pub fn text(&self, source: &'tree str) -> &'tree str {
         self.raw_node().utf8_text(source.as_bytes()).unwrap_or("")
     }
 
-    pub fn raw_node(&self) -> Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> Node<'tree> {
         match self {
             TypeAliasUnderlyingType::Type(n) => n.raw_node(),
             TypeAliasUnderlyingType::BuiltinSpecifier(n) => n.0,
@@ -119,6 +125,7 @@ pub enum FunctionBody<'tree> {
 }
 
 impl<'tree> FunctionBody<'tree> {
+    #[must_use]
     pub fn text(&self, source: &'tree str) -> &'tree str {
         match self {
             FunctionBody::BlockStatement(n) => n.0.utf8_text(source.as_bytes()).unwrap_or(""),
@@ -128,7 +135,8 @@ impl<'tree> FunctionBody<'tree> {
         }
     }
 
-    pub fn raw_node(&self) -> Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> Node<'tree> {
         match self {
             FunctionBody::BlockStatement(n) => n.0,
             FunctionBody::AsmBody(n) => n.0,
@@ -219,6 +227,7 @@ impl<'t> From<Node<'t>> for TolkRequiredVersion<'t> {
 }
 
 impl<'tree> TolkRequiredVersion<'tree> {
+    #[must_use]
     pub fn value(&self) -> Option<StringLiteral<'tree>> {
         self.0.field("value")
     }
@@ -234,6 +243,7 @@ impl<'t> From<Node<'t>> for Import<'t> {
 }
 
 impl<'tree> Import<'tree> {
+    #[must_use]
     pub fn path(&self) -> Option<StringLiteral<'tree>> {
         self.0.field("path")
     }
@@ -249,18 +259,22 @@ impl<'t> From<Node<'t>> for ConstantDeclaration<'t> {
 }
 
 impl<'tree> ConstantDeclaration<'tree> {
+    #[must_use]
     pub fn annotations(&self) -> Option<AnnotationList<'tree>> {
         self.0.field("annotations")
     }
 
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn typ(&self) -> Option<Type<'tree>> {
         self.0.field("type")
     }
 
+    #[must_use]
     pub fn value(&self) -> Option<Expression<'tree>> {
         self.0.field("value")
     }
@@ -276,14 +290,17 @@ impl<'t> From<Node<'t>> for GlobalVarDeclaration<'t> {
 }
 
 impl<'tree> GlobalVarDeclaration<'tree> {
+    #[must_use]
     pub fn annotations(&self) -> Option<AnnotationList<'tree>> {
         self.0.field("annotations")
     }
 
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn typ(&self) -> Option<Type<'tree>> {
         self.0.field("type")
     }
@@ -299,18 +316,22 @@ impl<'t> From<Node<'t>> for TypeAliasDeclaration<'t> {
 }
 
 impl<'tree> TypeAliasDeclaration<'tree> {
+    #[must_use]
     pub fn annotations(&self) -> Option<AnnotationList<'tree>> {
         self.0.field("annotations")
     }
 
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn type_parameters(&self) -> Option<TypeParameters<'tree>> {
         self.0.field("type_parameters")
     }
 
+    #[must_use]
     pub fn underlying_type(&self) -> Option<TypeAliasUnderlyingType<'tree>> {
         self.0.field("underlying_type")
     }
@@ -326,22 +347,27 @@ impl<'t> From<Node<'t>> for StructDeclaration<'t> {
 }
 
 impl<'tree> StructDeclaration<'tree> {
+    #[must_use]
     pub fn annotations(&self) -> Option<AnnotationList<'tree>> {
         self.0.field("annotations")
     }
 
+    #[must_use]
     pub fn pack_prefix(&self) -> Option<NumberLiteral<'tree>> {
         self.0.field("pack_prefix")
     }
 
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn type_parameters(&self) -> Option<TypeParameters<'tree>> {
         self.0.field("type_parameters")
     }
 
+    #[must_use]
     pub fn body(&self) -> Option<StructBody<'tree>> {
         self.0.field("body")
     }
@@ -377,18 +403,22 @@ impl<'t> From<Node<'t>> for StructFieldDeclaration<'t> {
 }
 
 impl<'tree> StructFieldDeclaration<'tree> {
+    #[must_use]
     pub fn modifiers(&self) -> Option<StructFieldModifiers<'tree>> {
         self.0.field("modifiers")
     }
 
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn typ(&self) -> Option<Type<'tree>> {
         self.0.field("type")
     }
 
+    #[must_use]
     pub fn default(&self) -> Option<Expression<'tree>> {
         self.0.field("default")
     }
@@ -401,7 +431,8 @@ pub enum StructFieldModifier {
 }
 
 impl StructFieldModifier {
-    pub fn as_str(&self) -> &'static str {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
         match self {
             StructFieldModifier::Readonly => "readonly",
             StructFieldModifier::Private => "private",
@@ -428,7 +459,8 @@ impl<'t> From<Node<'t>> for StructFieldModifiers<'t> {
     }
 }
 
-impl<'tree> StructFieldModifiers<'tree> {
+impl StructFieldModifiers<'_> {
+    #[must_use]
     pub fn modifiers(&self) -> Vec<StructFieldModifier> {
         let mut cursor = self.0.walk();
         self.0
@@ -440,10 +472,12 @@ impl<'tree> StructFieldModifiers<'tree> {
             .collect()
     }
 
+    #[must_use]
     pub fn has_readonly(&self) -> bool {
         self.modifiers().contains(&StructFieldModifier::Readonly)
     }
 
+    #[must_use]
     pub fn has_private(&self) -> bool {
         self.modifiers().contains(&StructFieldModifier::Private)
     }
@@ -459,18 +493,22 @@ impl<'t> From<Node<'t>> for EnumDeclaration<'t> {
 }
 
 impl<'tree> EnumDeclaration<'tree> {
+    #[must_use]
     pub fn annotations(&self) -> Option<AnnotationList<'tree>> {
         self.0.field("annotations")
     }
 
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn backed_type(&self) -> Option<Type<'tree>> {
         self.0.field("backed_type")
     }
 
+    #[must_use]
     pub fn body(&self) -> Option<EnumBody<'tree>> {
         self.0.field("body")
     }
@@ -506,14 +544,17 @@ impl<'t> From<Node<'t>> for EnumMemberDeclaration<'t> {
 }
 
 impl<'tree> EnumMemberDeclaration<'tree> {
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn default(&self) -> Option<Expression<'tree>> {
         self.0.field("default")
     }
 
+    #[must_use]
     pub fn owner(&'tree self) -> Option<EnumDeclaration<'tree>> {
         let node = parent_of_type(&self.0, "enum_declaration")?;
         Some(EnumDeclaration::from(node))
@@ -530,14 +571,17 @@ impl<'t> From<Node<'t>> for Function<'t> {
 }
 
 impl<'tree> Function<'tree> {
+    #[must_use]
     pub fn annotations(&self) -> Option<AnnotationList<'tree>> {
         self.0.field("annotations")
     }
 
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn type_parameters(&self) -> Option<TypeParameters<'tree>> {
         self.0.field("type_parameters")
     }
@@ -554,6 +598,7 @@ impl<'tree> Function<'tree> {
             .collect()
     }
 
+    #[must_use]
     pub fn return_type(&self) -> Option<Type<'tree>> {
         self.0.field("return_type")
     }
@@ -577,23 +622,28 @@ impl<'t> From<Node<'t>> for Parameter<'t> {
 }
 
 impl<'tree> Parameter<'tree> {
+    #[must_use]
     pub fn mutate(&self) -> bool {
         self.0.field::<Ident<'_>>("mutate").is_some()
     }
 
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn typ(&self) -> Option<Type<'tree>> {
         self.0.field("type")
     }
 
+    #[must_use]
     pub fn default(&self) -> Option<Expression<'tree>> {
         self.0.field("default")
     }
 
-    pub fn raw_node(&self) -> &Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> &Node<'tree> {
         &self.0
     }
 }
@@ -608,22 +658,27 @@ impl<'t> From<Node<'t>> for MethodDeclaration<'t> {
 }
 
 impl<'tree> MethodDeclaration<'tree> {
+    #[must_use]
     pub fn annotations(&self) -> Option<AnnotationList<'tree>> {
         self.0.field("annotations")
     }
 
+    #[must_use]
     pub fn receiver(&self) -> Option<MethodReceiver<'tree>> {
         self.0.field("receiver")
     }
 
+    #[must_use]
     pub fn receiver_type(&self) -> Option<Type<'tree>> {
         self.receiver().and_then(|r| r.typ())
     }
 
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn type_parameters(&self) -> Option<TypeParameters<'tree>> {
         self.0.field("type_parameters")
     }
@@ -649,6 +704,7 @@ impl<'tree> MethodDeclaration<'tree> {
         params.map(Parameter).collect()
     }
 
+    #[must_use]
     pub fn return_type(&self) -> Option<Type<'tree>> {
         self.0.field("return_type")
     }
@@ -661,6 +717,7 @@ impl<'tree> MethodDeclaration<'tree> {
             .map(Into::into)
     }
 
+    #[must_use]
     pub fn is_instance(&self, sources: &str) -> bool {
         let parameters = self.parameters(sources, false);
         if parameters.is_empty() {
@@ -684,14 +741,17 @@ impl<'t> From<Node<'t>> for GetMethodDeclaration<'t> {
 }
 
 impl<'tree> GetMethodDeclaration<'tree> {
+    #[must_use]
     pub fn annotations(&self) -> Option<AnnotationList<'tree>> {
         self.0.field("annotations")
     }
 
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn type_parameters(&self) -> Option<TypeParameters<'tree>> {
         self.0.field("type_parameters")
     }
@@ -708,6 +768,7 @@ impl<'tree> GetMethodDeclaration<'tree> {
             .collect()
     }
 
+    #[must_use]
     pub fn return_type(&self) -> Option<Type<'tree>> {
         self.0.field("return_type")
     }
@@ -731,6 +792,7 @@ impl<'t> From<Node<'t>> for MethodReceiver<'t> {
 }
 
 impl<'tree> MethodReceiver<'tree> {
+    #[must_use]
     pub fn typ(&self) -> Option<Type<'tree>> {
         self.0.field("receiver_type")
     }
@@ -775,10 +837,12 @@ impl<'t> From<Node<'t>> for Annotation<'t> {
 }
 
 impl<'tree> Annotation<'tree> {
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn arguments(&self) -> Option<AnnotationArguments<'tree>> {
         self.0.field("arguments")
     }
@@ -834,10 +898,12 @@ impl<'t> From<Node<'t>> for TypeParameter<'t> {
 }
 
 impl<'tree> TypeParameter<'tree> {
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
 
+    #[must_use]
     pub fn default(&self) -> Option<Type<'tree>> {
         self.0.field("default")
     }
@@ -851,7 +917,8 @@ pub enum BaseFunction<'tree> {
 }
 
 impl<'tree> BaseFunction<'tree> {
-    pub fn raw_node(&self) -> Node<'tree> {
+    #[must_use]
+    pub const fn raw_node(&self) -> Node<'tree> {
         match self {
             BaseFunction::Function(f) => f.0,
             BaseFunction::MethodDeclaration(m) => m.0,
@@ -859,6 +926,7 @@ impl<'tree> BaseFunction<'tree> {
         }
     }
 
+    #[must_use]
     pub fn name(&self) -> Option<Ident<'tree>> {
         match self {
             BaseFunction::Function(f) => f.name(),
@@ -867,6 +935,7 @@ impl<'tree> BaseFunction<'tree> {
         }
     }
 
+    #[must_use]
     pub fn type_parameters(&self) -> Vec<TypeParameter<'tree>> {
         match self {
             BaseFunction::Function(f) => f
@@ -884,6 +953,7 @@ impl<'tree> BaseFunction<'tree> {
         }
     }
 
+    #[must_use]
     pub fn parameters(&self, sources: &str, skip_self: bool) -> Vec<Parameter<'tree>> {
         match self {
             BaseFunction::Function(f) => f.parameters(),
@@ -892,6 +962,7 @@ impl<'tree> BaseFunction<'tree> {
         }
     }
 
+    #[must_use]
     pub fn return_type(&self) -> Option<Type<'tree>> {
         match self {
             BaseFunction::Function(f) => f.return_type(),
@@ -900,6 +971,7 @@ impl<'tree> BaseFunction<'tree> {
         }
     }
 
+    #[must_use]
     pub fn body(&self) -> Option<FunctionBody<'tree>> {
         match self {
             BaseFunction::Function(f) => f.body(),
@@ -908,13 +980,15 @@ impl<'tree> BaseFunction<'tree> {
         }
     }
 
-    pub fn is_method(&self) -> bool {
+    #[must_use]
+    pub const fn is_method(&self) -> bool {
         matches!(
             self,
             BaseFunction::MethodDeclaration(_) | BaseFunction::GetMethodDeclaration(_)
         )
     }
 
+    #[must_use]
     pub fn is_instance_method(&self, sources: &str) -> bool {
         matches!(
             self,
@@ -922,11 +996,11 @@ impl<'tree> BaseFunction<'tree> {
         )
     }
 
+    #[must_use]
     pub fn receiver_type(&self) -> Option<Type<'tree>> {
         match self {
             BaseFunction::MethodDeclaration(m) => m.receiver_type(),
-            BaseFunction::GetMethodDeclaration(_) => None,
-            BaseFunction::Function(_) => None,
+            BaseFunction::Function(_) | BaseFunction::GetMethodDeclaration(_) => None,
         }
     }
 }

@@ -58,17 +58,17 @@ pub(super) fn dump_test_transactions(
         .map(|txs| {
             let transactions = txs
                 .iter()
-                .flat_map(|tx| {
+                .map(|tx| {
                     let build = build_cache.result_for_code(&tx.code);
 
                     let contract_info = build.map(|(_, info)| ContractInfo {
                         name: info.name.clone(),
                         code_boc64: info.code_boc64.clone(),
                         source_map: info.source_map.clone(),
-                        abi: info.abi.clone(),
+                        abi: info.abi,
                     });
 
-                    Some(TransactionInfo {
+                    TransactionInfo {
                         lt: tx.transaction.lt.to_string(),
                         raw_transaction: tx.raw_transaction.clone(),
                         parent_transaction: tx.parent_transaction.map(|lt| lt.to_string()),
@@ -76,14 +76,14 @@ pub(super) fn dump_test_transactions(
                         child_transactions: tx
                             .child_transactions
                             .iter()
-                            .map(|lt| lt.to_string())
+                            .map(ToString::to_string)
                             .collect(),
                         shard_account_before: Boc::encode_base64(to_cell(&tx.shard_account_before)),
                         shard_account: Boc::encode_base64(to_cell(&tx.shard_account)),
                         vm_log_diff: vmlogs::convert_to_diff_logs(&tx.vm_log),
                         executor_logs: tx.executor_logs.clone(),
                         actions: tx.actions.clone(),
-                    })
+                    }
                 })
                 .collect::<Vec<_>>();
 
@@ -135,7 +135,7 @@ pub(super) fn dump_test_transactions(
     }
 
     for (name, info) in known_contracts {
-        let contract_file = contracts_dir.join(format!("{}.json", name));
+        let contract_file = contracts_dir.join(format!("{name}.json"));
         if !contract_file.exists() {
             let info_json = serde_json::to_string(&info)?;
             fs::write(contract_file, info_json)?;

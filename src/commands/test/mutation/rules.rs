@@ -1,7 +1,7 @@
 use owo_colors::OwoColorize;
 use tree_sitter::Node;
 
-pub(crate) fn rules() -> Vec<MutationRule> {
+pub(super) fn rules() -> Vec<MutationRule> {
     vec![
         MutationRule::remove(
             "remove_assert",
@@ -10,7 +10,7 @@ pub(crate) fn rules() -> Vec<MutationRule> {
             MutationLevel::Critical,
             "assertion",
             MutationMatcher::Query {
-                query: r#"(assert_statement) @assert"#,
+                query: r"(assert_statement) @assert",
                 capture: "assert",
             },
         ),
@@ -25,7 +25,7 @@ pub(crate) fn rules() -> Vec<MutationRule> {
                     if node.kind() != "throw" {
                         return Ok(false);
                     }
-                    let parent_kind = node.parent().map(|p| p.kind()).unwrap_or("");
+                    let parent_kind = node.parent().map_or("", |p| p.kind());
                     Ok(parent_kind != "assert_statement")
                 },
             },
@@ -372,7 +372,7 @@ pub(crate) fn rules() -> Vec<MutationRule> {
             MutationLevel::Critical,
             "control-flow",
             MutationMatcher::Query {
-                query: r#"(if_statement condition: (_) @cond)"#,
+                query: r"(if_statement condition: (_) @cond)",
                 capture: "cond",
             },
             "true",
@@ -384,7 +384,7 @@ pub(crate) fn rules() -> Vec<MutationRule> {
             MutationLevel::Critical,
             "control-flow",
             MutationMatcher::Query {
-                query: r#"(if_statement condition: (_) @cond)"#,
+                query: r"(if_statement condition: (_) @cond)",
                 capture: "cond",
             },
             "false",
@@ -393,20 +393,20 @@ pub(crate) fn rules() -> Vec<MutationRule> {
 }
 
 #[derive(Clone)]
-pub(crate) enum MutationEdit {
+pub(super) enum MutationEdit {
     Remove,
     Replace { replacement: &'static str },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub(crate) enum MutationLevel {
+pub(super) enum MutationLevel {
     Critical,
     Major,
     Minor,
 }
 
 impl MutationLevel {
-    pub(crate) fn label(&self) -> &'static str {
+    pub(crate) const fn label(&self) -> &'static str {
         match self {
             MutationLevel::Critical => "critical",
             MutationLevel::Major => "major",
@@ -423,10 +423,10 @@ impl MutationLevel {
     }
 }
 
-pub(crate) type NodePredicate = for<'a> fn(Node<'a>, &str) -> anyhow::Result<bool>;
+pub(super) type NodePredicate = for<'a> fn(Node<'a>, &str) -> anyhow::Result<bool>;
 
 #[derive(Clone)]
-pub(crate) enum MutationMatcher {
+pub(super) enum MutationMatcher {
     Query {
         query: &'static str,
         capture: &'static str,
@@ -437,7 +437,7 @@ pub(crate) enum MutationMatcher {
 }
 
 #[derive(Clone)]
-pub(crate) struct MutationRule {
+pub(super) struct MutationRule {
     pub name: &'static str,
     pub description: &'static str,
     pub explanation: &'static str,
@@ -448,7 +448,7 @@ pub(crate) struct MutationRule {
 }
 
 impl MutationRule {
-    fn remove(
+    const fn remove(
         name: &'static str,
         description: &'static str,
         explanation: &'static str,
@@ -467,7 +467,7 @@ impl MutationRule {
         }
     }
 
-    fn replace(
+    const fn replace(
         name: &'static str,
         description: &'static str,
         explanation: &'static str,

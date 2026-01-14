@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fs;
 use std::process::Command;
 
-pub(crate) fn build_dependency_graph(
+pub(super) fn build_dependency_graph(
     contracts: &[(&String, &ContractConfig)],
 ) -> anyhow::Result<Vec<String>> {
     let mut graph: HashMap<String, Vec<String>> = HashMap::new();
@@ -76,7 +76,7 @@ pub(crate) fn build_dependency_graph(
     Ok(result)
 }
 
-pub(crate) fn collect_dependencies_for_contract(
+pub(super) fn collect_dependencies_for_contract(
     target_contract: &str,
     contracts: &BTreeMap<String, ContractConfig>,
 ) -> anyhow::Result<HashSet<String>> {
@@ -108,7 +108,7 @@ pub(crate) fn collect_dependencies_for_contract(
     Ok(dependencies)
 }
 
-pub(crate) fn filter_compilation_order_for_contract(
+pub(super) fn filter_compilation_order_for_contract(
     target_contract: &str,
     compilation_order: &[String],
     contracts: &BTreeMap<String, ContractConfig>,
@@ -127,7 +127,7 @@ pub(crate) fn filter_compilation_order_for_contract(
     Ok(filtered_order)
 }
 
-pub(crate) fn generate_dependency_graph_svg(
+pub(super) fn generate_dependency_graph_svg(
     compilation_order: &Vec<String>,
     contracts: &BTreeMap<String, ContractConfig>,
     output_path: &str,
@@ -228,7 +228,7 @@ fn format_cycle_error(remaining: &[String], graph: &HashMap<String, Vec<String>>
     }
 
     if cycle_path.is_empty() {
-        remaining.join(", ").to_string()
+        remaining.join(", ")
     } else {
         cycle_path.reverse();
         format!("{} → {}", cycle_path.join(" → "), cycle_path[0])

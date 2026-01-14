@@ -28,7 +28,7 @@ pub(crate) struct ConsoleReporter {
 }
 
 impl ConsoleReporter {
-    pub(crate) fn new(config: ConsoleConfig) -> Self {
+    pub(crate) const fn new(config: ConsoleConfig) -> Self {
         Self {
             config,
             count_suites: 0,
@@ -134,7 +134,7 @@ impl TestReporter for ConsoleReporter {
             format!(
                 "({} test{})",
                 tests.len(),
-                if tests.len() != 1 { "s" } else { "" }
+                if tests.len() == 1 { "" } else { "s" }
             )
             .dimmed()
         );
@@ -287,7 +287,9 @@ fn process_test_fail(
 
 fn process_assert_failure(failure: &AssertFailure, test: &TestReport, fmt: &FormatterContext) {
     if let Some(message) = &failure.message() {
-        if !message.is_empty() {
+        if message.is_empty() {
+            println!("    {}", "└─".dimmed());
+        } else {
             let highlighted_message = FormatterContext::highlight_actual_expected(message);
             println!(
                 "    {} {} {}",
@@ -295,8 +297,6 @@ fn process_assert_failure(failure: &AssertFailure, test: &TestReport, fmt: &Form
                 "Error:".bright_red(),
                 highlighted_message
             );
-        } else {
-            println!("    {}", "└─".dimmed());
         }
     } else {
         println!("    {}", "└─".dimmed());
@@ -367,7 +367,7 @@ fn process_assert_failure(failure: &AssertFailure, test: &TestReport, fmt: &Form
 
         let diff_output = format!(
             "{tx_tree}\nUnexpected transaction{from_to}\n{}{}",
-            if !params.is_empty() { "with:\n" } else { "" },
+            if params.is_empty() { "" } else { "with:\n" },
             params.join("\n"),
         );
 

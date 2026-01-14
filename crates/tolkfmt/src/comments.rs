@@ -89,6 +89,7 @@ fn prev_non_comment_sibling(node: Node) -> Option<Node> {
     None
 }
 
+#[must_use]
 pub fn collect_comments(root: Node) -> HashMap<Node, Vec<Comment>> {
     let mut comments_map: HashMap<Node, Vec<Comment>> = HashMap::new();
 
@@ -186,10 +187,7 @@ pub fn collect_comments(root: Node) -> HashMap<Node, Vec<Comment>> {
         // the node and comments separated by an empty line.
         let final_kind = match initial_kind {
             CommentKind::Leading => {
-                let last_comment_row = group_nodes
-                    .last()
-                    .map(|n| n.end_position().row)
-                    .unwrap_or(0);
+                let last_comment_row = group_nodes.last().map_or(0, |n| n.end_position().row);
                 if owner.start_position().row == last_comment_row + 1 {
                     CommentKind::Leading
                 } else {
@@ -301,6 +299,7 @@ pub fn print_inline_comments_with_alignment(
     }
 }
 
+#[must_use]
 pub fn has_fmt_ignore(ctx: &Context<'_>, comments: Option<&Vec<Comment>>) -> bool {
     let Some(comments) = comments else {
         return false;

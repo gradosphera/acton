@@ -117,6 +117,7 @@ impl InstalledSendMessageAction {
     ///     println!("Destination: {}", msg.info.dest());
     /// }
     /// ```
+    #[must_use]
     pub fn message(&self) -> Option<RelaxedMessage<'_>> {
         self.msg_cell.parse::<RelaxedMessage<'_>>().ok()
     }
@@ -176,6 +177,7 @@ impl TraceStep {
     ///     }
     /// }
     /// ```
+    #[must_use]
     pub fn stack(&'_ self) -> Option<Vec<VmStackValue<'_>>> {
         match self {
             TraceStep::Execute { stack, .. } => Some(VmStack::new(stack).parsed()),
@@ -198,20 +200,20 @@ impl Display for Trace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         for step in &self.steps {
             match step {
-                TraceStep::Execute { instr, .. } => writeln!(f, "{}", instr)?,
+                TraceStep::Execute { instr, .. } => writeln!(f, "{instr}")?,
                 TraceStep::Exception {
                     errno,
                     message,
                     handled,
                 } => {
                     if *handled {
-                        writeln!(f, "Handled exception {}: {}", errno, message)?;
+                        writeln!(f, "Handled exception {errno}: {message}")?;
                     } else {
-                        writeln!(f, "Unhandled exception {}: {}", errno, message)?;
+                        writeln!(f, "Unhandled exception {errno}: {message}")?;
                     }
                 }
                 TraceStep::FinalC5 { cell } => {
-                    writeln!(f, "Final C5: C{{{}}}", cell)?;
+                    writeln!(f, "Final C5: C{{{cell}}}")?;
                 }
             }
         }
@@ -233,6 +235,7 @@ impl Trace {
     /// ```ignore
     /// let trace = Trace::new(vm_logs, Some(5000));
     /// ```
+    #[must_use]
     pub fn new(vm_logs: &str, start_gas: Option<usize>) -> Self {
         let lines = vmlogs::parser::parse_lines(vm_logs);
         Self::from_lines(lines, start_gas)
@@ -247,6 +250,7 @@ impl Trace {
     ///
     /// * `lines` — A vector of results, each containing a parsed [`VmLine`] or an error string.
     /// * `start_gas` — Optional initial gas limit.
+    #[must_use]
     pub fn from_lines(lines: Vec<Result<VmLine<'_>, String>>, start_gas: Option<usize>) -> Trace {
         let start_gas = start_gas.unwrap_or(1_000_000);
         let mut gas_remaining = start_gas;
@@ -295,9 +299,9 @@ impl Trace {
                         // very unlikely
                         steps.push(TraceStep::Execute {
                             instr,
-                            stack: "".to_owned(),
+                            stack: String::new(),
                             offset: 0,
-                            hash: "".to_owned(),
+                            hash: String::new(),
                             gas: gas_cost,
                         });
                     }
@@ -316,19 +320,18 @@ impl Trace {
                 }
                 VmLine::VmFinalC5 { value } => {
                     let cell = match value {
-                        CellLike::Cell(h) => h.to_owned(),
-                        CellLike::Builder(h) => h.to_owned(),
+                        CellLike::Builder(h) | CellLike::Cell(h) => h.to_owned(),
                     };
                     steps.push(TraceStep::FinalC5 { cell });
                 }
                 VmLine::VmLimitChanged { limit } => {
                     gas_remaining = limit.parse().unwrap_or(gas_remaining);
                 }
-                _ => {}
+                VmLine::VmUnknown { .. } => {}
             }
         }
 
-        Trace { steps, start_gas }
+        Trace { start_gas, steps }
     }
 
     /// Extracts all [`InstalledAction`]s from the execution trace.
@@ -342,6 +345,7 @@ impl Trace {
     /// let actions = trace.actions();
     /// println!("Total queued actions: {}", actions.actions.len());
     /// ```
+    #[must_use]
     pub fn actions(&self) -> InstalledActions {
         let actions = self
             .steps
@@ -412,7 +416,8 @@ pub struct InstalledActions {
 
 impl InstalledActions {
     /// Creates an empty collection of installed actions.
-    pub fn empty() -> Self {
+    #[must_use]
+    pub const fn empty() -> Self {
         Self { actions: vec![] }
     }
 
@@ -425,6 +430,7 @@ impl InstalledActions {
     ///     println!("Found queued message at offset {}", msg.loc_offset);
     /// }
     /// ```
+    #[must_use]
     pub fn find_message(&self, hash: &String) -> Option<&InstalledSendMessageAction> {
         self.actions
             .iter()
@@ -444,6 +450,7 @@ impl InstalledActions {
     ///     println!("Found reservation at offset {}", reserve.loc_offset);
     /// }
     /// ```
+    #[must_use]
     pub fn find_reserve(&self, mode: i32, amount: &BigInt) -> Option<&InstalledReserveAction> {
         self.actions
             .iter()
@@ -475,6 +482,7 @@ impl ExecutedActions {
     ///     println!("Executed: {:?}", action);
     /// }
     /// ```
+    #[must_use]
     pub fn from(logs: &str) -> ExecutedActions {
         let parsed_lines = parse_executor_lines(logs);
         let mut actions = Vec::new();
@@ -484,7 +492,7 @@ impl ExecutedActions {
                 Ok(ExecutorLine::ProcessSendMessage { message_hash }) => {
                     actions.push(ExecutedAction::SendMessage {
                         hash: message_hash.to_string(),
-                        remaining_balance: BigInt::from(0), // Will be updated by RemainingBalance
+                        remaining_balance: BigInt::ZERO, // Will be updated by RemainingBalance
                     });
                 }
                 Ok(ExecutorLine::RemainingBalance { balance }) => {
@@ -492,17 +500,17 @@ impl ExecutedActions {
                         remaining_balance, ..
                     }) = actions.last_mut()
                     {
-                        *remaining_balance = balance.parse::<BigInt>().unwrap_or(BigInt::from(0));
+                        *remaining_balance = balance.parse::<BigInt>().unwrap_or(BigInt::ZERO);
                     }
                 }
                 Ok(ExecutorLine::ProcessRawReserve { mode }) => {
                     actions.push(ExecutedAction::ReserveCurrency {
                         mode: mode.parse().unwrap_or(0),
-                        reserve: BigInt::from(0), // Will be filled from ActionReserveCurrency if available
-                        balance: BigInt::from(0),
-                        original_balance: BigInt::from(0),
-                        changed_remaining_balance: BigInt::from(0), // Will be updated by ChangedBalance
-                        changed_reserved_balance: BigInt::from(0), // Will be updated by ChangedBalance
+                        reserve: BigInt::ZERO, // Will be filled from ActionReserveCurrency if available
+                        balance: BigInt::ZERO,
+                        original_balance: BigInt::ZERO,
+                        changed_remaining_balance: BigInt::ZERO, // Will be updated by ChangedBalance
+                        changed_reserved_balance: BigInt::ZERO, // Will be updated by ChangedBalance
                     });
                 }
                 Ok(ExecutorLine::ActionReserveCurrency {
@@ -519,17 +527,17 @@ impl ExecutedActions {
                         ..
                     }) = actions.last_mut()
                     {
-                        *r = reserve.parse().unwrap_or(BigInt::from(0));
-                        *b = balance.parse().unwrap_or(BigInt::from(0));
-                        *ob = original_balance.parse().unwrap_or(BigInt::from(0));
+                        *r = reserve.parse().unwrap_or(BigInt::ZERO);
+                        *b = balance.parse().unwrap_or(BigInt::ZERO);
+                        *ob = original_balance.parse().unwrap_or(BigInt::ZERO);
                     } else {
                         actions.push(ExecutedAction::ReserveCurrency {
                             mode: mode_val,
-                            reserve: reserve.parse().unwrap_or(BigInt::from(0)),
-                            balance: balance.parse().unwrap_or(BigInt::from(0)),
-                            original_balance: original_balance.parse().unwrap_or(BigInt::from(0)),
-                            changed_remaining_balance: BigInt::from(0), // Will be updated by ChangedBalance
-                            changed_reserved_balance: BigInt::from(0), // Will be updated by ChangedBalance
+                            reserve: reserve.parse().unwrap_or(BigInt::ZERO),
+                            balance: balance.parse().unwrap_or(BigInt::ZERO),
+                            original_balance: original_balance.parse().unwrap_or(BigInt::ZERO),
+                            changed_remaining_balance: BigInt::ZERO, // Will be updated by ChangedBalance
+                            changed_reserved_balance: BigInt::ZERO, // Will be updated by ChangedBalance
                         });
                     }
                 }
@@ -543,12 +551,10 @@ impl ExecutedActions {
                         ..
                     }) = actions.last_mut()
                     {
-                        *changed_remaining_balance = remaining_balance
-                            .parse::<BigInt>()
-                            .unwrap_or(BigInt::from(0));
-                        *changed_reserved_balance = reserved_balance
-                            .parse::<BigInt>()
-                            .unwrap_or(BigInt::from(0));
+                        *changed_remaining_balance =
+                            remaining_balance.parse::<BigInt>().unwrap_or(BigInt::ZERO);
+                        *changed_reserved_balance =
+                            reserved_balance.parse::<BigInt>().unwrap_or(BigInt::ZERO);
                     }
                 }
                 _ => {}
@@ -565,7 +571,7 @@ mod tests {
 
     #[test]
     fn test_trace() {
-        let logs = r#"
+        let logs = r"
 stack: [ 50000607 50000607 C{B5EE9C7201020A010001280002B34801EFD2E8E5A9093E903E6734A920503635CB733D16202D807D5EA2909CBAF757E33FD2955F3F91525CD4E9514C71D49B7D2CF8703DD1110467F7FE496BCE33949F29D00BEBCB7C08029E2BD000004CBCF1113784D26D049F1901020114FF00F4A413F4BCF2C80B030114FF00F4A413F4BCF2C80B05027AD330F891F240ED44F80721830AF94130F8075003A17FF83B0280647FF837A08010FB02F892C8CF8508FA5270CF0B6EC98306FB0072FB0688FB0488ED54040400000201620607009CD0F8919130E020D72C23F43B277C8E1831ED44D001D70B1F01D61FD70B1F58A001C8CECB1FC9ED54E0D72C21D3A97834318E1230ED44D0D61F30C8CECF9000000002C9ED54E0810FF601C700F2F402015808090005BBE1780017B8AD0ED44D0D31F31D70B1F8} CS{B5EE9C72010101010002000000} 0 ]
 code cell hash: 734EFDF436945A5CB58154AAFB58A8258087B27EE31E98876254E4385F47B51D offset: 0
 execute SETCP 0
@@ -599,7 +605,7 @@ code cell hash: 32F41F1164EC59D6A206558EA1876655ED1CB186A793E2E53D05AD265F319507
 execute GASCONSUMED
 gas remaining: 4692
 stack: [ 50000607 50000607 C{B5EE9C7201020A010001280002B34801EFD2E8E5A9093E903E6734A920503635CB733D16202D807D5EA2909CBAF757E33FD2955F3F91525CD4E9514C71D49B7D2CF8703DD1110467F7FE496BCE33949F29D00BEBCB7C08029E2BD000004CBCF1113784D26D049F1901020114FF00F4A413F4BCF2C80B030114FF00F4A413F4BCF2C80B05027AD330F891F240ED44F80721830AF94130F8075003A17FF83B0280647FF837A08010FB02F892C8CF8508FA5270CF0B6EC98306FB0072FB0688FB0488ED54040400000201620607009CD0F8919130E020D72C23F43B277C8E1831ED44D001D70B1F01D61FD70B1F58A001C8CECB1FC9ED54E0D72C21D3A97834318E1230ED44D0D61F30C8CECF9000000002C9ED54E0810FF601C700F2F402015808090005BBE1780017B8AD0ED44D0D31F31D70B1F8} C{B5EE9C7201010601007A000114FF00F4A413F4BCF2C80B010201620203009CD0F8919130E020D72C23F43B277C8E1831ED44D001D70B1F01D61FD70B1F58A001C8CECB1FC9ED54E0D72C21D3A97834318E1230ED44D0D61F30C8CECF9000000002C9ED54E0810FF601C700F2F402015804050005BBE1780017B8AD0ED44D0D31F31D70B1F8} 308 ]
-        "#;
+        ";
 
         let trace = Trace::new(logs, Some(5000));
 
@@ -617,12 +623,12 @@ stack: [ 50000607 50000607 C{B5EE9C7201020A010001280002B34801EFD2E8E5A9093E903E6
 
     #[test]
     fn test_trace_exception() {
-        let logs = r#"
+        let logs = r"
 execute LDSTDADDR
 handling exception code 9: cannot load a MsgAddressInt
 default exception handler, terminating vm with exit code 9
 final c5: C{B5EE9C72010101010002000000}
-        "#;
+        ";
         let trace = Trace::new(logs, None);
         assert_eq!(trace.steps.len(), 2);
 
@@ -648,11 +654,11 @@ final c5: C{B5EE9C72010101010002000000}
 
     #[test]
     fn test_trace_exception_handled() {
-        let logs = r#"
+        let logs = r"
 execute CTOS
 handling exception code 9: failed to load library cell
 execute FOO
-        "#;
+        ";
         let trace = Trace::new(logs, None);
         assert_eq!(trace.steps.len(), 1);
 

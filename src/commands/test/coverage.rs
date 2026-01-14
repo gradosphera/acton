@@ -67,7 +67,7 @@ pub(super) fn collect_coverage(emulations: &EmulationsState, build_cache: &Build
                 continue;
             };
             if line_hits > &0 {
-                covered_lines_count += 1
+                covered_lines_count += 1;
             }
         }
 
@@ -78,7 +78,7 @@ pub(super) fn collect_coverage(emulations: &EmulationsState, build_cache: &Build
             line_hits,
             executable_lines,
             branch_hits,
-        })
+        });
     }
 
     Coverage { files }
@@ -103,7 +103,7 @@ fn collect_source_data<'a>(
         let source_map = build_result.1.source_map;
         let logs = &message.vm_log;
 
-        data.push(SourceMapAndLogs { source_map, logs })
+        data.push(SourceMapAndLogs { source_map, logs });
     }
 
     for get_result in emulations.get_methods() {
@@ -117,7 +117,7 @@ fn collect_source_data<'a>(
         let source_map = build_result.1.source_map;
         let logs = &get_result.vm_log;
 
-        data.push(SourceMapAndLogs { source_map, logs })
+        data.push(SourceMapAndLogs { source_map, logs });
     }
     data
 }
@@ -476,8 +476,7 @@ fn generate_text_report(coverage: &Coverage) -> String {
 
     result.push_str("Coverage Summary:\n");
     result.push_str(&format!(
-        "Lines: {}/{} ({:.2}%)\n",
-        covered_lines, total_lines, coverage_percentage
+        "Lines: {covered_lines}/{total_lines} ({coverage_percentage:.2}%)\n"
     ));
 
     let mut total_hits = 0u64;
@@ -487,7 +486,7 @@ fn generate_text_report(coverage: &Coverage) -> String {
         }
     }
 
-    result.push_str(&format!("Total Hits: {}\n", total_hits));
+    result.push_str(&format!("Total Hits: {total_hits}\n"));
     result.push('\n');
 
     for file_coverage in &coverage.files {
@@ -508,8 +507,7 @@ fn generate_text_report(coverage: &Coverage) -> String {
 
             for (line_idx, line) in lines.iter().enumerate() {
                 let line_number = line_idx + 1;
-                let line_number_padded =
-                    format!("{:>width$}", line_number, width = max_line_number_width);
+                let line_number_padded = format!("{line_number:>max_line_number_width$}");
 
                 let is_executable = file_coverage.executable_lines.contains(&(line_idx as i64));
 
@@ -520,19 +518,15 @@ fn generate_text_report(coverage: &Coverage) -> String {
                         .copied()
                         .unwrap_or(0);
                     let status = if hits > 0 { "✓ " } else { "✗ " };
-                    let hits_info = format!(" hits:{}", hits);
+                    let hits_info = format!(" hits:{hits}");
 
                     let padding = " ".repeat(code_width.saturating_sub(line.len()));
                     result.push_str(&format!(
-                        "{} {}| {}{}|{}\n",
-                        line_number_padded, status, line, padding, hits_info
+                        "{line_number_padded} {status}| {line}{padding}|{hits_info}\n"
                     ));
                 } else {
                     let padding = " ".repeat(code_width.saturating_sub(line.len()));
-                    result.push_str(&format!(
-                        "{}   | {}{}|\n",
-                        line_number_padded, line, padding
-                    ));
+                    result.push_str(&format!("{line_number_padded}   | {line}{padding}|\n"));
                 }
             }
         } else {

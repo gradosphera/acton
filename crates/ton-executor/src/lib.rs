@@ -16,7 +16,7 @@
 //! ## Key Concepts
 //!
 //! ### Data Format
-//! Most data (messages, account states, stacks) is exchanged as **Base64-encoded Bag of Cells (BoC)** strings.
+//! Most data (messages, account states, stacks) is exchanged as **Base64-encoded Bag of Cells (`BoC`)** strings.
 //!
 //! ### Concurrency and Thread Safety
 //! **Important:** The underlying C++ implementation relies on **global variables**.

@@ -2,19 +2,18 @@ use crate::common::assertion;
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use crate::support::snapshots::normalize_output;
-
 use std::fs;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
-const NON_CONTRACT_FILE: &str = r#"
+const NON_CONTRACT_FILE: &str = r"
 fun helper(): int {
     return 42;
 }
-"#;
+";
 
 // ========================================
 // Basic Init Tests
@@ -413,20 +412,18 @@ fn test_init_patches_gitignore_no_duplicates() {
 
     let gitignore_path = project.path().join(".gitignore");
     let content = fs::read_to_string(&gitignore_path).unwrap();
-    let lines = content.lines().map(|l| l.trim()).collect::<Vec<_>>();
+    let lines = content.lines().map(str::trim).collect::<Vec<_>>();
 
     let acton_count = lines.iter().filter(|&&l| l == ".acton/").count();
     assert_eq!(
         acton_count, 1,
-        "Should only have one .acton/ entry, found {}\nContent:\n{}",
-        acton_count, content
+        "Should only have one .acton/ entry, found {acton_count}\nContent:\n{content}"
     );
 
     let wallets_count = lines.iter().filter(|&&l| l == "wallets.toml").count();
     assert_eq!(
         wallets_count, 1,
-        "Should only have one wallets.toml entry, found {}\nContent:\n{}",
-        wallets_count, content
+        "Should only have one wallets.toml entry, found {wallets_count}\nContent:\n{content}"
     );
 
     output.assert_file_snapshot_matches(

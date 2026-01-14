@@ -89,7 +89,7 @@ impl ProjectBuilder {
     /// .with_license(None)                 // No license header
     /// ```
     pub(crate) fn with_license(mut self, license: Option<&str>) -> Self {
-        self.license = license.map(|s| s.to_string());
+        self.license = license.map(ToString::to_string);
         self
     }
 
@@ -130,7 +130,7 @@ impl ProjectBuilder {
         self
     }
 
-    /// Add a contract from a BoC file
+    /// Add a contract from a `BoC` file
     ///
     /// # Examples
     /// ```
@@ -147,12 +147,13 @@ impl ProjectBuilder {
         self
     }
 
-    /// Add a contract with simple dependencies (default EmbedCode)
+    /// Add a contract with simple dependencies (default `EmbedCode`)
     ///
     /// # Examples
     /// ```
     /// .contract_with_deps("simple", CONTRACT_CODE, vec!["child"])
     /// ```
+    #[allow(clippy::needless_pass_by_value)]
     pub(crate) fn contract_with_deps(mut self, name: &str, code: &str, depends: Vec<&str>) -> Self {
         self.contracts.push(ContractDef {
             name: name.to_string(),
@@ -160,7 +161,7 @@ impl ProjectBuilder {
             depends: depends
                 .iter()
                 .map(|s| DependencyDef {
-                    name: s.to_string(),
+                    name: (*s).to_string(),
                     kind: None,
                     function: None,
                     path: None,
@@ -194,10 +195,10 @@ impl ProjectBuilder {
             depends: depends
                 .iter()
                 .map(|(dep_name, kind, function, path)| DependencyDef {
-                    name: dep_name.to_string(),
-                    kind: kind.map(|s| s.to_string()),
-                    function: function.map(|s| s.to_string()),
-                    path: path.map(|s| s.to_string()),
+                    name: (*dep_name).to_string(),
+                    kind: kind.map(ToString::to_string),
+                    function: function.map(ToString::to_string),
+                    path: path.map(ToString::to_string),
                 })
                 .collect(),
             output: None,
@@ -206,7 +207,7 @@ impl ProjectBuilder {
         self
     }
 
-    /// Add a contract with BoC output
+    /// Add a contract with `BoC` output
     ///
     /// # Examples
     /// ```
@@ -371,6 +372,8 @@ impl ProjectBuilder {
         test_config: &Option<TestConfig>,
         license: &Option<String>,
     ) {
+        use std::fmt::Write as _;
+
         let license_line = if let Some(lic) = license {
             format!("license = \"{lic}\"\n")
         } else {
@@ -398,12 +401,14 @@ version = "0.1.0"
                 format!("contracts/{}.{}", contract.name, file_extension)
             };
 
-            toml_content.push_str(&format!(
+            write!(
+                toml_content,
                 "[contracts.{}]\nname = \"{}\"\nsrc = \"{}\"\n",
-                contract.name.to_lowercase().replace("-", "_"),
+                contract.name.to_lowercase().replace('-', "_"),
                 contract.name,
                 contract_path,
-            ));
+            )
+            .ok();
 
             // Generate dependencies
             if contract.depends.is_empty() {
@@ -457,7 +462,7 @@ version = "0.1.0"
         if !scripts.is_empty() {
             toml_content.push_str("[scripts]\n");
             for (name, cmd) in scripts {
-                toml_content.push_str(&format!("{} = \"{}\"\n", name, cmd));
+                toml_content.push_str(&format!("{name} = \"{cmd}\"\n"));
             }
             toml_content.push('\n');
         }
@@ -726,7 +731,7 @@ impl ActonCommand {
         self
     }
 
-    /// Start disasm command (without input - use with disasm_file or disasm_string)
+    /// Start disasm command (without input - use with `disasm_file` or `disasm_string`)
     ///
     /// # Examples
     /// ```
@@ -792,7 +797,7 @@ impl ActonCommand {
         self
     }
 
-    /// Specify API key for TonCenter requests
+    /// Specify API key for `TonCenter` requests
     ///
     /// # Examples
     /// ```
@@ -942,7 +947,7 @@ impl ActonCommand {
         self
     }
 
-    /// Enable JUnit merge mode (all suites in single file)
+    /// Enable `JUnit` merge mode (all suites in single file)
     ///
     /// # Examples
     /// ```
@@ -1084,7 +1089,7 @@ impl ActonCommand {
     /// .build().with_graph(Some("my.svg")) // Generate my.svg
     /// ```
     pub(crate) fn with_graph(mut self, path: Option<&str>) -> Self {
-        self.build_graph = Some(path.map(|s| s.to_string()));
+        self.build_graph = Some(path.map(ToString::to_string));
         self
     }
 

@@ -193,7 +193,7 @@ fn airdrop_wallet(name: Option<String>, faucet_url: String, json: bool) -> anyho
         println!("{} Fetching PoW challenge...", "→".blue().bold());
     }
     let challenge_res = client
-        .get(format!("{}/challenge", faucet_url))
+        .get(format!("{faucet_url}/challenge"))
         .send()
         .context("Failed to get challenge from faucet")?;
 
@@ -228,7 +228,7 @@ fn airdrop_wallet(name: Option<String>, faucet_url: String, json: bool) -> anyho
 
     // 3. Send claim
     let response = client
-        .post(format!("{}/claim", faucet_url))
+        .post(format!("{faucet_url}/claim"))
         .json(&serde_json::json!({
             "address": address,
             "challenge": challenge,
@@ -261,10 +261,9 @@ fn airdrop_wallet(name: Option<String>, faucet_url: String, json: bool) -> anyho
             if let Ok(res) = serde_json::from_str::<serde_json::Value>(&body_text) {
                 res.get("error")
                     .and_then(|e| e.as_str())
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| body_text.clone())
+                    .map_or_else(|| body_text.clone(), ToString::to_string)
             } else {
-                body_text.clone()
+                body_text
             }
         };
 
@@ -277,7 +276,7 @@ fn airdrop_wallet(name: Option<String>, faucet_url: String, json: bool) -> anyho
                 }))?
             );
         } else {
-            anyhow::bail!("Faucet returned error {}: {}", status, error_msg);
+            anyhow::bail!("Faucet returned error {status}: {error_msg}");
         }
     }
 
@@ -293,7 +292,7 @@ fn solve_challenge(challenge: &str, difficulty: u32) -> u64 {
         let result = hasher.finalize();
 
         let mut zero_bits = 0;
-        for &byte in result.iter() {
+        for &byte in &result {
             let leading_zeros = byte.leading_zeros();
             zero_bits += leading_zeros;
             if leading_zeros < 8 {
@@ -385,7 +384,7 @@ fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::R
             .iter()
             .map(|(_, _, addr)| addr.as_str())
             .collect();
-        match client.get_account_states(addresses) {
+        match client.get_account_states(&addresses) {
             Ok(states) => {
                 for state in states {
                     if let Some(b) = state.balance
@@ -411,7 +410,7 @@ fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::R
             if let Some(b) = balances.get(&address) {
                 let balance_ton = *b as f64 / 1_000_000_000.0;
                 balance_val = Some(*b);
-                balance_info = format!("— {}", format!("{:.4} TON", balance_ton).green());
+                balance_info = format!("— {}", format!("{balance_ton:.4} TON").green());
             } else {
                 balance_val = Some(0.into());
                 balance_info = format!("— {}", "0 TON".dimmed());
@@ -502,7 +501,7 @@ fn get_or_prompt_name(name: Option<String>) -> anyhow::Result<String> {
         Some(n) => {
             let normalized = normalize_wallet_name(&n);
             if normalized.is_empty() {
-                anyhow::bail!("Wallet name '{}' is invalid", n);
+                anyhow::bail!("Wallet name '{n}' is invalid");
             }
             Ok(normalized)
         }
@@ -636,7 +635,7 @@ fn save_wallet_to_config(
         .entry(name)
         .or_insert(Item::Table(Table::new()))
         .as_table_mut()
-        .with_context(|| format!("wallets.{} is not a table", name))?;
+        .with_context(|| format!("wallets.{name} is not a table"))?;
 
     wallet["kind"] = value(wallet_version_to_string(&version));
     wallet["workchain"] = value(0i64);
@@ -654,7 +653,7 @@ fn save_wallet_to_config(
         .entry("expected")
         .or_insert(Item::Table(Table::new()))
         .as_table_mut()
-        .with_context(|| format!("wallets.{}.expected is not a table", name))?;
+        .with_context(|| format!("wallets.{name}.expected is not a table"))?;
 
     expected["address-testnet"] = value(wallet_address);
 
@@ -711,10 +710,10 @@ fn new_wallet(
 
     let use_secure_store = get_or_prompt_use_keystore(secure)?;
 
-    let project_name = if !is_global {
-        config.map(|c| c.package.name)
-    } else {
+    let project_name = if is_global {
         None
+    } else {
+        config.map(|c| c.package.name)
     };
 
     let (mnemonic_str_opt, mnemonic_keyring_opt) =
@@ -791,7 +790,7 @@ fn maybe_store_mnemonic_in_keystore(
 
 fn keyring_id_for_wallet(name: &str, project_name: Option<String>) -> String {
     if let Some(pn) = project_name {
-        format!("{}:{}", pn, name)
+        format!("{pn}:{name}")
     } else {
         name.to_string()
     }
@@ -830,10 +829,10 @@ fn import_wallet(
 
     let use_secure_store = get_or_prompt_use_keystore(secure)?;
 
-    let project_name = if !is_global {
-        config.map(|c| c.package.name)
-    } else {
+    let project_name = if is_global {
         None
+    } else {
+        config.map(|c| c.package.name)
     };
 
     let (mnemonic_str_opt, mnemonic_keyring_opt) =
@@ -902,7 +901,7 @@ fn get_or_prompt_use_keystore(secure: Option<bool>) -> anyhow::Result<bool> {
                 .prompt()?
         }
     } else {
-        if let Some(true) = secure {
+        if secure == Some(true) {
             anyhow::bail!(
                 "Secure native store is not supported or accessible in this environment, but --secure was explicitly requested."
             );

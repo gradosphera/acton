@@ -3,7 +3,7 @@ use crate::debugging::support::debug::DebugBuilder;
 
 #[test]
 fn test_repeat_10_step_over() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 fun main() {
     var a = 0;
     repeat(10) {
@@ -11,7 +11,7 @@ fun main() {
     }
     return a + 1;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -37,7 +37,7 @@ fun main() {
 
 #[test]
 fn test_repeat_2_step_in() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 fun main() {
     var a = 0;
     repeat(2) {
@@ -45,7 +45,7 @@ fun main() {
     }
     return a + 1;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 
@@ -84,7 +84,7 @@ fun main() {
 
 #[test]
 fn test_repeat_2_step_over_with_complex_body() -> anyhow::Result<()> {
-    let code = r#"
+    let code = r"
 fun main() {
     var a = 0;
     repeat(2) {
@@ -96,7 +96,7 @@ fun main() {
     }
     return a + 1;
 }
-"#;
+";
 
     let session = DebugBuilder::new("debug-callback").code(code).build();
 

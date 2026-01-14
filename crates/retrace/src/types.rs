@@ -14,7 +14,7 @@ use tycho_types::models::{IntAddr, OutAction, StdAddr};
 pub struct BaseTxInfo {
     /// Logical‑time of the transaction.
     pub lt: u64,
-    /// Raw 256‑bit hash of the transaction BoC.
+    /// Raw 256‑bit hash of the transaction `BoC`.
     pub hash: [u8; 32],
     /// Contract address that issued / owns the transaction.
     pub address: StdAddr,

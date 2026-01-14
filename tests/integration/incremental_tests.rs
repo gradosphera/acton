@@ -3,10 +3,10 @@ use crate::support::compilation::CompilationOrder;
 use crate::support::project::ProjectBuilder;
 use std::fs;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 // ========================================
 // Basic Cache Tests
@@ -42,12 +42,12 @@ fn test_incremental_single_contract_change() {
     // Modify contract
     fs::write(
         project.path().join("contracts/simple.tolk"),
-        r#"
+        r"
         fun onInternalMessage(in: InMessage) {
             // Added comment
         }
         fun onBouncedMessage(_: InMessageBounced) {}
-    "#,
+    ",
     )
     .expect("Write modified contract");
 
@@ -67,13 +67,13 @@ fn test_incremental_whitespace_only_change() {
 
     fs::write(
         project.path().join("contracts/simple.tolk"),
-        r#"
-        
+        r"
+
         fun onInternalMessage(in: InMessage) {}
-        
+
         fun onBouncedMessage(_: InMessageBounced) {}
-        
-    "#,
+
+    ",
     )
     .expect("Write contract");
 
@@ -104,19 +104,19 @@ fn test_incremental_base_contract_change() {
     // Modify base contract
     fs::write(
         project.path().join("contracts/base.tolk"),
-        r#"
+        r"
         fun onInternalMessage(in: InMessage) {
             // Modified base
         }
         fun onBouncedMessage(_: InMessageBounced) {}
-    "#,
+    ",
     )
     .expect("Write base");
 
     let third = project.acton().build().run().success();
     let order = CompilationOrder::from_stdout(&third.get_normalized_stdout());
 
-    order.assert_chain(&["base", "dependent"])
+    order.assert_chain(&["base", "dependent"]);
 }
 
 #[test]
@@ -131,12 +131,12 @@ fn test_incremental_dependent_contract_change() {
     // Modify only dependent
     fs::write(
         project.path().join("contracts/dependent.tolk"),
-        r#"
+        r"
         fun onInternalMessage(in: InMessage) {
             // Modified dependent
         }
         fun onBouncedMessage(_: InMessageBounced) {}
-    "#,
+    ",
     )
     .expect("Write dependent");
 
@@ -162,12 +162,12 @@ fn test_incremental_deep_chain_base_change() {
     // Modify level0 (base)
     fs::write(
         project.path().join("contracts/level0.tolk"),
-        r#"
+        r"
         fun onInternalMessage(in: InMessage) {
             // Modified level0
         }
         fun onBouncedMessage(_: InMessageBounced) {}
-    "#,
+    ",
     )
     .expect("Write level0");
 
@@ -192,12 +192,12 @@ fn test_incremental_deep_chain_mid_change() {
     // Modify level1 (middle)
     fs::write(
         project.path().join("contracts/level1.tolk"),
-        r#"
+        r"
         fun onInternalMessage(in: InMessage) {
             // Modified level1
         }
         fun onBouncedMessage(_: InMessageBounced) {}
-    "#,
+    ",
     )
     .expect("Write level1");
 
@@ -227,12 +227,12 @@ fn test_incremental_diamond_base_change() {
     // Modify base
     fs::write(
         project.path().join("contracts/base.tolk"),
-        r#"
+        r"
         fun onInternalMessage(in: InMessage) {
             // Modified base
         }
         fun onBouncedMessage(_: InMessageBounced) {}
-    "#,
+    ",
     )
     .expect("Write base");
 
@@ -259,12 +259,12 @@ fn test_incremental_diamond_branch_change() {
     // Modify only left branch
     fs::write(
         project.path().join("contracts/left.tolk"),
-        r#"
+        r"
         fun onInternalMessage(in: InMessage) {
             // Modified left
         }
         fun onBouncedMessage(_: InMessageBounced) {}
-    "#,
+    ",
     )
     .expect("Write left");
 
@@ -286,17 +286,17 @@ fn test_incremental_library_file_change() {
     let project = ProjectBuilder::new("incr-lib-change")
         .file(
             "common/utils",
-            r#"
+            r"
             fun helper(): int {
                 return 42;
             }
-        "#,
+        ",
         )
         .contract(
             "main",
             r#"
             import "../common/utils"
-            
+
             fun onInternalMessage(in: InMessage) {
                 val x = helper();
             }
@@ -310,11 +310,11 @@ fn test_incremental_library_file_change() {
     // Modify library file
     fs::write(
         project.path().join("common/utils.tolk"),
-        r#"
+        r"
             fun helper(): int {
                 return 43; // Changed
             }
-        "#,
+        ",
     )
     .expect("Write lib");
 
@@ -331,9 +331,9 @@ fn test_incremental_nested_import_change() {
     let project = ProjectBuilder::new("incr-nested-import")
         .file(
             "common/base",
-            r#"
+            r"
             fun baseFunc(): int { return 1; }
-        "#,
+        ",
         )
         .file(
             "common/wrapper",
@@ -346,7 +346,7 @@ fn test_incremental_nested_import_change() {
             "main",
             r#"
             import "../common/wrapper"
-            
+
             fun onInternalMessage(in: InMessage) {
                 val x = wrapperFunc();
             }
@@ -360,9 +360,9 @@ fn test_incremental_nested_import_change() {
     // Modify base common nested import
     fs::write(
         project.path().join("common/base.tolk"),
-        r#"
+        r"
             fun baseFunc(): int { return 2; } // Changed
-        "#,
+        ",
     )
     .expect("Write base lib");
 
@@ -447,12 +447,12 @@ fn test_incremental_filtered_build() {
     // Modify contract1
     fs::write(
         project.path().join("contracts/contract1.tolk"),
-        r#"
+        r"
         fun onInternalMessage(in: InMessage) {
             // Modified
         }
         fun onBouncedMessage(_: InMessageBounced) {}
-    "#,
+    ",
     )
     .expect("Write contract1");
 
@@ -483,12 +483,12 @@ fn test_incremental_filtered_with_deps() {
     // Modify base
     fs::write(
         project.path().join("contracts/base.tolk"),
-        r#"
+        r"
         fun onInternalMessage(in: InMessage) {
             // Modified base
         }
         fun onBouncedMessage(_: InMessageBounced) {}
-    "#,
+    ",
     )
     .expect("Write base");
 
@@ -527,12 +527,12 @@ fn test_incremental_multiple_changes() {
         fs::write(
             project.path().join(format!("contracts/contract{i}.tolk")),
             format!(
-                r#"
+                r"
                     fun onInternalMessage(in: InMessage) {{
                         // Modified {i}
                     }}
                     fun onBouncedMessage(_: InMessageBounced) {{}}
-                "#
+                "
             ),
         )
         .expect("Write contract");
