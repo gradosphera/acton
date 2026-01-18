@@ -2,7 +2,7 @@ use crate::ast::expressions::NullLit;
 use crate::ast::node::{AstChildren, RawNode};
 use crate::ast::traits::HasTreeSitterKind;
 use crate::ast::{AstNode, InvalidNodeKindError, TryFromNode};
-use crate::impl_ast_node;
+use crate::{AstNodeBytesKind, impl_ast_node};
 use tree_sitter::Node;
 
 #[derive(Clone, Copy, Debug)]
@@ -44,16 +44,16 @@ impl<'tree> Type<'tree> {
 
 impl<'t> From<Node<'t>> for Type<'t> {
     fn from(node: Node<'t>) -> Self {
-        match node.kind() {
-            "type_identifier" => Type::TypeIdent(TypeIdent(node)),
-            "type_instantiatedTs" => Type::TypeInstantiatedTs(TypeInstantiatedTs(node)),
-            "tensor_type" => Type::TensorType(TensorType(node)),
-            "tuple_type" => Type::TupleType(TupleType(node)),
-            "parenthesized_type" => Type::ParenthesizedType(ParenthesizedType(node)),
-            "fun_callable_type" => Type::FunCallableType(FunCallableType(node)),
-            "nullable_type" => Type::NullableType(NullableType(node)),
-            "union_type" => Type::UnionType(UnionType(node)),
-            "null_literal" => Type::NullLit(NullLit(node)),
+        match node.kind_bytes() {
+            b"type_identifier" => Type::TypeIdent(TypeIdent(node)),
+            b"type_instantiatedTs" => Type::TypeInstantiatedTs(TypeInstantiatedTs(node)),
+            b"tensor_type" => Type::TensorType(TensorType(node)),
+            b"tuple_type" => Type::TupleType(TupleType(node)),
+            b"parenthesized_type" => Type::ParenthesizedType(ParenthesizedType(node)),
+            b"fun_callable_type" => Type::FunCallableType(FunCallableType(node)),
+            b"nullable_type" => Type::NullableType(NullableType(node)),
+            b"union_type" => Type::UnionType(UnionType(node)),
+            b"null_literal" => Type::NullLit(NullLit(node)),
             _ => Type::Unmapped(RawNode::new(node)),
         }
     }

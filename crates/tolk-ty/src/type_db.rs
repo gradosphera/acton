@@ -1,6 +1,6 @@
 use crate::type_interner::{TyId, TypeInterner};
 use crate::types::{AddressKind, TyData};
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tolk_resolver::file_db::FileDb;
 use tolk_resolver::file_index::{
@@ -53,15 +53,15 @@ pub struct TypeDb<'a> {
     /// It is also used to get information about resolved symbols by their [`Span`].
     pub project_index: &'a ProjectIndex,
     /// Stores all inferred types for top-level definitions by their [`SymbolId`].
-    pub top_level_types: HashMap<SymbolId, TyId>,
+    pub top_level_types: FxHashMap<SymbolId, TyId>,
     /// Stores all receiver types for methods by their [`SymbolId`].
-    pub receiver_types: HashMap<SymbolId, TyId>,
+    pub receiver_types: FxHashMap<SymbolId, TyId>,
 
     /// Caches types by the AST node ID that represents a [`Type`].
-    type_lower_cache: HashMap<usize, TyId>,
+    type_lower_cache: FxHashMap<usize, TyId>,
     /// Keeps track of definitions that have already been processed or are currently
     /// being processed (to handle `A -> B -> A` dependencies).
-    currently_lowering: HashSet<SymbolId>,
+    currently_lowering: FxHashSet<SymbolId>,
 }
 
 impl<'a> TypeDb<'a> {
@@ -77,10 +77,10 @@ impl<'a> TypeDb<'a> {
             intrn: type_interner,
             file_db,
             project_index,
-            type_lower_cache: HashMap::new(),
-            top_level_types: HashMap::new(),
-            receiver_types: HashMap::new(),
-            currently_lowering: HashSet::new(),
+            type_lower_cache: FxHashMap::default(),
+            top_level_types: FxHashMap::default(),
+            receiver_types: FxHashMap::default(),
+            currently_lowering: FxHashSet::default(),
         };
         db.collect_top_level_types();
         db
@@ -217,7 +217,7 @@ impl<'a> TypeDb<'a> {
         let file_index = self.project_index.get_file_index(file_id)?;
         let file_info = self.file_db.get_by_path(&file_index.path)?;
 
-        let ast_decl = file_info.find_syntax_declaration(symbol.name_span)?;
+        let ast_decl = file_info.find_syntax_declaration(symbol.id)?;
         let ty = self.lower_top_level_decl(file_id, &ast_decl, &symbol)?;
         self.top_level_types.insert(symbol_id, ty);
         Some(ty)
@@ -229,8 +229,7 @@ impl<'a> TypeDb<'a> {
         };
         let file_info = self.file_db.get_by_id(file_id)?;
 
-        let Some(ast::TopLevel::Struct(s)) = file_info.find_syntax_declaration(symbol.name_span)
-        else {
+        let Some(ast::TopLevel::Struct(s)) = file_info.find_syntax_declaration(symbol.id) else {
             return None;
         };
 

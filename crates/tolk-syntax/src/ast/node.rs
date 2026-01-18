@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::sync::Arc;
-use tree_sitter::{Node, Tree};
+use tree_sitter::{Node, Tree, TreeCursor};
 
 /// Represents a parsed Tolk source file.
 ///
@@ -106,27 +106,26 @@ impl SourceFile {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SyntaxNodeChildren<'tree> {
-    node: Option<Node<'tree>>,
-    current: usize,
-    count: usize,
+    cursor: Option<TreeCursor<'tree>>,
+    at_end: bool,
 }
 
 impl<'tree> SyntaxNodeChildren<'tree> {
     fn new(node: Node<'tree>) -> Self {
+        let mut cursor = node.walk();
+        cursor.goto_first_child();
         Self {
-            node: Some(node),
-            current: 0,
-            count: node.child_count(),
+            cursor: Some(cursor),
+            at_end: false,
         }
     }
 
     const fn empty() -> Self {
         Self {
-            node: None,
-            current: 0,
-            count: 0,
+            cursor: None,
+            at_end: true,
         }
     }
 }
@@ -135,18 +134,19 @@ impl<'tree> Iterator for SyntaxNodeChildren<'tree> {
     type Item = Node<'tree>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current < self.count {
-            let res = self.node.and_then(|n| n.child(self.current));
-            self.current += 1;
-            res
-        } else {
-            None
+        if self.at_end {
+            return None;
         }
+
+        let cursor = self.cursor.as_mut()?;
+        let node = cursor.node();
+        self.at_end = !cursor.goto_next_sibling();
+        Some(node)
     }
 }
 
 /// An iterator over `SyntaxNode` children of a particular AST type `N`.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AstChildren<'tree, N> {
     inner: SyntaxNodeChildren<'tree>,
     ph: PhantomData<N>,

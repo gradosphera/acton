@@ -11,7 +11,7 @@ macro_rules! match_parents {
     ($node:expr, $kind:ident) => {
         $node
             .parent()
-            .filter(|p| p.kind() == $kind::TREE_SITTER_KIND)
+            .filter(|p| p.kind_bytes() == $kind::TREE_SITTER_KIND.as_bytes())
             .map(|n| $kind(n))
     };
 
@@ -19,7 +19,7 @@ macro_rules! match_parents {
         $crate::match_parents!($node, $inner(...))
             .and_then(|inner_val| {
                 inner_val.syntax().parent()
-                    .filter(|p| p.kind() == $outer::TREE_SITTER_KIND)
+                    .filter(|p| p.kind_bytes() == $outer::TREE_SITTER_KIND.as_bytes())
                     .map(|n| ($outer(n), inner_val))
             })
     };
@@ -28,7 +28,7 @@ macro_rules! match_parents {
         $crate::match_parents!($node, $inner)
             .and_then(|inner_val| {
                 inner_val.syntax().parent()
-                    .filter(|p| p.kind() == $outer::TREE_SITTER_KIND)
+                    .filter(|p| p.kind_bytes() == $outer::TREE_SITTER_KIND.as_bytes())
                     .map(|n| ($outer(n), inner_val))
             })
     };
@@ -58,7 +58,7 @@ macro_rules! match_parents {
     ($node:expr, $outer:ident ($($inner:tt)*)) => {
         $crate::match_parents!($node, $($inner)*)
             .and_then(|n| n.syntax().parent())
-            .filter(|p| p.kind() == $outer::TREE_SITTER_KIND)
+            .filter(|p| p.kind_bytes() == $outer::TREE_SITTER_KIND.as_bytes())
             .map(|n| $outer(n))
     };
 }

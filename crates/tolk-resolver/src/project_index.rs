@@ -6,6 +6,7 @@
 use crate::file_db::FileDb;
 use crate::file_index::{FileId, FileIndex, Import, Symbol, SymbolId, SymbolKind};
 use crate::resolve_index::{FileResolveIndex, NameUse};
+use rustc_hash::FxHashMap;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -35,11 +36,11 @@ impl ResolvedImport {
 #[derive(Debug, Clone)]
 pub struct ProjectIndex {
     /// Map from `FileId` to its corresponding `FileIndex`.
-    pub(crate) files: HashMap<FileId, Arc<FileIndex>>,
+    pub(crate) files: FxHashMap<FileId, Arc<FileIndex>>,
     /// Map from `FileId` to a list of resolved imports in that file.
-    pub(crate) imports: HashMap<FileId, Vec<ResolvedImport>>,
+    pub(crate) imports: FxHashMap<FileId, Vec<ResolvedImport>>,
     /// Map from `FileId` to a list of file IDs that import this file.
-    pub(crate) dependents: HashMap<FileId, Vec<FileId>>,
+    pub(crate) dependents: FxHashMap<FileId, Vec<FileId>>,
     /// Map from absolute file path to `FileId`.
     pub(crate) path_to_file_id: HashMap<PathBuf, FileId>,
     /// Path to the Tolk standard library, if provided.
@@ -49,7 +50,7 @@ pub struct ProjectIndex {
     /// List of errors encountered during project indexing.
     pub(crate) errors: Vec<String>,
     /// Map from `FileId` to its name resolution index.
-    pub resolved_uses: HashMap<FileId, Arc<FileResolveIndex>>,
+    pub resolved_uses: FxHashMap<FileId, Arc<FileResolveIndex>>,
 }
 
 impl ProjectIndex {
@@ -58,11 +59,11 @@ impl ProjectIndex {
         ProjectIndexBuilder::new(file_db, root_path)
     }
 
-    pub fn files(&self) -> &HashMap<FileId, Arc<FileIndex>> {
+    pub fn files(&self) -> &FxHashMap<FileId, Arc<FileIndex>> {
         &self.files
     }
 
-    pub fn imports(&self) -> &HashMap<FileId, Vec<ResolvedImport>> {
+    pub fn imports(&self) -> &FxHashMap<FileId, Vec<ResolvedImport>> {
         &self.imports
     }
 
@@ -70,11 +71,11 @@ impl ProjectIndex {
         &self.path_to_file_id
     }
 
-    pub fn resolved_uses(&self) -> &HashMap<FileId, Arc<FileResolveIndex>> {
+    pub fn resolved_uses(&self) -> &FxHashMap<FileId, Arc<FileResolveIndex>> {
         &self.resolved_uses
     }
 
-    pub fn dependents(&self) -> &HashMap<FileId, Vec<FileId>> {
+    pub fn dependents(&self) -> &FxHashMap<FileId, Vec<FileId>> {
         &self.dependents
     }
 
@@ -242,7 +243,7 @@ impl<'a> ProjectIndexBuilder<'a> {
             }
         };
 
-        let mut files = HashMap::new();
+        let mut files = FxHashMap::default();
         let mut queue = VecDeque::new();
         queue.extend(
             root.imports
@@ -305,7 +306,7 @@ impl<'a> ProjectIndexBuilder<'a> {
             files.insert(file_id, index);
         }
 
-        let mut imports = HashMap::with_capacity(files.len());
+        let mut imports = FxHashMap::with_capacity_and_hasher(files.len(), Default::default());
         for (id, index) in &files {
             let (file_imports, file_errors) = ProjectIndex::resolve_imports(
                 index,
@@ -317,7 +318,8 @@ impl<'a> ProjectIndexBuilder<'a> {
             errors.extend(file_errors);
         }
 
-        let mut dependents: HashMap<FileId, Vec<FileId>> = HashMap::with_capacity(files.len());
+        let mut dependents: FxHashMap<FileId, Vec<FileId>> =
+            FxHashMap::with_capacity_and_hasher(files.len(), Default::default());
         for (id, file_imports) in &imports {
             for import in file_imports {
                 if let Some(target_id) = import.target {

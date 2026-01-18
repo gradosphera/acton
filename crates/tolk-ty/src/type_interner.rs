@@ -1,6 +1,6 @@
 use crate::type_formatter::TypeFormatter;
 use crate::types::*;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tolk_resolver::file_index::SymbolId;
 
@@ -31,8 +31,8 @@ impl<'a> std::fmt::Display for TyDisplay<'a> {
 /// and memory efficiency by deduplicating identical types.
 #[derive(Debug, Clone)]
 pub struct TypeInterner {
-    arena: Vec<TyData>,         // TyId -> TyData
-    map: HashMap<TyData, TyId>, // TyData -> TyId
+    arena: Vec<TyData>,           // TyId -> TyData
+    map: FxHashMap<TyData, TyId>, // TyData -> TyId
 
     pub ty_unknown: TyId,
     pub ty_auto: TyId, // special type for omitted return type of functions
@@ -62,7 +62,7 @@ impl TypeInterner {
     pub fn new() -> Self {
         let mut this = Self {
             arena: Vec::new(),
-            map: HashMap::new(),
+            map: FxHashMap::default(),
             ty_unknown: TyId(0),
             ty_int: TyId(0),
             ty_coins: TyId(0),

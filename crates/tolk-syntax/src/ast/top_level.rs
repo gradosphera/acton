@@ -6,7 +6,7 @@ use crate::ast::{
     AstNode, FunctionLike, HasAnnotations, HasGenericParams, HasName, HasTreeSitterKind,
     InvalidNodeKindError, TryFromNode,
 };
-use crate::impl_ast_node;
+use crate::{AstNodeBytesKind, impl_ast_node};
 use tree_sitter::Node;
 
 #[derive(Clone, Copy, Debug)]
@@ -72,14 +72,7 @@ impl<'tree> TryFromNode<'tree> for TopLevel<'tree> {
     type Error = InvalidNodeKindError;
 
     fn try_from_node(node: Node<'tree>) -> Result<Self, Self::Error> {
-        let res = Self::from(node);
-        match res {
-            TopLevel::Unmapped(_) => Err(InvalidNodeKindError {
-                expected: "top_level",
-                actual: node.kind().to_string(),
-            }),
-            _ => Ok(res),
-        }
+        Ok(Self::from(node))
     }
 }
 
@@ -120,18 +113,18 @@ impl<'tree> HasAnnotations<'tree> for TopLevel<'tree> {
 
 impl<'t> From<Node<'t>> for TopLevel<'t> {
     fn from(node: Node<'t>) -> Self {
-        match node.kind() {
-            "tolk_required_version" => TopLevel::TolkRequiredVersion(TolkRequiredVersion(node)),
-            "import_directive" => TopLevel::Import(Import(node)),
-            "global_var_declaration" => TopLevel::GlobalVar(GlobalVar(node)),
-            "constant_declaration" => TopLevel::Constant(Constant(node)),
-            "type_alias_declaration" => TopLevel::TypeAlias(TypeAlias(node)),
-            "struct_declaration" => TopLevel::Struct(Struct(node)),
-            "enum_declaration" => TopLevel::Enum(Enum(node)),
-            "function_declaration" => TopLevel::Func(Func(node)),
-            "method_declaration" => TopLevel::Method(Method(node)),
-            "get_method_declaration" => TopLevel::GetMethod(GetMethod(node)),
-            "empty_statement" => TopLevel::EmptyStmt(EmptyStmt(node)),
+        match node.kind_bytes() {
+            b"tolk_required_version" => TopLevel::TolkRequiredVersion(TolkRequiredVersion(node)),
+            b"import_directive" => TopLevel::Import(Import(node)),
+            b"global_var_declaration" => TopLevel::GlobalVar(GlobalVar(node)),
+            b"constant_declaration" => TopLevel::Constant(Constant(node)),
+            b"type_alias_declaration" => TopLevel::TypeAlias(TypeAlias(node)),
+            b"struct_declaration" => TopLevel::Struct(Struct(node)),
+            b"enum_declaration" => TopLevel::Enum(Enum(node)),
+            b"function_declaration" => TopLevel::Func(Func(node)),
+            b"method_declaration" => TopLevel::Method(Method(node)),
+            b"get_method_declaration" => TopLevel::GetMethod(GetMethod(node)),
+            b"empty_statement" => TopLevel::EmptyStmt(EmptyStmt(node)),
             _ => TopLevel::Unmapped(RawNode::new(node)),
         }
     }
@@ -160,8 +153,8 @@ impl<'tree> TypeAliasUnderlyingType<'tree> {
 
 impl<'t> From<Node<'t>> for TypeAliasUnderlyingType<'t> {
     fn from(node: Node<'t>) -> Self {
-        match node.kind() {
-            "builtin_specifier" => {
+        match node.kind_bytes() {
+            b"builtin_specifier" => {
                 TypeAliasUnderlyingType::BuiltinSpecifier(BuiltinSpecifier(node))
             }
             _ => TypeAliasUnderlyingType::Type(Type::from(node)),
@@ -201,11 +194,11 @@ impl<'tree> FuncBody<'tree> {
 
 impl<'t> From<Node<'t>> for FuncBody<'t> {
     fn from(node: Node<'t>) -> Self {
-        let kind = node.kind();
+        let kind = node.kind_bytes();
         match kind {
-            "block_statement" => FuncBody::Block(Block(node)),
-            "asm_body" => FuncBody::AsmBody(AsmBody(node)),
-            "builtin_specifier" => FuncBody::BuiltinSpecifier(BuiltinSpecifier(node)),
+            b"block_statement" => FuncBody::Block(Block(node)),
+            b"asm_body" => FuncBody::AsmBody(AsmBody(node)),
+            b"builtin_specifier" => FuncBody::BuiltinSpecifier(BuiltinSpecifier(node)),
             _ => FuncBody::Unmapped(RawNode::new(node)),
         }
     }
@@ -462,9 +455,9 @@ impl StructFieldModifier {
 
 impl<'tree> From<Node<'tree>> for StructFieldModifier {
     fn from(node: Node<'tree>) -> Self {
-        match node.kind() {
-            "readonly" => StructFieldModifier::Readonly,
-            "private" => StructFieldModifier::Private,
+        match node.kind_bytes() {
+            b"readonly" => StructFieldModifier::Readonly,
+            b"private" => StructFieldModifier::Private,
             _ => panic!("Unknown struct field modifier: {}", node.kind()),
         }
     }
@@ -481,8 +474,8 @@ impl StructFieldModifiers<'_> {
         let mut cursor = self.0.walk();
         self.0
             .children(&mut cursor)
-            .filter_map(|n| match n.kind() {
-                "readonly" | "private" => Some(StructFieldModifier::from(n)),
+            .filter_map(|n| match n.kind_bytes() {
+                b"readonly" | b"private" => Some(StructFieldModifier::from(n)),
                 _ => None,
             })
             .collect()
@@ -704,7 +697,7 @@ impl<'tree> Method<'tree> {
         let Some(first_name) = first.name() else {
             return false;
         };
-        first_name.text(sources) == "self"
+        first_name.text_matches(sources, "self")
     }
 }
 

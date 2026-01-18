@@ -4,6 +4,7 @@
 //! identifier to its corresponding definition, taking into account scoping
 //! rules and global symbol visibility.
 
+use crate::FileIndex;
 use crate::file_db::{FileDb, FileInfo};
 use crate::file_index::{AstNodeSpanExt, FileId, SymbolId};
 use crate::project_index::ProjectIndex;
@@ -25,26 +26,29 @@ impl GlobalEnv {
     /// Creates a new `GlobalEnv` for the given file, including its own symbols,
     /// directly imported symbols, and symbols from `common.tolk`.
     pub fn new(index: &ProjectIndex, file_id: FileId) -> Self {
-        let mut visible: HashMap<Arc<str>, Vec<SymbolId>> = HashMap::new();
-
         let common_tolk = index
             .files()
             .values()
             .find(|f| f.path.ends_with("common.tolk"))
             .cloned();
 
+        let file = index.get_file_index(file_id);
+
+        // Since common.tolk is quite big, preallocate memory for the map to avoid reallocations
+        let capacity = common_tolk.as_ref().map(|f| f.decls.len()).unwrap_or(0)
+            + file.as_ref().map(|f| f.decls.len()).unwrap_or(0)
+            + 50;
+
+        let mut visible: HashMap<Arc<str>, Vec<SymbolId>> = HashMap::with_capacity(capacity);
+
         // common.tolk is available in any file
         if let Some(common_tolk) = common_tolk {
-            for decl in &common_tolk.decls {
-                visible.entry(decl.name.clone()).or_default().push(decl.id);
-            }
+            Self::add_file_declaration(&mut visible, &common_tolk);
         }
 
         // add symbols from current file
-        if let Some(file) = index.files().get(&file_id) {
-            for decl in &file.decls {
-                visible.entry(decl.name.clone()).or_default().push(decl.id);
-            }
+        if let Some(file) = file {
+            Self::add_file_declaration(&mut visible, file);
         }
 
         // and add symbols from direct imports
@@ -57,13 +61,20 @@ impl GlobalEnv {
                     continue;
                 };
 
-                for decl in &index.decls {
-                    visible.entry(decl.name.clone()).or_default().push(decl.id);
-                }
+                Self::add_file_declaration(&mut visible, index);
             }
         }
 
         GlobalEnv { visible }
+    }
+
+    fn add_file_declaration(visible: &mut HashMap<Arc<str>, Vec<SymbolId>>, file: &Arc<FileIndex>) {
+        for decl in &file.decls {
+            visible
+                .entry(decl.name.clone())
+                .or_insert_with(|| Vec::with_capacity(1)) // avoid reallocation for the most of the cases
+                .push(decl.id);
+        }
     }
 }
 

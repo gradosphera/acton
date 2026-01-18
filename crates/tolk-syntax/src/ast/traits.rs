@@ -2,7 +2,9 @@ use crate::ast::expressions::Ident;
 use crate::ast::node::AstChildren;
 use crate::ast::top_level::{AnnotationList, TypeParameters};
 use crate::ast::{FuncBody, Parameter, Type};
+use std::ffi::CStr;
 use std::fmt;
+use tree_sitter::ffi::ts_node_type;
 
 /// Trait for AST nodes that have a name identifier.
 pub trait HasName<'tree> {
@@ -154,8 +156,10 @@ macro_rules! impl_ast_node {
             type Error = $crate::ast::traits::InvalidNodeKindError;
 
             fn try_from_node(node: tree_sitter::Node<'tree>) -> Result<Self, Self::Error> {
-                let expected = <Self as $crate::ast::traits::HasTreeSitterKind>::TREE_SITTER_KIND;
-                if node.kind() == expected {
+                use $crate::ast::traits::AstNodeBytesKind;
+                let expected: &str =
+                    <Self as $crate::ast::traits::HasTreeSitterKind>::TREE_SITTER_KIND;
+                if node.kind_bytes() == expected.as_bytes() {
                     Ok(Self::from(node))
                 } else {
                     Err($crate::ast::traits::InvalidNodeKindError {
@@ -196,5 +200,18 @@ impl<'tree> TryFromNode<'tree> for tree_sitter::Node<'tree> {
 impl<'tree> AstNode<'tree> for tree_sitter::Node<'tree> {
     fn syntax(&self) -> tree_sitter::Node<'tree> {
         *self
+    }
+}
+
+pub trait AstNodeBytesKind {
+    fn kind_bytes(&self) -> &[u8];
+}
+
+impl<'tree> AstNodeBytesKind for tree_sitter::Node<'tree> {
+    fn kind_bytes(&self) -> &[u8] {
+        // SAFETY: we know that `ts_node_type` returns a valid C-string.
+        #[allow(unsafe_code)]
+        let t = unsafe { CStr::from_ptr(ts_node_type(self.into_raw())) };
+        t.to_bytes()
     }
 }

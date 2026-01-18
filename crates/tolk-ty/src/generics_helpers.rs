@@ -1,12 +1,12 @@
 use crate::type_interner::{TyId, TypeInterner};
 use crate::type_substitutor::TypeSubstitutor;
 use crate::types::TyData;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 /// Stores the mapping of generic parameter names to their actual types.
 #[derive(Debug, Clone, Default)]
 pub struct GenericsSubstitutions {
-    pub mapping: HashMap<String, TyId>,
+    pub mapping: FxHashMap<String, TyId>,
 }
 
 impl GenericsSubstitutions {

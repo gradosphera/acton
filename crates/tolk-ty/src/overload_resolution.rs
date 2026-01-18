@@ -2,8 +2,8 @@ use crate::generics_helpers::GenericSubstitutionsDeducing;
 use crate::type_db::TypeDb;
 use crate::type_interner::{TyId, TypeInterner};
 use crate::types::TyData;
+use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use tolk_resolver::SymbolKind;
 use tolk_resolver::file_index::SymbolId;
 /*
@@ -104,11 +104,12 @@ pub fn calculate_shape_score(id: TyId, interner: &TypeInterner) -> ShapeScore {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct MethodCallCandidate {
     pub original_receiver: TyId,
     pub instantiated_receiver: TyId,
     pub method_id: SymbolId,
-    pub substitutions: HashMap<String, TyId>,
+    pub substitutions: FxHashMap<String, TyId>,
 }
 
 impl MethodCallCandidate {
@@ -145,11 +146,9 @@ pub fn resolve_methods_for_call(
 ) -> Vec<MethodCallCandidate> {
     // find all methods theoretically applicable; we'll filter them by priority;
     // for instance, if there is `T.method`, it will be instantiated with T=provided_receiver
-    let mut viable = Vec::new();
+    let mut viable = Vec::with_capacity(4);
 
-    let file_ids: Vec<_> = type_db.project_index.files().keys().cloned().collect();
-    for file_id in file_ids {
-        let file_index = &type_db.project_index.files()[&file_id];
+    for file_index in type_db.project_index.files().values() {
         for symbol in &file_index.decls {
             let SymbolKind::Method { .. } = symbol.kind else {
                 continue;
@@ -181,7 +180,7 @@ pub fn resolve_methods_for_call(
                     original_receiver: receiver,
                     instantiated_receiver: receiver,
                     method_id: symbol.id,
-                    substitutions: HashMap::new(),
+                    substitutions: FxHashMap::default(),
                 });
             }
         }

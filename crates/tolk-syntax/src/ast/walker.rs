@@ -1,3 +1,4 @@
+use crate::AstNodeBytesKind;
 use crate::ast::expressions::{
     AsCast, Assign, Bin, BoolLit, Call, CallArgument, DotAccess, DotAccessField, Expr, Ident,
     InstanceArg, Instantiation, IsType, Lambda, LambdaParameter, Lazy, Match, MatchArm,
@@ -925,9 +926,10 @@ pub fn walk_ast<'tree, W: Walker<'tree>>(
 
 #[must_use]
 pub fn find_parent_by_kind<'a>(node: &'a Node<'a>, target_kind: &str) -> Option<Node<'a>> {
+    let target_kind = target_kind.as_bytes();
     let mut current = node.parent();
     while let Some(parent) = current {
-        if parent.kind() == target_kind {
+        if parent.kind_bytes() == target_kind {
             return Some(parent);
         }
         current = parent.parent();

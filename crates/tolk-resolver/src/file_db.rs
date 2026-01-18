@@ -3,9 +3,8 @@
 //! This module provides the `FileDb` struct which manages reading, parsing,
 //! and indexing files. It also handles file ID allocation and caching.
 
-use crate::AstNodeSpanExt;
-use crate::file_index::OptionalSyntaxNodeSpanExt;
 use crate::file_index::{FileId, FileIndex, Span, Symbol};
+use crate::{AstNodeSpanExt, SymbolId};
 use dashmap::DashMap;
 use log::debug;
 use smol_str::SmolStr;
@@ -15,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::str::Utf8Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use tolk_syntax::{AstNode, HasName, ast};
+use tolk_syntax::{AstNode, ast};
 use tree_sitter::{Node, Tree};
 
 /// Holds information about a single processed source file.
@@ -48,17 +47,17 @@ impl FileInfo {
     }
 
     /// Finds the `Symbol` declaration corresponding to an AST node that has a name.
-    pub fn find_declaration<'a, Node: HasName<'a>>(&self, node: &Node) -> Option<&Symbol> {
-        let name_span = node.name().map(|d| d.syntax()).span();
-        let index_decl = self.index.decls.iter().find(|d| d.name_span == name_span)?;
+    pub fn find_declaration<'a, Node: AstNode<'a>>(&self, node: &Node) -> Option<&Symbol> {
+        let decl_span = node.span();
+        let index_decl = self.index.decls.iter().find(|d| d.body_span == decl_span)?;
         Some(index_decl)
     }
 
     /// Finds AST node for declaration with given name span.
-    pub fn find_syntax_declaration(&self, name_span: Span) -> Option<ast::TopLevel<'_>> {
-        self.source
-            .top_levels()
-            .find(|decl| decl.name().map(|n| n.syntax()).span() == name_span)
+    pub fn find_syntax_declaration(&self, decl_id: SymbolId) -> Option<ast::TopLevel<'_>> {
+        let idx = self.index.symbol_id_to_decl_index.get(&decl_id.local_id)?;
+        let child = self.source.root_node().child(*idx)?;
+        Some(child.into())
     }
 }
 

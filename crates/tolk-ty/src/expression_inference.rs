@@ -1,15 +1,16 @@
 use crate::flow_inference::{
-    ExprFlow, FlowContext, InferenceContext, InferenceResult, SinkExpr, UnreachableKind,
+    ExprFlow, FlowContext, InferenceContext, InferenceResult, MethodKey, SinkExpr, UnreachableKind,
 };
 use crate::generics_helpers::GenericSubstitutionsDeducing;
 use crate::generics_helpers::GenericsSubstitutions;
-use crate::overload_resolution::choose_only_method_to_call;
+use crate::overload_resolution::{MethodCallCandidate, choose_only_method_to_call};
 use crate::type_inference::TypeInferenceWalker;
 use crate::type_interner::TyId;
 use crate::type_substitutor::TypeSubstitutor;
 use crate::type_unify::TypeInferringUnifyStrategy;
 use crate::types::TyData;
 use crate::{try_expr_flow, try_flow};
+use smol_str::SmolStr;
 use tolk_resolver::file_index::OptionalSyntaxNodeSpanExt;
 use tolk_resolver::file_index::SymbolId;
 use tolk_resolver::resolve_index::{LocalDefId, NameUse, NameUseKind, Resolved};
@@ -1280,8 +1281,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 }
             }
 
-            if let Ok(Some(candidate)) =
-                choose_only_method_to_call(receiver_type, &field_name, self.ctx.type_db)
+            if let Ok(Some(candidate)) = self.choose_only_method_to_call(&field_name, receiver_type)
             {
                 fun_ref = Some(candidate.method_id);
                 substituted_ts.mapping = candidate.substitutions;
@@ -1373,8 +1373,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         // check for method (`t.size` / `user.getId`); even `i.0()` can be here if `fun int.0(self)` exists
         // for `T.copy` / `Container<T>.create`, substitution for T is also returned
         if fun_ref.is_none()
-            && let Ok(Some(candidate)) =
-                choose_only_method_to_call(obj_type, &field_name, self.ctx.type_db)
+            && let Ok(Some(candidate)) = self.choose_only_method_to_call(&field_name, obj_type)
         {
             fun_ref = Some(candidate.method_id);
             substituted_ts.mapping = candidate.substitutions;
@@ -1407,6 +1406,21 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         }
 
         ExprFlow::create(flow, as_cond)
+    }
+
+    fn choose_only_method_to_call(
+        &mut self,
+        field_name: &SmolStr,
+        receiver_type: TyId,
+    ) -> Result<Option<MethodCallCandidate>, String> {
+        let key = MethodKey(receiver_type, field_name.clone());
+        if let Some(cached) = self.ctx.computed_methods.get(&key) {
+            return Ok(cached.clone());
+        }
+
+        let result = choose_only_method_to_call(receiver_type, field_name, self.ctx.type_db)?;
+        self.ctx.computed_methods.insert(key, result.clone());
+        Ok(result)
     }
 
     fn infer_function_call(
@@ -2098,7 +2112,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
 
         self.ctx.call_stack.push_back(symbol.id);
         let file = self.ctx.type_db.file_db.get_by_id(symbol.id.file_id)?;
-        let func_decl = file.find_syntax_declaration(symbol.name_span)?;
+        let func_decl = file.find_syntax_declaration(symbol.id)?;
 
         let ctx = InferenceContext::new(
             symbol.id.file_id,

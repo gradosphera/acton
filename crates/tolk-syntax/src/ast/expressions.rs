@@ -3,7 +3,7 @@ use crate::ast::traits::{HasName, HasTreeSitterKind};
 use crate::ast::types::{InstantiationTList, Type};
 use crate::ast::{AstNode, Block};
 use crate::ast::{InvalidNodeKindError, TryFromNode};
-use crate::impl_ast_node;
+use crate::{AstNodeBytesKind, impl_ast_node};
 use tree_sitter::Node;
 
 #[derive(Clone, Copy, Debug)]
@@ -124,32 +124,32 @@ impl<'tree> Expr<'tree> {
 
 impl<'t> From<Node<'t>> for Expr<'t> {
     fn from(node: Node<'t>) -> Self {
-        match node.kind() {
-            "var_declaration_lhs" => Expr::VarDeclLhs(VarDeclLhs(node)),
-            "assignment" => Expr::Assign(Assign(node)),
-            "set_assignment" => Expr::SetAssign(SetAssign(node)),
-            "ternary_operator" => Expr::Ternary(Ternary(node)),
-            "binary_operator" => Expr::Bin(Bin(node)),
-            "unary_operator" => Expr::Unary(Unary(node)),
-            "lazy_expression" => Expr::Lazy(Lazy(node)),
-            "cast_as_operator" => Expr::AsCast(AsCast(node)),
-            "is_type_operator" => Expr::IsType(IsType(node)),
-            "not_null_operator" => Expr::NotNull(NotNull(node)),
-            "dot_access" => Expr::DotAccess(DotAccess(node)),
-            "function_call" => Expr::Call(Call(node)),
-            "generic_instantiation" => Expr::Instantiation(Instantiation(node)),
-            "parenthesized_expression" => Expr::Paren(Paren(node)),
-            "match_expression" => Expr::Match(Match(node)),
-            "object_literal" => Expr::ObjectLit(ObjectLit(node)),
-            "tensor_expression" => Expr::Tensor(Tensor(node)),
-            "typed_tuple" => Expr::Tuple(Tuple(node)),
-            "lambda_expression" => Expr::Lambda(Lambda(node)),
-            "number_literal" => Expr::NumberLit(NumberLit(node)),
-            "string_literal" => Expr::StringLit(StringLit(node)),
-            "boolean_literal" => Expr::BoolLit(BoolLit(node)),
-            "null_literal" => Expr::NullLit(NullLit(node)),
-            "underscore" => Expr::Underscore(Underscore(node)),
-            "identifier" => Expr::Ident(Ident(node)),
+        match node.kind_bytes() {
+            b"var_declaration_lhs" => Expr::VarDeclLhs(VarDeclLhs(node)),
+            b"assignment" => Expr::Assign(Assign(node)),
+            b"set_assignment" => Expr::SetAssign(SetAssign(node)),
+            b"ternary_operator" => Expr::Ternary(Ternary(node)),
+            b"binary_operator" => Expr::Bin(Bin(node)),
+            b"unary_operator" => Expr::Unary(Unary(node)),
+            b"lazy_expression" => Expr::Lazy(Lazy(node)),
+            b"cast_as_operator" => Expr::AsCast(AsCast(node)),
+            b"is_type_operator" => Expr::IsType(IsType(node)),
+            b"not_null_operator" => Expr::NotNull(NotNull(node)),
+            b"dot_access" => Expr::DotAccess(DotAccess(node)),
+            b"function_call" => Expr::Call(Call(node)),
+            b"generic_instantiation" => Expr::Instantiation(Instantiation(node)),
+            b"parenthesized_expression" => Expr::Paren(Paren(node)),
+            b"match_expression" => Expr::Match(Match(node)),
+            b"object_literal" => Expr::ObjectLit(ObjectLit(node)),
+            b"tensor_expression" => Expr::Tensor(Tensor(node)),
+            b"typed_tuple" => Expr::Tuple(Tuple(node)),
+            b"lambda_expression" => Expr::Lambda(Lambda(node)),
+            b"number_literal" => Expr::NumberLit(NumberLit(node)),
+            b"string_literal" => Expr::StringLit(StringLit(node)),
+            b"boolean_literal" => Expr::BoolLit(BoolLit(node)),
+            b"null_literal" => Expr::NullLit(NullLit(node)),
+            b"underscore" => Expr::Underscore(Underscore(node)),
+            b"identifier" => Expr::Ident(Ident(node)),
             _ => Expr::Unmapped(RawNode::new(node)),
         }
     }
@@ -390,9 +390,9 @@ impl<'tree> TryFromNode<'tree> for DotAccessField<'tree> {
     type Error = InvalidNodeKindError;
 
     fn try_from_node(node: Node<'tree>) -> Result<Self, Self::Error> {
-        match node.kind() {
-            "identifier" => Ok(DotAccessField::Ident(Ident(node))),
-            "numeric_index" => Ok(DotAccessField::NumericIndex(NumericIndex(node))),
+        match node.kind_bytes() {
+            b"identifier" => Ok(DotAccessField::Ident(Ident(node))),
+            b"numeric_index" => Ok(DotAccessField::NumericIndex(NumericIndex(node))),
             _ => Err(InvalidNodeKindError {
                 expected: "identifier or numeric_index",
                 actual: node.kind().to_string(),
@@ -412,9 +412,9 @@ impl<'tree> AstNode<'tree> for DotAccessField<'tree> {
 
 impl<'t> From<Node<'t>> for DotAccessField<'t> {
     fn from(node: Node<'t>) -> Self {
-        match node.kind() {
-            "identifier" => DotAccessField::Ident(Ident(node)),
-            "numeric_index" => DotAccessField::NumericIndex(NumericIndex(node)),
+        match node.kind_bytes() {
+            b"identifier" => DotAccessField::Ident(Ident(node)),
+            b"numeric_index" => DotAccessField::NumericIndex(NumericIndex(node)),
             _ => panic!("Unexpected dot access field kind: {}", node.kind()),
         }
     }
@@ -603,7 +603,8 @@ impl<'tree> TryFromNode<'tree> for LambdaParameter<'tree> {
     type Error = InvalidNodeKindError;
 
     fn try_from_node(node: Node<'tree>) -> Result<Self, Self::Error> {
-        if node.kind() == "lambda_parameter" || node.kind() == "parameter_declaration" {
+        if node.kind_bytes() == b"lambda_parameter" || node.kind_bytes() == b"parameter_declaration"
+        {
             Ok(Self(node))
         } else {
             Err(InvalidNodeKindError {
@@ -667,8 +668,8 @@ impl VarKind {
 
 impl<'tree> From<Node<'tree>> for VarKind {
     fn from(node: Node<'tree>) -> Self {
-        match node.kind() {
-            "val" => VarKind::Val,
+        match node.kind_bytes() {
+            b"val" => VarKind::Val,
             _ => VarKind::Var,
         }
     }
@@ -695,8 +696,8 @@ impl<'tree> VarDeclLhs<'tree> {
             .children(&mut cursor)
             .find(|n| {
                 matches!(
-                    n.kind(),
-                    "tuple_vars_declaration" | "tensor_vars_declaration" | "var_declaration"
+                    n.kind_bytes(),
+                    b"tuple_vars_declaration" | b"tensor_vars_declaration" | b"var_declaration"
                 )
             })
             .map(Into::into)
@@ -712,10 +713,10 @@ pub enum VarDeclPattern<'tree> {
 
 impl<'t> From<Node<'t>> for VarDeclPattern<'t> {
     fn from(node: Node<'t>) -> Self {
-        match node.kind() {
-            "tuple_vars_declaration" => VarDeclPattern::TupleVars(TupleVars(node)),
-            "tensor_vars_declaration" => VarDeclPattern::TensorVars(TensorVars(node)),
-            "var_declaration" => VarDeclPattern::VarDecl(VarDecl(node)),
+        match node.kind_bytes() {
+            b"tuple_vars_declaration" => VarDeclPattern::TupleVars(TupleVars(node)),
+            b"tensor_vars_declaration" => VarDeclPattern::TensorVars(TensorVars(node)),
+            b"var_declaration" => VarDeclPattern::VarDecl(VarDecl(node)),
             _ => panic!("Unexpected var declaration pattern kind: {}", node.kind()),
         }
     }
@@ -725,10 +726,10 @@ impl<'tree> TryFromNode<'tree> for VarDeclPattern<'tree> {
     type Error = InvalidNodeKindError;
 
     fn try_from_node(node: Node<'tree>) -> Result<Self, Self::Error> {
-        match node.kind() {
-            "tuple_vars_declaration" => Ok(VarDeclPattern::TupleVars(TupleVars(node))),
-            "tensor_vars_declaration" => Ok(VarDeclPattern::TensorVars(TensorVars(node))),
-            "var_declaration" => Ok(VarDeclPattern::VarDecl(VarDecl(node))),
+        match node.kind_bytes() {
+            b"tuple_vars_declaration" => Ok(VarDeclPattern::TupleVars(TupleVars(node))),
+            b"tensor_vars_declaration" => Ok(VarDeclPattern::TensorVars(TensorVars(node))),
+            b"var_declaration" => Ok(VarDeclPattern::VarDecl(VarDecl(node))),
             _ => Err(InvalidNodeKindError {
                 expected: "tuple_vars_declaration, tensor_vars_declaration, or var_declaration",
                 actual: node.kind().to_string(),
@@ -821,7 +822,7 @@ impl_ast_node!(CallArgument, "call_argument");
 impl<'tree> CallArgument<'tree> {
     #[must_use]
     pub fn mutate(&self) -> bool {
-        self.0.child(0).is_some_and(|n| n.kind() == "mutate")
+        self.0.child(0).is_some_and(|n| n.kind_bytes() == b"mutate")
     }
 
     #[must_use]
@@ -905,10 +906,10 @@ pub enum MatchArmBody<'tree> {
 
 impl<'t> From<Node<'t>> for MatchArmBody<'t> {
     fn from(node: Node<'t>) -> Self {
-        match node.kind() {
-            "block_statement" => MatchArmBody::Block(Block(node)),
-            "return_statement" => MatchArmBody::Return(crate::ast::statements::Return(node)),
-            "throw_statement" => MatchArmBody::Throw(crate::ast::statements::Throw(node)),
+        match node.kind_bytes() {
+            b"block_statement" => MatchArmBody::Block(Block(node)),
+            b"return_statement" => MatchArmBody::Return(crate::ast::statements::Return(node)),
+            b"throw_statement" => MatchArmBody::Throw(crate::ast::statements::Throw(node)),
             _ => MatchArmBody::Expr(Expr::from(node)),
         }
     }

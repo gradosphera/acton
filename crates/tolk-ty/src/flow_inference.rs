@@ -1,9 +1,11 @@
+use crate::overload_resolution::MethodCallCandidate;
 use crate::type_db::TypeDb;
 use crate::type_interner::{TyId, TypeInterner};
 use crate::types::TyData;
+use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
-use std::collections::{HashMap, VecDeque};
-use std::fmt::{Display, Formatter};
+use std::collections::VecDeque;
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use tolk_resolver::SymbolId;
 use tolk_resolver::file_index::{AstNodeSpanExt, FileId, Span};
@@ -73,7 +75,7 @@ impl FactsAboutExpr {
 #[derive(Debug, Default)]
 pub struct FlowContext {
     /// all local vars plus (optionally) indices/fields of tensors/tuples/objects
-    known_facts: HashMap<SinkExpr, FactsAboutExpr>,
+    known_facts: FxHashMap<SinkExpr, FactsAboutExpr>,
     /// if execution can't reach this point (after `return`, for example)
     unreachable: bool,
     uses: Vec<NameUse>,
@@ -88,7 +90,7 @@ impl Clone for FlowContext {
 impl FlowContext {
     pub fn new() -> Self {
         Self {
-            known_facts: HashMap::new(),
+            known_facts: FxHashMap::default(),
             uses: Vec::new(),
             unreachable: false,
         }
@@ -110,7 +112,7 @@ impl FlowContext {
     /// example: `tensorVar = 2`, invalidate facts about `tensorVar`, `tensorVar.0`, `tensorVar.1.2`, and all others
     /// example: `user.id = rhs`, invalidate facts about `user.id` (sign, etc.) and `user.id.*` if exist
     fn invalidate_all_subfields(&mut self, def: LocalDefId, parent_path: u64, parent_mask: u64) {
-        let mut new_facts = HashMap::new();
+        let mut new_facts = FxHashMap::default();
 
         for (sink, facts) in &self.known_facts {
             let should_remove = sink.def == def && (sink.index_path & parent_mask) == parent_path;
@@ -184,7 +186,7 @@ impl FlowContext {
             return c2.merge_flow(self, int);
         }
 
-        let mut unified = HashMap::new();
+        let mut unified = FxHashMap::default();
 
         if self.unreachable && !c2.unreachable {
             // `if (...) return; else ...;` — copy facts about common variables only from else (c2)
@@ -269,18 +271,22 @@ impl SinkExpr {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Hash)]
+pub struct MethodKey(pub TyId, pub SmolStr);
+
 #[derive(Debug)]
 pub struct InferenceContext<'db, 'a> {
     pub type_db: &'db mut TypeDb<'a>,
     pub file_id: FileId,
     pub self_type: Option<TyId>,
     pub declared_return_ty: Option<TyId>,
-    pub expression_types: HashMap<Span, TyId>,
+    pub expression_types: FxHashMap<Span, TyId>,
     pub resolved_refs: Vec<NameUse>,
     pub return_types: Vec<TyId>,
     pub inferred_return_type: Option<TyId>,
     pub decl_start: u32,
     pub call_stack: VecDeque<SymbolId>,
+    pub computed_methods: FxHashMap<MethodKey, Option<MethodCallCandidate>>,
 }
 
 impl<'db, 'a> InferenceContext<'db, 'a> {
@@ -294,12 +300,13 @@ impl<'db, 'a> InferenceContext<'db, 'a> {
             file_id,
             self_type: None,
             declared_return_ty: None,
-            expression_types: HashMap::new(),
+            expression_types: FxHashMap::default(),
             resolved_refs: Vec::new(),
             return_types: Vec::new(),
             inferred_return_type: None,
             decl_start: 0,
             call_stack,
+            computed_methods: FxHashMap::default(),
         }
     }
 
@@ -394,7 +401,7 @@ impl<'db, 'a> InferenceContext<'db, 'a> {
 #[derive(Debug, Clone)]
 pub struct InferenceResult {
     /// Map from AST node spans to their inferred types.
-    pub expression_types: HashMap<Span, TyId>,
+    pub expression_types: FxHashMap<Span, TyId>,
     /// List of resolved references (fields, methods).
     pub resolved_refs: Vec<NameUse>,
     /// The inferred return type of the function (if inference was run on a function).

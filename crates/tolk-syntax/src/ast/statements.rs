@@ -2,7 +2,7 @@ use crate::ast::AstNode;
 use crate::ast::expressions::{Expr, Ident, Match};
 use crate::ast::node::{AstChildren, RawNode};
 use crate::ast::traits::HasTreeSitterKind;
-use crate::impl_ast_node;
+use crate::{AstNodeBytesKind, impl_ast_node};
 use tree_sitter::Node;
 
 #[derive(Clone, Copy, Debug)]
@@ -54,21 +54,21 @@ impl<'tree> Stmt<'tree> {
 
 impl<'t> From<Node<'t>> for Stmt<'t> {
     fn from(node: Node<'t>) -> Self {
-        match node.kind() {
-            "block_statement" => Stmt::Block(Block(node)),
-            "if_statement" => Stmt::If(If(node)),
-            "while_statement" => Stmt::While(While(node)),
-            "repeat_statement" => Stmt::Repeat(Repeat(node)),
-            "try_catch_statement" => Stmt::TryCatch(TryCatch(node)),
-            "return_statement" => Stmt::Return(Return(node)),
-            "do_while_statement" => Stmt::DoWhile(DoWhile(node)),
-            "break_statement" => Stmt::Break(Break(node)),
-            "continue_statement" => Stmt::Continue(Continue(node)),
-            "throw_statement" => Stmt::Throw(Throw(node)),
-            "assert_statement" => Stmt::Assert(Assert(node)),
-            "match_statement" => Stmt::Match(MatchStmt(node)),
-            "empty_statement" => Stmt::EmptyStmt(crate::ast::top_level::EmptyStmt(node)),
-            "expression_statement" => Stmt::ExprStmt(ExprStmt(node)),
+        match node.kind_bytes() {
+            b"block_statement" => Stmt::Block(Block(node)),
+            b"if_statement" => Stmt::If(If(node)),
+            b"while_statement" => Stmt::While(While(node)),
+            b"repeat_statement" => Stmt::Repeat(Repeat(node)),
+            b"try_catch_statement" => Stmt::TryCatch(TryCatch(node)),
+            b"return_statement" => Stmt::Return(Return(node)),
+            b"do_while_statement" => Stmt::DoWhile(DoWhile(node)),
+            b"break_statement" => Stmt::Break(Break(node)),
+            b"continue_statement" => Stmt::Continue(Continue(node)),
+            b"throw_statement" => Stmt::Throw(Throw(node)),
+            b"assert_statement" => Stmt::Assert(Assert(node)),
+            b"match_statement" => Stmt::Match(MatchStmt(node)),
+            b"empty_statement" => Stmt::EmptyStmt(crate::ast::top_level::EmptyStmt(node)),
+            b"expression_statement" => Stmt::ExprStmt(ExprStmt(node)),
             _ => Stmt::Unmapped(RawNode::new(node)),
         }
     }
@@ -109,7 +109,7 @@ impl<'tree> Block<'tree> {
         let mut cursor = self.0.walk();
         self.0
             .children(&mut cursor)
-            .filter(|n| !matches!(n.kind(), "{" | "}"))
+            .filter(|n| !matches!(n.kind_bytes(), b"{" | b"}"))
             .map(Into::into)
             .collect()
     }
@@ -128,9 +128,9 @@ pub enum IfAlt<'tree> {
 
 impl<'t> From<Node<'t>> for IfAlt<'t> {
     fn from(node: Node<'t>) -> Self {
-        match node.kind() {
-            "if_statement" => IfAlt::If(If(node)),
-            "block_statement" => IfAlt::Block(Block(node)),
+        match node.kind_bytes() {
+            b"if_statement" => IfAlt::If(If(node)),
+            b"block_statement" => IfAlt::Block(Block(node)),
             _ => panic!("Unexpected if statement alternative kind: {}", node.kind()),
         }
     }

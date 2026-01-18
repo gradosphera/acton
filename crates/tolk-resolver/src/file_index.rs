@@ -4,6 +4,7 @@
 //! such as declarations, imports, and source spans.
 
 use crate::resolve_index::LocalDefId;
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::path::PathBuf;
@@ -240,6 +241,8 @@ pub struct FileIndex {
     pub imports: Vec<Import>,
     /// List of top-level declarations in this file.
     pub decls: Vec<Symbol>,
+    /// Mapping from local_id of the [`SymbolId`] to index in tree root children.
+    pub symbol_id_to_decl_index: BTreeMap<u32, usize>, // SymbolId.local_id to idx in top levels
 }
 
 impl FileIndex {
@@ -256,7 +259,9 @@ impl FileIndex {
 
         let mut local_id: u32 = 0;
 
-        for decl in file.top_levels() {
+        let mut symbol_id_to_decl_index = BTreeMap::new();
+
+        for (idx, decl) in file.top_levels().enumerate() {
             if matches!(
                 decl,
                 tolk_syntax::TopLevel::TolkRequiredVersion(_)
@@ -265,6 +270,8 @@ impl FileIndex {
             ) {
                 continue;
             }
+
+            symbol_id_to_decl_index.insert(local_id, idx);
 
             let name: Arc<str> = Arc::from(decl.name_text(&file.source));
             let name_span = decl.name().map(|n| n.syntax()).span();
@@ -481,6 +488,7 @@ impl FileIndex {
             path,
             imports,
             decls,
+            symbol_id_to_decl_index,
         }
     }
 }

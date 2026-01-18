@@ -2892,6 +2892,7 @@ dependencies = [
  "dashmap",
  "expect-test",
  "log",
+ "rustc-hash",
  "smol_str",
  "tempfile",
  "tolk-syntax",
@@ -2912,6 +2913,7 @@ name = "tolk-ty"
 version = "0.1.0"
 dependencies = [
  "log",
+ "rustc-hash",
  "smol_str",
  "tolk-resolver",
  "tolk-syntax",

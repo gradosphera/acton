@@ -1,6 +1,6 @@
 use crate::type_interner::{TyId, TypeInterner};
 use crate::types::*;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 pub struct TypeSubstitutor<'a> {
     interner: &'a mut TypeInterner,
@@ -11,7 +11,7 @@ impl<'a> TypeSubstitutor<'a> {
         Self { interner }
     }
 
-    pub fn substitute(&mut self, id: TyId, mapping: &HashMap<String, TyId>) -> TyId {
+    pub fn substitute(&mut self, id: TyId, mapping: &FxHashMap<String, TyId>) -> TyId {
         let data = self.interner.data(id).clone();
         match data {
             TyData::TypeParameter { ref name, .. } => {
@@ -194,7 +194,7 @@ mod tests {
             default_type: None,
         });
 
-        let mut mapping = HashMap::new();
+        let mut mapping = FxHashMap::default();
         mapping.insert("T".to_string(), t_int);
 
         let mut substitutor = TypeSubstitutor::new(&mut interner);
@@ -221,7 +221,7 @@ mod tests {
         // fun (T) -> U
         let t_func = interner.func(vec![t_param_t], t_param_u);
 
-        let mut mapping = HashMap::new();
+        let mut mapping = FxHashMap::default();
         mapping.insert("T".to_string(), t_int);
         mapping.insert("U".to_string(), t_bool);
 
@@ -238,7 +238,7 @@ mod tests {
         let t_int = interner.ty_int;
         let t_tuple = interner.tuple(vec![t_int]);
 
-        let mapping = HashMap::new();
+        let mapping = FxHashMap::default();
         let mut substitutor = TypeSubstitutor::new(&mut interner);
 
         let result = substitutor.substitute(t_tuple, &mapping);
@@ -258,7 +258,7 @@ mod tests {
         let t_inner_tuple = interner.tuple(vec![t_param]);
         let t_outer_tuple = interner.tuple(vec![t_inner_tuple]);
 
-        let mut mapping = HashMap::new();
+        let mut mapping = FxHashMap::default();
         mapping.insert("T".to_string(), t_int);
 
         let mut substitutor = TypeSubstitutor::new(&mut interner);
