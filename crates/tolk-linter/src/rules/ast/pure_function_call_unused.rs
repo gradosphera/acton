@@ -6,8 +6,7 @@ use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::{FileId, Symbol};
 use tolk_resolver::resolve_index::Resolved;
 use tolk_resolver::{AstNodeSpanExt, NameUse, SymbolKind};
-use tolk_syntax::ast::expressions::{Call, Expr};
-use tolk_syntax::ast::statements::ExprStmt;
+use tolk_syntax::ast::expressions::Call;
 use tolk_ty::InferenceResult;
 
 /// ### What it does
@@ -37,22 +36,18 @@ impl Violation for PureFunctionCallUnused {
     }
 }
 
-pub fn check_expr_stmt(
+pub fn check_expr_stmt_call(
     checker: &mut Checker,
     file_id: FileId,
-    node: &ExprStmt,
+    call: &Call,
     current_inference: Option<&InferenceResult>,
 ) -> Option<()> {
-    let Expr::Call(call) = node.expr()? else {
-        return None;
-    };
-
     let callee_ident = call.callee_identifier()?;
     let resolve_index = checker.resolve_index_for(file_id)?;
 
     // Try to resolve as standalone function
     if let Some(name_use) = resolve_index.find_use(callee_ident.start_byte()) {
-        check_symbol(checker, file_id, &call, name_use);
+        check_symbol(checker, file_id, call, name_use);
         // since we already resolve this symbol we don't need to do anything else
         return None;
     }
@@ -61,7 +56,7 @@ pub fn check_expr_stmt(
     if let Some(inference) = current_inference
         && let Some(name_use) = inference.resolve(callee_ident.span())
     {
-        check_symbol(checker, file_id, &call, name_use);
+        check_symbol(checker, file_id, call, name_use);
     }
 
     None

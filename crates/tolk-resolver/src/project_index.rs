@@ -120,12 +120,12 @@ impl ProjectIndex {
     }
 
     /// Resolves a `SymbolId` to its corresponding `Symbol` declaration.
-    pub fn resolve_symbol(&self, symbol_id: SymbolId) -> Option<Symbol> {
+    pub fn resolve_symbol(&self, symbol_id: SymbolId) -> Option<&Symbol> {
         let file_index = self.files.get(&symbol_id.file_id)?;
         file_index
             .decls
             .iter()
-            .filter_map(|d| {
+            .find_map(|d| {
                 if d.id == symbol_id {
                     return Some(d);
                 }
@@ -136,8 +136,6 @@ impl ProjectIndex {
                     _ => None,
                 }
             })
-            .next()
-            .cloned()
     }
 
     /// Finds a name usage at the specified byte offset in a file.

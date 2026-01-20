@@ -1016,7 +1016,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                             };
 
                             let resolved = self.ctx.type_db.project_index.resolve_symbol(*def)?;
-                            let SymbolKind::Struct { fields, .. } = resolved.kind else {
+                            let SymbolKind::Struct { fields, .. } = &resolved.kind else {
                                 return None;
                             };
 

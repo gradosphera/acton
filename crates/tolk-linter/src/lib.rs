@@ -14,7 +14,7 @@ use tolk_resolver::file_index::{FileId, SymbolId};
 use tolk_resolver::resolve_index::FileResolveIndex;
 use tolk_resolver::{AstNodeSpanExt, Resolved};
 use tolk_syntax::{
-    ExprStmt, Ident, InstanceArg, SourceFile, TopLevel, TypeIdent, Walker, walk_ast,
+    Expr, ExprStmt, Ident, InstanceArg, SourceFile, TopLevel, TypeIdent, Walker, walk_ast,
 };
 use tolk_ty::InferenceResult;
 use tolk_ty::TypeDb;
@@ -175,18 +175,19 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
     }
 
     fn walk_expr_stmt(&mut self, node: &ExprStmt<'file>) -> Self::Result {
-        run_rule!(
-            self.checker,
-            Rule::PureFunctionCallUnused,
-            pure_function_call_unused::check_expr_stmt(
-                self.checker,
-                self.file_id,
-                node,
-                self.current_inference
-            )
-        );
-
         if let Some(expr) = node.expr() {
+            if let Expr::Call(call) = &expr {
+                run_rule!(
+                    self.checker,
+                    Rule::PureFunctionCallUnused,
+                    pure_function_call_unused::check_expr_stmt_call(
+                        self.checker,
+                        self.file_id,
+                        call,
+                        self.current_inference
+                    )
+                );
+            }
             self.visit_expr(&expr);
         }
     }
