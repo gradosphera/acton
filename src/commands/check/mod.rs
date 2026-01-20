@@ -17,7 +17,26 @@ use tolk_ty::TypeInterner;
 use tolk_ty::infer;
 use tree_sitter::Point;
 
-pub fn check_cmd(fix: bool, json: bool, explain: Option<String>) -> anyhow::Result<()> {
+pub fn check_cmd(
+    fix: bool,
+    json: bool,
+    explain: Option<String>,
+    list_lint_rules: bool,
+) -> anyhow::Result<()> {
+    if list_lint_rules {
+        let rules: Vec<_> = tolk_linter::Linter::Tolk
+            .all_rules()
+            .map(|r| {
+                serde_json::json!({
+                    "name": r.name(),
+                    "description": r.explanation().unwrap_or_default(),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&rules)?);
+        return Ok(());
+    }
+
     if let Some(code) = explain {
         if let Ok(tolk_rules) = Tolk::from_str(&code)
             && let Some(rule) = tolk_rules.rules().next()

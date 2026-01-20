@@ -485,6 +485,8 @@ enum Commands {
         json: bool,
         #[arg(long, help = "Explain a rule")]
         explain: Option<String>,
+        #[arg(long, hide = true)]
+        list_lint_rules: bool,
     },
     #[command(
         about = "Retrace a transaction by its hash",
@@ -1315,7 +1317,12 @@ fn main() {
                 yes,
             ),
         },
-        Commands::Check { fix, json, explain } => check_cmd(fix, json, explain),
+        Commands::Check {
+            fix,
+            json,
+            explain,
+            list_lint_rules,
+        } => check_cmd(fix, json, explain, list_lint_rules),
         Commands::Up {
             version,
             canary,
