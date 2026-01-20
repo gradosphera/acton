@@ -95,18 +95,26 @@ pub fn check_cmd(fix: bool, json: bool, explain: Option<String>) -> anyhow::Resu
             "diagnostics": all_diagnostics.iter().map(|d| diagnostic_to_json(d, &file_db)).collect::<Vec<_>>()
         });
         println!("{}", serde_json::to_string_pretty(&json_output)?);
-    } else if !all_diagnostics.is_empty() {
-        let first_code = all_diagnostics
-            .iter()
-            .find(|d| d.code.is_some())
-            .and_then(|d| d.code.clone());
-        if let Some(code) = first_code {
-            eprintln!();
-            eprintln!(
-                "Use {} to get detailed explanation of a rule.",
-                "acton check --explain <CODE>".yellow()
-            );
-            eprintln!("For example: acton check --explain {}", code);
+    } else {
+        let shown_diagnostics = if fix {
+            filter_fixed_diagnostics(&all_diagnostics)
+        } else {
+            all_diagnostics
+        };
+
+        if !shown_diagnostics.is_empty() {
+            let first_code = shown_diagnostics
+                .iter()
+                .find(|d| d.code.is_some())
+                .and_then(|d| d.code.clone());
+            if let Some(code) = first_code {
+                eprintln!();
+                eprintln!(
+                    "Use {} to get detailed explanation of a rule.",
+                    "acton check --explain <CODE>".yellow()
+                );
+                eprintln!("For example: acton check --explain {}", code);
+            }
         }
     }
 
@@ -149,9 +157,15 @@ fn check_contract(
     }
 
     let root = PathBuf::from(&config.src).canonicalize()?;
+    let current_dir = std::env::current_dir().unwrap_or_default();
+    let relative_root = pathdiff::diff_paths(&root, &current_dir).unwrap_or_else(|| root.clone());
 
     if !json {
-        println!("Checking {} ({})", config.name, root.display());
+        println!(
+            "Checking {} ({})",
+            config.name,
+            relative_root.display().cyan()
+        );
     }
 
     check_file(&root, file_db, fix, json)
@@ -259,8 +273,12 @@ fn check_file(
     diagnostics.extend(all_diagnostics);
 
     if !json {
-        println!();
-        let _ = emit_diagnostics(file_db, &diagnostics);
+        let diagnostics_to_show = if fix {
+            filter_fixed_diagnostics(&diagnostics)
+        } else {
+            diagnostics.clone()
+        };
+        let _ = emit_diagnostics(file_db, &diagnostics_to_show);
     }
 
     if fix && !json {
@@ -268,6 +286,18 @@ fn check_file(
     }
 
     Ok(diagnostics)
+}
+
+fn filter_fixed_diagnostics(diagnostics: &[Diagnostic]) -> Vec<Diagnostic> {
+    diagnostics
+        .iter()
+        .filter(|d| {
+            !d.fixes
+                .iter()
+                .any(|f| f.applicability == Applicability::Auto)
+        })
+        .cloned()
+        .collect()
 }
 
 fn byte_offset_from_point(point: &Point, source: &str) -> usize {
@@ -384,20 +414,25 @@ fn emit_diagnostics(file_db: &FileDb, diagnostics: &[Diagnostic]) -> anyhow::Res
 
 fn apply_fixes(file_db: &FileDb, diagnostics: &[Diagnostic]) -> anyhow::Result<()> {
     let mut fixes_by_file: BTreeMap<String, Vec<(usize, usize, String)>> = BTreeMap::new();
+    let mut total_diags_by_file: HashMap<String, usize> = HashMap::new();
+    let mut fixed_diags_by_file: HashMap<String, usize> = HashMap::new();
 
     for diag in diagnostics {
-        if diag.fixes.is_empty() {
-            continue;
-        }
-
         let file_info = file_db
             .get_by_id(diag.file_id)
             .ok_or_else(|| anyhow::anyhow!("File info not found for file_id {}", diag.file_id))?;
 
         let file_path = file_info.index().path.to_string_lossy().to_string();
 
+        *total_diags_by_file.entry(file_path.clone()).or_default() += 1;
+
+        if diag.fixes.is_empty() {
+            continue;
+        }
+
         // For now, apply only the first fix for each diagnostic
         let fix = &diag.fixes[0];
+        *fixed_diags_by_file.entry(file_path.clone()).or_default() += 1;
 
         for edit in &fix.edits {
             fixes_by_file.entry(file_path.clone()).or_default().push((
@@ -408,8 +443,12 @@ fn apply_fixes(file_db: &FileDb, diagnostics: &[Diagnostic]) -> anyhow::Result<(
         }
     }
 
+    let current_dir = std::env::current_dir().unwrap_or_default();
+
     for (file_path, mut fixes) in fixes_by_file {
         let content = fs::read_to_string(&file_path)?;
+        let total_issues = *total_diags_by_file.get(&file_path).unwrap_or(&0);
+        let fixed_issues = *fixed_diags_by_file.get(&file_path).unwrap_or(&0);
 
         // sort fixes by start position in reverse order (to avoid offset issues when multiple fixes)
         fixes.sort_by(|a, b| b.0.cmp(&a.0));
@@ -429,7 +468,23 @@ fn apply_fixes(file_db: &FileDb, diagnostics: &[Diagnostic]) -> anyhow::Result<(
 
         if applied_fixes > 0 {
             fs::write(&file_path, new_content)?;
-            println!("Applied {} fixes to {}", applied_fixes, file_path);
+
+            let relative_path = pathdiff::diff_paths(&file_path, &current_dir)
+                .unwrap_or_else(|| PathBuf::from(&file_path));
+
+            if fixed_issues == total_issues {
+                println!("Fixed all issues in {}", relative_path.display().cyan());
+            } else {
+                let remaining = total_issues - fixed_issues;
+                println!(
+                    "Applied {} {} to {}, {} {} remaining",
+                    fixed_issues,
+                    if fixed_issues == 1 { "fix" } else { "fixes" },
+                    relative_path.display().cyan(),
+                    remaining,
+                    if remaining == 1 { "issue" } else { "issues" }
+                );
+            }
         }
     }
 
