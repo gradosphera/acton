@@ -34,6 +34,7 @@ pub struct Checker<'a> {
     pub body_types: &'a HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
     pub analysis_db: AnalysisDb,
     pub diagnostics: Vec<Diagnostic>,
+    pub settings: HashMap<Rule, acton_config::config::LintLevel>,
 
     #[cfg(feature = "profile_rules")]
     pub profiler: Profiler,
@@ -51,9 +52,74 @@ impl<'a> Checker<'a> {
             body_types,
             analysis_db: AnalysisDb::new(),
             diagnostics: Vec::new(),
+            settings: HashMap::new(),
             #[cfg(feature = "profile_rules")]
             profiler: Profiler::default(),
         }
+    }
+
+    pub fn with_settings(
+        mut self,
+        settings: HashMap<Rule, acton_config::config::LintLevel>,
+    ) -> Self {
+        self.settings = settings;
+        self
+    }
+
+    pub fn should_run(&self, rule: Rule) -> bool {
+        self.settings
+            .get(&rule)
+            .map(|level| *level != acton_config::config::LintLevel::Allow)
+            .unwrap_or(true) // default to run
+    }
+
+    pub fn emit_diagnostic(&mut self, rule: Rule, mut diagnostic: Diagnostic) {
+        if let Some(level) = self.settings.get(&rule) {
+            match level {
+                acton_config::config::LintLevel::Allow => return,
+                acton_config::config::LintLevel::Warn => {
+                    diagnostic.severity = rules::diagnostic::Severity::Warning;
+                }
+                acton_config::config::LintLevel::Deny => {
+                    diagnostic.severity = rules::diagnostic::Severity::Error;
+                }
+            }
+        }
+        self.diagnostics.push(diagnostic);
+    }
+
+    pub fn build_settings(
+        config: &acton_config::config::ActonConfig,
+        contract_name: Option<&str>,
+    ) -> HashMap<Rule, acton_config::config::LintLevel> {
+        let mut settings = HashMap::new();
+
+        let Some(lint) = &config.lint else {
+            return settings;
+        };
+
+        // 1. Apply global settings
+        for (name, entry) in &lint.entries {
+            if let acton_config::config::LintEntry::Level(level) = entry
+                && let Some(rule) = find_rule_by_name(name)
+            {
+                settings.insert(rule, level.clone());
+            }
+        }
+
+        // 2. Apply contract overrides
+        if let Some(contract_name) = contract_name
+            && let Some(acton_config::config::LintEntry::Config(override_settings)) =
+                lint.entries.get(contract_name)
+        {
+            for (name, level) in override_settings {
+                if let Some(rule) = find_rule_by_name(name) {
+                    settings.insert(rule, level.clone());
+                }
+            }
+        }
+
+        settings
     }
 
     pub fn resolve_index_for(&self, file_id: FileId) -> Option<Arc<FileResolveIndex>> {
@@ -102,21 +168,27 @@ impl<'a> Checker<'a> {
     }
 }
 
+fn find_rule_by_name(name: &str) -> Option<Rule> {
+    Linter::Tolk.all_rules().find(|r| r.name() == name)
+}
+
 #[cfg(feature = "profile_rules")]
 macro_rules! run_rule {
     ($checker:expr, $rule:expr, $body:expr) => {{
-        let start = std::time::Instant::now();
-        let result = $body;
-        $checker.profiler.record($rule, start.elapsed());
-        result
+        if $checker.should_run($rule) {
+            let start = std::time::Instant::now();
+            let _ = $body;
+            $checker.profiler.record($rule, start.elapsed());
+        }
     }};
 }
 
 #[cfg(not(feature = "profile_rules"))]
 macro_rules! run_rule {
     ($checker:expr, $rule:expr, $body:expr) => {{
-        let _ = $rule; // avoid unused warnings
-        $body
+        if $checker.should_run($rule) {
+            let _ = $body;
+        }
     }};
 }
 
@@ -235,7 +307,7 @@ impl<'a, 'b> CheckerWalker<'a, 'b> {
                     self.checker,
                     self.file_id,
                     node,
-                    &symbol,
+                    symbol,
                 )
             );
         }

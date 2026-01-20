@@ -72,7 +72,7 @@ pub fn check_resolved_reference(
         fixes: vec![],
         help: Some("deprecated symbols may be removed in future versions".to_string()),
     };
-    checker.diagnostics.push(diagnostic);
+    checker.emit_diagnostic(DeprecatedSymbolUse::rule(), diagnostic);
 
     Some(())
 }

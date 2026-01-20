@@ -135,5 +135,5 @@ fn fire_diagnostic(
         fixes,
         help: None,
     };
-    checker.diagnostics.push(diagnostic);
+    checker.emit_diagnostic(UnusedVariable::rule(), diagnostic);
 }

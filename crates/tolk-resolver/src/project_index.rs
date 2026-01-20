@@ -122,20 +122,17 @@ impl ProjectIndex {
     /// Resolves a `SymbolId` to its corresponding `Symbol` declaration.
     pub fn resolve_symbol(&self, symbol_id: SymbolId) -> Option<&Symbol> {
         let file_index = self.files.get(&symbol_id.file_id)?;
-        file_index
-            .decls
-            .iter()
-            .find_map(|d| {
-                if d.id == symbol_id {
-                    return Some(d);
-                }
+        file_index.decls.iter().find_map(|d| {
+            if d.id == symbol_id {
+                return Some(d);
+            }
 
-                match &d.kind {
-                    SymbolKind::Struct { fields, .. } => fields.iter().find(|f| f.id == symbol_id),
-                    SymbolKind::Enum { members } => members.iter().find(|f| f.id == symbol_id),
-                    _ => None,
-                }
-            })
+            match &d.kind {
+                SymbolKind::Struct { fields, .. } => fields.iter().find(|f| f.id == symbol_id),
+                SymbolKind::Enum { members } => members.iter().find(|f| f.id == symbol_id),
+                _ => None,
+            }
+        })
     }
 
     /// Finds a name usage at the specified byte offset in a file.

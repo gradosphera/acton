@@ -2938,6 +2938,7 @@ dependencies = [
 name = "tolk-linter"
 version = "0.1.0"
 dependencies = [
+ "acton-config",
  "log",
  "memchr",
  "rustc-hash",
@@ -2955,6 +2956,7 @@ dependencies = [
 name = "tolk-macros"
 version = "0.1.0"
 dependencies = [
+ "heck",
  "itertools",
  "proc-macro2",
  "quote",

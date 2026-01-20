@@ -205,7 +205,7 @@ impl<'a> TypeDb<'a> {
 
         // If it's a struct, we might need to lower its fields even if the struct type itself is already known
         if let SymbolKind::Struct { .. } = &symbol.kind {
-            self.lower_struct_fields(file_id, &symbol);
+            self.lower_struct_fields(file_id, symbol);
             return self.top_level_types.get(&symbol_id).cloned(); // struct type already set by `symbol_to_type`
         }
 
@@ -218,7 +218,7 @@ impl<'a> TypeDb<'a> {
         let file_info = self.file_db.get_by_path(&file_index.path)?;
 
         let ast_decl = file_info.find_syntax_declaration(symbol.id)?;
-        let ty = self.lower_top_level_decl(file_id, &ast_decl, &symbol)?;
+        let ty = self.lower_top_level_decl(file_id, &ast_decl, symbol)?;
         self.top_level_types.insert(symbol_id, ty);
         Some(ty)
     }

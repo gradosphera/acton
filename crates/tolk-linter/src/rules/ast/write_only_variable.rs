@@ -87,7 +87,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
             });
         }
 
-        checker.diagnostics.push(diagnostic);
+        checker.emit_diagnostic(WriteOnlyVariable::rule(), diagnostic);
     }
 
     Some(())

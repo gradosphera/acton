@@ -101,7 +101,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
             fixes,
             help: None,
         };
-        checker.diagnostics.push(diagnostic);
+        checker.emit_diagnostic(MutableVariableCanBeImmutable::rule(), diagnostic);
     }
     Some(())
 }

@@ -111,5 +111,5 @@ fn fire_diagnostic(
         }],
         help: None,
     };
-    checker.diagnostics.push(diagnostic);
+    checker.emit_diagnostic(FieldInitCanBeFolded::rule(), diagnostic);
 }

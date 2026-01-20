@@ -9,6 +9,7 @@ tolk-resolver = { path = "../tolk-resolver" }
 tolk-ty = { path = "../tolk-ty" }
 tolk-analysis = { path = "../tolk-analysis" }
 tolk-macros = { path = "../tolk-macros" }
+acton-config = { path = "../acton-config" }
 tree-sitter = "0.25.10"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"

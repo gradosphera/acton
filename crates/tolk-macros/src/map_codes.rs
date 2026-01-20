@@ -288,6 +288,7 @@ fn register_rules<'a>(input: impl Iterator<Item = &'a Rule>) -> TokenStream {
     let mut rule_group_match_arms = quote!();
     let mut rule_file_match_arms = quote!();
     let mut rule_line_match_arms = quote!();
+    let mut rule_name_match_arms = quote!();
 
     for Rule {
         name, attrs, path, ..
@@ -297,6 +298,9 @@ fn register_rules<'a>(input: impl Iterator<Item = &'a Rule>) -> TokenStream {
             #(#attrs)*
             #name,
         });
+
+        let kebab_name = heck::AsKebabCase(name.to_string()).to_string();
+
         // Apply the `attrs` to each arm, like `[cfg(feature = "foo")]`.
         rule_fixable_match_arms.extend(
             quote! {#(#attrs)* Self::#name => <#path as crate::rules::Violation>::FIX_AVAILABILITY,},
@@ -311,6 +315,7 @@ fn register_rules<'a>(input: impl Iterator<Item = &'a Rule>) -> TokenStream {
         rule_line_match_arms.extend(
             quote! {#(#attrs)* Self::#name => <#path as crate::rules::ViolationMetadata>::line(),},
         );
+        rule_name_match_arms.extend(quote! {#(#attrs)* Self::#name => #kebab_name,});
     }
 
     quote! {
@@ -326,6 +331,11 @@ fn register_rules<'a>(input: impl Iterator<Item = &'a Rule>) -> TokenStream {
         pub enum Rule { #rule_variants }
 
         impl Rule {
+            /// Returns the kebab-case name of this rule.
+            pub fn name(&self) -> &'static str {
+                match self { #rule_name_match_arms }
+            }
+
             /// Returns the documentation for this rule.
             pub fn explanation(&self) -> Option<&'static str> {
                 use crate::rules::ViolationMetadata;

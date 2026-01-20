@@ -75,7 +75,7 @@ fn check_symbol(checker: &mut Checker, file_id: FileId, call: &Call, name_use: &
             return;
         }
 
-        fire_diagnostic(checker, file_id, call, &symbol);
+        fire_diagnostic(checker, file_id, call, symbol);
     }
 }
 
@@ -97,5 +97,5 @@ fn fire_diagnostic(checker: &mut Checker, file_id: FileId, call: &Call, symbol: 
         fixes: vec![],
         help: Some("functions marked with `@pure` have no side effects. Calling them without using the result does nothing and may indicate a bug".to_string()),
     };
-    checker.diagnostics.push(diagnostic);
+    checker.emit_diagnostic(PureFunctionCallUnused::rule(), diagnostic);
 }

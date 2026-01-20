@@ -56,6 +56,7 @@ pub struct ActonConfig {
     pub package: PackageConfig,
     pub contracts: Option<ContractsConfig>,
     pub test: Option<TestSettings>,
+    pub lint: Option<LintConfig>,
     pub fmt: Option<FmtSettings>,
     pub scripts: Option<BTreeMap<String, String>>,
     #[serde(skip)] // we build wallets manually
@@ -121,6 +122,27 @@ pub struct TestSettings {
     pub ui_port: Option<u16>,
     #[serde(flatten)]
     pub metadata: BTreeMap<String, toml::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LintLevel {
+    Allow,
+    Warn,
+    Deny,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum LintEntry {
+    Level(LintLevel),
+    Config(BTreeMap<String, LintLevel>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LintConfig {
+    #[serde(flatten)]
+    pub entries: BTreeMap<String, LintEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -200,6 +222,7 @@ impl Default for ActonConfig {
                 license: Some("MIT".to_string()),
             },
             test: None,
+            lint: None,
             contracts: None,
             fmt: Some(FmtSettings {
                 width: Some(100),
@@ -580,6 +603,47 @@ depends = []
         assert_eq!(wallet.name, "Wallet V5");
         assert_eq!(wallet.src, "wallet-v5.tolk");
         assert_eq!(wallet.depends, Some(vec![]));
+    }
+
+    #[test]
+    fn test_lint_config_parsing() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[lint]
+unused-variable = "deny"
+mutable-variable-can-be-immutable = "warn"
+
+[lint.counter]
+unused-variable = "allow"
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let lint = config.lint.as_ref().unwrap();
+
+        match lint.entries.get("unused-variable").unwrap() {
+            LintEntry::Level(level) => assert_eq!(*level, LintLevel::Deny),
+            _ => panic!("Expected level"),
+        }
+
+        match lint
+            .entries
+            .get("mutable-variable-can-be-immutable")
+            .unwrap()
+        {
+            LintEntry::Level(level) => assert_eq!(*level, LintLevel::Warn),
+            _ => panic!("Expected level"),
+        }
+
+        match lint.entries.get("counter").unwrap() {
+            LintEntry::Config(config) => {
+                assert_eq!(*config.get("unused-variable").unwrap(), LintLevel::Allow);
+            }
+            _ => panic!("Expected config"),
+        }
     }
 
     #[test]

@@ -87,5 +87,5 @@ fn fire_diagnostic(checker: &mut Checker, span: tolk_resolver::file_index::Span,
         fixes: vec![],
         help: None,
     };
-    checker.diagnostics.push(diagnostic);
+    checker.emit_diagnostic(UnusedImport::rule(), diagnostic);
 }

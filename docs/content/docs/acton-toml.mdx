@@ -13,6 +13,7 @@ The top-level of `Acton.toml` contains the following sections:
 - `[package]` — Project metadata.
 - `[contracts]` — Definition of smart contracts in the project.
 - `[test]` — Configuration for the test runner.
+- `[lint]` — Linter configuration.
 - `[scripts]` — Custom shell commands or scripts.
 
 ---
@@ -121,6 +122,46 @@ fail-fast = true
 
 [test.mutation]
 disable-rules = ["flip_plus"]
+```
+
+---
+
+## `[lint]` Section
+
+Configures the Tolk linter (`acton check`) rules and their severity.
+
+| Level   | Description                                                                 |
+|:--------|:----------------------------------------------------------------------------|
+| `allow` | Rule is disabled.                                                           |
+| `warn`  | Rule violation is reported as a warning (default for most rules).           |
+| `deny`  | Rule violation is reported as an error, failing the check.                  |
+
+### Global Configuration
+
+Specify rules directly under `[lint]` to apply them to all contracts in the project.
+
+Example:
+```toml
+[lint]
+unused-variable = "deny"
+mutable-variable-can-be-immutable = "warn"
+```
+
+### Contract Overrides
+
+You can override lint levels for specific contracts by creating a subsection with the contract's identifier (the key used in the `[contracts]` section).
+
+Example:
+```toml
+[contracts.counter]
+name = "My Counter"
+src = "counter.tolk"
+
+[lint]
+unused-variable = "deny"
+
+[lint.counter]
+unused-variable = "allow" # Disable for counter contract only
 ```
 
 ---

@@ -84,8 +84,9 @@ pub fn check_cmd(fix: bool, json: bool, explain: Option<String>) -> anyhow::Resu
 
     let mut all_diagnostics = Vec::new();
 
-    for contract in contracts.values() {
-        let contract_diagnostics = check_contract(contract, &file_db, fix, json)?;
+    for (contract_id, contract) in contracts {
+        let contract_diagnostics =
+            check_contract(contract_id, contract, &file_db, fix, json, &config)?;
         all_diagnostics.extend(contract_diagnostics);
     }
 
@@ -146,10 +147,12 @@ fn find_acton_stdlib() -> anyhow::Result<PathBuf> {
 }
 
 fn check_contract(
+    contract_id: &str,
     config: &ContractConfig,
     file_db: &FileDb,
     fix: bool,
     json: bool,
+    acton_config: &ActonConfig,
 ) -> anyhow::Result<Vec<Diagnostic>> {
     if !config.src.ends_with(".tolk") {
         // skip contracts with .boc sources
@@ -168,7 +171,9 @@ fn check_contract(
         );
     }
 
-    check_file(&root, file_db, fix, json)
+    let lint_settings = Checker::build_settings(acton_config, Some(contract_id));
+
+    check_file(&root, file_db, fix, json, lint_settings)
 }
 
 fn check_file(
@@ -176,6 +181,7 @@ fn check_file(
     file_db: &FileDb,
     fix: bool,
     json: bool,
+    lint_settings: HashMap<tolk_linter::Rule, acton_config::config::LintLevel>,
 ) -> anyhow::Result<Vec<Diagnostic>> {
     let file_info = file_db.process(root)?;
 
@@ -250,7 +256,7 @@ fn check_file(
 
     // And finally run all inspections provided by checker
     let now = Instant::now();
-    let mut checker = Checker::new(file_db, &mut type_db, &body_types);
+    let mut checker = Checker::new(file_db, &mut type_db, &body_types).with_settings(lint_settings);
 
     for file_to_check in files_to_check {
         let Some(info) = file_db.get_by_id(file_to_check) else {

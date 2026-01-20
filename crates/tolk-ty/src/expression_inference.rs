@@ -1604,7 +1604,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         // if return type is omitted we need to infer function body first
         // once inferred, subsequent `return_ty` for this function will be non-auto
         if return_ty == self.const_intrn().ty_auto
-            && let Some(inferred_ty) = self.infer_auto_return_type_of_function(&declaration)
+            && let Some(inferred_ty) = self.infer_auto_return_type_of_function(declaration)
         {
             let func_ty = self.intrn().func(f_callable.0.clone(), inferred_ty);
             self.ctx.set_top_level_type(declaration.id, func_ty);
