@@ -9,7 +9,7 @@ use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tolk_syntax::{AstNode, FunctionLike, HasGenericParams, HasName, ast};
+use tolk_syntax::{AstNode, FunctionLike, HasAnnotations, HasGenericParams, HasName, ast};
 use tree_sitter::Node;
 
 /// Represents a byte range in the source code.
@@ -150,6 +150,8 @@ pub struct Symbol {
     pub body_span: Span,
     /// Span of the associated documentation comment (if any).
     pub doc_span: Option<Span>,
+    /// If this symbol is deprecated.
+    pub is_deprecated: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -261,6 +263,7 @@ impl FileIndex {
     ///
     /// Panics in debug builds if the path is not absolute.
     pub fn build(
+        content: &str,
         file_id: FileId,
         path: PathBuf,
         file: &ast::SourceFile,
@@ -293,6 +296,8 @@ impl FileIndex {
             let id = SymbolId { file_id, local_id };
             let body_span = decl.span();
             let doc_span = None; // TODO: future work
+            let is_deprecated = Self::is_deprecated(content, decl);
+
             match decl {
                 tolk_syntax::TopLevel::GlobalVar(_) => decls.push(Symbol {
                     id,
@@ -302,6 +307,7 @@ impl FileIndex {
                     name_span,
                     body_span,
                     doc_span,
+                    is_deprecated,
                 }),
                 tolk_syntax::TopLevel::Constant(_) => decls.push(Symbol {
                     id,
@@ -311,6 +317,7 @@ impl FileIndex {
                     name_span,
                     body_span,
                     doc_span,
+                    is_deprecated,
                 }),
                 tolk_syntax::TopLevel::TypeAlias(decl) => decls.push(Symbol {
                     id,
@@ -325,6 +332,7 @@ impl FileIndex {
                     name_span,
                     body_span,
                     doc_span,
+                    is_deprecated,
                 }),
                 tolk_syntax::TopLevel::Struct(decl) => {
                     let struct_name = name.clone();
@@ -346,6 +354,7 @@ impl FileIndex {
                                 name_span,
                                 body_span,
                                 doc_span,
+                                is_deprecated: false,
                             })
                         })
                         .collect();
@@ -360,6 +369,7 @@ impl FileIndex {
                         name_span,
                         body_span,
                         doc_span,
+                        is_deprecated,
                     })
                 }
                 tolk_syntax::TopLevel::Enum(decl) => {
@@ -382,6 +392,7 @@ impl FileIndex {
                                 name_span,
                                 body_span,
                                 doc_span,
+                                is_deprecated: false,
                             })
                         })
                         .collect();
@@ -393,6 +404,7 @@ impl FileIndex {
                         name_span,
                         body_span,
                         doc_span,
+                        is_deprecated,
                     })
                 }
                 tolk_syntax::TopLevel::Func(func) => {
@@ -413,6 +425,7 @@ impl FileIndex {
                         name_span,
                         body_span,
                         doc_span,
+                        is_deprecated,
                     })
                 }
                 tolk_syntax::TopLevel::Method(func) => {
@@ -457,6 +470,7 @@ impl FileIndex {
                         name_span,
                         body_span,
                         doc_span,
+                        is_deprecated,
                     })
                 }
                 tolk_syntax::TopLevel::GetMethod(func) => {
@@ -477,6 +491,7 @@ impl FileIndex {
                         name_span,
                         body_span,
                         doc_span,
+                        is_deprecated,
                     })
                 }
                 tolk_syntax::TopLevel::Import(import) => {
@@ -505,5 +520,14 @@ impl FileIndex {
             decls,
             symbol_id_to_decl_index,
         }
+    }
+
+    fn is_deprecated<'a, Node: HasAnnotations<'a>>(content: &str, node: Node) -> bool {
+        node.annotations().iter().any(|a| {
+            a.annotations().any(|a| {
+                a.name()
+                    .is_some_and(|name| name.text_matches(content, "deprecated"))
+            })
+        })
     }
 }

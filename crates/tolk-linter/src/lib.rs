@@ -1,18 +1,20 @@
+use crate::ast::deprecated_symbol_use;
 use crate::rules::ast::{
     field_init_can_be_folded, mutable_variable_can_be_immutable, unused_variable,
 };
 use rules::diagnostic::Diagnostic;
+pub use rules::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tolk_resolver::file_db::FileDb;
 use tolk_resolver::file_index::{FileId, SymbolId};
 use tolk_resolver::resolve_index::FileResolveIndex;
-use tolk_syntax::{ObjectLit, SourceFile, Walker, walk_ast};
+use tolk_resolver::{AstNodeSpanExt, Resolved};
+use tolk_syntax::{Ident, ObjectLit, SourceFile, TypeIdent, Walker, walk_ast};
 use tolk_ty::InferenceResult;
 use tolk_ty::TypeDb;
 
 mod rules;
-pub use rules::*;
 
 pub struct Checker<'a> {
     pub file_db: &'a FileDb,
@@ -66,6 +68,58 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
         }
         for arg in node.arguments() {
             self.walk_instance_arg(&arg);
+        }
+    }
+
+    fn walk_ident(&mut self, node: &Ident<'file>) -> Self::Result {
+        let Some(resolve_index) = self
+            .checker
+            .type_db
+            .project_index
+            .get_resolved_uses(self.file_id)
+        else {
+            return;
+        };
+
+        let Some(usage) = resolve_index.find_use(node.span().start()) else {
+            return;
+        };
+
+        if let Resolved::Global(resolved) = usage.resolved
+            && let Some(symbol) = self.checker.type_db.project_index.resolve_symbol(resolved)
+        {
+            deprecated_symbol_use::check_resolved_reference(
+                self.checker,
+                self.file_id,
+                &node.0,
+                &symbol,
+            );
+        }
+    }
+
+    fn walk_type_ident(&mut self, node: &TypeIdent<'file>) -> Self::Result {
+        let Some(resolve_index) = self
+            .checker
+            .type_db
+            .project_index
+            .get_resolved_uses(self.file_id)
+        else {
+            return;
+        };
+
+        let Some(usage) = resolve_index.find_use(node.span().start()) else {
+            return;
+        };
+
+        if let Resolved::Global(resolved) = usage.resolved
+            && let Some(symbol) = self.checker.type_db.project_index.resolve_symbol(resolved)
+        {
+            deprecated_symbol_use::check_resolved_reference(
+                self.checker,
+                self.file_id,
+                &node.0,
+                &symbol,
+            );
         }
     }
 

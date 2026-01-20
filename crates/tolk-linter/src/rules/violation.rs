@@ -1,4 +1,7 @@
-use crate::ast::{field_init_can_be_folded, mutable_variable_can_be_immutable, unused_variable};
+use crate::ast::{
+    deprecated_symbol_use, field_init_can_be_folded, mutable_variable_can_be_immutable,
+    unused_variable,
+};
 use serde::Serialize;
 use std::fmt::Display;
 
@@ -51,6 +54,7 @@ pub fn code_to_rule(linter: Linter, code: &str) -> Option<(RuleGroup, Rule)> {
         (Tolk, "E001") => field_init_can_be_folded::FieldInitCanBeFolded,
         (Tolk, "E002") => unused_variable::UnusedVariable,
         (Tolk, "E003") => mutable_variable_can_be_immutable::MutableVariableCanBeImmutable,
+        (Tolk, "E004") => deprecated_symbol_use::DeprecatedSymbolUse,
         _ => return None,
     })
 }

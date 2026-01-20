@@ -14,7 +14,8 @@ use crate::resolve_index::{
 use std::collections::HashMap;
 use std::sync::Arc;
 use tolk_syntax::{
-    AstNode, FuncBody, FunctionLike, HasGenericParams, HasName, InstanceArg, VarKind, Walker, ast,
+    AstNode, Constant, Enum, FuncBody, FunctionLike, GlobalVar, HasGenericParams, HasName,
+    InstanceArg, Struct, TypeAlias, VarKind, Walker, ast,
 };
 use tree_sitter::Node;
 
@@ -332,6 +333,68 @@ impl<'a> SymbolResolver<'a> {
 
 impl<'tree> Walker<'tree> for SymbolResolver<'_> {
     type Result = ();
+
+    fn walk_global_var(&mut self, node: &GlobalVar<'tree>) -> Self::Result {
+        if let Some(annotations) = node.annotations() {
+            self.walk_annotation_list(&annotations);
+        }
+        if let Some(typ) = node.typ() {
+            self.visit_type(&typ);
+        }
+        self.default_result()
+    }
+
+    fn walk_constant(&mut self, node: &Constant<'tree>) -> Self::Result {
+        if let Some(annotations) = node.annotations() {
+            self.walk_annotation_list(&annotations);
+        }
+        if let Some(typ) = node.typ() {
+            self.visit_type(&typ);
+        }
+        if let Some(value) = node.value() {
+            self.visit_expr(&value);
+        }
+        self.default_result()
+    }
+
+    fn walk_type_alias(&mut self, node: &TypeAlias<'tree>) -> Self::Result {
+        if let Some(annotations) = node.annotations() {
+            self.walk_annotation_list(&annotations);
+        }
+        if let Some(type_params) = node.type_parameters() {
+            self.walk_type_parameters(&type_params);
+        }
+        if let Some(underlying_type) = node.underlying_type() {
+            self.walk_type_alias_underlying_type(&underlying_type);
+        }
+        self.default_result()
+    }
+
+    fn walk_struct(&mut self, node: &Struct<'tree>) -> Self::Result {
+        if let Some(annotations) = node.annotations() {
+            self.walk_annotation_list(&annotations);
+        }
+        if let Some(type_params) = node.type_parameters() {
+            self.walk_type_parameters(&type_params);
+        }
+        if let Some(body) = node.body() {
+            self.walk_struct_body(&body);
+        }
+        self.default_result()
+    }
+
+    fn walk_enum(&mut self, node: &Enum<'tree>) -> Self::Result {
+        if let Some(annotations) = node.annotations() {
+            self.walk_annotation_list(&annotations);
+        }
+        if let Some(backed_type) = node.backed_type() {
+            self.visit_type(&backed_type);
+        }
+        if let Some(body) = node.body() {
+            self.walk_enum_body(&body);
+        }
+        self.default_result()
+    }
 
     fn walk_func(&mut self, node: &ast::Func<'tree>) -> Self::Result {
         self.enter_scope();

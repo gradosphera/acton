@@ -994,7 +994,6 @@ mod tests {
                 }
             "#,
             expect![[r#"
-                S at 24-25
                 S at 94-95
                 S at 124-125
             "#]],

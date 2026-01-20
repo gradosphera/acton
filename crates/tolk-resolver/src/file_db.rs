@@ -149,7 +149,13 @@ impl FileDb {
         };
         let info = Arc::new(FileInfo {
             id: file_id,
-            index: Arc::new(FileIndex::build(file_id, path.clone(), &file, source_kind)),
+            index: Arc::new(FileIndex::build(
+                content,
+                file_id,
+                path.clone(),
+                &file,
+                source_kind,
+            )),
             source: file,
         });
 
