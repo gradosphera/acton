@@ -1,5 +1,6 @@
 use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
 use crate::rules::violation::Violation;
+use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::{FileId, Span};
@@ -116,6 +117,7 @@ fn fire_diagnostic(
     let diagnostic = Diagnostic {
         file_id,
         severity: Severity::Warning,
+        code: UnusedVariable::code().map(|c| c.to_string()),
         message: UnusedVariable.message(),
         annotations: vec![Annotation {
             span: local.def_span,

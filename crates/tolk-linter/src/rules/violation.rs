@@ -59,6 +59,11 @@ pub trait ViolationMetadata {
     /// Returns the rule for this violation
     fn rule() -> Rule;
 
+    /// Returns the code for this violation
+    fn code() -> Option<&'static str> {
+        Linter::Tolk.code_for_rule(Self::rule())
+    }
+
     /// Returns an explanation of what this violation catches,
     /// why it's bad, and what users should do instead.
     fn explain() -> Option<&'static str>;

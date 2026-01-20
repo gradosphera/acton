@@ -22,6 +22,7 @@ pub enum Severity {
 pub struct Diagnostic {
     pub file_id: FileId,
     pub severity: Severity,
+    pub code: Option<String>,
     pub message: String,
     pub annotations: Vec<Annotation>,
     pub fixes: Vec<Fix>,

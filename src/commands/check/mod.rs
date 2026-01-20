@@ -4,9 +4,10 @@ use serde_json;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::time::Instant;
-use tolk_linter::Checker;
 use tolk_linter::diagnostic::{Annotation, Applicability, Diagnostic, Severity};
+use tolk_linter::{Checker, Tolk};
 use tolk_resolver::file_db::FileDb;
 use tolk_resolver::file_index::Span;
 use tolk_resolver::project_index::ProjectIndex;
@@ -16,7 +17,22 @@ use tolk_ty::TypeInterner;
 use tolk_ty::infer;
 use tree_sitter::Point;
 
-pub fn check_cmd(fix: bool, json: bool) -> anyhow::Result<()> {
+pub fn check_cmd(fix: bool, json: bool, explain: Option<String>) -> anyhow::Result<()> {
+    if let Some(code) = explain {
+        if let Ok(tolk_rules) = Tolk::from_str(&code)
+            && let Some(rule) = tolk_rules.rules().next()
+        {
+            if let Some(explanation) = rule.explanation() {
+                println!("{}", explanation);
+            } else {
+                println!("No explanation available for rule {}", code);
+            }
+        } else {
+            anyhow::bail!("Unknown rule code: {}", code);
+        }
+        return Ok(());
+    }
+
     let config = ActonConfig::load()?;
 
     let contracts = match config.contracts() {
@@ -79,6 +95,19 @@ pub fn check_cmd(fix: bool, json: bool) -> anyhow::Result<()> {
             "diagnostics": all_diagnostics.iter().map(|d| diagnostic_to_json(d, &file_db)).collect::<Vec<_>>()
         });
         println!("{}", serde_json::to_string_pretty(&json_output)?);
+    } else if !all_diagnostics.is_empty() {
+        let first_code = all_diagnostics
+            .iter()
+            .find(|d| d.code.is_some())
+            .and_then(|d| d.code.clone());
+        if let Some(code) = first_code {
+            eprintln!();
+            eprintln!(
+                "Use {} to get detailed explanation of a rule.",
+                "acton check --explain <CODE>".yellow()
+            );
+            eprintln!("For example: acton check --explain {}", code);
+        }
     }
 
     Ok(())
@@ -147,6 +176,7 @@ fn check_file(
         let diagnostic = Diagnostic {
             file_id: file_info.id(),
             severity: Severity::Error,
+            code: None,
             message: parse_error.message.clone(),
             annotations: vec![Annotation {
                 span: Span {
@@ -312,6 +342,9 @@ fn emit_diagnostics(file_db: &FileDb, diagnostics: &[Diagnostic]) -> anyhow::Res
         };
 
         let mut cs_diag = Diagnostic::new(severity).with_message(&diag.message);
+        if let Some(code) = &diag.code {
+            cs_diag = cs_diag.with_code(code);
+        }
 
         let mut labels = vec![];
         for anno in &diag.annotations {
@@ -475,6 +508,7 @@ fn diagnostic_to_json(diag: &Diagnostic, file_db: &FileDb) -> serde_json::Value 
     serde_json::json!({
         "file": file_path,
         "severity": severity,
+        "code": &diag.code,
         "message": &diag.message,
         "annotations": annotations_json,
         "fixes": fixes_json,

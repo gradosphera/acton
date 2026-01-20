@@ -1,5 +1,6 @@
 use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
 use crate::rules::violation::Violation;
+use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::AstNodeSpanExt;
@@ -150,6 +151,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
             let diagnostic = Diagnostic {
                 file_id,
                 severity: Severity::Warning,
+                code: MutableVariableCanBeImmutable::code().map(|c| c.to_string()),
                 message: MutableVariableCanBeImmutable.message(),
                 annotations: vec![Annotation {
                     span: local.def_span,

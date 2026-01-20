@@ -483,6 +483,8 @@ enum Commands {
         fix: bool,
         #[arg(long, help = "Output results as JSON")]
         json: bool,
+        #[arg(long, help = "Explain a rule")]
+        explain: Option<String>,
     },
     #[command(
         about = "Retrace a transaction by its hash",
@@ -1313,7 +1315,7 @@ fn main() {
                 yes,
             ),
         },
-        Commands::Check { fix, json } => check_cmd(fix, json),
+        Commands::Check { fix, json, explain } => check_cmd(fix, json, explain),
         Commands::Up {
             version,
             canary,

@@ -1,5 +1,6 @@
 use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
 use crate::rules::violation::Violation;
+use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::AstNodeSpanExt;
@@ -65,6 +66,7 @@ pub fn check_struct_literal(
             let diagnostic = Diagnostic {
                 file_id,
                 severity: Severity::Warning,
+                code: FieldInitCanBeFolded::code().map(|c| c.to_string()),
                 message: FieldInitCanBeFolded.message(),
                 annotations: vec![Annotation {
                     span: argument.span(),

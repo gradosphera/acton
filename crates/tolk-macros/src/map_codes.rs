@@ -131,7 +131,7 @@ pub(crate) fn map_codes(func: &ItemFn) -> syn::Result<TokenStream> {
 
         output.extend(quote! {
             impl #linter {
-                pub(crate) fn rules(&self) -> ::std::vec::IntoIter<Rule> {
+                pub fn rules(&self) -> ::std::vec::IntoIter<Rule> {
                     match self { #prefix_into_iter_match_arms }
                 }
             }
@@ -139,7 +139,7 @@ pub(crate) fn map_codes(func: &ItemFn) -> syn::Result<TokenStream> {
     }
     output.extend(quote! {
         impl RuleCodePrefix {
-            pub(crate) fn parse(linter: &Linter, code: &str) -> Result<Self, crate::rules::FromCodeError> {
+            pub fn parse(linter: &Linter, code: &str) -> Result<Self, crate::rules::FromCodeError> {
                 use std::str::FromStr;
 
                 Ok(match linter {
@@ -147,7 +147,7 @@ pub(crate) fn map_codes(func: &ItemFn) -> syn::Result<TokenStream> {
                 })
             }
 
-            pub(crate) fn rules(&self) -> ::std::vec::IntoIter<Rule> {
+            pub fn rules(&self) -> ::std::vec::IntoIter<Rule> {
                 match self {
                     #(RuleCodePrefix::#linter_idents(prefix) => prefix.clone().rules(),)*
                 }
