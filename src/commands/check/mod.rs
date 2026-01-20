@@ -249,12 +249,7 @@ fn check_file(
 
     // And finally run all inspections provided by checker
     let now = Instant::now();
-    let mut checker = Checker {
-        file_db,
-        type_db: &mut type_db,
-        body_types: &body_types,
-        diagnostics: vec![],
-    };
+    let mut checker = Checker::new(file_db, &mut type_db, &body_types);
 
     for file_to_check in files_to_check {
         let Some(info) = file_db.get_by_id(file_to_check) else {
@@ -268,6 +263,11 @@ fn check_file(
         checker.process_file(info.source(), info.id());
     }
     log::debug!("Run diagnostics in {:?}", now.elapsed());
+
+    #[cfg(feature = "profile_rules")]
+    {
+        checker.print_profiling_results();
+    }
 
     let mut diagnostics = checker.diagnostics.clone();
     diagnostics.extend(all_diagnostics);

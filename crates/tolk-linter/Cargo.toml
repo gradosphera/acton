@@ -11,3 +11,6 @@ tolk-macros = { path = "../tolk-macros" }
 tree-sitter = "0.25.10"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
+
+[features]
+profile_rules = []

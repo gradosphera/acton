@@ -15,16 +15,39 @@ use tolk_ty::InferenceResult;
 use tolk_ty::TypeDb;
 use tree_sitter::Node;
 
+#[cfg(feature = "profile_rules")]
+mod profiling;
 mod rules;
+
+#[cfg(feature = "profile_rules")]
+pub use profiling::Profiler;
 
 pub struct Checker<'a> {
     pub file_db: &'a FileDb,
     pub type_db: &'a mut TypeDb<'a>,
     pub body_types: &'a HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
     pub diagnostics: Vec<Diagnostic>,
+
+    #[cfg(feature = "profile_rules")]
+    pub profiler: Profiler,
 }
 
 impl<'a> Checker<'a> {
+    pub fn new(
+        file_db: &'a FileDb,
+        type_db: &'a mut TypeDb<'a>,
+        body_types: &'a HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
+    ) -> Self {
+        Self {
+            file_db,
+            type_db,
+            body_types,
+            diagnostics: Vec::new(),
+            #[cfg(feature = "profile_rules")]
+            profiler: Profiler::default(),
+        }
+    }
+
     pub fn resolve_index_for(&self, file_id: FileId) -> Option<Arc<FileResolveIndex>> {
         self.type_db
             .project_index
@@ -43,6 +66,43 @@ impl<'a> Checker<'a> {
 
         walk_ast(&mut walker, file);
     }
+
+    #[cfg(feature = "profile_rules")]
+    pub fn print_profiling_results(&self) {
+        let mut rules: Vec<_> = self.profiler.rules.iter().collect();
+        rules.sort_by_key(|(_, stats)| std::cmp::Reverse(stats.total));
+
+        println!("\nRule profiling results:");
+        println!("{:<40} {:>10} {:>15}", "Rule", "Calls", "Total Time");
+        println!("{:-<67}", "");
+        for (rule, stats) in rules {
+            println!(
+                "{:<40} {:>10} {:>15?}",
+                format!("{:?}", rule),
+                stats.calls,
+                stats.total
+            );
+        }
+        println!();
+    }
+}
+
+#[cfg(feature = "profile_rules")]
+macro_rules! run_rule {
+    ($checker:expr, $rule:expr, $body:expr) => {{
+        let start = std::time::Instant::now();
+        let result = $body;
+        $checker.profiler.record($rule, start.elapsed());
+        result
+    }};
+}
+
+#[cfg(not(feature = "profile_rules"))]
+macro_rules! run_rule {
+    ($checker:expr, $rule:expr, $body:expr) => {{
+        let _ = $rule; // avoid unused warnings
+        $body
+    }};
 }
 
 struct CheckerWalker<'a, 'b> {
@@ -55,8 +115,16 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
     type Result = ();
 
     fn walk_source_file(&mut self, source_file: &'file SourceFile) -> Self::Result {
-        mutable_variable_can_be_immutable::check_file(self.checker, self.file_id);
-        unused_variable::check_file(self.checker, self.file_id);
+        run_rule!(
+            self.checker,
+            Rule::MutableVariableCanBeImmutable,
+            mutable_variable_can_be_immutable::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::UnusedVariable,
+            unused_variable::check_file(self.checker, self.file_id)
+        );
 
         for top_level in source_file.top_levels() {
             self.visit_top_level(&top_level);
@@ -65,7 +133,11 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
     }
 
     fn walk_object_lit(&mut self, node: &ObjectLit<'file>) -> Self::Result {
-        field_init_can_be_folded::check_struct_literal(self.checker, self.file_id, node);
+        run_rule!(
+            self.checker,
+            Rule::FieldInitCanBeFolded,
+            field_init_can_be_folded::check_struct_literal(self.checker, self.file_id, node)
+        );
 
         if let Some(object_type) = node.typ() {
             self.visit_type(&object_type);
@@ -99,11 +171,15 @@ impl<'a, 'b> CheckerWalker<'a, 'b> {
         if let Resolved::Global(resolved) = usage.resolved
             && let Some(symbol) = self.checker.type_db.project_index.resolve_symbol(resolved)
         {
-            deprecated_symbol_use::check_resolved_reference(
+            run_rule!(
                 self.checker,
-                self.file_id,
-                node,
-                &symbol,
+                Rule::DeprecatedSymbolUse,
+                deprecated_symbol_use::check_resolved_reference(
+                    self.checker,
+                    self.file_id,
+                    node,
+                    &symbol,
+                )
             );
         }
     }

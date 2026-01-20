@@ -156,3 +156,6 @@ undocumented_unsafe_blocks = "deny"
 
 [lints]
 workspace = true
+
+[features]
+profile_rules = ["tolk-linter/profile_rules"] # for acton check
