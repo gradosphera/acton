@@ -1,6 +1,7 @@
 use crate::Checker;
 use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
-use crate::rules::violation::{Rule, Violation, ViolationMetadata};
+use crate::rules::violation::Violation;
+use tolk_macros::ViolationMetadata;
 use tolk_resolver::AstNodeSpanExt;
 use tolk_resolver::file_index::FileId;
 use tolk_resolver::file_index::Span;
@@ -11,17 +12,30 @@ use tolk_syntax::AstNodeBytesKind;
 use tolk_syntax::HasTreeSitterKind;
 use tolk_syntax::{Assign, Call, CallArgument, DotAccess, SetAssign, VarDeclLhs, match_parents};
 
+/// ### What it does
+/// Checks for variables that are declared as mutable (`var`) but are never mutated.
+///
+/// ### Why is this bad?
+/// Using `val` instead of `var` makes the code clearer by signaling that the variable's value will not change.
+///
+/// ### Example
+/// ```tolk
+/// fun main() {
+///     var x = 1;
+///     println(x);
+/// }
+/// ```
+///
+/// Use instead:
+/// ```tolk
+/// fun main() {
+///     val x = 1;
+///     println(x);
+/// }
+/// ```
+#[derive(ViolationMetadata)]
+#[violation_metadata(stable_since = "v0.0.1")]
 pub struct MutableVariableCanBeImmutable;
-
-impl ViolationMetadata for MutableVariableCanBeImmutable {
-    fn rule() -> Rule {
-        Rule::MutableVariableCanBeImmutable
-    }
-
-    fn explain() -> Option<&'static str> {
-        Some("Variable can be immutable")
-    }
-}
 
 impl Violation for MutableVariableCanBeImmutable {
     fn message(&self) -> String {

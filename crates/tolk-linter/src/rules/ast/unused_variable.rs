@@ -1,21 +1,41 @@
 use crate::Checker;
 use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
-use crate::rules::violation::{Rule, Violation, ViolationMetadata};
+use crate::rules::violation::Violation;
+use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::{FileId, Span};
 use tolk_resolver::resolve_index::{LocalDef, LocalDefKind};
 use tolk_syntax::{HasName, Ident, LambdaParameter, Parameter, TryFromNode, VarDecl};
 
+/// ### What it does
+/// Checks for variables and parameters that are declared but never used.
+///
+/// ### Why is this bad?
+/// Unused variables and parameters clutter the code and can be a sign of a bug.
+///
+/// ### Example
+/// ```tolk
+/// fun main() {
+///     val x = 1;
+///     println("hello");
+/// }
+/// ```
+///
+/// Use instead:
+/// ```tolk
+/// fun main() {
+///     println("hello");
+/// }
+/// ```
+/// Or prefix with an underscore if the variable is intentionally unused:
+/// ```tolk
+/// fun main() {
+///     val _x = 1;
+///     println("hello");
+/// }
+/// ```
+#[derive(ViolationMetadata)]
+#[violation_metadata(stable_since = "v0.0.1")]
 pub struct UnusedVariable;
-
-impl ViolationMetadata for UnusedVariable {
-    fn rule() -> Rule {
-        Rule::UnusedVariable
-    }
-
-    fn explain() -> Option<&'static str> {
-        Some("Unused variable")
-    }
-}
 
 impl Violation for UnusedVariable {
     fn message(&self) -> String {

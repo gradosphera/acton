@@ -1,21 +1,39 @@
 use crate::Checker;
 use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
-use crate::rules::violation::{Rule, Violation, ViolationMetadata};
+use crate::rules::violation::Violation;
+use tolk_macros::ViolationMetadata;
 use tolk_resolver::AstNodeSpanExt;
 use tolk_resolver::file_index::FileId;
 use tolk_syntax::{Expr, HasName, ObjectLit};
 
+/// ### What it does
+/// Checks for struct initialization where the field name and the variable used to initialize it are the same.
+///
+/// ### Why is this bad?
+/// It's redundant and can be simplified using the shorthand syntax.
+///
+/// ### Example
+/// ```tolk
+/// struct Foo { bar: int }
+///
+/// fun main() {
+///     val bar = 1;
+///     val foo = Foo { bar: bar };
+/// }
+/// ```
+///
+/// Use instead:
+/// ```tolk
+/// struct Foo { bar: int }
+///
+/// fun main() {
+///     val bar = 1;
+///     val foo = Foo { bar };
+/// }
+/// ```
+#[derive(ViolationMetadata)]
+#[violation_metadata(stable_since = "v0.0.1")]
 pub struct FieldInitCanBeFolded;
-
-impl ViolationMetadata for FieldInitCanBeFolded {
-    fn rule() -> Rule {
-        Rule::FieldInitCanBeFolded
-    }
-
-    fn explain() -> Option<&'static str> {
-        Some("Foo { bar: bar } can be folded to Foo { bar }")
-    }
-}
 
 impl Violation for FieldInitCanBeFolded {
     fn message(&self) -> String {
