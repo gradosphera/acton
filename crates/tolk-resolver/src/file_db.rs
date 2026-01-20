@@ -63,9 +63,20 @@ impl FileInfo {
 
     /// Finds the `Symbol` declaration corresponding to an AST node that has a name.
     pub fn find_declaration<'a, Node: AstNode<'a>>(&self, node: &Node) -> Option<&Symbol> {
-        let decl_span = node.span();
-        let index_decl = self.index.decls.iter().find(|d| d.body_span == decl_span)?;
-        Some(index_decl)
+        let span = node.span();
+        let idx = self.index.find_symbol_index_at_offset(span.start())?;
+        let symbol = &self.index.decls[idx];
+        if symbol.body_span == span {
+            Some(symbol)
+        } else {
+            None
+        }
+    }
+
+    /// Finds the `Symbol` declaration containing given offset.
+    pub fn find_symbol_at(&self, offset: usize) -> Option<&Symbol> {
+        let idx = self.index.find_symbol_index_at_offset(offset)?;
+        Some(&self.index.decls[idx])
     }
 
     /// Finds AST node for declaration with given name span.

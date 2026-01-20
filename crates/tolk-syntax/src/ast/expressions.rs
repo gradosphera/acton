@@ -461,6 +461,11 @@ impl<'tree> Call<'tree> {
         let callee = self.callee()?;
         match callee {
             Expr::DotAccess(dot_access) => Some(dot_access.field()?.syntax()),
+            Expr::Instantiation(inst) => match inst.expr()? {
+                Expr::DotAccess(dot_access) => Some(dot_access.field()?.syntax()),
+                Expr::Ident(ident) => Some(ident.syntax()),
+                _ => None,
+            },
             Expr::Ident(ident) => Some(ident.syntax()),
             _ => None,
         }

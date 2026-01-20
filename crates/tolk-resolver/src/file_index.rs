@@ -254,9 +254,27 @@ pub struct FileIndex {
     pub decls: Vec<Symbol>,
     /// Mapping from local_id of the [`SymbolId`] to index in tree root children.
     pub symbol_id_to_decl_index: BTreeMap<u32, usize>, // SymbolId.local_id to idx in top levels
+    /// Sorted list of spans for top-level declarations, used for efficient lookup.
+    pub body_spans: Vec<(Span, usize)>,
 }
 
 impl FileIndex {
+    pub fn find_symbol_index_at_offset(&self, offset: usize) -> Option<usize> {
+        let idx = self
+            .body_spans
+            .binary_search_by(|(span, _)| {
+                if span.contains(offset) {
+                    std::cmp::Ordering::Equal
+                } else if (span.start as usize) > offset {
+                    std::cmp::Ordering::Greater
+                } else {
+                    std::cmp::Ordering::Less
+                }
+            })
+            .ok()?;
+        Some(self.body_spans[idx].1)
+    }
+
     /// Builds a `FileIndex` from a parsed `SourceFile`.
     ///
     /// # Panics
@@ -512,6 +530,13 @@ impl FileIndex {
             local_id += 1;
         }
 
+        let mut body_spans: Vec<(Span, usize)> = decls
+            .iter()
+            .enumerate()
+            .map(|(i, d)| (d.body_span, i))
+            .collect();
+        body_spans.sort_by_key(|(s, _)| s.start);
+
         FileIndex {
             id: file_id,
             path,
@@ -519,6 +544,7 @@ impl FileIndex {
             imports,
             decls,
             symbol_id_to_decl_index,
+            body_spans,
         }
     }
 

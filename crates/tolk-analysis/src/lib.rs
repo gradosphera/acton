@@ -2,11 +2,8 @@ use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tolk_resolver::resolve_index::LocalDefId;
-use tolk_resolver::{AstNodeSpanExt, FileId, Resolved, Symbol, SymbolId, SymbolKind};
-use tolk_syntax::AstNode;
-use tolk_syntax::AstNodeBytesKind;
-use tolk_syntax::HasTreeSitterKind;
-use tolk_syntax::{Assign, Call, CallArgument, DotAccess, SetAssign, match_parents};
+use tolk_resolver::{AstNodeSpanExt, FileId, Resolved, SymbolId, SymbolKind};
+use tolk_syntax::{Assign, Call, CallArgument, DotAccess, SetAssign, TryFromNode};
 use tolk_ty::{InferenceResult, TypeDb};
 
 bitflags::bitflags! {
@@ -57,62 +54,63 @@ impl AnalysisDb {
         let root = file.source().tree.root_node();
         let inference = body_types.get(&file_id)?;
 
-        let mut use_facts = FxHashMap::default();
+        let mut per_local_flags: FxHashMap<LocalDefId, UseFlags> = resolved_index
+            .locals
+            .iter()
+            .map(|l| (l.id, UseFlags::empty()))
+            .collect();
 
-        for local in &resolved_index.locals {
-            let mut usages = resolved_index.local_usages_of(local.id).peekable();
-            if usages.peek().is_none() {
-                use_facts.insert(
-                    local.id,
-                    LocalUseFacts {
-                        flags: UseFlags::empty(),
-                    },
-                );
+        for usage in &resolved_index.uses {
+            let Resolved::Local(local_id) = usage.resolved else {
+                continue;
+            };
+
+            let Some(facts) = per_local_flags.get_mut(&local_id) else {
+                continue;
+            };
+
+            if facts.contains(UseFlags::READ) && facts.contains(UseFlags::WRITE) {
                 continue;
             }
 
-            // The variable is used for writing in a number of cases:
-            // - if it is on the left side of an assignment
-            // - if it is used in the `mutate` argument: `foo(mutate a)`
-            // - if a mutating method is called on it
+            let mut is_write = false; // is this usage is mutation
 
-            let mut facts = UseFlags::empty();
+            let Some(usage_node) =
+                root.descendant_for_byte_range(usage.span.start(), usage.span.end())
+            else {
+                continue;
+            };
 
-            for usage in usages {
-                let mut is_write = false; // is this usage is mutation
-
-                let Some(usage_node) =
-                    root.descendant_for_byte_range(usage.span.start(), usage.span.end())
-                else {
-                    continue;
-                };
-
-                // 1. Check assignments
-                if let Some(assign) = match_parents!(usage_node, Assign(...))
-                    && assign.is_lhs(&usage_node)
-                {
-                    facts.insert(UseFlags::WRITE);
-                    is_write = true;
-                } else if let Some(assign) = match_parents!(usage_node, SetAssign(...))
-                    && assign.is_lhs(&usage_node)
-                {
-                    facts.insert(UseFlags::READ);
-                    facts.insert(UseFlags::WRITE);
-                    is_write = true;
-                } else if let Some(argument) = match_parents!(usage_node, CallArgument) // 2. Check mutate arguments
-                    && argument.mutate()
-                {
-                    facts.insert(UseFlags::WRITE);
-                    is_write = true;
-                } else if let Some((call, dot)) = match_parents!(usage_node, Call(dot: DotAccess))  // 3. Check method calls
-                    && let Some(callee) = call.callee_identifier()
+            let mut current = usage_node.parent();
+            while let Some(node) = current {
+                if let Ok(assign) = Assign::try_from_node(node) {
+                    if assign.is_lhs(&usage_node) {
+                        facts.insert(UseFlags::WRITE);
+                        is_write = true;
+                    }
+                    break;
+                } else if let Ok(assign) = SetAssign::try_from_node(node) {
+                    if assign.is_lhs(&usage_node) {
+                        facts.insert(UseFlags::READ | UseFlags::WRITE);
+                        is_write = true;
+                    }
+                    break;
+                } else if let Ok(argument) = CallArgument::try_from_node(node) {
+                    if argument.mutate() {
+                        facts.insert(UseFlags::WRITE | UseFlags::MUTATE);
+                        is_write = true;
+                        break;
+                    }
+                } else if let Ok(dot) = DotAccess::try_from_node(node)
                     && dot.is_obj(&usage_node)
-                    && let Some(decl) = Self::find_outer_decl(call, file_id, type_db)
+                    && let Some(call) = node.parent().and_then(|p| Call::try_from_node(p).ok())
+                    && let Some(callee) = call.callee_identifier()
+                    && let Some(decl) = file.find_symbol_at(usage_node.start_byte())
                     && let Some(inference) = inference.get(&decl.id)
                 {
-                    let resolved2 = inference.resolve(callee.span());
+                    let resolved = inference.resolve(callee.span());
 
-                    if let Some(resolved) = resolved2
+                    if let Some(resolved) = resolved
                         && let Resolved::Global(id) = resolved.resolved
                     {
                         let resolved = type_db.project_index.resolve_symbol(id);
@@ -120,55 +118,35 @@ impl AnalysisDb {
                             && let SymbolKind::Method { is_mutable, .. } = resolved.kind
                             && is_mutable
                         {
-                            facts.insert(UseFlags::READ);
-                            facts.insert(UseFlags::WRITE);
-                            facts.insert(UseFlags::MUTATE);
-                            break;
+                            facts.insert(UseFlags::READ | UseFlags::WRITE | UseFlags::MUTATE);
+                            is_write = true;
                         }
                     } else {
                         // we cannot resolve this method call, assume it mutates to avoid false positives
-                        facts.insert(UseFlags::READ);
-                        facts.insert(UseFlags::WRITE);
-                        facts.insert(UseFlags::MUTATE);
-                        break;
+                        facts.insert(UseFlags::READ | UseFlags::WRITE | UseFlags::MUTATE);
+                        is_write = true;
                     }
-                }
-
-                if !is_write {
-                    // if this usage is not mutation then it is read
-                    facts.insert(UseFlags::READ);
-                }
-
-                if facts.contains(UseFlags::READ) && facts.contains(UseFlags::WRITE) {
-                    // already found any possible uses
                     break;
                 }
+
+                current = node.parent();
             }
 
-            use_facts.insert(local.id, LocalUseFacts { flags: facts });
+            if !is_write {
+                // if this usage is not mutation then it is read
+                facts.insert(UseFlags::READ);
+            }
         }
+
+        let use_facts = per_local_flags
+            .into_iter()
+            .map(|(id, flags)| (id, LocalUseFacts { flags }))
+            .collect();
 
         let facts = Arc::new(FileUseFacts {
             per_local: use_facts,
         });
         self.use_facts.insert(file_id, facts.clone());
         Some(facts)
-    }
-
-    fn find_outer_decl(call: Call, file_id: FileId, type_db: &TypeDb) -> Option<Symbol> {
-        let file_indo = type_db.file_db.get_by_id(file_id)?;
-        let mut current = call.syntax().parent();
-        while let Some(parent) = current {
-            let kind = parent.kind_bytes();
-            if kind == b"function_declaration"
-                || kind == b"method_declaration"
-                || kind == b"get_method_declaration"
-            {
-                let decl = file_indo.find_declaration(&parent)?;
-                return Some(decl.clone());
-            }
-            current = parent.parent();
-        }
-        None
     }
 }
