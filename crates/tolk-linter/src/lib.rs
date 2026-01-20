@@ -13,6 +13,7 @@ use tolk_resolver::{AstNodeSpanExt, Resolved};
 use tolk_syntax::{Ident, ObjectLit, SourceFile, TypeIdent, Walker, walk_ast};
 use tolk_ty::InferenceResult;
 use tolk_ty::TypeDb;
+use tree_sitter::Node;
 
 mod rules;
 
@@ -33,9 +34,11 @@ impl<'a> Checker<'a> {
     }
 
     pub fn process_file(&mut self, file: &SourceFile, file_id: FileId) {
+        let resolve_index = self.resolve_index_for(file_id);
         let mut walker = CheckerWalker {
             checker: self,
             file_id,
+            resolve_index,
         };
 
         walk_ast(&mut walker, file);
@@ -45,6 +48,7 @@ impl<'a> Checker<'a> {
 struct CheckerWalker<'a, 'b> {
     checker: &'a mut Checker<'b>,
     file_id: FileId,
+    resolve_index: Option<Arc<FileResolveIndex>>,
 }
 
 impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
@@ -72,38 +76,19 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
     }
 
     fn walk_ident(&mut self, node: &Ident<'file>) -> Self::Result {
-        let Some(resolve_index) = self
-            .checker
-            .type_db
-            .project_index
-            .get_resolved_uses(self.file_id)
-        else {
-            return;
-        };
-
-        let Some(usage) = resolve_index.find_use(node.span().start()) else {
-            return;
-        };
-
-        if let Resolved::Global(resolved) = usage.resolved
-            && let Some(symbol) = self.checker.type_db.project_index.resolve_symbol(resolved)
-        {
-            deprecated_symbol_use::check_resolved_reference(
-                self.checker,
-                self.file_id,
-                &node.0,
-                &symbol,
-            );
-        }
+        self.resolve_ident_and_run_inspections(&node.0)
     }
 
     fn walk_type_ident(&mut self, node: &TypeIdent<'file>) -> Self::Result {
-        let Some(resolve_index) = self
-            .checker
-            .type_db
-            .project_index
-            .get_resolved_uses(self.file_id)
-        else {
+        self.resolve_ident_and_run_inspections(&node.0)
+    }
+
+    fn default_result(&self) -> Self::Result {}
+}
+
+impl<'a, 'b> CheckerWalker<'a, 'b> {
+    fn resolve_ident_and_run_inspections(&mut self, node: &Node) {
+        let Some(resolve_index) = &self.resolve_index else {
             return;
         };
 
@@ -117,11 +102,9 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
             deprecated_symbol_use::check_resolved_reference(
                 self.checker,
                 self.file_id,
-                &node.0,
+                node,
                 &symbol,
             );
         }
     }
-
-    fn default_result(&self) -> Self::Result {}
 }
