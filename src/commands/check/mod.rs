@@ -216,6 +216,7 @@ fn check_file(
             file_id: file_info.id(),
             severity: Severity::Error,
             code: None,
+            name: "parse-error",
             message: parse_error.message.clone(),
             annotations: vec![Annotation {
                 span: Span {
@@ -288,6 +289,8 @@ fn check_file(
 
         checker.process_file(info.source(), info.id());
     }
+
+    checker.apply_suppressions();
     log::debug!("Run diagnostics in {:?}", now.elapsed());
 
     #[cfg(feature = "profile_rules")]
@@ -593,6 +596,7 @@ fn diagnostic_to_json(diag: &Diagnostic, file_db: &FileDb) -> serde_json::Value 
     serde_json::json!({
         "file": file_path,
         "severity": severity,
+        "name": &diag.name,
         "code": &diag.code,
         "message": &diag.message,
         "annotations": annotations_json,

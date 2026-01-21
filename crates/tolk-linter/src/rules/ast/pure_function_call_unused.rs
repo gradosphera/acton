@@ -83,6 +83,7 @@ fn fire_diagnostic(checker: &mut Checker, file_id: FileId, call: &Call, symbol: 
     let diagnostic = Diagnostic {
         file_id,
         severity: Severity::Warning,
+        name: PureFunctionCallUnused::rule().name(),
         code: PureFunctionCallUnused::code().map(|c| c.to_string()),
         message: PureFunctionCallUnused.message(),
         annotations: vec![Annotation {

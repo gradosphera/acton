@@ -58,6 +58,7 @@ pub fn check_resolved_reference(
     let diagnostic = Diagnostic {
         file_id,
         severity: Severity::Warning,
+        name: DeprecatedSymbolUse::rule().name(),
         code: DeprecatedSymbolUse::code().map(|c| c.to_string()),
         message: DeprecatedSymbolUse.message(),
         annotations: vec![Annotation {

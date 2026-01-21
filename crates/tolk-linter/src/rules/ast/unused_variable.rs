@@ -124,6 +124,7 @@ fn fire_diagnostic(
     let diagnostic = Diagnostic {
         file_id,
         severity: Severity::Warning,
+        name: UnusedVariable::rule().name(),
         code: UnusedVariable::code().map(|c| c.to_string()),
         message: UnusedVariable.message(),
         annotations: vec![Annotation {

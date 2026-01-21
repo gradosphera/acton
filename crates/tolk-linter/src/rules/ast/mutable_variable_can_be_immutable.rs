@@ -90,6 +90,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
         let diagnostic = Diagnostic {
             file_id,
             severity: Severity::Warning,
+            name: MutableVariableCanBeImmutable::rule().name(),
             code: MutableVariableCanBeImmutable::code().map(|c| c.to_string()),
             message: MutableVariableCanBeImmutable.message(),
             annotations: vec![Annotation {

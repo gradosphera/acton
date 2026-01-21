@@ -93,6 +93,7 @@ fn fire_diagnostic(
     let diagnostic = Diagnostic {
         file_id,
         severity: Severity::Warning,
+        name: FieldInitCanBeFolded::rule().name(),
         code: FieldInitCanBeFolded::code().map(|c| c.to_string()),
         message: FieldInitCanBeFolded.message(),
         annotations: vec![Annotation {

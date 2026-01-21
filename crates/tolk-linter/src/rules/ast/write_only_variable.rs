@@ -65,6 +65,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
         let diagnostic = Diagnostic {
             file_id,
             severity: Severity::Warning,
+            name: WriteOnlyVariable::rule().name(),
             code: WriteOnlyVariable::code().map(|c| c.to_string()),
             message: WriteOnlyVariable.message(),
             annotations: vec![Annotation {

@@ -7,6 +7,7 @@ use crate::rules::ast::{
 };
 use rules::diagnostic::Diagnostic;
 pub use rules::*;
+use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tolk_resolver::file_db::FileDb;
@@ -36,9 +37,16 @@ pub struct Checker<'a> {
     pub diagnostics: Vec<Diagnostic>,
     pub settings: HashMap<Rule, acton_config::config::LintLevel>,
 
+    /// Map from file ID to a map of line number to list of suppressed rule names/codes
+    pub file_suppressions: FxHashMap<FileId, FxHashMap<usize, Vec<String>>>,
+    /// Map from file ID to a list of line start byte offsets
+    pub line_starts: FxHashMap<FileId, Vec<u32>>,
+
     #[cfg(feature = "profile_rules")]
     pub profiler: Profiler,
 }
+
+const SUPPRESSION_MARKER: &str = "acton-disable-next-line";
 
 impl<'a> Checker<'a> {
     pub fn new(
@@ -53,8 +61,51 @@ impl<'a> Checker<'a> {
             analysis_db: AnalysisDb::new(),
             diagnostics: Vec::new(),
             settings: HashMap::new(),
+            file_suppressions: FxHashMap::default(),
+            line_starts: FxHashMap::default(),
             #[cfg(feature = "profile_rules")]
             profiler: Profiler::default(),
+        }
+    }
+
+    pub fn scan_for_suppressions(&mut self, file_id: FileId, text: &str) {
+        if memchr::memmem::find(text.as_bytes(), SUPPRESSION_MARKER.as_bytes()).is_none() {
+            // fast path for most of the files
+            return;
+        }
+
+        let mut line_starts = Vec::with_capacity(text.len() / 80);
+        line_starts.push(0);
+        for (i, &b) in text.as_bytes().iter().enumerate() {
+            if b == b'\n' {
+                line_starts.push((i + 1) as u32);
+            }
+        }
+        self.line_starts.insert(file_id, line_starts);
+
+        let mut suppressions = FxHashMap::default();
+        for (line_idx, line) in text.lines().enumerate() {
+            if let Some(pos) = line.find("//") {
+                let comment = &line[pos + 2..].trim();
+                if let Some(marker_pos) = comment.find(SUPPRESSION_MARKER) {
+                    let rules_part = comment[marker_pos + SUPPRESSION_MARKER.len()..].trim();
+
+                    let mut rules = Vec::new();
+                    for rule in rules_part.split(',') {
+                        let rule = rule.trim();
+                        if !rule.is_empty() {
+                            rules.push(rule.to_string());
+                        }
+                    }
+
+                    // we need to store suppression for the **next** line
+                    suppressions.insert(line_idx + 1, rules);
+                }
+            }
+        }
+
+        if !suppressions.is_empty() {
+            self.file_suppressions.insert(file_id, suppressions);
         }
     }
 
@@ -135,7 +186,45 @@ impl<'a> Checker<'a> {
             .use_facts(self.type_db, self.body_types, file_id)
     }
 
+    pub fn apply_suppressions(&mut self) {
+        self.diagnostics.retain(|diag| {
+            let Some(file_suppressions) = self.file_suppressions.get(&diag.file_id) else {
+                // fast path for most of the files
+                return true;
+            };
+
+            let Some(line_starts) = self.line_starts.get(&diag.file_id) else {
+                return true;
+            };
+
+            let span = if let Some(primary) = diag.annotations.iter().find(|a| a.is_primary) {
+                primary.span
+            } else if let Some(first) = diag.annotations.first() {
+                first.span
+            } else {
+                return true;
+            };
+
+            let line_idx = line_starts
+                .binary_search(&span.start)
+                .unwrap_or_else(|idx| idx - 1);
+
+            if let Some(suppressed_rules) = file_suppressions.get(&line_idx) {
+                if suppressed_rules.iter().any(|r| r == "all") {
+                    return false;
+                }
+
+                if suppressed_rules.iter().any(|r| r == diag.name) {
+                    return false;
+                }
+            }
+
+            true
+        });
+    }
+
     pub fn process_file(&mut self, file: &SourceFile, file_id: FileId) {
+        self.scan_for_suppressions(file_id, file.source.as_ref());
         self.use_facts(file_id);
         let resolve_index = self.resolve_index_for(file_id);
         let mut walker = CheckerWalker {

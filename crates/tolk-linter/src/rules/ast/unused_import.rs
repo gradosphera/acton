@@ -76,6 +76,7 @@ fn fire_diagnostic(checker: &mut Checker, span: tolk_resolver::file_index::Span,
     let diagnostic = Diagnostic {
         file_id,
         severity: Severity::Warning,
+        name: UnusedImport::rule().name(),
         code: UnusedImport::code().map(|c| c.to_string()),
         message: UnusedImport.message(),
         annotations: vec![Annotation {

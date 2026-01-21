@@ -21,6 +21,7 @@ pub enum Severity {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Diagnostic {
     pub file_id: FileId,
+    pub name: &'static str,
     pub severity: Severity,
     pub code: Option<String>,
     pub message: String,
