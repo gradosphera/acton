@@ -18,7 +18,6 @@
 /// val seqno = net.runGetMethod<int>(contract.address, "seqno");
 /// ```
 
-import "@stdlib/common"
 import "@stdlib/gas-payments"
 import "../build/build"
 import "../ffi/ffi"
@@ -409,6 +408,52 @@ fun net.send(from: address, message: OutMessage, mode: int): SendResultList {
 fun net.sendSingle(from: address, message: OutMessage): SendResult {
     val res = ffi.sendSingleMessage(message.messageCell, from.toCell())!;
     return SendResult.fromTuple(res)
+}
+
+/// Creates an External-in message.
+/// Body is always packed into the Either Right (in the reference).
+/// If `StateInit` is present it is also packed in the Either Right (in the refference).
+/// Full TL-B scheme of the message is.
+/// ```
+/// ext_in_msg_info$10 src:MsgAddressExt dest:MsgAddressInt
+///   import_fee:Grams = CommonMsgInfo;
+/// message$_ {X:Type} info:CommonMsgInfo
+///   init:(Maybe (Either StateInit ^StateInit))
+///   body:(Either X ^X) = Message X;
+///```
+fun createExternalMessage<TBody>(dest: address, body: TBody, stateInit: StateInit? = null, src: any_address? = null) {
+    val init = stateInit != null
+        ? Maybe<Either<StateInit, Cell<StateInit>>>.some(Either<StateInit, Cell<StateInit>>.right(stateInit.toCell()))
+        : Maybe<Either<StateInit, Cell<StateInit>>>.none();
+
+    // A little hack because Tolk does not support arbitrary function calls as default parameters
+    if (src == null) {
+        src = createAddressNone();
+    }
+    // Tolk does not have ext_address type, so ext_address = any_address \ int_address
+    if (src.isInternal()) {
+        Assert.fail("Internal source address is not supported for External-in messages");
+    }
+
+    return OutMessage {
+        messageCell: Message<TBody, ExternalInMessageInfo> {
+            info: ExternalInMessageInfo {
+                src,
+                dest,
+                // It is better to fairly calculate the import fee right here or in acton
+                importFee: ton("0.1"),
+            },
+            init,
+            body: Either<TBody, Cell<TBody>>.right(body.toCell())
+        }.toCell()
+    };
+}
+
+/// Sends external incoming message to the spefied destination address.
+/// Read more about External incomming messages: https://docs.ton.org/foundations/messages/external-in#incoming-external-messages
+fun net.sendExternal(msg: OutMessage): SendResultList {
+    // from and mode fields do not affect anything in case of an ExtIn message
+    return ffi.sendMessageFrom(msg.messageCell, address("-1:0000000000000000000000000000000000000000000000000000000000000000").toCell(), 0)!;
 }
 
 /// Transform the out message to a bounced message. Essentially, it sets the `bounced` flag to true.
