@@ -932,6 +932,96 @@ fun net.balance(of: address): coins {
     return state.storage.balance.grams
 }
 
+/// Sets the blockchain configuration.
+///
+/// This function updates the entire blockchain configuration with a new configuration dict.
+/// The configuration is validated before being applied. If validation fails, the function
+/// returns false and the configuration is not updated.
+///
+/// For detailed information about blockchain configuration parameters, see the
+/// [TON Blockchain Configuration Reference](https://docs.ton.org/foundations/config).
+///
+/// Parameters:
+/// - `config`: The new [Config] map containing configuration parameters (indices 0-90)
+///
+/// Returns: `true` if the configuration was successfully updated, `false` if validation failed.
+///
+/// Example:
+/// ```tolk
+/// var config = net.getConfig();
+/// val storagePrices = config.getStoragePrices();
+/// var pricesDict = storagePrices;
+/// pricesDict.setInitial(StoragePrices {
+///     initialUnixTime: 0,
+///     bitPrice: 1,
+///     cellPrice: 1000,
+///     masterchainBitPrice: 1,
+///     masterchainCellPrice: 1000
+/// });
+/// config.setStoragePrices(pricesDict);
+/// val success = net.setConfig(config);
+/// if (success) {
+///     println("Configuration updated successfully");
+/// }
+/// ```
+fun net.setConfig(config: Config): bool {
+    val root = config.toLowLevelDict();
+    val result = ffi.setConfig(root);
+
+    if (result) {
+        vm.setConfigRootDict(root);
+
+        var unpacked = vm.getConfigUnpacked();
+
+        val storagePrices = config.getStoragePrices().getInitial();
+        unpacked.set(storagePrices.toCell().beginParse(), 0);
+
+        val masterchainGasPrices = config.getGasPrices(MASTERCHAIN);
+        unpacked.set(masterchainGasPrices.toCell().beginParse(), 2);
+
+        val basechainGasPrices = config.getGasPrices(BASECHAIN);
+        unpacked.set(basechainGasPrices.toCell().beginParse(), 3);
+
+        val masterchainFwd = config.getMsgForwardPrices(MASTERCHAIN);
+        unpacked.set(masterchainFwd.toCell().beginParse(), 4);
+
+        val basechainFwd = config.getMsgForwardPrices(BASECHAIN);
+        unpacked.set(basechainFwd.toCell().beginParse(), 5);
+
+        vm.setConfigUnpacked(unpacked);
+    }
+
+    return result;
+}
+
+/// Retrieves the current blockchain configuration.
+///
+/// Returns a map of all blockchain configuration parameters indexed from 0-90.
+/// The configuration includes gas prices, storage costs, validator settings, and other
+/// network parameters. Use specialized getter functions like [Config.getGasPrices],
+/// [Config.getStoragePrices], or [Config.getGlobalVersion] to access specific parameters.
+///
+/// For detailed information about blockchain configuration parameters, see the
+/// [TON Blockchain Configuration Reference](https://docs.ton.org/foundations/config).
+///
+/// Returns: A [Config] map containing all current blockchain configuration parameters.
+///
+/// Example:
+/// ```tolk
+/// val config = net.getConfig();
+///
+/// // Access specific configuration
+/// val gasPrice = config.getGasPrices(BASECHAIN);
+/// val storagePrices = config.getStoragePrices();
+/// val globalVersion = config.getGlobalVersion();
+///
+/// println(format1("Network version: {}", globalVersion.version));
+/// ```
+fun net.getConfig(): Config {
+    return createMapFromLowLevelDict(ffi.getConfig());
+}
+
+
 /// Calculate the CRC16 checksum of a slice.
 ///
 /// Example:
@@ -996,3 +1086,5 @@ fun ffi.enableBroadcast(): void asm "26 EXTCALL"
 fun ffi.disableBroadcast(): void asm "27 EXTCALL"
 fun ffi.setNow(now: int): void asm "28 EXTCALL"
 fun ffi.getNow(): int asm "29 EXTCALL"
+fun ffi.getConfig(): dict asm "31 EXTCALL"
+fun ffi.setConfig(config: dict): bool asm "32 EXTCALL"

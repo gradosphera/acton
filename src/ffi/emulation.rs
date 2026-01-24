@@ -829,6 +829,7 @@ fn run_get_method_impl(
         .chain
         .build_libs_with_hash_owner(&HashBytes::from_slice(address_hash.as_slice()));
     let libs_root = libs.into_root();
+    let world_state = &mut ctx.chain.world_state;
 
     let method_id = id.to_i32().unwrap_or(0);
 
@@ -851,13 +852,21 @@ fn run_get_method_impl(
         prev_blocks_info: None,
     };
 
+    let config_b64 = world_state
+        .get_config()
+        .root()
+        .clone()
+        .map(Boc::encode_base64)
+        .expect("Config has no root");
+
     let result = if ctx.debug.is_enabled() {
         let args = serialize_tuple(&args)
             .map(|t| t.to_boc_b64(false))
             .context("Cannot serialize tuple")?
             .context("Cannot serialize tuple")?;
-        let step_executor =
-            StepGetExecutor::new(&args, &params, None).context("Cannot create get executor")?;
+
+        let step_executor = StepGetExecutor::new(&args, &params, Some(&config_b64))
+            .context("Cannot create get executor")?;
 
         let source_map = ctx
             .build
@@ -911,7 +920,7 @@ fn run_get_method_impl(
             .context("Cannot serialize tuple")?
             .context("Cannot serialize tuple")?;
         executor
-            .run_get_method(&args, &params, None)
+            .run_get_method(&args, &params, Some(&config_b64))
             .context("Cannot run get method")?
     };
 
@@ -1324,6 +1333,42 @@ const fn enable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) -> anyhow:
     Ok(())
 }
 
+extension!(get_config in (Context) using get_config_impl);
+fn get_config_impl(ctx: &mut Context, stack: &mut Tuple) -> anyhow::Result<()> {
+    let config = ctx.chain.world_state.get_config();
+    let config_cell = config
+        .root()
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Config has no root cell"))?;
+    let arc = ArcCell::from_boc(&Boc::encode(config_cell))
+        .map_err(|e| anyhow::anyhow!("Failed to encode config from world state: {e}"))?;
+
+    stack.push(TupleItem::Cell(arc));
+    Ok(())
+}
+
+extension!(set_config in (Context) with (config: ArcCell) using set_config_impl);
+fn set_config_impl(ctx: &mut Context, stack: &mut Tuple, config: ArcCell) -> anyhow::Result<()> {
+    let config_boc = config.to_boc(false)?;
+    let config_cell = Boc::decode(config_boc)?;
+
+    let result = ctx
+        .chain
+        .emulator
+        .set_config(&mut ctx.chain.world_state, config_cell);
+
+    match result {
+        Ok(res) => {
+            stack.push_bool(res);
+        }
+        Err(_) => {
+            stack.push_bool(false);
+        }
+    }
+
+    Ok(())
+}
+
 extension!(disable_broadcast in (Context) using disable_broadcast_impl);
 const fn disable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) -> anyhow::Result<()> {
     ctx.is_broadcasting = false;
@@ -1369,5 +1414,7 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         28 => set_now,
         29 => get_now,
         30 => send_single_message,
+        31 => get_config,
+        32 => set_config,
     });
 }

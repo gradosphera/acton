@@ -35,7 +35,7 @@
 //! #
 //! # fn example(msg: Cell) -> anyhow::Result<()> {
 //! // 1. Setup the state
-//! let mut state = WorldState::new(AccountsState::Local(LocalAccountsState::new()));
+//! let mut state = WorldState::new(AccountsState::Local(LocalAccountsState::new()), None)?;
 //!
 //! // 2. Create the emulator
 //! let emulator = Emulator::new(ExecutorVerbosity::Short, None)?;
@@ -54,6 +54,8 @@ pub mod emulator;
 pub mod extensions;
 pub mod remote;
 pub mod world_state;
+
+mod tests;
 
 pub use crate::emulator::{Emulator, SendMessageResult, SendMessageResultSuccess};
 pub use crate::world_state::{AccountsState, LocalAccountsState, RemoteAccountState, WorldState};

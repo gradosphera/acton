@@ -1,0 +1,102 @@
+import "../../lib/build/build"
+import "../../lib/emulation/config"
+import "../../lib/emulation/network"
+import "../../lib/testing/expect"
+import "../../lib/testing/transaction_expect"
+import "../../lib/vm/vm"
+
+get fun `test get config`() {
+    val config = net.getConfig();
+
+    expect(config.getGlobalVersion().version).toBeGreaterOrEqual(12);
+}
+
+get fun `test set config`() {
+    var config = net.getConfig();
+
+    var storagePricesBefore = config.getStoragePrices();
+    var baseStorage = storagePricesBefore.getInitial();
+    baseStorage.bitPrice += 10;
+
+    val savedPrice = baseStorage.bitPrice;
+    storagePricesBefore.setInitial(baseStorage);
+    config.setStoragePrices(storagePricesBefore);
+
+    val result = net.setConfig(config);
+    expect(result).toBeTrue();
+
+    val updatedConfig = net.getConfig();
+    var pricesAfter = updatedConfig.getStoragePrices();
+    var actual = pricesAfter.getInitial();
+
+    expect(savedPrice).toEqual(actual.bitPrice);
+}
+
+get fun `test bad config`() {
+    var config = net.getConfig();
+
+    config.setParamRaw(8, beginCell().endCell());
+
+    val result = net.setConfig(config);
+    expect(result).toBeFalse();
+}
+
+get fun `test get executor config`() {
+    val simpleCode = build("simple");
+    val getAddress = AutoDeployAddress {
+        stateInit: { code: simpleCode, data: beginCell().endCell() },
+    };
+
+    val deployMsg = createMessage({
+        dest: getAddress,
+        bounce: false,
+        value: ton("1"),
+    });
+
+    val deployer = net.treasury("deployer");
+    val res = net.send(deployer.address, deployMsg, SEND_MODE_PAY_FEES_SEPARATELY);
+
+    expect(res).toHaveSuccessfulDeploy({ from: deployer.address, to: getAddress.calculateAddress() });
+
+    val firstRes = net.runGetMethod(getAddress.calculateAddress(), "getParam") as int;
+
+    var config = net.getConfig();
+
+    var storagePricesBefore = config.getGasPrices(BASECHAIN);
+    storagePricesBefore.flatGasPrice += 100;
+    config.setGasPrices(storagePricesBefore, BASECHAIN);
+
+    val result = net.setConfig(config);
+    expect(result).toBeTrue();
+
+    val secondRes = net.runGetMethod(getAddress.calculateAddress(), "getParam") as int;
+    expect(firstRes).toNotEqual(secondRes);
+}
+
+fun calculateForwardFeeLocal(workchain: int8, bits: int, cells: int): coins
+    asm(cells bits workchain) "GETFORWARDFEE"
+
+get fun `test current config`() {
+    val gas = 100;
+    val before = calculateForwardFeeLocal(BASECHAIN, gas, gas);
+
+    val priceBefore = ((vm.getC7().get(0) as tuple).get(9) as Config).getMsgForwardPrices(BASECHAIN)
+        .lumpPrice;
+    var config = net.getConfig();
+
+    var storagePricesBefore = config.getMsgForwardPrices(BASECHAIN);
+
+    storagePricesBefore.lumpPrice += 2000;
+
+    config.setMsgForwardPrices(storagePricesBefore, BASECHAIN);
+    val result = net.setConfig(config);
+    expect(result).toBeTrue();
+
+    val priceAfter = ((vm.getC7().get(0) as tuple).get(9) as Config).getMsgForwardPrices(BASECHAIN)
+        .lumpPrice;
+    expect(priceBefore).toNotEqual(priceAfter);
+
+    val after = calculateForwardFeeLocal(BASECHAIN, gas, gas);
+
+    expect(before).toNotEqual(after);
+}

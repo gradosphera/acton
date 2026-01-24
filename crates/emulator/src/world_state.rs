@@ -12,7 +12,9 @@ use std::collections::HashMap;
 use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
-use tycho_types::cell::{Cell, HashBytes, Lazy};
+use ton_executor::DEFAULT_CONFIG;
+use tycho_types::boc;
+use tycho_types::cell::{Cell, CellFamily, HashBytes, Lazy};
 use tycho_types::models::{
     Account, AccountState, CurrencyCollection, IntAddr, OptionalAccount, ShardAccount, StateInit,
     StorageInfo,
@@ -271,7 +273,7 @@ impl RemoteAccountState {
 /// ```
 /// use emulator::world_state::{WorldState, AccountsState, LocalAccountsState};
 ///
-/// let mut world_state = WorldState::new(AccountsState::Local(LocalAccountsState::new()));
+/// let mut world_state = WorldState::new(AccountsState::Local(LocalAccountsState::new()), None).expect("Failed to create world state");
 /// assert_eq!(world_state.get_now(), 0);
 /// world_state.set_now(1000);
 /// assert_eq!(world_state.get_now(), 1000);
@@ -285,24 +287,47 @@ pub struct WorldState {
     current_now: u32,
     /// List of registered global library cells.
     libraries: Vec<Cell>,
+    /// Blockchain configuration
+    config: tycho_types::dict::Dict<u32, Cell>,
 }
 
 impl WorldState {
     /// Creates a new `WorldState` instance with the given initial state.
     #[must_use]
-    pub const fn new(accounts_state: AccountsState) -> Self {
-        Self {
+    pub fn new(accounts_state: AccountsState, config_b64: Option<&str>) -> anyhow::Result<Self> {
+        let config_str = config_b64.unwrap_or(DEFAULT_CONFIG);
+        let config = boc::Boc::decode_base64(config_str)
+            .ok()
+            .and_then(|cell| {
+                let mut slice = cell.as_slice_allow_exotic();
+                tycho_types::dict::Dict::load_from_root_ext(&mut slice, Cell::empty_context()).ok()
+            })
+            .ok_or_else(|| anyhow::anyhow!("Corrupted blockchain config for world state"))?;
+
+        Ok(Self {
             accounts_state,
             current_lt: 0,
             current_now: 0,
             libraries: vec![],
-        }
+            config,
+        })
     }
 
     /// Returns a reference to the map of accounts currently in the world state.
     #[must_use]
     pub const fn get_accounts(&self) -> &HashMap<String, ShardAccount> {
         self.accounts_state.accounts()
+    }
+
+    /// Returns a reference to the blockchain configuration.
+    #[must_use]
+    pub const fn get_config(&self) -> &tycho_types::dict::Dict<u32, Cell> {
+        &self.config
+    }
+
+    /// Sets the blockchain configuration.
+    pub fn set_config(&mut self, config: tycho_types::dict::Dict<u32, Cell>) {
+        self.config = config;
     }
 
     /// Checks if an account is deployed.
