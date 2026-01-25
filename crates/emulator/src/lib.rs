@@ -38,7 +38,7 @@
 //! let mut state = WorldState::new(AccountsState::Local(LocalAccountsState::new()), None)?;
 //!
 //! // 2. Create the emulator
-//! let emulator = Emulator::new(ExecutorVerbosity::Short, None)?;
+//! let emulator = Emulator::new(ExecutorVerbosity::Short, None, None)?;
 //!
 //! // 3. Emulate a message flow
 //! let results = emulator.send_message(&mut state, msg, &Default::default(), None)?;

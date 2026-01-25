@@ -30,7 +30,7 @@
 //! # use tycho_types::dict::Dict;
 //! #
 //! # fn example(state: &mut WorldState, msg: Cell) -> anyhow::Result<()> {
-//! let emulator = Emulator::new(ExecutorVerbosity::FullLocationStackVerbose, None)?;
+//! let emulator = Emulator::new(ExecutorVerbosity::FullLocationStackVerbose, None, None)?;
 //! let libs = Dict::new();
 //!
 //! // Send a message and process all resulting internal messages
@@ -48,7 +48,12 @@
 
 use crate::world_state::WorldState;
 use anyhow::Context;
-use std::time::SystemTime;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::time::{Instant, SystemTime};
 use ton_executor::ExecutorVerbosity;
 use ton_executor::message::{
     EmulationResult, Executor, RunTransactionArgs, RunTransactionResultError,
@@ -62,6 +67,75 @@ use tycho_types::models::{
 };
 use tycho_types::prelude::HashBytes;
 
+#[derive(Serialize, Deserialize, Hash, PartialEq, Eq, Clone, Debug)]
+pub struct EmulatorCacheKey {
+    pub shard_account_before_hash: HashBytes,
+    pub message_hash: HashBytes,
+    pub libs_hash: HashBytes,
+    pub from: Option<String>,
+}
+
+impl EmulatorCacheKey {
+    pub fn to_key(&self) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(self.shard_account_before_hash.as_slice());
+        hasher.update(self.message_hash.as_slice());
+        hasher.update(self.libs_hash.as_slice());
+        if let Some(from) = &self.from {
+            hasher.update(from.as_bytes());
+        }
+        hex::encode(hasher.finalize())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct EmulatorCacheValue {
+    pub result: EmulationResult,
+    pub executor_logs: String,
+}
+
+#[derive(Debug)]
+pub struct EmulatorCache {
+    path: PathBuf,
+    entries: HashMap<String, EmulatorCacheValue>,
+}
+
+impl EmulatorCache {
+    pub fn load(path: impl Into<PathBuf>) -> anyhow::Result<Self> {
+        let path = path.into();
+        let entries = if path.exists() {
+            let file = std::fs::File::open(&path)?;
+            serde_json::from_reader(file)?
+        } else {
+            HashMap::new()
+        };
+        Ok(Self { path, entries })
+    }
+
+    pub fn save(&self) -> anyhow::Result<()> {
+        if let Some(parent) = self.path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let file = std::fs::File::create(&self.path)?;
+        serde_json::to_writer_pretty(file, &self.entries).unwrap();
+        Ok(())
+    }
+
+    pub fn get(&self, key: &EmulatorCacheKey) -> Option<EmulatorCacheValue> {
+        self.entries.get(&key.to_key()).cloned()
+    }
+
+    pub fn insert(
+        &mut self,
+        key: EmulatorCacheKey,
+        value: EmulatorCacheValue,
+    ) -> anyhow::Result<()> {
+        self.entries.insert(key.to_key(), value);
+        // self.save()
+        Ok(())
+    }
+}
+
 /// A high-level emulator for TON transactions.
 ///
 /// It manages an underlying [`Executor`] and provides a more convenient API for
@@ -69,6 +143,10 @@ use tycho_types::prelude::HashBytes;
 pub struct Emulator {
     /// The underlying low-level executor.
     pub executor: Executor,
+
+    /// Optional cache for emulations.
+    pub cache: Option<Arc<Mutex<EmulatorCache>>>,
+    // pub executor2: OrdinaryTransactionExecutor,
 }
 
 impl Emulator {
@@ -78,9 +156,26 @@ impl Emulator {
     ///
     /// * `verbosity` - The level of logging detail for the executor.
     /// * `config_b64` - Optional Base64-encoded global configuration `BoC`.
-    pub fn new(verbosity: ExecutorVerbosity, config_b64: Option<&str>) -> anyhow::Result<Emulator> {
+    /// * `cache` - Optional cache for emulations.
+    pub fn new(
+        verbosity: ExecutorVerbosity,
+        config_b64: Option<&str>,
+        cache: Option<Arc<Mutex<EmulatorCache>>>,
+    ) -> anyhow::Result<Emulator> {
+        // let config = ConfigParams::construct_from_cell(read_single_root_boc(base64_decode(
+        //     // config_b64.unwrap_or(DEFAULT_CONFIG),
+        //     DEFAULT_CONFIG,
+        // )?)?)?;{
+        // let config = ConfigParams::construct_from_bytes(&base64_decode(DEFAULT_CONFIG)?)?;
+        // let config = ConfigParams::construct_from_file("./crates/emulator/src/default_config.boc")?;
+        // let executor2 = OrdinaryTransactionExecutor::new(BlockchainConfig::with_config(config)?);
+
         let executor = Executor::new(verbosity, config_b64)?;
-        Ok(Emulator { executor })
+        Ok(Emulator {
+            executor,
+            cache,
+            // executor2,
+        })
     }
 
     /// Emulates a single transaction for an internal message.
@@ -106,7 +201,7 @@ impl Emulator {
         libs: &Dict<HashBytes, LibDescr>,
         from: Option<IntAddr>,
     ) -> anyhow::Result<SendMessageResult> {
-        let msg_cell = Self::patch_message(message, from)?;
+        let msg_cell = Self::patch_message(message.clone(), from.clone())?;
         let msg_b64 = Boc::encode_base64(&msg_cell);
         let msg = msg_cell
             .parse::<Message<'_>>()
@@ -124,20 +219,79 @@ impl Emulator {
         let shard_account_before = state.get_account(&dst_addr);
         let code = Self::get_code_cell(&msg, &shard_account_before);
 
-        let args = RunTransactionArgs {
-            libs: libs.clone().into_root().map(Boc::encode_base64),
-            shard_account: Boc::encode_base64(&to_cell(&shard_account_before)?),
-            now: state.get_now(),
-            lt: state.get_lt(),
-            random_seed: None,
-            ignore_chksig: false,
-            debug_enabled: true,
-            prev_blocks_info: None,
-            is_tick_tock: None,
-            is_tock: None,
+        // let mut acc = Account::construct_from_bytes(&Boc::encode(to_cell(&shard_account_before)?))?;
+        // let message_2 = read_single_root_boc(Boc::encode(&msg_cell))?;
+        // let now = Instant::now();
+        // let tx = self.executor2.execute_with_params(
+        //     Some(message_2),
+        //     &mut acc,
+        //     ExecuteParams {
+        //         block_unixtime: state.get_now(),
+        //         last_tr_lt: state.get_lt(),
+        //         debug: true,
+        //         ..Default::default()
+        //     },
+        // ).unwrap();
+        //
+        // println!("new took {:?}, {:?}", now.elapsed(), tx.end_status);
+
+        let shard_account_before_cell = to_cell(&shard_account_before)?;
+        let shard_account_before_hash = *shard_account_before_cell.repr_hash();
+
+        let message_hash = *message.repr_hash();
+
+        let libs_cell = libs.clone().into_root().unwrap_or_else(Cell::empty_cell);
+        let libs_hash = *libs_cell.repr_hash();
+
+        let cache_key = EmulatorCacheKey {
+            shard_account_before_hash,
+            message_hash,
+            libs_hash,
+            from: from.map(|addr| addr.to_string()),
         };
 
-        let (result, executor_logs) = self.executor.run_transaction(&msg_b64, &args)?;
+        let cached_result = self
+            .cache
+            .as_ref()
+            .and_then(|c| c.lock().unwrap().get(&cache_key));
+
+        let now = Instant::now();
+        let (result, executor_logs) = if let Some(cached) = cached_result {
+            (cached.result, cached.executor_logs)
+        } else {
+            let args = RunTransactionArgs {
+                libs: libs.clone().into_root().map(Boc::encode_base64),
+                shard_account: Boc::encode_base64(&shard_account_before_cell),
+                now: state.get_now(),
+                lt: state.get_lt(),
+                random_seed: None,
+                ignore_chksig: false,
+                debug_enabled: true,
+                prev_blocks_info: None,
+                is_tick_tock: None,
+                is_tock: None,
+            };
+
+            // let now = Instant::now();
+            let (result, executor_logs) = self.executor.run_transaction(&msg_b64, &args)?;
+            // println!("old took {:?}", now.elapsed());
+
+            if let Some(cache) = &self.cache {
+                cache
+                    .lock()
+                    .unwrap()
+                    .insert(
+                        cache_key,
+                        EmulatorCacheValue {
+                            result: result.clone(),
+                            executor_logs: executor_logs.clone(),
+                        },
+                    )
+                    .unwrap();
+            }
+            (result, executor_logs)
+        };
+        println!("run took: {:?}", now.elapsed());
 
         let result = match result {
             EmulationResult::Success(result) => result,

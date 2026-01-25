@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 /// Result of a transaction emulation.
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum EmulationResult {
     Success(RunTransactionResultSuccess),
     Error(RunTransactionResultError),
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct RunTransactionResultSuccess {
     /// Base64 encoded transaction `BoC`.
     pub transaction: String,
@@ -20,7 +20,7 @@ pub struct RunTransactionResultSuccess {
     pub actions: Option<String>,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct RunTransactionResultError {
     /// Error message.
     pub error: String,

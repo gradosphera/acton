@@ -26,7 +26,7 @@ use abi::{ContractAbi, contract_abi};
 use acton_config::config::{ActonConfig, ContractDependency, DependencyKind};
 use acton_config::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
 use anyhow::anyhow;
-use emulator::emulator::Emulator;
+use emulator::emulator::{Emulator, EmulatorCache};
 use emulator::world_state::{
     AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,
 };
@@ -38,7 +38,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::{fs, process};
 use ton_executor::get::step::StepGetExecutor;
@@ -87,6 +87,7 @@ pub struct TestRunner<'a> {
     reporter_manager: &'a mut ReporterManager,
     mutation_overrides: BTreeMap<String, ArcCell>,
     remote_cache: RemoteSnapshotCache,
+    emulator_cache: Arc<Mutex<EmulatorCache>>,
     /// Contracts used as `library_ref` dependency. We need to register it for correct
     /// work of dependent contracts.
     ref_contracts: BTreeMap<String, tycho_types::cell::Cell>,
@@ -107,6 +108,7 @@ impl<'a> TestRunner<'a> {
         };
 
         let mut ref_contracts = BTreeMap::new();
+        // ... (existing code for ref_contracts)
         if let Some(contracts) = acton_config.contracts() {
             // collect contracts used as a `library_ref` dependency
             let mut contracts_by_ref = vec![];
@@ -161,6 +163,13 @@ impl<'a> TestRunner<'a> {
             mutation_overrides,
             ref_contracts,
             remote_cache: RemoteSnapshotCache::new(),
+            emulator_cache: Arc::new(Mutex::new(
+                EmulatorCache::load(".acton/emulator_cache.json").unwrap_or_else(|_| {
+                    EmulatorCache::load("emulator_cache.json").unwrap_or_else(|_| {
+                        EmulatorCache::load("/tmp/emulator_cache.json").expect("Failed to create cache")
+                    })
+                }),
+            )),
         }
     }
 
@@ -520,7 +529,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         }
     }
 
-    global_reporter.finalize()?;
+    // global_reporter.finalize()?;
 
     if config.ui
         && let Some(reports) = reports_for_ui
@@ -545,6 +554,8 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         );
         process::exit(1);
     }
+
+    runner.emulator_cache.lock().unwrap().save().expect("TODO: panic message");
 
     if total_failed > 0 {
         process::exit(1)

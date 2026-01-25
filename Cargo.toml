@@ -31,6 +31,8 @@ retrace = { path = "crates/retrace" }
 ton-source-map = { path = "crates/ton-source-map" }
 tolkfmt = { path = "crates/tolkfmt" }
 
+ton_executor = { path = "../ton-node-simplex-demo/executor" }
+
 # remote crates
 # base TON libraries
 tonlib-core = "0.26.6"
@@ -156,6 +158,9 @@ undocumented_unsafe_blocks = "deny"
 
 [lints]
 workspace = true
+
+[profile.release]
+debug = true
 
 [features]
 profile_rules = ["tolk-linter/profile_rules"] # for acton check
