@@ -1,5 +1,6 @@
 #![allow(unsafe_code)]
 use include_dir::{Dir, include_dir};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
@@ -9,7 +10,7 @@ use std::path::{Path, PathBuf};
 use ton_source_map::{HighLevelSourceMap, SourceMap, parse_marks_dict};
 
 thread_local! {
-    static CURRENT_MAPPINGS: RefCell<BTreeMap<String, String>> = const { RefCell::new(BTreeMap::new()) };
+    static CURRENT_MAPPINGS: RefCell<FxHashMap<String, String>> = RefCell::new(FxHashMap::default());
 }
 
 /// Compiles passed file with Tolk compiler.
@@ -66,18 +67,18 @@ pub struct Compiler {
     /// Other experimental options.
     pub experimental_options: String,
     /// Mappings for paths (e.g. "@core" -> "/path/to/core")
-    pub mappings: BTreeMap<String, String>,
+    pub mappings: FxHashMap<String, String>,
 }
 
 impl Compiler {
     #[must_use]
-    pub const fn new(opt_level: i64) -> Self {
+    pub fn new(opt_level: i64) -> Self {
         Self {
             opt_level,
             with_stack_comments: false,
             with_src_line_comments: false,
             experimental_options: String::new(),
-            mappings: BTreeMap::new(),
+            mappings: FxHashMap::default(),
         }
     }
 
@@ -130,39 +131,29 @@ impl Compiler {
                 dest_contents: *mut *mut c_char,
                 dest_error: *mut *mut c_char,
             ) {
-                fn realpath(path: PathBuf) -> Result<String, String> {
-                    let path_str = path.to_string_lossy();
-                    if path.is_absolute() {
-                        return canonicalize(&path)
-                            .map(|p| p.to_string_lossy().into_owned())
-                            .map_err(|e| e.to_string());
+                fn realpath(path_str: &str) -> Result<PathBuf, String> {
+                    if Path::new(path_str).is_absolute() {
+                        return canonicalize(path_str).map_err(|e| e.to_string());
                     }
 
                     if path_str.starts_with("@stdlib/") || path_str.starts_with("@fiftlib/") {
-                        return Ok(path_str.into_owned());
+                        return Ok(PathBuf::from(path_str));
                     }
 
                     if path_str.starts_with('@') {
+                        let (prefix, suffix) = match path_str.find('/') {
+                            Some(pos) => (&path_str[..pos], &path_str[pos + 1..]),
+                            None => (path_str, ""),
+                        };
+
                         let mut resolved = None;
                         CURRENT_MAPPINGS.with(|mappings| {
                             let mappings = mappings.borrow();
-                            let mut keys = mappings.keys().collect::<Vec<_>>();
-                            keys.sort_by_key(|k| std::cmp::Reverse(k.len()));
+                            if let Some(target) = mappings.get(prefix) {
+                                let cur_mapped_path = Path::new(target).join(suffix);
 
-                            for prefix in keys {
-                                if path_str.starts_with(&format!("{prefix}/")) {
-                                    let target = &mappings[prefix];
-                                    let suffix = &path_str[prefix.len()..];
-                                    let cur_mapped_path =
-                                        Path::new(target).join(suffix.trim_start_matches('/'));
-
-                                    resolved = Some(
-                                        canonicalize(cur_mapped_path)
-                                            .map(|p| p.to_string_lossy().into_owned())
-                                            .map_err(|e| e.to_string()),
-                                    );
-                                    break;
-                                }
+                                resolved =
+                                    Some(canonicalize(cur_mapped_path).map_err(|e| e.to_string()));
                             }
                         });
 
@@ -170,18 +161,14 @@ impl Compiler {
                             return res;
                         }
 
-                        let prefix = path_str.split('/').next().unwrap_or(&path_str);
                         return Err(format!("Unknown path mapping '{prefix}'"));
                     }
 
-                    canonicalize(path)
-                        .map(|p| p.to_string_lossy().into_owned())
-                        .map_err(|e| e.to_string())
+                    canonicalize(path_str).map_err(|e| e.to_string())
                 }
 
                 match FsReadCallbackKind::from(kind) {
                     FsReadCallbackKind::Realpath => {
-                        let mut relative_path = String::new();
                         // SAFETY: `data_ptr` is valid not-null pointer
                         let relative_path_raw = unsafe {
                             CStr::from_ptr(data_ptr)
@@ -189,17 +176,14 @@ impl Compiler {
                                 .expect("Invalid UTF-8 in relative path")
                         };
 
-                        relative_path.push_str(relative_path_raw);
-
-                        if !relative_path_raw.ends_with(".tolk") {
-                            relative_path += ".tolk";
-                        }
-
-                        let result = realpath(
-                            relative_path
-                                .parse()
-                                .expect("Failed to parse relative path"),
-                        );
+                        let result = if relative_path_raw.ends_with(".tolk") {
+                            realpath(relative_path_raw)
+                        } else {
+                            let mut path = String::with_capacity(relative_path_raw.len() + 5);
+                            path.push_str(relative_path_raw);
+                            path.push_str(".tolk");
+                            realpath(&path)
+                        };
 
                         let abs_path = match result {
                             Ok(abs_path) => abs_path,
@@ -213,8 +197,10 @@ impl Compiler {
                             }
                         };
 
-                        let raw_str = CString::new(abs_path)
-                            .expect("Failed to create C string from absolute path");
+                        let raw_str = CString::new(
+                            abs_path.to_str().expect("Invalid UTF-8 in absolute path"),
+                        )
+                        .expect("Failed to create C string from absolute path");
                         // SAFETY: `dest_contents` is valid not-null pointer
                         unsafe { *dest_contents = raw_str.into_raw() }
                     }

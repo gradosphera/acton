@@ -248,7 +248,12 @@ impl FileDb {
         left.text_matches(&source, right_text)
     }
 
-    pub fn text_matches<'a, Left: AstNode<'a>>(&self, file_id: FileId, left: &Left, expected: &str) -> bool {
+    pub fn text_matches<'a, Left: AstNode<'a>>(
+        &self,
+        file_id: FileId,
+        left: &Left,
+        expected: &str,
+    ) -> bool {
         let syntax = left.syntax();
         let start = syntax.start_byte();
         let end = syntax.end_byte();

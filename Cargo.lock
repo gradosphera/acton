@@ -3001,6 +3001,7 @@ name = "tolkc"
 version = "0.1.0"
 dependencies = [
  "include_dir",
+ "rustc-hash",
  "serde",
  "serde_json",
  "ton-source-map",

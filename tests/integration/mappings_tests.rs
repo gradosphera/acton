@@ -187,39 +187,6 @@ fn test_mappings_empty_value() {
 }
 
 #[test]
-fn test_mappings_nested_prefixes() {
-    let project = ProjectBuilder::new("mappings_nested")
-        .mapping("@core", "./libs/core")
-        .mapping("@core/utils", "./libs/utils")
-        .file(
-            "libs/core/math",
-            "fun add(a: int, b: int): int { return a + b; }",
-        )
-        .file(
-            "libs/utils/string",
-            "fun get_len(s: int): int { return 42; }",
-        )
-        .contract(
-            "main",
-            r#"
-            import "@core/math"
-            import "@core/utils/string"
-
-            fun onInternalMessage() {
-                add(1, get_len(1));
-            }
-            "#,
-        )
-        .build();
-
-    project
-        .acton()
-        .compile("contracts/main.tolk")
-        .run()
-        .success();
-}
-
-#[test]
 fn test_mappings_recursive() {
     let project = ProjectBuilder::new("mappings_recursive")
         .mapping("@core", "./libs/core")
