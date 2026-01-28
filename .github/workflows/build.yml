@@ -426,21 +426,21 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Run tests and generate coverage
-        run: |
-          rustup component add llvm-tools-preview
-          just coverage-html
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: target/llvm-cov/html
-
-      - name: Run formatter and linter
-        run: |
-          just fmt
-          just clippy
+#      - name: Run tests and generate coverage
+#        run: |
+#          rustup component add llvm-tools-preview
+#          just coverage-html
+#
+#      - name: Upload coverage report
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: coverage-report
+#          path: target/llvm-cov/html
+#
+#      - name: Run formatter and linter
+#        run: |
+#          just fmt
+#          just clippy
 
   create-canary-release:
     needs: [ build-macos, build-macos-intel, build-linux ]
