@@ -2962,7 +2962,6 @@ dependencies = [
  "smol_str",
  "tolk-resolver",
  "tolk-syntax",
- "tree-sitter",
 ]
 
 [[package]]
@@ -3069,7 +3068,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde",
- "serde_json",
  "tycho-types",
 ]
 
@@ -3214,10 +3212,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "num-bigint",
- "num-traits",
  "thiserror 2.0.18",
  "tonlib-core",
- "tycho-types",
 ]
 
 [[package]]

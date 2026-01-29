@@ -1,12 +1,11 @@
 [package]
 name = "tolk-ty"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 tolk-syntax = { workspace = true }
 tolk-resolver = { workspace = true }
-tree-sitter = { workspace = true }
 log = { workspace = true }
 smol_str = { workspace = true }
 rustc-hash = { workspace = true }

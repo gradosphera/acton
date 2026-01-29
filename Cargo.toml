@@ -1,8 +1,8 @@
 [package]
 name = "acton"
-version = "0.1.0"
-edition = "2024"
-rust-version = "1.90.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [workspace]
 members = ["crates/*"]
@@ -11,6 +11,13 @@ exclude = [
     "crates/acton-test-ui",
     "crates/ffi-test",
 ]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90.0"
+homepage = "https://i582.github.io/acton/"
+repository = "https://github.com/i582/acton"
 
 [workspace.dependencies]
 # local crates

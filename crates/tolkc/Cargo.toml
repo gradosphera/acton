@@ -1,8 +1,8 @@
 [package]
 name = "tolkc"
-version = "0.1.0"
 description = "Tolk compiler crate"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 ton-source-map = { workspace = true }
