@@ -1,26 +1,21 @@
 all: precommit
 
 build:
-    cargo build
-
-build-release:
     cargo build --release
 
-i-test:
-    cargo test --test integration_test
+test-unit:
+    cargo test --workspace --lib --bins \
+        --exclude retrace \
+        --exclude ton-executor
 
-d-test:
+test-serial:
+    cargo test -p retrace -p ton-executor -- --test-threads 1
+
+test-integration:
+    cargo test --test integration_test
     cargo test --test debug_test -- --test-threads 1
 
-test:
-    cargo test -p abi -p dap-client -p emulator -p tolk-syntax -p ton-api -p tvmffi -p vmlogs -p tolkfmt -p tolk-resolver -p tolk-ty \
-    && cargo test -p retrace -- --test-threads 1 \
-    && cargo test -p ton-executor -- --test-threads 1 \
-    && cargo test --lib commands::up::tests \
-    && cargo test --lib config::tests \
-    && cargo test --lib file_build_cache::tests \
-    && just i-test \
-    && just d-test
+test: test-unit test-serial test-integration
 
 test-update:
     SNAPSHOTS=overwrite just test
@@ -28,10 +23,16 @@ test-update:
 fmt:
     cargo fmt --all
 
+fmt-check:
+    cargo fmt --all --check
+
 clippy:
     cargo clippy --workspace --all-features --all-targets -- -D warnings
 
-check: fmt clippy test
+check-udeps:
+    cargo +nightly udeps --workspace
+
+check: fmt-check clippy test
 
 coverage-setup:
     cargo install cargo-llvm-cov
@@ -49,12 +50,11 @@ coverage-fmt-html:
 coverage-clean:
     cargo llvm-cov clean
 
-clean:
-    cargo clean
-    rm -rf crates/acton-test-ui/dist
-
 build-ui:
     cd crates/acton-test-ui && bun i && bun run build
 
-precommit:
-    just build && just check && just build-ui
+precommit: build-ui build check
+
+clean:
+    cargo clean
+    rm -rf crates/acton-test-ui/dist

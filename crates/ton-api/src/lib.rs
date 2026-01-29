@@ -211,17 +211,13 @@ impl TonApiClient {
             return Ok((0, true));
         }
 
-        if let Some(first) = result.stack.first() {
-            if first.len() == 2 {
-                if let (StackItem::Str(type_str), StackItem::Str(value_str)) =
-                    (&first[0], &first[1])
-                {
-                    if type_str == "num" {
-                        let seqno = u32::from_str_radix(value_str.trim_start_matches("0x"), 16)?;
-                        return Ok((seqno, false));
-                    }
-                }
-            }
+        if let Some(first) = result.stack.first()
+            && first.len() == 2
+            && let (StackItem::Str(type_str), StackItem::Str(value_str)) = (&first[0], &first[1])
+            && type_str == "num"
+        {
+            let seqno = u32::from_str_radix(value_str.trim_start_matches("0x"), 16)?;
+            return Ok((seqno, false));
         }
 
         Ok((0, false))
