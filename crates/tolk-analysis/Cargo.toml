@@ -4,14 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tolk-syntax = { path = "../tolk-syntax" }
-tolk-resolver = { path = "../tolk-resolver" }
-tolk-ty = { path = "../tolk-ty" }
-tolk-macros = { path = "../tolk-macros" }
-tree-sitter = "0.25.10"
-serde = { version = "1.0.228", features = ["derive"] }
-rustc-hash = "2.1.1"
-bitflags = "2.9.4"
+tolk-syntax = { workspace = true }
+tolk-resolver = { workspace = true }
+tolk-ty = { workspace = true }
+rustc-hash = { workspace = true }
+bitflags = { workspace = true }
 
 [lints]
 workspace = true

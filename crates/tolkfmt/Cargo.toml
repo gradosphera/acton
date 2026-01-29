@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-pretty = "0.12.5"
-tolk-syntax = { path = "../tolk-syntax" }
-tree-sitter = "0.25.10"
-anyhow = "1.0.100"
+pretty = { workspace = true }
+tolk-syntax = { workspace = true }
+tree-sitter = { workspace = true }
+anyhow = { workspace = true }
 
 [dev-dependencies]
-expect-test = "1.5.1"
+expect-test = { workspace = true }
 
 [lints]
 workspace = true
