@@ -1,4 +1,3 @@
-use abi::{ContractAbi, contract_abi};
 use acton::context::{
     AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx, EmulationsState,
     Env, IoContext, KnownAddresses,
@@ -20,6 +19,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use std::{fs, thread};
 use tasm::printer::FormatOptions;
 use tolkc::CompilerResult;
+use ton_abi::{ContractAbi, contract_abi};
 use ton_emulator::emulator::Emulator;
 use ton_emulator::world_state::{AccountsState, LocalAccountsState, WorldState};
 use ton_executor::get::step::StepGetExecutor;

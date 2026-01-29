@@ -1,10 +1,10 @@
 use crate::commands::test::TestDescriptor;
 use crate::context::{AssertFailure, BuildCache, EmulationsState, KnownAddresses};
-use abi::ContractAbi;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
+use ton_abi::ContractAbi;
 use ton_executor::get::GetMethodResult;
 use ton_source_map::SourceMap;
 use tycho_types::models::ShardAccount;

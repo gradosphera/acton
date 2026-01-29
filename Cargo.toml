@@ -25,8 +25,8 @@ license = "MIT"
 [workspace.dependencies]
 # local crates
 acton-config = { path = "crates/acton-config" }
-abi = { path = "crates/abi" }
 tolkc = { path = "crates/tolkc" }
+ton-abi = { path = "crates/ton-abi" }
 ton-emulator = { path = "crates/ton-emulator" }
 ton-executor = { path = "crates/ton-executor" }
 tolk-syntax = { path = "crates/tolk-syntax" }
@@ -142,8 +142,8 @@ winnow = "0.7.13"
 [dependencies]
 # local creates
 acton-config = { workspace = true }
-abi = { workspace = true }
 tolkc = { workspace = true }
+ton-abi = { workspace = true }
 ton-emulator = { workspace = true }
 ton-executor = { workspace = true }
 tolk-syntax = { workspace = true }

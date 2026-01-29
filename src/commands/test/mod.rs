@@ -22,7 +22,6 @@ use crate::debugger::dap::DapTransport;
 use crate::debugger::debug_context::DebugContext;
 use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
-use abi::{ContractAbi, contract_abi};
 use acton_config::config::{ActonConfig, ContractDependency, DependencyKind};
 use acton_config::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
 use anyhow::anyhow;
@@ -37,6 +36,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::{fs, process};
+use ton_abi::{ContractAbi, contract_abi};
 use ton_emulator::emulator::Emulator;
 use ton_emulator::world_state::{
     AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,

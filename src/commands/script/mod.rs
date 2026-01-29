@@ -9,7 +9,6 @@ use crate::file_build_cache::FileBuildCache;
 use crate::formatter::FormatterContext;
 use crate::wallets;
 use crate::{ffi, stdlib};
-use abi::{ContractAbi, contract_abi};
 use acton_config::config::{ActonConfig, Explorer};
 use anyhow::anyhow;
 use log::error;
@@ -19,6 +18,7 @@ use std::fs;
 use std::path::Path;
 use std::str::FromStr;
 use std::time::UNIX_EPOCH;
+use ton_abi::{ContractAbi, contract_abi};
 use ton_api::Network;
 use ton_emulator::emulator::Emulator;
 use ton_emulator::world_state::{

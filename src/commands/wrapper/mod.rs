@@ -1,11 +1,11 @@
 use crate::commands::common::error_fmt;
-use abi::{ContractAbi, TypeAbi};
 use acton_config::config::ActonConfig;
 use anyhow::anyhow;
 use owo_colors::OwoColorize;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use ton_abi::{ContractAbi, TypeAbi};
 
 struct WrapperModel {
     project_root: PathBuf,
@@ -52,8 +52,8 @@ fn build_model(
         .map_err(|e| anyhow!("Failed to read contract file: {e}"))?;
 
     let contract_path_str = contract_path.to_str().unwrap_or_default();
-    let mut abi = abi::contract_abi(&content, contract_path_str);
-    let handled_messages = abi::extract_handled_messages(&content, contract_path_str);
+    let mut abi = ton_abi::contract_abi(&content, contract_path_str);
+    let handled_messages = ton_abi::extract_handled_messages(&content, contract_path_str);
 
     let file_stem = contract_path
         .file_stem()
@@ -492,7 +492,7 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
         .iter()
         .map(|f| {
             let type_name =
-                if let abi::BaseTypeInfo::Cell { inner: Some(inner) } = &f.type_info.base {
+                if let ton_abi::BaseTypeInfo::Cell { inner: Some(inner) } = &f.type_info.base {
                     &inner.human_readable
                 } else {
                     &f.type_info.human_readable
@@ -521,7 +521,7 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
     } else {
         code.push_str(&format!("        body: {} {{\n", message_type.name));
         for field in &fields {
-            if let abi::BaseTypeInfo::Cell { inner: Some(_) } = &field.type_info.base {
+            if let ton_abi::BaseTypeInfo::Cell { inner: Some(_) } = &field.type_info.base {
                 code.push_str(&format!(
                     "            {}: {}.toCell(),\n",
                     field.name, field.name
@@ -559,7 +559,7 @@ fn generate_send_any_method(contract_name: &str) -> String {
     code
 }
 
-fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> String {
+fn generate_get_method(contract_name: &str, get_method: &ton_abi::GetMethod) -> String {
     let mut code = String::new();
     let method_name = &get_method.name;
 
@@ -568,7 +568,7 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
         .iter()
         .map(|p| {
             let type_name =
-                if let abi::BaseTypeInfo::Cell { inner: Some(inner) } = &p.type_info.base {
+                if let ton_abi::BaseTypeInfo::Cell { inner: Some(inner) } = &p.type_info.base {
                     &inner.human_readable
                 } else {
                     &p.type_info.human_readable
@@ -603,7 +603,7 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
                 "    return net.runGetMethod(self.address, \"{method_name}\")\n"
             ));
         } else if args.len() == 1 {
-            let arg_name = if let abi::BaseTypeInfo::Cell { inner: Some(_) } =
+            let arg_name = if let ton_abi::BaseTypeInfo::Cell { inner: Some(_) } =
                 &get_method.parameters[0].type_info.base
             {
                 format!("{}.toCell()", args[0])
@@ -619,7 +619,7 @@ fn generate_get_method(contract_name: &str, get_method: &abi::GetMethod) -> Stri
                 .parameters
                 .iter()
                 .map(|p| {
-                    if let abi::BaseTypeInfo::Cell { inner: Some(_) } = &p.type_info.base {
+                    if let ton_abi::BaseTypeInfo::Cell { inner: Some(_) } = &p.type_info.base {
                         format!("{}.toCell()", p.name)
                     } else {
                         p.name.clone()
@@ -740,7 +740,7 @@ fn generate_setup_test(contract_name: &str, abi: &ContractAbi) -> String {
             .map(|f| {
                 let default_value = get_default_value(&f.type_info.human_readable);
                 match &f.type_info.base {
-                    abi::BaseTypeInfo::Cell { inner: Some(inner) } => {
+                    ton_abi::BaseTypeInfo::Cell { inner: Some(inner) } => {
                         let default_value = get_default_value(&inner.human_readable);
                         format!(" {}: {}.toCell()", f.name, default_value)
                     }

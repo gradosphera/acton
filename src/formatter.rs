@@ -3,12 +3,12 @@ use crate::context::{
 };
 use crate::retrace::{ExecutedAction, InstalledActions};
 use crate::{exit_codes, retrace};
-use abi::{ContractAbi, TypeAbi};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Write;
+use ton_abi::{ContractAbi, TypeAbi};
 use ton_source_map::{DebugLocation, SourceLocation};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::ArcCell;

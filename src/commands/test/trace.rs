@@ -1,10 +1,10 @@
 use crate::commands::test::{Pos, TestDescriptor};
 use crate::context::{BuildCache, Emulations, KnownAddresses, to_cell};
-use abi::ContractAbi;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use ton_abi::ContractAbi;
 use ton_source_map::SourceMap;
 use tycho_types::boc::Boc;
 use tycho_types::models::IntAddr;
