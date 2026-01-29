@@ -12,10 +12,6 @@ use crate::{ffi, stdlib};
 use abi::{ContractAbi, contract_abi};
 use acton_config::config::{ActonConfig, Explorer};
 use anyhow::anyhow;
-use emulator::emulator::Emulator;
-use emulator::world_state::{
-    AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,
-};
 use log::error;
 use owo_colors::OwoColorize;
 use std::collections::{BTreeMap, HashMap};
@@ -24,6 +20,10 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 use ton_api::Network;
+use ton_emulator::emulator::Emulator;
+use ton_emulator::world_state::{
+    AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,
+};
 use ton_executor::get::step::StepGetExecutor;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
 use ton_executor::{DEFAULT_CONFIG, ExecutorVerbosity};

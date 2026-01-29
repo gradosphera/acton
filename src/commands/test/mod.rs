@@ -26,10 +26,6 @@ use abi::{ContractAbi, contract_abi};
 use acton_config::config::{ActonConfig, ContractDependency, DependencyKind};
 use acton_config::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
 use anyhow::anyhow;
-use emulator::emulator::Emulator;
-use emulator::world_state::{
-    AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,
-};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, error, warn};
 use num_traits::ToPrimitive;
@@ -41,6 +37,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::{fs, process};
+use ton_emulator::emulator::Emulator;
+use ton_emulator::world_state::{
+    AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,
+};
 use ton_executor::get::step::StepGetExecutor;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
 use ton_executor::{DEFAULT_CONFIG, ExecutorVerbosity};

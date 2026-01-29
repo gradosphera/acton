@@ -2,9 +2,9 @@ use crate::context::{
     AssertBinFailure, AssertFailure, Context, FailAssertFailure, TransactionGenericAssertFailure,
     TransactionNotFoundParams, WalletNotFoundFailure,
 };
-use emulator::{extension, register_ext_methods};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
+use ton_emulator::{extension, register_ext_methods};
 use ton_executor::BaseExecutor;
 use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::{Tuple, TupleItem};

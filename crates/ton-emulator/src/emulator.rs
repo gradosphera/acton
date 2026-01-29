@@ -23,8 +23,8 @@
 //! # Examples
 //!
 //! ```rust
-//! # use emulator::emulator::{Emulator, SendMessageResult};
-//! # use emulator::world_state::WorldState;
+//! # use ton_emulator::emulator::{Emulator, SendMessageResult};
+//! # use ton_emulator::world_state::WorldState;
 //! # use ton_executor::ExecutorVerbosity;
 //! # use tycho_types::cell::Cell;
 //! # use tycho_types::dict::Dict;

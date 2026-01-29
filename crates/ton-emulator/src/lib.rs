@@ -29,7 +29,7 @@
 //! ## Example
 //!
 //! ```rust
-//! # use emulator::{Emulator, WorldState, AccountsState, LocalAccountsState};
+//! # use ton_emulator::{Emulator, WorldState, AccountsState, LocalAccountsState};
 //! # use ton_executor::ExecutorVerbosity;
 //! # use tycho_types::cell::Cell;
 //! #

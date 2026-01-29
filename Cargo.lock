@@ -35,7 +35,6 @@ dependencies = [
  "dap",
  "dap-client",
  "dotenvy",
- "emulator",
  "fern",
  "flate2",
  "fs2",
@@ -81,6 +80,7 @@ dependencies = [
  "toml",
  "toml_edit",
  "ton-api",
+ "ton-emulator",
  "ton-executor",
  "ton-source-map",
  "tonlib-core",
@@ -835,21 +835,6 @@ name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
-
-[[package]]
-name = "emulator"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "num-bigint",
- "num-traits",
- "reqwest",
- "serde",
- "ton-executor",
- "tonlib-core",
- "tvmffi",
- "tycho-types",
-]
 
 [[package]]
 name = "encode_unicode"
@@ -3049,6 +3034,21 @@ dependencies = [
  "serde_json",
  "tycho-types",
  "urlencoding",
+]
+
+[[package]]
+name = "ton-emulator"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "num-bigint",
+ "num-traits",
+ "reqwest",
+ "serde",
+ "ton-executor",
+ "tonlib-core",
+ "tvmffi",
+ "tycho-types",
 ]
 
 [[package]]

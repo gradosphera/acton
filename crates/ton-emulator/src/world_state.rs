@@ -271,7 +271,7 @@ impl RemoteAccountState {
 /// # Examples
 ///
 /// ```
-/// use emulator::world_state::{WorldState, AccountsState, LocalAccountsState};
+/// use ton_emulator::world_state::{WorldState, AccountsState, LocalAccountsState};
 ///
 /// let mut world_state = WorldState::new(AccountsState::Local(LocalAccountsState::new()), None).expect("Failed to create world state");
 /// assert_eq!(world_state.get_now(), 0);
