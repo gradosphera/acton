@@ -23,7 +23,7 @@ use tolk_syntax::{
 };
 
 impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
-    pub fn infer_expr(
+    pub(crate) fn infer_expr(
         &mut self,
         v: Expr<'t>,
         flow: FlowContext,
@@ -71,7 +71,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
     }
 
     //+ CHECKED
-    pub fn infer_int_literal(
+    pub(crate) fn infer_int_literal(
         &mut self,
         v: NumberLit<'t>,
         flow: FlowContext,
@@ -98,7 +98,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
     }
 
     //+ CHECKED
-    pub fn infer_string_literal(
+    pub(crate) fn infer_string_literal(
         &mut self,
         v: StringLit<'t>,
         flow: FlowContext,
@@ -110,7 +110,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
     }
 
     //+ CHECKED
-    pub fn infer_bool_literal(
+    pub(crate) fn infer_bool_literal(
         &mut self,
         v: BoolLit<'t>,
         flow: FlowContext,
@@ -242,7 +242,10 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 let vars: Vec<_> = lhs_tensor.vars().collect();
                 let mut types_list = Vec::with_capacity(vars.len());
                 for (i, element) in vars.iter().enumerate() {
-                    let item_rhs_ty = rhs_items.get(i).cloned().unwrap_or(self.intrn().ty_unknown);
+                    let item_rhs_ty = rhs_items
+                        .get(i)
+                        .cloned()
+                        .unwrap_or_else(|| self.intrn().ty_unknown);
                     self.process_var_declaration_lhs_after_infer_rhs(*element, item_rhs_ty, flow);
                     types_list.push(self.ctx.get_node_type_or_unknown(&element.syntax()));
                 }
@@ -261,7 +264,10 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 let vars: Vec<_> = lhs_tuple.vars().collect();
                 let mut types_list = Vec::with_capacity(vars.len());
                 for (i, element) in vars.iter().enumerate() {
-                    let item_rhs_ty = rhs_items.get(i).cloned().unwrap_or(self.intrn().ty_unknown);
+                    let item_rhs_ty = rhs_items
+                        .get(i)
+                        .cloned()
+                        .unwrap_or_else(|| self.intrn().ty_unknown);
                     self.process_var_declaration_lhs_after_infer_rhs(*element, item_rhs_ty, flow);
                     types_list.push(self.ctx.get_node_type_or_unknown(&element.syntax()));
                 }
@@ -306,7 +312,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
     }
 
     //+ CHECKED
-    pub fn infer_assignment(
+    pub(crate) fn infer_assignment(
         &mut self,
         v: Assign<'t>,
         flow: FlowContext,
@@ -422,7 +428,10 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
 
                 let mut types_list = Vec::with_capacity(lhs_tensor.elements().count());
                 for (i, element) in lhs_tensor.elements().enumerate() {
-                    let item_rhs_ty = rhs_items.get(i).cloned().unwrap_or(self.intrn().ty_unknown);
+                    let item_rhs_ty = rhs_items
+                        .get(i)
+                        .cloned()
+                        .unwrap_or_else(|| self.intrn().ty_unknown);
                     self.process_assignment_lhs_after_infer_rhs(element, item_rhs_ty, flow);
                     types_list.push(self.ctx.get_node_type_or_unknown(&element));
                 }
@@ -442,7 +451,10 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
 
                 let mut types_list = Vec::with_capacity(lhs_tuple.elements().count());
                 for (i, element) in lhs_tuple.elements().enumerate() {
-                    let item_rhs_ty = rhs_items.get(i).cloned().unwrap_or(self.intrn().ty_unknown);
+                    let item_rhs_ty = rhs_items
+                        .get(i)
+                        .cloned()
+                        .unwrap_or_else(|| self.intrn().ty_unknown);
                     self.process_assignment_lhs_after_infer_rhs(element, item_rhs_ty, flow);
                     types_list.push(self.ctx.get_node_type_or_unknown(&element));
                 }
@@ -474,7 +486,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
     }
 
     //+ CHECKED
-    pub fn infer_unary_operator(
+    pub(crate) fn infer_unary_operator(
         &mut self,
         v: Unary<'t>,
         flow: FlowContext,
@@ -1226,7 +1238,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         ExprFlow::create(flow, as_cond)
     }
 
-    pub fn infer_dot_access(
+    pub(crate) fn infer_dot_access(
         &mut self,
         v: DotAccess<'t>,
         flow: FlowContext,
@@ -1298,7 +1310,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         let obj_type = dot_obj
             .and_then(|o| self.ctx.get_node_type(&o))
             .map(|ty| self.intrn().unwrap_alias(ty))
-            .unwrap_or(self.const_intrn().ty_unknown);
+            .unwrap_or_else(|| self.const_intrn().ty_unknown);
 
         // check for field access (`user.id`), when obj is a struct
         if let TyData::Struct { def, .. } = self.intrn().data(obj_type) {
@@ -1583,7 +1595,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 .0
                 .get(param_idx)
                 .cloned()
-                .unwrap_or(self.intrn().ty_unknown);
+                .unwrap_or_else(|| self.intrn().ty_unknown);
 
             param_ty = if self.intrn().has_generics(param_ty) {
                 // `fun f<T>(a:T, b:T)` T was fixated on `a`, use it as hint for `b`
@@ -1717,7 +1729,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         ExprFlow::create(flow, as_cond)
     }
 
-    pub fn infer_lambda_fun(
+    pub(crate) fn infer_lambda_fun(
         &mut self,
         v: Lambda<'t>,
         flow: FlowContext,
@@ -1806,7 +1818,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         ExprFlow::create(flow, as_cond)
     }
 
-    pub fn infer_match(
+    pub(crate) fn infer_match(
         &mut self,
         v: Match<'t>,
         flow: FlowContext,
@@ -1948,7 +1960,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             // where else_flow is `process_any_statement(empty_expression, arms_entry_facts)`
             // so it is essentially arms_entry_facts.
             // But we need to merge it with current final_flow.
-            let else_flow = flow.clone(); // arms_entry_facts was derived from flow
+            let else_flow = flow; // arms_entry_facts was derived from flow
             final_flow = final_flow.merge_flow(&else_flow, self.intrn());
         }
 
@@ -1958,7 +1970,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         ExprFlow::create(final_flow, as_cond)
     }
 
-    pub fn infer_object_literal(
+    pub(crate) fn infer_object_literal(
         &mut self,
         v: ObjectLit<'t>,
         flow: FlowContext,
@@ -2055,7 +2067,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         // if it's a generic struct, we need to deduce Ts by field values, like for a function call
         let mut deducing_ts = GenericSubstitutionsDeducing::new();
 
-        let result_ty = self.intrn().struct_ty(def_id, struct_name.clone());
+        let result_ty = self.intrn().struct_ty(def_id, struct_name);
 
         for arg in v.arguments() {
             let Some(name_node) = arg.name() else {
@@ -2109,7 +2121,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         // if execution is here, underscore is either used as lhs of assignment, or incorrectly, like `f(_)`
         // more precise is to always set unknown here, but for incorrect usages, instead of an error
         // "can not pass unknown to X" would better be an error it can't be used as a value, at later steps
-        let ty = hint.unwrap_or(self.intrn().ty_unknown);
+        let ty = hint.unwrap_or_else(|| self.intrn().ty_unknown);
         self.ctx.set_node_type(&v.0, ty);
         ExprFlow::create(flow, as_cond)
     }

@@ -16,3 +16,6 @@ tolk-resolver = { workspace = true }
 log = { workspace = true }
 smol_str = { workspace = true }
 rustc-hash = { workspace = true }
+
+[lints]
+workspace = true

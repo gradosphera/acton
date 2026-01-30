@@ -56,7 +56,7 @@ pub struct LocalDefId {
 
 impl LocalDefId {
     /// Creates a new `LocalDefId`.
-    pub fn new(file_id: FileId, local: u32) -> Self {
+    pub const fn new(file_id: FileId, local: u32) -> Self {
         Self { file_id, local }
     }
 }

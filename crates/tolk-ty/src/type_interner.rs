@@ -8,7 +8,7 @@ use tolk_resolver::file_index::SymbolId;
 ///
 /// This is a handle that can be used to retrieve the actual type data from `TypeInterner`.
 /// `TyId`s are cheap to copy and can be used as keys in maps.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub struct TyId(u32);
 
 /// Helper struct for displaying types using an interner.
@@ -118,7 +118,7 @@ impl TypeInterner {
     }
 
     /// Returns a helper object that implements `std::fmt::Display` for the given type ID.
-    pub fn display(&self, id: TyId) -> TyDisplay<'_> {
+    pub const fn display(&self, id: TyId) -> TyDisplay<'_> {
         TyDisplay { id, interner: self }
     }
 
@@ -559,10 +559,10 @@ impl TypeInterner {
         let dl = self.data(lhs);
         let dr = self.data(rhs);
 
-        if let TyData::Unknown = dl {
+        if matches!(dl, TyData::Unknown) {
             return true;
         }
-        if let TyData::Never = dr {
+        if matches!(dr, TyData::Never) {
             return true;
         }
 
@@ -737,7 +737,7 @@ impl TypeInterner {
             // - `int as int8 | int16` is NOT ok (ambiguity)
 
             if self.is_primitive_nullable(to) {
-                let or_null = self.get_union_or_null(to).unwrap();
+                let or_null = self.get_union_or_null(to).unwrap_or_default();
                 return from == self.ty_null || self.can_be_casted_with_as_operator(from, or_null);
             }
 
@@ -808,7 +808,8 @@ impl TypeInterner {
             }
             TyData::Union(_) => {
                 if self.is_primitive_nullable(id)
-                    && self.can_hold_tvm_null_instead(self.get_union_or_null(id).unwrap())
+                    && self
+                        .can_hold_tvm_null_instead(self.get_union_or_null(id).unwrap_or_default())
                 {
                     return 1;
                 }

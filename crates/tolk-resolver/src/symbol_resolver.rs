@@ -282,7 +282,7 @@ impl<'a> SymbolResolver<'a> {
         Some(())
     }
 
-    fn decl_start(&mut self) -> u32 {
+    fn decl_start(&self) -> u32 {
         self.decl
             .map(|d| d.syntax().start_byte() as u32)
             .unwrap_or(0)

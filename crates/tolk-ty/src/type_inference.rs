@@ -77,20 +77,20 @@ pub fn infer(
     InferenceResult::new(walker.ctx)
 }
 
-pub struct TypeInferenceWalker<'db, 'a> {
+pub(crate) struct TypeInferenceWalker<'db, 'a> {
     pub ctx: InferenceContext<'db, 'a>,
 }
 
 impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
-    pub fn new(ctx: InferenceContext<'db, 'a>) -> Self {
+    pub(crate) const fn new(ctx: InferenceContext<'db, 'a>) -> Self {
         Self { ctx }
     }
 
-    pub(crate) fn intrn(&mut self) -> &mut TypeInterner {
+    pub(crate) const fn intrn(&mut self) -> &mut TypeInterner {
         self.ctx.type_db.intrn
     }
 
-    pub(crate) fn const_intrn(&self) -> &TypeInterner {
+    pub(crate) const fn const_intrn(&self) -> &TypeInterner {
         self.ctx.type_db.intrn
     }
 
@@ -105,14 +105,14 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
             .lower_opt_type(self.ctx.file_id, ty.as_ref())
     }
 
-    pub(crate) fn local_id_of(&mut self, span: Span) -> LocalDefId {
+    pub(crate) const fn local_id_of(&self, span: Span) -> LocalDefId {
         LocalDefId {
             local: span.start,
             file_id: self.ctx.file_id,
         }
     }
 
-    pub(crate) fn sink_of(&mut self, param: &Parameter) -> SinkExpr {
+    pub(crate) fn sink_of(&self, param: &Parameter) -> SinkExpr {
         let span = param.name().map(|p| p.0).span();
         let name = self.text_of(param);
         let id = self.local_id_of(span);
@@ -136,24 +136,24 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
         })
     }
 
-    pub fn infer_global_var<'t>(&mut self, v: &GlobalVar<'t>, symbol_id: SymbolId) {
+    pub(crate) fn infer_global_var<'t>(&mut self, v: &GlobalVar<'t>, symbol_id: SymbolId) {
         let declared_type = self.lower(v.typ());
         self.ctx.set_top_level_type(symbol_id, declared_type);
         self.ctx.set_node_type(v, declared_type);
     }
 
-    pub fn infer_type_alias<'t>(&mut self, v: &TypeAlias<'t>, symbol_id: SymbolId) {
+    pub(crate) fn infer_type_alias<'t>(&mut self, v: &TypeAlias<'t>, symbol_id: SymbolId) {
         // type alias was already inferred during top levels type inference
         let Some(name_ident) = v.name() else { return };
         let ty = self
             .ctx
             .get_top_level_type(symbol_id)
-            .unwrap_or(self.intrn().ty_unknown);
+            .unwrap_or_else(|| self.intrn().ty_unknown);
         self.ctx.set_node_type(&name_ident, ty);
         self.ctx.set_node_type(v, ty);
     }
 
-    pub fn infer_constant<'t>(&mut self, v: &Constant<'t>, symbol_id: SymbolId) {
+    pub(crate) fn infer_constant<'t>(&mut self, v: &Constant<'t>, symbol_id: SymbolId) {
         let declared_type = self.lower_or_none(v.typ());
         let flow = FlowContext::new();
         if let Some(value) = v.value() {
@@ -168,7 +168,7 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
         }
     }
 
-    pub fn infer_struct<'t>(&mut self, v: &Struct<'t>, symbol_id: SymbolId) {
+    pub(crate) fn infer_struct<'t>(&mut self, v: &Struct<'t>, symbol_id: SymbolId) {
         let Some(name_ident) = v.name() else { return };
         let Some(body) = v.body() else { return };
         for field in body.fields() {
@@ -191,7 +191,7 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
         self.ctx.set_node_type(v, struct_ty);
     }
 
-    pub fn infer_enum<'t>(&mut self, v: &Enum<'t>, symbol_id: SymbolId) {
+    pub(crate) fn infer_enum<'t>(&mut self, v: &Enum<'t>, symbol_id: SymbolId) {
         let Some(name_ident) = v.name() else { return };
         let Some(body) = v.body() else { return };
         for member in body.members() {
@@ -220,7 +220,7 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
     }
 
     /// Infers both standalone functions and get methods.
-    pub fn infer_function_base<'t, 'b, F: FunctionLike<'b>>(
+    pub(crate) fn infer_function_base<'t, 'b, F: FunctionLike<'b>>(
         &mut self,
         v: &F,
         symbol_id: SymbolId,
@@ -257,7 +257,7 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
         Some(())
     }
 
-    pub fn infer_method<'t>(&mut self, v: &Method<'t>, symbol_id: SymbolId) -> Option<()> {
+    pub(crate) fn infer_method<'t>(&mut self, v: &Method<'t>, symbol_id: SymbolId) -> Option<()> {
         let mut body_start = FlowContext::new();
         let declared_return_ty = self.lower_or_none(v.return_type());
         self.ctx.declared_return_ty = declared_return_ty;

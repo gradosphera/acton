@@ -2,16 +2,16 @@ use crate::type_interner::{TyId, TypeInterner};
 use crate::types::*;
 use rustc_hash::FxHashMap;
 
-pub struct TypeSubstitutor<'a> {
+pub(crate) struct TypeSubstitutor<'a> {
     interner: &'a mut TypeInterner,
 }
 
 impl<'a> TypeSubstitutor<'a> {
-    pub fn new(interner: &'a mut TypeInterner) -> Self {
+    pub(crate) const fn new(interner: &'a mut TypeInterner) -> Self {
         Self { interner }
     }
 
-    pub fn substitute(&mut self, id: TyId, mapping: &FxHashMap<String, TyId>) -> TyId {
+    pub(crate) fn substitute(&mut self, id: TyId, mapping: &FxHashMap<String, TyId>) -> TyId {
         let data = self.interner.data(id).clone();
         match data {
             TyData::TypeParameter { ref name, .. } => {

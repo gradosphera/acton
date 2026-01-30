@@ -1247,7 +1247,7 @@ mod tests {
 
                 if path == &target_file {
                     let mut pos = 0;
-                    let mut chars = content.chars().peekable();
+                    let mut chars = content.chars();
                     while let Some(c) = chars.next() {
                         if c == '<' {
                             // Check for <caret>

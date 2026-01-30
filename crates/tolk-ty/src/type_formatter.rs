@@ -1,16 +1,16 @@
 use crate::type_interner::{TyId, TypeInterner};
 use crate::types::*;
 
-pub struct TypeFormatter<'a> {
+pub(crate) struct TypeFormatter<'a> {
     interner: &'a TypeInterner,
 }
 
 impl<'a> TypeFormatter<'a> {
-    pub fn new(interner: &'a TypeInterner) -> Self {
+    pub(crate) const fn new(interner: &'a TypeInterner) -> Self {
         Self { interner }
     }
 
-    pub fn format(&self, id: TyId) -> String {
+    pub(crate) fn format(&self, id: TyId) -> String {
         match self.interner.data(id) {
             TyData::Int(int_ty) => match int_ty {
                 IntTy::Int => "int".to_string(),

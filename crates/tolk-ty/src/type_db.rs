@@ -34,10 +34,11 @@ pub struct EnumMember {
     pub span: Span,
 }
 
-/// Describes the initial type inference context where we infer types for all
-/// top-level definitions. When inferring types for top-level definitions, the main task
-/// is to convert the AST representation of a type into the canonical [`TyId`] form,
-/// which is an interned version of the [`TyData`].
+/// Describes the initial type inference context.
+///
+/// In it, we infer types for all top-level definitions. When inferring types for top-level
+/// definitions, the main task is to convert the AST representation of a type into the
+/// canonical [`TyId`] form, which is an interned version of the [`TyData`].
 ///
 /// [`TypeInterner`] is used to intern all types during analysis and subsequent
 /// type inference inside function bodies.
@@ -214,7 +215,7 @@ impl<'a> TypeDb<'a> {
         }
 
         // like `type int = builtin` from stdlib
-        if let SymbolKind::TypeAlias { is_builtin: true } = &symbol.kind {
+        if matches!(&symbol.kind, SymbolKind::TypeAlias { is_builtin: true }) {
             return self.as_primitive_type(&symbol.name);
         }
 

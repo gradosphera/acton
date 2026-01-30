@@ -29,15 +29,15 @@ pub struct FileInfo {
 }
 
 impl FileInfo {
-    pub fn id(&self) -> FileId {
+    pub const fn id(&self) -> FileId {
         self.id
     }
 
-    pub fn index(&self) -> &Arc<FileIndex> {
+    pub const fn index(&self) -> &Arc<FileIndex> {
         &self.index
     }
 
-    pub fn source(&self) -> &ast::SourceFile {
+    pub const fn source(&self) -> &ast::SourceFile {
         &self.source
     }
 
