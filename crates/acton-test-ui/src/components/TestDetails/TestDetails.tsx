@@ -2,7 +2,7 @@ import path from "node:path"
 import { Address } from "@ton/core"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { FiCheck, FiChevronDown, FiCircle, FiMinus, FiX } from "react-icons/fi"
+import { FiCheck, FiChevronDown, FiCircle, FiCode, FiMinus, FiX } from "react-icons/fi"
 import { SiIntellijidea, SiRust, SiWebstorm } from "react-icons/si"
 import { VscCode } from "react-icons/vsc"
 import { useContracts } from "../../hooks/useContracts"
@@ -13,6 +13,7 @@ import { processTransactions } from "../../utils/transaction"
 import { CodeSnippet } from "../common/CodeSnippet/CodeSnippet"
 import { DataBlock } from "../common/DataBlock/DataBlock"
 import { TransactionTree } from "../TransactionView/TransactionTree/TransactionTree"
+import { ContractChip } from "../TransactionView/ContractChip/ContractChip"
 import styles from "./TestDetails.module.css"
 
 interface TestDetailsProps {
@@ -121,7 +122,6 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace, projectRo
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input or textarea
       if (
         document.activeElement instanceof HTMLInputElement ||
         document.activeElement instanceof HTMLTextAreaElement
@@ -148,6 +148,19 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace, projectRo
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [test, selectedIde, errorLocation])
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (headerDropdownRef.current && !headerDropdownRef.current.contains(event.target as Node)) {
+        setIsHeaderIDESelectorOpen(false)
+      }
+      if (gridDropdownRef.current && !gridDropdownRef.current.contains(event.target as Node)) {
+        setIsGridIDESelectorOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
   const getRelativePath = (path: string) => {
     if (projectRoot && path.startsWith(projectRoot)) {
       const rel = path.substring(projectRoot.length)
@@ -172,11 +185,84 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace, projectRo
     return trace.traces.reduce((acc, t) => acc + t.transactions.length, 0)
   }, [trace])
 
+  const parsedTransactions = useMemo(() => {
+    if (!trace || !trace.traces[selectedTraceIndex]) return []
+    try {
+      return processTransactions(trace.traces[selectedTraceIndex].transactions)
+    } catch (e) {
+      console.error("Failed to process trace", e)
+      return []
+    }
+  }, [trace, selectedTraceIndex])
+
+  const failedTransactions = useMemo(() => {
+    if (!test.failed_transactions) return []
+    try {
+      return processTransactions(test.failed_transactions)
+    } catch (e) {
+      console.error("Failed to process failed transactions", e)
+      return []
+    }
+  }, [test.failed_transactions])
+
+  const contracts = useMemo(() => {
+    const map = new Map<string, ContractData>()
+
+    const addContract = (address: Address, name?: string) => {
+      const addrStr = address.toString()
+      if (map.has(addrStr)) return
+
+      const backendContract = name ? backendContracts[name] : undefined
+      map.set(addrStr, {
+        displayName: name ?? formatAddress(addrStr),
+        address: address,
+        letter: String.fromCharCode(65 + (map.size % 26)),
+        abi: backendContract?.abi,
+      } as ContractData)
+    }
+
+    if (trace?.wallets) {
+      for (const [address, name] of Object.entries(trace.wallets)) {
+        try {
+          addContract(Address.parse(address), name)
+        } catch (e) {
+          console.error("Failed to parse wallet address", address, e)
+        }
+      }
+    }
+
+    if (parsedTransactions) {
+      for (const tx of parsedTransactions) {
+        if (tx.address) {
+          addContract(tx.address, tx.contractName)
+        }
+      }
+    }
+
+    if (failedTransactions) {
+      for (const tx of failedTransactions) {
+        if (tx.address) {
+          addContract(tx.address, tx.contractName)
+        }
+      }
+    }
+
+    return map
+  }, [parsedTransactions, failedTransactions, trace, backendContracts])
+
+  const normalizeAddress = (addr: string | undefined) => {
+    if (!addr) return undefined
+    try {
+      return Address.parse(addr).toString()
+    } catch {
+      return addr
+    }
+  }
+
   useEffect(() => {
     if (trace) {
       const saved = localStorage.getItem(`selectedTraceIndex:${test.suite_name}::${test.name}`)
       const index = saved ? Number.parseInt(saved, 10) : 0
-      // Ensure the saved index is valid for the current trace
       if (index < trace.traces.length) {
         setSelectedTraceIndex(index)
       } else {
@@ -194,53 +280,6 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace, projectRo
     setActiveTab(tab)
     localStorage.setItem("activeTab", tab)
   }
-
-  const parsedTransactions = useMemo(() => {
-    if (!trace || !trace.traces[selectedTraceIndex]) return []
-    try {
-      return processTransactions(trace.traces[selectedTraceIndex].transactions)
-    } catch (e) {
-      console.error("Failed to process trace", e)
-      return []
-    }
-  }, [trace, selectedTraceIndex])
-
-  const contracts = useMemo(() => {
-    const map = new Map<string, ContractData>()
-    if (!trace) return map
-
-    // 1. Add all known wallets from treasury/external
-    if (trace.wallets) {
-      for (const [address, name] of Object.entries(trace.wallets)) {
-        try {
-          map.set(address, {
-            displayName: name,
-            address: Address.parse(address),
-            letter: String.fromCharCode(65 + (map.size % 26)),
-          })
-        } catch (e) {
-          console.error("Failed to parse wallet address", address, e)
-        }
-      }
-    }
-
-    // 2. Add contracts from transactions
-    if (parsedTransactions) {
-      for (const tx of parsedTransactions) {
-        if (tx.address && !map.has(tx.address.toString())) {
-          const addressStr = tx.address.toString()
-          const backendContract = tx.contractName ? backendContracts[tx.contractName] : undefined
-          map.set(addressStr, {
-            displayName: tx.contractName ?? formatAddress(addressStr),
-            address: tx.address,
-            letter: String.fromCharCode(65 + (map.size % 26)),
-            abi: backendContract?.abi,
-          } as ContractData)
-        }
-      }
-    }
-    return map
-  }, [parsedTransactions, trace, backendContracts])
 
   const allContracts = [...Object.values(backendContracts)]
 
@@ -297,9 +336,65 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace, projectRo
             <div className={styles.errorSection}>
               <div className={styles.errorTitle}>Error Message</div>
               <DataBlock
-                data={test.message ?? "No error message available"}
+                data={
+                  test.failed_transaction_context
+                    ? (test.message ?? "expect(actual).toHaveTx(expected)")
+                    : (test.detailed_message ?? test.message ?? "No error message available")
+                }
                 className={styles.errorMessageBlock}
               />
+
+              {failedTransactions.length > 0 && (
+                <div className={styles.failedTransactionsSection}>
+                  <TransactionTree
+                    transactions={failedTransactions}
+                    contracts={contracts}
+                    allContracts={allContracts}
+                  />
+                </div>
+              )}
+
+              {test.failed_transaction_context && (
+                <div className={styles.structuredError}>
+                  <div className={styles.structuredErrorTitle}>
+                    {test.message?.includes("Unexpected") || test.message?.includes("toNotHaveTx")
+                      ? "Unexpected transaction with the following parameters:"
+                      : "Cannot find transaction with the following parameters:"}
+                  </div>
+                  <div className={styles.errorHeader}>
+                    <div className={styles.errorRoute}>
+                      <span className={styles.routeLabel}>From:</span>
+                      {test.failed_transaction_context.from_address ? (
+                        <ContractChip
+                          address={normalizeAddress(test.failed_transaction_context.from_address)}
+                          contracts={contracts}
+                        />
+                      ) : (
+                        <span className={styles.anyAddress}>&lt;any&gt;</span>
+                      )}
+                    </div>
+                    <div className={styles.errorRoute}>
+                      <span className={styles.routeLabel}>To:</span>
+                      {test.failed_transaction_context.to_address ? (
+                        <ContractChip
+                          address={normalizeAddress(test.failed_transaction_context.to_address)}
+                          contracts={contracts}
+                        />
+                      ) : (
+                        <span className={styles.anyAddress}>&lt;any&gt;</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className={styles.errorParams}>
+                    {test.failed_transaction_context.params.map(([key, value]) => (
+                      <div key={key} className={styles.errorParam}>
+                        <span className={styles.paramKey}>{key}:</span>
+                        <span className={styles.paramValue}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <CodeSnippet
                 filePath={errorLocation.filePath}

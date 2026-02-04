@@ -5,6 +5,12 @@ export enum TestStatus {
   Todo = "Todo",
 }
 
+export interface FailedTransactionContext {
+  readonly from_address?: string
+  readonly to_address?: string
+  readonly params: [string, string][]
+}
+
 export interface TestReport {
   readonly name: string
   readonly suite_name: string
@@ -14,6 +20,9 @@ export interface TestReport {
   readonly duration: { secs: number; nanos: number }
   readonly status: TestStatus
   readonly message?: string
+  readonly detailed_message?: string
+  readonly failed_transactions?: BackendTransaction[]
+  readonly failed_transaction_context?: FailedTransactionContext
   readonly details?: string
   readonly trace_path?: string
 }

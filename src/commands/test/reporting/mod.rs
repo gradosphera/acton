@@ -1,4 +1,5 @@
 use crate::commands::test::TestDescriptor;
+use crate::commands::test::trace::TransactionInfo;
 use crate::context::{AssertFailure, BuildCache, EmulationsState, KnownAddresses};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -31,6 +32,13 @@ pub struct TestExecutionContext {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct FailedTransactionContext {
+    pub from_address: Option<String>,
+    pub to_address: Option<String>,
+    pub params: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct TestReport {
     pub name: String,
     pub suite_name: String,
@@ -42,6 +50,9 @@ pub struct TestReport {
     pub gas_limit: Option<u64>,
     pub status: TestStatus,
     pub message: Option<String>,
+    pub detailed_message: Option<String>,
+    pub failed_transactions: Option<Vec<TransactionInfo>>,
+    pub failed_transaction_context: Option<FailedTransactionContext>,
     pub details: Option<String>,
     #[serde(skip)]
     pub abi: ContractAbi,
