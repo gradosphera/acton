@@ -1,7 +1,7 @@
 .contractChip {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-sms);
+  gap: var(--spacing-sm);
   font-size: var(--font-size-sm);
   position: relative;
   padding: var(--spacing-xs);
@@ -42,7 +42,7 @@
   height: 22px;
   border-radius: 50%;
   background-color: var(--text-secondary);
-  color: var(--card-bg);
+  color: var(--bg-color);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   flex-shrink: 0;
@@ -73,7 +73,7 @@
   transform: translateY(-50%);
   padding: 2px;
   border: none;
-  background-color: var(--card-bg);
+  background-color: var(--bg-color);
   border-radius: var(--border-radius-sm);
   cursor: pointer;
   transition:

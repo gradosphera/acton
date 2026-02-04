@@ -1,9 +1,9 @@
 .container {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-family: var(--font-mono), monospace;
+  font-size: var(--font-size-xs);
   background-color: var(--bg-color);
-  color: var(--text-primary);
-  padding: 8px 12px;
+  color: var(--text-secondary);
+  padding: var(--spacing-mds) var(--spacing-mds) calc(var(--spacing-mds) - 2px);
   border-radius: 6px;
   border: 1px solid var(--border-color);
   word-break: break-all;

@@ -17,9 +17,9 @@
 
 .actionsList {
   display: flex;
-  gap: 16px;
+  gap: var(--spacing-md);
   overflow-x: auto;
-  padding-bottom: 8px;
+  padding: var(--spacing-sm) 0;
 }
 
 .actionCard {
@@ -33,7 +33,7 @@
   position: relative;
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  background-color: var(--card-bg);
+  background-color: var(--bg-color);
 }
 
 .actionCard:hover {
@@ -75,7 +75,6 @@
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: var(--color-todo);
 }
 
 .actionTitleText {

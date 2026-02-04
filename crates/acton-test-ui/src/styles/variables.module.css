@@ -1,41 +1,39 @@
 :root {
-  --bg-color: #f4f7f6;
-  --card-bg: #ffffff;
-  --text-primary: #2c3e50;
-  --text-secondary: #7f8c8d;
-  --text-muted: #95a5a6;
+  --bg-color: #ffffff;
+  --bg-secondary-color: #f4f4f5;
+  --bg-selection-color: #f4f4f5;
+  --text-primary: #09090b;
+  --text-secondary: #71717a;
+  --text-muted: #a1a1aa;
 
-  --color-passed: #27ae60;
-  --color-passed-bg: #d4edda;
-  --color-passed-text: #155724;
+  --color-passed: #10b981;
+  --color-passed-bg: #ecfdf5;
+  --color-passed-text: #065f46;
 
-  --color-failed: #e74c3c;
-  --color-failed-bg: #f8d7da;
-  --color-failed-text: #721c24;
+  --color-failed: #ef4444;
+  --color-failed-bg: #fef2f2;
+  --color-failed-text: #991b1b;
 
-  --color-skipped: #f39c12;
-  --color-skipped-bg: #fff3cd;
-  --color-skipped-text: #856404;
+  --color-skipped: #f59e0b;
+  --color-skipped-bg: #fffbeb;
+  --color-skipped-text: #92400e;
 
-  --color-todo: #3498db;
-  --color-todo-bg: #d1ecf1;
-  --color-todo-text: #0c5460;
+  --color-todo: #3b82f6;
+  --color-todo-bg: #eff6ff;
+  --color-todo-text: #1e40af;
 
-  --link-color: #3498db;
-  --border-color: #eeeeee;
-  --shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  --link-color: #3b82f6;
+  --border-color: #e4e4e7;
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
 
-  --hover-bg: rgba(0, 0, 0, 0.04);
-  --divider-color: rgba(0, 0, 0, 0.03);
+  --hover-bg: #f4f4f5;
 
   --font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "Fira Code", "Source Code Pro", Menlo, Monaco, Consolas, "Courier New", monospace;
 
-  --font-size-xsss: 0.55rem;
-  --font-size-xss: 0.65rem;
+  --font-size-xss: 0.5rem;
   --font-size-xs: 0.75rem;
-  --font-size-xsm: 0.82rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
   --font-size-lg: 1.125rem;
@@ -50,7 +48,6 @@
 
   --spacing-xss: 0.1rem;
   --spacing-xs: 0.25rem;
-  --spacing-sms: 0.35rem;
   --spacing-sm: 0.5rem;
   --spacing-mds: 0.75rem;
   --spacing-md: 1rem;
@@ -69,13 +66,15 @@
 }
 
 :root.dark-theme {
-  --bg-color: #121212;
-  --card-bg: #1e1e1e;
-  --text-primary: #e1e1e1;
-  --text-secondary: #a0a0a0;
-  --text-muted: #707070;
+  --bg-color: hsl(30, 0%, 6%);
+  --bg-secondary-color: hsl(240, 5%, 10%);
+  --bg-selection-color: hsl(30, 0%, 15%);
+  --text-primary: hsl(240, 5%, 80%);
+  --text-secondary: hsl(247, 4%, 70%);
+  --text-muted: hsl(247, 4%, 50%);
 
   --color-passed: #30d158;
+  --color-passed-icon: hsl(126, 50%, 55%);
   --color-passed-bg: #1c3e26;
   --color-passed-text: #7cd996;
 
@@ -92,17 +91,16 @@
   --color-todo-text: #66b3ff;
 
   --link-color: #0a84ff;
-  --border-color: #333333;
+  --border-color: hsl(240, 5%, 14%);
   --shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 
   --hover-bg: rgba(255, 255, 255, 0.06);
-  --divider-color: rgba(255, 255, 255, 0.04);
 
   --color-background-primary: #1c1c1e;
 }
 
 .variables {
-  /* This is just a placeholder to export variables if needed via CSS modules, 
+  /* This is just a placeholder to export variables if needed via CSS modules,
      but mostly we'll use them via var() */
   display: none;
 }

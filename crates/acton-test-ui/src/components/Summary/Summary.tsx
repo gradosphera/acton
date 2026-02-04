@@ -17,12 +17,12 @@ export const Summary: React.FC<SummaryProps> = ({ reports }) => {
         <span className={styles.count}>{total}</span>
         <span className={styles.label}>Total</span>
       </div>
-      <div className={styles.card}>
-        <span className={`${styles.count} ${styles.passed}`}>{passed}</span>
+      <div className={`${styles.card} ${styles.passed}`}>
+        <span className={styles.count}>{passed}</span>
         <span className={styles.label}>Passed</span>
       </div>
-      <div className={styles.card}>
-        <span className={`${styles.count} ${styles.failed}`}>{failed}</span>
+      <div className={`${styles.card} ${styles.failed}`}>
+        <span className={styles.count}>{failed}</span>
         <span className={styles.label}>Failed</span>
       </div>
     </div>

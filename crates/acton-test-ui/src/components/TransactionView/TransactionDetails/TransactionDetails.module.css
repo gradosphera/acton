@@ -1,6 +1,6 @@
 .transactionDetailsContainer {
   border-radius: 8px;
-  background-color: var(--card-bg);
+  background-color: var(--bg-color);
   margin-bottom: 16px;
   border: 1px solid var(--border-color);
   position: relative;

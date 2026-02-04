@@ -291,7 +291,7 @@ export function TransactionTree({
     if (nodeDatum.attributes?.isRoot === "true") {
       return (
         <g>
-          <circle r={15} fill={"var(--card-bg)"} stroke="var(--text-primary)" strokeWidth={1.5} />
+          <circle r={15} fill={"var(--bg-color)"} stroke="var(--text-primary)" strokeWidth={1.5} />
           <text
             fill="var(--text-primary)"
             strokeWidth="0"
@@ -403,7 +403,7 @@ export function TransactionTree({
             isSelected
               ? "var(--text-primary)"
               : nodeDatum.attributes?.success === "✓"
-                ? "var(--card-bg)"
+                ? "var(--bg-color)"
                 : "var(--color-failed)"
           }
           stroke={"var(--text-primary)"}
@@ -427,7 +427,7 @@ export function TransactionTree({
         />
 
         <text
-          fill={isSelected ? "var(--card-bg)" : "var(--text-primary)"}
+          fill={isSelected ? "var(--bg-color)" : "var(--text-primary)"}
           strokeWidth="0"
           x="0"
           y="5"

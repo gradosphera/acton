@@ -9,7 +9,7 @@
   left: 50%;
   transform: translateX(-50%);
   padding: var(--spacing-md);
-  background-color: var(--card-bg);
+  background-color: var(--bg-color);
   border-radius: var(--border-radius-md);
   box-shadow: 0 8px 24px rgb(0 0 0 / 15%);
   min-width: 200px;
@@ -40,7 +40,7 @@
   height: 0;
   border-left: 9px solid transparent;
   border-right: 9px solid transparent;
-  border-top: 9px solid var(--divider-color);
+  border-top: 9px solid var(--bg-secondary-color);
   z-index: 999;
 }
 
@@ -54,7 +54,7 @@
   height: 0;
   border-left: 8px solid transparent;
   border-right: 8px solid transparent;
-  border-top: 8px solid var(--card-bg);
+  border-top: 8px solid var(--bg-color);
   z-index: 1001;
 }
 
@@ -65,7 +65,7 @@
   margin-top: -8px;
   border-top: 8px solid transparent;
   border-bottom: 8px solid transparent;
-  border-right: 8px solid var(--card-bg);
+  border-right: 8px solid var(--bg-color);
   border-left: none;
 }
 
@@ -76,14 +76,14 @@
   margin-top: -9px;
   border-top: 9px solid transparent;
   border-bottom: 9px solid transparent;
-  border-right: 9px solid var(--divider-color);
+  border-right: 9px solid var(--bg-secondary-color);
   border-left: none;
 }
 
 .tooltipPositioned {
   position: fixed;
   padding: var(--spacing-md);
-  background-color: var(--card-bg);
+  background-color: var(--bg-color);
   border-radius: var(--border-radius-md);
   box-shadow: 0 8px 24px rgb(0 0 0 / 15%);
   min-width: 200px;
@@ -104,7 +104,7 @@
   height: 0;
   border-left: 8px solid transparent;
   border-right: 8px solid transparent;
-  border-top: 8px solid var(--card-bg);
+  border-top: 8px solid var(--bg-color);
 }
 
 .tooltipPositioned::before {
@@ -117,7 +117,7 @@
   height: 0;
   border-left: 9px solid transparent;
   border-right: 9px solid transparent;
-  border-top: 9px solid var(--divider-color);
+  border-top: 9px solid var(--bg-secondary-color);
   z-index: 999;
 }
 
@@ -130,14 +130,14 @@
   top: unset;
   bottom: 100%;
   border-top: unset;
-  border-bottom: 8px solid var(--card-bg);
+  border-bottom: 8px solid var(--bg-color);
 }
 
 .tooltip.bottom::before {
   top: unset;
   bottom: 100%;
   border-top: unset;
-  border-bottom: 9px solid var(--divider-color);
+  border-bottom: 9px solid var(--bg-secondary-color);
 }
 
 .content {

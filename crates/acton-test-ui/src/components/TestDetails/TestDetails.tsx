@@ -25,9 +25,10 @@ interface IDEConfig {
 }
 
 export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace }) => {
-  const [activeTab, setActiveTab] = useState<"vm" | "executor" | "transactions">(() => {
+  const [activeTab, setActiveTab] = useState<"logs" | "transactions">(() => {
     const saved = localStorage.getItem("activeTab")
-    return (saved as "vm" | "executor" | "transactions") || "transactions"
+    if (saved === "vm" || saved === "executor") return "logs"
+    return (saved as "logs" | "transactions") || "transactions"
   })
   const [selectedTraceIndex, setSelectedTraceIndex] = useState<number>(() => {
     const saved = localStorage.getItem(`selectedTraceIndex:${test.suite_name}::${test.name}`)
@@ -67,7 +68,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace }) => {
     localStorage.setItem(`selectedTraceIndex:${test.suite_name}::${test.name}`, index.toString())
   }
 
-  const handleTabChange = (tab: "vm" | "executor" | "transactions") => {
+  const handleTabChange = (tab: "logs" | "transactions") => {
     setActiveTab(tab)
     localStorage.setItem("activeTab", tab)
   }
@@ -199,29 +200,35 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace }) => {
 
     const logs = currentTraceList.transactions
       .map((tx, idx) => {
-        const content = activeTab === "vm" ? tx.vm_log_diff : tx.executor_logs
-        if (!content) return null
+        const hasVmLog = tx.vm_log_diff && tx.vm_log_diff.trim().length > 0
+        const hasExecutorLog = tx.executor_logs && tx.executor_logs.trim().length > 0
+
+        if (!hasVmLog && !hasExecutorLog) return null
 
         return (
           <div key={tx.lt} className={styles.txLogs}>
             <div className={styles.txHeader}>
               <span>Transaction #{idx + 1}</span>
-              {tx.dest_contract_info && (
-                <span className={styles.txDest}>Dest: {tx.dest_contract_info}</span>
-              )}
             </div>
-            <DataBlock data={content} />
+            {hasExecutorLog && (
+              <div className={styles.logSection}>
+                <div className={styles.logSectionTitle}>Executor Log</div>
+                <DataBlock data={tx.executor_logs} />
+              </div>
+            )}
+            {hasVmLog && (
+              <div className={styles.logSection}>
+                <div className={styles.logSectionTitle}>VM Log</div>
+                <DataBlock data={tx.vm_log_diff} />
+              </div>
+            )}
           </div>
         )
       })
       .filter(Boolean)
 
     if (logs.length === 0) {
-      return (
-        <div className={styles.empty}>
-          No {activeTab === "vm" ? "VM" : "executor"} logs for this trace
-        </div>
-      )
+      return <div className={styles.empty}>No logs for this trace</div>
     }
 
     return logs
@@ -270,28 +277,23 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace }) => {
         </div>
       )}
 
-      <div className={styles.tabs}>
-        <button
-          type="button"
-          className={`${styles.tab} ${activeTab === "transactions" ? styles.activeTab : ""}`}
-          onClick={() => handleTabChange("transactions")}
-        >
-          Transactions
-        </button>
-        <button
-          type="button"
-          className={`${styles.tab} ${activeTab === "vm" ? styles.activeTab : ""}`}
-          onClick={() => handleTabChange("vm")}
-        >
-          VM Log
-        </button>
-        <button
-          type="button"
-          className={`${styles.tab} ${activeTab === "executor" ? styles.activeTab : ""}`}
-          onClick={() => handleTabChange("executor")}
-        >
-          Executor Logs
-        </button>
+      <div className={styles.tabsContainer}>
+        <div className={styles.tabsList}>
+          <button
+            type="button"
+            className={`${styles.tabTrigger} ${activeTab === "transactions" ? styles.activeTabTrigger : ""}`}
+            onClick={() => handleTabChange("transactions")}
+          >
+            Transactions
+          </button>
+          <button
+            type="button"
+            className={`${styles.tabTrigger} ${activeTab === "logs" ? styles.activeTabTrigger : ""}`}
+            onClick={() => handleTabChange("logs")}
+          >
+            Logs
+          </button>
+        </div>
       </div>
 
       {trace && trace.traces.length > 1 && (
