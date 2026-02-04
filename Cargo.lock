@@ -2932,6 +2932,7 @@ dependencies = [
  "log",
  "rustc-hash",
  "smol_str",
+ "tempfile",
  "tolk-resolver",
  "tolk-syntax",
 ]
