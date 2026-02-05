@@ -1,5 +1,5 @@
-import type { Abi } from "../../../types"
-import { Tooltip } from "../../common/Tooltip/Tooltip"
+import type { Abi } from "@/types"
+import { Tooltip } from "@/index"
 import styles from "./ExitCodeViewer.module.css"
 import { EXIT_CODE_DESCRIPTIONS } from "./error-codes"
 

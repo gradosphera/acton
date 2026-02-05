@@ -7,8 +7,8 @@ import {
   type OutAction,
   type Transaction,
 } from "@ton/core"
-import type { BackendTransaction } from "../types"
-import type { TransactionInfo } from "../types/transaction"
+import type { BackendTransaction } from "@/types"
+import type { TransactionInfo } from "@/types"
 
 const bigintToAddress = (addr: bigint | undefined): Address | undefined => {
   if (addr === undefined) return undefined

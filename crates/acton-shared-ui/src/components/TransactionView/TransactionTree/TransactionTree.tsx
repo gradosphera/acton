@@ -9,10 +9,10 @@ import {
   Tree,
   type TreeLinkDatum,
 } from "react-d3-tree"
-import type { BackendContractInfo } from "../../../types"
-import type { ContractData, TransactionInfo } from "../../../types/transaction"
-import { formatCurrency } from "../../../utils/format"
-import { getTransactionOpcode } from "../../../utils/transaction"
+import type { BackendContractInfo } from "@/types"
+import type { ContractData, TransactionInfo } from "@/types/transaction"
+import { fmt } from "@/index"
+import { getTransactionOpcode } from "@/utils/transaction"
 import { TransactionDetails } from "../TransactionDetails/TransactionDetails"
 import { SmartTooltip } from "./SmartTooltip"
 import styles from "./TransactionTree.module.css"
@@ -73,13 +73,13 @@ function TransactionTooltipContent({ data }: { data: TransactionTooltipData }): 
       <div className={styles.tooltipField}>
         <div className={styles.tooltipFieldLabel}>Money</div>
         <div className={styles.tooltipFieldValue}>
-          <div>Sent Total: {formatCurrency(data.sentTotal)}</div>
+          <div>Sent Total: {fmt.formatCurrency(data.sentTotal)}</div>
           <div className={styles.tooltipSubValue}>
-            Total Fees: {formatCurrency(data.fees.totalFees)}
+            Total Fees: {fmt.formatCurrency(data.fees.totalFees)}
           </div>
           {data.fees.gasFees !== undefined && (
             <div className={styles.tooltipSubValue}>
-              Gas Fees: {formatCurrency(data.fees.gasFees)}
+              Gas Fees: {fmt.formatCurrency(data.fees.gasFees)}
             </div>
           )}
         </div>
@@ -182,7 +182,7 @@ export function TransactionTree({
         totalFees: tx.transaction.totalFees.coins,
       },
       sentTotal: Array.from(tx.transaction.outMessages.values()).reduce(
-        (acc, msg) => acc + (msg.info.type === "internal" ? msg.info.value.coins : 0n),
+        (acc: bigint, msg: any) => acc + (msg.info.type === "internal" ? msg.info.value.coins : 0n),
         0n,
       ),
     }
@@ -214,10 +214,10 @@ export function TransactionTree({
       const opcode = getTransactionOpcode(tx.transaction)
 
       const targetContract = thisAddress ? contracts.get(thisAddress.toString()) : undefined
-      let typeAbi = targetContract?.abi?.messages.find((it) => it.opcode === opcode)
+      let typeAbi = targetContract?.abi?.messages.find((it: any) => it.opcode === opcode)
       if (typeAbi === undefined) {
         for (const contract of allContracts) {
-          typeAbi = contract.abi?.messages.find((it) => it.opcode === opcode)
+          typeAbi = contract.abi?.messages.find((it: any) => it.opcode === opcode)
         }
       }
       const opcodeName = typeAbi?.name
@@ -228,7 +228,7 @@ export function TransactionTree({
       const lt = tx.lt
       const isSelected = selectedTransaction?.lt === lt
 
-      const hasExternalOut = Array.from(tx.transaction.outMessages.values()).some((outMsg) => {
+      const hasExternalOut = Array.from(tx.transaction.outMessages.values()).some((outMsg: any) => {
         return outMsg.info.type === "external-out"
       })
 
@@ -241,7 +241,7 @@ export function TransactionTree({
                 parentLt: lt,
               },
               children: [],
-            },
+            } as any,
           ]
         : []
 
@@ -253,7 +253,7 @@ export function TransactionTree({
           lt,
           success: isSuccess ? "✓" : "✗",
           exitCode: exitCode?.toString() ?? "0",
-          value: formatCurrency(value),
+          value: fmt.formatCurrency(value),
           opcode: opcodeHex,
           outMsgs: tx.transaction.outMessagesCount.toString(),
           withInitCode,
@@ -262,7 +262,7 @@ export function TransactionTree({
           isSelected,
         },
         children: [
-          ...tx.children.map((it) => convertTransactionToNode(it)),
+          ...tx.children.map((it: any) => convertTransactionToNode(it)),
           ...externalOutChildren,
         ],
       } satisfies RawNodeDatum
@@ -312,8 +312,8 @@ export function TransactionTree({
       const parentTx = transactionMap.get(parentLt)
 
       const externalOutMsg = Array.from(parentTx?.transaction.outMessages.values() ?? []).find(
-        (msg) => msg.info.type === "external-out",
-      )
+        (msg: any) => msg.info.type === "external-out",
+      ) as any
       const externalOutDest = externalOutMsg?.info.dest?.toString() ?? "External"
       const createdLt =
         externalOutMsg?.info.type === "external-out" ? externalOutMsg.info.createdLt.toString() : ""

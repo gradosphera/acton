@@ -4,7 +4,7 @@ import { FiChevronRight } from "react-icons/fi"
 import styles from "./App.module.css"
 import { Sidebar } from "./components/Sidebar/Sidebar"
 import { TestDetails } from "./components/TestDetails/TestDetails"
-import type { TestReport, Trace } from "./types"
+import type { TestReport, Trace } from "@acton/shared-ui"
 
 export const App: React.FC = () => {
   const [reports, setReports] = useState<TestReport[]>([])

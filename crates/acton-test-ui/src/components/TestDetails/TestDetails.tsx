@@ -2,18 +2,17 @@ import path from "node:path"
 import { Address } from "@ton/core"
 import type React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { FiCheck, FiChevronDown, FiCircle, FiCode, FiMinus, FiX } from "react-icons/fi"
+import { FiCheck, FiChevronDown, FiCircle, FiMinus, FiX } from "react-icons/fi"
 import { SiIntellijidea, SiRust, SiWebstorm } from "react-icons/si"
 import { VscCode } from "react-icons/vsc"
 import { useContracts } from "../../hooks/useContracts"
-import { type TestReport, TestStatus, type Trace } from "../../types"
-import type { ContractData } from "../../types/transaction"
-import { formatAddress } from "../../utils/format"
-import { processTransactions } from "../../utils/transaction"
-import { CodeSnippet } from "../common/CodeSnippet/CodeSnippet"
-import { DataBlock } from "../common/DataBlock/DataBlock"
-import { TransactionTree } from "../TransactionView/TransactionTree/TransactionTree"
-import { ContractChip } from "../TransactionView/ContractChip/ContractChip"
+import { type TestReport, TestStatus, type Trace } from "@acton/shared-ui"
+import type { ContractData } from "@acton/shared-ui"
+import { fmt } from "@acton/shared-ui"
+import { processTransactions } from "@acton/shared-ui"
+import { CodeSnippet } from "@acton/shared-ui"
+import { DataBlock } from "@acton/shared-ui"
+import { TransactionTree, ContractChip } from "@acton/shared-ui"
 import styles from "./TestDetails.module.css"
 
 interface TestDetailsProps {
@@ -214,7 +213,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({ test, trace, projectRo
 
       const backendContract = name ? backendContracts[name] : undefined
       map.set(addrStr, {
-        displayName: name ?? formatAddress(addrStr),
+        displayName: name ?? fmt.formatAddress(addrStr),
         address: address,
         letter: String.fromCharCode(65 + (map.size % 26)),
         abi: backendContract?.abi,

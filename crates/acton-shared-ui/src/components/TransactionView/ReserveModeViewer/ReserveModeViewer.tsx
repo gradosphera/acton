@@ -1,5 +1,5 @@
 import type React from "react"
-import { parseReserveMode } from "../../../utils/transaction"
+import { parseReserveMode } from "@/utils/transaction"
 import styles from "./ReserveModeViewer.module.css"
 
 interface ReserveModeViewerProps {

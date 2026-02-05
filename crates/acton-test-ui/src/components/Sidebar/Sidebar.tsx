@@ -12,8 +12,8 @@ import {
   FiSun,
   FiX,
 } from "react-icons/fi"
-import { type TestReport, TestStatus } from "../../types"
-import { AppIcon } from "../common/AppIcon"
+import { type TestReport, TestStatus } from "@acton/shared-ui"
+import { AppIcon } from "@acton/shared-ui"
 import { Summary } from "../Summary/Summary"
 import styles from "./Sidebar.module.css"
 

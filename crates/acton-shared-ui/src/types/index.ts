@@ -67,3 +67,5 @@ export interface BackendContractInfo {
   readonly source_map: unknown
   readonly abi?: Abi
 }
+
+export * from "./transaction"

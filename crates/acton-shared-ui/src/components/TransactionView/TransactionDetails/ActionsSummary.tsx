@@ -1,9 +1,9 @@
 import type { OutAction } from "@ton/core"
 import type React from "react"
 import { useState } from "react"
-import type { ContractData } from "../../../types/transaction"
-import { formatCurrency } from "../../../utils/format"
-import { DataBlock } from "../../common/DataBlock/DataBlock"
+import type { ContractData } from "@/types/transaction"
+import { fmt } from "@/index"
+import { DataBlock } from "@/index"
 import { ContractChip } from "../ContractChip/ContractChip"
 import { ReserveModeViewer } from "../ReserveModeViewer/ReserveModeViewer"
 import { SendModeViewer } from "../SendModeViewer/SendModeViewer"
@@ -118,7 +118,7 @@ const renderActionDetails = (
                 </div>
                 <div className={styles.detailRow}>
                   <span className={styles.detailLabel}>Value:</span>
-                  <span className={styles.detailValue}>{formatCurrency(info.value.coins)}</span>
+                  <span className={styles.detailValue}>{fmt.formatCurrency(info.value.coins)}</span>
                 </div>
                 <div className={styles.detailRow}>
                   <span className={styles.detailLabel}>Bounce:</span>
@@ -192,7 +192,9 @@ const renderActionDetails = (
             </div>
             <div className={styles.detailRow}>
               <span className={styles.detailLabel}>Amount:</span>
-              <span className={styles.detailValue}>{formatCurrency(action.currency.coins)}</span>
+              <span className={styles.detailValue}>
+                {fmt.formatCurrency(action.currency.coins)}
+              </span>
             </div>
           </div>
         </div>
@@ -229,7 +231,7 @@ export function ActionsSummary({
           msg.info.type === "internal"
             ? msg.info.dest.toString()
             : (msg.info.dest?.toString() ?? "External")
-        const value = msg.info.type === "internal" ? formatCurrency(msg.info.value.coins) : ""
+        const value = msg.info.type === "internal" ? fmt.formatCurrency(msg.info.value.coins) : ""
         return {
           title: "Send Message",
           description: `${msgType} → ${dest}`,
@@ -247,7 +249,7 @@ export function ActionsSummary({
         return {
           title: "Reserve",
           description: `Mode: ${action.mode}`,
-          value: formatCurrency(action.currency.coins),
+          value: fmt.formatCurrency(action.currency.coins),
         }
       }
       default: {

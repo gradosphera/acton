@@ -1,9 +1,9 @@
 import React, { type JSX, useState } from "react"
 import { FiChevronDown, FiChevronUp } from "react-icons/fi"
-import type { BackendContractInfo } from "../../../types"
-import type { ContractData, TransactionInfo } from "../../../types/transaction"
-import { formatCurrency, formatNumber } from "../../../utils/format"
-import { computeSendMode, getTransactionOpcode } from "../../../utils/transaction"
+import type { BackendContractInfo } from "@/types"
+import type { ContractData, TransactionInfo } from "@/types/transaction"
+import { fmt } from "@/index"
+import { computeSendMode, getTransactionOpcode } from "@/utils/transaction"
 import { ContractChip } from "../ContractChip/ContractChip"
 import { ExitCodeChip } from "../ExitCodeChip/ExitCodeChip"
 import { OpcodeChip } from "../OpcodeChip/OpcodeChip"
@@ -60,7 +60,7 @@ export function TransactionDetails({
   const opcodeName = typeAbi?.name
 
   const sentTotal = Array.from(tx.transaction.outMessages.values()).reduce(
-    (acc, msg) => acc + (msg.info.type === "internal" ? msg.info.value.coins : 0n),
+    (acc: bigint, msg: any) => acc + (msg.info.type === "internal" ? msg.info.value.coins : 0n),
     0n,
   )
 
@@ -90,7 +90,7 @@ export function TransactionDetails({
               <div className={styles.multiColumnItem}>
                 <div className={styles.multiColumnItemTitle}>Value</div>
                 <div className={`${styles.multiColumnItemValue}`}>
-                  {formatCurrency(inMessage.info.value.coins)}
+                  {fmt.formatCurrency(inMessage.info.value.coins)}
                 </div>
               </div>
               <div className={styles.multiColumnItem}>
@@ -148,25 +148,27 @@ export function TransactionDetails({
           <div className={styles.multiColumnRow}>
             <div className={styles.multiColumnItem}>
               <div className={styles.multiColumnItemTitle}>Amount Sent (Total)</div>
-              <div className={`${styles.multiColumnItemValue}`}>{formatCurrency(sentTotal)}</div>
+              <div className={`${styles.multiColumnItemValue}`}>
+                {fmt.formatCurrency(sentTotal)}
+              </div>
             </div>
             <div className={styles.multiColumnItem}>
               <div className={styles.multiColumnItemTitle}>Total Fee</div>
               <div className={`${styles.multiColumnItemValue}`}>
-                {formatCurrency(tx.transaction.totalFees.coins)}
+                {fmt.formatCurrency(tx.transaction.totalFees.coins)}
               </div>
             </div>
             <div className={styles.multiColumnItem}>
               <div className={styles.multiColumnItemTitle}>Gas Fee</div>
               <div className={`${styles.multiColumnItemValue}`}>
-                {computePhase.type === "skipped" ? "N/A" : formatCurrency(computePhase.gasFees)}
+                {computePhase.type === "skipped" ? "N/A" : fmt.formatCurrency(computePhase.gasFees)}
               </div>
             </div>
             {tx.transaction.inMessage?.info.type === "internal" && (
               <div className={styles.multiColumnItem}>
                 <div className={styles.multiColumnItemTitle}>Forward Fee</div>
                 <div className={`${styles.multiColumnItemValue}`}>
-                  {formatCurrency(tx.transaction.inMessage.info.forwardFee)}
+                  {fmt.formatCurrency(tx.transaction.inMessage.info.forwardFee)}
                 </div>
               </div>
             )}
@@ -206,7 +208,7 @@ export function TransactionDetails({
               <div className={styles.multiColumnItem}>
                 <div className={styles.multiColumnItemTitle}>Gas Fee</div>
                 <div className={styles.multiColumnItemValue}>
-                  {formatCurrency(computePhase.gasFees)}
+                  {fmt.formatCurrency(computePhase.gasFees)}
                 </div>
               </div>
             </div>
@@ -232,7 +234,7 @@ export function TransactionDetails({
               <div className={styles.multiColumnItem}>
                 <div className={styles.multiColumnItemTitle}>Total Actions</div>
                 <div className={`${styles.multiColumnItemValue} ${styles.numberValue}`}>
-                  {formatNumber(tx.outActions.length)}
+                  {fmt.formatNumber(tx.outActions.length)}
                   {tx.outActions.length > 0 && (
                     <button
                       type="button"

@@ -65,18 +65,18 @@ export const CodeSnippet: React.FC<CodeSnippetProps> = ({
         setLoading(false)
       } catch (err: unknown) {
         console.error(err)
-        setError(err.message)
+        setError((err as { message: string }).message)
         setLoading(false)
       }
     }
 
-    loadContent()
+    void loadContent()
 
     // Listen for theme changes
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         if (mutation.type === "attributes" && mutation.attributeName === "class") {
-          loadContent()
+          void loadContent()
         }
       }
     })

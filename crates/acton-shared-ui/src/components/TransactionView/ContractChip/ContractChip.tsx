@@ -1,6 +1,6 @@
 import type React from "react"
 import { useCallback, useEffect, useState } from "react"
-import type { ContractData } from "../../../types/transaction"
+import type { ContractData } from "@/types/transaction"
 import styles from "./ContractChip.module.css"
 
 interface ContractChipProps {
