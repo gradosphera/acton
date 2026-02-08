@@ -1026,11 +1026,7 @@ fn test_wrapper_generation_with_conflicting_field_names() {
         )
         .build();
 
-    let output = project
-        .acton()
-        .wrapper("my_contract")
-        .run()
-        .success();
+    let output = project.acton().wrapper("my_contract").run().success();
 
     output
         .assert_contains("Generated")
