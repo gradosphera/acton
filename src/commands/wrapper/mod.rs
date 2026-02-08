@@ -312,11 +312,11 @@ fn generate_wrapper(model: &WrapperModel, types_file_path: Option<&PathBuf>) -> 
     let mut code = String::new();
 
     code.push_str("import \"@stdlib/gas-payments\"\n");
-    code.push_str(&import_stdlib(proot, root, ".acton/build/build"));
-    code.push_str(&import_stdlib(proot, root, ".acton/emulation/network"));
-    code.push_str(&import_stdlib(proot, root, ".acton/testing/assert"));
-    code.push_str(&import_stdlib(proot, root, ".acton/testing/expect"));
-    code.push_str(&import_stdlib(proot, root, ".acton/types/message"));
+    code.push_str(&import_stdlib("build/build"));
+    code.push_str(&import_stdlib("emulation/network"));
+    code.push_str(&import_stdlib("testing/assert"));
+    code.push_str(&import_stdlib("testing/expect"));
+    code.push_str(&import_stdlib("types/message"));
 
     if let Some(types_path) = types_file_path {
         let types_import = get_relative_import(proot, root, types_path);
@@ -648,13 +648,9 @@ fn generate_test(model: &WrapperModel, types_file_override: Option<&PathBuf>) ->
     let mut code = String::new();
 
     code.push_str("import \"@stdlib/gas-payments\"\n");
-    code.push_str(&import_stdlib(proot, root, ".acton/emulation/network"));
-    code.push_str(&import_stdlib(proot, root, ".acton/testing/expect"));
-    code.push_str(&import_stdlib(
-        proot,
-        root,
-        ".acton/testing/transaction_expect",
-    ));
+    code.push_str(&import_stdlib("emulation/network"));
+    code.push_str(&import_stdlib("testing/expect"));
+    code.push_str(&import_stdlib("testing/transaction_expect"));
 
     if let Some(types_path) = types_file_override {
         let types_import = get_relative_import(proot, root, types_path);
@@ -688,9 +684,8 @@ fn generate_test(model: &WrapperModel, types_file_override: Option<&PathBuf>) ->
     format!("{}\n", code.trim())
 }
 
-fn import_stdlib(project_root: &Path, where_: &Path, path: &str) -> String {
-    let types_import = get_relative_import(project_root, where_, Path::new(path));
-    gen_import_path(types_import)
+fn import_stdlib(path: &str) -> String {
+    gen_import_path(PathBuf::from("@acton").join(path))
 }
 
 fn gen_import_path(path: PathBuf) -> String {
@@ -770,13 +765,15 @@ fn generate_setup_test(contract_name: &str, abi: &ContractAbi) -> String {
 
 fn get_default_value(type_name: &str) -> &str {
     match type_name {
-        "int" | "int64" | "int32" | "int16" | "int8" => "0",
-        "uint" | "uint64" | "uint32" | "uint16" | "uint8" => "0",
+        _ if type_name.starts_with("int") => "0",
+        _ if type_name.starts_with("uint") => "0",
         "coins" => "0",
         "bool" => "false",
         "address" => "address(\"EQD__________________________________________0vo\")",
+        "any_address" => "address(\"EQD__________________________________________0vo\")",
         "cell" => "createEmptyCell()",
         "slice" => "createEmptySlice()",
+        _ if type_name.starts_with("map<") => "createEmptyMap()",
         _ => "null",
     }
 }
