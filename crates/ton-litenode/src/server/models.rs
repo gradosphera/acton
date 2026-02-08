@@ -73,3 +73,14 @@ pub struct FaucetRequest {
 pub struct GetTracesQuery {
     pub hash: String,
 }
+
+#[derive(Deserialize)]
+pub struct SetAddressNameRequest {
+    pub address: String,
+    pub name: String,
+}
+
+#[derive(Deserialize)]
+pub struct GetAddressNameQuery {
+    pub address: String,
+}

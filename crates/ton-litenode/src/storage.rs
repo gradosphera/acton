@@ -4,7 +4,9 @@ use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fmt::Display;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
+use tycho_types::models::StdAddr;
 
 pub const EMPTY_CELL_BASE64: &str = "te6cckEBAQEAAgAAAEysuc0=";
 
@@ -185,6 +187,7 @@ pub struct TransactionInfo {
     pub meta: TxMeta,
     pub in_msg: Option<MessageInfo>,
     pub out_msgs: Vec<MessageInfo>,
+    pub tx_boc: Vec<u8>,
 }
 
 #[derive(Clone, Debug)]
@@ -228,6 +231,7 @@ pub struct History {
     pub tx_by_hash: HashMap<Hash256, TxMeta>,
     pub msg_by_hash: HashMap<Hash256, MsgMeta>,
     pub msg_to_tx: HashMap<Hash256, Hash256>,
+    pub address_names: HashMap<Addr, String>,
 }
 
 impl Default for History {
@@ -238,6 +242,8 @@ impl Default for History {
 
 impl History {
     pub fn new() -> Self {
+        let address_names = Self::build_address_names();
+
         Self {
             conn: None,
             blocks: Vec::new(),
@@ -245,10 +251,13 @@ impl History {
             tx_by_hash: HashMap::new(),
             msg_by_hash: HashMap::new(),
             msg_to_tx: HashMap::new(),
+            address_names,
         }
     }
 
     pub fn with_conn(conn: Arc<Mutex<Connection>>) -> Self {
+        let address_names = Self::build_address_names();
+
         Self {
             conn: Some(conn),
             blocks: Vec::new(),
@@ -256,7 +265,22 @@ impl History {
             tx_by_hash: HashMap::new(),
             msg_by_hash: HashMap::new(),
             msg_to_tx: HashMap::new(),
+            address_names,
         }
+    }
+
+    fn build_address_names() -> HashMap<Addr, String> {
+        let mut address_names = HashMap::new();
+        if let Ok(addr) = StdAddr::from_str("kQBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVfil") {
+            address_names.insert(
+                Addr {
+                    workchain: addr.workchain as i32,
+                    addr: addr.address.0,
+                },
+                "Faucet".to_string(),
+            );
+        }
+        address_names
     }
 }
 
