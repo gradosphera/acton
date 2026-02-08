@@ -818,3 +818,178 @@ fn test_wrapper_generation_with_mappings() {
             "integration/snapshots/wrapper/test_wrapper_generation_with_mappings/test.tolk.txt",
         );
 }
+
+#[test]
+fn test_wrapper_generation_with_wrappers_mapping() {
+    let project = ProjectBuilder::new("wrapper_wrappers_mapping")
+        .mapping("wrappers", "tests/wrappers")
+        .file(
+            "contracts/types",
+            r#"
+                struct Storage {
+                    counter: int32
+                }
+
+                struct (0x00000001) Ping {
+                    value: int32
+                }
+
+                type AllowedMessage = Ping;
+            "#,
+        )
+        .contract(
+            "main",
+            r#"
+            import "types"
+
+            fun onInternalMessage(in: InMessage) {
+                val msg = lazy AllowedMessage.fromSlice(in.body);
+
+                match (msg) {
+                    Ping => {}
+                    else => {}
+                }
+            }
+            "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("main")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/wrappers/Main.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_wrappers_mapping/wrapper.tolk.txt",
+        )
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/main.test.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_wrappers_mapping/test.tolk.txt",
+        );
+}
+
+#[test]
+fn test_wrapper_generation_prefers_specific_mapping() {
+    let project = ProjectBuilder::new("wrapper_specific_mapping")
+        .mapping("core", "libs")
+        .mapping("core_sub", "libs/core")
+        .file(
+            "libs/core/types",
+            r#"
+                struct (0x00000002) Pong {
+                    value: int
+                }
+
+                type AllowedMessage = Pong;
+            "#,
+        )
+        .contract(
+            "main",
+            r#"
+            import "@core_sub/types"
+
+            fun onInternalMessage(in: InMessage) {
+                val msg = lazy AllowedMessage.fromSlice(in.body);
+
+                match (msg) {
+                    Pong => {}
+                    else => {}
+                }
+            }
+            "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("main")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/wrappers/Main.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_prefers_specific_mapping/wrapper.tolk.txt",
+        )
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/main.test.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_prefers_specific_mapping/test.tolk.txt",
+        );
+}
+
+#[test]
+fn test_wrapper_generation_with_import_mappings() {
+    let project = ProjectBuilder::new("wrapper_import_mappings")
+        .mapping("contracts", "contracts")
+        .mapping("wrappers", "tests/wrappers")
+        .file(
+            "contracts/types",
+            r#"
+                struct Storage {
+                    counter: int32
+                }
+
+                struct (0x00000001) Increment {
+                    value: int32
+                }
+
+                type AllowedMessage = Increment;
+            "#,
+        )
+        .contract(
+            "my_contract",
+            r#"
+                import "@contracts/types"
+
+                fun onInternalMessage(in: InMessage) {
+                    val msg = lazy AllowedMessage.fromSlice(in.body);
+
+                    match (msg) {
+                        Increment => {}
+                        else => {}
+                    }
+                }
+            "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/wrappers/MyContract.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_import_mappings/wrapper.tolk.txt",
+        )
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/my_contract.test.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_import_mappings/test.tolk.txt",
+        );
+}

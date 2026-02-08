@@ -4,9 +4,7 @@ import "@acton/emulation/network"
 import "@acton/testing/assert"
 import "@acton/testing/expect"
 import "@acton/types/message"
-import "../../contracts/types"
-import "../../contracts/main"
-import "@core/types"
+import "@core_sub/types"
 
 struct Main {
     address: address
@@ -14,10 +12,10 @@ struct Main {
 }
 
 /// Creates a contract wrapper instance from the storage data
-fun Main.fromStorage(storage: Storage, toShard: AddressShardingOptions? = null) {
+fun Main.fromStorage(toShard: AddressShardingOptions? = null) {
     val stateInit = ContractState {
         code: build("main"),
-        data: storage.toCell(),
+        data: createEmptyCell(),
     };
     val address = toShard == null
         ? AutoDeployAddress { stateInit }.calculateAddress()
@@ -45,24 +43,12 @@ fun Main.deploy(self, from: address, config: SendParams = {}): SendResultList {
     return net.send(from, msg, SEND_MODE_PAY_FEES_SEPARATELY)
 }
 
-fun Main.sendIncrement(self, from: address, value: int32, config: SendParams = {}): SendResultList {
+fun Main.sendPong(self, from: address, value: int, config: SendParams = {}): SendResultList {
     val msg = createMessage({
         bounce: config.bounce,
         value: config.value,
         dest: self.address,
-        body: Increment {
-            value,
-        },
-    });
-    return net.send(from, msg, SEND_MODE_PAY_FEES_SEPARATELY)
-}
-
-fun Main.sendDecrement(self, from: address, value: int, config: SendParams = {}): SendResultList {
-    val msg = createMessage({
-        bounce: config.bounce,
-        value: config.value,
-        dest: self.address,
-        body: Decrement {
+        body: Pong {
             value,
         },
     });
