@@ -13,8 +13,11 @@ Cargo.lock
 *.swo
 
 docs/.astro
-docs/node_modules
 docs/out
+
+**/node_modules
+**/target
+toncenter-*.json
 
 # OS files
 .DS_Store
