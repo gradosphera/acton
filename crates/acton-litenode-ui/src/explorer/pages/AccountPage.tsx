@@ -1,25 +1,27 @@
 import type React from "react"
-import { useEffect, useMemo, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
-import type { TonClient } from "../api/client"
-import type { FullAccountState, Transaction } from "../api/types"
-import { AccountInfo } from "../components/AccountInfo"
-import { Breadcrumbs } from "../components/Breadcrumbs"
-import { TransactionList } from "../components/TransactionList"
-import { normalizeAddress } from "../components/utils"
+import {useEffect, useMemo, useState} from "react"
+import {useNavigate, useParams} from "react-router-dom"
+
+import type {TonClient} from "../api/client"
+import type {FullAccountState, Transaction} from "../api/types"
+import {AccountInfo} from "../components/AccountInfo"
+import {Breadcrumbs} from "../components/Breadcrumbs"
+import {TransactionList} from "../components/TransactionList"
+import {normalizeAddress} from "../components/utils"
+
 import styles from "./AccountPage.module.css"
 
 interface AccountPageProps {
   readonly client: TonClient
 }
 
-export const AccountPage: React.FC<AccountPageProps> = ({ client }) => {
-  const { address = "" } = useParams<{ address: string }>()
+export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
+  const {address = ""} = useParams<{address: string}>()
   const navigate = useNavigate()
-  const [accountState, setAccountState] = useState<FullAccountState | null>(null)
+  const [accountState, setAccountState] = useState<FullAccountState | undefined>()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | undefined>()
 
   const formattedAddress = useMemo(() => normalizeAddress(address), [address])
 
@@ -27,12 +29,12 @@ export const AccountPage: React.FC<AccountPageProps> = ({ client }) => {
     let isActive = true
     const load = async () => {
       if (!formattedAddress) {
-        setAccountState(null)
+        setAccountState(undefined)
         setTransactions([])
         return
       }
       setLoading(true)
-      setError(null)
+      setError(undefined)
       try {
         const [state, txs] = await Promise.all([
           client.getAddressInformation(formattedAddress),
@@ -41,10 +43,10 @@ export const AccountPage: React.FC<AccountPageProps> = ({ client }) => {
         if (!isActive) return
         setAccountState(state)
         setTransactions(txs)
-      } catch (e) {
+      } catch (error) {
         if (!isActive) return
-        setError(e instanceof Error ? e.message : "An error occurred")
-        setAccountState(null)
+        setError(error instanceof Error ? error.message : "An error occurred")
+        setAccountState(undefined)
         setTransactions([])
       } finally {
         if (isActive) setLoading(false)
@@ -60,9 +62,9 @@ export const AccountPage: React.FC<AccountPageProps> = ({ client }) => {
   const handleSearch = (addr: string) => {
     const finalAddr = addr ? normalizeAddress(addr) : ""
     if (finalAddr) {
-      navigate(`/explorer/address/${finalAddr}`)
+      void navigate(`/explorer/address/${finalAddr}`)
     } else {
-      navigate("/explorer")
+      void navigate("/explorer")
     }
   }
 

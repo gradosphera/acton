@@ -1,9 +1,10 @@
-import { ChevronRight } from "lucide-react"
+import {ChevronRight} from "lucide-react"
 import React from "react"
-import { Link } from "react-router-dom"
-import { AddressLabel } from "./AddressLabel"
+import {Link} from "react-router-dom"
+
+import {AddressLabel} from "./AddressLabel"
 import styles from "./Breadcrumbs.module.css"
-import { formatAddress } from "./utils"
+import {formatAddress} from "./utils"
 
 export interface BreadcrumbItem {
   readonly label: string
@@ -16,7 +17,7 @@ interface BreadcrumbsProps {
   readonly items: BreadcrumbItem[]
 }
 
-export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items }) => {
+export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({items}) => {
   const formatItem = (item: BreadcrumbItem) => {
     if (item.isAddress) {
       return <AddressLabel address={item.label} />

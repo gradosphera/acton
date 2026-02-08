@@ -1,4 +1,4 @@
-import type { ApiResponse, FullAccountState, Transaction, V3TracesResponse } from "./types"
+import type {ApiResponse, FullAccountState, Transaction, V3TracesResponse} from "./types"
 
 interface TonClientOptions {
   readonly v2BaseUrl: string
@@ -11,7 +11,7 @@ export class TonClient {
   private readonly v3BaseUrl: string
   private readonly addressNameBaseUrl: string
 
-  constructor({ v2BaseUrl, v3BaseUrl, addressNameBaseUrl }: TonClientOptions) {
+  constructor({v2BaseUrl, v3BaseUrl, addressNameBaseUrl}: TonClientOptions) {
     this.v2BaseUrl = v2BaseUrl
     this.v3BaseUrl = v3BaseUrl
     this.addressNameBaseUrl = addressNameBaseUrl
@@ -39,7 +39,7 @@ export class TonClient {
     return this.request(url, "Failed to fetch traces")
   }
 
-  async getAddressName(address: string): Promise<string | null> {
+  async getAddressName(address: string): Promise<string | undefined> {
     const url = this.buildUrl(this.addressNameBaseUrl, "/address-name")
     url.searchParams.append("address", address)
     return this.request(url, "Failed to fetch address name")
@@ -49,13 +49,13 @@ export class TonClient {
     const url = this.buildUrl(this.addressNameBaseUrl, "/address-name")
     await this.request<null>(url, "Failed to set address name", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address, name }),
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({address, name}),
     })
   }
 
   private buildUrl(base: string, path: string): URL {
-    const fullBase = base.startsWith("http") ? base : `${window.location.origin}${base}`
+    const fullBase = base.startsWith("http") ? base : `${globalThis.location.origin}${base}`
     return new URL(`${fullBase}${path}`)
   }
 

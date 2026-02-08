@@ -1,22 +1,24 @@
-import type React from "react"
-import { useEffect, useMemo, useState } from "react"
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom"
-import { TonClient } from "./explorer/api/client"
-import { toTestnetAddress } from "./explorer/components/utils"
-import { AddressBookProvider } from "./explorer/hooks/useAddressBook"
-import { AccountPage } from "./explorer/pages/AccountPage"
-import { ExplorerIndexPage } from "./explorer/pages/ExplorerIndexPage"
-import { TransactionPage } from "./explorer/pages/TransactionPage"
+import * as React from "react"
+import {useEffect, useMemo, useState} from "react"
+import {BrowserRouter, Navigate, Route, Routes, useNavigate} from "react-router-dom"
+
+import {Moon, Sun} from "lucide-react"
+
+import {TonClient} from "./explorer/api/client"
+import {toTestnetAddress} from "./explorer/components/utils"
+import {AddressBookProvider} from "./explorer/hooks/useAddressBook"
+import {AccountPage} from "./explorer/pages/AccountPage"
+import {ExplorerIndexPage} from "./explorer/pages/ExplorerIndexPage"
+import {TransactionPage} from "./explorer/pages/TransactionPage"
 import "@acton/shared-ui/styles/tokens.css"
 import "./index.css"
-import { Moon, Sun } from "lucide-react"
 import styles from "./App.module.css"
 
 export const App: React.FC = () => {
   const [theme, setTheme] = useState(() => {
     return (
       localStorage.getItem("theme") ||
-      (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+      (globalThis.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
     )
   })
 
@@ -46,7 +48,7 @@ export const App: React.FC = () => {
                   type="button"
                   className={styles.logo}
                   onClick={() => {
-                    window.location.href = "/"
+                    globalThis.location.href = "/"
                   }}
                 >
                   <svg
@@ -114,14 +116,14 @@ const HeaderSearch: React.FC = () => {
           type="text"
           placeholder="Search by address or hash"
           className={styles.searchInput}
-          onKeyDown={(e) => {
+          onKeyDown={e => {
             if (e.key === "Enter") {
               const val = (e.target as HTMLInputElement).value
               if (val.length === 64) {
-                navigate(`/tx/${val}`)
+                void navigate(`/tx/${val}`)
               } else {
                 const formatted = toTestnetAddress(val)
-                navigate(`/explorer/address/${formatted ?? val}`)
+                void navigate(`/explorer/address/${formatted ?? val}`)
               }
             }
           }}

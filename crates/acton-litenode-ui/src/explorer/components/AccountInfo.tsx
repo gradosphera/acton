@@ -1,23 +1,25 @@
-import { Card, CardContent, CardHeader } from "@acton/shared-ui"
-import { Check, Copy, Edit2, X } from "lucide-react"
+import {Card, CardContent, CardHeader} from "@acton/shared-ui"
+import {Check, Copy, Edit2, X} from "lucide-react"
 import type React from "react"
-import { useEffect, useState } from "react"
-import type { FullAccountState } from "../api/types"
-import { useAddressBook, useAddressName } from "../hooks/useAddressBook"
+import {useEffect, useState} from "react"
+
+import type {FullAccountState} from "../api/types"
+import {useAddressBook, useAddressName} from "../hooks/useAddressBook"
+
 import styles from "./AccountInfo.module.css"
-import { formatAddress, formatNano } from "./utils"
+import {formatAddress, formatNano} from "./utils"
 
 interface AccountInfoProps {
   readonly address: string
   readonly state: FullAccountState
 }
 
-export const AccountInfo: React.FC<AccountInfoProps> = ({ address, state }) => {
+export const AccountInfo: React.FC<AccountInfoProps> = ({address, state}) => {
   const [isEditing, setIsEditing] = useState(false)
-  const [customName, setCustomName] = useState<string | null>(null)
+  const [customName, setCustomName] = useState<string | undefined>()
   const [editValue, setEditValue] = useState("")
   const [loading, setLoading] = useState(false)
-  const { setAddressName } = useAddressBook()
+  const {setAddressName} = useAddressBook()
   const resolvedName = useAddressName(address)
 
   const [copied, setCopied] = useState(false)
@@ -30,7 +32,7 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({ address, state }) => {
   }, [copied])
 
   useEffect(() => {
-    setCustomName(resolvedName)
+    setCustomName(resolvedName || undefined)
   }, [resolvedName])
 
   const handleStartEdit = () => {
@@ -42,10 +44,10 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({ address, state }) => {
     setLoading(true)
     try {
       await setAddressName(address, editValue || "")
-      setCustomName(editValue || null)
+      setCustomName(editValue || undefined)
       setIsEditing(false)
-    } catch (e) {
-      console.error("Failed to save name:", e)
+    } catch (error) {
+      console.error("Failed to save name:", error)
     } finally {
       setLoading(false)
     }
@@ -74,8 +76,8 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({ address, state }) => {
                 type="text"
                 className={styles.editInput}
                 value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onKeyDown={(e) => {
+                onChange={e => setEditValue(e.target.value)}
+                onKeyDown={e => {
                   if (e.key === "Enter") {
                     void handleSave()
                   } else if (e.key === "Escape") {
@@ -87,7 +89,9 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({ address, state }) => {
               <button
                 type="button"
                 className={styles.iconButton}
-                onClick={handleSave}
+                onClick={() => {
+                  void handleSave()
+                }}
                 disabled={loading}
               >
                 <Check size={18} className={styles.saveIcon} />
@@ -142,7 +146,7 @@ export const AccountInfo: React.FC<AccountInfoProps> = ({ address, state }) => {
           <div className={styles.label}>Details</div>
           <div className={styles.detailsGrid}>
             <span
-              className={`${styles.status} ${state.state !== "active" ? styles.statusUninitialized : ""}`}
+              className={`${styles.status} ${state.state === "active" ? "" : styles.statusUninitialized}`}
             >
               {state.state}
             </span>

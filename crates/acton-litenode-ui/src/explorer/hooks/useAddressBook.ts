@@ -1,9 +1,19 @@
-import { Address } from "@ton/core"
+import {Address} from "@ton/core"
 import type React from "react"
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
-import type { TonClient } from "../api/client"
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 
-type AddressName = string | null
+import type {TonClient} from "../api/client"
+
+type AddressName = string | undefined
 
 interface AddressBookContextValue {
   readonly getCachedName: (address: string) => AddressName | undefined
@@ -13,7 +23,7 @@ interface AddressBookContextValue {
   readonly version: number
 }
 
-const AddressBookContext = createContext<AddressBookContextValue | null>(null)
+const AddressBookContext = createContext<AddressBookContextValue | undefined>(undefined)
 
 const normalizeKey = (address: string) => {
   try {
@@ -26,13 +36,13 @@ const normalizeKey = (address: string) => {
 export const AddressBookProvider: React.FC<{
   client: TonClient
   children: React.ReactNode
-}> = ({ client, children }) => {
+}> = ({client, children}) => {
   const cacheRef = useRef(new Map<string, AddressName>())
   const pendingRef = useRef(new Map<string, Promise<AddressName>>())
   const [version, setVersion] = useState(0)
 
   const getCachedName = useCallback((address: string) => {
-    if (!address) return undefined
+    if (!address) return
     const key = normalizeKey(address)
     return cacheRef.current.get(key)
   }, [])
@@ -41,23 +51,23 @@ export const AddressBookProvider: React.FC<{
     if (!address) return
     const key = normalizeKey(address)
     cacheRef.current.set(key, name)
-    setVersion((prev) => prev + 1)
+    setVersion(prev => prev + 1)
   }, [])
 
   const setAddressName = useCallback(
     async (address: string, name: string) => {
       await client.setAddressName(address, name)
-      updateName(address, name || null)
+      updateName(address, name || undefined)
     },
     [client, updateName],
   )
 
   const fetchName = useCallback(
     async (address: string) => {
-      if (!address) return null
+      if (!address) return
       const key = normalizeKey(address)
       if (cacheRef.current.has(key)) {
-        return cacheRef.current.get(key) ?? null
+        return cacheRef.current.get(key)
       }
       const pending = pendingRef.current.get(key)
       if (pending) return pending
@@ -67,10 +77,10 @@ export const AddressBookProvider: React.FC<{
           const name = await client.getAddressName(address)
           updateName(address, name)
           return name
-        } catch (e) {
-          console.warn(`Failed to fetch name for ${address}:`, e)
-          updateName(address, null)
-          return null
+        } catch (error) {
+          console.warn(`Failed to fetch name for ${address}:`, error)
+          updateName(address, undefined as AddressName)
+          return
         } finally {
           pendingRef.current.delete(key)
         }
@@ -93,7 +103,7 @@ export const AddressBookProvider: React.FC<{
     [fetchName, getCachedName, setAddressName, updateName, version],
   )
 
-  return <AddressBookContext.Provider value={value}>{children}</AddressBookContext.Provider>
+  return createElement(AddressBookContext.Provider, {value}, children)
 }
 
 export const useAddressBook = () => {
@@ -105,8 +115,8 @@ export const useAddressBook = () => {
 }
 
 export const useAddressName = (address: string) => {
-  const { getCachedName, fetchName, version } = useAddressBook()
-  const [name, setName] = useState<AddressName>(() => getCachedName(address) ?? null)
+  const {getCachedName, fetchName, version} = useAddressBook()
+  const [name, setName] = useState<AddressName>(() => getCachedName(address))
 
   useEffect(() => {
     const cached = getCachedName(address)
@@ -117,13 +127,13 @@ export const useAddressName = (address: string) => {
 
   useEffect(() => {
     if (!address) {
-      setName(null)
+      setName(undefined)
       return
     }
     let isActive = true
     const cached = getCachedName(address)
     if (cached === undefined) {
-      fetchName(address).then((next) => {
+      void fetchName(address).then(next => {
         if (isActive) setName(next)
       })
     }

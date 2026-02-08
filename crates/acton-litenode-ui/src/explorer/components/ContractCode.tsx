@@ -1,7 +1,9 @@
-import { Buffer } from "buffer"
+import {Buffer} from "node:buffer"
+
 import type React from "react"
-import { useMemo, useState } from "react"
-import { Cell as Cell2, runtime, text } from "ton-assembly"
+import {useMemo, useState} from "react"
+import {Cell as Cell2, runtime, text} from "ton-assembly"
+
 import styles from "./ContractCode.module.css"
 
 interface ContractCodeProps {
@@ -10,11 +12,11 @@ interface ContractCodeProps {
 
 type CodeTab = "decompiled" | "base64" | "hex"
 
-export const ContractCode: React.FC<ContractCodeProps> = ({ codeBoc }) => {
+export const ContractCode: React.FC<ContractCodeProps> = ({codeBoc}) => {
   const [activeTab, setActiveTab] = useState<CodeTab>("decompiled")
 
   const codeData = useMemo(() => {
-    if (!codeBoc) return null
+    if (!codeBoc) return
     try {
       const buf = Buffer.from(codeBoc, "base64")
       const cell = Cell2.fromBoc(buf)[0]
@@ -25,8 +27,8 @@ export const ContractCode: React.FC<ContractCodeProps> = ({ codeBoc }) => {
         hex: Buffer.from(codeBoc, "base64").toString("hex").toUpperCase(),
         decompiled: decompiled,
       }
-    } catch (e) {
-      console.error("Failed to process contract code:", e)
+    } catch (error) {
+      console.error("Failed to process contract code:", error)
       return {
         base64: codeBoc,
         hex: "Error processing HEX",

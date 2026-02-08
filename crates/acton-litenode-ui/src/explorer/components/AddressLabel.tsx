@@ -1,6 +1,8 @@
 import type React from "react"
-import { useAddressName } from "../hooks/useAddressBook"
-import { formatAddress } from "./utils"
+
+import {useAddressName} from "../hooks/useAddressBook"
+
+import {formatAddress} from "./utils"
 
 interface AddressLabelProps {
   readonly address: string

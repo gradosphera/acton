@@ -1,7 +1,8 @@
-import react from "@vitejs/plugin-react"
-import { defineConfig, type PluginOption } from "vite"
-import { nodePolyfills } from "vite-plugin-node-polyfills"
 import path from "node:path"
+
+import react from "@vitejs/plugin-react"
+import {defineConfig, type PluginOption} from "vite"
+import {nodePolyfills} from "vite-plugin-node-polyfills"
 
 export default defineConfig({
   plugins: [
@@ -15,8 +16,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@acton/shared-ui": path.resolve(__dirname, "../acton-shared-ui/src"),
-      "@": path.resolve(__dirname, "../acton-shared-ui/src"),
+      "@acton/shared-ui": path.resolve(import.meta.dirname, "../acton-shared-ui/src"),
+      "@": path.resolve(import.meta.dirname, "../acton-shared-ui/src"),
     },
   },
   build: {
