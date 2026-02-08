@@ -501,7 +501,8 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
                 } else {
                     &f.type_info.human_readable
                 };
-            format!("{}: {}", f.name, type_name)
+            let name = normalize_param_name(&f.name);
+            format!("{}: {}", name, type_name)
         })
         .collect::<Vec<_>>()
         .join(", ");
@@ -525,13 +526,17 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
     } else {
         code.push_str(&format!("        body: {} {{\n", message_type.name));
         for field in &fields {
+            let param_name = normalize_param_name(&field.name);
+
             if let ton_abi::BaseTypeInfo::Cell { inner: Some(_) } = &field.type_info.base {
                 code.push_str(&format!(
                     "            {}: {}.toCell(),\n",
-                    field.name, field.name
+                    field.name, param_name
                 ));
-            } else {
+            } else if field.name == param_name {
                 code.push_str(&format!("            {},\n", field.name));
+            } else {
+                code.push_str(&format!("            {}: {},\n", field.name, param_name));
             }
         }
         code.push_str("        },\n");
@@ -542,6 +547,14 @@ fn generate_send_method(contract_name: &str, message_type: &TypeAbi) -> String {
     code.push_str("}\n");
 
     code
+}
+
+fn normalize_param_name(name: &str) -> String {
+    if name == "from" || name == "config" {
+        format!("{}_", name)
+    } else {
+        name.to_owned()
+    }
 }
 
 fn generate_send_any_method(contract_name: &str) -> String {

@@ -993,3 +993,53 @@ fn test_wrapper_generation_with_import_mappings() {
             "integration/snapshots/wrapper/test_wrapper_generation_with_import_mappings/test.tolk.txt",
         );
 }
+
+#[test]
+fn test_wrapper_generation_with_conflicting_field_names() {
+    let project = ProjectBuilder::new("wrapper_conflicts")
+        .contract(
+            "my_contract",
+            r#"
+                import "types"
+
+                fun onInternalMessage(in: InMessage) {
+                    val msg = lazy AllowedMessage.fromSlice(in.body);
+
+                    match (msg) {
+                        MessageWithConflicts => {}
+                        else => {}
+                    }
+                }
+            "#,
+        )
+        .file(
+            "contracts/types",
+            r"
+                struct (0x00000001) MessageWithConflicts {
+                    from: address
+                    config: int
+                    other: uint32
+                }
+
+                type AllowedMessage = MessageWithConflicts;
+            ",
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .wrapper("my_contract")
+        .run()
+        .success();
+
+    output
+        .assert_contains("Generated")
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/wrappers/MyContract.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_conflicting_field_names/wrapper.tolk.txt",
+        );
+}
