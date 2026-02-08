@@ -1,17 +1,17 @@
-import react from "@vitejs/plugin-react"
-import { defineConfig, type PluginOption } from "vite"
-import { nodePolyfills } from "vite-plugin-node-polyfills"
 import path from "node:path"
+import react from "@vitejs/plugin-react"
+import { defineConfig } from "vite"
+import { nodePolyfills } from "vite-plugin-node-polyfills"
 
 export default defineConfig({
   plugins: [
-    react() as PluginOption,
+    react(),
     nodePolyfills({
       include: ["buffer", "path"],
       globals: {
         Buffer: true,
       },
-    }) as PluginOption,
+    }),
   ],
   resolve: {
     alias: {
@@ -24,6 +24,13 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 3000,
+    port: 3006,
+    proxy: {
+      "/api/v2": {
+        target: "http://localhost:8081",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/v2/, "/api/v2"),
+      },
+    },
   },
 })
