@@ -756,3 +756,65 @@ fn test_wrapper_for_contract_without_file() {
             "integration/snapshots/wrapper/test_wrapper_for_contract_without_file/stderr.txt",
         );
 }
+
+#[test]
+fn test_wrapper_generation_with_mappings() {
+    let project = ProjectBuilder::new("wrapper_mappings")
+        .mapping("@core", "./libs/core")
+        .file(
+            "libs/core/types",
+            r#"
+                struct (0x00000001) Increment {
+                    value: int32
+                }
+
+                struct (0x00000002) Decrement {
+                    value: int
+                }
+
+                type AllowedMessage = Increment | Decrement;
+            "#,
+        )
+        .contract(
+            "main",
+            r#"
+            import "@core/types"
+
+            struct Storage {}
+
+            fun onInternalMessage(in: InMessage) {
+                val msg = lazy AllowedMessage.fromSlice(in.body);
+
+                match (msg) {
+                    Increment => {}
+                    Decrement => {}
+                    else => {}
+                }
+            }
+            "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("main")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/wrappers/Main.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_mappings/wrapper.tolk.txt",
+        )
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("tests/main.test.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_with_mappings/test.tolk.txt",
+        );
+}
