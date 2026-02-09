@@ -106,7 +106,13 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
             ]}
           />
           <div className={styles.topSection}>
-            <AccountInfo address={formattedAddress} state={accountState} />
+            <AccountInfo
+              address={formattedAddress}
+              state={accountState}
+              jettonWallets={jettonWallets}
+              client={client}
+              onMoreAssetsClick={() => handleTabChange("tokens")}
+            />
             {jettonMaster && (
               <div className={styles.jettonInfo}>
                 <div className={styles.jettonHeader}>

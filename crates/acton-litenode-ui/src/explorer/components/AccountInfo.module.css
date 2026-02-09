@@ -10,6 +10,24 @@
   background-color: #22c55e;
 }
 
+.assetIconImage {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.moreLink {
+  color: var(--tonscan-accent);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  margin-left: 4px;
+}
+
+.moreLink:hover {
+  text-decoration: underline;
+}
+
 .assetRow {
   display: flex;
   align-items: center;
