@@ -304,7 +304,7 @@ impl ActonConfig {
 
         // Merge wallets from different sources
         // Order of importance (later overrides earlier):
-        // 1. Global ~/.acton/wallets/global.wallets.toml
+        // 1. Global ~/.config/acton/wallets/global.wallets.toml
         // 2. Local wallets.toml
 
         let mut merged_wallets = BTreeMap::new();
@@ -439,7 +439,8 @@ pub fn global_wallets_path() -> Option<PathBuf> {
 
     Some(
         PathBuf::from(home)
-            .join(".acton")
+            .join(".config")
+            .join("acton")
             .join("wallets")
             .join("global.wallets.toml"),
     )
@@ -454,7 +455,8 @@ pub fn global_libraries_path() -> Option<PathBuf> {
 
     Some(
         PathBuf::from(home)
-            .join(".acton")
+            .join(".config")
+            .join("acton")
             .join("libraries")
             .join("global.libraries.toml"),
     )

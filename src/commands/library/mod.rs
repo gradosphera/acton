@@ -719,7 +719,7 @@ fn save_library(
     } else {
         let options = vec![
             "Local (libraries.toml)",
-            "Global (~/.acton/libraries/global.libraries.toml)",
+            "Global (~/.config/acton/libraries/global.libraries.toml)",
         ];
         let selection = Select::new("Save library info to:", options).prompt()?;
         selection.starts_with("Global")

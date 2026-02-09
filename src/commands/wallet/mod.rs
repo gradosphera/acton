@@ -529,7 +529,7 @@ fn get_is_global(global_flag: bool, local_flag: bool) -> anyhow::Result<bool> {
     } else {
         let options = vec![
             "Local (wallets.toml)",
-            "Global (~/.acton/wallets/global.wallets.toml)",
+            "Global (~/.config/acton/wallets/global.wallets.toml)",
         ];
         let selection = Select::new("Save wallet to:", options).prompt()?;
         Ok(selection.starts_with("Global"))
