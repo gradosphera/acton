@@ -29,7 +29,7 @@ pub async fn litenode_airdrop_cmd(address: &str, amount_ton: f64, port: u16) -> 
     let amount_nanotons = (amount_ton * 1_000_000_000.0) as u128;
 
     let res = client
-        .post(format!("http://localhost:{}/faucet", port))
+        .post(format!("http://localhost:{}/admin/faucet", port))
         .json(&serde_json::json!({
             "address": address,
             "amount": amount_nanotons
