@@ -24,6 +24,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [jettonMaster, setJettonMaster] = useState<JettonMaster | undefined>()
   const [jettonWallets, setJettonWallets] = useState<JettonWallet[]>([])
+  const [holders, setHolders] = useState<JettonWallet[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | undefined>()
 
@@ -37,22 +38,25 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
         setTransactions([])
         setJettonMaster(undefined)
         setJettonWallets([])
+        setHolders([])
         return
       }
       setLoading(true)
       setError(undefined)
       try {
-        const [state, txs, masters, wallets] = await Promise.all([
+        const [state, txs, masters, wallets, masterHolders] = await Promise.all([
           client.getAddressInformation(formattedAddress),
           client.getTransactions(formattedAddress),
           client.getJettonMasters([formattedAddress]),
           client.getJettonWallets([formattedAddress]),
+          client.getJettonWallets(undefined, [formattedAddress]),
         ])
         if (!isActive) return
         setAccountState(state)
         setTransactions(txs)
         setJettonMaster(masters[0])
         setJettonWallets(wallets)
+        setHolders(masterHolders)
       } catch (error) {
         if (!isActive) return
         setError(error instanceof Error ? error.message : "An error occurred")
@@ -60,6 +64,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
         setTransactions([])
         setJettonMaster(undefined)
         setJettonWallets([])
+        setHolders([])
       } finally {
         if (isActive) setLoading(false)
       }
@@ -165,6 +170,8 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
             accountState={accountState}
             ownerAddress={formattedAddress}
             jettonWallets={jettonWallets}
+            jettonMaster={jettonMaster}
+            holders={holders}
             client={client}
             onAddressClick={handleSearch}
             activeTabHash={location.hash.replace("#", "")}

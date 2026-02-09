@@ -23,7 +23,7 @@ import type React from "react"
 import {useMemo, useState, useEffect} from "react"
 import {useNavigate} from "react-router-dom"
 
-import type {FullAccountState, JettonWallet, Transaction} from "../api/types"
+import type {FullAccountState, JettonMaster, JettonWallet, Transaction} from "../api/types"
 import {TonClient} from "../api/client"
 
 import {AddressLabel} from "./AddressLabel"
@@ -32,13 +32,15 @@ import {Tokens} from "./Tokens"
 import styles from "./AccountDetails.module.css"
 import {formatNano, formatTimeAgo, isSameAddress, parseAddress} from "./utils"
 
-type Tabs = "history" | "contract" | "tokens"
+type Tabs = "history" | "contract" | "tokens" | "holders"
 
 interface AccountDetailsProps {
   readonly transactions: Transaction[]
   readonly accountState: FullAccountState
   readonly ownerAddress: string
   readonly jettonWallets: JettonWallet[]
+  readonly jettonMaster?: JettonMaster
+  readonly holders?: JettonWallet[]
   readonly client: TonClient
   readonly onAddressClick?: (addr: string) => void
   readonly activeTabHash?: string
@@ -52,6 +54,8 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
   accountState,
   ownerAddress,
   jettonWallets,
+  jettonMaster,
+  holders,
   client,
   onAddressClick,
   activeTabHash,
@@ -63,9 +67,12 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
   useEffect(() => {
     if (
       activeTabHash &&
-      (activeTabHash === "history" || activeTabHash === "contract" || activeTabHash === "tokens")
+      (activeTabHash === "history" ||
+        activeTabHash === "contract" ||
+        activeTabHash === "tokens" ||
+        activeTabHash === "holders")
     ) {
-      setActiveTab(activeTabHash)
+      setActiveTab(activeTabHash as Tabs)
     }
   }, [activeTabHash])
 
@@ -100,6 +107,15 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
         >
           <Coins size={14} /> Tokens
         </button>
+        {jettonMaster && (
+          <button
+            type="button"
+            className={`${styles.tab} ${activeTab === "holders" ? styles.tabActive : ""}`}
+            onClick={() => handleTabClick("holders")}
+          >
+            <Filter size={14} /> Holders
+          </button>
+        )}
         <div className={styles.tab}>
           <div className={styles.nftIcon} /> NFTs
         </div>
@@ -242,6 +258,59 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
       ) : activeTab === "tokens" ? (
         <CardContent className={styles.tokensContent}>
           <Tokens wallets={jettonWallets} client={client} onAddressClick={onAddressClick} />
+        </CardContent>
+      ) : activeTab === "holders" ? (
+        <CardContent className={styles.historyContent}>
+          <Table>
+            <TableHeader>
+              <TableRow className={styles.historyHeaderRow}>
+                <TableHead className={styles.tableHeader}>Owner</TableHead>
+                <TableHead className={styles.tableHeader}>Wallet</TableHead>
+                <TableHead className={`${styles.tableHeader} ${styles.valueContainer}`}>
+                  Balance
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(holders || []).map(holder => {
+                const decimals = Number(jettonMaster?.jetton_content?.decimals || 9)
+                const balance = Number(holder.balance) / 10 ** decimals
+                const symbol = jettonMaster?.jetton_content?.symbol || ""
+
+                return (
+                  <TableRow key={holder.address} className={styles.row}>
+                    <TableCell>
+                      <button
+                        type="button"
+                        className={styles.address}
+                        onClick={() => onAddressClick?.(holder.owner)}
+                      >
+                        <AddressLabel address={holder.owner} />
+                      </button>
+                    </TableCell>
+                    <TableCell>
+                      <button
+                        type="button"
+                        className={styles.address}
+                        onClick={() => onAddressClick?.(holder.address)}
+                      >
+                        <AddressLabel address={holder.address} />
+                      </button>
+                    </TableCell>
+                    <TableCell className={styles.valueContainer}>
+                      <div className={styles.valuePositive}>
+                        {balance.toLocaleString(undefined, {maximumFractionDigits: decimals})}{" "}
+                        {symbol}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+          {(!holders || holders.length === 0) && (
+            <div className={styles.empty}>No holders found.</div>
+          )}
         </CardContent>
       ) : (
         <ContractCode codeBoc={accountState.code} />
