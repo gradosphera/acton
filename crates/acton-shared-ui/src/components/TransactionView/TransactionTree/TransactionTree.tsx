@@ -372,7 +372,6 @@ export function TransactionTree({
     }
 
     const opcode = (nodeDatum.attributes?.opcode as string | undefined) ?? "empty opcode"
-    const isNumberOpcode = !Number.isNaN(Number.parseInt(opcode, 10))
     const isSelected = nodeDatum.attributes?.isSelected as boolean
     const lt = nodeDatum.attributes?.lt as string
     const tx = transactionMap.get(lt)
@@ -463,9 +462,7 @@ export function TransactionTree({
               )}
             </div>
             <div className={styles.bottonText}>
-              <p className={styles.edgeTextContent}>
-                {isNumberOpcode ? <>Opcode: {opcode}</> : opcode}
-              </p>
+              <p className={styles.edgeTextContent}>{opcode}</p>
               {nodeDatum.attributes?.exitCode && nodeDatum.attributes.exitCode !== "0" && (
                 <p className={styles.edgeTextContent}>
                   Exit: {nodeDatum.attributes.exitCode as string} | Success:{" "}

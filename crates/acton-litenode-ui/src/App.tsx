@@ -136,7 +136,7 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
           <Route path="/explorer" element={<ExplorerIndexPage />} />
           <Route path="/explorer/address/:address" element={<AccountPage client={client} />} />
           <Route path="/tokens" element={<TokensPage client={client} />} />
-          <Route path="/tx/:hash" element={<TransactionPage client={client} />} />
+          <Route path="/explorer/tx/:hash" element={<TransactionPage client={client} />} />
           <Route path="*" element={<Navigate to="/explorer" replace />} />
         </Routes>
       </main>
@@ -157,7 +157,7 @@ const HeaderSearch: React.FC = () => {
             if (e.key === "Enter") {
               const val = (e.target as HTMLInputElement).value
               if (val.length === 64) {
-                void navigate(`/tx/${val}`)
+                void navigate(`/explorer/tx/${val}`)
               } else {
                 const formatted = toTestnetAddress(val)
                 void navigate(`/explorer/address/${formatted ?? val}`)

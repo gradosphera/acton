@@ -187,7 +187,7 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
                     key={tx.hash}
                     className={`${styles.row} ${styles.clickableRow}`}
                     onClick={() => {
-                      void navigate(`/tx/${tx.hash}`)
+                      void navigate(`/explorer/tx/${tx.hash}`)
                     }}
                   >
                     <TableCell className={styles.time}>{formatTimeAgo(tx.utime)}</TableCell>
