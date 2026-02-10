@@ -37,6 +37,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::{fs, process};
+use tolk_syntax::{AstNode, HasName};
 use ton_abi::{ContractAbi, contract_abi};
 use ton_emulator::emulator::Emulator;
 use ton_emulator::world_state::{
@@ -1064,46 +1065,33 @@ pub struct TestDescriptor {
 }
 
 fn find_all_test(file_path: &str, content: &str) -> Vec<TestDescriptor> {
-    let Ok(tree) = tolk_syntax::parse(content) else {
+    let Ok(file) = tolk_syntax::parse(content) else {
         return vec![];
     };
-    let root_node = tree.root_node();
-    let mut cursor = root_node.walk();
 
-    root_node
-        .children(&mut cursor)
-        .filter_map(|child| {
-            if child.kind() == "get_method_declaration" {
-                let name_node = child.child_by_field_name("name")?;
-                let raw_name = name_node
-                    .utf8_text(content.as_bytes())
-                    .map(ToString::to_string)
-                    .ok()?;
+    file.get_methods()
+        .filter_map(|method| {
+            let name_node = method.name()?;
+            let name = name_node.normalized_name(content).to_owned();
 
-                let name = raw_name.trim_matches('`').to_string();
+            // get fun `test-foo`() or get fun test_foo() or get fun `test foo`()
+            if name.starts_with("test-") || name.starts_with("test_") || name.starts_with("test ") {
+                let id = i32::from(CRC16.checksum(name.as_bytes())) | 0x1_00_00;
+                let test_annotations = annotations::find_test_annotations(content, method);
 
-                // get fun `test-foo`() or get fun test_foo() or get fun `test foo`()
-                if name.starts_with("test-")
-                    || name.starts_with("test_")
-                    || name.starts_with("test ")
-                {
-                    let id = i32::from(CRC16.checksum(name.as_bytes())) | 0x1_00_00;
-                    let test_annotations = annotations::find_test_annotations(content, child);
-
-                    return Some(TestDescriptor {
-                        id,
-                        name,
-                        annotations: test_annotations.annotations,
-                        expected_exit_code: test_annotations.expected_exit_code,
-                        gas_limit: test_annotations.gas_limit,
-                        todo_description: test_annotations.todo_description,
-                        pos: Pos {
-                            row: name_node.start_position().row,
-                            column: name_node.start_position().column,
-                            uri: file_path.to_owned(),
-                        },
-                    });
-                }
+                return Some(TestDescriptor {
+                    id,
+                    name,
+                    annotations: test_annotations.annotations,
+                    expected_exit_code: test_annotations.expected_exit_code,
+                    gas_limit: test_annotations.gas_limit,
+                    todo_description: test_annotations.todo_description,
+                    pos: Pos {
+                        row: name_node.syntax().start_position().row,
+                        column: name_node.syntax().start_position().column,
+                        uri: file_path.to_owned(),
+                    },
+                });
             }
 
             None

@@ -536,11 +536,11 @@ fun expect<T>(value: T, loc: SourceLocation = reflect.sourceLocation()) {
 /// throw 10; // Test will end with exit code 10 and be considered as passed
 /// ```
 ///
-/// Alternatively, you can use `@custom({ fail_with: 10 })` annotation to set
+/// Alternatively, you can use `@test({ fail_with: 10 })` annotation to set
 /// the expected exit code for the whole test.
 ///
 /// ```tolk
-/// @custom({ fail_with: 10 })
+/// @test({ fail_with: 10 })
 /// get fun test_fail_with() {
 ///     throw 10; // ok
 /// }

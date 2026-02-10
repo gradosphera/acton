@@ -1,4 +1,4 @@
-use tolk_syntax::{AstNode, HasName, SourceFile, TopLevel};
+use tolk_syntax::{HasName, SourceFile};
 
 pub(super) fn prepare_test_file(content: &str) -> String {
     let Ok(file) = tolk_syntax::parse(content) else {
@@ -14,17 +14,12 @@ pub(super) fn prepare_test_file(content: &str) -> String {
 }
 
 fn has_entry_function(file: &SourceFile, content: &str) -> bool {
-    file.top_levels()
-        .filter_map(|d| match d {
-            TopLevel::Func(func) => Some(func),
-            _ => None,
-        })
-        .any(|func| {
-            if let Some(name) = func.name() {
-                let name = name.text(content);
-                return name == "main" || name == "onInternalMessage";
-            }
+    file.functions().any(|func| {
+        if let Some(name) = func.name() {
+            let name = name.normalized_name(content);
+            return name == "main" || name == "onInternalMessage";
+        }
 
-            false
-        })
+        false
+    })
 }
