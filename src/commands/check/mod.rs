@@ -5,11 +5,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Instant;
 use tolk_linter::diagnostic::{Annotation, Applicability, Diagnostic, Severity};
 use tolk_linter::{Checker, Tolk};
-use tolk_resolver::FileInfo;
 use tolk_resolver::file_db::FileDb;
 use tolk_resolver::file_index::Span;
 use tolk_resolver::project_index::ProjectIndex;
@@ -211,7 +209,7 @@ fn check_root_file(
     let mut all_diagnostics = vec![];
 
     let has_compiler_errors =
-        check_with_compiler(root, &acton_config, &file_info, &mut all_diagnostics)?;
+        check_with_compiler(root, file_db, acton_config, &mut all_diagnostics)?;
 
     let parse_errors = file_info.source().errors();
 
@@ -338,8 +336,8 @@ fn check_root_file(
 
 fn check_with_compiler(
     root: &Path,
-    acton_config: &&ActonConfig,
-    file_info: &Arc<FileInfo>,
+    file_db: &FileDb,
+    acton_config: &ActonConfig,
     all_diagnostics: &mut Vec<Diagnostic>,
 ) -> anyhow::Result<bool> {
     let now = Instant::now();
@@ -355,6 +353,14 @@ fn check_with_compiler(
     let has_compiler_errors = compiler_errors.is_empty();
 
     for compiler_error in compiler_errors {
+        let file_info = match file_db.process(Path::new(&compiler_error.range.file_name)) {
+            Ok(file_id) => file_id,
+            Err(error) => {
+                log::warn!("Cannot process file for compiler error {error}");
+                continue;
+            }
+        };
+
         let start_byte = byte_offset_from_point(
             &Point {
                 row: compiler_error.range.start_line_no - 1,
