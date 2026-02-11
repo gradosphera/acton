@@ -152,9 +152,16 @@ pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
             .get_resolved_uses(file_info_iter.id())?;
 
         for local_def in resolved_local_by_file.locals.iter() {
+            let name = local_def.name.clone();
+            if name.starts_with("_") {
+                // don't check explicitly unused symbols
+                // we also skip something like `_foo_bar` but I think it's ok
+                continue;
+            }
+
             // TODO: check type for params
-            let cameled = local_def.name.to_lower_camel_case();
-            let name = local_def.name.clone().to_string();
+            let cameled = name.to_lower_camel_case();
+            let name = name.clone().to_string();
 
             if cameled == name {
                 continue;
@@ -215,11 +222,15 @@ pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
             }
 
             match &symbol.kind {
+                tolk_resolver::SymbolKind::GetMethod { .. } => {
+                    // Since the get method name defines the method ID and there are names from TEPs in snake case (e.g. `get_wallet_info`),
+                    // we cannot warn about the get method names
+                    continue;
+                }
                 tolk_resolver::SymbolKind::GlobalVariable
                 | tolk_resolver::SymbolKind::Function { .. }
                 | tolk_resolver::SymbolKind::StructField
-                | tolk_resolver::SymbolKind::Method { .. }
-                | tolk_resolver::SymbolKind::GetMethod { .. } => {
+                | tolk_resolver::SymbolKind::Method { .. } => {
                     check_case(symbol, checker, symbol_def_file_id, CaseRules::LowerCamel)
                 }
                 tolk_resolver::SymbolKind::Struct { .. }
