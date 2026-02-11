@@ -5,9 +5,11 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Instant;
 use tolk_linter::diagnostic::{Annotation, Applicability, Diagnostic, Severity};
 use tolk_linter::{Checker, Tolk};
+use tolk_resolver::FileInfo;
 use tolk_resolver::file_db::FileDb;
 use tolk_resolver::file_index::Span;
 use tolk_resolver::project_index::ProjectIndex;
@@ -15,6 +17,7 @@ use tolk_resolver::symbol_resolver::resolve;
 use tolk_ty::TypeDb;
 use tolk_ty::TypeInterner;
 use tolk_ty::infer;
+use tolkc::Compiler;
 use tree_sitter::Point;
 
 pub fn check_cmd(
@@ -192,7 +195,7 @@ fn check_contract(
 
     let lint_settings = Checker::build_settings(acton_config, Some(contract_id));
 
-    check_root_file(&root, file_db, fix, json, lint_settings)
+    check_root_file(&root, file_db, fix, json, lint_settings, acton_config)
 }
 
 fn check_root_file(
@@ -201,36 +204,45 @@ fn check_root_file(
     fix: bool,
     json: bool,
     lint_settings: HashMap<tolk_linter::Rule, acton_config::config::LintLevel>,
+    acton_config: &ActonConfig,
 ) -> anyhow::Result<Vec<Diagnostic>> {
     let file_info = file_db.process(root)?;
 
-    let parse_errors = file_info.source().errors();
     let mut all_diagnostics = vec![];
 
-    for parse_error in parse_errors {
-        let start_byte =
-            byte_offset_from_point(&parse_error.span.start, &file_info.source().source);
-        let end_byte = byte_offset_from_point(&parse_error.span.end, &file_info.source().source);
+    let has_compiler_errors =
+        check_with_compiler(root, &acton_config, &file_info, &mut all_diagnostics)?;
 
-        let diagnostic = Diagnostic {
-            file_id: file_info.id(),
-            severity: Severity::Error,
-            code: None,
-            name: "parse-error",
-            message: parse_error.message.clone(),
-            annotations: vec![Annotation {
-                span: Span {
-                    start: start_byte as u32,
-                    end: end_byte as u32,
-                },
-                message: None,
-                is_primary: true,
-                tags: vec![],
-            }],
-            fixes: vec![],
-            help: None,
-        };
-        all_diagnostics.push(diagnostic);
+    let parse_errors = file_info.source().errors();
+
+    if has_compiler_errors {
+        // don't possibly duplicate parsing errors if we have compiler errors
+        for parse_error in parse_errors {
+            let start_byte =
+                byte_offset_from_point(&parse_error.span.start, &file_info.source().source);
+            let end_byte =
+                byte_offset_from_point(&parse_error.span.end, &file_info.source().source);
+
+            let diagnostic = Diagnostic {
+                file_id: file_info.id(),
+                severity: Severity::Error,
+                code: None,
+                name: "parse-error",
+                message: parse_error.message.clone(),
+                annotations: vec![Annotation {
+                    span: Span {
+                        start: start_byte as u32,
+                        end: end_byte as u32,
+                    },
+                    message: None,
+                    is_primary: true,
+                    tags: vec![],
+                }],
+                fixes: vec![],
+                help: None,
+            };
+            all_diagnostics.push(diagnostic);
+        }
     }
 
     // First we need to build project index:
@@ -322,6 +334,63 @@ fn check_root_file(
     }
 
     Ok(diagnostics)
+}
+
+fn check_with_compiler(
+    root: &Path,
+    acton_config: &&ActonConfig,
+    file_info: &Arc<FileInfo>,
+    all_diagnostics: &mut Vec<Diagnostic>,
+) -> anyhow::Result<bool> {
+    let now = Instant::now();
+
+    let compiler = Compiler::new(2).with_mappings(&acton_config.mappings);
+    let compiler_errors = compiler.check(root)?;
+    log::debug!(
+        "Run compiler check took {:?}, found {} errors",
+        now.elapsed(),
+        compiler_errors.len()
+    );
+
+    let has_compiler_errors = compiler_errors.is_empty();
+
+    for compiler_error in compiler_errors {
+        let start_byte = byte_offset_from_point(
+            &Point {
+                row: compiler_error.range.start_line_no - 1,
+                column: compiler_error.range.start_char_no - 1,
+            },
+            &file_info.source().source,
+        );
+        let end_byte = byte_offset_from_point(
+            &Point {
+                row: compiler_error.range.end_line_no - 1,
+                column: compiler_error.range.end_char_no - 1,
+            },
+            &file_info.source().source,
+        );
+
+        let diagnostic = Diagnostic {
+            file_id: file_info.id(),
+            severity: Severity::Error,
+            code: None,
+            name: "compiler-error",
+            message: compiler_error.message.clone(),
+            annotations: vec![Annotation {
+                span: Span {
+                    start: start_byte as u32,
+                    end: end_byte as u32,
+                },
+                message: None,
+                is_primary: true,
+                tags: vec![],
+            }],
+            fixes: vec![],
+            help: None,
+        };
+        all_diagnostics.push(diagnostic);
+    }
+    Ok(has_compiler_errors)
 }
 
 fn filter_fixed_diagnostics(diagnostics: &[Diagnostic]) -> Vec<Diagnostic> {

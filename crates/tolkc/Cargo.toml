@@ -18,6 +18,7 @@ serde_json = { workspace = true }
 include_dir = { workspace = true }
 rustc-hash = { workspace = true }
 dunce = { workspace = true }
+anyhow = { workspace = true }
 
 [lints]
 workspace = true

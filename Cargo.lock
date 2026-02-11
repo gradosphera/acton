@@ -3020,6 +3020,7 @@ dependencies = [
 name = "tolkc"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "dunce",
  "include_dir",
  "rustc-hash",
