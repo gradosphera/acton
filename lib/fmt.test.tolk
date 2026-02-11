@@ -113,7 +113,7 @@ get fun `test-format-message`() {
             other: null
         },
         extraFlags: 0,
-        fwdFee: 0,
+        fwdFee: 266669,
         createdLt: 0,
         createdAt: 0
     },
