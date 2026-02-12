@@ -1,8 +1,8 @@
 use crate::commands::test::TestDescriptor;
 use crate::commands::test::trace::TransactionInfo;
 use crate::context::{AssertFailure, BuildCache, EmulationsState, KnownAddresses};
+use rustc_hash::FxHashMap;
 use serde::Serialize;
-use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 use ton_abi::ContractAbi;
@@ -23,12 +23,12 @@ pub struct TestExecutionContext {
     pub stdout: String,
     pub stderr: String,
     pub assert_failure: Option<AssertFailure>,
-    pub accounts: HashMap<String, ShardAccount>,
+    pub accounts: FxHashMap<String, ShardAccount>,
     pub expected_exit_code: i32,
     pub build_cache: BuildCache,
     pub emulations: EmulationsState,
     pub known_addresses: KnownAddresses,
-    pub known_code_cells: HashMap<String, String>,
+    pub known_code_cells: FxHashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

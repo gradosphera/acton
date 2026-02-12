@@ -13,6 +13,7 @@ use dap::responses::ContinueResponse;
 use dap::types::StackFrame;
 use dap_client::DapClient;
 use owo_colors::OwoColorize;
+use rustc_hash::FxHashMap;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::time::{Duration, UNIX_EPOCH};
@@ -251,7 +252,7 @@ fn execute_script<'a>(
             default_log_level: verbosity,
             wallets: config.wallets.as_ref(),
             open_wallets: BTreeMap::new(),
-            build_override: BTreeMap::new(),
+            build_override: FxHashMap::default(),
             explorer: None,
             fork_net: None,
             api_key: None,

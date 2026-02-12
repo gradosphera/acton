@@ -4,7 +4,8 @@ use acton_config::config;
 use acton_config::config::{ActonConfig, ContractConfig, Explorer, WalletsConfig};
 use num_bigint::BigInt;
 use owo_colors::OwoColorize;
-use std::collections::{BTreeMap, HashMap};
+use rustc_hash::FxHashMap;
+use std::collections::BTreeMap;
 use ton_abi::ContractAbi;
 use ton_api::{Network, TonApiClient};
 use ton_emulator::emulator::{Emulator, SendMessageResult, SendMessageResultSuccess};
@@ -159,7 +160,7 @@ See https://i582.github.io/acton/docs/scripting/setup-wallets/ for more informat
 
 #[derive(Debug, Clone)]
 pub struct BuildCache {
-    pub built: HashMap<String, CompilationResult>,
+    pub built: FxHashMap<String, CompilationResult>,
 }
 
 impl Default for BuildCache {
@@ -172,7 +173,7 @@ impl BuildCache {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            built: HashMap::new(),
+            built: FxHashMap::default(),
         }
     }
 
@@ -224,7 +225,7 @@ pub struct KnownAddress {
 
 #[derive(Debug, Clone)]
 pub struct KnownAddresses {
-    pub addresses: HashMap<IntAddr, KnownAddress>,
+    pub addresses: FxHashMap<IntAddr, KnownAddress>,
 }
 
 impl Default for KnownAddresses {
@@ -237,7 +238,7 @@ impl KnownAddresses {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            addresses: HashMap::new(),
+            addresses: FxHashMap::default(),
         }
     }
 }
@@ -251,7 +252,7 @@ pub struct Emulations {
 
 #[derive(Clone, Debug)]
 pub struct EmulationsState {
-    pub results: HashMap<String, Emulations>,
+    pub results: FxHashMap<String, Emulations>,
 }
 
 impl Default for EmulationsState {
@@ -264,7 +265,7 @@ impl EmulationsState {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            results: HashMap::new(),
+            results: FxHashMap::default(),
         }
     }
 
@@ -412,7 +413,7 @@ pub struct BuildContext<'a> {
     pub build_cache: &'a mut BuildCache,
     pub file_build_cache: &'a mut FileBuildCache,
     pub known_addresses: &'a mut KnownAddresses,
-    pub known_code_cells: &'a mut HashMap<String, String>,
+    pub known_code_cells: &'a mut FxHashMap<String, String>,
     pub need_debug_info: bool,
     pub backtrace: Option<String>,
 }

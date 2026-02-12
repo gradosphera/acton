@@ -32,7 +32,9 @@ use log::{debug, error, warn};
 use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
 use regex::Regex;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -74,7 +76,7 @@ pub struct TestResult {
     pub captured_stderr: String,
     pub assert_failure: Option<AssertFailure>,
     pub expected_exit_code: Option<i32>,
-    pub accounts: HashMap<String, ShardAccount>,
+    pub accounts: FxHashMap<String, ShardAccount>,
 }
 
 #[derive(Debug)]
@@ -84,7 +86,7 @@ pub struct TestRunner<'a> {
     build_cache: BuildCache,
     file_build_cache: &'a mut FileBuildCache,
     known_addresses: KnownAddresses,
-    known_code_cells: HashMap<String, String>,
+    known_code_cells: FxHashMap<String, String>,
     emulations: EmulationsState,
     transport: DapTransport,
     reporter_manager: &'a mut ReporterManager,
@@ -157,7 +159,7 @@ impl<'a> TestRunner<'a> {
             build_cache: BuildCache::new(),
             file_build_cache: cache,
             known_addresses: KnownAddresses::new(),
-            known_code_cells: HashMap::new(),
+            known_code_cells: FxHashMap::default(),
             emulations: EmulationsState::new(),
             transport,
             reporter_manager,
@@ -927,13 +929,13 @@ fn run_file_tests(
             test_report.status = TestStatus::Failed;
 
             let formatter = FormatterContext {
-                contract_abi: std::borrow::Cow::Borrowed(abi),
-                accounts: std::borrow::Cow::Borrowed(&accounts),
-                build_cache: std::borrow::Cow::Borrowed(&runner.build_cache),
-                emulations: std::borrow::Cow::Borrowed(&runner.emulations),
-                known_addresses: std::borrow::Cow::Borrowed(&runner.known_addresses),
-                known_code_cells: std::borrow::Cow::Borrowed(&runner.known_code_cells),
-                backtrace: runner.config.backtrace.map(|b| std::borrow::Cow::Owned(b.to_string())),
+                contract_abi: Cow::Borrowed(abi),
+                accounts: Cow::Borrowed(&accounts),
+                build_cache: Cow::Borrowed(&runner.build_cache),
+                emulations: Cow::Borrowed(&runner.emulations),
+                known_addresses: Cow::Borrowed(&runner.known_addresses),
+                known_code_cells: Cow::Borrowed(&runner.known_code_cells),
+                backtrace: runner.config.backtrace.map(|b| Cow::Owned(b.to_string())),
                 fork_net: None,
                 network: None,
                 api_key: None,

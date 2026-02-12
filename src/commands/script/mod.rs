@@ -13,6 +13,7 @@ use acton_config::config::{ActonConfig, Explorer};
 use anyhow::anyhow;
 use log::error;
 use owo_colors::OwoColorize;
+use rustc_hash::FxHashMap;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::Path;
@@ -217,7 +218,7 @@ fn execute_script(
     let mut build_cache = BuildCache::new();
     let mut file_build_cache = FileBuildCache::new(None)?;
     let mut known_addresses = KnownAddresses::new();
-    let mut known_code_cell = HashMap::new();
+    let mut known_code_cell = FxHashMap::default();
     let mut emulations = EmulationsState::new();
 
     let mut assert_failure = None;

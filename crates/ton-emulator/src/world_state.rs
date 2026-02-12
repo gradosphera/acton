@@ -8,6 +8,7 @@ use crate::remote;
 use acton_config::config::ActonConfig;
 use anyhow::anyhow;
 use num_traits::cast::ToPrimitive;
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
@@ -66,7 +67,7 @@ impl AccountsState {
 
     /// Returns a reference to the underlying map of accounts.
     #[must_use]
-    pub const fn accounts(&self) -> &HashMap<String, ShardAccount> {
+    pub const fn accounts(&self) -> &FxHashMap<String, ShardAccount> {
         match self {
             Self::Local(r) => &r.accounts,
             Self::Remote(r) => &r.accounts,
@@ -76,7 +77,7 @@ impl AccountsState {
 
 /// A purely local implementation of the world state.
 pub struct LocalAccountsState {
-    pub accounts: HashMap<String, ShardAccount>,
+    pub accounts: FxHashMap<String, ShardAccount>,
 }
 
 impl Default for LocalAccountsState {
@@ -90,7 +91,7 @@ impl LocalAccountsState {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            accounts: HashMap::new(),
+            accounts: FxHashMap::default(),
         }
     }
 
@@ -152,7 +153,7 @@ impl RemoteSnapshotCache {
 /// A state implementation that fetches missing accounts from a remote network.
 pub struct RemoteAccountState {
     /// Local cache and overrides for accounts.
-    pub accounts: HashMap<String, ShardAccount>,
+    pub accounts: FxHashMap<String, ShardAccount>,
     /// The network to fork from (e.g., "mainnet", "testnet").
     pub fork_net: Network,
     /// Optional block number to pin the state to.
@@ -174,7 +175,7 @@ impl RemoteAccountState {
         cache: RemoteSnapshotCache,
     ) -> Self {
         Self {
-            accounts: HashMap::new(),
+            accounts: FxHashMap::default(),
             fork_net,
             fork_block_number,
             api_key,
@@ -342,7 +343,7 @@ impl WorldState {
 
     /// Returns a reference to the map of accounts currently in the world state.
     #[must_use]
-    pub const fn get_accounts(&self) -> &HashMap<String, ShardAccount> {
+    pub const fn get_accounts(&self) -> &FxHashMap<String, ShardAccount> {
         self.accounts_state.accounts()
     }
 

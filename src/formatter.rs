@@ -9,9 +9,11 @@ use crate::{context, exit_codes, retrace};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
+use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Write;
+use std::sync::Arc;
 use ton_abi::{ContractAbi, TypeAbi};
 use ton_api::Network;
 use ton_source_map::{DebugLocation, SourceLocation};
@@ -50,11 +52,11 @@ struct TransactionNode {
 #[derive(Debug, Clone)]
 pub struct FormatterContext<'a> {
     pub contract_abi: Cow<'a, ContractAbi>,
-    pub accounts: Cow<'a, HashMap<String, ShardAccount>>,
+    pub accounts: Cow<'a, FxHashMap<String, ShardAccount>>,
     pub build_cache: Cow<'a, BuildCache>,
     pub emulations: Cow<'a, EmulationsState>,
     pub known_addresses: Cow<'a, KnownAddresses>,
-    pub known_code_cells: Cow<'a, HashMap<String, String>>,
+    pub known_code_cells: Cow<'a, FxHashMap<String, String>>,
     pub backtrace: Option<Cow<'a, str>>,
     pub fork_net: Option<Network>,
     pub api_key: Option<Cow<'a, str>>,
@@ -66,11 +68,11 @@ impl<'a> FormatterContext<'a> {
     pub fn empty() -> Self {
         Self {
             contract_abi: Cow::Owned(ContractAbi::default()),
-            accounts: Cow::Owned(HashMap::new()),
+            accounts: Cow::Owned(FxHashMap::default()),
             build_cache: Cow::Owned(BuildCache::new()),
             emulations: Cow::Owned(EmulationsState::new()),
             known_addresses: Cow::Owned(KnownAddresses::new()),
-            known_code_cells: Cow::Owned(HashMap::new()),
+            known_code_cells: Cow::Owned(FxHashMap::default()),
             backtrace: None,
             fork_net: None,
             network: None,
@@ -1723,7 +1725,7 @@ impl<'a> FormatterContext<'a> {
     }
 
     #[must_use]
-    pub fn account_code(accounts: &HashMap<String, ShardAccount>, addr: String) -> Option<Cell> {
+    pub fn account_code(accounts: &FxHashMap<String, ShardAccount>, addr: String) -> Option<Cell> {
         let account = accounts.get(&addr);
         let state = account?.account.load().ok()?.0?.state;
         match state {
@@ -1784,9 +1786,9 @@ impl<'a> FormatterContext<'a> {
 
                 Some(TransactionInfo {
                     lt: tx.lt.to_string(),
-                    raw_transaction: Boc::encode_base64(to_cell(&tx)),
-                    parent_transaction: res.parent_lt.map(|lt| lt.to_string()),
-                    dest_contract_info: build.map(|(_, info)| info.name),
+                    raw_transaction: Boc::encode_base64(to_cell(&tx)).into(),
+                    parent_transaction: res.parent_lt.map(|lt| lt.to_string().into()),
+                    dest_contract_info: build.map(|(_, info)| info.name.into()),
                     child_transactions: res.children_ids.iter().map(ToString::to_string).collect(),
                     shard_account_before: String::new(),
                     shard_account: String::new(),
@@ -1798,9 +1800,9 @@ impl<'a> FormatterContext<'a> {
                     executor_logs: self
                         .emulations
                         .find_tx_executor_logs(tx.lt)
-                        .map(ToString::to_string)
+                        .map(Arc::from)
                         .unwrap_or_default(),
-                    actions: Some(res.actions.to_boc_b64(false).ok()?),
+                    actions: Some(res.actions.to_boc_b64(false).ok()?.into()),
                 })
             })
             .collect()

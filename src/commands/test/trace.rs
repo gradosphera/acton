@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use ton_abi::ContractAbi;
 use ton_source_map::SourceMap;
 use tycho_types::boc::Boc;
@@ -34,14 +35,14 @@ pub(super) struct ContractInfo {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionInfo {
     pub lt: String,
-    pub raw_transaction: String,
+    pub raw_transaction: Arc<str>,
     pub parent_transaction: Option<String>,
     pub child_transactions: Vec<String>,
     pub shard_account_before: String,
     pub shard_account: String,
     pub vm_log_diff: String,
-    pub executor_logs: String,
-    pub actions: Option<String>,
+    pub executor_logs: Arc<str>,
+    pub actions: Option<Arc<str>>,
     pub dest_contract_info: Option<String>,
 }
 

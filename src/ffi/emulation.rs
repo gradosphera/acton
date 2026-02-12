@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use ton_abi::contract_abi;
 use ton_api::{Network, TonApiClient, TonCenterTransaction};
@@ -500,8 +501,8 @@ fn send_message_debug(
     };
 
     let shard_account_after = &result.shard_account;
-    let shard_account_cell =
-        Boc::decode_base64(shard_account_after).context("Failed to decode shard account BoC")?;
+    let shard_account_cell = Boc::decode_base64(shard_account_after.as_ref())
+        .context("Failed to decode shard account BoC")?;
     let shard_account: ShardAccount = shard_account_cell
         .parse()
         .context("Failed to load shard account from cell")?;
@@ -510,8 +511,8 @@ fn send_message_debug(
         .world_state
         .update_account(&int_message.dst.to_string(), &shard_account);
 
-    let tx_cell =
-        Boc::decode_base64(&result.transaction).context("Failed to decode transaction BoC")?;
+    let tx_cell = Boc::decode_base64(result.transaction.as_ref())
+        .context("Failed to decode transaction BoC")?;
     let transaction: Transaction = tx_cell
         .parse()
         .context("Failed to load transaction from cell")?;
@@ -533,7 +534,7 @@ fn send_message_debug(
         shard_account,
         out_messages,
         vm_log: result.vm_log,
-        executor_logs: String::new(),
+        executor_logs: Arc::default(),
         actions: result.actions,
         code,
         externals: vec![],
