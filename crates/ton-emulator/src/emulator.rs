@@ -46,6 +46,7 @@
 //! # }
 //! ```
 
+use std::sync::Arc;
 use crate::world_state::WorldState;
 use anyhow::Context;
 use std::time::SystemTime;
@@ -245,7 +246,7 @@ impl Emulator {
     }
 
     pub fn patch_message(
-        config: &Dict<u32, Cell>,
+        config: Arc<Dict<u32, Cell>>,
         message_cell: Cell,
         src_addr: Option<IntAddr>,
     ) -> anyhow::Result<Cell> {
@@ -289,7 +290,7 @@ impl Emulator {
     }
 
     pub(crate) fn compute_in_msg_fwd_fee(
-        config: &Dict<u32, Cell>,
+        config: Arc<Dict<u32, Cell>>,
         message: &RelaxedMessage<'_>,
         is_masterchain: bool,
     ) -> anyhow::Result<Tokens> {
