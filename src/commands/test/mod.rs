@@ -222,8 +222,8 @@ impl<'a> TestRunner<'a> {
         test: &TestDescriptor,
         code_cell: &Arc<Cell>,
         dest_address: &TonAddress,
-        abi: &ContractAbi,
-        source_map: &SourceMap,
+        abi: Arc<ContractAbi>,
+        source_map: Arc<SourceMap>,
     ) -> anyhow::Result<TestResult> {
         let verbosity = self.minimal_log_verbosity();
 
@@ -305,7 +305,7 @@ impl<'a> TestRunner<'a> {
                 need_debug_info: self.config.debug
                     || self.config.backtrace == Some(BacktraceMode::Full)
                     || self.config.coverage,
-                backtrace: self.config.backtrace.as_ref().map(ToString::to_string),
+                backtrace: self.config.backtrace,
             },
             debug: DebugCtx::Disabled,
             is_broadcasting: false,
@@ -714,7 +714,9 @@ fn compile_test_file(
                 }
             }
         }
-        tolkc::CompilerResult::Error(_) => {}
+        tolkc::CompilerResult::Error(_) => {
+            // handled in caller
+        }
     }
     Ok(compilation_result)
 }
@@ -739,6 +741,7 @@ fn run_tests_for_file(runner: &mut TestRunner, file: &str) -> anyhow::Result<Tes
     let config = &runner.config;
     let need_debug_info =
         config.debug || config.backtrace == Some(BacktraceMode::Full) || config.coverage;
+
     let now = Instant::now();
     let compilation_result = compile_test_file(
         runner.file_build_cache,
@@ -746,30 +749,29 @@ fn run_tests_for_file(runner: &mut TestRunner, file: &str) -> anyhow::Result<Tes
         need_debug_info,
         &runner.acton_config,
     )?;
+    let _ = fs::remove_file(&tmp_test_filename);
     debug!("Test file '{file}' compilation time: {:?}", now.elapsed());
 
-    match compilation_result {
-        tolkc::CompilerResult::Success(result) => {
-            let _ = fs::remove_file(&tmp_test_filename);
-
-            let code_cell = ArcCell::from_boc_b64(&result.code_boc64)?;
-            let stats = run_file_tests(
-                runner,
-                file,
-                tests,
-                &code_cell,
-                &abi,
-                &result.source_map.unwrap_or_default(),
-            )?;
-            Ok(stats)
-        }
+    let result = match compilation_result {
+        tolkc::CompilerResult::Success(result) => result,
         tolkc::CompilerResult::Error(error) => {
-            let _ = fs::remove_file(&tmp_test_filename);
             let normalized_filepath = error.message.replace(&tmp_test_filename, file);
             let trimmed_message = normalized_filepath.trim();
             anyhow::bail!(trimmed_message.to_string())
         }
-    }
+    };
+
+    let code_cell = ArcCell::from_boc_b64(&result.code_boc64)?;
+    let source_map = result.source_map.unwrap_or_default();
+    let stats = run_file_tests(
+        runner,
+        file,
+        tests,
+        &code_cell,
+        Arc::new(abi),
+        Arc::new(source_map),
+    )?;
+    Ok(stats)
 }
 
 fn run_file_tests(
@@ -777,10 +779,10 @@ fn run_file_tests(
     file_path: &str,
     tests: Vec<TestDescriptor>,
     code_cell: &ArcCell,
-    abi: &ContractAbi,
-    source_map: &SourceMap,
+    abi: Arc<ContractAbi>,
+    source_map: Arc<SourceMap>,
 ) -> anyhow::Result<TestStats> {
-    let abs_file_path = dunce::canonicalize(file_path).unwrap_or_else(|_| PathBuf::from(file_path));
+    let file_path = dunce::canonicalize(file_path).unwrap_or_else(|_| PathBuf::from(file_path));
     let filtered_tests = if let Some(pattern) = &runner.config.filter {
         let regex = match Regex::new(pattern) {
             Ok(r) => r,
@@ -800,7 +802,7 @@ fn run_file_tests(
 
     runner
         .reporter_manager
-        .on_suite_started(&abs_file_path, &filtered_tests)?;
+        .on_suite_started(&file_path, &filtered_tests)?;
 
     let dest_address = contract_address(code_cell)?;
 
@@ -810,11 +812,11 @@ fn run_file_tests(
     let mut todo = 0;
 
     for test in &filtered_tests {
-        let suite_name = extract_suite_name(&abs_file_path);
+        let suite_name = extract_suite_name(&file_path);
         let mut test_report = TestReport {
             name: test.name.clone(),
-            suite_name: suite_name.clone(),
-            file_path: abs_file_path.to_string_lossy().to_string(),
+            suite_name,
+            file_path: file_path.clone(),
             row: test.pos.row,
             column: test.pos.column,
             duration: Duration::default(),
@@ -828,7 +830,7 @@ fn run_file_tests(
             location: None,
             abi: abi.clone(),
             source_map: source_map.clone(),
-            backtrace: runner.config.backtrace.as_ref().map(ToString::to_string),
+            backtrace: runner.config.backtrace,
             execution: None,
             trace_path: runner
                 .config
@@ -855,7 +857,13 @@ fn run_file_tests(
         }
 
         let start_time = Instant::now();
-        let result = match runner.execute_test(test, code_cell, &dest_address, abi, source_map) {
+        let result = match runner.execute_test(
+            test,
+            code_cell,
+            &dest_address,
+            abi.clone(),
+            source_map.clone(),
+        ) {
             Ok(result) => result,
             Err(err) => {
                 eprintln!(
@@ -929,13 +937,13 @@ fn run_file_tests(
             test_report.status = TestStatus::Failed;
 
             let formatter = FormatterContext {
-                contract_abi: Cow::Borrowed(abi),
+                contract_abi: abi.clone(),
                 accounts: Cow::Borrowed(&accounts),
                 build_cache: Cow::Borrowed(&runner.build_cache),
                 emulations: Cow::Borrowed(&runner.emulations),
                 known_addresses: Cow::Borrowed(&runner.known_addresses),
                 known_code_cells: Cow::Borrowed(&runner.known_code_cells),
-                backtrace: runner.config.backtrace.map(|b| Cow::Owned(b.to_string())),
+                backtrace: runner.config.backtrace,
                 fork_net: None,
                 network: None,
                 api_key: None,
@@ -946,7 +954,7 @@ fn run_file_tests(
                 test_report.details = failure.location().map(|l| l.format_full());
                 test_report.location = failure.location();
                 test_report.detailed_message =
-                    Some(formatter.format_detailed_assert_failure(failure, abi));
+                    Some(formatter.format_detailed_assert_failure(failure, abi.clone()));
 
                 if let AssertFailure::TransactionNotFound(tx_failure)
                 | AssertFailure::TransactionIsFound(tx_failure) = failure
@@ -954,7 +962,7 @@ fn run_file_tests(
                     test_report.failed_transactions =
                         Some(formatter.parse_failed_transactions(&tx_failure.txs));
                     test_report.failed_transaction_context =
-                        Some(formatter.get_failed_transaction_context(tx_failure, abi));
+                        Some(formatter.get_failed_transaction_context(tx_failure, abi.clone()));
                 }
             } else if expected_exit_code != 0 {
                 test_report.message = Some(format!(
@@ -983,18 +991,21 @@ fn run_file_tests(
             if let GetMethodResult::Success(get_result) = get_result {
                 runner.emulations.save_get_method(&test.name, get_result);
                 // TODO: remove this memoize somehow
-                let content = fs::read_to_string(file_path).unwrap_or_default();
+                let content = fs::read_to_string(&file_path).unwrap_or_default();
                 runner.build_cache.memoize(
                     &test.name,
-                    file_path,
+                    &file_path,
                     &code_cell.to_boc_b64(false)?,
                     &code_cell.cell_hash()?.to_hex().to_ascii_uppercase(),
                     source_map.clone(),
-                    Some(contract_abi(
-                        &content,
-                        file_path,
-                        &runner.acton_config.mappings,
-                    )),
+                    Some(
+                        contract_abi(
+                            &content,
+                            file_path.to_string_lossy().as_ref(),
+                            &runner.acton_config.mappings,
+                        )
+                        .into(),
+                    ),
                 );
             }
         }
@@ -1015,7 +1026,7 @@ fn run_file_tests(
     };
     runner
         .reporter_manager
-        .on_suite_finished(&abs_file_path, &suite_stats)?;
+        .on_suite_finished(&file_path, &suite_stats)?;
 
     if runner.config.snapshot.is_some() {
         match profiling::collect_profile(runner, abi) {
@@ -1060,7 +1071,7 @@ pub struct Pos {
 #[derive(Debug)]
 pub struct TestDescriptor {
     pub id: i32,
-    pub name: String,
+    pub name: Arc<str>,
     pub annotations: Vec<String>,
     pub expected_exit_code: Option<i32>,
     pub gas_limit: Option<u64>,
@@ -1076,7 +1087,7 @@ fn find_all_test(file_path: &str, content: &str) -> Vec<TestDescriptor> {
     file.get_methods()
         .filter_map(|method| {
             let name_node = method.name()?;
-            let name = name_node.normalized_name(content).to_owned();
+            let name = name_node.normalized_name(content);
 
             // get fun `test-foo`() or get fun test_foo() or get fun `test foo`()
             if name.starts_with("test-") || name.starts_with("test_") || name.starts_with("test ") {
@@ -1085,7 +1096,7 @@ fn find_all_test(file_path: &str, content: &str) -> Vec<TestDescriptor> {
 
                 return Some(TestDescriptor {
                     id,
-                    name,
+                    name: name.into(),
                     annotations: test_annotations.annotations,
                     expected_exit_code: test_annotations.expected_exit_code,
                     gas_limit: test_annotations.gas_limit,

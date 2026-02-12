@@ -6,6 +6,7 @@ use crate::context::{
 };
 use crate::retrace::{ExecutedAction, InstalledActions};
 use crate::{context, exit_codes, retrace};
+use acton_config::test::BacktraceMode;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
@@ -51,13 +52,13 @@ struct TransactionNode {
 /// Context for formatting `TupleItems` with rich information
 #[derive(Debug, Clone)]
 pub struct FormatterContext<'a> {
-    pub contract_abi: Cow<'a, ContractAbi>,
+    pub contract_abi: Arc<ContractAbi>,
     pub accounts: Cow<'a, FxHashMap<String, ShardAccount>>,
     pub build_cache: Cow<'a, BuildCache>,
     pub emulations: Cow<'a, EmulationsState>,
     pub known_addresses: Cow<'a, KnownAddresses>,
     pub known_code_cells: Cow<'a, FxHashMap<String, String>>,
-    pub backtrace: Option<Cow<'a, str>>,
+    pub backtrace: Option<BacktraceMode>,
     pub fork_net: Option<Network>,
     pub api_key: Option<Cow<'a, str>>,
     pub network: Option<Network>,
@@ -67,7 +68,7 @@ impl<'a> FormatterContext<'a> {
     #[must_use]
     pub fn empty() -> Self {
         Self {
-            contract_abi: Cow::Owned(ContractAbi::default()),
+            contract_abi: Arc::new(ContractAbi::default()),
             accounts: Cow::Owned(FxHashMap::default()),
             build_cache: Cow::Owned(BuildCache::new()),
             emulations: Cow::Owned(EmulationsState::new()),
@@ -84,13 +85,13 @@ impl<'a> FormatterContext<'a> {
     #[must_use]
     pub fn from_context<'b: 'a>(ctx: &'b context::Context<'a>) -> Self {
         Self {
-            contract_abi: Cow::Borrowed(ctx.env.abi),
+            contract_abi: ctx.env.abi.clone(),
             accounts: Cow::Borrowed(ctx.chain.world_state.get_accounts()),
             build_cache: Cow::Borrowed(ctx.build.build_cache),
             emulations: Cow::Borrowed(ctx.chain.emulations),
             known_addresses: Cow::Borrowed(ctx.build.known_addresses),
             known_code_cells: Cow::Borrowed(ctx.build.known_code_cells),
-            backtrace: ctx.build.backtrace.as_deref().map(Cow::Borrowed),
+            backtrace: ctx.build.backtrace,
             fork_net: ctx.env.fork_net.clone(),
             network: ctx.network.clone(),
             api_key: ctx.env.api_key.as_deref().map(Cow::Borrowed),
@@ -1600,7 +1601,7 @@ impl<'a> FormatterContext<'a> {
     pub fn format_search_transaction_parameters(
         &self,
         assert_failure: &TransactionGenericAssertFailure,
-        abi: &ContractAbi,
+        abi: Arc<ContractAbi>,
     ) -> Vec<String> {
         let mut params = vec![];
         if let Some(opcode) = assert_failure.params.opcode {
@@ -1739,7 +1740,7 @@ impl<'a> FormatterContext<'a> {
     pub fn get_failed_transaction_context(
         &self,
         failure: &TransactionGenericAssertFailure,
-        abi: &ContractAbi,
+        abi: Arc<ContractAbi>,
     ) -> FailedTransactionContext {
         let from_address = failure.params.from.as_ref().map(|addr| match addr {
             IntAddr::Std(addr) => addr.display_base64(false).to_string(),
@@ -1812,7 +1813,7 @@ impl<'a> FormatterContext<'a> {
     pub fn format_detailed_assert_failure(
         &self,
         failure: &AssertFailure,
-        abi: &ContractAbi,
+        abi: Arc<ContractAbi>,
     ) -> String {
         let mut result = String::new();
 

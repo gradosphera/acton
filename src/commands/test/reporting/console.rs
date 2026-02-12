@@ -4,6 +4,7 @@ use crate::context::AssertFailure;
 use crate::formatter::FormatterContext;
 use crate::{exit_codes, retrace};
 use owo_colors::OwoColorize;
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use ton_executor::get::{GetMethodResult, GetMethodResultSuccess};
 use ton_source_map::SourceLocation;
@@ -203,13 +204,13 @@ impl TestReporter for ConsoleReporter {
             };
 
             let formatter = FormatterContext {
-                contract_abi: std::borrow::Cow::Borrowed(&test.abi),
-                accounts: std::borrow::Cow::Borrowed(&exec.accounts),
-                build_cache: std::borrow::Cow::Borrowed(&exec.build_cache),
-                emulations: std::borrow::Cow::Borrowed(&exec.emulations),
-                known_addresses: std::borrow::Cow::Borrowed(&exec.known_addresses),
-                known_code_cells: std::borrow::Cow::Borrowed(&exec.known_code_cells),
-                backtrace: test.backtrace.as_deref().map(std::borrow::Cow::Borrowed),
+                contract_abi: test.abi.clone(),
+                accounts: Cow::Borrowed(&exec.accounts),
+                build_cache: Cow::Borrowed(&exec.build_cache),
+                emulations: Cow::Borrowed(&exec.emulations),
+                known_addresses: Cow::Borrowed(&exec.known_addresses),
+                known_code_cells: Cow::Borrowed(&exec.known_code_cells),
+                backtrace: test.backtrace,
                 fork_net: None,
                 network: None,
                 api_key: None,
@@ -335,7 +336,7 @@ fn process_assert_failure(failure: &AssertFailure, test: &TestReport, fmt: &Form
     }
 
     if let AssertFailure::TransactionNotFound(failure) = &failure {
-        let params = fmt.format_search_transaction_parameters(failure, &test.abi);
+        let params = fmt.format_search_transaction_parameters(failure, test.abi.clone());
         let tx_tree = fmt.format(&failure.txs);
 
         let diff_output = format!(
@@ -351,7 +352,7 @@ fn process_assert_failure(failure: &AssertFailure, test: &TestReport, fmt: &Form
     }
 
     if let AssertFailure::TransactionIsFound(failure) = &failure {
-        let params = fmt.format_search_transaction_parameters(failure, &test.abi);
+        let params = fmt.format_search_transaction_parameters(failure, test.abi.clone());
         let tx_tree = fmt.format(&failure.txs);
 
         let from_to = if failure.params.from.is_none() && failure.params.to.is_none() {

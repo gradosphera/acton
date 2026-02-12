@@ -12,7 +12,7 @@ use tycho_types::models::IntAddr;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct TestTrace {
-    pub name: String,
+    pub name: Arc<str>,
     pub pos: Pos,
     pub traces: Vec<TransactionList>,
     pub contracts: Vec<String>,
@@ -28,8 +28,8 @@ pub(super) struct TransactionList {
 pub(super) struct ContractInfo {
     pub name: String,
     pub code_boc64: String,
-    pub source_map: SourceMap,
-    pub abi: Option<ContractAbi>,
+    pub source_map: Arc<SourceMap>,
+    pub abi: Option<Arc<ContractAbi>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

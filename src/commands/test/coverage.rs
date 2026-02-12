@@ -86,7 +86,7 @@ pub(super) fn collect_coverage(emulations: &EmulationsState, build_cache: &Build
 }
 
 struct SourceMapAndLogs {
-    source_map: SourceMap,
+    source_map: Arc<SourceMap>,
     logs: Arc<str>,
 }
 

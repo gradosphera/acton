@@ -89,7 +89,7 @@ fn build_impl(
         return Ok(());
     }
 
-    if let Some(cached) = ctx.build.build_cache.built.get(&path) {
+    if let Some(cached) = ctx.build.build_cache.built.get(Path::new(&path)) {
         let elapsed = start_time.elapsed();
         info!("Build {path} from memory cache in {elapsed:?}");
 
@@ -110,11 +110,11 @@ fn build_impl(
         let content = fs::read_to_string(&path).unwrap_or_default();
         ctx.build.build_cache.memoize(
             &name,
-            &path,
+            Path::new(&path),
             &cached_entry.code_boc64,
             &cached_entry.code_hash_hex,
-            cached_entry.source_map.clone().unwrap_or_default(),
-            Some(contract_abi(&content, &path, &ctx.env.config.mappings)),
+            cached_entry.source_map.clone().unwrap_or_default().into(),
+            Some(contract_abi(&content, &path, &ctx.env.config.mappings).into()),
         );
 
         let code_cell = ArcCell::from_boc_b64(&cached_entry.code_boc64)
@@ -148,11 +148,11 @@ fn build_impl(
             let content = fs::read_to_string(&path).unwrap_or_default();
             ctx.build.build_cache.memoize(
                 &name,
-                &path,
+                Path::new(&path),
                 &success.code_boc64,
                 &success.code_hash_hex,
-                success.source_map.unwrap_or_default(),
-                Some(contract_abi(&content, &path, &ctx.env.config.mappings)),
+                success.source_map.unwrap_or_default().into(),
+                Some(contract_abi(&content, &path, &ctx.env.config.mappings).into()),
             );
             let code_cell = ArcCell::from_boc_b64(&success.code_boc64).map_err(|e| {
                 anyhow::anyhow!("Failed to decode compiled code BoC for {path}: {e}")

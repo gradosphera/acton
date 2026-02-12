@@ -17,6 +17,7 @@ use rustc_hash::FxHashMap;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 use std::{fs, thread};
 use tasm::printer::FormatOptions;
@@ -185,8 +186,8 @@ pub(crate) fn run_script_file(
             let (script_result, io, formatter) = execute_script(
                 &code_cell,
                 &data_cell,
-                &abi,
-                &source_map,
+                abi.into(),
+                source_map.into(),
                 debug_port,
                 ExecutorVerbosity::FullLocationStackVerbose,
                 stack,
@@ -202,8 +203,8 @@ pub(crate) fn run_script_file(
 fn execute_script<'a>(
     code_cell: &'a ArcCell,
     data_cell: &'a ArcCell,
-    abi: &'a ContractAbi,
-    source_map: &'a SourceMap,
+    abi: Arc<ContractAbi>,
+    source_map: Arc<SourceMap>,
     debug_port: u16,
     verbosity: ExecutorVerbosity,
     stack: Tuple,
@@ -249,7 +250,7 @@ fn execute_script<'a>(
     let mut ctx = Context {
         env: Env {
             config: &config,
-            abi,
+            abi: abi.clone(),
             default_log_level: verbosity,
             wallets: config.wallets.as_ref(),
             open_wallets: BTreeMap::new(),
@@ -257,7 +258,7 @@ fn execute_script<'a>(
             explorer: None,
             fork_net: None,
             api_key: None,
-            running_id: "script".to_owned(),
+            running_id: "script".into(),
         },
         io: IoContext {
             stdout_buffer: String::new(),
@@ -297,7 +298,7 @@ fn execute_script<'a>(
         transport,
         AnyExecutor::Get(executor.clone()),
         source_map,
-        "main".to_string(),
+        "main".into(),
     );
 
     ctx.debug = DebugCtx::new(&mut dbg_ctx);
@@ -310,7 +311,7 @@ fn execute_script<'a>(
     let Context { io, .. } = ctx;
 
     let formatter = FormatterContext {
-        contract_abi: Cow::Borrowed(abi),
+        contract_abi: abi,
         accounts: Cow::Owned(world_state.get_accounts().clone()),
         build_cache: Cow::Owned(build_cache.clone()),
         emulations: Cow::Owned(emulations.clone()),
