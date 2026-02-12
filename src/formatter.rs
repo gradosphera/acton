@@ -1787,8 +1787,8 @@ impl<'a> FormatterContext<'a> {
                 Some(TransactionInfo {
                     lt: tx.lt.to_string(),
                     raw_transaction: Boc::encode_base64(to_cell(&tx)).into(),
-                    parent_transaction: res.parent_lt.map(|lt| lt.to_string().into()),
-                    dest_contract_info: build.map(|(_, info)| info.name.into()),
+                    parent_transaction: res.parent_lt.map(|lt| lt.to_string()),
+                    dest_contract_info: build.map(|(_, info)| info.name),
                     child_transactions: res.children_ids.iter().map(ToString::to_string).collect(),
                     shard_account_before: String::new(),
                     shard_account: String::new(),
