@@ -217,7 +217,7 @@ fn execute_script(
     };
     let mut world_state = WorldState::new(resolver, config_b64)?;
     let mut build_cache = BuildCache::new();
-    let mut file_build_cache = FileBuildCache::new(None)?;
+    let file_build_cache = FileBuildCache::new(None)?;
     let mut known_addresses = KnownAddresses::new();
     let mut known_code_cell = FxHashMap::default();
     let mut emulations = EmulationsState::new();
@@ -258,7 +258,7 @@ fn execute_script(
         },
         build: BuildContext {
             build_cache: &mut build_cache,
-            file_build_cache: &mut file_build_cache,
+            file_build_cache: &file_build_cache,
             known_addresses: &mut known_addresses,
             known_code_cells: &mut known_code_cell,
             need_debug_info: false,

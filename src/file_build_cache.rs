@@ -10,6 +10,8 @@ use std::fs;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 use tolkc::abi::ContractABI;
@@ -35,7 +37,9 @@ pub struct CacheEntry {
 pub struct FileBuildCache {
     cache_dir: PathBuf,
     config: ActonConfig,
-    entries: FxHashMap<String, CacheEntry>,
+    entries: Mutex<FxHashMap<String, CacheEntry>>,
+    pending: Mutex<Vec<(String, CacheEntry)>>,
+    defer_writes: AtomicBool,
     _lock_file: File,
 }
 
@@ -73,7 +77,9 @@ impl FileBuildCache {
 
         Ok(Self {
             cache_dir,
-            entries,
+            entries: Mutex::new(entries),
+            pending: Mutex::new(Vec::new()),
+            defer_writes: AtomicBool::new(false),
             config,
             _lock_file: lock_file,
         })
@@ -88,7 +94,9 @@ impl FileBuildCache {
 
         Ok(Self {
             cache_dir: tmp_dir.path().to_path_buf(),
-            entries: FxHashMap::default(),
+            entries: Mutex::new(FxHashMap::default()),
+            pending: Mutex::new(Vec::new()),
+            defer_writes: AtomicBool::new(false),
             config,
             _lock_file: lock_file,
         })
@@ -136,21 +144,24 @@ impl FileBuildCache {
     }
 
     pub fn get(
-        &mut self,
+        &self,
         file_path: &str,
         with_debug_info: bool,
         optimization_level: usize,
         tolk_version: String,
     ) -> Option<CacheEntry> {
         let key = self.compute_key(file_path, with_debug_info, optimization_level, tolk_version);
-        let entry = self.entries.get(&key)?;
+        let entry = {
+            let entries = self.entries.lock().expect("cannot lock file cache entries");
+            entries.get(&key)?.clone()
+        };
 
         if let Ok(dependencies) = self.get_dependencies(file_path, &mut HashSet::new()) {
             debug!("Check hash `{file_path}` with dependencies: {dependencies:?}");
             if let Ok(current_hash) = self.compute_dependencies_hash(&dependencies)
                 && current_hash == entry.dependencies_hash
             {
-                return Some(entry.clone());
+                return Some(entry);
             }
         }
 
@@ -158,7 +169,7 @@ impl FileBuildCache {
     }
 
     pub fn put(
-        &mut self,
+        &self,
         file_path: &str,
         result: &CompilerResultSuccess,
         with_debug_info: bool,
@@ -185,14 +196,7 @@ impl FileBuildCache {
         };
 
         let key = self.compute_key(file_path, with_debug_info, optimization_level, tolk_version);
-        let cache_file = self.cache_dir.join(format!("{key}.json"));
-
-        let content = serde_json::to_string_pretty(&entry)?;
-        let tmp = cache_file.with_extension("json.tmp");
-        fs::write(&tmp, content)?;
-        fs::rename(&tmp, cache_file)?;
-
-        self.entries.insert(key, entry);
+        self.put_entry(key, entry)?;
 
         Ok(())
     }
@@ -315,7 +319,14 @@ impl FileBuildCache {
             fs::remove_dir_all(&self.cache_dir)?;
             fs::create_dir_all(&self.cache_dir)?;
         }
-        self.entries.clear();
+        self.entries
+            .lock()
+            .expect("cannot lock file cache entries")
+            .clear();
+        self.pending
+            .lock()
+            .expect("cannot lock pending cache entries")
+            .clear();
 
         let lock_file_path = self.cache_dir.join(".lock");
         self._lock_file = File::create(&lock_file_path)?;
@@ -340,7 +351,66 @@ impl FileBuildCache {
 
     #[must_use]
     pub fn size(&self) -> usize {
-        self.entries.len()
+        self.entries
+            .lock()
+            .expect("cannot lock file cache entries")
+            .len()
+    }
+
+    pub fn enable_deferred_writes(&self) {
+        self.defer_writes.store(true, Ordering::SeqCst);
+    }
+
+    pub fn flush_deferred(&mut self) -> Result<()> {
+        let mut pending = self
+            .pending
+            .lock()
+            .expect("cannot lock pending cache entries");
+        if pending.is_empty() {
+            self.defer_writes.store(false, Ordering::SeqCst);
+            return Ok(());
+        }
+
+        for (key, entry) in pending.drain(..) {
+            self.write_entry(&key, &entry)?;
+            self.entries
+                .lock()
+                .expect("cannot lock file cache entries")
+                .insert(key, entry);
+        }
+
+        self.defer_writes.store(false, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn put_entry(&self, key: String, entry: CacheEntry) -> Result<()> {
+        if self.defer_writes.load(Ordering::SeqCst) {
+            self.entries
+                .lock()
+                .expect("cannot lock file cache entries")
+                .insert(key.clone(), entry.clone());
+            self.pending
+                .lock()
+                .expect("cannot lock pending cache entries")
+                .push((key, entry));
+            return Ok(());
+        }
+
+        self.write_entry(&key, &entry)?;
+        self.entries
+            .lock()
+            .expect("cannot lock file cache entries")
+            .insert(key, entry);
+        Ok(())
+    }
+
+    fn write_entry(&self, key: &str, entry: &CacheEntry) -> Result<()> {
+        let cache_file = self.cache_dir.join(format!("{key}.json"));
+        let content = serde_json::to_string_pretty(entry)?;
+        let tmp = cache_file.with_extension("json.tmp");
+        fs::write(&tmp, content)?;
+        fs::rename(&tmp, cache_file)?;
+        Ok(())
     }
 
     fn sha256_file(path: &str) -> Result<[u8; 32]> {
@@ -374,7 +444,7 @@ mod tests {
     #[test]
     fn test_file_cache_operations() {
         let temp_dir = tempdir().unwrap();
-        let (mut cache, lib_path, main_path) =
+        let (cache, lib_path, main_path) =
             prepare_cache(&temp_dir).expect("Failed to prepare cache");
 
         thread::sleep(Duration::from_millis(10));
@@ -393,7 +463,7 @@ mod tests {
     #[test]
     fn test_should_return_none_for_different_debug_info() {
         let temp_dir = tempdir().unwrap();
-        let (mut cache, _, main_path) = prepare_cache(&temp_dir).expect("Failed to prepare cache");
+        let (cache, _, main_path) = prepare_cache(&temp_dir).expect("Failed to prepare cache");
 
         let cached = cache.get(main_path.to_str().unwrap(), true, 2, "1.1".to_string());
         assert!(
@@ -405,7 +475,7 @@ mod tests {
     #[test]
     fn test_should_return_none_for_different_optimization_level() {
         let temp_dir = tempdir().unwrap();
-        let (mut cache, _, main_path) = prepare_cache(&temp_dir).expect("Failed to prepare cache");
+        let (cache, _, main_path) = prepare_cache(&temp_dir).expect("Failed to prepare cache");
 
         let cached = cache.get(main_path.to_str().unwrap(), false, 0, "1.1".to_string());
         assert!(
@@ -417,7 +487,7 @@ mod tests {
     #[test]
     fn test_should_return_none_for_different_tolk_version() {
         let temp_dir = tempdir().unwrap();
-        let (mut cache, _, main_path) = prepare_cache(&temp_dir).expect("Failed to prepare cache");
+        let (cache, _, main_path) = prepare_cache(&temp_dir).expect("Failed to prepare cache");
 
         let cached = cache.get(main_path.to_str().unwrap(), false, 2, "1.2".to_string());
         assert!(
@@ -429,7 +499,7 @@ mod tests {
     fn prepare_cache(temp_dir: &TempDir) -> Result<(FileBuildCache, PathBuf, PathBuf)> {
         let cache_dir = temp_dir.path().join("cache");
 
-        let mut cache = FileBuildCache::new(Some(cache_dir))?;
+        let cache = FileBuildCache::new(Some(cache_dir))?;
 
         let lib_path = temp_dir.path().join("lib.tolk");
         File::create(&lib_path)?.write_all(b"fun helper() { }")?;

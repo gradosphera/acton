@@ -44,7 +44,7 @@ pub fn compile_cmd(
         anyhow::bail!("File must end with {}", ".tolk".yellow());
     }
 
-    let mut file_cache = FileBuildCache::new(None)?;
+    let file_cache = FileBuildCache::new(None)?;
 
     let acton_config = config::ActonConfig::load().ok();
 

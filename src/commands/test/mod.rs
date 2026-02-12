@@ -37,7 +37,8 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::{fs, process};
 use tolk_syntax::{AstNode, HasName};
@@ -80,16 +81,16 @@ pub struct TestResult {
 }
 
 #[derive(Debug)]
-pub struct TestRunner<'a> {
+pub struct TestRunner {
     config: TestConfig,
     acton_config: ActonConfig,
     build_cache: BuildCache,
-    file_build_cache: &'a mut FileBuildCache,
+    file_build_cache: Arc<FileBuildCache>,
     known_addresses: KnownAddresses,
     known_code_cells: FxHashMap<String, String>,
     emulations: EmulationsState,
     transport: DapTransport,
-    reporter_manager: &'a mut ReporterManager,
+    reporter_manager: Arc<Mutex<ReporterManager>>,
     mutation_overrides: BTreeMap<String, ArcCell>,
     remote_cache: RemoteSnapshotCache,
     /// Contracts used as `library_ref` dependency. We need to register it for correct
@@ -97,14 +98,14 @@ pub struct TestRunner<'a> {
     ref_contracts: BTreeMap<String, tycho_types::cell::Cell>,
 }
 
-impl<'a> TestRunner<'a> {
+impl TestRunner {
     pub fn new(
         acton_config: ActonConfig,
         config: TestConfig,
-        cache: &'a mut FileBuildCache,
-        reporter_manager: &'a mut ReporterManager,
+        cache: Arc<FileBuildCache>,
+        reporter_manager: Arc<Mutex<ReporterManager>>,
         mutation_overrides: BTreeMap<String, ArcCell>,
-    ) -> TestRunner<'a> {
+    ) -> TestRunner {
         let transport = if config.debug {
             crate::debugger::start_dap_server(config.debug_port)
         } else {
@@ -135,9 +136,8 @@ impl<'a> TestRunner<'a> {
                     continue;
                 };
 
-                let Some(cached) =
-                    cache.get(&contract_info.src, config.debug, 2, "1.3".to_string())
-                else {
+                let cached = { cache.get(&contract_info.src, config.debug, 2, "1.3".to_string()) };
+                let Some(cached) = cached else {
                     warn!("No build cache for contract {}", &contract_info.src);
                     continue;
                 };
@@ -299,7 +299,7 @@ impl<'a> TestRunner<'a> {
             },
             build: BuildContext {
                 build_cache: &mut self.build_cache,
-                file_build_cache: self.file_build_cache,
+                file_build_cache: &self.file_build_cache,
                 known_addresses: &mut self.known_addresses,
                 known_code_cells: &mut self.known_code_cells,
                 need_debug_info: self.config.debug
@@ -391,6 +391,18 @@ impl<'a> TestRunner<'a> {
     }
 }
 
+#[derive(Debug)]
+enum WorkerMsg {
+    FileResult {
+        file: String,
+        result: Result<TestStats, String>,
+    },
+    WorkerDone {
+        build_cache: BuildCache,
+        emulations: EmulationsState,
+    },
+}
+
 pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()> {
     // First we need to build all contracts and generate all dependency files with code
     build_cmd(None, config.clear_cache, None, None, false)?;
@@ -443,46 +455,176 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     global_reporter.init()?;
     global_reporter.on_testing_started()?;
 
-    let mut file_cache = FileBuildCache::new(None)?;
+    let reporter_manager = Arc::new(Mutex::new(global_reporter));
+    let file_cache = Arc::new(FileBuildCache::new(None)?);
+    file_cache.enable_deferred_writes();
 
     let mut total_passed = 0;
     let mut total_failed = 0;
     let mut total_skipped = 0;
     let mut total_todo = 0;
 
-    let mut runner = TestRunner::new(
-        acton_config,
-        config.clone(),
-        &mut file_cache,
-        &mut global_reporter,
-        build_overrides_for_mutations(config)?,
-    );
+    let mutation_overrides = build_overrides_for_mutations(config)?;
+    let worker_count = if config.debug {
+        1
+    } else {
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+            .min(test_files.len().max(1))
+    };
 
-    for (index, file) in test_files.iter().enumerate() {
-        let result = run_tests_for_file(&mut runner, file);
-        match result {
-            Ok(stats) => {
-                total_passed += stats.passed;
-                total_failed += stats.failed;
-                total_skipped += stats.skipped;
-                total_todo += stats.todo;
+    let mut merged_build_cache = BuildCache::new();
+    let mut merged_emulations = EmulationsState::new();
 
-                if index + 1 < test_files.len()
-                    && config.report_formats.contains(&ReportFormat::Console)
-                {
-                    println!();
+    if worker_count <= 1 {
+        let mut runner = TestRunner::new(
+            acton_config,
+            config.clone(),
+            file_cache.clone(),
+            reporter_manager.clone(),
+            mutation_overrides,
+        );
+
+        for (index, file) in test_files.iter().enumerate() {
+            let result = run_tests_for_file(&mut runner, file);
+            match result {
+                Ok(stats) => {
+                    total_passed += stats.passed;
+                    total_failed += stats.failed;
+                    total_skipped += stats.skipped;
+                    total_todo += stats.todo;
+
+                    if index + 1 < test_files.len()
+                        && config.report_formats.contains(&ReportFormat::Console)
+                    {
+                        println!();
+                    }
+                }
+                Err(err) => {
+                    eprintln!("{err}");
+                    total_failed += 1;
                 }
             }
-            Err(err) => {
-                eprintln!("{err}");
-                total_failed += 1;
+
+            if config.fail_fast && total_failed > 0 {
+                break;
             }
         }
 
-        if config.fail_fast && total_failed > 0 {
-            break;
+        merged_build_cache = runner.build_cache;
+        merged_emulations = runner.emulations;
+    } else {
+        let (work_tx, work_rx) = mpsc::channel::<String>();
+        let work_rx = Arc::new(Mutex::new(work_rx));
+        let (result_tx, result_rx) = mpsc::channel::<WorkerMsg>();
+        let stop_flag = Arc::new(AtomicBool::new(false));
+
+        let mut handles = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            let acton_config = acton_config.clone();
+            let config = config.clone();
+            let file_cache = file_cache.clone();
+            let reporter_manager = reporter_manager.clone();
+            let mutation_overrides = mutation_overrides.clone();
+            let work_rx = work_rx.clone();
+            let result_tx = result_tx.clone();
+            let stop_flag = stop_flag.clone();
+
+            let handle = std::thread::spawn(move || {
+                let mut runner = TestRunner::new(
+                    acton_config,
+                    config,
+                    file_cache,
+                    reporter_manager,
+                    mutation_overrides,
+                );
+
+                loop {
+                    if stop_flag.load(Ordering::SeqCst) {
+                        break;
+                    }
+
+                    let file = {
+                        let rx = work_rx.lock().expect("cannot lock work receiver");
+                        rx.recv()
+                    };
+
+                    let Ok(file) = file else {
+                        break;
+                    };
+
+                    let result =
+                        run_tests_for_file(&mut runner, &file).map_err(|err| err.to_string());
+                    let _ = result_tx.send(WorkerMsg::FileResult { file, result });
+                }
+
+                let _ = result_tx.send(WorkerMsg::WorkerDone {
+                    build_cache: runner.build_cache,
+                    emulations: runner.emulations,
+                });
+            });
+
+            handles.push(handle);
+        }
+
+        drop(result_tx);
+
+        for file in test_files.iter() {
+            if stop_flag.load(Ordering::SeqCst) {
+                break;
+            }
+            let _ = work_tx.send(file.clone());
+        }
+        drop(work_tx);
+
+        let mut remaining_files = test_files.len();
+        let mut remaining_workers = worker_count;
+
+        while remaining_files > 0 || remaining_workers > 0 {
+            let msg = match result_rx.recv() {
+                Ok(msg) => msg,
+                Err(_) => break,
+            };
+
+            match msg {
+                WorkerMsg::FileResult { file, result } => {
+                    remaining_files = remaining_files.saturating_sub(1);
+                    match result {
+                        Ok(stats) => {
+                            total_passed += stats.passed;
+                            total_failed += stats.failed;
+                            total_skipped += stats.skipped;
+                            total_todo += stats.todo;
+                        }
+                        Err(err) => {
+                            eprintln!("{file}: {err}");
+                            total_failed += 1;
+                            if config.fail_fast {
+                                stop_flag.store(true, Ordering::SeqCst);
+                            }
+                        }
+                    }
+                }
+                WorkerMsg::WorkerDone {
+                    build_cache,
+                    emulations,
+                } => {
+                    merge_build_cache(&mut merged_build_cache, build_cache);
+                    merge_emulations(&mut merged_emulations, emulations);
+                    remaining_workers = remaining_workers.saturating_sub(1);
+                }
+            }
+        }
+
+        for handle in handles {
+            let _ = handle.join();
         }
     }
+
+    let mut file_cache =
+        Arc::try_unwrap(file_cache).expect("file build cache still has outstanding references");
+    file_cache.flush_deferred()?;
 
     let total_tests = total_passed + total_failed + total_skipped + total_todo;
 
@@ -494,10 +636,13 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         todo: total_todo,
         duration: Duration::default(),
     };
-    runner.reporter_manager.on_testing_finished(&global_stats)?;
+    reporter_manager
+        .lock()
+        .expect("cannot lock reporter manager")
+        .on_testing_finished(&global_stats)?;
 
     if config.coverage {
-        let coverage = collect_coverage(&runner.emulations, &runner.build_cache);
+        let coverage = collect_coverage(&merged_emulations, &merged_build_cache);
         print_coverage_summary(&coverage);
 
         if let Some(format_type) = &config.coverage_format {
@@ -525,7 +670,10 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         }
     }
 
-    global_reporter.finalize()?;
+    reporter_manager
+        .lock()
+        .expect("cannot lock reporter manager")
+        .finalize()?;
 
     if config.ui
         && let Some(reports) = reports_for_ui
@@ -567,6 +715,24 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         process::exit(1)
     }
     Ok(())
+}
+
+fn merge_build_cache(dst: &mut BuildCache, src: BuildCache) {
+    for (key, value) in src.built {
+        dst.built.entry(key).or_insert(value);
+    }
+}
+
+fn merge_emulations(dst: &mut EmulationsState, src: EmulationsState) {
+    for (name, emulation) in src.results {
+        dst.results
+            .entry(name)
+            .and_modify(|existing| {
+                existing.messages.extend(emulation.messages.clone());
+                existing.get_methods.extend(emulation.get_methods.clone());
+            })
+            .or_insert(emulation);
+    }
 }
 
 fn build_overrides_for_mutations(
@@ -684,7 +850,7 @@ struct TestStats {
 }
 
 fn compile_test_file(
-    file_cache: &mut FileBuildCache,
+    file_cache: &FileBuildCache,
     file: &str,
     need_debug_info: bool,
     acton_config: &ActonConfig,
@@ -744,7 +910,7 @@ fn run_tests_for_file(runner: &mut TestRunner, file: &str) -> anyhow::Result<Tes
 
     let now = Instant::now();
     let compilation_result = compile_test_file(
-        runner.file_build_cache,
+        &runner.file_build_cache,
         &tmp_test_filename,
         need_debug_info,
         &runner.acton_config,
@@ -802,6 +968,8 @@ fn run_file_tests(
 
     runner
         .reporter_manager
+        .lock()
+        .expect("cannot lock reporter manager")
         .on_suite_started(&file_path, &filtered_tests)?;
 
     let dest_address = contract_address(code)?;
@@ -839,19 +1007,31 @@ fn run_file_tests(
                 .map(|_| format!("{}_trace.json", test.name)),
         };
 
-        runner.reporter_manager.on_test_started(&test_report)?;
+        runner
+            .reporter_manager
+            .lock()
+            .expect("cannot lock reporter manager")
+            .on_test_started(&test_report)?;
 
         if test.annotations.contains(&TestAnnotation::Todo) {
             test_report.status = TestStatus::Todo;
             test_report.details = test.todo_description.clone();
-            runner.reporter_manager.on_test_finished(&test_report)?;
+            runner
+                .reporter_manager
+                .lock()
+                .expect("cannot lock reporter manager")
+                .on_test_finished(&test_report)?;
             todo += 1;
             continue;
         }
 
         if test.annotations.contains(&TestAnnotation::Skip) {
             test_report.status = TestStatus::Skipped;
-            runner.reporter_manager.on_test_finished(&test_report)?;
+            runner
+                .reporter_manager
+                .lock()
+                .expect("cannot lock reporter manager")
+                .on_test_finished(&test_report)?;
             skipped += 1;
             continue;
         }
@@ -979,7 +1159,11 @@ fn run_file_tests(
             failed += 1;
         }
 
-        runner.reporter_manager.on_test_finished(&test_report)?;
+        runner
+            .reporter_manager
+            .lock()
+            .expect("cannot lock reporter manager")
+            .on_test_finished(&test_report)?;
 
         if runner.config.coverage {
             // For coverage, we need to process test logs as well for unit tests coverage,
@@ -1022,6 +1206,8 @@ fn run_file_tests(
     };
     runner
         .reporter_manager
+        .lock()
+        .expect("cannot lock reporter manager")
         .on_suite_finished(&file_path, &suite_stats)?;
 
     if runner.config.snapshot.is_some() {

@@ -414,7 +414,7 @@ pub struct ChainContext<'a> {
 
 pub struct BuildContext<'a> {
     pub build_cache: &'a mut BuildCache,
-    pub file_build_cache: &'a mut FileBuildCache,
+    pub file_build_cache: &'a FileBuildCache,
     pub known_addresses: &'a mut KnownAddresses,
     pub known_code_cells: &'a mut FxHashMap<String, String>,
     pub need_debug_info: bool,
