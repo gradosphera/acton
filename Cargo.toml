@@ -299,5 +299,8 @@ workspace = true
 [features]
 profile_rules = ["tolk-linter/profile_rules"] # for acton check
 
+[profile.dev]
+debug = "full"
+
 #[profile.release]
 #debug = "full"

@@ -192,7 +192,7 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
 }
 
 fn process_contract(
-    file_cache: &mut FileBuildCache,
+    file_cache: &FileBuildCache,
     contract_config: &ContractConfig,
     contract_path: &String,
     acton_config: &ActonConfig,

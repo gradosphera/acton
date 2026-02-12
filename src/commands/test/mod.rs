@@ -474,10 +474,37 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
             .min(test_files.len().max(1))
     };
 
-    let mut merged_build_cache = BuildCache::new();
-    let mut merged_emulations = EmulationsState::new();
+    let need_debug_info =
+        config.debug || config.backtrace == Some(BacktraceMode::Full) || config.coverage;
 
-    if worker_count <= 1 {
+    let mut abort_after_precompile = false;
+    let mut prepared_files = Vec::with_capacity(test_files.len());
+    for file in &test_files {
+        let prepared = prepare_test_file_data(
+            file,
+            need_debug_info,
+            &file_cache,
+            &acton_config,
+        );
+        match prepared {
+            Ok(prepared) => prepared_files.push(prepared),
+            Err(err) => {
+                eprintln!("{file}: {err}");
+                total_failed += 1;
+                if config.fail_fast {
+                    abort_after_precompile = true;
+                    break;
+                }
+            }
+        }
+    }
+    if abort_after_precompile {
+        prepared_files.clear();
+    }
+
+    let prepared_files = Arc::new(prepared_files);
+
+    let (merged_build_cache, merged_emulations) = if worker_count <= 1 {
         let mut runner = TestRunner::new(
             acton_config,
             config.clone(),
@@ -486,8 +513,8 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
             mutation_overrides,
         );
 
-        for (index, file) in test_files.iter().enumerate() {
-            let result = run_tests_for_file(&mut runner, file);
+        for (index, prepared) in prepared_files.iter().enumerate() {
+            let result = run_tests_for_file(&mut runner, prepared);
             match result {
                 Ok(stats) => {
                     total_passed += stats.passed;
@@ -512,10 +539,11 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
             }
         }
 
-        merged_build_cache = runner.build_cache;
-        merged_emulations = runner.emulations;
+        (runner.build_cache, runner.emulations)
+    } else if prepared_files.is_empty() {
+        (BuildCache::new(), EmulationsState::new())
     } else {
-        let (work_tx, work_rx) = mpsc::channel::<String>();
+        let (work_tx, work_rx) = mpsc::channel::<usize>();
         let work_rx = Arc::new(Mutex::new(work_rx));
         let (result_tx, result_rx) = mpsc::channel::<WorkerMsg>();
         let stop_flag = Arc::new(AtomicBool::new(false));
@@ -530,6 +558,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
             let work_rx = work_rx.clone();
             let result_tx = result_tx.clone();
             let stop_flag = stop_flag.clone();
+            let prepared_files = prepared_files.clone();
 
             let handle = std::thread::spawn(move || {
                 let mut runner = TestRunner::new(
@@ -550,13 +579,24 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
                         rx.recv()
                     };
 
-                    let Ok(file) = file else {
+                    let Ok(file_index) = file else {
                         break;
                     };
 
+                    let Some(prepared) = prepared_files.get(file_index) else {
+                        let _ = result_tx.send(WorkerMsg::FileResult {
+                            file: "<unknown>".to_string(),
+                            result: Err("Invalid test file index".to_string()),
+                        });
+                        continue;
+                    };
+
                     let result =
-                        run_tests_for_file(&mut runner, &file).map_err(|err| err.to_string());
-                    let _ = result_tx.send(WorkerMsg::FileResult { file, result });
+                        run_tests_for_file(&mut runner, prepared).map_err(|err| err.to_string());
+                    let _ = result_tx.send(WorkerMsg::FileResult {
+                        file: prepared.file.clone(),
+                        result,
+                    });
                 }
 
                 let _ = result_tx.send(WorkerMsg::WorkerDone {
@@ -570,16 +610,19 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
 
         drop(result_tx);
 
-        for file in test_files.iter() {
+        for idx in 0..prepared_files.len() {
             if stop_flag.load(Ordering::SeqCst) {
                 break;
             }
-            let _ = work_tx.send(file.clone());
+            let _ = work_tx.send(idx);
         }
         drop(work_tx);
 
-        let mut remaining_files = test_files.len();
+        let mut remaining_files = prepared_files.len();
         let mut remaining_workers = worker_count;
+
+        let mut merged_build_cache = BuildCache::new();
+        let mut merged_emulations = EmulationsState::new();
 
         while remaining_files > 0 || remaining_workers > 0 {
             let msg = match result_rx.recv() {
@@ -620,7 +663,9 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         for handle in handles {
             let _ = handle.join();
         }
-    }
+
+        (merged_build_cache, merged_emulations)
+    };
 
     let mut file_cache =
         Arc::try_unwrap(file_cache).expect("file build cache still has outstanding references");
@@ -887,36 +932,20 @@ fn compile_test_file(
     Ok(compilation_result)
 }
 
-fn run_tests_for_file(runner: &mut TestRunner, file: &str) -> anyhow::Result<TestStats> {
-    let content = match fs::read_to_string(file) {
-        Ok(content) => content,
-        Err(err) => {
-            return Err(anyhow!("Error reading file '{file}': {err}"));
-        }
-    };
-
-    let tests = find_all_test(file, &content);
-
-    let abi = contract_abi(content.as_str(), file, &runner.acton_config.mappings);
-
-    let executable_code = prepare_test_file(&content);
+fn compile_test_for_file(
+    file: &str,
+    content: &str,
+    need_debug_info: bool,
+    file_cache: &FileBuildCache,
+    acton_config: &ActonConfig,
+) -> anyhow::Result<tolkc::compiler::CompilerResultSuccess> {
     let tmp_test_filename = file.to_owned() + ".test.tolk";
 
+    let executable_code = prepare_test_file(content);
     fs::write(&tmp_test_filename, executable_code)?;
-
-    let config = &runner.config;
-    let need_debug_info =
-        config.debug || config.backtrace == Some(BacktraceMode::Full) || config.coverage;
-
-    let now = Instant::now();
-    let compilation_result = compile_test_file(
-        &runner.file_build_cache,
-        &tmp_test_filename,
-        need_debug_info,
-        &runner.acton_config,
-    )?;
+    let compilation_result =
+        compile_test_file(file_cache, &tmp_test_filename, need_debug_info, acton_config)?;
     let _ = fs::remove_file(&tmp_test_filename);
-    debug!("Test file '{file}' compilation time: {:?}", now.elapsed());
 
     let result = match compilation_result {
         tolkc::CompilerResult::Success(result) => result,
@@ -927,17 +956,63 @@ fn run_tests_for_file(runner: &mut TestRunner, file: &str) -> anyhow::Result<Tes
         }
     };
 
-    let code_cell = ArcCell::from_boc_b64(&result.code_boc64)?;
-    let source_map = result.source_map.unwrap_or_default();
-    let stats = run_file_tests(
-        runner,
+    Ok(result)
+}
+
+struct PreparedTestFile {
+    file: String,
+    tests: Vec<TestDescriptor>,
+    abi: Arc<ContractAbi>,
+    code_cell: ArcCell,
+    source_map: Arc<SourceMap>,
+}
+
+fn prepare_test_file_data(
+    file: &str,
+    need_debug_info: bool,
+    file_cache: &FileBuildCache,
+    acton_config: &ActonConfig,
+) -> anyhow::Result<PreparedTestFile> {
+    let content = fs::read_to_string(file)
+        .map_err(|err| anyhow!("Error reading file '{file}': {err}"))?;
+
+    let tests = find_all_test(file, &content);
+    let abi = contract_abi(content.as_str(), file, &acton_config.mappings);
+
+    let now = Instant::now();
+    let compilation_result = compile_test_for_file(
         file,
-        tests,
-        &code_cell,
-        Arc::new(abi),
-        Arc::new(source_map),
+        &content,
+        need_debug_info,
+        file_cache,
+        acton_config,
     )?;
-    Ok(stats)
+    debug!("Test file '{file}' compilation time: {:?}", now.elapsed());
+
+    let code_cell = ArcCell::from_boc_b64(&compilation_result.code_boc64)?;
+    let source_map = compilation_result.source_map.unwrap_or_default();
+
+    Ok(PreparedTestFile {
+        file: file.to_string(),
+        tests,
+        abi: Arc::new(abi),
+        code_cell,
+        source_map: Arc::new(source_map),
+    })
+}
+
+fn run_tests_for_file(
+    runner: &mut TestRunner,
+    prepared: &PreparedTestFile,
+) -> anyhow::Result<TestStats> {
+    run_file_tests(
+        runner,
+        &prepared.file,
+        prepared.tests.clone(),
+        &prepared.code_cell,
+        prepared.abi.clone(),
+        prepared.source_map.clone(),
+    )
 }
 
 fn run_file_tests(
@@ -1256,7 +1331,7 @@ pub enum TestAnnotation {
     Skip,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TestDescriptor {
     pub id: i32,
     pub name: Arc<str>,
