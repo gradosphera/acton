@@ -10,8 +10,8 @@ use crate::commands::test::reporting::junit::{JUnitConfig, JUnitReporter};
 use crate::commands::test::reporting::teamcity::TeamCityReporter;
 use crate::commands::test::reporting::ui::{UiReporter, start_ui_server};
 use crate::commands::test::reporting::{
-    ReporterManager, TestExecutionContext, TestReport, TestStatus, TestSuiteStats,
-    extract_suite_name,
+    ReporterManager, TestExecutionContext, TestExecutionExtras, TestReport, TestStatus,
+    TestSuiteStats, extract_suite_name,
 };
 use crate::context::{
     AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
@@ -837,10 +837,11 @@ fn run_file_tests(
             failed_transaction_context: None,
             details: None,
             location: None,
+            stdout: String::new(),
+            stderr: String::new(),
             abi: abi.clone(),
             source_map: source_map.clone(),
             backtrace: runner.config.backtrace,
-            execution: None,
             trace_path: runner
                 .config
                 .save_test_trace
@@ -853,14 +854,18 @@ fn run_file_tests(
         if test.annotations.contains(&TestAnnotation::Todo) {
             test_report.status = TestStatus::Todo;
             test_report.details = test.todo_description.clone();
-            runner.reporter_manager.on_test_finished(&test_report)?;
+            runner
+                .reporter_manager
+                .on_test_finished(&test_report, None, None)?;
             todo += 1;
             continue;
         }
 
         if test.annotations.contains(&TestAnnotation::Skip) {
             test_report.status = TestStatus::Skipped;
-            runner.reporter_manager.on_test_finished(&test_report)?;
+            runner
+                .reporter_manager
+                .on_test_finished(&test_report, None, None)?;
             skipped += 1;
             continue;
         }
@@ -921,19 +926,8 @@ fn run_file_tests(
         }
 
         test_report.duration = duration;
-        test_report.execution = Some(TestExecutionContext {
-            get_result: get_result.clone(),
-            gas_used,
-            stdout: captured_stdout.clone(),
-            stderr: captured_stderr.clone(),
-            assert_failure: assert_failure.clone(),
-            accounts: accounts.clone(),
-            expected_exit_code,
-            build_cache: runner.build_cache.clone(),
-            emulations: runner.emulations.clone(),
-            known_addresses: runner.known_addresses.clone(),
-            known_code_cells: runner.known_code_cells.clone(),
-        });
+        test_report.stdout = captured_stdout;
+        test_report.stderr = captured_stderr;
 
         if test_passed {
             test_report.status = TestStatus::Passed;
@@ -988,7 +982,25 @@ fn run_file_tests(
             failed += 1;
         }
 
-        runner.reporter_manager.on_test_finished(&test_report)?;
+        let exec_ctx = TestExecutionContext {
+            get_result: &get_result,
+            gas_used,
+            assert_failure: assert_failure.as_ref(),
+            accounts: &accounts,
+            expected_exit_code,
+        };
+        let exec_extra = TestExecutionExtras {
+            build_cache: &runner.build_cache,
+            emulations: &runner.emulations,
+            known_addresses: &runner.known_addresses,
+            known_code_cells: &runner.known_code_cells,
+        };
+
+        runner.reporter_manager.on_test_finished(
+            &test_report,
+            Some(&exec_ctx),
+            Some(&exec_extra),
+        )?;
 
         if runner.config.coverage {
             // For coverage, we need to process test logs as well for unit tests coverage,

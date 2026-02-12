@@ -1,4 +1,6 @@
-use super::{TestReport, TestReporter, TestStatus, TestSuiteStats, extract_suite_name};
+use super::{
+    TestExecutionContext, TestReport, TestReporter, TestStatus, TestSuiteStats, extract_suite_name,
+};
 use crate::commands::test::TestDescriptor;
 use crate::context::AssertFailure;
 use crate::formatter::FormatterContext;
@@ -26,15 +28,14 @@ impl TeamCityReporter {
     fn format_test_failure(
         &self,
         test: &TestReport,
+        exec: Option<&TestExecutionContext<'_>>,
     ) -> (String, String, Option<String>, Option<String>) {
         let mut message = "Test failed".to_string();
         let mut details = String::new();
         let mut expected: Option<String> = None;
         let mut actual: Option<String> = None;
 
-        if let Some(exec) = &test.execution
-            && let Some(ref assert_failure) = exec.assert_failure
-        {
+        if let Some(assert_failure) = exec.and_then(|ctx| ctx.assert_failure) {
             if let Some(location) = assert_failure.location() {
                 details = location.format_full();
             }
@@ -149,14 +150,19 @@ impl TestReporter for TeamCityReporter {
         Ok(())
     }
 
-    fn on_test_finished(&mut self, test: &TestReport) -> anyhow::Result<()> {
+    fn on_test_finished(
+        &mut self,
+        test: &TestReport,
+        exec: Option<&TestExecutionContext<'_>>,
+        _extra: Option<&super::TestExecutionExtras<'_>>,
+    ) -> anyhow::Result<()> {
         let test_name = self.escape_name(&test.name);
         let suite_name = self.escape_name(&extract_suite_name(Path::new(&test.file_path)));
         let duration_ms = test.duration.as_millis();
 
         match test.status {
             TestStatus::Failed => {
-                let (message, details, expected, actual) = self.format_test_failure(test);
+                let (message, details, expected, actual) = self.format_test_failure(test, exec);
 
                 if let (Some(exp), Some(act)) = (expected, actual) {
                     println!(

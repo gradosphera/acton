@@ -36,22 +36,18 @@ impl DotReporter {
     }
 
     fn print_test_output(&self, test: &TestReport, output_type: &str) -> anyhow::Result<()> {
-        let Some(execution) = &test.execution else {
-            return Ok(());
-        };
-
         let (content, label) = match output_type {
             "stdout" => {
-                if execution.stdout.trim().is_empty() {
+                if test.stdout.trim().is_empty() {
                     return Ok(());
                 }
-                (&execution.stdout, "stdout")
+                (&test.stdout, "stdout")
             }
             "stderr" => {
-                if execution.stderr.trim().is_empty() {
+                if test.stderr.trim().is_empty() {
                     return Ok(());
                 }
-                (&execution.stderr, "stderr")
+                (&test.stderr, "stderr")
             }
             _ => return Ok(()),
         };
@@ -96,7 +92,12 @@ impl TestReporter for DotReporter {
         Ok(())
     }
 
-    fn on_test_finished(&mut self, test: &TestReport) -> anyhow::Result<()> {
+    fn on_test_finished(
+        &mut self,
+        test: &TestReport,
+        _exec: Option<&super::TestExecutionContext<'_>>,
+        _extra: Option<&super::TestExecutionExtras<'_>>,
+    ) -> anyhow::Result<()> {
         self.print_status_dot(&test.status);
         self.tests.push(test.clone());
         Ok(())

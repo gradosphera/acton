@@ -85,13 +85,11 @@ impl JUnitReporter {
         test_case.set_classname(&test.suite_name);
         test_case.set_time(test.duration);
 
-        if let Some(execution) = &test.execution {
-            if self.config.include_system_out && !execution.stdout.trim().is_empty() {
-                test_case.set_system_out(&execution.stdout);
-            }
-            if self.config.include_system_err && !execution.stderr.trim().is_empty() {
-                test_case.set_system_err(&execution.stderr);
-            }
+        if self.config.include_system_out && !test.stdout.trim().is_empty() {
+            test_case.set_system_out(&test.stdout);
+        }
+        if self.config.include_system_err && !test.stderr.trim().is_empty() {
+            test_case.set_system_err(&test.stderr);
         }
 
         test_case
@@ -192,7 +190,12 @@ impl TestReporter for JUnitReporter {
         Ok(())
     }
 
-    fn on_test_finished(&mut self, test: &TestReport) -> anyhow::Result<()> {
+    fn on_test_finished(
+        &mut self,
+        test: &TestReport,
+        _exec: Option<&super::TestExecutionContext<'_>>,
+        _extra: Option<&super::TestExecutionExtras<'_>>,
+    ) -> anyhow::Result<()> {
         if let Some(ref suite_name) = self.current_suite
             && let Some(suite) = self.suites.get_mut(suite_name)
         {

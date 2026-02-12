@@ -1,4 +1,6 @@
-use super::{TestExecutionContext, TestReport, TestReporter, TestStatus, TestSuiteStats};
+use super::{
+    TestExecutionContext, TestExecutionExtras, TestReport, TestReporter, TestStatus, TestSuiteStats,
+};
 use crate::commands::test::TestDescriptor;
 use crate::context::AssertFailure;
 use crate::formatter::FormatterContext;
@@ -150,7 +152,12 @@ impl TestReporter for ConsoleReporter {
         Ok(())
     }
 
-    fn on_test_finished(&mut self, test: &TestReport) -> anyhow::Result<()> {
+    fn on_test_finished(
+        &mut self,
+        test: &TestReport,
+        exec: Option<&TestExecutionContext<'_>>,
+        extra: Option<&TestExecutionExtras<'_>>,
+    ) -> anyhow::Result<()> {
         let beautified_name = self.beatify_test_name(&test.name);
         let duration_ms = test.duration.as_millis();
         let (time_value, time_unit) = if duration_ms > 0 {
@@ -199,24 +206,27 @@ impl TestReporter for ConsoleReporter {
                 time_unit.red().dimmed()
             );
 
-            let Some(exec) = &test.execution else {
+            let Some(exec) = exec else {
                 anyhow::bail!("Test execution context is missing for failed test")
+            };
+            let Some(extra) = extra else {
+                anyhow::bail!("Test execution extras are missing for failed test")
             };
 
             let formatter = FormatterContext {
                 contract_abi: test.abi.clone(),
-                accounts: Cow::Borrowed(&exec.accounts),
-                build_cache: Cow::Borrowed(&exec.build_cache),
-                emulations: Cow::Borrowed(&exec.emulations),
-                known_addresses: Cow::Borrowed(&exec.known_addresses),
-                known_code_cells: Cow::Borrowed(&exec.known_code_cells),
+                accounts: Cow::Borrowed(exec.accounts),
+                build_cache: Cow::Borrowed(extra.build_cache),
+                emulations: Cow::Borrowed(extra.emulations),
+                known_addresses: Cow::Borrowed(extra.known_addresses),
+                known_code_cells: Cow::Borrowed(extra.known_code_cells),
                 backtrace: test.backtrace,
                 fork_net: None,
                 network: None,
                 api_key: None,
             };
 
-            match &exec.get_result {
+            match exec.get_result {
                 GetMethodResult::Success(result) => {
                     process_test_fail(test, exec, formatter, result);
                 }
@@ -226,19 +236,17 @@ impl TestReporter for ConsoleReporter {
             }
         }
 
-        if self.config.show_output
-            && let Some(exec) = &test.execution
-        {
-            if !exec.stdout.trim().is_empty() {
+        if self.config.show_output {
+            if !test.stdout.trim().is_empty() {
                 println!("    {} Test output:", "└─".dimmed());
-                for line in exec.stdout.trim().lines() {
+                for line in test.stdout.trim().lines() {
                     println!("       {line}");
                 }
             }
 
-            if !exec.stderr.trim().is_empty() {
+            if !test.stderr.trim().is_empty() {
                 println!("    {} Test stderr:", "└─".dimmed());
-                for line in exec.stderr.trim().lines() {
+                for line in test.stderr.trim().lines() {
                     println!("       {}", line.bright_red());
                 }
             }
@@ -250,7 +258,7 @@ impl TestReporter for ConsoleReporter {
 
 fn process_test_fail(
     test: &TestReport,
-    exec: &TestExecutionContext,
+    exec: &TestExecutionContext<'_>,
     fmt: FormatterContext<'_>,
     result: &GetMethodResultSuccess,
 ) {
@@ -265,7 +273,7 @@ fn process_test_fail(
         return;
     }
 
-    if let Some(assert_failure) = &exec.assert_failure {
+    if let Some(assert_failure) = exec.assert_failure {
         process_assert_failure(assert_failure, test, &fmt);
         // since assertions set the exit code to 567, we don't want to process exit codes
         return;

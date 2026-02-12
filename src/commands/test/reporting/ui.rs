@@ -49,7 +49,12 @@ impl UiReporter {
 }
 
 impl TestReporter for UiReporter {
-    fn on_test_finished(&mut self, test: &TestReport) -> anyhow::Result<()> {
+    fn on_test_finished(
+        &mut self,
+        test: &TestReport,
+        _exec: Option<&super::TestExecutionContext<'_>>,
+        _extra: Option<&super::TestExecutionExtras<'_>>,
+    ) -> anyhow::Result<()> {
         self.reports
             .lock()
             .expect("cannot lock mutex")

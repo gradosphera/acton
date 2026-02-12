@@ -18,19 +18,21 @@ pub(super) mod junit;
 pub(super) mod teamcity;
 pub(super) mod ui;
 
-#[derive(Debug, Clone)]
-pub struct TestExecutionContext {
-    pub get_result: GetMethodResult,
+#[derive(Debug, Clone, Copy)]
+pub struct TestExecutionContext<'a> {
+    pub get_result: &'a GetMethodResult,
     pub gas_used: u64,
-    pub stdout: String,
-    pub stderr: String,
-    pub assert_failure: Option<AssertFailure>,
-    pub accounts: FxHashMap<String, ShardAccount>,
+    pub assert_failure: Option<&'a AssertFailure>,
+    pub accounts: &'a FxHashMap<String, ShardAccount>,
     pub expected_exit_code: i32,
-    pub build_cache: BuildCache,
-    pub emulations: EmulationsState,
-    pub known_addresses: KnownAddresses,
-    pub known_code_cells: FxHashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TestExecutionExtras<'a> {
+    pub build_cache: &'a BuildCache,
+    pub emulations: &'a EmulationsState,
+    pub known_addresses: &'a KnownAddresses,
+    pub known_code_cells: &'a FxHashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -58,13 +60,15 @@ pub struct TestReport {
     pub details: Option<String>,
     pub location: Option<SourceLocation>,
     #[serde(skip)]
+    pub stdout: String,
+    #[serde(skip)]
+    pub stderr: String,
+    #[serde(skip)]
     pub abi: Arc<ContractAbi>,
     #[serde(skip)]
     pub source_map: Arc<SourceMap>,
     #[serde(skip)]
     pub backtrace: Option<BacktraceMode>,
-    #[serde(skip)]
-    pub execution: Option<TestExecutionContext>,
     pub trace_path: Option<String>,
 }
 
@@ -133,7 +137,12 @@ pub trait TestReporter: Send + Sync {
         Ok(())
     }
 
-    fn on_test_finished(&mut self, _test: &TestReport) -> anyhow::Result<()> {
+    fn on_test_finished(
+        &mut self,
+        _test: &TestReport,
+        _exec: Option<&TestExecutionContext<'_>>,
+        _extra: Option<&TestExecutionExtras<'_>>,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -216,9 +225,14 @@ impl ReporterManager {
         Ok(())
     }
 
-    pub fn on_test_finished(&mut self, test: &TestReport) -> anyhow::Result<()> {
+    pub fn on_test_finished(
+        &mut self,
+        test: &TestReport,
+        exec: Option<&TestExecutionContext<'_>>,
+        extra: Option<&TestExecutionExtras<'_>>,
+    ) -> anyhow::Result<()> {
         for reporter in &mut self.reporters {
-            reporter.on_test_finished(test)?;
+            reporter.on_test_finished(test, exec, extra)?;
         }
         Ok(())
     }
