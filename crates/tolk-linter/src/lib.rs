@@ -419,7 +419,15 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
             self.checker,
             Rule::NoBounceHandler,
             no_bounce_handler::check_call_expr(self.checker, self.file_id, node, self.current_decl)
-        )
+        );
+
+        if let Some(callee) = node.callee() {
+            self.visit_expr(&callee);
+        }
+        for arg in node.arguments() {
+            self.walk_call_argument(&arg);
+        }
+        self.default_result()
     }
 
     fn default_result(&self) -> Self::Result {}
