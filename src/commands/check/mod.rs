@@ -112,13 +112,14 @@ pub fn check_cmd(
             fix::apply_fixes(&file_db, &all_diagnostics)?;
         }
 
-        let shown_diagnostics = if fix {
+        let mut shown_diagnostics = if fix {
             fix::filter_fixed_diagnostics(&all_diagnostics)
         } else {
             all_diagnostics
         };
 
         if !shown_diagnostics.is_empty() {
+            shown_diagnostics.sort();
             let first_code = shown_diagnostics
                 .iter()
                 .find(|d| d.code.is_some())

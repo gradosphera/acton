@@ -3,8 +3,8 @@ extern crate core;
 use crate::ast::name_case_checker::check_name_cases;
 use crate::ast::{deprecated_symbol_use, no_bounce_handler};
 use crate::rules::ast::{
-    field_init_can_be_folded, mutable_variable_can_be_immutable, pure_function_call_unused,
-    unused_import, unused_variable, write_only_variable,
+    field_init_can_be_folded, method_can_be_static, mutable_variable_can_be_immutable,
+    pure_function_call_unused, unused_import, unused_variable, write_only_variable,
 };
 use rules::diagnostic::{Diagnostic, Severity};
 pub use rules::*;
@@ -358,6 +358,11 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
             self.checker,
             Rule::UnusedImport,
             unused_import::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::MethodCanBeStatic,
+            method_can_be_static::check_file(self.checker, self.file_id)
         );
         run_rule!(
             self.checker,

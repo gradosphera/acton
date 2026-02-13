@@ -1,14 +1,10 @@
-warning[E002]: variable is unused
+warning[E009]: method can be static
   --> [ROOT]/contracts/main[LINE]
   |
 5 |             fun Foo.bar(self) {}
-  |                         ^^^^ unused variable `self`
-
-help: prefix with underscore: `_self`
-  --> [ROOT]/contracts/main[LINE]
+  |                         ^^^^ receiver `self` is not used in `bar`
   |
-5 |             fun Foo.bar(self) {}
-  |                         ^^^^ _self
+  = remove `self` parameter to make this method static
 
 warning[E004]: usage of deprecated symbol
   --> [ROOT]/contracts/main[LINE]
@@ -20,4 +16,4 @@ warning[E004]: usage of deprecated symbol
 
 
 Use acton check --explain <CODE> to get detailed explanation of a rule.
-For example: acton check --explain E002
+For example: acton check --explain E004
