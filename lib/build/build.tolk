@@ -2,7 +2,6 @@
 ///
 /// This module provides the capability to compile Tolk contracts dynamically during the execution of tests or scripts.
 /// It interfaces with the Tolk compiler to generate the code cell for a given contract.
-import "../ffi/ffi"
 
 /// Build a contract with a specified name and optional path.
 ///

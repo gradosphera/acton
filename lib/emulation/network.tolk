@@ -20,7 +20,6 @@
 
 import "@stdlib/gas-payments"
 import "@stdlib/reflection"
-import "../build/build"
 import "../ffi/ffi"
 import "../fmt"
 import "../testing/assert"

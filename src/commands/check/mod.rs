@@ -1,7 +1,9 @@
 use acton_config::config::{ActonConfig, ContractConfig};
+use globset::{Glob, GlobSetBuilder};
 use owo_colors::OwoColorize;
 use serde_json;
 use std::collections::{BTreeMap, HashMap};
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -17,6 +19,7 @@ use tolk_ty::TypeInterner;
 use tolk_ty::infer;
 use tolkc::Compiler;
 use tree_sitter::Point;
+use walkdir::WalkDir;
 
 pub fn check_cmd(
     fix: bool,
@@ -91,6 +94,12 @@ pub fn check_cmd(
         return Ok(());
     }
 
+    let cwd = std::env::current_dir()?;
+
+    let now = Instant::now();
+    let files = find_files(&cwd)?;
+    log::info!("found {} files in {:?}", files.len(), now.elapsed());
+
     let stdlib = find_stdlib()?;
     let acton_stdlib = find_acton_stdlib()?;
     let common_tolk = stdlib.join("common.tolk");
@@ -108,6 +117,16 @@ pub fn check_cmd(
         let contract_diagnostics =
             check_contract(contract_id, contract, &file_db, fix, json, &config)?;
         all_diagnostics.extend(contract_diagnostics);
+    }
+
+    for file in files {
+        let Some(name) = file.file_name() else {
+            continue;
+        };
+        if name.to_string_lossy().ends_with(".test.tolk") {
+            let contract_diagnostics = check_test_file(&file, &file_db, fix, json, &config)?;
+            all_diagnostics.extend(contract_diagnostics);
+        }
     }
 
     if json {
@@ -143,15 +162,15 @@ pub fn check_cmd(
 }
 
 fn find_stdlib() -> anyhow::Result<PathBuf> {
-    let path_to_acton = PathBuf::from(".acton/tolk-stdlib");
-    if !path_to_acton.exists() {
+    let path_to_stdlib = PathBuf::from(".acton/tolk-stdlib");
+    if !path_to_stdlib.exists() {
         anyhow::bail!(
             "cannot find Tolk stdlib in .acton/, did you run {}?",
             "acton init".yellow()
         );
     }
 
-    Ok(path_to_acton.canonicalize()?)
+    Ok(path_to_stdlib.canonicalize()?)
 }
 
 fn find_acton_stdlib() -> anyhow::Result<PathBuf> {
@@ -192,6 +211,30 @@ fn check_contract(
     }
 
     let lint_settings = Checker::build_settings(acton_config, Some(contract_id));
+
+    check_root_file(&root, file_db, fix, json, lint_settings, acton_config)
+}
+
+fn check_test_file(
+    file: &Path,
+    file_db: &FileDb,
+    fix: bool,
+    json: bool,
+    acton_config: &ActonConfig,
+) -> anyhow::Result<Vec<Diagnostic>> {
+    let root = file.canonicalize()?;
+    let current_dir = std::env::current_dir().unwrap_or_default();
+    let relative_root = pathdiff::diff_paths(&root, &current_dir).unwrap_or_else(|| root.clone());
+
+    if !json {
+        println!(
+            "Checking {} ({})",
+            file.file_name().unwrap_or_default().to_string_lossy(),
+            relative_root.display().cyan()
+        );
+    }
+
+    let lint_settings = Checker::build_settings(acton_config, None);
 
     check_root_file(&root, file_db, fix, json, lint_settings, acton_config)
 }
@@ -345,9 +388,10 @@ fn check_with_compiler(
     let compiler = Compiler::new(2).with_mappings(&acton_config.mappings);
     let compiler_errors = compiler.check(root)?;
     log::debug!(
-        "Run compiler check took {:?}, found {} errors",
+        "Run compiler check took {:?}, found {} errors in {}",
         now.elapsed(),
-        compiler_errors.len()
+        compiler_errors.len(),
+        root.display()
     );
 
     let has_compiler_errors = compiler_errors.is_empty();
@@ -737,4 +781,76 @@ fn byte_to_line_col(source: &str, byte_offset: usize) -> Option<(u32, u32)> {
     } else {
         None
     }
+}
+
+fn find_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    const EXCLUDED_DIRS: &[&str] = &[
+        ".git",
+        ".github",
+        ".idea",
+        ".acton",
+        "node_modules",
+        "target",
+        "tolk-stdlib",
+    ];
+
+    let mut exclude_builder = GlobSetBuilder::new();
+    for p in [
+        // ... for future ignoring via flags
+    ] {
+        exclude_builder.add(Glob::new(p)?);
+    }
+    let excludes = exclude_builder.build()?;
+
+    let it = WalkDir::new(root)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|entry| {
+            if !entry.file_type().is_dir() {
+                return true;
+            }
+            let name = entry.file_name();
+            if EXCLUDED_DIRS.iter().any(|d| name == OsStr::new(d)) {
+                // fast path
+                return false;
+            }
+
+            let p = entry.path();
+            let rel = p.strip_prefix(root).unwrap_or(p);
+            !excludes.is_match(rel)
+        });
+
+    let mut out: Vec<PathBuf> = Vec::with_capacity(32);
+
+    for entry in it {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(err) => {
+                log::warn!("walk dir error: {err}");
+                continue;
+            }
+        };
+
+        if entry.file_type().is_file() {
+            let path = entry.path();
+
+            if let Some(ext) = path.extension() {
+                if ext != "tolk" {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+
+            let rel = path.strip_prefix(root).unwrap_or(path);
+            if excludes.is_match(rel) {
+                continue;
+            }
+
+            out.push(path.to_path_buf());
+        }
+    }
+
+    out.sort_unstable();
+    Ok(out)
 }

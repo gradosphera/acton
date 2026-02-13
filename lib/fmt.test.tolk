@@ -1,5 +1,4 @@
 import "fmt"
-import "fs"
 import "emulation/network"
 import "testing/expect"
 import "tlb/maybe"

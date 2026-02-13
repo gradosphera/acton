@@ -33,7 +33,6 @@ import "assert"
 import "../fmt"
 import "../emulation/network"
 import "../ffi/ffi"
-import "../types/transaction"
 
 /// Expect the transaction list to have a successful deploy transaction.
 ///

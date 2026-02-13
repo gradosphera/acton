@@ -1,5 +1,4 @@
 import "crypto"
-import "../io"
 import "../testing/expect"
 
 get fun `test-mnemonic-new-returns-24-words`() {

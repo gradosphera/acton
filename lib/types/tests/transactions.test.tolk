@@ -1,5 +1,4 @@
 import "../message"
-import "../out_actions"
 import "../transaction"
 import "contracts/types"
 import "../../build/build"
@@ -7,7 +6,6 @@ import "../../emulation/network"
 import "../../testing/expect"
 import "../../testing/transaction_expect"
 import "../../tlb/maybe"
-import "../../vm/vm"
 
 struct Counter {
     address: address

@@ -3,7 +3,6 @@ import "contracts/types"
 import "../../build/build"
 import "../../testing/expect"
 import "../../testing/transaction_expect"
-import "../../tlb/maybe"
 
 struct Counter {
     address: address
