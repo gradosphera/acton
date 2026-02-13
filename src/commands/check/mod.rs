@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use globset::{Glob, GlobSetBuilder};
 use owo_colors::OwoColorize;
 use serde_json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -93,6 +93,13 @@ pub fn check_cmd(
             }
         }
     }
+
+    // Deduplicate all diagnostic for JSON output to avoid duplicate errors in IDEs
+    let all_diagnostics = all_diagnostics
+        .into_iter()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
 
     if json {
         let json_output = serde_json::json!({
