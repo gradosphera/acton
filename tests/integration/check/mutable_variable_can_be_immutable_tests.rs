@@ -20,6 +20,42 @@ fn test_check_mutable_variable_can_be_immutable() {
 
 #[test]
 #[named]
+fn test_check_mutable_variable_can_be_immutable_with_tensor_decl() {
+    run_simple_test(
+        "mutable_variable_can_be_immutable",
+        r#"
+            fun foo(_a: int) {}
+
+            fun main() {
+                var (a, b) = (100, 200);
+                b = 100;
+                foo(a + b);
+            }
+        "#,
+        function_name!(),
+    )
+}
+
+#[test]
+#[named]
+fn test_check_mutable_variable_can_be_immutable_with_tuple_decl() {
+    run_simple_test(
+        "mutable_variable_can_be_immutable",
+        r#"
+            fun foo(_a: int) {}
+
+            fun main() {
+                var [a, b] = [100, 200];
+                b = 100;
+                foo(a + b);
+            }
+        "#,
+        function_name!(),
+    )
+}
+
+#[test]
+#[named]
 fn test_check_mutable_variable_can_be_immutable_for_immutable_variable() {
     run_simple_test(
         "mutable_variable_can_be_immutable",
