@@ -126,3 +126,24 @@ fun name(f: int) {
 }
 ------------------------------------------------------------------------
 type inference error at offset 128: unknown type
+
+========================================================================
+Generic method as right hand of ternary inside other generic function call
+========================================================================
+struct MinterStorage {
+    totalSupply: coins
+    adminAddress: address?
+    nextAdminAddress: address?
+    metadataUri: string
+}
+
+fun MinterStorage.load() {
+    return MinterStorage.fromCell(contract.getData())
+}
+
+fun main() {
+    val st = MinterStorage.load();
+    //! ^ MinterStorage
+}
+------------------------------------------------------------------------
+ok

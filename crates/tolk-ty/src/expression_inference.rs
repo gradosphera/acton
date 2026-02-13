@@ -1440,7 +1440,11 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             }
             if let Some(fun_ref) = fun_ref {
                 let typ = self.ctx.get_top_level_type(fun_ref);
-                if let Some(typ) = typ {
+                if let Some(mut typ) = typ {
+                    if self.const_intrn().has_generics(typ) {
+                        let mut substitutor = TypeSubstitutor::new(self.intrn());
+                        typ = substitutor.substitute(typ, &substituted_ts.mapping)
+                    }
                     self.ctx.set_node_type(&v, typ);
                 }
                 self.ctx.set_resolved(NameUse {
