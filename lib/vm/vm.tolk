@@ -37,8 +37,8 @@ fun vm.setC5(cell: cell): void
 
 /// Generic helper to get a single config parameter.
 fun vm.getConfigParam<T>(index: int): T {
-    var c7 = vm.getC7();
-    var params = c7.get(0) as tuple;
+    val c7 = vm.getC7();
+    val params = c7.get(0) as tuple;
     return params.get(index);
 }
 
@@ -91,8 +91,8 @@ fun vm.setConfigUnpacked(values: tuple) {
 /// val unpacked = vm.getConfigUnpacked();
 /// ```
 fun vm.getConfigUnpacked() {
-    var c7 = vm.getC7();
-    var params = c7.get(0) as tuple;
+    val c7 = vm.getC7();
+    val params = c7.get(0) as tuple;
 
     return params.get(CONFIG_UNPACKED_INDEX) as tuple;
 }

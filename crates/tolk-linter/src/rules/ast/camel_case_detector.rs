@@ -8,6 +8,7 @@ use heck::{ToLowerCamelCase, ToShoutySnakeCase, ToUpperCamelCase};
 use std::collections::HashSet;
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::FileId;
+use tolk_resolver::resolve_index::LocalDefKind;
 use tolk_resolver::{Resolved, Symbol};
 
 /// ### What it does
@@ -156,9 +157,13 @@ pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
                 continue;
             }
 
+            let (correct_case, case_name) = match local_def.kind {
+                LocalDefKind::TypeParameter => (name.to_upper_camel_case(), "PascalCase"),
+                _ => (name.to_lower_camel_case(), "camelCase"),
+            };
+
             // TODO: check type for params
-            let cameled = name.to_lower_camel_case();
-            if cameled.as_bytes() == name.as_bytes() {
+            if correct_case.as_bytes() == name.as_bytes() {
                 continue;
             }
 
@@ -167,14 +172,14 @@ pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
             // we need the definition itself too
             edits.push(Edit {
                 span: local_def.def_span,
-                replacement: cameled.clone(),
+                replacement: correct_case.clone(),
                 file_id: file_info_iter.id(),
             });
 
             usages.for_each(|usage| {
                 edits.push(Edit {
                     span: usage.span,
-                    replacement: cameled.clone(),
+                    replacement: correct_case.clone(),
                     file_id: file_info_iter.id(),
                 });
             });
@@ -187,12 +192,12 @@ pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
                 message: NameCaseChecker.message(),
                 annotations: vec![Annotation {
                     span: local_def.def_span,
-                    message: Some(format!("not camelCase: {name}",)),
+                    message: Some(format!("not {case_name}: {name}",)),
                     is_primary: true,
                     tags: vec![DiagnosticTag::Unnecessary],
                 }],
                 fixes: vec![Fix {
-                    message: format!("rename to camelCase: {}", cameled),
+                    message: format!("rename to {case_name}: {correct_case}"),
                     edits,
                     applicability: Applicability::Auto,
                 }],
