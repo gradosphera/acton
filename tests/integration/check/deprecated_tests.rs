@@ -2,7 +2,7 @@ use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use function_name::named;
 
-fn run_simple_test(content: &str, name: &str) {
+pub(crate) fn run_simple_test(group: &str, content: &str, name: &str) {
     let project = ProjectBuilder::new(&format!("check-{}", name))
         .contract("main", content)
         .build();
@@ -14,13 +14,14 @@ fn run_simple_test(content: &str, name: &str) {
         .check()
         .run()
         .success()
-        .assert_stderr_snapshot_matches(&format!("integration/snapshots/check/{name}.txt"));
+        .assert_stderr_snapshot_matches(&format!("integration/snapshots/check/{group}/{name}.txt"));
 }
 
 #[test]
 #[named]
 fn test_check_deprecated_function_use() {
     run_simple_test(
+        "deprecated",
         r#"
             @deprecated
             fun foo() {}
@@ -37,6 +38,7 @@ fn test_check_deprecated_function_use() {
 #[named]
 fn test_check_deprecated_function_use_with_message() {
     run_simple_test(
+        "deprecated",
         r#"
             @deprecated("use bar instead")
             fun foo() {}
@@ -53,6 +55,7 @@ fn test_check_deprecated_function_use_with_message() {
 #[named]
 fn test_check_deprecated_struct_use() {
     run_simple_test(
+        "deprecated",
         r#"
             @deprecated("use Bar instead")
             struct Foo {}
@@ -69,6 +72,7 @@ fn test_check_deprecated_struct_use() {
 #[named]
 fn test_check_deprecated_static_method_use() {
     run_simple_test(
+        "deprecated",
         r#"
             struct Foo {}
 
@@ -87,6 +91,7 @@ fn test_check_deprecated_static_method_use() {
 #[named]
 fn test_check_deprecated_instance_method_use() {
     run_simple_test(
+        "deprecated",
         r#"
             struct Foo {}
 
@@ -105,6 +110,7 @@ fn test_check_deprecated_instance_method_use() {
 #[named]
 fn test_check_deprecated_global_var_use() {
     run_simple_test(
+        "deprecated",
         r#"
             @deprecated
             global foo: int

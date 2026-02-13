@@ -20,4 +20,4 @@ warning[E004]: usage of deprecated symbol
 
 
 Use acton check --explain <CODE> to get detailed explanation of a rule.
-For example: acton check --explain E004
+For example: acton check --explain E002
