@@ -2,7 +2,6 @@ use crate::type_interner::{TyId, TypeInterner};
 use crate::types::{AddressKind, TyData};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
-use tolk_resolver::AstNodeSpanExt;
 use tolk_resolver::file_db::FileDb;
 use tolk_resolver::file_index::{
     FileId, OptionalSyntaxNodeSpanExt, Span, Symbol, SymbolId, SymbolKind,
@@ -550,15 +549,6 @@ impl<'a> TypeDb<'a> {
     ) -> Option<TyId> {
         let name_node = inst.name()?;
         let args_list = inst.arguments()?;
-
-        let text = self
-            .file_db
-            .text(file_id, inst.span())
-            .unwrap_or_default()
-            .to_string();
-        if text.contains("Generic") {
-            println!()
-        }
 
         let inner_ty = self.lower_type(file_id, &Type::TypeIdent(name_node));
 
