@@ -108,6 +108,8 @@ pub fn check_cmd(
         });
         println!("{}", serde_json::to_string_pretty(&json_output)?);
     } else {
+        fix::apply_fixes(&file_db, &all_diagnostics)?;
+
         let shown_diagnostics = if fix {
             fix::filter_fixed_diagnostics(&all_diagnostics)
         } else {
@@ -332,10 +334,6 @@ fn check_root_file(
             diagnostics.clone()
         };
         let _ = render::emit_diagnostics(file_db, &diagnostics_to_show);
-    }
-
-    if fix && !json {
-        fix::apply_fixes(file_db, &diagnostics)?;
     }
 
     Ok(diagnostics)
