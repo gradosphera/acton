@@ -439,7 +439,14 @@ impl<'a, 'b> CheckerWalker<'a, 'b> {
             return;
         };
 
-        let Some(usage) = resolve_index.find_use(node.span().start()) else {
+        let node_span = node.span();
+        let usage = if let Some(usage) = resolve_index.find_use(node_span.start()) {
+            usage
+        } else if let Some(inference) = self.current_inference
+            && let Some(usage) = inference.resolve(node_span)
+        {
+            usage
+        } else {
             return;
         };
 
