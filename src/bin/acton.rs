@@ -8,6 +8,7 @@ use acton::commands::fmt::fmt_cmd;
 use acton::commands::init::init_cmd;
 use acton::commands::internal::internal_register_contract;
 use acton::commands::library::{fetch_cmd, info_cmd, publish_cmd};
+use acton::commands::ls::ls_cmd;
 use acton::commands::new::new_cmd;
 use acton::commands::retrace::retrace_cmd;
 use acton::commands::run::run_cmd;
@@ -534,6 +535,17 @@ enum Commands {
         paths: Vec<String>,
         #[arg(long, help = "Check if files are formatted without overwriting them")]
         check: bool,
+    },
+    #[command(about = "LSP server for the TON languages and technologies")]
+    Ls {
+        #[arg(long, help = "Port to listen on (TCP)")]
+        port: Option<u16>,
+        #[arg(long, help = "Use stdio for communication (default)")]
+        stdio: bool,
+        #[arg(long, help = "Path to log file")]
+        log_file: Option<String>,
+        #[arg(long, help = "Disable logging")]
+        no_log: bool,
     },
     #[command(
         about = "Manage Acton versions",
@@ -1099,8 +1111,12 @@ fn main() {
             .homepage("https://github.com/i582/acton")
     );
     dotenv().ok();
-    setup_logging().expect("Failed to set up logging");
     let cli = Cli::parse();
+
+    if !matches!(cli.command, Commands::Ls { .. }) {
+        // for language server we set up own logging
+        setup_logging().expect("Failed to set up logging");
+    }
 
     let result = match cli.command {
         Commands::Init => init_cmd(),
@@ -1408,6 +1424,18 @@ fn main() {
             Ok(())
         }
         Commands::Docgen { output } => docgen_cmd(output),
+        Commands::Ls {
+            port,
+            stdio,
+            log_file,
+            no_log,
+        } => {
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to initialize tokio runtime for langauge server");
+            rt.block_on(ls_cmd(port, stdio, log_file, no_log))
+        }
         Commands::InternalRegisterContract { path, id } => internal_register_contract(&path, id),
         Commands::Litenode { command } => match command {
             LitenodeCommand::Start {
