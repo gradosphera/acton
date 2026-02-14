@@ -1,10 +1,10 @@
-import "../../../.acton/tolk-stdlib/reflection"
-import "../../../lib/types/message"
-import "../../../lib/types/out_actions"
-import "../../../lib/emulation/network"
-import "../../../lib/testing/expect"
-import "../../../lib/testing/outlist_expect"
-import "../../../lib/vm/vm"
+import "@stdlib/reflection"
+import "@local-acton/types/message"
+import "@local-acton/types/out_actions"
+import "@local-acton/emulation/network"
+import "@local-acton/testing/expect"
+import "@local-acton/testing/outlist_expect"
+import "@local-acton/vm/vm"
 
 struct (0x7e8764ef) IncreaseCounter {
     queryId: uint64

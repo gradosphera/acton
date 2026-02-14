@@ -1,4 +1,4 @@
-import "../../lib/testing/assert"
+import "@local-acton/testing/assert"
 
 get fun `test-consume less with lambda`() {
     Assert.consumesLessThan1(fun (a: int) {
