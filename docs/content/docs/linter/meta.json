@@ -13,6 +13,7 @@
     "e011-message-should-be-named",
     "e012-create-message-inline-send",
     "e013-mutable-parameter-can-be-immutable",
+    "e014-acton-import-in-contract",
     "s001-name-case-checker"
   ]
 }
