@@ -5,8 +5,8 @@ use crate::ast::{acton_import_in_contract, deprecated_symbol_use, no_bounce_hand
 use crate::rules::ast::{
     asm_function_missing_safety_comment, field_init_can_be_folded, message_entity_naming,
     method_can_be_static, mutable_parameter_can_be_immutable, mutable_variable_can_be_immutable,
-    pure_function_call_unused, unused_import, unused_variable, used_ignored_identifier,
-    write_only_variable,
+    pure_function_call_unused, send_mode_literal, unused_import, unused_variable,
+    used_ignored_identifier, write_only_variable,
 };
 use rules::diagnostic::{Diagnostic, Severity};
 pub use rules::*;
@@ -463,6 +463,18 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
                     node,
                     inference
                 )
+            );
+
+            run_rule!(
+                self.checker,
+                Rule::SendModeLiteral,
+                send_mode_literal::check_call(self.checker, self.file_id, node, Some(inference))
+            );
+        } else {
+            run_rule!(
+                self.checker,
+                Rule::SendModeLiteral,
+                send_mode_literal::check_call(self.checker, self.file_id, node, None)
             );
         }
 

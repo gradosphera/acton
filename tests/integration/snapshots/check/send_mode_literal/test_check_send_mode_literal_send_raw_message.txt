@@ -1,0 +1,17 @@
+warning[E016]: send mode should use SEND_MODE_* constants
+  --> [ROOT]/contracts/main[LINE]
+  |
+3 |                 sendRawMessage(beginCell().endCell(), 3);
+  |                                                       ^ numeric send mode literal is used here
+  |
+  = use named `SEND_MODE_*` constants instead of numeric mode literals
+
+help: replace with SEND_MODE_* constants
+  --> [ROOT]/contracts/main[LINE]
+  |
+3 |                 sendRawMessage(beginCell().endCell(), 3);
+  |                                                       ^ SEND_MODE_PAY_FEES_SEPARATELY + SEND_MODE_IGNORE_ERRORS
+
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain E016

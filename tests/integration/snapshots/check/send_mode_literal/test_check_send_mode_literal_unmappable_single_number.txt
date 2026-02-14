@@ -1,0 +1,11 @@
+warning[E016]: send mode should use SEND_MODE_* constants
+  --> [ROOT]/contracts/main[LINE]
+  |
+8 |                 deployMessage.send(4);
+  |                                    ^ numeric send mode literal is used here
+  |
+  = replace numeric mode literals with `SEND_MODE_*` constants
+
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain E016

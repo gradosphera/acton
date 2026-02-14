@@ -15,6 +15,7 @@
     "e013-mutable-parameter-can-be-immutable",
     "e014-acton-import-in-contract",
     "e015-asm-function-missing-safety-comment",
+    "e016-send-mode-literal",
     "s001-name-case-checker"
   ]
 }
