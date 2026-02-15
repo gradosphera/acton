@@ -14,8 +14,8 @@ use crate::{FileIndex, SymbolKind};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tolk_syntax::{
-    AstNode, Constant, Enum, EnumMember, FuncBody, FunctionLike, GlobalVar, HasGenericParams,
-    HasName, InstanceArg, Struct, StructField, TypeAlias, VarKind, Walker, ast,
+    Assign, AstNode, Constant, Enum, EnumMember, FuncBody, FunctionLike, GlobalVar,
+    HasGenericParams, HasName, InstanceArg, Struct, StructField, TypeAlias, VarKind, Walker, ast,
 };
 use tree_sitter::Node;
 
@@ -337,14 +337,23 @@ impl<'a> SymbolResolver<'a> {
                     let name_str = name.text(self.file_content()).to_string();
                     self.check_redeclaration(&name_str, "var_declaration");
                     let is_mutable = matches!(kind, VarKind::Var);
-                    self.add_symbol(
-                        &name.0,
-                        name_str,
-                        LocalDefKind::Var {
-                            is_mutable,
-                            has_type: var_decl.typ().is_some(),
-                        },
-                    );
+
+                    // don't add `val a redef = 100` as standalone variable
+                    if !var_decl.is_redefinition() {
+                        self.add_symbol(
+                            &name.0,
+                            name_str,
+                            LocalDefKind::Var {
+                                is_mutable,
+                                has_type: var_decl.typ().is_some(),
+                            },
+                        );
+                    } else {
+                        // val a = 100;
+                        // val a redef = 200;
+                        //     ^ resolve to first declaration
+                        self.resolve_symbol(&name.0, NameUseKind::LocalValue);
+                    }
                 }
 
                 if let Some(typ) = var_decl.typ() {
@@ -546,6 +555,16 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
             self.visit_expr(&condition);
         }
         self.exit_scope();
+    }
+
+    fn walk_assign(&mut self, node: &Assign<'tree>) -> Self::Result {
+        if let Some(right) = node.right() {
+            self.visit_expr(&right);
+        }
+        if let Some(left) = node.left() {
+            self.visit_expr(&left);
+        }
+        self.default_result()
     }
 
     fn walk_dot_access(&mut self, node: &ast::DotAccess<'tree>) -> Self::Result {
