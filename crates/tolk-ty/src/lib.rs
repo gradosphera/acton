@@ -74,6 +74,7 @@
 pub(crate) mod expression_inference;
 pub(crate) mod flow_inference;
 pub(crate) mod generics_helpers;
+pub mod global_usages;
 pub(crate) mod overload_resolution;
 pub(crate) mod statement_inference;
 pub(crate) mod type_db;
@@ -85,6 +86,7 @@ pub(crate) mod type_unify;
 pub(crate) mod types;
 
 pub use flow_inference::InferenceResult;
+pub use global_usages::{GlobalUsage, GlobalUsages};
 pub use type_db::TypeDb;
 pub use type_inference::infer;
 pub use type_interner::{TyId, TypeInterner};

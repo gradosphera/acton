@@ -6,6 +6,7 @@ use lsp_types::*;
 use std::sync::Arc;
 use tolk_resolver::resolve_index::LocalDefId;
 use tolk_resolver::{FileInfo, Resolved, SymbolId};
+use tolk_ty::GlobalUsages;
 use tower_lsp::jsonrpc::Result as LspResult;
 
 impl Backend {
@@ -70,22 +71,14 @@ impl Backend {
         //
         // We find files that directly import the file with the definition and search only
         // within them, which speeds up the search by orders of magnitude.
-        let dependents = analysis.project_index.direct_dependents(symbol_id.file_id);
-
-        let locations = dependents
-            .into_iter()
-            .filter_map(|file_id| {
-                let index = analysis.project_index.get_resolved_uses(file_id)?;
-                let file = self.file_db.get_by_id(file_id)?;
+        let usages = GlobalUsages::new(analysis.project_index.as_ref(), &analysis.all_body_types);
+        let locations = usages
+            .for_symbol(symbol_id)
+            .filter_map(|reference| {
+                let file = self.file_db.get_by_id(reference.file_id)?;
                 let url = self.get_file_url(&file)?;
-
-                let locations = index
-                    .global_usages_of(symbol_id)
-                    .map(|usage| Location::new(url.clone(), usage.span.range(&file)))
-                    .collect::<Vec<_>>();
-                Some(locations)
+                Some(Location::new(url, reference.usage.span.range(&file)))
             })
-            .flatten()
             .collect::<Vec<_>>();
         Some(locations)
     }

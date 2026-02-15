@@ -105,3 +105,67 @@ fn test_fix_used_ignored_identifier_for_multiple_variables() {
         function_name!(),
     );
 }
+
+#[test]
+#[named]
+fn test_fix_used_ignored_identifier_for_parameter() {
+    run_fix_test(
+        r#"
+            fun foo(_value: int): int {
+                return _value + _value;
+            }
+
+            fun main() {
+                foo(10);
+            }
+        "#,
+        r#"
+            fun foo(value: int): int {
+                return value + value;
+            }
+
+            fun main() {
+                foo(10);
+            }
+        "#,
+        function_name!(),
+    );
+}
+
+#[test]
+#[named]
+fn test_fix_used_ignored_identifier_ignores_double_underscore() {
+    run_fix_test(
+        r#"
+            fun main() {
+                val __internal = 10;
+                __internal;
+            }
+        "#,
+        r#"
+            fun main() {
+                val __internal = 10;
+                __internal;
+            }
+        "#,
+        function_name!(),
+    );
+}
+
+#[test]
+#[named]
+fn test_fix_used_ignored_identifier_ignores_truly_unused_identifier() {
+    run_fix_test(
+        r#"
+            fun main() {
+                val _value = 10;
+            }
+        "#,
+        r#"
+            fun main() {
+                val _value = 10;
+            }
+        "#,
+        function_name!(),
+    );
+}
