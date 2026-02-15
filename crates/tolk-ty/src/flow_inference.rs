@@ -7,9 +7,9 @@ use smol_str::SmolStr;
 use std::collections::VecDeque;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
-use tolk_resolver::SymbolId;
 use tolk_resolver::file_index::{AstNodeSpanExt, FileId, Span};
 use tolk_resolver::resolve_index::{LocalDefId, NameUse};
+use tolk_resolver::{Resolved, SymbolId};
 use tolk_syntax::AstNode;
 
 #[derive(Debug)]
@@ -443,5 +443,12 @@ impl InferenceResult {
             })
             .ok()
             .map(|idx| &self.resolved_refs[idx])
+    }
+
+    /// Returns an iterator over all usages of the given global symbol.
+    pub fn global_usages_of(&self, symbol_id: SymbolId) -> impl Iterator<Item = &NameUse> {
+        self.resolved_refs
+            .iter()
+            .filter(move |u| matches!(u.resolved, Resolved::Global(id) if id == symbol_id))
     }
 }

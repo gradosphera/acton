@@ -5,11 +5,10 @@ use crate::rules::violation::Violation;
 use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use heck::{ToLowerCamelCase, ToShoutySnakeCase, ToUpperCamelCase};
-use std::collections::HashSet;
 use tolk_macros::ViolationMetadata;
+use tolk_resolver::Symbol;
 use tolk_resolver::file_index::FileId;
 use tolk_resolver::resolve_index::LocalDefKind;
-use tolk_resolver::{Resolved, Symbol};
 
 /// ### What it does
 /// Checks identifier naming style and suggests consistent casing.
@@ -55,8 +54,8 @@ impl Violation for NameCaseChecker {
 }
 
 enum CaseRules {
-    LowerCamel,
-    UpperCamel,
+    Camel,
+    Pascal,
     ScreamingSnake,
 }
 
@@ -67,8 +66,8 @@ fn check_case(symbol: &Symbol, checker: &mut Checker, symbol_def_file_id: FileId
     }
 
     let (correct_case, case_name) = match case {
-        CaseRules::LowerCamel => (symbol.name.to_lower_camel_case(), "camelCase"),
-        CaseRules::UpperCamel => (symbol.name.to_upper_camel_case(), "PascalCase"),
+        CaseRules::Camel => (symbol.name.to_lower_camel_case(), "camelCase"),
+        CaseRules::Pascal => (symbol.name.to_upper_camel_case(), "PascalCase"),
         CaseRules::ScreamingSnake => (symbol.name.to_shouty_snake_case(), "SCREAMING_SNAKE_CASE"),
     };
 
@@ -76,52 +75,37 @@ fn check_case(symbol: &Symbol, checker: &mut Checker, symbol_def_file_id: FileId
         return;
     }
 
-    let mut edits = vec![];
-    let mut seen = HashSet::new();
-    // we need the definition itself too
-    if seen.insert((
-        symbol_def_file_id,
-        symbol.name_span.start,
-        symbol.name_span.end,
-    )) {
-        edits.push(Edit {
+    let mut edits = vec![
+        // definition itself
+        Edit {
             span: symbol.name_span,
             replacement: correct_case.clone(),
             file_id: symbol_def_file_id,
-        });
-    }
+        },
+    ];
 
-    for (usage_file_id, resolved_index) in checker.type_db.project_index.resolved_uses.iter() {
-        for usage in resolved_index.global_usages_of(symbol.id) {
-            if seen.insert((*usage_file_id, usage.span.start, usage.span.end)) {
-                edits.push(Edit {
-                    span: usage.span,
-                    replacement: correct_case.clone(),
-                    file_id: *usage_file_id,
-                });
-            }
+    for (&file_id, index) in &checker.type_db.project_index.resolved_uses {
+        for usage in index.global_usages_of(symbol.id) {
+            edits.push(Edit {
+                span: usage.span,
+                replacement: correct_case.clone(),
+                file_id,
+            });
         }
     }
 
     // Extra usages resolved only during type inference (e.g. struct literal field keys).
-    for (usage_file_id, file_body_types) in checker.body_types.iter() {
+    for (&file_id, file_body_types) in checker.body_types {
         for inference in file_body_types.values() {
-            for usage in &inference.resolved_refs {
-                if let Resolved::Global(resolved_id) = usage.resolved
-                    && resolved_id == symbol.id
-                    && seen.insert((*usage_file_id, usage.span.start, usage.span.end))
-                {
-                    edits.push(Edit {
-                        span: usage.span,
-                        replacement: correct_case.clone(),
-                        file_id: *usage_file_id,
-                    });
-                }
+            for usage in inference.global_usages_of(symbol.id) {
+                edits.push(Edit {
+                    span: usage.span,
+                    replacement: correct_case.clone(),
+                    file_id,
+                });
             }
         }
     }
-
-    let str_sym_name = &symbol.name;
 
     let diagnostic = Diagnostic {
         file_id: symbol_def_file_id,
@@ -131,7 +115,7 @@ fn check_case(symbol: &Symbol, checker: &mut Checker, symbol_def_file_id: FileId
         message: NameCaseChecker.message(),
         annotations: vec![Annotation {
             span: symbol.name_span,
-            message: Some(format!("not {case_name}: `{str_sym_name}`",)),
+            message: Some(format!("not {case_name}: `{}`", symbol.name)),
             is_primary: true,
             tags: vec![DiagnosticTag::Unnecessary],
         }],
@@ -146,8 +130,8 @@ fn check_case(symbol: &Symbol, checker: &mut Checker, symbol_def_file_id: FileId
 }
 
 pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
-    // locals
-    for &file_id in checker.type_db.project_index.files().keys() {
+    // First check local declarations
+    for file_id in checker.type_db.project_index.sorted_files() {
         let Some(file_info) = checker.file_db.get_by_id(file_id) else {
             continue;
         };
@@ -172,27 +156,27 @@ pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
                 _ => (name.to_lower_camel_case(), "camelCase"),
             };
 
-            // TODO: check type for params
             if correct_case.as_bytes() == name.as_bytes() {
                 continue;
             }
 
             let usages = resolve_index.local_usages_of(local_def.id);
-            let mut edits = vec![];
-            // we need the definition itself too
-            edits.push(Edit {
-                span: local_def.def_span,
-                replacement: correct_case.clone(),
-                file_id,
-            });
+            let mut edits = vec![
+                // definition itself
+                Edit {
+                    span: local_def.def_span,
+                    replacement: correct_case.clone(),
+                    file_id,
+                },
+            ];
 
-            usages.for_each(|usage| {
+            for usage in usages {
                 edits.push(Edit {
                     span: usage.span,
                     replacement: correct_case.clone(),
                     file_id,
                 });
-            });
+            }
 
             let diagnostic = Diagnostic {
                 file_id,
@@ -217,10 +201,14 @@ pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
         }
     }
 
-    // globals
+    // And then global ones
     let globals = checker.type_db.project_index.global_symbols();
 
-    for &symbol_id in globals.values().flatten() {
+    // sort global symbols for stability
+    let mut symbol_ids = globals.values().flatten().copied().collect::<Vec<_>>();
+    symbol_ids.sort_unstable_by_key(|id| (id.file_id, id.local_id));
+
+    for symbol_id in symbol_ids {
         let Some(file_info) = checker.file_db.get_by_id(symbol_id.file_id) else {
             continue;
         };
@@ -242,13 +230,13 @@ pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
             | tolk_resolver::SymbolKind::Function { .. }
             | tolk_resolver::SymbolKind::StructField
             | tolk_resolver::SymbolKind::Method { .. } => {
-                check_case(symbol, checker, file_info.id(), CaseRules::LowerCamel)
+                check_case(symbol, checker, file_info.id(), CaseRules::Camel)
             }
             tolk_resolver::SymbolKind::Struct { .. }
             | tolk_resolver::SymbolKind::Enum { .. }
             | tolk_resolver::SymbolKind::EnumMember
             | tolk_resolver::SymbolKind::TypeAlias { .. } => {
-                check_case(symbol, checker, file_info.id(), CaseRules::UpperCamel)
+                check_case(symbol, checker, file_info.id(), CaseRules::Pascal)
             }
             tolk_resolver::SymbolKind::Constant => {
                 check_case(symbol, checker, file_info.id(), CaseRules::ScreamingSnake)

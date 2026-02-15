@@ -63,6 +63,12 @@ impl ProjectIndex {
         &self.files
     }
 
+    pub fn sorted_files(&self) -> Vec<FileId> {
+        let mut files = self.files.keys().copied().collect::<Vec<_>>();
+        files.sort_unstable();
+        files
+    }
+
     pub const fn imports(&self) -> &FxHashMap<FileId, Vec<ResolvedImport>> {
         &self.imports
     }
