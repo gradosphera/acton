@@ -117,19 +117,13 @@ fn check_case(symbol: &Symbol, checker: &mut Checker, symbol_def_file_id: FileId
 }
 
 pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
-    // First check local declarations
-    for file_id in checker.type_db.project_index.sorted_files() {
-        let Some(file_info) = checker.file_db.get_by_id(file_id) else {
-            continue;
-        };
-        if !file_info.is_workspace_file() {
-            continue;
-        }
-
+    for file_index in checker.type_db.project_index.workspace_files() {
+        let file_id = file_index.id;
         let Some(resolve_index) = checker.resolve_index_for(file_id) else {
             continue;
         };
 
+        // First check local declarations
         for local_def in resolve_index.locals.iter() {
             let name = local_def.name.clone();
             if name.starts_with("_") {
@@ -186,47 +180,41 @@ pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
             };
             checker.emit_diagnostic(NameCaseChecker::rule(), diagnostic);
         }
-    }
 
-    // And then global ones
-    let globals = checker.type_db.project_index.global_symbols();
-
-    // sort global symbols for stability
-    let mut symbol_ids = globals.values().flatten().copied().collect::<Vec<_>>();
-    symbol_ids.sort_unstable_by_key(|id| (id.file_id, id.local_id));
-
-    for symbol_id in symbol_ids {
-        let Some(file_info) = checker.file_db.get_by_id(symbol_id.file_id) else {
-            continue;
-        };
-        if !file_info.is_workspace_file() {
-            continue;
-        }
-
-        let Some(symbol) = checker.type_db.project_index.resolve_symbol(symbol_id) else {
-            continue;
-        };
-
-        match &symbol.kind {
-            tolk_resolver::SymbolKind::GetMethod { .. } => {
-                // Since the get method name defines the method ID and there are names from TEPs in snake case (e.g. `get_wallet_info`),
-                // we cannot warn about the get method names
-                continue;
-            }
-            tolk_resolver::SymbolKind::GlobalVariable
-            | tolk_resolver::SymbolKind::Function { .. }
-            | tolk_resolver::SymbolKind::StructField
-            | tolk_resolver::SymbolKind::Method { .. } => {
-                check_case(symbol, checker, file_info.id(), CaseRules::Camel)
-            }
-            tolk_resolver::SymbolKind::Struct { .. }
-            | tolk_resolver::SymbolKind::Enum { .. }
-            | tolk_resolver::SymbolKind::EnumMember
-            | tolk_resolver::SymbolKind::TypeAlias { .. } => {
-                check_case(symbol, checker, file_info.id(), CaseRules::Pascal)
-            }
-            tolk_resolver::SymbolKind::Constant => {
-                check_case(symbol, checker, file_info.id(), CaseRules::ScreamingSnake)
+        // And then global ones
+        for symbol in &file_index.decls {
+            match &symbol.kind {
+                tolk_resolver::SymbolKind::GetMethod { .. } => {
+                    // Since the get method name defines the method ID and there are names from TEPs in snake case (e.g. `get_wallet_info`),
+                    // we cannot warn about the get method names
+                    continue;
+                }
+                tolk_resolver::SymbolKind::GlobalVariable
+                | tolk_resolver::SymbolKind::Function { .. }
+                | tolk_resolver::SymbolKind::Method { .. } => {
+                    check_case(symbol, checker, file_id, CaseRules::Camel)
+                }
+                tolk_resolver::SymbolKind::Struct { fields, .. } => {
+                    check_case(symbol, checker, file_id, CaseRules::Pascal);
+                    for field in fields {
+                        check_case(field, checker, file_id, CaseRules::Camel)
+                    }
+                }
+                tolk_resolver::SymbolKind::Enum { members } => {
+                    check_case(symbol, checker, file_id, CaseRules::Pascal);
+                    for member in members {
+                        check_case(member, checker, file_id, CaseRules::Pascal)
+                    }
+                }
+                tolk_resolver::SymbolKind::TypeAlias { .. } => {
+                    check_case(symbol, checker, file_id, CaseRules::Pascal)
+                }
+                tolk_resolver::SymbolKind::Constant => {
+                    check_case(symbol, checker, file_id, CaseRules::ScreamingSnake)
+                }
+                tolk_resolver::SymbolKind::StructField | tolk_resolver::SymbolKind::EnumMember => {
+                    // checked in struct and enum arms
+                }
             }
         }
     }

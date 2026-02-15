@@ -4,6 +4,7 @@
 //! such as declarations, imports, and source spans.
 
 use crate::resolve_index::LocalDefId;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
@@ -136,7 +137,7 @@ impl<'tree> OptionalSyntaxNodeSpanExt<'tree> for Option<Node<'tree>> {
 }
 
 /// Unique identifier for a top-level symbol in the project.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct SymbolId {
     /// The ID of the file where the symbol is defined.
     pub file_id: FileId,
@@ -145,7 +146,7 @@ pub struct SymbolId {
 }
 
 /// Information about a top-level declaration (function, struct, etc.).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Symbol {
     /// Unique identifier for this symbol.
     pub id: SymbolId,
@@ -167,18 +168,18 @@ pub struct Symbol {
     pub is_pure: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Parameter {
     pub is_mutate: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct TypeParameter {
     pub name: Arc<str>,
 }
 
 /// Distinguishes between different kinds of top-level declarations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum SymbolKind {
     /// A global variable.
     GlobalVariable,
@@ -252,7 +253,7 @@ impl Symbol {
 }
 
 /// Represents an import statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Import {
     /// Path string as it appears in the source code.
     pub path: Arc<str>,
@@ -263,7 +264,7 @@ pub struct Import {
 /// Unique identifier for a file in the project.
 pub type FileId = u32;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum FileSource {
     Stdlib,
     Acton,
@@ -271,7 +272,7 @@ pub enum FileSource {
 }
 
 /// A processed index of a single Tolk source file.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct FileIndex {
     /// Unique identifier for this file.
     pub id: FileId,
@@ -295,15 +296,30 @@ impl FileIndex {
             .body_spans
             .binary_search_by(|(span, _)| {
                 if span.contains(offset) {
-                    std::cmp::Ordering::Equal
+                    Ordering::Equal
                 } else if (span.start as usize) > offset {
-                    std::cmp::Ordering::Greater
+                    Ordering::Greater
                 } else {
-                    std::cmp::Ordering::Less
+                    Ordering::Less
                 }
             })
             .ok()?;
         Some(self.body_spans[idx].1)
+    }
+
+    /// Checks if passed file resides in Tolk standard library.
+    pub fn is_stdlib_file(&self) -> bool {
+        self.source_kind == FileSource::Stdlib
+    }
+
+    /// Checks if passed file resides in Acton standard library.
+    pub fn is_acton_file(&self) -> bool {
+        self.source_kind == FileSource::Acton
+    }
+
+    /// Checks if passed file resides in workspace, not in Tolk stdlib or Acton files.
+    pub fn is_workspace_file(&self) -> bool {
+        self.source_kind == FileSource::Workspace
     }
 
     /// Builds a `FileIndex` from a parsed `SourceFile`.

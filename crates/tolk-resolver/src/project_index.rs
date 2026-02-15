@@ -63,8 +63,13 @@ impl ProjectIndex {
         &self.files
     }
 
-    pub fn sorted_files(&self) -> Vec<FileId> {
-        let mut files = self.files.keys().copied().collect::<Vec<_>>();
+    pub fn workspace_files(&self) -> Vec<Arc<FileIndex>> {
+        let mut files = self
+            .files
+            .values()
+            .filter(|f| f.is_workspace_file())
+            .cloned()
+            .collect::<Vec<_>>();
         files.sort_unstable();
         files
     }
