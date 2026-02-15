@@ -5,6 +5,7 @@ use function_name::named;
 pub(crate) fn run_simple_test(group: &str, content: &str, name: &str) {
     let project = ProjectBuilder::new(&format!("check-{}", name))
         .contract("main", content)
+        .with_lint_level("unauthorized-access", "warn")
         .build();
 
     project.acton().init().run().success();

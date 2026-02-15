@@ -3073,6 +3073,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.18",
  "tolk-analysis",
+ "tolk-dataflow",
  "tolk-macros",
  "tolk-resolver",
  "tolk-syntax",

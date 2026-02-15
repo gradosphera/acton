@@ -8,8 +8,14 @@ pub mod builder;
 pub mod cfg;
 pub mod solver;
 
-pub use builder::{build_cfg_for_function_like, build_cfg_for_top_level};
-pub use cfg::{ControlFlowGraph, DotOptions, EdgeKind, FlowEdge, FlowNode, FlowNodeKind, NodeId};
+pub use builder::{
+    build_cfg_for_function, build_cfg_for_function_with_source, build_cfg_for_top_level,
+    build_cfg_for_top_level_with_source,
+};
+pub use cfg::{
+    ControlFlowGraph, DotOptions, EdgeKind, FlowEdge, FlowNode, FlowNodeKind, FlowNodeTaintFacts,
+    NodeId,
+};
 pub use solver::{
     DataflowAnalysis, DataflowResult, Direction, SolverConfig, solve, solve_with_config,
 };
@@ -18,6 +24,7 @@ pub use solver::{
 mod tests {
     use crate::builder::build_cfg_for_top_level;
     use crate::cfg::EdgeKind;
+    use tolk_resolver::FileResolveIndex;
     use tolk_syntax::{TopLevel, parse};
 
     #[test]
@@ -43,7 +50,12 @@ mod tests {
             .find(|top_level| matches!(top_level, TopLevel::Func(_)))
             .expect("function is expected");
 
-        let cfg = build_cfg_for_top_level(&top_level, None).expect("cfg is expected");
+        let file_index = FileResolveIndex {
+            file_id: 0,
+            locals: vec![],
+            uses: vec![],
+        };
+        let cfg = build_cfg_for_top_level(&top_level, &file_index).expect("cfg is expected");
 
         assert!(cfg.node_count() > 2);
         assert!(cfg.edge_count() > 2);
@@ -85,7 +97,13 @@ mod tests {
             .top_levels()
             .find(|top_level| matches!(top_level, TopLevel::Func(_)))
             .expect("function is expected");
-        let cfg = build_cfg_for_top_level(&top_level, None).expect("cfg is expected");
+
+        let file_index = FileResolveIndex {
+            file_id: 0,
+            locals: vec![],
+            uses: vec![],
+        };
+        let cfg = build_cfg_for_top_level(&top_level, &file_index).expect("cfg is expected");
         let dot = cfg.to_dot();
 
         assert!(dot.contains("digraph tolk_cfg"));
@@ -147,7 +165,13 @@ mod tests {
             .top_levels()
             .find(|top_level| matches!(top_level, TopLevel::Func(_)))
             .expect("function is expected");
-        let cfg = build_cfg_for_top_level(&top_level, None).expect("cfg is expected");
+
+        let file_index = FileResolveIndex {
+            file_id: 0,
+            locals: vec![],
+            uses: vec![],
+        };
+        let cfg = build_cfg_for_top_level(&top_level, &file_index).expect("cfg is expected");
         let dot = cfg.to_dot();
 
         assert!(cfg.node_count() > 20, "node_count={}", cfg.node_count());

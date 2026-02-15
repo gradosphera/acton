@@ -58,6 +58,17 @@ pub enum EdgeKind {
     Exceptional,
 }
 
+/// Taint-oriented facts attached to a CFG node.
+#[derive(Debug, Clone, Default)]
+pub struct FlowNodeTaintFacts {
+    /// Message roots directly referenced via field access in this node expression.
+    pub direct_source_roots: FxHashSet<LocalDefId>,
+    /// Whether this node proves admin authorization via sender check.
+    pub has_admin_sender_check: bool,
+    /// Whether this node performs storage write (`contract.setData`, `*.save()`).
+    pub has_storage_write_sink: bool,
+}
+
 /// Control-flow node plus dataflow-relevant read/write facts.
 #[derive(Debug, Clone)]
 pub struct FlowNode {
@@ -66,6 +77,7 @@ pub struct FlowNode {
     pub span: Option<Span>,
     pub reads: FxHashSet<LocalDefId>,
     pub writes: FxHashSet<LocalDefId>,
+    pub taint: FlowNodeTaintFacts,
 }
 
 impl FlowNode {
@@ -76,6 +88,7 @@ impl FlowNode {
             span,
             reads: FxHashSet::default(),
             writes: FxHashSet::default(),
+            taint: FlowNodeTaintFacts::default(),
         }
     }
 }

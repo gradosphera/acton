@@ -1,41 +1,67 @@
 use crate::cfg::{ControlFlowGraph, EdgeKind, FlowNodeKind, NodeId};
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
+use std::sync::Arc;
 use tolk_resolver::file_index::AstNodeSpanExt;
-use tolk_resolver::resolve_index::{FileResolveIndex, LocalDefId, Resolved};
+use tolk_resolver::resolve_index::{FileResolveIndex, LocalDefId, LocalDefKind, Resolved};
 use tolk_syntax::ast::Node;
 use tolk_syntax::{
-    Assert, Assign, AstNode, Call, DotAccess, Expr, FuncBody, FunctionLike, HasName, IfAlt,
-    InstanceArg, Match, MatchArmBody, MatchPattern, Paren, SetAssign, Stmt, TopLevel,
-    VarDeclPattern,
+    Assert, Assign, AstNode, AstNodeBytesKind, Bin, Call, DotAccess, DotAccessField, Expr,
+    FuncBody, FunctionLike, HasName, IfAlt, InstanceArg, Match, MatchArmBody, MatchPattern, Paren,
+    SetAssign, Stmt, TopLevel, VarDeclPattern,
 };
 
 /// Builds CFG for supported top-level declarations (`fun`, `method`, `get fun`).
 #[must_use]
 pub fn build_cfg_for_top_level(
     top_level: &TopLevel<'_>,
-    resolve_index: Option<&FileResolveIndex>,
+    resolve_index: &FileResolveIndex,
+) -> Option<ControlFlowGraph> {
+    build_cfg_for_top_level_with_source(top_level, resolve_index, None)
+}
+
+/// Builds CFG for supported top-level declarations (`fun`, `method`, `get fun`),
+/// additionally taking source text for analyses that need identifier text.
+#[must_use]
+pub fn build_cfg_for_top_level_with_source(
+    top_level: &TopLevel<'_>,
+    resolve_index: &FileResolveIndex,
+    source: Option<&str>,
 ) -> Option<ControlFlowGraph> {
     match top_level {
-        TopLevel::Func(func) => build_cfg_for_function_like(func, resolve_index),
-        TopLevel::Method(method) => build_cfg_for_function_like(method, resolve_index),
-        TopLevel::GetMethod(get_method) => build_cfg_for_function_like(get_method, resolve_index),
+        TopLevel::Func(func) => build_cfg_for_function_with_source(func, resolve_index, source),
+        TopLevel::Method(method) => {
+            build_cfg_for_function_with_source(method, resolve_index, source)
+        }
+        TopLevel::GetMethod(get_method) => {
+            build_cfg_for_function_with_source(get_method, resolve_index, source)
+        }
         _ => None,
     }
 }
 
 /// Builds CFG for function-like declaration with block body.
 #[must_use]
-pub fn build_cfg_for_function_like<'tree, F: FunctionLike<'tree>>(
+pub fn build_cfg_for_function<'tree, F: FunctionLike<'tree>>(
     function: &F,
-    resolve_index: Option<&FileResolveIndex>,
+    resolve_index: &FileResolveIndex,
+) -> Option<ControlFlowGraph> {
+    build_cfg_for_function_with_source(function, resolve_index, None)
+}
+
+/// Builds CFG for function-like declaration with block body, with optional source text.
+#[must_use]
+pub fn build_cfg_for_function_with_source<'tree, F: FunctionLike<'tree>>(
+    function: &F,
+    resolve_index: &FileResolveIndex,
+    source: Option<&str>,
 ) -> Option<ControlFlowGraph> {
     let body = function.body()?;
     let FuncBody::Block(block) = body else {
         return None;
     };
 
-    let mut builder = CfgBuilder::new(resolve_index);
+    let mut builder = CfgBuilder::new(resolve_index, source);
     let fragment = builder.build_block_fragment(block);
 
     builder
@@ -86,16 +112,30 @@ struct CfgBuilder<'idx> {
     cfg: ControlFlowGraph,
     loops: Vec<LoopContext>,
     exception_targets: Vec<NodeId>,
-    collector: Option<UseDefCollector<'idx>>,
+    collector: UseDefCollector<'idx>,
+    inbound_message_roots: FxHashSet<LocalDefId>,
+    message_roots: FxHashSet<LocalDefId>,
 }
 
 impl<'idx> CfgBuilder<'idx> {
-    fn new(resolve_index: Option<&'idx FileResolveIndex>) -> Self {
+    fn new(resolve_index: &'idx FileResolveIndex, source: Option<&'idx str>) -> Self {
+        let collector = UseDefCollector::new(resolve_index, source);
+        let mut inbound_message_roots = FxHashSet::default();
+        let mut message_roots = FxHashSet::default();
+        for local in &resolve_index.locals {
+            if matches!(local.kind, LocalDefKind::Param { .. }) && local.name.as_ref() == "in" {
+                inbound_message_roots.insert(local.id);
+                message_roots.insert(local.id);
+            }
+        }
+
         Self {
             cfg: ControlFlowGraph::new(),
             loops: Vec::new(),
             exception_targets: Vec::new(),
-            collector: resolve_index.map(UseDefCollector::new),
+            collector,
+            inbound_message_roots,
+            message_roots,
         }
     }
 
@@ -392,14 +432,14 @@ impl<'idx> CfgBuilder<'idx> {
             .cfg
             .add_node(FlowNodeKind::CatchBinding, Some(catch_clause.span()));
 
-        if let Some(collector) = &self.collector {
-            let writes = &mut self.cfg.node_mut(catch_binding).writes;
-            if let Some(var1) = catch_clause.catch_var1() {
-                collector.collect_definition_ident(var1.syntax(), writes);
-            }
-            if let Some(var2) = catch_clause.catch_var2() {
-                collector.collect_definition_ident(var2.syntax(), writes);
-            }
+        let writes = &mut self.cfg.node_mut(catch_binding).writes;
+        if let Some(var1) = catch_clause.catch_var1() {
+            self.collector
+                .collect_definition_ident(var1.syntax(), writes);
+        }
+        if let Some(var2) = catch_clause.catch_var2() {
+            self.collector
+                .collect_definition_ident(var2.syntax(), writes);
         }
 
         let body_fragment = if let Some(catch_body) = catch_clause.body() {
@@ -604,20 +644,17 @@ impl<'idx> CfgBuilder<'idx> {
     }
 
     fn collect_expr_into_node(&mut self, node_id: NodeId, expr: Expr<'_>, mode: AccessMode) {
-        if let Some(collector) = &self.collector {
-            let node = self.cfg.node_mut(node_id);
-            collector.collect_expr(expr, mode, &mut node.reads, &mut node.writes);
-        }
+        let node = self.cfg.node_mut(node_id);
+        self.collector
+            .collect_expr(expr, mode, &mut node.reads, &mut node.writes);
+        self.collect_taint_for_expr(node_id, expr);
     }
 
     fn collect_match_pattern_into_node(&mut self, node_id: NodeId, pattern: MatchPattern<'_>) {
-        let Some(collector) = &self.collector else {
-            return;
-        };
-
         if let MatchPattern::Expr(expr) = pattern {
             let node = self.cfg.node_mut(node_id);
-            collector.collect_expr(expr, AccessMode::Read, &mut node.reads, &mut node.writes);
+            self.collector
+                .collect_expr(expr, AccessMode::Read, &mut node.reads, &mut node.writes);
         }
     }
 
@@ -632,6 +669,56 @@ impl<'idx> CfgBuilder<'idx> {
                 | FlowNodeKind::MatchPattern
         )
     }
+
+    fn collect_taint_for_expr(&mut self, node_id: NodeId, expr: Expr<'_>) {
+        let collector = &self.collector;
+        let is_message_from_slice = collector.contains_message_from_slice(
+            expr,
+            &self.message_roots,
+            &self.inbound_message_roots,
+        );
+        if is_message_from_slice {
+            let writes = self
+                .cfg
+                .node(node_id)
+                .writes
+                .iter()
+                .copied()
+                .collect::<Vec<_>>();
+            self.message_roots.extend(writes);
+        }
+
+        let mut direct_roots = FxHashSet::default();
+        collector.collect_message_field_roots(
+            expr,
+            &self.message_roots,
+            &self.inbound_message_roots,
+            &mut direct_roots,
+        );
+
+        if !direct_roots.is_empty() && !is_message_from_slice {
+            self.cfg
+                .node_mut(node_id)
+                .taint
+                .direct_source_roots
+                .extend(direct_roots.iter().copied());
+        }
+
+        let is_assert_node = self.cfg.node(node_id).kind == FlowNodeKind::Assert;
+        if is_assert_node
+            && collector.contains_admin_sender_check(expr, &self.inbound_message_roots)
+        {
+            self.cfg.node_mut(node_id).taint.has_admin_sender_check = true;
+        }
+
+        if collector.contains_storage_write_sink(expr) {
+            self.cfg.node_mut(node_id).taint.has_storage_write_sink = true;
+        }
+    }
+}
+
+fn is_inbound_payload_field_name(name: &str) -> bool {
+    name == "body" || name == "bouncedBody"
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -645,13 +732,17 @@ enum AccessMode {
 struct UseDefCollector<'idx> {
     uses_by_start: FxHashMap<u32, LocalDefId>,
     defs_by_start: FxHashMap<u32, LocalDefId>,
+    names_by_start: FxHashMap<u32, Arc<str>>,
+    source: Option<&'idx str>,
     _resolve_index: &'idx FileResolveIndex,
 }
 
 impl<'idx> UseDefCollector<'idx> {
-    fn new(resolve_index: &'idx FileResolveIndex) -> Self {
+    fn new(resolve_index: &'idx FileResolveIndex, source: Option<&'idx str>) -> Self {
         let mut uses_by_start = FxHashMap::default();
+        let mut names_by_start = FxHashMap::default();
         for usage in &resolve_index.uses {
+            names_by_start.insert(usage.span.start, usage.name.clone());
             if let Resolved::Local(local_id) = usage.resolved {
                 uses_by_start.insert(usage.span.start, local_id);
             }
@@ -660,13 +751,895 @@ impl<'idx> UseDefCollector<'idx> {
         let mut defs_by_start = FxHashMap::default();
         for local in &resolve_index.locals {
             defs_by_start.insert(local.def_span.start, local.id);
+            names_by_start
+                .entry(local.def_span.start)
+                .or_insert_with(|| local.name.clone());
         }
 
         Self {
             uses_by_start,
             defs_by_start,
+            names_by_start,
+            source,
             _resolve_index: resolve_index,
         }
+    }
+
+    fn local_of_ident(&self, ident: Node<'_>) -> Option<LocalDefId> {
+        let start = ident.start_byte() as u32;
+        self.uses_by_start
+            .get(&start)
+            .copied()
+            .or_else(|| self.defs_by_start.get(&start).copied())
+    }
+
+    fn name_of_ident(&self, ident: Node<'_>) -> Option<&str> {
+        let start = ident.start_byte() as u32;
+        if let Some(name) = self.names_by_start.get(&start) {
+            return Some(name.as_ref());
+        }
+
+        let source = self.source?;
+        let text = ident.utf8_text(source.as_bytes()).ok()?;
+        Some(text.trim_matches('`'))
+    }
+
+    fn call_name(&self, call: Call<'_>) -> Option<&str> {
+        let ident = call.callee_identifier()?;
+        self.name_of_ident(ident)
+    }
+
+    fn expr_base_local(&self, expr: Expr<'_>) -> Option<LocalDefId> {
+        match expr {
+            Expr::Ident(ident) => self.local_of_ident(ident.syntax()),
+            Expr::DotAccess(dot_access) => {
+                dot_access.obj().and_then(|obj| self.expr_base_local(obj))
+            }
+            Expr::Paren(paren) => paren.inner().and_then(|inner| self.expr_base_local(inner)),
+            Expr::NotNull(not_null) => not_null
+                .inner()
+                .and_then(|inner| self.expr_base_local(inner)),
+            Expr::AsCast(as_cast) => as_cast.expr().and_then(|inner| self.expr_base_local(inner)),
+            Expr::Lazy(lazy) => lazy.expr().and_then(|inner| self.expr_base_local(inner)),
+            _ => None,
+        }
+    }
+
+    fn collect_message_field_roots(
+        &self,
+        expr: Expr<'_>,
+        message_roots: &FxHashSet<LocalDefId>,
+        inbound_message_roots: &FxHashSet<LocalDefId>,
+        out: &mut FxHashSet<LocalDefId>,
+    ) {
+        self.collect_message_field_roots_inner(expr, message_roots, inbound_message_roots, out);
+    }
+
+    fn collect_message_field_roots_inner(
+        &self,
+        expr: Expr<'_>,
+        message_roots: &FxHashSet<LocalDefId>,
+        inbound_message_roots: &FxHashSet<LocalDefId>,
+        out: &mut FxHashSet<LocalDefId>,
+    ) {
+        match expr {
+            Expr::DotAccess(dot_access) => {
+                if let Some(base_local) = self.taint_source_root_for_dot_access(
+                    dot_access,
+                    message_roots,
+                    inbound_message_roots,
+                ) {
+                    out.insert(base_local);
+                }
+
+                if let Some(obj) = dot_access.obj() {
+                    self.collect_message_field_roots_inner(
+                        obj,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::Assign(assign) => {
+                if let Some(left) = assign.left() {
+                    self.collect_message_field_roots_inner(
+                        left,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+                if let Some(right) = assign.right() {
+                    self.collect_message_field_roots_inner(
+                        right,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::SetAssign(assign) => {
+                if let Some(left) = assign.left() {
+                    self.collect_message_field_roots_inner(
+                        left,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+                if let Some(right) = assign.right() {
+                    self.collect_message_field_roots_inner(
+                        right,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::Call(call) => {
+                if let Some(callee) = call.callee() {
+                    self.collect_message_field_roots_inner(
+                        callee,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+                for argument in call.arguments() {
+                    if let Some(arg_expr) = argument.expr() {
+                        self.collect_message_field_roots_inner(
+                            arg_expr,
+                            message_roots,
+                            inbound_message_roots,
+                            out,
+                        );
+                    }
+                }
+            }
+            Expr::Instantiation(instantiation) => {
+                if let Some(inner) = instantiation.expr() {
+                    self.collect_message_field_roots_inner(
+                        inner,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::Paren(paren) => {
+                if let Some(inner) = paren.inner() {
+                    self.collect_message_field_roots_inner(
+                        inner,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::Ternary(ternary) => {
+                if let Some(condition) = ternary.condition() {
+                    self.collect_message_field_roots_inner(
+                        condition,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+                if let Some(consequence) = ternary.consequence() {
+                    self.collect_message_field_roots_inner(
+                        consequence,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+                if let Some(alternative) = ternary.alternative() {
+                    self.collect_message_field_roots_inner(
+                        alternative,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::Bin(bin) => {
+                if let Some(left) = bin.left() {
+                    self.collect_message_field_roots_inner(
+                        left,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+                if let Some(right) = bin.right() {
+                    self.collect_message_field_roots_inner(
+                        right,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::Unary(unary) => {
+                if let Some(argument) = unary.argument() {
+                    self.collect_message_field_roots_inner(
+                        argument,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::Lazy(lazy) => {
+                if let Some(inner) = lazy.expr() {
+                    self.collect_message_field_roots_inner(
+                        inner,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::AsCast(as_cast) => {
+                if let Some(inner) = as_cast.expr() {
+                    self.collect_message_field_roots_inner(
+                        inner,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::IsType(is_type) => {
+                if let Some(inner) = is_type.expr() {
+                    self.collect_message_field_roots_inner(
+                        inner,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::NotNull(not_null) => {
+                if let Some(inner) = not_null.inner() {
+                    self.collect_message_field_roots_inner(
+                        inner,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::ObjectLit(object_lit) => {
+                for arg in object_lit.arguments() {
+                    if let Some(value) = arg.value() {
+                        self.collect_message_field_roots_inner(
+                            value,
+                            message_roots,
+                            inbound_message_roots,
+                            out,
+                        );
+                    }
+                }
+            }
+            Expr::Tensor(tensor) => {
+                for element in tensor.elements() {
+                    self.collect_message_field_roots_inner(
+                        element,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::Tuple(tuple) => {
+                for element in tuple.elements() {
+                    self.collect_message_field_roots_inner(
+                        element,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+            }
+            Expr::Match(match_expr) => {
+                if let Some(subject) = match_expr.expr() {
+                    self.collect_message_field_roots_inner(
+                        subject,
+                        message_roots,
+                        inbound_message_roots,
+                        out,
+                    );
+                }
+                for arm in match_expr.arms() {
+                    if let MatchPattern::Expr(pattern_expr) = arm.pattern() {
+                        self.collect_message_field_roots_inner(
+                            pattern_expr,
+                            message_roots,
+                            inbound_message_roots,
+                            out,
+                        );
+                    }
+                    if let Some(body) = arm.body() {
+                        match body {
+                            MatchArmBody::Block(_) => {}
+                            MatchArmBody::Return(ret) => {
+                                if let Some(expr) = ret.expr() {
+                                    self.collect_message_field_roots_inner(
+                                        expr,
+                                        message_roots,
+                                        inbound_message_roots,
+                                        out,
+                                    );
+                                }
+                            }
+                            MatchArmBody::Throw(throw_stmt) => {
+                                if let Some(expr) = throw_stmt.expr() {
+                                    self.collect_message_field_roots_inner(
+                                        expr,
+                                        message_roots,
+                                        inbound_message_roots,
+                                        out,
+                                    );
+                                }
+                            }
+                            MatchArmBody::Expr(expr) => {
+                                self.collect_message_field_roots_inner(
+                                    expr,
+                                    message_roots,
+                                    inbound_message_roots,
+                                    out,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            Expr::VarDeclLhs(_)
+            | Expr::Lambda(_)
+            | Expr::NumberLit(_)
+            | Expr::StringLit(_)
+            | Expr::BoolLit(_)
+            | Expr::NullLit(_)
+            | Expr::Underscore(_)
+            | Expr::Ident(_)
+            | Expr::Unmapped(_) => {}
+        }
+    }
+
+    fn taint_source_root_for_dot_access(
+        &self,
+        dot_access: DotAccess<'_>,
+        message_roots: &FxHashSet<LocalDefId>,
+        inbound_message_roots: &FxHashSet<LocalDefId>,
+    ) -> Option<LocalDefId> {
+        let obj = dot_access.obj()?;
+        let base_local = self.expr_base_local(obj)?;
+        if !message_roots.contains(&base_local) {
+            return None;
+        }
+
+        if inbound_message_roots.contains(&base_local)
+            && !self
+                .expr_has_inbound_payload_origin(Expr::DotAccess(dot_access), inbound_message_roots)
+        {
+            // For raw inbound message (`in`), only payload projections (`in.body*`, `in.bouncedBody*`)
+            // are considered taint sources. Metadata fields like `in.senderAddress` are excluded.
+            return None;
+        }
+
+        Some(base_local)
+    }
+
+    fn expr_has_inbound_payload_origin(
+        &self,
+        expr: Expr<'_>,
+        inbound_message_roots: &FxHashSet<LocalDefId>,
+    ) -> bool {
+        match expr {
+            Expr::DotAccess(dot_access) => {
+                if let Some(obj) = dot_access.obj() {
+                    if let Some(base_local) = self.expr_base_local(obj)
+                        && inbound_message_roots.contains(&base_local)
+                        && self
+                            .dot_access_field_name(dot_access)
+                            .is_some_and(is_inbound_payload_field_name)
+                    {
+                        return true;
+                    }
+
+                    return self.expr_has_inbound_payload_origin(obj, inbound_message_roots);
+                }
+                false
+            }
+            Expr::Paren(paren) => paren.inner().is_some_and(|inner| {
+                self.expr_has_inbound_payload_origin(inner, inbound_message_roots)
+            }),
+            Expr::NotNull(not_null) => not_null.inner().is_some_and(|inner| {
+                self.expr_has_inbound_payload_origin(inner, inbound_message_roots)
+            }),
+            Expr::AsCast(as_cast) => as_cast.expr().is_some_and(|inner| {
+                self.expr_has_inbound_payload_origin(inner, inbound_message_roots)
+            }),
+            Expr::Lazy(lazy) => lazy.expr().is_some_and(|inner| {
+                self.expr_has_inbound_payload_origin(inner, inbound_message_roots)
+            }),
+            _ => false,
+        }
+    }
+
+    fn dot_access_field_name(&self, dot_access: DotAccess) -> Option<&str> {
+        let field = dot_access.field()?;
+        match field {
+            DotAccessField::Ident(ident) => self.name_of_ident(ident.syntax()),
+            DotAccessField::NumericIndex(_) => None,
+        }
+    }
+
+    fn contains_storage_write_sink(&self, expr: Expr<'_>) -> bool {
+        match expr {
+            Expr::Call(call) => {
+                if self
+                    .call_name(call)
+                    .is_some_and(|name| name == "setData" || name == "save")
+                // VERY simplified for now
+                {
+                    return true;
+                }
+
+                if let Some(callee) = call.callee()
+                    && self.contains_storage_write_sink(callee)
+                {
+                    return true;
+                }
+
+                for argument in call.arguments() {
+                    if let Some(arg_expr) = argument.expr()
+                        && self.contains_storage_write_sink(arg_expr)
+                    {
+                        return true;
+                    }
+                }
+
+                false
+            }
+            Expr::DotAccess(dot_access) => dot_access
+                .obj()
+                .is_some_and(|obj| self.contains_storage_write_sink(obj)),
+            Expr::Assign(assign) => {
+                assign
+                    .left()
+                    .is_some_and(|left| self.contains_storage_write_sink(left))
+                    || assign
+                        .right()
+                        .is_some_and(|right| self.contains_storage_write_sink(right))
+            }
+            Expr::SetAssign(assign) => {
+                assign
+                    .left()
+                    .is_some_and(|left| self.contains_storage_write_sink(left))
+                    || assign
+                        .right()
+                        .is_some_and(|right| self.contains_storage_write_sink(right))
+            }
+            Expr::Instantiation(inst) => inst
+                .expr()
+                .is_some_and(|inner| self.contains_storage_write_sink(inner)),
+            Expr::Paren(paren) => paren
+                .inner()
+                .is_some_and(|inner| self.contains_storage_write_sink(inner)),
+            Expr::Ternary(ternary) => {
+                ternary
+                    .condition()
+                    .is_some_and(|condition| self.contains_storage_write_sink(condition))
+                    || ternary
+                        .consequence()
+                        .is_some_and(|consequence| self.contains_storage_write_sink(consequence))
+                    || ternary
+                        .alternative()
+                        .is_some_and(|alternative| self.contains_storage_write_sink(alternative))
+            }
+            Expr::Bin(bin) => {
+                bin.left()
+                    .is_some_and(|left| self.contains_storage_write_sink(left))
+                    || bin
+                        .right()
+                        .is_some_and(|right| self.contains_storage_write_sink(right))
+            }
+            Expr::Unary(unary) => unary
+                .argument()
+                .is_some_and(|argument| self.contains_storage_write_sink(argument)),
+            Expr::Lazy(lazy) => lazy
+                .expr()
+                .is_some_and(|inner| self.contains_storage_write_sink(inner)),
+            Expr::AsCast(as_cast) => as_cast
+                .expr()
+                .is_some_and(|inner| self.contains_storage_write_sink(inner)),
+            Expr::IsType(is_type) => is_type
+                .expr()
+                .is_some_and(|inner| self.contains_storage_write_sink(inner)),
+            Expr::NotNull(not_null) => not_null
+                .inner()
+                .is_some_and(|inner| self.contains_storage_write_sink(inner)),
+            Expr::ObjectLit(object_lit) => object_lit.arguments().any(|arg| {
+                arg.value()
+                    .is_some_and(|value| self.contains_storage_write_sink(value))
+            }),
+            Expr::Tensor(tensor) => tensor
+                .elements()
+                .any(|element| self.contains_storage_write_sink(element)),
+            Expr::Tuple(tuple) => tuple
+                .elements()
+                .any(|element| self.contains_storage_write_sink(element)),
+            Expr::Match(match_expr) => {
+                if let Some(subject) = match_expr.expr()
+                    && self.contains_storage_write_sink(subject)
+                {
+                    return true;
+                }
+                match_expr.arms().any(|arm| {
+                    if let MatchPattern::Expr(pattern_expr) = arm.pattern()
+                        && self.contains_storage_write_sink(pattern_expr)
+                    {
+                        return true;
+                    }
+
+                    arm.body().is_some_and(|body| match body {
+                        MatchArmBody::Block(_) => false,
+                        MatchArmBody::Return(ret) => ret
+                            .expr()
+                            .is_some_and(|expr| self.contains_storage_write_sink(expr)),
+                        MatchArmBody::Throw(throw_stmt) => throw_stmt
+                            .expr()
+                            .is_some_and(|expr| self.contains_storage_write_sink(expr)),
+                        MatchArmBody::Expr(expr) => self.contains_storage_write_sink(expr),
+                    })
+                })
+            }
+            Expr::VarDeclLhs(_)
+            | Expr::Lambda(_)
+            | Expr::NumberLit(_)
+            | Expr::StringLit(_)
+            | Expr::BoolLit(_)
+            | Expr::NullLit(_)
+            | Expr::Underscore(_)
+            | Expr::Ident(_)
+            | Expr::Unmapped(_) => false,
+        }
+    }
+
+    fn contains_admin_sender_check(
+        &self,
+        expr: Expr<'_>,
+        inbound_message_roots: &FxHashSet<LocalDefId>,
+    ) -> bool {
+        match expr {
+            Expr::Bin(bin) => {
+                if self.is_equality_bin(bin) {
+                    let left = bin.left();
+                    let right = bin.right();
+                    if let (Some(left), Some(right)) = (left, right)
+                        && ((self.is_inbound_sender_expr(left, inbound_message_roots)
+                            && self.is_admin_address_expr(right))
+                            || (self.is_inbound_sender_expr(right, inbound_message_roots)
+                                && self.is_admin_address_expr(left)))
+                    {
+                        return true;
+                    }
+                }
+
+                bin.left().is_some_and(|left| {
+                    self.contains_admin_sender_check(left, inbound_message_roots)
+                }) || bin.right().is_some_and(|right| {
+                    self.contains_admin_sender_check(right, inbound_message_roots)
+                })
+            }
+            Expr::Call(call) => {
+                if let Some(callee) = call.callee()
+                    && self.contains_admin_sender_check(callee, inbound_message_roots)
+                {
+                    return true;
+                }
+                for argument in call.arguments() {
+                    if let Some(arg_expr) = argument.expr()
+                        && self.contains_admin_sender_check(arg_expr, inbound_message_roots)
+                    {
+                        return true;
+                    }
+                }
+                false
+            }
+            Expr::DotAccess(dot_access) => dot_access
+                .obj()
+                .is_some_and(|obj| self.contains_admin_sender_check(obj, inbound_message_roots)),
+            Expr::Assign(assign) => {
+                assign.left().is_some_and(|left| {
+                    self.contains_admin_sender_check(left, inbound_message_roots)
+                }) || assign.right().is_some_and(|right| {
+                    self.contains_admin_sender_check(right, inbound_message_roots)
+                })
+            }
+            Expr::SetAssign(assign) => {
+                assign.left().is_some_and(|left| {
+                    self.contains_admin_sender_check(left, inbound_message_roots)
+                }) || assign.right().is_some_and(|right| {
+                    self.contains_admin_sender_check(right, inbound_message_roots)
+                })
+            }
+            Expr::Instantiation(inst) => inst.expr().is_some_and(|inner| {
+                self.contains_admin_sender_check(inner, inbound_message_roots)
+            }),
+            Expr::Paren(paren) => paren.inner().is_some_and(|inner| {
+                self.contains_admin_sender_check(inner, inbound_message_roots)
+            }),
+            Expr::Ternary(ternary) => {
+                ternary.condition().is_some_and(|condition| {
+                    self.contains_admin_sender_check(condition, inbound_message_roots)
+                }) || ternary.consequence().is_some_and(|consequence| {
+                    self.contains_admin_sender_check(consequence, inbound_message_roots)
+                }) || ternary.alternative().is_some_and(|alternative| {
+                    self.contains_admin_sender_check(alternative, inbound_message_roots)
+                })
+            }
+            Expr::Unary(unary) => unary.argument().is_some_and(|argument| {
+                self.contains_admin_sender_check(argument, inbound_message_roots)
+            }),
+            Expr::Lazy(lazy) => lazy.expr().is_some_and(|inner| {
+                self.contains_admin_sender_check(inner, inbound_message_roots)
+            }),
+            Expr::AsCast(as_cast) => as_cast.expr().is_some_and(|inner| {
+                self.contains_admin_sender_check(inner, inbound_message_roots)
+            }),
+            Expr::IsType(is_type) => is_type.expr().is_some_and(|inner| {
+                self.contains_admin_sender_check(inner, inbound_message_roots)
+            }),
+            Expr::NotNull(not_null) => not_null.inner().is_some_and(|inner| {
+                self.contains_admin_sender_check(inner, inbound_message_roots)
+            }),
+            Expr::ObjectLit(object_lit) => object_lit.arguments().any(|arg| {
+                arg.value().is_some_and(|value| {
+                    self.contains_admin_sender_check(value, inbound_message_roots)
+                })
+            }),
+            Expr::Tensor(tensor) => tensor
+                .elements()
+                .any(|element| self.contains_admin_sender_check(element, inbound_message_roots)),
+            Expr::Tuple(tuple) => tuple
+                .elements()
+                .any(|element| self.contains_admin_sender_check(element, inbound_message_roots)),
+            Expr::Match(match_expr) => {
+                if let Some(subject) = match_expr.expr()
+                    && self.contains_admin_sender_check(subject, inbound_message_roots)
+                {
+                    return true;
+                }
+                false
+            }
+            Expr::VarDeclLhs(_)
+            | Expr::Lambda(_)
+            | Expr::NumberLit(_)
+            | Expr::StringLit(_)
+            | Expr::BoolLit(_)
+            | Expr::NullLit(_)
+            | Expr::Underscore(_)
+            | Expr::Ident(_)
+            | Expr::Unmapped(_) => false,
+        }
+    }
+
+    fn is_inbound_sender_expr(
+        &self,
+        expr: Expr<'_>,
+        inbound_message_roots: &FxHashSet<LocalDefId>,
+    ) -> bool {
+        match expr {
+            Expr::DotAccess(dot_access) => {
+                let Some(obj) = dot_access.obj() else {
+                    return false;
+                };
+                let Some(base_local) = self.expr_base_local(obj) else {
+                    return false;
+                };
+                inbound_message_roots.contains(&base_local)
+                    && self
+                        .dot_access_field_name(dot_access)
+                        .is_some_and(|name| name == "senderAddress")
+            }
+            Expr::Paren(paren) => paren
+                .inner()
+                .is_some_and(|inner| self.is_inbound_sender_expr(inner, inbound_message_roots)),
+            Expr::NotNull(not_null) => not_null
+                .inner()
+                .is_some_and(|inner| self.is_inbound_sender_expr(inner, inbound_message_roots)),
+            Expr::AsCast(as_cast) => as_cast
+                .expr()
+                .is_some_and(|inner| self.is_inbound_sender_expr(inner, inbound_message_roots)),
+            Expr::Lazy(lazy) => lazy
+                .expr()
+                .is_some_and(|inner| self.is_inbound_sender_expr(inner, inbound_message_roots)),
+            _ => false,
+        }
+    }
+
+    fn is_admin_address_expr(&self, expr: Expr<'_>) -> bool {
+        match expr {
+            Expr::DotAccess(dot_access) => self
+                .dot_access_field_name(dot_access)
+                .is_some_and(|name| name == "adminAddress"),
+            Expr::Paren(paren) => paren
+                .inner()
+                .is_some_and(|inner| self.is_admin_address_expr(inner)),
+            Expr::NotNull(not_null) => not_null
+                .inner()
+                .is_some_and(|inner| self.is_admin_address_expr(inner)),
+            Expr::AsCast(as_cast) => as_cast
+                .expr()
+                .is_some_and(|inner| self.is_admin_address_expr(inner)),
+            Expr::Lazy(lazy) => lazy
+                .expr()
+                .is_some_and(|inner| self.is_admin_address_expr(inner)),
+            _ => false,
+        }
+    }
+
+    fn contains_message_from_slice(
+        &self,
+        expr: Expr<'_>,
+        message_roots: &FxHashSet<LocalDefId>,
+        inbound_message_roots: &FxHashSet<LocalDefId>,
+    ) -> bool {
+        match expr {
+            Expr::Call(call) => {
+                if self.call_name(call).is_some_and(|name| name == "fromSlice") {
+                    for argument in call.arguments() {
+                        let Some(arg_expr) = argument.expr() else {
+                            continue;
+                        };
+                        let mut roots = FxHashSet::default();
+                        self.collect_message_field_roots(
+                            arg_expr,
+                            message_roots,
+                            inbound_message_roots,
+                            &mut roots,
+                        );
+                        if !roots.is_empty() {
+                            return true;
+                        }
+                    }
+                }
+
+                if let Some(callee) = call.callee()
+                    && self.contains_message_from_slice(
+                        callee,
+                        message_roots,
+                        inbound_message_roots,
+                    )
+                {
+                    return true;
+                }
+
+                for argument in call.arguments() {
+                    if let Some(arg_expr) = argument.expr()
+                        && self.contains_message_from_slice(
+                            arg_expr,
+                            message_roots,
+                            inbound_message_roots,
+                        )
+                    {
+                        return true;
+                    }
+                }
+
+                false
+            }
+            Expr::DotAccess(dot_access) => dot_access.obj().is_some_and(|obj| {
+                self.contains_message_from_slice(obj, message_roots, inbound_message_roots)
+            }),
+            Expr::Assign(assign) => {
+                assign.left().is_some_and(|left| {
+                    self.contains_message_from_slice(left, message_roots, inbound_message_roots)
+                }) || assign.right().is_some_and(|right| {
+                    self.contains_message_from_slice(right, message_roots, inbound_message_roots)
+                })
+            }
+            Expr::SetAssign(assign) => {
+                assign.left().is_some_and(|left| {
+                    self.contains_message_from_slice(left, message_roots, inbound_message_roots)
+                }) || assign.right().is_some_and(|right| {
+                    self.contains_message_from_slice(right, message_roots, inbound_message_roots)
+                })
+            }
+            Expr::Instantiation(inst) => inst.expr().is_some_and(|inner| {
+                self.contains_message_from_slice(inner, message_roots, inbound_message_roots)
+            }),
+            Expr::Paren(paren) => paren.inner().is_some_and(|inner| {
+                self.contains_message_from_slice(inner, message_roots, inbound_message_roots)
+            }),
+            Expr::Ternary(ternary) => {
+                ternary.condition().is_some_and(|condition| {
+                    self.contains_message_from_slice(
+                        condition,
+                        message_roots,
+                        inbound_message_roots,
+                    )
+                }) || ternary.consequence().is_some_and(|consequence| {
+                    self.contains_message_from_slice(
+                        consequence,
+                        message_roots,
+                        inbound_message_roots,
+                    )
+                }) || ternary.alternative().is_some_and(|alternative| {
+                    self.contains_message_from_slice(
+                        alternative,
+                        message_roots,
+                        inbound_message_roots,
+                    )
+                })
+            }
+            Expr::Bin(bin) => {
+                bin.left().is_some_and(|left| {
+                    self.contains_message_from_slice(left, message_roots, inbound_message_roots)
+                }) || bin.right().is_some_and(|right| {
+                    self.contains_message_from_slice(right, message_roots, inbound_message_roots)
+                })
+            }
+            Expr::Unary(unary) => unary.argument().is_some_and(|argument| {
+                self.contains_message_from_slice(argument, message_roots, inbound_message_roots)
+            }),
+            Expr::Lazy(lazy) => lazy.expr().is_some_and(|inner| {
+                self.contains_message_from_slice(inner, message_roots, inbound_message_roots)
+            }),
+            Expr::AsCast(as_cast) => as_cast.expr().is_some_and(|inner| {
+                self.contains_message_from_slice(inner, message_roots, inbound_message_roots)
+            }),
+            Expr::IsType(is_type) => is_type.expr().is_some_and(|inner| {
+                self.contains_message_from_slice(inner, message_roots, inbound_message_roots)
+            }),
+            Expr::NotNull(not_null) => not_null.inner().is_some_and(|inner| {
+                self.contains_message_from_slice(inner, message_roots, inbound_message_roots)
+            }),
+            Expr::ObjectLit(object_lit) => object_lit.arguments().any(|arg| {
+                arg.value().is_some_and(|value| {
+                    self.contains_message_from_slice(value, message_roots, inbound_message_roots)
+                })
+            }),
+            Expr::Tensor(tensor) => tensor.elements().any(|element| {
+                self.contains_message_from_slice(element, message_roots, inbound_message_roots)
+            }),
+            Expr::Tuple(tuple) => tuple.elements().any(|element| {
+                self.contains_message_from_slice(element, message_roots, inbound_message_roots)
+            }),
+            Expr::Match(match_expr) => {
+                if let Some(subject) = match_expr.expr()
+                    && self.contains_message_from_slice(
+                        subject,
+                        message_roots,
+                        inbound_message_roots,
+                    )
+                {
+                    return true;
+                }
+                false
+            }
+            Expr::VarDeclLhs(_)
+            | Expr::Lambda(_)
+            | Expr::NumberLit(_)
+            | Expr::StringLit(_)
+            | Expr::BoolLit(_)
+            | Expr::NullLit(_)
+            | Expr::Underscore(_)
+            | Expr::Ident(_)
+            | Expr::Unmapped(_) => false,
+        }
+    }
+
+    fn is_equality_bin(&self, bin: Bin<'_>) -> bool {
+        let Some(op) = bin.operator() else {
+            return false;
+        };
+
+        op.kind_bytes() == b"=="
     }
 
     fn collect_definition_ident(&self, ident: Node<'_>, writes: &mut FxHashSet<LocalDefId>) {

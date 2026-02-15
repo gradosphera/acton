@@ -8,6 +8,7 @@ use crate::rules::ast::{
     pure_function_call_unused, send_mode_literal, unused_import, unused_variable,
     used_ignored_identifier, write_only_variable,
 };
+use acton_config::config::LintLevel;
 use rules::diagnostic::{Diagnostic, Severity};
 pub use rules::*;
 use rustc_hash::FxHashMap;
@@ -28,6 +29,7 @@ use tree_sitter::Node;
 mod profiling;
 mod rules;
 
+use crate::dfa::unauthorized_access;
 #[cfg(feature = "profile_rules")]
 pub use profiling::Profiler;
 use tolk_analysis::{AnalysisDb, FileUseFacts};
@@ -58,7 +60,7 @@ pub struct Checker<'a> {
     pub body_types: &'a HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
     pub analysis_db: AnalysisDb,
     pub diagnostics: Vec<Diagnostic>,
-    pub settings: HashMap<Rule, acton_config::config::LintLevel>,
+    pub settings: HashMap<Rule, LintLevel>,
 
     /// Map from file ID to a map of line number to list of suppressed rule names/codes
     pub file_suppressions: FxHashMap<FileId, FxHashMap<usize, Vec<String>>>,
@@ -132,10 +134,7 @@ impl<'a> Checker<'a> {
         }
     }
 
-    pub fn with_settings(
-        mut self,
-        settings: HashMap<Rule, acton_config::config::LintLevel>,
-    ) -> Self {
+    pub fn with_settings(mut self, settings: HashMap<Rule, LintLevel>) -> Self {
         self.settings = settings;
         self
     }
@@ -143,7 +142,7 @@ impl<'a> Checker<'a> {
     pub fn should_run(&self, rule: Rule) -> bool {
         self.settings
             .get(&rule)
-            .map(|level| *level != acton_config::config::LintLevel::Allow)
+            .map(|level| *level != LintLevel::Allow)
             .unwrap_or(true) // default to run
     }
 
@@ -154,11 +153,11 @@ impl<'a> Checker<'a> {
     pub fn emit_diagnostic(&mut self, mut diagnostic: Diagnostic) {
         if let Some(level) = self.settings.get(&diagnostic.rule) {
             match level {
-                acton_config::config::LintLevel::Allow => return,
-                acton_config::config::LintLevel::Warn => {
+                LintLevel::Allow => return,
+                LintLevel::Warn => {
                     diagnostic.severity = Severity::Warning;
                 }
-                acton_config::config::LintLevel::Deny => {
+                LintLevel::Deny => {
                     diagnostic.severity = Severity::Error;
                 }
             }
@@ -169,8 +168,10 @@ impl<'a> Checker<'a> {
     pub fn build_settings(
         config: &acton_config::config::ActonConfig,
         contract_name: Option<&str>,
-    ) -> HashMap<Rule, acton_config::config::LintLevel> {
+    ) -> HashMap<Rule, LintLevel> {
         let mut settings = HashMap::new();
+
+        settings.insert(Rule::UnauthorizedAccess, LintLevel::Allow); // disabled by default for now
 
         let Some(lint) = &config.lint else {
             return settings;
@@ -385,6 +386,11 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
             self.checker,
             Rule::MessageShouldBeNamed,
             message_entity_naming::check_file_for_message_name(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::UnauthorizedAccess,
+            unauthorized_access::check_file(self.checker, self.file_id)
         );
         run_rule!(
             self.checker,

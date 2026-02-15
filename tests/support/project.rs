@@ -1,5 +1,6 @@
 use crate::common::{acton_exe, assert_ui};
 use crate::support::assertions::TestOutput;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -14,6 +15,7 @@ pub(crate) struct ProjectBuilder {
     raw_files: Vec<(String, String)>,
     scripts: Vec<(String, String)>,
     mappings: Vec<(String, String)>,
+    lint_levels: BTreeMap<String, String>,
     test_config: Option<TestConfig>,
     license: Option<String>,
     create_acton_toml: bool,
@@ -71,6 +73,7 @@ impl ProjectBuilder {
             raw_files: Vec::new(),
             scripts: Vec::new(),
             mappings: Vec::new(),
+            lint_levels: BTreeMap::new(),
             test_config: None,
             license: Some("MIT".to_string()),
             create_acton_toml: true,
@@ -102,6 +105,18 @@ impl ProjectBuilder {
 
     pub(crate) fn mapping(mut self, prefix: &str, target: &str) -> Self {
         self.mappings.push((prefix.to_string(), target.to_string()));
+        self
+    }
+
+    /// Configure lint rule level in Acton.toml.
+    ///
+    /// # Examples
+    /// ```
+    /// .with_lint_level("unauthorized-access", "warn")
+    /// .with_lint_level("unused-variable", "deny")
+    /// ```
+    pub(crate) fn with_lint_level(mut self, rule: &str, level: &str) -> Self {
+        self.lint_levels.insert(rule.to_string(), level.to_string());
         self
     }
 
@@ -391,6 +406,7 @@ impl ProjectBuilder {
                 &self.contracts,
                 &self.scripts,
                 &self.mappings,
+                &self.lint_levels,
                 &self.test_config,
                 &self.license,
             );
@@ -417,12 +433,14 @@ impl ProjectBuilder {
         code.replace("import \"../../../../lib/", "import \"../../lib/")
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_acton_toml(
         project_path: &Path,
         name: &str,
         contracts: &[ContractDef],
         scripts: &[(String, String)],
         mappings: &[(String, String)],
+        lint_levels: &BTreeMap<String, String>,
         test_config: &Option<TestConfig>,
         license: &Option<String>,
     ) {
@@ -525,6 +543,14 @@ version = "0.1.0"
             toml_content.push_str("[scripts]\n");
             for (name, cmd) in scripts {
                 toml_content.push_str(&format!("{name} = \"{cmd}\"\n"));
+            }
+            toml_content.push('\n');
+        }
+
+        if !lint_levels.is_empty() {
+            toml_content.push_str("[lint]\n");
+            for (rule, level) in lint_levels {
+                toml_content.push_str(&format!("{rule} = \"{level}\"\n"));
             }
             toml_content.push('\n');
         }

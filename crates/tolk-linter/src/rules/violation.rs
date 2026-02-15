@@ -5,6 +5,7 @@ use crate::ast::{
     no_bounce_handler, pure_function_call_unused, send_mode_literal, unused_import,
     unused_variable, used_ignored_identifier, write_only_variable,
 };
+use crate::dfa::unauthorized_access;
 use serde::Serialize;
 use std::fmt::Display;
 
@@ -70,6 +71,7 @@ pub fn code_to_rule(linter: Linter, code: &str) -> Option<(RuleGroup, Rule)> {
         (Tolk, "E014") => acton_import_in_contract::ActonImportInContract,
         (Tolk, "E015") => asm_function_missing_safety_comment::AsmFunctionMissingSafetyComment,
         (Tolk, "E016") => send_mode_literal::SendModeLiteral,
+        (Tolk, "E017") => unauthorized_access::UnauthorizedAccess,
         (Tolk, "C001") => compiler_error::CompilerError,
         (Tolk, "S001") => name_case_checker::NameCaseChecker,
         _ => return None,
