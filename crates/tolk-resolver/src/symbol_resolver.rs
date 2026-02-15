@@ -15,7 +15,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tolk_syntax::{
     Assign, AstNode, Constant, Enum, EnumMember, FuncBody, FunctionLike, GlobalVar,
-    HasGenericParams, HasName, InstanceArg, Struct, StructField, TypeAlias, VarKind, Walker, ast,
+    HasGenericParams, HasName, InstanceArg, Struct, StructField, TryFromNode, TypeAlias, VarKind,
+    Walker, ast,
 };
 use tree_sitter::Node;
 
@@ -111,6 +112,7 @@ pub struct SymbolResolver<'a> {
     env: GlobalEnv,
     decl: Option<ast::TopLevel<'a>>,
     inside_method_receiver: bool,
+    inside_dot_access: bool,
 }
 
 /// Represents an error encountered during symbol resolution.
@@ -145,6 +147,7 @@ impl<'a> SymbolResolver<'a> {
             env,
             decl: None,
             inside_method_receiver: false,
+            inside_dot_access: false,
         }
     }
 
@@ -297,18 +300,37 @@ impl<'a> SymbolResolver<'a> {
             Some(symbol)
         });
 
-        let Some(final_candidate) = filtered_candidate.next() else {
-            // // should not be reachable
-            // error!("no candidates after filtering for {name}");
-            return None;
-        };
+        let first = filtered_candidate.next()?;
+        let second = filtered_candidate.next();
+
+        if use_kind == NameUseKind::Mixed
+            && let Some(second) = second
+            && let Some(parent) = ident.parent()
+        {
+            let final_sym = if ast::Call::try_from_node(parent).is_ok() {
+                // this is a call
+                if second.is_func() { second } else { first }
+            } else {
+                // this is an identifier
+                if second.is_type() { second } else { first }
+            };
+
+            self.uses.push(NameUse {
+                decl: decl_start,
+                span: ident.span(),
+                kind: use_kind,
+                name,
+                resolved: Resolved::Global(final_sym.id),
+            });
+            return Some(());
+        }
 
         self.uses.push(NameUse {
             decl: decl_start,
             span: ident.span(),
             kind: use_kind,
             name,
-            resolved: Resolved::Global(final_candidate.id),
+            resolved: Resolved::Global(first.id),
         });
         Some(())
     }
@@ -569,7 +591,9 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
 
     fn walk_dot_access(&mut self, node: &ast::DotAccess<'tree>) -> Self::Result {
         if let Some(obj) = node.obj() {
+            self.inside_dot_access = true;
             self.visit_expr(&obj);
+            self.inside_dot_access = false;
         }
         // don't walk field, we don't have types yet
     }
@@ -628,7 +652,12 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
     }
 
     fn walk_ident(&mut self, node: &ast::Ident<'tree>) -> Self::Result {
-        self.resolve_symbol(&node.0, NameUseKind::Value);
+        let use_kind = if self.inside_dot_access {
+            NameUseKind::Mixed // may be `address.foo()`
+        } else {
+            NameUseKind::Value
+        };
+        self.resolve_symbol(&node.0, use_kind);
     }
 
     fn walk_type_ident(&mut self, node: &ast::TypeIdent<'tree>) -> Self::Result {

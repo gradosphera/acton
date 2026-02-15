@@ -323,11 +323,11 @@ fun main(): void {
     <caret>someType
         .<caret>bar();
 
-    <caret>someType(); // TODO
+    <caret>someType();
 }
 ------------------------------------------------------------------------
-7:4 -> 4:4 resolved
-8:9 unresolved
+7:4 -> 0:5 resolved
+8:9 -> 2:13 resolved
 10:4 -> 4:4 resolved
 
 ========================================================================

@@ -128,6 +128,28 @@ mod tests {
     }
 
     #[test]
+    fn test_function_and_type_with_same_name() {
+        check_definition(
+            r#"
+                type foo = int;
+
+                fun foo() {}
+
+                fun main() {
+                    <caret>foo();
+                    val a: <caret>foo;
+                    <caret>foo.bar();
+                }
+            "#,
+            expect![[r#"
+                foo -> Global(foo at test.tolk:54-57)
+                foo -> Global(foo at test.tolk:22-25)
+                foo -> Global(foo at test.tolk:22-25)
+            "#]],
+        );
+    }
+
+    #[test]
     fn test_nested_scopes() {
         check_definition(
             r#"

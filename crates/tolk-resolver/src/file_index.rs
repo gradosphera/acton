@@ -241,6 +241,14 @@ impl Symbol {
             SymbolKind::TypeAlias { .. } | SymbolKind::Struct { .. } | SymbolKind::Enum { .. }
         )
     }
+
+    /// Returns `true` if this declaration defines a function.
+    pub const fn is_func(&self) -> bool {
+        matches!(
+            self.kind,
+            SymbolKind::Function { .. } | SymbolKind::Method { .. } | SymbolKind::GetMethod { .. }
+        )
+    }
 }
 
 /// Represents an import statement.
