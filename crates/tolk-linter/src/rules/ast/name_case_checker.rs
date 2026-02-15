@@ -1,6 +1,7 @@
 use crate::rules::diagnostic::{
     Annotation, Applicability, Diagnostic, DiagnosticTag, Edit, Fix, Severity,
 };
+use crate::rules::utils;
 use crate::rules::violation::Violation;
 use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
@@ -67,9 +68,24 @@ fn check_case(symbol: &Symbol, checker: &mut Checker, symbol_def_file_id: FileId
     }
 
     let (correct_case, case_name) = match case {
-        CaseRules::Camel => (symbol.name.to_lower_camel_case(), "camelCase"),
-        CaseRules::Pascal => (symbol.name.to_upper_camel_case(), "PascalCase"),
-        CaseRules::ScreamingSnake => (symbol.name.to_shouty_snake_case(), "SCREAMING_SNAKE_CASE"),
+        CaseRules::Camel => {
+            if utils::cases::is_camel_ascii(symbol.name.as_ref()) {
+                return;
+            }
+            (symbol.name.to_lower_camel_case(), "camelCase")
+        }
+        CaseRules::Pascal => {
+            if utils::cases::is_pascal_ascii(symbol.name.as_ref()) {
+                return;
+            }
+            (symbol.name.to_upper_camel_case(), "PascalCase")
+        }
+        CaseRules::ScreamingSnake => {
+            if utils::cases::is_screaming_snake_ascii(symbol.name.as_ref()) {
+                return;
+            }
+            (symbol.name.to_shouty_snake_case(), "SCREAMING_SNAKE_CASE")
+        }
     };
 
     if symbol.name.as_bytes() == correct_case.as_bytes() {
@@ -133,8 +149,18 @@ pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
             }
 
             let (correct_case, case_name) = match local_def.kind {
-                LocalDefKind::TypeParameter => (name.to_upper_camel_case(), "PascalCase"),
-                _ => (name.to_lower_camel_case(), "camelCase"),
+                LocalDefKind::TypeParameter => {
+                    if utils::cases::is_pascal_ascii(name.as_ref()) {
+                        continue;
+                    }
+                    (name.to_upper_camel_case(), "PascalCase")
+                }
+                _ => {
+                    if utils::cases::is_camel_ascii(name.as_ref()) {
+                        continue;
+                    }
+                    (name.to_lower_camel_case(), "camelCase")
+                }
             };
 
             if correct_case.as_bytes() == name.as_bytes() {
