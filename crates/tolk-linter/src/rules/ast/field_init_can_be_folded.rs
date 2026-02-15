@@ -1,6 +1,5 @@
-use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
+use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix};
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use memchr::memchr;
 use tolk_macros::ViolationMetadata;
@@ -90,19 +89,14 @@ fn fire_diagnostic(
     key_bytes: &[u8],
 ) {
     let key_name = String::from_utf8_lossy(key_bytes).to_string();
-    let diagnostic = Diagnostic {
-        file_id,
-        severity: Severity::Warning,
-        name: FieldInitCanBeFolded::rule().name(),
-        code: FieldInitCanBeFolded::code().map(|c| c.to_string()),
-        message: FieldInitCanBeFolded.message(),
-        annotations: vec![Annotation {
+    let diagnostic = Diagnostic::warning_for(file_id, FieldInitCanBeFolded)
+        .with_annotations(vec![Annotation {
             span: argument.span(),
             message: Some(format!("can be folded to just '{key_name}'")),
             is_primary: true,
             tags: vec![],
-        }],
-        fixes: vec![Fix {
+        }])
+        .with_fixes(vec![Fix {
             message: "fold initialization".to_string(),
             edits: vec![Edit {
                 span: argument.span(),
@@ -110,8 +104,6 @@ fn fire_diagnostic(
                 file_id,
             }],
             applicability: Applicability::Auto,
-        }],
-        help: None,
-    };
-    checker.emit_diagnostic(FieldInitCanBeFolded::rule(), diagnostic);
+        }]);
+    checker.emit_diagnostic(diagnostic);
 }

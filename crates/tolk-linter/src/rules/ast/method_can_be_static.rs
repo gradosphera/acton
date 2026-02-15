@@ -1,6 +1,5 @@
-use crate::rules::diagnostic::{Annotation, Diagnostic, Severity};
+use crate::rules::diagnostic::{Annotation, Diagnostic};
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::{FileId, Span, SymbolId};
@@ -229,21 +228,14 @@ fn fire_diagnostic(
         ),
     };
 
-    let diagnostic = Diagnostic {
-        file_id,
-        severity: Severity::Warning,
-        name: MethodCanBeStatic::rule().name(),
-        code: MethodCanBeStatic::code().map(|c| c.to_string()),
-        message: MethodCanBeStatic.message(),
-        annotations: vec![Annotation {
+    let diagnostic = Diagnostic::warning_for(file_id, MethodCanBeStatic)
+        .with_annotations(vec![Annotation {
             span: self_span,
             message: Some(format!("{annotation_message} in `{method_name}`")),
             is_primary: true,
             tags: vec![],
-        }],
-        fixes: vec![],
-        help: Some(help),
-    };
+        }])
+        .with_help(help);
 
-    checker.emit_diagnostic(MethodCanBeStatic::rule(), diagnostic);
+    checker.emit_diagnostic(diagnostic);
 }

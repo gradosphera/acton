@@ -10,6 +10,7 @@ Use `acton check --explain <CODE>` to read a detailed explanation for any specif
 
 | Code | Rule | Status | Quick fix | What it does |
 |:-----|:-----|:-------|:----------|:-------------|
+| [C001](./c001-compiler-error) | [`compiler-error`](./c001-compiler-error) | Stable since `v0.0.1` | not available | Reports any compiler error. |
 | [E001](./e001-field-init-can-be-folded) | [`field-init-can-be-folded`](./e001-field-init-can-be-folded) | Stable since `v0.0.1` | always available | Checks for struct initialization where the field name and the variable used to initialize it are the same. |
 | [E002](./e002-unused-variable) | [`unused-variable`](./e002-unused-variable) | Stable since `v0.0.1` | always available | Checks for variables and parameters that are declared but never used. |
 | [E003](./e003-mutable-variable-can-be-immutable) | [`mutable-variable-can-be-immutable`](./e003-mutable-variable-can-be-immutable) | Stable since `v0.0.1` | always available | Checks for variables that are declared as mutable (`var`) but are never mutated. |

@@ -1,5 +1,6 @@
 {
   "pages": [
+    "c001-compiler-error",
     "e001-field-init-can-be-folded",
     "e002-unused-variable",
     "e003-mutable-variable-can-be-immutable",

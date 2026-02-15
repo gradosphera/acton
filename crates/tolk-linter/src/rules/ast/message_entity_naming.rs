@@ -1,6 +1,5 @@
-use crate::rules::diagnostic::{Annotation, Diagnostic, Severity};
+use crate::rules::diagnostic::{Annotation, Diagnostic};
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::AstNodeSpanExt;
@@ -113,25 +112,17 @@ pub fn check_file_for_message_name(checker: &mut Checker, file_id: FileId) -> Op
             continue;
         }
 
-        let diagnostic = Diagnostic {
-            file_id,
-            severity: Severity::Warning,
-            name: MessageShouldBeNamed::rule().name(),
-            code: MessageShouldBeNamed::code().map(|c| c.to_string()),
-            message: MessageShouldBeNamed.message(),
-            annotations: vec![Annotation {
+        let diagnostic = Diagnostic::warning_for(file_id, MessageShouldBeNamed)
+            .with_annotations(vec![Annotation {
                 span: local.def_span,
                 message: Some("message should be properly named, not `msg`".to_owned()),
                 is_primary: true,
                 tags: vec![],
-            }],
-            fixes: vec![],
-            help: Some(
-                "use a descriptive message name, for example `deployMessage` or `transferMessage`"
-                    .to_owned(),
-            ),
-        };
-        checker.emit_diagnostic(MessageShouldBeNamed::rule(), diagnostic);
+            }])
+            .with_help(
+                "use a descriptive message name, for example `deployMessage` or `transferMessage`",
+            );
+        checker.emit_diagnostic(diagnostic);
     }
 
     Some(())
@@ -152,27 +143,19 @@ pub fn check_call_for_inline_send(
         return None;
     }
 
-    let diagnostic = Diagnostic {
-        file_id,
-        severity: Severity::Warning,
-        name: CreateMessageInlineSend::rule().name(),
-        code: CreateMessageInlineSend::code().map(|c| c.to_string()),
-        message: CreateMessageInlineSend.message(),
-        annotations: vec![Annotation {
+    let diagnostic = Diagnostic::warning_for(file_id, CreateMessageInlineSend)
+        .with_annotations(vec![Annotation {
             span: call.span(),
             message: Some(
                 "avoid `createMessage(...).send(...)`, create named message first".to_owned(),
             ),
             is_primary: true,
             tags: vec![],
-        }],
-        fixes: vec![],
-        help: Some(
-            "split into two statements: create message in a variable, then call `.send(...)`"
-                .to_owned(),
-        ),
-    };
-    checker.emit_diagnostic(CreateMessageInlineSend::rule(), diagnostic);
+        }])
+        .with_help(
+            "split into two statements: create message in a variable, then call `.send(...)`",
+        );
+    checker.emit_diagnostic(diagnostic);
 
     None
 }

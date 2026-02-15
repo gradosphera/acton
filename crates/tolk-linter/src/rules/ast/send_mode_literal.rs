@@ -1,5 +1,5 @@
-use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
-use crate::rules::violation::{Violation, ViolationMetadata};
+use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix};
+use crate::rules::violation::Violation;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::AstNodeSpanExt;
@@ -74,22 +74,16 @@ pub fn check_call(
         });
     }
 
-    let diagnostic = Diagnostic {
-        file_id,
-        severity: Severity::Warning,
-        name: SendModeLiteral::rule().name(),
-        code: SendModeLiteral::code().map(|c| c.to_string()),
-        message: SendModeLiteral.message(),
-        annotations: vec![Annotation {
+    let diagnostic = Diagnostic::warning_for(file_id, SendModeLiteral)
+        .with_annotations(vec![Annotation {
             span: mode_expr.span(),
             message: Some("numeric send mode literal is used here".to_string()),
             is_primary: true,
             tags: vec![],
-        }],
-        fixes,
-        help: Some(help),
-    };
-    checker.emit_diagnostic(SendModeLiteral::rule(), diagnostic);
+        }])
+        .with_fixes(fixes)
+        .with_help(help);
+    checker.emit_diagnostic(diagnostic);
 
     None
 }

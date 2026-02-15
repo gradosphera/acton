@@ -326,6 +326,8 @@ fn register_rules<'a>(input: impl Iterator<Item = &'a Rule>) -> TokenStream {
             Copy,
             Clone,
             Hash,
+            Ord,
+            PartialOrd,
         )]
         #[repr(u16)]
         pub enum Rule { #rule_variants }

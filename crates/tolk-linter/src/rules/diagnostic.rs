@@ -1,3 +1,5 @@
+use crate::Rule;
+use crate::rules::violation::Violation;
 use tolk_resolver::FileId;
 use tolk_resolver::file_index::Span;
 
@@ -21,6 +23,7 @@ pub enum Severity {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Diagnostic {
     pub file_id: FileId,
+    pub rule: Rule,
     pub name: &'static str,
     pub severity: Severity,
     pub code: Option<String>,
@@ -28,6 +31,48 @@ pub struct Diagnostic {
     pub annotations: Vec<Annotation>,
     pub fixes: Vec<Fix>,
     pub help: Option<String>,
+}
+
+impl Diagnostic {
+    pub fn for_violation<V: Violation>(file_id: FileId, severity: Severity, violation: V) -> Self {
+        Self {
+            file_id,
+            rule: V::rule(),
+            name: V::rule().name(),
+            severity,
+            code: V::code().map(str::to_string),
+            message: violation.message(),
+            annotations: vec![],
+            fixes: vec![],
+            help: None,
+        }
+    }
+
+    pub fn warning_for<V: Violation>(file_id: FileId, violation: V) -> Self {
+        Self::for_violation(file_id, Severity::Warning, violation)
+    }
+
+    pub fn error_for<V: Violation>(file_id: FileId, violation: V) -> Self {
+        Self::for_violation(file_id, Severity::Error, violation)
+    }
+
+    #[must_use]
+    pub fn with_annotations(mut self, annotations: Vec<Annotation>) -> Self {
+        self.annotations = annotations;
+        self
+    }
+
+    #[must_use]
+    pub fn with_fixes(mut self, fixes: Vec<Fix>) -> Self {
+        self.fixes = fixes;
+        self
+    }
+
+    #[must_use]
+    pub fn with_help<T: AsRef<str>>(mut self, help: T) -> Self {
+        self.help = Some(help.as_ref().to_owned());
+        self
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]

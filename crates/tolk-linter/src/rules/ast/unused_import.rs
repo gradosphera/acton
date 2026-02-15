@@ -1,7 +1,6 @@
 use crate::diagnostic::DiagnosticTag;
-use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
+use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix};
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use rustc_hash::{FxBuildHasher, FxHashSet};
 use tolk_macros::ViolationMetadata;
@@ -104,22 +103,15 @@ fn fire_diagnostic(checker: &mut Checker, span: Span, file_id: FileId, source: &
         vec![]
     };
 
-    let diagnostic = Diagnostic {
-        file_id,
-        severity: Severity::Warning,
-        name: UnusedImport::rule().name(),
-        code: UnusedImport::code().map(|c| c.to_string()),
-        message: UnusedImport.message(),
-        annotations: vec![Annotation {
+    let diagnostic = Diagnostic::warning_for(file_id, UnusedImport)
+        .with_annotations(vec![Annotation {
             span,
             message: Some("this import is unused".to_string()),
             is_primary: true,
             tags: vec![DiagnosticTag::Unnecessary],
-        }],
-        fixes,
-        help: None,
-    };
-    checker.emit_diagnostic(UnusedImport::rule(), diagnostic);
+        }])
+        .with_fixes(fixes);
+    checker.emit_diagnostic(diagnostic);
 }
 
 fn expand_to_whole_line(source: &str, span: Span) -> Option<Span> {

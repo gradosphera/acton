@@ -151,8 +151,8 @@ impl<'a> Checker<'a> {
         run_rule!(self, Rule::NameCaseChecker, check_name_cases(self));
     }
 
-    pub fn emit_diagnostic(&mut self, rule: Rule, mut diagnostic: Diagnostic) {
-        if let Some(level) = self.settings.get(&rule) {
+    pub fn emit_diagnostic(&mut self, mut diagnostic: Diagnostic) {
+        if let Some(level) = self.settings.get(&diagnostic.rule) {
             match level {
                 acton_config::config::LintLevel::Allow => return,
                 acton_config::config::LintLevel::Warn => {

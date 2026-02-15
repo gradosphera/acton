@@ -1,5 +1,5 @@
-use crate::rules::diagnostic::{Annotation, Diagnostic, Severity};
-use crate::rules::violation::{Violation, ViolationMetadata};
+use crate::rules::diagnostic::{Annotation, Diagnostic};
+use crate::rules::violation::Violation;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::{FileId, Span};
@@ -53,24 +53,16 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
 
 #[cold]
 fn fire_diagnostic(checker: &mut Checker, file_id: FileId, span: Span) {
-    let diagnostic = Diagnostic {
-        file_id,
-        severity: Severity::Error,
-        name: ActonImportInContract::rule().name(),
-        code: ActonImportInContract::code().map(|c| c.to_string()),
-        message: ActonImportInContract.message(),
-        annotations: vec![Annotation {
+    let diagnostic = Diagnostic::error_for(file_id, ActonImportInContract)
+        .with_annotations(vec![Annotation {
             span,
             message: Some("this import resolves to a file in .acton".to_string()),
             is_primary: true,
             tags: vec![],
-        }],
-        fixes: vec![],
-        help: Some(
+        }])
+        .with_help(
             "Acton stdlib may use emulator-only instructions that are unavailable on-chain, so such imports can break contract execution.
 Use on-chain-safe modules (for example, `@stdlib/...`), and if you only need data types, copy their definitions into your project."
-                .to_string(),
-        ),
-    };
-    checker.emit_diagnostic(ActonImportInContract::rule(), diagnostic);
+        );
+    checker.emit_diagnostic(diagnostic);
 }

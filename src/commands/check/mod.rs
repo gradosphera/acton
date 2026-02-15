@@ -8,8 +8,8 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use tolk_linter::Checker;
 use tolk_linter::diagnostic::{Annotation, Diagnostic, Severity};
+use tolk_linter::{Checker, Rule};
 use tolk_resolver::file_db::FileDb;
 use tolk_resolver::file_index::Span;
 use tolk_resolver::project_index::ProjectIndex;
@@ -206,7 +206,7 @@ fn check_test_file(
 
     let mut lint_settings = Checker::build_settings(acton_config, None);
     // we can import any files in tests
-    lint_settings.insert(tolk_linter::Rule::ActonImportInContract, LintLevel::Allow);
+    lint_settings.insert(Rule::ActonImportInContract, LintLevel::Allow);
 
     check_root_file(&root, file_db, fix, json, lint_settings, acton_config)
 }
@@ -216,7 +216,7 @@ fn check_root_file(
     file_db: &FileDb,
     fix: bool,
     json: bool,
-    lint_settings: HashMap<tolk_linter::Rule, LintLevel>,
+    lint_settings: HashMap<Rule, LintLevel>,
     acton_config: &ActonConfig,
 ) -> anyhow::Result<Vec<Diagnostic>> {
     let file_info = file_db.process(root)?;
@@ -239,6 +239,7 @@ fn check_root_file(
                 file_id: file_info.id(),
                 severity: Severity::Error,
                 code: None,
+                rule: Rule::CompilerError,
                 name: "parse-error",
                 message: parse_error.message.clone(),
                 annotations: vec![Annotation {

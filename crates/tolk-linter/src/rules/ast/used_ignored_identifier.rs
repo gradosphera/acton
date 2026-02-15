@@ -1,6 +1,5 @@
-use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
+use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix};
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::FileId;
@@ -78,13 +77,8 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
             });
         }
 
-        let diagnostic = Diagnostic {
-            file_id,
-            severity: Severity::Warning,
-            name: UsedIgnoredIdentifier::rule().name(),
-            code: UsedIgnoredIdentifier::code().map(|c| c.to_string()),
-            message: UsedIgnoredIdentifier.message(),
-            annotations: vec![
+        let diagnostic = Diagnostic::warning_for(file_id, UsedIgnoredIdentifier)
+            .with_annotations(vec![
                 Annotation {
                     span: first_use_span,
                     message: Some(format!(
@@ -100,15 +94,14 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
                     is_primary: false,
                     tags: vec![],
                 },
-            ],
-            fixes: vec![Fix {
+            ])
+            .with_fixes(vec![Fix {
                 message: format!("rename `{}` to `{}`", local.name, renamed),
                 edits,
                 applicability: Applicability::Auto,
-            }],
-            help: Some("remove leading underscore if this identifier should be used".to_string()),
-        };
-        checker.emit_diagnostic(UsedIgnoredIdentifier::rule(), diagnostic);
+            }])
+            .with_help("remove leading underscore if this identifier should be used");
+        checker.emit_diagnostic(diagnostic);
     }
 
     Some(())

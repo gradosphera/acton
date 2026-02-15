@@ -1,8 +1,5 @@
-use crate::rules::diagnostic::{
-    Annotation, Applicability, Diagnostic, DiagnosticTag, Edit, Fix, Severity,
-};
+use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, DiagnosticTag, Edit, Fix};
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::{FileId, Span};
@@ -129,20 +126,13 @@ fn fire_diagnostic(
         }
     }
 
-    let diagnostic = Diagnostic {
-        file_id,
-        severity: Severity::Warning,
-        name: UnusedVariable::rule().name(),
-        code: UnusedVariable::code().map(|c| c.to_string()),
-        message: UnusedVariable.message(),
-        annotations: vec![Annotation {
+    let diagnostic = Diagnostic::warning_for(file_id, UnusedVariable)
+        .with_annotations(vec![Annotation {
             span: local.def_span,
             message: Some(format!("unused variable `{name}`",)),
             is_primary: true,
             tags: vec![DiagnosticTag::Unnecessary],
-        }],
-        fixes,
-        help: None,
-    };
-    checker.emit_diagnostic(UnusedVariable::rule(), diagnostic);
+        }])
+        .with_fixes(fixes);
+    checker.emit_diagnostic(diagnostic);
 }

@@ -1,6 +1,5 @@
-use crate::rules::diagnostic::{Annotation, Diagnostic, Severity};
+use crate::rules::diagnostic::{Annotation, Diagnostic};
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::{FileId, Symbol};
@@ -80,13 +79,8 @@ fn check_symbol(checker: &mut Checker, file_id: FileId, call: &Call, name_use: &
 }
 
 fn fire_diagnostic(checker: &mut Checker, file_id: FileId, call: &Call, symbol: &Symbol) {
-    let diagnostic = Diagnostic {
-        file_id,
-        severity: Severity::Warning,
-        name: PureFunctionCallUnused::rule().name(),
-        code: PureFunctionCallUnused::code().map(|c| c.to_string()),
-        message: PureFunctionCallUnused.message(),
-        annotations: vec![Annotation {
+    let diagnostic = Diagnostic::warning_for(file_id, PureFunctionCallUnused)
+        .with_annotations(vec![Annotation {
             span: call.span(),
             message: Some(format!(
                 "result of pure function `{}` is not used",
@@ -94,9 +88,7 @@ fn fire_diagnostic(checker: &mut Checker, file_id: FileId, call: &Call, symbol: 
             )),
             is_primary: true,
             tags: vec![],
-        }],
-        fixes: vec![],
-        help: Some("functions marked with `@pure` have no side effects. Calling them without using the result does nothing and may indicate a bug".to_string()),
-    };
-    checker.emit_diagnostic(PureFunctionCallUnused::rule(), diagnostic);
+        }])
+        .with_help("functions marked with `@pure` have no side effects. Calling them without using the result does nothing and may indicate a bug");
+    checker.emit_diagnostic(diagnostic);
 }

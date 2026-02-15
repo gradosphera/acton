@@ -1,6 +1,5 @@
-use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
+use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix};
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_analysis::UseFlags;
 use tolk_macros::ViolationMetadata;
@@ -91,22 +90,15 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
             });
         }
 
-        let diagnostic = Diagnostic {
-            file_id,
-            severity: Severity::Warning,
-            name: MutableParameterCanBeImmutable::rule().name(),
-            code: MutableParameterCanBeImmutable::code().map(|c| c.to_string()),
-            message: MutableParameterCanBeImmutable.message(),
-            annotations: vec![Annotation {
+        let diagnostic = Diagnostic::warning_for(file_id, MutableParameterCanBeImmutable)
+            .with_annotations(vec![Annotation {
                 span: local.def_span,
                 message: Some("can be made immutable".to_owned()),
                 is_primary: true,
                 tags: vec![],
-            }],
-            fixes,
-            help: None,
-        };
-        checker.emit_diagnostic(MutableParameterCanBeImmutable::rule(), diagnostic);
+            }])
+            .with_fixes(fixes);
+        checker.emit_diagnostic(diagnostic);
     }
     Some(())
 }

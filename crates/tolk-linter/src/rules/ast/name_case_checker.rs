@@ -1,9 +1,6 @@
-use crate::rules::diagnostic::{
-    Annotation, Applicability, Diagnostic, DiagnosticTag, Edit, Fix, Severity,
-};
+use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, DiagnosticTag, Edit, Fix};
 use crate::rules::utils;
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use heck::{ToLowerCamelCase, ToShoutySnakeCase, ToUpperCamelCase};
 use tolk_macros::ViolationMetadata;
@@ -110,26 +107,19 @@ fn check_case(symbol: &Symbol, checker: &mut Checker, symbol_def_file_id: FileId
         });
     }
 
-    let diagnostic = Diagnostic {
-        file_id: symbol_def_file_id,
-        severity: Severity::Warning,
-        name: NameCaseChecker::rule().name(),
-        code: NameCaseChecker::code().map(|c| c.to_string()),
-        message: NameCaseChecker.message(),
-        annotations: vec![Annotation {
+    let diagnostic = Diagnostic::warning_for(symbol_def_file_id, NameCaseChecker)
+        .with_annotations(vec![Annotation {
             span: symbol.name_span,
             message: Some(format!("not {case_name}: `{}`", symbol.name)),
             is_primary: true,
             tags: vec![DiagnosticTag::Unnecessary],
-        }],
-        fixes: vec![Fix {
+        }])
+        .with_fixes(vec![Fix {
             message: format!("rename to {case_name}: {}", correct_case),
             edits,
             applicability: Applicability::Auto,
-        }],
-        help: None,
-    };
-    checker.emit_diagnostic(NameCaseChecker::rule(), diagnostic);
+        }]);
+    checker.emit_diagnostic(diagnostic);
 }
 
 pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
@@ -185,26 +175,19 @@ pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
                 });
             }
 
-            let diagnostic = Diagnostic {
-                file_id,
-                severity: Severity::Warning,
-                name: NameCaseChecker::rule().name(),
-                code: NameCaseChecker::code().map(|c| c.to_string()),
-                message: NameCaseChecker.message(),
-                annotations: vec![Annotation {
+            let diagnostic = Diagnostic::warning_for(file_id, NameCaseChecker)
+                .with_annotations(vec![Annotation {
                     span: local_def.def_span,
                     message: Some(format!("not {case_name}: {name}",)),
                     is_primary: true,
                     tags: vec![DiagnosticTag::Unnecessary],
-                }],
-                fixes: vec![Fix {
+                }])
+                .with_fixes(vec![Fix {
                     message: format!("rename to {case_name}: {correct_case}"),
                     edits,
                     applicability: Applicability::Auto,
-                }],
-                help: None,
-            };
-            checker.emit_diagnostic(NameCaseChecker::rule(), diagnostic);
+                }]);
+            checker.emit_diagnostic(diagnostic);
         }
 
         // And then global ones

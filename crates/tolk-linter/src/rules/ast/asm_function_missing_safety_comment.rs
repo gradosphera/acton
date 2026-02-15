@@ -1,5 +1,5 @@
-use crate::rules::diagnostic::{Annotation, Diagnostic, Severity};
-use crate::rules::violation::{Violation, ViolationMetadata};
+use crate::rules::diagnostic::{Annotation, Diagnostic};
+use crate::rules::violation::Violation;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::AstNodeSpanExt;
@@ -129,13 +129,8 @@ fn contains_safety_word(text: &str) -> bool {
 
 #[cold]
 fn fire_diagnostic(checker: &mut Checker, file_id: FileId, span: Span) {
-    let diagnostic = Diagnostic {
-        file_id,
-        severity: Severity::Warning,
-        name: AsmFunctionMissingSafetyComment::rule().name(),
-        code: AsmFunctionMissingSafetyComment::code().map(|code| code.to_string()),
-        message: AsmFunctionMissingSafetyComment.message(),
-        annotations: vec![Annotation {
+    let diagnostic = Diagnostic::warning_for(file_id, AsmFunctionMissingSafetyComment)
+        .with_annotations(vec![Annotation {
             span,
             message: Some(
                 "add `// SAFETY: ...` or a doc comment section like `/// # Safety` above this declaration"
@@ -143,13 +138,10 @@ fn fire_diagnostic(checker: &mut Checker, file_id: FileId, span: Span) {
             ),
             is_primary: true,
             tags: vec![],
-        }],
-        fixes: vec![],
-        help: Some(
+        }])
+        .with_help(
             "document why this asm usage is sound and what preconditions callers must satisfy"
-                .to_string(),
-        ),
-    };
+        );
 
-    checker.emit_diagnostic(AsmFunctionMissingSafetyComment::rule(), diagnostic);
+    checker.emit_diagnostic(diagnostic);
 }

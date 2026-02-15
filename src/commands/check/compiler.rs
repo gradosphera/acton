@@ -2,6 +2,7 @@ use crate::commands::check::pos;
 use acton_config::config::ActonConfig;
 use std::path::Path;
 use std::time::Instant;
+use tolk_linter::Rule;
 use tolk_linter::diagnostic::{Annotation, Diagnostic, Severity};
 use tolk_resolver::{FileDb, Span};
 use tolkc::Compiler;
@@ -56,6 +57,7 @@ pub(super) fn check_with_compiler(
             file_id: file_info.id(),
             severity: Severity::Error,
             code: None,
+            rule: Rule::CompilerError,
             name: "compiler-error",
             message: compiler_error.message.clone(),
             annotations: vec![Annotation {
