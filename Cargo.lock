@@ -3053,6 +3053,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tolk-dataflow"
+version = "0.1.0"
+dependencies = [
+ "rustc-hash",
+ "tolk-resolver",
+ "tolk-syntax",
+]
+
+[[package]]
 name = "tolk-linter"
 version = "0.1.0"
 dependencies = [

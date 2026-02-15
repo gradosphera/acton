@@ -36,6 +36,7 @@ tolk-ty = { path = "crates/tolk-ty" }
 tolk-analysis = { path = "crates/tolk-analysis" }
 tolk-linter = { path = "crates/tolk-linter" }
 tolk-macros = { path = "crates/tolk-macros" }
+tolk-dataflow = { path = "crates/tolk-dataflow" }
 tvmffi = { path = "crates/tvmffi" }
 vmlogs = { path = "crates/vmlogs" }
 tasm = { path = "crates/tasm" }
