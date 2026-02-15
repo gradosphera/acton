@@ -1,6 +1,6 @@
 pub mod ast;
 pub mod diagnostic;
-pub mod violation;
 mod utils;
+pub mod violation;
 
 pub use violation::*;

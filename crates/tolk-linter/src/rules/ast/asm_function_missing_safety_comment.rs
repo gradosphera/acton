@@ -38,7 +38,6 @@ impl Violation for AsmFunctionMissingSafetyComment {
 pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
     let file = checker.file_db.get_by_id(file_id)?;
     let source = file.source().source.as_ref();
-    let lines = source.lines().collect::<Vec<_>>();
     let line_offsets = file.line_offsets();
 
     for top_level in file.source().top_levels() {
@@ -65,7 +64,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
             continue;
         }
 
-        if has_safety_comment_above_declaration(&lines, line_offsets, decl_span.start()) {
+        if has_safety_comment_above_declaration(source, line_offsets, decl_span.start()) {
             continue;
         }
 
@@ -76,7 +75,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
 }
 
 fn has_safety_comment_above_declaration(
-    lines: &[&str],
+    source: &str,
     line_offsets: &[usize],
     declaration_start: usize,
 ) -> bool {
@@ -87,7 +86,7 @@ fn has_safety_comment_above_declaration(
 
     let mut line_idx = declaration_line as isize - 1;
     while line_idx >= 0 {
-        let Some(line) = lines.get(line_idx as usize) else {
+        let Some(line) = line_text(source, line_offsets, line_idx as usize) else {
             break;
         };
         let trimmed = line.trim_start();
@@ -104,6 +103,15 @@ fn has_safety_comment_above_declaration(
     }
 
     false
+}
+
+fn line_text<'a>(source: &'a str, line_offsets: &[usize], line_idx: usize) -> Option<&'a str> {
+    let start = *line_offsets.get(line_idx)?;
+    let end = line_offsets
+        .get(line_idx + 1)
+        .copied()
+        .unwrap_or(source.len());
+    source.get(start..end)
 }
 
 fn offset_to_line(line_offsets: &[usize], offset: usize) -> usize {
