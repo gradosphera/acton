@@ -640,6 +640,9 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
             let name_str = name.text(self.file_content()).to_string();
             self.add_symbol(&name.0, name_str, LocalDefKind::TypeParameter);
         }
+        if let Some(default) = node.default() {
+            self.visit_type(&default)
+        }
     }
 
     fn walk_parameter(&mut self, node: &ast::Parameter<'tree>, in_common: bool) -> Self::Result {

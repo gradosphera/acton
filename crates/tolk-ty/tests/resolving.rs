@@ -226,3 +226,38 @@ fn get_test_path(relative_path: &str) -> PathBuf {
 fn test_basics() {
     run_resolve_tests_from_file(&get_test_path("basic.test"));
 }
+
+#[test]
+fn test_aliases() {
+    run_resolve_tests_from_file(&get_test_path("aliases.test"));
+}
+
+#[test]
+fn test_enums() {
+    run_resolve_tests_from_file(&get_test_path("enums.test"));
+}
+
+#[test]
+fn test_instance_methods() {
+    run_resolve_tests_from_file(&get_test_path("instance-methods.test"));
+}
+
+#[test]
+fn test_lambdas() {
+    run_resolve_tests_from_file(&get_test_path("lambdas.test"));
+}
+
+#[test]
+fn test_static_methods() {
+    run_resolve_tests_from_file(&get_test_path("static-methods.test"));
+}
+
+#[test]
+fn test_struct_fields() {
+    run_resolve_tests_from_file(&get_test_path("struct-fields.test"));
+}
+
+#[test]
+fn test_type_parameters() {
+    run_resolve_tests_from_file(&get_test_path("type-parameters.test"));
+}

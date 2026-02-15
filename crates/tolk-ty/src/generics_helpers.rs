@@ -167,9 +167,10 @@ impl GenericSubstitutionsDeducing {
                         args: Some(a_args),
                         ..
                     } => {
-                        if let TyData::TypeAlias { def: p_def, .. } =
-                            interner.data(interner.unwrap_alias(p_inner))
-                            && *p_def == a_def
+                        // `arg: WrapperAlias<T>` called as `f(wrappedInt)` => T is int
+                        let p_data = interner.data(p_inner).clone();
+                        if let TyData::TypeAlias { def: p_def, .. } = p_data
+                            && p_def == a_def
                             && p_args.len() == a_args.len()
                         {
                             for (&p, &a) in p_args.iter().zip(a_args.iter()) {

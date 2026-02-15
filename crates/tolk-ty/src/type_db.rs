@@ -1,4 +1,6 @@
+use crate::generics_helpers::GenericsSubstitutions;
 use crate::type_interner::{TyId, TypeInterner};
+use crate::type_substitutor::TypeSubstitutor;
 use crate::types::{AddressKind, TyData};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
@@ -376,7 +378,15 @@ impl<'a> TypeDb<'a> {
 
                 Some(alias_ty)
             }
-            _ => None,
+            ast::TopLevel::Enum(_) => {
+                let name = symbol.name.clone();
+                Some(self.intrn.enum_ty(symbol.id, name))
+            }
+            ast::TopLevel::TolkRequiredVersion(_)
+            | ast::TopLevel::Import(_)
+            | ast::TopLevel::Struct(_)
+            | ast::TopLevel::EmptyStmt(_)
+            | ast::TopLevel::Unmapped(_) => None,
         }
     }
 
@@ -597,14 +607,31 @@ impl<'a> TypeDb<'a> {
                     name,
                     inner_ty,
                     ..
-                } = self.intrn.data(*inner_ty)
+                } = self.intrn.data(*inner_ty).clone()
                 {
-                    return Some(self.intrn.type_alias_instantiation(
-                        *def,
-                        name.clone(),
-                        *inner_ty,
-                        tys,
-                    ));
+                    let mut inner_ty = inner_ty;
+
+                    // type Alias<T> = Generic<T>
+                    // Alias<int> -> Alias<int> with base=Generic<int>
+                    let resolved = self.project_index.resolve_symbol(def)?;
+                    if let SymbolKind::TypeAlias {
+                        type_parameters, ..
+                    } = &resolved.kind
+                    {
+                        let mut substituion = GenericsSubstitutions::new();
+
+                        for (param, &ty) in type_parameters.iter().zip(&tys) {
+                            substituion.set_type_t(param.name.to_string(), ty);
+                        }
+
+                        let mut substitutor = TypeSubstitutor::new(self.intrn);
+                        inner_ty = substitutor.substitute(inner_ty, &substituion.mapping)
+                    }
+
+                    return Some(
+                        self.intrn
+                            .type_alias_instantiation(def, name, inner_ty, tys),
+                    );
                 }
             }
 

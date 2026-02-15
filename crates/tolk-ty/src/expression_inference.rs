@@ -1292,8 +1292,9 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         let obj_type = self
             .ctx
             .get_node_type(&obj)
-            .map(|ty| self.intrn().unwrap_alias(ty))
             .unwrap_or_else(|| self.const_intrn().ty_unknown);
+
+        let unwrapped_obj_type = self.intrn().unwrap_alias(obj_type);
 
         // a.foo
         //   ^^^^ field
@@ -1312,8 +1313,8 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         {
             // `Color.Red` (enum member) — just fill v->target and done
             let unwrapped = self.intrn().unwrap_alias(receiver_type);
-            if let TyData::Enum { .. } = self.intrn().data(unwrapped) {
-                let member = self.ctx.type_db.find_enum_member(sym_id, &field_name);
+            if let TyData::Enum { def, .. } = self.const_intrn().data(unwrapped) {
+                let member = self.ctx.type_db.find_enum_member(*def, &field_name);
                 if let Some(member) = member {
                     self.ctx.set_resolved(NameUse {
                         decl: self.ctx.decl_start,
@@ -1342,7 +1343,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         }
 
         // check for field access (`user.id`), when obj is a struct
-        if let TyData::Struct { def, .. } = self.intrn().data(obj_type) {
+        if let TyData::Struct { def, .. } = self.intrn().data(unwrapped_obj_type) {
             let def_id = *def;
             let struct_ty = self
                 .ctx
@@ -1361,7 +1362,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 let mut inferred_type = field_def.declared_type;
 
                 let mut deducer = GenericSubstitutionsDeducing::new();
-                deducer.auto_deduce_from_argument(struct_ty, obj_type, self.intrn());
+                deducer.auto_deduce_from_argument(struct_ty, unwrapped_obj_type, self.intrn());
 
                 if self.const_intrn().has_generics(inferred_type) {
                     let mut substitutor = TypeSubstitutor::new(self.intrn());
@@ -1386,7 +1387,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             && let DotAccessField::NumericIndex(_) = field
             && let Ok(index_at) = field_name.parse::<usize>()
         {
-            match self.intrn().data(obj_type).clone() {
+            match self.intrn().data(unwrapped_obj_type).clone() {
                 TyData::Tensor(items) => {
                     if index_at >= items.len() {
                         return ExprFlow::create(flow, as_cond);
