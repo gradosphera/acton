@@ -1,7 +1,9 @@
 extern crate core;
 
 use crate::ast::name_case_checker::check_name_cases;
-use crate::ast::{acton_import_in_contract, deprecated_symbol_use, no_bounce_handler, several_not_null_assertions};
+use crate::ast::{
+    acton_import_in_contract, deprecated_symbol_use, no_bounce_handler, several_not_null_assertions,
+};
 use crate::rules::ast::{
     asm_function_missing_safety_comment, field_init_can_be_folded, message_entity_naming,
     method_can_be_static, mutable_parameter_can_be_immutable, mutable_variable_can_be_immutable,

@@ -17,6 +17,8 @@
     "e014-acton-import-in-contract",
     "e015-asm-function-missing-safety-comment",
     "e016-send-mode-literal",
+    "e017-unauthorized-access",
+    "e019-several-not-null-assertions",
     "s001-name-case-checker"
   ]
 }
