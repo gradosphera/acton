@@ -274,8 +274,9 @@ pub struct ABIStructField {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ABIEnumMember {
     pub name: String,
-    // C++ пишет computed_value; безопаснее String (как и у int const)
     pub value: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -332,6 +333,8 @@ pub enum ABIDeclaration {
 pub struct ABIFunctionParameter {
     pub name: String,
     pub ty: ABIType,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -354,7 +357,6 @@ pub struct ABIInternalMessage {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
 
-    // C++ пишет ключ только если has_value()
     #[serde(rename = "minimalMsgValue", skip_serializing_if = "Option::is_none")]
     pub minimal_msg_value: Option<i64>,
 
@@ -380,7 +382,6 @@ pub struct ABIOutgoingMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ABIStorage {
-    // C++ вообще не пишет ключи если nullptr
     #[serde(rename = "storageTy", skip_serializing_if = "Option::is_none")]
     pub storage_ty: Option<ABIType>,
 
@@ -391,11 +392,23 @@ pub struct ABIStorage {
     pub storage_at_deployment_ty: Option<ABIType>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ABIThrownErrorKind {
+    #[serde(rename = "plainInt")]
+    PlainInt,
+    #[serde(rename = "constant")]
+    Constant,
+    #[serde(rename = "enumMember")]
+    EnumMember,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ABIThrownError {
-    // C++ может не писать constName если empty
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<ABIThrownErrorKind>,
     #[serde(
-        rename = "constName",
+        rename = "name",
+        alias = "constName",
         default,
         skip_serializing_if = "String::is_empty"
     )]
@@ -454,4 +467,32 @@ pub struct ContractABI {
     pub compiler_name: String,
     #[serde(rename = "compilerVersion")]
     pub compiler_version: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ABIThrownError, ABIThrownErrorKind};
+
+    #[test]
+    fn thrown_error_deserializes_abi_1_3_format() {
+        let error: ABIThrownError = serde_json::from_str(
+            r#"{"kind":"enumMember","name":"Errors.NotEnoughTon","errCode":57}"#,
+        )
+        .expect("failed to deserialize ABI 1.3 thrown error");
+
+        assert_eq!(error.kind, Some(ABIThrownErrorKind::EnumMember));
+        assert_eq!(error.const_name, "Errors.NotEnoughTon");
+        assert_eq!(error.err_code, 57);
+    }
+
+    #[test]
+    fn thrown_error_deserializes_legacy_format() {
+        let error: ABIThrownError =
+            serde_json::from_str(r#"{"constName":"ERR_NOT_ENOUGH_TON","errCode":57}"#)
+                .expect("failed to deserialize legacy thrown error");
+
+        assert_eq!(error.kind, None);
+        assert_eq!(error.const_name, "ERR_NOT_ENOUGH_TON");
+        assert_eq!(error.err_code, 57);
+    }
 }

@@ -427,6 +427,8 @@ pub struct CompilerCheckError {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CompilerError {
     pub message: String,
+    #[serde(default, alias = "isWarning")]
+    pub is_warning: bool,
     pub range: CompilerErrorRange,
 }
 
@@ -469,3 +471,49 @@ type WasmFsReadCallback = Option<
         dest_error: *mut *mut ::std::os::raw::c_char,
     ),
 >;
+
+#[cfg(test)]
+mod tests {
+    use super::CompilerError;
+
+    #[test]
+    fn compiler_error_deserializes_warning_flag() {
+        let error: CompilerError = serde_json::from_str(
+            r#"{
+                "message":"warning message",
+                "is_warning":true,
+                "range":{
+                    "file_name":"main.tolk",
+                    "start_line_no":1,
+                    "start_char_no":1,
+                    "end_line_no":1,
+                    "end_char_no":5,
+                    "text_inside":"main"
+                }
+            }"#,
+        )
+        .expect("failed to deserialize compiler warning");
+
+        assert!(error.is_warning);
+    }
+
+    #[test]
+    fn compiler_error_defaults_warning_flag_to_false() {
+        let error: CompilerError = serde_json::from_str(
+            r#"{
+                "message":"error message",
+                "range":{
+                    "file_name":"main.tolk",
+                    "start_line_no":1,
+                    "start_char_no":1,
+                    "end_line_no":1,
+                    "end_char_no":5,
+                    "text_inside":"main"
+                }
+            }"#,
+        )
+        .expect("failed to deserialize compiler error");
+
+        assert!(!error.is_warning);
+    }
+}
