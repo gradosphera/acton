@@ -3316,9 +3316,12 @@ dependencies = [
  "anyhow",
  "chrono",
  "dashmap 7.0.0-rc2",
+ "dunce",
  "fern",
+ "globset",
  "log",
  "lsp-types",
+ "owo-colors",
  "rustc-hash",
  "serde",
  "serde_json",
@@ -3331,6 +3334,7 @@ dependencies = [
  "toml",
  "tower-lsp",
  "tree-sitter",
+ "walkdir",
 ]
 
 [[package]]

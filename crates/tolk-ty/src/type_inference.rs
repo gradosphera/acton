@@ -87,11 +87,11 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
     }
 
     pub(crate) const fn intrn(&mut self) -> &mut TypeInterner {
-        self.ctx.type_db.intrn
+        &mut self.ctx.type_db.intrn
     }
 
     pub(crate) const fn const_intrn(&self) -> &TypeInterner {
-        self.ctx.type_db.intrn
+        &self.ctx.type_db.intrn
     }
 
     pub(crate) fn lower(&mut self, ty: Option<Type<'_>>) -> TyId {

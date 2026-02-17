@@ -57,7 +57,7 @@ pub struct ProjectIndex {
 
 impl ProjectIndex {
     /// Creates a new builder for `ProjectIndex`.
-    pub fn builder(file_db: &'_ FileDb, root_path: PathBuf) -> ProjectIndexBuilder<'_> {
+    pub fn builder(file_db: Arc<FileDb>, root_path: PathBuf) -> ProjectIndexBuilder {
         ProjectIndexBuilder::new(file_db, root_path)
     }
 
@@ -286,15 +286,15 @@ impl ProjectIndex {
 }
 
 /// A builder for creating a `ProjectIndex`.
-pub struct ProjectIndexBuilder<'a> {
-    file_db: &'a FileDb,
+pub struct ProjectIndexBuilder {
+    file_db: Arc<FileDb>,
     root_path: PathBuf,
     stdlib_path: Option<PathBuf>,
     mappings: FxHashMap<String, String>,
 }
 
-impl<'a> ProjectIndexBuilder<'a> {
-    pub fn new(file_db: &'a FileDb, root_path: PathBuf) -> Self {
+impl ProjectIndexBuilder {
+    pub fn new(file_db: Arc<FileDb>, root_path: PathBuf) -> Self {
         Self {
             file_db,
             root_path,
@@ -375,7 +375,7 @@ impl<'a> ProjectIndexBuilder<'a> {
             let resolved = match ProjectIndex::resolve_path(
                 &import,
                 root_file,
-                self.file_db,
+                self.file_db.as_ref(),
                 self.stdlib_path.as_deref(),
                 &self.mappings,
             ) {
@@ -409,7 +409,7 @@ impl<'a> ProjectIndexBuilder<'a> {
             let (file_imports, file_errors) = ProjectIndex::resolve_imports(
                 index,
                 &path_to_file_id,
-                self.file_db,
+                self.file_db.as_ref(),
                 self.stdlib_path.as_deref(),
                 &self.mappings,
             );

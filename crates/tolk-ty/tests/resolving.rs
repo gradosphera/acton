@@ -4,10 +4,11 @@ use crate::common::test_parser::{TestCase, TestParser};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tolk_resolver::file_db::{FileDb, FileInfo};
 use tolk_resolver::project_index::ProjectIndex;
 use tolk_resolver::{Resolved, SymbolId, resolve};
-use tolk_ty::{InferenceResult, TypeDb, TypeInterner, infer};
+use tolk_ty::{InferenceResult, TypeDb, infer};
 
 #[cfg(test)]
 pub mod common;
@@ -132,7 +133,7 @@ fn run_resolve_test(test_case: &TestCase) -> String {
     }
 
     let stdlib_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tolkc/assets/tolk-stdlib");
-    let file_db = FileDb::new(stdlib_path.clone(), None);
+    let file_db = Arc::new(FileDb::new(stdlib_path.clone(), None));
     let stdlib_path = dunce::canonicalize(stdlib_path).unwrap();
 
     let common_tolk = stdlib_path.join("common.tolk");
@@ -140,7 +141,7 @@ fn run_resolve_test(test_case: &TestCase) -> String {
         file_db.process(&common_tolk).unwrap();
     }
 
-    let mut index = ProjectIndex::builder(&file_db, root_path.clone())
+    let mut index = ProjectIndex::builder(file_db.clone(), root_path.clone())
         .with_stdlib(file_db.stdlib_path().to_owned())
         .build()
         .expect("Failed to build index");
@@ -151,8 +152,7 @@ fn run_resolve_test(test_case: &TestCase) -> String {
 
     resolve(&file_db, &mut index);
 
-    let mut interner = TypeInterner::new();
-    let mut type_db = TypeDb::new(&mut interner, &file_db, &index);
+    let mut type_db = TypeDb::new(file_db.clone(), &index);
 
     let mut inferences: HashMap<SymbolId, InferenceResult> = HashMap::new();
     for decl in file_info.source().top_levels() {

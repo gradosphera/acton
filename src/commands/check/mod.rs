@@ -7,6 +7,7 @@ use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
 use tolk_linter::diagnostic::{Annotation, Applicability, Diagnostic, Severity};
 use tolk_linter::{Checker, Rule};
@@ -53,7 +54,7 @@ pub fn check_cmd(
     let acton_stdlib = find_acton_stdlib()?;
     let common_tolk = stdlib.join("common.tolk");
 
-    let file_db = FileDb::new(stdlib, Some(acton_stdlib));
+    let file_db = Arc::new(FileDb::new(stdlib, Some(acton_stdlib)));
 
     // We need stdlib for all targets so preprocess it before all.
     if common_tolk.exists() {
@@ -65,21 +66,21 @@ pub fn check_cmd(
     if let Some(target) = target {
         if target.ends_with(".tolk") {
             let contract_diagnostics =
-                check_test_file(Path::new(&target), &file_db, fix, json, &config)?;
+                check_test_file(Path::new(&target), file_db.clone(), fix, json, &config)?;
             all_diagnostics.extend(contract_diagnostics);
         } else {
             let contract = config
                 .get_contract(&target)
                 .ok_or_else(|| anyhow!(error_fmt::contract_not_found(&config, &target)))?;
             let contract_diagnostics =
-                check_contract(&target, contract, &file_db, fix, json, &config)?;
+                check_contract(&target, contract, file_db.clone(), fix, json, &config)?;
             all_diagnostics.extend(contract_diagnostics);
         }
     } else {
         let contracts = config.contracts().cloned().unwrap_or_default();
         for (contract_id, contract) in contracts {
             let contract_diagnostics =
-                check_contract(&contract_id, &contract, &file_db, fix, json, &config)?;
+                check_contract(&contract_id, &contract, file_db.clone(), fix, json, &config)?;
             all_diagnostics.extend(contract_diagnostics);
         }
 
@@ -88,7 +89,8 @@ pub fn check_cmd(
                 continue;
             };
             if name.to_string_lossy().ends_with(".test.tolk") {
-                let contract_diagnostics = check_test_file(&file, &file_db, fix, json, &config)?;
+                let contract_diagnostics =
+                    check_test_file(&file, file_db.clone(), fix, json, &config)?;
                 all_diagnostics.extend(contract_diagnostics);
             }
         }
@@ -191,7 +193,7 @@ fn find_acton_stdlib() -> anyhow::Result<PathBuf> {
 fn check_contract(
     contract_id: &str,
     config: &ContractConfig,
-    file_db: &FileDb,
+    file_db: Arc<FileDb>,
     fix: bool,
     json: bool,
     acton_config: &ActonConfig,
@@ -213,7 +215,7 @@ fn check_contract(
 
 fn check_test_file(
     file: &Path,
-    file_db: &FileDb,
+    file_db: Arc<FileDb>,
     fix: bool,
     json: bool,
     acton_config: &ActonConfig,
@@ -239,7 +241,7 @@ fn check_test_file(
 
 fn check_root_file(
     root: &Path,
-    file_db: &FileDb,
+    file_db: Arc<FileDb>,
     fix: bool,
     json: bool,
     lint_settings: HashMap<Rule, LintLevel>,
@@ -251,7 +253,7 @@ fn check_root_file(
     let mut all_diagnostics = vec![];
 
     let has_compiler_errors =
-        compiler::check_with_compiler(root, file_db, acton_config, &mut all_diagnostics)?;
+        compiler::check_with_compiler(root, &file_db, acton_config, &mut all_diagnostics)?;
 
     let parse_errors = file_info.source().errors();
 
@@ -289,7 +291,7 @@ fn check_root_file(
     // - parse
     // - resolve imports
     let now = Instant::now();
-    let mut index = ProjectIndex::builder(file_db, root.to_owned())
+    let mut index = ProjectIndex::builder(file_db.clone(), root.to_owned())
         .with_stdlib(file_db.stdlib_path().to_owned())
         .with_mappings(&acton_config.mappings)
         .build()?;
@@ -298,13 +300,12 @@ fn check_root_file(
 
     // Then we can resolve all symbols across files
     let now = Instant::now();
-    resolve(file_db, &mut index);
+    resolve(&file_db, &mut index);
     log::debug!("Resolve project took {:?}", now.elapsed());
 
     // Infer types of all top level declarations
     let now = Instant::now();
-    let mut interner = TypeInterner::new();
-    let mut type_db = TypeDb::new(&mut interner, file_db, &index);
+    let mut type_db = TypeDb::new(file_db.clone(), &index);
 
     let mut body_types = HashMap::new();
 
@@ -331,7 +332,8 @@ fn check_root_file(
 
     // And finally run all inspections provided by checker
     let now = Instant::now();
-    let mut checker = Checker::new(file_db, &mut type_db, &body_types).with_settings(lint_settings);
+    let mut checker =
+        Checker::new(&file_db, &mut type_db, &body_types).with_settings(lint_settings);
 
     // locals by file -> file_db -> project_index -> by usage
     // globals one time
@@ -366,7 +368,7 @@ fn check_root_file(
         } else {
             diagnostics.clone()
         };
-        let _ = render::emit_diagnostics(file_db, &diagnostics_to_show);
+        let _ = render::emit_diagnostics(&file_db, &diagnostics_to_show);
     }
 
     Ok(diagnostics)

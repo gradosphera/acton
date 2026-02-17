@@ -1,6 +1,7 @@
 use crate::commands::check::pos;
 use acton_config::config::ActonConfig;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Instant;
 use tolk_linter::Rule;
 use tolk_linter::diagnostic::{Annotation, Diagnostic, Severity};

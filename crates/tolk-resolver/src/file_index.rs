@@ -322,6 +322,22 @@ impl FileIndex {
         self.source_kind == FileSource::Workspace
     }
 
+    pub fn is_test_file(&self) -> bool {
+        self.path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().ends_with(".test.tolk"))
+    }
+
+    pub fn is_root_file(&self) -> bool {
+        if self.is_test_file() {
+            return true;
+        }
+
+        self.decls
+            .iter()
+            .any(|d| d.name.as_ref() == "main" || d.name.as_ref() == "onInternalMessage")
+    }
+
     /// Builds a `FileIndex` from a parsed `SourceFile`.
     ///
     /// # Panics

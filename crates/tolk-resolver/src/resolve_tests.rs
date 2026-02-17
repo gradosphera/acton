@@ -1,10 +1,13 @@
 #[cfg(test)]
 mod tests {
     use crate::file_db::FileDb;
+    use crate::project_index::ProjectIndex;
     use crate::resolve_index::Resolved;
+    use crate::symbol_resolver;
     use expect_test::{Expect, expect};
     use std::collections::BTreeMap;
     use std::path::PathBuf;
+    use std::sync::Arc;
 
     #[test]
     fn test_local_var() {
@@ -1428,7 +1431,7 @@ mod tests {
             let target_abs_path = target_abs_path.expect("Target file not found in project files");
 
             let stdlib_path = PathBuf::from("../../crates/tolkc/assets/tolk-stdlib");
-            let file_db = FileDb::new(stdlib_path.clone(), None);
+            let file_db = Arc::new(FileDb::new(stdlib_path.clone(), None));
 
             let stdlib_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(stdlib_path);
             let stdlib_path = dunce::canonicalize(stdlib_path).unwrap();
@@ -1450,14 +1453,13 @@ mod tests {
                     .collect::<BTreeMap<_, _>>()
             });
 
-            let mut project_index =
-                crate::project_index::ProjectIndex::builder(&file_db, target_abs_path.clone())
-                    .with_stdlib(stdlib_path)
-                    .with_mappings(&mappings)
-                    .build()
-                    .unwrap();
+            let mut project_index = ProjectIndex::builder(file_db.clone(), target_abs_path.clone())
+                .with_stdlib(stdlib_path)
+                .with_mappings(&mappings)
+                .build()
+                .unwrap();
 
-            crate::symbol_resolver::resolve(&file_db, &mut project_index);
+            symbol_resolver::resolve(&file_db, &mut project_index);
 
             let file_id = project_index
                 .path_to_file_id()

@@ -2,8 +2,9 @@ use dashmap::DashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::RwLock;
 use tolk_resolver::file_db::FileDb;
-use ton_ls::Backend;
+use ton_ls::{Backend, TolkAnalyzer};
 use tower_lsp::{LspService, Server};
 
 pub async fn ls_cmd(
@@ -52,12 +53,15 @@ async fn ls_cmd_internal(port: Option<u16>, stdio: bool, file_db: FileDb) -> any
             });
         }
 
+        let tolk = TolkAnalyzer::empty();
+
         Backend {
             client,
             file_db: Arc::new(file_db),
             documents: DashMap::new(),
             analysis: DashMap::new(),
             file_urls: DashMap::new(),
+            tolk: RwLock::new(tolk),
             #[cfg(feature = "profiling")]
             profiling,
         }

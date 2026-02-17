@@ -10,7 +10,7 @@ use std::time::Instant;
 use tolk_linter::Checker;
 use tolk_resolver::ProjectIndexBuilder;
 use tolk_resolver::symbol_resolver::resolve;
-use tolk_ty::{TypeDb, TypeInterner, infer};
+use tolk_ty::{TypeDb, infer};
 use tower_lsp::lsp_types::Url;
 use tree_sitter::Tree;
 
@@ -87,7 +87,7 @@ impl Backend {
 
         let acton_config = ActonConfig::load()?;
 
-        let mut index = ProjectIndexBuilder::new(&self.file_db, root_path.clone())
+        let mut index = ProjectIndexBuilder::new(self.file_db.clone(), root_path.clone())
             .with_stdlib(stdlib_path.to_owned())
             .with_mappings(&acton_config.mappings)
             .build()?;
@@ -96,8 +96,7 @@ impl Backend {
         let resolving_time = now.elapsed();
         let now = Instant::now();
 
-        let mut interner = TypeInterner::new();
-        let mut type_db = TypeDb::new(&mut interner, &self.file_db, &index);
+        let mut type_db = TypeDb::new(self.file_db.clone(), &index);
 
         let mut all_body_types = HashMap::new();
 
@@ -148,7 +147,6 @@ impl Backend {
 
         Ok(AnalysisResult {
             project_index: Arc::new(index),
-            type_interner: Arc::new(interner),
             all_body_types,
             diagnostics,
         })

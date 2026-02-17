@@ -123,7 +123,7 @@ impl MethodCallCandidate {
 /// example: pattern=`Container<T>`, actual=`Container<Container<U>>` => T=Container<U>
 fn can_substitute_to_reach_actual(pattern: TyId, actual: TyId, type_db: &mut TypeDb) -> bool {
     let mut deducer = GenericSubstitutionsDeducing::new();
-    let replaced = deducer.auto_deduce_from_argument(pattern, actual, type_db.intrn);
+    let replaced = deducer.auto_deduce_from_argument(pattern, actual, &mut type_db.intrn);
     type_db.intrn.equals(replaced, actual)
 }
 
@@ -218,10 +218,10 @@ pub(crate) fn resolve_methods_for_call(
     // 2) if there are both generic and non-generic functions, filter out generic
     let n_generics = viable
         .iter()
-        .filter(|c| c.is_generic(type_db.intrn))
+        .filter(|c| c.is_generic(&type_db.intrn))
         .count();
     if n_generics < viable.len() {
-        viable.retain(|c| !c.is_generic(type_db.intrn));
+        viable.retain(|c| !c.is_generic(&type_db.intrn));
         return viable;
     }
 
@@ -232,13 +232,13 @@ pub(crate) fn resolve_methods_for_call(
         depth: -999,
     };
     for candidate in &viable {
-        let s = calculate_shape_score(candidate.original_receiver, type_db.intrn);
+        let s = calculate_shape_score(candidate.original_receiver, &type_db.intrn);
         if s.is_shape_better_than(&best_shape) {
             best_shape = s;
         }
     }
 
-    viable.retain(|c| calculate_shape_score(c.original_receiver, type_db.intrn) == best_shape);
+    viable.retain(|c| calculate_shape_score(c.original_receiver, &type_db.intrn) == best_shape);
     if viable.len() == 1 {
         return viable;
     }
@@ -309,7 +309,7 @@ pub(crate) fn choose_only_method_to_call(
 
         msg.push_str(&format!("candidate function: `{}`", method_name));
 
-        if candidate.is_generic(type_db.intrn) {
+        if candidate.is_generic(&type_db.intrn) {
             // TODO: format substitutions nicely
             msg.push_str(" with substitutions");
         }

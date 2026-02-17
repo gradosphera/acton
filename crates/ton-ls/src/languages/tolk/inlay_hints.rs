@@ -26,7 +26,7 @@ impl Backend {
             let path = uri.to_file_path().ok()?;
             let file_info = self.file_db.get_by_path(&path)?;
 
-            let mut hints = Vec::with_capacity(10);
+            let hints = Vec::with_capacity(10);
 
             let body_types = analysis.all_body_types.get(&file_info.id())?;
 
@@ -34,14 +34,14 @@ impl Backend {
                 let decl = file_info.find_syntax_declaration(symbol_id);
                 let Some(decl) = decl else { continue };
 
-                collect_inlay_hints(
-                    inference_result,
-                    &analysis.project_index,
-                    &analysis.type_interner,
-                    &file_info,
-                    &decl,
-                    &mut hints,
-                );
+                // collect_inlay_hints(
+                //     inference_result,
+                //     &analysis.project_index,
+                //     &analysis.type_interner,
+                //     &file_info,
+                //     &decl,
+                //     &mut hints,
+                // );
             }
 
             Some(hints)

@@ -1,6 +1,7 @@
 use dashmap::DashMap;
 use lsp_types::*;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tolk_resolver::file_db::FileDb;
 use tolk_resolver::file_index::FileId;
 use tower_lsp::jsonrpc::Result as LspResult;
@@ -11,7 +12,7 @@ pub mod profiling;
 pub mod utils;
 
 use crate::AnalysisResult;
-use crate::languages::tolk::semantic_tokens;
+use crate::languages::tolk::{TolkAnalyzer, semantic_tokens};
 #[cfg(feature = "profiling")]
 pub use profiling::ProfilingContext;
 
@@ -21,15 +22,36 @@ pub struct Backend {
     pub documents: DashMap<Url, String>,
     pub analysis: DashMap<Url, Arc<AnalysisResult>>,
     pub file_urls: DashMap<FileId, Url>,
+
+    pub tolk: RwLock<TolkAnalyzer>,
+
     #[cfg(feature = "profiling")]
     pub profiling: Arc<ProfilingContext>,
 }
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(&self, _: InitializeParams) -> LspResult<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
         let now = std::time::Instant::now();
         log::info!("Request: initialize");
+
+        let root = params
+            .workspace_folders
+            .unwrap_or_default()
+            .first()
+            .map(|f| f.uri.clone())
+            .unwrap_or_else(|| {
+                Url::from_file_path(std::env::current_dir().unwrap_or_else(|_| ".".into()))
+                    .expect("cannot create url")
+            });
+
+        let root_path = root.to_file_path().expect("root cannot be file");
+
+        let now2 = std::time::Instant::now();
+        let tolk = TolkAnalyzer::start(root_path).expect("cannot start Tolk");
+        *self.tolk.write().await = tolk;
+        log::info!("start took {:?}", now2.elapsed());
+
         let res = Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
@@ -93,13 +115,13 @@ impl LanguageServer for Backend {
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let now = std::time::Instant::now();
         log::info!("Notification: did_open for {}", params.text_document.uri);
-        self.update_document(&params.text_document.uri, params.text_document.text);
-        self.analyze(params.text_document.uri).await;
+        // self.update_document(&params.text_document.uri, params.text_document.text);
+        // self.analyze(params.text_document.uri).await;
         log::info!("Notification: did_open took {:?}", now.elapsed());
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        self.handle_did_change(params).await;
+        // self.handle_did_change(params).await;
     }
 
     async fn did_save(&self, _params: DidSaveTextDocumentParams) {}

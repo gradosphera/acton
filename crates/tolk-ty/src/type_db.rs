@@ -50,9 +50,9 @@ pub struct TypeDb<'a> {
     /// Since types in the form of [`TyData`] store names, we need access to files and their source code
     /// to convert `Span` into text snippets. Also, since the resolver operates with symbols that
     /// only contain a `Span`, we need the AST of files to infer types for top-level definitions.
-    pub file_db: &'a FileDb,
+    pub file_db: Arc<FileDb>,
     /// All types in the analysis are interned via [`TypeInterner`].
-    pub intrn: &'a mut TypeInterner,
+    pub intrn: TypeInterner,
     /// Mostly used to retrieve a specific file's index by its ID.
     /// It is also used to get information about resolved symbols by their [`Span`].
     pub project_index: &'a ProjectIndex,
@@ -74,13 +74,9 @@ impl<'a> TypeDb<'a> {
     /// Creates a new `TypeDb` and initializes it by collecting top-level types.
     ///
     /// This performs an initial pass to register structs and enums so they are available globally.
-    pub fn new(
-        type_interner: &'a mut TypeInterner,
-        file_db: &'a FileDb,
-        project_index: &'a ProjectIndex,
-    ) -> TypeDb<'a> {
+    pub fn new(file_db: Arc<FileDb>, project_index: &'a ProjectIndex) -> TypeDb<'a> {
         let mut db = TypeDb {
-            intrn: type_interner,
+            intrn: TypeInterner::new(),
             file_db,
             project_index,
             inverted_call_graph: FxHashMap::default(),
@@ -624,7 +620,7 @@ impl<'a> TypeDb<'a> {
                             substituion.set_type_t(param.name.to_string(), ty);
                         }
 
-                        let mut substitutor = TypeSubstitutor::new(self.intrn);
+                        let mut substitutor = TypeSubstitutor::new(&mut self.intrn);
                         inner_ty = substitutor.substitute(inner_ty, &substituion.mapping)
                     }
 

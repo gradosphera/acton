@@ -108,6 +108,7 @@ pub fn run(cfg: &ControlFlowGraph) -> AdminAuthorizationReport {
 mod tests {
     use super::run;
     use std::path::PathBuf;
+    use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
     use tolk_dataflow::ControlFlowGraph;
     use tolk_dataflow::build_cfg_for_top_level_with_source;
@@ -127,8 +128,8 @@ mod tests {
         let path = unique_temp_file_path();
         std::fs::write(&path, source).expect("write source");
 
-        let file_db = FileDb::new(PathBuf::from("/__dummy_stdlib__"), None);
-        let mut project = ProjectIndex::builder(&file_db, path.clone())
+        let file_db = Arc::new(FileDb::new(PathBuf::from("/__dummy_stdlib__"), None));
+        let mut project = ProjectIndex::builder(file_db.clone(), path.clone())
             .build()
             .expect("build project index");
         resolve(&file_db, &mut project);

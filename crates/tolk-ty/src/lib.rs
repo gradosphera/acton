@@ -37,9 +37,8 @@
 //!     // Resolve symbols across the project
 //!     tolk_resolver::resolve(&file_db, &mut index);
 //!
-//!     // Create the type interner and database
-//!     let mut interner = TypeInterner::new();
-//!     let mut type_db = TypeDb::new(&mut interner, &file_db, &index);
+//!     // Create the type database
+//!     let mut type_db = TypeDb::new(&file_db, &index);
 //!
 //!     // Run type inference on each top-level declaration
 //!     for decl in file_info.source().top_levels() {
