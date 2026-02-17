@@ -525,7 +525,20 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         }
     }
 
-    global_reporter.finalize()?;
+    runner.reporter_manager.finalize()?;
+
+    if config.snapshot.is_some() || config.baseline_snapshot.is_some() {
+        match profiling::collect_profile(&runner) {
+            Ok(()) => {}
+            Err(err) => {
+                eprintln!(
+                    "{}: Cannot collect profiling result: {}",
+                    "Error".red(),
+                    err
+                );
+            }
+        }
+    }
 
     if config.ui
         && let Some(reports) = reports_for_ui
@@ -1032,19 +1045,6 @@ fn run_file_tests(
     runner
         .reporter_manager
         .on_suite_finished(&file_path, &suite_stats)?;
-
-    if runner.config.snapshot.is_some() {
-        match profiling::collect_profile(runner, abi) {
-            Ok(()) => {}
-            Err(err) => {
-                eprintln!(
-                    "{}: Cannot collect profiling result: {}",
-                    "Error".red(),
-                    err
-                );
-            }
-        }
-    }
 
     Ok(TestStats {
         passed,
