@@ -73,7 +73,7 @@ fun Expectation<OutActionList>.toBeSendMessageAt<Msg>(self, index: int) {
             if (e == 63) {
                 // prefix mismatch
                 val msg = action.loadGenericMessage();
-                val opcode = msg.loadOpcode();
+                val opcode = msg.loadOpcode(true);
                 if (opcode == null) {
                     expectImpl.failToFindOutMsg<Msg>(e, self.location);
                     return;
@@ -99,7 +99,7 @@ fun Expectation<OutActionList>.toBeSendMessageAt<Msg>(self, index: int) {
     }
 
     Assert.fail(
-        format2("Out action at index {} is not a send message, but {}", index, action.kind()),
+        format1("Out action at index {} is not a send message", index),
         self.location
     );
 }

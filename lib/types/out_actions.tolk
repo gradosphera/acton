@@ -22,19 +22,19 @@
 /// ```
 
 import "message"
+import "../fmt"
 import "../testing/assert"
-import "../tlb/either"
 import "../vm/vm"
 
 /// Represents a node in the out list.
 /// This is an internal type, you shouldn't use it directly.
 struct OutList {
+    prev: Cell<OutList>
     action: OutAction
 }
 
 /// Represents send message action.
 struct (0x0ec3c86d) OutActionSendMessage {
-    prev: Cell<OutList>
     /// Mode of the send message. See `SEND_MODE_*` constants.
     mode: uint8
     /// Message to send.
@@ -100,14 +100,12 @@ fun OutActionSendMessage.loadGenericMessage(self): MessageRelaxedGeneric {
 
 /// Represents set code action.
 struct (0xad4de08e) OutActionSetCode {
-    prev: Cell<OutList>
     /// New code to set.
     newCode: cell
 }
 
 /// Represents reserve currency action.
 struct (0x36e6b809) OutActionReserveCurrency {
-    prev: Cell<OutList>
     /// Mode of the reserve currency. See `RESERVE_MODE_*` constants.
     mode: uint8
     /// Currency to reserve.
@@ -116,7 +114,6 @@ struct (0x36e6b809) OutActionReserveCurrency {
 
 /// Represents change library action.
 struct (0x26fa1dd4) OutActionChangeLibrary {
-    prev: Cell<OutList>
     /// Mode of the change library.
     mode: uint7
     /// Library reference, either hash or cell reference.
@@ -179,8 +176,12 @@ type OutActionList = tuple
 /// println(action.kind());
 /// ```
 fun OutActionList.at(self, i: int): OutAction {
-    val rawAction = self.get(i) as tuple;
-    return OutAction.fromTuple(rawAction);
+    val rawAction = self.get(i);
+    try {
+        return (rawAction as cell as Cell<OutAction>).load();
+    } catch (e) {
+        Assert.fail(format2("Unknown out action at index {} (decode error code {})", i, e));
+    }
 }
 
 /// Returns the send message action at the given index.
@@ -218,19 +219,9 @@ fun OutActionList.getSendMessageAt(self, i: int): OutActionSendMessage? {
 /// }
 /// ```
 fun OutActionList.getSendMessageBodyAt<Msg>(self, i: int): Msg? {
-    val action = self.at(i);
-    if (action is OutActionSendMessage) {
-        val msg = (action.outMsg as Cell<MessageRelaxed<Msg>>).load({
-            assertEndAfterReading: false,
-        });
-
-        if (msg.body is EitherLeft<Msg>) {
-            return msg.body.value;
-        }
-        if (msg.body is EitherRight<Cell<Msg>>) {
-            return msg.body.value.load({ assertEndAfterReading: false });
-        }
-        return null;
+    val action = self.getSendMessageAt(i);
+    if (action != null) {
+        return action!.loadBody<Msg>();
     }
     return null;
 }
@@ -263,89 +254,31 @@ fun vm.outActions(): OutActionList {
 /// println(out_actions.size());
 /// ```
 fun vm.parseOutActions(cell: cell): OutActionList {
+    val rootSlice = cell.beginParse();
+    if (rootSlice.remainingBitsCount() == 0 && rootSlice.remainingRefsCount() == 0) {
+        return createEmptyTuple();
+    }
+
     var result = createEmptyTuple();
-    val root = cell as Cell<OutList>;
-    var next: Cell<OutList>? = root;
+    var next: Cell<OutList>? = cell as Cell<OutList>;
 
     while (next != null) {
-        val loaded = next.load();
-        match (loaded.action) {
-            OutActionSendMessage => {
-                result.push(loaded.action.toTuple());
-                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
-                    next = null;
-                } else {
-                    next = loaded.action.prev;
-                }
-            }
-            OutActionSetCode => {
-                result.push(loaded.action.toTuple());
-                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
-                    next = null;
-                } else {
-                    next = loaded.action.prev;
-                }
-            }
-            OutActionReserveCurrency => {
-                result.push(loaded.action.toTuple());
-                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
-                    next = null;
-                } else {
-                    next = loaded.action.prev;
-                }
-            }
-            OutActionChangeLibrary => {
-                result.push(loaded.action.toTuple());
-                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
-                    next = null;
-                } else {
-                    next = loaded.action.prev;
-                }
-            }
+        var nodeSlice = (next! as cell).beginParse();
+        if (nodeSlice.remainingRefsCount() == 0) {
+            Assert.fail("Malformed out action list node");
+        }
+
+        val prev = nodeSlice.loadRef() as Cell<OutList>;
+        val rawAction = beginCell().storeSlice(nodeSlice).endCell();
+        result.push(rawAction);
+
+        val prevSlice = prev.beginParse();
+        if (prevSlice.remainingBitsCount() == 0 && prevSlice.remainingRefsCount() == 0) {
+            next = null;
+        } else {
+            next = prev;
         }
     }
 
     return result;
-}
-
-// Implementation details
-
-fun LibRef.fromTuple(data: tuple): LibRef {
-    val tag = data.get(0) as int;
-    if (tag == 0) {
-        return LibRefHash.fromTuple(data);
-    } else if (tag == 1) {
-        return LibRefRef.fromTuple(data);
-    } else {
-        throw 0xFF; // unknown libref type
-    }
-}
-fun OutAction.fromTuple(data: tuple): OutAction {
-    if (data.size() == 2) {
-        return OutActionSetCode.fromTuple(data);
-    } else if (data.size() == 3) {
-        return OutActionSendMessage.fromTuple(data);
-    } else if (data.size() == 4) {
-        val third = data.get(2) as int;
-        if (third == 0 || third == 1) {
-            return OutActionChangeLibrary.fromTuple(data);
-        }
-        return OutActionReserveCurrency.fromTuple(data);
-    } else {
-        Assert.fail("Unknown out action");
-    }
-}
-
-fun OutActionChangeLibrary.toTuple(self) {
-    var tuple = createEmptyTuple();
-    tuple.push(self.prev);
-    tuple.push(self.mode);
-    if (self.libref is LibRefHash) {
-        tuple.push(0);
-        tuple.push(self.libref.libHash);
-    } else {
-        tuple.push(1);
-        tuple.push(self.libref.library);
-    }
-    return tuple;
 }

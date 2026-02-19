@@ -1,0 +1,13 @@
+  Installing standard library [ACTON_VERSION]
+   Compiling contracts
+   Compiling noop
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+
+ TEST  [ROOT]
+
+ > tests/di_set_now_overwrite.test.tolk (1 test)
+  ✓ di-net-set-now-overwrite-project-builder [TIME]
+
+ ✓ 1 passed in 1 file

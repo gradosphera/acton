@@ -168,7 +168,7 @@ fun Expectation<int>.toBeApproxEqAbs(self, expected: int, maxDelta: int) {
     if (realDelta > maxDelta) {
         ffi.assertFail(
             format4(
-                "{} !~= {} (max delta: {}, real delta: {}",
+                "{} !~= {} (max delta: {}, real delta: {})",
                 self.value,
                 expected,
                 maxDelta,
@@ -189,11 +189,28 @@ fun Expectation<int>.toBeApproxEqAbs(self, expected: int, maxDelta: int) {
 /// ```
 fun Expectation<int>.toBeApproxEqRel(self, expected: int, maxDelta: int) {
     val valueDelta = abs(self.value - expected);
-    val percent = mulDivFloor(valueDelta, 100, self.value);
+    val denominator = abs(self.value);
+    if (denominator == 0) {
+        if (valueDelta > 0) {
+            ffi.assertFail(
+                format3(
+                    "{} !~= {} (max delta: {}%, real delta: inf%)",
+                    self.value,
+                    expected,
+                    maxDelta
+                ),
+                self.location
+            );
+            throw ASSERTION_FAILED;
+        }
+        return;
+    }
+
+    val percent = mulDivFloor(valueDelta, 100, denominator);
     if (percent > maxDelta) {
         ffi.assertFail(
             format4(
-                "{} !~= {} (max delta: {}%, real delta: {}%",
+                "{} !~= {} (max delta: {}%, real delta: {}%)",
                 self.value,
                 expected,
                 maxDelta,
@@ -345,7 +362,7 @@ fun Expectation<any_address>.toBeExternalAddress(self) {
 fun Expectation<tuple>.toContain<U>(self, expected: U) {
     var i = 0;
     while (i < self.value.size()) {
-        val item = self.value.get<U>(i);
+        val item = self.value.get(i) as U;
         if (item == expected) {
             return;
         }
@@ -367,7 +384,7 @@ fun Expectation<tuple>.toContain<U>(self, expected: U) {
 fun Expectation<tuple>.toNotContain<U>(self, expected: U) {
     var i = 0;
     while (i < self.value.size()) {
-        val item = self.value.get<U>(i);
+        val item = self.value.get(i) as U;
         if (item == expected) {
             Assert.fail("Tuple contains the value but it should not", self.location);
         }

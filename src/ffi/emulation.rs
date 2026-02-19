@@ -640,15 +640,21 @@ fn find_transaction_by_params_impl(
         stack.push(TupleItem::Null);
         return Ok(());
     };
+    let requires_internal_in_msg = params.opcode.is_some()
+        || params.bounced.is_some()
+        || params.bounce.is_some()
+        || params.value.is_some()
+        || params.from.is_some()
+        || params.to.is_some();
 
     let found = parsed_txs.iter().filter(|tx| {
-        if let Some(expected_deploy) = params.deploy
-            && expected_deploy
-            && (tx.orig_status != AccountStatus::NotExists
-                || tx.end_status != AccountStatus::Active)
-        {
-            // We expect to deploy contract but we don't
-            return false;
+        if let Some(expected_deploy) = params.deploy {
+            let is_deploy = tx.orig_status == AccountStatus::NotExists
+                && tx.end_status == AccountStatus::Active;
+            if expected_deploy != is_deploy {
+                // Deploy flag mismatch
+                return false;
+            }
         }
 
         let in_msg = tx.load_in_msg();
@@ -723,6 +729,8 @@ fn find_transaction_by_params_impl(
                     return false;
                 }
             }
+        } else if requires_internal_in_msg {
+            return false;
         }
 
         let Ok(TxInfo::Ordinary(info)) = tx.load_info() else {
@@ -1182,15 +1190,30 @@ fn load_library_by_hash_impl(
 ) -> anyhow::Result<()> {
     let network = ctx.network();
     let custom_networks = ctx.env.config.custom_networks();
-    let api_client = TonApiClient::new(network, custom_networks, ctx.env.api_key.clone())?;
 
-    let lib = api_client.get_library_by_hash(hash.as_str());
-    match lib {
-        Ok(lib) => {
-            let cell = ArcCell::from_boc(&Boc::encode(lib))?;
+    if let Network::Custom(network_name) = &network
+        && !custom_networks.contains_key(network_name.as_ref())
+    {
+        stack.push(TupleItem::Null);
+        return Ok(());
+    }
+
+    let api_key = ctx.env.api_key.clone();
+    let Ok(api_client) = TonApiClient::new(network, custom_networks, api_key) else {
+        stack.push(TupleItem::Null);
+        return Ok(());
+    };
+
+    match api_client
+        .get_library_by_hash(hash.as_str())
+        .and_then(|lib| ArcCell::from_boc(&Boc::encode(lib)).map_err(Into::into))
+    {
+        Ok(cell) => {
             stack.push(TupleItem::Cell(cell));
         }
-        Err(_) => stack.push(TupleItem::Null),
+        Err(_) => {
+            stack.push(TupleItem::Null);
+        }
     }
 
     Ok(())
@@ -1232,6 +1255,8 @@ fn wait_for_transaction_impl(
     address: ArcCell,
 ) -> anyhow::Result<()> {
     if !ctx.is_broadcasting {
+        // In emulation mode waitForTransaction is a no-op.
+        stack.push_bool(true);
         return Ok(());
     }
 
@@ -1249,7 +1274,13 @@ fn wait_for_transaction_impl(
 
     let custom_networks = ctx.env.config.custom_networks();
     let api_key = ctx.env.api_key.clone();
-    let api_client = TonApiClient::new(network.clone(), custom_networks, api_key.clone())?;
+    let api_client = match TonApiClient::new(network.clone(), custom_networks, api_key.clone()) {
+        Ok(client) => client,
+        Err(_) => {
+            stack.push_bool(false);
+            return Ok(());
+        }
+    };
 
     let ext_message_hash_bytes = ext_message_hash.data();
 
@@ -1302,10 +1333,6 @@ fn wait_for_transaction_impl(
         }
     }
 
-    ctx.asserts.fail(
-        "Transaction was not applied after {} attempts. Check your wallet's transactions"
-            .to_owned(),
-    );
     stack.push_bool(false);
     Ok(())
 }

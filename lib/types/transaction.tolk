@@ -364,8 +364,34 @@ type TransactionDescr =
 
 type VarUint7 = int
 
+fun varUintSize(value: int, maxBytes: int): int {
+    if (value < 0) {
+        Assert.fail("VarUInteger value must be non-negative");
+    }
+    if (value == 0) {
+        return 0;
+    }
+
+    var size = 1;
+    var threshold = 256;
+    while (size < maxBytes && value >= threshold) {
+        size += 1;
+        threshold *= 256;
+    }
+
+    if (value >= threshold) {
+        Assert.fail("VarUInteger value is out of range");
+    }
+
+    return size;
+}
+
 fun VarUint7.packToBuilder(self, mutate b: builder) {
-    b.storeUint(self, 32) // TODO: correct serialization
+    val size = varUintSize(self, 7);
+    b.storeUint(size, 3);
+    if (size > 0) {
+        b.storeUint(self, size * 8);
+    }
 }
 
 fun VarUint7.unpackFromSlice(mutate s: slice): VarUint7 {
@@ -376,7 +402,11 @@ fun VarUint7.unpackFromSlice(mutate s: slice): VarUint7 {
 type VarUint3 = int
 
 fun VarUint3.packToBuilder(self, mutate b: builder) {
-    b.storeUint(self, 16) // TODO: correct serialization
+    val size = varUintSize(self, 3);
+    b.storeUint(size, 2);
+    if (size > 0) {
+        b.storeUint(self, size * 8);
+    }
 }
 
 fun VarUint3.unpackFromSlice(mutate s: slice): VarUint3 {
@@ -425,6 +455,18 @@ struct (0b1) AccountInfo {
 /// Union type for account.
 type Account = AccountNone | AccountInfo
 
+/// Account state in AccountStorage (block.tlb `AccountState`).
+struct (0b00) AccountStateUninit
+struct (0b1) AccountStateActive {
+    stateInit: StateInit
+}
+struct (0b01) AccountStateFrozen {
+    stateHash: uint256
+}
+
+/// Union type for account storage state.
+type AccountState = AccountStateUninit | AccountStateActive | AccountStateFrozen
+
 /// Represents account storage.
 struct AccountStorage {
     /// Last transaction logical time.
@@ -432,7 +474,7 @@ struct AccountStorage {
     /// Account balance.
     balance: CurrencyCollection,
     /// Account state.
-    state: AccountStatus
+    state: AccountState
 }
 
 /// Represents a shard account state.
