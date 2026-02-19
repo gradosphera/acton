@@ -26,6 +26,14 @@ fun branchScore(choice: Either<uint32, uint32>): int {
 
 ## Definitions
 
+## `Either`
+
+```tolk
+type Either<X, Y> = EitherLeft<X> | EitherRight<Y>
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/tlb/either.tolk#L19" />
+
 ## `Either<X, Y>.left`
 
 ```tolk

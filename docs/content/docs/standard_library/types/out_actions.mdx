@@ -205,6 +205,31 @@ Represents library reference as a cell reference.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L135" />
 
+## `LibRef`
+
+```tolk
+type LibRef = LibRefHash | LibRefRef
+```
+
+Type alias for library reference used by [OutActionChangeLibrary.libref](#outactionchangelibrary).
+Value is either a hash-only reference ([LibRefHash](#librefhash)) or an in-cell library ([LibRefRef](#librefref)).
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L142" />
+
+## `OutAction`
+
+```tolk
+type OutAction =
+    | OutActionSendMessage
+    | OutActionSetCode
+    | OutActionReserveCurrency
+    | OutActionChangeLibrary
+```
+
+Type alias for tagged union of all supported out action variants.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L145" />
+
 ## `OutAction.kind`
 
 ```tolk
@@ -221,6 +246,20 @@ Exact return values:
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L158" />
 
+## `OutActionList`
+
+```tolk
+type OutActionList = tuple
+```
+
+Type alias for the out action list tuple.
+
+Each tuple entry is a raw cell that must decode as [OutAction](#outaction) when read via [OutActionList.at](#outactionlistat).
+
+To get the out actions, use [vm.outActions](#vmoutactions) method.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L180" />
+
 ## `OutActionList.at`
 
 ```tolk
@@ -231,7 +270,7 @@ Returns the out action at the given index.
 
 NOTE: this list is reversed, so the last action is at index 0.
 
-Fails with [Assert.fail](../../testing/assert/#assertfail) if the stored tuple element cannot be decoded as OutAction.
+Fails with [Assert.fail](../../testing/assert/#assertfail) if the stored tuple element cannot be decoded as [OutAction](#outaction).
 
 Example:
 ```tolk
@@ -322,7 +361,7 @@ fun vm.parseOutActions(cell: cell): OutActionList
 
 Parses the out actions from the raw cell (like C5 register).
 
-If cell is empty (no bits and no refs), returns an empty tuple.
+If [cell](#vmparseoutactions) is empty (no bits and no refs), returns an empty tuple.
 Fails with [Assert.fail](../../testing/assert/#assertfail) if list node layout is malformed.
 
 Example:

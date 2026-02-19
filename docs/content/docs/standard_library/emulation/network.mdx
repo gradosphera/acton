@@ -87,6 +87,36 @@ Information about external outgoing message.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L49" />
 
+## `ChildTxsIds`
+
+```tolk
+type ChildTxsIds = tuple
+```
+
+Represents a list of child transactions IDs (LT) for single send result.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L61" />
+
+## `OutMessages`
+
+```tolk
+type OutMessages = tuple
+```
+
+Represents a list of out messages for single send result.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L64" />
+
+## `ExtOutList`
+
+```tolk
+type ExtOutList = tuple
+```
+
+Represents a list of external outgoing messages for single send result.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L67" />
+
 ## `ExtOutList.at`
 
 ```tolk
@@ -177,6 +207,20 @@ fun SendResult.allOutActions(self): OutActionList
 Returns all out actions produced by this transaction as a list.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L166" />
+
+## `SendResultList`
+
+```tolk
+type SendResultList = tuple
+```
+
+Represents a list of send results obtained from [net.send](#netsend) method.
+
+This list represent all transactions produced by a [net.send](#netsend) call.
+
+To get a single send result, use [SendResultList.at](#sendresultlistat) method.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L175" />
 
 ## `SendResultList.at`
 
@@ -1061,7 +1105,7 @@ For detailed information about blockchain configuration parameters, see the
 [TON Blockchain Configuration Reference](https://docs.ton.org/foundations/config).
 
 Parameters:
-- `config`: The new Config map containing configuration parameters (indices 0-90)
+- `config`: The new [Config](../config/#config) map containing configuration parameters (indices 0-90)
 
 Returns: `true` if the configuration was successfully updated, `false` if validation failed.
 
@@ -1102,7 +1146,7 @@ network parameters. Use specialized getter functions like [Config.getGasPrices](
 For detailed information about blockchain configuration parameters, see the
 [TON Blockchain Configuration Reference](https://docs.ton.org/foundations/config).
 
-Returns: A Config map containing all current blockchain configuration parameters.
+Returns: A [Config](../config/#config) map containing all current blockchain configuration parameters.
 
 Example:
 ```tolk

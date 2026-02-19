@@ -68,10 +68,10 @@ Loads the opcode of the message.
 Returns `null` for malformed or too-short body data:
 - body marks `EitherRight` but does not contain a body reference;
 - decoded body has fewer than 32 bits for the first opcode;
-- skipBounce is true, first opcode is `0xFFFFFFFF`, and fewer than 32 bits remain
+- [skipBounce](#messagerelaxedgenericloadopcode) is true, first opcode is `0xFFFFFFFF`, and fewer than 32 bits remain
   for the second opcode.
 
-If skipBounce is true, the `0xFFFFFFFF` prefix is skipped.
+If [skipBounce](#messagerelaxedgenericloadopcode) is true, the `0xFFFFFFFF` prefix is skipped.
 
 Example:
 ```tolk
@@ -112,7 +112,7 @@ Loads the opcode of the message.
 
 Same behavior as [MessageRelaxedGeneric.loadOpcode](#messagerelaxedgenericloadopcode):
 - returns the first 32-bit opcode by default;
-- if skipBounce is true, the `0xFFFFFFFF` prefix is skipped;
+- if [skipBounce](#messagerelaxedgenericloadopcode) is true, the `0xFFFFFFFF` prefix is skipped;
 - returns `null` for malformed or too-short body data.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L86" />
@@ -319,6 +319,24 @@ ext_out_msg_info$11 src:MsgAddressInt dest:MsgAddressExt
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L225" />
 
+## `CommonMessageInfo`
+
+```tolk
+type CommonMessageInfo =
+    | InternalMessage
+    | ExternalInMessageInfo
+    | ExternalOutMessageInfo
+```
+
+Tagged union for the TL-B `CommonMsgInfo` constructors.
+
+Runtime variant is selected by the leading tag:
+- `0b0`: [InternalMessage](#internalmessage)
+- `0b10`: [ExternalInMessageInfo](#externalinmessageinfo)
+- `0b11`: [ExternalOutMessageInfo](#externaloutmessageinfo)
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L238" />
+
 ## `Message`
 
 ```tolk
@@ -332,7 +350,7 @@ struct Message<TBody = RemainingBitsAndRefs, TInfo = CommonMessageInfo> {
 
 Generic message structure with configurable body and info types.
 
-`TInfo` defaults to CommonMessageInfo, so when `Message` is loaded with default generic
+`TInfo` defaults to [CommonMessageInfo](#commonmessageinfo), so when `Message` is loaded with default generic
 arguments, `info` is decoded as one of the `CommonMsgInfo` tagged variants above.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/message.tolk#L247" />

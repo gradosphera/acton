@@ -36,6 +36,24 @@ println1("Bit price: {}", storagePrices);
 
 ## Definitions
 
+## `Config`
+
+```tolk
+type Config = map<uint32, cell>
+```
+
+Type representing the blockchain configuration.
+
+The configuration is a key-value map where keys are parameter indices (0-255)
+and values are cells containing the serialized configuration parameter data.
+Configuration parameters are defined in the [`block.tlb`](https://github.com/ton-blockchain/ton/blob/master/crypto/block/block.tlb)
+TL-B schema.
+
+`Config.set*` methods mutate only this in-memory map.
+To apply updates to the emulator globally, call [net.setConfig](../network/#netsetconfig) with the mutated config.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/config.tolk#L41" />
+
 ## `Config.setParamRaw`
 
 ```tolk
@@ -47,7 +65,7 @@ Sets a raw configuration parameter at the given index.
 This is a low-level function that directly stores a cell at the specified parameter index.
 For type-safe parameter access, prefer using specialized setter functions such as
 [Config.setGasPrices](#configsetgasprices), [Config.setStoragePrices](#configsetstorageprices), or [Config.setGlobalVersion](#configsetglobalversion).
-This mutates only the local Config value until you call [net.setConfig](../network/#netsetconfig).
+This mutates only the local [Config](#config) value until you call [net.setConfig](../network/#netsetconfig).
 
 Parameters:
 - `index`: The configuration parameter index (typically 0-90)
@@ -126,7 +144,7 @@ Sets the global network version and capabilities (Param 8).
 This function updates the network version and validator capabilities configuration.
 When validators vote to update the network, they update this parameter, allowing
 the TON Blockchain to upgrade without downtime.
-This mutates only the local Config value until you call [net.setConfig](../network/#netsetconfig).
+This mutates only the local [Config](#config) value until you call [net.setConfig](../network/#netsetconfig).
 
 Parameters:
 - `version`: The new global network version struct containing version and capabilities
@@ -203,6 +221,19 @@ Prices are given per 65536 seconds of storage. Storage fees are calculated based
 of bits and cells used to represent contract code and data.
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/config.tolk#L150" />
+
+## `StoragePricesDict`
+
+```tolk
+type StoragePricesDict = map<uint32, StoragePrices>
+```
+
+Dictionary mapping Unix timestamps to storage price configurations.
+
+This allows different storage prices to apply at different periods in time.
+The dictionary is indexed by Unix timestamp values.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/config.tolk#L167" />
 
 ## `INITIAL_UNIXTIME_STORAGE_INDEX`
 
@@ -283,7 +314,7 @@ Sets the storage price configuration (Param 18).
 Storage prices are organized as a dictionary mapping timestamps to price structures,
 allowing for price adjustments over time. This function updates the entire storage
 price dictionary.
-This mutates only the local Config value until you call [net.setConfig](../network/#netsetconfig).
+This mutates only the local [Config](#config) value until you call [net.setConfig](../network/#netsetconfig).
 
 Parameters:
 - `prices`: A dictionary mapping Unix timestamps to [StoragePrices](#storageprices) configurations
@@ -317,7 +348,7 @@ Retrieves the storage price configuration (Param 18).
 Returns a dictionary of storage prices indexed by timestamp. Use this to determine
 the cost of storing data on the blockchain.
 
-Returns: StoragePricesDict containing storage price configurations indexed by timestamp.
+Returns: [StoragePricesDict](#storagepricesdict) containing storage price configurations indexed by timestamp.
 
 Example:
 ```tolk
@@ -412,7 +443,7 @@ Parameters:
 - `prices`: Gas price configuration struct
 - `chainType`: Chain type constant - either `BASECHAIN` for basechain prices (Param 21) or `MASTERCHAIN` for masterchain prices (Param 20)
 
-This mutates only the local Config value until you call [net.setConfig](../network/#netsetconfig).
+This mutates only the local [Config](#config) value until you call [net.setConfig](../network/#netsetconfig).
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/config.tolk#L327" />
 
@@ -500,7 +531,7 @@ Parameters:
 - `prices`: Message forwarding price configuration
 - `chainType`: If equal to `MASTERCHAIN`, uses Param 24; any other value (including `BASECHAIN`) uses Param 25
 
-This mutates only the local Config value until you call [net.setConfig](../network/#netsetconfig).
+This mutates only the local [Config](#config) value until you call [net.setConfig](../network/#netsetconfig).
 
 Example:
 ```tolk
@@ -613,7 +644,7 @@ Sets the precompiled contracts configuration (Param 45).
 Updates the list of precompiled smart contracts and their associated gas costs.
 Precompiled contracts are system-provided optimizations for common cryptographic
 and utility operations.
-This mutates only the local Config value until you call [net.setConfig](../network/#netsetconfig).
+This mutates only the local [Config](#config) value until you call [net.setConfig](../network/#netsetconfig).
 
 Parameters:
 - `precompiledConfig`: Configuration containing the dictionary of precompiled contracts

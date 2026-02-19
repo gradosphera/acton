@@ -51,6 +51,14 @@ Both fields are plain `int` for compatibility with TVM builtins like isSignature
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/crypto/crypto.tolk#L30" />
 
+## `Mnemonic`
+
+```tolk
+type Mnemonic = array<string>
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/crypto/crypto.tolk#L36" />
+
 ## `crypto.createMnemonic`
 
 ```tolk
@@ -78,7 +86,7 @@ fun Mnemonic.toKeyPair(self): KeyPair
 
 Derives an Ed25519 [KeyPair](#keypair) from a mnemonic phrase.
 
-`self` must be a Mnemonic (`array<string>`) of 24 valid BIP39 words,
+`self` must be a [Mnemonic](#mnemonic) (`array<string>`) of 24 valid BIP39 words,
 for example as returned by [crypto.createMnemonic](#cryptocreatemnemonic).
 
 Example:
