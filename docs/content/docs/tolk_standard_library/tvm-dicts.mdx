@@ -1,0 +1,661 @@
+---
+title: "tvm-dicts"
+description: "tvm-dicts.tolk Tolk standard library file"
+---
+
+import { SourceCodeLink } from '@/components/SourceCodeLink';
+
+## Definitions
+
+## `createEmptyDict`
+
+```tolk
+@pure
+fun createEmptyDict(): dict
+```
+
+Creates an empty dictionary, which is actually a null value. Equivalent to `PUSHNULL`
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L26" />
+
+## `dict.dictIsEmpty`
+
+```tolk
+@pure
+fun dict.dictIsEmpty(self): bool
+```
+
+Checks whether a dictionary is empty.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L31" />
+
+## `dict.iDictGet`
+
+```tolk
+@pure
+fun dict.iDictGet(self, keyLen: int, key: int): (slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L36" />
+
+## `dict.uDictGet`
+
+```tolk
+@pure
+fun dict.uDictGet(self, keyLen: int, key: int): (slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L40" />
+
+## `dict.sDictGet`
+
+```tolk
+@pure
+fun dict.sDictGet(self, keyLen: int, key: slice): (slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L44" />
+
+## `dict.iDictSet`
+
+```tolk
+@pure
+fun dict.iDictSet(mutate self, keyLen: int, key: int, value: slice): void
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L49" />
+
+## `dict.uDictSet`
+
+```tolk
+@pure
+fun dict.uDictSet(mutate self, keyLen: int, key: int, value: slice): void
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L53" />
+
+## `dict.sDictSet`
+
+```tolk
+@pure
+fun dict.sDictSet(mutate self, keyLen: int, key: slice, value: slice): void
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L57" />
+
+## `dict.iDictSetRef`
+
+```tolk
+@pure
+fun dict.iDictSetRef(mutate self, keyLen: int, key: int, value: cell): void
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L62" />
+
+## `dict.uDictSetRef`
+
+```tolk
+@pure
+fun dict.uDictSetRef(mutate self, keyLen: int, key: int, value: cell): void
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L66" />
+
+## `dict.sDictSetRef`
+
+```tolk
+@pure
+fun dict.sDictSetRef(mutate self, keyLen: int, key: slice, value: cell): void
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L70" />
+
+## `dict.iDictSetIfNotExists`
+
+```tolk
+@pure
+fun dict.iDictSetIfNotExists(mutate self, keyLen: int, key: int, value: slice): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L75" />
+
+## `dict.uDictSetIfNotExists`
+
+```tolk
+@pure
+fun dict.uDictSetIfNotExists(mutate self, keyLen: int, key: int, value: slice): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L79" />
+
+## `dict.iDictSetIfExists`
+
+```tolk
+@pure
+fun dict.iDictSetIfExists(mutate self, keyLen: int, key: int, value: slice): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L84" />
+
+## `dict.uDictSetIfExists`
+
+```tolk
+@pure
+fun dict.uDictSetIfExists(mutate self, keyLen: int, key: int, value: slice): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L88" />
+
+## `dict.iDictGetRef`
+
+```tolk
+@pure
+fun dict.iDictGetRef(self, keyLen: int, key: int): (cell?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L93" />
+
+## `dict.uDictGetRef`
+
+```tolk
+@pure
+fun dict.uDictGetRef(self, keyLen: int, key: int): (cell?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L97" />
+
+## `dict.sDictGetRef`
+
+```tolk
+@pure
+fun dict.sDictGetRef(self, keyLen: int, key: slice): (cell?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L101" />
+
+## `dict.iDictGetRefOrNull`
+
+```tolk
+@pure
+fun dict.iDictGetRefOrNull(self, keyLen: int, key: int): cell?
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L106" />
+
+## `dict.uDictGetRefOrNull`
+
+```tolk
+@pure
+fun dict.uDictGetRefOrNull(self, keyLen: int, key: int): cell?
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L110" />
+
+## `dict.sDictGetRefOrNull`
+
+```tolk
+@pure
+fun dict.sDictGetRefOrNull(self, keyLen: int, key: slice): cell?
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L114" />
+
+## `dict.iDictDelete`
+
+```tolk
+@pure
+fun dict.iDictDelete(mutate self, keyLen: int, key: int): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L119" />
+
+## `dict.uDictDelete`
+
+```tolk
+@pure
+fun dict.uDictDelete(mutate self, keyLen: int, key: int): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L123" />
+
+## `dict.sDictDelete`
+
+```tolk
+@pure
+fun dict.sDictDelete(mutate self, keyLen: int, key: slice): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L127" />
+
+## `dict.iDictSetAndGet`
+
+```tolk
+@pure
+fun dict.iDictSetAndGet(mutate self, keyLen: int, key: int, value: slice): (slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L132" />
+
+## `dict.uDictSetAndGet`
+
+```tolk
+@pure
+fun dict.uDictSetAndGet(mutate self, keyLen: int, key: int, value: slice): (slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L136" />
+
+## `dict.sDictSetAndGet`
+
+```tolk
+@pure
+fun dict.sDictSetAndGet(mutate self, keyLen: int, key: slice, value: slice): (slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L140" />
+
+## `dict.iDictSetAndGetRefOrNull`
+
+```tolk
+@pure
+fun dict.iDictSetAndGetRefOrNull(mutate self, keyLen: int, key: int, value: cell): cell?
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L145" />
+
+## `dict.uDictSetAndGetRefOrNull`
+
+```tolk
+@pure
+fun dict.uDictSetAndGetRefOrNull(mutate self, keyLen: int, key: int, value: cell): cell?
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L149" />
+
+## `dict.iDictDeleteAndGet`
+
+```tolk
+@pure
+fun dict.iDictDeleteAndGet(mutate self, keyLen: int, key: int): (slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L154" />
+
+## `dict.uDictDeleteAndGet`
+
+```tolk
+@pure
+fun dict.uDictDeleteAndGet(mutate self, keyLen: int, key: int): (slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L158" />
+
+## `dict.sDictDeleteAndGet`
+
+```tolk
+@pure
+fun dict.sDictDeleteAndGet(mutate self, keyLen: int, key: slice): (slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L162" />
+
+## `dict.iDictSetBuilder`
+
+```tolk
+@pure
+fun dict.iDictSetBuilder(mutate self, keyLen: int, key: int, value: builder): void
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L167" />
+
+## `dict.uDictSetBuilder`
+
+```tolk
+@pure
+fun dict.uDictSetBuilder(mutate self, keyLen: int, key: int, value: builder): void
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L171" />
+
+## `dict.sDictSetBuilder`
+
+```tolk
+@pure
+fun dict.sDictSetBuilder(mutate self, keyLen: int, key: slice, value: builder): void
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L175" />
+
+## `dict.iDictSetBuilderIfNotExists`
+
+```tolk
+@pure
+fun dict.iDictSetBuilderIfNotExists(mutate self, keyLen: int, key: int, value: builder): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L180" />
+
+## `dict.uDictSetBuilderIfNotExists`
+
+```tolk
+@pure
+fun dict.uDictSetBuilderIfNotExists(mutate self, keyLen: int, key: int, value: builder): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L184" />
+
+## `dict.iDictSetBuilderIfExists`
+
+```tolk
+@pure
+fun dict.iDictSetBuilderIfExists(mutate self, keyLen: int, key: int, value: builder): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L188" />
+
+## `dict.uDictSetBuilderIfExists`
+
+```tolk
+@pure
+fun dict.uDictSetBuilderIfExists(mutate self, keyLen: int, key: int, value: builder): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L192" />
+
+## `dict.iDictDeleteFirstAndGet`
+
+```tolk
+@pure
+fun dict.iDictDeleteFirstAndGet(mutate self, keyLen: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L197" />
+
+## `dict.uDictDeleteFirstAndGet`
+
+```tolk
+@pure
+fun dict.uDictDeleteFirstAndGet(mutate self, keyLen: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L201" />
+
+## `dict.sDictDeleteFirstAndGet`
+
+```tolk
+@pure
+fun dict.sDictDeleteFirstAndGet(mutate self, keyLen: int): (slice?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L205" />
+
+## `dict.iDictDeleteLastAndGet`
+
+```tolk
+@pure
+fun dict.iDictDeleteLastAndGet(mutate self, keyLen: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L210" />
+
+## `dict.uDictDeleteLastAndGet`
+
+```tolk
+@pure
+fun dict.uDictDeleteLastAndGet(mutate self, keyLen: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L214" />
+
+## `dict.sDictDeleteLastAndGet`
+
+```tolk
+@pure
+fun dict.sDictDeleteLastAndGet(mutate self, keyLen: int): (slice?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L218" />
+
+## `dict.iDictGetFirst`
+
+```tolk
+@pure
+fun dict.iDictGetFirst(self, keyLen: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L223" />
+
+## `dict.uDictGetFirst`
+
+```tolk
+@pure
+fun dict.uDictGetFirst(self, keyLen: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L227" />
+
+## `dict.sDictGetFirst`
+
+```tolk
+@pure
+fun dict.sDictGetFirst(self, keyLen: int): (slice?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L231" />
+
+## `dict.iDictGetFirstAsRef`
+
+```tolk
+@pure
+fun dict.iDictGetFirstAsRef(self, keyLen: int): (int?, cell?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L235" />
+
+## `dict.uDictGetFirstAsRef`
+
+```tolk
+@pure
+fun dict.uDictGetFirstAsRef(self, keyLen: int): (int?, cell?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L239" />
+
+## `dict.sDictGetFirstAsRef`
+
+```tolk
+@pure
+fun dict.sDictGetFirstAsRef(self, keyLen: int): (slice?, cell?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L243" />
+
+## `dict.iDictGetLast`
+
+```tolk
+@pure
+fun dict.iDictGetLast(self, keyLen: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L248" />
+
+## `dict.uDictGetLast`
+
+```tolk
+@pure
+fun dict.uDictGetLast(self, keyLen: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L252" />
+
+## `dict.sDictGetLast`
+
+```tolk
+@pure
+fun dict.sDictGetLast(self, keyLen: int): (slice?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L256" />
+
+## `dict.iDictGetLastAsRef`
+
+```tolk
+@pure
+fun dict.iDictGetLastAsRef(self, keyLen: int): (int?, cell?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L260" />
+
+## `dict.uDictGetLastAsRef`
+
+```tolk
+@pure
+fun dict.uDictGetLastAsRef(self, keyLen: int): (int?, cell?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L264" />
+
+## `dict.sDictGetLastAsRef`
+
+```tolk
+@pure
+fun dict.sDictGetLastAsRef(self, keyLen: int): (slice?, cell?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L268" />
+
+## `dict.iDictGetNext`
+
+```tolk
+@pure
+fun dict.iDictGetNext(self, keyLen: int, pivot: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L273" />
+
+## `dict.uDictGetNext`
+
+```tolk
+@pure
+fun dict.uDictGetNext(self, keyLen: int, pivot: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L277" />
+
+## `dict.sDictGetNext`
+
+```tolk
+@pure
+fun dict.sDictGetNext(self, keyLen: int, pivot: slice): (slice?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L281" />
+
+## `dict.iDictGetNextOrEqual`
+
+```tolk
+@pure
+fun dict.iDictGetNextOrEqual(self, keyLen: int, pivot: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L285" />
+
+## `dict.uDictGetNextOrEqual`
+
+```tolk
+@pure
+fun dict.uDictGetNextOrEqual(self, keyLen: int, pivot: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L289" />
+
+## `dict.sDictGetNextOrEqual`
+
+```tolk
+@pure
+fun dict.sDictGetNextOrEqual(self, keyLen: int, pivot: slice): (slice?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L293" />
+
+## `dict.iDictGetPrev`
+
+```tolk
+@pure
+fun dict.iDictGetPrev(self, keyLen: int, pivot: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L298" />
+
+## `dict.uDictGetPrev`
+
+```tolk
+@pure
+fun dict.uDictGetPrev(self, keyLen: int, pivot: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L302" />
+
+## `dict.sDictGetPrev`
+
+```tolk
+@pure
+fun dict.sDictGetPrev(self, keyLen: int, pivot: slice): (slice?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L306" />
+
+## `dict.iDictGetPrevOrEqual`
+
+```tolk
+@pure
+fun dict.iDictGetPrevOrEqual(self, keyLen: int, pivot: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L310" />
+
+## `dict.uDictGetPrevOrEqual`
+
+```tolk
+@pure
+fun dict.uDictGetPrevOrEqual(self, keyLen: int, pivot: int): (int?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L314" />
+
+## `dict.sDictGetPrevOrEqual`
+
+```tolk
+@pure
+fun dict.sDictGetPrevOrEqual(self, keyLen: int, pivot: slice): (slice?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L318" />
+
+## `dict.prefixDictGet`
+
+```tolk
+@pure
+fun dict.prefixDictGet(self, keyLen: int, key: slice): (slice, slice?, slice?, bool)
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L327" />
+
+## `dict.prefixDictSet`
+
+```tolk
+@pure
+fun dict.prefixDictSet(mutate self, keyLen: int, key: slice, value: slice): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L331" />
+
+## `dict.prefixDictDelete`
+
+```tolk
+@pure
+fun dict.prefixDictDelete(mutate self, keyLen: int, key: slice): bool
+```
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/tvm-dicts.tolk#L335" />
+

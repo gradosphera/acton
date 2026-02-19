@@ -5,14 +5,25 @@ mod linter;
 mod stdlib;
 
 const DEFAULT_STDLIB_OUT: &str = "docs/content/docs/standard_library";
+const DEFAULT_TOLK_STDLIB_OUT: &str = "docs/content/docs/tolk_standard_library";
 const DEFAULT_LINTER_OUT: &str = "docs/content/docs/linter";
+const TOLK_STDLIB_SRC: &str = "crates/tolkc/assets/tolk-stdlib";
 const GITHUB_SOURCE_BASE: &str = "https://github.com/i582/acton/blob/master";
 
 pub fn docgen_cmd(output: Option<String>) -> Result<()> {
     let stdlib_output = output.unwrap_or_else(|| DEFAULT_STDLIB_OUT.to_string());
     let stdlib_out_dir = PathBuf::from(&stdlib_output);
+    let tolk_stdlib_out_dir = stdlib_out_dir
+        .parent()
+        .map(|parent| parent.join("tolk_standard_library"))
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_TOLK_STDLIB_OUT));
 
-    stdlib::generate_stdlib_docs(Path::new("lib"), &stdlib_out_dir)?;
+    stdlib::generate_stdlib_docs(
+        Path::new("lib"),
+        Path::new(TOLK_STDLIB_SRC),
+        &stdlib_out_dir,
+        &tolk_stdlib_out_dir,
+    )?;
 
     let linter_out_dir = stdlib_out_dir
         .parent()

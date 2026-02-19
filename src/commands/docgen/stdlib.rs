@@ -9,27 +9,83 @@ use tolk_syntax::{
     Struct as AstStruct, TopLevel, TypeAlias as AstTypeAlias, parse,
 };
 
-pub(super) fn generate_stdlib_docs(lib_dir: &Path, out_dir: &Path) -> Result<()> {
-    if !lib_dir.exists() {
-        anyhow::bail!("Directory 'lib' not found");
+pub(super) fn generate_stdlib_docs(
+    lib_dir: &Path,
+    tolk_stdlib_dir: &Path,
+    stdlib_out_dir: &Path,
+    tolk_stdlib_out_dir: &Path,
+) -> Result<()> {
+    let legacy_nested_tolk_dir = stdlib_out_dir.join("tolk_stdlib");
+    if legacy_nested_tolk_dir.exists() {
+        fs::remove_dir_all(&legacy_nested_tolk_dir)?;
     }
 
-    fs::create_dir_all(out_dir)?;
+    let mut docs = collect_docs(lib_dir, stdlib_out_dir, SourceKind::Acton)?;
+    docs.extend(collect_docs(
+        tolk_stdlib_dir,
+        tolk_stdlib_out_dir,
+        SourceKind::Tolk,
+    )?);
 
-    let index_article = out_dir.join("index.mdx");
+    write_stdlib_index(stdlib_out_dir)?;
+    write_tolk_stdlib_index(tolk_stdlib_out_dir)?;
+
+    let symbol_map = build_symbol_map(&docs);
+    let link_regex = Regex::new(r"\[([a-zA-Z0-9_.]+)]")?;
+
+    for doc in &docs {
+        write_doc_page(doc, &symbol_map, &link_regex)?;
+    }
+
+    Ok(())
+}
+
+fn write_stdlib_index(stdlib_out_dir: &Path) -> Result<()> {
+    fs::create_dir_all(stdlib_out_dir)?;
+    let index_article = stdlib_out_dir.join("index.mdx");
     fs::write(
         &index_article,
         r#"---
-title: "Standard library"
+title: "Acton standard library"
 description: "Learn about available functions/struct/constants available in Acton standard library"
 icon: FileCode
 ---
 
 Acton provides a collection of functions for writing scripts and tests in Tolk.
+
+The Tolk stdlib is documented in [Tolk standard library](../tolk_standard_library).
 "#,
     )?;
+    Ok(())
+}
 
-    let mut files: Vec<_> = walkdir::WalkDir::new(lib_dir)
+fn write_tolk_stdlib_index(tolk_stdlib_out_dir: &Path) -> Result<()> {
+    fs::create_dir_all(tolk_stdlib_out_dir)?;
+    let index_article = tolk_stdlib_out_dir.join("index.mdx");
+    fs::write(
+        &index_article,
+        r#"---
+title: "Tolk standard library"
+description: "Learn about bundled Tolk stdlib modules used by Acton standard library"
+icon: FileCode
+---
+
+This section contains documentation of Tolk standard library.
+"#,
+    )?;
+    Ok(())
+}
+
+fn collect_docs(
+    source_dir: &Path,
+    output_root: &Path,
+    source_kind: SourceKind,
+) -> Result<Vec<FileDoc>> {
+    if !source_dir.exists() {
+        anyhow::bail!("Directory '{}' not found", source_dir.display());
+    }
+
+    let mut files: Vec<_> = walkdir::WalkDir::new(source_dir)
         .into_iter()
         .filter_map(std::result::Result::ok)
         .filter(|e| {
@@ -39,15 +95,7 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
 
     files.sort_by_key(|e| e.path().to_string_lossy().to_string());
 
-    struct FileDoc {
-        path: PathBuf,
-        file_stem: String,
-        symbols: Vec<SymbolInfo>,
-        file_header: Option<String>,
-    }
-
     let mut docs = Vec::new();
-    let mut symbol_map: HashMap<String, Vec<LinkTarget>> = HashMap::new();
 
     for entry in files {
         let path = entry.path();
@@ -57,7 +105,7 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
         }
 
         let content = fs::read_to_string(path)?;
-        let relative_path = path.strip_prefix(lib_dir)?;
+        let relative_path = path.strip_prefix(source_dir)?;
         let file_stem = relative_path
             .file_stem()
             .unwrap_or_default()
@@ -70,117 +118,122 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
         let file_header = extract_file_header_doc(&content);
 
         if !symbols.is_empty() || file_header.is_some() {
-            let target_rel_path = relative_path.with_extension("");
-            for symbol in &symbols {
-                let link_target = LinkTarget {
-                    path: target_rel_path.clone(),
-                    anchor: symbol.name.clone(),
-                };
-                insert_link_target(&mut symbol_map, symbol.name.clone(), link_target.clone());
-                for alias in &symbol.link_aliases {
-                    insert_link_target(&mut symbol_map, alias.clone(), link_target.clone());
-                }
-            }
-
             docs.push(FileDoc {
-                path: path.to_path_buf(),
-                file_stem,
+                source_path: path.to_path_buf(),
+                output_stem_path: output_root.join(relative_path.with_extension("")),
+                title: file_stem.clone(),
+                description: format!("{}.tolk {}", file_stem, source_kind.description_suffix()),
                 symbols,
                 file_header,
             });
         }
     }
 
-    let link_regex = Regex::new(r"\[([a-zA-Z0-9_.]+)]")?;
+    Ok(docs)
+}
 
+fn build_symbol_map(docs: &[FileDoc]) -> HashMap<String, Vec<LinkTarget>> {
+    let mut symbol_map: HashMap<String, Vec<LinkTarget>> = HashMap::new();
     for doc in docs {
-        let relative_path = doc.path.strip_prefix(lib_dir)?;
-        let current_file_stem_path = relative_path.with_extension("");
-
-        let mut output_path = out_dir.to_path_buf();
-        if let Some(parent) = relative_path.parent() {
-            output_path.push(parent);
-            fs::create_dir_all(&output_path)?;
-        }
-        output_path.push(format!("{}.mdx", doc.file_stem));
-
-        let mut mdx_content = String::new();
-        mdx_content.push_str("---\n");
-        mdx_content.push_str(&format!("title: \"{}\"\n", doc.file_stem));
-        mdx_content.push_str(&format!(
-            "description: \"{}.tolk standard library file\"\n",
-            doc.file_stem
-        ));
-        mdx_content.push_str("---\n\n");
-        mdx_content.push_str("import { SourceCodeLink } from '@/components/SourceCodeLink';\n\n");
-
-        if let Some(header) = &doc.file_header {
-            mdx_content.push_str(header);
-            mdx_content.push_str("\n\n");
-        }
-
-        if !doc.symbols.is_empty() {
-            mdx_content.push_str("## Definitions\n\n");
-        }
-
-        for symbol in doc.symbols {
-            mdx_content.push_str(&format!("## `{}`\n\n", symbol.name));
-
-            let source_url = format!(
-                "{GITHUB_SOURCE_BASE}/{}#L{}",
-                doc.path.to_string_lossy(),
-                symbol.start_line + 1
-            );
-
-            mdx_content.push_str("```tolk\n");
-            mdx_content.push_str(&symbol.signature);
-            mdx_content.push_str("\n```\n\n");
-
-            if let Some(doc_text) = symbol.doc.as_ref() {
-                if Some(doc_text) == doc.file_header.as_ref() {
-                    // skip if the symbol doc is exactly the same as the file header
-                } else {
-                    let processed_doc =
-                        link_regex.replace_all(doc_text, |caps: &regex::Captures<'_>| {
-                            let name = &caps[1];
-                            if let Some(link_target) =
-                                resolve_link_target(&symbol_map, name, &current_file_stem_path)
-                            {
-                                let target_path = &link_target.path;
-                                if target_path == &current_file_stem_path {
-                                    format!(
-                                        "[{}](#{})",
-                                        name,
-                                        normalize_symbol_link(&link_target.anchor)
-                                    )
-                                } else {
-                                    let relative_link_path =
-                                        pathdiff::diff_paths(target_path, &current_file_stem_path)
-                                            .unwrap_or_else(|| target_path.clone());
-
-                                    let link = relative_link_path.to_string_lossy().to_string();
-                                    format!(
-                                        "[{}]({}/#{})",
-                                        name,
-                                        link,
-                                        normalize_symbol_link(&link_target.anchor)
-                                    )
-                                }
-                            } else {
-                                eprintln!("Warning: Symbol '{name}' not found in documentation");
-                                name.to_string()
-                            }
-                        });
-                    mdx_content.push_str(&processed_doc);
-                    mdx_content.push_str("\n\n");
-                }
+        for symbol in &doc.symbols {
+            let link_target = LinkTarget {
+                path: doc.output_stem_path.clone(),
+                anchor: symbol.name.clone(),
+            };
+            insert_link_target(&mut symbol_map, symbol.name.clone(), link_target.clone());
+            for alias in &symbol.link_aliases {
+                insert_link_target(&mut symbol_map, alias.clone(), link_target.clone());
             }
-
-            mdx_content.push_str(&format!("<SourceCodeLink href=\"{source_url}\" />\n\n"));
         }
-        fs::write(output_path, mdx_content)?;
+    }
+    symbol_map
+}
+
+fn write_doc_page(
+    doc: &FileDoc,
+    symbol_map: &HashMap<String, Vec<LinkTarget>>,
+    link_regex: &Regex,
+) -> Result<()> {
+    let current_file_stem_path = &doc.output_stem_path;
+    let mut output_path = current_file_stem_path.clone();
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    output_path.set_extension("mdx");
+
+    let mut mdx_content = String::new();
+    mdx_content.push_str("---\n");
+    mdx_content.push_str(&format!("title: \"{}\"\n", doc.title));
+    mdx_content.push_str(&format!("description: \"{}\"\n", doc.description));
+    mdx_content.push_str("---\n\n");
+    mdx_content.push_str("import { SourceCodeLink } from '@/components/SourceCodeLink';\n\n");
+
+    if let Some(header) = &doc.file_header {
+        mdx_content.push_str(&sanitize_mdx_text(header));
+        mdx_content.push_str("\n\n");
     }
 
+    if !doc.symbols.is_empty() {
+        mdx_content.push_str("## Definitions\n\n");
+    }
+
+    for symbol in &doc.symbols {
+        mdx_content.push_str(&format!("## `{}`\n\n", symbol.name));
+
+        let source_url = format!(
+            "{GITHUB_SOURCE_BASE}/{}#L{}",
+            doc.source_path.to_string_lossy(),
+            symbol.start_line + 1
+        );
+
+        mdx_content.push_str("```tolk\n");
+        mdx_content.push_str(&symbol.signature);
+        mdx_content.push_str("\n```\n\n");
+
+        if let Some(doc_text) = symbol.doc.as_ref() {
+            if Some(doc_text) == doc.file_header.as_ref() {
+                // skip if the symbol doc is exactly the same as the file header
+            } else {
+                let processed_doc =
+                    link_regex.replace_all(doc_text, |caps: &regex::Captures<'_>| {
+                        let name = &caps[1];
+                        if let Some(link_target) =
+                            resolve_link_target(symbol_map, name, current_file_stem_path)
+                        {
+                            let target_path = &link_target.path;
+                            if target_path == current_file_stem_path {
+                                format!(
+                                    "[{}](#{})",
+                                    name,
+                                    normalize_symbol_link(&link_target.anchor)
+                                )
+                            } else {
+                                let relative_link_path =
+                                    pathdiff::diff_paths(target_path, current_file_stem_path)
+                                        .unwrap_or_else(|| target_path.clone());
+
+                                let link = relative_link_path.to_string_lossy().to_string();
+                                format!(
+                                    "[{}]({}/#{})",
+                                    name,
+                                    link,
+                                    normalize_symbol_link(&link_target.anchor)
+                                )
+                            }
+                        } else {
+                            eprintln!("Warning: Symbol '{name}' not found in documentation");
+                            name.to_string()
+                        }
+                    });
+                mdx_content.push_str(&sanitize_mdx_text(&processed_doc));
+                mdx_content.push_str("\n\n");
+            }
+        }
+
+        mdx_content.push_str(&format!("<SourceCodeLink href=\"{source_url}\" />\n\n"));
+    }
+
+    fs::write(output_path, mdx_content)?;
     Ok(())
 }
 
@@ -219,6 +272,29 @@ struct SymbolInfo {
     doc: Option<String>,
     start_line: usize,
     link_aliases: Vec<String>,
+}
+
+struct FileDoc {
+    source_path: PathBuf,
+    output_stem_path: PathBuf,
+    title: String,
+    description: String,
+    symbols: Vec<SymbolInfo>,
+    file_header: Option<String>,
+}
+
+enum SourceKind {
+    Acton,
+    Tolk,
+}
+
+impl SourceKind {
+    const fn description_suffix(&self) -> &'static str {
+        match self {
+            Self::Acton => "standard library file",
+            Self::Tolk => "Tolk standard library file",
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -554,4 +630,49 @@ fn extract_file_header_doc(source: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+fn sanitize_mdx_text(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut in_fenced_code_block = false;
+
+    for segment in text.split_inclusive('\n') {
+        let line = segment.strip_suffix('\n').unwrap_or(segment);
+        let ends_with_newline = segment.ends_with('\n');
+
+        if line.trim_start().starts_with("```") {
+            in_fenced_code_block = !in_fenced_code_block;
+            result.push_str(line);
+        } else if in_fenced_code_block {
+            result.push_str(line);
+        } else {
+            result.push_str(&escape_mdx_text_line(line));
+        }
+
+        if ends_with_newline {
+            result.push('\n');
+        }
+    }
+
+    result
+}
+
+fn escape_mdx_text_line(line: &str) -> String {
+    let mut escaped = String::with_capacity(line.len());
+    let mut in_inline_code = false;
+
+    for ch in line.chars() {
+        if ch == '`' {
+            in_inline_code = !in_inline_code;
+            escaped.push(ch);
+            continue;
+        }
+
+        if !in_inline_code && ch == '<' {
+            escaped.push('\\');
+        }
+        escaped.push(ch);
+    }
+
+    escaped
 }

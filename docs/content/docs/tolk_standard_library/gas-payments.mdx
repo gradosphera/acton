@@ -1,0 +1,149 @@
+---
+title: "gas-payments"
+description: "gas-payments.tolk Tolk standard library file"
+---
+
+import { SourceCodeLink } from '@/components/SourceCodeLink';
+
+## Definitions
+
+## `getGasConsumedAtTheMoment`
+
+```tolk
+fun getGasConsumedAtTheMoment(): int
+```
+
+Returns amount of gas (in gas units) consumed in current Computation Phase.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L9" />
+
+## `acceptExternalMessage`
+
+```tolk
+fun acceptExternalMessage(): void
+```
+
+This function is required to be called when you process an external message (from an outer world)
+and "accept" it to blockchain.
+Without calling this function, an external message would be discarded.
+As an effect, the current smart contract agrees to buy some gas to finish the current transaction.
+For more details, check [accept_message effects](https://ton.org/docs/#/smart-contracts/accept).
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L17" />
+
+## `setGasLimitToMaximum`
+
+```tolk
+fun setGasLimitToMaximum(): void
+```
+
+When processing an internal message, by default, the limit of gas consumption is determined by incoming message.
+Functions [setGasLimit](#setgaslimit) and [setGasLimitToMaximum](#setgaslimittomaximum) allow you to change this behavior.
+Sets current gas limit `gl` to its maximal allowed value `gm`, and resets the gas credit `gc` to zero,
+decreasing the value of `gr` by `gc` in the process.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L24" />
+
+## `setGasLimit`
+
+```tolk
+fun setGasLimit(limit: int): void
+```
+
+When processing an internal message, by default, the limit of gas consumption is determined by incoming message.
+Functions [setGasLimit](#setgaslimit) and [setGasLimitToMaximum](#setgaslimittomaximum) allow you to change this behavior.
+Sets current gas limit `gl` to the minimum of limit and `gm`, and resets the gas credit `gc` to zero.
+If the gas consumed so far (including the present instruction) exceeds the resulting value of `gl`,
+an (unhandled) out of gas exception is thrown before setting new gas limits.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L32" />
+
+## `calculateGasFee`
+
+```tolk
+@pure
+fun calculateGasFee(workchain: int8, gasUsed: int): coins
+```
+
+Calculates fee (amount in nanotoncoins to be paid) for a transaction which consumed `gasUsed` gas units.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L36" />
+
+## `calculateGasFeeWithoutFlatPrice`
+
+```tolk
+@pure
+fun calculateGasFeeWithoutFlatPrice(workchain: int8, gasUsed: coins): coins
+```
+
+Same as [calculateGasFee](#calculategasfee), but without flat price. [Docs about fees](https://docs.ton.org/develop/howto/fees-low-level)
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L41" />
+
+## `calculateStorageFee`
+
+```tolk
+fun calculateStorageFee(workchain: int8, seconds: int, bits: int, cells: int): coins
+```
+
+Calculates amount of nanotoncoins you should pay for storing a contract of provided size for `seconds`.
+`bits` and `cells` represent contract state (code + data).
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L47" />
+
+## `calculateForwardFee`
+
+```tolk
+@pure
+fun calculateForwardFee(workchain: int8, bits: int, cells: int): coins
+```
+
+Calculates amount of nanotoncoins you should pay to send a message of a specified size.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L51" />
+
+## `calculateForwardFeeWithoutLumpPrice`
+
+```tolk
+@pure
+fun calculateForwardFeeWithoutLumpPrice(workchain: int8, bits: int, cells: int): coins
+```
+
+Same as [calculateForwardFee](#calculateforwardfee), but without lump price. [Docs about fees](https://docs.ton.org/develop/howto/fees-low-level)
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L56" />
+
+## `calculateOriginalForwardFee`
+
+```tolk
+@deprecated("use modern `onInternalMessage` and access `in.originalForwardFee` directly")
+fun calculateOriginalForwardFee(workchain: int8, incomingFwdFee: coins): coins
+```
+
+Calculates fee that was paid by the sender of an incoming internal message.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L61" />
+
+## `contract.getStorageDuePayment`
+
+```tolk
+fun contract.getStorageDuePayment(): coins
+```
+
+Returns the amount of nanotoncoins current contract debts for storage. ("due" and "debt" are synonyms)
+If it has no debt, `0` is returned.
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L67" />
+
+## `contract.getStoragePaidPayment`
+
+```tolk
+@pure
+fun contract.getStoragePaidPayment(): coins
+```
+
+Returns the amount of nanotoncoins charged for storage.
+(during storage phase preceeding to current computation phase)
+
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/crates/tolkc/assets/tolk-stdlib/gas-payments.tolk#L72" />
+
