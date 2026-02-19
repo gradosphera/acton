@@ -3,8 +3,10 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tolk_syntax::parse;
-use tree_sitter::Node;
+use tolk_syntax::{
+    AstNode, BaseFunction, Constant as AstConstant, Enum as AstEnum, HasName, SourceFile,
+    Struct as AstStruct, TopLevel, TypeAlias as AstTypeAlias, parse,
+};
 
 use super::GITHUB_SOURCE_BASE;
 
@@ -63,10 +65,8 @@ Acton provides a collection of functions for writing scripts and tests in Tolk.
             .to_string_lossy()
             .to_string();
 
-        let tree = parse(&content)?;
-        let root_node = tree.root_node();
-
-        let symbols = extract_symbols(root_node, &content);
+        let source_file = parse(&content)?;
+        let symbols = extract_symbols(&source_file, &content);
         let symbols: Vec<_> = symbols.into_iter().filter(|s| !skip_symbol(s)).collect();
         let file_header = extract_file_header_doc(&content);
 
@@ -228,48 +228,63 @@ struct LinkTarget {
     anchor: String,
 }
 
-fn extract_symbols(root: Node<'_>, source: &str) -> Vec<SymbolInfo> {
+fn extract_symbols(source_file: &SourceFile, source: &str) -> Vec<SymbolInfo> {
     let mut symbols = Vec::new();
-    let mut cursor = root.walk();
 
-    for child in root.children(&mut cursor) {
-        let kind = child.kind();
-        if kind == "function_declaration"
-            || kind == "method_declaration"
-            || kind == "get_method_declaration"
-        {
-            if let Some(func) = parse_function(child, source) {
-                symbols.push(func);
+    for top_level in source_file.top_levels() {
+        match top_level {
+            TopLevel::Func(func) => {
+                if let Some(symbol) = parse_function(BaseFunction::Function(func), source) {
+                    symbols.push(symbol);
+                }
             }
-        } else if kind == "type_alias_declaration"
-            && let Some(type_alias) = parse_type_alias(child, source)
-        {
-            symbols.push(type_alias);
-        } else if kind == "struct_declaration"
-            && let Some(s) = parse_struct(child, source)
-        {
-            symbols.push(s);
-        } else if kind == "enum_declaration"
-            && let Some(e) = parse_enum(child, source)
-        {
-            symbols.push(e);
-        } else if kind == "constant_declaration"
-            && let Some(c) = parse_constant(child, source)
-        {
-            symbols.push(c);
+            TopLevel::Method(method) => {
+                if let Some(symbol) =
+                    parse_function(BaseFunction::MethodDeclaration(method), source)
+                {
+                    symbols.push(symbol);
+                }
+            }
+            TopLevel::GetMethod(get_method) => {
+                if let Some(symbol) =
+                    parse_function(BaseFunction::GetMethodDeclaration(get_method), source)
+                {
+                    symbols.push(symbol);
+                }
+            }
+            TopLevel::TypeAlias(type_alias) => {
+                if let Some(symbol) = parse_type_alias(type_alias, source) {
+                    symbols.push(symbol);
+                }
+            }
+            TopLevel::Struct(struct_decl) => {
+                if let Some(symbol) = parse_struct(struct_decl, source) {
+                    symbols.push(symbol);
+                }
+            }
+            TopLevel::Enum(enum_decl) => {
+                if let Some(symbol) = parse_enum(enum_decl, source) {
+                    symbols.push(symbol);
+                }
+            }
+            TopLevel::Constant(const_decl) => {
+                if let Some(symbol) = parse_constant(const_decl, source) {
+                    symbols.push(symbol);
+                }
+            }
+            _ => {}
         }
     }
 
     symbols
 }
 
-fn parse_type_alias(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
-    let name_node = node.child_by_field_name("name")?;
-    let name = name_node.utf8_text(source.as_bytes()).ok()?.to_string();
-    let signature = node.utf8_text(source.as_bytes()).ok()?;
+fn parse_type_alias(type_alias: AstTypeAlias<'_>, source: &str) -> Option<SymbolInfo> {
+    let name = extract_name(&type_alias, source)?;
+    let signature = type_alias.text(source);
 
-    let doc = extract_doc_comment(node, source);
-    let start_line = node.start_position().row;
+    let doc = extract_doc_comment(type_alias.syntax().start_byte(), source);
+    let start_line = type_alias.syntax().start_position().row;
 
     Some(SymbolInfo {
         kind: SymbolKind::TypeAlias,
@@ -281,15 +296,14 @@ fn parse_type_alias(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
     })
 }
 
-fn parse_struct(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
-    let name_node = node.child_by_field_name("name")?;
-    let name = name_node.utf8_text(source.as_bytes()).ok()?.to_string();
+fn parse_struct(struct_decl: AstStruct<'_>, source: &str) -> Option<SymbolInfo> {
+    let name = extract_name(&struct_decl, source)?;
 
-    let signature = node.utf8_text(source.as_bytes()).ok()?;
-    let link_aliases = parse_struct_field_aliases(node, source, &name);
+    let signature = struct_decl.text(source);
+    let link_aliases = parse_struct_field_aliases(struct_decl, source, &name);
 
-    let doc = extract_doc_comment(node, source);
-    let start_line = node.start_position().row;
+    let doc = extract_doc_comment(struct_decl.syntax().start_byte(), source);
+    let start_line = struct_decl.syntax().start_position().row;
 
     Some(SymbolInfo {
         kind: SymbolKind::Struct,
@@ -301,14 +315,13 @@ fn parse_struct(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
     })
 }
 
-fn parse_enum(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
-    let name_node = node.child_by_field_name("name")?;
-    let name = name_node.utf8_text(source.as_bytes()).ok()?.to_string();
-    let signature = node.utf8_text(source.as_bytes()).ok()?;
-    let link_aliases = parse_enum_member_aliases(node, source, &name);
+fn parse_enum(enum_decl: AstEnum<'_>, source: &str) -> Option<SymbolInfo> {
+    let name = extract_name(&enum_decl, source)?;
+    let signature = enum_decl.text(source);
+    let link_aliases = parse_enum_member_aliases(enum_decl, source, &name);
 
-    let doc = extract_doc_comment(node, source);
-    let start_line = node.start_position().row;
+    let doc = extract_doc_comment(enum_decl.syntax().start_byte(), source);
+    let start_line = enum_decl.syntax().start_position().row;
 
     Some(SymbolInfo {
         kind: SymbolKind::Enum,
@@ -320,13 +333,11 @@ fn parse_enum(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
     })
 }
 
-fn parse_constant(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
-    let name_node = node.child_by_field_name("name")?;
-    let name = name_node.utf8_text(source.as_bytes()).ok()?.to_string();
-
-    let full_text = node.utf8_text(source.as_bytes()).ok()?;
-    let doc = extract_doc_comment(node, source);
-    let start_line = node.start_position().row;
+fn parse_constant(constant: AstConstant<'_>, source: &str) -> Option<SymbolInfo> {
+    let name = extract_name(&constant, source)?;
+    let full_text = constant.text(source);
+    let doc = extract_doc_comment(constant.syntax().start_byte(), source);
+    let start_line = constant.syntax().start_position().row;
 
     Some(SymbolInfo {
         kind: SymbolKind::Constant,
@@ -338,32 +349,27 @@ fn parse_constant(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
     })
 }
 
-fn parse_function(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
-    let kind = node.kind();
-
-    let name_node = node.child_by_field_name("name")?;
-    let mut name = name_node.utf8_text(source.as_bytes()).ok()?.to_string();
-
-    if kind == "method_declaration"
-        && let Some(receiver_node) = node.child_by_field_name("receiver")
-        && let Some(type_node) = receiver_node.child_by_field_name("receiver_type")
+fn parse_function(function: BaseFunction<'_>, source: &str) -> Option<SymbolInfo> {
+    let mut name = extract_name(&function, source)?;
+    if let BaseFunction::MethodDeclaration(method) = function
+        && let Some(receiver_type) = method.receiver_type()
     {
-        let type_name = type_node.utf8_text(source.as_bytes()).ok()?;
-        name = format!("{type_name}.{name}");
+        name = format!("{}.{}", receiver_type.text(source), name);
     }
 
-    let full_text = node.utf8_text(source.as_bytes()).ok()?;
-    let link_aliases = parse_parameter_aliases(node, source, &name);
+    let function_syntax = function.syntax();
+    let full_text = function_syntax.utf8_text(source.as_bytes()).ok()?;
+    let link_aliases = parse_parameter_aliases(function, source, &name);
 
-    let signature = if let Some(body) = node.child_by_field_name("body") {
-        let cut_idx = body.start_byte() - node.start_byte();
+    let signature = if let Some(body) = function.body() {
+        let cut_idx = body.syntax().start_byte() - function_syntax.start_byte();
         full_text[..cut_idx].trim().to_string()
     } else {
         full_text.to_string()
     };
 
-    let doc = extract_doc_comment(node, source);
-    let start_line = node.start_position().row;
+    let doc = extract_doc_comment(function_syntax.start_byte(), source);
+    let start_line = function_syntax.start_position().row;
 
     Some(SymbolInfo {
         kind: SymbolKind::Function,
@@ -375,54 +381,43 @@ fn parse_function(node: Node<'_>, source: &str) -> Option<SymbolInfo> {
     })
 }
 
-fn parse_parameter_aliases(node: Node<'_>, source: &str, owner_name: &str) -> Vec<String> {
+fn parse_parameter_aliases(
+    function: BaseFunction<'_>,
+    source: &str,
+    owner_name: &str,
+) -> Vec<String> {
     let mut aliases = Vec::new();
 
-    let Some(parameters) = node.child_by_field_name("parameters") else {
-        return aliases;
-    };
+    for parameter in function.parameters() {
+        let Some(parameter_name) = extract_name(&parameter, source) else {
+            continue;
+        };
+        if parameter_name.is_empty() || parameter_name == "self" {
+            continue;
+        }
 
-    let mut cursor = parameters.walk();
-    for child in parameters.children(&mut cursor) {
-        if child.kind() != "parameter_declaration" {
-            continue;
-        }
-        let Some(name_node) = child.child_by_field_name("name") else {
-            continue;
-        };
-        let Ok(param_name) = name_node.utf8_text(source.as_bytes()) else {
-            continue;
-        };
-        let param_name = param_name.trim_matches('`');
-        if param_name.is_empty() || param_name == "self" {
-            continue;
-        }
-        aliases.push(param_name.to_string());
-        aliases.push(format!("{owner_name}.{param_name}"));
+        aliases.push(parameter_name.clone());
+        aliases.push(format!("{owner_name}.{parameter_name}"));
     }
 
     aliases
 }
 
-fn parse_struct_field_aliases(node: Node<'_>, source: &str, owner_name: &str) -> Vec<String> {
+fn parse_struct_field_aliases(
+    struct_decl: AstStruct<'_>,
+    source: &str,
+    owner_name: &str,
+) -> Vec<String> {
     let mut aliases = Vec::new();
 
-    let Some(body) = node.child_by_field_name("body") else {
+    let Some(body) = struct_decl.body() else {
         return aliases;
     };
 
-    let mut cursor = body.walk();
-    for child in body.children(&mut cursor) {
-        if child.kind() != "struct_field_declaration" {
-            continue;
-        }
-        let Some(name_node) = child.child_by_field_name("name") else {
+    for field in body.fields() {
+        let Some(field_name) = extract_name(&field, source) else {
             continue;
         };
-        let Ok(field_name) = name_node.utf8_text(source.as_bytes()) else {
-            continue;
-        };
-        let field_name = field_name.trim_matches('`');
         if field_name.is_empty() {
             continue;
         }
@@ -432,25 +427,21 @@ fn parse_struct_field_aliases(node: Node<'_>, source: &str, owner_name: &str) ->
     aliases
 }
 
-fn parse_enum_member_aliases(node: Node<'_>, source: &str, owner_name: &str) -> Vec<String> {
+fn parse_enum_member_aliases(
+    enum_decl: AstEnum<'_>,
+    source: &str,
+    owner_name: &str,
+) -> Vec<String> {
     let mut aliases = Vec::new();
 
-    let Some(body) = node.child_by_field_name("body") else {
+    let Some(body) = enum_decl.body() else {
         return aliases;
     };
 
-    let mut cursor = body.walk();
-    for child in body.children(&mut cursor) {
-        if child.kind() != "enum_member_declaration" {
-            continue;
-        }
-        let Some(name_node) = child.child_by_field_name("name") else {
+    for member in body.members() {
+        let Some(member_name) = extract_name(&member, source) else {
             continue;
         };
-        let Ok(member_name) = name_node.utf8_text(source.as_bytes()) else {
-            continue;
-        };
-        let member_name = member_name.trim_matches('`');
         if member_name.is_empty() {
             continue;
         }
@@ -486,8 +477,15 @@ fn resolve_link_target<'a>(
         .find(|target| target.path == current_file_stem_path)
 }
 
-fn extract_doc_comment(node: Node<'_>, source: &str) -> Option<String> {
-    let start_byte = node.start_byte();
+fn extract_name<'tree, N>(node: &N, source: &'tree str) -> Option<String>
+where
+    N: HasName<'tree>,
+{
+    let name = node.name()?;
+    Some(name.text(source).trim_matches('`').to_string())
+}
+
+fn extract_doc_comment(start_byte: usize, source: &str) -> Option<String> {
     let prefix = &source[..start_byte];
 
     let mut lines = Vec::new();
