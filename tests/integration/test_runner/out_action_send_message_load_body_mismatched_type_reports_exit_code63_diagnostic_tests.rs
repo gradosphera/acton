@@ -63,7 +63,7 @@ get fun `test-cw-out-action-load-body-mismatch-diagnostic`() {
     action!.loadBody<CwLoadBodyExpected>();
 }
 "#,
-        "integration/snapshots/test-runner/out_action_send_message_load_body_mismatched_type_reports_exit_code63_diagnostic/out_action_send_message_load_body_mismatched_type_reports_exit_code63_diagnostic.stdout.txt",
+        "integration/snapshots/test-runner/out_action_send_message_load_body_mismatched_type_reports_exit_code63_diagnostic/out_action_send_message_load_body_mismatched_type_reports.stdout.txt",
     );
 }
 
