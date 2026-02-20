@@ -34,6 +34,6 @@ get fun `test-bt-consumes-less-than1-returns-result`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_consumes_less_than1_returns_computed_function_result_tests/assert_consumes_less_than1_returns_computed_function_result.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_consumes_less_than1_returns_computed_function_result_tests/assert_consumes_less_than1_returns_computed_function_result.stdout.txt",
         );
 }

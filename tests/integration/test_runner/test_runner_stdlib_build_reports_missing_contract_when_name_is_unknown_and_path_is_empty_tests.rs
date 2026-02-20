@@ -28,7 +28,7 @@ fn build_reports_missing_contract_when_name_is_unknown_and_path_is_empty() {
         .assert_failed(1)
         .assert_contains("Contract missing not found in Acton.toml")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_build_reports_missing_contract_when_name_is_unknown_and_path_is_empty_tests/build_reports_missing_contract_when_name_is_unknown_and_path_is_empty.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_build_reports_missing_contract_when_name_is_unknown_and_path_is_empty_tests/build_reports_missing_contract_when_name_is_unknown_and_path_is_empty.stdout.txt",
         );
 }
 
@@ -56,6 +56,6 @@ fn build_reports_missing_contract_when_name_and_path_are_empty() {
         .assert_contains("Available contracts:")
         .assert_contains("simple")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_build_reports_missing_contract_when_name_is_unknown_and_path_is_empty_tests/build_reports_missing_contract_when_name_and_path_are_empty.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_build_reports_missing_contract_when_name_is_unknown_and_path_is_empty_tests/build_reports_missing_contract_when_name_and_path_are_empty.stdout.txt",
         );
 }

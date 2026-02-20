@@ -47,7 +47,7 @@ get fun `test-cj-parse-out-actions-preserves-kinds`() {
     expect(viaRaw.at(1).kind()).toEqual("reserve-currency");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_preserves_reserve_and_change_library_kinds.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_preserves_reserve_and_change_library_kinds.stdout.txt",
     );
 }
 
@@ -65,7 +65,7 @@ get fun `test-cj-parse-out-actions-reserve-one-nanoton-kind-bug`() {
     expect(parsed.at(0).kind()).toEqual("reserve-currency");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_reserve_nanoton_is_misparsed_as_change_library_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_reserve_nanoton_is_misparsed_as_change_library_bug.stdout.txt",
     );
 }
 
@@ -82,7 +82,7 @@ get fun `test-cj-parse-out-actions-reserve-zero-nanoton-kind`() {
     expect(parsed.at(0).kind()).toEqual("reserve-currency");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_reserve_zero_nanoton_stays_reserve_currency.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_reserve_zero_nanoton_stays_reserve_currency.stdout.txt",
     );
 }
 
@@ -99,7 +99,7 @@ get fun `test-cj-parse-out-actions-single-set-code`() {
     expect(parsed.at(0).kind()).toEqual("set-code");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_single_set_code_action_is_decoded.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_single_set_code_action_is_decoded.stdout.txt",
     );
 }
 
@@ -125,7 +125,7 @@ get fun `test-cj-parse-out-actions-single-send-message`() {
     expect(send!.mode).toEqual(SEND_MODE_PAY_FEES_SEPARATELY);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_single_send_message_action_preserves_mode.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_single_send_message_action_preserves_mode.stdout.txt",
     );
 }
 
@@ -155,7 +155,7 @@ get fun `test-cj-parse-out-actions-reserve-zero-and-one`() {
     }
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_reserve_zero_and_one_preserve_kind_and_amount.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_reserve_zero_and_one_preserve_kind_and_amount.stdout.txt",
     );
 }
 
@@ -195,6 +195,6 @@ get fun `test-cj-parse-out-actions-mixed-chain`() {
     }
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_mixed_action_chain_preserves_order_and_types.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_parse_out_actions_preserves_reserve_and_change_library_kinds_tests/parse_out_actions_mixed_action_chain_preserves_order_and_types.stdout.txt",
     );
 }

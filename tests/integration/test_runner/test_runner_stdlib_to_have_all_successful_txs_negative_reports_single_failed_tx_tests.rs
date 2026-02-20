@@ -58,7 +58,7 @@ get fun `test-ce-all-successful-negative-single-failing-tx`() {
     expect(results).toHaveAllSuccessfulTxs();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_have_all_successful_txs_negative_reports_single_failed_tx_tests/to_have_all_successful_txs_negative_reports_single_failed_tx.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_have_all_successful_txs_negative_reports_single_failed_tx_tests/to_have_all_successful_txs_negative_reports_single_failed_tx.stdout.txt",
     );
 }
 
@@ -111,6 +111,6 @@ get fun `test-ce-all-successful-negative-fixture-single-failing-tx`() {{
         .failure()
         .assert_failed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_to_have_all_successful_txs_negative_reports_single_failed_tx_tests/to_have_all_successful_txs_negative_reports_single_failed_tx_in_fixture.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_to_have_all_successful_txs_negative_reports_single_failed_tx_tests/to_have_all_successful_txs_negative_reports_single_failed_tx_in_fixture.stdout.txt",
         );
 }

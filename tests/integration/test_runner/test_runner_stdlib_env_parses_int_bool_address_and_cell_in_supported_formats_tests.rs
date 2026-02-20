@@ -60,7 +60,7 @@ fn env_parses_int_bool_address_and_cell_in_supported_formats() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_env_parses_int_bool_address_and_cell_in_supported_formats_tests/env_parses_int_bool_address_and_cell_in_supported_formats.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_env_parses_int_bool_address_and_cell_in_supported_formats_tests/env_parses_int_bool_address_and_cell_in_supported_formats.stdout.txt",
         );
 }
 
@@ -96,7 +96,7 @@ fn env_returns_null_for_invalid_inputs_and_missing_values() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_env_parses_int_bool_address_and_cell_in_supported_formats_tests/env_returns_null_for_invalid_inputs_and_missing_values.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_env_parses_int_bool_address_and_cell_in_supported_formats_tests/env_returns_null_for_invalid_inputs_and_missing_values.stdout.txt",
         );
 }
 
@@ -142,7 +142,7 @@ fn env_or_uses_defaults_only_for_null_paths() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_env_parses_int_bool_address_and_cell_in_supported_formats_tests/env_or_uses_defaults_only_for_null_paths.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_env_parses_int_bool_address_and_cell_in_supported_formats_tests/env_or_uses_defaults_only_for_null_paths.stdout.txt",
         );
 }
 
@@ -174,6 +174,6 @@ fn env_parses_user_friendly_address_form() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_env_parses_int_bool_address_and_cell_in_supported_formats_tests/env_parses_user_friendly_address_form.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_env_parses_int_bool_address_and_cell_in_supported_formats_tests/env_parses_user_friendly_address_form.stdout.txt",
         );
 }

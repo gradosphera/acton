@@ -90,7 +90,7 @@ get fun `test-bd-stdlib-config-gas-prices-extended-dual-chain-independence`() {
     expect(actualMaster.other.specialGasLimit).toNotEqual(baseAfterUpdate.other.specialGasLimit);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_set_gas_prices_extended_fields_keep_base_and_masterchain_independent_tests/config_set_gas_prices_extended_fields_keep_base_and_masterchain_independent.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_set_gas_prices_extended_fields_keep_base_and_masterchain_independent_tests/config_set_gas_prices_extended_fields_keep_base_and_masterchain_independent.stdout.txt",
     );
 }
 
@@ -147,6 +147,6 @@ get fun `test-bd-stdlib-config-gas-prices-single-chain-independence`() {
     expect(actualMaster.other.deleteDueLimit).toEqual(masterBefore.other.deleteDueLimit);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_set_gas_prices_extended_fields_keep_base_and_masterchain_independent_tests/config_set_gas_prices_for_basechain_does_not_change_masterchain_extended_fields.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_set_gas_prices_extended_fields_keep_base_and_masterchain_independent_tests/config_set_gas_prices_for_basechain_does_not_change_masterchain_extended_fields.stdout.txt",
     );
 }

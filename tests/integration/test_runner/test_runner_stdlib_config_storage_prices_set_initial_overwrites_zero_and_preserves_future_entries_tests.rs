@@ -95,6 +95,6 @@ get fun `test-dq-stdlib-config-storage-prices-set-initial-overwrite-preserves-fu
     expect(futureB.masterchainCellPrice).toEqual(133);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_storage_prices_set_initial_overwrites_zero_and_preserves_future_entries_tests/config_storage_prices_set_initial_overwrites_zero_and_preserves_future_entries.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_storage_prices_set_initial_overwrites_zero_and_preserves_future_entries_tests/config_storage_prices_set_initial_overwrites_zero_and_preserves_future_entries.stdout.txt",
     );
 }

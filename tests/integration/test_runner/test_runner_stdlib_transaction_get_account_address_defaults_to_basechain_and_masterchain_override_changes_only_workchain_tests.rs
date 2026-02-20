@@ -94,7 +94,7 @@ get fun `test-dc-stdlib-transaction-get-account-address-default-vs-masterchain`(
     expect(defaultParts.hash).toEqual(masterParts.hash);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_get_account_address_defaults_to_basechain_and_masterchain_override_changes_only_workchain_tests/transaction_get_account_address_defaults_to_basechain_and_masterchain_override_changes_only_workchain.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_get_account_address_defaults_to_basechain_and_masterchain_override_changes_only_workchain_tests/transaction_get_account_address_defaults_to_basechain_and_masterchain_override_changes_only_workchain.stdout.txt",
     );
 }
 
@@ -153,6 +153,6 @@ get fun `test-dc-stdlib-transaction-get-account-address-masterchain-stable`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_transaction_get_account_address_defaults_to_basechain_and_masterchain_override_changes_only_workchain_tests/transaction_get_account_address_masterchain_override_is_stable_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_transaction_get_account_address_defaults_to_basechain_and_masterchain_override_changes_only_workchain_tests/transaction_get_account_address_masterchain_override_is_stable_in_fixture_project.stdout.txt",
         );
 }

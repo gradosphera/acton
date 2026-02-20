@@ -69,6 +69,6 @@ get fun `test-dk-stdlib-vm-config-unpacked-after-root-dict-mutation`() {
     expect(afterStorage.masterchainCellPrice).toNotEqual(rootStorage.masterchainCellPrice);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_vm_get_config_unpacked_stays_stable_after_set_config_root_dict_mutation_tests/vm_get_config_unpacked_stays_stable_after_set_config_root_dict_mutation.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_vm_get_config_unpacked_stays_stable_after_set_config_root_dict_mutation_tests/vm_get_config_unpacked_stays_stable_after_set_config_root_dict_mutation.stdout.txt",
     );
 }

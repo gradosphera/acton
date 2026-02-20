@@ -24,5 +24,5 @@ fn parse_out_actions_rejects_node_without_prev_ref() {
         .failure()
         .assert_failed(1)
         .assert_contains("Malformed out action list node")
-        .assert_snapshot_matches("integration/snapshots/test-runner/test_runner_stdlib_out_action_from_tuple_rejects_single_item_tuple_tests/parse_out_actions_rejects_node_without_prev_ref.stdout.txt");
+        .assert_snapshot_matches("integration/snapshots/test-runner/stdlib_out_action_from_tuple_rejects_single_item_tuple_tests/parse_out_actions_rejects_node_without_prev_ref.stdout.txt");
 }

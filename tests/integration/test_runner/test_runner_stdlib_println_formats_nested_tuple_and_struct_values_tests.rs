@@ -72,7 +72,7 @@ get fun `test-ar-stdlib-println-nested-tuple-and-struct-values`() {
     println(nested);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_println_formats_nested_tuple_and_struct_values_tests/println_formats_nested_tuple_and_struct_values.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_println_formats_nested_tuple_and_struct_values_tests/println_formats_nested_tuple_and_struct_values.stdout.txt",
     );
 }
 
@@ -97,6 +97,6 @@ get fun `test-ar-stdlib-println1-nested-tuple-and-struct-values`() {
     println1("nested={}", nested);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_println_formats_nested_tuple_and_struct_values_tests/println1_formats_nested_tuple_and_struct_values_via_placeholder_pipeline.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_println_formats_nested_tuple_and_struct_values_tests/println1_formats_nested_tuple_and_struct_values_via_placeholder_pipeline.stdout.txt",
     );
 }

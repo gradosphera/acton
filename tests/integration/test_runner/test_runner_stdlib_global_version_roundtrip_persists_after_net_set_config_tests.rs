@@ -44,7 +44,7 @@ get fun `test-bb-stdlib-config-global-version-roundtrip`() {
     expect(updated.capabilities).toNotEqual(before.capabilities);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_global_version_roundtrip_persists_after_net_set_config_tests/global_version_roundtrip_persists_after_net_set_config.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_global_version_roundtrip_persists_after_net_set_config_tests/global_version_roundtrip_persists_after_net_set_config.stdout.txt",
     );
 }
 
@@ -76,6 +76,6 @@ get fun `test-bb-stdlib-config-global-version-raw-typed-consistency`() {
     expect(secondRead.capabilities).toEqual(target.capabilities);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_global_version_roundtrip_persists_after_net_set_config_tests/global_version_typed_and_raw_reads_match_after_roundtrip.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_global_version_roundtrip_persists_after_net_set_config_tests/global_version_typed_and_raw_reads_match_after_roundtrip.stdout.txt",
     );
 }

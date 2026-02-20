@@ -66,7 +66,7 @@ get fun `test-au-fs-read-non-utf8-binary-fixture`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_fs_read_file_returns_null_for_non_utf8_binary_fixture_tests/fs_read_file_returns_null_for_non_utf8_binary_fixture.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_fs_read_file_returns_null_for_non_utf8_binary_fixture_tests/fs_read_file_returns_null_for_non_utf8_binary_fixture.stdout.txt",
         );
 }
 
@@ -95,6 +95,6 @@ get fun `test-au-fs-read-binary-like-content-normalized-paths`() {
     expect(direct!).toNotEqual("B5EE9C72\n00FF10AA\n7F00\n");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_fs_read_file_returns_null_for_non_utf8_binary_fixture_tests/fs_read_file_keeps_binary_like_text_content_across_normalized_paths.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_fs_read_file_returns_null_for_non_utf8_binary_fixture_tests/fs_read_file_keeps_binary_like_text_content_across_normalized_paths.stdout.txt",
     );
 }

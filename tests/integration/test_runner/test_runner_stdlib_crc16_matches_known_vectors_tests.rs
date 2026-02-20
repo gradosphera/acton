@@ -31,7 +31,7 @@ get fun `test-ei-stdlib-crc16-known-vectors`() {
     expect(crc16("TON")).toEqual(14070);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crc16_matches_known_vectors_tests/crc16_matches_known_vectors.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crc16_matches_known_vectors_tests/crc16_matches_known_vectors.stdout.txt",
     );
 }
 
@@ -52,6 +52,6 @@ get fun `test-ei-stdlib-crc16-deterministic-u16-range`() {
     expect(first <= 65535).toBeTrue();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crc16_matches_known_vectors_tests/crc16_is_deterministic_and_stays_in_u16_range.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crc16_matches_known_vectors_tests/crc16_is_deterministic_and_stays_in_u16_range.stdout.txt",
     );
 }

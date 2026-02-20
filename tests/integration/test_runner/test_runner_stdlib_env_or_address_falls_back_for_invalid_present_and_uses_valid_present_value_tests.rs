@@ -36,7 +36,7 @@ fn env_or_address_falls_back_for_invalid_present_and_uses_valid_present_value() 
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_env_or_address_falls_back_for_invalid_present_and_uses_valid_present_value_tests/env_or_address_falls_back_for_invalid_present_and_uses_valid_present_value.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_env_or_address_falls_back_for_invalid_present_and_uses_valid_present_value_tests/env_or_address_falls_back_for_invalid_present_and_uses_valid_present_value.stdout.txt",
         );
 }
 
@@ -76,6 +76,6 @@ fn env_or_cell_falls_back_for_invalid_present_and_uses_valid_present_value() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_env_or_address_falls_back_for_invalid_present_and_uses_valid_present_value_tests/env_or_cell_falls_back_for_invalid_present_and_uses_valid_present_value.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_env_or_address_falls_back_for_invalid_present_and_uses_valid_present_value_tests/env_or_cell_falls_back_for_invalid_present_and_uses_valid_present_value.stdout.txt",
         );
 }

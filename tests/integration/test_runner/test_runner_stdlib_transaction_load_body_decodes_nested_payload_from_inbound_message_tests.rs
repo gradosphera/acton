@@ -85,7 +85,7 @@ get fun `test-db-stdlib-transaction-load-body-nested-inline`() {
     expect(rawBody.loadUint(32)).toEqual(payload.amount);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_body_decodes_nested_payload_from_inbound_message_tests/transaction_load_body_decodes_nested_payload_from_inbound_message.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_load_body_decodes_nested_payload_from_inbound_message_tests/transaction_load_body_decodes_nested_payload_from_inbound_message.stdout.txt",
     );
 }
 
@@ -147,6 +147,6 @@ get fun `test-db-stdlib-transaction-load-body-nested-fixture`() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_body_decodes_nested_payload_from_inbound_message_tests/transaction_load_body_decodes_nested_payload_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_transaction_load_body_decodes_nested_payload_from_inbound_message_tests/transaction_load_body_decodes_nested_payload_in_fixture_project.stdout.txt",
         );
 }

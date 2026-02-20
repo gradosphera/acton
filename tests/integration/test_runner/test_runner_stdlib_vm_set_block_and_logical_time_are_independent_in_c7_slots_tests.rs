@@ -54,7 +54,7 @@ get fun `test-dj-vm-set-block-and-logical-time-independent-slots`() {
     expect(paramsAfterLogical.get(5) as int).toEqual(logicalLtBefore + 202);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_vm_set_block_and_logical_time_are_independent_in_c7_slots_tests/vm_set_block_and_logical_time_are_independent_in_c7_slots.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_vm_set_block_and_logical_time_are_independent_in_c7_slots_tests/vm_set_block_and_logical_time_are_independent_in_c7_slots.stdout.txt",
     );
 }
 
@@ -100,6 +100,6 @@ get fun `test-dj-vm-set-logical-then-block-slot-isolation`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_vm_set_block_and_logical_time_are_independent_in_c7_slots_tests/vm_set_logical_then_block_time_preserves_slot_isolation_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_vm_set_block_and_logical_time_are_independent_in_c7_slots_tests/vm_set_logical_then_block_time_preserves_slot_isolation_in_fixture_project.stdout.txt",
         );
 }

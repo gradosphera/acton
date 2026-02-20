@@ -38,7 +38,7 @@ get fun `test-dw-stdlib-create-mnemonic-returns-24-non-empty-words`() {
     }
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_create_mnemonic_returns_24_non_empty_words_tests/crypto_create_mnemonic_returns_24_non_empty_words.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_create_mnemonic_returns_24_non_empty_words_tests/crypto_create_mnemonic_returns_24_non_empty_words.stdout.txt",
     );
 }
 
@@ -78,6 +78,6 @@ get fun `test-dw-stdlib-create-mnemonic-keypair-shape`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_crypto_create_mnemonic_returns_24_non_empty_words_tests/crypto_create_mnemonic_outputs_are_valid_for_keypair_derivation_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_crypto_create_mnemonic_returns_24_non_empty_words_tests/crypto_create_mnemonic_outputs_are_valid_for_keypair_derivation_in_fixture_project.stdout.txt",
         );
 }

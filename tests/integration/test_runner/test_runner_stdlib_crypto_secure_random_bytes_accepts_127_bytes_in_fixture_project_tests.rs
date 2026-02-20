@@ -70,7 +70,7 @@ get fun `test-ay-stdlib-secure-random-accepts-127-bytes`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_crypto_secure_random_bytes_accepts_127_bytes_in_fixture_project_tests/crypto_secure_random_bytes_accepts_127_bytes_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_crypto_secure_random_bytes_accepts_127_bytes_in_fixture_project_tests/crypto_secure_random_bytes_accepts_127_bytes_in_fixture_project.stdout.txt",
         );
 }
 
@@ -84,7 +84,7 @@ get fun `test-ay-stdlib-secure-random-rejects-zero-bytes`() {
 }
 "#,
         "bytesNum must be between 1 and 128",
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_secure_random_bytes_accepts_127_bytes_in_fixture_project_tests/crypto_secure_random_bytes_rejects_zero_bytes.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_secure_random_bytes_accepts_127_bytes_in_fixture_project_tests/crypto_secure_random_bytes_rejects_zero_bytes.stdout.txt",
     );
 }
 
@@ -98,6 +98,6 @@ get fun `test-ay-stdlib-secure-random-rejects-128-bytes`() {
     crypto.getSecureRandomBytes(128);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_secure_random_bytes_accepts_127_bytes_in_fixture_project_tests/crypto_secure_random_bytes_rejects_128_bytes_with_exit_567.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_secure_random_bytes_accepts_127_bytes_in_fixture_project_tests/crypto_secure_random_bytes_rejects_128_bytes_with_exit_567.stdout.txt",
     );
 }

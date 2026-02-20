@@ -55,7 +55,7 @@ get fun `test-maybe-some-none-unwrap-semantics`() {
     expect(nestedValue.unwrapOr(123)).toEqual(123);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_maybe_some_none_unwrap_and_unwrap_or_follow_documented_semantics_tests/maybe_some_none_unwrap_and_unwrap_or_follow_documented_semantics.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_maybe_some_none_unwrap_and_unwrap_or_follow_documented_semantics_tests/maybe_some_none_unwrap_and_unwrap_or_follow_documented_semantics.stdout.txt",
     );
 }
 
@@ -69,6 +69,6 @@ get fun `test-maybe-unwrap-on-none-throws-exit-code-7`() {
     empty.unwrap();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_maybe_some_none_unwrap_and_unwrap_or_follow_documented_semantics_tests/maybe_unwrap_on_none_throws_exit_code_7.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_maybe_some_none_unwrap_and_unwrap_or_follow_documented_semantics_tests/maybe_unwrap_on_none_throws_exit_code_7.stdout.txt",
     );
 }

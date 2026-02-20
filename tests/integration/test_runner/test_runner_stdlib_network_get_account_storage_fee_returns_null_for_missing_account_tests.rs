@@ -48,7 +48,7 @@ get fun `test-bk-stdlib-network-get-account-storage-fee-missing-account`() {
     expect(net.getAccountStorageFee(missing, 0) == null).toBeTrue();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_network_get_account_storage_fee_returns_null_for_missing_account_tests/network_get_account_storage_fee_returns_null_for_missing_account.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_network_get_account_storage_fee_returns_null_for_missing_account_tests/network_get_account_storage_fee_returns_null_for_missing_account.stdout.txt",
     );
 }
 
@@ -89,7 +89,7 @@ get fun `test-bk-stdlib-network-get-account-storage-fee-existing-account`() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_network_get_account_storage_fee_returns_null_for_missing_account_tests/network_get_account_storage_fee_returns_non_null_for_existing_account_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_network_get_account_storage_fee_returns_null_for_missing_account_tests/network_get_account_storage_fee_returns_non_null_for_existing_account_in_fixture_project.stdout.txt",
         );
 }
 
@@ -117,7 +117,7 @@ get fun `test-bk-stdlib-account-state-uninit-and-active-variants`() {
     }
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_network_get_account_storage_fee_returns_null_for_missing_account_tests/account_state_variants_uninit_and_active_are_parsed_from_accounts.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_network_get_account_storage_fee_returns_null_for_missing_account_tests/account_state_variants_uninit_and_active_are_parsed_from_accounts.stdout.txt",
     );
 }
 
@@ -138,7 +138,7 @@ get fun `test-bk-stdlib-account-state-frozen-local-roundtrip`() {
     }
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_network_get_account_storage_fee_returns_null_for_missing_account_tests/account_state_frozen_local_roundtrip_cell_works.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_network_get_account_storage_fee_returns_null_for_missing_account_tests/account_state_frozen_local_roundtrip_cell_works.stdout.txt",
     );
 }
 
@@ -178,6 +178,6 @@ get fun `test-bk-stdlib-account-state-frozen-roundtrip-via-set-account-bug`() {
     }
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_network_get_account_storage_fee_returns_null_for_missing_account_tests/account_state_frozen_roundtrip_via_set_account_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_network_get_account_storage_fee_returns_null_for_missing_account_tests/account_state_frozen_roundtrip_via_set_account_bug.stdout.txt",
     );
 }

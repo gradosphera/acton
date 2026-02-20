@@ -60,7 +60,7 @@ get fun `test-ba-stdlib-sign-hash-sensitive-for-different-cells`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_crypto_sign_is_hash_sensitive_for_different_cells_in_fixture_project_tests/crypto_sign_is_hash_sensitive_for_different_cells_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_crypto_sign_is_hash_sensitive_for_different_cells_in_fixture_project_tests/crypto_sign_is_hash_sensitive_for_different_cells_in_fixture_project.stdout.txt",
         );
 }
 
@@ -83,7 +83,7 @@ get fun `test-ba-stdlib-raw-sign-positive-negative-hash-values`() {
     expect(sigA).toNotEqual(sigB);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_sign_is_hash_sensitive_for_different_cells_in_fixture_project_tests/crypto_raw_sign_positive_and_negative_hash_values_do_not_collapse.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_sign_is_hash_sensitive_for_different_cells_in_fixture_project_tests/crypto_raw_sign_positive_and_negative_hash_values_do_not_collapse.stdout.txt",
     );
 }
 
@@ -104,6 +104,6 @@ get fun `test-ba-stdlib-raw-sign-positive-negative-private-keys`() {
     expect(sigA).toNotEqual(sigB);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_sign_is_hash_sensitive_for_different_cells_in_fixture_project_tests/crypto_raw_sign_positive_and_negative_private_keys_do_not_collapse.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_sign_is_hash_sensitive_for_different_cells_in_fixture_project_tests/crypto_raw_sign_positive_and_negative_private_keys_do_not_collapse.stdout.txt",
     );
 }

@@ -74,7 +74,7 @@ get fun `test-cn-set-c5-roundtrip-non-empty-transitions`() {
     expect(restoredSecond!.mode).toEqual(SEND_MODE_REGULAR);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_c5_roundtrip_restores_single_and_double_action_out_lists_tests/set_c5_roundtrip_restores_single_and_double_action_out_lists.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_c5_roundtrip_restores_single_and_double_action_out_lists_tests/set_c5_roundtrip_restores_single_and_double_action_out_lists.stdout.txt",
     );
 }
 
@@ -91,7 +91,7 @@ get fun `test-cn-set-c5-empty-cell-out-actions-bug`() {
     expect(parsed.size()).toEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_c5_roundtrip_restores_single_and_double_action_out_lists_tests/set_c5_to_empty_cell_breaks_vm_out_actions_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_c5_roundtrip_restores_single_and_double_action_out_lists_tests/set_c5_to_empty_cell_breaks_vm_out_actions_bug.stdout.txt",
     );
 }
 
@@ -105,6 +105,6 @@ get fun `test-cn-parse-out-actions-direct-empty-cell`() {
     expect(parsed.size()).toEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_c5_roundtrip_restores_single_and_double_action_out_lists_tests/parse_out_actions_direct_empty_cell_returns_empty_list.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_c5_roundtrip_restores_single_and_double_action_out_lists_tests/parse_out_actions_direct_empty_cell_returns_empty_list.stdout.txt",
     );
 }

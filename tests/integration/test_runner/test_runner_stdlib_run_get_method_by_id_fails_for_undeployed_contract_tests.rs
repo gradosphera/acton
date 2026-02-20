@@ -14,7 +14,7 @@ get fun currentCounter(): int {
 
 #[test]
 fn run_get_method_by_id_fails_for_undeployed_contract() {
-    let snapshot_path = "integration/snapshots/test-runner/test_runner_stdlib_run_get_method_by_id_fails_for_undeployed_contract_tests/run_get_method_by_id_fails_for_undeployed_contract.stdout.txt";
+    let snapshot_path = "integration/snapshots/test-runner/stdlib_run_get_method_by_id_fails_for_undeployed_contract_tests/run_get_method_by_id_fails_for_undeployed_contract.stdout.txt";
     ProjectBuilder::new("bg-stdlib-run-get-method-by-id-undeployed")
         .contract("simple", SIMPLE_CONTRACT)
         .test_file(
@@ -99,6 +99,6 @@ fn run_get_method_by_id_fails_for_invalid_method_id_on_deployed_contract() {
         .failure()
         .assert_failed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_run_get_method_by_id_fails_for_undeployed_contract_tests/run_get_method_by_id_fails_for_invalid_method_id_on_deployed_contract.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_run_get_method_by_id_fails_for_undeployed_contract_tests/run_get_method_by_id_fails_for_invalid_method_id_on_deployed_contract.stdout.txt",
         );
 }

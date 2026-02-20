@@ -49,7 +49,7 @@ get fun `test-fs-read-existing-and-normalized-paths`() {
     expect(viaParent!).toEqual("line-from-agent-w");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_fs_read_file_returns_content_for_existing_and_normalized_paths_tests/fs_read_file_returns_content_for_existing_and_normalized_paths.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_fs_read_file_returns_content_for_existing_and_normalized_paths_tests/fs_read_file_returns_content_for_existing_and_normalized_paths.stdout.txt",
     );
 }
 
@@ -67,6 +67,6 @@ get fun `test-fs-read-missing-file-returns-null`() {
     expect(missingViaParent).toBeNull();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_fs_read_file_returns_content_for_existing_and_normalized_paths_tests/fs_read_file_returns_null_for_missing_file.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_fs_read_file_returns_content_for_existing_and_normalized_paths_tests/fs_read_file_returns_null_for_missing_file.stdout.txt",
     );
 }

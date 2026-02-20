@@ -42,7 +42,7 @@ get fun `test-bm-load-library-unknown-hash-project-builder`() {{
         .assert_passed(1)
         .assert_contains("bm-load-library-null-project-builder")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_load_library_unknown_hash_returns_null_in_project_builder_tests/load_library_unknown_hash_returns_null_in_project_builder.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_load_library_unknown_hash_returns_null_in_project_builder_tests/load_library_unknown_hash_returns_null_in_project_builder.stdout.txt",
         );
 }
 
@@ -80,6 +80,6 @@ get fun `test-bm-load-library-unknown-hash-fixture`() {{
         .assert_passed(1)
         .assert_contains("bm-load-library-null-fixture")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_load_library_unknown_hash_returns_null_in_project_builder_tests/load_library_unknown_hash_returns_null_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_load_library_unknown_hash_returns_null_in_project_builder_tests/load_library_unknown_hash_returns_null_in_fixture_project.stdout.txt",
         );
 }

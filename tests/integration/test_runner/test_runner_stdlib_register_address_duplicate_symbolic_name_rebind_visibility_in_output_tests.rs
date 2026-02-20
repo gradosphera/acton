@@ -54,6 +54,6 @@ get fun `test-cq-register-address-duplicate-symbolic-name`() {
     })));
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_register_address_duplicate_symbolic_name_rebind_visibility_in_output_tests/register_address_duplicate_symbolic_name_rebind_visibility_in_output.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_register_address_duplicate_symbolic_name_rebind_visibility_in_output_tests/register_address_duplicate_symbolic_name_rebind_visibility_in_output.stdout.txt",
     );
 }

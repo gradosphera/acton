@@ -57,6 +57,6 @@ get fun `test-du-stdlib-precompiled-duplicate-hash-no-overwrite`() {
     expect(persistedOther.gasUsage).toEqual(333);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_precompiled_add_contract_gas_duplicate_hash_does_not_overwrite_original_entry_tests/precompiled_add_contract_gas_duplicate_hash_does_not_overwrite_original_entry.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_precompiled_add_contract_gas_duplicate_hash_does_not_overwrite_original_entry_tests/precompiled_add_contract_gas_duplicate_hash_does_not_overwrite_original_entry.stdout.txt",
     );
 }

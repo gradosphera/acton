@@ -76,7 +76,7 @@ get fun `test-eo-varuint-unpack-canonical-boundaries`() {
     expect(canonicalVarUint3Box(16777215).load().value).toEqual(16777215);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_varuint_unpack_from_slice_supports_canonical_boundary_values_tests/transaction_varuint_unpack_from_slice_supports_canonical_boundary_values.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_varuint_unpack_from_slice_supports_canonical_boundary_values_tests/transaction_varuint_unpack_from_slice_supports_canonical_boundary_values.stdout.txt",
     );
 }
 
@@ -100,7 +100,7 @@ get fun `test-eo-varuint7-pack-roundtrip-boundary-bug`() {
     expect(decoded.value).toEqual(source.value);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_varuint_unpack_from_slice_supports_canonical_boundary_values_tests/transaction_varuint7_pack_to_builder_roundtrip_boundary_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_varuint_unpack_from_slice_supports_canonical_boundary_values_tests/transaction_varuint7_pack_to_builder_roundtrip_boundary_bug.stdout.txt",
     );
 }
 
@@ -124,6 +124,6 @@ get fun `test-eo-varuint3-pack-roundtrip-boundary-bug`() {
     expect(decoded.value).toEqual(source.value);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_varuint_unpack_from_slice_supports_canonical_boundary_values_tests/transaction_varuint3_pack_to_builder_roundtrip_boundary_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_varuint_unpack_from_slice_supports_canonical_boundary_values_tests/transaction_varuint3_pack_to_builder_roundtrip_boundary_bug.stdout.txt",
     );
 }

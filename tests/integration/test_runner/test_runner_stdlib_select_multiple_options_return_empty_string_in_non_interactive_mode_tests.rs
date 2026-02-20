@@ -29,7 +29,7 @@ get fun `test-ap-stdlib-select-multiple-options-fallback`() {
     expect(selected).toEqual("");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_select_multiple_options_return_empty_string_in_non_interactive_mode_tests/select_multiple_options_return_empty_string_in_non_interactive_mode.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_select_multiple_options_return_empty_string_in_non_interactive_mode_tests/select_multiple_options_return_empty_string_in_non_interactive_mode.stdout.txt",
     );
 }
 
@@ -43,6 +43,6 @@ get fun `test-ap-stdlib-select-starting-cursor-index-zero-bug`() {
     expect(selected).toEqual("");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_select_multiple_options_return_empty_string_in_non_interactive_mode_tests/select_does_not_honor_starting_cursor_index_zero_in_non_interactive_mode_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_select_multiple_options_return_empty_string_in_non_interactive_mode_tests/select_does_not_honor_starting_cursor_index_zero_in_non_interactive_mode_bug.stdout.txt",
     );
 }

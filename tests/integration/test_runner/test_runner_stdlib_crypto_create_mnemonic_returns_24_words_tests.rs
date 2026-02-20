@@ -29,7 +29,7 @@ get fun `test-an-stdlib-create-mnemonic-returns-24-words`() {
     expect(words.size()).toEqual(24);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_create_mnemonic_returns_24_words.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_create_mnemonic_returns_24_words.stdout.txt",
     );
 }
 
@@ -49,7 +49,7 @@ get fun `test-an-stdlib-to-keypair-deterministic`() {
     expect(kp1.publicKey).toNotEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_to_keypair_is_deterministic_for_same_mnemonic.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_to_keypair_is_deterministic_for_same_mnemonic.stdout.txt",
     );
 }
 
@@ -72,7 +72,7 @@ get fun `test-an-stdlib-sign-matches-raw-sign`() {
     expect(isSignatureValid(data.hash(), signSig, kp.publicKey)).toBeTrue();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_sign_matches_raw_sign_and_verifies.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_sign_matches_raw_sign_and_verifies.stdout.txt",
     );
 }
 
@@ -96,7 +96,7 @@ get fun `test-an-stdlib-raw-sign-deterministic-hash-sensitive`() {
     expect(isSignatureValid(hashB, sigA1, kp.publicKey)).toBeFalse();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_raw_sign_is_deterministic_and_hash_sensitive.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_raw_sign_is_deterministic_and_hash_sensitive.stdout.txt",
     );
 }
 
@@ -112,7 +112,7 @@ get fun `test-an-stdlib-fast-random-seeded-deterministic`() {
     expect(seeded127a).toEqual(seeded127b);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_fast_random_bytes_seeded_are_deterministic.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_fast_random_bytes_seeded_are_deterministic.stdout.txt",
     );
 }
 
@@ -126,7 +126,7 @@ get fun `test-an-stdlib-fast-random-rejects-128-bytes`() {
     crypto.getFastRandomBytes(128, 1);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_fast_random_bytes_rejects_128_bytes.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_fast_random_bytes_rejects_128_bytes.stdout.txt",
     );
 }
 
@@ -145,7 +145,7 @@ get fun `test-an-stdlib-fast-random-supports-zero-bytes`() {
     expect(noSeed.remainingRefsCount()).toEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_fast_random_bytes_supports_zero_bytes.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_fast_random_bytes_supports_zero_bytes.stdout.txt",
     );
 }
 
@@ -164,7 +164,7 @@ get fun `test-an-stdlib-secure-random-supports-1-and-127`() {
     expect(b127.remainingRefsCount()).toEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_secure_random_bytes_supports_1_and_127.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_secure_random_bytes_supports_1_and_127.stdout.txt",
     );
 }
 
@@ -178,6 +178,6 @@ get fun `test-an-stdlib-secure-random-rejects-128-bytes`() {
     crypto.getSecureRandomBytes(128);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_secure_random_bytes_rejects_128_bytes.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_create_mnemonic_returns_24_words_tests/crypto_secure_random_bytes_rejects_128_bytes.stdout.txt",
     );
 }

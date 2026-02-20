@@ -58,7 +58,7 @@ fn build_reads_explicit_boc_path_and_executes_runtime_code() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_build_reads_explicit_boc_path_and_executes_runtime_code_tests/build_reads_explicit_boc_path_and_executes_runtime_code.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_build_reads_explicit_boc_path_and_executes_runtime_code_tests/build_reads_explicit_boc_path_and_executes_runtime_code.stdout.txt",
         );
 }
 
@@ -71,6 +71,6 @@ fn build_name_based_code_executes_in_fixture_runtime() {
         .success()
         .assert_passed(2)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_build_reads_explicit_boc_path_and_executes_runtime_code_tests/build_name_based_code_executes_in_fixture_runtime.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_build_reads_explicit_boc_path_and_executes_runtime_code_tests/build_name_based_code_executes_in_fixture_runtime.stdout.txt",
         );
 }

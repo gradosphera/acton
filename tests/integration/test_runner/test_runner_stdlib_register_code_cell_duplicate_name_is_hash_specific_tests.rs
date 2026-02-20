@@ -83,7 +83,7 @@ get fun `test-cr-register-code-cell-duplicate-name-hash-specific`() {
     println(betaRes);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_register_code_cell_duplicate_name_is_hash_specific_tests/register_code_cell_duplicate_name_is_hash_specific.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_register_code_cell_duplicate_name_is_hash_specific_tests/register_code_cell_duplicate_name_is_hash_specific.stdout.txt",
     );
 }
 
@@ -138,6 +138,6 @@ get fun `test-cr-register-code-cell-duplicate-name-precedence`() {
         .assert_passed(1)
         .assert_contains("1 TON -> cr_duplicate_name_after")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_register_code_cell_duplicate_name_is_hash_specific_tests/register_code_cell_duplicate_name_last_registration_wins_for_same_hash.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_register_code_cell_duplicate_name_is_hash_specific_tests/register_code_cell_duplicate_name_last_registration_wins_for_same_hash.stdout.txt",
         );
 }

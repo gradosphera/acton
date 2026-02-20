@@ -35,7 +35,7 @@ get fun `test-br-stdlib-format5-placeholder-order-bug`() {
     expect(rendered).toEqual("255 | 1.5 TON | 10 | left | right");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format5_mixed_specifiers_should_follow_placeholder_order_bug_tests/format5_mixed_specifiers_should_follow_placeholder_order_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format5_mixed_specifiers_should_follow_placeholder_order_bug_tests/format5_mixed_specifiers_should_follow_placeholder_order_bug.stdout.txt",
     );
 }
 
@@ -63,6 +63,6 @@ get fun `test-br-stdlib-format5-placeholder-order-fixture-bug`() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_format5_mixed_specifiers_should_follow_placeholder_order_bug_tests/format5_mixed_specifiers_should_follow_placeholder_order_in_fixture_project_bug.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_format5_mixed_specifiers_should_follow_placeholder_order_bug_tests/format5_mixed_specifiers_should_follow_placeholder_order_in_fixture_project_bug.stdout.txt",
         );
 }

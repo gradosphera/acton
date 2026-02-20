@@ -50,7 +50,7 @@ get fun `test-eb-stdlib-format4-extra-args-ignored`() {
     expect(rendered).toEqual("alpha: 2.5 TON");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format4_ignores_extra_arguments_when_template_has_only_two_placeholders.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format4_ignores_extra_arguments_when_template_has_only_two_placeholders.stdout.txt",
     );
 }
 
@@ -64,7 +64,7 @@ get fun `test-eb-stdlib-format4-missing-placeholder-slot`() {
     expect(rendered).toEqual("a=1 b=2 c=3 d=4 e={}");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format4_leaves_unmatched_placeholder_when_template_has_five_slots.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format4_leaves_unmatched_placeholder_when_template_has_five_slots.stdout.txt",
     );
 }
 
@@ -77,7 +77,7 @@ get fun `test-eb-stdlib-format1-unknown-modifier`() {
     format1("value={:hex}", 255);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_unknown_modifier_in_placeholder.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_unknown_modifier_in_placeholder.stdout.txt",
         &["Invalid format string", "unknown format modifier 'hex'"],
     );
 }
@@ -91,7 +91,7 @@ get fun `test-eb-stdlib-format1-empty-modifier`() {
     format1("value={:}", 255);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_empty_modifier_in_placeholder.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_empty_modifier_in_placeholder.stdout.txt",
         &["Invalid format string", "unknown format modifier ''"],
     );
 }
@@ -105,7 +105,7 @@ get fun `test-eb-stdlib-format1-unsupported-placeholder-payload`() {
     format1("value={name}", 255);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_unsupported_placeholder_payload.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_unsupported_placeholder_payload.stdout.txt",
         &["Invalid format string", "unsupported placeholder {name}"],
     );
 }
@@ -119,7 +119,7 @@ get fun `test-eb-stdlib-format1-unclosed-open-brace`() {
     format1("value={", 255);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_unclosed_open_brace.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_unclosed_open_brace.stdout.txt",
         &["Invalid format string", "unclosed '{' placeholder"],
     );
 }
@@ -133,7 +133,7 @@ get fun `test-eb-stdlib-format1-unmatched-closing-brace`() {
     format1("value=}", 255);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_unmatched_closing_brace.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_unmatched_closing_brace.stdout.txt",
         &["Invalid format string", "unmatched '}'"],
     );
 }
@@ -148,7 +148,7 @@ get fun `test-eb-stdlib-format2-escaped-braces-literals`() {
     expect(rendered).toEqual("literal={} value=42");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format2_escaped_braces_are_treated_as_literals.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format2_escaped_braces_are_treated_as_literals.stdout.txt",
     );
 }
 
@@ -162,7 +162,7 @@ get fun `test-eb-stdlib-format1-utf8-literal-placeholder`() {
     expect(rendered).toEqual("привет🙂 7");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_supports_utf8_literals_with_plain_placeholder.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_supports_utf8_literals_with_plain_placeholder.stdout.txt",
     );
 }
 
@@ -176,7 +176,7 @@ get fun `test-eb-stdlib-format1-escaped-only-literals`() {
     expect(rendered).toEqual("{} and }{");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_escaped_braces_without_placeholders_render_as_literals.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_escaped_braces_without_placeholders_render_as_literals.stdout.txt",
     );
 }
 
@@ -189,7 +189,7 @@ get fun `test-eb-stdlib-format1-invalid-modifier-payload`() {
     format1("value={:x:}", 255);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_invalid_modifier_payload.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format4_ignores_extra_arguments_when_template_has_only_two_placeholders_tests/format1_rejects_invalid_modifier_payload.stdout.txt",
         &["Invalid format string", "unknown format modifier 'x:'"],
     );
 }

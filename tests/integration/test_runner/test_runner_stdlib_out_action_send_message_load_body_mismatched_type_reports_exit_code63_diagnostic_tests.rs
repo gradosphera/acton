@@ -63,7 +63,7 @@ get fun `test-cw-out-action-load-body-mismatch-diagnostic`() {
     action!.loadBody<CwLoadBodyExpected>();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_out_action_send_message_load_body_mismatched_type_reports_exit_code63_diagnostic_tests/out_action_send_message_load_body_mismatched_type_reports_exit_code63_diagnostic.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_out_action_send_message_load_body_mismatched_type_reports_exit_code63_diagnostic_tests/out_action_send_message_load_body_mismatched_type_reports_exit_code63_diagnostic.stdout.txt",
     );
 }
 
@@ -107,6 +107,6 @@ get fun `test-cw-out-action-load-body-mismatch-diagnostic-fixture`() {{
         .assert_failed(1)
         .assert_contains("exit_code=63")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_out_action_send_message_load_body_mismatched_type_reports_exit_code63_diagnostic_tests/out_action_send_message_load_body_mismatched_type_reports_exit_code63_diagnostic_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_out_action_send_message_load_body_mismatched_type_reports_exit_code63_diagnostic_tests/out_action_send_message_load_body_mismatched_type_reports_exit_code63_diagnostic_in_fixture_project.stdout.txt",
         );
 }

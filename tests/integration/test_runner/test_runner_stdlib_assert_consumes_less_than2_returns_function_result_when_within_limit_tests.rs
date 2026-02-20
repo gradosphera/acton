@@ -37,7 +37,7 @@ get fun `test-ac-consumes-less-than2-returns-result`() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-        "integration/snapshots/test-runner/test_runner_stdlib_assert_consumes_less_than2_returns_function_result_when_within_limit_tests/assert_consumes_less_than2_returns_function_result_when_within_limit.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_assert_consumes_less_than2_returns_function_result_when_within_limit_tests/assert_consumes_less_than2_returns_function_result_when_within_limit.stdout.txt",
         );
 }
 
@@ -69,7 +69,7 @@ get fun `test-ac-consumes-less-than-failure`() {
         .assert_failed(1)
         .assert_contains("Gas consumption was expected to be less than or equal to 0")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_consumes_less_than2_returns_function_result_when_within_limit_tests/assert_consumes_less_than_reports_human_readable_gas_failure.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_consumes_less_than2_returns_function_result_when_within_limit_tests/assert_consumes_less_than_reports_human_readable_gas_failure.stdout.txt",
         );
 }
 
@@ -94,7 +94,7 @@ get fun `test-ac-decimal-default-message-formatting`() {
         .assert_contains("Actual:   -0.15")
         .assert_contains("Expected: -0.1")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_consumes_less_than2_returns_function_result_when_within_limit_tests/expect_to_equal_decimal_formats_negative_fraction_values_in_failure.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_consumes_less_than2_returns_function_result_when_within_limit_tests/expect_to_equal_decimal_formats_negative_fraction_values_in_failure.stdout.txt",
         );
 }
 
@@ -126,7 +126,7 @@ get fun `test-ac-decimal-custom-message-location`() {
         .assert_contains("tests/custom_decimal.test.tolk:42:7")
         .assert_not_contains("toEqualDecimal(expected)")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_consumes_less_than2_returns_function_result_when_within_limit_tests/assert_equal_decimal_uses_custom_message_and_location_from_arguments.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_consumes_less_than2_returns_function_result_when_within_limit_tests/assert_equal_decimal_uses_custom_message_and_location_from_arguments.stdout.txt",
         );
 }
 
@@ -151,6 +151,6 @@ get fun `test-ac-assert-not-equal-failure-branch`() {
         .assert_contains("numbers should differ")
         .assert_contains("Values are equal but expected to be different")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_consumes_less_than2_returns_function_result_when_within_limit_tests/assert_not_equal_failure_surfaces_ffi_not_equal_branch_details.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_consumes_less_than2_returns_function_result_when_within_limit_tests/assert_not_equal_failure_surfaces_ffi_not_equal_branch_details.stdout.txt",
         );
 }

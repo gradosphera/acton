@@ -43,7 +43,7 @@ get fun `test-di-net-set-now-overwrite-project-builder`() {
     expect(net.now()).toEqual(1700023111);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_net_set_now_overwrites_timestamp_across_multiple_updates_in_project_builder_tests/net_set_now_overwrites_timestamp_across_multiple_updates_in_project_builder.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_net_set_now_overwrites_timestamp_across_multiple_updates_in_project_builder_tests/net_set_now_overwrites_timestamp_across_multiple_updates_in_project_builder.stdout.txt",
     );
 }
 
@@ -77,6 +77,6 @@ get fun `test-di-net-set-now-boundary-overwrite`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_net_set_now_overwrites_timestamp_across_multiple_updates_in_project_builder_tests/net_set_now_handles_boundary_and_followup_overwrite_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_net_set_now_overwrites_timestamp_across_multiple_updates_in_project_builder_tests/net_set_now_handles_boundary_and_followup_overwrite_in_fixture_project.stdout.txt",
         );
 }

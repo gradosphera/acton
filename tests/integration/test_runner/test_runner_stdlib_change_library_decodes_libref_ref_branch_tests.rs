@@ -53,7 +53,7 @@ get fun `test-cz-change-library-decodes-libref-ref-branch`() {
     }
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_change_library_decodes_libref_ref_branch_tests/change_library_decodes_libref_ref_branch.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_change_library_decodes_libref_ref_branch_tests/change_library_decodes_libref_ref_branch.stdout.txt",
     );
 }
 
@@ -78,6 +78,6 @@ get fun `test-cz-change-library-mode-preserved-remove`() {
     }
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_change_library_decodes_libref_ref_branch_tests/change_library_mode_is_preserved_for_remove_action.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_change_library_decodes_libref_ref_branch_tests/change_library_mode_is_preserved_for_remove_action.stdout.txt",
     );
 }

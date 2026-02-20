@@ -36,7 +36,7 @@ get fun `test-by-expect-bool-pass-false`() {{
         .success()
         .assert_passed(2)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_expect_bool_matchers_pass_for_true_and_false_values_tests/expect_bool_matchers_pass_for_true_and_false_values.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_expect_bool_matchers_pass_for_true_and_false_values_tests/expect_bool_matchers_pass_for_true_and_false_values.stdout.txt",
         );
 }
 
@@ -63,6 +63,6 @@ get fun `test-by-expect-bool-fail-to-be-false`() {{
         .assert_contains("false,\n            true")
         .assert_contains("true,\n            false")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_expect_bool_matchers_pass_for_true_and_false_values_tests/expect_bool_matcher_mismatch_reports_tuple_diff.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_expect_bool_matchers_pass_for_true_and_false_values_tests/expect_bool_matcher_mismatch_reports_tuple_diff.stdout.txt",
         );
 }

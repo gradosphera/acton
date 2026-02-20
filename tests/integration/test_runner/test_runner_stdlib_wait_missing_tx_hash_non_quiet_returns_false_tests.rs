@@ -69,7 +69,7 @@ fn wait_missing_tx_hash_non_quiet_returns_false() {
         "de-stdlib-wait-missing-hash-non-quiet",
         "test-de-stdlib-wait-missing-hash-non-quiet",
         false,
-        "integration/snapshots/test-runner/test_runner_stdlib_wait_missing_tx_hash_non_quiet_returns_false_tests/wait_missing_tx_hash_non_quiet_returns_false.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_wait_missing_tx_hash_non_quiet_returns_false_tests/wait_missing_tx_hash_non_quiet_returns_false.stdout.txt",
     );
 }
 
@@ -79,6 +79,6 @@ fn wait_missing_tx_hash_quiet_returns_false_without_wait_log() {
         "de-stdlib-wait-missing-hash-quiet",
         "test-de-stdlib-wait-missing-hash-quiet",
         true,
-        "integration/snapshots/test-runner/test_runner_stdlib_wait_missing_tx_hash_non_quiet_returns_false_tests/wait_missing_tx_hash_quiet_returns_false_without_wait_log.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_wait_missing_tx_hash_non_quiet_returns_false_tests/wait_missing_tx_hash_quiet_returns_false_without_wait_log.stdout.txt",
     );
 }

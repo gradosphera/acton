@@ -54,7 +54,7 @@ get fun `test-cm-stdlib-vm-set-c7-overwrite-slot-three`() {
     expect(blockchain.now()).toEqual(1700003000);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_vm_set_c7_overwrites_slot_three_without_clobbering_neighbors_tests/vm_set_c7_overwrites_slot_three_without_clobbering_neighbors.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_vm_set_c7_overwrites_slot_three_without_clobbering_neighbors_tests/vm_set_c7_overwrites_slot_three_without_clobbering_neighbors.stdout.txt",
     );
 }
 
@@ -106,6 +106,6 @@ get fun `test-cm-stdlib-vm-set-c7-repeated-reads-writes`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_vm_set_c7_overwrites_slot_three_without_clobbering_neighbors_tests/vm_set_c7_repeated_reads_and_writes_preserve_unmodified_slots.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_vm_set_c7_overwrites_slot_three_without_clobbering_neighbors_tests/vm_set_c7_repeated_reads_and_writes_preserve_unmodified_slots.stdout.txt",
         );
 }

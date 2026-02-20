@@ -33,7 +33,7 @@ get fun `test-ea-stdlib-format3-mixed-placeholder-order-bug`() {
     expect(rendered).toEqual("255 | 10 | 1.5 TON");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format3_mixed_placeholders_should_follow_template_order_bug_tests/format3_mixed_placeholders_should_follow_template_order_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format3_mixed_placeholders_should_follow_template_order_bug_tests/format3_mixed_placeholders_should_follow_template_order_bug.stdout.txt",
     );
 }
 
@@ -47,6 +47,6 @@ get fun `test-ea-stdlib-format3-escaped-braces-bug`() {
     expect(rendered).toEqual("wrap={inner} hex=ff ton=2.5 TON");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format3_mixed_placeholders_should_follow_template_order_bug_tests/format3_escaped_braces_around_placeholder_should_collapse_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format3_mixed_placeholders_should_follow_template_order_bug_tests/format3_escaped_braces_around_placeholder_should_collapse_bug.stdout.txt",
     );
 }

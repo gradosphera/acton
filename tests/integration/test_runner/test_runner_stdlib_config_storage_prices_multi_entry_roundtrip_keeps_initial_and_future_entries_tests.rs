@@ -69,7 +69,7 @@ get fun `test-bc-stdlib-config-storage-prices-multi-entry-roundtrip`() {
     expect(future.masterchainCellPrice).toEqual(88);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_storage_prices_multi_entry_roundtrip_keeps_initial_and_future_entries_tests/config_storage_prices_multi_entry_roundtrip_keeps_initial_and_future_entries.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_storage_prices_multi_entry_roundtrip_keeps_initial_and_future_entries_tests/config_storage_prices_multi_entry_roundtrip_keeps_initial_and_future_entries.stdout.txt",
     );
 }
 
@@ -131,6 +131,6 @@ get fun `test-bc-stdlib-config-storage-prices-set-initial-overwrites-index-zero`
     expect(future.masterchainCellPrice).toEqual(808);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_storage_prices_multi_entry_roundtrip_keeps_initial_and_future_entries_tests/config_storage_prices_set_initial_overwrites_index_zero_only.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_storage_prices_multi_entry_roundtrip_keeps_initial_and_future_entries_tests/config_storage_prices_set_initial_overwrites_index_zero_only.stdout.txt",
     );
 }

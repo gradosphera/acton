@@ -143,7 +143,7 @@ get fun `test-df-send-single-vs-send-first-result-project-builder`() {
     expect(sendSingleOutBody).toEqual(sendFirstOutBody);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_net_send_single_matches_net_send_first_result_transaction_and_action_in_project_builder_tests/net_send_single_matches_net_send_first_result_transaction_and_action_in_project_builder.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_net_send_single_matches_net_send_first_result_transaction_and_action_in_project_builder_tests/net_send_single_matches_net_send_first_result_transaction_and_action_in_project_builder.stdout.txt",
     );
 }
 
@@ -269,6 +269,6 @@ get fun `test-df-send-single-vs-send-first-result-fixture-project`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_net_send_single_matches_net_send_first_result_transaction_and_action_in_project_builder_tests/net_send_single_matches_net_send_first_result_transaction_and_action_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_net_send_single_matches_net_send_first_result_transaction_and_action_in_project_builder_tests/net_send_single_matches_net_send_first_result_transaction_and_action_in_fixture_project.stdout.txt",
         );
 }

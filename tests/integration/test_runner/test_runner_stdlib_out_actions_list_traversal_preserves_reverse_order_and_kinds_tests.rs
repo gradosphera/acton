@@ -71,7 +71,7 @@ get fun `test-al-out-actions-list-traversal-order`() {
     expect(outActions.at(3).kind()).toEqual("set-code");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/out_actions_list_traversal_preserves_reverse_order_and_kinds.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/out_actions_list_traversal_preserves_reverse_order_and_kinds.stdout.txt",
     );
 }
 
@@ -120,7 +120,7 @@ get fun `test-al-parse-out-actions-from-c5`() {
     expect(second!.mode).toEqual(SEND_MODE_REGULAR);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/parse_out_actions_from_raw_c5_matches_vm_out_actions.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/parse_out_actions_from_raw_c5_matches_vm_out_actions.stdout.txt",
     );
 }
 
@@ -155,7 +155,7 @@ get fun `test-al-get-send-message-at-null-non-send`() {
     expect(outActions.at(1).kind()).toEqual("set-code");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/get_send_message_at_returns_null_for_non_send_entries.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/get_send_message_at_returns_null_for_non_send_entries.stdout.txt",
     );
 }
 
@@ -190,7 +190,7 @@ get fun `test-al-get-send-message-body-inline-left`() {
     expect(body!.amount).toEqual(77);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/get_send_message_body_at_reads_inline_body_left_branch.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/get_send_message_body_at_reads_inline_body_left_branch.stdout.txt",
     );
 }
 
@@ -229,7 +229,7 @@ get fun `test-al-get-send-message-body-ref-right`() {
     expect(body!.part3).toEqual(0x33);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/get_send_message_body_at_reads_ref_body_right_branch.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/get_send_message_body_at_reads_ref_body_right_branch.stdout.txt",
     );
 }
 
@@ -249,7 +249,7 @@ get fun `test-al-get-send-message-body-null-non-send`() {
     expect(body == null).toBeTrue();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/get_send_message_body_at_returns_null_for_non_send_action.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/get_send_message_body_at_returns_null_for_non_send_action.stdout.txt",
     );
 }
 
@@ -283,7 +283,7 @@ get fun `test-al-out-message-out-actions-helper`() {
     expect(body!.amount).toEqual(505);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/out_message_out_actions_helper_returns_send_action_with_mode_and_body.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/out_message_out_actions_helper_returns_send_action_with_mode_and_body.stdout.txt",
     );
 }
 
@@ -312,6 +312,6 @@ get fun `test-al-get-send-message-helpers-null-for-reserve-and-change-library`()
     expect(bodyAtReserve == null).toBeTrue();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/get_send_message_helpers_return_null_for_reserve_and_change_library_actions.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_out_actions_list_traversal_preserves_reverse_order_and_kinds_tests/get_send_message_helpers_return_null_for_reserve_and_change_library_actions.stdout.txt",
     );
 }

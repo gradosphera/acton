@@ -31,6 +31,6 @@ get fun `test-cd-stdlib-outlist-to-be-non-empty-empty-list`() {
     expect(out_actions).toBeNonEmpty();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_outlist_to_be_non_empty_empty_list_reports_failure_message_tests/outlist_to_be_non_empty_empty_list_reports_failure_message.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_outlist_to_be_non_empty_empty_list_reports_failure_message_tests/outlist_to_be_non_empty_empty_list_reports_failure_message.stdout.txt",
     );
 }

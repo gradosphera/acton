@@ -42,7 +42,7 @@ get fun `test-dy-stdlib-secure-random-boundaries-1-and-2-lengths`() {
     expect(bytes2.remainingRefsCount()).toEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_secure_random_bytes_boundaries_1_and_2_have_expected_lengths_tests/crypto_secure_random_bytes_boundaries_1_and_2_have_expected_lengths.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_secure_random_bytes_boundaries_1_and_2_have_expected_lengths_tests/crypto_secure_random_bytes_boundaries_1_and_2_have_expected_lengths.stdout.txt",
     );
 }
 
@@ -80,6 +80,6 @@ get fun `test-dy-stdlib-secure-random-size-2-keeps-length-across-calls`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_crypto_secure_random_bytes_boundaries_1_and_2_have_expected_lengths_tests/crypto_secure_random_bytes_size_2_keeps_length_across_calls_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_crypto_secure_random_bytes_boundaries_1_and_2_have_expected_lengths_tests/crypto_secure_random_bytes_size_2_keeps_length_across_calls_in_fixture_project.stdout.txt",
         );
 }

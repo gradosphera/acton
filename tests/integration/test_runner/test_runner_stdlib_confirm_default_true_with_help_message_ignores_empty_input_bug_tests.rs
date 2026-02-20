@@ -29,6 +29,6 @@ fn confirm_default_true_with_help_message_ignores_empty_input_bug() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_confirm_default_true_with_help_message_ignores_empty_input_bug_tests/confirm_default_true_with_help_message_ignores_empty_input_bug.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_confirm_default_true_with_help_message_ignores_empty_input_bug_tests/confirm_default_true_with_help_message_ignores_empty_input_bug.stdout.txt",
         );
 }

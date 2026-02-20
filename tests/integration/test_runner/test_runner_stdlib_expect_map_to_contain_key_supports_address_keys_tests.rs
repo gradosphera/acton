@@ -35,7 +35,7 @@ get fun `test-ec-stdlib-map-to-contain-key-address-pass`() {
     expect(balances).toHaveLength(1);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_map_to_contain_key_supports_address_keys_tests/expect_map_to_contain_key_supports_address_keys.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_map_to_contain_key_supports_address_keys_tests/expect_map_to_contain_key_supports_address_keys.stdout.txt",
     );
 }
 
@@ -56,6 +56,6 @@ get fun `test-ec-stdlib-map-to-contain-key-friendly-equivalent`() {
     expect(balances).toNotContainKey(address("0:00000000000000000000000000000000000000000000000000000000000000bb"));
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_map_to_contain_key_supports_address_keys_tests/expect_map_to_contain_key_fails_for_equivalent_friendly_address_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_map_to_contain_key_supports_address_keys_tests/expect_map_to_contain_key_fails_for_equivalent_friendly_address_bug.stdout.txt",
     );
 }

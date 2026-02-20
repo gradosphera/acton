@@ -30,7 +30,7 @@ get fun `test-eg-assert-equal-decimal-no-round-half-up`() {
         .assert_contains("Actual:   1.49")
         .assert_contains("Expected: 1.5")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_equal_decimal_does_not_round_half_up_boundaries_tests/assert_equal_decimal_does_not_round_half_up_boundaries.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_equal_decimal_does_not_round_half_up_boundaries_tests/assert_equal_decimal_does_not_round_half_up_boundaries.stdout.txt",
         );
 }
 
@@ -55,6 +55,6 @@ get fun `test-eg-assert-equal-decimal-negative-leading-zero`() {
         .assert_contains("Actual:   -0.05")
         .assert_contains("Expected: -0.06")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_equal_decimal_does_not_round_half_up_boundaries_tests/assert_equal_decimal_formats_negative_small_values_with_leading_zero.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_equal_decimal_does_not_round_half_up_boundaries_tests/assert_equal_decimal_formats_negative_small_values_with_leading_zero.stdout.txt",
         );
 }

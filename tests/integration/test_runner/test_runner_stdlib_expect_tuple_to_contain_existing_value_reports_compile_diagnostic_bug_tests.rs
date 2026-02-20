@@ -60,7 +60,7 @@ get fun `test-ca-stdlib-to-contain-existing-value-bug`() {
     expect(values).toContain(2);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug_tests/expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug_tests/expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug.stdout.txt",
     );
 }
 
@@ -77,7 +77,7 @@ get fun `test-ca-stdlib-to-contain-missing-value-diagnostic-bug`() {
     expect(values).toContain(30);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug_tests/expect_tuple_to_contain_missing_value_runtime_diagnostic_is_unreachable_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug_tests/expect_tuple_to_contain_missing_value_runtime_diagnostic_is_unreachable_bug.stdout.txt",
         &["Array doesn't contain the value"],
     );
 }
@@ -95,7 +95,7 @@ get fun `test-ca-stdlib-to-not-contain-present-value-diagnostic-bug`() {
     expect(values).toNotContain(8);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug_tests/expect_tuple_to_not_contain_present_value_runtime_diagnostic_is_unreachable_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug_tests/expect_tuple_to_not_contain_present_value_runtime_diagnostic_is_unreachable_bug.stdout.txt",
         &["Array contains the value, but it should not"],
     );
 }
@@ -113,7 +113,7 @@ get fun `test-ca-stdlib-to-not-contain-missing-value`() {
     expect(values).toNotContain(9);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug_tests/expect_tuple_to_not_contain_missing_value_passes.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug_tests/expect_tuple_to_not_contain_missing_value_passes.stdout.txt",
     );
 }
 
@@ -128,7 +128,7 @@ get fun `test-ca-stdlib-to-contain-empty-tuple-missing-value`() {
     expect(values).toContain(1);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug_tests/expect_tuple_to_contain_missing_value_in_empty_tuple_reports_runtime_diagnostic.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug_tests/expect_tuple_to_contain_missing_value_in_empty_tuple_reports_runtime_diagnostic.stdout.txt",
         &["Array doesn't contain the value"],
     );
 }

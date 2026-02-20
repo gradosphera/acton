@@ -50,7 +50,7 @@ get fun `test-cb-outlist-incompatible-typed-payload`() {
     expect(out_actions).toBeSendMessageAt<IncreaseCounter>(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_outlist_to_be_send_message_at_incompatible_typed_payload_reports_exit_code_tests/outlist_to_be_send_message_at_incompatible_typed_payload_reports_exit_code.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_outlist_to_be_send_message_at_incompatible_typed_payload_reports_exit_code_tests/outlist_to_be_send_message_at_incompatible_typed_payload_reports_exit_code.stdout.txt",
     );
 }
 
@@ -70,6 +70,6 @@ get fun `test-cb-outlist-non-send-action`() {
     expect(out_actions).toBeSendMessageAt<IncreaseCounter>(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_outlist_to_be_send_message_at_incompatible_typed_payload_reports_exit_code_tests/outlist_to_be_send_message_at_fails_for_non_send_action.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_outlist_to_be_send_message_at_incompatible_typed_payload_reports_exit_code_tests/outlist_to_be_send_message_at_fails_for_non_send_action.stdout.txt",
     );
 }

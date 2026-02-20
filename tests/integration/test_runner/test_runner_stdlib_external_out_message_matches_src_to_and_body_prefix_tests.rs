@@ -76,6 +76,6 @@ get fun `test-em-message-matches-external-out-filters`() {
     expect(msg.matches<EmOtherNotice>({ from: src, to: dest })).toBeFalse();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_external_out_message_matches_src_to_and_body_prefix_tests/external_out_message_matches_src_to_and_body_prefix_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_external_out_message_matches_src_to_and_body_prefix_tests/external_out_message_matches_src_to_and_body_prefix_bug.stdout.txt",
     );
 }

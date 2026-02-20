@@ -53,6 +53,6 @@ get fun `test-ci-stdlib-ext-message-load-opcode-right-without-ref`() {
     expect(msg.loadOpcode()).toBeNull();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_ext_message_load_opcode_returns_null_for_either_right_without_ref_tests/ext_message_load_opcode_returns_null_for_either_right_without_ref.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_ext_message_load_opcode_returns_null_for_either_right_without_ref_tests/ext_message_load_opcode_returns_null_for_either_right_without_ref.stdout.txt",
     );
 }

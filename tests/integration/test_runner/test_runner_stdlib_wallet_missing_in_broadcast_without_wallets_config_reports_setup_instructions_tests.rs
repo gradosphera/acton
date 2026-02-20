@@ -57,7 +57,7 @@ get fun `test-bw-wallet-missing-no-wallets-config`() {
     net.wallet("bw_missing_wallet");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_wallet_missing_in_broadcast_without_wallets_config_reports_setup_instructions_tests/wallet_missing_in_broadcast_without_wallets_config_reports_setup_instructions.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_wallet_missing_in_broadcast_without_wallets_config_reports_setup_instructions_tests/wallet_missing_in_broadcast_without_wallets_config_reports_setup_instructions.stdout.txt",
         None,
     );
 }
@@ -72,7 +72,7 @@ get fun `test-bw-wallet-missing-with-wallets-config`() {
     net.wallet("bw_missing_wallet");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_wallet_missing_in_broadcast_without_wallets_config_reports_setup_instructions_tests/wallet_missing_in_broadcast_with_wallets_config_lists_available_wallets.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_wallet_missing_in_broadcast_without_wallets_config_reports_setup_instructions_tests/wallet_missing_in_broadcast_with_wallets_config_lists_available_wallets.stdout.txt",
         Some(SINGLE_WALLET_CONFIG),
     );
 }

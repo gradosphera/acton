@@ -33,7 +33,7 @@ get fun `test-dt-stdlib-config-precompiled-default-builtin-entry`() {
     expect(precompiled.list).toHaveLength(1);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_get_precompiled_contracts_config_default_decodes_with_builtin_entry_tests/config_get_precompiled_contracts_config_default_decodes_with_builtin_entry.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_get_precompiled_contracts_config_default_decodes_with_builtin_entry_tests/config_get_precompiled_contracts_config_default_decodes_with_builtin_entry.stdout.txt",
     );
 }
 
@@ -55,6 +55,6 @@ get fun `test-dt-stdlib-config-precompiled-explicit-empty`() {
     expect(updated.list).toHaveLength(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_get_precompiled_contracts_config_default_decodes_with_builtin_entry_tests/config_get_precompiled_contracts_config_roundtrips_explicit_empty_value.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_get_precompiled_contracts_config_default_decodes_with_builtin_entry_tests/config_get_precompiled_contracts_config_roundtrips_explicit_empty_value.stdout.txt",
     );
 }

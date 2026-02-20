@@ -83,6 +83,6 @@ get fun `test-bh-stdlib-wait-for-transaction-positive-known-body-hash`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_wait_for_transaction_returns_true_in_emulation_mode_tests/wait_for_transaction_returns_true_in_emulation_mode.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_wait_for_transaction_returns_true_in_emulation_mode_tests/wait_for_transaction_returns_true_in_emulation_mode.stdout.txt",
         );
 }

@@ -186,7 +186,7 @@ get fun `test-ck-transaction-get-action-fee-tick-and-tock`() {
     expect(tockTx.getActionFee()).toEqual(expected);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_get_action_fee_tick_and_tock_match_ord_action_fee_tests/transaction_get_action_fee_tick_and_tock_match_ord_action_fee.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_get_action_fee_tick_and_tock_match_ord_action_fee_tests/transaction_get_action_fee_tick_and_tock_match_ord_action_fee.stdout.txt",
     );
 }
 
@@ -210,6 +210,6 @@ get fun `test-ck-transaction-get-action-fee-tick-tock-none`() {
     expect(tockNoAction.getActionFee()).toBeNone();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_get_action_fee_tick_and_tock_match_ord_action_fee_tests/transaction_get_action_fee_tick_tock_without_action_returns_none.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_get_action_fee_tick_and_tock_match_ord_action_fee_tests/transaction_get_action_fee_tick_tock_without_action_returns_none.stdout.txt",
     );
 }

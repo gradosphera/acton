@@ -14,7 +14,7 @@ get fun ping(): int {
 
 #[test]
 fn net_is_deployed_transitions_false_to_true_on_deterministic_deploy_path() {
-    let snapshot_path = "integration/snapshots/test-runner/test_runner_stdlib_net_is_deployed_transitions_false_to_true_on_deterministic_deploy_path_tests/net_is_deployed_transitions_false_to_true_on_deterministic_deploy_path.stdout.txt";
+    let snapshot_path = "integration/snapshots/test-runner/stdlib_net_is_deployed_transitions_false_to_true_on_deterministic_deploy_path_tests/net_is_deployed_transitions_false_to_true_on_deterministic_deploy_path.stdout.txt";
     ProjectBuilder::new("cp-stdlib-net-is-deployed-transition")
         .contract("probe", CP_SIMPLE_CONTRACT)
         .test_file(
@@ -128,6 +128,6 @@ fn net_is_deployed_transitions_false_to_true_in_fixture_project() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_net_is_deployed_transitions_false_to_true_on_deterministic_deploy_path_tests/net_is_deployed_transitions_false_to_true_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_net_is_deployed_transitions_false_to_true_on_deterministic_deploy_path_tests/net_is_deployed_transitions_false_to_true_in_fixture_project.stdout.txt",
         );
 }

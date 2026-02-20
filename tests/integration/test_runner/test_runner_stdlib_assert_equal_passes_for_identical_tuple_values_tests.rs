@@ -36,7 +36,7 @@ get fun `test-ek-stdlib-assert-equal-pass-identical-tuple`() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_equal_passes_for_identical_tuple_values_tests/assert_equal_passes_for_identical_tuple_values.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_equal_passes_for_identical_tuple_values_tests/assert_equal_passes_for_identical_tuple_values.stdout.txt",
         );
 }
 
@@ -63,6 +63,6 @@ get fun `test-ek-stdlib-assert-equal-failure-diagnostics`() {
         .assert_contains("42")
         .assert_contains("41")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_equal_passes_for_identical_tuple_values_tests/assert_equal_reports_actual_and_expected_on_failure.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_equal_passes_for_identical_tuple_values_tests/assert_equal_reports_actual_and_expected_on_failure.stdout.txt",
         );
 }

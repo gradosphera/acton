@@ -66,7 +66,7 @@ get fun `test-af-outlist-to-be-non-empty`() {
     expect(out_actions.size()).toEqual(1);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_non_empty_passes_for_single_send_action.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_non_empty_passes_for_single_send_action.stdout.txt",
     );
 }
 
@@ -81,7 +81,7 @@ get fun `test-af-outlist-to-be-empty`() {
     expect(out_actions.size()).toEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_empty_passes_without_actions.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_empty_passes_without_actions.stdout.txt",
     );
 }
 
@@ -111,7 +111,7 @@ get fun `test-af-outlist-send-message-typed-body`() {
     }
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_send_message_at_extracts_typed_body.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_send_message_at_extracts_typed_body.stdout.txt",
     );
 }
 
@@ -134,7 +134,7 @@ get fun `test-af-outlist-opcode-mismatch-known-type`() {
     expect(out_actions).toBeSendMessageAt<DecreaseCounter>(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_send_message_at_opcode_mismatch_reports_known_type.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_send_message_at_opcode_mismatch_reports_known_type.stdout.txt",
     );
 }
 
@@ -157,7 +157,7 @@ get fun `test-af-outlist-opcode-mismatch-unknown-type`() {
     expect(out_actions).toBeSendMessageAt<IncreaseCounter>(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_send_message_at_opcode_mismatch_without_known_type_name.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_send_message_at_opcode_mismatch_without_known_type_name.stdout.txt",
     );
 }
 
@@ -185,6 +185,6 @@ get fun `test-af-outlist-opcode-mismatch-bounced-prefix`() {
     expect(out_actions).toBeSendMessageAt<IncreaseCounter>(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_send_message_at_bounced_prefix_opcode_mismatch_is_reported.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_outlist_to_be_non_empty_passes_for_single_send_action_tests/outlist_to_be_send_message_at_bounced_prefix_opcode_mismatch_is_reported.stdout.txt",
     );
 }

@@ -46,7 +46,7 @@ get fun `test-dm-stdlib-config-raw-roundtrip`() {
     expect(nested.loadInt(8)).toEqual(-77);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_set_param_raw_get_param_raw_roundtrip_preserves_cell_shape_tests/config_set_param_raw_get_param_raw_roundtrip_preserves_cell_shape.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_set_param_raw_get_param_raw_roundtrip_preserves_cell_shape_tests/config_set_param_raw_get_param_raw_roundtrip_preserves_cell_shape.stdout.txt",
     );
 }
 
@@ -81,6 +81,6 @@ get fun `test-dm-stdlib-config-neighbor-isolation`() {
     expect(rightSlice.loadUint(8)).toEqual(0xBB);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_set_param_raw_get_param_raw_roundtrip_preserves_cell_shape_tests/config_set_param_raw_overwrite_keeps_neighbor_slot_unchanged.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_set_param_raw_get_param_raw_roundtrip_preserves_cell_shape_tests/config_set_param_raw_overwrite_keeps_neighbor_slot_unchanged.stdout.txt",
     );
 }

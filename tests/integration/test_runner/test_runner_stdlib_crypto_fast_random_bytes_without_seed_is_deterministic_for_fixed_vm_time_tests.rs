@@ -38,6 +38,6 @@ get fun `test-az-stdlib-fast-random-without-seed-fixed-time`() {
     expect(randomA).toEqual(randomB);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_fast_random_bytes_without_seed_is_deterministic_for_fixed_vm_time_tests/crypto_fast_random_bytes_without_seed_is_deterministic_for_fixed_vm_time.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_fast_random_bytes_without_seed_is_deterministic_for_fixed_vm_time_tests/crypto_fast_random_bytes_without_seed_is_deterministic_for_fixed_vm_time.stdout.txt",
     );
 }

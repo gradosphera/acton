@@ -30,7 +30,7 @@ get fun `test-ef-decimal-equality-zero-and-high-precision`() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_expect_to_equal_decimal_accepts_zero_and_high_decimals_when_values_match_tests/expect_to_equal_decimal_accepts_zero_and_high_decimals_when_values_match.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_expect_to_equal_decimal_accepts_zero_and_high_decimals_when_values_match_tests/expect_to_equal_decimal_accepts_zero_and_high_decimals_when_values_match.stdout.txt",
         );
 }
 
@@ -61,6 +61,6 @@ get fun `test-ef-decimal-failure-format-high-decimals`() {
         .assert_contains("Actual:   -0.000000000000000015")
         .assert_contains("Expected: -0.000000000000000016")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_expect_to_equal_decimal_accepts_zero_and_high_decimals_when_values_match_tests/expect_to_equal_decimal_formats_zero_and_high_decimal_failures.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_expect_to_equal_decimal_accepts_zero_and_high_decimals_when_values_match_tests/expect_to_equal_decimal_formats_zero_and_high_decimal_failures.stdout.txt",
         );
 }

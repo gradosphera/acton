@@ -44,7 +44,7 @@ get fun `test-stdlib-array-matchers-empty`() {
     .success()
     .assert_passed(2)
     .assert_snapshot_matches(
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_array_matchers_cover_membership_and_length_tests/expect_array_matchers_accept_empty_and_non_empty_arrays.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_array_matchers_cover_membership_and_length_tests/expect_array_matchers_accept_empty_and_non_empty_arrays.stdout.txt",
     );
 }
 
@@ -82,6 +82,6 @@ get fun `test-stdlib-array-to-have-length-mismatch`() {
     .failure()
     .assert_failed(5)
     .assert_snapshot_matches(
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_array_matchers_cover_membership_and_length_tests/expect_array_matchers_report_membership_and_length_mismatches.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_array_matchers_cover_membership_and_length_tests/expect_array_matchers_report_membership_and_length_mismatches.stdout.txt",
     );
 }

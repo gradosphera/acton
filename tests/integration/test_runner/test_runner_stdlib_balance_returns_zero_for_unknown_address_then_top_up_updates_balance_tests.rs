@@ -45,7 +45,7 @@ get fun `test-ah-stdlib-balance-zero-then-top-up`() {
     expect(net.balance(target)).toEqual(ton("1"));
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/balance_returns_zero_for_unknown_address_then_top_up_updates_balance.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/balance_returns_zero_for_unknown_address_then_top_up_updates_balance.stdout.txt",
         &[],
     );
 }
@@ -64,7 +64,7 @@ get fun `test-ah-stdlib-top-up-is-additive`() {
     expect(net.balance(target)).toEqual(ton("3"));
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/top_up_is_additive_for_the_same_address.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/top_up_is_additive_for_the_same_address.stdout.txt",
         &[],
     );
 }
@@ -93,7 +93,7 @@ get fun `test-ah-stdlib-set-account-fresh-target-preserves-markers`() {
     expect(net.balance(target)).toEqual(beforeBalance);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/set_account_on_fresh_target_preserves_shard_markers.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/set_account_on_fresh_target_preserves_shard_markers.stdout.txt",
         &[],
     );
 }
@@ -126,7 +126,7 @@ get fun `test-ah-stdlib-set-account-preserves-existing-shard-markers-and-balance
     expect(net.balance(target)).toEqual(beforeBalance);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/set_account_preserves_existing_shard_markers_and_balance.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/set_account_preserves_existing_shard_markers_and_balance.stdout.txt",
         &[],
     );
 }
@@ -159,7 +159,7 @@ get fun `test-ah-stdlib-set-shard-account-copy-state`() {
     expect(net.balance(target)).toEqual(expectedBalance);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/set_shard_account_copies_markers_and_balance_between_addresses.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/set_shard_account_copies_markers_and_balance_between_addresses.stdout.txt",
         &[],
     );
 }
@@ -186,7 +186,7 @@ get fun `test-ah-stdlib-set-shard-account-null-reset`() {
     expect(net.balance(target)).toEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/set_shard_account_null_resets_balance_and_markers.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/set_shard_account_null_resets_balance_and_markers.stdout.txt",
         &[],
     );
 }
@@ -213,7 +213,7 @@ get fun `test-ah-stdlib-register-address-output-name`() {
     println(res);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/register_address_name_is_used_in_transaction_output.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/register_address_name_is_used_in_transaction_output.stdout.txt",
         &["ah_registered_target"],
     );
 }
@@ -246,7 +246,7 @@ get fun `test-ah-stdlib-register-code-cell-output-name`() {
     println(res);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/register_code_cell_name_is_used_for_auto_deploy_output.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_balance_returns_zero_for_unknown_address_then_top_up_updates_balance_tests/register_code_cell_name_is_used_for_auto_deploy_output.stdout.txt",
         &["ah_registered_simple_code"],
     );
 }

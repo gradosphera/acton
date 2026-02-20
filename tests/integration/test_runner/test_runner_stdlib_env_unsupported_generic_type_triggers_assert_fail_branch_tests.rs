@@ -28,6 +28,6 @@ fn env_unsupported_generic_type_triggers_assert_fail_branch() {
             "env() supports only int, bool, string, slice, address and cell types, but got Unsupported",
         )
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_env_unsupported_generic_type_triggers_assert_fail_branch_tests/env_unsupported_generic_type_triggers_assert_fail_branch.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_env_unsupported_generic_type_triggers_assert_fail_branch_tests/env_unsupported_generic_type_triggers_assert_fail_branch.stdout.txt",
         );
 }

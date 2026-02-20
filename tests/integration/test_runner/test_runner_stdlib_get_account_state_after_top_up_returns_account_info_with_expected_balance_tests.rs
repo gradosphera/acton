@@ -55,7 +55,7 @@ get fun `test-bj-stdlib-get-account-state-after-top-up`() {
     expect(state!.storage.balance.grams).toEqual(ton("2"));
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_get_account_state_after_top_up_returns_account_info_with_expected_balance_tests/get_account_state_after_top_up_returns_account_info_with_expected_balance.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_get_account_state_after_top_up_returns_account_info_with_expected_balance_tests/get_account_state_after_top_up_returns_account_info_with_expected_balance.stdout.txt",
     );
 }
 
@@ -76,6 +76,6 @@ get fun `test-bj-stdlib-get-account-state-transition-bug`() {
     expect(after!.storage.balance.grams).toEqual(ton("1"));
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_get_account_state_after_top_up_returns_account_info_with_expected_balance_tests/get_account_state_should_transition_from_null_to_non_null_after_top_up_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_get_account_state_after_top_up_returns_account_info_with_expected_balance_tests/get_account_state_should_transition_from_null_to_non_null_after_top_up_bug.stdout.txt",
     );
 }

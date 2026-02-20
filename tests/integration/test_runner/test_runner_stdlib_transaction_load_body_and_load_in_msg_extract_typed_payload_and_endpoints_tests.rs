@@ -167,7 +167,7 @@ get fun `test-am-transaction-load-body-and-load-in-msg`() {
     expect(inMsg.info.dest).toEqual(workerAddress);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints.stdout.txt",
     );
 }
 
@@ -188,7 +188,7 @@ get fun `test-am-transaction-load-body-mismatch`() {
     tx.loadBody<Other>();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_load_body_reports_exit_code63_for_mismatched_message_type.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_load_body_reports_exit_code63_for_mismatched_message_type.stdout.txt",
     );
 }
 
@@ -209,7 +209,7 @@ get fun `test-am-transaction-load-in-msg-mismatch`() {
     tx.loadInMsg<Other>().loadBody();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_load_in_msg_reports_exit_code63_for_mismatched_message_type.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_load_in_msg_reports_exit_code63_for_mismatched_message_type.stdout.txt",
     );
 }
 
@@ -240,7 +240,7 @@ get fun `test-am-transaction-get-used-gas-for-root-and-child`() {
     expect(childTx.getUsedGas()).toBeGreater(255);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_get_used_gas_matches_send_result_for_root_and_child_transactions.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_get_used_gas_matches_send_result_for_root_and_child_transactions.stdout.txt",
     );
 }
 
@@ -276,7 +276,7 @@ get fun `test-am-transaction-get-used-gas-skipped-compute`() {
     tx.getUsedGas();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_get_used_gas_reports_skipped_compute_phase_for_undeployed_destination.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_get_used_gas_reports_skipped_compute_phase_for_undeployed_destination.stdout.txt",
     );
 }
 
@@ -321,7 +321,7 @@ get fun `test-am-transaction-get-action-fee-match-and-none`() {
     expect(noActionTx.getActionFee()).toBeNone();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_get_action_fee_matches_transaction_description_and_none_branch.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_get_action_fee_matches_transaction_description_and_none_branch.stdout.txt",
     );
 }
 
@@ -344,7 +344,7 @@ get fun `test-am-transaction-get-account-address-workchain-override`() {
     expect(tx.getAccountAddress(MASTERCHAIN)).toNotEqual(workerAddress);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_get_account_address_defaults_to_basechain_and_supports_masterchain_override.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_get_account_address_defaults_to_basechain_and_supports_masterchain_override.stdout.txt",
     );
 }
 
@@ -364,6 +364,6 @@ get fun `test-am-transaction-varuint7-roundtrip-bug`() {
     expect(decoded.bits).toEqual(original.bits);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_varuint7_roundtrip_for_storage_used_large_values_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_load_body_and_load_in_msg_extract_typed_payload_and_endpoints_tests/transaction_varuint7_roundtrip_for_storage_used_large_values_bug.stdout.txt",
     );
 }

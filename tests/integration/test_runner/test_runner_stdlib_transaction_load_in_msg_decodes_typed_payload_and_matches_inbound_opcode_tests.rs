@@ -72,7 +72,7 @@ get fun `test-da-stdlib-transaction-load-in-msg-inline-opcode`() {
     expect(rawBody.loadUint(32)).toEqual(reflect.serializationPrefixOf<DaInlinePayload>());
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_in_msg_decodes_typed_payload_and_matches_inbound_opcode_tests/transaction_load_in_msg_decodes_typed_payload_and_matches_inbound_opcode.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_transaction_load_in_msg_decodes_typed_payload_and_matches_inbound_opcode_tests/transaction_load_in_msg_decodes_typed_payload_and_matches_inbound_opcode.stdout.txt",
     );
 }
 
@@ -129,6 +129,6 @@ get fun `test-da-stdlib-transaction-load-in-msg-fixture-opcode`() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_transaction_load_in_msg_decodes_typed_payload_and_matches_inbound_opcode_tests/transaction_load_in_msg_in_fixture_project_matches_inbound_opcode.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_transaction_load_in_msg_decodes_typed_payload_and_matches_inbound_opcode_tests/transaction_load_in_msg_in_fixture_project_matches_inbound_opcode.stdout.txt",
         );
 }

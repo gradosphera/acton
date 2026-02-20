@@ -72,7 +72,7 @@ get fun `test-ak-stdlib-load-opcode-left`() {
     expect(msg.loadOpcode()).toEqual(0x1234ABCD);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_reads_opcode_from_either_left_body.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_reads_opcode_from_either_left_body.stdout.txt",
     );
 }
 
@@ -102,7 +102,7 @@ get fun `test-ak-stdlib-load-opcode-right-ref`() {
     expect(msg.loadOpcode()).toEqual(0x2345BCDE);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_reads_opcode_from_either_right_body_ref.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_reads_opcode_from_either_right_body_ref.stdout.txt",
     );
 }
 
@@ -123,7 +123,7 @@ get fun `test-ak-stdlib-load-opcode-right-without-ref`() {
     expect(msg.loadOpcode()).toBeNull();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_returns_null_for_either_right_without_ref.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_returns_null_for_either_right_without_ref.stdout.txt",
     );
 }
 
@@ -144,7 +144,7 @@ get fun `test-ak-stdlib-load-opcode-short-body`() {
     expect(msg.loadOpcode()).toBeNull();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_returns_null_when_body_too_short.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_returns_null_when_body_too_short.stdout.txt",
     );
 }
 
@@ -170,7 +170,7 @@ get fun `test-ak-stdlib-load-opcode-bounce-prefix-without-skip`() {
     expect(msg.loadOpcode(false)).toEqual(0xFFFFFFFF);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_without_skip_bounce_returns_bounce_prefix.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_without_skip_bounce_returns_bounce_prefix.stdout.txt",
     );
 }
 
@@ -196,7 +196,7 @@ get fun `test-ak-stdlib-load-opcode-bounce-prefix-with-skip`() {
     expect(msg.loadOpcode(true)).toEqual(0x3456CDEF);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_with_skip_bounce_returns_nested_opcode.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_load_opcode_reads_opcode_from_either_left_body_tests/load_opcode_with_skip_bounce_returns_nested_opcode.stdout.txt",
     );
 }
 
@@ -220,7 +220,7 @@ get fun `test-ak-stdlib-message-load-body-left`() {
     expect(msg.loadBody()).toEqual(payload);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_load_opcode_reads_opcode_from_either_left_body_tests/message_relaxed_load_body_returns_either_left_value.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_load_opcode_reads_opcode_from_either_left_body_tests/message_relaxed_load_body_returns_either_left_value.stdout.txt",
     );
 }
 
@@ -245,6 +245,6 @@ get fun `test-ak-stdlib-message-load-body-right`() {
     expect(msg.loadBody()).toEqual(payload);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_load_opcode_reads_opcode_from_either_left_body_tests/message_relaxed_load_body_returns_either_right_cell_value.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_load_opcode_reads_opcode_from_either_left_body_tests/message_relaxed_load_body_returns_either_right_cell_value.stdout.txt",
     );
 }

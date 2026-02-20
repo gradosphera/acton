@@ -62,7 +62,7 @@ get fun `test-dh-create-external-message-src-override-no-state-init`() {
     expect(parsed.loadBody()).toEqual(DhTriggerExternal { queryId: 41 });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_create_external_message_honors_explicit_external_src_and_omits_state_init_tests/create_external_message_honors_explicit_external_src_and_omits_state_init.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_create_external_message_honors_explicit_external_src_and_omits_state_init_tests/create_external_message_honors_explicit_external_src_and_omits_state_init.stdout.txt",
     );
 }
 
@@ -91,6 +91,6 @@ get fun `test-dh-create-external-message-default-src-no-state-init`() {
     expect(body.queryId).toEqual(99);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_create_external_message_honors_explicit_external_src_and_omits_state_init_tests/create_external_message_defaults_src_to_none_and_keeps_state_init_absent.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_create_external_message_honors_explicit_external_src_and_omits_state_init_tests/create_external_message_defaults_src_to_none_and_keeps_state_init_absent.stdout.txt",
     );
 }

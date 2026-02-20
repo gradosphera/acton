@@ -117,7 +117,7 @@ get fun `test-ct-ext-out-list-atornull-out-of-range`() {
     expect(missing == null).toBeTrue();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_ext_out_list_at_or_null_out_of_range_returns_null_bug_tests/ext_out_list_at_or_null_out_of_range_returns_null_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_ext_out_list_at_or_null_out_of_range_returns_null_bug_tests/ext_out_list_at_or_null_out_of_range_returns_null_bug.stdout.txt",
     );
 }
 
@@ -141,7 +141,7 @@ get fun `test-ct-ext-out-list-atornull-negative-index`() {
     expect(missing == null).toBeTrue();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_ext_out_list_at_or_null_out_of_range_returns_null_bug_tests/ext_out_list_at_or_null_negative_index_returns_null.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_ext_out_list_at_or_null_out_of_range_returns_null_bug_tests/ext_out_list_at_or_null_negative_index_returns_null.stdout.txt",
     );
 }
 
@@ -165,7 +165,7 @@ get fun `test-ct-ext-out-list-atornull-opcode-mismatch`() {
     expect(mismatched == null).toBeTrue();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_ext_out_list_at_or_null_out_of_range_returns_null_bug_tests/ext_out_list_at_or_null_opcode_mismatch_returns_null.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_ext_out_list_at_or_null_out_of_range_returns_null_bug_tests/ext_out_list_at_or_null_opcode_mismatch_returns_null.stdout.txt",
     );
 }
 
@@ -190,7 +190,7 @@ get fun `test-ct-ext-out-list-atornull-valid-index`() {
     expect(first!.loadBody().count).toEqual(1);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_ext_out_list_at_or_null_out_of_range_returns_null_bug_tests/ext_out_list_at_or_null_valid_index_returns_message.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_ext_out_list_at_or_null_out_of_range_returns_null_bug_tests/ext_out_list_at_or_null_valid_index_returns_message.stdout.txt",
     );
 }
 
@@ -220,6 +220,6 @@ get fun `test-ct-ext-out-list-atornull-empty-list`() {
     expect(missing == null).toBeTrue();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_ext_out_list_at_or_null_out_of_range_returns_null_bug_tests/ext_out_list_at_or_null_empty_list_returns_null.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_ext_out_list_at_or_null_out_of_range_returns_null_bug_tests/ext_out_list_at_or_null_empty_list_returns_null.stdout.txt",
     );
 }

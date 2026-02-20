@@ -36,7 +36,7 @@ get fun `test-bx-expect-nan-pass`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_expect_nan_matchers_accept_nan_and_non_nan_values_tests/expect_nan_matchers_accept_nan_and_non_nan_values.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_expect_nan_matchers_accept_nan_and_non_nan_values_tests/expect_nan_matchers_accept_nan_and_non_nan_values.stdout.txt",
         );
 }
 
@@ -62,6 +62,6 @@ get fun `test-bx-expect-non-nan-fail-nan`() {{
         .assert_contains("expect(actual).toBeNonNaN()")
         .assert_contains("Values are equal but expected to be different")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_expect_nan_matchers_accept_nan_and_non_nan_values_tests/expect_nan_matchers_report_mismatch_for_nan_and_non_nan_edges.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_expect_nan_matchers_accept_nan_and_non_nan_values_tests/expect_nan_matchers_report_mismatch_for_nan_and_non_nan_edges.stdout.txt",
         );
 }

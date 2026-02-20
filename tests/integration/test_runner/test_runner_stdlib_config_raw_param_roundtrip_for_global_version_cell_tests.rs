@@ -73,7 +73,7 @@ get fun `test-ai-stdlib-config-raw-param-roundtrip`() {
     expect(decoded.capabilities).toEqual(0xABCD);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_raw_param_roundtrip_for_global_version_cell.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_raw_param_roundtrip_for_global_version_cell.stdout.txt",
     );
 }
 
@@ -90,7 +90,7 @@ get fun `test-ai-stdlib-config-invalid-global-version-cell`() {
     expect(result).toBeFalse();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_set_config_rejects_invalid_global_version_cell.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_set_config_rejects_invalid_global_version_cell.stdout.txt",
     );
 }
 
@@ -118,7 +118,7 @@ get fun `test-ai-stdlib-config-storage-prices-roundtrip`() {
     expect(updated.cellPrice).toEqual(expectedCellPrice);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_storage_prices_roundtrip_updates_initial_entry.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_storage_prices_roundtrip_updates_initial_entry.stdout.txt",
     );
 }
 
@@ -156,7 +156,7 @@ get fun `test-ai-stdlib-config-gas-prices-roundtrip`() {
     expect(actualMaster.flatGasPrice).toNotEqual(masterBefore);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_gas_prices_update_basechain_and_masterchain_independently.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_gas_prices_update_basechain_and_masterchain_independently.stdout.txt",
     );
 }
 
@@ -186,7 +186,7 @@ get fun `test-ai-stdlib-config-msg-forward-prices`() {
     expect(after).toNotEqual(before);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_msg_forward_prices_update_changes_forward_fee_opcode_result.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_msg_forward_prices_update_changes_forward_fee_opcode_result.stdout.txt",
     );
 }
 
@@ -221,7 +221,7 @@ get fun `test-ai-stdlib-config-precompiled-contracts`() {
     expect(second.gasUsage).toEqual(555);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_precompiled_contracts_roundtrip_and_duplicate_insert_guard.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_precompiled_contracts_roundtrip_and_duplicate_insert_guard.stdout.txt",
     );
 }
 
@@ -261,6 +261,6 @@ get fun `test-ai-stdlib-config-gas-price-affects-run-get-method`() {
     expect(after).toNotEqual(before);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_gas_price_change_affects_run_get_method_result.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_raw_param_roundtrip_for_global_version_cell_tests/config_gas_price_change_affects_run_get_method_result.stdout.txt",
     );
 }

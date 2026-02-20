@@ -79,7 +79,7 @@ get fun `test-cf-stdlib-to-consume-less-than-pass`() {
     expect(rootTx).toConsumeLessThan(rootTx.gasUsed + 1);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_consume_less_than_accepts_threshold_above_measured_gas_tests/to_consume_less_than_accepts_threshold_above_measured_gas.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_consume_less_than_accepts_threshold_above_measured_gas_tests/to_consume_less_than_accepts_threshold_above_measured_gas.stdout.txt",
     );
 }
 
@@ -148,6 +148,6 @@ get fun `test-cf-stdlib-to-consume-less-than-equal-threshold`() {
         .failure()
         .assert_failed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_to_consume_less_than_accepts_threshold_above_measured_gas_tests/to_consume_less_than_fails_on_equal_threshold_boundary.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_to_consume_less_than_accepts_threshold_above_measured_gas_tests/to_consume_less_than_fails_on_equal_threshold_boundary.stdout.txt",
         );
 }

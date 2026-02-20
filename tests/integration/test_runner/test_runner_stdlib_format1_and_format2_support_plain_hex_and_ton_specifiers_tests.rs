@@ -39,7 +39,7 @@ get fun `test-y-stdlib-format1-format2-specifiers`() {
     expect(ton).toEqual("balance 1.5 TON");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format1_and_format2_support_plain_hex_and_ton_specifiers_tests/format1_and_format2_support_plain_hex_and_ton_specifiers.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format1_and_format2_support_plain_hex_and_ton_specifiers_tests/format1_and_format2_support_plain_hex_and_ton_specifiers.stdout.txt",
     );
 }
 
@@ -56,7 +56,7 @@ get fun `test-y-stdlib-format3-format4-mixed-specifiers`() {
     expect(formatted4).toEqual("a=left b=10 c=1.23 TON d=right");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format1_and_format2_support_plain_hex_and_ton_specifiers_tests/format3_and_format4_support_mixed_plain_hex_and_ton.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format1_and_format2_support_plain_hex_and_ton_specifiers_tests/format3_and_format4_support_mixed_plain_hex_and_ton.stdout.txt",
     );
 }
 
@@ -70,6 +70,6 @@ get fun `test-y-stdlib-format5-placeholder-order-bug`() {
     expect(rendered).toEqual("255 | 10 | 1.5 TON | left | right");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format1_and_format2_support_plain_hex_and_ton_specifiers_tests/format5_should_respect_placeholder_order_for_plain_hex_and_ton_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format1_and_format2_support_plain_hex_and_ton_specifiers_tests/format5_should_respect_placeholder_order_for_plain_hex_and_ton_bug.stdout.txt",
     );
 }

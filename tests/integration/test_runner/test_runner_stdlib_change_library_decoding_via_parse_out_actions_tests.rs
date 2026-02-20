@@ -46,6 +46,6 @@ get fun `test-cx-change-library-decoding-via-parse-out-actions`() {
     }
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_change_library_decoding_via_parse_out_actions_tests/change_library_decoding_via_parse_out_actions.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_change_library_decoding_via_parse_out_actions_tests/change_library_decoding_via_parse_out_actions.stdout.txt",
     );
 }

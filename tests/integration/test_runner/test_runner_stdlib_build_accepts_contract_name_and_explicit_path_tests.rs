@@ -31,7 +31,7 @@ fn build_accepts_contract_name_and_explicit_path() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_build_accepts_contract_name_and_explicit_path_tests/build_accepts_contract_name_and_explicit_path.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_build_accepts_contract_name_and_explicit_path_tests/build_accepts_contract_name_and_explicit_path.stdout.txt",
         );
 }
 
@@ -57,6 +57,6 @@ fn build_reports_missing_contract_when_path_is_omitted() {
         .assert_failed(1)
         .assert_contains("Contract missing not found in Acton.toml")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_build_accepts_contract_name_and_explicit_path_tests/build_reports_missing_contract_when_path_is_omitted.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_build_accepts_contract_name_and_explicit_path_tests/build_reports_missing_contract_when_path_is_omitted.stdout.txt",
         );
 }

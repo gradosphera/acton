@@ -93,6 +93,6 @@ get fun `test-be-stdlib-config-msg-forward-prices-branch-isolation`() {
     expect(masterFinal.cellPrice).toNotEqual(masterBeforeCell);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_set_msg_forward_prices_keeps_basechain_and_masterchain_isolated_tests/config_set_msg_forward_prices_keeps_basechain_and_masterchain_isolated.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_set_msg_forward_prices_keeps_basechain_and_masterchain_isolated_tests/config_set_msg_forward_prices_keeps_basechain_and_masterchain_isolated.stdout.txt",
     );
 }

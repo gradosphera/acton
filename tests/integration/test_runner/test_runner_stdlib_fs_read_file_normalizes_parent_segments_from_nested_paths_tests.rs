@@ -56,7 +56,7 @@ get fun `test-fs-read-parent-normalization-nested`() {
     expect(viaParent!).toEqual(viaParentAndDot!);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_fs_read_file_normalizes_parent_segments_from_nested_paths_tests/fs_read_file_normalizes_parent_segments_from_nested_paths.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_fs_read_file_normalizes_parent_segments_from_nested_paths_tests/fs_read_file_normalizes_parent_segments_from_nested_paths.stdout.txt",
     );
 }
 
@@ -113,6 +113,6 @@ get fun `test-fs-read-repeated-normalized-is-stable`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_fs_read_file_normalizes_parent_segments_from_nested_paths_tests/fs_read_file_repeated_normalized_reads_are_stable.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_fs_read_file_normalizes_parent_segments_from_nested_paths_tests/fs_read_file_repeated_normalized_reads_are_stable.stdout.txt",
         );
 }

@@ -38,7 +38,7 @@ fn println_and_println1_support_hex_and_ton_formatters() {
             println1("plain={}", "ok");
         }
         "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_println_and_println1_support_hex_and_ton_formatters_tests/println_and_println1_support_hex_and_ton_formatters.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_println_and_println1_support_hex_and_ton_formatters_tests/println_and_println1_support_hex_and_ton_formatters.stdout.txt",
     );
 }
 
@@ -54,6 +54,6 @@ fn eprintln_reports_into_test_stderr_block() {
             println("stdout-after");
         }
         "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_println_and_println1_support_hex_and_ton_formatters_tests/eprintln_reports_into_test_stderr_block.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_println_and_println1_support_hex_and_ton_formatters_tests/eprintln_reports_into_test_stderr_block.stdout.txt",
     );
 }

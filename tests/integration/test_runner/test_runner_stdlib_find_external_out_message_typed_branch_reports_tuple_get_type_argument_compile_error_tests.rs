@@ -42,7 +42,7 @@ get fun `test-en-find-external-out-message-typed-branch-bug`() {
     expect(found).toBeNone();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_find_external_out_message_typed_branch_reports_tuple_get_type_argument_compile_error_tests/find_external_out_message_typed_branch_reports_tuple_get_type_argument_compile_error.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_find_external_out_message_typed_branch_reports_tuple_get_type_argument_compile_error_tests/find_external_out_message_typed_branch_reports_tuple_get_type_argument_compile_error.stdout.txt",
     );
 }
 
@@ -58,6 +58,6 @@ get fun `test-en-find-external-out-message-default-branch-bug`() {
     expect(found).toBeNone();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_find_external_out_message_typed_branch_reports_tuple_get_type_argument_compile_error_tests/find_external_out_message_default_branch_reports_tuple_get_type_argument_compile_error.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_find_external_out_message_typed_branch_reports_tuple_get_type_argument_compile_error_tests/find_external_out_message_default_branch_reports_tuple_get_type_argument_compile_error.stdout.txt",
     );
 }

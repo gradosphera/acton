@@ -34,7 +34,7 @@ get fun `test-bn-enable-broadcast-toggle`() {
     expect(net.isBroadcasting()).toEqual(true);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_enable_broadcast_toggle_reflects_in_is_broadcasting_tests/enable_broadcast_toggle_reflects_in_is_broadcasting.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_enable_broadcast_toggle_reflects_in_is_broadcasting_tests/enable_broadcast_toggle_reflects_in_is_broadcasting.stdout.txt",
     );
 }
 
@@ -56,6 +56,6 @@ get fun `test-bn-disable-broadcast-toggle`() {
     expect(net.isBroadcasting()).toEqual(false);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_enable_broadcast_toggle_reflects_in_is_broadcasting_tests/disable_broadcast_toggle_reflects_in_is_broadcasting.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_enable_broadcast_toggle_reflects_in_is_broadcasting_tests/disable_broadcast_toggle_reflects_in_is_broadcasting.stdout.txt",
     );
 }

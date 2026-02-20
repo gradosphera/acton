@@ -38,7 +38,7 @@ get fun `test-dz-stdlib-sign-deterministic-same-key-cell`() {
     expect(isSignatureValid(data.hash(), sigA, kp.publicKey)).toBeTrue();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_crypto_sign_is_deterministic_for_same_key_and_cell_tests/crypto_sign_is_deterministic_for_same_key_and_cell.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_crypto_sign_is_deterministic_for_same_key_and_cell_tests/crypto_sign_is_deterministic_for_same_key_and_cell.stdout.txt",
     );
 }
 
@@ -82,6 +82,6 @@ get fun `test-dz-stdlib-sign-shape-and-raw-sign-parity`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_crypto_sign_is_deterministic_for_same_key_and_cell_tests/crypto_sign_has_512bit_slice_shape_and_matches_raw_sign_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_crypto_sign_is_deterministic_for_same_key_and_cell_tests/crypto_sign_has_512bit_slice_shape_and_matches_raw_sign_in_fixture_project.stdout.txt",
         );
 }

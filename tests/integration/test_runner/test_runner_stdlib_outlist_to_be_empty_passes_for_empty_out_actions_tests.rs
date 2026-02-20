@@ -34,7 +34,7 @@ get fun `test-cc-outlist-to-be-empty-pass`() {
     expect(out_actions.size()).toEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_outlist_to_be_empty_passes_for_empty_out_actions_tests/outlist_to_be_empty_passes_for_empty_out_actions.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_outlist_to_be_empty_passes_for_empty_out_actions_tests/outlist_to_be_empty_passes_for_empty_out_actions.stdout.txt",
     );
 }
 
@@ -72,6 +72,6 @@ get fun `test-cc-outlist-to-be-empty-non-empty-fail`() {
         .failure()
         .assert_failed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_outlist_to_be_empty_passes_for_empty_out_actions_tests/outlist_to_be_empty_fails_for_non_empty_out_actions.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_outlist_to_be_empty_passes_for_empty_out_actions_tests/outlist_to_be_empty_fails_for_non_empty_out_actions.stdout.txt",
         );
 }

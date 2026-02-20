@@ -213,7 +213,7 @@ get fun `test-cs-send-result-all-out-actions-project-builder`() {
     expect(flattenedCount).toEqual(2);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_send_result_all_out_actions_flattens_root_and_child_transactions_in_project_builder_tests/send_result_all_out_actions_flattens_root_and_child_transactions_in_project_builder.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_send_result_all_out_actions_flattens_root_and_child_transactions_in_project_builder_tests/send_result_all_out_actions_flattens_root_and_child_transactions_in_project_builder.stdout.txt",
     );
 }
 
@@ -282,6 +282,6 @@ get fun `test-cs-send-result-all-out-actions-terminal`() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_send_result_all_out_actions_flattens_root_and_child_transactions_in_project_builder_tests/send_result_all_out_actions_handles_terminal_transaction_without_actions_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_send_result_all_out_actions_flattens_root_and_child_transactions_in_project_builder_tests/send_result_all_out_actions_handles_terminal_transaction_without_actions_in_fixture_project.stdout.txt",
         );
 }

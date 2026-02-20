@@ -81,7 +81,7 @@ get fun `test-cv-out-action-inline-parity`() {
     expect(amount).toEqual(typedBody.amount);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_out_action_send_message_load_message_and_generic_are_parity_for_inline_body_tests/out_action_send_message_load_message_and_generic_are_parity_for_inline_body.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_out_action_send_message_load_message_and_generic_are_parity_for_inline_body_tests/out_action_send_message_load_message_and_generic_are_parity_for_inline_body.stdout.txt",
     );
 }
 
@@ -149,6 +149,6 @@ get fun `test-cv-out-action-ref-parity`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_out_action_send_message_load_message_and_generic_are_parity_for_inline_body_tests/out_action_send_message_load_message_and_generic_are_parity_for_ref_body_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_out_action_send_message_load_message_and_generic_are_parity_for_inline_body_tests/out_action_send_message_load_message_and_generic_are_parity_for_ref_body_in_fixture_project.stdout.txt",
         );
 }

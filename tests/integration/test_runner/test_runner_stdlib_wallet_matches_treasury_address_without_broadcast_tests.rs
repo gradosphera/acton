@@ -34,7 +34,7 @@ get fun `test-bf-wallet-fallback-matches-treasury-address`() {
     expect(wallet.address).toEqual(treasury.address);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_wallet_matches_treasury_address_without_broadcast_tests/wallet_matches_treasury_address_without_broadcast.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_wallet_matches_treasury_address_without_broadcast_tests/wallet_matches_treasury_address_without_broadcast.stdout.txt",
     );
 }
 
@@ -64,6 +64,6 @@ get fun `test-bf-wallet-fallback-unknown-name-non-broadcast`() {
     });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_wallet_matches_treasury_address_without_broadcast_tests/wallet_unknown_name_uses_treasury_and_sends_in_non_broadcast_mode.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_wallet_matches_treasury_address_without_broadcast_tests/wallet_unknown_name_uses_treasury_and_sends_in_non_broadcast_mode.stdout.txt",
     );
 }

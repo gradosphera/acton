@@ -80,6 +80,6 @@ get fun `test-dv-stdlib-vm-register-library-repeated-idempotent`() {
     expect(followUpTxs).toHaveSuccessfulTx({ to: contractAddress });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_vm_register_library_is_idempotent_under_repeated_same_cell_registration_tests/vm_register_library_is_idempotent_under_repeated_same_cell_registration.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_vm_register_library_is_idempotent_under_repeated_same_cell_registration_tests/vm_register_library_is_idempotent_under_repeated_same_cell_registration.stdout.txt",
     );
 }

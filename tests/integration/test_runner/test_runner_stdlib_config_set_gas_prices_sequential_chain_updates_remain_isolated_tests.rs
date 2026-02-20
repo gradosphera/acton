@@ -129,6 +129,6 @@ get fun `test-ds-stdlib-config-gas-prices-sequential-isolation`() {
     expect(finalMaster.other.deleteDueLimit).toEqual(masterBeforeThirdWrite.other.deleteDueLimit);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_set_gas_prices_sequential_chain_updates_remain_isolated_tests/config_set_gas_prices_sequential_chain_updates_remain_isolated.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_set_gas_prices_sequential_chain_updates_remain_isolated_tests/config_set_gas_prices_sequential_chain_updates_remain_isolated.stdout.txt",
     );
 }

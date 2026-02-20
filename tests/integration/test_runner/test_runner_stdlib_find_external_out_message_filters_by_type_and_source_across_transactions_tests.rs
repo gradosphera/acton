@@ -194,7 +194,7 @@ get fun `test-dd-find-external-out-message-type-and-source`() {
     expect(wrongType).toBeNone();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_find_external_out_message_filters_by_type_and_source_across_transactions_tests/find_external_out_message_filters_by_type_and_source_across_transactions.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_find_external_out_message_filters_by_type_and_source_across_transactions_tests/find_external_out_message_filters_by_type_and_source_across_transactions.stdout.txt",
     );
 }
 
@@ -237,6 +237,6 @@ get fun `test-dd-find-external-out-message-per-send`() {
     expect(secondWrongOpcode).toBeNone();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_find_external_out_message_filters_by_type_and_source_across_transactions_tests/find_external_out_message_uses_body_type_per_send_result_list.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_find_external_out_message_filters_by_type_and_source_across_transactions_tests/find_external_out_message_uses_body_type_per_send_result_list.stdout.txt",
     );
 }

@@ -36,6 +36,6 @@ get fun `test-bi-stdlib-wait-for-transaction-missing-hash-before-send`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_wait_for_transaction_returns_true_in_emulation_mode_v2_tests/wait_for_transaction_returns_true_in_emulation_mode.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_wait_for_transaction_returns_true_in_emulation_mode_v2_tests/wait_for_transaction_returns_true_in_emulation_mode.stdout.txt",
         );
 }

@@ -60,7 +60,7 @@ get fun `test-ch-stdlib-ext-message-load-body-left`() {
     expect(msg.loadBody()).toEqual(payload);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_ext_message_relaxed_load_body_returns_left_value_tests/ext_message_relaxed_load_body_returns_left_value.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_ext_message_relaxed_load_body_returns_left_value_tests/ext_message_relaxed_load_body_returns_left_value.stdout.txt",
     );
 }
 
@@ -85,6 +85,6 @@ get fun `test-ch-stdlib-ext-message-load-body-right`() {
     expect(msg.loadBody()).toEqual(payload);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_ext_message_relaxed_load_body_returns_left_value_tests/ext_message_relaxed_load_body_loads_right_cell_value.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_ext_message_relaxed_load_body_returns_left_value_tests/ext_message_relaxed_load_body_loads_right_cell_value.stdout.txt",
     );
 }

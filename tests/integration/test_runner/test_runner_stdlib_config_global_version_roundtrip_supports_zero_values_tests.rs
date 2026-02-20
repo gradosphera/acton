@@ -42,7 +42,7 @@ get fun `test-do-stdlib-config-global-version-zero-roundtrip`() {
     expect(updated.capabilities).toEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_global_version_roundtrip_supports_zero_values_tests/config_global_version_roundtrip_supports_zero_values.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_global_version_roundtrip_supports_zero_values_tests/config_global_version_roundtrip_supports_zero_values.stdout.txt",
     );
 }
 
@@ -69,6 +69,6 @@ get fun `test-do-stdlib-config-global-version-non-zero-roundtrip`() {
     expect(updated.capabilities).toNotEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_global_version_roundtrip_supports_zero_values_tests/config_global_version_roundtrip_supports_non_zero_values.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_global_version_roundtrip_supports_zero_values_tests/config_global_version_roundtrip_supports_non_zero_values.stdout.txt",
     );
 }

@@ -71,7 +71,7 @@ get fun `test-ep-declared-pack-prefix-helpers-direct-calls`() {
     expect(never.getDeclaredPackPrefixLen()).toBeNull();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_declared_pack_prefix_helpers_direct_calls_return_expected_values_tests/declared_pack_prefix_helpers_direct_calls_return_expected_values.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_declared_pack_prefix_helpers_direct_calls_return_expected_values_tests/declared_pack_prefix_helpers_direct_calls_return_expected_values.stdout.txt",
     );
 }
 
@@ -106,6 +106,6 @@ get fun `test-ep-transaction-expect-matchers-declared-pack-prefix-paths`() {
     });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_declared_pack_prefix_helpers_direct_calls_return_expected_values_tests/transaction_expect_matchers_use_default_and_typed_declared_pack_prefix_paths.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_declared_pack_prefix_helpers_direct_calls_return_expected_values_tests/transaction_expect_matchers_use_default_and_typed_declared_pack_prefix_paths.stdout.txt",
     );
 }

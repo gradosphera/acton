@@ -50,7 +50,7 @@ get fun `test-bz-stdlib-expect-address-matchers-success`() {
     expect(externalAddress).toBeExternalAddress();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_address_matchers_accept_internal_none_and_external_addresses_tests/expect_address_matchers_accept_internal_none_and_external_addresses.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_address_matchers_accept_internal_none_and_external_addresses_tests/expect_address_matchers_accept_internal_none_and_external_addresses.stdout.txt",
     );
 }
 
@@ -90,6 +90,6 @@ get fun `test-bz-stdlib-to-be-external-address-fails-for-internal`() {
         .success()
         .assert_passed(3)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_expect_address_matchers_accept_internal_none_and_external_addresses_tests/expect_address_matchers_report_assertion_failures_for_wrong_kinds.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_expect_address_matchers_accept_internal_none_and_external_addresses_tests/expect_address_matchers_report_assertion_failures_for_wrong_kinds.stdout.txt",
         );
 }

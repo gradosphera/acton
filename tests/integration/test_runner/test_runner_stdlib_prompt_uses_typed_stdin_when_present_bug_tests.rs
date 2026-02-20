@@ -26,6 +26,6 @@ fn prompt_uses_typed_stdin_when_present_bug() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_prompt_uses_typed_stdin_when_present_bug_tests/prompt_uses_typed_stdin_when_present_bug.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_prompt_uses_typed_stdin_when_present_bug_tests/prompt_uses_typed_stdin_when_present_bug.stdout.txt",
         );
 }

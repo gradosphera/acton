@@ -38,7 +38,7 @@ get fun `test-at-stdlib-stderr-first-separation`() {
     eprintln("stderr-3-last");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_keeps_stdout_and_stderr_separated_when_stderr_happens_first_tests/keeps_stdout_and_stderr_separated_when_stderr_happens_first.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_keeps_stdout_and_stderr_separated_when_stderr_happens_first_tests/keeps_stdout_and_stderr_separated_when_stderr_happens_first.stdout.txt",
     );
 }
 
@@ -57,6 +57,6 @@ get fun `test-at-stdlib-interleaved-stdout-order`() {
     println("stdout-4");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_keeps_stdout_and_stderr_separated_when_stderr_happens_first_tests/preserves_stdout_order_during_interleaved_println_and_eprintln.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_keeps_stdout_and_stderr_separated_when_stderr_happens_first_tests/preserves_stdout_order_during_interleaved_println_and_eprintln.stdout.txt",
     );
 }

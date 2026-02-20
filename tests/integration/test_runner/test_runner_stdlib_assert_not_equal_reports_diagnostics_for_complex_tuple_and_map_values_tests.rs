@@ -44,6 +44,6 @@ get fun `test-ej-stdlib-assert-not-equal-complex-map-diagnostic`() {{
         .assert_contains("ej tuple/map notEqual diagnostic map")
         .assert_contains("Values are equal but expected to be different")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_not_equal_reports_diagnostics_for_complex_tuple_and_map_values_tests/assert_not_equal_reports_diagnostics_for_complex_tuple_and_map_values.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_not_equal_reports_diagnostics_for_complex_tuple_and_map_values_tests/assert_not_equal_reports_diagnostics_for_complex_tuple_and_map_values.stdout.txt",
         );
 }

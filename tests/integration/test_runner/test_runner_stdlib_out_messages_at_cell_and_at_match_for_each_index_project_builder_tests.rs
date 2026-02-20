@@ -188,7 +188,7 @@ get fun `test-cu-out-messages-atcell-at-project-builder`() {
     expect(bodyViaAt0.queryId == bodyViaAt1.queryId).toEqual(false);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_out_messages_at_cell_and_at_match_for_each_index_project_builder_tests/out_messages_at_cell_and_at_match_for_each_index_project_builder.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_out_messages_at_cell_and_at_match_for_each_index_project_builder_tests/out_messages_at_cell_and_at_match_for_each_index_project_builder.stdout.txt",
     );
 }
 
@@ -235,6 +235,6 @@ depends = []
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_out_messages_at_cell_and_at_match_for_each_index_project_builder_tests/out_messages_at_cell_and_at_match_for_same_index_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_out_messages_at_cell_and_at_match_for_each_index_project_builder_tests/out_messages_at_cell_and_at_match_for_same_index_fixture_project.stdout.txt",
         );
 }

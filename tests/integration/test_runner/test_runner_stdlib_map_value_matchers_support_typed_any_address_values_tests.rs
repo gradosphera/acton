@@ -50,7 +50,7 @@ get fun `test-ed-stdlib-map-value-matchers-typed-any-address-success`() {
     expect(balances).toNotContainValue(carol);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_map_value_matchers_support_typed_any_address_values_tests/map_value_matchers_support_typed_any_address_values.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_map_value_matchers_support_typed_any_address_values_tests/map_value_matchers_support_typed_any_address_values.stdout.txt",
     );
 }
 
@@ -78,7 +78,7 @@ get fun `test-ed-stdlib-map-to-not-contain-value-reports-present-typed-address`(
     expect(balances).toNotContainValue(alice);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_map_value_matchers_support_typed_any_address_values_tests/map_value_matchers_report_typed_any_address_mismatches.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_map_value_matchers_support_typed_any_address_values_tests/map_value_matchers_report_typed_any_address_mismatches.stdout.txt",
         2,
     );
 }

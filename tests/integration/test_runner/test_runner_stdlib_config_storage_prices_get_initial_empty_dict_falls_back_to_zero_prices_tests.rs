@@ -49,6 +49,6 @@ get fun `test-dp-stdlib-config-storage-prices-get-initial-prefers-zero-key`() {
     expect(initial.masterchainCellPrice).toEqual(404);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_storage_prices_get_initial_empty_dict_falls_back_to_zero_prices_tests/config_storage_prices_get_initial_prefers_zero_key_when_present.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_storage_prices_get_initial_empty_dict_falls_back_to_zero_prices_tests/config_storage_prices_get_initial_prefers_zero_key_when_present.stdout.txt",
     );
 }

@@ -38,7 +38,7 @@ get fun `test-bu-consumes-less-than3-returns-result`() {{
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_consumes_less_than3_returns_computed_result_tests/assert_consumes_less_than3_returns_computed_result.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_consumes_less_than3_returns_computed_result_tests/assert_consumes_less_than3_returns_computed_result.stdout.txt",
         );
 }
 
@@ -74,6 +74,6 @@ get fun `test-bu-consumes-less-than3-wrong-arity`() {{
         .failure()
         .assert_failed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_consumes_less_than3_returns_computed_result_tests/assert_consumes_less_than3_rejects_wrong_callback_arity.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_consumes_less_than3_returns_computed_result_tests/assert_consumes_less_than3_rejects_wrong_callback_arity.stdout.txt",
         );
 }

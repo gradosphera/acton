@@ -171,7 +171,7 @@ get fun `test-ae-successful-tx-search-filters`() {
     });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_have_successful_tx_matches_success_and_opcode_filters.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_have_successful_tx_matches_success_and_opcode_filters.stdout.txt",
     );
 }
 
@@ -197,7 +197,7 @@ get fun `test-ae-failed-tx-compute-exit-filter`() {
     });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_have_failed_tx_matches_compute_exit_code_filter.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_have_failed_tx_matches_compute_exit_code_filter.stdout.txt",
     );
 }
 
@@ -219,7 +219,7 @@ get fun `test-ae-action-exit-code-filter`() {
     });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_have_tx_matches_action_exit_code_filter.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_have_tx_matches_action_exit_code_filter.stdout.txt",
     );
 }
 
@@ -266,7 +266,7 @@ get fun `test-ae-bounced-tx-opcode-filter`() {
     });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_have_bounced_tx_matches_bounced_opcode_and_exit_code_filters.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_have_bounced_tx_matches_bounced_opcode_and_exit_code_filters.stdout.txt",
     );
 }
 
@@ -282,7 +282,7 @@ get fun `test-ae-emit-external-message-positive`() {
     expect(res).toEmitExternalMessage<ExternalNotice>();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_emit_external_message_matches_emitted_type.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_emit_external_message_matches_emitted_type.stdout.txt",
     );
 }
 
@@ -298,7 +298,7 @@ get fun `test-ae-emit-external-message-missing`() {
     expect(res).toEmitExternalMessage<ExternalNotice>();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_emit_external_message_fails_for_missing_external_output.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_emit_external_message_fails_for_missing_external_output.stdout.txt",
     );
 }
 
@@ -317,7 +317,7 @@ get fun `test-ae-failed-tx-missing-exit-code`() {
     });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_have_failed_tx_requires_non_null_exit_code_param.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_have_failed_tx_requires_non_null_exit_code_param.stdout.txt",
     );
 }
 
@@ -351,6 +351,6 @@ get fun `test-ae-deploy-filter`() {
     });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_not_have_tx_with_deploy_false_is_ignored_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_have_successful_tx_matches_success_and_opcode_filters_tests/to_not_have_tx_with_deploy_false_is_ignored_bug.stdout.txt",
     );
 }

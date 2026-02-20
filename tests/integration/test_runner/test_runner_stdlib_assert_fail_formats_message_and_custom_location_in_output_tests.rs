@@ -36,7 +36,7 @@ get fun `test-bv-assert-fail-custom-location`() {
         .assert_contains("Error: bv explicit fail message")
         .assert_contains("at tests/custom_assert_fail_output.test.tolk:42:7")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_fail_formats_message_and_custom_location_in_output_tests/assert_fail_formats_message_and_custom_location_in_output.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_fail_formats_message_and_custom_location_in_output_tests/assert_fail_formats_message_and_custom_location_in_output.stdout.txt",
         );
 }
 
@@ -68,6 +68,6 @@ get fun `test-bv-assert-fail-expected-exit`() {
         .assert_passed(1)
         .assert_not_contains("Error: bv expected exit path message")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_assert_fail_formats_message_and_custom_location_in_output_tests/assert_fail_honors_expected_exit_code_path_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_assert_fail_formats_message_and_custom_location_in_output_tests/assert_fail_honors_expected_exit_code_path_in_fixture_project.stdout.txt",
         );
 }

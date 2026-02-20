@@ -35,6 +35,6 @@ get fun `test-dx-stdlib-mnemonic-to-keypair-deterministic-repeated-calls`() {
     expect(kpFirst.publicKey).toNotEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_mnemonic_to_keypair_is_deterministic_for_repeated_calls_tests/mnemonic_to_keypair_is_deterministic_for_repeated_calls.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_mnemonic_to_keypair_is_deterministic_for_repeated_calls_tests/mnemonic_to_keypair_is_deterministic_for_repeated_calls.stdout.txt",
     );
 }

@@ -28,7 +28,7 @@ fn env_slice_returns_raw_and_empty_values_and_null_when_missing() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_env_slice_returns_raw_and_empty_values_and_null_when_missing_tests/env_slice_returns_raw_and_empty_values_and_null_when_missing.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_env_slice_returns_raw_and_empty_values_and_null_when_missing_tests/env_slice_returns_raw_and_empty_values_and_null_when_missing.stdout.txt",
         );
 }
 
@@ -64,7 +64,7 @@ get fun `test-bp-stdlib-env-or-string-fallback`() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_env_slice_returns_raw_and_empty_values_and_null_when_missing_tests/env_or_string_uses_missing_fallback_and_preserves_present_values.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_env_slice_returns_raw_and_empty_values_and_null_when_missing_tests/env_or_string_uses_missing_fallback_and_preserves_present_values.stdout.txt",
         );
 }
 
@@ -96,7 +96,7 @@ fn env_or_slice_uses_fallback_for_missing_and_present_value_when_set() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_env_slice_returns_raw_and_empty_values_and_null_when_missing_tests/env_or_slice_uses_fallback_for_missing_and_present_value_when_set.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_env_slice_returns_raw_and_empty_values_and_null_when_missing_tests/env_or_slice_uses_fallback_for_missing_and_present_value_when_set.stdout.txt",
         );
 }
 
@@ -130,6 +130,6 @@ fn env_string_and_slice_support_long_values_without_truncation() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_env_slice_returns_raw_and_empty_values_and_null_when_missing_tests/env_string_and_slice_support_long_values_without_truncation.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_env_slice_returns_raw_and_empty_values_and_null_when_missing_tests/env_string_and_slice_support_long_values_without_truncation.stdout.txt",
         );
 }

@@ -65,7 +65,7 @@ get fun `test-co-get-deployed-code-transition-project-builder`() {{
         .assert_contains("co-before-deploy-code-is-null")
         .assert_contains("co-after-deploy-code-is-not-null")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_get_deployed_code_transitions_from_null_to_non_null_in_project_builder_tests/get_deployed_code_transitions_from_null_to_non_null_in_project_builder.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_get_deployed_code_transitions_from_null_to_non_null_in_project_builder_tests/get_deployed_code_transitions_from_null_to_non_null_in_project_builder.stdout.txt",
         );
 }
 
@@ -124,6 +124,6 @@ get fun `test-co-get-deployed-code-transition-fixture-project`() {
         .assert_contains("co-fixture-before-deploy-code-is-null")
         .assert_contains("co-fixture-after-deploy-code-is-not-null")
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_get_deployed_code_transitions_from_null_to_non_null_in_project_builder_tests/get_deployed_code_transitions_from_null_to_non_null_in_fixture_project.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_get_deployed_code_transitions_from_null_to_non_null_in_project_builder_tests/get_deployed_code_transitions_from_null_to_non_null_in_fixture_project.stdout.txt",
         );
 }

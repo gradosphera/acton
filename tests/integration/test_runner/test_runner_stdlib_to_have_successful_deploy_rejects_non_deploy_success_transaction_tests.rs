@@ -71,7 +71,7 @@ get fun `test-cg-to-have-successful-deploy-rejects-non-deploy-success-transactio
     });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_have_successful_deploy_rejects_non_deploy_success_transaction_tests/to_have_successful_deploy_rejects_non_deploy_success_transaction.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_have_successful_deploy_rejects_non_deploy_success_transaction_tests/to_have_successful_deploy_rejects_non_deploy_success_transaction.stdout.txt",
     );
 }
 
@@ -109,6 +109,6 @@ get fun `test-cg-to-have-successful-deploy-formatting-expected-search-params`() 
     });
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_to_have_successful_deploy_rejects_non_deploy_success_transaction_tests/to_have_successful_deploy_failure_format_includes_expected_search_params.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_to_have_successful_deploy_rejects_non_deploy_success_transaction_tests/to_have_successful_deploy_failure_format_includes_expected_search_params.stdout.txt",
     );
 }

@@ -310,7 +310,7 @@ get fun `test-ag-send-processes-children-and-find-transaction`() {
     expect(receiverCount(receiverAddress)).toEqual(1);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/send_processes_children_and_find_transaction_by_participants_and_opcode.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/send_processes_children_and_find_transaction_by_participants_and_opcode.stdout.txt",
     );
 }
 
@@ -344,7 +344,7 @@ get fun `test-ag-send-single-keeps-child-list-empty`() {
     expect(receiverCount(receiverAddress)).toEqual(0);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/send_single_keeps_child_list_empty_and_preserves_out_message.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/send_single_keeps_child_list_empty_and_preserves_out_message.stdout.txt",
     );
 }
 
@@ -369,7 +369,7 @@ get fun `test-ag-send-external-runs-handler`() {
     expect(externalCount(externalAddress)).toEqual(1);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/send_external_runs_handler_and_collects_external_out_message.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/send_external_runs_handler_and_collects_external_out_message.stdout.txt",
     );
 }
 
@@ -398,7 +398,7 @@ get fun `test-ag-send-external-repeatable`() {
     expect(externalCount(externalAddress)).toEqual(2);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/send_external_is_repeatable_and_keeps_incrementing_state.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/send_external_is_repeatable_and_keeps_incrementing_state.stdout.txt",
     );
 }
 
@@ -443,7 +443,7 @@ get fun `test-ag-find-transaction-body-hash`() {
     expect(notFound is None).toEqual(true);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/find_transaction_matches_body_hash_and_returns_null_for_mismatch.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/find_transaction_matches_body_hash_and_returns_null_for_mismatch.stdout.txt",
     );
 }
 
@@ -496,7 +496,7 @@ get fun `test-ag-find-transaction-bounced-opcode`() {
     expect(notBouncedMatch is None).toEqual(true);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/find_transaction_matches_bounced_opcode_after_prefix.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/find_transaction_matches_bounced_opcode_after_prefix.stdout.txt",
     );
 }
 
@@ -528,7 +528,7 @@ get fun `test-ag-wait-in-emulation-mode`() {
     expect(empty.wait()).toEqual(true);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/wait_returns_true_in_emulation_mode_for_non_empty_and_empty_results.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/wait_returns_true_in_emulation_mode_for_non_empty_and_empty_results.stdout.txt",
     );
 }
 
@@ -544,7 +544,7 @@ get fun `test-ag-wait-empty-list-in-broadcast-mode`() {
     net.disableBroadcast();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/wait_returns_false_for_empty_list_in_broadcast_mode.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/wait_returns_false_for_empty_list_in_broadcast_mode.stdout.txt",
     );
 }
 
@@ -582,6 +582,6 @@ get fun `test-ag-wait-zero-attempts-rejected`() {
     .assert_failed(1)
     .assert_contains("Attempt number must be positive")
     .assert_snapshot_matches(
-        "integration/snapshots/test-runner/test_runner_stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/wait_rejects_zero_attempts_in_broadcast_mode.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_send_processes_children_and_find_transaction_by_participants_and_opcode_tests/wait_rejects_zero_attempts_in_broadcast_mode.stdout.txt",
     );
 }

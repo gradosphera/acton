@@ -84,7 +84,7 @@ fn expect_map_to_have_length_accepts_empty_and_single_entry_maps() {
     .success()
     .assert_passed(1)
     .assert_snapshot_matches(
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_map_to_have_length_accepts_empty_and_single_entry_maps_tests/expect_map_to_have_length_accepts_empty_and_single_entry_maps.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_map_to_have_length_accepts_empty_and_single_entry_maps_tests/expect_map_to_have_length_accepts_empty_and_single_entry_maps.stdout.txt",
     );
 }
 
@@ -107,6 +107,6 @@ fn expect_map_to_have_length_reports_boundary_mismatch_for_single_entry_map() {
     .failure()
     .assert_failed(1)
     .assert_snapshot_matches(
-        "integration/snapshots/test-runner/test_runner_stdlib_expect_map_to_have_length_accepts_empty_and_single_entry_maps_tests/expect_map_to_have_length_reports_boundary_mismatch_for_single_entry_map.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_expect_map_to_have_length_accepts_empty_and_single_entry_maps_tests/expect_map_to_have_length_reports_boundary_mismatch_for_single_entry_map.stdout.txt",
     );
 }

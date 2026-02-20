@@ -86,7 +86,7 @@ get fun `test-dr-stdlib-config-storage-prices-multi-entry-roundtrip`() {
     expect(entryB.masterchainCellPrice).toEqual(808);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_storage_prices_roundtrip_preserves_multiple_timestamp_entries_tests/config_storage_prices_roundtrip_preserves_multiple_timestamp_entries.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_storage_prices_roundtrip_preserves_multiple_timestamp_entries_tests/config_storage_prices_roundtrip_preserves_multiple_timestamp_entries.stdout.txt",
     );
 }
 
@@ -169,6 +169,6 @@ get fun `test-dr-stdlib-config-storage-prices-second-write-replacement`() {
     expect(replacement.masterchainCellPrice).toEqual(1004);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_config_storage_prices_roundtrip_preserves_multiple_timestamp_entries_tests/config_storage_prices_roundtrip_replaces_old_dictionary_entries_on_second_write.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_config_storage_prices_roundtrip_preserves_multiple_timestamp_entries_tests/config_storage_prices_roundtrip_replaces_old_dictionary_entries_on_second_write.stdout.txt",
     );
 }

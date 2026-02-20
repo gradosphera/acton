@@ -33,7 +33,7 @@ get fun `test-bs-stdlib-format2-default-formatter`() {
     expect(rendered).toEqual("left=-42 right=true");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format2_plain_placeholders_use_default_formatter_for_int_and_bool_tests/format2_plain_placeholders_use_default_formatter_for_int_and_bool.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format2_plain_placeholders_use_default_formatter_for_int_and_bool_tests/format2_plain_placeholders_use_default_formatter_for_int_and_bool.stdout.txt",
     );
 }
 
@@ -47,6 +47,6 @@ get fun `test-bs-stdlib-format2-escaped-braces-bug`() {
     expect(rendered).toEqual("open={inner} close=done");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_format2_plain_placeholders_use_default_formatter_for_int_and_bool_tests/format2_escaped_braces_around_placeholder_should_collapse_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_format2_plain_placeholders_use_default_formatter_for_int_and_bool_tests/format2_escaped_braces_around_placeholder_should_collapse_bug.stdout.txt",
     );
 }

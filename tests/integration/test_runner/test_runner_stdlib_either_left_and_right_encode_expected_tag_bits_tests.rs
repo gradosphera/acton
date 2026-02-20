@@ -45,7 +45,7 @@ fn either_left_and_right_encode_expected_tag_bits() {
             expect(rightSlice.loadUint(32)).toEqual(99);
         }
         "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_either_left_and_right_encode_expected_tag_bits_tests/either_left_and_right_encode_expected_tag_bits.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_either_left_and_right_encode_expected_tag_bits_tests/either_left_and_right_encode_expected_tag_bits.stdout.txt",
     );
 }
 
@@ -69,6 +69,6 @@ fn either_match_routes_left_and_right_variants() {
             expect(branchScore(right)).toEqual(2011);
         }
         "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_either_left_and_right_encode_expected_tag_bits_tests/either_match_routes_left_and_right_variants.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_either_left_and_right_encode_expected_tag_bits_tests/either_match_routes_left_and_right_variants.stdout.txt",
     );
 }

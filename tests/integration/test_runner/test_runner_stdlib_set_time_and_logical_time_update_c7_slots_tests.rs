@@ -70,7 +70,7 @@ get fun `test-aj-stdlib-vm-set-time-and-logical-slots-3-4-5`() {
     expect(blockchain.now()).toEqual(1700001234);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_time_and_logical_time_update_c7_slots_tests/set_time_and_logical_time_update_c7_slots.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_time_and_logical_time_update_c7_slots_tests/set_time_and_logical_time_update_c7_slots.stdout.txt",
     );
 }
 
@@ -96,7 +96,7 @@ get fun `test-aj-stdlib-vm-set-original-balance-slot-7`() {
     expect(withExtra.get(1) as dict?).toBeNotNull();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_time_and_logical_time_update_c7_slots_tests/set_original_balance_updates_balance_tuple_with_and_without_extra_dict.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_time_and_logical_time_update_c7_slots_tests/set_original_balance_updates_balance_tuple_with_and_without_extra_dict.stdout.txt",
     );
 }
 
@@ -123,7 +123,7 @@ get fun `test-aj-stdlib-vm-set-config-root-slot-9`() {
     expect(c7Version.capabilities).toEqual(version.capabilities);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_time_and_logical_time_update_c7_slots_tests/set_config_root_dict_replaces_c7_root_config_slot.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_time_and_logical_time_update_c7_slots_tests/set_config_root_dict_replaces_c7_root_config_slot.stdout.txt",
     );
 }
 
@@ -147,7 +147,7 @@ get fun `test-aj-stdlib-vm-config-unpacked-slot-14`() {
     expect(actual.get(2) as bool).toEqual(false);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_time_and_logical_time_update_c7_slots_tests/set_and_get_config_unpacked_round_trip_slot_14.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_time_and_logical_time_update_c7_slots_tests/set_and_get_config_unpacked_round_trip_slot_14.stdout.txt",
     );
 }
 
@@ -165,7 +165,7 @@ get fun `test-aj-stdlib-vm-register-library`() {
     expect(true).toBeTrue();
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_time_and_logical_time_update_c7_slots_tests/register_library_accepts_code_and_empty_cells.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_time_and_logical_time_update_c7_slots_tests/register_library_accepts_code_and_empty_cells.stdout.txt",
     );
 }
 
@@ -188,7 +188,7 @@ get fun `test-aj-stdlib-vm-convert-address-valid`() {
     expect(renderedRaw).toEqual("kQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHTW");
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_time_and_logical_time_update_c7_slots_tests/convert_address_supports_raw_and_user_friendly_forms.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_time_and_logical_time_update_c7_slots_tests/convert_address_supports_raw_and_user_friendly_forms.stdout.txt",
     );
 }
 
@@ -202,7 +202,7 @@ get fun `test-aj-stdlib-vm-convert-address-invalid`() {
 }
 "#,
         "Failed to convert address from not-an-address",
-        "integration/snapshots/test-runner/test_runner_stdlib_set_time_and_logical_time_update_c7_slots_tests/convert_address_reports_invalid_input.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_time_and_logical_time_update_c7_slots_tests/convert_address_reports_invalid_input.stdout.txt",
     );
 }
 
@@ -217,7 +217,7 @@ get fun `test-aj-stdlib-vm-get-config-param-generic-bug`() {
     expect(now).toEqual(1700001000);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_time_and_logical_time_update_c7_slots_tests/get_config_param_generic_is_not_usable_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_time_and_logical_time_update_c7_slots_tests/get_config_param_generic_is_not_usable_bug.stdout.txt",
     );
 }
 
@@ -231,7 +231,7 @@ get fun `test-aj-stdlib-vm-cell-from-hex-valid`() {
     expect(decoded).toEqual(createEmptyCell());
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_time_and_logical_time_update_c7_slots_tests/cell_from_hex_decodes_valid_boc_hex.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_time_and_logical_time_update_c7_slots_tests/cell_from_hex_decodes_valid_boc_hex.stdout.txt",
     );
 }
 
@@ -245,6 +245,6 @@ get fun `test-aj-stdlib-vm-cell-from-hex-invalid`() {
 }
 "#,
         "Failed to decode cell hex deadbeef",
-        "integration/snapshots/test-runner/test_runner_stdlib_set_time_and_logical_time_update_c7_slots_tests/cell_from_hex_reports_invalid_hex.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_time_and_logical_time_update_c7_slots_tests/cell_from_hex_reports_invalid_hex.stdout.txt",
     );
 }

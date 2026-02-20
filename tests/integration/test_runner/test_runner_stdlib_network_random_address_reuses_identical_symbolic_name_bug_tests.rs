@@ -31,6 +31,6 @@ get fun `test-bo-stdlib-network-random-address-reuse`() {
     expect(second).toEqual(first);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_network_random_address_reuses_identical_symbolic_name_bug_tests/network_random_address_reuses_identical_symbolic_name_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_network_random_address_reuses_identical_symbolic_name_bug_tests/network_random_address_reuses_identical_symbolic_name_bug.stdout.txt",
     );
 }

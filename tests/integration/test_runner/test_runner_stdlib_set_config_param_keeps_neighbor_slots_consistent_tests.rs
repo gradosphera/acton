@@ -47,7 +47,7 @@ get fun `test-cl-stdlib-set-config-param-neighbor-slots`() {
     expect(paramsAfter.get(5) as int).toEqual(501234567);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_config_param_keeps_neighbor_slots_consistent_tests/set_config_param_keeps_neighbor_slots_consistent.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_config_param_keeps_neighbor_slots_consistent_tests/set_config_param_keeps_neighbor_slots_consistent.stdout.txt",
     );
 }
 
@@ -73,7 +73,7 @@ get fun `test-cl-stdlib-set-config-param-slot-three`() {
     expect(paramsAfter.get(5) as int).toEqual(beforeLogicalTime);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_config_param_keeps_neighbor_slots_consistent_tests/set_config_param_slot_three_updates_blockchain_now_and_c7.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_config_param_keeps_neighbor_slots_consistent_tests/set_config_param_slot_three_updates_blockchain_now_and_c7.stdout.txt",
     );
 }
 
@@ -89,6 +89,6 @@ get fun `test-cl-stdlib-get-config-param-tuple-read-bug`() {
     expect(originalBalance.get(0) as int).toEqual(ton("9"));
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_set_config_param_keeps_neighbor_slots_consistent_tests/get_config_param_tuple_read_is_not_usable_bug.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_set_config_param_keeps_neighbor_slots_consistent_tests/get_config_param_tuple_read_is_not_usable_bug.stdout.txt",
     );
 }

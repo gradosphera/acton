@@ -24,7 +24,7 @@ fn prompts_return_deterministic_fallbacks_in_non_interactive_runner() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_prompts_return_deterministic_fallbacks_in_non_interactive_runner_tests/prompts_return_deterministic_fallbacks_in_non_interactive_runner.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_prompts_return_deterministic_fallbacks_in_non_interactive_runner_tests/prompts_return_deterministic_fallbacks_in_non_interactive_runner.stdout.txt",
         );
 }
 
@@ -50,6 +50,6 @@ fn confirm_default_true_is_ignored_in_non_interactive_mode_bug() {
         .success()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_stdlib_prompts_return_deterministic_fallbacks_in_non_interactive_runner_tests/confirm_default_true_is_ignored_in_non_interactive_mode_bug.stdout.txt",
+            "integration/snapshots/test-runner/stdlib_prompts_return_deterministic_fallbacks_in_non_interactive_runner_tests/confirm_default_true_is_ignored_in_non_interactive_mode_bug.stdout.txt",
         );
 }

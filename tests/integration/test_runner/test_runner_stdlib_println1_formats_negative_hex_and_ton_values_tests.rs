@@ -37,7 +37,7 @@ get fun `test-as-stdlib-println1-negative-formatters`() {
     println1("ton_neg_one_and_half={:ton}", -1500000000);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_println1_formats_negative_hex_and_ton_values_tests/println1_formats_negative_hex_and_ton_values.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_println1_formats_negative_hex_and_ton_values_tests/println1_formats_negative_hex_and_ton_values.stdout.txt",
     );
 }
 
@@ -53,6 +53,6 @@ get fun `test-as-stdlib-println1-edge-formatters`() {
     println1("ton_i64_max={:ton}", 9223372036854775807);
 }
 "#,
-        "integration/snapshots/test-runner/test_runner_stdlib_println1_formats_negative_hex_and_ton_values_tests/println1_formats_edge_hex_and_ton_values.stdout.txt",
+        "integration/snapshots/test-runner/stdlib_println1_formats_negative_hex_and_ton_values_tests/println1_formats_edge_hex_and_ton_values.stdout.txt",
     );
 }
