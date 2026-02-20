@@ -84,6 +84,23 @@ fun Expectation<T>.toEqualDecimal(self, expected: T, decimals: int) {
     Assert.equalDecimal(self.value, expected, decimals, "", self.location);
 }
 
+/// Asserts that actual value matches a stored snapshot.
+///
+/// If the snapshot does not exist yet, it is created automatically.
+///
+/// Optional `name` can be used to store multiple snapshots from the same test file.
+///
+/// Example:
+/// ```tolk
+/// expect([1, 2, 3]).toMatchSnapshot("numbers");
+/// ```
+fun Expectation<T>.toMatchSnapshot(self, name: string = "") {
+    val actual = format1("{}", self.value);
+    if (!ffi.assertSnapshot(self.location, name, actual)) {
+        throw ASSERTION_FAILED;
+    }
+}
+
 /// Asserts that actual value is not equal to expected value.
 ///
 /// Example:

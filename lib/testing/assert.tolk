@@ -294,5 +294,11 @@ fun ffi.failWalletNotFound(walletName: string, location: string = ""): bool
 fun ffi.assertDecimal<T>(location: string, message: string, decimals: int, right: T, left: T): bool
     asm "106 EXTCALL"
 
+/// Internal function to compare formatted value with a stored snapshot.
+///
+/// NOT FOR PUBLIC USE.
+fun ffi.assertSnapshot(location: string, name: string, actual: string): bool
+    asm "107 EXTCALL"
+
 fun ffi.typeNameByOpcode(id: int): string?
     asm "14 EXTCALL"

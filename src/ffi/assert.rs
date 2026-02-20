@@ -4,6 +4,8 @@ use crate::context::{
 };
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use ton_emulator::{extension, register_ext_methods};
 use ton_executor::BaseExecutor;
 use ton_source_map::SourceLocation;
@@ -155,6 +157,149 @@ fn assert_decimal_impl(
     }));
 
     stack.push_bool(false);
+    Ok(())
+}
+
+fn split_location(location: &str) -> (&str, &str, &str) {
+    let mut parts = location.rsplitn(3, ':');
+    let char_no = parts.next().unwrap_or("0");
+    let line_no = parts.next().unwrap_or("0");
+    let file = parts.next().unwrap_or(location);
+    (file, line_no, char_no)
+}
+
+fn snapshot_path_from_location(location: &str) -> PathBuf {
+    let (source_file, _, _) = split_location(location);
+    let source_path = Path::new(source_file);
+    let file_name = source_path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| "unknown.test.tolk".to_string());
+    let normalized_file_name = if let Some(base) = file_name.strip_suffix(".test.tolk.test.tolk") {
+        format!("{base}.test.tolk")
+    } else if let Some(base) = file_name.strip_suffix(".tolk.tolk") {
+        format!("{base}.tolk")
+    } else {
+        file_name
+    };
+    let base_dir = source_path.parent().unwrap_or_else(|| Path::new("."));
+    base_dir
+        .join("__snapshots__")
+        .join(format!("{normalized_file_name}.snap.json"))
+}
+
+fn load_snapshot_map(path: &Path) -> Result<BTreeMap<String, String>, String> {
+    if !path.exists() {
+        return Ok(BTreeMap::new());
+    }
+    let content = std::fs::read_to_string(path)
+        .map_err(|err| format!("Cannot read snapshot file {}: {err}", path.display()))?;
+    if content.trim().is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    serde_json::from_str::<BTreeMap<String, String>>(&content)
+        .map_err(|err| format!("Cannot parse snapshot file {}: {err}", path.display()))
+}
+
+fn save_snapshot_map(path: &Path, snapshots: &BTreeMap<String, String>) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "Cannot create snapshot directory {}: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    let content = serde_json::to_string_pretty(snapshots)
+        .map_err(|err| format!("Cannot serialize snapshots for {}: {err}", path.display()))?;
+    std::fs::write(path, format!("{content}\n"))
+        .map_err(|err| format!("Cannot write snapshot file {}: {err}", path.display()))
+}
+
+fn snapshot_message(
+    snapshot_path: &Path,
+    key: &str,
+    expected: Option<&str>,
+    actual: Option<&str>,
+    error: Option<&str>,
+) -> String {
+    let mut message = String::new();
+    message.push_str("expect(<actual>).toMatchSnapshot(<expected>)\n");
+    message.push_str(&format!(
+        "Snapshot file: {}\nSnapshot key: {key}\n",
+        snapshot_path.display()
+    ));
+    if let Some(err) = error {
+        message.push_str(&format!("Snapshot error: {err}"));
+        return message;
+    }
+    if let Some(expected) = expected {
+        message.push_str("--- Expected ---\n");
+        message.push_str(expected);
+        message.push('\n');
+    }
+    if let Some(actual) = actual {
+        message.push_str("--- Actual ---\n");
+        message.push_str(actual);
+    }
+    message
+}
+
+extension!(assert_snapshot in (Context) with (actual: String, name: String, location: String) using assert_snapshot_impl);
+fn assert_snapshot_impl(
+    ctx: &mut Context,
+    stack: &mut Tuple,
+    actual: String,
+    name: String,
+    location: String,
+) -> anyhow::Result<()> {
+    let (_, line_no, char_no) = split_location(&location);
+    let key = if name.trim().is_empty() {
+        format!("{line_no}:{char_no}")
+    } else {
+        name
+    };
+    let snapshot_path = snapshot_path_from_location(&location);
+
+    let mut snapshots = match load_snapshot_map(&snapshot_path) {
+        Ok(snapshots) => snapshots,
+        Err(err) => {
+            let message = snapshot_message(&snapshot_path, &key, None, Some(&actual), Some(&err));
+            *ctx.asserts.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
+                message: Some(message),
+                location: SourceLocation::parse(&location)?,
+            }));
+            stack.push_bool(false);
+            return Ok(());
+        }
+    };
+
+    if let Some(expected) = snapshots.get(&key) {
+        if expected == &actual {
+            stack.push_bool(true);
+            return Ok(());
+        }
+        let message = snapshot_message(&snapshot_path, &key, Some(expected), Some(&actual), None);
+        *ctx.asserts.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
+            message: Some(message),
+            location: SourceLocation::parse(&location)?,
+        }));
+        stack.push_bool(false);
+        return Ok(());
+    }
+
+    snapshots.insert(key.clone(), actual);
+    if let Err(err) = save_snapshot_map(&snapshot_path, &snapshots) {
+        let message = snapshot_message(&snapshot_path, &key, None, None, Some(&err));
+        *ctx.asserts.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
+            message: Some(message),
+            location: SourceLocation::parse(&location)?,
+        }));
+        stack.push_bool(false);
+        return Ok(());
+    }
+
+    stack.push_bool(true);
     Ok(())
 }
 
@@ -454,5 +599,6 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         104 => fail_to_not_find_transaction_by_params : 4,
         105 => fail_wallet_not_found : 2,
         106 => assert_decimal : 5,
+        107 => assert_snapshot : 3,
     });
 }
