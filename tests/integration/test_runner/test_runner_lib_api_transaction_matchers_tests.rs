@@ -1,11 +1,3 @@
-//! Reserved integration test module for transaction matcher coverage.
-//!
-//! Ownership boundary:
-//! - tests/integration/test-runner/test_runner_lib_api_transaction_matchers_tests.rs
-//! - tests/integration/snapshots/test-runner/lib_api_transaction_matchers_tests/**
-//! - tests/integration/testdata/test_runner_lib_api_transaction_matchers/**
-//! - tests/support/test_runner_lib_api_transaction_matchers/** (optional)
-
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 

@@ -1,11 +1,3 @@
-//! Integration tests for test-runner lib API account state helpers.
-//!
-//! Ownership boundary:
-//! - tests/integration/test-runner/test_runner_lib_api_account_state_tests.rs
-//! - tests/integration/snapshots/test-runner/lib_api_account_state_tests/**
-//! - tests/integration/testdata/test_runner_lib_api_account_state/**
-//! - tests/support/test_runner_lib_api_account_state/** (optional)
-
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 

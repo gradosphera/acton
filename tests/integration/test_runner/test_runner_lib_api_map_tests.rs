@@ -1,11 +1,3 @@
-//! Reserved integration test module for subagent L.
-//!
-//! Ownership boundary for agent L:
-//! - tests/integration/test-runner/test_runner_lib_api_map_tests.rs
-//! - tests/integration/snapshots/test-runner/lib_api_map_tests/**
-//! - tests/integration/testdata/test_runner_lib_api_map/**
-//! - tests/support/test_runner_lib_api_map/** (optional)
-
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 

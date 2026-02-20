@@ -1,15 +1,3 @@
-//! Reserved integration test module for subagent H.
-//!
-//! Ownership boundary for agent H:
-//! - tests/integration/test-runner/test_runner_cmd_agent_h_tests.rs
-//! - tests/integration/snapshots/test-runner/cmd_agent_h_tests/**
-//! - tests/integration/testdata/test_runner_cmd_agent_h/**
-//! - tests/support/test_runner_cmd_agent_h/** (optional)
-//!
-//! Required test name prefix:
-//! - save_test_trace_
-//! - regular_run_
-
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use std::fs;

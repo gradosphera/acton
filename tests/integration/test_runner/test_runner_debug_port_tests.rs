@@ -1,9 +1,3 @@
-//! Integration tests for runner debug CLI flags and configuration merging.
-//!
-//! Ownership boundary:
-//! - tests/integration/test-runner/test_runner_debug_port_tests.rs
-//! - tests/integration/snapshots/test-runner/test_runner_debug_port_tests/**
-
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use acton_config::config::TestSettings;

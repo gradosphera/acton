@@ -1,11 +1,3 @@
-//! Integration tests for `expectToEndWithExitCode`.
-//!
-//! Ownership boundary:
-//! - tests/integration/test-runner/test_runner_lib_api_exit_code_tests.rs
-//! - tests/integration/snapshots/test-runner/lib_api_exit_code_tests/**
-//! - tests/integration/testdata/test_runner_lib_api_exit_code/**
-//! - tests/support/test_runner_lib_api_exit_code/** (optional)
-
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 

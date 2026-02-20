@@ -1,9 +1,3 @@
-//! Reserved integration test module for subagent T.
-//!
-//! Ownership boundary for agent T:
-//! - tests/integration/test-runner/test_runner_lib_api_fmt_env_tests.rs
-//! - tests/integration/snapshots/test-runner/lib_api_fmt_env_tests/**
-
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 

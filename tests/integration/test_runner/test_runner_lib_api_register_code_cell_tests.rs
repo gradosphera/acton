@@ -1,9 +1,3 @@
-//! Integration tests for register code cell and address aliases in the test runner lib API.
-//!
-//! Ownership boundary:
-//! - tests/integration/test-runner/test_runner_lib_api_register_code_cell_tests.rs
-//! - tests/integration/snapshots/test-runner/lib_api_register_code_cell_tests/**
-
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 

@@ -1,5 +1,3 @@
-//! Integration tests for the `acton test --ui` flow.
-
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use std::net::TcpListener;
