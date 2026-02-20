@@ -32,7 +32,7 @@ struct KeyPair {
     publicKey: int;
 }
 
-// With an assumption, that the length of an array is exactly 24
+// Mnemonic phrase represented as `array<string>` (24 words for `crypto.createMnemonic()`).
 type Mnemonic = array<string>
 
 /// Generates a new random BIP39-compatible mnemonic phrase.
@@ -51,13 +51,13 @@ fun crypto.createMnemonic(): Mnemonic {
 
 /// Derives an Ed25519 [KeyPair] from a mnemonic phrase.
 ///
-/// The `words` parameter must be a tuple of 24 valid BIP39 mnemonic words,
-/// as returned by [crypto.createMnemonic].
+/// `self` must be a [Mnemonic] (`array<string>`) of 24 valid BIP39 words,
+/// for example as returned by [crypto.createMnemonic].
 ///
 /// Example:
 /// ```tolk
 /// val words = crypto.createMnemonic();
-/// val kp = words.toKeyPair(words);
+/// val kp = words.toKeyPair();
 /// // kp.privateKey — 32-byte seed
 /// // kp.publicKey  — 32-byte public key
 /// ```
@@ -101,7 +101,10 @@ fun crypto.rawSign(privateKey: int, data: int): slice {
 
 /// Generates cryptographically secure random bytes.
 ///
-/// Returns a slice containing `bytesNum` random bytes (1 to 128).
+/// Returns a slice containing `bytesNum` random bytes.
+///
+/// Current accepted range is `1..127`.
+/// `0` and values `>= 128` fail.
 ///
 /// Example:
 /// ```tolk
@@ -126,17 +129,17 @@ fun crypto.getSecureRandomBytes(bytesNum: uint16): slice {
 /// val bytes = crypto.getFastRandomBytes(16, 42);
 /// ```
 fun crypto.getFastRandomBytes(bytesNum: uint16, seed: int? = null): slice {
-    if(seed == null) {
+    if (seed == null) {
         seed = blockchain.now();
     }
-    random.initializeBy(seed);
+    random.setSeed(seed as uint256);
     // In this case bytes won't fit in one slice
     if (bytesNum >= 128) {
         Assert.fail("getFastRandomBytes expects bytesNum less than 128");
     }
 
     var res = beginCell();
-    while(bytesNum > 0) {
+    while (bytesNum > 0) {
         var rnd = beginCell().storeUint(random.uint256(), 256).toSlice();
         val neededBytesNum = min(32, bytesNum);
         res.storeUint(rnd.loadUint(8 * neededBytesNum), 8 * neededBytesNum);

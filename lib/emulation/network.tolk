@@ -68,19 +68,24 @@ type ExtOutList = tuple
 
 /// Returns the external outgoing message at the given index with given type.
 ///
-/// Note that if message is not a given type, loading will fail with exit code 63.
-/// If you want to handle this case, use [ExtOutList.atOrNull] instead.
+/// If the message is not of the requested type, loading fails with exit code 63.
+/// Use [ExtOutList.atOrNull] to handle this case without throwing.
 fun ExtOutList.at<Msg>(self, index: int): ExtMessageRelaxed<Msg> {
     val cell = self.get(index) as cell as Cell<ExtMessageRelaxed<Msg>>;
     return cell.load();
 }
 
 /// Returns the external outgoing message at the given index with given type or
-/// null if message is not a given type.
+/// `null` if message is not of the requested type.
 ///
-/// Note that if message is not a given type, this method will return null instead
-/// of throwing an exception. Use [ExtOutList.at] if you don't want to handle null case.
+/// If message is not of the requested type, `index < 0`, or `index >= self.size()`,
+/// this method returns `null` instead of throwing.
+/// Use [ExtOutList.at] if you do not want to handle the `null` case.
 fun ExtOutList.atOrNull<Msg>(self, index: int): ExtMessageRelaxed<Msg>? {
+    if (index < 0 || index >= self.size()) {
+        return null;
+    }
+
     val cell = self.get(index) as cell as Cell<ExtMessageRelaxed<Msg>>;
     try {
         return cell.load();
@@ -276,14 +281,16 @@ fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>
         return false;
     }
 
-    if (reflect.serializationPrefixOf<TBody>() != null) {
+    val declaredPrefix = TBody.externalOutPrefix();
+    if (declaredPrefix != -1) {
         val body = self.loadBody();
-        if (body.remainingBitsCount() < TBody.getDeclaredPackPrefixLen()) {
+        val declaredPrefixLen = TBody.externalOutPrefixLen();
+        if (body.remainingBitsCount() < declaredPrefixLen) {
             return false;
         }
 
-        val prefix = body.preloadUint(TBody.getDeclaredPackPrefixLen());
-        if (prefix != reflect.serializationPrefixOf<TBody>()) {
+        val prefix = body.preloadUint(declaredPrefixLen);
+        if (prefix != declaredPrefix) {
             return false;
         }
     }
@@ -322,17 +329,16 @@ fun SendResultList.findExternalOutMessage<TBody = never>(
 
         var externalIdx = 0;
         while (externalIdx < externals.size()) {
-            val externalOut = externals
-                .get<Cell<Message<RemainingBitsAndRefs, ExternalOutMessageInfo>>>(externalIdx)
-                .load();
+            val externalOutCell = externals.get(externalIdx) as cell as Cell<Message<RemainingBitsAndRefs, ExternalOutMessageInfo>>;
+            val externalOut = externalOutCell.load();
 
             if (externalOut.matches<TBody>(params)) {
                 return Maybe<Message<TBody, ExternalOutMessageInfo>>.some(
-                    Message{
+                    Message {
                         info: externalOut.info,
                         init: externalOut.init,
                         body: EitherLeft{
-                            value: TBody.fromSlice(externalOut.loadBody()),
+                            value: TBody.decodeExternalOutBody(externalOut.loadBody()),
                         },
                     },
                 );
@@ -357,7 +363,10 @@ fun SendResultList.findExternalOutMessage<TBody = never>(
 /// val tx = result.unwrap();
 /// ```
 fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams = {}): Maybe<Transaction> {
-    params.opcode = Msg.getDeclaredPackPrefix();
+    val declaredPrefix: int? = Msg.getDeclaredPackPrefix();
+    if (declaredPrefix != null) {
+        params.opcode = declaredPrefix;
+    }
     val tx = ffi.findTransactionByParams(self, params.toTuple());
     if (tx == null) {
         return Maybe<Transaction>.none();
@@ -366,7 +375,12 @@ fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams = {})
     return Maybe<Transaction>.some(txCell.load());
 }
 
-/// Send a message from a specified address with specified mode.
+/// Send a message from a specified address.
+///
+/// In broadcast mode, sending to the real network is attempted only when `from`
+/// matches one of the wallets opened at script startup.
+/// If `from` is not an opened wallet address, this method falls back to normal
+/// emulator execution, even when [net.isBroadcasting] is `true`.
 ///
 /// Example:
 /// ```tolk
@@ -599,6 +613,11 @@ fun net.isBroadcasting(): bool {
 ///
 /// This function allows scripts to manually enable broadcasting behavior.
 /// Useful for testing broadcasting logic in emulation mode.
+/// It toggles only the runtime broadcast flag.
+///
+/// Wallets are loaded once at startup (when the script is launched with CLI `--broadcast`).
+/// Calling [net.enableBroadcast] later does not load wallets, so [net.wallet] can still fail
+/// and wallet-backed real sends can remain unavailable.
 ///
 /// Example:
 /// ```tolk
@@ -615,6 +634,7 @@ fun net.enableBroadcast(): void {
 /// Disable broadcasting mode.
 ///
 /// This function allows scripts to manually disable broadcasting behavior.
+/// It does not reload or rebuild the startup wallet map.
 ///
 /// Example:
 /// ```tolk
@@ -677,8 +697,8 @@ fun net.disableBroadcast(): void {
 /// ```
 /// ```tolk
 /// val data: tuple = net.runGetMethod(wallet.address, "get_all_data");
-/// val first = data.get<int>(0);
-/// val second = data.get<int>(1);
+/// val first = data.get(0) as int;
+/// val second = data.get(1) as int;
 /// ```
 ///
 /// If you need to run a get method by its ID, use [net.runGetMethodById] instead.
@@ -737,8 +757,15 @@ fun net.getDeployedCode(addr: address): cell? {
 ///
 /// Example:
 /// ```tolk
-/// val messageHash = "abc123...";
-/// net.waitForTransaction(wallet.address, messageHash, 20, 2000);
+/// val txs = net.send(wallet.address, message);
+/// val tx = txs.at(0).tx.load();
+/// val inMsg = tx.messages.load().inMsg.unwrap().load();
+///
+/// var body = inMsg.body;
+/// body.skipBits(1); // skip Either tag bit
+/// val bodyHashSlice = beginCell().storeUint(body.hash(), 256).toSlice();
+///
+/// val ok = net.waitForTransaction(inMsg.info.dest, bodyHashSlice, true, 20, 2000);
 /// ```
 ///
 /// See [SendResultList.wait] for high-level API.
@@ -774,11 +801,20 @@ fun net.randomAddress(name: string? = null, wc: int = 0): address {
     builder.storeUint(0b0, 1);
     builder.storeInt(wc, 8);
 
-    var i = 0;
-    while (i < 32) {
-        val num = random.range(256);
-        builder.storeUint(num, 8);
-        i += 1;
+    if (name != null) {
+        val deterministicHash = beginCell()
+            .storeInt(wc, 8)
+            .storeSlice(name.beginParse())
+            .endCell()
+            .hash();
+        builder.storeUint(deterministicHash, 256);
+    } else {
+        var i = 0;
+        while (i < 32) {
+            val num = random.range(256);
+            builder.storeUint(num, 8);
+            i += 1;
+        }
     }
 
     val address = address.fromValidBuilder(builder);
@@ -1121,6 +1157,30 @@ fun crc16(data: string): int asm "13 EXTCALL"
 
 fun tuple.fromTuple(data: tuple): tuple {
     return data;
+}
+
+fun T.externalOutPrefix() {
+    return reflect.serializationPrefixOf<T>();
+}
+
+fun never.externalOutPrefix() {
+    return -1;
+}
+
+fun T.externalOutPrefixLen() {
+    return reflect.serializationPrefixLenOf<T>();
+}
+
+fun never.externalOutPrefixLen() {
+    return 0;
+}
+
+fun T.decodeExternalOutBody(body: RemainingBitsAndRefs): T {
+    return T.fromSlice(body);
+}
+
+fun never.decodeExternalOutBody(_: RemainingBitsAndRefs): never {
+    throw 0;
 }
 
 struct impl

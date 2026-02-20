@@ -120,13 +120,8 @@ enum Commands {
         // Debugging
         #[arg(long, help = "Enable debug mode", help_heading = "Debugging")]
         debug: bool,
-        #[arg(
-            long,
-            help = "Debug server port",
-            default_value = "12345",
-            help_heading = "Debugging"
-        )]
-        debug_port: u16,
+        #[arg(long, help = "Debug server port", help_heading = "Debugging")]
+        debug_port: Option<u16>,
         #[arg(long, help = "Enable backtraces", help_heading = "Debugging")]
         backtrace: Option<BacktraceMode>,
 
@@ -383,6 +378,12 @@ enum Commands {
             help = "Output directory for build artifacts"
         )]
         out_dir: Option<String>,
+        #[arg(
+            long,
+            value_name = "DIR",
+            help = "Directory to save compiled Fift files"
+        )]
+        output_fift: Option<String>,
         #[arg(long, help = "Show compiled contract info")]
         info: bool,
     },
@@ -820,6 +821,10 @@ fn example_build_usage() -> StyledStr {
        <dim>{{</> name<dim> = </><green>"child"</><dim>,</> kind<dim> = </><green>"library_ref"</><dim>,</> function<dim> = </><green>"getChildCode"</><dim>,</> path<dim> = </><green>"child_dep.tolk"</> <dim>}}</>
      <dim>]</>"#
     );
+    let build_config_example = color_print::cformat!(
+        r#"<dim>[</>build<dim>]</>
+     output-fift<dim> = </><green>"build/fift"</>"#
+    );
 
     let build_examples = Vec::from([
         ("Build all contracts", "acton build"),
@@ -831,6 +836,10 @@ fn example_build_usage() -> StyledStr {
         (
             "Generate dependency graph as SVG file",
             "acton build --graph deps.svg",
+        ),
+        (
+            "Save compiled Fift files to a custom directory",
+            "acton build --output-fift build/fift",
         ),
     ]);
 
@@ -844,6 +853,11 @@ fn example_build_usage() -> StyledStr {
         "\n     {named}# Configure contracts in Acton.toml{named:#}"
     );
     let _ = write!(writer, "\n     {config_example}");
+    let _ = write!(
+        writer,
+        "\n\n     {named}# Optional build output settings{named:#}"
+    );
+    let _ = write!(writer, "\n     {build_config_example}");
     let _ = write!(writer, "\n\n{header}Examples:{header:#}");
 
     const USAGE_SEP: &str = "\n     ";
@@ -1156,48 +1170,51 @@ fn main() {
             fork_block_number,
             ui,
             ui_port,
-        } => {
-            let config = create_test_config(
-                filter,
-                debug,
-                debug_port,
-                backtrace,
-                coverage,
-                coverage_format,
-                coverage_file,
-                exclude,
-                include,
-                clear_cache,
-                reporter,
-                junit_path,
-                junit_merge,
-                snapshot,
-                baseline_snapshot,
-                fork_net,
-                api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
-                fork_block_number,
-                save_test_trace.or_else(|| {
-                    if ui {
-                        Some(".acton/traces".to_owned())
-                    } else {
-                        None
-                    }
-                }),
-                mutate,
-                mutate_overrides,
-                mutate_contract,
-                disable_rule,
-                Some(fail_fast),
-                ui,
-                ui_port,
-            );
+        } => match fork_net.as_deref().map(Network::from_str).transpose() {
+            Ok(fork_net) => {
+                let config = create_test_config(
+                    filter,
+                    debug,
+                    debug_port,
+                    backtrace,
+                    coverage,
+                    coverage_format,
+                    coverage_file,
+                    exclude,
+                    include,
+                    clear_cache,
+                    reporter,
+                    junit_path,
+                    junit_merge,
+                    snapshot,
+                    baseline_snapshot,
+                    fork_net,
+                    api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
+                    fork_block_number,
+                    save_test_trace.or_else(|| {
+                        if ui {
+                            Some(".acton/traces".to_owned())
+                        } else {
+                            None
+                        }
+                    }),
+                    mutate,
+                    mutate_overrides,
+                    mutate_contract,
+                    disable_rule,
+                    Some(fail_fast),
+                    ui,
+                    ui_port,
+                );
 
-            if mutate {
-                mutation::test_mutate_cmd(&path, &config)
-            } else {
-                test_cmd(path, &config)
+                if mutate {
+                    mutation::test_mutate_cmd(&path, &config)
+                } else {
+                    test_cmd(path, &config)
+                }
             }
-        }
+            Err(err) => Err(err),
+        },
         Commands::Run { script, args } => run_cmd(&script, &args),
         Commands::Retrace {
             hash,
@@ -1249,8 +1266,9 @@ fn main() {
             clear_cache,
             graph,
             out_dir,
+            output_fift,
             info,
-        } => build_cmd(contract_id, clear_cache, graph, out_dir, info),
+        } => build_cmd(contract_id, clear_cache, graph, out_dir, output_fift, info),
         Commands::Compile {
             path,
             json,
@@ -1541,7 +1559,7 @@ fn setup_logging() -> anyhow::Result<()> {
 fn create_test_config(
     filter: Option<String>,
     debug: bool,
-    debug_port: u16,
+    debug_port: Option<u16>,
     backtrace: Option<BacktraceMode>,
     coverage: bool,
     coverage_format: Option<CoverageFormat>,
@@ -1554,7 +1572,7 @@ fn create_test_config(
     junit_merge: bool,
     snapshot: Option<String>,
     baseline_snapshot: Option<String>,
-    fork_net: Option<String>,
+    fork_net: Option<Network>,
     api_key: Option<String>,
     fork_block_number: Option<u64>,
     save_test_trace: Option<String>,
@@ -1575,7 +1593,7 @@ fn create_test_config(
             filter,
             report_formats,
             if debug { Some(true) } else { None },
-            Some(debug_port),
+            debug_port,
             backtrace,
             if coverage { Some(true) } else { None },
             coverage_format,
@@ -1595,7 +1613,7 @@ fn create_test_config(
             junit_merge,
             snapshot,
             baseline_snapshot,
-            fork_net.and_then(|n| Network::from_str(&n).ok()),
+            fork_net,
             api_key,
             fork_block_number,
             save_test_trace,
@@ -1611,7 +1629,7 @@ fn create_test_config(
 
     TestConfig {
         debug,
-        debug_port,
+        debug_port: debug_port.unwrap_or(12345),
         backtrace,
         coverage,
         filter,
@@ -1635,6 +1653,6 @@ fn create_test_config(
         fail_fast: fail_fast.unwrap_or(false),
         ui,
         ui_port,
-        fork_net: fork_net.and_then(|n| Network::from_str(&n).ok()),
+        fork_net,
     }
 }

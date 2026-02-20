@@ -393,7 +393,7 @@ impl<'a> TestRunner<'a> {
 
 pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()> {
     // First we need to build all contracts and generate all dependency files with code
-    build_cmd(None, config.clear_cache, None, None, false)?;
+    build_cmd(None, config.clear_cache, None, None, None, false)?;
     println!("     {} tests", "Running".green().bold());
 
     // If path is omitted, default to current directory
@@ -525,7 +525,20 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         }
     }
 
-    global_reporter.finalize()?;
+    runner.reporter_manager.finalize()?;
+
+    if config.snapshot.is_some() || config.baseline_snapshot.is_some() {
+        match profiling::collect_profile(&runner) {
+            Ok(()) => {}
+            Err(err) => {
+                eprintln!(
+                    "{}: Cannot collect profiling result: {}",
+                    "Error".red(),
+                    err
+                );
+            }
+        }
+    }
 
     if config.ui
         && let Some(reports) = reports_for_ui
@@ -1032,19 +1045,6 @@ fn run_file_tests(
     runner
         .reporter_manager
         .on_suite_finished(&file_path, &suite_stats)?;
-
-    if runner.config.snapshot.is_some() {
-        match profiling::collect_profile(runner, abi) {
-            Ok(()) => {}
-            Err(err) => {
-                eprintln!(
-                    "{}: Cannot collect profiling result: {}",
-                    "Error".red(),
-                    err
-                );
-            }
-        }
-    }
 
     Ok(TestStats {
         passed,
