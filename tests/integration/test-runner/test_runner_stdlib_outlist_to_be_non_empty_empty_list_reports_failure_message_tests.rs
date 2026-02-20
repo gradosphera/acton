@@ -27,7 +27,7 @@ fn outlist_to_be_non_empty_empty_list_reports_failure_message() {
         "cd-stdlib-outlist-to-be-non-empty-empty-list",
         r#"
 get fun `test-cd-stdlib-outlist-to-be-non-empty-empty-list`() {
-    val out_actions = createEmptyTuple();
+    val out_actions = [];
     expect(out_actions).toBeNonEmpty();
 }
 "#,

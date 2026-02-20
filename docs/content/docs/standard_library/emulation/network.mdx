@@ -211,7 +211,7 @@ Returns all out actions produced by this transaction as a list.
 ## `SendResultList`
 
 ```tolk
-type SendResultList = tuple
+type SendResultList = array<tuple>
 ```
 
 Represents a list of send results obtained from [net.send](#netsend) method.
@@ -452,7 +452,7 @@ fun createExternalMessage<TBody>(dest: address, body: TBody, stateInit: StateIni
 
 Creates an External-in message.
 Body is always packed into the Either Right (in the reference).
-If `StateInit` is present it is also packed in the Either Right (in the refference).
+If `StateInit` is present it is also packed in the Either Right (in the reference).
 Full TL-B scheme of the message is.
 ```
 ext_in_msg_info$10 src:MsgAddressExt dest:MsgAddressInt

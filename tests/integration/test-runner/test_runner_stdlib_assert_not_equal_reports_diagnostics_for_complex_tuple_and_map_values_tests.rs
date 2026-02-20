@@ -10,11 +10,11 @@ fn assert_not_equal_reports_diagnostics_for_complex_tuple_and_map_values() {
     let source = format!(
         r#"{ASSERT_IMPORTS}
 get fun `test-ej-stdlib-assert-not-equal-complex-tuple-diagnostic`() {{
-    var nested = createEmptyTuple();
+    var nested = [];
     nested.push(22);
     nested.push(33);
 
-    var payload = createEmptyTuple();
+    var payload = [];
     payload.push(11);
     payload.push(nested);
     payload.push("alpha");

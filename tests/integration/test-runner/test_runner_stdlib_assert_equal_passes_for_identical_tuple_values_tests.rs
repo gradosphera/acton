@@ -14,11 +14,11 @@ fn assert_equal_passes_for_identical_tuple_values() {
     let source = wrap_assert_source(
         r#"
 get fun `test-ek-stdlib-assert-equal-pass-identical-tuple`() {
-    var left = createEmptyTuple();
+    var left = [];
     left.push(10);
     left.push("ok");
 
-    var right = createEmptyTuple();
+    var right = [];
     right.push(10);
     right.push("ok");
 

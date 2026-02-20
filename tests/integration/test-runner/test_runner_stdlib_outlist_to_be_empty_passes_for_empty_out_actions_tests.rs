@@ -29,7 +29,7 @@ fn outlist_to_be_empty_passes_for_empty_out_actions() {
         "cc-stdlib-outlist-to-be-empty-pass",
         r#"
 get fun `test-cc-outlist-to-be-empty-pass`() {
-    val out_actions = createEmptyTuple();
+    val out_actions = [];
     expect(out_actions).toBeEmpty();
     expect(out_actions.size()).toEqual(0);
 }

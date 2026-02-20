@@ -82,7 +82,7 @@ fn expect_tuple_have_length_reports_expected_size() {
         "ad-stdlib-expect-tuple-have-length",
         r#"
 get fun `test-ad-stdlib-tuple-have-length`() {
-    var values = createEmptyTuple();
+    var values = [];
     values.push(10);
     values.push(20);
     values.push(30);
@@ -122,7 +122,7 @@ fn expect_tuple_contain_should_compile_and_assert_at_runtime_bug() {
         "ad-stdlib-expect-tuple-contain-compile-bug",
         r#"
 get fun `test-ad-stdlib-tuple-contain-compile-bug`() {
-    var values = createEmptyTuple();
+    var values = [];
     values.push(1);
     expect(values).toContain(1);
 }

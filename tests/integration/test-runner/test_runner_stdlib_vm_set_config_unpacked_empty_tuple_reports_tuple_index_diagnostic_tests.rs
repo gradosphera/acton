@@ -36,7 +36,7 @@ fn vm_set_config_unpacked_empty_tuple_reports_tuple_index_diagnostic() {
         "dl-stdlib-vm-set-config-unpacked-empty-tuple-diagnostic",
         r#"
 get fun `test-dl-vm-set-config-unpacked-empty-tuple-diagnostic`() {
-    vm.setConfigUnpacked(createEmptyTuple());
+    vm.setConfigUnpacked([]);
 
     var config = net.getConfig();
     val applied = net.setConfig(config);
@@ -54,7 +54,7 @@ fn vm_set_config_unpacked_single_item_tuple_reports_tuple_index_diagnostic_in_fi
     let source = format!(
         r#"{DL_VM_IMPORTS}
 get fun `test-dl-vm-set-config-unpacked-single-item-tuple-diagnostic`() {{
-    var malformed = createEmptyTuple();
+    var malformed = [];
     malformed.push(1);
     vm.setConfigUnpacked(malformed);
 

@@ -76,7 +76,7 @@ fn outlist_to_be_empty_passes_without_actions() {
         "af-stdlib-outlist-to-be-empty",
         r#"
 get fun `test-af-outlist-to-be-empty`() {
-    val out_actions = createEmptyTuple();
+    val out_actions = [];
     expect(out_actions).toBeEmpty();
     expect(out_actions.size()).toEqual(0);
 }

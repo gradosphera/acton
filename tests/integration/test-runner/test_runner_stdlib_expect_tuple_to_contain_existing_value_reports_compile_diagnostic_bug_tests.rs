@@ -53,7 +53,7 @@ fn expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug() {
         "ca-stdlib-expect-tuple-to-contain-existing-value-bug",
         r#"
 get fun `test-ca-stdlib-to-contain-existing-value-bug`() {
-    var values = createEmptyTuple();
+    var values = [];
     values.push(1);
     values.push(2);
 
@@ -70,7 +70,7 @@ fn expect_tuple_to_contain_missing_value_runtime_diagnostic_is_unreachable_bug()
         "ca-stdlib-expect-tuple-to-contain-missing-value-diagnostic-bug",
         r#"
 get fun `test-ca-stdlib-to-contain-missing-value-diagnostic-bug`() {
-    var values = createEmptyTuple();
+    var values = [];
     values.push(10);
     values.push(20);
 
@@ -88,7 +88,7 @@ fn expect_tuple_to_not_contain_present_value_runtime_diagnostic_is_unreachable_b
         "ca-stdlib-expect-tuple-to-not-contain-present-value-diagnostic-bug",
         r#"
 get fun `test-ca-stdlib-to-not-contain-present-value-diagnostic-bug`() {
-    var values = createEmptyTuple();
+    var values = [];
     values.push(7);
     values.push(8);
 
@@ -106,7 +106,7 @@ fn expect_tuple_to_not_contain_missing_value_passes() {
         "ca-stdlib-expect-tuple-to-not-contain-missing-value",
         r#"
 get fun `test-ca-stdlib-to-not-contain-missing-value`() {
-    var values = createEmptyTuple();
+    var values = [];
     values.push(7);
     values.push(8);
 
@@ -123,7 +123,7 @@ fn expect_tuple_to_contain_missing_value_in_empty_tuple_reports_runtime_diagnost
         "ca-stdlib-expect-tuple-to-contain-empty-tuple-missing-value",
         r#"
 get fun `test-ca-stdlib-to-contain-empty-tuple-missing-value`() {
-    var values = createEmptyTuple();
+    var values = [];
 
     expect(values).toContain(1);
 }

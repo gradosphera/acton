@@ -133,7 +133,7 @@ fn set_and_get_config_unpacked_round_trip_slot_14() {
         "aj-stdlib-vm-config-unpacked-slot-14",
         r#"
 get fun `test-aj-stdlib-vm-config-unpacked-slot-14`() {
-    var unpacked = createEmptyTuple();
+    var unpacked = [];
     unpacked.push(777);
     unpacked.push("aj-unpacked");
     unpacked.push(false);
