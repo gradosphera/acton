@@ -18,6 +18,9 @@ num-bigint = { workspace = true }
 anyhow = { workspace = true }
 tycho-types = { workspace = true }
 serde = { workspace = true }
+dunce = { workspace = true }
+rustc-hash = { workspace = true }
+path-absolutize = { workspace = true }
 
 [lints]
 workspace = true

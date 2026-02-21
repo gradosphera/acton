@@ -1,0 +1,19 @@
+[package]
+name = "tolk-dataflow"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[dependencies]
+tolk-syntax = { workspace = true }
+tolk-resolver = { workspace = true }
+rustc-hash = { workspace = true }
+
+[lints]
+workspace = true

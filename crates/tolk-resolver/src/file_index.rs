@@ -4,6 +4,7 @@
 //! such as declarations, imports, and source spans.
 
 use crate::resolve_index::LocalDefId;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
@@ -13,7 +14,7 @@ use tolk_syntax::{AstNode, FunctionLike, HasAnnotations, HasGenericParams, HasNa
 use tree_sitter::Node;
 
 /// Represents a byte range in the source code.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Span {
     /// Start byte offset (inclusive).
     pub start: u32,
@@ -33,6 +34,17 @@ impl Span {
         start: u32::MAX,
         end: u32::MAX,
     };
+
+    pub const fn from_offset(offset: usize) -> Self {
+        Span {
+            start: offset as u32,
+            end: offset as u32 + 1,
+        }
+    }
+
+    pub const fn file_start() -> Self {
+        Span { start: 0, end: 0 }
+    }
 
     /// Creates a span from a tree-sitter node.
     pub fn from_syntax(node: &Node) -> Self {
@@ -125,7 +137,7 @@ impl<'tree> OptionalSyntaxNodeSpanExt<'tree> for Option<Node<'tree>> {
 }
 
 /// Unique identifier for a top-level symbol in the project.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct SymbolId {
     /// The ID of the file where the symbol is defined.
     pub file_id: FileId,
@@ -134,7 +146,7 @@ pub struct SymbolId {
 }
 
 /// Information about a top-level declaration (function, struct, etc.).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Symbol {
     /// Unique identifier for this symbol.
     pub id: SymbolId,
@@ -156,13 +168,18 @@ pub struct Symbol {
     pub is_pure: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Parameter {
     pub is_mutate: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub struct TypeParameter {
+    pub name: Arc<str>,
+}
+
 /// Distinguishes between different kinds of top-level declarations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum SymbolKind {
     /// A global variable.
     GlobalVariable,
@@ -171,6 +188,7 @@ pub enum SymbolKind {
         /// Whether the function has an explicit return type.
         has_return_type: bool,
         parameters: Vec<Parameter>,
+        type_parameters: Vec<TypeParameter>,
     },
     /// A method defined on a type.
     Method {
@@ -181,18 +199,21 @@ pub enum SymbolKind {
         /// Whether the method is an instance method.
         is_instance: bool,
         parameters: Vec<Parameter>,
+        type_parameters: Vec<TypeParameter>,
     },
     /// A GET-method (for TON smart contracts).
     GetMethod {
         /// Whether the method has an explicit return type.
         has_return_type: bool,
         parameters: Vec<Parameter>,
+        type_parameters: Vec<TypeParameter>,
     },
     /// A struct definition.
     Struct {
         /// Fields of the struct.
         fields: Vec<Symbol>,
         is_generic: bool,
+        type_parameters: Vec<TypeParameter>,
     },
     /// A field within a struct.
     StructField,
@@ -209,6 +230,7 @@ pub enum SymbolKind {
     TypeAlias {
         /// When `type slice = builtin`
         is_builtin: bool,
+        type_parameters: Vec<TypeParameter>,
     },
 }
 
@@ -220,10 +242,18 @@ impl Symbol {
             SymbolKind::TypeAlias { .. } | SymbolKind::Struct { .. } | SymbolKind::Enum { .. }
         )
     }
+
+    /// Returns `true` if this declaration defines a function.
+    pub const fn is_func(&self) -> bool {
+        matches!(
+            self.kind,
+            SymbolKind::Function { .. } | SymbolKind::Method { .. } | SymbolKind::GetMethod { .. }
+        )
+    }
 }
 
 /// Represents an import statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Import {
     /// Path string as it appears in the source code.
     pub path: Arc<str>,
@@ -234,7 +264,7 @@ pub struct Import {
 /// Unique identifier for a file in the project.
 pub type FileId = u32;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum FileSource {
     Stdlib,
     Acton,
@@ -242,7 +272,7 @@ pub enum FileSource {
 }
 
 /// A processed index of a single Tolk source file.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct FileIndex {
     /// Unique identifier for this file.
     pub id: FileId,
@@ -266,15 +296,30 @@ impl FileIndex {
             .body_spans
             .binary_search_by(|(span, _)| {
                 if span.contains(offset) {
-                    std::cmp::Ordering::Equal
+                    Ordering::Equal
                 } else if (span.start as usize) > offset {
-                    std::cmp::Ordering::Greater
+                    Ordering::Greater
                 } else {
-                    std::cmp::Ordering::Less
+                    Ordering::Less
                 }
             })
             .ok()?;
         Some(self.body_spans[idx].1)
+    }
+
+    /// Checks if passed file resides in Tolk standard library.
+    pub fn is_stdlib_file(&self) -> bool {
+        self.source_kind == FileSource::Stdlib
+    }
+
+    /// Checks if passed file resides in Acton standard library.
+    pub fn is_acton_file(&self) -> bool {
+        self.source_kind == FileSource::Acton
+    }
+
+    /// Checks if passed file resides in workspace, not in Tolk stdlib or Acton files.
+    pub fn is_workspace_file(&self) -> bool {
+        self.source_kind == FileSource::Workspace
     }
 
     /// Builds a `FileIndex` from a parsed `SourceFile`.
@@ -351,6 +396,7 @@ impl FileIndex {
                             decl.underlying_type(),
                             Some(ast::TypeAliasUnderlyingType::BuiltinSpecifier(_))
                         ),
+                        type_parameters: Self::extract_type_parameters(file, decl),
                     },
                     name_span,
                     body_span,
@@ -390,6 +436,7 @@ impl FileIndex {
                         kind: SymbolKind::Struct {
                             fields,
                             is_generic: decl.type_parameters().is_some(),
+                            type_parameters: Self::extract_type_parameters(file, decl),
                         },
                         name_span,
                         body_span,
@@ -449,6 +496,7 @@ impl FileIndex {
                                     is_mutate: p.mutate(),
                                 })
                                 .collect(),
+                            type_parameters: Self::extract_type_parameters(file, decl),
                         },
                         name_span,
                         body_span,
@@ -495,6 +543,7 @@ impl FileIndex {
                                     is_mutate: p.mutate(),
                                 })
                                 .collect(),
+                            type_parameters: Self::extract_type_parameters(file, decl),
                         },
                         name_span,
                         body_span,
@@ -517,6 +566,7 @@ impl FileIndex {
                                     is_mutate: p.mutate(),
                                 })
                                 .collect(),
+                            type_parameters: Self::extract_type_parameters(file, decl),
                         },
                         name_span,
                         body_span,
@@ -559,6 +609,26 @@ impl FileIndex {
             symbol_id_to_decl_index,
             body_spans,
         }
+    }
+
+    fn extract_type_parameters<'a, Node: HasGenericParams<'a>>(
+        file: &ast::SourceFile,
+        decl: Node,
+    ) -> Vec<TypeParameter> {
+        decl.type_parameters()
+            .map(|tp| {
+                tp.parameters()
+                    .flat_map(|p| {
+                        let name_ident = p.name()?;
+                        Some(TypeParameter {
+                            name: Arc::from(name_ident.text(&file.source)),
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+            .into_iter()
+            .collect()
     }
 
     fn is_deprecated<'a, Node: HasAnnotations<'a>>(content: &str, node: Node) -> bool {

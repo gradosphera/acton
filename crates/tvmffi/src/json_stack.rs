@@ -3,6 +3,7 @@ use anyhow::Context;
 use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::ops::Mul;
 use tonlib_core::cell::ArcCell;
 use tonlib_core::tlb_types::tlb::TLB;
 
@@ -83,7 +84,12 @@ fn item_to_json(item: &TupleItem) -> anyhow::Result<JsonStackEntry> {
 pub fn legacy_item_to_json(item: &TupleItem) -> anyhow::Result<Value> {
     match item {
         TupleItem::Null => Ok(serde_json::json!(["null", null])),
-        TupleItem::Int(i) => Ok(serde_json::json!(["num", format!("0x{i:x}")])),
+        TupleItem::Int(i) => {
+            if i < &BigInt::from(0u64) {
+                return Ok(serde_json::json!(["num", format!("-0x{:x}", i.mul(-1))]));
+            }
+            Ok(serde_json::json!(["num", format!("0x{i:x}")]))
+        }
         TupleItem::Cell(c) => Ok(serde_json::json!(["cell", { "bytes": c.to_boc_b64(false)? }])),
         TupleItem::Slice(c) => Ok(serde_json::json!(["slice", { "bytes": c.to_boc_b64(false)? }])),
         TupleItem::Builder(c) => {

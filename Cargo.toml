@@ -11,7 +11,6 @@ exclude = [
     "crates/acton-test-ui",
     "crates/acton-shared-ui",
     "crates/acton-litenode-ui",
-    "crates/ffi-test",
 ]
 
 [workspace.package]
@@ -37,6 +36,7 @@ tolk-ty = { path = "crates/tolk-ty" }
 tolk-analysis = { path = "crates/tolk-analysis" }
 tolk-linter = { path = "crates/tolk-linter" }
 tolk-macros = { path = "crates/tolk-macros" }
+tolk-dataflow = { path = "crates/tolk-dataflow" }
 tvmffi = { path = "crates/tvmffi" }
 vmlogs = { path = "crates/vmlogs" }
 tasm = { path = "crates/tasm" }
@@ -114,7 +114,7 @@ opener = "0.8.4"
 
 # acton wallet
 hmac = "0.12.1"
-pbkdf2 = "0.12.2"
+ring = "0.17"
 nacl = "0.5.3"
 toml_edit = "0.24.0"
 
@@ -146,6 +146,7 @@ heck = "0.5.0"
 pretty = "0.12.5"
 winnow = "0.7.13"
 dunce = "1.0.5"
+path-absolutize = "3.1.1"
 
 [dependencies]
 # local creates
@@ -158,6 +159,9 @@ tolk-syntax = { workspace = true }
 tolk-resolver = { workspace = true }
 tolk-ty = { workspace = true }
 tolk-linter = { workspace = true }
+ton-ls = { path = "crates/ton-ls" }
+tower-lsp = "0.20"
+dashmap = { workspace = true }
 tvmffi = { workspace = true }
 vmlogs = { workspace = true }
 tasm = { workspace = true }
@@ -232,7 +236,7 @@ opener = { workspace = true }
 
 # acton wallet
 hmac = { workspace = true }
-pbkdf2 = { workspace = true }
+ring = { workspace = true }
 nacl = { workspace = true }
 toml_edit = { workspace = true }
 
@@ -244,8 +248,9 @@ similar = { workspace = true }
 
 # actin check
 codespan-reporting = { workspace = true }
-tracing-subscriber = "0.3.22"
 rustc-hash = "2.1.1"
+function_name = "0.3.0"
+path-absolutize = { workspace = true }
 
 [dev-dependencies]
 snapbox = { version = "0.6.23", features = ["regex", "cmd", "dir", "term-svg"] }
@@ -298,6 +303,7 @@ workspace = true
 
 [features]
 profile_rules = ["tolk-linter/profile_rules"] # for acton check
+profiling = ["ton-ls/profiling"]
 
 [profile.dev]
 debug = "full"

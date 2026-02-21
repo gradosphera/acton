@@ -1,0 +1,18 @@
+warning[E006]: unused import
+  --> [ROOT]/contracts/main[LINE]
+  |
+7 |             import "./unused.tolk";
+  |             ^^^^^^^^^^^^^^^^^^^^^^ this import is unused
+
+help: remove unused import
+  --> [ROOT]/contracts/main[LINE]
+  |  
+7 | /             import "./unused.tolk";
+8 | | 
+  | /^
+
+
+1 issue can be fixed automatically, rerun with --fix flag.
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain E006

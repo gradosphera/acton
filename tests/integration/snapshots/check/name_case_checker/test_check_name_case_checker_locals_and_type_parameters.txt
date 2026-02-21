@@ -1,0 +1,48 @@
+warning[S001]: name should be in the expected case
+  --> [ROOT]/contracts/main[LINE]
+  |
+2 |             fun localHelper<bad_type>(Bad_param: bad_type): bad_type {
+  |                             ^^^^^^^^ not PascalCase: bad_type
+
+help: rename to PascalCase: BadType
+  --> [ROOT]/contracts/main[LINE]
+  |
+2 |             fun localHelper<bad_type>(Bad_param: bad_type): bad_type {
+  |                             ^^^^^^^^             ^^^^^^^^   ^^^^^^^^ BadType
+  |                             |                    |           
+  |                             |                    BadType
+  |                             BadType
+
+warning[S001]: name should be in the expected case
+  --> [ROOT]/contracts/main[LINE]
+  |
+2 |             fun localHelper<bad_type>(Bad_param: bad_type): bad_type {
+  |                                       ^^^^^^^^^ not camelCase: Bad_param
+
+help: rename to camelCase: badParam
+  --> [ROOT]/contracts/main[LINE]
+  |
+2 |             fun localHelper<bad_type>(Bad_param: bad_type): bad_type {
+  |                                       ^^^^^^^^^ badParam
+3 |                 val Bad_local = Bad_param;
+  |                                 ^^^^^^^^^ badParam
+
+warning[S001]: name should be in the expected case
+  --> [ROOT]/contracts/main[LINE]
+  |
+3 |                 val Bad_local = Bad_param;
+  |                     ^^^^^^^^^ not camelCase: Bad_local
+
+help: rename to camelCase: badLocal
+  --> [ROOT]/contracts/main[LINE]
+  |
+3 |                 val Bad_local = Bad_param;
+  |                     ^^^^^^^^^ badLocal
+4 |                 return Bad_local;
+  |                        ^^^^^^^^^ badLocal
+
+
+3 issues can be fixed automatically, rerun with --fix flag.
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain S001

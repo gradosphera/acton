@@ -22,19 +22,24 @@
 /// ```
 
 import "message"
+import "../fmt"
 import "../testing/assert"
-import "../tlb/either"
 import "../vm/vm"
 
 /// Represents a node in the out list.
-/// This is an internal type, you shouldn't use it directly.
+/// This is an internal linked-list node, you should not use it directly.
+///
+/// `prev` is stored in the list node itself and points to the previous list node.
+/// It is not a field of any `OutAction*` payload.
 struct OutList {
+    /// Link to previous out-list node.
+    prev: Cell<OutList>
+    /// Serialized out action stored in this node.
     action: OutAction
 }
 
 /// Represents send message action.
 struct (0x0ec3c86d) OutActionSendMessage {
-    prev: Cell<OutList>
     /// Mode of the send message. See `SEND_MODE_*` constants.
     mode: uint8
     /// Message to send.
@@ -100,14 +105,12 @@ fun OutActionSendMessage.loadGenericMessage(self): MessageRelaxedGeneric {
 
 /// Represents set code action.
 struct (0xad4de08e) OutActionSetCode {
-    prev: Cell<OutList>
     /// New code to set.
     newCode: cell
 }
 
 /// Represents reserve currency action.
 struct (0x36e6b809) OutActionReserveCurrency {
-    prev: Cell<OutList>
     /// Mode of the reserve currency. See `RESERVE_MODE_*` constants.
     mode: uint8
     /// Currency to reserve.
@@ -116,7 +119,6 @@ struct (0x36e6b809) OutActionReserveCurrency {
 
 /// Represents change library action.
 struct (0x26fa1dd4) OutActionChangeLibrary {
-    prev: Cell<OutList>
     /// Mode of the change library.
     mode: uint7
     /// Library reference, either hash or cell reference.
@@ -135,10 +137,11 @@ struct (0b1) LibRefRef {
     library: cell
 }
 
-/// Represents library reference, either hash or cell reference.
+/// Type alias for library reference used by [OutActionChangeLibrary.libref].
+/// Value is either a hash-only reference ([LibRefHash]) or an in-cell library ([LibRefRef]).
 type LibRef = LibRefHash | LibRefRef
 
-/// Represents all possible out actions.
+/// Type alias for tagged union of all supported out action variants.
 type OutAction =
     | OutActionSendMessage
     | OutActionSetCode
@@ -146,6 +149,12 @@ type OutAction =
     | OutActionChangeLibrary
 
 /// Returns the kind of the out action as a string.
+///
+/// Exact return values:
+/// - `"send-message"` for [OutActionSendMessage]
+/// - `"set-code"` for [OutActionSetCode]
+/// - `"reserve-currency"` for [OutActionReserveCurrency]
+/// - `"change-library"` for [OutActionChangeLibrary]
 fun OutAction.kind(self): string {
     match (self) {
         OutActionSendMessage => {
@@ -163,14 +172,16 @@ fun OutAction.kind(self): string {
     }
 }
 
-/// Represents a list of out actions.
+/// Type alias for the out action list array.
 ///
 /// To get the out actions, use [vm.outActions] method.
-type OutActionList = tuple
+type OutActionList = array<Cell<OutAction>>
 
 /// Returns the out action at the given index.
 ///
 /// NOTE: this list is reversed, so the last action is at index 0.
+///
+/// Fails with [Assert.fail] if the stored tuple element cannot be decoded as [OutAction].
 ///
 /// Example:
 /// ```tolk
@@ -179,8 +190,12 @@ type OutActionList = tuple
 /// println(action.kind());
 /// ```
 fun OutActionList.at(self, i: int): OutAction {
-    val rawAction = self.get(i) as tuple;
-    return OutAction.fromTuple(rawAction);
+    val rawAction = self.get(i);
+    try {
+        return rawAction.load();
+    } catch (e) {
+        Assert.fail(format2("Unknown out action at index {} (decode error code {})", i, e));
+    }
 }
 
 /// Returns the send message action at the given index.
@@ -208,6 +223,8 @@ fun OutActionList.getSendMessageAt(self, i: int): OutActionSendMessage? {
 /// Note that you should provide the message type as a generic parameter.
 ///
 /// If the action is not a send message, returns null.
+/// If the action is a send message but `Msg` does not match actual body type, this call throws
+/// (for example with exit code 63 from typed message decoding).
 ///
 /// Example:
 /// ```tolk
@@ -218,19 +235,9 @@ fun OutActionList.getSendMessageAt(self, i: int): OutActionSendMessage? {
 /// }
 /// ```
 fun OutActionList.getSendMessageBodyAt<Msg>(self, i: int): Msg? {
-    val action = self.at(i);
-    if (action is OutActionSendMessage) {
-        val msg = (action.outMsg as Cell<MessageRelaxed<Msg>>).load({
-            assertEndAfterReading: false,
-        });
-
-        if (msg.body is EitherLeft<Msg>) {
-            return msg.body.value;
-        }
-        if (msg.body is EitherRight<Cell<Msg>>) {
-            return msg.body.value.load({ assertEndAfterReading: false });
-        }
-        return null;
+    val action = self.getSendMessageAt(i);
+    if (action != null) {
+        return action!.loadBody<Msg>();
     }
     return null;
 }
@@ -257,95 +264,40 @@ fun vm.outActions(): OutActionList {
 
 /// Parses the out actions from the raw cell (like C5 register).
 ///
+/// If [cell] is empty (no bits and no refs), returns an empty tuple.
+/// Fails with [Assert.fail] if list node layout is malformed.
+///
 /// Example:
 /// ```tolk
 /// val out_actions = vm.parseOutActions(vm.getC5());
 /// println(out_actions.size());
 /// ```
 fun vm.parseOutActions(cell: cell): OutActionList {
-    var result = createEmptyTuple();
-    val root = cell as Cell<OutList>;
-    var next: Cell<OutList>? = root;
+    val rootSlice = cell.beginParse();
+    if (rootSlice.remainingBitsCount() == 0 && rootSlice.remainingRefsCount() == 0) {
+        return [];
+    }
+
+    var result = OutActionList [];
+    var next: Cell<OutList>? = cell as Cell<OutList>;
 
     while (next != null) {
-        val loaded = next.load();
-        match (loaded.action) {
-            OutActionSendMessage => {
-                result.push(loaded.action.toTuple());
-                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
-                    next = null;
-                } else {
-                    next = loaded.action.prev;
-                }
-            }
-            OutActionSetCode => {
-                result.push(loaded.action.toTuple());
-                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
-                    next = null;
-                } else {
-                    next = loaded.action.prev;
-                }
-            }
-            OutActionReserveCurrency => {
-                result.push(loaded.action.toTuple());
-                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
-                    next = null;
-                } else {
-                    next = loaded.action.prev;
-                }
-            }
-            OutActionChangeLibrary => {
-                result.push(loaded.action.toTuple());
-                if (loaded.action.prev.beginParse().remainingBitsCount() == 0) {
-                    next = null;
-                } else {
-                    next = loaded.action.prev;
-                }
-            }
+        var nodeSlice = (next! as cell).beginParse();
+        if (nodeSlice.remainingRefsCount() == 0) {
+            Assert.fail("Malformed out action list node");
+        }
+
+        val prev = nodeSlice.loadRef() as Cell<OutList>;
+        val rawAction = beginCell().storeSlice(nodeSlice).endCell();
+        result.push(rawAction as Cell<OutAction>);
+
+        val prevSlice = prev.beginParse();
+        if (prevSlice.remainingBitsCount() == 0 && prevSlice.remainingRefsCount() == 0) {
+            next = null;
+        } else {
+            next = prev;
         }
     }
 
     return result;
-}
-
-// Implementation details
-
-fun LibRef.fromTuple(data: tuple): LibRef {
-    val tag = data.get(0) as int;
-    if (tag == 0) {
-        return LibRefHash.fromTuple(data);
-    } else if (tag == 1) {
-        return LibRefRef.fromTuple(data);
-    } else {
-        throw 0xFF; // unknown libref type
-    }
-}
-fun OutAction.fromTuple(data: tuple): OutAction {
-    if (data.size() == 2) {
-        return OutActionSetCode.fromTuple(data);
-    } else if (data.size() == 3) {
-        return OutActionSendMessage.fromTuple(data);
-    } else if (data.size() == 4) {
-        val third = data.get(2) as int;
-        if (third == 0 || third == 1) {
-            return OutActionChangeLibrary.fromTuple(data);
-        }
-        return OutActionReserveCurrency.fromTuple(data);
-    } else {
-        Assert.fail("Unknown out action");
-    }
-}
-
-fun OutActionChangeLibrary.toTuple(self) {
-    var tuple = createEmptyTuple();
-    tuple.push(self.prev);
-    tuple.push(self.mode);
-    if (self.libref is LibRefHash) {
-        tuple.push(0);
-        tuple.push(self.libref.libHash);
-    } else {
-        tuple.push(1);
-        tuple.push(self.libref.library);
-    }
-    return tuple;
 }

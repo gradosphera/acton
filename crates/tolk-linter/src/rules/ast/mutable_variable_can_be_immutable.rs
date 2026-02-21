@@ -1,13 +1,12 @@
-use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix, Severity};
+use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix};
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_analysis::UseFlags;
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::FileId;
 use tolk_resolver::file_index::Span;
 use tolk_resolver::resolve_index::LocalDefKind;
-use tolk_syntax::HasTreeSitterKind;
+use tolk_syntax::{HasTreeSitterKind, VarDeclPattern};
 use tolk_syntax::{VarDeclLhs, match_parents};
 
 /// ### What it does
@@ -50,7 +49,13 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
     let use_facts = checker.use_facts(file_id)?;
 
     for local in &resolved_index.locals {
-        if !matches!(local.kind, LocalDefKind::Var { is_mutable: true }) {
+        if !matches!(
+            local.kind,
+            LocalDefKind::Var {
+                is_mutable: true,
+                ..
+            }
+        ) {
             // not a mutable variable
             continue;
         }
@@ -75,6 +80,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
         if let Some(def_node) =
             root.descendant_for_byte_range(local.def_span.start(), local.def_span.end())
             && let Some(decl) = match_parents!(def_node, VarDeclLhs(...))
+            && matches!(decl.pattern(), Some(VarDeclPattern::VarDecl(_))) // add fix only for var a = 100
             && let Some(kind_node) = decl.kind_node()
         {
             fixes.push(Fix {
@@ -88,22 +94,15 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
             });
         }
 
-        let diagnostic = Diagnostic {
-            file_id,
-            severity: Severity::Warning,
-            name: MutableVariableCanBeImmutable::rule().name(),
-            code: MutableVariableCanBeImmutable::code().map(|c| c.to_string()),
-            message: MutableVariableCanBeImmutable.message(),
-            annotations: vec![Annotation {
+        let diagnostic = Diagnostic::warning_for(file_id, MutableVariableCanBeImmutable)
+            .with_annotations(vec![Annotation {
                 span: local.def_span,
                 message: Some("can be made val".to_owned()),
                 is_primary: true,
                 tags: vec![],
-            }],
-            fixes,
-            help: None,
-        };
-        checker.emit_diagnostic(MutableVariableCanBeImmutable::rule(), diagnostic);
+            }])
+            .with_fixes(fixes);
+        checker.emit_diagnostic(diagnostic);
     }
     Some(())
 }

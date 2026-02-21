@@ -1,5 +1,6 @@
 use crate::common::{acton_exe, assert_ui};
 use crate::support::assertions::TestOutput;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -14,6 +15,7 @@ pub(crate) struct ProjectBuilder {
     raw_files: Vec<(String, String)>,
     scripts: Vec<(String, String)>,
     mappings: Vec<(String, String)>,
+    lint_levels: BTreeMap<String, String>,
     test_config: Option<TestConfig>,
     license: Option<String>,
     create_acton_toml: bool,
@@ -60,8 +62,7 @@ pub(crate) struct TestConfig {
 #[allow(dead_code)]
 impl ProjectBuilder {
     pub(crate) fn new(name: &str) -> Self {
-        let mut temp_dir = TempDir::new().expect("Failed to create temp dir");
-        temp_dir.disable_cleanup(true);
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
         Self {
             name: name.to_string(),
             temp_dir,
@@ -71,6 +72,7 @@ impl ProjectBuilder {
             raw_files: Vec::new(),
             scripts: Vec::new(),
             mappings: Vec::new(),
+            lint_levels: BTreeMap::new(),
             test_config: None,
             license: Some("MIT".to_string()),
             create_acton_toml: true,
@@ -102,6 +104,18 @@ impl ProjectBuilder {
 
     pub(crate) fn mapping(mut self, prefix: &str, target: &str) -> Self {
         self.mappings.push((prefix.to_string(), target.to_string()));
+        self
+    }
+
+    /// Configure lint rule level in Acton.toml.
+    ///
+    /// # Examples
+    /// ```
+    /// .with_lint_level("unauthorized-access", "warn")
+    /// .with_lint_level("unused-variable", "deny")
+    /// ```
+    pub(crate) fn with_lint_level(mut self, rule: &str, level: &str) -> Self {
+        self.lint_levels.insert(rule.to_string(), level.to_string());
         self
     }
 
@@ -391,6 +405,7 @@ impl ProjectBuilder {
                 &self.contracts,
                 &self.scripts,
                 &self.mappings,
+                &self.lint_levels,
                 &self.test_config,
                 &self.license,
             );
@@ -417,12 +432,14 @@ impl ProjectBuilder {
         code.replace("import \"../../../../lib/", "import \"../../lib/")
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_acton_toml(
         project_path: &Path,
         name: &str,
         contracts: &[ContractDef],
         scripts: &[(String, String)],
         mappings: &[(String, String)],
+        lint_levels: &BTreeMap<String, String>,
         test_config: &Option<TestConfig>,
         license: &Option<String>,
     ) {
@@ -525,6 +542,14 @@ version = "0.1.0"
             toml_content.push_str("[scripts]\n");
             for (name, cmd) in scripts {
                 toml_content.push_str(&format!("{name} = \"{cmd}\"\n"));
+            }
+            toml_content.push('\n');
+        }
+
+        if !lint_levels.is_empty() {
+            toml_content.push_str("[lint]\n");
+            for (rule, level) in lint_levels {
+                toml_content.push_str(&format!("{rule} = \"{level}\"\n"));
             }
             toml_content.push('\n');
         }
@@ -634,6 +659,7 @@ impl Project {
             build_clear_cache: false,
             build_graph: None,
             build_out_dir: None,
+            build_output_fift: None,
             disasm_string: None,
             disasm_output: None,
             disasm_address: None,
@@ -678,6 +704,7 @@ pub(crate) struct ActonCommand {
     pub(crate) build_clear_cache: bool,
     pub(crate) build_graph: Option<Option<String>>,
     pub(crate) build_out_dir: Option<String>,
+    pub(crate) build_output_fift: Option<String>,
     pub(crate) disasm_string: Option<String>,
     pub(crate) disasm_output: Option<String>,
     pub(crate) disasm_address: Option<String>,
@@ -807,6 +834,11 @@ impl ActonCommand {
 
     pub(crate) fn fmt(mut self) -> Self {
         self.cmd = self.cmd.arg("fmt").current_dir(&self.project.path);
+        self
+    }
+
+    pub(crate) fn check(mut self) -> Self {
+        self.cmd = self.cmd.arg("check").current_dir(&self.project.path);
         self
     }
 
@@ -1167,6 +1199,12 @@ impl ActonCommand {
         self
     }
 
+    /// Set output directory for compiled Fift files (only for build command)
+    pub(crate) fn with_output_fift(mut self, path: &str) -> Self {
+        self.build_output_fift = Some(path.to_string());
+        self
+    }
+
     /// Enable info output for build command
     pub(crate) fn with_info(mut self) -> Self {
         self.build_info = true;
@@ -1259,6 +1297,10 @@ impl ActonCommand {
 
         if let Some(out_dir) = self.build_out_dir {
             self.cmd = self.cmd.arg("--out-dir").arg(out_dir);
+        }
+
+        if let Some(output_fift_dir) = self.build_output_fift {
+            self.cmd = self.cmd.arg("--output-fift").arg(output_fift_dir);
         }
 
         if self.build_info {

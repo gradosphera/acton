@@ -1,11 +1,16 @@
 extern crate core;
 
-use crate::ast::camel_case_detector::check_name_cases;
-use crate::ast::{deprecated_symbol_use, no_bounce_handler};
-use crate::rules::ast::{
-    field_init_can_be_folded, mutable_variable_can_be_immutable, pure_function_call_unused,
-    unused_import, unused_variable, write_only_variable,
+use crate::ast::name_case_checker::check_name_cases;
+use crate::ast::{
+    acton_import_in_contract, deprecated_symbol_use, no_bounce_handler, several_not_null_assertions,
 };
+use crate::rules::ast::{
+    asm_function_missing_safety_comment, field_init_can_be_folded, import_path_can_use_mappings,
+    message_entity_naming, method_can_be_static, mutable_parameter_can_be_immutable,
+    mutable_variable_can_be_immutable, pure_function_call_unused, send_mode_literal, unused_import,
+    unused_variable, used_ignored_identifier, write_only_variable,
+};
+use acton_config::config::LintLevel;
 use rules::diagnostic::{Diagnostic, Severity};
 pub use rules::*;
 use rustc_hash::FxHashMap;
@@ -16,7 +21,8 @@ use tolk_resolver::file_index::{FileId, SymbolId};
 use tolk_resolver::resolve_index::FileResolveIndex;
 use tolk_resolver::{AstNodeSpanExt, NameUse, Resolved};
 use tolk_syntax::{
-    Call, Expr, ExprStmt, Ident, InstanceArg, SourceFile, TopLevel, TypeIdent, Walker, walk_ast,
+    Call, Expr, ExprStmt, Ident, InstanceArg, NotNull, SourceFile, TopLevel, TypeIdent, Walker,
+    walk_ast,
 };
 use tolk_ty::InferenceResult;
 use tolk_ty::TypeDb;
@@ -26,6 +32,7 @@ use tree_sitter::Node;
 mod profiling;
 mod rules;
 
+use crate::dfa::unauthorized_access;
 #[cfg(feature = "profile_rules")]
 pub use profiling::Profiler;
 use tolk_analysis::{AnalysisDb, FileUseFacts};
@@ -56,7 +63,7 @@ pub struct Checker<'a> {
     pub body_types: &'a HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
     pub analysis_db: AnalysisDb,
     pub diagnostics: Vec<Diagnostic>,
-    pub settings: HashMap<Rule, acton_config::config::LintLevel>,
+    pub settings: HashMap<Rule, LintLevel>,
 
     /// Map from file ID to a map of line number to list of suppressed rule names/codes
     pub file_suppressions: FxHashMap<FileId, FxHashMap<usize, Vec<String>>>,
@@ -130,10 +137,7 @@ impl<'a> Checker<'a> {
         }
     }
 
-    pub fn with_settings(
-        mut self,
-        settings: HashMap<Rule, acton_config::config::LintLevel>,
-    ) -> Self {
+    pub fn with_settings(mut self, settings: HashMap<Rule, LintLevel>) -> Self {
         self.settings = settings;
         self
     }
@@ -141,7 +145,7 @@ impl<'a> Checker<'a> {
     pub fn should_run(&self, rule: Rule) -> bool {
         self.settings
             .get(&rule)
-            .map(|level| *level != acton_config::config::LintLevel::Allow)
+            .map(|level| *level != LintLevel::Allow)
             .unwrap_or(true) // default to run
     }
 
@@ -149,14 +153,14 @@ impl<'a> Checker<'a> {
         run_rule!(self, Rule::NameCaseChecker, check_name_cases(self));
     }
 
-    pub fn emit_diagnostic(&mut self, rule: Rule, mut diagnostic: Diagnostic) {
-        if let Some(level) = self.settings.get(&rule) {
+    pub fn emit_diagnostic(&mut self, mut diagnostic: Diagnostic) {
+        if let Some(level) = self.settings.get(&diagnostic.rule) {
             match level {
-                acton_config::config::LintLevel::Allow => return,
-                acton_config::config::LintLevel::Warn => {
+                LintLevel::Allow => return,
+                LintLevel::Warn => {
                     diagnostic.severity = Severity::Warning;
                 }
-                acton_config::config::LintLevel::Deny => {
+                LintLevel::Deny => {
                     diagnostic.severity = Severity::Error;
                 }
             }
@@ -167,8 +171,10 @@ impl<'a> Checker<'a> {
     pub fn build_settings(
         config: &acton_config::config::ActonConfig,
         contract_name: Option<&str>,
-    ) -> HashMap<Rule, acton_config::config::LintLevel> {
+    ) -> HashMap<Rule, LintLevel> {
         let mut settings = HashMap::new();
+
+        settings.insert(Rule::UnauthorizedAccess, LintLevel::Allow); // disabled by default for now
 
         let Some(lint) = &config.lint else {
             return settings;
@@ -356,8 +362,48 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
         );
         run_rule!(
             self.checker,
+            Rule::MutableParameterCanBeImmutable,
+            mutable_parameter_can_be_immutable::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
             Rule::UnusedImport,
             unused_import::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::ImportPathCanUseMappings,
+            import_path_can_use_mappings::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::ActonImportInContract,
+            acton_import_in_contract::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::AsmFunctionMissingSafetyComment,
+            asm_function_missing_safety_comment::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::UsedIgnoredIdentifier,
+            used_ignored_identifier::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::MessageShouldBeNamed,
+            message_entity_naming::check_file_for_message_name(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::UnauthorizedAccess,
+            unauthorized_access::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::MethodCanBeStatic,
+            method_can_be_static::check_file(self.checker, self.file_id)
         );
         run_rule!(
             self.checker,
@@ -419,7 +465,53 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
             self.checker,
             Rule::NoBounceHandler,
             no_bounce_handler::check_call_expr(self.checker, self.file_id, node, self.current_decl)
-        )
+        );
+
+        if let Some(inference) = self.current_inference {
+            run_rule!(
+                self.checker,
+                Rule::CreateMessageInlineSend,
+                message_entity_naming::check_call_for_inline_send(
+                    self.checker,
+                    self.file_id,
+                    node,
+                    inference
+                )
+            );
+
+            run_rule!(
+                self.checker,
+                Rule::SendModeLiteral,
+                send_mode_literal::check_call(self.checker, self.file_id, node, Some(inference))
+            );
+        } else {
+            run_rule!(
+                self.checker,
+                Rule::SendModeLiteral,
+                send_mode_literal::check_call(self.checker, self.file_id, node, None)
+            );
+        }
+
+        if let Some(callee) = node.callee() {
+            self.visit_expr(&callee);
+        }
+        for arg in node.arguments() {
+            self.walk_call_argument(&arg);
+        }
+        self.default_result()
+    }
+
+    fn walk_not_null(&mut self, node: &NotNull<'file>) -> Self::Result {
+        run_rule!(
+            self.checker,
+            Rule::SeveralNotNullAssertions,
+            several_not_null_assertions::check_not_null(self.checker, self.file_id, node)
+        );
+
+        if let Some(inner) = node.inner() {
+            self.visit_expr(&inner);
+        }
+        self.default_result()
     }
 
     fn default_result(&self) -> Self::Result {}
@@ -431,7 +523,14 @@ impl<'a, 'b> CheckerWalker<'a, 'b> {
             return;
         };
 
-        let Some(usage) = resolve_index.find_use(node.span().start()) else {
+        let node_span = node.span();
+        let usage = if let Some(usage) = resolve_index.find_use(node_span.start()) {
+            usage
+        } else if let Some(inference) = self.current_inference
+            && let Some(usage) = inference.resolve(node_span)
+        {
+            usage
+        } else {
             return;
         };
 

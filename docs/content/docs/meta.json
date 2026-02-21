@@ -18,6 +18,8 @@
     "advanced/libraries",
     "--- Miscellaneous ---",
     "miscellaneous/ide-support",
-    "standard_library"
+    "standard_library",
+    "tolk_standard_library",
+    "linter"
   ]
 }

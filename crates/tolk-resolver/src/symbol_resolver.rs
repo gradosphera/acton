@@ -4,18 +4,19 @@
 //! identifier to its corresponding definition, taking into account scoping
 //! rules and global symbol visibility.
 
-use crate::FileIndex;
 use crate::file_db::{FileDb, FileInfo};
 use crate::file_index::{AstNodeSpanExt, FileId, SymbolId};
 use crate::project_index::ProjectIndex;
 use crate::resolve_index::{
     FileResolveIndex, LocalDef, LocalDefId, LocalDefKind, NameUse, NameUseKind, Resolved,
 };
+use crate::{FileIndex, SymbolKind};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tolk_syntax::{
-    AstNode, Constant, Enum, FuncBody, FunctionLike, GlobalVar, HasGenericParams, HasName,
-    InstanceArg, Struct, TypeAlias, VarKind, Walker, ast,
+    Assign, AstNode, Constant, Enum, EnumMember, FuncBody, FunctionLike, GlobalVar,
+    HasGenericParams, HasName, InstanceArg, Struct, StructField, TryFromNode, TypeAlias, VarKind,
+    Walker, ast,
 };
 use tree_sitter::Node;
 
@@ -73,6 +74,13 @@ impl GlobalEnv {
 
     fn add_file_declaration(visible: &mut HashMap<Arc<str>, Vec<SymbolId>>, file: &Arc<FileIndex>) {
         for decl in &file.decls {
+            if matches!(
+                decl.kind,
+                SymbolKind::Method { .. } | SymbolKind::EnumMember | SymbolKind::StructField
+            ) {
+                continue;
+            }
+
             visible
                 .entry(decl.name.clone())
                 .or_insert_with(|| Vec::with_capacity(1)) // avoid reallocation for the most of the cases
@@ -104,6 +112,7 @@ pub struct SymbolResolver<'a> {
     env: GlobalEnv,
     decl: Option<ast::TopLevel<'a>>,
     inside_method_receiver: bool,
+    inside_dot_access: bool,
 }
 
 /// Represents an error encountered during symbol resolution.
@@ -138,6 +147,7 @@ impl<'a> SymbolResolver<'a> {
             env,
             decl: None,
             inside_method_receiver: false,
+            inside_dot_access: false,
         }
     }
 
@@ -290,18 +300,37 @@ impl<'a> SymbolResolver<'a> {
             Some(symbol)
         });
 
-        let Some(final_candidate) = filtered_candidate.next() else {
-            // // should not be reachable
-            // error!("no candidates after filtering for {name}");
-            return None;
-        };
+        let first = filtered_candidate.next()?;
+        let second = filtered_candidate.next();
+
+        if use_kind == NameUseKind::Mixed
+            && let Some(second) = second
+            && let Some(parent) = ident.parent()
+        {
+            let final_sym = if ast::Call::try_from_node(parent).is_ok() {
+                // this is a call
+                if second.is_func() { second } else { first }
+            } else {
+                // this is an identifier
+                if second.is_type() { second } else { first }
+            };
+
+            self.uses.push(NameUse {
+                decl: decl_start,
+                span: ident.span(),
+                kind: use_kind,
+                name,
+                resolved: Resolved::Global(final_sym.id),
+            });
+            return Some(());
+        }
 
         self.uses.push(NameUse {
             decl: decl_start,
             span: ident.span(),
             kind: use_kind,
             name,
-            resolved: Resolved::Global(final_candidate.id),
+            resolved: Resolved::Global(first.id),
         });
         Some(())
     }
@@ -330,7 +359,23 @@ impl<'a> SymbolResolver<'a> {
                     let name_str = name.text(self.file_content()).to_string();
                     self.check_redeclaration(&name_str, "var_declaration");
                     let is_mutable = matches!(kind, VarKind::Var);
-                    self.add_symbol(&name.0, name_str, LocalDefKind::Var { is_mutable });
+
+                    // don't add `val a redef = 100` as standalone variable
+                    if !var_decl.is_redefinition() {
+                        self.add_symbol(
+                            &name.0,
+                            name_str,
+                            LocalDefKind::Var {
+                                is_mutable,
+                                has_type: var_decl.typ().is_some(),
+                            },
+                        );
+                    } else {
+                        // val a = 100;
+                        // val a redef = 200;
+                        //     ^ resolve to first declaration
+                        self.resolve_symbol(&name.0, NameUseKind::LocalValue);
+                    }
                 }
 
                 if let Some(typ) = var_decl.typ() {
@@ -408,6 +453,17 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
             self.walk_struct_body(&body);
         }
         self.exit_scope();
+        self.exit_scope();
+        self.default_result()
+    }
+
+    fn walk_struct_field(&mut self, node: &StructField<'tree>) -> Self::Result {
+        if let Some(typ) = node.typ() {
+            self.visit_type(&typ);
+        }
+        if let Some(default) = node.default() {
+            self.visit_expr(&default);
+        }
         self.default_result()
     }
 
@@ -420,6 +476,13 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
         }
         if let Some(body) = node.body() {
             self.walk_enum_body(&body);
+        }
+        self.default_result()
+    }
+
+    fn walk_enum_member(&mut self, node: &EnumMember<'tree>) -> Self::Result {
+        if let Some(default) = node.default() {
+            self.visit_expr(&default);
         }
         self.default_result()
     }
@@ -516,9 +579,21 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
         self.exit_scope();
     }
 
+    fn walk_assign(&mut self, node: &Assign<'tree>) -> Self::Result {
+        if let Some(right) = node.right() {
+            self.visit_expr(&right);
+        }
+        if let Some(left) = node.left() {
+            self.visit_expr(&left);
+        }
+        self.default_result()
+    }
+
     fn walk_dot_access(&mut self, node: &ast::DotAccess<'tree>) -> Self::Result {
         if let Some(obj) = node.obj() {
+            self.inside_dot_access = true;
             self.visit_expr(&obj);
+            self.inside_dot_access = false;
         }
         // don't walk field, we don't have types yet
     }
@@ -559,7 +634,9 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
                 &name.0,
                 name_str,
                 LocalDefKind::Param {
+                    has_type: node.typ().is_some(),
                     is_mutable: node.mutate(),
+                    is_self: false,           // there is no self parameters in lambdas
                     in_asm_or_builtin: false, // lambda cannot be assembly or builtin
                 },
             );
@@ -575,7 +652,12 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
     }
 
     fn walk_ident(&mut self, node: &ast::Ident<'tree>) -> Self::Result {
-        self.resolve_symbol(&node.0, NameUseKind::Value);
+        let use_kind = if self.inside_dot_access {
+            NameUseKind::Mixed // may be `address.foo()`
+        } else {
+            NameUseKind::Value
+        };
+        self.resolve_symbol(&node.0, use_kind);
     }
 
     fn walk_type_ident(&mut self, node: &ast::TypeIdent<'tree>) -> Self::Result {
@@ -587,17 +669,23 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
             let name_str = name.text(self.file_content()).to_string();
             self.add_symbol(&name.0, name_str, LocalDefKind::TypeParameter);
         }
+        if let Some(default) = node.default() {
+            self.visit_type(&default)
+        }
     }
 
     fn walk_parameter(&mut self, node: &ast::Parameter<'tree>, in_common: bool) -> Self::Result {
         if let Some(name) = node.name() {
             let name_str = name.text(self.file_content()).to_string();
+            let is_self = name_str == "self";
             self.check_redeclaration(&name_str, "parameter_declaration");
             self.add_symbol(
                 &name.0,
                 name_str,
                 LocalDefKind::Param {
+                    has_type: node.typ().is_some(),
                     is_mutable: node.mutate(),
+                    is_self,
                     in_asm_or_builtin: !in_common,
                 },
             );

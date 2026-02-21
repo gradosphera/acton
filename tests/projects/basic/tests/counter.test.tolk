@@ -2,9 +2,6 @@ import "../../../../lib/build/build"
 import "../../../../lib/emulation/network"
 import "../../../../lib/testing/expect"
 import "../../../../lib/testing/transaction_expect"
-import "../../../../lib/types/message"
-import "../../../../lib/types/out_actions"
-import "../../../../lib/vm/vm"
 import "../../../../lib/io"
 
 import "../contracts/counter_messages"
@@ -30,7 +27,7 @@ fun Counter.sendIncrease(self, from: address, increaseBy: int) {
         dest: self.address,
         body: IncreaseCounter { queryId: 0, increaseBy },
     });
-    return net.send(from, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+    return net.send(from, msg);
 }
 
 fun Counter.sendReset(self, from: address) {
@@ -40,7 +37,7 @@ fun Counter.sendReset(self, from: address) {
         dest: self.address,
         body: ResetCounter { queryId: 0 },
     });
-    return net.send(from, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+    return net.send(from, msg);
 }
 
 fun Counter.getCounter(self): int {
@@ -58,7 +55,7 @@ fun setupTest() {
             stateInit: counter.init,
         },
     });
-    val res = net.send(deployer.address, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+    val res = net.send(deployer.address, msg);
     expect(res).toHaveSuccessfulDeploy({ to: counter.address });
 
     return (counter, deployer)

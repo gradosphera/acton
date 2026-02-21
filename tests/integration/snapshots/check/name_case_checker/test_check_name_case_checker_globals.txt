@@ -1,0 +1,161 @@
+warning[S001]: name should be in the expected case
+  --> [ROOT]/contracts/main[LINE]
+  |
+2 |             struct low_struct {
+  |                    ^^^^^^^^^^ not PascalCase: `low_struct`
+
+help: rename to PascalCase: LowStruct
+   --> [ROOT]/contracts/main[LINE]
+   |
+ 2 |             struct low_struct {
+   |                    ^^^^^^^^^^ LowStruct
+   .
+10 |             type low_alias = low_struct
+   |                              ^^^^^^^^^^ LowStruct
+   .
+19 |             fun low_struct.Bad_method(self): int {
+   |                 ^^^^^^^^^^ LowStruct
+   .
+28 |                 val instance = low_struct { Bad_field: 10 };
+   |                                ^^^^^^^^^^ LowStruct
+
+warning[S001]: name should be in the expected case
+  --> [ROOT]/contracts/main[LINE]
+  |
+3 |                 Bad_field: int,
+  |                 ^^^^^^^^^ not camelCase: `Bad_field`
+
+help: rename to camelCase: badField
+   --> [ROOT]/contracts/main[LINE]
+   |
+ 3 |                 Bad_field: int,
+   |                 ^^^^^^^^^ badField
+   .
+20 |                 return self.Bad_field + Bad_global;
+   |                             ^^^^^^^^^ badField
+   .
+24 |                 return x.Bad_field;
+   |                          ^^^^^^^^^ badField
+   .
+28 |                 val instance = low_struct { Bad_field: 10 };
+   |                                             ^^^^^^^^^ badField
+
+warning[S001]: name should be in the expected case
+  --> [ROOT]/contracts/main[LINE]
+  |
+6 |             enum low_enum {
+  |                  ^^^^^^^^ not PascalCase: `low_enum`
+
+help: rename to PascalCase: LowEnum
+   --> [ROOT]/contracts/main[LINE]
+   |
+ 6 |             enum low_enum {
+   |                  ^^^^^^^^ LowEnum
+   .
+30 |                 val enumValue = low_enum.low_member;
+   |                                 ^^^^^^^^ LowEnum
+
+warning[S001]: name should be in the expected case
+  --> [ROOT]/contracts/main[LINE]
+  |
+7 |                 low_member = 1,
+  |                 ^^^^^^^^^^ not PascalCase: `low_member`
+
+help: rename to PascalCase: LowMember
+   --> [ROOT]/contracts/main[LINE]
+   |
+ 7 |                 low_member = 1,
+   |                 ^^^^^^^^^^ LowMember
+   .
+30 |                 val enumValue = low_enum.low_member;
+   |                                          ^^^^^^^^^^ LowMember
+
+warning[S001]: name should be in the expected case
+   --> [ROOT]/contracts/main[LINE]
+   |
+10 |             type low_alias = low_struct
+   |                  ^^^^^^^^^ not PascalCase: `low_alias`
+
+help: rename to PascalCase: LowAlias
+   --> [ROOT]/contracts/main[LINE]
+   |
+10 |             type low_alias = low_struct
+   |                  ^^^^^^^^^ LowAlias
+   .
+23 |             fun useAlias(x: low_alias): int {
+   |                             ^^^^^^^^^ LowAlias
+   .
+29 |                 val aliasValue: low_alias = instance;
+   |                                 ^^^^^^^^^ LowAlias
+
+warning[S001]: name should be in the expected case
+   --> [ROOT]/contracts/main[LINE]
+   |
+12 |             const badConst = 2
+   |                   ^^^^^^^^ not SCREAMING_SNAKE_CASE: `badConst`
+
+help: rename to SCREAMING_SNAKE_CASE: BAD_CONST
+   --> [ROOT]/contracts/main[LINE]
+   |
+12 |             const badConst = 2
+   |                   ^^^^^^^^ BAD_CONST
+   .
+16 |                 return value + badConst;
+   |                                ^^^^^^^^ BAD_CONST
+   .
+36 |                 return fromFunction + fromMethod + fromAlias + badConst;
+   |                                                                ^^^^^^^^ BAD_CONST
+
+warning[S001]: name should be in the expected case
+   --> [ROOT]/contracts/main[LINE]
+   |
+13 |             global Bad_global: int
+   |                    ^^^^^^^^^^ not camelCase: `Bad_global`
+
+help: rename to camelCase: badGlobal
+   --> [ROOT]/contracts/main[LINE]
+   |
+13 |             global Bad_global: int
+   |                    ^^^^^^^^^^ badGlobal
+   .
+20 |                 return self.Bad_field + Bad_global;
+   |                                         ^^^^^^^^^^ badGlobal
+   .
+32 |                 Bad_global = 5;
+   |                 ^^^^^^^^^^ badGlobal
+
+warning[S001]: name should be in the expected case
+   --> [ROOT]/contracts/main[LINE]
+   |
+15 |             fun Bad_function(value: int): int {
+   |                 ^^^^^^^^^^^^ not camelCase: `Bad_function`
+
+help: rename to camelCase: badFunction
+   --> [ROOT]/contracts/main[LINE]
+   |
+15 |             fun Bad_function(value: int): int {
+   |                 ^^^^^^^^^^^^ badFunction
+   .
+33 |                 val fromFunction = Bad_function(enumValue as int);
+   |                                    ^^^^^^^^^^^^ badFunction
+
+warning[S001]: name should be in the expected case
+   --> [ROOT]/contracts/main[LINE]
+   |
+19 |             fun low_struct.Bad_method(self): int {
+   |                            ^^^^^^^^^^ not camelCase: `Bad_method`
+
+help: rename to camelCase: badMethod
+   --> [ROOT]/contracts/main[LINE]
+   |
+19 |             fun low_struct.Bad_method(self): int {
+   |                            ^^^^^^^^^^ badMethod
+   .
+34 |                 val fromMethod = instance.Bad_method();
+   |                                           ^^^^^^^^^^ badMethod
+
+
+9 issues can be fixed automatically, rerun with --fix flag.
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain S001

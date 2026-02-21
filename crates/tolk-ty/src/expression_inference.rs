@@ -16,10 +16,10 @@ use tolk_resolver::file_index::SymbolId;
 use tolk_resolver::resolve_index::{LocalDefId, NameUse, NameUseKind, Resolved};
 use tolk_resolver::{AstNodeSpanExt, Span, Symbol, SymbolKind};
 use tolk_syntax::{
-    AsCast, Assign, AstNode, Bin, BoolLit, Call, DotAccess, DotAccessField, Expr, HasName, Ident,
-    IsType, Lambda, Lazy, Match, MatchArmBody, MatchPattern, NotNull, NullLit, NumberLit,
-    ObjectLit, Paren, SetAssign, StringLit, Tensor, Ternary, TopLevel, Tuple, Unary, Underscore,
-    VarDecl, VarDeclPattern,
+    AsCast, Assign, AstNode, Bin, BoolLit, Call, DotAccess, DotAccessField, Expr, HasGenericParams,
+    HasName, Ident, Instantiation, IsType, Lambda, Lazy, Match, MatchArmBody, MatchPattern,
+    NotNull, NullLit, NumberLit, ObjectLit, Paren, SetAssign, StringLit, Tensor, Ternary, TopLevel,
+    Tuple, Type, Unary, Underscore, VarDecl, VarDeclPattern,
 };
 
 impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
@@ -66,6 +66,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             Expr::Tuple(expr) => self.infer_typed_tuple(expr, flow, as_cond, hint),
             Expr::NullLit(lit) => self.infer_null_literal(lit, flow, as_cond),
             Expr::Lambda(v) => self.infer_lambda_fun(v, flow, as_cond, hint),
+            Expr::Instantiation(v) => self.infer_instantiation(v, flow, as_cond),
             Expr::Underscore(v) => self.infer_underscore(v, flow, as_cond, hint),
             _ => ExprFlow::create(flow, as_cond),
         }
@@ -1048,7 +1049,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                             let name = self.text_of(&ident);
                             let name = name.as_str();
 
-                            let obj_ty = self.ctx.get_node_type_data(&dot.obj()?.syntax())?;
+                            let obj_ty = self.ctx.get_node_type_data(&cur_dot.obj()?.syntax())?;
                             let TyData::Struct { def, .. } = obj_ty else {
                                 return None;
                             };
@@ -1282,9 +1283,18 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         let obj = try_expr_flow!(flow, v.obj());
         let field = try_expr_flow!(flow, v.field());
 
-        let mut dot_obj: Option<Expr<'t>> = None; // to be filled for `<dot_obj>.(field/index/method)`, nullptr for `Point.create`
+        let mut is_static_call = false; // to be filled for `<dot_obj>.(field/index/method)`, nullptr for `Point.create`
         let mut fun_ref: Option<SymbolId> = None; // to be filled for `<any_expr>.method` / `Point.create` (both standalone or in a call)
         let mut substituted_ts = GenericsSubstitutions::new();
+
+        flow = self.infer_expr(obj, flow, false, None).out_flow;
+
+        let obj_type = self
+            .ctx
+            .get_node_type(&obj)
+            .unwrap_or_else(|| self.const_intrn().ty_unknown);
+
+        let unwrapped_obj_type = self.intrn().unwrap_alias(obj_type);
 
         // a.foo
         //   ^^^^ field
@@ -1297,14 +1307,14 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
 
         // handle `Point.create` / `Container<int>.wrap` / `Color.Red`: lhs is a type, looking up a constant/method
         if let Some(Expr::Ident(obj)) = v.obj()
-            && let Some(usage) = self.ctx.get_resolved_node(&obj.0)
+            && let Some(usage) = self.ctx.get_resolved_node(&obj)
             && let Resolved::Global(sym_id) = usage.resolved
             && let Some(receiver_type) = self.ctx.get_top_level_type(sym_id)
         {
             // `Color.Red` (enum member) — just fill v->target and done
             let unwrapped = self.intrn().unwrap_alias(receiver_type);
-            if let TyData::Enum { .. } = self.intrn().data(unwrapped) {
-                let member = self.ctx.type_db.find_enum_member(sym_id, &field_name);
+            if let TyData::Enum { def, .. } = self.const_intrn().data(unwrapped) {
+                let member = self.ctx.type_db.find_enum_member(*def, &field_name);
                 if let Some(member) = member {
                     self.ctx.set_resolved(NameUse {
                         decl: self.ctx.decl_start,
@@ -1321,26 +1331,26 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
 
             if let Ok(Some(candidate)) = self.choose_only_method_to_call(&field_name, receiver_type)
             {
+                is_static_call = true;
                 fun_ref = Some(candidate.method_id);
                 substituted_ts.mapping = candidate.substitutions;
             }
         }
 
-        // handle other (most, actually) cases: `<any_expr>.field` / `<any_expr>.method`
-        if fun_ref.is_none() {
-            dot_obj = Some(obj);
-            flow = self.infer_expr(obj, flow, false, None).out_flow;
+        // Wrapper<T>.foo
+        if let Some(Expr::Instantiation(_)) = v.obj() {
+            is_static_call = true;
         }
 
-        // our goal is to fill v->target (field/index/method) knowing type of obj
-        let obj_type = dot_obj
-            .and_then(|o| self.ctx.get_node_type(&o))
-            .map(|ty| self.intrn().unwrap_alias(ty))
-            .unwrap_or_else(|| self.const_intrn().ty_unknown);
-
         // check for field access (`user.id`), when obj is a struct
-        if let TyData::Struct { def, .. } = self.intrn().data(obj_type) {
+        if let TyData::Struct { def, .. } = self.intrn().data(unwrapped_obj_type) {
             let def_id = *def;
+            let struct_ty = self
+                .ctx
+                .type_db
+                .get_top_level_type(None, def_id)
+                .unwrap_or_default();
+
             if let Some(field_def) = self.ctx.type_db.find_struct_field(def_id, &field_name) {
                 self.ctx.set_resolved(NameUse {
                     decl: self.ctx.decl_start,
@@ -1350,6 +1360,15 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                     resolved: Resolved::Global(field_def.id),
                 });
                 let mut inferred_type = field_def.declared_type;
+
+                let mut deducer = GenericSubstitutionsDeducing::new();
+                deducer.auto_deduce_from_argument(struct_ty, unwrapped_obj_type, self.intrn());
+
+                if self.const_intrn().has_generics(inferred_type) {
+                    let mut substitutor = TypeSubstitutor::new(self.intrn());
+                    inferred_type =
+                        substitutor.substitute(inferred_type, &deducer.substitutions.mapping)
+                }
 
                 if let Some(s_expr) = self.extract_sink_expression(Expr::DotAccess(v)) {
                     inferred_type =
@@ -1368,7 +1387,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             && let DotAccessField::NumericIndex(_) = field
             && let Ok(index_at) = field_name.parse::<usize>()
         {
-            match self.intrn().data(obj_type).clone() {
+            match self.intrn().data(unwrapped_obj_type).clone() {
                 TyData::Tensor(items) => {
                     if index_at >= items.len() {
                         return ExprFlow::create(flow, as_cond);
@@ -1420,12 +1439,18 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         if let Some(out_f) = out_f_called {
             // so, it's `user.method()` / `t.tupleAt()` / `t.tupleAt<int>()` / `Point.create`
             *out_f = fun_ref; // (it's still may be a generic one, then Ts will be deduced from arguments)
-            if let Some(out_o) = out_dot_obj {
-                *out_o = dot_obj;
+            if let Some(out_o) = out_dot_obj
+                && !is_static_call
+            {
+                *out_o = Some(obj);
             }
             if let Some(fun_ref) = fun_ref {
                 let typ = self.ctx.get_top_level_type(fun_ref);
-                if let Some(typ) = typ {
+                if let Some(mut typ) = typ {
+                    if self.const_intrn().has_generics(typ) {
+                        let mut substitutor = TypeSubstitutor::new(self.intrn());
+                        typ = substitutor.substitute(typ, &substituted_ts.mapping)
+                    }
                     self.ctx.set_node_type(&v, typ);
                 }
                 self.ctx.set_resolved(NameUse {
@@ -1494,8 +1519,18 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         // v is `globalF(args)` / `globalF<int>(args)` / `obj.method(args)` / `local_var(args)` / `getF()(args)`
         let mut self_obj: Option<Expr<'t>> = None; // for `obj.method()`, obj will be here (but for `Point.create()`, no obj exists)
         let mut fun_ref: Option<SymbolId> = None;
+        let mut instantiation_types: Option<Vec<Type<'t>>> = None;
 
-        if let Expr::Ident(ident) = callee {
+        let actual_callee = if let Expr::Instantiation(inst) = callee {
+            instantiation_types = inst
+                .instantiation_ts()
+                .map(|t| t.types().collect::<Vec<_>>());
+            inst.expr().unwrap_or(callee)
+        } else {
+            callee
+        };
+
+        if let Expr::Ident(ident) = actual_callee {
             flow = self.infer_reference(ident, flow, false).out_flow;
 
             if let Some(resolved) = self.ctx.get_resolved_node(&ident) {
@@ -1505,7 +1540,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                     // Local variable call (lambda?) - handled below via inferred type
                 }
             }
-        } else if let Expr::DotAccess(dot) = callee {
+        } else if let Expr::DotAccess(dot) = actual_callee {
             flow = self
                 .infer_dot_access(
                     dot,
@@ -1517,13 +1552,21 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 )
                 .out_flow;
         } else {
-            flow = self.infer_expr(callee, flow, false, None).out_flow;
+            flow = self.infer_expr(actual_callee, flow, false, None).out_flow;
+
+            if let Some(resolved) = self.ctx.get_resolved_node(&callee) {
+                if let Resolved::Global(id) = resolved.resolved {
+                    fun_ref = Some(id);
+                } else if let Resolved::Local(_) = resolved.resolved {
+                    // Local variable call (lambda?) - handled below via inferred type
+                }
+            }
         }
 
         // callee must have "callable" inferred type
         let f_callable = self
             .ctx
-            .get_node_type(&callee)
+            .get_node_type(&actual_callee)
             .map(|t| self.const_intrn().unwrap_alias(t))
             .and_then(|t| self.return_type_or_none(t));
         let Some(f_callable) = f_callable else {
@@ -1579,12 +1622,33 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             // something strange if we cannot resolve reference
             return ExprFlow::create(flow, as_cond);
         };
-        let parameters = match &declaration.kind {
-            SymbolKind::Function { parameters, .. } => parameters,
-            SymbolKind::Method { parameters, .. } => parameters,
-            SymbolKind::GetMethod { parameters, .. } => parameters,
+        let (parameters, type_parameters) = match &declaration.kind {
+            SymbolKind::Function {
+                parameters,
+                type_parameters,
+                ..
+            } => (parameters, type_parameters),
+            SymbolKind::Method {
+                parameters,
+                type_parameters,
+                ..
+            } => (parameters, type_parameters),
+            SymbolKind::GetMethod {
+                parameters,
+                type_parameters,
+                ..
+            } => (parameters, type_parameters),
             _ => return ExprFlow::create(flow, as_cond),
         };
+
+        if let Some(instantiation_types) = instantiation_types {
+            for (type_parameter, ty) in type_parameters.iter().zip(instantiation_types) {
+                let ty = self.ctx.type_db.lower_type(self.ctx.file_id, &ty);
+                deducing_ts
+                    .substitutions
+                    .set_type_t(type_parameter.name.to_string(), ty)
+            }
+        }
 
         // let receiver_ty = self.ctx.type_db.receiver_types.get(&fun_ref);
 
@@ -1613,17 +1677,6 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 }
             }
         }
-
-        // TODO:
-        // for static generic method call `Container<int>.create` of fun_ref = `Container<T>.create`, gather T=int
-        // if self_obj.is_none()
-        //     && let Some(&receiver_ty) = receiver_ty
-        //     && self.const_intrn().has_generics(receiver_ty)
-        //     && let Expression::DotAccess(dot) = callee
-        //     && let Some(Expression::Ident(name)) = dot.obj()
-        // {
-        //
-        // }
 
         // loop over every argument, one by one, like control flow goes
         for (i, arg) in v.arguments().enumerate() {
@@ -2026,11 +2079,12 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         // either by lhs hint `var u: User = { ... }, or by explicitly provided ref `User { ... }`
         let mut struct_def_id = None;
         let mut struct_name = None;
+        let mut explicit_ty = None;
 
         // `User { ... }` / `UserAlias { ... }` / `Wrapper { ... }` / `Wrapper<int> { ... }`
         if let Some(type_node) = v.typ() {
-            let explicit_ty = self.lower(Some(type_node));
-            let unwrapped = self.const_intrn().unwrap_alias(explicit_ty);
+            let explicit_type = self.lower(Some(type_node));
+            let unwrapped = self.const_intrn().unwrap_alias(explicit_type);
 
             match self.const_intrn().data(unwrapped) {
                 TyData::Struct { name, def, .. } => {
@@ -2038,7 +2092,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                     struct_def_id = Some(*def);
                     struct_name = Some(name.clone());
                 }
-                TyData::Instantiation { inner_ty, .. } => {
+                TyData::GenericTypeWithTs { inner_ty, .. } => {
                     if let TyData::Struct { name, def, .. } = self.const_intrn().data(*inner_ty) {
                         // if `type WAlias<T> = Wrapper<T>`, here `Wrapper` (generic struct)
                         struct_def_id = Some(*def);
@@ -2047,6 +2101,8 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 }
                 _ => {}
             }
+
+            explicit_ty = Some(explicit_type);
 
             // example: `var v: Ok<int> = Ok { ... }`, now struct_ref is "Ok<T>", take "Ok<int>" from hint
             let is_generic = struct_def_id.is_some_and(|id| self.ctx.type_db.is_struct_generic(id));
@@ -2089,7 +2145,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                     }
                     struct_def_id = found_def;
                 }
-                TyData::Instantiation { inner_ty, .. } => {
+                TyData::GenericTypeWithTs { inner_ty, .. } => {
                     if let TyData::Struct { name, def, .. } = self.const_intrn().data(*inner_ty) {
                         struct_def_id = Some(*def);
                         struct_name = Some(name.clone());
@@ -2109,8 +2165,6 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         // so, we have struct_ref, so we can check field names and infer values
         // if it's a generic struct, we need to deduce Ts by field values, like for a function call
         let mut deducing_ts = GenericSubstitutionsDeducing::new();
-
-        let result_ty = self.intrn().struct_ty(def_id, struct_name);
 
         for arg in v.arguments() {
             let Some(name_node) = arg.name() else {
@@ -2152,7 +2206,104 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             }
         }
 
+        let result_ty = if let Some(explicit_ty) = explicit_ty {
+            if self.const_intrn().has_generics(explicit_ty) {
+                let mut substitutor = TypeSubstitutor::new(self.intrn());
+                substitutor.substitute(explicit_ty, &deducing_ts.substitutions.mapping)
+            } else {
+                explicit_ty
+            }
+        } else {
+            self.intrn().struct_ty(def_id, struct_name)
+        };
+
         self.ctx.set_node_type(&v, result_ty);
+        ExprFlow::create(flow, as_cond)
+    }
+
+    fn infer_instantiation(
+        &mut self,
+        v: Instantiation,
+        flow: FlowContext,
+        as_cond: bool,
+    ) -> ExprFlow {
+        let Some(expr) = v.expr() else {
+            return ExprFlow::create(flow, as_cond);
+        };
+
+        if let Some(resolved) = self.ctx.get_resolved_node(&expr)
+            && let Resolved::Global(id) = resolved.resolved
+            && let Some(symbol) = self.ctx.type_db.project_index.resolve_symbol(id)
+        {
+            if symbol.is_type()
+                && let Some(ty) = self.ctx.type_db.convert_instantiated(&v, self.ctx.file_id)
+            {
+                self.ctx.set_node_type(&v, ty);
+            } else {
+                // function call with explicit generics
+                // this is mess, but ok for now
+                if let Some(file) = self.ctx.type_db.file_db.get_by_id(symbol.id.file_id)
+                    && let Some(element) = file.find_syntax_declaration(symbol.id)
+                {
+                    let Some(type_parameters) = element.type_parameters() else {
+                        return ExprFlow::create(flow, as_cond);
+                    };
+                    let type_parameters = type_parameters.parameters();
+                    let Some(instantiation_types) = v.instantiation_ts() else {
+                        return ExprFlow::create(flow, as_cond);
+                    };
+                    let tys = instantiation_types
+                        .types()
+                        .map(|t| self.ctx.type_db.lower_type(file.id(), &t))
+                        .collect::<Vec<_>>();
+
+                    let mut substituted_ts = GenericsSubstitutions::new();
+                    for (param, ty) in type_parameters.zip(tys) {
+                        let Some(name) = param.name() else { continue };
+                        let Some(name) = self.ctx.type_db.file_db.text_of(file.id(), &name) else {
+                            continue;
+                        };
+
+                        substituted_ts.set_type_t(name.to_string(), ty);
+                    }
+
+                    let typ = self.ctx.get_top_level_type(symbol.id);
+                    let f_callable = typ
+                        .map(|t| self.const_intrn().unwrap_alias(t))
+                        .and_then(|t| self.return_type_or_none(t));
+
+                    if let Some(f_callable) = f_callable {
+                        let mut return_ty = f_callable.1;
+
+                        // if return type is omitted we need to infer function body first
+                        // once inferred, subsequent `return_ty` for this function will be non-auto
+                        if return_ty == self.const_intrn().ty_auto
+                            && let Some(inferred_ty) =
+                                self.infer_auto_return_type_of_function(symbol)
+                        {
+                            let func_ty = self.intrn().func(f_callable.0.clone(), inferred_ty);
+                            self.ctx.set_top_level_type(symbol.id, func_ty);
+                            return_ty = inferred_ty
+                        }
+
+                        let mut func_ty = self.intrn().func(f_callable.0, return_ty);
+
+                        if self.intrn().has_generics(func_ty) {
+                            let mut substitutor = TypeSubstitutor::new(self.intrn());
+                            func_ty = substitutor.substitute(func_ty, &substituted_ts.mapping)
+                        }
+
+                        self.ctx.set_node_type(&v, func_ty);
+                    }
+                }
+            }
+
+            return ExprFlow::create(flow, as_cond);
+        }
+
+        if let Some(ty) = self.ctx.type_db.convert_instantiated(&v, self.ctx.file_id) {
+            self.ctx.set_node_type(&v, ty);
+        }
         ExprFlow::create(flow, as_cond)
     }
 

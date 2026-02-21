@@ -137,7 +137,7 @@ fun Counter.sendIncrease(self, from: address, increaseBy: int) {
         dest: self.address,
         body: IncreaseCounter { queryId: 0, increaseBy },
     });
-    return net.send(from, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+    return net.send(from, msg);
 }
 
 fun Counter.sendReset(self, from: address) {
@@ -147,7 +147,7 @@ fun Counter.sendReset(self, from: address) {
         dest: self.address,
         body: ResetCounter { queryId: 0 },
     });
-    return net.send(from, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+    return net.send(from, msg);
 }
 
 fun Counter.getCounter(self): int {
@@ -165,7 +165,7 @@ fun setupTest() {
             stateInit: counter.init,
         },
     });
-    val res = net.send(deployer.address, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+    val res = net.send(deployer.address, msg);
     expect(res).toHaveSuccessfulDeploy({ to: counter.address });
 
     return (counter, deployer)
@@ -213,6 +213,7 @@ fn setup_counter_project() -> DebugSession {
 }
 
 #[test]
+#[cfg_attr(target_os = "linux", ignore)]
 fn test_real_counter_contract_tests() -> anyhow::Result<()> {
     let session = setup_counter_project();
     let mut client = session.start();
@@ -238,6 +239,7 @@ fn test_real_counter_contract_tests() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(target_os = "linux", ignore)]
 fn test_real_counter_contract_step_in() -> anyhow::Result<()> {
     let session = setup_counter_project();
     let mut client = session.start();

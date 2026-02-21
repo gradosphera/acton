@@ -1,5 +1,5 @@
-use crate::diagnostic::{Annotation, Diagnostic, Severity};
-use crate::{Checker, FixAvailability, Violation, ViolationMetadata};
+use crate::diagnostic::{Annotation, Diagnostic};
+use crate::{Checker, FixAvailability, Violation};
 use rustc_hash::{FxBuildHasher, FxHashSet};
 use std::collections::VecDeque;
 use tolk_macros::ViolationMetadata;
@@ -112,13 +112,8 @@ fn fire_diagnostic(
     bounce_arg: InstanceArg,
     file_id: FileId,
 ) {
-    let diagnostic = Diagnostic {
-        file_id,
-        severity: Severity::Warning,
-        name: NoBounceHandler::rule().name(),
-        code: NoBounceHandler::code().map(|c| c.to_string()),
-        message: NoBounceHandler.message(),
-        annotations: vec![
+    let diagnostic = Diagnostic::warning_for(file_id, NoBounceHandler)
+        .with_annotations(vec![
             Annotation {
                 span: name_node.span(),
                 message: Some("In this createMessage call".to_string()),
@@ -133,9 +128,7 @@ fn fire_diagnostic(
                 is_primary: true,
                 tags: vec![],
             },
-        ],
-        fixes: vec![],
-        help: Some("Add bounce handler or use `BounceMode.NoBounce`".to_string()),
-    };
-    checker.emit_diagnostic(NoBounceHandler::rule(), diagnostic);
+        ])
+        .with_help("Add bounce handler or use `BounceMode.NoBounce`");
+    checker.emit_diagnostic(diagnostic);
 }

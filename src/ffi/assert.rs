@@ -301,7 +301,7 @@ pub fn process_txs_and_search_params(
     if let Some(raw_opcode) = raw_opcode {
         if raw_opcode == TupleItem::Null {
             params.opcode = None;
-        } else if let TupleItem::Int(num) = raw_opcode {
+        } else if let Some(num) = read_int_like_param(&raw_opcode) {
             params.opcode = num.to_u32();
         }
     }
@@ -329,7 +329,7 @@ pub fn process_txs_and_search_params(
     if let Some(raw_exit_code) = raw_exit_code {
         if raw_exit_code == TupleItem::Null {
             params.exit_code = None;
-        } else if let TupleItem::Int(num) = raw_exit_code {
+        } else if let Some(num) = read_int_like_param(&raw_exit_code) {
             params.exit_code = num.to_u32();
         }
     }
@@ -395,7 +395,7 @@ pub fn process_txs_and_search_params(
     if let Some(raw_action_exit_code) = raw_action_exit_code {
         if raw_action_exit_code == TupleItem::Null {
             params.action_exit_code = None;
-        } else if let TupleItem::Int(num) = raw_action_exit_code {
+        } else if let Some(num) = read_int_like_param(&raw_action_exit_code) {
             params.action_exit_code = Some(num.to_i32().unwrap_or(0));
         }
     }
@@ -429,22 +429,30 @@ pub fn process_txs_and_search_params(
         .filter_map(|x| {
             let result = x.to_boc(false).ok()?;
             let tx_cell = Boc::decode(&result).ok()?;
-            let mut tx_slice = tx_cell.as_slice().ok()?;
-            Transaction::load_from(&mut tx_slice).ok()
+            tx_cell.parse::<Transaction>().ok()
         })
         .collect::<Vec<_>>();
 
     Some((params, parsed_txs))
 }
 
+fn read_int_like_param(item: &TupleItem) -> Option<BigInt> {
+    match item {
+        TupleItem::Int(num) => Some(num.clone()),
+        TupleItem::Tuple(items) => items.first().and_then(read_int_like_param),
+        TupleItem::TypedTuple { inner, .. } => inner.0.first().and_then(read_int_like_param),
+        _ => None,
+    }
+}
+
 pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
-        100 => assert_fail,
-        101 => assert_bin,
-        102 => expect_to_end_with_exit_code,
-        103 => fail_to_find_transaction_by_params,
-        104 => fail_to_not_find_transaction_by_params,
-        105 => fail_wallet_not_found,
-        106 => assert_decimal,
+        100 => assert_fail : 2,
+        101 => assert_bin : 7,
+        102 => expect_to_end_with_exit_code : 1,
+        103 => fail_to_find_transaction_by_params : 4,
+        104 => fail_to_not_find_transaction_by_params : 4,
+        105 => fail_wallet_not_found : 2,
+        106 => assert_decimal : 5,
     });
 }

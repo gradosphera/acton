@@ -1,6 +1,5 @@
-use crate::rules::diagnostic::{Annotation, Diagnostic, Severity};
+use crate::rules::diagnostic::{Annotation, Diagnostic};
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_analysis::UseFlags;
 use tolk_macros::ViolationMetadata;
@@ -62,21 +61,15 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
             continue;
         }
 
-        let diagnostic = Diagnostic {
-            file_id,
-            severity: Severity::Warning,
-            name: WriteOnlyVariable::rule().name(),
-            code: WriteOnlyVariable::code().map(|c| c.to_string()),
-            message: WriteOnlyVariable.message(),
-            annotations: vec![Annotation {
-                span: local.def_span,
-                message: Some(format!("variable `{}` is write-only", local.name)),
-                is_primary: true,
-                tags: vec![],
-            }],
-            fixes: vec![],
-            help: None,
-        };
+        let diagnostic =
+            Diagnostic::warning_for(file_id, WriteOnlyVariable).with_annotations(vec![
+                Annotation {
+                    span: local.def_span,
+                    message: Some(format!("variable `{}` is write-only", local.name)),
+                    is_primary: true,
+                    tags: vec![],
+                },
+            ]);
 
         let mut diagnostic = diagnostic;
         if let Some(write_span) = facts.first_write_span {
@@ -88,7 +81,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
             });
         }
 
-        checker.emit_diagnostic(WriteOnlyVariable::rule(), diagnostic);
+        checker.emit_diagnostic(diagnostic);
     }
 
     Some(())

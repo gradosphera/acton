@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::{CStr, CString, c_char, c_int};
+use std::fs;
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use ton_source_map::{HighLevelSourceMap, SourceMap, parse_marks_dict};
@@ -23,8 +24,11 @@ thread_local! {
 ///
 /// ## Example
 ///
-/// ```
-/// let compilation_result = tolkc::compile(Path::new(&tmp_test_filename));
+/// ```no_run
+/// use std::path::Path;
+///
+/// let tmp_test_filename = "file.tolk";
+/// let compilation_result = tolkc::compile(Path::new(&tmp_test_filename), false);
 /// match compilation_result {
 ///     tolkc::CompilerResult::Success(result) => {
 ///         // ... use result.code_boc64
@@ -177,8 +181,18 @@ impl Compiler {
                 dest_contents: *mut *mut c_char,
                 dest_error: *mut *mut c_char,
             ) {
+                fn fail_if_symlink(path: &Path) -> Result<(), String> {
+                    match fs::symlink_metadata(path) {
+                        Ok(metadata) if metadata.file_type().is_symlink() => {
+                            Err("Cannot import symlink file".to_string())
+                        }
+                        _ => Ok(()),
+                    }
+                }
+
                 fn realpath(path_str: &str) -> Result<PathBuf, String> {
                     if Path::new(path_str).is_absolute() {
+                        fail_if_symlink(Path::new(path_str))?;
                         return dunce::canonicalize(path_str).map_err(|e| e.to_string());
                     }
 
@@ -198,9 +212,9 @@ impl Compiler {
                             if let Some(target) = mappings.get(prefix) {
                                 let cur_mapped_path = Path::new(target).join(suffix);
 
-                                resolved = Some(
-                                    dunce::canonicalize(cur_mapped_path).map_err(|e| e.to_string()),
-                                );
+                                resolved = Some(fail_if_symlink(&cur_mapped_path).and_then(|_| {
+                                    dunce::canonicalize(cur_mapped_path).map_err(|e| e.to_string())
+                                }));
                             }
                         });
 
@@ -211,6 +225,7 @@ impl Compiler {
                         return Err(format!("Unknown path mapping '{prefix}'"));
                     }
 
+                    fail_if_symlink(Path::new(path_str))?;
                     dunce::canonicalize(path_str).map_err(|e| e.to_string())
                 }
 
@@ -412,6 +427,8 @@ pub struct CompilerCheckError {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CompilerError {
     pub message: String,
+    #[serde(default, alias = "isWarning")]
+    pub is_warning: bool,
     pub range: CompilerErrorRange,
 }
 
@@ -454,3 +471,49 @@ type WasmFsReadCallback = Option<
         dest_error: *mut *mut ::std::os::raw::c_char,
     ),
 >;
+
+#[cfg(test)]
+mod tests {
+    use super::CompilerError;
+
+    #[test]
+    fn compiler_error_deserializes_warning_flag() {
+        let error: CompilerError = serde_json::from_str(
+            r#"{
+                "message":"warning message",
+                "is_warning":true,
+                "range":{
+                    "file_name":"main.tolk",
+                    "start_line_no":1,
+                    "start_char_no":1,
+                    "end_line_no":1,
+                    "end_char_no":5,
+                    "text_inside":"main"
+                }
+            }"#,
+        )
+        .expect("failed to deserialize compiler warning");
+
+        assert!(error.is_warning);
+    }
+
+    #[test]
+    fn compiler_error_defaults_warning_flag_to_false() {
+        let error: CompilerError = serde_json::from_str(
+            r#"{
+                "message":"error message",
+                "range":{
+                    "file_name":"main.tolk",
+                    "start_line_no":1,
+                    "start_char_no":1,
+                    "end_line_no":1,
+                    "end_char_no":5,
+                    "text_inside":"main"
+                }
+            }"#,
+        )
+        .expect("failed to deserialize compiler error");
+
+        assert!(!error.is_warning);
+    }
+}

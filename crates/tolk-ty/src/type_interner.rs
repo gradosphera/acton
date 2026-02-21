@@ -277,8 +277,8 @@ impl TypeInterner {
     }
 
     /// Creates an instantiation of a generic type.
-    pub fn instantiation(&mut self, inner_ty: TyId, types: Vec<TyId>) -> TyId {
-        self.intern(TyData::Instantiation { inner_ty, types })
+    pub fn generic_type_with_ts(&mut self, inner_ty: TyId, types: Vec<TyId>) -> TyId {
+        self.intern(TyData::GenericTypeWithTs { inner_ty, types })
     }
 
     /// Creates a type parameter type.
@@ -389,7 +389,7 @@ impl TypeInterner {
             TyData::Func { params, return_ty } => {
                 params.iter().any(|&p| self.has_generics(p)) || self.has_generics(*return_ty)
             }
-            TyData::Instantiation { inner_ty, types } => {
+            TyData::GenericTypeWithTs { inner_ty, types } => {
                 self.has_generics(*inner_ty) || types.iter().any(|&t| self.has_generics(t))
             }
             TyData::Struct { args, .. } => args
@@ -463,8 +463,8 @@ impl TypeInterner {
                     ..
                 },
             ) => {
-                if da == db {
-                    return true;
+                if da != db {
+                    return false;
                 }
                 if let (Some(base_a), Some(base_b)) = (ba, bb)
                     && base_a == base_b
@@ -529,11 +529,11 @@ impl TypeInterner {
                 na == nb
             }
             (
-                TyData::Instantiation {
+                TyData::GenericTypeWithTs {
                     inner_ty: ia,
                     types: ta,
                 },
-                TyData::Instantiation {
+                TyData::GenericTypeWithTs {
                     inner_ty: ib,
                     types: tb,
                 },
@@ -635,7 +635,7 @@ impl TypeInterner {
             },
             (TyData::Cell, TyData::Struct { .. }) => {
                 // Cell<Something> to cell, e.g. `contract.setData(obj.toCell())`
-                if let TyData::Instantiation { inner_ty, .. } = dr
+                if let TyData::GenericTypeWithTs { inner_ty, .. } = dr
                     && let TyData::Struct { name, .. } = self.data(*inner_ty)
                 {
                     return name.as_ref() == "Cell";
@@ -682,11 +682,11 @@ impl TypeInterner {
                 self.equals(*kl, *kr) && self.equals(*vl, *vr)
             }
             (
-                TyData::Instantiation {
+                TyData::GenericTypeWithTs {
                     inner_ty: il,
                     types: tl,
                 },
-                TyData::Instantiation {
+                TyData::GenericTypeWithTs {
                     inner_ty: ir,
                     types: tr,
                 },
@@ -703,11 +703,10 @@ impl TypeInterner {
             }
             (TyData::Struct { def: dl, .. }, TyData::Struct { def: dr, .. }) => {
                 // C<C<int>> = C<CIntAlias>
-                if dl == dr {
-                    return true;
+                if dl != dr {
+                    return false;
                 }
                 // Check struct equality using equal_to
-                // In C++: return struct_ref == rhs_struct->struct_ref || equal_to(rhs_struct);
                 self.equals(lhs, rhs)
             }
             (TyData::Enum { def: dl, .. }, TyData::Enum { def: dr, .. }) => dl == dr,
@@ -766,7 +765,7 @@ impl TypeInterner {
                     unsigned: false, ..
                 }),
             ) => true, // bool as intN (not uint)
-            (TyData::Cell, TyData::Instantiation { inner_ty, .. }) => {
+            (TyData::Cell, TyData::GenericTypeWithTs { inner_ty, .. }) => {
                 // cell as Cell<T>
                 if let TyData::Struct { name, .. } = self.data(*inner_ty) {
                     return name.as_ref() == "Cell";
@@ -1229,33 +1228,6 @@ mod tests {
     }
 
     #[test]
-    fn test_struct_structural_equality() {
-        let mut interner = TypeInterner::new();
-
-        let def_base = SymbolId {
-            file_id: 1,
-            local_id: 1,
-        };
-        let def_inst1 = SymbolId {
-            file_id: 1,
-            local_id: 2,
-        };
-        let def_inst2 = SymbolId {
-            file_id: 1,
-            local_id: 3,
-        };
-        let t_int = interner.ty_int;
-
-        let t_box_int1 =
-            interner.struct_instantiation(def_inst1, "Box".into(), def_base, vec![t_int]);
-        let t_box_int2 =
-            interner.struct_instantiation(def_inst2, "Box".into(), def_base, vec![t_int]);
-
-        // should be equal because they share the same base and args
-        assert!(interner.equals(t_box_int1, t_box_int2));
-    }
-
-    #[test]
     fn test_union_flattening_and_deduplication() {
         let mut interner = TypeInterner::new();
 
@@ -1336,19 +1308,6 @@ mod tests {
             def_base,
             vec![t_int],
         );
-        let t_box_int2 = interner.struct_instantiation(
-            SymbolId {
-                file_id: 1,
-                local_id: 3,
-            },
-            "Box".into(),
-            def_base,
-            vec![t_int],
-        );
-
-        // union(Box<int>, Box<int>) -> Box<int>
-        let u1 = interner.union(vec![t_box_int1, t_box_int2]);
-        assert_eq!(u1, t_box_int1);
 
         // union(Box<int>, int) -> Box<int> | int (no dedup)
         let u2 = interner.union(vec![t_box_int1, t_int]);

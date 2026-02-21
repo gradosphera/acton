@@ -31,6 +31,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, error, warn};
 use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
+use path_absolutize::Absolutize;
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -41,8 +42,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::{fs, process};
-use tolk_syntax::{AstNode, HasName};
-use ton_abi::{ContractAbi, contract_abi};
+use tolk_syntax::{AstNode, HasName, SourceFile};
+use ton_abi::{ContractAbi, ContractAbiParseCache, contract_abi, contract_abi_with_file};
 use ton_emulator::emulator::Emulator;
 use ton_emulator::world_state::{
     AccountsState, LocalAccountsState, RemoteAccountState, RemoteSnapshotCache, WorldState,
@@ -93,6 +94,7 @@ pub struct TestRunner {
     reporter_manager: Arc<Mutex<ReporterManager>>,
     mutation_overrides: BTreeMap<String, ArcCell>,
     remote_cache: RemoteSnapshotCache,
+    abi_parse_cache: ContractAbiParseCache,
     /// Contracts used as `library_ref` dependency. We need to register it for correct
     /// work of dependent contracts.
     ref_contracts: BTreeMap<String, tycho_types::cell::Cell>,
@@ -166,6 +168,7 @@ impl TestRunner {
             mutation_overrides,
             ref_contracts,
             remote_cache: RemoteSnapshotCache::new(),
+            abi_parse_cache: ContractAbiParseCache::new(),
         }
     }
 
@@ -405,7 +408,7 @@ enum WorkerMsg {
 
 pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()> {
     // First we need to build all contracts and generate all dependency files with code
-    build_cmd(None, config.clear_cache, None, None, false)?;
+    build_cmd(None, config.clear_cache, None, None, None, false)?;
     println!("     {} tests", "Running".green().bold());
 
     // If path is omitted, default to current directory
@@ -720,6 +723,19 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         .expect("cannot lock reporter manager")
         .finalize()?;
 
+    if config.snapshot.is_some() || config.baseline_snapshot.is_some() {
+        match profiling::collect_profile(&runner) {
+            Ok(()) => {}
+            Err(err) => {
+                eprintln!(
+                    "{}: Cannot collect profiling result: {}",
+                    "Error".red(),
+                    err
+                );
+            }
+        }
+    }
+
     if config.ui
         && let Some(reports) = reports_for_ui
     {
@@ -950,7 +966,7 @@ fn compile_test_for_file(
     let result = match compilation_result {
         tolkc::CompilerResult::Success(result) => result,
         tolkc::CompilerResult::Error(error) => {
-            let normalized_filepath = error.message.replace(&tmp_test_filename, file);
+            let normalized_filepath = error.message.replace(&tmp_test_filename, filepath);
             let trimmed_message = normalized_filepath.trim();
             anyhow::bail!(trimmed_message.to_string())
         }
@@ -1023,7 +1039,7 @@ fn run_file_tests(
     abi: Arc<ContractAbi>,
     source_map: Arc<SourceMap>,
 ) -> anyhow::Result<TestStats> {
-    let file_path = dunce::canonicalize(file_path).unwrap_or_else(|_| PathBuf::from(file_path));
+    let file_path = Path::new(file_path).absolutize()?;
     let filtered_tests = if let Some(pattern) = &runner.config.filter {
         let regex = match Regex::new(pattern) {
             Ok(r) => r,
@@ -1059,7 +1075,7 @@ fn run_file_tests(
         let mut test_report = TestReport {
             name: test.name.clone(),
             suite_name,
-            file_path: file_path.clone(),
+            file_path: file_path.to_path_buf(),
             row: test.pos.row,
             column: test.pos.column,
             duration: Duration::default(),
@@ -1246,7 +1262,7 @@ fn run_file_tests(
             if let GetMethodResult::Success(get_result) = get_result {
                 runner.emulations.save_get_method(&test.name, get_result);
                 // TODO: remove this memoize somehow
-                let content = fs::read_to_string(&file_path).unwrap_or_default();
+                let content: Arc<str> = fs::read_to_string(&file_path).unwrap_or_default().into();
                 runner.build_cache.memoize(
                     &test.name,
                     &file_path,
@@ -1255,7 +1271,7 @@ fn run_file_tests(
                     source_map.clone(),
                     Some(
                         contract_abi(
-                            &content,
+                            content,
                             file_path.to_string_lossy().as_ref(),
                             &runner.acton_config.mappings,
                         )
@@ -1284,19 +1300,6 @@ fn run_file_tests(
         .lock()
         .expect("cannot lock reporter manager")
         .on_suite_finished(&file_path, &suite_stats)?;
-
-    if runner.config.snapshot.is_some() {
-        match profiling::collect_profile(runner, abi) {
-            Ok(()) => {}
-            Err(err) => {
-                eprintln!(
-                    "{}: Cannot collect profiling result: {}",
-                    "Error".red(),
-                    err
-                );
-            }
-        }
-    }
 
     Ok(TestStats {
         passed,
@@ -1342,8 +1345,12 @@ pub struct TestDescriptor {
     pub pos: Pos,
 }
 
-fn find_all_test(file_path: &str, content: &str) -> Vec<TestDescriptor> {
-    let Ok(file) = tolk_syntax::parse(content) else {
+fn find_all_test(
+    file_path: &str,
+    file: &anyhow::Result<SourceFile>,
+    content: &str,
+) -> Vec<TestDescriptor> {
+    let Ok(file) = file else {
         return vec![];
     };
 

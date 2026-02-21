@@ -11,7 +11,7 @@
 ///
 /// // Interact
 /// val msg = createMessage({ ... });
-/// val results = net.send(deployer.address, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val results = net.send(deployer.address, msg);
 ///
 /// // Check state
 /// val balance = net.balance(contract.address);
@@ -20,7 +20,6 @@
 
 import "@stdlib/gas-payments"
 import "@stdlib/reflection"
-import "../build/build"
 import "../ffi/ffi"
 import "../fmt"
 import "../testing/assert"
@@ -59,29 +58,34 @@ struct ExtOutMsgInfo {
 }
 
 /// Represents a list of child transactions IDs (LT) for single send result.
-type ChildTxsIds = tuple
+type ChildTxsIds = array<int>
 
 /// Represents a list of out messages for single send result.
-type OutMessages = tuple
+type OutMessages = array<cell>
 
 /// Represents a list of external outgoing messages for single send result.
-type ExtOutList = tuple
+type ExtOutList = array<cell>
 
 /// Returns the external outgoing message at the given index with given type.
 ///
-/// Note that if message is not a given type, loading will fail with exit code 63.
-/// If you want to handle this case, use [ExtOutList.atOrNull] instead.
+/// If the message is not of the requested type, loading fails with exit code 63.
+/// Use [ExtOutList.atOrNull] to handle this case without throwing.
 fun ExtOutList.at<Msg>(self, index: int): ExtMessageRelaxed<Msg> {
     val cell = self.get(index) as cell as Cell<ExtMessageRelaxed<Msg>>;
     return cell.load();
 }
 
 /// Returns the external outgoing message at the given index with given type or
-/// null if message is not a given type.
+/// `null` if message is not of the requested type.
 ///
-/// Note that if message is not a given type, this method will return null instead
-/// of throwing an exception. Use [ExtOutList.at] if you don't want to handle null case.
+/// If message is not of the requested type, `index < 0`, or `index >= self.size()`,
+/// this method returns `null` instead of throwing.
+/// Use [ExtOutList.at] if you do not want to handle the `null` case.
 fun ExtOutList.atOrNull<Msg>(self, index: int): ExtMessageRelaxed<Msg>? {
+    if (index < 0 || index >= self.size()) {
+        return null;
+    }
+
     val cell = self.get(index) as cell as Cell<ExtMessageRelaxed<Msg>>;
     try {
         return cell.load();
@@ -168,7 +172,7 @@ fun SendResult.allOutActions(self): OutActionList {
 /// This list represent all transactions produced by a [net.send] call.
 ///
 /// To get a single send result, use [SendResultList.at] method.
-type SendResultList = tuple
+type SendResultList = array<tuple>
 
 /// Returns the send result at the given index.
 fun SendResultList.at(self, index: int): SendResult {
@@ -187,7 +191,7 @@ fun SendResultList.at(self, index: int): SendResult {
 ///
 /// Example:
 /// ```tolk
-/// val result = net.send(wallet.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val result = net.send(wallet.address, message);
 /// val success = result.wait();
 /// if (success) {
 ///     println("Transaction applied successfully");
@@ -196,7 +200,7 @@ fun SendResultList.at(self, index: int): SendResult {
 ///
 /// Example with custom parameters:
 /// ```tolk
-/// val result = net.send(wallet.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val result = net.send(wallet.address, message);
 /// val success = result.wait(true, 30, 3000); // quiet mode, 30 attempts, 3 seconds delay
 /// ```
 fun SendResultList.wait(
@@ -277,14 +281,16 @@ fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>
         return false;
     }
 
-    if (reflect.serializationPrefixOf<TBody>() != null) {
+    val declaredPrefix = TBody.externalOutPrefix();
+    if (declaredPrefix != -1) {
         val body = self.loadBody();
-        if (body.remainingBitsCount() < TBody.getDeclaredPackPrefixLen()) {
+        val declaredPrefixLen = TBody.externalOutPrefixLen();
+        if (body.remainingBitsCount() < declaredPrefixLen) {
             return false;
         }
 
-        val prefix = body.preloadUint(TBody.getDeclaredPackPrefixLen());
-        if (prefix != reflect.serializationPrefixOf<TBody>()) {
+        val prefix = body.preloadUint(declaredPrefixLen);
+        if (prefix != declaredPrefix) {
             return false;
         }
     }
@@ -296,7 +302,7 @@ fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>
 ///
 /// Example:
 /// ```tolk
-/// val tx = net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val tx = net.send(deployer.address, message);
 /// val result = tx.findExternalOutMessage({ from: counter.address });
 /// expect(result).toBeDefined();
 /// val tx = result.unwrap();
@@ -323,17 +329,16 @@ fun SendResultList.findExternalOutMessage<TBody = never>(
 
         var externalIdx = 0;
         while (externalIdx < externals.size()) {
-            val externalOut = externals
-                .get<Cell<Message<RemainingBitsAndRefs, ExternalOutMessageInfo>>>(externalIdx)
-                .load();
+            val externalOutCell = externals.get(externalIdx) as cell as Cell<Message<RemainingBitsAndRefs, ExternalOutMessageInfo>>;
+            val externalOut = externalOutCell.load();
 
             if (externalOut.matches<TBody>(params)) {
                 return Maybe<Message<TBody, ExternalOutMessageInfo>>.some(
-                    Message{
+                    Message {
                         info: externalOut.info,
                         init: externalOut.init,
                         body: EitherLeft{
-                            value: TBody.fromSlice(externalOut.loadBody()),
+                            value: TBody.decodeExternalOutBody(externalOut.loadBody()),
                         },
                     },
                 );
@@ -352,13 +357,16 @@ fun SendResultList.findExternalOutMessage<TBody = never>(
 ///
 /// Example:
 /// ```tolk
-/// val tx = net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val tx = net.send(deployer.address, message);
 /// val result = tx.findTransaction({ to: counter.address });
 /// expect(result).toBeDefined();
 /// val tx = result.unwrap();
 /// ```
 fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams = {}): Maybe<Transaction> {
-    params.opcode = Msg.getDeclaredPackPrefix();
+    val declaredPrefix: int? = Msg.getDeclaredPackPrefix();
+    if (declaredPrefix != null) {
+        params.opcode = declaredPrefix;
+    }
     val tx = ffi.findTransactionByParams(self, params.toTuple());
     if (tx == null) {
         return Maybe<Transaction>.none();
@@ -367,7 +375,12 @@ fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams = {})
     return Maybe<Transaction>.some(txCell.load());
 }
 
-/// Send a message from a specified address with specified mode.
+/// Send a message from a specified address.
+///
+/// In broadcast mode, sending to the real network is attempted only when `from`
+/// matches one of the wallets opened at script startup.
+/// If `from` is not an opened wallet address, this method falls back to normal
+/// emulator execution, even when [net.isBroadcasting] is `true`.
 ///
 /// Example:
 /// ```tolk
@@ -378,15 +391,19 @@ fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams = {})
 ///         dest: counter.address,
 ///         value: ton("1"),
 ///     });
-///     net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
+///     net.send(deployer.address, message);
 /// }
 /// ```
 ///
 /// Returns a list of send results representing all transactions produced by this send call.
 ///
 /// See [net.sendSingle] if you need to send a single message without out message processing.
-fun net.send(from: address, message: OutMessage, mode: int): SendResultList {
-    return ffi.sendMessageFrom(message.messageCell, from.toCell(), mode)!;
+fun net.send(from: address, message: OutMessage): SendResultList {
+    val rawRes = ffi.sendMessageFrom(message.messageCell, from.toCell());
+    if (rawRes == null) {
+        Assert.fail("ffi.sendMessageFrom unexpectedly returned null")
+    }
+    return rawRes;
 }
 
 /// Send a single message from a specified address.
@@ -416,7 +433,7 @@ fun net.sendSingle(from: address, message: OutMessage): SendResult {
 
 /// Creates an External-in message.
 /// Body is always packed into the Either Right (in the reference).
-/// If `StateInit` is present it is also packed in the Either Right (in the refference).
+/// If `StateInit` is present it is also packed in the Either Right (in the reference).
 /// Full TL-B scheme of the message is.
 /// ```
 /// ext_in_msg_info$10 src:MsgAddressExt dest:MsgAddressInt
@@ -457,7 +474,7 @@ fun createExternalMessage<TBody>(dest: address, body: TBody, stateInit: StateIni
 /// Read more about External incomming messages: https://docs.ton.org/foundations/messages/external-in#incoming-external-messages
 fun net.sendExternal(msg: OutMessage): SendResultList {
     // from and mode fields do not affect anything in case of an ExtIn message
-    return ffi.sendMessageFrom(msg.messageCell, address("-1:0000000000000000000000000000000000000000000000000000000000000000").toCell(), 0)!;
+    return ffi.sendMessageFrom(msg.messageCell, address("-1:0000000000000000000000000000000000000000000000000000000000000000").toCell())!;
 }
 
 /// Transform the out message to a bounced message. Essentially, it sets the `bounced` flag to true.
@@ -525,7 +542,7 @@ fun net.treasury(name: string): Treasury {
         dest: { workchain: 0, stateInit },
     });
     // Deploy treasury
-    net.send(deployer, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+    net.send(deployer, msg);
     return Treasury { address };
 }
 
@@ -596,6 +613,11 @@ fun net.isBroadcasting(): bool {
 ///
 /// This function allows scripts to manually enable broadcasting behavior.
 /// Useful for testing broadcasting logic in emulation mode.
+/// It toggles only the runtime broadcast flag.
+///
+/// Wallets are loaded once at startup (when the script is launched with CLI `--broadcast`).
+/// Calling [net.enableBroadcast] later does not load wallets, so [net.wallet] can still fail
+/// and wallet-backed real sends can remain unavailable.
 ///
 /// Example:
 /// ```tolk
@@ -612,6 +634,7 @@ fun net.enableBroadcast(): void {
 /// Disable broadcasting mode.
 ///
 /// This function allows scripts to manually disable broadcasting behavior.
+/// It does not reload or rebuild the startup wallet map.
 ///
 /// Example:
 /// ```tolk
@@ -674,8 +697,8 @@ fun net.disableBroadcast(): void {
 /// ```
 /// ```tolk
 /// val data: tuple = net.runGetMethod(wallet.address, "get_all_data");
-/// val first = data.get<int>(0);
-/// val second = data.get<int>(1);
+/// val first = data.get(0) as int;
+/// val second = data.get(1) as int;
 /// ```
 ///
 /// If you need to run a get method by its ID, use [net.runGetMethodById] instead.
@@ -734,8 +757,15 @@ fun net.getDeployedCode(addr: address): cell? {
 ///
 /// Example:
 /// ```tolk
-/// val messageHash = "abc123...";
-/// net.waitForTransaction(wallet.address, messageHash, 20, 2000);
+/// val txs = net.send(wallet.address, message);
+/// val tx = txs.at(0).tx.load();
+/// val inMsg = tx.messages.load().inMsg.unwrap().load();
+///
+/// var body = inMsg.body;
+/// body.skipBits(1); // skip Either tag bit
+/// val bodyHashSlice = beginCell().storeUint(body.hash(), 256).toSlice();
+///
+/// val ok = net.waitForTransaction(inMsg.info.dest, bodyHashSlice, true, 20, 2000);
 /// ```
 ///
 /// See [SendResultList.wait] for high-level API.
@@ -771,11 +801,20 @@ fun net.randomAddress(name: string? = null, wc: int = 0): address {
     builder.storeUint(0b0, 1);
     builder.storeInt(wc, 8);
 
-    var i = 0;
-    while (i < 32) {
-        val num = random.range(256);
-        builder.storeUint(num, 8);
-        i += 1;
+    if (name != null) {
+        val deterministicHash = beginCell()
+            .storeInt(wc, 8)
+            .storeSlice(name.beginParse())
+            .endCell()
+            .hash();
+        builder.storeUint(deterministicHash, 256);
+    } else {
+        var i = 0;
+        while (i < 32) {
+            val num = random.range(256);
+            builder.storeUint(num, 8);
+            i += 1;
+        }
     }
 
     val address = address.fromValidBuilder(builder);
@@ -916,7 +955,7 @@ fun net.topUp(to: address, amount: coins) {
         value: amount,
         dest: to,
     });
-    net.send(treasury.address, topupMsg, SEND_MODE_REGULAR);
+    net.send(treasury.address, topupMsg);
 }
 
 /// Get the balance of an address.
@@ -934,6 +973,88 @@ fun net.balance(of: address): coins {
         return 0;
     }
     return state.storage.balance.grams
+}
+
+/// Returns the account state for an address in emulation.
+///
+/// The returned value is either `AccountInfo` for an existing account
+/// or `AccountNone` if the account does not exist.
+///
+/// Example:
+/// ```tolk
+/// val acc = net.getAccount(addr);
+/// if (acc is AccountInfo) {
+///     println("Account exists");
+/// }
+/// ```
+fun net.getAccount(addr: address): Account {
+    val shard = net.getShardAccount(addr);
+    return shard!.account.load();
+}
+
+
+/// Sets the account state for an address in emulation.
+///
+/// If the account already exists, preserves `lastTransHash` and `lastTransLt`
+/// from the existing shard account. Otherwise, initializes them to zero.
+///
+/// Example:
+/// ```tolk
+/// val acc = net.getAccount(addr);
+/// net.setAccount(addr, acc);
+/// ```
+fun net.setAccount(addr: address, acc: Account) {
+    val shardAcc = net.getShardAccount(addr);
+    var lastTransHash = 0;
+    var lastTransLt = 0;
+    if (shardAcc != null) {
+        lastTransHash = shardAcc.lastTransHash;
+        lastTransLt = shardAcc.lastTransLt;
+    }
+    val newShardAcc = ShardAccount {
+        account: acc.toCell(),
+        lastTransHash,
+        lastTransLt,
+    };
+    net.setShardAccount(addr, newShardAcc);
+}
+
+/// Returns the shard account state for an address in emulation.
+///
+/// The returned shard account can represent an uninitialized account.
+///
+/// Example:
+/// ```tolk
+/// val shard = net.getShardAccount(addr);
+/// if (shard != null) {
+///     println1("Last LT: {}", shard.lastTransLt);
+/// }
+/// ```
+fun net.getShardAccount(addr: address): ShardAccount? {
+    val rawRes = ffi.getShardAccount(addr);
+    if (rawRes == null) {
+        return null;
+    }
+    return ShardAccount.fromCell(rawRes);
+}
+
+/// Sets the shard account state for an address in emulation.
+///
+/// Pass `null` to reset the account to an empty state.
+///
+/// Example:
+/// ```tolk
+/// val shard = net.getShardAccount(addr);
+/// if (shard != null) {
+///     net.setShardAccount(addr, shard);
+/// }
+/// ```
+fun net.setShardAccount(addr: address, account: ShardAccount?): void {
+    if (account == null) {
+        ffi.setShardAccount(addr, null);
+        return;
+    }
+    ffi.setShardAccount(addr, account.toCell());
 }
 
 /// Sets the blockchain configuration.
@@ -1038,6 +1159,30 @@ fun tuple.fromTuple(data: tuple): tuple {
     return data;
 }
 
+fun T.externalOutPrefix() {
+    return reflect.serializationPrefixOf<T>();
+}
+
+fun never.externalOutPrefix() {
+    return -1;
+}
+
+fun T.externalOutPrefixLen() {
+    return reflect.serializationPrefixLenOf<T>();
+}
+
+fun never.externalOutPrefixLen() {
+    return 0;
+}
+
+fun T.decodeExternalOutBody(body: RemainingBitsAndRefs): T {
+    return T.fromSlice(body);
+}
+
+fun never.decodeExternalOutBody(_: RemainingBitsAndRefs): never {
+    throw 0;
+}
+
 struct impl
 
 fun impl.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, name: string, args: Args? = null): Ret {
@@ -1050,7 +1195,7 @@ fun impl.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, name: strin
         throw CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE;
     }
 
-    val argsToSend = args == null ? createEmptyTuple() : args.toTuple();
+    val argsToSend = args == null ? [] : args.toTuple();
     val res = ffi.runGetMethod(addr.toCell(), code, id, name, reflect.typeNameOf<Ret>(), argsToSend);
     if (res == null) {
         // actual error will be processed by test framework, just halt execution
@@ -1071,7 +1216,7 @@ fun __treasuryCode(): cell asm """
     "te6cckEBBAEARQABFP8A9KQT9LzyyAsBAgEgAwIAWvLT/+1E0NP/0RK68qL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmWwAE0jD+omUe" base64>B B>boc PUSHREF
 """
 
-fun ffi.sendMessageFrom(msg: cell, from: cell, mode: int): SendResultList? asm "9 EXTCALL"
+fun ffi.sendMessageFrom(msg: cell, from: cell): SendResultList? asm "9 EXTCALL"
 fun ffi.sendSingleMessage(msg: cell, from: cell): tuple? asm "30 EXTCALL"
 fun ffi.runGetMethod(addr: cell, code: cell, id: int, name: string, returnType: string, args: tuple): tuple? asm "8 EXTCALL"
 fun ffi.isDeployed(addr: cell): bool asm "11 EXTCALL"
@@ -1092,3 +1237,5 @@ fun ffi.setNow(now: int): void asm "28 EXTCALL"
 fun ffi.getNow(): int asm "29 EXTCALL"
 fun ffi.getConfig(): dict asm "31 EXTCALL"
 fun ffi.setConfig(config: dict): bool asm "32 EXTCALL"
+fun ffi.getShardAccount(addr: address): cell? asm "33 EXTCALL";
+fun ffi.setShardAccount(addr: address, account: cell?): void asm "34 EXTCALL";

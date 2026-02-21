@@ -1,7 +1,9 @@
 mod actions_tests;
 mod annotations_tests;
 mod basic_unit_tests;
+mod build;
 mod build_tests;
+mod check;
 mod compile_tests;
 mod config_tests;
 mod coverage_tests;
@@ -20,6 +22,7 @@ mod reporters_tests;
 mod run_tests;
 mod script_tests;
 mod stdlib_tests;
+mod test_runner;
 mod test_tests;
 mod verify_tests;
 mod wallet_tests;

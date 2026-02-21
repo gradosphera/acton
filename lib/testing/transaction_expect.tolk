@@ -4,9 +4,12 @@
 /// It allows verifying the outcome of network operations, such as checking if a transaction succeeded,
 /// if a contract was deployed, or if specific messages were emitted.
 ///
+/// Matchers accept `SearchParams`; all non-null fields are used as filters.
+/// Generic matcher variants (`<Msg>`) additionally inject opcode filtering from `Msg` declared prefix (if present).
+///
 /// Examples:
 /// ```tolk
-/// val results = net.send(wallet.address, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val results = net.send(wallet.address, msg);
 ///
 /// // Verify general success
 /// expect(results).toHaveSuccessfulTx({
@@ -20,10 +23,10 @@
 /// });
 ///
 /// // Verify failure case
-/// val failResults = net.send(wallet.address, invalidMsg, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val failResults = net.send(wallet.address, invalidMsg);
 /// expect(failResults).toHaveFailedTx({
 ///     to: contract.address,
-///     exit_code: 102 // specific error code
+///     exitCode: 102 // specific error code
 /// });
 /// ```
 
@@ -33,11 +36,11 @@ import "assert"
 import "../fmt"
 import "../emulation/network"
 import "../ffi/ffi"
-import "../types/transaction"
 
 /// Expect the transaction list to have a successful deploy transaction.
 ///
 /// Transaction is considered as "deploy" if previous status was "NonExisting" and end status was "Active".
+/// If generic `Msg` is provided and has declared prefix, matcher also filters by `params.opcode`.
 ///
 /// Example:
 ///
@@ -47,7 +50,10 @@ import "../types/transaction"
 /// });
 /// ```
 fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = never>(self, params: SearchParams = {}) {
-    params.opcode = Msg.getDeclaredPackPrefix();
+    val declaredPrefix: int? = Msg.getDeclaredPackPrefix();
+    if (declaredPrefix != null) {
+        params.opcode = declaredPrefix;
+    }
     params.success = true;
     params.deploy = true;
 
@@ -65,8 +71,13 @@ fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = never>(self, params
 
 /// Expect the transaction list to have a successful transaction.
 ///
-/// Transaction is considered as "successful" if exit code is 0, but exit code
-/// can be overridden by the `exitCode` parameter.
+/// Matcher sets `params.success = true`.
+/// Runtime "success" means both compute phase and action phase are successful.
+///
+/// By default matcher also requires `params.exitCode = 0` when `exitCode` is not provided.
+/// This default can be overridden with explicit `params.exitCode`.
+///
+/// If generic `Msg` is provided and has declared prefix, matcher also filters by `params.opcode`.
 ///
 /// Example:
 /// ```tolk
@@ -76,7 +87,10 @@ fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = never>(self, params
 /// });
 /// ```
 fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = never>(self, params: SearchParams = {}) {
-    params.opcode = Msg.getDeclaredPackPrefix();
+    val declaredPrefix: int? = Msg.getDeclaredPackPrefix();
+    if (declaredPrefix != null) {
+        params.opcode = declaredPrefix;
+    }
     params.success = true;
     if (params.exitCode == null) {
         params.exitCode = 0;
@@ -96,15 +110,23 @@ fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = never>(self, params: Se
 
 /// Expect the transaction list to have a transaction with specified parameters.
 ///
+/// All non-null `SearchParams` fields are applied as filters.
+///
+/// If generic `Msg` is provided and has declared prefix, matcher also filters by `params.opcode`.
+///
 /// Example:
 /// ```tolk
 /// expect(txs).toHaveTx({
 ///     from: deployer.address,
 ///     to: counter.address,
+///     actionExitCode: 37,
 /// });
 /// ```
 fun Expectation<SendResultList>.toHaveTx<Msg = never>(self, params: SearchParams = {}) {
-    params.opcode = Msg.getDeclaredPackPrefix();
+    val declaredPrefix: int? = Msg.getDeclaredPackPrefix();
+    if (declaredPrefix != null) {
+        params.opcode = declaredPrefix;
+    }
 
     val tx = ffi.findTransactionByParams(self.value, params.toTuple());
     if (tx == null) {
@@ -128,7 +150,10 @@ fun Expectation<SendResultList>.toHaveTx<Msg = never>(self, params: SearchParams
 /// });
 /// ```
 fun Expectation<SendResultList>.toNotHaveTx<Msg = never>(self, params: SearchParams = {}) {
-    params.opcode = Msg.getDeclaredPackPrefix();
+    val declaredPrefix: int? = Msg.getDeclaredPackPrefix();
+    if (declaredPrefix != null) {
+        params.opcode = declaredPrefix;
+    }
 
     val tx = ffi.findTransactionByParams(self.value, params.toTuple());
     if (tx != null) {
@@ -152,7 +177,10 @@ fun Expectation<SendResultList>.toNotHaveTx<Msg = never>(self, params: SearchPar
 /// });
 /// ```
 fun Expectation<SendResultList>.toHaveBouncedTx<Msg = never>(self, params: SearchParams = {}) {
-    params.opcode = Msg.getDeclaredPackPrefix();
+    val declaredPrefix: int? = Msg.getDeclaredPackPrefix();
+    if (declaredPrefix != null) {
+        params.opcode = declaredPrefix;
+    }
     params.bounced = true;
 
     val tx = ffi.findTransactionByParams(self.value, params.toTuple());
@@ -168,18 +196,27 @@ fun Expectation<SendResultList>.toHaveBouncedTx<Msg = never>(self, params: Searc
 }
 
 /// Expect the transaction list to have a **failed** transaction.
-/// Exit code in parameters must be set to non zero value.
+///
+/// This matcher sets `params.success = false`.
+/// `params.exitCode` is required and must be non-zero.
+/// If `exitCode` is null or `0`, matcher fails immediately before transaction search.
+///
+/// Any additional non-null `SearchParams` fields further narrow the search.
+/// If generic `Msg` is provided and has declared prefix, matcher also filters by `params.opcode`.
 ///
 /// Example:
 /// ```tolk
 /// expect(txs).toHaveFailedTx({
 ///     from: deployer.address,
 ///     to: counter.address,
-///     exit_code: 123,
+///     exitCode: 123,
 /// });
 /// ```
 fun Expectation<SendResultList>.toHaveFailedTx<Msg = never>(self, params: SearchParams = {}) {
-    params.opcode = Msg.getDeclaredPackPrefix();
+    val declaredPrefix: int? = Msg.getDeclaredPackPrefix();
+    if (declaredPrefix != null) {
+        params.opcode = declaredPrefix;
+    }
     params.success = false;
     if (params.exitCode == null) {
         Assert.fail("expect(<actual>).toHaveFailedTx(params) must have not null exitCode parameter in params");
@@ -204,7 +241,7 @@ fun Expectation<SendResultList>.toHaveFailedTx<Msg = never>(self, params: Search
 ///
 /// Example:
 /// ```tolk
-/// val results = net.send(wallet.address, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val results = net.send(wallet.address, msg);
 /// expect(results).toHaveAllSuccessfulTxs();
 /// ```
 fun Expectation<SendResultList>.toHaveAllSuccessfulTxs(self) {
@@ -264,7 +301,7 @@ fun Expectation<SendResultList>.toEmitExternalMessage<Msg>(self) {
 ///
 /// Example:
 /// ```tolk
-/// val result = net.send(deployer.address, message, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val result = net.send(deployer.address, message);
 /// expect(result.at(0)).toConsumeLessThan(1000);
 /// ```
 fun Expectation<SendResult>.toConsumeLessThan(self, amount: int) {

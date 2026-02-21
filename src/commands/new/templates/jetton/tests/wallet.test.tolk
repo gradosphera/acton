@@ -3,7 +3,6 @@ import "@acton/build/build"
 import "@acton/emulation/network"
 import "@acton/testing/expect"
 import "@acton/testing/transaction_expect"
-import "@acton/types/message"
 // Jetton contract imports
 import "@contracts/errors"
 import "@contracts/messages"
@@ -386,7 +385,7 @@ get fun `test malformed forward payload`() {
         }.toCell(),
     });
 
-    val res = net.send(deployer.address, transferMsg, SEND_MODE_REGULAR);
+    val res = net.send(deployer.address, transferMsg);
     expect(res).toHaveFailedTx({
         from: deployer.address,
         to: deployerJettonWallet.address,
@@ -522,7 +521,7 @@ get fun `test check revert on not enough tons for forward`() {
         dest: deployerJettonWallet.address,
         body: createEmptySlice(),
     });
-    net.send(deployer.address, tonTransferMsg, SEND_MODE_PAY_FEES_SEPARATELY);
+    net.send(deployer.address, tonTransferMsg);
 
     val sentAmount = ton("0.1");
     val forwardAmount = ton("0.3");
@@ -587,8 +586,7 @@ get fun `test wallet does not accept internal transfer not from wallet`() {
 
     val sendResult = net.send(
         notDeployer.address,
-        internalTransferMsg,
-        SEND_MODE_PAY_FEES_SEPARATELY
+        internalTransferMsg
     );
 
     expect(sendResult).toHaveFailedTx({
@@ -755,8 +753,7 @@ get fun `test minter should only accept burn messages from jetton wallets`() {
 
     val sendResultWrong = net.send(
         deployerJettonWallet.address,
-        burnNotificationWrong,
-        SEND_MODE_PAY_FEES_SEPARATELY
+        burnNotificationWrong
     );
 
     expect(sendResultWrong).toHaveFailedTx({
@@ -780,8 +777,7 @@ get fun `test minter should only accept burn messages from jetton wallets`() {
 
     val sendResultCorrect = net.send(
         deployerJettonWallet.address,
-        burnNotificationCorrect,
-        SEND_MODE_PAY_FEES_SEPARATELY
+        burnNotificationCorrect
     );
 
     expect(sendResultCorrect).toHaveSuccessfulTx({
@@ -1068,7 +1064,7 @@ get fun `test transfer to masterchain`() {
         }.toCell(),
     });
 
-    val res = net.send(deployer.address, transferMsg, SEND_MODE_REGULAR);
+    val res = net.send(deployer.address, transferMsg);
     expect(res).toHaveFailedTx({
         from: deployer.address,
         to: deployerJettonWallet.address,

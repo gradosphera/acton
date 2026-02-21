@@ -2,9 +2,6 @@ import "../../../../lib/build/build"
 import "../../../../lib/emulation/network"
 import "../../../../lib/testing/expect"
 import "../../../../lib/testing/transaction_expect"
-import "../../../../lib/types/message"
-import "../../../../lib/types/out_actions"
-import "../../../../lib/vm/vm"
 
 import "../contracts/messages"
 
@@ -33,7 +30,7 @@ fun setupTest() {
             stateInit: counter.init,
         },
     });
-    val res = net.send(deployer.address, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+    val res = net.send(deployer.address, msg);
     expect(res).toHaveSuccessfulDeploy({ to: counter.address });
 
     return (counter, deployer)

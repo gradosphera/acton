@@ -1,0 +1,14 @@
+warning[E017]: possible storage write without admin sender check
+   --> [ROOT]/contracts/main[LINE]
+   |
+10 |             fun onInternalMessage(in: InMessage) {
+   |                                   -- inbound sender comes from message parameter `in`
+   .
+14 |                 save(storage);
+   |                 ^^^^^^^^^^^^^ storage mutation (`save` / `setData`) is reachable without admin sender check
+   |
+   = add `assert (in.senderAddress == storage.adminAddress) throw <code>;` before storage write
+
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain E017

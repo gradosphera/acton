@@ -72,6 +72,10 @@ fun Expectation<T>.toEqual<U>(self, expected: U) {
 
 /// Asserts that actual value is equal to expected value as decimal with given precision.
 ///
+/// Comparison itself is exact (no rounding is applied to actual or expected values).
+/// `decimals` controls only failure-message formatting:
+/// decimal point insertion, trailing-zero trimming, and normalized integer-style output (`.0`).
+///
 /// Example:
 /// ```tolk
 /// expect(ton("1.5")).toEqualDecimal(ton("1.5"), 9);
@@ -168,7 +172,7 @@ fun Expectation<int>.toBeApproxEqAbs(self, expected: int, maxDelta: int) {
     if (realDelta > maxDelta) {
         ffi.assertFail(
             format4(
-                "{} !~= {} (max delta: {}, real delta: {}",
+                "{} !~= {} (max delta: {}, real delta: {})",
                 self.value,
                 expected,
                 maxDelta,
@@ -180,20 +184,44 @@ fun Expectation<int>.toBeApproxEqAbs(self, expected: int, maxDelta: int) {
     }
 }
 
-/// Asserts that actual value is approximately equal to expected value using difference in percentage.
+/// Asserts that actual value is approximately equal to expected value using relative percentage difference.
+///
+/// Relative delta is computed as:
+/// `floor(abs(actual - expected) * 100 / abs(actual))`.
+/// The assertion passes when this computed percentage is less than or equal to `maxDelta`.
+///
+/// Zero branch:
+/// if `actual == 0`, only `expected == 0` passes; any non-zero `expected` is treated as infinite delta and fails.
 ///
 /// Example:
 /// ```tolk
-/// expect(10).toBeApproxEqRel(15, 60); // ok, difference is 50%, which is less than maximum allowed difference of 60%
-/// expect(10).toBeApproxEqRel(20, 50); // error, difference is 100%, which is greater than maximum allowed difference of 50%
+/// expect(1000).toBeApproxEqRel(1099, 9);
+/// expect(0).toBeApproxEqRel(0, 0);
 /// ```
 fun Expectation<int>.toBeApproxEqRel(self, expected: int, maxDelta: int) {
     val valueDelta = abs(self.value - expected);
-    val percent = mulDivFloor(valueDelta, 100, self.value);
+    val denominator = abs(self.value);
+    if (denominator == 0) {
+        if (valueDelta > 0) {
+            ffi.assertFail(
+                format3(
+                    "{} !~= {} (max delta: {}%, real delta: inf%)",
+                    self.value,
+                    expected,
+                    maxDelta
+                ),
+                self.location
+            );
+            throw ASSERTION_FAILED;
+        }
+        return;
+    }
+
+    val percent = mulDivFloor(valueDelta, 100, denominator);
     if (percent > maxDelta) {
         ffi.assertFail(
             format4(
-                "{} !~= {} (max delta: {}%, real delta: {}%",
+                "{} !~= {} (max delta: {}%, real delta: {}%)",
                 self.value,
                 expected,
                 maxDelta,
@@ -219,17 +247,36 @@ fun Expectation<T?>.toBeNull(self) {
 ///
 /// Example:
 /// ```tolk
-/// expect(null).toBeNotNull();
+/// val someValue: int? = 10;
+/// expect(someValue).toBeNotNull();
 /// ```
 fun Expectation<T?>.toBeNotNull(self) {
     Assert.notEqual(self.value, null, "expect(<actual>).toBeNotNull()", self.location);
 }
 
+/// Asserts that actual `Maybe<T>` value is defined (`Some`).
+///
+/// Fails when actual value is `None`.
+///
+/// Example:
+/// ```tolk
+/// val someValue = Maybe<int>.some(10);
+/// expect(someValue).toBeDefined();
+/// ```
 fun Expectation<Maybe<T>>.toBeDefined(self) {
     if (self.value is None) {
         Assert.fail("expect(<actual>).toBeDefined()", self.location);
     }
 }
+/// Asserts that actual `Maybe<T>` value is `None`.
+///
+/// Fails when actual value is `Some`.
+///
+/// Example:
+/// ```tolk
+/// val noneValue = Maybe<int>.none();
+/// expect(noneValue).toBeNone();
+/// ```
 fun Expectation<Maybe<T>>.toBeNone(self) {
     if (self.value !is None) {
         Assert.fail("expect(<actual>).toBeNone()", self.location);
@@ -240,7 +287,7 @@ fun Expectation<Maybe<T>>.toBeNone(self) {
 ///
 /// Example:
 /// ```tolk
-/// expect("").toBeNonEmpty();
+/// expect("hello").toBeNonEmpty();
 /// ```
 fun Expectation<slice>.toBeNonEmpty(self) {
     Assert.notEqual(self.value, "", "expect(<actual>).toBeNonEmpty()", self.location);
@@ -270,7 +317,7 @@ fun Expectation<int>.toBeNaN(self) {
 ///
 /// Example:
 /// ```tolk
-/// expect(nan()).toBeNonNaN();
+/// expect(0).toBeNonNaN();
 /// ```
 fun Expectation<int>.toBeNonNaN(self) {
     Assert.notEqual(self.value, ffi.nan(), "expect(<actual>).toBeNonNaN()", self.location);
@@ -332,60 +379,77 @@ fun Expectation<any_address>.toBeExternalAddress(self) {
     }
 }
 
-/// Asserts that actual value represeneted as tuple contains the expected value.
+/// Asserts that actual value represeneted as an array contains the expected value.
 ///
 /// Example:
 /// ```tolk
-/// var tuple = createEmptyTuple();
-/// tuple.push(1);
-/// tuple.push(2);
-/// tuple.push(3);
-/// expect(tuple).toContain(2);
+/// val arr = [1, 2, 3];
+/// expect(arr).toContain(2);
 /// ```
-fun Expectation<tuple>.toContain<U>(self, expected: U) {
+fun Expectation<array<E>>.toContain<U>(self, expected: U) {
     var i = 0;
     while (i < self.value.size()) {
-        val item = self.value.get<U>(i);
+        val item = self.value.get(i) as U;
         if (item == expected) {
             return;
         }
         i += 1;
     }
-    Assert.fail("Tuple doesn't contain the value", self.location);
+    Assert.fail("Array doesn't contain the value", self.location);
 }
 
-/// Asserts that actual value represeneted as tuple does not contain the expected value.
+/// Asserts that actual value represeneted as an array does not contain the expected value.
 ///
 /// Example:
 /// ```tolk
-/// var tuple = createEmptyTuple();
-/// tuple.push(1);
-/// tuple.push(2);
-/// tuple.push(3);
-/// expect(tuple).toNotContain(4);
+/// val arr = [1, 2, 3];
+/// expect(arr).toNotContain(4);
 /// ```
-fun Expectation<tuple>.toNotContain<U>(self, expected: U) {
+fun Expectation<array<E>>.toNotContain<U>(self, expected: U) {
     var i = 0;
     while (i < self.value.size()) {
-        val item = self.value.get<U>(i);
+        val item = self.value.get(i) as U;
         if (item == expected) {
-            Assert.fail("Tuple contains the value but it should not", self.location);
+            Assert.fail("Array contains the value, but it should not", self.location);
         }
         i += 1;
     }
 }
 
-/// Asserts that actual value represeneted as tuple has the expected length.
+/// Asserts that actual value represeneted as an array is empty.
 ///
 /// Example:
 /// ```tolk
-/// var tuple = createEmptyTuple();
-/// tuple.push(1);
-/// tuple.push(2);
-/// tuple.push(3);
-/// expect(tuple).toHaveLength(3);
+/// val arr = array<int> [];
+/// expect(arr).toBeEmpty();
 /// ```
-fun Expectation<tuple>.toHaveLength(self, length: int) {
+fun Expectation<array<E>>.toBeEmpty(self) {
+    if (self.value.size() != 0) {
+        Assert.fail("expect(<actual>).toBeEmpty(<expected>): array is not empty", self.location);
+    }
+}
+
+/// Asserts that actual value represeneted as an array is not empty.
+///
+/// Example:
+/// ```tolk
+/// val arr = [1, 2, 3];
+/// expect(arr).toBeNonEmpty();
+/// ```
+fun Expectation<array<E>>.toBeNonEmpty(self) {
+    if (self.value.size() == 0) {
+        Assert.fail("expect(<actual>).toBeNonEmpty(<expected>): array is empty", self.location);
+    }
+}
+
+/// Asserts that actual value represeneted as an array has the expected length.
+///
+/// Example:
+/// ```tolk
+/// val arr = [1, 2, 3];
+/// expect(arr).toHaveLength(3);
+/// ```
+fun Expectation<array<E>>.toHaveLength(self, length: int) {
     Assert.equal(self.value.size(), length, "expect(<actual>).toHaveLength(<expected>)", self.location);
 }
 

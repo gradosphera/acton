@@ -30,7 +30,8 @@ struct (0b01) Frozen
 struct (0b10) Active
 struct (0b11) NonExisting
 
-/// Represents possible account statuses.
+/// Type alias for transaction account status values used by [Transaction.origStatus] and
+/// [Transaction.endStatus].
 type AccountStatus = Uninitialized | Frozen | Active | NonExisting
 
 /// Represents depth and balance information for split accounts.
@@ -69,11 +70,15 @@ struct (0b0111) Transaction {
 
 /// Loads the in message body of the transaction with given type.
 ///
-/// Note that if message type mismatch, loading will fail with exit code 63.
+/// Fails if transaction has no inbound message (`messages.inMsg` is `None`), because this
+/// method unwraps it before typed decoding.
+///
+/// After an inbound message exists, if message type does not match `Msg`, loading fails with
+/// exit code 63.
 ///
 /// Example:
 /// ```tolk
-/// val result = net.send(address, msg, SEND_MODE_PAY_FEES_SEPARATELY);
+/// val result = net.send(address, msg);
 /// val tx = result.findTransaction<IncreaseCounter>({ to: address }).unwrap();
 /// val body = tx.loadBody<IncreaseCounter>();
 /// println(body.increaseBy);
@@ -86,13 +91,21 @@ fun Transaction.loadBody<Msg>(self) {
 
 /// Loads the in message of the transaction with given type.
 ///
-/// Note that if message type mismatch, loading will fail with exit code 63.
+/// Fails if transaction has no inbound message (`messages.inMsg` is `None`), because this
+/// method unwraps it before typed decoding.
+///
+/// After an inbound message exists, if message type does not match `Msg`, loading fails with
+/// exit code 63.
 fun Transaction.loadInMsg<Msg>(self) {
     val inMsgCell = self.messages.load().inMsg.unwrap() as cell as Cell<MessageRelaxed<Msg>>;
     return inMsgCell.load()
 }
 
-/// Returns consumed gas for transaction.
+/// Returns consumed gas for ordinary transactions with VM compute phase.
+///
+/// Fails with [Assert.fail]:
+/// - if `description` is not [TransOrd];
+/// - if `description.computePh` is [TrComputeSkipped].
 fun Transaction.getUsedGas(self) {
     val description = self.description.load();
     if (description is TransOrd) {
@@ -106,7 +119,12 @@ fun Transaction.getUsedGas(self) {
     }
 }
 
-/// Returns fee for action phase of the transaction.
+/// Returns action-phase fee based on [Transaction.description] variant.
+///
+/// Behavior by variant:
+/// - [TransOrd] and [TransTickTock] with `action = Some`: returns `action.totalActionFees`;
+/// - [TransOrd] and [TransTickTock] with `action = None`: returns `None`;
+/// - all other [TransactionDescr] variants: returns `None`.
 fun Transaction.getActionFee(self): Maybe<coins> {
     val descr = self.description.load();
     if (descr is TransOrd) {
@@ -364,8 +382,34 @@ type TransactionDescr =
 
 type VarUint7 = int
 
+fun varUintSize(value: int, maxBytes: int): int {
+    if (value < 0) {
+        Assert.fail("VarUInteger value must be non-negative");
+    }
+    if (value == 0) {
+        return 0;
+    }
+
+    var size = 1;
+    var threshold = 256;
+    while (size < maxBytes && value >= threshold) {
+        size += 1;
+        threshold *= 256;
+    }
+
+    if (value >= threshold) {
+        Assert.fail("VarUInteger value is out of range");
+    }
+
+    return size;
+}
+
 fun VarUint7.packToBuilder(self, mutate b: builder) {
-    b.storeUint(self, 32) // TODO: correct serialization
+    val size = varUintSize(self, 7);
+    b.storeUint(size, 3);
+    if (size > 0) {
+        b.storeUint(self, size * 8);
+    }
 }
 
 fun VarUint7.unpackFromSlice(mutate s: slice): VarUint7 {
@@ -376,7 +420,11 @@ fun VarUint7.unpackFromSlice(mutate s: slice): VarUint7 {
 type VarUint3 = int
 
 fun VarUint3.packToBuilder(self, mutate b: builder) {
-    b.storeUint(self, 16) // TODO: correct serialization
+    val size = varUintSize(self, 3);
+    b.storeUint(size, 2);
+    if (size > 0) {
+        b.storeUint(self, size * 8);
+    }
 }
 
 fun VarUint3.unpackFromSlice(mutate s: slice): VarUint3 {
@@ -425,6 +473,18 @@ struct (0b1) AccountInfo {
 /// Union type for account.
 type Account = AccountNone | AccountInfo
 
+/// Account state in AccountStorage (block.tlb `AccountState`).
+struct (0b00) AccountStateUninit
+struct (0b1) AccountStateActive {
+    stateInit: StateInit
+}
+struct (0b01) AccountStateFrozen {
+    stateHash: uint256
+}
+
+/// Union type for account storage state.
+type AccountState = AccountStateUninit | AccountStateActive | AccountStateFrozen
+
 /// Represents account storage.
 struct AccountStorage {
     /// Last transaction logical time.
@@ -432,7 +492,14 @@ struct AccountStorage {
     /// Account balance.
     balance: CurrencyCollection,
     /// Account state.
-    state: AccountStatus
+    state: AccountState
+}
+
+/// Represents a shard account state.
+struct ShardAccount {
+    account: Cell<Account>,
+    lastTransHash: uint256,
+    lastTransLt: uint64,
 }
 
 /// Represents a list of transactions.

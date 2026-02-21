@@ -1,0 +1,13 @@
+  Installing standard library [ACTON_VERSION]
+   Compiling contracts
+   Compiling Counter
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+
+ TEST  [ROOT]
+
+ > tests/da_transaction_load_in_msg_fixture_opcode.test.tolk (1 test)
+  ✓ da-stdlib-transaction-load-in-msg-fixture-opcode [TIME]
+
+ ✓ 1 passed in 1 file

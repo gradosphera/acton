@@ -11,8 +11,8 @@ use tolk_resolver::file_index::{
 };
 use tolk_resolver::resolve_index::LocalDefId;
 use tolk_syntax::{
-    AstNode, Constant, Enum, FuncBody, FunctionLike, GlobalVar, HasName, Method, Parameter, Struct,
-    TopLevel, Type, TypeAlias,
+    AstNode, Constant, Enum, FuncBody, FunctionLike, GlobalVar, HasGenericParams, HasName, Method,
+    Parameter, Struct, TopLevel, Type, TypeAlias,
 };
 
 /// Runs type inference on a top-level declaration.
@@ -154,6 +154,9 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
             .unwrap_or_else(|| self.intrn().ty_unknown);
         self.ctx.set_node_type(&name_ident, ty);
         self.ctx.set_node_type(v, ty);
+
+        self.infer_type_parameters(v);
+
         if let Some(name) = v.name() {
             self.ctx.set_node_type(&name, ty);
         }
@@ -183,6 +186,9 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
     pub(crate) fn infer_struct<'t>(&mut self, v: &Struct<'t>, symbol_id: SymbolId) {
         let Some(name_ident) = v.name() else { return };
         let Some(body) = v.body() else { return };
+
+        self.infer_type_parameters(v);
+
         for field in body.fields() {
             let declared_type = self.lower_or_none(field.typ());
             if let Some(default_value) = field.default() {
@@ -230,6 +236,36 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
         }
     }
 
+    fn infer_type_parameters<'b, Node: HasGenericParams<'b>>(&mut self, v: &Node) {
+        let Some(type_parameters) = v.type_parameters() else {
+            return;
+        };
+
+        for param in type_parameters.parameters() {
+            let Some(param_name_node) = param.name() else {
+                continue;
+            };
+            let param_name = self
+                .ctx
+                .type_db
+                .file_db
+                .text_of(self.ctx.file_id, &param_name_node)
+                .unwrap_or_default()
+                .to_string();
+
+            let default_type = param.default();
+            let default_ty = self.lower_or_none(default_type);
+            let param_ty = self.intrn().type_parameter(param_name, default_ty);
+
+            self.ctx.set_node_type(&param, param_ty);
+            self.ctx.set_node_type(&param_name_node, param_ty);
+
+            if let Some(default) = default_type {
+                self.ctx.set_node_type(&default, param_ty);
+            }
+        }
+    }
+
     fn update_function_return_type(&mut self, symbol_id: SymbolId) {
         if let Some(inferred_ty) = self.ctx.inferred_return_type
             && let Some(existing_ty) = self.ctx.get_top_level_type(symbol_id)
@@ -241,13 +277,15 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
     }
 
     /// Infers both standalone functions and get methods.
-    pub(crate) fn infer_function_base<'t, 'b, F: FunctionLike<'b>>(
+    pub(crate) fn infer_function_base<'t, 'b, F: FunctionLike<'b> + HasGenericParams<'b>>(
         &mut self,
         v: &F,
         symbol_id: SymbolId,
     ) -> Option<()> {
         let mut body_start = FlowContext::new();
         let declared_return_ty = self.lower_or_none(v.return_type());
+
+        self.infer_type_parameters(v);
 
         if let Some(return_type) = v.return_type()
             && let Some(declared_return_ty) = declared_return_ty
@@ -288,6 +326,8 @@ impl<'db, 'a> TypeInferenceWalker<'db, 'a> {
         let mut body_start = FlowContext::new();
         let declared_return_ty = self.lower_or_none(v.return_type());
         self.ctx.declared_return_ty = declared_return_ty;
+
+        self.infer_type_parameters(v);
 
         let receiver_type = self.lower(v.receiver_type());
 

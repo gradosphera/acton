@@ -9,6 +9,7 @@ build:
 test-unit:
     {{ CARGO_TEST }} --workspace --lib --bins \
         --exclude retrace
+    cargo test --workspace --doc
 
 test-serial:
     # we need test by test execution due to Toncenter rate limit
@@ -31,7 +32,7 @@ fmt-check:
     cargo fmt --all --check
 
 clippy:
-    cargo clippy --workspace --all-features --all-targets -- -D warnings
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
 check-udeps:
     cargo +nightly udeps --workspace

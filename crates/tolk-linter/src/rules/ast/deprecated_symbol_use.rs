@@ -1,6 +1,5 @@
-use crate::rules::diagnostic::{Annotation, Diagnostic, Severity};
+use crate::rules::diagnostic::{Annotation, Diagnostic};
 use crate::rules::violation::Violation;
-use crate::rules::violation::ViolationMetadata;
 use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::FileId;
@@ -55,13 +54,8 @@ pub fn check_resolved_reference(
         .map(|msg| format!(". {msg}"))
         .unwrap_or_else(|| "".to_owned());
 
-    let diagnostic = Diagnostic {
-        file_id,
-        severity: Severity::Warning,
-        name: DeprecatedSymbolUse::rule().name(),
-        code: DeprecatedSymbolUse::code().map(|c| c.to_string()),
-        message: DeprecatedSymbolUse.message(),
-        annotations: vec![Annotation {
+    let diagnostic = Diagnostic::warning_for(file_id, DeprecatedSymbolUse)
+        .with_annotations(vec![Annotation {
             span: ident.span(),
             message: Some(format!(
                 "{} is deprecated and should not be used{message}",
@@ -69,11 +63,9 @@ pub fn check_resolved_reference(
             )),
             is_primary: true,
             tags: vec![],
-        }],
-        fixes: vec![],
-        help: Some("deprecated symbols may be removed in future versions".to_string()),
-    };
-    checker.emit_diagnostic(DeprecatedSymbolUse::rule(), diagnostic);
+        }])
+        .with_help("deprecated symbols may be removed in future versions");
+    checker.emit_diagnostic(diagnostic);
 
     Some(())
 }
