@@ -288,6 +288,10 @@ fn collect_file_dependency_paths_from_imports_recursive(
         }
 
         let Some(import_path) = parse_import_path_line(&line) else {
+            if line_trimmed.starts_with("fun ") || line_trimmed.starts_with("struct ") {
+                // start of definitions
+                break;
+            }
             continue;
         };
 
@@ -299,10 +303,6 @@ fn collect_file_dependency_paths_from_imports_recursive(
         };
 
         collect_file_dependency_paths_from_imports_recursive(resolved_path, mappings, processed);
-
-        if line_trimmed.starts_with("fun ") || line_trimmed.starts_with("struct ") {
-            break;
-        }
     }
 }
 
