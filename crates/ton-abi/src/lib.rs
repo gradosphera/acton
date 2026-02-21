@@ -1,38 +1,48 @@
 pub mod abi_serde;
 
 use num_bigint::BigInt;
+use path_absolutize::Absolutize;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsStr;
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tolk_syntax::SourceFile;
 
-fn resolve_mapped_path(import_path: &str, mappings: &Option<BTreeMap<String, String>>) -> String {
+fn resolve_mapped_path<'a>(
+    import_path: &'a str,
+    mappings: &Option<BTreeMap<String, String>>,
+) -> Cow<'a, str> {
     if import_path.starts_with("@stdlib/") || import_path.starts_with("@fiftlib/") {
-        return import_path.to_string();
+        return Cow::Borrowed(import_path);
     }
 
     if let Some(rest) = import_path.strip_prefix('@') {
         let (prefix_without_at, path) = rest.split_once('/').unwrap_or((rest, ""));
+        let prefix_with_at = &import_path[..prefix_without_at.len() + 1];
 
         if let Some(mappings) = mappings {
             // Try both with and without @ prefix in the mappings keys
             let mapping = mappings
                 .get(prefix_without_at)
-                .or_else(|| mappings.get(&format!("@{}", prefix_without_at)));
+                .or_else(|| mappings.get(prefix_with_at));
 
             if let Some(mapping) = mapping {
                 let mapped_path =
                     add_tolk_extension_if_needed_to_path(Path::new(mapping).join(path));
-                return dunce::canonicalize(&mapped_path) // since for now we don't support custom Acton.toml path, it's safe
-                    .unwrap_or(mapped_path)
-                    .to_string_lossy()
-                    .to_string();
+                let Ok(abs_path) = mapped_path.absolutize() else {
+                    return Cow::Borrowed(import_path);
+                };
+                return Cow::Owned(abs_path.to_string_lossy().to_string());
             }
         }
     }
-    import_path.to_string()
+
+    Cow::Borrowed(import_path)
 }
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
@@ -191,8 +201,20 @@ struct AbiInfo {
 #[derive(Debug)]
 struct FileInfo {
     path: String,
-    content: String,
+    content: Arc<str>,
     tree: tree_sitter::Tree,
+}
+
+#[derive(Debug, Default)]
+pub struct ContractAbiParseCache {
+    files: FxHashMap<String, SourceFile>,
+}
+
+impl ContractAbiParseCache {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
 }
 
 pub fn get_file_dependencies(
@@ -208,24 +230,7 @@ pub fn get_file_dependencies(
         return Ok(vec![]);
     }
 
-    let content = match fs::read_to_string(file_path) {
-        Ok(content) => content,
-        Err(e) => anyhow::bail!("Failed to read file '{file_path}': {e}"),
-    };
-
-    let tree = match tolk_syntax::parse(&content) {
-        Ok(tree) => tree,
-        Err(e) => anyhow::bail!("Failed to parse file '{file_path}': {e:?}"),
-    };
-
-    let root_node = tree.root_node();
-    let files = collect_imported_files(&root_node, &content, file_path, mappings);
-
-    let mut dependencies: Vec<String> = files
-        .into_iter()
-        .map(|file_info| file_info.path)
-        .filter(|path| path != file_path)
-        .collect();
+    let mut dependencies = collect_file_dependency_paths_from_imports(file_path, mappings)?;
 
     if include_itself {
         dependencies.push(file_path.to_string());
@@ -234,22 +239,109 @@ pub fn get_file_dependencies(
     Ok(dependencies)
 }
 
+fn collect_file_dependency_paths_from_imports(
+    file_path: &str,
+    mappings: &Option<BTreeMap<String, String>>,
+) -> anyhow::Result<Vec<String>> {
+    let mut processed = HashSet::with_capacity(4);
+    collect_file_dependency_paths_from_imports_recursive(
+        file_path.to_owned(),
+        mappings,
+        &mut processed,
+    );
+    processed.remove(file_path);
+
+    let mut dependencies: Vec<String> = processed.into_iter().collect();
+    dependencies.sort_unstable();
+    Ok(dependencies)
+}
+
+fn collect_file_dependency_paths_from_imports_recursive(
+    file_path: String,
+    mappings: &Option<BTreeMap<String, String>>,
+    processed: &mut HashSet<String>,
+) {
+    if processed.contains(file_path.as_str()) {
+        return;
+    }
+
+    let base_path = match Path::new(&file_path).parent() {
+        Some(path) => path.to_path_buf(),
+        None => return,
+    };
+
+    let file = match fs::File::open(&file_path) {
+        Ok(file) => file,
+        Err(_) => return,
+    };
+    processed.insert(file_path);
+
+    let reader = BufReader::new(file);
+
+    for line in reader.lines() {
+        let Ok(line) = line else {
+            continue;
+        };
+        let line_trimmed = line.trim_start();
+        if line_trimmed.is_empty() {
+            continue;
+        }
+
+        let Some(import_path) = parse_import_path_line(&line) else {
+            continue;
+        };
+
+        let import_path = resolve_mapped_path(import_path, mappings);
+        let Some(resolved_path) =
+            resolve_import_path_from_base_path(&base_path, import_path.as_ref())
+        else {
+            continue;
+        };
+
+        collect_file_dependency_paths_from_imports_recursive(resolved_path, mappings, processed);
+
+        if line_trimmed.starts_with("fun ") || line_trimmed.starts_with("struct ") {
+            break;
+        }
+    }
+}
+
+#[cfg(test)]
+fn collect_import_paths_only(content: &str) -> Vec<String> {
+    content
+        .lines()
+        .filter_map(parse_import_path_line)
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn parse_import_path_line(line: &str) -> Option<&str> {
+    let line = line.trim_start();
+    let rest = line.strip_prefix("import")?;
+    let rest = rest.trim_start();
+    let rest = rest.strip_prefix('"')?;
+    let end_quote = rest.find('"')?;
+    let import_path = &rest[..end_quote];
+    (!import_path.is_empty()).then_some(import_path)
+}
+
 #[must_use]
 pub fn contract_abi(
-    content: &str,
+    content: Arc<str>,
     file_path: &str,
     mappings: &Option<BTreeMap<String, String>>,
 ) -> ContractAbi {
-    let file = tolk_syntax::parse(content);
-    contract_abi_with_file(content, file_path, &file, mappings)
+    let file = tolk_syntax::parse(&content);
+    contract_abi_with_file(content, file_path, &file, mappings, None)
 }
 
 #[must_use]
 pub fn contract_abi_with_file(
-    content: &str,
+    content: Arc<str>,
     file_path: &str,
     file: &anyhow::Result<SourceFile>,
     mappings: &Option<BTreeMap<String, String>>,
+    cache: Option<&mut ContractAbiParseCache>,
 ) -> ContractAbi {
     let contract_name = get_contract_name_from_file_path(file_path);
 
@@ -257,9 +349,10 @@ pub fn contract_abi_with_file(
         return ContractAbi::default();
     };
 
-    let root_node = file.root_node();
+    let mut local_cache = ContractAbiParseCache::default();
+    let cache = cache.unwrap_or(&mut local_cache);
 
-    let files = collect_imported_files(&root_node, content, file_path, mappings);
+    let files = collect_imported_files(file, content, file_path, mappings, cache);
 
     let mut abi_info = AbiInfo {
         get_methods: Vec::new(),
@@ -294,16 +387,16 @@ pub fn contract_abi_with_file(
 
 #[must_use]
 pub fn extract_handled_messages(
-    content: &str,
+    content: Arc<str>,
     file_path: &str,
     mappings: &Option<BTreeMap<String, String>>,
 ) -> Vec<String> {
-    let Ok(tree) = tolk_syntax::parse(content) else {
+    let Ok(file) = tolk_syntax::parse(&content) else {
         return Vec::new();
     };
 
-    let root_node = tree.root_node();
-    let files = collect_imported_files(&root_node, content, file_path, mappings);
+    let mut cache = ContractAbiParseCache::default();
+    let files = collect_imported_files(&file, content, file_path, mappings, &mut cache);
 
     let mut handled_messages = Vec::new();
 
@@ -374,62 +467,57 @@ fn find_match_patterns(node: &tree_sitter::Node<'_>, content: &str) -> Vec<Strin
 }
 
 fn collect_imported_files(
-    root_node: &tree_sitter::Node<'_>,
-    content: &str,
+    file: &SourceFile,
+    content: Arc<str>,
     file_path: &str,
     mappings: &Option<BTreeMap<String, String>>,
+    cache: &mut ContractAbiParseCache,
 ) -> Vec<FileInfo> {
-    let mut files = Vec::new();
-    let mut processed = HashSet::new();
+    let mut files = Vec::with_capacity(4);
+    let mut processed = HashSet::with_capacity(4);
 
-    let Ok(parsed_file) = tolk_syntax::parse(content) else {
-        return vec![];
-    };
     files.push(FileInfo {
         path: file_path.to_string(),
-        content: content.to_string(),
-        tree: parsed_file.tree,
+        content: content.clone(),
+        tree: file.tree.clone(),
     });
     processed.insert(file_path.to_string());
+    cache
+        .files
+        .entry(file_path.to_string())
+        .or_insert_with(|| file.clone());
 
     collect_imported_files_recursive(
-        root_node,
+        file,
         content,
         file_path,
         &mut files,
         &mut processed,
         mappings,
+        cache,
     );
 
     files
 }
 
 fn collect_imported_files_recursive(
-    node: &tree_sitter::Node<'_>,
-    content: &str,
+    file: &SourceFile,
+    content: Arc<str>,
     file_path: &str,
     files: &mut Vec<FileInfo>,
     processed: &mut HashSet<String>,
     mappings: &Option<BTreeMap<String, String>>,
+    cache: &mut ContractAbiParseCache,
 ) {
-    let mut cursor = node.walk();
-    for child in node
-        .children(&mut cursor)
-        .filter(|child| child.kind() == "import_directive")
-    {
-        let Some(path_node) = child.child_by_field_name("path") else {
+    for import in file.imports() {
+        let Some(path_node) = import.path() else {
             continue;
         };
 
-        let import_path_text = path_node
-            .utf8_text(content.as_bytes())
-            .unwrap_or("")
-            .to_string();
-
-        let import_path1 = import_path_text.trim_matches('"');
+        let import_path1 = path_node.content(content.as_ref());
         let import_path = resolve_mapped_path(import_path1, mappings);
 
-        let resolved_path = resolve_import_path(file_path, &import_path);
+        let resolved_path = resolve_import_path(file_path, import_path.as_ref());
         let Some(resolved) = resolved_path else {
             continue;
         };
@@ -439,41 +527,52 @@ fn collect_imported_files_recursive(
             continue;
         }
 
-        let Ok(import_content) = fs::read_to_string(&resolved) else {
-            continue;
+        let parsed_file = if let Some(cached) = cache.files.get(&resolved) {
+            cached.clone()
+        } else {
+            let Ok(import_content) = fs::read_to_string(&resolved) else {
+                continue;
+            };
+            let import_content: Arc<str> = import_content.into();
+
+            let Ok(parsed_file) = tolk_syntax::parse(&import_content) else {
+                continue;
+            };
+            cache.files.insert(resolved.clone(), parsed_file.clone());
+            parsed_file
         };
 
-        if let Ok(parsed_file) = tolk_syntax::parse(&import_content) {
-            let root_node = parsed_file.root_node();
+        collect_imported_files_recursive(
+            &parsed_file,
+            parsed_file.source.clone(),
+            &resolved,
+            files,
+            processed,
+            mappings,
+            cache,
+        );
 
-            collect_imported_files_recursive(
-                &root_node,
-                &import_content,
-                &resolved,
-                files,
-                processed,
-                mappings,
-            );
-
-            files.push(FileInfo {
-                path: resolved.clone(),
-                content: import_content,
-                tree: parsed_file.tree,
-            });
-            processed.insert(resolved);
-        }
+        files.push(FileInfo {
+            path: resolved.clone(),
+            content: parsed_file.source.clone(),
+            tree: parsed_file.tree,
+        });
+        processed.insert(resolved);
     }
 }
 
 fn resolve_import_path(base_file: &str, import_path: &str) -> Option<String> {
+    let base_path = Path::new(base_file).parent()?;
+    resolve_import_path_from_base_path(base_path, import_path)
+}
+
+fn resolve_import_path_from_base_path(base_path: &Path, import_path: &str) -> Option<String> {
     if Path::new(import_path).is_absolute() {
         // path can be absolute after mappings
         return Some(import_path.to_owned());
     }
 
     let import_path = add_tolk_extension_if_needed(import_path.to_string());
-
-    let base_path = Path::new(base_file).parent()?;
 
     if import_path.starts_with("./") || import_path.starts_with("../") {
         let relative_path = base_path.join(import_path);
@@ -939,6 +1038,15 @@ fn get_contract_name_from_file_path(file_path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_test_dir(prefix: &str) -> PathBuf {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        std::env::temp_dir().join(format!("ton-abi-{prefix}-{}-{now}", std::process::id()))
+    }
 
     #[test]
     fn test_contract_abi_basic() {
@@ -955,7 +1063,7 @@ fun onInternalMessage() {
 }
 ";
 
-        let abi = contract_abi(code, "test.tolk", &None);
+        let abi = contract_abi(code.into(), "test.tolk", &None);
 
         assert_eq!(abi.name, "test");
         assert!(abi.entry_point.is_some());
@@ -976,7 +1084,7 @@ get fun custom_method(): int {
 }
 ";
 
-        let abi = contract_abi(code, "test.tolk", &None);
+        let abi = contract_abi(code.into(), "test.tolk", &None);
 
         assert_eq!(abi.get_methods.len(), 1);
         assert_eq!(abi.get_methods[0].name, "custom_method");
@@ -1013,7 +1121,7 @@ get fun custom_id(): int {
 }
 ";
 
-        let abi = contract_abi(code, "test.tolk", &None);
+        let abi = contract_abi(code.into(), "test.tolk", &None);
 
         assert_eq!(abi.get_methods.len(), 5);
 
@@ -1064,7 +1172,7 @@ struct (0b1010) BinaryData {
 }
 ";
 
-        let abi = contract_abi(code, "test.tolk", &None);
+        let abi = contract_abi(code.into(), "test.tolk", &None);
 
         assert_eq!(abi.types.len(), 5);
         assert_eq!(abi.messages.len(), 3); // Only structs with pack_prefix
@@ -1111,7 +1219,7 @@ fun regular_function() {
 }
 ";
 
-        let abi = contract_abi(code, "test.tolk", &None);
+        let abi = contract_abi(code.into(), "test.tolk", &None);
 
         assert!(abi.entry_point.is_some());
         assert!(abi.external_entry_point.is_some());
@@ -1154,7 +1262,7 @@ get fun large_id(): int {
 }
 ";
 
-        let abi = contract_abi(code, "test.tolk", &None);
+        let abi = contract_abi(code.into(), "test.tolk", &None);
 
         assert_eq!(abi.get_methods.len(), 3);
 
@@ -1203,7 +1311,7 @@ get fun main_method(): int {
 }
 "#;
 
-        let abi = contract_abi(main_content, "main.tolk", &None);
+        let abi = contract_abi(main_content.into(), "main.tolk", &None);
 
         let _ = fs::remove_file(import_path);
 
@@ -1228,5 +1336,74 @@ get fun main_method(): int {
         assert!(crc_value > 0);
         assert!(method_id >= 0x10000);
         assert_eq!(method_id & 0xFFFF, crc_value & 0xFFFF);
+    }
+
+    #[test]
+    fn test_collect_import_paths_only_simple_lines() {
+        let content = r#"
+    import "a"
+import "b/c"
+"#;
+
+        let imports = collect_import_paths_only(content);
+        assert_eq!(imports, vec!["a".to_string(), "b/c".to_string()]);
+    }
+
+    #[test]
+    fn test_get_file_dependencies_scans_only_imports_and_recurses() {
+        let test_dir = unique_test_dir("deps");
+        fs::create_dir_all(&test_dir).unwrap();
+
+        let main = test_dir.join("main.tolk");
+        let dep_a = test_dir.join("a.tolk");
+        let dep_b = test_dir.join("b.tolk");
+
+        fs::write(
+            &main,
+            r#"
+import "a"
+// import "ignored"
+this is invalid syntax but should not affect import scanning
+"#,
+        )
+        .unwrap();
+        fs::write(&dep_a, "import \"./b\"\n").unwrap();
+        fs::write(&dep_b, "let x = 1\n").unwrap();
+
+        let main_str = main.to_string_lossy().to_string();
+        let deps = get_file_dependencies(&main_str, true, &None).unwrap();
+
+        let deps_canon: HashSet<String> = deps
+            .iter()
+            .map(|dep| {
+                dunce::canonicalize(dep)
+                    .unwrap_or_else(|_| PathBuf::from(dep))
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect();
+
+        assert!(
+            deps_canon.contains(
+                &dunce::canonicalize(&dep_a)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            )
+        );
+        assert!(
+            deps_canon.contains(
+                &dunce::canonicalize(&dep_b)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            )
+        );
+        assert_eq!(deps.last(), Some(&main_str));
+
+        let _ = fs::remove_file(&main);
+        let _ = fs::remove_file(&dep_a);
+        let _ = fs::remove_file(&dep_b);
+        let _ = fs::remove_dir_all(&test_dir);
     }
 }
