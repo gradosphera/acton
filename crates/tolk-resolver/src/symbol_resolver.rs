@@ -778,7 +778,10 @@ fn norm(name: &str) -> Arc<str> {
 pub fn resolve(db: &FileDb, index: &mut ProjectIndex) {
     let files = index.files().keys().cloned().collect::<Vec<_>>();
     for file_id in files {
-        let Some(file_index) = resolve_file(db, index, file_id) else {
+        let Some(file_info) = db.get_by_id(file_id) else {
+            continue;
+        };
+        let Some(file_index) = resolve_file(index, file_info) else {
             continue;
         };
 
@@ -787,9 +790,8 @@ pub fn resolve(db: &FileDb, index: &mut ProjectIndex) {
 }
 
 /// Resolves all symbols within a single file and updates the `ProjectIndex`.
-pub fn resolve_file(db: &FileDb, index: &ProjectIndex, file: FileId) -> Option<FileResolveIndex> {
-    let file_info = &db.get_by_id(file)?;
-    let env = GlobalEnv::new(index, file);
+pub fn resolve_file(index: &ProjectIndex, file_info: Arc<FileInfo>) -> Option<FileResolveIndex> {
+    let env = GlobalEnv::new(index, file_info.id());
 
     let mut resolver = SymbolResolver::new(index, file_info.clone(), env);
 

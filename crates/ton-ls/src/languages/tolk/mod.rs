@@ -6,6 +6,7 @@ use dashmap::DashMap;
 use globset::{Glob, GlobSetBuilder};
 use lsp_types::Url;
 use owo_colors::OwoColorize;
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -13,7 +14,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 use tolk_linter::Checker;
-use tolk_resolver::{FileDb, FileId, ProjectIndex, ProjectIndexBuilder, SymbolId, resolve};
+use tolk_resolver::{
+    FileDb, FileId, ProjectIndex, ProjectIndexBuilder, SymbolId, resolve, resolve_file,
+};
 use tolk_ty::{InferenceResult, TypeDb, TypeInterner, infer};
 use walkdir::WalkDir;
 
@@ -38,7 +41,7 @@ pub struct RootAnalysisResult {
 pub struct TolkAnalyzer {
     pub file_db: Arc<FileDb>,
     pub documents: DashMap<Url, String>,
-    pub roots: FxHashMap<PathBuf, RootAnalysisResult>,
+    pub root: Option<RootAnalysisResult>,
     pub file_urls: DashMap<FileId, Url>,
     #[cfg(feature = "profiling")]
     pub profiling: Arc<ProfilingContext>,
@@ -49,7 +52,7 @@ impl TolkAnalyzer {
         Self {
             file_db: Arc::new(FileDb::new(Default::default(), Default::default())),
             documents: Default::default(),
-            roots: Default::default(),
+            root: Default::default(),
             file_urls: Default::default(),
         }
     }
@@ -57,12 +60,15 @@ impl TolkAnalyzer {
     pub fn start(root_dir: PathBuf) -> anyhow::Result<TolkAnalyzer> {
         let acton_config = ActonConfig::load()?;
 
+        let now = Instant::now();
         let files = find_files(&root_dir)?;
+        log::info!("Initial file discovery took {:?}", now.elapsed());
 
         let stdlib = find_stdlib(&root_dir)?;
         let acton_stdlib = find_acton_stdlib(&root_dir)?;
         let common_tolk = stdlib.join("common.tolk");
 
+        let now = Instant::now();
         let file_db = Arc::new(FileDb::new(stdlib.clone(), Some(acton_stdlib)));
 
         // We need stdlib for all targets so preprocess it before all.
@@ -70,15 +76,18 @@ impl TolkAnalyzer {
             file_db.process(&common_tolk)?;
         }
 
-        let mut file_urls = DashMap::new();
         let mut roots = vec![];
-        for file in files {
-            let Ok(file_info) = file_db.process(&file) else {
-                continue;
-            };
 
+        // Process all files in parallel
+        let processed_files = files
+            .par_iter()
+            .map(|file| file_db.process(file))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        let file_urls = DashMap::new();
+        for file_info in processed_files {
             if file_info.index().is_root_file() {
-                roots.push(file);
+                roots.push(file_info.path().clone());
             }
 
             if let Some(url) = file_info.url() {
@@ -86,19 +95,38 @@ impl TolkAnalyzer {
             }
         }
 
+        log::info!("File read and indexing took {:?}", now.elapsed());
+        let now = Instant::now();
+
+        let mut index =
+            ProjectIndexBuilder::build_all(file_db.clone(), &files, &acton_config.mappings)?;
+        log::info!("Build project index took {:?}", now.elapsed());
+        let now = Instant::now();
+
+        // Resolve all files in parallel
+        let resolved_uses = index
+            .files()
+            .par_iter()
+            .filter_map(|(_, file_index)| {
+                let file_info = file_db.get_by_id(file_index.id)?;
+                let file_index = resolve_file(&index, file_info)?;
+                Some((file_index.file_id, Arc::new(file_index)))
+            })
+            .collect::<Vec<_>>();
+
+        for (file_id, file_index) in resolved_uses {
+            index.resolved_uses.insert(file_id, file_index);
+        }
+
+        log::info!("Resolve index took {:?}", now.elapsed());
+        let now = Instant::now();
+
+        let mut type_db = TypeDb::new(file_db.clone(), &index);
+
         let mut all_roots_body_types: HashMap<FileId, Arc<HashMap<SymbolId, InferenceResult>>> =
             HashMap::new();
 
-        let mut analyzed_roots = FxHashMap::default();
         for root_path in roots {
-            let mut index = ProjectIndexBuilder::new(file_db.clone(), root_path.clone())
-                .with_stdlib(stdlib.to_owned())
-                .with_mappings(&acton_config.mappings)
-                .build()?;
-            resolve(&file_db, &mut index);
-
-            let mut type_db = TypeDb::new(file_db.clone(), &index);
-
             let mut root_body_types = HashMap::new();
 
             let root_file_id = index
@@ -127,15 +155,8 @@ impl TolkAnalyzer {
                 root_body_types.insert(file_id, body_types.clone());
                 all_roots_body_types.insert(file_id, body_types);
             }
-
-            analyzed_roots.insert(
-                root_path,
-                RootAnalysisResult {
-                    index: Arc::new(index),
-                    all_body_types: root_body_types,
-                },
-            );
         }
+        log::info!("Type inference took {:?}", now.elapsed());
 
         #[cfg(feature = "profiling")]
         let profiling = Arc::new(crate::ProfilingContext::new());
@@ -155,7 +176,10 @@ impl TolkAnalyzer {
         Ok(TolkAnalyzer {
             file_db,
             documents: DashMap::default(),
-            roots: analyzed_roots,
+            root: Some(RootAnalysisResult {
+                index: Arc::from(index),
+                all_body_types: all_roots_body_types,
+            }),
             file_urls,
             #[cfg(feature = "profiling")]
             profiling,

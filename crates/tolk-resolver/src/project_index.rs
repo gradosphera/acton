@@ -210,21 +210,18 @@ impl ProjectIndex {
         index: &FileIndex,
         path_to_id: &HashMap<PathBuf, FileId>,
         file_db: &FileDb,
-        stdlib_path: Option<&Path>,
         mappings: &FxHashMap<String, String>,
     ) -> (Vec<ResolvedImport>, Vec<String>) {
         let mut errors = vec![];
         let mut file_imports = Vec::with_capacity(index.imports.len());
         for import in &index.imports {
-            let resolved =
-                match Self::resolve_path(&import.path, &index.path, file_db, stdlib_path, mappings)
-                {
-                    Ok(resolved) => resolved,
-                    Err(err) => {
-                        errors.push(format!("{:#?}", err));
-                        continue;
-                    }
-                };
+            let resolved = match Self::resolve_path(&import.path, &index.path, file_db, mappings) {
+                Ok(resolved) => resolved,
+                Err(err) => {
+                    errors.push(format!("{:#?}", err));
+                    continue;
+                }
+            };
             let file_id = path_to_id.get(&resolved);
             file_imports.push(ResolvedImport {
                 import: import.clone(),
@@ -238,14 +235,10 @@ impl ProjectIndex {
         import: &Arc<str>,
         file: &Path,
         file_db: &FileDb,
-        stdlib_path: Option<&Path>,
         mappings: &FxHashMap<String, String>,
     ) -> anyhow::Result<PathBuf> {
         if let Some(relative_path) = import.strip_prefix("@stdlib/") {
-            let Some(stdlib) = stdlib_path else {
-                anyhow::bail!("Stdlib path not provided for @stdlib import: {}", import);
-            };
-            let abs_path = stdlib.join(relative_path);
+            let abs_path = file_db.stdlib_path().join(relative_path);
             let abs_path = Self::append_tolk_extension_if_needed(abs_path);
             return Ok(file_db.canonicalize(&abs_path)?);
         }
@@ -376,7 +369,6 @@ impl ProjectIndexBuilder {
                 &import,
                 root_file,
                 self.file_db.as_ref(),
-                self.stdlib_path.as_deref(),
                 &self.mappings,
             ) {
                 Ok(resolved) => resolved,
@@ -410,7 +402,6 @@ impl ProjectIndexBuilder {
                 index,
                 &path_to_file_id,
                 self.file_db.as_ref(),
-                self.stdlib_path.as_deref(),
                 &self.mappings,
             );
             imports.insert(*id, file_imports);
@@ -442,6 +433,93 @@ impl ProjectIndexBuilder {
             resolved_uses: Default::default(),
             stdlib_path: self.stdlib_path,
             mappings: self.mappings,
+            errors,
+            global_symbols,
+        })
+    }
+
+    pub fn build_all(
+        file_db: Arc<FileDb>,
+        files_vec: &Vec<PathBuf>,
+        mappings: &Option<BTreeMap<String, String>>,
+    ) -> anyhow::Result<ProjectIndex> {
+        let mut errors = vec![];
+
+        let mappings = if let Some(mappings) = mappings {
+            mappings
+                .iter()
+                .map(|(key, value)| {
+                    if key.starts_with('@') {
+                        (key.clone(), value.clone())
+                    } else {
+                        (format!("@{key}"), value.clone())
+                    }
+                })
+                .collect::<FxHashMap<_, _>>()
+        } else {
+            FxHashMap::default()
+        };
+
+        let mut path_to_file_id = HashMap::new();
+        let mut files = FxHashMap::default();
+        for file in files_vec {
+            let info = match file_db.process(&file) {
+                Ok(info) => info.index().clone(),
+                Err(err) => {
+                    anyhow::bail!("Cannot process file {}: {err}", file.display())
+                }
+            };
+
+            path_to_file_id.insert(file.clone(), info.id);
+            files.insert(info.id, info);
+        }
+
+        let stdlib = file_db.stdlib_path();
+        let common_tolk = stdlib.join("common.tolk");
+        match file_db.process(&common_tolk) {
+            Ok(info) => {
+                let index = info.index().clone();
+                let file_id = index.id;
+                files.insert(file_id, index);
+            }
+            Err(err) => {
+                errors.push(format!("Cannot process common.tolk file: {err}"));
+            }
+        };
+
+        let mut imports = FxHashMap::with_capacity_and_hasher(files.len(), Default::default());
+        for (id, index) in &files {
+            let (file_imports, file_errors) =
+                ProjectIndex::resolve_imports(index, &path_to_file_id, file_db.as_ref(), &mappings);
+            imports.insert(*id, file_imports);
+            errors.extend(file_errors);
+        }
+
+        let mut dependents: FxHashMap<FileId, Vec<FileId>> =
+            FxHashMap::with_capacity_and_hasher(files.len(), Default::default());
+        for (id, file_imports) in &imports {
+            for import in file_imports {
+                if let Some(target_id) = import.target {
+                    dependents.entry(target_id).or_default().push(*id);
+                }
+            }
+        }
+
+        let mut global_symbols = HashMap::new();
+        for file in files.values() {
+            for decl in &file.decls {
+                Self::add_symbol_to_global_index(&mut global_symbols, decl);
+            }
+        }
+
+        Ok(ProjectIndex {
+            files,
+            imports,
+            dependents,
+            path_to_file_id,
+            resolved_uses: Default::default(),
+            stdlib_path: Some(file_db.stdlib_path().to_owned()),
+            mappings,
             errors,
             global_symbols,
         })

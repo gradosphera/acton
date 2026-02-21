@@ -37,3 +37,4 @@ globset = { workspace = true }
 walkdir = { workspace = true }
 dunce = { workspace = true }
 owo-colors = { workspace = true }
+rayon = "1.11.0"
