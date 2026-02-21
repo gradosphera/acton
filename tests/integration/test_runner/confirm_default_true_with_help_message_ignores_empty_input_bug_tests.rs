@@ -3,7 +3,7 @@ use crate::support::project::ProjectBuilder;
 
 #[test]
 fn confirm_default_true_with_help_message_ignores_empty_input_bug() {
-    let mut command = ProjectBuilder::new("aq-stdlib-confirm-empty-input-default-bug")
+    let project = ProjectBuilder::new("aq-stdlib-confirm-empty-input-default-bug")
         .test_file(
             "confirm_empty_input_bug",
             r#"
@@ -17,11 +17,9 @@ fn confirm_default_true_with_help_message_ignores_empty_input_bug() {
                 expect(accepted).toEqual(false);
             }
         "#,
-        )
-        .build()
-        .acton()
-        .test();
+        ).build();
 
+    let mut command = project.acton().test();
     command.cmd = command.cmd.stdin("\n\n");
 
     command
