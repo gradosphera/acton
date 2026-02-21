@@ -249,16 +249,14 @@ Exact return values:
 ## `OutActionList`
 
 ```tolk
-type OutActionList = tuple
+type OutActionList = array<Cell<OutAction>>
 ```
 
-Type alias for the out action list tuple.
-
-Each tuple entry is a raw cell that must decode as [OutAction](#outaction) when read via [OutActionList.at](#outactionlistat).
+Type alias for the out action list array.
 
 To get the out actions, use [vm.outActions](#vmoutactions) method.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L180" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L178" />
 
 ## `OutActionList.at`
 
@@ -279,7 +277,7 @@ val action = out_actions.at(0);
 println(action.kind());
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L194" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L192" />
 
 ## `OutActionList.getSendMessageAt`
 
@@ -300,7 +298,7 @@ if (action != null) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L215" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L213" />
 
 ## `OutActionList.getSendMessageBodyAt`
 
@@ -325,7 +323,7 @@ if (body != null) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L239" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L237" />
 
 ## `OutMessage.outActions`
 
@@ -335,7 +333,7 @@ fun OutMessage.outActions(self, mode: int): OutActionList
 
 Returns the out actions for the message.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L248" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L246" />
 
 ## `vm.outActions`
 
@@ -351,7 +349,7 @@ val out_actions = vm.outActions();
 println(out_actions.size());
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L263" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L261" />
 
 ## `vm.parseOutActions`
 
@@ -370,5 +368,5 @@ val out_actions = vm.parseOutActions(vm.getC5());
 println(out_actions.size());
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L277" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/types/out_actions.tolk#L275" />
 

@@ -58,13 +58,13 @@ struct ExtOutMsgInfo {
 }
 
 /// Represents a list of child transactions IDs (LT) for single send result.
-type ChildTxsIds = tuple
+type ChildTxsIds = array<int>
 
 /// Represents a list of out messages for single send result.
-type OutMessages = tuple
+type OutMessages = array<cell>
 
 /// Represents a list of external outgoing messages for single send result.
-type ExtOutList = tuple
+type ExtOutList = array<cell>
 
 /// Returns the external outgoing message at the given index with given type.
 ///
@@ -172,7 +172,7 @@ fun SendResult.allOutActions(self): OutActionList {
 /// This list represent all transactions produced by a [net.send] call.
 ///
 /// To get a single send result, use [SendResultList.at] method.
-type SendResultList = tuple
+type SendResultList = array<tuple>
 
 /// Returns the send result at the given index.
 fun SendResultList.at(self, index: int): SendResult {
@@ -433,7 +433,7 @@ fun net.sendSingle(from: address, message: OutMessage): SendResult {
 
 /// Creates an External-in message.
 /// Body is always packed into the Either Right (in the reference).
-/// If `StateInit` is present it is also packed in the Either Right (in the refference).
+/// If `StateInit` is present it is also packed in the Either Right (in the reference).
 /// Full TL-B scheme of the message is.
 /// ```
 /// ext_in_msg_info$10 src:MsgAddressExt dest:MsgAddressInt
@@ -1195,7 +1195,7 @@ fun impl.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, name: strin
         throw CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE;
     }
 
-    val argsToSend = args == null ? createEmptyTuple() : args.toTuple();
+    val argsToSend = args == null ? [] : args.toTuple();
     val res = ffi.runGetMethod(addr.toCell(), code, id, name, reflect.typeNameOf<Ret>(), argsToSend);
     if (res == null) {
         // actual error will be processed by test framework, just halt execution

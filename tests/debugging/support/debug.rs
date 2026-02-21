@@ -27,8 +27,7 @@ pub(crate) struct DebugBuilder {
 
 impl DebugBuilder {
     pub(crate) fn new(name: &str) -> Self {
-        let mut temp_dir = TempDir::new().expect("Failed to create temp dir");
-        temp_dir.disable_cleanup(true);
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
         Self {
             name: name.to_string(),
             temp_dir,
