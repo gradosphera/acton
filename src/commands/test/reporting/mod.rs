@@ -21,13 +21,18 @@ pub(super) mod ui;
 
 #[derive(Debug, Clone)]
 pub struct TestExecutionContext {
-    pub get_result: GetMethodResult,
     pub gas_used: u64,
     pub stdout: String,
     pub stderr: String,
     pub assert_failure: Option<AssertFailure>,
-    pub accounts: FxHashMap<StdAddr, ShardAccount>,
     pub expected_exit_code: i32,
+    pub failure: Option<TestFailureExecutionContext>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TestFailureExecutionContext {
+    pub get_result: GetMethodResult,
+    pub accounts: FxHashMap<StdAddr, ShardAccount>,
     pub build_cache: BuildCache,
     pub emulations: EmulationsState,
     pub known_addresses: KnownAddresses,

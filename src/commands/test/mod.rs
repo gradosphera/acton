@@ -10,8 +10,8 @@ use crate::commands::test::reporting::junit::{JUnitConfig, JUnitReporter};
 use crate::commands::test::reporting::teamcity::TeamCityReporter;
 use crate::commands::test::reporting::ui::{UiReporter, start_ui_server};
 use crate::commands::test::reporting::{
-    ReporterManager, TestExecutionContext, TestReport, TestStatus, TestSuiteStats,
-    extract_suite_name,
+    ReporterManager, TestExecutionContext, TestFailureExecutionContext, TestReport, TestStatus,
+    TestSuiteStats, extract_suite_name,
 };
 use crate::context::{
     AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
@@ -932,18 +932,25 @@ fn run_file_tests(
         }
 
         test_report.duration = duration;
+        let failure_execution = if test_passed {
+            None
+        } else {
+            Some(TestFailureExecutionContext {
+                get_result: get_result.clone(),
+                accounts: accounts.clone(),
+                build_cache: runner.build_cache.clone(),
+                emulations: runner.emulations.clone(),
+                known_addresses: runner.known_addresses.clone(),
+                known_code_cells: runner.known_code_cells.clone(),
+            })
+        };
         test_report.execution = Some(TestExecutionContext {
-            get_result: get_result.clone(),
             gas_used,
-            stdout: captured_stdout.clone(),
-            stderr: captured_stderr.clone(),
+            stdout: captured_stdout,
+            stderr: captured_stderr,
             assert_failure: assert_failure.clone(),
-            accounts: accounts.clone(),
             expected_exit_code,
-            build_cache: runner.build_cache.clone(),
-            emulations: runner.emulations.clone(),
-            known_addresses: runner.known_addresses.clone(),
-            known_code_cells: runner.known_code_cells.clone(),
+            failure: failure_execution,
         });
 
         if test_passed {

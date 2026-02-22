@@ -202,21 +202,24 @@ impl TestReporter for ConsoleReporter {
             let Some(exec) = &test.execution else {
                 anyhow::bail!("Test execution context is missing for failed test")
             };
+            let Some(failure_context) = &exec.failure else {
+                anyhow::bail!("Failure execution context is missing for failed test")
+            };
 
             let formatter = FormatterContext {
                 contract_abi: test.abi.clone(),
-                accounts: Cow::Borrowed(&exec.accounts),
-                build_cache: Cow::Borrowed(&exec.build_cache),
-                emulations: Cow::Borrowed(&exec.emulations),
-                known_addresses: Cow::Borrowed(&exec.known_addresses),
-                known_code_cells: Cow::Borrowed(&exec.known_code_cells),
+                accounts: Cow::Borrowed(&failure_context.accounts),
+                build_cache: Cow::Borrowed(&failure_context.build_cache),
+                emulations: Cow::Borrowed(&failure_context.emulations),
+                known_addresses: Cow::Borrowed(&failure_context.known_addresses),
+                known_code_cells: Cow::Borrowed(&failure_context.known_code_cells),
                 backtrace: test.backtrace,
                 fork_net: None,
                 network: None,
                 api_key: None,
             };
 
-            match &exec.get_result {
+            match &failure_context.get_result {
                 GetMethodResult::Success(result) => {
                     process_test_fail(test, exec, formatter, result);
                 }
