@@ -18,6 +18,8 @@ use acton::commands::up::up_cmd;
 use acton::commands::verify::verify_cmd;
 use acton::commands::wallet::{WalletCommand, wallet_cmd};
 use acton::commands::wrapper::wrapper_cmd;
+use acton_config::color::OwoColorize;
+use acton_config::color::{ColorMode, init_color_mode};
 use acton_config::config::{ActonConfig, Explorer, Network};
 use acton_config::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
 use clap::builder::styling::Style;
@@ -29,7 +31,6 @@ use clap_complete::engine::{ArgValueCompleter, CompletionCandidate};
 use commands::common::error_fmt;
 use dotenvy::dotenv;
 use human_panic::{Metadata, setup_panic};
-use owo_colors::OwoColorize;
 use std::fs::OpenOptions;
 use std::str::FromStr;
 use std::{env, fs, process};
@@ -44,6 +45,16 @@ use ton_source_map::SourceMap;
 #[command(about = "TON blockchain development tool")]
 #[command(color = ColorChoice::Auto)]
 struct Cli {
+    #[arg(
+        long,
+        value_enum,
+        global = true,
+        value_name = "WHEN",
+        default_value_t = ColorMode::Auto,
+        help = "Control when to use colored output"
+    )]
+    color: ColorMode,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -809,22 +820,55 @@ fn example_build_usage() -> StyledStr {
     let mut writer = StyledStr::new();
     let styled = Styles::styled();
 
-    // for some reason `cstr` cannot output `{` correctly :/
-    let config_example = color_print::cformat!(
-        r#"<dim>[</>contracts.wallet<dim>]</>
-     name<dim> = </><green>"Wallet Contract"</>
-     src<dim> = </><green>"contracts/wallet.tolk"</>
-     output<dim> = </><green>"wallet.boc"</>
-     depends<dim> = [</><green>"child"</><dim>]</>
-     <dim># or as library with custom function name and output path</>
-     depends<dim> = </><dim>[</>
-       <dim>{{</> name<dim> = </><green>"child"</><dim>,</> kind<dim> = </><green>"library_ref"</><dim>,</> function<dim> = </><green>"getChildCode"</><dim>,</> path<dim> = </><green>"child_dep.tolk"</> <dim>}}</>
-     <dim>]</>"#
-    );
-    let build_config_example = color_print::cformat!(
-        r#"<dim>[</>build<dim>]</>
-     output-fift<dim> = </><green>"build/fift"</>"#
-    );
+    let dim = |text: &str| text.dimmed().to_string();
+    let green = |text: &str| text.green().to_string();
+
+    let config_example = [
+        format!("{}contracts.wallet{}", dim("["), dim("]")),
+        format!("     name{}{}", dim(" = "), green("\"Wallet Contract\"")),
+        format!(
+            "     src{}{}",
+            dim(" = "),
+            green("\"contracts/wallet.tolk\"")
+        ),
+        format!("     output{}{}", dim(" = "), green("\"wallet.boc\"")),
+        format!(
+            "     depends{}{}{}{}",
+            dim(" = "),
+            dim("["),
+            green("\"child\""),
+            dim("]")
+        ),
+        format!(
+            "     {}",
+            dim("# or as library with custom function name and output path")
+        ),
+        format!("     depends{}{}", dim(" = "), dim("[")),
+        format!(
+            "       {} name{}{}{} kind{}{}{} function{}{}{} path{}{} {}",
+            dim("{"),
+            dim(" = "),
+            green("\"child\""),
+            dim(","),
+            dim(" = "),
+            green("\"library_ref\""),
+            dim(","),
+            dim(" = "),
+            green("\"getChildCode\""),
+            dim(","),
+            dim(" = "),
+            green("\"child_dep.tolk\""),
+            dim("}")
+        ),
+        format!("     {}", dim("]")),
+    ]
+    .join("\n");
+
+    let build_config_example = [
+        format!("{}build{}", dim("["), dim("]")),
+        format!("     output-fift{}{}", dim(" = "), green("\"build/fift\"")),
+    ]
+    .join("\n");
 
     let build_examples = Vec::from([
         ("Build all contracts", "acton build"),
@@ -1125,14 +1169,15 @@ fn main() {
             .homepage("https://github.com/i582/acton")
     );
     dotenv().ok();
-    let cli = Cli::parse();
+    let Cli { color, command } = Cli::parse();
+    init_color_mode(color);
 
-    if !matches!(cli.command, Commands::Ls { .. }) {
+    if !matches!(command, Commands::Ls { .. }) {
         // for language server we set up own logging
         setup_logging().expect("Failed to set up logging");
     }
 
-    let result = match cli.command {
+    let result = match command {
         Commands::Init => init_cmd(),
         Commands::Wallet { command } => wallet_cmd(command),
         Commands::New {
