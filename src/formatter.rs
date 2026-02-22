@@ -20,11 +20,11 @@ use ton_api::Network;
 use ton_source_map::{DebugLocation, SourceLocation};
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, Load};
+use tycho_types::cell::{Cell, HashBytes, Load};
 use tycho_types::models::{
     AccountState, AccountStatus, Base64StdAddrFlags, ComputePhase, DisplayBase64StdAddr,
     ExecutedComputePhase, IntAddr, MsgInfo, RelaxedMessage, RelaxedMsgInfo, ReserveCurrencyFlags,
-    SendMsgFlags, ShardAccount, Transaction, TxInfo,
+    SendMsgFlags, ShardAccount, StdAddr, Transaction, TxInfo,
 };
 use tycho_types::num::Tokens;
 
@@ -50,11 +50,11 @@ struct TransactionNode {
 #[derive(Debug, Clone)]
 pub struct FormatterContext<'a> {
     pub contract_abi: Arc<ContractAbi>,
-    pub accounts: Cow<'a, FxHashMap<String, ShardAccount>>,
+    pub accounts: Cow<'a, FxHashMap<StdAddr, ShardAccount>>,
     pub build_cache: Cow<'a, BuildCache>,
     pub emulations: Cow<'a, EmulationsState>,
     pub known_addresses: Cow<'a, KnownAddresses>,
-    pub known_code_cells: Cow<'a, FxHashMap<String, String>>,
+    pub known_code_cells: Cow<'a, FxHashMap<HashBytes, String>>,
     pub backtrace: Option<BacktraceMode>,
     pub fork_net: Option<Network>,
     pub api_key: Option<Cow<'a, str>>,
@@ -724,8 +724,12 @@ impl<'a> FormatterContext<'a> {
             MsgInfo::ExtIn(info) => info.dst,
             MsgInfo::ExtOut(_) => return None,
         };
+        let dst = match dst {
+            IntAddr::Std(addr) => addr,
+            IntAddr::Var(_) => panic!("Var addresses are not supported anymore"),
+        };
 
-        let code = Self::account_code(&self.accounts, dst.to_string());
+        let code = Self::account_code(&self.accounts, &dst);
         let result = self.build_cache.result_for_code(&code)?;
 
         let info = retrace::find_exception_info(logs, &result.1.source_map)?;
@@ -935,7 +939,12 @@ impl<'a> FormatterContext<'a> {
     ) -> Option<SourceLocation> {
         let in_msg = tx.load_in_msg().ok()??;
         if let MsgInfo::Int(info) = &in_msg.info {
-            let code = Self::account_code(&self.accounts, info.dst.to_string());
+            let addr = match &info.dst {
+                IntAddr::Std(addr) => addr,
+                IntAddr::Var(_) => panic!("Var addresses are not supported anymore"),
+            };
+
+            let code = Self::account_code(&self.accounts, addr);
             let result = self.build_cache.result_for_code(&code);
 
             if let Some(result) = result {
@@ -1006,44 +1015,37 @@ impl<'a> FormatterContext<'a> {
     }
 
     fn get_contract_type(&self, addr: &IntAddr) -> Option<String> {
+        let addr = match addr {
+            IntAddr::Std(addr) => addr,
+            IntAddr::Var(_) => panic!("Var addresses are not supported anymore"),
+        };
+
+        // contract can be registered as an address with a name
         if let Some(known_address) = self.known_addresses.addresses.get(addr) {
             return Some(known_address.name.clone());
         }
 
-        let addr_str = addr.to_string();
-
-        if let Some(account) = self.accounts.get(&addr_str) {
-            let state = account.account.load().ok()?.0?.state;
-            let code_hash = match state {
-                AccountState::Uninit => None,
-                AccountState::Active(state) => state.code.map(|code| code.repr_hash().to_string()),
-                AccountState::Frozen(_) => None,
-            };
-
-            if let Some(code_hash) = code_hash
-                && let Some(known_code_cell) = self.known_code_cells.get(&code_hash)
-            {
-                return Some(known_code_cell.clone());
-            }
-        }
-
-        let shard_account = self.accounts.get(&addr_str)?;
+        let shard_account = self.accounts.get(addr)?;
         let account = shard_account.load_account().ok()??;
 
-        let AccountState::Active(info) = account.state else {
+        let state = account.state;
+        let AccountState::Active(info) = state else {
             return None;
         };
 
         let code = info.code?;
-        let code_hash = code.repr_hash().to_string();
-        let compilation_result = self
-            .build_cache
-            .built
-            .iter()
-            .find(|(_, result)| result.code_hash.eq_ignore_ascii_case(&code_hash));
+        let code_hash = code.repr_hash();
 
+        // contract can be registered as a cell with a name
+        if let Some(cell_name) = self.known_code_cells.get(code_hash) {
+            return Some(cell_name.clone());
+        }
+
+        // when we compile contracts from Acton.toml we store results in build cache
+        // so we can find compiled contract and its name
+        let compilation_result = self.build_cache.result_for_code(&Some(code));
         if let Some((_, result)) = compilation_result {
-            return Some(result.name.clone());
+            return Some(result.name);
         }
 
         None
@@ -1712,8 +1714,11 @@ impl<'a> FormatterContext<'a> {
     }
 
     #[must_use]
-    pub fn account_code(accounts: &FxHashMap<String, ShardAccount>, addr: String) -> Option<Cell> {
-        let account = accounts.get(&addr);
+    pub fn account_code(
+        accounts: &FxHashMap<StdAddr, ShardAccount>,
+        addr: &StdAddr,
+    ) -> Option<Cell> {
+        let account = accounts.get(addr);
         let state = account?.account.load().ok()?.0?.state;
         match state {
             AccountState::Uninit => None,
@@ -1770,7 +1775,7 @@ impl<'a> FormatterContext<'a> {
             .into_iter()
             .flat_map(|res| {
                 let tx = res.tx;
-                let code = Self::account_code(&self.accounts, tx.account.to_string());
+                let code = Self::account_code(&self.accounts, &StdAddr::new(0, tx.account));
                 let build = self.build_cache.result_for_code(&code);
 
                 Some(TransactionInfo {

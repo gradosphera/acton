@@ -10,7 +10,8 @@ use std::time::Duration;
 use ton_abi::ContractAbi;
 use ton_executor::get::GetMethodResult;
 use ton_source_map::{SourceLocation, SourceMap};
-use tycho_types::models::ShardAccount;
+use tycho_types::cell::HashBytes;
+use tycho_types::models::{ShardAccount, StdAddr};
 
 pub(super) mod console;
 pub(super) mod dot;
@@ -25,12 +26,12 @@ pub struct TestExecutionContext {
     pub stdout: String,
     pub stderr: String,
     pub assert_failure: Option<AssertFailure>,
-    pub accounts: FxHashMap<String, ShardAccount>,
+    pub accounts: FxHashMap<StdAddr, ShardAccount>,
     pub expected_exit_code: i32,
     pub build_cache: BuildCache,
     pub emulations: EmulationsState,
     pub known_addresses: KnownAddresses,
-    pub known_code_cells: FxHashMap<String, String>,
+    pub known_code_cells: FxHashMap<HashBytes, String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

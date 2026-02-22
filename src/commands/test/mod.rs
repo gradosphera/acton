@@ -54,8 +54,8 @@ use ton_source_map::SourceMap;
 use tvmffi::serde::serialize_tuple;
 use tvmffi::stack::Tuple;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellBuilder};
-use tycho_types::models::ShardAccount;
+use tycho_types::cell::{Cell, CellBuilder, HashBytes};
+use tycho_types::models::{ShardAccount, StdAddr};
 use walkdir::WalkDir;
 
 mod annotations;
@@ -75,7 +75,7 @@ pub struct TestResult {
     pub captured_stderr: String,
     pub assert_failure: Option<AssertFailure>,
     pub expected_exit_code: Option<i32>,
-    pub accounts: FxHashMap<String, ShardAccount>,
+    pub accounts: FxHashMap<StdAddr, ShardAccount>,
 }
 
 #[derive(Debug)]
@@ -85,7 +85,7 @@ pub struct TestRunner<'a> {
     build_cache: BuildCache,
     file_build_cache: &'a mut FileBuildCache,
     known_addresses: KnownAddresses,
-    known_code_cells: FxHashMap<String, String>,
+    known_code_cells: FxHashMap<HashBytes, String>,
     emulations: EmulationsState,
     transport: DapTransport,
     reporter_manager: &'a mut ReporterManager,
@@ -1011,7 +1011,7 @@ fn run_file_tests(
                     &test.name,
                     &file_path,
                     &Boc::encode_base64(code),
-                    &code.repr_hash().to_string().to_ascii_uppercase(),
+                    *code.repr_hash(),
                     source_map.clone(),
                     Some(
                         contract_abi(

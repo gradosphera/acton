@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use ton_networks::{CustomNetworkUrls, Network};
 use tycho_types::boc::Boc;
 use tycho_types::cell::Cell;
+use tycho_types::models::StdAddr;
 
 /// Fetches account information from `TonCenter`.
 ///
@@ -23,7 +24,7 @@ use tycho_types::cell::Cell;
 ///   use the `TONCENTER_API_KEY` environment variable.
 pub fn get_account_info(
     seqno: Option<u64>,
-    address: &str,
+    address: &StdAddr,
     network: &Network,
     api_key: Option<String>,
     custom_networks: HashMap<String, CustomNetworkUrls>,

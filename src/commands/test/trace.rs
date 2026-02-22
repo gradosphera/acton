@@ -8,7 +8,6 @@ use std::sync::Arc;
 use ton_abi::ContractAbi;
 use ton_source_map::SourceMap;
 use tycho_types::boc::Boc;
-use tycho_types::models::IntAddr;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct TestTrace {
@@ -94,12 +93,10 @@ pub(super) fn dump_test_transactions(
 
     let mut wallets = BTreeMap::new();
     for (addr, known) in &known_addresses.addresses {
-        if let IntAddr::Std(addr) = addr {
-            wallets.insert(
-                addr.display_base64_url(true).to_string(),
-                known.name.clone(),
-            );
-        }
+        wallets.insert(
+            addr.display_base64_url(true).to_string(),
+            known.name.clone(),
+        );
     }
 
     let mut known_contracts = BTreeMap::new();

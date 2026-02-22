@@ -16,14 +16,14 @@ use std::env;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use ton_executor::{DEFAULT_CONFIG, DEFAULT_CONFIG_DICT};
+use ton_executor::{DEFAULT_CONFIG, DEFAULT_CONFIG_CELL, DEFAULT_CONFIG_DICT};
 use ton_networks::Network;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellFamily, HashBytes, Lazy};
 use tycho_types::dict;
 use tycho_types::models::{
     Account, AccountState, CurrencyCollection, IntAddr, OptionalAccount, ShardAccount, StateInit,
-    StdAddr, StdAddrFormat, StorageInfo,
+    StdAddr, StorageInfo,
 };
 
 /// Represents the source of the world state.
@@ -47,7 +47,7 @@ impl AccountsState {
     ///
     /// * `address` - The raw address of the account.
     /// * `current_lt` - The current logical time of the world state.
-    pub fn retrieve(&mut self, address: &str, current_lt: u64) -> ShardAccount {
+    pub fn retrieve(&mut self, address: &StdAddr, current_lt: u64) -> ShardAccount {
         match self {
             Self::Local(r) => r.retrieve(address, current_lt),
             Self::Remote(r) => r.retrieve(address, current_lt),
@@ -60,7 +60,7 @@ impl AccountsState {
     ///
     /// * `address` - The raw address of the account.
     /// * `account` - The new shard account data.
-    pub fn update(&mut self, address: &str, account: ShardAccount) {
+    pub fn update(&mut self, address: &StdAddr, account: ShardAccount) {
         match self {
             Self::Local(r) => r.update(address, account),
             Self::Remote(r) => r.update(address, account),
@@ -69,7 +69,7 @@ impl AccountsState {
 
     /// Returns a reference to the underlying map of accounts.
     #[must_use]
-    pub const fn accounts(&self) -> &FxHashMap<String, ShardAccount> {
+    pub const fn accounts(&self) -> &FxHashMap<StdAddr, ShardAccount> {
         match self {
             Self::Local(r) => &r.accounts,
             Self::Remote(r) => &r.accounts,
@@ -79,7 +79,7 @@ impl AccountsState {
 
 /// A purely local implementation of the world state.
 pub struct LocalAccountsState {
-    pub accounts: FxHashMap<String, ShardAccount>,
+    pub accounts: FxHashMap<StdAddr, ShardAccount>,
 }
 
 impl Default for LocalAccountsState {
@@ -97,7 +97,7 @@ impl LocalAccountsState {
         }
     }
 
-    fn retrieve(&mut self, address: &str, current_lt: u64) -> ShardAccount {
+    fn retrieve(&mut self, address: &StdAddr, current_lt: u64) -> ShardAccount {
         if let Some(acc) = self.accounts.get(address) {
             return acc.clone();
         }
@@ -107,12 +107,12 @@ impl LocalAccountsState {
             last_trans_hash: HashBytes::ZERO,
             last_trans_lt: current_lt,
         };
-        self.accounts.insert(address.to_string(), acc.clone());
+        self.accounts.insert(address.clone(), acc.clone());
         acc
     }
 
-    fn update(&mut self, address: &str, account: ShardAccount) {
-        self.accounts.insert(address.to_owned(), account);
+    fn update(&mut self, address: &StdAddr, account: ShardAccount) {
+        self.accounts.insert(address.clone(), account);
     }
 }
 
@@ -120,7 +120,7 @@ impl LocalAccountsState {
 pub struct RemoteCacheKey {
     fork_block_number: Option<u64>,
     fork_net: String,
-    address: String,
+    address: StdAddr,
 }
 
 #[derive(Clone, Debug)]
@@ -155,7 +155,7 @@ impl RemoteSnapshotCache {
 /// A state implementation that fetches missing accounts from a remote network.
 pub struct RemoteAccountState {
     /// Local cache and overrides for accounts.
-    pub accounts: FxHashMap<String, ShardAccount>,
+    pub accounts: FxHashMap<StdAddr, ShardAccount>,
     /// The network to fork from (e.g., "mainnet", "testnet").
     pub fork_net: Network,
     /// Optional block number to pin the state to.
@@ -186,14 +186,14 @@ impl RemoteAccountState {
         }
     }
 
-    fn retrieve(&mut self, address: &str, current_lt: u64) -> ShardAccount {
+    fn retrieve(&mut self, address: &StdAddr, current_lt: u64) -> ShardAccount {
         if let Some(acc) = self.accounts.get(address) {
             return acc.clone();
         }
 
         match self.resolve_remote_account(address, current_lt) {
             Ok(acc) => {
-                self.accounts.insert(address.to_string(), acc.clone());
+                self.accounts.insert(address.clone(), acc.clone());
                 acc
             }
             Err(err) => {
@@ -210,20 +210,20 @@ impl RemoteAccountState {
         }
     }
 
-    fn update(&mut self, address: &str, account: ShardAccount) {
-        self.accounts.insert(address.to_owned(), account);
+    fn update(&mut self, address: &StdAddr, account: ShardAccount) {
+        self.accounts.insert(address.clone(), account);
     }
 
     fn resolve_remote_account(
         &self,
-        address: &str,
+        address: &StdAddr,
         current_lt: u64,
     ) -> anyhow::Result<ShardAccount> {
         // return cached version if it already resolved earlier in current suite
         let cache_key = RemoteCacheKey {
             fork_block_number: self.fork_block_number,
             fork_net: self.fork_net.to_string(),
-            address: address.to_owned(),
+            address: address.clone(),
         };
         if let Some(cached) = self.cache.get(&cache_key) {
             return Ok(cached);
@@ -270,7 +270,7 @@ impl RemoteAccountState {
         let acc = ShardAccount {
             account: Lazy::new(&OptionalAccount(Some(Account {
                 balance: CurrencyCollection::new(balance),
-                address: IntAddr::Std(StdAddr::from_str_ext(address, StdAddrFormat::any())?.0),
+                address: IntAddr::Std(address.clone()),
                 last_trans_lt: info.last_transaction_id.lt.parse()?,
                 state: account_state,
                 storage_stat: StorageInfo::default(),
@@ -345,7 +345,7 @@ impl WorldState {
 
     /// Returns a reference to the map of accounts currently in the world state.
     #[must_use]
-    pub const fn get_accounts(&self) -> &FxHashMap<String, ShardAccount> {
+    pub const fn get_accounts(&self) -> &FxHashMap<StdAddr, ShardAccount> {
         self.accounts_state.accounts()
     }
 
@@ -355,7 +355,7 @@ impl WorldState {
         self.config.clone()
     }
 
-    /// Returns a  blockchain configuration as base64 encoded string.
+    /// Returns a blockchain configuration as base64 encoded string.
     #[must_use]
     pub fn get_config_b64(&self) -> Cow<'_, str> {
         if self.config == *DEFAULT_CONFIG_DICT {
@@ -370,6 +370,15 @@ impl WorldState {
         )
     }
 
+    /// Returns a blockchain configuration as a cell.
+    #[must_use]
+    pub fn get_config_cell(&self) -> Cell {
+        if self.config == *DEFAULT_CONFIG_DICT {
+            return DEFAULT_CONFIG_CELL.clone();
+        }
+        self.config.root().clone().expect("Config has no root")
+    }
+
     /// Sets the blockchain configuration.
     pub fn set_config(&mut self, config: dict::Dict<u32, Cell>) {
         self.config = Arc::new(config);
@@ -379,7 +388,7 @@ impl WorldState {
     ///
     /// If the state is `Remote` and the account is not in the local cache, it will
     /// attempt to fetch it from the network to determine its status.
-    pub fn check_deployed(&mut self, raw_addr: &str) -> bool {
+    pub fn check_deployed(&mut self, raw_addr: &StdAddr) -> bool {
         let deployed = self.accounts_state.accounts().contains_key(raw_addr);
         if !deployed && matches!(self.accounts_state, AccountsState::Remote(_)) {
             // we need to populate address for the first time
@@ -394,12 +403,12 @@ impl WorldState {
     }
 
     /// Retrieves an account by its address, fetching it from the source if necessary.
-    pub fn get_account(&mut self, raw_addr: &str) -> ShardAccount {
-        self.accounts_state.retrieve(raw_addr, self.current_lt)
+    pub fn get_account(&mut self, addr: &StdAddr) -> ShardAccount {
+        self.accounts_state.retrieve(addr, self.current_lt)
     }
 
     /// Updates an account's data in the world state.
-    pub fn update_account(&mut self, addr: &str, account: &ShardAccount) {
+    pub fn update_account(&mut self, addr: &StdAddr, account: &ShardAccount) {
         self.accounts_state.update(addr, account.clone());
     }
 

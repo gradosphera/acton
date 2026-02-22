@@ -122,9 +122,12 @@ impl Emulator {
                 anyhow::bail!("Send transaction only support internal and external-in messages")
             }
         };
-        let dst_addr = dst.to_string();
+        let dst = match dst {
+            IntAddr::Std(dst) => dst,
+            IntAddr::Var(_) => panic!("Var address is not supported anymore"),
+        };
 
-        let shard_account_before = state.get_account(&dst_addr);
+        let shard_account_before = state.get_account(&dst);
         let code = Self::get_code_cell(&msg, &shard_account_before);
 
         let args = RunTransactionArgs {
@@ -152,7 +155,7 @@ impl Emulator {
             .context("Failed to parse shard account")?;
 
         // Since state was updated, we need to update it in world state too.
-        state.update_account(&dst_addr, &shard_account_after);
+        state.update_account(&dst, &shard_account_after);
 
         let transaction = Boc::decode_base64(result.transaction.as_ref())?
             .parse::<Transaction>()

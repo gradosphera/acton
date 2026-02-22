@@ -21,7 +21,7 @@ use tonlib_core::wallet::ton_wallet::TonWallet;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Store};
 use tycho_types::dict::Dict;
-use tycho_types::models::{IntAddr, LibDescr, Transaction};
+use tycho_types::models::{IntAddr, LibDescr, StdAddr, Transaction};
 
 #[derive(Debug, Clone)]
 pub struct AssertBinFailure {
@@ -184,7 +184,7 @@ impl BuildCache {
         name: &str,
         path: &Path,
         code: &str,
-        code_hash: &str,
+        code_hash: HashBytes,
         source_map: Arc<SourceMap>,
         abi: Option<Arc<ContractAbi>>,
     ) {
@@ -193,7 +193,7 @@ impl BuildCache {
             CompilationResult {
                 name: name.to_owned(),
                 code_boc64: code.to_owned(),
-                code_hash: code_hash.to_owned(),
+                code_hash,
                 source_map,
                 abi,
             },
@@ -203,10 +203,10 @@ impl BuildCache {
     #[must_use]
     pub fn result_for_code(&self, code: &Option<Cell>) -> Option<(PathBuf, CompilationResult)> {
         let Some(code) = code else { return None };
-        let code_hash = code.repr_hash().to_string().to_uppercase();
+        let code_hash = code.repr_hash();
         self.built
             .iter()
-            .find(|(_, result)| result.code_hash == code_hash)
+            .find(|(_, result)| &result.code_hash == code_hash)
             .map(|(name, result)| ((*name).clone(), (*result).clone()))
     }
 }
@@ -215,7 +215,7 @@ impl BuildCache {
 pub struct CompilationResult {
     pub name: String,
     pub code_boc64: String,
-    pub code_hash: String,
+    pub code_hash: HashBytes,
     pub source_map: Arc<SourceMap>,
     pub abi: Option<Arc<ContractAbi>>,
 }
@@ -227,7 +227,7 @@ pub struct KnownAddress {
 
 #[derive(Debug, Clone)]
 pub struct KnownAddresses {
-    pub addresses: FxHashMap<IntAddr, KnownAddress>,
+    pub addresses: FxHashMap<StdAddr, KnownAddress>,
 }
 
 impl Default for KnownAddresses {
@@ -415,7 +415,7 @@ pub struct BuildContext<'a> {
     pub build_cache: &'a mut BuildCache,
     pub file_build_cache: &'a mut FileBuildCache,
     pub known_addresses: &'a mut KnownAddresses,
-    pub known_code_cells: &'a mut FxHashMap<String, String>,
+    pub known_code_cells: &'a mut FxHashMap<HashBytes, String>,
     pub need_debug_info: bool,
     pub backtrace: Option<BacktraceMode>,
 }

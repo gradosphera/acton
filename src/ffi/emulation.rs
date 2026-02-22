@@ -10,11 +10,12 @@ use base64::Engine;
 use crc::{CRC_16_XMODEM, Crc};
 use log::{debug, info, warn};
 use num_bigint::BigInt;
-use num_traits::{ToPrimitive, Zero};
+use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use ton_abi::contract_abi;
@@ -41,10 +42,6 @@ use tycho_types::models::{
 
 fn tycho_to_ton_cell(cell: &Cell) -> anyhow::Result<TonArcCell> {
     TonArcCell::from_boc(&Boc::encode(cell)).map_err(Into::into)
-}
-
-fn ton_to_tycho_cell(cell: &TonArcCell) -> anyhow::Result<Cell> {
-    Boc::decode(cell.to_boc(false)?).map_err(Into::into)
 }
 
 extension!(build in (Context) with (path: String, name: String) using build_impl);
@@ -117,7 +114,7 @@ fn build_impl(
             &name,
             Path::new(&path),
             &cached_entry.code_boc64,
-            &cached_entry.code_hash_hex,
+            HashBytes::from_str(&cached_entry.code_hash_hex)?,
             cached_entry.source_map.clone().unwrap_or_default().into(),
             Some(contract_abi(content, &path, &ctx.env.config.mappings).into()),
         );
@@ -153,7 +150,7 @@ fn build_impl(
                 &name,
                 Path::new(&path),
                 &success.code_boc64,
-                &success.code_hash_hex,
+                HashBytes::from_str(&success.code_hash_hex)?,
                 success.source_map.unwrap_or_default().into(),
                 Some(contract_abi(content, &path, &ctx.env.config.mappings).into()),
             );
@@ -368,17 +365,20 @@ fn send_message_debug(
     libs: &Dict<HashBytes, LibDescr>,
     src_addr: Option<IntAddr>,
 ) -> anyhow::Result<Vec<SendMessageResult>> {
-    let message_obj: RelaxedMessage = msg_cell
+    let msg: RelaxedMessage = msg_cell
         .parse()
         .context("Failed to load message from cell")?;
 
-    let RelaxedMsgInfo::Int(int_message) = &message_obj.info else {
+    let RelaxedMsgInfo::Int(int_message) = &msg.info else {
         anyhow::bail!("Emulator only supports internal messages for now");
     };
 
-    let dst_addr_str = int_message.dst.to_string();
-    let dest_account = ctx.chain.world_state.get_account(&dst_addr_str);
-    let code = Emulator::get_code_cell(&message_obj, &dest_account);
+    let dst = match &int_message.dst {
+        IntAddr::Std(addr) => addr,
+        IntAddr::Var(_) => panic!("Var addresses are not supported anymore"),
+    };
+    let dest_account = ctx.chain.world_state.get_account(dst);
+    let code = Emulator::get_code_cell(&msg, &dest_account);
 
     let step_executor = StepExecutor::new().expect("Failed to create executor");
     let source_map = ctx
@@ -479,9 +479,7 @@ fn send_message_debug(
         .parse()
         .context("Failed to load shard account from cell")?;
 
-    ctx.chain
-        .world_state
-        .update_account(&dst_addr_str, &shard_account);
+    ctx.chain.world_state.update_account(dst, &shard_account);
 
     let tx_cell = Boc::decode_base64(result.transaction.as_ref())
         .context("Failed to decode transaction BoC")?;
@@ -793,7 +791,7 @@ fn run_get_method_impl(
     let world_state = &mut ctx.chain.world_state;
     let addr_str = addr.to_string();
 
-    let shard_account = world_state.get_account(&addr_str);
+    let shard_account = world_state.get_account(&addr);
     let state = shard_account
         .account
         .load()
@@ -967,27 +965,23 @@ fn suggest_name<'a>(input: &str, candidates: &'a [&'a str]) -> Option<&'a str> {
     if best_dist <= 3 { best } else { None }
 }
 
-extension!(is_deployed in (Context) with (address: StdAddr) using is_deployed_impl);
-fn is_deployed_impl(ctx: &mut Context, stack: &mut Tuple, address: StdAddr) -> anyhow::Result<()> {
-    let is_deployed = ctx.chain.world_state.check_deployed(&address.to_string());
+extension!(is_deployed in (Context) with (addr: StdAddr) using is_deployed_impl);
+fn is_deployed_impl(ctx: &mut Context, stack: &mut Tuple, addr: StdAddr) -> anyhow::Result<()> {
+    let is_deployed = ctx.chain.world_state.check_deployed(&addr);
     stack.push_bool(is_deployed);
     Ok(())
 }
 
 extension!(get_deployed_code in (Context) with (addr: StdAddr) using get_deployed_code_impl);
 fn get_deployed_code_impl(ctx: &mut Context, stk: &mut Tuple, addr: StdAddr) -> anyhow::Result<()> {
-    let dst_addr_str = addr.to_string();
-
-    let is_deployed = ctx.chain.world_state.check_deployed(&dst_addr_str);
+    let is_deployed = ctx.chain.world_state.check_deployed(&addr);
     if !is_deployed {
         stk.push(TupleItem::Null);
         return Ok(());
     }
 
-    let account = ctx.chain.world_state.get_account(&dst_addr_str);
-    let cell = if let Some(value) = get_address_code(&account) {
-        value
-    } else {
+    let account = ctx.chain.world_state.get_account(&addr);
+    let Some(cell) = get_address_code(&account) else {
         stk.push(TupleItem::Null);
         return Ok(());
     };
@@ -1008,8 +1002,8 @@ fn get_address_code(account: &ShardAccount) -> Option<Cell> {
 
 extension!(crc16 in (Context) with (data: String) using crc16_impl);
 fn crc16_impl(_ctx: &mut Context, stack: &mut Tuple, data: String) -> anyhow::Result<()> {
-    let crc = Crc::<u16>::new(&CRC_16_XMODEM);
-    let result = crc.checksum(data.as_bytes());
+    const CRC16: Crc<u16> = Crc::<u16>::new(&CRC_16_XMODEM);
+    let result = CRC16.checksum(data.as_bytes());
     stack.push(TupleItem::Int(BigInt::from(result)));
     Ok(())
 }
@@ -1017,24 +1011,20 @@ fn crc16_impl(_ctx: &mut Context, stack: &mut Tuple, data: String) -> anyhow::Re
 extension!(type_name_by_opcode in (Context) with (id: BigInt) using type_name_by_opcode_impl);
 fn type_name_by_opcode_impl(ctx: &mut Context, stk: &mut Tuple, id: BigInt) -> anyhow::Result<()> {
     let id = u32::try_from(&id).context("ID is too big for uint32 opcode")?;
-    let type_abi = ctx.env.abi.find_type_by_opcode(id);
-    match type_abi {
-        None => {
-            stk.push(TupleItem::Null);
-        }
-        Some(type_abi) => {
-            stk.push_string(&type_abi.name);
-        }
-    }
+    let Some(type_abi) = ctx.env.abi.find_type_by_opcode(id) else {
+        stk.push(TupleItem::Null);
+        return Ok(());
+    };
+    stk.push_string(&type_abi.name);
     Ok(())
 }
 
-extension!(register_address in (Context) with (name: String, address: IntAddr) using register_address_impl);
+extension!(register_address in (Context) with (name: String, address: StdAddr) using register_address_impl);
 fn register_address_impl(
     ctx: &mut Context,
-    _stack: &mut Tuple,
+    _: &mut Tuple,
     name: String,
-    address: IntAddr,
+    address: StdAddr,
 ) -> anyhow::Result<()> {
     ctx.build
         .known_addresses
@@ -1051,19 +1041,15 @@ fn register_code_impl(
     code: Cell,
 ) -> anyhow::Result<()> {
     let hash = code.repr_hash();
-    ctx.build.known_code_cells.insert(format!("{hash:x}"), name);
+    ctx.build.known_code_cells.insert(*hash, name);
     Ok(())
 }
 
 extension!(account_state in (Context) with (addr: StdAddr) using account_state_impl);
 fn account_state_impl(ctx: &mut Context, stk: &mut Tuple, addr: StdAddr) -> anyhow::Result<()> {
-    let Ok(account) = ctx
-        .chain
-        .world_state
-        .get_account(&addr.to_string())
-        .account
-        .load()
-        .map_err(|e| anyhow::anyhow!("Failed to load account: {e}"))
+    let account = ctx.chain.world_state.get_account(&addr);
+    let optional_account = account.account.load();
+    let Ok(account) = optional_account.map_err(|e| anyhow::anyhow!("Failed to load account: {e}"))
     else {
         stk.push(TupleItem::Null);
         return Ok(());
@@ -1126,7 +1112,7 @@ fn load_library_by_hash_impl(
         return Ok(());
     };
 
-    match api_client.get_library_by_hash(hash.as_str()) {
+    match api_client.get_library_by_hash(&hash) {
         Ok(cell) => {
             stack.push(TupleItem::Cell(cell));
         }
@@ -1144,6 +1130,18 @@ fn is_broadcasting_impl(ctx: &mut Context, stack: &mut Tuple) -> anyhow::Result<
     Ok(())
 }
 
+extension!(enable_broadcast in (Context) using enable_broadcast_impl);
+const fn enable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) -> anyhow::Result<()> {
+    ctx.is_broadcasting = true;
+    Ok(())
+}
+
+extension!(disable_broadcast in (Context) using disable_broadcast_impl);
+const fn disable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) -> anyhow::Result<()> {
+    ctx.is_broadcasting = false;
+    Ok(())
+}
+
 extension!(get_wallet_by_name in (Context) with (name: String) using get_wallet_by_name_impl);
 fn get_wallet_by_name_impl(
     ctx: &mut Context,
@@ -1151,10 +1149,12 @@ fn get_wallet_by_name_impl(
     name: String,
 ) -> anyhow::Result<()> {
     if let Some(wallet) = ctx.env.open_wallets.get(&name) {
-        let cell = wallet.address().to_msg_address().to_cell();
-        let cell = cell.context("Cannot build cell from wallet address:")?;
-        let cell = ton_to_tycho_cell(&cell.to_arc())?;
-        stack.push(TupleItem::Cell(cell));
+        let addr = wallet.address();
+        let addr = StdAddr::new(
+            addr.workchain as i8,
+            HashBytes(<[u8; 32]>::try_from(addr.hash_part.as_slice())?),
+        );
+        stack.push(TupleItem::Cell(to_cell(&addr)));
         return Ok(());
     }
 
@@ -1163,14 +1163,14 @@ fn get_wallet_by_name_impl(
     Ok(())
 }
 
-extension!(wait_for_transaction in (Context) with (sleep_duration: BigInt, attempts: BigInt, quiet: BigInt, ext_message_hash: HashBytes, address: StdAddr) using wait_for_transaction_impl);
+extension!(wait_for_transaction in (Context) with (sleep_duration: BigInt, attempts: BigInt, quiet: bool, ext_message_hash: HashBytes, address: StdAddr) using wait_for_transaction_impl);
 #[allow(clippy::too_many_arguments)]
 fn wait_for_transaction_impl(
     ctx: &mut Context,
     stack: &mut Tuple,
     sleep_duration: BigInt,
     attempts: BigInt,
-    quiet: BigInt,
+    quiet: bool,
     ext_message_hash: HashBytes,
     address: StdAddr,
 ) -> anyhow::Result<()> {
@@ -1180,7 +1180,6 @@ fn wait_for_transaction_impl(
         return Ok(());
     }
 
-    let quiet = !quiet.is_zero();
     let attempts = attempts.to_u32().unwrap_or(20);
     let sleep_duration_ms = sleep_duration.to_u64().unwrap_or(2000);
 
@@ -1285,22 +1284,10 @@ fn get_transaction_link(
     }
 }
 
-extension!(enable_broadcast in (Context) using enable_broadcast_impl);
-const fn enable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) -> anyhow::Result<()> {
-    ctx.is_broadcasting = true;
-    Ok(())
-}
-
 extension!(get_config in (Context) using get_config_impl);
 fn get_config_impl(ctx: &mut Context, stack: &mut Tuple) -> anyhow::Result<()> {
-    let config = ctx.chain.world_state.get_config();
-    let cell = config
-        .root()
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Config has no root cell"))?
-        .clone();
-
-    stack.push(TupleItem::Cell(cell));
+    let config = ctx.chain.world_state.get_config_cell();
+    stack.push(TupleItem::Cell(config));
     Ok(())
 }
 
@@ -1317,12 +1304,6 @@ fn set_config_impl(ctx: &mut Context, stack: &mut Tuple, config: Cell) -> anyhow
         }
     }
 
-    Ok(())
-}
-
-extension!(disable_broadcast in (Context) using disable_broadcast_impl);
-const fn disable_broadcast_impl(ctx: &mut Context, _stack: &mut Tuple) -> anyhow::Result<()> {
-    ctx.is_broadcasting = false;
     Ok(())
 }
 
@@ -1346,8 +1327,7 @@ fn get_shard_account_impl(
     stack: &mut Tuple,
     addr: StdAddr,
 ) -> anyhow::Result<()> {
-    let raw_addr = addr.to_string();
-    let shard_account = ctx.chain.world_state.get_account(&raw_addr);
+    let shard_account = ctx.chain.world_state.get_account(&addr);
     let shard_account_cell = to_cell(&shard_account);
     stack.push(TupleItem::Cell(shard_account_cell));
     Ok(())
@@ -1370,9 +1350,7 @@ fn set_shard_account_impl(
         },
     };
 
-    ctx.chain
-        .world_state
-        .update_account(&addr.to_string(), &shard_account);
+    ctx.chain.world_state.update_account(&addr, &shard_account);
     Ok(())
 }
 
