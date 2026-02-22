@@ -75,6 +75,14 @@ impl AccountsState {
             Self::Remote(r) => &r.accounts,
         }
     }
+
+    #[must_use]
+    pub fn take_accounts(self) -> FxHashMap<StdAddr, ShardAccount> {
+        match self {
+            Self::Local(r) => r.accounts,
+            Self::Remote(r) => r.accounts,
+        }
+    }
 }
 
 /// A purely local implementation of the world state.
@@ -347,6 +355,11 @@ impl WorldState {
     #[must_use]
     pub const fn get_accounts(&self) -> &FxHashMap<StdAddr, ShardAccount> {
         self.accounts_state.accounts()
+    }
+
+    #[must_use]
+    pub fn take_accounts(self) -> FxHashMap<StdAddr, ShardAccount> {
+        self.accounts_state.take_accounts()
     }
 
     /// Returns a reference to the blockchain configuration.

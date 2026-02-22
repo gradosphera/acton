@@ -382,7 +382,7 @@ impl<'a> TestRunner<'a> {
             captured_stderr,
             assert_failure,
             expected_exit_code,
-            accounts: world_state.get_accounts().clone(),
+            accounts: world_state.take_accounts(),
         })
     }
 }
