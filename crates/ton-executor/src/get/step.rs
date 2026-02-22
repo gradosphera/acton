@@ -201,8 +201,8 @@ impl StepGetExecutor {
                 std::ptr::from_mut::<Ctx>(ctx).cast::<c_void>(),
                 c_int::from(stack_items_count),
                 std::mem::transmute::<
-                    unsafe extern "C" fn(*mut Ctx, *const i8) -> *const i8,
-                    unsafe extern "C" fn(*mut c_void, *const i8) -> *const i8,
+                    unsafe extern "C" fn(*mut Ctx, *const c_char) -> *const c_char,
+                    unsafe extern "C" fn(*mut c_void, *const c_char) -> *const c_char,
                 >(callback),
             );
         };
