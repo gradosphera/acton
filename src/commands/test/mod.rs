@@ -887,6 +887,8 @@ fn run_file_tests(
                     err
                 );
                 failed += 1;
+                test_report.status = TestStatus::Failed;
+                runner.reporter_manager.on_test_finished(&test_report)?;
                 continue;
             }
         };
