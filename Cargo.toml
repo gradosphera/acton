@@ -85,6 +85,7 @@ fern = "0.7.1" # overall logging
 chrono = { version = "0.4", features = ["serde"] }
 walkdir = "2.5" # test discovery
 sha2 = "0.10" # for cache
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] } # fast file content hash for cache
 fs2 = "0.4" # build cache locking
 quick-junit = "0.5.2" # junit format for tests
 
@@ -208,6 +209,7 @@ fern = { workspace = true } # overall logging
 chrono = { workspace = true }
 walkdir = { workspace = true } # test discovery
 sha2 = { workspace = true } # for cache
+xxhash-rust = { workspace = true } # fast file content hash for cache
 fs2 = { workspace = true } # build cache locking
 quick-junit = { workspace = true } # junit format for tests
 

@@ -107,7 +107,7 @@ fn build_impl(
     if let Some(cached_entry) =
         ctx.build
             .file_build_cache
-            .get(&path, ctx.build.need_debug_info, 2, "1.3".to_string())
+            .get(&path, ctx.build.need_debug_info, 2, "1.3")
     {
         let elapsed = start_time.elapsed();
         info!("Build {path} from file cache (.acton/cache) in {elapsed:?}");
@@ -140,13 +140,11 @@ fn build_impl(
                 "Build {path} from source (compilation: {compile_time:?}, total: {total_elapsed:?})"
             );
 
-            if let Err(err) = ctx.build.file_build_cache.put(
-                &path,
-                &success,
-                ctx.build.need_debug_info,
-                2,
-                "1.3".to_string(),
-            ) {
+            if let Err(err) =
+                ctx.build
+                    .file_build_cache
+                    .put(&path, &success, ctx.build.need_debug_info, 2, "1.3")
+            {
                 warn!("Failed to build cached code BoC for {path}: {err}");
             }
 
