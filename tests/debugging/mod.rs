@@ -287,7 +287,7 @@ fn execute_script<'a>(
         network: None,
     };
 
-    let stack = serialize_tuple(&stack)?.to_boc_b64(false)?;
+    let stack = Boc::encode_base64(serialize_tuple(&stack)?);
 
     let mut executor = StepGetExecutor::new(&stack, &params, Some(DEFAULT_CONFIG))?;
     ffi::register(&mut executor, &mut ctx);
@@ -337,7 +337,7 @@ fn get_script_result(
                 anyhow::bail!("VM exit code {}", result.vm_exit_code)
             }
 
-            let cell = ArcCell::from_boc_b64(&result.stack)?;
+            let cell = Boc::decode_base64(result.stack.as_ref())?;
 
             let tuple = Tuple::deserialize(&cell)?;
             let tuple_str = formatter.format_tuple(&tuple, false, false);

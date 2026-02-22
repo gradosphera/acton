@@ -18,16 +18,13 @@ use std::sync::Arc;
 use ton_abi::{ContractAbi, TypeAbi};
 use ton_api::Network;
 use ton_source_map::{DebugLocation, SourceLocation};
-use tonlib_core::TonAddress;
-use tonlib_core::cell::ArcCell;
-use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, Load};
 use tycho_types::models::{
-    AccountState, AccountStatus, ComputePhase, ExecutedComputePhase, IntAddr, MsgInfo,
-    RelaxedMessage, RelaxedMsgInfo, ReserveCurrencyFlags, SendMsgFlags, ShardAccount, Transaction,
-    TxInfo,
+    AccountState, AccountStatus, Base64StdAddrFlags, ComputePhase, DisplayBase64StdAddr,
+    ExecutedComputePhase, IntAddr, MsgInfo, RelaxedMessage, RelaxedMsgInfo, ReserveCurrencyFlags,
+    SendMsgFlags, ShardAccount, Transaction, TxInfo,
 };
 use tycho_types::num::Tokens;
 
@@ -37,9 +34,9 @@ struct SendResult {
     children_ids: Vec<i64>,
     parent_lt: Option<i64>,
     #[allow(dead_code)]
-    actions: ArcCell,
+    actions: Cell,
     #[allow(dead_code)]
-    out_messages: Vec<ArcCell>,
+    out_messages: Vec<Cell>,
     externals: Vec<Cell>,
 }
 
@@ -98,62 +95,62 @@ impl<'a> FormatterContext<'a> {
         }
     }
 
-    fn format_slice(&self, slice: &ArcCell) -> String {
-        let mut parser = slice.parser();
+    fn format_slice(&self, slice: &Cell) -> String {
+        let mut parser = slice.as_slice_allow_exotic();
 
-        if parser.remaining_bits() == 2 && parser.load_u8(2).unwrap_or(0) == 0 {
+        if parser.size_bits() == 2 && parser.load_small_uint(2).unwrap_or(1) == 0 {
             return "addr_none".to_string();
         }
 
-        if parser.remaining_bits() == 267
-            && let Ok(address) = parser.load_address()
+        if parser.size_bits() == 267
+            && let Ok(address) = IntAddr::load_from(&mut parser)
         {
             return self.address_to_string(&address);
         }
 
-        slice
-            .to_boc_hex(false)
-            .unwrap_or_else(|_| "<invalid slice>".to_owned())
+        Boc::encode_hex(slice)
     }
 
-    fn address_to_string(&self, address: &TonAddress) -> String {
-        let need_mainnet_address =
-            self.fork_net == Some(Network::Mainnet) || self.network == Some(Network::Mainnet);
-        address.to_base64_std_flags(false, !need_mainnet_address)
-    }
+    fn address_to_string(&self, address: &IntAddr) -> String {
+        match address {
+            IntAddr::Std(addr) => {
+                let need_mainnet_address = self.fork_net == Some(Network::Mainnet)
+                    || self.network == Some(Network::Mainnet);
 
-    fn format_address_slice(&self, slice: &ArcCell, colorize: bool) -> String {
-        let mut parser = slice.parser();
-        if let Ok(address) = parser.load_address() {
-            let addr = Self::arc_cell_to_addr(slice);
-            let address_base64 = self.address_to_string(&address);
-
-            let addr_str = if colorize {
-                address_base64.cyan().to_string()
-            } else {
-                address_base64
-            };
-
-            if let Some(addr) = &addr {
-                let contract_type = self.get_contract_type(addr);
-                if let Some(contract_type) = contract_type {
-                    return format!("{addr_str} ({contract_type})");
-                }
+                let display = DisplayBase64StdAddr {
+                    addr,
+                    flags: Base64StdAddrFlags {
+                        testnet: !need_mainnet_address,
+                        base64_url: true,
+                        bounceable: true,
+                    },
+                };
+                display.to_string()
             }
+            _ => address.to_string(),
+        }
+    }
 
-            return addr_str;
+    fn format_address_slice(&self, slice: &Cell, colorize: bool) -> String {
+        let mut parser = slice.as_slice_allow_exotic();
+        let Ok(addr) = IntAddr::load_from(&mut parser) else {
+            return Boc::encode_hex(slice);
+        };
+
+        let addr_base64 = self.address_to_string(&addr);
+
+        let addr_str = if colorize {
+            addr_base64.cyan().to_string()
+        } else {
+            addr_base64
+        };
+
+        let contract_type = self.get_contract_type(&addr);
+        if let Some(contract_type) = contract_type {
+            return format!("{addr_str} ({contract_type})");
         }
 
-        slice
-            .to_boc_hex(false)
-            .unwrap_or_else(|_| "invalid address".to_owned())
-    }
-
-    fn arc_cell_to_addr(slice: &ArcCell) -> Option<IntAddr> {
-        let cell = Boc::decode(slice.to_boc(false).ok()?).ok()?;
-        let mut slice = cell.as_slice().ok()?;
-        let addr = IntAddr::load_from(&mut slice);
-        addr.ok()
+        addr_str
     }
 
     /// Format transaction list as a tree
@@ -171,62 +168,59 @@ impl<'a> FormatterContext<'a> {
     fn parse_send_results(&self, tx_items: &[TupleItem]) -> Vec<SendResult> {
         tx_items
             .iter()
-            .filter_map(|el| match el {
-                TupleItem::Tuple(tuple) => match (
-                    tuple[0].clone(),
-                    tuple[1].clone(),
-                    tuple[3].clone(),
-                    tuple[4].clone(),
-                    tuple[6].clone(), // externals
-                ) {
-                    (
-                        TupleItem::Cell(tx),
-                        TupleItem::Tuple(child_ids),
-                        TupleItem::Cell(actions),
-                        TupleItem::Tuple(out_messages),
-                        TupleItem::Tuple(externals),
-                    ) => {
-                        let result = tx.to_boc(false).ok()?;
-                        let tx_cell = Boc::decode(&result).ok()?;
-                        let tx = tx_cell.parse::<Transaction>().ok()?;
-                        Some(SendResult {
-                            tx,
-                            children_ids: child_ids
-                                .iter()
-                                .filter_map(|id| match id {
-                                    TupleItem::Int(int) => int.to_i64(),
-                                    _ => None,
-                                })
-                                .collect(),
-                            parent_lt: match tuple[2].clone() {
-                                TupleItem::Null => None,
-                                TupleItem::Int(int) => int.to_i64(),
-                                _ => None,
-                            },
-                            actions,
-                            out_messages: out_messages
-                                .iter()
-                                .filter_map(|msg| match msg {
-                                    TupleItem::Cell(cell) => Some(cell.clone()),
-                                    _ => None,
-                                })
-                                .collect(),
-                            externals: externals
-                                .iter()
-                                .filter_map(|ext| match ext {
-                                    TupleItem::Cell(cell) => {
-                                        let boc = cell.to_boc(false).ok()?;
-                                        let cell = Boc::decode(&boc).ok()?;
-                                        Some(cell)
-                                    }
-                                    _ => None,
-                                })
-                                .collect(),
+            .filter_map(|el| {
+                let TupleItem::Tuple(tuple) = el else {
+                    return None;
+                };
+
+                let (
+                    Some(TupleItem::Cell(tx)),
+                    Some(TupleItem::Tuple(child_ids)),
+                    Some(TupleItem::Cell(actions)),
+                    Some(TupleItem::Tuple(out_messages)),
+                    Some(TupleItem::Tuple(externals)),
+                ) = (
+                    tuple.first(),
+                    tuple.get(1),
+                    tuple.get(3),
+                    tuple.get(4),
+                    tuple.get(6), // externals
+                )
+                else {
+                    return None;
+                };
+
+                let tx = tx.parse::<Transaction>().ok()?;
+                Some(SendResult {
+                    tx,
+                    children_ids: child_ids
+                        .iter()
+                        .filter_map(|id| match id {
+                            TupleItem::Int(int) => int.to_i64(),
+                            _ => None,
                         })
-                    }
-                    _ => None,
-                },
-                _ => None,
+                        .collect(),
+                    parent_lt: match tuple.get(2) {
+                        Some(TupleItem::Null) => None,
+                        Some(TupleItem::Int(int)) => int.to_i64(),
+                        _ => None,
+                    },
+                    actions: actions.clone(),
+                    out_messages: out_messages
+                        .iter()
+                        .filter_map(|msg| match msg {
+                            TupleItem::Cell(cell) => Some(cell.clone()),
+                            _ => None,
+                        })
+                        .collect(),
+                    externals: externals
+                        .iter()
+                        .filter_map(|ext| match ext {
+                            TupleItem::Cell(cell) => Some(cell.clone()),
+                            _ => None,
+                        })
+                        .collect(),
+                })
             })
             .collect::<Vec<_>>()
     }
@@ -433,18 +427,20 @@ impl<'a> FormatterContext<'a> {
         if is_root {
             let in_msg = &tx.load_in_msg();
             if let Ok(Some(in_msg)) = in_msg {
-                let src_addr = match &in_msg.info {
-                    MsgInfo::Int(info) => info.src.clone(),
-                    _ => panic!("Expected internal message"),
-                };
-                let src_formatted =
-                    self.format_address_with_letter(&src_addr, contract_letters, show_full_names);
-                tx_builder += &format!(
-                    "{} {} {}\n",
-                    "N/A".dimmed(),
-                    "->".dimmed(),
-                    src_formatted.trim()
-                );
+                if let MsgInfo::Int(info) = &in_msg.info {
+                    let src_addr = info.src.clone();
+                    let src_formatted = self.format_address_with_letter(
+                        &src_addr,
+                        contract_letters,
+                        show_full_names,
+                    );
+                    tx_builder += &format!(
+                        "{} {} {}\n",
+                        "N/A".dimmed(),
+                        "->".dimmed(),
+                        src_formatted.trim()
+                    );
+                }
                 tx_builder += "└── ".dimmed().to_string().as_str();
             }
         }
@@ -1010,13 +1006,7 @@ impl<'a> FormatterContext<'a> {
     }
 
     fn get_contract_type(&self, addr: &IntAddr) -> Option<String> {
-        let known_address = self
-            .known_addresses
-            .addresses
-            .iter()
-            .find(|(address, _)| address.to_string() == addr.to_string());
-
-        if let Some((_, known_address)) = known_address {
+        if let Some(known_address) = self.known_addresses.addresses.get(addr) {
             return Some(known_address.name.clone());
         }
 
@@ -1030,12 +1020,9 @@ impl<'a> FormatterContext<'a> {
                 AccountState::Frozen(_) => None,
             };
 
-            let known_code_cell = self
-                .known_code_cells
-                .iter()
-                .find(|(hash, _info)| code_hash == Some((*hash).clone()));
-
-            if let Some((_, known_code_cell)) = known_code_cell {
+            if let Some(code_hash) = code_hash
+                && let Some(known_code_cell) = self.known_code_cells.get(&code_hash)
+            {
                 return Some(known_code_cell.clone());
             }
         }
@@ -1048,9 +1035,12 @@ impl<'a> FormatterContext<'a> {
         };
 
         let code = info.code?;
-        let compilation_result = self.build_cache.built.iter().find(|(_, result)| {
-            result.code_hash.to_ascii_lowercase() == code.repr_hash().to_string()
-        });
+        let code_hash = code.repr_hash().to_string();
+        let compilation_result = self
+            .build_cache
+            .built
+            .iter()
+            .find(|(_, result)| result.code_hash.eq_ignore_ascii_case(&code_hash));
 
         if let Some((_, result)) = compilation_result {
             return Some(result.name.clone());
@@ -1178,7 +1168,7 @@ impl<'a> FormatterContext<'a> {
                 self.format_tuple(items, root, colorize)
             }
             TupleItem::Slice(cell) => {
-                if cell.bit_len() == 0 && cell.references().is_empty() {
+                if cell.bit_len() == 0 && cell.reference_count() == 0 {
                     return "empty slice".to_owned();
                 }
 
@@ -1197,15 +1187,11 @@ impl<'a> FormatterContext<'a> {
             }
             TupleItem::Nan => "NaN".to_owned(),
             TupleItem::Cell(cell) => {
-                let s = cell
-                    .to_boc_hex(false)
-                    .unwrap_or_else(|_| "<invalid cell>".to_owned());
+                let s = Boc::encode_hex(cell);
                 if colorize { s.dimmed().to_string() } else { s }
             }
             TupleItem::Builder(cell) => {
-                let s = cell
-                    .to_boc_hex(false)
-                    .unwrap_or_else(|_| "<invalid builder>".to_owned());
+                let s = Boc::encode_hex(cell);
                 if colorize { s.dimmed().to_string() } else { s }
             }
             TupleItem::Tuple(items) => self.format_tuple(items, root, colorize),
@@ -1742,14 +1728,16 @@ impl<'a> FormatterContext<'a> {
         failure: &TransactionGenericAssertFailure,
         abi: Arc<ContractAbi>,
     ) -> FailedTransactionContext {
-        let from_address = failure.params.from.as_ref().map(|addr| match addr {
-            IntAddr::Std(addr) => addr.display_base64(false).to_string(),
-            _ => addr.to_string(),
-        });
-        let to_address = failure.params.to.as_ref().map(|addr| match addr {
-            IntAddr::Std(addr) => addr.display_base64(false).to_string(),
-            _ => addr.to_string(),
-        });
+        let from_address = failure
+            .params
+            .from
+            .as_ref()
+            .map(|addr| self.address_to_string(addr));
+        let to_address = failure
+            .params
+            .to
+            .as_ref()
+            .map(|addr| self.address_to_string(addr));
         let params = self
             .format_search_transaction_parameters(failure, abi)
             .into_iter()
@@ -1803,7 +1791,7 @@ impl<'a> FormatterContext<'a> {
                         .find_tx_executor_logs(tx.lt)
                         .map(Arc::from)
                         .unwrap_or_default(),
-                    actions: Some(res.actions.to_boc_b64(false).ok()?.into()),
+                    actions: Some(Boc::encode_base64(&res.actions).into()),
                 })
             })
             .collect()

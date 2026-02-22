@@ -5,8 +5,8 @@ use num_bigint::BigInt;
 use rand::RngCore;
 use ton_emulator::{extension, register_ext_methods};
 use ton_executor::BaseExecutor;
-use tonlib_core::cell::CellBuilder;
 use tvmffi::stack::{Tuple, TupleItem};
+use tycho_types::cell::CellBuilder;
 
 extension!(get_secure_random_bytes in (Context) with (bytes_num: BigInt) using get_secure_random_bytes_impl);
 fn get_secure_random_bytes_impl(
@@ -23,9 +23,9 @@ fn get_secure_random_bytes_impl(
     rand::thread_rng().fill_bytes(&mut buf);
 
     let mut builder = CellBuilder::new();
-    builder.store_bits(n * 8, &buf)?;
+    builder.store_raw(&buf, (n * 8) as u16)?;
     let cell = builder.build()?;
-    stack.push(TupleItem::Slice(cell.into()));
+    stack.push(TupleItem::Slice(cell));
     Ok(())
 }
 
@@ -36,34 +36,26 @@ fn mnemonic_new_impl(_ctx: &mut Context, stack: &mut Tuple) -> anyhow::Result<()
     for word in &words {
         // Tolk `string` = Cell with a ref to a snake-string cell
         let mut snake = CellBuilder::new();
-        snake.store_bits(word.len() * 8, word.as_bytes())?;
+        snake.store_raw(word.as_bytes(), (word.len() * 8) as u16)?;
         let snake_cell = snake.build()?;
 
         let mut wrapper = CellBuilder::new();
-        wrapper.store_reference(&snake_cell.into())?;
-        items.push(TupleItem::Cell(wrapper.build()?.into()));
+        wrapper.store_reference(snake_cell)?;
+        items.push(TupleItem::Cell(wrapper.build()?));
     }
     stack.push(TupleItem::Tuple(items));
     Ok(())
 }
 
-extension!(mnemonic_to_key_pair in (Context) with (words: Tuple) using mnemonic_to_key_pair_impl);
+extension!(mnemonic_to_key_pair in (Context) with (words: Vec<String>) using mnemonic_to_key_pair_impl);
 fn mnemonic_to_key_pair_impl(
     _ctx: &mut Context,
     stack: &mut Tuple,
-    words: Tuple,
+    words: Vec<String>,
 ) -> anyhow::Result<()> {
-    let word_strings: Vec<String> = words
-        .iter()
-        .map(|item| match item {
-            TupleItem::Cell(cell) | TupleItem::Slice(cell) => Tuple::parse_snake_string(cell)
-                .ok_or_else(|| anyhow::anyhow!("cannot parse string from cell")),
-            _ => anyhow::bail!("expected string items in mnemonic tuple"),
-        })
-        .collect::<anyhow::Result<Vec<String>>>()?;
-    let word_strs: Vec<&str> = word_strings.iter().map(String::as_str).collect();
+    let words = words.iter().map(String::as_str).collect();
 
-    let mnemonic = tonlib_core::wallet::mnemonic::Mnemonic::new(word_strs, &None)?;
+    let mnemonic = tonlib_core::wallet::mnemonic::Mnemonic::new(words, &None)?;
     let key_pair = mnemonic.to_key_pair()?;
 
     // Return KeyPair { privateKey: bytes32, publicKey: bytes32 }
@@ -75,6 +67,7 @@ fn mnemonic_to_key_pair_impl(
     let mut result = Tuple::empty();
     result.push(TupleItem::Int(private_key));
     result.push(TupleItem::Int(public_key));
+
     stack.push(TupleItem::Tuple(result));
     Ok(())
 }
@@ -107,9 +100,9 @@ fn raw_sign_impl(
 
     // Return signature as a 512-bit slice (64 bytes)
     let mut builder = CellBuilder::new();
-    builder.store_bits(512, &sig)?;
+    builder.store_raw(&sig, 512)?;
     let cell = builder.build()?;
-    stack.push(TupleItem::Slice(cell.into()));
+    stack.push(TupleItem::Slice(cell));
     Ok(())
 }
 

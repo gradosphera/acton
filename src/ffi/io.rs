@@ -5,7 +5,6 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use ton_emulator::{extension, register_ext_methods};
 use ton_executor::BaseExecutor;
-use tvmffi::from_stack::FromStack;
 use tvmffi::stack::{Tuple, TupleItem};
 
 extension!(println in (Context) with (s: TupleItem, type_name: String) using println_impl);
@@ -247,14 +246,17 @@ fn parse_format(fmt: &str) -> anyhow::Result<Vec<FormatToken>> {
     Ok(tokens)
 }
 
-fn format_default(ctx: &mut Context, type_name: &str, arg: TupleItem) -> String {
+fn format_default(
+    formatter: &crate::formatter::FormatterContext<'_>,
+    type_name: &str,
+    arg: TupleItem,
+) -> String {
     let typed_arg = arg.to_typed(type_name);
-    let formatter = crate::formatter::FormatterContext::from_context(ctx);
     formatter.format(&typed_arg)
 }
 
 fn format_single_arg(
-    ctx: &mut Context,
+    formatter: &crate::formatter::FormatterContext<'_>,
     kind: PlaceholderKind,
     type_name: &str,
     arg: TupleItem,
@@ -267,7 +269,7 @@ fn format_single_arg(
             {
                 return format!("{value:x}");
             }
-            format_default(ctx, type_name, arg)
+            format_default(formatter, type_name, arg)
         }
         PlaceholderKind::Ton => {
             if let TupleItem::Tuple(items) = &arg
@@ -277,9 +279,9 @@ fn format_single_arg(
                 let amount = value.to_f64().unwrap_or(0.0) / 1e9;
                 return format!("{amount} TON");
             }
-            format_default(ctx, type_name, arg)
+            format_default(formatter, type_name, arg)
         }
-        PlaceholderKind::Plain => format_default(ctx, type_name, arg),
+        PlaceholderKind::Plain => format_default(formatter, type_name, arg),
     }
 }
 
@@ -291,13 +293,14 @@ fn format_args(
     let tokens = parse_format(&fmt)?;
     let mut out = String::with_capacity(fmt.len());
     let mut args_iter = args.into_iter();
+    let formatter = crate::formatter::FormatterContext::from_context(ctx);
 
     for token in tokens {
         match token {
             FormatToken::Literal(text) => out.push_str(&text),
             FormatToken::Placeholder(kind) => {
                 if let Some((type_name, arg)) = args_iter.next() {
-                    let formatted = format_single_arg(ctx, kind, &type_name, arg);
+                    let formatted = format_single_arg(&formatter, kind, &type_name, arg);
                     out.push_str(&formatted);
                 } else {
                     out.push_str(placeholder_repr(kind));
@@ -325,26 +328,13 @@ fn prompt_impl(
     Ok(())
 }
 
-extension!(select in (Context) with (variants: TupleItem, message: String) using select_impl);
+extension!(select in (Context) with (variants: Vec<String>, message: String) using select_impl);
 fn select_impl(
     _ctx: &mut Context,
     stack: &mut Tuple,
-    variants: TupleItem,
+    variants: Vec<String>,
     message: String,
 ) -> anyhow::Result<()> {
-    let TupleItem::Tuple(raw_variants) = variants else {
-        stack.push_string("");
-        return Ok(());
-    };
-
-    let variants = raw_variants
-        .iter()
-        .filter_map(|var| {
-            let str = String::from_item((*var).clone());
-            str.ok()
-        })
-        .collect::<Vec<_>>();
-
     let result = Select::new(&message, variants)
         .with_starting_cursor(0)
         .prompt()

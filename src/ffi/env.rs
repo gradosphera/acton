@@ -4,10 +4,10 @@ use std::env;
 use std::str::FromStr;
 use ton_emulator::{extension, register_ext_methods};
 use ton_executor::BaseExecutor;
-use tonlib_core::TonAddress;
-use tonlib_core::cell::{ArcCell, CellBuilder};
-use tonlib_core::tlb_types::tlb::TLB;
 use tvmffi::stack::{Tuple, TupleItem};
+use tycho_types::boc::Boc;
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, Store};
+use tycho_types::models::{StdAddr, StdAddrFormat};
 
 extension!(env_int in (Context) with (name: String) using env_int_impl);
 fn env_int_impl(_ctx: &mut Context, stack: &mut Tuple, name: String) -> anyhow::Result<()> {
@@ -35,12 +35,7 @@ extension!(env_bool in (Context) with (name: String) using env_bool_impl);
 fn env_bool_impl(_ctx: &mut Context, stack: &mut Tuple, name: String) -> anyhow::Result<()> {
     match env::var(&name) {
         Ok(val) => {
-            let v = val.to_lowercase();
-            if v == "true" || v == "1" {
-                stack.push_bool(true);
-            } else {
-                stack.push_bool(false);
-            }
+            stack.push_bool(val == "1" || val.eq_ignore_ascii_case("true"));
         }
         Err(_) => stack.push(TupleItem::Null),
     }
@@ -73,12 +68,12 @@ extension!(env_address in (Context) with (name: String) using env_address_impl);
 fn env_address_impl(_ctx: &mut Context, stack: &mut Tuple, name: String) -> anyhow::Result<()> {
     match env::var(&name) {
         Ok(val) => {
-            if let Ok(addr) = TonAddress::from_str(&val) {
+            if let Ok((addr, _)) = StdAddr::from_str_ext(&val, StdAddrFormat::any()) {
                 let mut builder = CellBuilder::new();
-                if builder.store_address(&addr).is_ok()
+                if addr.store_into(&mut builder, Cell::empty_context()).is_ok()
                     && let Ok(cell) = builder.build()
                 {
-                    stack.push(TupleItem::Slice(cell.to_arc()));
+                    stack.push(TupleItem::Slice(cell));
                     return Ok(());
                 }
             }
@@ -93,10 +88,10 @@ extension!(env_cell in (Context) with (name: String) using env_cell_impl);
 fn env_cell_impl(_ctx: &mut Context, stack: &mut Tuple, name: String) -> anyhow::Result<()> {
     match env::var(&name) {
         Ok(val) => {
-            let cell = if let Ok(b) = ArcCell::from_boc_b64(&val) {
+            let cell = if let Ok(b) = Boc::decode_base64(&val) {
                 Some(b)
             } else {
-                ArcCell::from_boc_hex(&val).ok()
+                Boc::decode_hex(&val).ok()
             };
 
             if let Some(cell) = cell {
