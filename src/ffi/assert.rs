@@ -2,6 +2,7 @@ use crate::context::{
     AssertBinFailure, AssertFailure, Context, FailAssertFailure, TransactionGenericAssertFailure,
     TransactionNotFoundParams, WalletNotFoundFailure,
 };
+use anyhow::Context as ErrorContext;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use ton_emulator::{extension, register_ext_methods};
@@ -161,7 +162,8 @@ fn expect_to_end_with_exit_code_impl(
     _: &mut Tuple,
     code: BigInt,
 ) -> anyhow::Result<()> {
-    *ctx.asserts.expected_exit_code = Some(code);
+    let exit_code = i32::try_from(&code).context("Exit code value is too big for uint32")?;
+    *ctx.asserts.expected_exit_code = Some(exit_code);
     Ok(())
 }
 

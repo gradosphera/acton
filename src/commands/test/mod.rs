@@ -29,7 +29,6 @@ use anyhow::anyhow;
 use dunce;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, error, warn};
-use num_traits::ToPrimitive;
 use owo_colors::OwoColorize;
 use path_absolutize::Absolutize;
 use regex::Regex;
@@ -347,7 +346,7 @@ impl<'a> TestRunner<'a> {
                     ctx.io.stdout_buffer,
                     ctx.io.stderr_buffer,
                     (*ctx.asserts.assert_failure).clone(),
-                    ctx.asserts.expected_exit_code.clone(),
+                    *ctx.asserts.expected_exit_code,
                 )
             } else {
                 let mut executor = GetExecutor::new(&params)?;
@@ -373,7 +372,7 @@ impl<'a> TestRunner<'a> {
                     ctx.io.stdout_buffer,
                     ctx.io.stderr_buffer,
                     (*ctx.asserts.assert_failure).clone(),
-                    ctx.asserts.expected_exit_code.clone(),
+                    *ctx.asserts.expected_exit_code,
                 )
             };
 
@@ -382,7 +381,7 @@ impl<'a> TestRunner<'a> {
             captured_stdout,
             captured_stderr,
             assert_failure,
-            expected_exit_code: expected_exit_code.and_then(|value| value.to_i32()),
+            expected_exit_code,
             accounts: world_state.get_accounts().clone(),
         })
     }

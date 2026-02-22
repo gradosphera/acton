@@ -408,7 +408,7 @@ pub struct IoContext {
 
 pub struct AssertsContext<'a> {
     pub assert_failure: &'a mut Option<AssertFailure>,
-    pub expected_exit_code: &'a mut Option<BigInt>,
+    pub expected_exit_code: &'a mut Option<i32>,
 }
 
 pub struct ChainContext<'a> {
