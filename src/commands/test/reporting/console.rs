@@ -4,8 +4,9 @@ use crate::context::AssertFailure;
 use crate::formatter::FormatterContext;
 use crate::{exit_codes, retrace};
 use acton_config::color::OwoColorize;
+use acton_config::config::project_root;
 use std::borrow::Cow;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use ton_executor::get::{GetMethodResult, GetMethodResultSuccess};
 use ton_source_map::SourceLocation;
 
@@ -46,7 +47,7 @@ impl ConsoleReporter {
 
 impl TestReporter for ConsoleReporter {
     fn on_testing_started(&mut self) -> anyhow::Result<()> {
-        let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+        let cwd = project_root().to_path_buf();
         println!(
             "\n{} {}\n",
             " TEST ".bold().on_blue(),
@@ -123,7 +124,7 @@ impl TestReporter for ConsoleReporter {
     ) -> anyhow::Result<()> {
         self.count_suites += 1;
 
-        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let cwd = project_root().to_path_buf();
         let relative = pathdiff::diff_paths(file_path, cwd);
         let relative_path = relative.unwrap_or_else(|| file_path.to_owned());
 

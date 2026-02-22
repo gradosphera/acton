@@ -1,7 +1,9 @@
 use crate::formatter::FormatterContext;
 use acton_config::color::OwoColorize;
+use acton_config::config::project_root;
 use retrace::{ComputeInfo, Network, retrace};
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use tycho_types::boc::Boc;
 use tycho_types::models::{IntAddr, OutAction, RelaxedMsgInfo};
@@ -32,23 +34,22 @@ pub fn retrace_cmd(
     };
 
     let mut last_error = None;
+    let resolved_logs_dir =
+        logs_dir.map(|logs_dir| resolve_logs_dir_path(project_root(), &logs_dir));
     for network in networks {
         let retrace_future = retrace(network.clone(), &hash, HashMap::new());
         match rt.block_on(retrace_future) {
             Ok(result) => {
-                if let Some(logs_dir) = &logs_dir {
+                if let Some(logs_dir) = &resolved_logs_dir {
                     std::fs::create_dir_all(logs_dir)?;
+                    std::fs::write(logs_dir.join("vm.log"), result.emulated_tx.vm_logs.as_ref())?;
                     std::fs::write(
-                        format!("{logs_dir}/vm.log"),
-                        result.emulated_tx.vm_logs.as_ref(),
-                    )?;
-                    std::fs::write(
-                        format!("{logs_dir}/executor.log"),
+                        logs_dir.join("executor.log"),
                         result.emulated_tx.executor_logs.as_ref(),
                     )?;
-                    println!("{} Logs saved to {}", "Success:".green(), logs_dir);
+                    println!("{} Logs saved to {}", "Success:".green(), logs_dir.display());
                 }
-                print_retrace_result(network, result, verbose, logs_dir.as_ref());
+                print_retrace_result(network, result, verbose, resolved_logs_dir.as_ref());
                 return Ok(());
             }
             Err(e) => {
@@ -67,7 +68,7 @@ fn print_retrace_result(
     network: Network,
     result: retrace::TraceResult,
     verbose: bool,
-    logs_dir: Option<&String>,
+    logs_dir: Option<&PathBuf>,
 ) {
     let tx = &result.emulated_tx;
     let money = &result.money;
@@ -403,4 +404,34 @@ fn format_address(addr: IntAddr) -> String {
     }
 
     addr.to_string()
+}
+
+fn resolve_logs_dir_path(project_root: &Path, logs_dir: &str) -> PathBuf {
+    let logs_dir_path = Path::new(logs_dir);
+    if logs_dir_path.is_absolute() {
+        logs_dir_path.to_path_buf()
+    } else {
+        project_root.join(logs_dir_path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_logs_dir_path;
+    use std::path::Path;
+
+    #[test]
+    fn test_resolve_logs_dir_path_relative_to_project_root() {
+        let project_root = Path::new("/tmp/acton-project");
+        let resolved = resolve_logs_dir_path(project_root, "logs/retrace");
+        assert_eq!(resolved, project_root.join("logs/retrace"));
+    }
+
+    #[test]
+    fn test_resolve_logs_dir_path_keeps_absolute_path() {
+        let project_root = Path::new("/tmp/acton-project");
+        let absolute = Path::new("/tmp/custom/logs");
+        let resolved = resolve_logs_dir_path(project_root, absolute.to_str().unwrap());
+        assert_eq!(resolved, absolute);
+    }
 }

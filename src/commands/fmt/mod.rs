@@ -1,10 +1,10 @@
 use acton_config::color::OwoColorize;
-use acton_config::config::ActonConfig;
+use acton_config::config::{ActonConfig, project_root, resolve_path_from_project_root};
 use anyhow::{Context, Result};
 use globset::{Glob, GlobSetBuilder};
 use similar::{ChangeTag, TextDiff};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use walkdir::WalkDir;
 
@@ -29,40 +29,45 @@ pub fn fmt_cmd(paths: Vec<String>, check: bool) -> Result<()> {
     let mut files_to_format = Vec::new();
 
     let search_paths = if paths.is_empty() {
-        vec![PathBuf::from(".")]
+        vec![resolve_path_from_project_root(".")]
     } else {
-        paths.into_iter().map(PathBuf::from).collect()
+        paths
+            .into_iter()
+            .map(resolve_path_from_project_root)
+            .collect()
     };
 
-    for path in search_paths {
-        if path.is_file() {
-            if path.extension().is_some_and(|ext| ext == "tolk") {
-                files_to_format.push(path);
+    for search_root in search_paths {
+        if search_root.is_file() {
+            if search_root.extension().is_some_and(|ext| ext == "tolk") {
+                files_to_format.push(search_root);
             }
-        } else if path.is_dir() {
-            let iter = WalkDir::new(&path)
+        } else if search_root.is_dir() {
+            let iter = WalkDir::new(&search_root)
                 .into_iter()
                 .filter_entry(|entry| {
                     if !entry.file_type().is_dir() {
                         return true;
                     }
                     let p = entry.path();
-                    !ignore_set.is_match(p)
+                    let rel = p.strip_prefix(&search_root).unwrap_or(p);
+                    !ignore_set.is_match(rel)
                 })
                 .filter_map(std::result::Result::ok);
 
             for entry in iter {
                 let path = entry.path();
-                if path.extension().is_some_and(|ext| ext == "tolk") && path.is_file() {
-                    let relative_path = path.strip_prefix("./").unwrap_or(path);
+                if !path.extension().is_some_and(|ext| ext == "tolk") || !path.is_file() {
+                    continue;
+                }
 
-                    if !ignore_set.is_match(relative_path) {
-                        files_to_format.push(relative_path.to_path_buf());
-                    }
+                let rel = path.strip_prefix(&search_root).unwrap_or(path);
+                if !ignore_set.is_match(rel) {
+                    files_to_format.push(path.to_path_buf());
                 }
             }
         } else {
-            anyhow::bail!("Path {} does not exist", path.display());
+            anyhow::bail!("Path {} does not exist", search_root.display());
         }
     }
 
@@ -76,8 +81,9 @@ pub fn fmt_cmd(paths: Vec<String>, check: bool) -> Result<()> {
     let mut error_count = 0;
 
     for file_path in files_to_format {
+        let display_path = relative_display_path(&file_path);
         let content = fs::read_to_string(&file_path)
-            .with_context(|| format!("Failed to read {}", file_path.display()))?;
+            .with_context(|| format!("Failed to read {}", display_path.display()))?;
 
         match tolkfmt::format_source(&content, width) {
             Ok(formatted) => {
@@ -86,7 +92,7 @@ pub fn fmt_cmd(paths: Vec<String>, check: bool) -> Result<()> {
                         unformatted_files.push(file_path.clone());
 
                         let diff = TextDiff::from_lines(&content, &formatted);
-                        println!("Diff in {}:", file_path.display().bold());
+                        println!("Diff in {}:", display_path.display().to_string().bold());
 
                         for hunk in diff.unified_diff().context_radius(3).iter_hunks() {
                             for change in hunk.iter_changes() {
@@ -109,14 +115,18 @@ pub fn fmt_cmd(paths: Vec<String>, check: bool) -> Result<()> {
                         println!();
                     } else {
                         fs::write(&file_path, formatted)
-                            .with_context(|| format!("Failed to write {}", file_path.display()))?;
+                            .with_context(|| format!("Failed to write {}", display_path.display()))?;
                         formatted_count += 1;
-                        println!("{} {}", "Formatted".green(), file_path.display());
+                        println!(
+                            "{} {}",
+                            "Formatted".green(),
+                            display_path.display()
+                        );
                     }
                 }
             }
             Err(err) => {
-                eprintln!("{} {}: {}", "Error".red(), file_path.display(), err);
+                eprintln!("{} {}: {}", "Error".red(), display_path.display(), err);
                 error_count += 1;
             }
         }
@@ -142,4 +152,8 @@ pub fn fmt_cmd(paths: Vec<String>, check: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn relative_display_path(path: &Path) -> PathBuf {
+    pathdiff::diff_paths(path, project_root()).unwrap_or_else(|| path.to_path_buf())
 }

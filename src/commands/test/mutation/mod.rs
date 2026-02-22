@@ -2,7 +2,7 @@ use crate::commands::common::error_fmt;
 use crate::commands::test::TestConfig;
 use crate::commands::test::mutation::rules::{MutationEdit, MutationMatcher, MutationRule, rules};
 use acton_config::color::OwoColorize;
-use acton_config::config::ActonConfig;
+use acton_config::config::{ActonConfig, project_root, resolve_path_from_project_root};
 use anyhow::anyhow;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -241,19 +241,19 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
     })?;
 
     let all_disable_rules = &config.disable_rules;
-    let project_root = std::env::current_dir()?;
+    let project_root = project_root().to_path_buf();
 
     let mut sources = Vec::new();
 
-    let main_content = match fs::read_to_string(&contract.src) {
+    let main_contract_path = resolve_path_from_project_root(&contract.src);
+    let main_content = match fs::read_to_string(&main_contract_path) {
         Ok(content) => content,
         Err(err) => {
-            anyhow::bail!("Error reading file '{}': {err}", contract.src)
+            anyhow::bail!("Error reading file '{}': {err}", main_contract_path.display())
         }
     };
     let main_tree = tolk_syntax::parse(&main_content)?;
-    let main_path = PathBuf::from(&contract.src);
-    let main_path = dunce::canonicalize(&main_path).unwrap_or(main_path);
+    let main_path = dunce::canonicalize(&main_contract_path).unwrap_or(main_contract_path);
 
     let main_relative_path = if main_path.starts_with(&project_root) {
         main_path.strip_prefix(&project_root)?.to_path_buf()
@@ -262,13 +262,17 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
     };
 
     sources.push(MutationSource {
-        path: main_path,
+        path: main_path.clone(),
         relative_path: main_relative_path,
         content: main_content,
         tree: main_tree.tree,
     });
 
-    let dependencies = ton_abi::get_file_dependencies(&contract.src, true, &acton_config.mappings)?;
+    let dependencies = ton_abi::get_file_dependencies(
+        &main_path.to_string_lossy(),
+        true,
+        &acton_config.mappings,
+    )?;
     for dep_path_str in &dependencies {
         let dep_path = PathBuf::from(dep_path_str);
         let dep_path = dunce::canonicalize(&dep_path).unwrap_or(dep_path);

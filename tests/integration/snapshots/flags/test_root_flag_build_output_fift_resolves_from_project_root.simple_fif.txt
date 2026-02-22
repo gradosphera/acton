@@ -1,0 +1,11 @@
+"Asm.fif" include
+// automatically generated from simple.tolk
+PROGRAM{
+  0 DECLMETHOD onInternalMessage()
+  onInternalMessage() PROC:<{
+    DROP
+    INMSG_BOUNCED
+    IFJMP:<{
+    }>
+  }>
+}END>c

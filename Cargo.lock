@@ -3328,6 +3328,7 @@ dependencies = [
 name = "ton-source-map"
 version = "0.1.0"
 dependencies = [
+ "acton-config",
  "anyhow",
  "pathdiff",
  "serde",

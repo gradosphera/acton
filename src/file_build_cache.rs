@@ -1,4 +1,4 @@
-use acton_config::config::ActonConfig;
+use acton_config::config::{ActonConfig, project_root, resolve_path_from_project_root};
 use anyhow::{Result, anyhow};
 use fs2::FileExt;
 use log::debug;
@@ -65,7 +65,10 @@ pub struct FileBuildCache {
 
 impl FileBuildCache {
     pub fn new(cache_dir: Option<PathBuf>) -> Result<Self> {
-        let cache_dir = cache_dir.unwrap_or_else(|| PathBuf::from(".acton/cache"));
+        let cache_dir = match cache_dir {
+            Some(path) => resolve_path_from_project_root(path),
+            None => project_root().join(".acton/cache"),
+        };
 
         if !cache_dir.exists() {
             fs::create_dir_all(&cache_dir)?;
@@ -95,7 +98,7 @@ impl FileBuildCache {
 
         let config = ActonConfig::load().unwrap_or_default();
 
-        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let cwd = project_root().to_path_buf();
         let contract_src_index = Self::build_contract_src_index(&config, &cwd);
 
         Ok(Self {
@@ -117,7 +120,7 @@ impl FileBuildCache {
         let lock_file_path = tmp_dir.path().join(".lock");
         let lock_file = File::create(&lock_file_path)?;
 
-        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let cwd = project_root().to_path_buf();
         let contract_src_index = Self::build_contract_src_index(&config, &cwd);
 
         Ok(Self {

@@ -5,7 +5,7 @@ use crate::debugger::debug_context::StepMode;
 use crate::ffi::assert::parse_search_params;
 use crate::formatter::FormatterContext;
 use acton_config::color::OwoColorize;
-use acton_config::config::Explorer;
+use acton_config::config::{Explorer, resolve_path_from_project_root};
 use anyhow::Context as AnyhowContext;
 use base64::Engine;
 use crc::{CRC_16_XMODEM, Crc};
@@ -66,13 +66,16 @@ fn build_impl(
             debug!("Found contract with info: {found_contract:?}");
             name = found_contract.name; // use actual name instead of id
             path = found_contract.src;
-            path = dunce::canonicalize(&path)
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or(path);
         } else {
             anyhow::bail!(error_fmt::contract_not_found(ctx.env.config, &name));
         }
     }
+
+    let resolved_path = resolve_path_from_project_root(&path);
+    path = dunce::canonicalize(&resolved_path)
+        .unwrap_or(resolved_path)
+        .to_string_lossy()
+        .to_string();
 
     if let Some(override_code) = ctx.env.build_override.get(id.as_str()) {
         debug!("Overriding code for {name}");

@@ -1,0 +1,15 @@
+{
+  "abiSchemaVersion": "1.0",
+  "contractName": "",
+  "declarations": [],
+  "incomingMessages": [],
+  "incomingExternal": [],
+  "outgoingMessages": [],
+  "emittedEvents": [],
+  "storage": {},
+  "getMethods": [],
+  "thrownErrors": [],
+  "constants": [],
+  "compilerName": "tolk",
+  "compilerVersion": "1.2.0"
+}

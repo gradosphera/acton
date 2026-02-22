@@ -386,7 +386,7 @@ impl ActonConfig {
 
     pub fn save(&self) -> Result<()> {
         let content = toml::to_string_pretty(self)?;
-        fs::write("Acton.toml", content)?;
+        fs::write(manifest_path(), content)?;
         Ok(())
     }
 
@@ -457,13 +457,19 @@ pub fn project_root() -> &'static Path {
     manifest_path().parent().unwrap_or_else(|| Path::new("."))
 }
 
-pub fn init_manifest_path(path: impl AsRef<Path>) -> Result<()> {
+#[must_use]
+pub fn resolve_path_from_project_root(path: impl AsRef<Path>) -> PathBuf {
     let path = path.as_ref();
-    let mut resolved = if path.is_absolute() {
+    if path.is_absolute() {
         path.to_path_buf()
     } else {
-        path.absolutize()?.to_path_buf()
-    };
+        project_root().join(path)
+    }
+}
+
+pub fn init_manifest_path(path: impl AsRef<Path>) -> Result<()> {
+    let path = path.as_ref();
+    let mut resolved = path.absolutize()?.to_path_buf();
 
     if resolved.is_dir() {
         resolved = resolved.join("Acton.toml");

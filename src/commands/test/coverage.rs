@@ -1,5 +1,6 @@
 use crate::context::{BuildCache, EmulationsState};
 use crate::vmtrace::{HighLevelTrace, HighLevelTraceStep, HighLevelTraceStepMapped};
+use acton_config::config::project_root;
 use acton_config::color::OwoColorize;
 use comfy_table::{Cell as TableCell, CellAlignment, Color, ContentArrangement, Table};
 use retrace::trace::{Trace, TraceStep};
@@ -376,7 +377,7 @@ pub(super) fn print_coverage_summary(coverage: &Coverage) {
 
     files_with_percentage.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
 
-    let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+    let cwd = project_root().to_path_buf();
     for (percentage, file_coverage) in files_with_percentage {
         let relative_path = Path::new(&file_coverage.file)
             .strip_prefix(&cwd)
@@ -410,7 +411,7 @@ pub(super) fn print_coverage_summary(coverage: &Coverage) {
 
 pub(super) fn generate_lcov_file(
     coverage: &Coverage,
-    output_path: &str,
+    output_path: &Path,
 ) -> Result<(), std::io::Error> {
     let mut lcov_content = String::new();
 
@@ -454,7 +455,7 @@ pub(super) fn generate_lcov_file(
 
 pub(super) fn generate_text_file(
     coverage: &Coverage,
-    output_path: &str,
+    output_path: &Path,
 ) -> Result<(), std::io::Error> {
     let text_content = generate_text_report(coverage);
     fs::write(output_path, text_content)

@@ -1,0 +1,13 @@
+   Compiling contracts
+   Compiling simple
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+
+ TEST  [ROOT]
+
+ > tests/build_function.test.tolk (2 tests)
+  ✓ build-default-path-from-project-root [TIME]
+  ✓ build-explicit-path-from-project-root [TIME]
+
+ ✓ 2 passed in 1 file

@@ -3,6 +3,7 @@ use acton_config::config::{ContractConfig, DependencyKind};
 use anyhow::anyhow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fs;
+use std::path::Path;
 use std::process::Command;
 
 pub(super) fn build_dependency_graph(
@@ -130,7 +131,7 @@ pub(super) fn filter_compilation_order_for_contract(
 pub(super) fn generate_dependency_graph_svg(
     compilation_order: &Vec<String>,
     contracts: &BTreeMap<String, ContractConfig>,
-    output_path: &str,
+    output_path: &Path,
 ) -> anyhow::Result<()> {
     let mut dot_content = String::new();
     dot_content.push_str("digraph Dependencies {\n");
@@ -172,15 +173,22 @@ pub(super) fn generate_dependency_graph_svg(
 
     dot_content.push_str("}\n");
 
-    let dot_path = "deps.dot";
-    fs::write(dot_path, &dot_content)?;
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let dot_path = output_path.with_extension("dot");
+    fs::write(&dot_path, &dot_content)?;
 
     let graphviz_check = Command::new("dot").arg("-V").output();
 
     match graphviz_check {
         Ok(output) if output.status.success() => {
             let svg_output = Command::new("dot")
-                .args(["-Tsvg", dot_path, "-o", output_path])
+                .arg("-Tsvg")
+                .arg(&dot_path)
+                .arg("-o")
+                .arg(output_path)
                 .output()?;
 
             if !svg_output.status.success() {
@@ -188,12 +196,12 @@ pub(super) fn generate_dependency_graph_svg(
                 return Err(anyhow!("Failed to generate SVG: {error_msg}"));
             }
 
-            let _ = fs::remove_file(dot_path);
+            let _ = fs::remove_file(&dot_path);
 
             println!(
                 "   {} dependency graph: {}",
                 "Generated".cyan(),
-                output_path
+                output_path.display()
             );
         }
         Ok(_) => {

@@ -11,6 +11,7 @@ Options:
       --graph <GRAPH>         Generate dependency graph as SVG file (requires graphviz)
       --manifest-path <PATH>  Path to Acton.toml
       --out-dir <OUT_DIR>     Output directory for build artifacts [default: build]
+      --root <PATH>           Path to project root directory
       --output-fift <DIR>     Directory to save compiled Fift files
       --info                  Show compiled contract info
   -h, --help                  Print help

@@ -1,0 +1,4 @@
+cat contracts/simple.tolk
+
+fun onInternalMessage(in: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}

@@ -1,0 +1,2 @@
+   Generated tests/wrappers/Simple.tolk
+   Generated tests/simple.test.tolk

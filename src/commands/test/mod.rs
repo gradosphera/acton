@@ -24,7 +24,9 @@ use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
 use crate::formatter::FormatterContext;
 use acton_config::color::OwoColorize;
-use acton_config::config::{ActonConfig, ContractDependency, DependencyKind};
+use acton_config::config::{
+    ActonConfig, ContractDependency, DependencyKind, project_root, resolve_path_from_project_root,
+};
 use acton_config::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
 use anyhow::anyhow;
 use dunce;
@@ -388,21 +390,44 @@ impl<'a> TestRunner<'a> {
 }
 
 pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()> {
+    let mut config = config.clone();
+    config.junit_path = config.junit_path.as_ref().map(|path| {
+        resolve_path_from_project_root(path)
+            .to_string_lossy()
+            .to_string()
+    });
+    config.save_test_trace = config.save_test_trace.as_ref().map(|path| {
+        resolve_path_from_project_root(path)
+            .to_string_lossy()
+            .to_string()
+    });
+    config.snapshot = config.snapshot.as_ref().map(|path| {
+        resolve_path_from_project_root(path)
+            .to_string_lossy()
+            .to_string()
+    });
+    config.baseline_snapshot = config.baseline_snapshot.as_ref().map(|path| {
+        resolve_path_from_project_root(path)
+            .to_string_lossy()
+            .to_string()
+    });
+
     // First we need to build all contracts and generate all dependency files with code
     build_cmd(None, config.clear_cache, None, None, None, false)?;
     println!("     {} tests", "Running".green().bold());
 
     // If path is omitted, default to current directory
     let path = path.unwrap_or_else(|| ".".to_string());
+    let resolved_path = resolve_path_from_project_root(&path);
 
-    if !fs::exists(&path).unwrap_or(false) {
+    if !fs::exists(&resolved_path).unwrap_or(false) {
         anyhow::bail!(error_fmt::file_not_found(&path));
     }
 
-    let metadata = match fs::metadata(&path) {
+    let metadata = match fs::metadata(&resolved_path) {
         Ok(metadata) => metadata,
         Err(err) => {
-            anyhow::bail!("Cannot access '{path}': {err}")
+            anyhow::bail!("Cannot access '{}': {err}", resolved_path.display())
         }
     };
     let test_files = if metadata.is_file() {
@@ -410,18 +435,22 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
             anyhow::bail!("Test file must end with {}", ".test.tolk".yellow());
         }
         vec![
-            dunce::canonicalize(&path)
-                .unwrap_or_else(|_| PathBuf::from(&path))
+            dunce::canonicalize(&resolved_path)
+                .unwrap_or_else(|_| resolved_path.clone())
                 .to_string_lossy()
                 .to_string(),
         ]
     } else if metadata.is_dir() {
-        find_test_files_recursively(&path, &config.exclude_patterns, &config.include_patterns)?
+        find_test_files_recursively(
+            &resolved_path.to_string_lossy(),
+            &config.exclude_patterns,
+            &config.include_patterns,
+        )?
             .into_iter()
             .map(|p| p.to_string_lossy().to_string())
             .collect()
     } else {
-        anyhow::bail!("Path '{path}' is neither a file nor a directory");
+        anyhow::bail!("Path '{}' is neither a file nor a directory", resolved_path.display());
     };
 
     let acton_config = ActonConfig::load()?;
@@ -435,7 +464,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     let reports_for_ui = ui_reporter.as_ref().map(UiReporter::get_reports_arc);
 
     let mut global_reporter = ReporterManager::new();
-    TestRunner::setup_reporters(&mut global_reporter, config, ui_reporter);
+    TestRunner::setup_reporters(&mut global_reporter, &config, ui_reporter);
     global_reporter.init()?;
     global_reporter.on_testing_started()?;
 
@@ -451,7 +480,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         config.clone(),
         &mut file_cache,
         &mut global_reporter,
-        build_overrides_for_mutations(config)?,
+        build_overrides_for_mutations(&config)?,
     );
 
     for (index, file) in test_files.iter().enumerate() {
@@ -500,21 +529,29 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
             println!();
             match format_type {
                 CoverageFormat::Lcov => {
-                    let lcov_path = config.coverage_file.as_deref().unwrap_or("lcov.info");
-                    if let Err(err) = generate_lcov_file(&coverage, lcov_path) {
-                        eprintln!("Warning: Failed to generate LCOV file '{lcov_path}': {err}");
+                    let lcov_path = resolve_path_from_project_root(
+                        config.coverage_file.as_deref().unwrap_or("lcov.info"),
+                    );
+                    if let Err(err) = generate_lcov_file(&coverage, &lcov_path) {
+                        eprintln!(
+                            "Warning: Failed to generate LCOV file '{}': {err}",
+                            lcov_path.display()
+                        );
                     } else {
-                        println!("LCOV file saved in {lcov_path}");
+                        println!("LCOV file saved in {}", lcov_path.display());
                     }
                 }
                 CoverageFormat::Text => {
-                    let text_path = config.coverage_file.as_deref().unwrap_or("coverage.txt");
-                    if let Err(err) = generate_text_file(&coverage, text_path) {
+                    let text_path = resolve_path_from_project_root(
+                        config.coverage_file.as_deref().unwrap_or("coverage.txt"),
+                    );
+                    if let Err(err) = generate_text_file(&coverage, &text_path) {
                         eprintln!(
-                            "Warning: Failed to generate text coverage file '{text_path}': {err}"
+                            "Warning: Failed to generate text coverage file '{}': {err}",
+                            text_path.display()
                         );
                     } else {
-                        println!("Text coverage file saved in {text_path}");
+                        println!("Text coverage file saved in {}", text_path.display());
                     }
                 }
             }
@@ -541,9 +578,9 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     {
         let reports = reports.lock().expect("cannot lock mutex").clone();
         let trace_dir = config.save_test_trace.clone();
-        let project_root = std::env::current_dir().unwrap_or_default();
-        let project_root = dunce::canonicalize(project_root)
-            .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default())
+        let project_root_path = project_root().to_path_buf();
+        let project_root = dunce::canonicalize(&project_root_path)
+            .unwrap_or(project_root_path)
             .to_string_lossy()
             .to_string();
         let project_root = if project_root.ends_with(std::path::MAIN_SEPARATOR) {

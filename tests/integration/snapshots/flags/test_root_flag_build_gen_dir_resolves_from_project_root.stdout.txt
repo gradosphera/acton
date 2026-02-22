@@ -1,0 +1,6 @@
+   Compiling contracts
+   Compiling child
+    Finished in [TIME]
+   Compiling main
+    Finished in [TIME]
+    Finished in [TIME]

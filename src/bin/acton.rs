@@ -20,7 +20,9 @@ use acton::commands::wallet::{WalletCommand, wallet_cmd};
 use acton::commands::wrapper::wrapper_cmd;
 use acton_config::color::OwoColorize;
 use acton_config::color::{ColorMode, init_color_mode};
-use acton_config::config::{ActonConfig, Explorer, Network, init_manifest_path};
+use acton_config::config::{
+    ActonConfig, Explorer, Network, init_manifest_path, resolve_path_from_project_root,
+};
 use acton_config::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
 use clap::builder::styling::Style;
 use clap::builder::{StyledStr, Styles};
@@ -58,6 +60,15 @@ struct Cli {
 
     #[arg(long, global = true, value_name = "PATH", help = "Path to Acton.toml")]
     manifest_path: Option<PathBuf>,
+
+    #[arg(
+        long,
+        global = true,
+        value_name = "PATH",
+        help = "Path to project root directory",
+        conflicts_with = "manifest_path"
+    )]
+    root: Option<PathBuf>,
 
     #[command(subcommand)]
     command: Commands,
@@ -1180,7 +1191,10 @@ fn find_manifest_in_ancestors(start_dir: &Path) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-fn resolve_manifest_path(manifest_path: Option<PathBuf>) -> anyhow::Result<(PathBuf, bool)> {
+fn resolve_manifest_path(
+    manifest_path: Option<PathBuf>,
+    root: Option<PathBuf>,
+) -> anyhow::Result<PathBuf> {
     let cwd = env::current_dir()?;
 
     if let Some(manifest_path) = manifest_path {
@@ -1194,30 +1208,34 @@ fn resolve_manifest_path(manifest_path: Option<PathBuf>) -> anyhow::Result<(Path
             resolved = resolved.join("Acton.toml");
         }
 
-        return Ok((resolved, true));
+        return Ok(resolved);
+    }
+
+    if let Some(root) = root {
+        let resolved_root = if root.is_absolute() {
+            root
+        } else {
+            cwd.join(root)
+        };
+
+        if resolved_root.file_name().is_some_and(|name| name == "Acton.toml") {
+            return Ok(resolved_root);
+        }
+
+        return Ok(resolved_root.join("Acton.toml"));
     }
 
     if let Some(found_manifest_path) = find_manifest_in_ancestors(&cwd) {
-        return Ok((found_manifest_path, true));
+        return Ok(found_manifest_path);
     }
 
-    Ok((cwd.join("Acton.toml"), false))
+    Ok(cwd.join("Acton.toml"))
 }
 
-fn configure_manifest_path(manifest_path: Option<PathBuf>) -> anyhow::Result<()> {
-    let (resolved_manifest_path, should_switch_to_project_root) =
-        resolve_manifest_path(manifest_path)?;
+fn configure_manifest_path(manifest_path: Option<PathBuf>, root: Option<PathBuf>) -> anyhow::Result<()> {
+    let resolved_manifest_path = resolve_manifest_path(manifest_path, root)?;
 
     init_manifest_path(&resolved_manifest_path)?;
-
-    // Keep relative paths in commands stable by working from the project directory.
-    if should_switch_to_project_root
-        && let Some(project_dir) = resolved_manifest_path.parent()
-        && project_dir.exists()
-    {
-        env::set_current_dir(project_dir)?;
-    }
-
     Ok(())
 }
 
@@ -1233,11 +1251,12 @@ fn main() {
     let Cli {
         color,
         manifest_path,
+        root,
         command,
     } = Cli::parse();
     init_color_mode(color);
 
-    if let Err(err) = configure_manifest_path(manifest_path) {
+    if let Err(err) = configure_manifest_path(manifest_path, root) {
         eprintln!("{} {}", "Error:".red(), err);
         process::exit(1);
     }
@@ -1627,16 +1646,19 @@ fn report_error_as_json<T>(result: anyhow::Result<T>) {
 
 fn read_source_map(source_map: Option<String>) -> anyhow::Result<Option<Box<SourceMap>>> {
     let source_map_data = if let Some(path) = source_map {
-        if !fs::exists(&path).unwrap_or(false) {
+        let resolved_path = resolve_path_from_project_root(&path);
+
+        if !fs::exists(&resolved_path).unwrap_or(false) {
             anyhow::bail!(error_fmt::file_not_found(&path));
         }
 
-        let metadata = fs::metadata(&path)?;
+        let metadata = fs::metadata(&resolved_path)?;
         if !metadata.is_file() {
             anyhow::bail!("{} is not a file", path.yellow());
         }
 
-        let content = fs::read_to_string(path).expect("Failed to read source map file");
+        let content =
+            fs::read_to_string(resolved_path).expect("Failed to read source map file");
         let result: SourceMap =
             serde_json::from_str(content.as_str()).expect("Failed to parse source map JSON");
         Some(Box::new(result))
@@ -1647,11 +1669,14 @@ fn read_source_map(source_map: Option<String>) -> anyhow::Result<Option<Box<Sour
 }
 
 fn setup_logging() -> anyhow::Result<()> {
-    fs::create_dir_all(".acton/")?;
+    let log_path = resolve_path_from_project_root(".acton/debug.log");
+    if let Some(parent_dir) = log_path.parent() {
+        fs::create_dir_all(parent_dir)?;
+    }
     let log_file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(".acton/debug.log")?;
+        .open(log_path)?;
 
     fern::Dispatch::new()
         .format(|out, message, record| {

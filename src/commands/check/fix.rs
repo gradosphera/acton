@@ -1,11 +1,15 @@
 use acton_config::color::OwoColorize;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tolk_linter::diagnostic::{Applicability, Diagnostic};
 use tolk_resolver::FileDb;
 
-pub(super) fn apply_fixes(file_db: &FileDb, diagnostics: &[Diagnostic]) -> anyhow::Result<()> {
+pub(super) fn apply_fixes(
+    file_db: &FileDb,
+    diagnostics: &[Diagnostic],
+    project_root: &Path,
+) -> anyhow::Result<()> {
     let mut fixes_by_file: BTreeMap<PathBuf, Vec<(usize, usize, String)>> = BTreeMap::new();
     let mut total_diags_by_file: HashMap<PathBuf, usize> = HashMap::new();
     let mut fixed_diags_by_file: HashMap<PathBuf, usize> = HashMap::new();
@@ -46,8 +50,6 @@ pub(super) fn apply_fixes(file_db: &FileDb, diagnostics: &[Diagnostic]) -> anyho
         }
     }
 
-    let current_dir = std::env::current_dir().unwrap_or_default();
-
     for (file_path, mut fixes) in fixes_by_file {
         // sort fixes by start position in reverse order (to avoid offset issues when multiple fixes)
         fixes.sort_by(|(a_start, _, _), (b_start, _, _)| b_start.cmp(a_start));
@@ -71,7 +73,7 @@ pub(super) fn apply_fixes(file_db: &FileDb, diagnostics: &[Diagnostic]) -> anyho
         if applied_fixes > 0 {
             fs::write(&file_path, new_content)?;
 
-            let relative_path = pathdiff::diff_paths(&file_path, &current_dir)
+            let relative_path = pathdiff::diff_paths(&file_path, project_root)
                 .unwrap_or_else(|| PathBuf::from(&file_path));
 
             let total_issues = *total_diags_by_file.get(&file_path).unwrap_or(&0);

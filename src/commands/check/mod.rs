@@ -1,6 +1,8 @@
 use crate::commands::common::error_fmt;
 use acton_config::color::OwoColorize;
-use acton_config::config::{ActonConfig, ContractConfig, LintLevel};
+use acton_config::config::{
+    ActonConfig, ContractConfig, LintLevel, project_root, resolve_path_from_project_root,
+};
 use anyhow::anyhow;
 use globset::{Glob, GlobSetBuilder};
 use serde_json;
@@ -42,11 +44,10 @@ pub fn check_cmd(
     }
 
     let config = ActonConfig::load()?;
-
-    let cwd = std::env::current_dir()?;
+    let project_root = project_root().to_path_buf();
 
     let now = Instant::now();
-    let files = find_files(&cwd)?;
+    let files = find_files(&project_root)?;
     log::info!("found {} files in {:?}", files.len(), now.elapsed());
 
     let stdlib = find_stdlib()?;
@@ -64,8 +65,9 @@ pub fn check_cmd(
 
     if let Some(target) = target {
         if target.ends_with(".tolk") {
+            let resolved_target = resolve_path_from_project_root(&target);
             let contract_diagnostics =
-                check_test_file(Path::new(&target), &file_db, fix, json, &config)?;
+                check_test_file(&resolved_target, &file_db, fix, json, &config)?;
             all_diagnostics.extend(contract_diagnostics);
         } else {
             let contract = config
@@ -109,7 +111,7 @@ pub fn check_cmd(
         println!("{}", serde_json::to_string_pretty(&json_output)?);
     } else {
         if fix {
-            fix::apply_fixes(&file_db, &all_diagnostics)?;
+            fix::apply_fixes(&file_db, &all_diagnostics, &project_root)?;
         }
 
         let mut shown_diagnostics = if fix {
@@ -165,7 +167,7 @@ pub fn check_cmd(
 }
 
 fn find_stdlib() -> anyhow::Result<PathBuf> {
-    let path_to_stdlib = PathBuf::from(".acton/tolk-stdlib");
+    let path_to_stdlib = project_root().join(".acton").join("tolk-stdlib");
     if !path_to_stdlib.exists() {
         anyhow::bail!(
             "cannot find Tolk stdlib in .acton/, did you run {}?",
@@ -177,7 +179,7 @@ fn find_stdlib() -> anyhow::Result<PathBuf> {
 }
 
 fn find_acton_stdlib() -> anyhow::Result<PathBuf> {
-    let path_to_acton = PathBuf::from(".acton");
+    let path_to_acton = project_root().join(".acton");
     if !path_to_acton.exists() {
         anyhow::bail!(
             "cannot find Acton in .acton/, did you run {}?",
@@ -205,7 +207,8 @@ fn check_contract(
         println!("    {} {}", "Checking".green().bold(), config.name,);
     }
 
-    let root = dunce::canonicalize(PathBuf::from(&config.src))?;
+    let root = dunce::canonicalize(resolve_path_from_project_root(&config.src))
+        .unwrap_or_else(|_| resolve_path_from_project_root(&config.src));
     let lint_settings = Checker::build_settings(acton_config, Some(contract_id));
 
     check_root_file(&root, file_db, fix, json, lint_settings, acton_config)
@@ -218,9 +221,10 @@ fn check_test_file(
     json: bool,
     acton_config: &ActonConfig,
 ) -> anyhow::Result<Vec<Diagnostic>> {
-    let root = dunce::canonicalize(file)?;
-    let current_dir = std::env::current_dir().unwrap_or_default();
-    let relative_root = pathdiff::diff_paths(&root, &current_dir).unwrap_or_else(|| root.clone());
+    let root = dunce::canonicalize(resolve_path_from_project_root(file))
+        .unwrap_or_else(|_| resolve_path_from_project_root(file));
+    let relative_root =
+        pathdiff::diff_paths(&root, project_root()).unwrap_or_else(|| root.clone());
 
     if !json {
         println!(

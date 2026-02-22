@@ -1,12 +1,12 @@
 use crate::commands::common::error_fmt;
 use crate::file_build_cache::FileBuildCache;
 use acton_config::color::OwoColorize;
-use acton_config::config;
+use acton_config::config::{self, resolve_path_from_project_root};
 use anyhow::anyhow;
 use log::info;
 use serde_json;
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 use std::time::Instant;
 use tolkc::abi::ContractABI;
 use ton_source_map::SourceMap;
@@ -23,6 +23,13 @@ pub fn compile_cmd(
     abi: Option<String>,
     clear_cache: bool,
 ) -> anyhow::Result<()> {
+    let resolved_input_path = resolve_path_from_project_root(path);
+    let resolved_input_path_key = resolved_input_path.to_string_lossy().to_string();
+    let source_map_output = source_map.map(resolve_path_from_project_root);
+    let abi_output = abi.map(resolve_path_from_project_root);
+    let boc_output = boc.map(resolve_path_from_project_root);
+    let fift_output = fift.map(resolve_path_from_project_root);
+
     if clear_cache {
         let mut file_cache = FileBuildCache::new(None)?;
         file_cache.clear()?;
@@ -31,16 +38,16 @@ pub fn compile_cmd(
 
     let start_time = Instant::now();
 
-    if !fs::exists(path).unwrap_or(false) {
+    if !fs::exists(&resolved_input_path).unwrap_or(false) {
         anyhow::bail!(error_fmt::file_not_found(path));
     }
 
-    let metadata = fs::metadata(path)?;
+    let metadata = fs::metadata(&resolved_input_path)?;
     if !metadata.is_file() {
         anyhow::bail!("{} is not a file", path.yellow());
     }
 
-    if !path.ends_with(".tolk") {
+    if resolved_input_path.extension().and_then(|ext| ext.to_str()) != Some("tolk") {
         anyhow::bail!("File must end with {}", ".tolk".yellow());
     }
 
@@ -48,10 +55,14 @@ pub fn compile_cmd(
 
     let acton_config = config::ActonConfig::load().ok();
 
-    let need_debug_info = source_map.is_some();
-    if let Some(cached_entry) = file_cache.get(path, need_debug_info, 2, "1.3") {
+    let need_debug_info = source_map_output.is_some();
+    if let Some(cached_entry) = file_cache.get(&resolved_input_path_key, need_debug_info, 2, "1.3")
+    {
         let elapsed = start_time.elapsed();
-        info!("Compile {path} from file cache (.acton/cache) in {elapsed:?}");
+        info!(
+            "Compile {} from file cache (.acton/cache) in {elapsed:?}",
+            resolved_input_path.display()
+        );
 
         handle_compilation_result(
             cached_entry.code_boc64,
@@ -59,12 +70,12 @@ pub fn compile_cmd(
             cached_entry.fift_code,
             cached_entry.source_map,
             cached_entry.abi,
-            abi,
-            source_map,
+            abi_output,
+            source_map_output,
             json,
             base64_only,
-            boc,
-            fift,
+            boc_output,
+            fift_output,
             true,
             None,
         )?;
@@ -72,24 +83,26 @@ pub fn compile_cmd(
     }
 
     let compile_start = Instant::now();
-    let with_debug_info = source_map.is_some();
+    let with_debug_info = source_map_output.is_some();
 
     let mut compiler = tolkc::Compiler::new(2);
     if let Some(acton_config) = &acton_config {
         compiler = compiler.with_mappings(&acton_config.mappings)
     }
 
-    let compilation_result = compiler.compile(Path::new(path), with_debug_info);
+    let compilation_result = compiler.compile(&resolved_input_path, with_debug_info);
     let compile_time = compile_start.elapsed();
 
     match compilation_result {
         tolkc::CompilerResult::Success(result) => {
             let total_elapsed = start_time.elapsed();
             info!(
-                "Compile {path} from source (compilation: {compile_time:?}, total: {total_elapsed:?})"
+                "Compile {} from source (compilation: {compile_time:?}, total: {total_elapsed:?})",
+                resolved_input_path.display()
             );
 
-            if let Err(e) = file_cache.put(path, &result, with_debug_info, 2, "1.3")
+            if let Err(e) =
+                file_cache.put(&resolved_input_path_key, &result, with_debug_info, 2, "1.3")
                 && !json
             {
                 eprintln!("Warning: Failed to cache compilation result: {e}");
@@ -101,12 +114,12 @@ pub fn compile_cmd(
                 result.fift_code,
                 result.source_map,
                 result.abi,
-                abi,
-                source_map,
+                abi_output,
+                source_map_output,
                 json,
                 base64_only,
-                boc,
-                fift,
+                boc_output,
+                fift_output,
                 false,
                 Some(total_elapsed),
             )
@@ -115,7 +128,9 @@ pub fn compile_cmd(
             let total_elapsed = start_time.elapsed();
             info!(
                 "Compile {} failed after {:?}: {}",
-                path, total_elapsed, error.message
+                resolved_input_path.display(),
+                total_elapsed,
+                error.message
             );
 
             if json {
@@ -139,12 +154,12 @@ fn handle_compilation_result(
     fift_code: String,
     source_map: Option<SourceMap>,
     abi: Option<ContractABI>,
-    abi_path: Option<String>,
-    source_map_path: Option<String>,
+    abi_path: Option<PathBuf>,
+    source_map_path: Option<PathBuf>,
     json: bool,
     base64_only: bool,
-    boc: Option<String>,
-    fift: Option<String>,
+    boc: Option<PathBuf>,
+    fift: Option<PathBuf>,
     from_cache: bool,
     elapsed: Option<std::time::Duration>,
 ) -> anyhow::Result<()> {
@@ -152,7 +167,7 @@ fn handle_compilation_result(
     let code_hex = Boc::encode_hex(&code);
 
     if let Some(source_map_path) = &source_map_path {
-        if let Some(parent_dir) = Path::new(&source_map_path).parent()
+        if let Some(parent_dir) = source_map_path.parent()
             && let Err(err) = fs::create_dir_all(parent_dir)
         {
             anyhow::bail!(
@@ -167,7 +182,7 @@ fn handle_compilation_result(
                 fs::write(source_map_path, json_string).map_err(|err| {
                     anyhow!(
                         "Failed to save source map {}: {err}",
-                        source_map_path.yellow()
+                        source_map_path.display()
                     )
                 })?;
             } else {
@@ -179,7 +194,7 @@ fn handle_compilation_result(
     }
 
     if let Some(fift_path) = &fift {
-        if let Some(parent_dir) = Path::new(&fift_path).parent()
+        if let Some(parent_dir) = fift_path.parent()
             && let Err(err) = fs::create_dir_all(parent_dir)
         {
             anyhow::bail!(
@@ -190,13 +205,13 @@ fn handle_compilation_result(
         }
 
         fs::write(fift_path, &fift_code)
-            .map_err(|err| anyhow!("Failed to save Fift file {}: {err}", fift_path.yellow()))?;
+            .map_err(|err| anyhow!("Failed to save Fift file {}: {err}", fift_path.display()))?;
     }
 
     if let Some(abi) = &abi
         && let Some(abi_path) = &abi_path
     {
-        if let Some(parent_dir) = Path::new(&abi_path).parent()
+        if let Some(parent_dir) = abi_path.parent()
             && let Err(err) = fs::create_dir_all(parent_dir)
         {
             anyhow::bail!(
@@ -207,11 +222,11 @@ fn handle_compilation_result(
         }
 
         fs::write(abi_path, serde_json::to_string_pretty(abi)?)
-            .map_err(|err| anyhow!("Failed to save ABI file {}: {err}", abi_path.yellow()))?;
+            .map_err(|err| anyhow!("Failed to save ABI file {}: {err}", abi_path.display()))?;
     }
 
     if let Some(boc_path) = &boc {
-        if let Some(parent_dir) = Path::new(&boc_path).parent()
+        if let Some(parent_dir) = boc_path.parent()
             && let Err(err) = fs::create_dir_all(parent_dir)
         {
             anyhow::bail!(
@@ -223,7 +238,7 @@ fn handle_compilation_result(
 
         let bytes = Boc::encode(code);
         fs::write(boc_path, bytes)
-            .map_err(|err| anyhow!("Failed to save BoC file {}: {err}", boc_path.yellow()))?;
+            .map_err(|err| anyhow!("Failed to save BoC file {}: {err}", boc_path.display()))?;
         return Ok(());
     }
 

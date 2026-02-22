@@ -1,13 +1,13 @@
 use crate::commands::common::{error_fmt, select_contract, select_wallet};
 use crate::wallets::open_wallets;
 use acton_config::color::OwoColorize;
-use acton_config::config::ActonConfig;
+use acton_config::config::{ActonConfig, resolve_path_from_project_root};
 use anyhow::{Context, anyhow};
 use base64::Engine;
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 use ton_api::{Network, StackItem, TonApiClient};
 use tonlib_core::TonAddress;
@@ -33,8 +33,8 @@ pub fn verify_cmd(
     let contract = config
         .get_contract(&contract_key)
         .ok_or_else(|| anyhow!(error_fmt::contract_not_found(&config, &contract_key)))?;
-    let contract_path = dunce::canonicalize(contract.src.clone())
-        .unwrap_or_else(|_| PathBuf::from(contract.src.clone()));
+    let contract_path = dunce::canonicalize(resolve_path_from_project_root(&contract.src))
+        .unwrap_or_else(|_| resolve_path_from_project_root(&contract.src));
 
     let network = Network::from_str(&network)?;
 
@@ -54,7 +54,7 @@ pub fn verify_cmd(
 
     println!("  {} Compiling contract", "→".blue().bold());
     let compiler = tolkc::Compiler::new(2).with_mappings(&config.mappings);
-    let compilation_result = compiler.compile(Path::new(&contract_path), false);
+    let compilation_result = compiler.compile(&contract_path, false);
 
     let code_boc64 = match compilation_result {
         tolkc::CompilerResult::Success(result) => {

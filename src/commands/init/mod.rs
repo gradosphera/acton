@@ -1,7 +1,9 @@
 use crate::commands::common::{symlink_global_libraries, symlink_global_wallets};
 use crate::stdlib;
 use acton_config::color::OwoColorize;
-use acton_config::config::{ActonConfig, ContractConfig, ContractsConfig};
+use acton_config::config::{
+    ActonConfig, ContractConfig, ContractsConfig, manifest_path, project_root,
+};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -9,7 +11,9 @@ use tree_sitter::Node;
 use walkdir::WalkDir;
 
 pub fn init_cmd() -> anyhow::Result<()> {
-    let acton_toml_exists = Path::new("Acton.toml").exists();
+    let project_root = project_root().to_path_buf();
+    let config_path = manifest_path().to_path_buf();
+    let acton_toml_exists = config_path.exists();
 
     if acton_toml_exists {
         println!(
@@ -19,7 +23,7 @@ pub fn init_cmd() -> anyhow::Result<()> {
     } else {
         let mut config = ActonConfig::default();
 
-        let discovered_contracts = discover_contracts();
+        let discovered_contracts = discover_contracts(&project_root);
         let contract_count = discovered_contracts.len();
 
         if discovered_contracts.is_empty() {
@@ -49,9 +53,9 @@ pub fn init_cmd() -> anyhow::Result<()> {
         );
     }
 
-    stdlib::ensure_latest(Path::new("."))?;
+    stdlib::ensure_latest(&project_root)?;
 
-    patch_or_create_gitignore()?;
+    patch_or_create_gitignore(&project_root)?;
 
     if let Err(e) = symlink_global_wallets() {
         println!(
@@ -78,9 +82,10 @@ pub fn init_cmd() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn patch_or_create_gitignore() -> anyhow::Result<()> {
-    let content = if fs::exists(".gitignore").unwrap_or(false) {
-        fs::read_to_string(".gitignore")?
+fn patch_or_create_gitignore(project_root: &Path) -> anyhow::Result<()> {
+    let gitignore_path = project_root.join(".gitignore");
+    let content = if fs::exists(&gitignore_path).unwrap_or(false) {
+        fs::read_to_string(&gitignore_path)?
     } else {
         String::new()
     };
@@ -112,7 +117,7 @@ fn patch_or_create_gitignore() -> anyhow::Result<()> {
             new_content.push('\n');
         }
         new_content.push_str(&to_add);
-        fs::write(".gitignore", new_content)?;
+        fs::write(&gitignore_path, new_content)?;
         println!(
             "     {} .gitignore with Acton patterns",
             "Patched".green().bold()
@@ -121,10 +126,10 @@ fn patch_or_create_gitignore() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn discover_contracts() -> BTreeMap<String, ContractConfig> {
+fn discover_contracts(project_root: &Path) -> BTreeMap<String, ContractConfig> {
     let mut contracts = BTreeMap::new();
 
-    for entry in WalkDir::new(".")
+    for entry in WalkDir::new(project_root)
         .follow_links(false)
         .into_iter()
         .filter_entry(|e| {
@@ -165,7 +170,7 @@ fn discover_contracts() -> BTreeMap<String, ContractConfig> {
             .unwrap_or("unknown");
 
         let relative_path = path
-            .strip_prefix(".")
+            .strip_prefix(project_root)
             .unwrap_or(path)
             .to_string_lossy()
             .to_string();

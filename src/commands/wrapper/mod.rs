@@ -1,6 +1,6 @@
 use crate::commands::common::error_fmt;
 use acton_config::color::OwoColorize;
-use acton_config::config::ActonConfig;
+use acton_config::config::{ActonConfig, project_root, resolve_path_from_project_root};
 use anyhow::anyhow;
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
@@ -28,11 +28,7 @@ fn build_model(
     test_output: Option<String>,
     storage_struct_name: Option<String>,
 ) -> anyhow::Result<WrapperModel> {
-    let project_root = find_project_root_from_current_dir().ok_or_else(|| {
-        anyhow!(
-            "Could not find Acton.toml in project root. Make sure you're in a project directory."
-        )
-    })?;
+    let project_root = project_root().to_path_buf();
 
     let config = ActonConfig::load().map_err(|e| anyhow!("Failed to load Acton.toml: {e}"))?;
 
@@ -40,7 +36,7 @@ fn build_model(
         .get_contract(contract_id)
         .ok_or_else(|| anyhow!(error_fmt::contract_not_found(&config, contract_id)))?;
 
-    let contract_path = project_root.join(&contract_config.src);
+    let contract_path = resolve_path_from_project_root(&contract_config.src);
 
     if !contract_path.exists() {
         anyhow::bail!(
@@ -115,8 +111,9 @@ fn build_model(
         .join("tests")
         .join(format!("{contract_id}.test.tolk"));
 
-    let wrapper_path = wrapper_output.map_or(default_wrapper, PathBuf::from);
-    let test_path = test_output.map_or(default_test, PathBuf::from);
+    let wrapper_path =
+        wrapper_output.map_or(default_wrapper, |path| resolve_path_from_project_root(path));
+    let test_path = test_output.map_or(default_test, |path| resolve_path_from_project_root(path));
 
     let mut message_paths: Vec<PathBuf> = message_paths.iter().map(PathBuf::from).collect();
     message_paths.sort();
@@ -269,22 +266,6 @@ fn print_types_warning(contract_path: &Path, types_file_path: &Path, abi: &Contr
         "═══════════════════════════════════════════════════════════".yellow()
     );
     println!();
-}
-
-fn find_project_root_from_current_dir() -> Option<PathBuf> {
-    let mut current = std::env::current_dir().ok()?;
-
-    loop {
-        let acton_toml = current.join("Acton.toml");
-        if acton_toml.exists() {
-            return Some(current);
-        }
-
-        match current.parent() {
-            Some(parent) => current = parent.to_path_buf(),
-            None => return None,
-        }
-    }
 }
 
 fn to_pascal_case(s: &str) -> String {

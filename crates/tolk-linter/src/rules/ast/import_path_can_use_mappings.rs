@@ -1,6 +1,7 @@
 use crate::rules::diagnostic::{Annotation, Applicability, Diagnostic, Edit, Fix};
 use crate::rules::violation::Violation;
 use crate::{Checker, FixAvailability};
+use acton_config::config::project_root;
 use rustc_hash::FxHashMap;
 use std::path::{Path, PathBuf};
 use tolk_macros::ViolationMetadata;
@@ -47,7 +48,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
         return None;
     }
 
-    let project_root = std::env::current_dir().ok()?;
+    let project_root = project_root();
 
     for resolved_import in imports {
         let import = resolved_import.import();
@@ -75,7 +76,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
         }
 
         let Some(mapped_import) =
-            suggest_mapped_import(&target_file.index().path, &project_root, mappings)
+            suggest_mapped_import(&target_file.index().path, project_root, mappings)
         else {
             continue;
         };

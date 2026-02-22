@@ -5,7 +5,7 @@ use std::path::Path;
 
 pub mod error_fmt {
     use acton_config::color::OwoColorize;
-    use acton_config::config::ActonConfig;
+    use acton_config::config::{ActonConfig, project_root};
     use std::path::Path;
 
     #[must_use]
@@ -89,7 +89,7 @@ pub mod error_fmt {
         }
         let path = Path::new(path);
 
-        let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
+        let cwd = project_root().to_path_buf();
         let absolute_path = if path.is_absolute() {
             path.to_path_buf()
         } else {

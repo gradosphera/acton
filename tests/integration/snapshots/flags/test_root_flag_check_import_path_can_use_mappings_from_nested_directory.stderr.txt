@@ -1,0 +1,31 @@
+warning[E018]: import path can use mappings
+  --> [ROOT]/contracts/main[LINE]
+  |
+2 |             import "../libs/math.tolk";
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^ this import can use mapping `@libs/math`
+  |
+  = replace this import with `import "@libs/math";`
+
+help: replace import path with mapping
+  --> [ROOT]/contracts/main[LINE]
+  |
+2 |             import "../libs/math.tolk";
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^ import "@libs/math"
+
+warning[E002]: variable is unused
+  --> [ROOT]/contracts/main[LINE]
+  |
+4 |             fun onInternalMessage(in: InMessage) {
+  |                                   ^^ unused variable `in`
+
+help: prefix with underscore: `_in`
+  --> [ROOT]/contracts/main[LINE]
+  |
+4 |             fun onInternalMessage(in: InMessage) {
+  |                                   ^^ _in
+
+
+2 issues can be fixed automatically, rerun with --fix flag.
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain E002

@@ -10,7 +10,7 @@ use crate::formatter::FormatterContext;
 use crate::wallets;
 use crate::{ffi, stdlib};
 use acton_config::color::OwoColorize;
-use acton_config::config::{ActonConfig, Explorer};
+use acton_config::config::{ActonConfig, Explorer, project_root, resolve_path_from_project_root};
 use anyhow::anyhow;
 use log::error;
 use rustc_hash::FxHashMap;
@@ -53,7 +53,10 @@ pub fn script_cmd(
     net: Option<String>,
     explorer: Option<Explorer>,
 ) -> anyhow::Result<()> {
-    stdlib::ensure_latest(Path::new("."))?;
+    let project_root = project_root().to_path_buf();
+    stdlib::ensure_latest(&project_root)?;
+
+    let resolved_path = resolve_path_from_project_root(path);
 
     if clear_cache {
         let mut file_cache = FileBuildCache::new(None)?;
@@ -61,16 +64,16 @@ pub fn script_cmd(
         println!("  {} Cache cleared", "✓".green().bold());
     }
 
-    if !fs::exists(path).unwrap_or(false) {
+    if !fs::exists(&resolved_path).unwrap_or(false) {
         anyhow::bail!(error_fmt::file_not_found(path));
     }
 
-    let metadata = fs::metadata(path)?;
+    let metadata = fs::metadata(&resolved_path)?;
     if !metadata.is_file() {
         anyhow::bail!("{} is not a file", path.yellow());
     }
 
-    if !path.ends_with(".tolk") {
+    if resolved_path.extension().and_then(|ext| ext.to_str()) != Some("tolk") {
         anyhow::bail!("Script file must end with {}", ".tolk".yellow());
     }
 
@@ -78,13 +81,14 @@ pub fn script_cmd(
         Network::from_str(net)?; // validate network
     }
 
-    let content = fs::read_to_string(path)
+    let content = fs::read_to_string(&resolved_path)
         .map_err(|err| anyhow!("Cannot access {}: {err}", path.yellow()))?;
+    let resolved_path = resolved_path.to_string_lossy().to_string();
 
     let stack = parse_stack_args(args)?;
 
     run_script_file(
-        path,
+        &resolved_path,
         &content,
         stack,
         debug,

@@ -2,7 +2,9 @@ use crate::commands::common::{error_fmt, select_contract, select_wallet};
 use crate::commands::disasm::disasm_cmd;
 use crate::wallets::open_wallets;
 use acton_config::color::OwoColorize;
-use acton_config::config::{ActonConfig, global_libraries_path};
+use acton_config::config::{
+    ActonConfig, global_libraries_path, project_root, resolve_path_from_project_root,
+};
 use anyhow::{Context, anyhow};
 use chrono::{DateTime, Local};
 use inquire::{Select, Text};
@@ -59,8 +61,8 @@ pub fn publish_cmd(
         let contract = config
             .get_contract(&contract_key)
             .ok_or_else(|| anyhow!(error_fmt::contract_not_found(&config, &contract_key)))?;
-        let contract_path = dunce::canonicalize(contract.src.clone())
-            .unwrap_or_else(|_| PathBuf::from(contract.src.clone()));
+        let contract_path = dunce::canonicalize(resolve_path_from_project_root(&contract.src))
+            .unwrap_or_else(|_| resolve_path_from_project_root(&contract.src));
 
         if contract_path.extension() != Some("tolk".as_ref()) {
             anyhow::bail!("Contract source must be a {} file", ".tolk".yellow());
@@ -70,7 +72,7 @@ pub fn publish_cmd(
 
         println!("  {} Compiling contract", "→".blue().bold());
         let compiler = tolkc::Compiler::new(2).with_mappings(&config.mappings);
-        let compilation_result = compiler.compile(Path::new(&contract_path), false);
+        let compilation_result = compiler.compile(&contract_path, false);
 
         match compilation_result {
             CompilerResult::Success(result) => {
@@ -329,11 +331,16 @@ pub fn fetch_cmd(
         }
 
         if let Some(path) = output {
+            let output_path = resolve_fetch_output_path(project_root(), &path);
+            if let Some(parent_dir) = output_path.parent() {
+                fs::create_dir_all(parent_dir)?;
+            }
+
             if path.ends_with(".boc") {
                 let bytes = Boc::encode(&library_cell);
-                fs::write(&path, bytes)?;
+                fs::write(&output_path, bytes)?;
             } else {
-                fs::write(&path, &boc_base64)?;
+                fs::write(&output_path, &boc_base64)?;
             }
             println!("  {} Written to {}", "✓".green().bold(), path);
         } else {
@@ -342,6 +349,15 @@ pub fn fetch_cmd(
     }
 
     Ok(())
+}
+
+fn resolve_fetch_output_path(project_root: &Path, output: &str) -> PathBuf {
+    let output_path = Path::new(output);
+    if output_path.is_absolute() {
+        output_path.to_path_buf()
+    } else {
+        project_root.join(output_path)
+    }
 }
 
 pub fn info_cmd(name: Option<String>, api_key: Option<String>) -> anyhow::Result<()> {
@@ -813,6 +829,27 @@ fn parse_duration(s: &str) -> anyhow::Result<u64> {
         "d" => Ok(num * 24 * 60 * 60),
         "y" => Ok(num * 365 * 24 * 60 * 60),
         _ => unreachable!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_fetch_output_path;
+    use std::path::Path;
+
+    #[test]
+    fn test_resolve_fetch_output_path_relative_to_project_root() {
+        let project_root = Path::new("/tmp/acton-project");
+        let resolved = resolve_fetch_output_path(project_root, "dist/lib.boc");
+        assert_eq!(resolved, project_root.join("dist/lib.boc"));
+    }
+
+    #[test]
+    fn test_resolve_fetch_output_path_keeps_absolute_path() {
+        let project_root = Path::new("/tmp/acton-project");
+        let absolute = Path::new("/tmp/out/lib.boc");
+        let resolved = resolve_fetch_output_path(project_root, absolute.to_str().unwrap());
+        assert_eq!(resolved, absolute);
     }
 }
 

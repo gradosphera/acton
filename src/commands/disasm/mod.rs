@@ -1,5 +1,6 @@
 use crate::commands::common::error_fmt;
 use acton_config::color::OwoColorize;
+use acton_config::config::resolve_path_from_project_root;
 use anyhow::anyhow;
 use std::fs;
 use std::path::Path;
@@ -38,19 +39,25 @@ pub fn disasm_cmd(
     let boc_data = if let Some(string) = boc_string {
         string
     } else if let Some(path) = boc_file {
-        if !fs::exists(&path).unwrap_or(false) {
+        if path.trim().is_empty() {
+            anyhow::bail!("Empty file path is not allowed");
+        }
+
+        let resolved_path = resolve_path_from_project_root(&path);
+
+        if !fs::exists(&resolved_path).unwrap_or(false) {
             anyhow::bail!(error_fmt::file_not_found(&path));
         }
 
-        let metadata =
-            fs::metadata(&path).map_err(|err| anyhow!("Cannot access {}: {err}", path.yellow()))?;
+        let metadata = fs::metadata(&resolved_path)
+            .map_err(|err| anyhow!("Cannot access {}: {err}", path.yellow()))?;
         if !metadata.is_file() {
             anyhow::bail!("{} is not a file", path.yellow());
         }
 
         // BoC file can be binary file or file with hex/base64 encoded data
-        let binary_data =
-            fs::read(&path).map_err(|err| anyhow!("Cannot access {}: {err}", path.yellow()))?;
+        let binary_data = fs::read(&resolved_path)
+            .map_err(|err| anyhow!("Cannot access {}: {err}", path.yellow()))?;
         if let Ok(cell) = Boc::decode_base64(binary_data.trim_ascii()) {
             Boc::encode_hex(cell)
         } else if let Ok(cell) = Boc::decode_hex(binary_data.trim_ascii()) {
@@ -117,8 +124,10 @@ pub fn disasm_cmd(
     let output = code.print(&opts);
 
     if let Some(output_path) = output_file {
+        let resolved_output_path = resolve_path_from_project_root(&output_path);
+
         // Create parent directories if they don't exist
-        if let Some(parent_dir) = Path::new(&output_path).parent()
+        if let Some(parent_dir) = Path::new(&resolved_output_path).parent()
             && let Err(err) = fs::create_dir_all(parent_dir)
         {
             anyhow::bail!(
@@ -128,7 +137,7 @@ pub fn disasm_cmd(
             );
         }
 
-        fs::write(&output_path, &output)?;
+        fs::write(&resolved_output_path, &output)?;
         println!("Disassembled code written to {output_path}");
     } else {
         println!("{output}");

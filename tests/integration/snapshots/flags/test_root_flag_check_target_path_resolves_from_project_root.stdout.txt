@@ -1,0 +1,1 @@
+    Checking contracts/simple.tolk

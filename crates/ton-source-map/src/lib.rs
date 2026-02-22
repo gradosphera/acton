@@ -1,6 +1,8 @@
+use acton_config::config::project_root;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::Path;
 use std::sync::Arc;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, CellSlice, Load};
@@ -92,17 +94,19 @@ impl SourceLocation {
     pub fn normalize_path(file: &str) -> String {
         let normalized = Self::normalize_temp_name(file);
 
-        if let Ok(cwd) = std::env::current_dir()
-            && let Some(relative) = pathdiff::diff_paths(&normalized, cwd)
-        {
-            return relative.display().to_string();
-        }
-
-        normalized
+        Self::normalize_path_from_root(&normalized, project_root())
     }
 
     fn normalize_temp_name(file: &str) -> String {
         file.replace(".test.tolk.test.tolk", ".test.tolk")
+    }
+
+    fn normalize_path_from_root(file: &str, project_root: &Path) -> String {
+        if let Some(relative) = pathdiff::diff_paths(file, project_root) {
+            return relative.display().to_string();
+        }
+
+        file.to_string()
     }
 
     pub fn parse(s: &str) -> anyhow::Result<Option<Self>> {
@@ -127,6 +131,20 @@ impl SourceLocation {
             end_column: column,
             length: 0,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SourceLocation;
+    use std::path::Path;
+
+    #[test]
+    fn test_normalize_path_from_root_uses_project_root_base() {
+        let root = Path::new("/tmp/acton-project");
+        let file = "/tmp/acton-project/contracts/main.tolk";
+        let normalized = SourceLocation::normalize_path_from_root(file, root);
+        assert_eq!(normalized, "contracts/main.tolk");
     }
 }
 
