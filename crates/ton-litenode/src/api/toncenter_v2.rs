@@ -92,7 +92,7 @@ pub fn map_account_state(s: &LiteNodeAccountState) -> Value {
             AccountStatus::Active => "active",
             AccountStatus::Uninit => "uninitialized",
             AccountStatus::Frozen => "frozen",
-            AccountStatus::Nonexist => "nonexist",
+            AccountStatus::Nonexist => "uninitialized", // there is no nonexist in toncenter v2
         }
     })
 }
