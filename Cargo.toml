@@ -75,6 +75,7 @@ globset = "0.4"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 toml = "0.9.8"
+jsonpath_lib = "0.3.0"
 
 include_dir = "0.7" # include stdlib and Acton lib
 inquire = "0.9.1" # for interactive cli
@@ -204,6 +205,7 @@ globset = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
+jsonpath_lib = { workspace = true }
 
 include_dir = { workspace = true } # include stdlib and Acton lib
 inquire = { workspace = true } # for interactive cli
