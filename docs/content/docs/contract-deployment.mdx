@@ -31,12 +31,12 @@ A deploy script is a standard Tolk script that interacts with the network. It ty
 Here is an example of a script that deploys a simple Counter contract:
 
 ```tolk title="scripts/deploy.tolk"
-import "../.acton/io"
-import "../.acton/emulation/network"
-import "../.acton/build/build"
+import "@acton/io"
+import "@acton/emulation/network"
+import "@acton/build/build"
 
-import "../tests/wrappers/Counter" // Import your contract wrapper
-import "../contracts/types"        // Import types if needed
+import "@tests/wrappers/Counter" // Import your contract wrapper
+import "@contracts/types"        // Import types if needed
 
 fun main() {
     // 1. Load the configured wallet (searches wallets.toml and global wallets)
@@ -54,7 +54,7 @@ fun main() {
     // 3. Deploy the contract
     // This sends a transaction from the deployer wallet with the stateInit
     val result = counter.deploy(deployer.address, { value: ton("0.05") });
-    
+
     // Wait for the transaction to be confirmed on the blockchain
     result.wait();
 
@@ -89,7 +89,7 @@ fun main() {
 
     // Deploy
     minter.deploy(deployer.address, { value: ton("0.05") }).wait();
-    
+
     println1("Jetton deployed at {}", minter.address);
 }
 ```

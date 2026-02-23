@@ -95,12 +95,12 @@ When using `--broadcast`, your script will send real transactions and spend real
 Example deployment script:
 
 ```tolk title="deploy.tolk"
-import "counter_wrapper"
-import "types"
+import "@acton/io"
+import "@acton/emulation/network"
+import "@acton/build/build"
 
-import "../.acton/io"
-import "../.acton/emulation/network"
-import "../.acton/build/build"
+import "@contracts/types"
+import "@wrappers/Counter"
 
 fun main() {
     // 1. Load the configured wallet (searches wallets.toml and global wallets)
@@ -132,8 +132,8 @@ acton script query.tolk --fork-net mainnet --api-key YOUR_API_KEY
 Example query script:
 
 ```tolk title="query.tolk"
-import "../.acton/io"
-import "../.acton/emulation/network"
+import "@acton/io"
+import "@acton/emulation/network"
 
 fun main() {
     val contractAddress = address("EQDt7LL...");

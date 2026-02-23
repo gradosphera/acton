@@ -145,12 +145,12 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
         The template includes a deployment script `scripts/deploy.tolk`:
 
         ```tolk title="scripts/deploy.tolk"
-        import "../tests/wrappers/Counter"
-        import "../contracts/types"
+        import "@acton/io"
+        import "@acton/emulation/network"
+        import "@acton/build/build"
 
-        import "../.acton/io"
-        import "../.acton/emulation/network"
-        import "../.acton/build/build"
+        import "@tests/wrappers/Counter"
+        import "@contracts/types"
 
         fun main() {
             val deployer = net.wallet("deployer");
@@ -186,7 +186,7 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
 
 ## Next Steps
 
-Congratulations! You've successfully built, tested, deployed, and verified a smart contract on the TON blockchain using Acton! 
+Congratulations! You've successfully built, tested, deployed, and verified a smart contract on the TON blockchain using Acton!
 
 Explore more advanced topics:
 

@@ -78,7 +78,7 @@ Defining types inside the contract file makes them impossible to import safely i
 
 ```tolk title="contracts/counter.tolk"
 // ❌ Don't do this!
-struct (0x7e8764ef) Increase { amount: int32 } 
+struct (0x7e8764ef) Increase { amount: int32 }
 
 type AllowedMessage = Increase
 
@@ -136,9 +136,9 @@ The generated wrapper provides a struct representing your contract and methods t
 The wrapper provides a static `fromStorage` method to create the initial state and a `deploy` method to put it on the chain.
 
 ```tolk title="tests/counter.test.tolk"
-import "../wrappers/Counter"
+import "@wrappers/Counter"
 // Don't forget to import types for the storage struct!
-import "../contracts/types" 
+import "@contracts/types"
 
 get fun `test-example`() {
     // 1. Create contract instance from storage data
@@ -170,9 +170,9 @@ You can use it like this:
 contract.sendIncrease(deployer.address, 10);
 
 // With custom value and bounce flag
-contract.sendIncrease(deployer.address, 10, { 
-    value: ton("0.5"), 
-    bounce: true 
+contract.sendIncrease(deployer.address, 10, {
+    value: ton("0.5"),
+    bounce: true
 });
 ```
 
