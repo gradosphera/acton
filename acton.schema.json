@@ -255,6 +255,13 @@
       "type": "object",
       "description": "Linter configuration for the project",
       "properties": {
+        "exclude": {
+          "type": "array",
+          "description": "Glob patterns for files to exclude from lint diagnostics",
+          "items": {
+            "type": "string"
+          }
+        },
         "rules": {
           "type": "object",
           "description": "Lint rules and contract-specific overrides",

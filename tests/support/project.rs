@@ -17,6 +17,7 @@ pub(crate) struct ProjectBuilder {
     scripts: Vec<(String, String)>,
     mappings: Vec<(String, String)>,
     lint_levels: BTreeMap<String, String>,
+    lint_excludes: Vec<String>,
     test_config: Option<TestConfig>,
     license: Option<String>,
     create_acton_toml: bool,
@@ -74,6 +75,7 @@ impl ProjectBuilder {
             scripts: Vec::new(),
             mappings: Vec::new(),
             lint_levels: BTreeMap::new(),
+            lint_excludes: Vec::new(),
             test_config: None,
             license: Some("MIT".to_string()),
             create_acton_toml: true,
@@ -117,6 +119,18 @@ impl ProjectBuilder {
     /// ```
     pub(crate) fn with_lint_level(mut self, rule: &str, level: &str) -> Self {
         self.lint_levels.insert(rule.to_string(), level.to_string());
+        self
+    }
+
+    /// Exclude files from lint checks using glob patterns.
+    ///
+    /// # Examples
+    /// ```
+    /// .with_lint_exclude("contracts/generated/*.tolk")
+    /// .with_lint_exclude("contracts/legacy.tolk")
+    /// ```
+    pub(crate) fn with_lint_exclude(mut self, pattern: &str) -> Self {
+        self.lint_excludes.push(pattern.to_string());
         self
     }
 
@@ -407,6 +421,7 @@ impl ProjectBuilder {
                 &self.scripts,
                 &self.mappings,
                 &self.lint_levels,
+                &self.lint_excludes,
                 &self.test_config,
                 &self.license,
             );
@@ -441,6 +456,7 @@ impl ProjectBuilder {
         scripts: &[(String, String)],
         mappings: &[(String, String)],
         lint_levels: &BTreeMap<String, String>,
+        lint_excludes: &[String],
         test_config: &Option<TestConfig>,
         license: &Option<String>,
     ) {
@@ -545,6 +561,19 @@ version = "0.1.0"
                 toml_content.push_str(&format!("{name} = \"{cmd}\"\n"));
             }
             toml_content.push('\n');
+        }
+
+        if !lint_excludes.is_empty() {
+            toml_content.push_str("[lint]\n");
+            toml_content.push_str("exclude = [");
+            toml_content.push_str(
+                &lint_excludes
+                    .iter()
+                    .map(|pattern| format!("\"{pattern}\""))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
+            toml_content.push_str("]\n\n");
         }
 
         if !lint_levels.is_empty() {

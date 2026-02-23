@@ -2,7 +2,7 @@ use crate::commands::common::error_fmt;
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, ContractConfig, LintLevel};
 use anyhow::anyhow;
-use globset::{Glob, GlobSetBuilder};
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
@@ -11,7 +11,7 @@ use std::time::Instant;
 use tolk_linter::diagnostic::{Annotation, Applicability, Diagnostic, Severity};
 use tolk_linter::{Checker, Rule};
 use tolk_resolver::file_db::FileDb;
-use tolk_resolver::file_index::Span;
+use tolk_resolver::file_index::{FileId, Span};
 use tolk_resolver::project_index::ProjectIndex;
 use tolk_resolver::symbol_resolver::resolve;
 use tolk_ty::TypeDb;
@@ -26,6 +26,56 @@ mod fix;
 mod json;
 mod pos;
 mod render;
+
+pub(super) struct LintExcludes {
+    project_root: PathBuf,
+    patterns: Vec<String>,
+    excludes: GlobSet,
+}
+
+impl LintExcludes {
+    fn from_config(project_root: &Path, config: &ActonConfig) -> anyhow::Result<Self> {
+        let patterns = config
+            .lint
+            .as_ref()
+            .and_then(|lint| lint.exclude.clone())
+            .unwrap_or_default();
+
+        let mut exclude_builder = GlobSetBuilder::new();
+        for pattern in &patterns {
+            exclude_builder.add(Glob::new(pattern)?);
+        }
+
+        Ok(Self {
+            project_root: project_root.to_path_buf(),
+            patterns,
+            excludes: exclude_builder.build()?,
+        })
+    }
+
+    fn is_match(&self, path: &Path) -> bool {
+        if self.patterns.is_empty() {
+            return false;
+        }
+
+        let absolute = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            self.project_root.join(path)
+        };
+        let relative =
+            pathdiff::diff_paths(&absolute, &self.project_root).unwrap_or_else(|| absolute.clone());
+
+        self.excludes.is_match(&relative) || self.excludes.is_match(&absolute)
+    }
+
+    fn is_match_file_id(&self, file_db: &FileDb, file_id: FileId) -> bool {
+        let Some(info) = file_db.get_by_id(file_id) else {
+            return false;
+        };
+        self.is_match(info.path())
+    }
+}
 
 pub fn check_cmd(
     fix: bool,
@@ -44,6 +94,7 @@ pub fn check_cmd(
     let config = ActonConfig::load()?;
 
     let cwd = std::env::current_dir()?;
+    let excludes = LintExcludes::from_config(&cwd, &config)?;
 
     let now = Instant::now();
     let files = find_files(&cwd)?;
@@ -65,21 +116,31 @@ pub fn check_cmd(
     if let Some(target) = target {
         if target.ends_with(".tolk") {
             let contract_diagnostics =
-                check_test_file(Path::new(&target), &file_db, fix, json, &config)?;
+                check_test_file(Path::new(&target), &file_db, fix, json, &config, &excludes)?;
             all_diagnostics.extend(contract_diagnostics);
         } else {
             let contract = config
                 .get_contract(&target)
                 .ok_or_else(|| anyhow!(error_fmt::contract_not_found(&config, &target)))?;
             let contract_diagnostics =
-                check_contract(&target, contract, &file_db, fix, json, &config)?;
+                check_contract(&target, contract, &file_db, fix, json, &config, &excludes)?;
             all_diagnostics.extend(contract_diagnostics);
         }
     } else {
         let contracts = config.contracts().cloned().unwrap_or_default();
         for (contract_id, contract) in contracts {
-            let contract_diagnostics =
-                check_contract(&contract_id, &contract, &file_db, fix, json, &config)?;
+            if excludes.is_match(Path::new(&contract.src)) {
+                continue;
+            }
+            let contract_diagnostics = check_contract(
+                &contract_id,
+                &contract,
+                &file_db,
+                fix,
+                json,
+                &config,
+                &excludes,
+            )?;
             all_diagnostics.extend(contract_diagnostics);
         }
 
@@ -87,8 +148,9 @@ pub fn check_cmd(
             let Some(name) = file.file_name() else {
                 continue;
             };
-            if name.to_string_lossy().ends_with(".test.tolk") {
-                let contract_diagnostics = check_test_file(&file, &file_db, fix, json, &config)?;
+            if name.to_string_lossy().ends_with(".test.tolk") && !excludes.is_match(&file) {
+                let contract_diagnostics =
+                    check_test_file(&file, &file_db, fix, json, &config, &excludes)?;
                 all_diagnostics.extend(contract_diagnostics);
             }
         }
@@ -195,6 +257,7 @@ fn check_contract(
     fix: bool,
     json: bool,
     acton_config: &ActonConfig,
+    excludes: &LintExcludes,
 ) -> anyhow::Result<Vec<Diagnostic>> {
     if !config.src.ends_with(".tolk") {
         // skip contracts with .boc sources
@@ -208,7 +271,15 @@ fn check_contract(
     let root = dunce::canonicalize(PathBuf::from(&config.src))?;
     let lint_settings = Checker::build_settings(acton_config, Some(contract_id));
 
-    check_root_file(&root, file_db, fix, json, lint_settings, acton_config)
+    check_root_file(
+        &root,
+        file_db,
+        fix,
+        json,
+        lint_settings,
+        acton_config,
+        excludes,
+    )
 }
 
 fn check_test_file(
@@ -217,6 +288,7 @@ fn check_test_file(
     fix: bool,
     json: bool,
     acton_config: &ActonConfig,
+    excludes: &LintExcludes,
 ) -> anyhow::Result<Vec<Diagnostic>> {
     let root = dunce::canonicalize(file)?;
     let current_dir = std::env::current_dir().unwrap_or_default();
@@ -234,7 +306,15 @@ fn check_test_file(
     // we can import any files in tests
     lint_settings.insert(Rule::ActonImportInContract, LintLevel::Allow);
 
-    check_root_file(&root, file_db, fix, json, lint_settings, acton_config)
+    check_root_file(
+        &root,
+        file_db,
+        fix,
+        json,
+        lint_settings,
+        acton_config,
+        excludes,
+    )
 }
 
 fn check_root_file(
@@ -244,6 +324,7 @@ fn check_root_file(
     json: bool,
     lint_settings: HashMap<Rule, LintLevel>,
     acton_config: &ActonConfig,
+    excludes: &LintExcludes,
 ) -> anyhow::Result<Vec<Diagnostic>> {
     let file_info = file_db.process(root)?;
     let file_source = file_info.source().source.clone();
@@ -345,6 +426,9 @@ fn check_root_file(
             // we don't want to check non-workspace files
             continue;
         }
+        if info.id() != file_info.id() && excludes.is_match(info.path()) {
+            continue;
+        }
 
         checker.process_file(info.source(), info.id());
     }
@@ -359,6 +443,11 @@ fn check_root_file(
 
     let mut diagnostics = checker.diagnostics.clone();
     diagnostics.extend(all_diagnostics);
+    diagnostics.retain(|diagnostic| {
+        diagnostic.rule == Rule::CompilerError
+            || diagnostic.file_id == file_info.id()
+            || !excludes.is_match_file_id(file_db, diagnostic.file_id)
+    });
 
     if !json {
         let diagnostics_to_show = if fix {

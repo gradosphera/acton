@@ -1,0 +1,6 @@
+error: expected <expression>, got `}`
+  --> [ROOT]/contracts/broken_helper[LINE]
+  |
+4 |             }
+  |             ^
+

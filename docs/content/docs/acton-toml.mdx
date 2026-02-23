@@ -154,6 +154,22 @@ Configures the Tolk linter (`acton check`).
 
 Use `[lint]` for linter-wide settings and `[lint.rules]` for rule severities.
 
+### General Settings
+
+| Field     | Type       | Description                                                                                             |
+|:----------|:-----------|:--------------------------------------------------------------------------------------------------------|
+| `exclude` | `string[]` | Glob patterns for files to exclude from lint diagnostics. Excluded contract roots are skipped entirely. |
+
+Example:
+```toml
+[lint]
+exclude = ["contracts/generated/*.tolk", "contracts/legacy.tolk"]
+```
+
+Excluded dependency files are still parsed for imports/types, but lint diagnostics for them are hidden.
+When you pass an explicit target to `acton check` (contract id or file path), that target is checked even if it matches `exclude`.
+Compiler errors are never hidden by `exclude`.
+
 | Level   | Description                                                                 |
 |:--------|:----------------------------------------------------------------------------|
 | `allow` | Rule is disabled.                                                           |

@@ -145,7 +145,9 @@ pub struct LintRules {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
 pub struct LintConfig {
+    pub exclude: Option<Vec<String>>,
     pub rules: Option<LintRules>,
     #[serde(flatten)]
     pub metadata: BTreeMap<String, toml::Value>,
@@ -688,6 +690,9 @@ name = "test-project"
 description = "Test project"
 version = "0.1.0"
 
+[lint]
+exclude = ["contracts/skip.tolk"]
+
 [lint.rules]
 unused-variable = "deny"
 mutable-variable-can-be-immutable = "warn"
@@ -697,7 +702,13 @@ unused-variable = "allow"
 "#;
 
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
-        let lint = config.lint.as_ref().unwrap().rules.as_ref().unwrap();
+        let lint_settings = config.lint.as_ref().unwrap();
+        assert_eq!(
+            lint_settings.exclude.as_ref().unwrap(),
+            &vec!["contracts/skip.tolk".to_string()]
+        );
+
+        let lint = lint_settings.rules.as_ref().unwrap();
 
         match lint.entries.get("unused-variable").unwrap() {
             LintEntry::Level(level) => assert_eq!(*level, LintLevel::Deny),
