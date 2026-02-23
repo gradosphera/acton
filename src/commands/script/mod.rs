@@ -298,20 +298,22 @@ fn execute_script(
 
     let stack = Boc::encode_base64(serialize_tuple(&stack)?);
     let result = executor.run_get_method(&stack, &params, Some(DEFAULT_CONFIG))?;
-    print_script_result(&mut ctx, ScriptResult { result });
+    print_script_result(&ctx, ScriptResult { result });
     Ok(())
 }
 
-fn print_script_result(ctx: &mut Context<'_>, result: ScriptResult) {
+fn print_script_result(ctx: &Context<'_>, result: ScriptResult) {
     match &result.result {
         GetMethodResult::Success(success_result) => {
             let exit_code = success_result.vm_exit_code;
 
             if exit_code != 0
-                && let Some(assert_failure) = ctx.asserts.assert_failure
+                && let Some(assert_failure) = ctx.asserts.assert_failure.as_ref()
             {
+                let formatter = FormatterContext::from_context(ctx);
+
                 if let AssertFailure::WalletNotFound(failure) = assert_failure {
-                    let message = AssertFailure::format_wallet_not_found_message(failure, &ctx.env);
+                    let message = formatter.format_wallet_not_found_message(failure);
                     let highlighted_message = FormatterContext::highlight_actual_expected(&message);
                     eprintln!("{} {}", "Error:".bright_red(), highlighted_message);
 
@@ -319,20 +321,13 @@ fn print_script_result(ctx: &mut Context<'_>, result: ScriptResult) {
                         println!("{} at {}", "└─".dimmed(), location.format().dimmed());
                     }
                 } else {
-                    if let Some(message) = &assert_failure.message() {
-                        if message.is_empty() {
-                            println!("{}", "└─".dimmed());
-                        } else {
-                            let highlighted_message =
-                                FormatterContext::highlight_actual_expected(message);
-                            println!("{} {}", "Error:".bright_red(), highlighted_message);
-                        }
-                    } else {
-                        println!("{}", "└─".dimmed());
-                    }
+                    let detailed_message = formatter
+                        .format_detailed_assert_failure(assert_failure, ctx.env.abi.clone());
 
-                    if let Some(location) = &assert_failure.location() {
-                        println!("{} at {}", "└─".dimmed(), location.format().dimmed());
+                    if detailed_message.is_empty() {
+                        println!("{}", "└─".dimmed());
+                    } else {
+                        println!("{detailed_message}");
                     }
                 }
             }

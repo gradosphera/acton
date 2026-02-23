@@ -605,6 +605,89 @@ fn test_script_success_exit_code() {
 // ========================================
 
 #[test]
+fn test_script_assert_failure_formats_detailed_output() {
+    let project = ProjectBuilder::new("script-assert-format")
+        .script_file(
+            "assert_failure",
+            r#"
+            import "../../lib/testing/assert"
+
+            fun main() {
+                Assert.equal(
+                    (42, 41),
+                    (42, 42),
+                    "script assert diagnostics",
+                    "scripts/assert_failure.tolk:8:21"
+                );
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/assert_failure.tolk")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_script_assert_failure_formats_detailed_output.stdout.txt",
+        );
+}
+
+#[test]
+fn test_script_to_have_tx_not_found_shows_transaction_search_details() {
+    let project = ProjectBuilder::new("script-tx-not-found")
+        .contract(
+            "simple",
+            r#"
+            fun onInternalMessage(_: InMessage) {}
+            fun onBouncedMessage(_: InMessageBounced) {}
+        "#,
+        )
+        .script_file(
+            "tx_not_found",
+            r#"
+            import "../../lib/build/build"
+            import "../../lib/emulation/network"
+            import "../../lib/testing/expect"
+            import "../../lib/testing/transaction_expect"
+
+            fun main() {
+                val sender = net.treasury("sender");
+                val init = ContractState {
+                    code: build("simple"),
+                    data: createEmptyCell(),
+                };
+                val target = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+                val txs = net.send(sender.address, createMessage({
+                    bounce: false,
+                    value: ton("1"),
+                    dest: { stateInit: init },
+                    body: beginCell().storeUint(0x01020304, 32).endCell(),
+                }));
+
+                expect(txs).toHaveTx({
+                    from: sender.address,
+                    to: target,
+                    opcode: 0xDEADBEEF,
+                });
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/tx_not_found.tolk")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_script_to_have_tx_not_found_shows_transaction_search_details.stdout.txt",
+        );
+}
+
+#[test]
 fn test_script_output_snapshot() {
     let project = ProjectBuilder::new("script-snapshot")
         .script_file(

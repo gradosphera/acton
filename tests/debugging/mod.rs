@@ -317,6 +317,8 @@ fn execute_script<'a>(
         emulations: Cow::Owned(emulations.clone()),
         known_addresses: Cow::Owned(known_addresses.clone()),
         known_code_cells: Cow::Owned(known_code_cell.clone()),
+        has_wallets_config: false,
+        available_wallets: vec![],
         backtrace: None,
         fork_net: None,
         network: None,

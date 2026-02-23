@@ -1,6 +1,5 @@
 use crate::debugger::debug_context::DebugContext;
 use crate::file_build_cache::FileBuildCache;
-use acton_config::color::OwoColorize;
 use acton_config::config;
 use acton_config::config::{ActonConfig, ContractConfig, Explorer, WalletsConfig};
 use acton_config::test::BacktraceMode;
@@ -98,7 +97,7 @@ impl AssertFailure {
             AssertFailure::Fail(arg) => arg.message.clone(),
             AssertFailure::TransactionNotFound(arg) => arg.message.clone(),
             AssertFailure::TransactionIsFound(arg) => arg.message.clone(),
-            AssertFailure::WalletNotFound(_) => None, // Will be formatted in print_script_result
+            AssertFailure::WalletNotFound(_) => None, // Formatted in FormatterContext
         }
     }
 
@@ -110,52 +109,6 @@ impl AssertFailure {
             AssertFailure::TransactionNotFound(arg) => arg.location.clone(),
             AssertFailure::TransactionIsFound(arg) => arg.location.clone(),
             AssertFailure::WalletNotFound(arg) => arg.location.clone(),
-        }
-    }
-
-    #[must_use]
-    pub fn format_wallet_not_found_message(failure: &WalletNotFoundFailure, env: &Env) -> String {
-        let has_wallets_config = env.wallets.is_some();
-        let available_wallets = env.open_wallets.keys().cloned().collect::<Vec<_>>();
-
-        if !has_wallets_config || available_wallets.is_empty() {
-            format!(
-                "Wallet {} not found in Acton.toml. Wallets are not configured yet.
-
-To add wallets, run {} or add the following section to your Acton.toml:
-
-{}
-[wallets.{}]
-type = \"v4r2\"
-workchain = 0
-keys = {{ mnemonic-env = \"WALLET_MNEMONIC\" }}
-
-[wallets.deployer.expected]
-address-testnet = \"<<ADDRESS>>\"
-
-See https://i582.github.io/acton/docs/setup-wallets/ for more information
-",
-                failure.wallet_name.yellow(),
-                "acton wallet new".green(),
-                "# Example wallet configuration".dimmed(),
-                failure.wallet_name
-            )
-        } else {
-            let available = if available_wallets.is_empty() {
-                "no wallets defined yet".to_string()
-            } else {
-                available_wallets
-                    .iter()
-                    .map(|s| format!("  {}", s.yellow()))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            };
-
-            format!(
-                "Wallet {} not found in Acton.toml\nAvailable wallets:\n{}",
-                failure.wallet_name.yellow(),
-                available
-            )
         }
     }
 }

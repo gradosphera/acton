@@ -962,6 +962,8 @@ fn run_file_tests(
                 emulations: Cow::Borrowed(&runner.emulations),
                 known_addresses: Cow::Borrowed(&runner.known_addresses),
                 known_code_cells: Cow::Borrowed(&runner.known_code_cells),
+                has_wallets_config: false,
+                available_wallets: vec![],
                 backtrace: runner.config.backtrace,
                 fork_net: None,
                 network: None,
@@ -972,8 +974,8 @@ fn run_file_tests(
                 test_report.message = failure.message();
                 test_report.details = failure.location().map(|l| l.format_full());
                 test_report.location = failure.location();
-                test_report.detailed_message =
-                    Some(formatter.format_detailed_assert_failure(failure, abi.clone()));
+                let detailed = formatter.format_detailed_assert_failure(failure, abi.clone());
+                test_report.detailed_message = Some(FormatterContext::strip_ansi_text(&detailed));
 
                 if let AssertFailure::TransactionNotFound(tx_failure)
                 | AssertFailure::TransactionIsFound(tx_failure) = failure

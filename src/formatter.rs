@@ -2,7 +2,7 @@ use crate::commands::test::reporting::{FailedTransactionContext, TestReport};
 use crate::commands::test::trace::TransactionInfo;
 use crate::context::{
     AssertFailure, BuildCache, EmulationsState, KnownAddresses, TransactionGenericAssertFailure,
-    to_cell,
+    WalletNotFoundFailure, to_cell,
 };
 use crate::retrace::{ExecutedAction, InstalledActions};
 use crate::{context, exit_codes, retrace};
@@ -55,6 +55,8 @@ pub struct FormatterContext<'a> {
     pub emulations: Cow<'a, EmulationsState>,
     pub known_addresses: Cow<'a, KnownAddresses>,
     pub known_code_cells: Cow<'a, FxHashMap<HashBytes, String>>,
+    pub has_wallets_config: bool,
+    pub available_wallets: Vec<String>,
     pub backtrace: Option<BacktraceMode>,
     pub fork_net: Option<Network>,
     pub api_key: Option<Cow<'a, str>>,
@@ -71,6 +73,8 @@ impl<'a> FormatterContext<'a> {
             emulations: Cow::Owned(EmulationsState::new()),
             known_addresses: Cow::Owned(KnownAddresses::new()),
             known_code_cells: Cow::Owned(FxHashMap::default()),
+            has_wallets_config: false,
+            available_wallets: vec![],
             backtrace: None,
             fork_net: None,
             network: None,
@@ -88,10 +92,52 @@ impl<'a> FormatterContext<'a> {
             emulations: Cow::Borrowed(ctx.chain.emulations),
             known_addresses: Cow::Borrowed(ctx.build.known_addresses),
             known_code_cells: Cow::Borrowed(ctx.build.known_code_cells),
+            has_wallets_config: ctx.env.wallets.is_some(),
+            available_wallets: ctx.env.open_wallets.keys().cloned().collect(),
             backtrace: ctx.build.backtrace,
             fork_net: ctx.env.fork_net.clone(),
             network: ctx.network.clone(),
             api_key: ctx.env.api_key.as_deref().map(Cow::Borrowed),
+        }
+    }
+
+    #[must_use]
+    pub fn format_wallet_not_found_message(&self, failure: &WalletNotFoundFailure) -> String {
+        if !self.has_wallets_config || self.available_wallets.is_empty() {
+            format!(
+                "Wallet {} not found in wallets.toml or global.wallets.toml. Wallets are not configured yet.
+
+To add wallets, run {} or add the following section to your wallets.toml:
+
+{}
+[wallets.{}]
+type = \"v4r2\"
+workchain = 0
+keys = {{ mnemonic-env = \"WALLET_MNEMONIC\" }}
+
+[wallets.deployer.expected]
+address-testnet = \"<<ADDRESS>>\"
+
+See https://i582.github.io/acton/docs/setup-wallets/ for more information
+",
+                failure.wallet_name.yellow(),
+                "acton wallet new".green(),
+                "# Example wallet configuration".dimmed(),
+                failure.wallet_name
+            )
+        } else {
+            let available = self
+                .available_wallets
+                .iter()
+                .map(|s| format!("  {}", s.yellow()))
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            format!(
+                "Wallet {} not found in Acton.toml\nAvailable wallets:\n{}",
+                failure.wallet_name.yellow(),
+                available
+            )
         }
     }
 
@@ -1842,8 +1888,7 @@ impl<'a> FormatterContext<'a> {
             && !message.is_empty()
         {
             let highlighted_message = Self::highlight_actual_expected(message);
-            let clean_message = strip_ansi_codes(&highlighted_message);
-            writeln!(result, "Error: {clean_message}").ok();
+            writeln!(result, "{}", highlighted_message).ok();
         }
 
         match failure {
@@ -1854,23 +1899,23 @@ impl<'a> FormatterContext<'a> {
                     &bin_failure.left_type,
                     &bin_failure.right_type,
                 );
-                writeln!(result, "{}", strip_ansi_codes(&diff)).ok();
+                writeln!(result, "{diff}").ok();
             }
             AssertFailure::Bin(bin_failure) if bin_failure.operator == "!=" => {
                 let value = self.format_tuple_value(&bin_failure.left, &bin_failure.left_type, 0);
                 writeln!(result, "Values are equal but expected to be different:").ok();
-                writeln!(result, "  {}", strip_ansi_codes(&value)).ok();
+                writeln!(result, "  {value}").ok();
             }
             AssertFailure::Bin(bin_failure) if bin_failure.is_ord() => {
                 let left = self.format_tuple_value(&bin_failure.left, &bin_failure.left_type, 0);
                 let right = self.format_tuple_value(&bin_failure.right, &bin_failure.right_type, 0);
-                writeln!(result, "Actual:   {}", strip_ansi_codes(&left)).ok();
-                writeln!(result, "Expected: {}", strip_ansi_codes(&right)).ok();
+                writeln!(result, "Actual:   {left}").ok();
+                writeln!(result, "Expected: {right}").ok();
             }
             AssertFailure::TransactionNotFound(tx_failure) => {
                 let params = self.format_search_transaction_parameters(tx_failure, abi);
                 let tx_tree = self.format(&tx_failure.txs);
-                writeln!(result, "{}", strip_ansi_codes(&tx_tree)).ok();
+                writeln!(result, "{tx_tree}").ok();
                 writeln!(
                     result,
                     "Cannot find transaction from {} to {}",
@@ -1880,13 +1925,13 @@ impl<'a> FormatterContext<'a> {
                 .ok();
                 writeln!(result, "with:").ok();
                 for param in params {
-                    writeln!(result, "  {}", strip_ansi_codes(&param)).ok();
+                    writeln!(result, "  {param}").ok();
                 }
             }
             AssertFailure::TransactionIsFound(tx_failure) => {
                 let params = self.format_search_transaction_parameters(tx_failure, abi);
                 let tx_tree = self.format(&tx_failure.txs);
-                writeln!(result, "{}", strip_ansi_codes(&tx_tree)).ok();
+                writeln!(result, "{tx_tree}").ok();
                 let from_to = if tx_failure.params.from.is_none() && tx_failure.params.to.is_none()
                 {
                     "".to_string()
@@ -1901,9 +1946,14 @@ impl<'a> FormatterContext<'a> {
                 if !params.is_empty() {
                     writeln!(result, "with:").ok();
                     for param in params {
-                        writeln!(result, "  {}", strip_ansi_codes(&param)).ok();
+                        writeln!(result, "  {param}").ok();
                     }
                 }
+            }
+            AssertFailure::WalletNotFound(failure) => {
+                let message = self.format_wallet_not_found_message(failure);
+                let highlighted_message = Self::highlight_actual_expected(&message);
+                writeln!(result, "Error: {highlighted_message}").ok();
             }
             _ => {}
         }
@@ -1913,6 +1963,11 @@ impl<'a> FormatterContext<'a> {
         }
 
         result.trim().to_string()
+    }
+
+    #[must_use]
+    pub fn strip_ansi_text(text: &str) -> String {
+        strip_ansi_codes(text)
     }
 
     #[must_use]

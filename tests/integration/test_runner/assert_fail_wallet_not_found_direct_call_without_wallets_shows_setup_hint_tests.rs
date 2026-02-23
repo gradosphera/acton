@@ -51,10 +51,8 @@ fn assert_fail_wallet_not_found_direct_call_without_wallets_shows_setup_hint() {
 
     output
         .assert_stderr_contains(
-            "Wallet el_missing_wallet not found in Acton.toml. Wallets are not configured yet.",
+            "Wallet el_missing_wallet not found in wallets.toml or global.wallets.toml. Wallets are not configured yet.",
         )
-        .assert_stderr_contains("To add wallets, run acton wallet new")
-        .assert_stderr_contains("[wallets.el_missing_wallet]")
         .assert_stderr_contains(
             "See https://i582.github.io/acton/docs/setup-wallets/ for more information",
         )

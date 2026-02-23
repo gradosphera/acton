@@ -1,0 +1,8 @@
+  Installing standard library [ACTON_VERSION]
+script assert diagnostics
+(
+    42,
+    41,
+    42
+)
+at scripts/assert_failure[LINE]
