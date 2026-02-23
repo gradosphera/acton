@@ -1,0 +1,17 @@
+warning[E001]: field initialization can be folded
+  --> [ROOT]/contracts/main[LINE]
+  |
+8 |                     bar: bar,
+  |                     ^^^^^^^^ can be folded to just 'bar'
+
+help: fold initialization
+  --> [ROOT]/contracts/main[LINE]
+  |
+8 |                     bar: bar,
+  |                     ^^^^^^^^ bar
+
+
+1 issue can be fixed automatically, rerun with --fix flag.
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain E001

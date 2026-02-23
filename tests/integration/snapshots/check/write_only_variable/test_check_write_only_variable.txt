@@ -1,0 +1,11 @@
+warning[E005]: variable is only written to but never read
+  --> [ROOT]/contracts/main[LINE]
+  |
+3 |                 var counter = 0;
+  |                     ^^^^^^^ variable `counter` is write-only
+4 |                 counter = 1;
+  |                 ------- first write usage here
+
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain E005

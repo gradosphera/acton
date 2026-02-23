@@ -1,0 +1,13 @@
+warning[E008]: contract sends a message that may bounce but `onBouncedMessage` handler doesn't exist
+  --> [ROOT]/contracts/main[LINE]
+  |
+3 |                 val reply = createMessage({
+  |                             ------------- In this createMessage call
+4 |                     bounce: BounceMode.Only256BitsOfBody,
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ message is marked bounce, but bounce handler doesn't exist
+  |
+  = Add bounce handler or use `BounceMode.NoBounce`
+
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain E008

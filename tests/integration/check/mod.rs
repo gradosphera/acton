@@ -4,6 +4,7 @@ use crate::support::project::ProjectBuilder;
 mod acton_import_tests;
 mod asm_safety_comment_tests;
 mod deprecated_tests;
+mod field_init_can_be_folded_tests;
 mod import_path_can_use_mappings_tests;
 mod lint_exclude_tests;
 mod lint_exit_code_tests;
@@ -14,11 +15,15 @@ mod method_can_be_static_tests;
 mod mutable_parameter_can_be_immutable_tests;
 mod mutable_variable_can_be_immutable_tests;
 mod name_case_checker_tests;
+mod no_bounce_handler_tests;
+mod pure_function_call_unused_tests;
 mod send_mode_literal_tests;
 mod several_not_null_assertions_tests;
 mod unauthorized_access_tests;
 mod unused_import_tests;
+mod unused_variable_tests;
 mod used_ignored_identifier_tests;
+mod write_only_variable_tests;
 
 pub(crate) fn run_simple_test(group: &str, content: &str, name: &str) {
     run_simple_test_with_mappings(group, content, &[], &[], name);
