@@ -56,7 +56,7 @@ fn assert_fail_wallet_not_found_direct_call_without_wallets_shows_setup_hint() {
         .assert_stderr_contains("To add wallets, run acton wallet new")
         .assert_stderr_contains("[wallets.el_missing_wallet]")
         .assert_stderr_contains(
-            "See https://i582.github.io/acton/docs/scripting/setup-wallets/ for more information",
+            "See https://i582.github.io/acton/docs/setup-wallets/ for more information",
         )
         .assert_contains("at scripts/el_assert_fail_wallet_not_found.tolk:5:5");
 }

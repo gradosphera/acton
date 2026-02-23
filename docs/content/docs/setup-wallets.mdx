@@ -1,6 +1,7 @@
 ---
-title: "Setting up wallets"
+title: "Setup wallets"
 description: "Learn how to configure wallets for use in scripts and contract verification"
+icon: "Wallet"
 ---
 
 Wallets are essential for interacting with the real blockchain in Acton. They enable you to deploy contracts, send transactions, and verify smart contract source code.
@@ -15,7 +16,7 @@ Acton supports two levels of wallet configuration:
 When you create a project using `acton new` or `acton init`, Acton automatically creates a symbolic link `global.wallets.toml` pointing to your global wallets for easy access.
 
 <Callout type="warn">
-    Both `wallets.toml` and `global.wallets.toml` contain sensitive information (mnemonics). Acton automatically adds them to your `.gitignore`, but you should always be careful not to commit them.
+    Both `wallets.toml` and `global.wallets.toml` may contain sensitive information (mnemonics). Acton automatically adds them to your `.gitignore`, but you should always be careful not to commit them.
 </Callout>
 
 ## Wallet Configuration
@@ -47,7 +48,7 @@ The most secure way to store mnemonics is using your system's secure native stor
 ```toml title="wallets.toml"
 [wallets.deployer]
 kind = "v5r1"
-keys = { mnemonic-keyring = "deployer" }
+keys = { mnemonic-keyring = "my-project:deployer" }
 ```
 
 Acton will automatically retrieve the mnemonic from your system's secure storage when needed.
@@ -235,6 +236,5 @@ Without `--broadcast`, `net.wallet()` creates a local test wallet with the same 
 
 ## Next Steps
 
-- Read the [script command reference](/docs/commands/script/) for all available options
 - Learn about [blockchain interaction](/docs/scripting/blockchain-interaction/) to deploy contracts and send transactions
 - Explore [contract verification](/docs/commands/verify/) to verify your deployed contracts
