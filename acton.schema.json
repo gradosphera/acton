@@ -254,22 +254,28 @@
     "lint": {
       "type": "object",
       "description": "Linter configuration for the project",
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "enum": ["allow", "warn", "deny"],
-            "description": "Global lint level for a rule"
-          },
-          {
-            "type": "object",
-            "description": "Contract-specific lint overrides",
-            "additionalProperties": {
-              "type": "string",
-              "enum": ["allow", "warn", "deny"]
-            }
+      "properties": {
+        "rules": {
+          "type": "object",
+          "description": "Lint rules and contract-specific overrides",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["allow", "warn", "deny"],
+                "description": "Global lint level for a rule"
+              },
+              {
+                "type": "object",
+                "description": "Contract-specific lint overrides",
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": ["allow", "warn", "deny"]
+                }
+              }
+            ]
           }
-        ]
+        }
       }
     }
   }

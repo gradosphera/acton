@@ -139,9 +139,16 @@ pub enum LintEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct LintConfig {
+pub struct LintRules {
     #[serde(flatten)]
     pub entries: BTreeMap<String, LintEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LintConfig {
+    pub rules: Option<LintRules>,
+    #[serde(flatten)]
+    pub metadata: BTreeMap<String, toml::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -681,16 +688,16 @@ name = "test-project"
 description = "Test project"
 version = "0.1.0"
 
-[lint]
+[lint.rules]
 unused-variable = "deny"
 mutable-variable-can-be-immutable = "warn"
 
-[lint.counter]
+[lint.rules.counter]
 unused-variable = "allow"
 "#;
 
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
-        let lint = config.lint.as_ref().unwrap();
+        let lint = config.lint.as_ref().unwrap().rules.as_ref().unwrap();
 
         match lint.entries.get("unused-variable").unwrap() {
             LintEntry::Level(level) => assert_eq!(*level, LintLevel::Deny),

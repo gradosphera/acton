@@ -548,7 +548,7 @@ version = "0.1.0"
         }
 
         if !lint_levels.is_empty() {
-            toml_content.push_str("[lint]\n");
+            toml_content.push_str("[lint.rules]\n");
             for (rule, level) in lint_levels {
                 toml_content.push_str(&format!("{rule} = \"{level}\"\n"));
             }

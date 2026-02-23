@@ -14,7 +14,7 @@ The top-level of `Acton.toml` contains the following sections:
 - `[contracts]` — Definition of smart contracts in the project.
 - `[build]` — Build command output settings.
 - `[test]` — Configuration for the test runner.
-- `[lint]` — Linter configuration.
+- `[lint]` — General linter configuration.
 - `[networks]` — Custom network definitions.
 - `[scripts]` — Custom shell commands or scripts.
 - `[mappings]` — Path mappings for Tolk compiler imports.
@@ -98,7 +98,7 @@ Example:
 output-fift = "build/fift"
 ```
 
-`acton build --output-fift <DIR>` overrides this value for a single run.  
+`acton build --output-fift <DIR>` overrides this value for a single run.
 Precompiled `.boc` contracts are skipped for Fift output.
 
 ---
@@ -150,7 +150,9 @@ disable-rules = ["flip_plus"]
 
 ## `[lint]` Section
 
-Configures the Tolk linter (`acton check`) rules and their severity.
+Configures the Tolk linter (`acton check`).
+
+Use `[lint]` for linter-wide settings and `[lint.rules]` for rule severities.
 
 | Level   | Description                                                                 |
 |:--------|:----------------------------------------------------------------------------|
@@ -160,11 +162,11 @@ Configures the Tolk linter (`acton check`) rules and their severity.
 
 ### Global Configuration
 
-Specify rules directly under `[lint]` to apply them to all contracts in the project.
+Specify rules under `[lint.rules]` to apply them to all contracts in the project.
 
 Example:
 ```toml
-[lint]
+[lint.rules]
 unused-variable = "deny"
 mutable-variable-can-be-immutable = "warn"
 ```
@@ -179,10 +181,10 @@ Example:
 name = "My Counter"
 src = "counter.tolk"
 
-[lint]
+[lint.rules]
 unused-variable = "deny"
 
-[lint.counter]
+[lint.rules.counter]
 unused-variable = "allow" # Disable for counter contract only
 ```
 

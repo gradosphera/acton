@@ -10,7 +10,7 @@ use crate::rules::ast::{
     mutable_variable_can_be_immutable, pure_function_call_unused, send_mode_literal, unused_import,
     unused_variable, used_ignored_identifier, write_only_variable,
 };
-use acton_config::config::LintLevel;
+use acton_config::config::{LintEntry, LintLevel};
 use rules::diagnostic::{Diagnostic, Severity};
 pub use rules::*;
 use rustc_hash::FxHashMap;
@@ -176,13 +176,13 @@ impl<'a> Checker<'a> {
 
         settings.insert(Rule::UnauthorizedAccess, LintLevel::Allow); // disabled by default for now
 
-        let Some(lint) = &config.lint else {
+        let Some(lint) = config.lint.as_ref().and_then(|lint| lint.rules.as_ref()) else {
             return settings;
         };
 
         // 1. Apply global settings
         for (name, entry) in &lint.entries {
-            if let acton_config::config::LintEntry::Level(level) = entry
+            if let LintEntry::Level(level) = entry
                 && let Some(rule) = find_rule_by_name(name)
             {
                 settings.insert(rule, level.clone());
@@ -191,8 +191,7 @@ impl<'a> Checker<'a> {
 
         // 2. Apply contract overrides
         if let Some(contract_name) = contract_name
-            && let Some(acton_config::config::LintEntry::Config(override_settings)) =
-                lint.entries.get(contract_name)
+            && let Some(LintEntry::Config(override_settings)) = lint.entries.get(contract_name)
         {
             for (name, level) in override_settings {
                 if let Some(rule) = find_rule_by_name(name) {
