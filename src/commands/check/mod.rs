@@ -77,6 +77,21 @@ impl LintExcludes {
     }
 }
 
+fn diagnostics_summary(diagnostics: &[Diagnostic]) -> (usize, usize) {
+    let mut error_count = 0;
+    let mut warning_count = 0;
+
+    for diagnostic in diagnostics {
+        match diagnostic.severity {
+            Severity::Warning => warning_count += 1,
+            Severity::Error | Severity::Fatal => error_count += 1,
+            Severity::Info | Severity::Help => {}
+        }
+    }
+
+    (error_count, warning_count)
+}
+
 pub fn check_cmd(
     fix: bool,
     json: bool,
@@ -92,6 +107,10 @@ pub fn check_cmd(
     }
 
     let config = ActonConfig::load()?;
+    let max_warnings = config
+        .lint
+        .as_ref()
+        .map_or(usize::MAX, |lint| lint.max_warnings);
 
     let cwd = std::env::current_dir()?;
     let excludes = LintExcludes::from_config(&cwd, &config)?;
@@ -169,6 +188,14 @@ pub fn check_cmd(
             "diagnostics": all_diagnostics.iter().map(|d| json::diagnostic_to_json(d, &file_db)).collect::<Vec<_>>()
         });
         println!("{}", serde_json::to_string_pretty(&json_output)?);
+
+        let (error_count, warning_count) = diagnostics_summary(&all_diagnostics);
+        let warning_limit_exceeded = warning_count > max_warnings;
+        let is_success = error_count == 0 && !warning_limit_exceeded;
+
+        if !is_success {
+            std::process::exit(1);
+        }
     } else {
         if fix {
             fix::apply_fixes(&file_db, &all_diagnostics)?;
@@ -179,6 +206,8 @@ pub fn check_cmd(
         } else {
             all_diagnostics
         };
+        let (error_count, warning_count) = diagnostics_summary(&shown_diagnostics);
+        let warning_limit_exceeded = warning_count > max_warnings;
 
         if !shown_diagnostics.is_empty() {
             shown_diagnostics.sort();
@@ -187,6 +216,7 @@ pub fn check_cmd(
                 .find(|d| d.code.is_some())
                 .and_then(|d| d.code.clone());
 
+            let mut printed_autofix_notice = false;
             if !fix {
                 let count_to_autofix = shown_diagnostics
                     .iter()
@@ -209,7 +239,24 @@ pub fn check_cmd(
                         "{count_to_autofix} {issue_word} can be fixed automatically, rerun with {} flag.",
                         "--fix".yellow()
                     );
+                    printed_autofix_notice = true;
                 }
+            }
+
+            if warning_limit_exceeded {
+                if !printed_autofix_notice {
+                    eprintln!();
+                }
+                eprintln!(
+                    "Warning limit exceeded: {} {} (max warnings: {}).",
+                    warning_count,
+                    if warning_count == 1 {
+                        "warning"
+                    } else {
+                        "warnings"
+                    },
+                    max_warnings
+                );
             }
 
             if let Some(code) = first_code {
@@ -220,6 +267,10 @@ pub fn check_cmd(
                 );
                 eprintln!("For example: acton check --explain {}", code);
             }
+        }
+
+        if error_count > 0 || warning_limit_exceeded {
+            std::process::exit(1);
         }
     }
 

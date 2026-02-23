@@ -156,14 +156,16 @@ Use `[lint]` for linter-wide settings and `[lint.rules]` for rule severities.
 
 ### General Settings
 
-| Field     | Type       | Description                                                                                             |
-|:----------|:-----------|:--------------------------------------------------------------------------------------------------------|
-| `exclude` | `string[]` | Glob patterns for files to exclude from lint diagnostics. Excluded contract roots are skipped entirely. |
+| Field          | Type       | Description                                                                                             |
+|:---------------|:-----------|:--------------------------------------------------------------------------------------------------------|
+| `exclude`      | `string[]` | Glob patterns for files to exclude from lint diagnostics. Excluded contract roots are skipped entirely. |
+| `max-warnings` | `integer`  | Maximum warning count allowed before `acton check` exits with non-zero code. Default: unlimited.        |
 
 Example:
 ```toml
 [lint]
 exclude = ["contracts/generated/*.tolk", "contracts/legacy.tolk"]
+max-warnings = 0 # fail on any warning
 ```
 
 Excluded dependency files are still parsed for imports/types, but lint diagnostics for them are hidden.

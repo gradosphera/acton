@@ -71,7 +71,7 @@ fn test_color_always_check_diagnostics_contains_ansi_with_no_color_env() {
         .arg("always")
         .check()
         .run()
-        .success();
+        .failure();
 
     let stderr = output.get_stderr();
     assert!(
@@ -98,7 +98,7 @@ fn test_color_never_check_diagnostics_has_no_ansi() {
         .arg("never")
         .check()
         .run()
-        .success();
+        .failure();
 
     let stderr = output.get_stderr();
     assert!(

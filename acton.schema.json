@@ -262,6 +262,11 @@
             "type": "string"
           }
         },
+        "max-warnings": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum allowed warning count before `acton check` exits with a non-zero code"
+        },
         "rules": {
           "type": "object",
           "description": "Lint rules and contract-specific overrides",

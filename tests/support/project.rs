@@ -18,6 +18,7 @@ pub(crate) struct ProjectBuilder {
     mappings: Vec<(String, String)>,
     lint_levels: BTreeMap<String, String>,
     lint_excludes: Vec<String>,
+    lint_max_warnings: Option<usize>,
     test_config: Option<TestConfig>,
     license: Option<String>,
     create_acton_toml: bool,
@@ -76,6 +77,7 @@ impl ProjectBuilder {
             mappings: Vec::new(),
             lint_levels: BTreeMap::new(),
             lint_excludes: Vec::new(),
+            lint_max_warnings: None,
             test_config: None,
             license: Some("MIT".to_string()),
             create_acton_toml: true,
@@ -131,6 +133,12 @@ impl ProjectBuilder {
     /// ```
     pub(crate) fn with_lint_exclude(mut self, pattern: &str) -> Self {
         self.lint_excludes.push(pattern.to_string());
+        self
+    }
+
+    /// Configure maximum allowed warning count for `acton check`.
+    pub(crate) fn with_lint_max_warnings(mut self, max_warnings: usize) -> Self {
+        self.lint_max_warnings = Some(max_warnings);
         self
     }
 
@@ -422,6 +430,7 @@ impl ProjectBuilder {
                 &self.mappings,
                 &self.lint_levels,
                 &self.lint_excludes,
+                self.lint_max_warnings,
                 &self.test_config,
                 &self.license,
             );
@@ -457,6 +466,7 @@ impl ProjectBuilder {
         mappings: &[(String, String)],
         lint_levels: &BTreeMap<String, String>,
         lint_excludes: &[String],
+        lint_max_warnings: Option<usize>,
         test_config: &Option<TestConfig>,
         license: &Option<String>,
     ) {
@@ -563,17 +573,23 @@ version = "0.1.0"
             toml_content.push('\n');
         }
 
-        if !lint_excludes.is_empty() {
+        if !lint_excludes.is_empty() || lint_max_warnings.is_some() {
             toml_content.push_str("[lint]\n");
-            toml_content.push_str("exclude = [");
-            toml_content.push_str(
-                &lint_excludes
-                    .iter()
-                    .map(|pattern| format!("\"{pattern}\""))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            );
-            toml_content.push_str("]\n\n");
+            if !lint_excludes.is_empty() {
+                toml_content.push_str("exclude = [");
+                toml_content.push_str(
+                    &lint_excludes
+                        .iter()
+                        .map(|pattern| format!("\"{pattern}\""))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                );
+                toml_content.push_str("]\n");
+            }
+            if let Some(max_warnings) = lint_max_warnings {
+                toml_content.push_str(&format!("max-warnings = {max_warnings}\n"));
+            }
+            toml_content.push('\n');
         }
 
         if !lint_levels.is_empty() {

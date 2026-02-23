@@ -1,14 +1,17 @@
-warning[E017]: possible storage write without admin sender check
+warning[E002]: variable is unused
   --> [ROOT]/contracts/alpha[LINE]
   |
-2 |             fun onInternalMessage(in: InMessage) {
-  |                                   -- inbound sender comes from message parameter `in`
-3 |                 val _sender = in.senderAddress;
-4 |                 contract.setData(contract.getData());
-  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ storage mutation (`save` / `setData`) is reachable without admin sender check
-  |
-  = add `assert (in.senderAddress == storage.adminAddress) throw <code>;` before storage write
+3 |                 val x = 1;
+  |                     ^ unused variable `x`
 
+help: prefix with underscore: `_x`
+  --> [ROOT]/contracts/alpha[LINE]
+  |
+3 |                 val x = 1;
+  |                     ^ _x
+
+
+1 issue can be fixed automatically, rerun with --fix flag.
 
 Use acton check --explain <CODE> to get detailed explanation of a rule.
-For example: acton check --explain E017
+For example: acton check --explain E002

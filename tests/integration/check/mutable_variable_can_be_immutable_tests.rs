@@ -1,4 +1,6 @@
 use crate::integration::check::run_simple_test;
+use crate::support::TestOutputExt;
+use crate::support::project::ProjectBuilder;
 use function_name::named;
 
 #[test]
@@ -218,9 +220,11 @@ fn test_check_mutable_variable_can_be_immutable_with_call_of_mutable_method() {
 #[test]
 #[named]
 fn test_check_mutable_variable_can_be_immutable_with_call_of_unresolved_method() {
-    run_simple_test(
-        "mutable_variable_can_be_immutable",
-        r#"
+    let name = function_name!();
+    let project = ProjectBuilder::new(name)
+        .contract(
+            "main",
+            r#"
             struct Foo { a: int }
 
             fun main() {
@@ -228,6 +232,17 @@ fn test_check_mutable_variable_can_be_immutable_with_call_of_unresolved_method()
                 a.some();
             }
         "#,
-        function_name!(),
-    )
+        )
+        .build();
+
+    project.acton().init().run().success();
+
+    project
+        .acton()
+        .check()
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(&format!(
+            "integration/snapshots/check/mutable_variable_can_be_immutable/{name}.txt"
+        ));
 }

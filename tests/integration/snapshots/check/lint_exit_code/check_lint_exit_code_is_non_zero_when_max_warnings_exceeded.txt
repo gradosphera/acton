@@ -1,17 +1,18 @@
 warning[E002]: variable is unused
-  --> [ROOT]/contracts/beta[LINE]
+  --> [ROOT]/contracts/main[LINE]
   |
 3 |                 val x = 1;
   |                     ^ unused variable `x`
 
 help: prefix with underscore: `_x`
-  --> [ROOT]/contracts/beta[LINE]
+  --> [ROOT]/contracts/main[LINE]
   |
 3 |                 val x = 1;
   |                     ^ _x
 
 
 1 issue can be fixed automatically, rerun with --fix flag.
+Warning limit exceeded: 1 warning (max warnings: 0).
 
 Use acton check --explain <CODE> to get detailed explanation of a rule.
 For example: acton check --explain E002

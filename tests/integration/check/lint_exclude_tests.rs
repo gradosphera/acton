@@ -2,16 +2,15 @@ use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use function_name::named;
 
-const UNAUTHORIZED_ACCESS_CONTRACT: &str = r#"
-            fun onInternalMessage(in: InMessage) {
-                val _sender = in.senderAddress;
-                contract.setData(contract.getData());
+const UNUSED_VARIABLE_CONTRACT: &str = r#"
+            fun main() {
+                val x = 1;
             }
         "#;
 
-const HELPER_WITH_UNAUTHORIZED_ACCESS: &str = r#"
+const HELPER_WITH_UNUSED_VARIABLE: &str = r#"
             fun dangerous() {
-                contract.setData(contract.getData());
+                val helper_unused = 1;
             }
         "#;
 
@@ -25,9 +24,9 @@ const BROKEN_HELPER: &str = r#"
 #[named]
 fn check_lint_exclude_skips_excluded_contract_root() {
     let project = ProjectBuilder::new(&format!("check-{}", function_name!()))
-        .contract("alpha", UNAUTHORIZED_ACCESS_CONTRACT)
-        .contract("beta", UNAUTHORIZED_ACCESS_CONTRACT)
-        .with_lint_level("unauthorized-access", "warn")
+        .contract("alpha", UNUSED_VARIABLE_CONTRACT)
+        .contract("beta", UNUSED_VARIABLE_CONTRACT)
+        .with_lint_level("unused-variable", "warn")
         .with_lint_exclude("contracts/beta.tolk")
         .build();
 
@@ -53,13 +52,13 @@ fn check_lint_exclude_hides_dependency_diagnostics_but_keeps_graph_valid() {
             r#"
                 import "./helper.tolk";
 
-                fun onInternalMessage(_in: InMessage) {
+                fun main() {
                     dangerous();
                 }
             "#,
         )
-        .file("contracts/helper", HELPER_WITH_UNAUTHORIZED_ACCESS)
-        .with_lint_level("unauthorized-access", "warn")
+        .file("contracts/helper", HELPER_WITH_UNUSED_VARIABLE)
+        .with_lint_level("unused-variable", "warn")
         .with_lint_exclude("contracts/helper.tolk")
         .build();
 
@@ -80,9 +79,9 @@ fn check_lint_exclude_hides_dependency_diagnostics_but_keeps_graph_valid() {
 #[named]
 fn check_lint_exclude_is_ignored_for_explicit_target() {
     let project = ProjectBuilder::new(&format!("check-{}", function_name!()))
-        .contract("alpha", UNAUTHORIZED_ACCESS_CONTRACT)
-        .contract("beta", UNAUTHORIZED_ACCESS_CONTRACT)
-        .with_lint_level("unauthorized-access", "warn")
+        .contract("alpha", UNUSED_VARIABLE_CONTRACT)
+        .contract("beta", UNUSED_VARIABLE_CONTRACT)
+        .with_lint_level("unused-variable", "warn")
         .with_lint_exclude("contracts/beta.tolk")
         .build();
 
@@ -104,9 +103,9 @@ fn check_lint_exclude_is_ignored_for_explicit_target() {
 #[named]
 fn check_lint_exclude_is_ignored_for_explicit_target_path() {
     let project = ProjectBuilder::new(&format!("check-{}", function_name!()))
-        .contract("alpha", UNAUTHORIZED_ACCESS_CONTRACT)
-        .contract("beta", UNAUTHORIZED_ACCESS_CONTRACT)
-        .with_lint_level("unauthorized-access", "warn")
+        .contract("alpha", UNUSED_VARIABLE_CONTRACT)
+        .contract("beta", UNUSED_VARIABLE_CONTRACT)
+        .with_lint_level("unused-variable", "warn")
         .with_lint_exclude("contracts/beta.tolk")
         .build();
 
@@ -148,7 +147,7 @@ fn check_lint_exclude_does_not_hide_compiler_errors_from_excluded_files() {
         .acton()
         .check()
         .run()
-        .success()
+        .code(1)
         .assert_stderr_snapshot_matches(&format!(
             "integration/snapshots/check/lint_exclude/{}.txt",
             function_name!()

@@ -144,13 +144,30 @@ pub struct LintRules {
     pub entries: BTreeMap<String, LintEntry>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+const fn default_max_warnings() -> usize {
+    usize::MAX
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct LintConfig {
     pub exclude: Option<Vec<String>>,
+    #[serde(default = "default_max_warnings")]
+    pub max_warnings: usize,
     pub rules: Option<LintRules>,
     #[serde(flatten)]
     pub metadata: BTreeMap<String, toml::Value>,
+}
+
+impl Default for LintConfig {
+    fn default() -> Self {
+        Self {
+            exclude: None,
+            max_warnings: default_max_warnings(),
+            rules: None,
+            metadata: BTreeMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -692,6 +709,7 @@ version = "0.1.0"
 
 [lint]
 exclude = ["contracts/skip.tolk"]
+max-warnings = 3
 
 [lint.rules]
 unused-variable = "deny"
@@ -707,6 +725,7 @@ unused-variable = "allow"
             lint_settings.exclude.as_ref().unwrap(),
             &vec!["contracts/skip.tolk".to_string()]
         );
+        assert_eq!(lint_settings.max_warnings, 3);
 
         let lint = lint_settings.rules.as_ref().unwrap();
 
@@ -730,6 +749,23 @@ unused-variable = "allow"
             }
             _ => panic!("Expected config"),
         }
+    }
+
+    #[test]
+    fn test_lint_config_max_warnings_default_is_unlimited() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[lint.rules]
+unused-variable = "warn"
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let lint_settings = config.lint.as_ref().unwrap();
+        assert_eq!(lint_settings.max_warnings, usize::MAX);
     }
 
     #[test]
