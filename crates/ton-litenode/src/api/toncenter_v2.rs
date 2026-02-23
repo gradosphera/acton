@@ -57,14 +57,8 @@ pub fn map_message(msg: &crate::litenode::LiteNodeMessage) -> Value {
         "@type": "raw.message",
         "hash": msg.hash.to_hex(),
         "opcode": msg.opcode.map(|op| format!("0x{:08x}", op)),
-        "source": {
-            "@type": "accountAddress",
-            "account_address": msg.source.as_ref().map(|a| a.to_string()).unwrap_or_default()
-        },
-        "destination": {
-            "@type": "accountAddress",
-            "account_address": msg.destination.as_ref().map(|a| a.to_string()).unwrap_or_default()
-        },
+        "source": msg.source.as_ref().map(|a| a.to_string()).unwrap_or_default(),
+        "destination": msg.destination.as_ref().map(|a| a.to_string()).unwrap_or_default(),
         "value": msg.value.to_string(),
         "fwd_fee": msg.fwd_fee.to_string(),
         "ihr_fee": msg.ihr_fee.to_string(),
