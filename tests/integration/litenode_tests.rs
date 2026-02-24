@@ -174,6 +174,122 @@ fn litenode_supports_pre_start_commands_and_get_out_msg_queue_size() {
 }
 
 #[test]
+fn litenode_supports_try_locate_transaction_endpoints() {
+    let project = ProjectBuilder::new("litenode-try-locate-endpoints")
+        .contract("child", CHILD_CONTRACT)
+        .contract_with_deps("deployer", DEPLOYER_CONTRACT, vec!["child"])
+        .script_file("deploy", DEPLOY_SCRIPT)
+        .build();
+
+    fs::write(project.path().join("wallets.toml"), DEPLOYER_WALLET_CONFIG)
+        .expect("Failed to write wallets.toml");
+
+    let node = project
+        .litenode()
+        .before_start(|cmd| cmd.build())
+        .args(["--accounts", "deployer"])
+        .start();
+    append_localnet_network(project.path(), &node.base_url());
+
+    let script_result = project
+        .acton()
+        .script("scripts/deploy.tolk")
+        .broadcast()
+        .verify_network("custom:localnet")
+        .run();
+    let script_stdout = String::from_utf8(script_result.output.get_output().stdout.clone())
+        .expect("Failed to decode deploy script stdout");
+    let script_stderr = String::from_utf8(script_result.output.get_output().stderr.clone())
+        .expect("Failed to decode deploy script stderr");
+    let script_status = script_result.output.get_output().status.code().unwrap_or(1);
+
+    assert_eq!(
+        script_status, 0,
+        "Deploy script failed with status {script_status}\nstdout:\n{script_stdout}\nstderr:\n{script_stderr}"
+    );
+
+    let deployer_address = extract_marker_value(&script_stdout, "DEPLOYER_CONTRACT=");
+
+    let deadline = Instant::now() + Duration::from_secs(12);
+    let (source_tx_hash, source, destination, created_lt) = loop {
+        let response = node.get_json(&format!(
+            "/api/v2/getTransactions?address={deployer_address}&limit=10"
+        ));
+        if let Some(locator) = extract_first_outgoing_message_locator(&response) {
+            break locator;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Failed to find outgoing message in deployer transactions:\n{}",
+            serde_json::to_string_pretty(&response).unwrap_or_default()
+        );
+        thread::sleep(Duration::from_millis(200));
+    };
+
+    let try_locate_tx_query = format!(
+        "/api/v2/tryLocateTx?source={source}&destination={destination}&created_lt={created_lt}"
+    );
+    let try_locate_tx = wait_for_ok_response(&node, &try_locate_tx_query, Duration::from_secs(12));
+    assert_eq!(
+        try_locate_tx["result"]["@type"].as_str(),
+        Some("ext.transaction")
+    );
+    assert_eq!(
+        try_locate_tx["result"]["account"].as_str(),
+        Some(destination.as_str())
+    );
+
+    let try_locate_result_tx_query = format!(
+        "/api/v2/tryLocateResultTx?source={source}&destination={destination}&created_lt={created_lt}"
+    );
+    let try_locate_result_tx =
+        wait_for_ok_response(&node, &try_locate_result_tx_query, Duration::from_secs(12));
+    assert_eq!(
+        try_locate_result_tx["result"]["hash"].as_str(),
+        try_locate_tx["result"]["hash"].as_str()
+    );
+
+    let try_locate_source_tx = node.get_json(&format!(
+        "/api/v2/tryLocateSourceTx?source={source}&destination={destination}&created_lt={created_lt}"
+    ));
+    assert_eq!(
+        try_locate_source_tx["ok"].as_bool(),
+        Some(true),
+        "tryLocateSourceTx failed: {}",
+        serde_json::to_string_pretty(&try_locate_source_tx).unwrap_or_default()
+    );
+    assert_eq!(
+        try_locate_source_tx["result"]["hash"].as_str(),
+        Some(source_tx_hash.as_str())
+    );
+    assert_eq!(
+        try_locate_source_tx["result"]["account"].as_str(),
+        Some(source.as_str())
+    );
+
+    let try_locate_tx_rpc = node.post_json(
+        "/api/v2",
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tryLocateTx",
+            "params": {
+                "source": source,
+                "destination": destination,
+                "created_lt": created_lt
+            }
+        }),
+    );
+    assert_eq!(try_locate_tx_rpc["ok"].as_bool(), Some(true));
+    assert_eq!(
+        try_locate_tx_rpc["result"]["hash"].as_str(),
+        try_locate_tx["result"]["hash"].as_str()
+    );
+
+    node.stop();
+}
+
+#[test]
 fn litenode_supports_utils_detect_and_pack_endpoints() {
     let project = ProjectBuilder::new("litenode-utils-endpoints").build();
     let node = project.litenode().start();
@@ -269,6 +385,50 @@ fn extract_marker_value(output: &str, marker: &str) -> String {
         .map(str::trim)
         .find_map(|line| line.strip_prefix(marker).map(ToOwned::to_owned))
         .unwrap_or_else(|| panic!("Marker `{marker}` not found in output:\n{cleaned}"))
+}
+
+fn wait_for_ok_response(
+    node: &crate::support::litenode::LiteNodeHandle,
+    query: &str,
+    timeout: Duration,
+) -> Value {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let response = node.get_json(query);
+        if response["ok"].as_bool() == Some(true) {
+            return response;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Timed out waiting for successful response from `{query}`:\n{}",
+            serde_json::to_string_pretty(&response).unwrap_or_default()
+        );
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
+fn extract_first_outgoing_message_locator(
+    response: &Value,
+) -> Option<(String, String, String, u64)> {
+    let txs = response.get("result")?.as_array()?;
+    for tx in txs {
+        let tx_hash = tx.get("hash")?.as_str()?;
+        let out_msgs = tx.get("out_msgs")?.as_array()?;
+        for out_msg in out_msgs {
+            let source = out_msg.get("source")?.as_str()?;
+            let destination = out_msg.get("destination")?.as_str()?;
+            let created_lt = out_msg.get("created_lt")?.as_str()?.parse::<u64>().ok()?;
+            if !source.is_empty() && !destination.is_empty() && created_lt > 0 {
+                return Some((
+                    tx_hash.to_owned(),
+                    source.to_owned(),
+                    destination.to_owned(),
+                    created_lt,
+                ));
+            }
+        }
+    }
+    None
 }
 
 fn normalize_transactions_std_for_snapshot(response: &mut Value) {

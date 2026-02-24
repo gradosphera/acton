@@ -143,6 +143,24 @@ async fn json_rpc_router(node: Arc<LiteNode>, payload: JsonRpcRequest) -> anyhow
                 .await
                 .map(|r| v2::map_transactions_std(&r, page_limit))?
         }
+        "tryLocateTx" => {
+            let req: TryLocateTxRequest = parse_params(params, method)?;
+            node.try_locate_tx(req.source, req.destination, req.created_lt)
+                .await
+                .map(|r| v2::map_transaction(&r))?
+        }
+        "tryLocateResultTx" => {
+            let req: TryLocateTxRequest = parse_params(params, method)?;
+            node.try_locate_result_tx(req.source, req.destination, req.created_lt)
+                .await
+                .map(|r| v2::map_transaction(&r))?
+        }
+        "tryLocateSourceTx" => {
+            let req: TryLocateTxRequest = parse_params(params, method)?;
+            node.try_locate_source_tx(req.source, req.destination, req.created_lt)
+                .await
+                .map(|r| v2::map_transaction(&r))?
+        }
         "getBlockHeader" => {
             let req: GetBlockRequest = parse_params(params, method)?;
             node.get_block_header(req.seqno as u32)

@@ -167,6 +167,24 @@ pub(crate) enum Request {
         to_lt: Option<u64>,
         resp: oneshot::Sender<anyhow::Result<Vec<LiteNodeTransaction>>>,
     },
+    TryLocateTx {
+        source: Addr,
+        destination: Addr,
+        created_lt: u64,
+        resp: oneshot::Sender<anyhow::Result<LiteNodeTransaction>>,
+    },
+    TryLocateResultTx {
+        source: Addr,
+        destination: Addr,
+        created_lt: u64,
+        resp: oneshot::Sender<anyhow::Result<LiteNodeTransaction>>,
+    },
+    TryLocateSourceTx {
+        source: Addr,
+        destination: Addr,
+        created_lt: u64,
+        resp: oneshot::Sender<anyhow::Result<LiteNodeTransaction>>,
+    },
     RunGetMethod {
         address: Addr,
         method_id: i32,
@@ -326,6 +344,66 @@ impl LiteNode {
                 lt,
                 hash,
                 to_lt,
+                resp,
+            })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn try_locate_tx(
+        &self,
+        source_str: String,
+        destination_str: String,
+        created_lt: u64,
+    ) -> anyhow::Result<LiteNodeTransaction> {
+        let source = Self::parse_addr(&source_str)?;
+        let destination = Self::parse_addr(&destination_str)?;
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::TryLocateTx {
+                source,
+                destination,
+                created_lt,
+                resp,
+            })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn try_locate_result_tx(
+        &self,
+        source_str: String,
+        destination_str: String,
+        created_lt: u64,
+    ) -> anyhow::Result<LiteNodeTransaction> {
+        let source = Self::parse_addr(&source_str)?;
+        let destination = Self::parse_addr(&destination_str)?;
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::TryLocateResultTx {
+                source,
+                destination,
+                created_lt,
+                resp,
+            })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn try_locate_source_tx(
+        &self,
+        source_str: String,
+        destination_str: String,
+        created_lt: u64,
+    ) -> anyhow::Result<LiteNodeTransaction> {
+        let source = Self::parse_addr(&source_str)?;
+        let destination = Self::parse_addr(&destination_str)?;
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::TryLocateSourceTx {
+                source,
+                destination,
+                created_lt,
                 resp,
             })
             .await?;
@@ -638,6 +716,33 @@ fn process_loop_request(node: &mut Node, req: Request) {
             let res = handle_get_transactions(node, address, limit, lt, hash, to_lt);
             let _ = resp.send(res);
         }
+        Request::TryLocateTx {
+            source,
+            destination,
+            created_lt,
+            resp,
+        } => {
+            let res = handle_try_locate_tx(node, source, destination, created_lt);
+            let _ = resp.send(res);
+        }
+        Request::TryLocateResultTx {
+            source,
+            destination,
+            created_lt,
+            resp,
+        } => {
+            let res = handle_try_locate_result_tx(node, source, destination, created_lt);
+            let _ = resp.send(res);
+        }
+        Request::TryLocateSourceTx {
+            source,
+            destination,
+            created_lt,
+            resp,
+        } => {
+            let res = handle_try_locate_source_tx(node, source, destination, created_lt);
+            let _ = resp.send(res);
+        }
         Request::RunGetMethod {
             address,
             method_id,
@@ -829,6 +934,78 @@ fn handle_get_transactions(
         })
         .collect();
     Ok(full_txs)
+}
+
+fn handle_try_locate_tx(
+    node: &Node,
+    source: Addr,
+    destination: Addr,
+    created_lt: u64,
+) -> anyhow::Result<LiteNodeTransaction> {
+    let msg_hash = find_message_hash(node, source, destination, created_lt)?;
+    let tx_hash = node
+        .history
+        .msg_to_tx
+        .get(&msg_hash)
+        .copied()
+        .context("Destination transaction not found for message")?;
+    let tx = node
+        .get_transaction_by_hash(&tx_hash)
+        .context("Located destination transaction is missing")?;
+
+    if tx.meta.account != destination {
+        anyhow::bail!("Located transaction does not belong to destination account")
+    }
+
+    convert_to_tx_struct(&tx, tx.tx_boc.clone())
+}
+
+fn handle_try_locate_result_tx(
+    node: &Node,
+    source: Addr,
+    destination: Addr,
+    created_lt: u64,
+) -> anyhow::Result<LiteNodeTransaction> {
+    handle_try_locate_tx(node, source, destination, created_lt)
+}
+
+fn handle_try_locate_source_tx(
+    node: &Node,
+    source: Addr,
+    destination: Addr,
+    created_lt: u64,
+) -> anyhow::Result<LiteNodeTransaction> {
+    let msg_hash = find_message_hash(node, source, destination, created_lt)?;
+    let tx_hash = node
+        .history
+        .tx_by_hash
+        .iter()
+        .find_map(|(hash, tx)| {
+            (tx.account == source && tx.out_msg_hashes.contains(&msg_hash)).then_some(*hash)
+        })
+        .context("Source transaction not found for message")?;
+    let tx = node
+        .get_transaction_by_hash(&tx_hash)
+        .context("Located source transaction is missing")?;
+    convert_to_tx_struct(&tx, tx.tx_boc.clone())
+}
+
+fn find_message_hash(
+    node: &Node,
+    source: Addr,
+    destination: Addr,
+    created_lt: u64,
+) -> anyhow::Result<Hash256> {
+    node.history
+        .msg_by_hash
+        .iter()
+        .find_map(|(hash, msg)| {
+            (msg.src == Some(source)
+                && msg.dst == Some(destination)
+                && msg.created_lt == Some(created_lt))
+            .then_some(*hash)
+        })
+        .context("Message not found by source, destination and created_lt")
 }
 
 fn handle_run_get_method(

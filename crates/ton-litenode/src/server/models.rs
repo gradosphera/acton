@@ -54,6 +54,13 @@ pub const fn default_limit() -> usize {
 }
 
 #[derive(Deserialize)]
+pub struct TryLocateTxRequest {
+    pub source: String,
+    pub destination: String,
+    pub created_lt: u64,
+}
+
+#[derive(Deserialize)]
 pub struct GetBlockRequest {
     /// Workchain index (ignored, dev node only uses workchain 0)
     #[allow(dead_code)]

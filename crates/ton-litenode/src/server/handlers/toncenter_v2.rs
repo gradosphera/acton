@@ -145,6 +145,39 @@ pub async fn get_transactions_std(
     .await
 }
 
+pub async fn try_locate_tx(
+    State(node): State<Arc<LiteNode>>,
+    Query(payload): Query<TryLocateTxRequest>,
+) -> Json<Value> {
+    handle_result(
+        node.try_locate_tx(payload.source, payload.destination, payload.created_lt),
+        v2::map_transaction,
+    )
+    .await
+}
+
+pub async fn try_locate_result_tx(
+    State(node): State<Arc<LiteNode>>,
+    Query(payload): Query<TryLocateTxRequest>,
+) -> Json<Value> {
+    handle_result(
+        node.try_locate_result_tx(payload.source, payload.destination, payload.created_lt),
+        v2::map_transaction,
+    )
+    .await
+}
+
+pub async fn try_locate_source_tx(
+    State(node): State<Arc<LiteNode>>,
+    Query(payload): Query<TryLocateTxRequest>,
+) -> Json<Value> {
+    handle_result(
+        node.try_locate_source_tx(payload.source, payload.destination, payload.created_lt),
+        v2::map_transaction,
+    )
+    .await
+}
+
 pub async fn detect_address(Query(payload): Query<AddressRequest>) -> Json<Value> {
     handle_result(
         async move {
