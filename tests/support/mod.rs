@@ -5,6 +5,8 @@ pub(crate) mod compilation;
 #[cfg(test)]
 pub(crate) mod fixtures;
 #[cfg(test)]
+pub(crate) mod litenode;
+#[cfg(test)]
 pub(crate) mod project;
 #[cfg(test)]
 pub(crate) mod snapshots;

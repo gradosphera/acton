@@ -17,6 +17,7 @@ mod formatter;
 mod incremental_tests;
 mod init_tests;
 mod library_tests;
+mod litenode_tests;
 mod mappings_tests;
 mod new_tests;
 mod println_tests;
