@@ -178,6 +178,35 @@ pub async fn try_locate_source_tx(
     .await
 }
 
+pub async fn get_config_param(
+    State(node): State<Arc<LiteNode>>,
+    Query(payload): Query<GetConfigParamRequest>,
+) -> Json<Value> {
+    handle_result(
+        async move {
+            let param = parse_config_param(&payload)?;
+            let seqno = parse_seqno(payload.seqno)?;
+            node.get_config_param(param, seqno).await
+        },
+        v2::map_config_info,
+    )
+    .await
+}
+
+pub async fn get_config_all(
+    State(node): State<Arc<LiteNode>>,
+    Query(payload): Query<GetConfigAllRequest>,
+) -> Json<Value> {
+    handle_result(
+        async move {
+            let seqno = parse_seqno(payload.seqno)?;
+            node.get_config_all(seqno).await
+        },
+        v2::map_config_info,
+    )
+    .await
+}
+
 pub async fn detect_address(Query(payload): Query<AddressRequest>) -> Json<Value> {
     handle_result(
         async move {
@@ -352,4 +381,23 @@ fn parse_hash_any(hash: &str) -> anyhow::Result<Hash256> {
     }
 
     anyhow::bail!("Invalid hash format")
+}
+
+fn parse_config_param(payload: &GetConfigParamRequest) -> anyhow::Result<u32> {
+    let raw = payload
+        .param
+        .or(payload.config_id)
+        .ok_or_else(|| anyhow::anyhow!("`param` is required"))?;
+    if raw < 0 {
+        anyhow::bail!("Config param must be a non-negative integer");
+    }
+    Ok(raw as u32)
+}
+
+fn parse_seqno(seqno: Option<i32>) -> anyhow::Result<Option<u32>> {
+    match seqno {
+        Some(value) if value < 0 => anyhow::bail!("`seqno` must be a non-negative integer"),
+        Some(value) => Ok(Some(value as u32)),
+        None => Ok(None),
+    }
 }

@@ -269,6 +269,16 @@ pub fn map_lookup_block(id: &LiteNodeBlockId) -> Value {
     map_block_id(id)
 }
 
+pub fn map_config_info(config: &BocBytes) -> Value {
+    serde_json::json!({
+        "@type": "configInfo",
+        "config": {
+            "@type": "tvm.cell",
+            "bytes": base64::engine::general_purpose::STANDARD.encode(config),
+        }
+    })
+}
+
 pub fn map_out_msg_queue_sizes(mi: &LiteNodeMasterchainInfo) -> Value {
     serde_json::json!({
         "@type": "blocks.outMsgQueueSizes",

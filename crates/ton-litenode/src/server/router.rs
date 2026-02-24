@@ -38,6 +38,8 @@ pub fn create_router(node: Arc<LiteNode>) -> Router {
         .route("/v2/tryLocateTx", get(try_locate_tx))
         .route("/v2/tryLocateResultTx", get(try_locate_result_tx))
         .route("/v2/tryLocateSourceTx", get(try_locate_source_tx))
+        .route("/v2/getConfigParam", get(get_config_param))
+        .route("/v2/getConfigAll", get(get_config_all))
         .route("/v2/getBlockHeader", get(get_block_header))
         .route("/v2/getBlockTransactions", get(get_block_transactions))
         .route(

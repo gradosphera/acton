@@ -143,6 +143,21 @@ async fn json_rpc_router(node: Arc<LiteNode>, payload: JsonRpcRequest) -> anyhow
                 .await
                 .map(|r| v2::map_transactions_std(&r, page_limit))?
         }
+        "getConfigParam" => {
+            let req: GetConfigParamRequest = parse_params(params, method)?;
+            let param = parse_config_param(&req)?;
+            let seqno = parse_seqno(req.seqno)?;
+            node.get_config_param(param, seqno)
+                .await
+                .map(|r| v2::map_config_info(&r))?
+        }
+        "getConfigAll" => {
+            let req: GetConfigAllRequest = parse_params(params, method)?;
+            let seqno = parse_seqno(req.seqno)?;
+            node.get_config_all(seqno)
+                .await
+                .map(|r| v2::map_config_info(&r))?
+        }
         "tryLocateTx" => {
             let req: TryLocateTxRequest = parse_params(params, method)?;
             node.try_locate_tx(req.source, req.destination, req.created_lt)
@@ -280,4 +295,23 @@ fn parse_hash_any(hash: &str) -> anyhow::Result<Hash256> {
     }
 
     anyhow::bail!("Invalid hash format")
+}
+
+fn parse_config_param(payload: &GetConfigParamRequest) -> anyhow::Result<u32> {
+    let raw = payload
+        .param
+        .or(payload.config_id)
+        .ok_or_else(|| anyhow::anyhow!("`param` is required"))?;
+    if raw < 0 {
+        anyhow::bail!("Config param must be a non-negative integer");
+    }
+    Ok(raw as u32)
+}
+
+fn parse_seqno(seqno: Option<i32>) -> anyhow::Result<Option<u32>> {
+    match seqno {
+        Some(value) if value < 0 => anyhow::bail!("`seqno` must be a non-negative integer"),
+        Some(value) => Ok(Some(value as u32)),
+        None => Ok(None),
+    }
 }

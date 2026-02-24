@@ -61,6 +61,18 @@ pub struct TryLocateTxRequest {
 }
 
 #[derive(Deserialize)]
+pub struct GetConfigParamRequest {
+    pub param: Option<i32>,
+    pub config_id: Option<i32>,
+    pub seqno: Option<i32>,
+}
+
+#[derive(Deserialize)]
+pub struct GetConfigAllRequest {
+    pub seqno: Option<i32>,
+}
+
+#[derive(Deserialize)]
 pub struct GetBlockRequest {
     /// Workchain index (ignored, dev node only uses workchain 0)
     #[allow(dead_code)]

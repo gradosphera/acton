@@ -17,7 +17,8 @@ use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
 use tvmffi::json_stack::json_to_legacy_item;
 use tvmffi::stack::Tuple;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{CellFamily, Store};
+use tycho_types::cell::{Cell, CellFamily, Store};
+use tycho_types::dict::Dict;
 use tycho_types::models::{Message, StdAddr, StdAddrFormat};
 
 const CRC16: Crc<u16> = Crc::<u16>::new(&CRC_16_XMODEM);
@@ -205,6 +206,15 @@ pub(crate) enum Request {
     },
     GetConsensusBlock {
         resp: oneshot::Sender<anyhow::Result<LiteNodeConsensusBlock>>,
+    },
+    GetConfigParam {
+        param: u32,
+        seqno: Option<u32>,
+        resp: oneshot::Sender<anyhow::Result<BocBytes>>,
+    },
+    GetConfigAll {
+        seqno: Option<u32>,
+        resp: oneshot::Sender<anyhow::Result<BocBytes>>,
     },
     GetShards {
         seqno: u32,
@@ -494,6 +504,24 @@ impl LiteNode {
         rx.await?
     }
 
+    pub async fn get_config_param(
+        &self,
+        param: u32,
+        seqno: Option<u32>,
+    ) -> anyhow::Result<BocBytes> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::GetConfigParam { param, seqno, resp })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn get_config_all(&self, seqno: Option<u32>) -> anyhow::Result<BocBytes> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::GetConfigAll { seqno, resp }).await?;
+        rx.await?
+    }
+
     pub async fn get_shards(&self, seqno: u32) -> anyhow::Result<Vec<LiteNodeBlockId>> {
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::GetShards { seqno, resp }).await?;
@@ -767,6 +795,14 @@ fn process_loop_request(node: &mut Node, req: Request) {
         }
         Request::GetConsensusBlock { resp } => {
             let res = handle_get_consensus_block(node);
+            let _ = resp.send(res);
+        }
+        Request::GetConfigParam { param, seqno, resp } => {
+            let res = handle_get_config_param(node, param, seqno);
+            let _ = resp.send(res);
+        }
+        Request::GetConfigAll { seqno, resp } => {
+            let res = handle_get_config_all(node, seqno);
             let _ = resp.send(res);
         }
         Request::GetShards { seqno, resp } => {
@@ -1159,7 +1195,7 @@ fn convert_to_message_struct(meta: &MsgMeta, boc: &[u8]) -> anyhow::Result<LiteN
     let mut init_state_bytes = Vec::new();
     if let Some(init) = msg.init {
         let mut builder = tycho_types::cell::CellBuilder::new();
-        let _ = init.store_into(&mut builder, tycho_types::cell::Cell::empty_context());
+        let _ = init.store_into(&mut builder, Cell::empty_context());
         if let Ok(cell) = builder.build() {
             init_state_bytes = Boc::encode(cell);
         }
@@ -1251,11 +1287,48 @@ fn handle_get_consensus_block(node: &Node) -> anyhow::Result<LiteNodeConsensusBl
     })
 }
 
+fn handle_get_config_param(
+    node: &Node,
+    param: u32,
+    seqno: Option<u32>,
+) -> anyhow::Result<BocBytes> {
+    ensure_seqno_exists(node, seqno)?;
+
+    let config_boc = handle_get_config_all(node, seqno)?;
+    let config_cell = Boc::decode(&config_boc).context("Failed to decode blockchain config BOC")?;
+    let mut slice = config_cell.as_slice_allow_exotic();
+    let config_dict = Dict::<u32, Cell>::load_from_root_ext(&mut slice, Cell::empty_context())
+        .context("Failed to parse blockchain config dictionary")?;
+    let param_cell = config_dict
+        .get(param)
+        .context("Failed to read config parameter")?
+        .with_context(|| format!("Config parameter {param} not found"))?;
+
+    Ok(Boc::encode(param_cell).into())
+}
+
+fn handle_get_config_all(node: &Node, seqno: Option<u32>) -> anyhow::Result<BocBytes> {
+    ensure_seqno_exists(node, seqno)?;
+
+    node.get_cell(&node.globals.config_boc_hash)
+        .context("Blockchain config cell not found")
+}
+
 fn handle_get_shards(node: &Node, seqno: u32) -> anyhow::Result<Vec<LiteNodeBlockId>> {
     let Some(block_header) = node.get_block_header(seqno) else {
         anyhow::bail!("Block not found for seqno={seqno}")
     };
     Ok(vec![block_header.block_id()])
+}
+
+fn ensure_seqno_exists(node: &Node, seqno: Option<u32>) -> anyhow::Result<()> {
+    if let Some(seqno) = seqno
+        && seqno > 0
+        && node.get_block_header(seqno).is_none()
+    {
+        anyhow::bail!("Block {seqno} not found");
+    }
+    Ok(())
 }
 
 fn handle_lookup_block(

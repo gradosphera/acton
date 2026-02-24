@@ -290,6 +290,106 @@ fn litenode_supports_try_locate_transaction_endpoints() {
 }
 
 #[test]
+fn litenode_supports_config_endpoints() {
+    let project = ProjectBuilder::new("litenode-config-endpoints").build();
+    let node = project.litenode().start();
+
+    let get_config_all = node.get_json("/api/v2/getConfigAll");
+    assert_eq!(
+        get_config_all["ok"].as_bool(),
+        Some(true),
+        "getConfigAll failed: {}",
+        serde_json::to_string_pretty(&get_config_all).unwrap_or_default()
+    );
+    assert_eq!(
+        get_config_all["result"]["@type"].as_str(),
+        Some("configInfo")
+    );
+    assert_eq!(
+        get_config_all["result"]["config"]["@type"].as_str(),
+        Some("tvm.cell")
+    );
+    let all_bytes = get_config_all["result"]["config"]["bytes"]
+        .as_str()
+        .expect("getConfigAll result.config.bytes must be a string")
+        .to_owned();
+    assert!(
+        !all_bytes.is_empty(),
+        "getConfigAll returned an empty config cell"
+    );
+
+    let get_config_param = node.get_json("/api/v2/getConfigParam?param=8");
+    assert_eq!(
+        get_config_param["ok"].as_bool(),
+        Some(true),
+        "getConfigParam failed: {}",
+        serde_json::to_string_pretty(&get_config_param).unwrap_or_default()
+    );
+    assert_eq!(
+        get_config_param["result"]["@type"].as_str(),
+        Some("configInfo")
+    );
+    let param_bytes = get_config_param["result"]["config"]["bytes"]
+        .as_str()
+        .expect("getConfigParam result.config.bytes must be a string")
+        .to_owned();
+    assert!(
+        !param_bytes.is_empty(),
+        "getConfigParam returned an empty parameter cell"
+    );
+    assert_ne!(
+        all_bytes, param_bytes,
+        "Expected param cell BOC to differ from full config BOC"
+    );
+
+    let get_config_param_alias = node.get_json("/api/v2/getConfigParam?config_id=8");
+    assert_eq!(
+        get_config_param_alias["ok"].as_bool(),
+        Some(true),
+        "getConfigParam with config_id failed: {}",
+        serde_json::to_string_pretty(&get_config_param_alias).unwrap_or_default()
+    );
+    assert_eq!(
+        get_config_param_alias["result"]["config"]["bytes"].as_str(),
+        Some(param_bytes.as_str())
+    );
+
+    let rpc_get_config_all = node.post_json(
+        "/api/v2",
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getConfigAll",
+            "params": {}
+        }),
+    );
+    assert_eq!(rpc_get_config_all["ok"].as_bool(), Some(true));
+    assert_eq!(
+        rpc_get_config_all["result"]["config"]["bytes"].as_str(),
+        Some(all_bytes.as_str())
+    );
+
+    let rpc_get_config_param = node.post_json(
+        "/api/v2",
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "getConfigParam",
+            "params": {
+                "param": 8
+            }
+        }),
+    );
+    assert_eq!(rpc_get_config_param["ok"].as_bool(), Some(true));
+    assert_eq!(
+        rpc_get_config_param["result"]["config"]["bytes"].as_str(),
+        Some(param_bytes.as_str())
+    );
+
+    node.stop();
+}
+
+#[test]
 fn litenode_supports_utils_detect_and_pack_endpoints() {
     let project = ProjectBuilder::new("litenode-utils-endpoints").build();
     let node = project.litenode().start();
