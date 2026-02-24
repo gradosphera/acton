@@ -43,7 +43,7 @@ pub fn fetch_remote_shard_account(
     } else {
         let b = base64::engine::general_purpose::STANDARD.decode(&info.code)?;
         let h = compute_boc_hash(&b)?;
-        cas.put(b, h);
+        cas.put(b.into(), h);
         Some(h)
     };
 
@@ -52,7 +52,7 @@ pub fn fetch_remote_shard_account(
     } else {
         let b = base64::engine::general_purpose::STANDARD.decode(&info.data)?;
         let h = compute_boc_hash(&b)?;
-        cas.put(b, h);
+        cas.put(b.into(), h);
         Some(h)
     };
 
@@ -113,7 +113,7 @@ pub fn fetch_remote_shard_account(
     let cell = builder.build()?;
     let boc = Boc::encode(cell);
     let account_hash = compute_boc_hash(&boc)?;
-    cas.put(boc.clone(), account_hash);
+    cas.put(boc.clone().into(), account_hash);
 
     let meta = AccountMeta {
         account_hash,
@@ -126,7 +126,7 @@ pub fn fetch_remote_shard_account(
         frozen_hash: None,
     };
 
-    Ok((boc, meta))
+    Ok((boc.into(), meta))
 }
 
 fn compute_boc_hash(boc: &[u8]) -> anyhow::Result<Hash256> {

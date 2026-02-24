@@ -210,7 +210,7 @@ pub struct TransactionInfo {
     pub meta: TxMeta,
     pub in_msg: Option<MessageInfo>,
     pub out_msgs: Vec<MessageInfo>,
-    pub tx_boc: Vec<u8>,
+    pub tx_boc: BocBytes,
 }
 
 #[derive(Clone, Debug)]
@@ -238,7 +238,7 @@ impl TraceNode {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountDelta {
     pub addr: Addr,
     pub old_hash: Option<Hash256>,
@@ -339,7 +339,7 @@ impl Indexes {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum QueuePolicy {
     ExternalFirstFifo,
     InternalFirstFifo,

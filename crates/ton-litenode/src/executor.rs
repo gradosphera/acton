@@ -103,8 +103,9 @@ impl TvmExecutor for TvmEmulatorAdapter {
         // 3. Process output
         match res {
             EmulationResult::Success(s) => {
-                let tx_boc = STANDARD.decode(s.transaction.as_ref())?;
-                let new_account_boc = Some(STANDARD.decode(s.shard_account.as_ref())?);
+                let tx_boc = BocBytes::from(STANDARD.decode(s.transaction.as_ref())?);
+                let new_account_boc =
+                    Some(BocBytes::from(STANDARD.decode(s.shard_account.as_ref())?));
 
                 let tx_cell = Boc::decode_base64(s.transaction.as_ref())?;
                 let tx = tx_cell.parse::<Transaction>()?;
@@ -117,7 +118,7 @@ impl TvmExecutor for TvmEmulatorAdapter {
                         use tycho_types::cell::Store;
                         msg.store_into(&mut builder, Cell::empty_context())?;
                         let cell = builder.build()?;
-                        Ok(Boc::encode(cell))
+                        Ok(BocBytes::from(Boc::encode(cell)))
                     })
                     .collect::<anyhow::Result<Vec<_>>>()?;
 

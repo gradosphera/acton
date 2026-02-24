@@ -636,6 +636,19 @@ pub enum LitenodeCommand {
         api_key: Option<String>,
         #[arg(long, help = "Path to SQLite database for persistent storage")]
         db_path: Option<String>,
+        #[arg(
+            long,
+            help = "Load LiteNode state from JSON snapshot before startup",
+            conflicts_with = "db_path", // for now
+            value_name = "PATH"
+        )]
+        load_state: Option<String>,
+        #[arg(
+            long,
+            help = "Dump LiteNode state to JSON snapshot on shutdown",
+            value_name = "PATH"
+        )]
+        dump_state: Option<String>,
     },
     #[command(about = "Request TON from faucet")]
     Airdrop {
@@ -747,6 +760,14 @@ fn example_litenode_usage() -> StyledStr {
             (
                 "Auto-fund and deploy configured wallets",
                 "acton litenode start --accounts deployer,user",
+            ),
+            (
+                "Load network state from JSON snapshot",
+                "acton litenode start --load-state snapshots/localnet.json",
+            ),
+            (
+                "Dump network state to JSON snapshot on shutdown",
+                "acton litenode start --dump-state snapshots/localnet.json",
             ),
             (
                 "Request 100 TON from faucet to specified address",
@@ -1613,6 +1634,8 @@ fn main() {
                 accounts,
                 api_key,
                 db_path,
+                load_state,
+                dump_state,
             } => {
                 let resolved_litenode =
                     resolve_litenode_settings(port, fork_net, fork_block_number, accounts);
@@ -1627,6 +1650,8 @@ fn main() {
                         resolved_litenode.fork_net,
                         resolved_litenode.fork_block_number,
                         resolved_litenode.accounts,
+                        load_state,
+                        dump_state,
                         api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
                     )
                     .await

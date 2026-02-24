@@ -334,13 +334,13 @@ impl Node {
                         if let Some(cell) = state.code {
                             let ch = Hash256(*cell.repr_hash().as_array());
                             let boc = Boc::encode(cell);
-                            self.cas.put(boc, ch);
+                            self.cas.put(boc.into(), ch);
                             code_hash = Some(ch);
                         }
                         if let Some(cell) = state.data {
                             let dh = Hash256(*cell.repr_hash().as_array());
                             let boc = Boc::encode(cell);
-                            self.cas.put(boc, dh);
+                            self.cas.put(boc.into(), dh);
                             data_hash = Some(dh);
                         }
                         AccountStatus::Active
@@ -1009,7 +1009,7 @@ impl Node {
         let mut builder = CellBuilder::new();
         sa.store_into(&mut builder, tycho_types::cell::Cell::empty_context())?;
         let cell = builder.build()?;
-        Ok(Boc::encode(cell))
+        Ok(Boc::encode(cell).into())
     }
 
     fn fetch_remote_shard_account(
@@ -1070,7 +1070,7 @@ impl Node {
 
         let boc = message.to_cell()?.to_boc(false)?;
         let hash = compute_boc_hash(&boc)?;
-        self.cas.put(boc.clone(), hash);
+        self.cas.put(boc.clone().into(), hash);
 
         // 2. Register MsgMeta
         let msg_meta = parse_msg_meta(&boc, hash)?;
@@ -1159,5 +1159,5 @@ fn create_dev_block_boc(seqno: Seqno, tx_hash: Hash256) -> anyhow::Result<BocByt
     builder.store_u32(seqno)?;
     builder.store_u256(&tycho_types::prelude::HashBytes(tx_hash.0))?;
     let cell = builder.build()?;
-    Ok(Boc::encode(cell))
+    Ok(Boc::encode(cell).into())
 }

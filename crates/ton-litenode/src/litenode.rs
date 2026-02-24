@@ -234,6 +234,14 @@ pub(crate) enum Request {
     GetStateSource {
         resp: oneshot::Sender<anyhow::Result<StateSource>>,
     },
+    DumpState {
+        path: String,
+        resp: oneshot::Sender<anyhow::Result<()>>,
+    },
+    LoadState {
+        path: String,
+        resp: oneshot::Sender<anyhow::Result<()>>,
+    },
 }
 
 pub struct LiteNode {
@@ -262,7 +270,8 @@ impl LiteNode {
     pub async fn send_boc(&self, boc_str: String) -> anyhow::Result<LiteNodeBlockTransactions> {
         let boc = base64::engine::general_purpose::STANDARD
             .decode(&boc_str)
-            .context("Invalid BOC base64")?;
+            .context("Invalid BOC base64")?
+            .into();
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::SendBoc { boc, resp }).await?;
         rx.await?
@@ -528,6 +537,18 @@ impl LiteNode {
         rx.await?
     }
 
+    pub async fn dump_state(&self, path: String) -> anyhow::Result<()> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::DumpState { path, resp }).await?;
+        rx.await?
+    }
+
+    pub async fn load_state(&self, path: String) -> anyhow::Result<()> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::LoadState { path, resp }).await?;
+        rx.await?
+    }
+
     fn parse_addr(s: &str) -> anyhow::Result<Addr> {
         let (int_addr, _) = StdAddr::from_str_ext(s, StdAddrFormat::any()).map_err(|_| {
             anyhow::anyhow!("Invalid address, only standard internal address is allowed")
@@ -546,7 +567,7 @@ fn run_node_loop(
 ) -> anyhow::Result<()> {
     let executor = Box::new(TvmEmulatorAdapter::new()?);
     let config_bytes = base64::engine::general_purpose::STANDARD.decode(DEFAULT_CONFIG)?;
-    let mut node = Node::with_db_path(executor, config_bytes, state_source, db_path)?;
+    let mut node = Node::with_db_path(executor, config_bytes.into(), state_source, db_path)?;
 
     tracing::info!("TON lite node started");
 
@@ -699,6 +720,14 @@ fn process_loop_request(node: &mut Node, req: Request) {
         Request::GetStateSource { resp } => {
             let _ = resp.send(Ok(node.state_source.clone()));
         }
+        Request::DumpState { path, resp } => {
+            let res = node.dump_state_to_path(path);
+            let _ = resp.send(res);
+        }
+        Request::LoadState { path, resp } => {
+            let res = node.load_state_from_path(path);
+            let _ = resp.send(res);
+        }
     }
 }
 
@@ -849,7 +878,7 @@ fn handle_run_get_method(
                 .unwrap_or_default();
             Ok(LiteNodeRunGetMethodResult {
                 gas_used: s.gas_used.parse().unwrap_or(0),
-                stack: stack_bytes,
+                stack: stack_bytes.into(),
                 exit_code: s.vm_exit_code,
                 vm_log: s.vm_log,
                 block_id,
@@ -862,7 +891,7 @@ fn handle_run_get_method(
 
 pub(crate) fn convert_to_tx_struct(
     tx: &TransactionInfo,
-    tx_boc: Vec<u8>,
+    tx_boc: BocBytes,
 ) -> anyhow::Result<LiteNodeTransaction> {
     let in_msg_struct = if let Some(in_msg) = &tx.in_msg {
         convert_to_message_struct(&in_msg.meta, &in_msg.boc)?
@@ -873,8 +902,8 @@ pub(crate) fn convert_to_tx_struct(
             destination: None,
             value: 0,
             body_hash: Hash256([0; 32]),
-            body: Vec::new(),
-            init_state: Vec::new(),
+            body: Vec::new().into(),
+            init_state: Vec::new().into(),
             opcode: None,
             fwd_fee: 0,
             ihr_fee: 0,
@@ -946,8 +975,8 @@ fn convert_to_message_struct(meta: &MsgMeta, boc: &[u8]) -> anyhow::Result<LiteN
         destination: meta.dst,
         value: meta.value.unwrap_or(0),
         body_hash,
-        body: body_bytes,
-        init_state: init_state_bytes,
+        body: body_bytes.into(),
+        init_state: init_state_bytes.into(),
         opcode,
         fwd_fee,
         ihr_fee,

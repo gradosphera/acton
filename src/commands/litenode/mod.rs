@@ -22,14 +22,21 @@ const STARTUP_ACCOUNT_TOPUP_NANOTONS: u128 = 100_000_000_000; // 100 TON
 const STARTUP_DEPLOY_TRANSFER_NANOTONS: u128 = 50_000_000; // 0.05 TON
 const WALLET_MSG_TTL_SECONDS: u64 = 600;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn litenode_start_cmd(
     port: u16,
     db_path: Option<String>,
     fork_net: Option<String>,
     fork_block_number: Option<u64>,
     accounts: Vec<String>,
+    load_state: Option<String>,
+    dump_state: Option<String>,
     api_key: Option<String>,
 ) -> anyhow::Result<()> {
+    if load_state.is_some() && db_path.is_some() {
+        anyhow::bail!("--load-state cannot be used together with --db-path for now");
+    }
+
     let (state_source, fork_network) = if let Some(network) = fork_net {
         let network = Network::from_str(&network)?;
         let fork_network = network.to_string();
@@ -46,9 +53,20 @@ pub async fn litenode_start_cmd(
     };
 
     let node = Arc::new(LiteNode::new(state_source, db_path.clone()));
+    if let Some(path) = load_state.as_deref() {
+        node.load_state(path.to_owned())
+            .await
+            .with_context(|| format!("Failed to load state snapshot from {}", path))?;
+        println!(
+            "      {} state from {}",
+            "Loaded".green().bold(),
+            path.dimmed()
+        );
+    }
+
     setup_startup_accounts(&node, &accounts).await?;
-    run_server(
-        node,
+    let run_result = run_server(
+        node.clone(),
         ServerArgs {
             port,
             db_path,
@@ -56,7 +74,22 @@ pub async fn litenode_start_cmd(
             fork_block_number,
         },
     )
-    .await?;
+    .await;
+
+    if run_result.is_ok()
+        && let Some(path) = dump_state.as_deref()
+    {
+        node.dump_state(path.to_owned())
+            .await
+            .with_context(|| format!("Failed to dump state snapshot to {}", path))?;
+        println!(
+            "       {} state to {}",
+            "Saved".green().bold(),
+            path.dimmed()
+        );
+    }
+
+    run_result?;
     Ok(())
 }
 
