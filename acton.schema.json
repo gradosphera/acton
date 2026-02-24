@@ -178,6 +178,19 @@
         }
       }
     },
+    "litenode": {
+      "type": "object",
+      "description": "Default settings for `acton litenode` commands",
+      "properties": {
+        "port": {
+          "type": "integer",
+          "description": "Port used by `acton litenode` commands when --port is not provided",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 3000
+        }
+      }
+    },
     "contracts": {
       "type": "object",
       "description": "Definition of contracts in the project",

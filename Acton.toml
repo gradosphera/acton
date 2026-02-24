@@ -24,6 +24,9 @@ include = ["tests/acton-stdlib/**", ".jetton/**"]
 
 [test.mutation]
 
+[litenode]
+port = 3010
+
 [networks.localnet]
 v2-url = "http://localhost:3010/api/v2"
 v3-url = "http://localhost:3010/api/v3"

@@ -55,6 +55,7 @@ pub struct ActonConfig {
     pub lint: Option<LintConfig>,
     pub fmt: Option<FmtSettings>,
     pub build: Option<BuildSettings>,
+    pub litenode: Option<LitenodeSettings>,
     pub scripts: Option<BTreeMap<String, String>>,
     #[serde(skip)] // we build wallets manually
     pub wallets: Option<WalletsConfig>,
@@ -199,6 +200,12 @@ pub struct BuildSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
+pub struct LitenodeSettings {
+    pub port: Option<u16>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
 pub struct MutationConfig {
     pub disable_rules: Option<Vec<String>>,
 }
@@ -274,6 +281,7 @@ impl Default for ActonConfig {
                 ignore: Some(vec![]),
             }),
             build: None,
+            litenode: None,
             wallets: None,
             libraries: None,
             scripts: None,
@@ -932,5 +940,22 @@ output-fift = "build/fift"
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
         let build = config.build.as_ref().unwrap();
         assert_eq!(build.output_fift.as_deref(), Some("build/fift"));
+    }
+
+    #[test]
+    fn test_litenode_settings_parsing() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[litenode]
+port = 3015
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let litenode = config.litenode.as_ref().unwrap();
+        assert_eq!(litenode.port, Some(3015));
     }
 }

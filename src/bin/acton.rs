@@ -612,8 +612,8 @@ enum Commands {
 pub enum LitenodeCommand {
     #[command(about = "Start the lightweight TON node")]
     Start {
-        #[arg(long, default_value_t = 3000)]
-        port: u16,
+        #[arg(long, help = "LiteNode server port (default: [litenode].port or 3000)")]
+        port: Option<u16>,
         #[arg(long, help = "Fork from network for remote account resolution")]
         fork_net: Option<String>,
         #[arg(long, help = "TonCenter API key for blockchain queries")]
@@ -627,8 +627,12 @@ pub enum LitenodeCommand {
         address: String,
         #[arg(long, short, help = "Amount of TON to request", default_value = "100")]
         amount: f64,
-        #[arg(long, short, help = "LiteNode server port", default_value_t = 3000)]
-        port: u16,
+        #[arg(
+            long,
+            short,
+            help = "LiteNode server port (default: [litenode].port or 3000)"
+        )]
+        port: Option<u16>,
     },
 }
 
@@ -713,7 +717,7 @@ fn example_litenode_usage() -> StyledStr {
     format_examples(
         &[
             (
-                "Start the lightweight TON node on default port 3000",
+                "Start the lightweight TON node (port from [litenode].port or 3000)",
                 "acton litenode start",
             ),
             (
@@ -1580,6 +1584,7 @@ fn main() {
                 api_key,
                 db_path,
             } => {
+                let port = resolve_litenode_port(port);
                 let rt = tokio::runtime::Builder::new_multi_thread()
                     .enable_all()
                     .build()
@@ -1599,6 +1604,7 @@ fn main() {
                 amount,
                 port,
             } => {
+                let port = resolve_litenode_port(port);
                 let rt = tokio::runtime::Builder::new_multi_thread()
                     .enable_all()
                     .build()
@@ -1614,6 +1620,16 @@ fn main() {
         eprintln!("{} {}", "Error:".red(), err);
         process::exit(1)
     }
+}
+
+fn resolve_litenode_port(cli_port: Option<u16>) -> u16 {
+    cli_port
+        .or_else(|| {
+            ActonConfig::load()
+                .ok()
+                .and_then(|config| config.litenode.as_ref().and_then(|litenode| litenode.port))
+        })
+        .unwrap_or(3000)
 }
 
 fn report_error_as_json<T>(result: anyhow::Result<T>) {
