@@ -165,6 +165,10 @@ async fn json_rpc_router(node: Arc<LiteNode>, payload: JsonRpcRequest) -> anyhow
             .get_masterchain_info()
             .await
             .map(|r| v2::map_masterchain_info(&r))?,
+        "getConsensusBlock" => node
+            .get_consensus_block()
+            .await
+            .map(|r| v2::map_consensus_block(&r))?,
         "getOutMsgQueueSize" => node
             .get_masterchain_info()
             .await

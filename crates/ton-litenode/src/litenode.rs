@@ -127,6 +127,12 @@ pub struct LiteNodeMasterchainInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LiteNodeConsensusBlock {
+    pub consensus_block: Seqno,
+    pub timestamp: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LiteNodeBlockHeader {
     pub id: LiteNodeBlockId,
     pub gen_utime: u32,
@@ -178,6 +184,9 @@ pub(crate) enum Request {
     },
     GetMasterchainInfo {
         resp: oneshot::Sender<anyhow::Result<LiteNodeMasterchainInfo>>,
+    },
+    GetConsensusBlock {
+        resp: oneshot::Sender<anyhow::Result<LiteNodeConsensusBlock>>,
     },
     GetShards {
         seqno: u32,
@@ -398,6 +407,12 @@ impl LiteNode {
     pub async fn get_masterchain_info(&self) -> anyhow::Result<LiteNodeMasterchainInfo> {
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::GetMasterchainInfo { resp }).await?;
+        rx.await?
+    }
+
+    pub async fn get_consensus_block(&self) -> anyhow::Result<LiteNodeConsensusBlock> {
+        let (resp, rx) = oneshot::channel();
+        self.tx.send(Request::GetConsensusBlock { resp }).await?;
         rx.await?
     }
 
@@ -643,6 +658,10 @@ fn process_loop_request(node: &mut Node, req: Request) {
         }
         Request::GetMasterchainInfo { resp } => {
             let res = handle_get_masterchain_info(node);
+            let _ = resp.send(res);
+        }
+        Request::GetConsensusBlock { resp } => {
+            let res = handle_get_consensus_block(node);
             let _ = resp.send(res);
         }
         Request::GetShards { seqno, resp } => {
@@ -1039,6 +1058,19 @@ fn handle_get_masterchain_info(node: &Node) -> anyhow::Result<LiteNodeMasterchai
         state_root_hash: block_id.root_hash,
         last: block_id,
         init: LiteNodeBlockId::first(),
+    })
+}
+
+fn handle_get_consensus_block(node: &Node) -> anyhow::Result<LiteNodeConsensusBlock> {
+    let consensus_block = node.globals.head_seqno;
+    let timestamp = node
+        .get_block_header(consensus_block)
+        .map(|block| block.gen_utime)
+        .unwrap_or_default();
+
+    Ok(LiteNodeConsensusBlock {
+        consensus_block,
+        timestamp,
     })
 }
 

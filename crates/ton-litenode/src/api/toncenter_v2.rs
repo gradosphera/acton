@@ -1,7 +1,7 @@
 use crate::litenode::{
     LiteNodeAccountState, LiteNodeBlockHeader, LiteNodeBlockId, LiteNodeBlockTransactions,
-    LiteNodeMasterchainInfo, LiteNodeRunGetMethodResult, LiteNodeTransaction,
-    LiteNodeTransactionId,
+    LiteNodeConsensusBlock, LiteNodeMasterchainInfo, LiteNodeRunGetMethodResult,
+    LiteNodeTransaction, LiteNodeTransactionId,
 };
 use crate::storage::AccountStatus;
 use crate::types::{Addr, BocBytes};
@@ -223,6 +223,14 @@ pub fn map_masterchain_info(mi: &LiteNodeMasterchainInfo) -> Value {
         "last": map_block_id(&mi.last),
         "state_root_hash": mi.state_root_hash.to_hex(),
         "init": map_block_id(&mi.init)
+    })
+}
+
+pub fn map_consensus_block(cb: &LiteNodeConsensusBlock) -> Value {
+    serde_json::json!({
+        "@type": "ext.blocks.consensusBlock",
+        "consensus_block": cb.consensus_block,
+        "timestamp": cb.timestamp
     })
 }
 
