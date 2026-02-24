@@ -203,6 +203,7 @@ pub struct BuildSettings {
 pub struct LitenodeSettings {
     pub port: Option<u16>,
     pub fork_net: Option<String>,
+    pub fork_block_number: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -954,11 +955,13 @@ version = "0.1.0"
 [litenode]
 port = 3015
 fork-net = "testnet"
+fork-block-number = 1234567
 "#;
 
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
         let litenode = config.litenode.as_ref().unwrap();
         assert_eq!(litenode.port, Some(3015));
         assert_eq!(litenode.fork_net.as_deref(), Some("testnet"));
+        assert_eq!(litenode.fork_block_number, Some(1234567));
     }
 }

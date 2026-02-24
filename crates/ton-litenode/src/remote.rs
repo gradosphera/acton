@@ -16,6 +16,7 @@ use tycho_types::num::Tokens;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteProvider {
     pub network: Network,
+    pub fork_block_number: Option<u64>,
     pub api_key: Option<String>,
 }
 
@@ -34,7 +35,7 @@ pub fn fetch_remote_shard_account(
         provider.api_key.as_deref().map(ToString::to_string),
     )?;
 
-    let info = api_client.get_account_info(None, &addr.to_string())?;
+    let info = api_client.get_account_info(provider.fork_block_number, &addr.to_string())?;
 
     let code = if info.code.is_empty() {
         None

@@ -10,13 +10,18 @@ pub async fn litenode_start_cmd(
     port: u16,
     db_path: Option<String>,
     fork_net: Option<String>,
+    fork_block_number: Option<u64>,
     api_key: Option<String>,
 ) -> anyhow::Result<()> {
     let (state_source, fork_network) = if let Some(network) = fork_net {
         let network = Network::from_str(&network)?;
         let fork_network = network.to_string();
         (
-            StateSource::Remote(RemoteProvider { network, api_key }),
+            StateSource::Remote(RemoteProvider {
+                network,
+                fork_block_number,
+                api_key,
+            }),
             Some(fork_network),
         )
     } else {
@@ -30,6 +35,7 @@ pub async fn litenode_start_cmd(
             port,
             db_path,
             fork_network,
+            fork_block_number,
         },
     )
     .await?;

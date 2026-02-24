@@ -10,6 +10,7 @@ pub struct ServerArgs {
     pub port: u16,
     pub db_path: Option<String>,
     pub fork_network: Option<String>,
+    pub fork_block_number: Option<u64>,
 }
 
 pub async fn run_server(node: Arc<LiteNode>, args: ServerArgs) -> anyhow::Result<()> {
@@ -22,7 +23,11 @@ pub async fn run_server(node: Arc<LiteNode>, args: ServerArgs) -> anyhow::Result
         "Starting".green().bold(),
     );
     if let Some(fork_network) = args.fork_network {
-        println!("     {} from {}", "Forking".green().bold(), fork_network);
+        let fork_source = args
+            .fork_block_number
+            .map(|seqno| format!("{fork_network} at seqno {seqno}"))
+            .unwrap_or(fork_network);
+        println!("    {} from {}", "Forking".green().bold(), fork_source);
     }
     axum::serve(listener, app).await?;
     Ok(())

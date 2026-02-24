@@ -192,6 +192,11 @@
         "fork-net": {
           "type": "string",
           "description": "Network to fork from used by `acton litenode start`"
+        },
+        "fork-block-number": {
+          "type": "integer",
+          "description": "Block sequence number used by `acton litenode start` when forking from historical state",
+          "minimum": 0
         }
       }
     },
