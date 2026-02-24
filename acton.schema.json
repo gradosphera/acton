@@ -184,10 +184,14 @@
       "properties": {
         "port": {
           "type": "integer",
-          "description": "Port used by `acton litenode` commands when --port is not provided",
+          "description": "Litenode port used by `acton litenode` commands",
           "minimum": 0,
           "maximum": 65535,
           "default": 3000
+        },
+        "fork-net": {
+          "type": "string",
+          "description": "Network to fork from used by `acton litenode start`"
         }
       }
     },

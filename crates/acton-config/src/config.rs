@@ -202,6 +202,7 @@ pub struct BuildSettings {
 #[serde(rename_all = "kebab-case")]
 pub struct LitenodeSettings {
     pub port: Option<u16>,
+    pub fork_net: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -952,10 +953,12 @@ version = "0.1.0"
 
 [litenode]
 port = 3015
+fork-net = "testnet"
 "#;
 
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
         let litenode = config.litenode.as_ref().unwrap();
         assert_eq!(litenode.port, Some(3015));
+        assert_eq!(litenode.fork_net.as_deref(), Some("testnet"));
     }
 }

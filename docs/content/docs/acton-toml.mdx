@@ -108,17 +108,19 @@ Precompiled `.boc` contracts are skipped for Fift output.
 
 Configures defaults for `acton litenode`.
 
-| Field  | Type      | Default | Description                                                      |
-|:-------|:----------|:--------|:-----------------------------------------------------------------|
-| `port` | `integer` | `3000`  | Port used by `acton litenode` commands when `--port` is omitted. |
+| Field      | Type      | Default | Description                                                            |
+|:-----------|:----------|:--------|:-----------------------------------------------------------------------|
+| `port`     | `integer` | `3000`  | Port used by `acton litenode` commands when `--port` is omitted.       |
+| `fork-net` | `string`  | -       | Network used by `acton litenode start` when `--fork-net` is omitted.   |
 
 Example:
 ```toml
 [litenode]
 port = 3010
+fork-net = "testnet"
 ```
 
-`acton litenode ... --port <PORT>` overrides this value for a single run.
+`acton litenode start --port <PORT>` and `--fork-net <NETWORK>` override these values for a single run.
 
 ---
 

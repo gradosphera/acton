@@ -20,7 +20,7 @@ use acton::commands::wallet::{WalletCommand, wallet_cmd};
 use acton::commands::wrapper::wrapper_cmd;
 use acton_config::color::OwoColorize;
 use acton_config::color::{ColorMode, init_color_mode};
-use acton_config::config::{ActonConfig, Explorer, Network, init_manifest_path};
+use acton_config::config::{ActonConfig, Explorer, LitenodeSettings, Network, init_manifest_path};
 use acton_config::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
 use clap::builder::styling::Style;
 use clap::builder::{StyledStr, Styles};
@@ -614,7 +614,10 @@ pub enum LitenodeCommand {
     Start {
         #[arg(long, help = "LiteNode server port (default: [litenode].port or 3000)")]
         port: Option<u16>,
-        #[arg(long, help = "Fork from network for remote account resolution")]
+        #[arg(
+            long,
+            help = "Fork from network for remote account resolution (default: [litenode].fork-net)"
+        )]
         fork_net: Option<String>,
         #[arg(long, help = "TonCenter API key for blockchain queries")]
         api_key: Option<String>,
@@ -719,6 +722,10 @@ fn example_litenode_usage() -> StyledStr {
             (
                 "Start the lightweight TON node (port from [litenode].port or 3000)",
                 "acton litenode start",
+            ),
+            (
+                "Start LiteNode with state forked from a network",
+                "acton litenode start --fork-net testnet",
             ),
             (
                 "Request 100 TON from faucet to specified address",
@@ -1584,16 +1591,16 @@ fn main() {
                 api_key,
                 db_path,
             } => {
-                let port = resolve_litenode_port(port);
+                let resolved_litenode = resolve_litenode_settings(port, fork_net);
                 let rt = tokio::runtime::Builder::new_multi_thread()
                     .enable_all()
                     .build()
                     .expect("Failed to build tokio runtime");
                 rt.block_on(async {
                     commands::litenode::litenode_start_cmd(
-                        port,
+                        resolved_litenode.port,
                         db_path,
-                        fork_net,
+                        resolved_litenode.fork_net,
                         api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
                     )
                     .await
@@ -1622,14 +1629,31 @@ fn main() {
     }
 }
 
+struct ResolvedLitenodeSettings {
+    port: u16,
+    fork_net: Option<String>,
+}
+
 fn resolve_litenode_port(cli_port: Option<u16>) -> u16 {
-    cli_port
-        .or_else(|| {
-            ActonConfig::load()
-                .ok()
-                .and_then(|config| config.litenode.as_ref().and_then(|litenode| litenode.port))
-        })
-        .unwrap_or(3000)
+    resolve_litenode_settings(cli_port, None).port
+}
+
+fn resolve_litenode_settings(
+    cli_port: Option<u16>,
+    cli_fork_net: Option<String>,
+) -> ResolvedLitenodeSettings {
+    let config = load_litenode_settings_from_config();
+    ResolvedLitenodeSettings {
+        port: cli_port.or(config.port).unwrap_or(3000),
+        fork_net: cli_fork_net.or(config.fork_net),
+    }
+}
+
+fn load_litenode_settings_from_config() -> LitenodeSettings {
+    ActonConfig::load()
+        .ok()
+        .and_then(|config| config.litenode)
+        .unwrap_or_default()
 }
 
 fn report_error_as_json<T>(result: anyhow::Result<T>) {

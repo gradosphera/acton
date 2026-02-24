@@ -12,15 +12,27 @@ pub async fn litenode_start_cmd(
     fork_net: Option<String>,
     api_key: Option<String>,
 ) -> anyhow::Result<()> {
-    let state_source = if let Some(network) = fork_net {
+    let (state_source, fork_network) = if let Some(network) = fork_net {
         let network = Network::from_str(&network)?;
-        StateSource::Remote(RemoteProvider { network, api_key })
+        let fork_network = network.to_string();
+        (
+            StateSource::Remote(RemoteProvider { network, api_key }),
+            Some(fork_network),
+        )
     } else {
-        StateSource::Local
+        (StateSource::Local, None)
     };
 
     let node = Arc::new(LiteNode::new(state_source, db_path.clone()));
-    run_server(node, ServerArgs { port, db_path }).await?;
+    run_server(
+        node,
+        ServerArgs {
+            port,
+            db_path,
+            fork_network,
+        },
+    )
+    .await?;
     Ok(())
 }
 

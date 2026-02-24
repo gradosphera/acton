@@ -9,6 +9,7 @@ use std::sync::Arc;
 pub struct ServerArgs {
     pub port: u16,
     pub db_path: Option<String>,
+    pub fork_network: Option<String>,
 }
 
 pub async fn run_server(node: Arc<LiteNode>, args: ServerArgs) -> anyhow::Result<()> {
@@ -20,6 +21,9 @@ pub async fn run_server(node: Arc<LiteNode>, args: ServerArgs) -> anyhow::Result
         "    {} LiteNode server on http://{address}",
         "Starting".green().bold(),
     );
+    if let Some(fork_network) = args.fork_network {
+        println!("     {} from {}", "Forking".green().bold(), fork_network);
+    }
     axum::serve(listener, app).await?;
     Ok(())
 }
