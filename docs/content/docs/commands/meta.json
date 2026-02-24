@@ -11,6 +11,7 @@
     "verify",
     "library",
     "wallet",
+    "litenode",
     "shell-completions"
   ]
 }

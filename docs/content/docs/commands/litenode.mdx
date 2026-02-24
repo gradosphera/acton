@@ -1,0 +1,119 @@
+---
+title: "Local Development Node"
+description: "Reference for acton litenode command and its subcommands"
+---
+
+The `litenode` command manages Acton's local development node.
+
+## Basic Usage
+
+```bash
+acton litenode <SUBCOMMAND> [OPTIONS]
+```
+
+## Subcommands
+
+| Subcommand | Description                                                                                      |
+|------------|--------------------------------------------------------------------------------------------------|
+| `start`    | Starts local node server with optional forking, account bootstrap, and state persistence options |
+| `airdrop`  | Sends TON from local faucet to a target address                                                  |
+
+## `acton litenode start`
+
+Starts the local development node and exposes TON-compatible HTTP API.
+
+```bash
+acton litenode start [OPTIONS]
+```
+
+### Options
+
+| Option                        | Type    | Description                                                                           |
+|-------------------------------|---------|---------------------------------------------------------------------------------------|
+| `--port <PORT>`               | Integer | Server port (default: `[litenode].port` or `3000`)                                    |
+| `--fork-net <NETWORK>`        | String  | Remote network for account resolution (default: `[litenode].fork-net`)                |
+| `--fork-block-number <SEQNO>` | Integer | Historical fork block seqno (default: `[litenode].fork-block-number`)                 |
+| `--accounts <NAME[,NAME...]>` | Array   | Wallet names to auto-fund and auto-deploy on startup (default: `[litenode].accounts`) |
+| `--api-key <API_KEY>`         | String  | TonCenter API key for remote blockchain queries (also reads `TONCENTER_API_KEY`)      |
+| `--db-path <PATH>`            | String  | Path to SQLite database for persistent state                                          |
+| `--load-state <PATH>`         | String  | Load JSON snapshot before startup                                                     |
+| `--dump-state <PATH>`         | String  | Dump JSON snapshot on graceful shutdown                                               |
+
+### Examples
+
+```bash
+# Start with defaults
+acton litenode start
+
+# Start on custom port
+acton litenode start --port 3010
+
+# Fork from testnet
+acton litenode start --fork-net testnet
+
+# Fork from specific block
+acton litenode start --fork-net testnet --fork-block-number 55000000
+
+# Auto-fund and deploy wallets on startup
+acton litenode start --accounts deployer,user
+
+# Persist state in SQLite
+acton litenode start --db-path .acton/litenode.db
+
+# Work with JSON snapshots
+acton litenode start --load-state snapshots/localnet.json --dump-state snapshots/localnet.json
+```
+
+### Notes
+
+- `--load-state` and `--db-path` cannot be used together in one run.
+- `--dump-state` writes snapshot during graceful shutdown (`Ctrl+C`).
+- When fork mode is enabled, node startup output includes a second line with fork source.
+
+## `acton litenode airdrop`
+
+Sends TON from local node faucet to an address.
+
+```bash
+acton litenode airdrop <ADDRESS> [OPTIONS]
+```
+
+### Options
+
+| Option                       | Type    | Description                                          |
+|------------------------------|---------|------------------------------------------------------|
+| `<ADDRESS>`                  | String  | Recipient address                                    |
+| `--amount <TON>`, `-a <TON>` | Float   | Amount in TON (default: `100`)                       |
+| `--port <PORT>`, `-p <PORT>` | Integer | LiteNode port (default: `[litenode].port` or `3000`) |
+
+### Examples
+
+```bash
+# Send default amount (100 TON)
+acton litenode airdrop UQA_ftKIJsHEAE_UgtFOUK15hPzycZooFuUr8duyY9T3kwwM
+
+# Send custom amount
+acton litenode airdrop UQA_ftKIJsHEAE_UgtFOUK15hPzycZooFuUr8duyY9T3kwwM --amount 25
+
+# Target custom port
+acton litenode airdrop UQA_ftKIJsHEAE_UgtFOUK15hPzycZooFuUr8duyY9T3kwwM --port 3010
+```
+
+## Configuration
+
+You can set defaults in `Acton.toml`:
+
+```toml title="Acton.toml"
+[litenode]
+port = 3000
+fork-net = "testnet"
+fork-block-number = 55000000
+accounts = ["deployer", "user"]
+```
+
+CLI options override `Acton.toml` values for the current run.
+
+## Learn More
+
+- [Local development node guide](/docs/local-development-node)
+- [Acton Manifest: `[litenode]`](/docs/acton-toml)

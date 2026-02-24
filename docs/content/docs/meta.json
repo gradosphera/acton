@@ -15,6 +15,7 @@
     "test-runner",
     "scripting",
     "linting",
+    "local-development-node",
     "acton-toml.mdx",
     "--- Advanced ---",
     "advanced/libraries",
