@@ -19,3 +19,14 @@
   color: var(--text-muted);
   font-style: italic;
 }
+
+.tooltipContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.tooltipDescription {
+  color: var(--text-secondary);
+  line-height: 1.4;
+}

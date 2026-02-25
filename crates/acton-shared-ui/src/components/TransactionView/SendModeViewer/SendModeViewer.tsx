@@ -1,17 +1,29 @@
 import * as React from "react"
 
-import {parseSendMode} from "@/components/TransactionView/SendModeViewer/parser"
+import {Tooltip} from "@/components/Tooltip/Tooltip"
+import {parseSendMode, type SendModeInfo} from "@/components/TransactionView/SendModeViewer/parser"
 
 import styles from "./SendModeViewer.module.css"
 
-export interface SendModeInfo {
-  readonly name: string
-  readonly value: number
-  readonly description: string
-}
+export type {SendModeInfo} from "@/components/TransactionView/SendModeViewer/parser"
 
 interface SendModeViewerProps {
   readonly mode: number | undefined
+}
+
+function renderFlags(flags: readonly SendModeInfo[]): React.JSX.Element {
+  return (
+    <>
+      {flags.map((flag, index) => (
+        <span key={`${flag.name}-${flag.value}`}>
+          {index > 0 && <span className={styles.plus}> + </span>}
+          <span className={styles.constant}>
+            {flag.name} ({flag.value})
+          </span>
+        </span>
+      ))}
+    </>
+  )
 }
 
 export const SendModeViewer: React.FC<SendModeViewerProps> = ({mode}) => {
@@ -20,17 +32,19 @@ export const SendModeViewer: React.FC<SendModeViewerProps> = ({mode}) => {
   }
 
   const flags = parseSendMode(mode)
-
-  return (
-    <div className={styles.container}>
-      {flags.map((flag, index) => (
-        <span key={flag.value} title={flag.description}>
-          {index > 0 && <span className={styles.plus}> + </span>}
-          <span className={styles.constant}>
-            {flag.name} ({flag.value})
-          </span>
-        </span>
+  const tooltipContent = (
+    <div className={styles.tooltipContent}>
+      {flags.map(flag => (
+        <div key={`${flag.name}-${flag.value}`} className={styles.tooltipDescription}>
+          {flag.description}
+        </div>
       ))}
     </div>
+  )
+
+  return (
+    <Tooltip content={tooltipContent} variant="hover">
+      <div className={styles.container}>{renderFlags(flags)}</div>
+    </Tooltip>
   )
 }

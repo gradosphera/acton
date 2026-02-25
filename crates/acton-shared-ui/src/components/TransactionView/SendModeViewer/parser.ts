@@ -1,30 +1,45 @@
-import {SendModeInfo} from "@/components/TransactionView/SendModeViewer/SendModeViewer"
+export interface SendModeInfo {
+  readonly name: string
+  readonly value: number
+  readonly description: string
+}
 
 export const SEND_MODE_CONSTANTS = {
-  0: {name: "SendDefaultMode", description: "Ordinary message (default)."},
-  64: {
-    name: "SendRemainingValue",
-    description: "Carry all the remaining value of the inbound message.",
-  },
-  128: {
-    name: "SendRemainingBalance",
-    description: "Carry all the remaining balance of the current smart contract.",
+  0: {
+    name: "SendModeRegular",
+    description:
+      "Ordinary message. Gas fees are deducted from the sending amount. Action phase errors should not be ignored.",
   },
   1: {
-    name: "SendPayFwdFeesSeparately",
-    description: "Pay forward fees separately from the message value.",
+    name: "SendModePayFeesSeparately",
+    description: "Sender pays transfer fees separately.",
   },
   2: {
-    name: "SendIgnoreErrors",
-    description: "Ignore any errors arising while processing this message.",
+    name: "SendModeIgnoreErrors",
+    description: "Ignore any errors arising while processing this message during action phase.",
   },
   16: {
-    name: "SendBounceIfActionFail",
-    description: "Bounce transaction in case of any errors during action phase.",
+    name: "SendModeBounceOnActionFail",
+    description:
+      "Bounce transaction on action phase failure. Has no effect when SendModeIgnoreErrors (2) is enabled.",
   },
   32: {
-    name: "SendDestroyIfZero",
-    description: "Current account will be destroyed if its resulting balance is zero.",
+    name: "SendModeDestroy",
+    description: "Destroy current account if resulting balance is zero.",
+  },
+  64: {
+    name: "SendModeCarryAllRemainingMessageValue",
+    description:
+      "Carry all remaining value of the inbound message in addition to the value initially indicated in the new message.",
+  },
+  128: {
+    name: "SendModeCarryAllBalance",
+    description:
+      "Carry all remaining balance of the current smart contract instead of the value originally indicated in the message.",
+  },
+  1024: {
+    name: "SendModeEstimateFeeOnly",
+    description: "Do not create an action, only estimate fee.",
   },
 } as const
 
