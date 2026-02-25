@@ -592,6 +592,35 @@ fn send_single_message_impl(
     Ok(())
 }
 
+fn root_lt_from_send_results(txs: &Tuple) -> Option<u64> {
+    let first = txs.first()?;
+    let TupleItem::Tuple(send_result) = first else {
+        return None;
+    };
+    let Some(TupleItem::Cell(tx_cell)) = send_result.first() else {
+        return None;
+    };
+    let tx = tx_cell.parse::<Transaction>().ok()?;
+    Some(tx.lt)
+}
+
+extension!(save_trace_name in (Context) with (trace_name: String, txs: Tuple) using save_trace_name_impl);
+fn save_trace_name_impl(
+    ctx: &mut Context,
+    _stack: &mut Tuple,
+    trace_name: String,
+    txs: Tuple,
+) -> anyhow::Result<()> {
+    let Some(root_lt) = root_lt_from_send_results(&txs) else {
+        return Ok(());
+    };
+
+    ctx.chain
+        .emulations
+        .save_trace_name(&ctx.env.running_id, root_lt, trace_name);
+    Ok(())
+}
+
 extension!(find_transaction_by_params in (Context) with (params: Tuple, txs: Tuple) using find_transaction_by_params_impl);
 fn find_transaction_by_params_impl(
     _ctx: &mut Context,
@@ -1389,5 +1418,6 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         32 => set_config : 1,
         33 => get_shard_account : 1,
         34 => set_shard_account : 2,
+        35 => save_trace_name : 2,
     });
 }

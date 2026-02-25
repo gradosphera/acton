@@ -1239,3 +1239,4 @@ fun ffi.getConfig(): dict asm "31 EXTCALL"
 fun ffi.setConfig(config: dict): bool asm "32 EXTCALL"
 fun ffi.getShardAccount(addr: address): cell? asm "33 EXTCALL";
 fun ffi.setShardAccount(addr: address, account: cell?): void asm "34 EXTCALL";
+fun ffi.saveTraceName(txs: tuple, name: string): void asm "35 EXTCALL";

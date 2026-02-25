@@ -13,7 +13,7 @@ use tolk_resolver::file_index::{FileId, Span};
 ///
 /// ### Example
 /// ```tolk
-/// import "../.acton/tlb/maybe.tolk";
+/// import "@acton/tlb/maybe";
 /// ```
 ///
 /// Use instead:

@@ -202,7 +202,16 @@ impl KnownAddresses {
 pub struct Emulations {
     pub name: String,
     pub messages: Vec<Vec<SendMessageResultSuccess>>,
+    pub trace_names: FxHashMap<u64, String>,
     pub get_methods: Vec<GetMethodResultSuccess>,
+}
+
+impl Emulations {
+    #[must_use]
+    pub fn trace_name(&self, trace_transactions: &[SendMessageResultSuccess]) -> Option<&str> {
+        let root_lt = trace_transactions.first()?.transaction.lt;
+        self.trace_names.get(&root_lt).map(String::as_str)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -241,24 +250,26 @@ impl EmulationsState {
     }
 
     pub fn save_message(&mut self, env_name: &str, message: Vec<SendMessageResult>) {
-        self.results
+        let successful_messages = message
+            .iter()
+            .filter_map(|m| match m {
+                SendMessageResult::Success(m) => Some(m),
+                SendMessageResult::Error(_) => None,
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let emulations = self
+            .results
             .entry(env_name.to_owned())
             .or_insert_with(|| Emulations {
                 name: env_name.to_owned(),
                 messages: vec![],
+                trace_names: FxHashMap::default(),
                 get_methods: vec![],
-            })
-            .messages
-            .push(
-                message
-                    .iter()
-                    .filter_map(|m| match m {
-                        SendMessageResult::Success(m) => Some(m),
-                        SendMessageResult::Error(_) => None,
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            );
+            });
+
+        emulations.messages.push(successful_messages);
     }
 
     pub fn save_get_method(&mut self, env_name: &str, get_method: GetMethodResultSuccess) {
@@ -267,10 +278,19 @@ impl EmulationsState {
             .or_insert_with(|| Emulations {
                 name: env_name.to_owned(),
                 messages: vec![],
+                trace_names: FxHashMap::default(),
                 get_methods: vec![],
             })
             .get_methods
             .push(get_method);
+    }
+
+    pub fn save_trace_name(&mut self, env_name: &str, root_lt: u64, trace_name: String) {
+        let Some(emulations) = self.results.get_mut(env_name) else {
+            return;
+        };
+
+        emulations.trace_names.insert(root_lt, trace_name);
     }
 
     #[must_use]

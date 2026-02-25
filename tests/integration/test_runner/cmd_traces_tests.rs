@@ -11,6 +11,7 @@ const TRACE_TEST_PREPARE: &str = r#"
 import "../../lib/testing/expect"
 import "../../lib/build/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/tracing"
 
 struct Counter {
     address: address
@@ -298,6 +299,83 @@ fn save_test_trace_creates_trace_per_test_and_single_contract_file() {
         1,
         "Expected exactly one contract trace file in {}",
         contracts_dir.display()
+    );
+}
+
+#[test]
+fn save_test_trace_keeps_custom_trace_names() {
+    let project = trace_project(
+        "h-save-trace-custom-names",
+        r#"
+        get fun `test-custom-trace-names`() {
+            val counter = Counter.fromStorage();
+            val deployer = net.treasury("deployer");
+            val deployMsg = createMessage({
+                bounce: false,
+                value: ton("1.0"),
+                dest: {
+                    stateInit: counter.init,
+                },
+            });
+
+            val deployTxs = net.send(deployer.address, deployMsg);
+            tracing.save(deployTxs, "deploy-counter");
+            expect(deployTxs.size()).toEqual(1);
+
+            val sender = net.treasury("sender");
+            val ping = createMessage({
+                bounce: false,
+                value: ton("0.2"),
+                dest: counter.address,
+            });
+
+            val pingTxs = net.send(sender.address, ping);
+            tracing.save(pingTxs, "ping-counter");
+            expect(pingTxs.size()).toEqual(1);
+        }
+        "#,
+    );
+
+    let output = project
+        .acton()
+        .test()
+        .arg("--save-test-trace")
+        .arg("trace-custom-names")
+        .run()
+        .success();
+
+    output
+        .assert_passed(1)
+        .assert_file_exists("trace-custom-names/test-custom-trace-names_trace.json")
+        .assert_file_exists("trace-custom-names/contracts/simple.json");
+
+    assert_trace_json_contract(
+        &project,
+        "trace-custom-names/test-custom-trace-names_trace.json",
+        "test-custom-trace-names",
+    );
+
+    let trace = read_json_from_project(
+        &project,
+        "trace-custom-names/test-custom-trace-names_trace.json",
+    );
+    let traces = trace["traces"]
+        .as_array()
+        .unwrap_or_else(|| panic!("Missing traces array in custom names trace json"));
+    let trace_names = traces
+        .iter()
+        .filter_map(|item| item["name"].as_str())
+        .collect::<Vec<_>>();
+
+    assert!(
+        trace_names.contains(&"deploy-counter"),
+        "Expected custom name `deploy-counter` in trace names: {:?}",
+        trace_names
+    );
+    assert!(
+        trace_names.contains(&"ping-counter"),
+        "Expected custom name `ping-counter` in trace names: {:?}",
+        trace_names
     );
 }
 

@@ -26,7 +26,7 @@ include = ["tests/acton-stdlib/**", ".jetton/**"]
 
 [litenode]
 port = 3010
-fork-net = "testnet"
+accounts = ["local-wallet"]
 
 [networks.localnet]
 v2-url = "http://localhost:3010/api/v2"

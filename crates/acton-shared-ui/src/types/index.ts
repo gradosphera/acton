@@ -41,6 +41,7 @@ export interface BackendTransaction {
 }
 
 export interface TransactionList {
+  readonly name?: string
   readonly transactions: BackendTransaction[]
 }
 

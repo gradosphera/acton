@@ -20,6 +20,7 @@ pub(super) struct TestTrace {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct TransactionList {
+    pub name: String,
     pub transactions: Vec<TransactionInfo>,
 }
 
@@ -55,8 +56,9 @@ pub(super) fn dump_test_transactions(
     let traces = txs
         .messages
         .iter()
-        .map(|txs| {
-            let transactions = txs
+        .enumerate()
+        .map(|(trace_index, trace_transactions)| {
+            let transactions = trace_transactions
                 .iter()
                 .map(|tx| {
                     let build = build_cache.result_for_code(&tx.code);
@@ -87,7 +89,11 @@ pub(super) fn dump_test_transactions(
                 })
                 .collect::<Vec<_>>();
 
-            TransactionList { transactions }
+            let name = txs
+                .trace_name(trace_transactions)
+                .map_or_else(|| format!("Trace {}", trace_index + 1), ToString::to_string);
+
+            TransactionList { name, transactions }
         })
         .collect::<Vec<_>>();
 

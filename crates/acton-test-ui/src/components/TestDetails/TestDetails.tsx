@@ -48,6 +48,7 @@ interface IDEConfig {
 
 interface TraceFeeSummary {
   readonly traceIndex: number
+  readonly traceName: string
   readonly firstMessageName: string
   readonly transactionCount: number
   readonly transactionFees: readonly bigint[]
@@ -55,6 +56,14 @@ interface TraceFeeSummary {
   readonly totalGasFees: bigint
   readonly totalForwardFees: bigint
   readonly totalFees: bigint
+}
+
+const formatTraceName = (name: string | undefined, index: number): string => {
+  const trimmed = name?.trim()
+  if (trimmed && trimmed.length > 0) {
+    return trimmed
+  }
+  return `Trace #${index + 1}`
 }
 
 export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoot}) => {
@@ -277,6 +286,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
     }
 
     return parsedTraceTransactions.map((transactions, traceIndex) => {
+      const traceName = formatTraceName(trace?.traces[traceIndex]?.name, traceIndex)
       let totalGasUsed = 0n
       let totalGasFees = 0n
       let totalForwardFees = 0n
@@ -305,6 +315,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
 
       return {
         traceIndex,
+        traceName,
         firstMessageName,
         transactionCount: transactions.length,
         transactionFees,
@@ -314,7 +325,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
         totalFees,
       }
     })
-  }, [allContracts, backendContracts, parsedTraceTransactions])
+  }, [allContracts, backendContracts, parsedTraceTransactions, trace])
 
   const failedTransactions = useMemo(() => {
     if (!test.failed_transactions) return []
@@ -597,10 +608,10 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
                             type="button"
                             className={styles.traceLinkButton}
                             onClick={() => handleOpenTraceTransactions(summary.traceIndex)}
-                            title={`Open Trace ${summary.traceIndex + 1} (${summary.firstMessageName}) in Transactions`}
+                            title={`Open ${summary.traceName} (${summary.firstMessageName}) in Transactions`}
                           >
                             <span>
-                              Trace {summary.traceIndex + 1}
+                              {summary.traceName}
                               <span className={styles.traceMessageSeparator} aria-hidden="true">
                                 {" · "}
                               </span>
@@ -764,14 +775,14 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
 
       {activeTab !== "info" && trace && trace.traces.length > 1 && (
         <div className={styles.traceSelector}>
-          {trace.traces.map((_t, index) => (
+          {trace.traces.map((traceItem, index) => (
             <button
               key={`${trace.name}-${index}`}
               type="button"
               className={`${styles.traceTab} ${selectedTraceIndex === index ? styles.activeTraceTab : ""}`}
               onClick={() => handleSelectTraceIndex(index)}
             >
-              Trace #{index + 1}
+              {formatTraceName(traceItem.name, index)}
             </button>
           ))}
         </div>
