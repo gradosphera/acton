@@ -69,6 +69,44 @@ workchain = 0
 keys = { mnemonic = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later" }
 "#;
 
+const V3_GETTER_CONTRACT: &str = r"
+fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+
+get fun addTen(value: int): int {
+    return value + 10;
+}
+";
+
+const V3_DEPLOY_GETTER_SCRIPT: &str = r#"
+import "../../lib/build/build"
+import "../../lib/emulation/network"
+import "../../lib/io"
+
+fun main() {
+    val wallet = net.wallet("deployer");
+
+    val getterInit = ContractState {
+        code: build("getter"),
+        data: createEmptyCell(),
+    };
+    val getterAddress = AutoDeployAddress {
+        stateInit: getterInit,
+    }.calculateAddress();
+
+    val deployGetter = createMessage({
+        bounce: false,
+        value: ton("1"),
+        dest: {
+            stateInit: getterInit,
+        },
+    });
+    net.send(wallet.address, deployGetter);
+
+    println1("GETTER_CONTRACT={}", getterAddress);
+}
+"#;
+
 #[test]
 fn litenode_supports_pre_start_commands_and_get_out_msg_queue_size() {
     let project = ProjectBuilder::new("litenode-pre-start-commands")
@@ -390,6 +428,70 @@ fn litenode_supports_config_endpoints() {
 }
 
 #[test]
+fn litenode_supports_v3_run_get_method() {
+    let project = ProjectBuilder::new("litenode-v3-run-get-method")
+        .contract("getter", V3_GETTER_CONTRACT)
+        .script_file("deploy_getter", V3_DEPLOY_GETTER_SCRIPT)
+        .build();
+
+    fs::write(project.path().join("wallets.toml"), DEPLOYER_WALLET_CONFIG)
+        .expect("Failed to write wallets.toml");
+
+    let node = project
+        .litenode()
+        .before_start(|cmd| cmd.build())
+        .args(["--accounts", "deployer"])
+        .start();
+    append_localnet_network(project.path(), &node.base_url());
+
+    let script_result = project
+        .acton()
+        .script("scripts/deploy_getter.tolk")
+        .broadcast()
+        .verify_network("custom:localnet")
+        .run();
+    let script_stdout = String::from_utf8(script_result.output.get_output().stdout.clone())
+        .expect("Failed to decode deploy script stdout");
+    let script_stderr = String::from_utf8(script_result.output.get_output().stderr.clone())
+        .expect("Failed to decode deploy script stderr");
+    let script_status = script_result.output.get_output().status.code().unwrap_or(1);
+
+    assert_eq!(
+        script_status, 0,
+        "Deploy script failed with status {script_status}\nstdout:\n{script_stdout}\nstderr:\n{script_stderr}"
+    );
+
+    let getter_address = extract_marker_value(&script_stdout, "GETTER_CONTRACT=");
+    wait_until_address_state_active(&node, &getter_address, Duration::from_secs(12));
+
+    let response = node.post_json(
+        "/api/v3/runGetMethod",
+        &json!({
+            "address": getter_address,
+            "method": "addTen",
+            "stack": [
+                {
+                    "type": "num",
+                    "value": "7"
+                }
+            ]
+        }),
+    );
+
+    assert_eq!(
+        response["ok"].as_bool(),
+        Some(true),
+        "v3 runGetMethod failed: {}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+    assert_eq!(response["result"]["exit_code"].as_i64(), Some(0));
+    assert_eq!(response["result"]["stack"][0]["type"].as_str(), Some("num"));
+    assert_eq!(response["result"]["stack"][0]["value"].as_str(), Some("17"));
+
+    node.stop();
+}
+
+#[test]
 fn litenode_supports_utils_detect_and_pack_endpoints() {
     let project = ProjectBuilder::new("litenode-utils-endpoints").build();
     let node = project.litenode().start();
@@ -501,6 +603,27 @@ fn wait_for_ok_response(
         assert!(
             Instant::now() < deadline,
             "Timed out waiting for successful response from `{query}`:\n{}",
+            serde_json::to_string_pretty(&response).unwrap_or_default()
+        );
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
+fn wait_until_address_state_active(
+    node: &crate::support::litenode::LiteNodeHandle,
+    address: &str,
+    timeout: Duration,
+) {
+    let query = format!("/api/v2/getAddressState?address={address}");
+    let deadline = Instant::now() + timeout;
+    loop {
+        let response = node.get_json(&query);
+        if response["ok"].as_bool() == Some(true) && response["result"].as_str() == Some("active") {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Timed out waiting for address `{address}` to become active:\n{}",
             serde_json::to_string_pretty(&response).unwrap_or_default()
         );
         thread::sleep(Duration::from_millis(200));

@@ -1,7 +1,11 @@
+use crate::litenode::LiteNodeRunGetMethodResult;
 use crate::storage::{JettonMasterMeta, JettonWalletMeta, MsgMeta, TraceNode, TransactionInfo};
 use base64::Engine;
 use serde_json::value::Value;
 use std::collections::HashMap;
+use tvmffi::json_stack::stack_to_json;
+use tvmffi::stack::Tuple;
+use tycho_types::boc::Boc;
 
 #[allow(clippy::ptr_arg)]
 pub fn map_jetton_masters(masters: &Vec<JettonMasterMeta>) -> Value {
@@ -58,6 +62,23 @@ pub fn map_traces(tn: &TraceNode) -> Value {
         "traces": [
             map_trace(tn, &transactions, &transactions_order)
         ]
+    })
+}
+
+pub fn map_run_get_method_v3(result: &LiteNodeRunGetMethodResult) -> Value {
+    let stack_cell = Boc::decode(&result.stack).unwrap_or_default();
+    let stack_tuple = Tuple::deserialize(&stack_cell).unwrap_or_default();
+    let stack = stack_to_json(&stack_tuple)
+        .unwrap_or_default()
+        .into_iter()
+        .map(map_stack_entry)
+        .collect::<Vec<_>>();
+
+    serde_json::json!({
+        "gas_used": result.gas_used,
+        "exit_code": result.exit_code,
+        "stack": stack,
+        "vm_log": result.vm_log,
     })
 }
 
@@ -188,4 +209,54 @@ fn map_message(msg: &MsgMeta) -> Value {
             "body": "", // We don't have BOC here easily
         }
     })
+}
+
+fn map_stack_entry(entry: Value) -> Value {
+    let Some(entry_type) = entry.get("@type").and_then(Value::as_str) else {
+        return entry;
+    };
+
+    match entry_type {
+        "tvm.stackEntryNull" => serde_json::json!({
+            "type": "null",
+            "value": Value::Null
+        }),
+        "tvm.stackEntryNumber" => serde_json::json!({
+            "type": "num",
+            "value": entry
+                .pointer("/number/number")
+                .cloned()
+                .unwrap_or(Value::Null)
+        }),
+        "tvm.stackEntryCell" => serde_json::json!({
+            "type": "cell",
+            "value": entry.get("cell").cloned().unwrap_or(Value::Null)
+        }),
+        "tvm.stackEntrySlice" => serde_json::json!({
+            "type": "slice",
+            "value": entry.get("slice").cloned().unwrap_or(Value::Null)
+        }),
+        "tvm.stackEntryBuilder" => serde_json::json!({
+            "type": "builder",
+            "value": entry.get("builder").cloned().unwrap_or(Value::Null)
+        }),
+        "tvm.stackEntryTuple" => {
+            let elements = entry
+                .pointer("/tuple/elements")
+                .and_then(Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .cloned()
+                        .map(map_stack_entry)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            serde_json::json!({
+                "type": "tuple",
+                "value": elements
+            })
+        }
+        _ => entry,
+    }
 }
