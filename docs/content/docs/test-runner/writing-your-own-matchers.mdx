@@ -10,10 +10,10 @@ This guide will walk you through creating your own custom matchers for `expect()
 Imagine you have some validation logic that you want to extract into a function. By extracting it into a function, you'll get code like this:
 
 ```tolk
-import ".acton/testing/expect"
-import ".acton/testing/assert"
+import "@acton/testing/expect"
+import "@acton/testing/assert"
 
-fun checkIfValueIsEqualWithFlags(left: int, right: int, param1: bool, param2: bool) { 
+fun checkIfValueIsEqualWithFlags(left: int, right: int, param1: bool, param2: bool) {
     // some complex logic
     Assert.equal(left, right);
 }
@@ -31,8 +31,8 @@ This approach works, but it breaks the fluent API pattern of `expect()` and make
 This code can be written much more readably and consistently by creating a custom matcher:
 
 ```tolk
-import ".acton/testing/expect"
-import ".acton/testing/assert"
+import "@acton/testing/expect"
+import "@acton/testing/assert"
 
 fun Expectation<int>.toEqualWithFlags(self, right: int, param1: bool, param2: bool) {
     // some complex logic
@@ -75,9 +75,9 @@ While you can define generic matchers for `Expectation<T>`, it's often more usef
 Let's create a matcher that checks if an integer is even.
 
 ```tolk
-import ".acton/testing/expect"
-import ".acton/testing/assert"
-import ".acton/fmt"
+import "@acton/testing/expect"
+import "@acton/testing/assert"
+import "@acton/fmt"
 
 fun Expectation<int>.toBeEven(self) {
     if (self.value % 2 != 0) {
@@ -100,9 +100,9 @@ In this example, `toBeEven` is defined on `Expectation<int>`, so it will only be
 You can create matchers for any type, including complex ones like `address`. Let's create a matcher to check if an address has a specific workchain.
 
 ```tolk
-import ".acton/testing/expect"
-import ".acton/testing/assert"
-import ".acton/fmt"
+import "@acton/testing/expect"
+import "@acton/testing/assert"
+import "@acton/fmt"
 
 fun Expectation<address>.toHaveWorkchain(self, expectedWorkchain: int) {
     val actualWorkchain = self.value.getWorkchain();
@@ -129,9 +129,9 @@ get fun `test-address-workchain`() {
 Here is how you can write a matcher for a `slice` to check if it starts with a specific prefix.
 
 ```tolk
-import ".acton/testing/expect"
-import ".acton/testing/assert"
-import ".acton/fmt"
+import "@acton/testing/expect"
+import "@acton/testing/assert"
+import "@acton/fmt"
 
 fun Expectation<slice>.toStartWith(self, prefix: slice) {
     if (!self.value.getFirstBits(prefix.remainingBitsCount()).bitsEqual(prefix)) {
@@ -168,9 +168,9 @@ struct User {
 Now, let's create a matcher to verify that a user is active.
 
 ```tolk
-import ".acton/testing/expect"
-import ".acton/testing/assert"
-import ".acton/fmt"
+import "@acton/testing/expect"
+import "@acton/testing/assert"
+import "@acton/fmt"
 
 // Assume User struct is defined here or imported
 

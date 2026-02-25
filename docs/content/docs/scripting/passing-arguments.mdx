@@ -14,7 +14,7 @@ To define a script that accepts arguments, simply add parameters to your `main()
 For example, consider a script that adds two numbers:
 
 ```tolk title="add.tolk"
-import ".acton/lib/io"
+import "@acton/io"
 
 fun main(a: int, b: int) {
     println("The sum is:")
@@ -56,7 +56,7 @@ Beyond simple integers, you can pass various complex data types to your scripts.
 You can pass null values to work with optional types:
 
 ```tolk title="process_optional.tolk"
-import ".acton/lib/io"
+import "@acton/io"
 
 fun main(value: int?) {
     println1("Value: {}", value);
@@ -82,7 +82,7 @@ acton script process_optional.tolk 42
 You can pass tuples by enclosing the values in `[ ... ]` or `( ... )`.
 
 ```tolk title="process_tuple.tolk"
-import ".acton/lib/io"
+import "@acton/io"
 
 fun main(data: tuple) {
     val a: int = data.get(0)
@@ -110,7 +110,7 @@ acton script process_tuple.tolk "[(10 20)]"
 You can pass values that will be automatically unpacked into a struct.
 
 ```tolk title="process_struct.tolk"
-import ".acton/lib/io"
+import "@acton/io"
 
 struct Point {
     x: int,
@@ -135,7 +135,7 @@ The stack `[10 20]` will be passed to `main` and automatically converted to a `P
 To pass a string, you need to wrap it in double quotes both for the shell and for Acton's argument parser. This results in a `'"..."'` syntax. The string will be converted into a `slice` containing the UTF-8 bytes of the string.
 
 ```tolk title="hello_string.tolk"
-import ".acton/lib/io"
+import "@acton/io"
 
 fun main(name: slice) {
     println1("Hello, {}", name.beginParse())
@@ -166,7 +166,7 @@ Hello, World
 You can also pass raw cells and slices using the `C{...}` and `CS{...}` syntax, where the content is a hex-encoded Bag of Cells (BoC).
 
 ```tolk title="process_cell.tolk"
-import ".acton/lib/io"
+import "@acton/io"
 
 fun main(data: cell) {
     val s = data.beginParse()
