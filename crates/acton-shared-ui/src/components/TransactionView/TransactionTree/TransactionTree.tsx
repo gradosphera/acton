@@ -321,12 +321,15 @@ export function TransactionTree({
 
       const description = tx.transaction.description
       const computePhase = description.type === "generic" ? description.computePhase : undefined
+      const actionPhase = description.type === "generic" ? description.actionPhase : undefined
 
       const inMessage = tx.transaction.inMessage
       const withInitCode = inMessage?.init?.code !== undefined
       const isBounced = inMessage?.info.type === "internal" ? inMessage.info.bounced : false
 
-      const isSuccess = computePhase?.type === "vm" ? computePhase.success : true
+      const isComputeSuccess = computePhase?.type === "vm" ? computePhase.success : true
+      const isActionSuccess = actionPhase ? actionPhase.resultCode === 0 : true
+      const isSuccess = isComputeSuccess && isActionSuccess
       const exitCode = computePhase?.type === "vm" ? computePhase.exitCode : undefined
 
       const value = inMessage?.info.type === "internal" ? inMessage.info.value.coins : undefined

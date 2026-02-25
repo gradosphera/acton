@@ -73,7 +73,7 @@ export const EXIT_CODE_DESCRIPTIONS = {
     phase: "Compute phase",
   },
   11: {
-    docsAnchor: "#11-\"unknown\"-error",
+    docsAnchor: '#11-"unknown"-error',
     name: "Unknown Error",
     description: "Unknown error, may be thrown by user programs.",
     phase: "Compute phase",

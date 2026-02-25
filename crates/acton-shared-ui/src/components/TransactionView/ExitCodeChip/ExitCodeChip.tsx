@@ -7,9 +7,10 @@ import {EXIT_CODE_DESCRIPTIONS, getExitCodeDocsUrl, type ExitCodeDescription} fr
 interface ExitCodeViewerProps {
   readonly exitCode: number | undefined
   readonly abi?: Abi | undefined
+  readonly phase?: "compute" | "action"
 }
 
-export function ExitCodeChip({exitCode, abi}: ExitCodeViewerProps) {
+export function ExitCodeChip({exitCode, abi, phase = "compute"}: ExitCodeViewerProps) {
   if (exitCode === undefined) {
     return <span className={styles.exitCode}>—</span>
   }
@@ -26,7 +27,7 @@ export function ExitCodeChip({exitCode, abi}: ExitCodeViewerProps) {
 
   const displayName = standardDescription?.name ?? (customErrorDescription ? "Custom error" : "")
   const description = customErrorDescription ?? standardDescription?.description
-  const phase = standardDescription?.phase
+  const origin = standardDescription?.phase
   const docsUrl = getExitCodeDocsUrl(exitCode)
 
   const tooltipContent = (
@@ -45,16 +46,16 @@ export function ExitCodeChip({exitCode, abi}: ExitCodeViewerProps) {
           )}
         </div>
       )}
-      {phase && (
+      {origin && (
         <div className={styles.tooltipSection}>
           <div className={styles.tooltipLabel}>Origin:</div>
-          <div className={styles.tooltipPhase}>{phase}</div>
+          <div className={styles.tooltipPhase}>{origin}</div>
         </div>
       )}
     </div>
   )
 
-  const isSuccess = exitCode === 0 || exitCode === 1
+  const isSuccess = phase === "action" ? exitCode === 0 : exitCode === 0 || exitCode === 1
   const className = `${styles.exitCode} ${isSuccess ? styles.success : styles.error}`
 
   return (

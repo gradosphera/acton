@@ -239,6 +239,16 @@ export function TransactionDetails({
                 </div>
               </div>
               <div className={styles.multiColumnItem}>
+                <div className={styles.multiColumnItemTitle}>Exit Code</div>
+                <div className={styles.multiColumnItemValue}>
+                  <ExitCodeChip
+                    exitCode={actionPhase.resultCode}
+                    abi={targetContract?.abi}
+                    phase="action"
+                  />
+                </div>
+              </div>
+              <div className={styles.multiColumnItem}>
                 <div className={styles.multiColumnItemTitle}>Total Actions</div>
                 <div className={`${styles.multiColumnItemValue} ${styles.numberValue}`}>
                   {fmt.formatNumber(tx.outActions.length)}

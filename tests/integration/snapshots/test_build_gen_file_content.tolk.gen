@@ -12,7 +12,7 @@
 ///
 /// # Safety
 ///
-/// This function always return valid cell with contract code.
+/// This function always returns the correct cell with the contract code.
 @pure
 fun dependencyCompiledCode(): cell asm """
     "te6ccgEBAgEAFAABFP8A9KQT9LzyyAsBAArTMPiR3A==" base64>B B>boc PUSHREF
