@@ -307,3 +307,56 @@ fn test_fix_unused_import_with_mappings() {
         .trim()
     );
 }
+
+#[test]
+#[named]
+fn test_fix_unused_import_in_shared_file_used_by_multiple_targets() {
+    let project = ProjectBuilder::new("check-fix-unused-import-shared-multi-target")
+        .with_lint_level("unused-import", "warn")
+        .contract(
+            "main_a",
+            r#"import "./shared.tolk";
+
+fun main() {
+    sharedHelper();
+}
+"#,
+        )
+        .contract(
+            "main_b",
+            r#"import "./shared.tolk";
+
+fun main() {
+    sharedHelper();
+}
+"#,
+        )
+        .file(
+            "contracts/shared",
+            r#"import "./unused.tolk";
+import "./functions.tolk";
+
+fun sharedHelper(): int {
+    return fromFunction();
+}
+"#,
+        )
+        .file("contracts/functions", FUNCTIONS_FILE)
+        .file("contracts/unused", UNUSED_FILE)
+        .build();
+
+    project.acton().init().run().success();
+    project
+        .acton()
+        .check()
+        .arg("--fix")
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            "contracts/shared.tolk",
+            &format!(
+                "integration/snapshots/check/unused_import/{}.shared.tolk.txt",
+                function_name!()
+            ),
+        );
+}

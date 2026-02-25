@@ -1,4 +1,5 @@
 use acton_config::color::OwoColorize;
+use rustc_hash::FxHashSet;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
@@ -9,6 +10,8 @@ pub(super) fn apply_fixes(file_db: &FileDb, diagnostics: &[Diagnostic]) -> anyho
     let mut fixes_by_file: BTreeMap<PathBuf, Vec<(usize, usize, String)>> = BTreeMap::new();
     let mut total_diags_by_file: HashMap<PathBuf, usize> = HashMap::new();
     let mut fixed_diags_by_file: HashMap<PathBuf, usize> = HashMap::new();
+
+    let mut applied_edits = FxHashSet::default();
 
     for diag in diagnostics {
         let file_info = file_db
@@ -32,6 +35,11 @@ pub(super) fn apply_fixes(file_db: &FileDb, diagnostics: &[Diagnostic]) -> anyho
         *fixed_diags_by_file.entry(file_path.clone()).or_default() += 1;
 
         for edit in &fix.edits {
+            if !applied_edits.insert(edit) {
+                // don't apply duplicate edits (for example for case checker)
+                continue;
+            }
+
             let edit_file_id = edit.file_id;
             let edit_file_info = file_db.get_by_id(edit_file_id).ok_or_else(|| {
                 anyhow::anyhow!("File info not found for edit file_id {}", edit_file_id)

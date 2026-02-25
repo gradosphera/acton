@@ -1,0 +1,5 @@
+import "./functions.tolk";
+
+fun sharedHelper(): int {
+    return fromFunction();
+}
