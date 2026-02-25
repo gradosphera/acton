@@ -7,8 +7,9 @@ use crate::ast::{
 use crate::rules::ast::{
     asm_function_missing_safety_comment, field_init_can_be_folded, import_path_can_use_mappings,
     message_entity_naming, method_can_be_static, mutable_parameter_can_be_immutable,
-    mutable_variable_can_be_immutable, pure_function_call_unused, send_mode_literal, unused_import,
-    unused_variable, used_ignored_identifier, write_only_variable,
+    mutable_variable_can_be_immutable, pure_function_call_unused, reserve_mode_literal,
+    send_mode_literal, unused_import, unused_variable, used_ignored_identifier,
+    write_only_variable,
 };
 use acton_config::config::{LintEntry, LintLevel};
 use rules::diagnostic::{Diagnostic, Severity};
@@ -483,11 +484,23 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
                 Rule::SendModeLiteral,
                 send_mode_literal::check_call(self.checker, self.file_id, node, Some(inference))
             );
+
+            run_rule!(
+                self.checker,
+                Rule::ReserveModeLiteral,
+                reserve_mode_literal::check_call(self.checker, self.file_id, node, Some(inference))
+            );
         } else {
             run_rule!(
                 self.checker,
                 Rule::SendModeLiteral,
                 send_mode_literal::check_call(self.checker, self.file_id, node, None)
+            );
+
+            run_rule!(
+                self.checker,
+                Rule::ReserveModeLiteral,
+                reserve_mode_literal::check_call(self.checker, self.file_id, node, None)
             );
         }
 

@@ -17,6 +17,7 @@ mod mutable_variable_can_be_immutable_tests;
 mod name_case_checker_tests;
 mod no_bounce_handler_tests;
 mod pure_function_call_unused_tests;
+mod reserve_mode_literal_tests;
 mod send_mode_literal_tests;
 mod several_not_null_assertions_tests;
 mod unauthorized_access_tests;
