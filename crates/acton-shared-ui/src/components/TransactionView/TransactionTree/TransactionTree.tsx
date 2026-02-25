@@ -1,6 +1,6 @@
 /* eslint-disable unicorn/prefer-spread */
 
-import type {Address} from "@ton/core"
+import {Cell, loadShardAccount, type Address} from "@ton/core"
 import type React from "react"
 import {useEffect, useMemo, useRef, useState} from "react"
 import {
@@ -21,7 +21,14 @@ import {SmartTooltip} from "./SmartTooltip"
 import styles from "./TransactionTree.module.css"
 import {useTooltip} from "./useTooltip"
 
-interface TransactionTooltipData {
+type AccountStateType = "none" | "uninit" | "active" | "frozen"
+
+interface ParsedAccountSnapshot {
+  readonly state: AccountStateType
+  readonly balance: bigint | undefined
+}
+
+interface EdgeTransactionTooltipData {
   readonly fromAddress: string
   readonly computePhase: {
     readonly success: boolean
@@ -36,6 +43,20 @@ interface TransactionTooltipData {
   readonly sentTotal: bigint
 }
 
+interface NodeTransactionTooltipData {
+  readonly contract: {
+    readonly typeName: string
+    readonly address: string
+  }
+  readonly account: {
+    readonly stateBefore: AccountStateType | undefined
+    readonly stateAfter: AccountStateType | undefined
+    readonly balance: bigint | undefined
+    readonly isCreated: boolean
+    readonly isDestroyed: boolean
+  }
+}
+
 interface TransactionTreeProps {
   readonly transactions: TransactionInfo[]
   readonly contracts: Map<string, ContractData>
@@ -43,7 +64,11 @@ interface TransactionTreeProps {
   readonly onContractClick?: (address: string) => void
 }
 
-function TransactionTooltipContent({data}: {data: TransactionTooltipData}): React.JSX.Element {
+function EdgeTransactionTooltipContent({
+  data,
+}: {
+  data: EdgeTransactionTooltipData
+}): React.JSX.Element {
   return (
     <div className={styles.tooltipContent}>
       <div className={styles.tooltipField}>
@@ -85,6 +110,41 @@ function TransactionTooltipContent({data}: {data: TransactionTooltipData}): Reac
             <div className={styles.tooltipSubValue}>
               Gas Fees: {fmt.formatCurrency(data.fees.gasFees)}
             </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function NodeTransactionTooltipContent({
+  data,
+}: {
+  data: NodeTransactionTooltipData
+}): React.JSX.Element {
+  const stateBefore = formatAccountState(data.account.stateBefore)
+  const stateAfter = formatAccountState(data.account.stateAfter)
+  const hasStateChanged = stateBefore !== stateAfter
+
+  return (
+    <div className={styles.tooltipContent}>
+      <div className={styles.tooltipField}>
+        <div className={styles.tooltipFieldLabel}>{data.contract.typeName}</div>
+        <div className={styles.tooltipFieldValue}>{data.contract.address}</div>
+      </div>
+
+      <div className={styles.tooltipField}>
+        <div className={styles.tooltipFieldLabel}>Account</div>
+        <div className={styles.tooltipFieldValue}>
+          <div>Balance: {formatCurrencyOrUnknown(data.account.balance)}</div>
+          {hasStateChanged && (
+            <div>
+              State: {stateBefore} {"->"} {stateAfter}
+            </div>
+          )}
+          {data.account.isCreated && <div className={styles.tooltipSubValue}>Account created</div>}
+          {data.account.isDestroyed && (
+            <div className={styles.tooltipSubValue}>Account destroyed</div>
           )}
         </div>
       </div>
@@ -150,6 +210,24 @@ export function TransactionTree({
     return map
   }, [transactions])
 
+  const accountSnapshotMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        before: ParsedAccountSnapshot | undefined
+        after: ParsedAccountSnapshot | undefined
+      }
+    >()
+
+    for (const tx of transactions) {
+      map.set(tx.lt, {
+        before: parseShardAccountSnapshot(tx.shardAccountBefore),
+        after: parseShardAccountSnapshot(tx.shardAccountAfter),
+      })
+    }
+    return map
+  }, [transactions])
+
   const handleNodeClick = (lt: string): void => {
     const transaction = transactionMap.get(lt)
     if (!transaction) return
@@ -163,14 +241,14 @@ export function TransactionTree({
     }
   }
 
-  const showTransactionTooltip = (event: React.MouseEvent, tx: TransactionInfo): void => {
+  const showEdgeTransactionTooltip = (event: React.MouseEvent, tx: TransactionInfo): void => {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
     triggerRectReference.current = rect
 
     const description = tx.transaction.description
     const computePhase = description.type === "generic" ? description.computePhase : undefined
 
-    const tooltipData: TransactionTooltipData = {
+    const tooltipData: EdgeTransactionTooltipData = {
       fromAddress: tx.transaction.inMessage?.info.src
         ? formatAddress(tx.transaction.inMessage.info.src as Address, new Map())
         : "unknown",
@@ -194,7 +272,45 @@ export function TransactionTree({
     showTooltip({
       x: rect.left,
       y: rect.top,
-      content: <TransactionTooltipContent data={tooltipData} />,
+      content: <EdgeTransactionTooltipContent data={tooltipData} />,
+    })
+  }
+
+  const showNodeTransactionTooltip = (event: React.MouseEvent, tx: TransactionInfo): void => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    triggerRectReference.current = rect
+
+    const contractAddress = tx.address ? formatAddress(tx.address, new Map()) : "unknown"
+
+    const accountSnapshot = accountSnapshotMap.get(tx.lt)
+    const stateBefore = accountSnapshot?.before?.state
+    const stateAfter = accountSnapshot?.after?.state
+    const balanceBefore = accountSnapshot?.before?.balance
+    const balanceAfter = accountSnapshot?.after?.balance
+    const balance = balanceAfter ?? balanceBefore
+    const isCreated =
+      tx.transaction.oldStatus === "non-existing" && tx.transaction.endStatus === "active"
+    const isDestroyed =
+      tx.transaction.oldStatus === "active" && tx.transaction.endStatus === "non-existing"
+
+    const tooltipData: NodeTransactionTooltipData = {
+      contract: {
+        typeName: tx.contractName ?? "unknown",
+        address: contractAddress,
+      },
+      account: {
+        stateBefore,
+        stateAfter,
+        balance,
+        isCreated,
+        isDestroyed,
+      },
+    }
+
+    showTooltip({
+      x: rect.left,
+      y: rect.top,
+      content: <NodeTransactionTooltipContent data={tooltipData} />,
     })
   }
 
@@ -423,7 +539,7 @@ export function TransactionTree({
           }}
           onMouseEnter={event => {
             if (!tx) return
-            showTransactionTooltip(event, tx)
+            showNodeTransactionTooltip(event, tx)
           }}
           onMouseLeave={() => {
             hideTooltip()
@@ -449,7 +565,7 @@ export function TransactionTree({
             role="note"
             onMouseEnter={event => {
               if (!tx) return
-              showTransactionTooltip(event, tx)
+              showEdgeTransactionTooltip(event, tx)
             }}
             onMouseLeave={() => {
               hideTooltip()
@@ -583,4 +699,51 @@ function formatAddress(address: Address | undefined, contracts: Map<string, Cont
   }
 
   return `${displayAddress.slice(0, 5)}...${displayAddress.slice(-5)}`
+}
+
+function parseShardAccountSnapshot(shardAccountBase64: string): ParsedAccountSnapshot | undefined {
+  try {
+    const shard = loadShardAccount(Cell.fromBase64(shardAccountBase64).beginParse())
+    const account = shard.account
+    if (!account) {
+      return {
+        state: "none",
+        balance: undefined,
+      }
+    }
+
+    return {
+      state: account.storage.state.type,
+      balance: account.storage.balance.coins,
+    }
+  } catch {
+    return undefined
+  }
+}
+
+function formatAccountState(state: AccountStateType | undefined): string {
+  switch (state) {
+    case "none": {
+      return "none"
+    }
+    case "uninit": {
+      return "uninit"
+    }
+    case "active": {
+      return "active"
+    }
+    case "frozen": {
+      return "frozen"
+    }
+    default: {
+      return "unknown"
+    }
+  }
+}
+
+function formatCurrencyOrUnknown(value: bigint | undefined): string {
+  if (value === undefined) {
+    return "unknown"
+  }
+  return fmt.formatCurrency(value)
 }
