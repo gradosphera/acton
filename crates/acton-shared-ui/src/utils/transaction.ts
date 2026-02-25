@@ -62,6 +62,7 @@ export function processTransactions(transactions: BackendTransaction[]): Transac
       transaction: parsedTx,
       vmLogDiff: tx.vm_log_diff,
       executorLogs: tx.executor_logs,
+      executorActions: tx.executor_actions ?? [],
       actions: actionsCell,
       outActions,
       contractName: tx.dest_contract_info,

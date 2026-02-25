@@ -52,6 +52,10 @@
   font-weight: var(--font-weight-bold);
 }
 
+.actionCardFailed {
+  border-color: var(--color-failed);
+}
+
 .actionContent {
   flex: 1;
   min-width: 0;
@@ -82,6 +86,16 @@
 
 .actionTitleText {
   flex: 1;
+}
+
+.failureBadge {
+  font-size: 0.6875rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-failed-text);
+  background-color: var(--color-failed-bg);
+  border-radius: var(--border-radius-sm);
+  padding: 0 6px;
+  line-height: 1.4;
 }
 
 .actionDescription {
@@ -165,6 +179,9 @@
   color: var(--text-primary);
   flex: 1;
   word-break: break-all;
+}
+
+.detailFailure {
 }
 
 .booleanTrue {

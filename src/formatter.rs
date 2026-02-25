@@ -904,6 +904,7 @@ See https://i582.github.io/acton/docs/setup-wallets/ for more information
                 ExecutedAction::SendMessage {
                     hash,
                     remaining_balance,
+                    ..
                 } => {
                     let message = installed_actions.find_message(hash);
 
@@ -1869,6 +1870,11 @@ impl<'a> FormatterContext<'a> {
                         .emulations
                         .find_tx_executor_logs(tx.lt)
                         .map(Arc::from)
+                        .unwrap_or_default(),
+                    executor_actions: self
+                        .emulations
+                        .find_tx_executor_logs(tx.lt)
+                        .map(crate::commands::test::trace::parse_executor_actions)
                         .unwrap_or_default(),
                     actions: Some(Boc::encode_base64(&res.actions).into()),
                 })

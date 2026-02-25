@@ -55,6 +55,18 @@ pub enum ExecutorLine<'a> {
         remaining_balance: &'a str,
         reserved_balance: &'a str,
     },
+    NotEnoughGramsToTransfer {
+        remaining_balance: &'a str,
+        required: &'a str,
+    },
+    CannotReserve {
+        requested: &'a str,
+        available: &'a str,
+    },
+    InvalidAction {
+        action_index: &'a str,
+        error_code: &'a str,
+    },
     Unknown {
         text: &'a str,
     },
@@ -201,6 +213,45 @@ fn executor_changed_balance<'a>(i: &mut I<'a>) -> PResult<ExecutorLine<'a>> {
     })
 }
 
+// not enough grams to transfer with the message : remaining balance is 997209600ng, need 1000000400000 (including forwarding fees)
+fn executor_not_enough_grams_to_transfer<'a>(i: &mut I<'a>) -> PResult<ExecutorLine<'a>> {
+    let _ =
+        "not enough grams to transfer with the message : remaining balance is ".parse_next(i)?;
+    let remaining_balance = number.parse_next(i)?;
+    let _ = "ng, need ".parse_next(i)?;
+    let required = number.parse_next(i)?;
+    let _ = opt(" (including forwarding fees)").parse_next(i)?;
+    Ok(ExecutorLine::NotEnoughGramsToTransfer {
+        remaining_balance,
+        required,
+    })
+}
+
+// cannot reserve 1000000000000 nanograms : only 1088500000 available
+fn executor_cannot_reserve<'a>(i: &mut I<'a>) -> PResult<ExecutorLine<'a>> {
+    let _ = "cannot reserve ".parse_next(i)?;
+    let requested = number.parse_next(i)?;
+    let _ = " nanograms : only ".parse_next(i)?;
+    let available = number.parse_next(i)?;
+    let _ = " available".parse_next(i)?;
+    Ok(ExecutorLine::CannotReserve {
+        requested,
+        available,
+    })
+}
+
+// invalid action 1 in action list: error code 37
+fn executor_invalid_action<'a>(i: &mut I<'a>) -> PResult<ExecutorLine<'a>> {
+    let _ = "invalid action ".parse_next(i)?;
+    let action_index = number.parse_next(i)?;
+    let _ = " in action list: error code ".parse_next(i)?;
+    let error_code = number.parse_next(i)?;
+    Ok(ExecutorLine::InvalidAction {
+        action_index,
+        error_code,
+    })
+}
+
 // Unknown lines
 fn executor_unknown<'a>(i: &mut I<'a>) -> PResult<ExecutorLine<'a>> {
     // not(peek(alt(...)))
@@ -213,6 +264,9 @@ fn executor_unknown<'a>(i: &mut I<'a>) -> PResult<ExecutorLine<'a>> {
         "remaining balance ",
         "action_reserve_currency: mode=",
         "changed remaining balance to ",
+        "not enough grams to transfer with the message : remaining balance is ",
+        "cannot reserve ",
+        "invalid action ",
     ))))
     .parse_next(i)?;
     let t = until_eol.parse_next(i)?;
@@ -229,6 +283,9 @@ pub fn executor_line<'a>(i: &mut I<'a>) -> PResult<ExecutorLine<'a>> {
         executor_remaining_balance,
         executor_action_reserve_currency,
         executor_changed_balance,
+        executor_not_enough_grams_to_transfer,
+        executor_cannot_reserve,
+        executor_invalid_action,
         executor_unknown,
     ))
     .parse_next(i)
@@ -272,6 +329,9 @@ mod tests {
 [ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	remaining balance 96968400ng
 [ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	action_reserve_currency: mode=0, reserve=10000ng, balance=96334000ng, original balance=999753200ng
 [ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	changed remaining balance to 96324000ng, reserved balance to 10000ng
+[ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	not enough grams to transfer with the message : remaining balance is 997209600ng, need 1000000400000 (including forwarding fees)
+[ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	cannot reserve 1000000000000 nanograms : only 1088500000 available
+[ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	invalid action 1 in action list: error code 37
 [ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]	some unknown message here";
 
     #[test]
@@ -289,10 +349,10 @@ mod tests {
             }
         }
 
-        assert_eq!(results.len(), 9, "Expected 9 log lines");
+        assert_eq!(results.len(), 12, "Expected 12 log lines");
 
         let success_count = results.iter().filter(|r| r.is_ok()).count();
-        assert_eq!(success_count, 9, "All lines should parse successfully");
+        assert_eq!(success_count, 12, "All lines should parse successfully");
     }
 
     #[test]
@@ -459,6 +519,60 @@ mod tests {
             assert_eq!(text, "some unknown message here");
         } else {
             panic!("Expected Unknown variant");
+        }
+    }
+
+    #[test]
+    fn test_parse_not_enough_grams_to_transfer_line() {
+        let line = "[ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]\tnot enough grams to transfer with the message : remaining balance is 997209600ng, need 1000000400000 (including forwarding fees)";
+        let result = parse_executor_line(line);
+        assert!(result.is_ok());
+
+        if let Ok(ExecutorLine::NotEnoughGramsToTransfer {
+            remaining_balance,
+            required,
+        }) = result
+        {
+            assert_eq!(remaining_balance, "997209600");
+            assert_eq!(required, "1000000400000");
+        } else {
+            panic!("Expected NotEnoughGramsToTransfer variant");
+        }
+    }
+
+    #[test]
+    fn test_parse_cannot_reserve_line() {
+        let line = "[ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]\tcannot reserve 1000000000000 nanograms : only 1088500000 available";
+        let result = parse_executor_line(line);
+        assert!(result.is_ok());
+
+        if let Ok(ExecutorLine::CannotReserve {
+            requested,
+            available,
+        }) = result
+        {
+            assert_eq!(requested, "1000000000000");
+            assert_eq!(available, "1088500000");
+        } else {
+            panic!("Expected CannotReserve variant");
+        }
+    }
+
+    #[test]
+    fn test_parse_invalid_action_line() {
+        let line = "[ 4][t 0][2025-11-04 08:57:12.814271][transaction.cpp:1948]\tinvalid action 1 in action list: error code 37";
+        let result = parse_executor_line(line);
+        assert!(result.is_ok());
+
+        if let Ok(ExecutorLine::InvalidAction {
+            action_index,
+            error_code,
+        }) = result
+        {
+            assert_eq!(action_index, "1");
+            assert_eq!(error_code, "37");
+        } else {
+            panic!("Expected InvalidAction variant");
         }
     }
 }

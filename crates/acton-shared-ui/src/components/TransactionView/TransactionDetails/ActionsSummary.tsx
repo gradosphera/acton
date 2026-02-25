@@ -1,21 +1,30 @@
 import type {OutAction} from "@ton/core"
 import React, {useState} from "react"
 
+import type {BackendExecutorAction, BackendExecutorActionFailureReason} from "@/types"
 import type {ContractData} from "@/types/transaction"
 import {fmt, DataBlock} from "@/index"
 import {parseSendMode} from "@/components/TransactionView/SendModeViewer/parser"
 import {parseReserveMode} from "@/utils/transaction"
 
 import {ContractChip} from "../ContractChip/ContractChip"
+import {ExitCodeChip} from "../ExitCodeChip/ExitCodeChip"
 import {ReserveModeViewer} from "../ReserveModeViewer/ReserveModeViewer"
 
 import styles from "./ActionsSummary.module.css"
 
 interface ActionsSummaryProps {
   readonly actions: readonly OutAction[]
+  readonly executorActions?: readonly BackendExecutorAction[]
   readonly contracts: Map<string, ContractData>
   readonly contractAddress: string
   readonly onContractClick?: (address: string) => void
+}
+
+interface ActionExecutionMeta {
+  readonly isFailed: boolean
+  readonly failureCode: number | undefined
+  readonly failureReasonText: string | undefined
 }
 
 const getActionIcon = (actionType: OutAction["type"]): React.JSX.Element => {
@@ -93,12 +102,84 @@ const formatReserveModeNames = (mode: number): string => {
   return formatModeNames(getReserveModeNames(mode))
 }
 
+const isActionFailed = (action: BackendExecutorAction): boolean => {
+  return action.failure_code !== undefined || action.failure_reason !== undefined
+}
+
+const formatNanoTon = (value: string): string => {
+  try {
+    return fmt.formatCurrency(BigInt(value))
+  } catch {
+    return `${value} ng`
+  }
+}
+
+const formatFailureReason = (
+  reason: BackendExecutorActionFailureReason | undefined,
+): string | undefined => {
+  if (!reason) return
+
+  switch (reason.type) {
+    case "not_enough_toncoin_to_send": {
+      return `Not enough Toncoin: balance ${formatNanoTon(reason.remaining_balance)}, required ${formatNanoTon(reason.required)}.`
+    }
+    case "cannot_reserve_toncoin": {
+      return `Cannot reserve ${formatNanoTon(reason.requested)}: only ${formatNanoTon(reason.available)} available.`
+    }
+  }
+}
+
+const mapExecutorActionsByType = (
+  actions: readonly OutAction[],
+  executorActions: readonly BackendExecutorAction[],
+): Array<BackendExecutorAction | undefined> => {
+  const mapped: Array<BackendExecutorAction | undefined> = []
+  let cursor = 0
+
+  for (const action of actions) {
+    if (action.type !== "sendMsg" && action.type !== "reserve") {
+      mapped.push(undefined)
+      continue
+    }
+
+    let matched: BackendExecutorAction | undefined
+    while (cursor < executorActions.length) {
+      const candidate = executorActions[cursor]
+      cursor += 1
+      const typeMatches =
+        (action.type === "sendMsg" && candidate.type === "send_message") ||
+        (action.type === "reserve" && candidate.type === "reserve_currency")
+
+      if (typeMatches) {
+        matched = candidate
+        break
+      }
+    }
+
+    mapped.push(matched)
+  }
+
+  return mapped
+}
+
+const getActionExecutionMeta = (
+  executorAction: BackendExecutorAction | undefined,
+): ActionExecutionMeta => ({
+  isFailed: executorAction ? isActionFailed(executorAction) : false,
+  failureCode: executorAction?.failure_code,
+  failureReasonText: formatFailureReason(executorAction?.failure_reason),
+})
+
 const renderActionDetails = (
   action: OutAction,
+  executorAction: BackendExecutorAction | undefined,
   contractAddress: string,
   contracts: Map<string, ContractData>,
   onContractClick?: (address: string) => void,
 ): React.JSX.Element | undefined => {
+  const execution = getActionExecutionMeta(executorAction)
+  const contractAbi = contracts.get(contractAddress)?.abi
+
   switch (action.type) {
     case "sendMsg": {
       const message = action.outMsg
@@ -188,6 +269,22 @@ const renderActionDetails = (
                 <DataBlock data={message.body.toBoc().toString("hex")} />
               </div>
             </div>
+            {execution.failureReasonText && (
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Failure:</span>
+                <span className={`${styles.detailValue} ${styles.detailFailure}`}>
+                  {execution.failureReasonText}
+                </span>
+              </div>
+            )}
+            {execution.failureCode !== undefined && (
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Exit Code:</span>
+                <span className={styles.detailValue}>
+                  <ExitCodeChip exitCode={execution.failureCode} abi={contractAbi} phase="action" />
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )
@@ -228,6 +325,22 @@ const renderActionDetails = (
                 {fmt.formatCurrency(action.currency.coins)}
               </span>
             </div>
+            {execution.failureReasonText && (
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Failure:</span>
+                <span className={`${styles.detailValue} ${styles.detailFailure}`}>
+                  {execution.failureReasonText}
+                </span>
+              </div>
+            )}
+            {execution.failureCode !== undefined && (
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Exit Code:</span>
+                <span className={styles.detailValue}>
+                  <ExitCodeChip exitCode={execution.failureCode} abi={contractAbi} phase="action" />
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )
@@ -239,11 +352,13 @@ const renderActionDetails = (
 
 export function ActionsSummary({
   actions,
+  executorActions = [],
   contracts,
   contractAddress,
   onContractClick,
 }: ActionsSummaryProps): React.JSX.Element {
   const [selectedActionIndex, setSelectedActionIndex] = useState<number | undefined>()
+  const mappedExecutorActions = mapExecutorActionsByType(actions, executorActions)
 
   if (actions.length === 0) {
     return (
@@ -303,6 +418,7 @@ export function ActionsSummary({
           {actions.map((action, index) => {
             const summary = getActionSummary(action)
             const isSelected = selectedActionIndex === index
+            const execution = getActionExecutionMeta(mappedExecutorActions[index])
 
             let enhancedDescription: React.ReactNode = summary.description
             if (action.type === "sendMsg") {
@@ -337,7 +453,9 @@ export function ActionsSummary({
             return (
               <div
                 key={action.type === "sendMsg" ? action.outMsg.body.hash().toString("hex") : index}
-                className={`${styles.actionCard} ${isSelected ? styles.actionCardSelected : ""}`}
+                className={`${styles.actionCard} ${isSelected ? styles.actionCardSelected : ""} ${
+                  execution.isFailed ? styles.actionCardFailed : ""
+                }`}
                 onClick={() => {
                   setSelectedActionIndex(isSelected ? undefined : index)
                 }}
@@ -353,6 +471,7 @@ export function ActionsSummary({
                   <div className={styles.actionTitle}>
                     <div className={styles.actionIcon}>{getActionIcon(action.type)}</div>
                     <span className={styles.actionTitleText}>{summary.title}</span>
+                    {execution.isFailed && <span className={styles.failureBadge}>Failed</span>}
                   </div>
                   <div className={styles.actionDescription}>{enhancedDescription}</div>
                   {summary.value && <div className={styles.actionValue}>{summary.value}</div>}
@@ -367,6 +486,7 @@ export function ActionsSummary({
         <div className={styles.detailsContainer}>
           {renderActionDetails(
             actions[selectedActionIndex],
+            mappedExecutorActions[selectedActionIndex],
             contractAddress,
             contracts,
             onContractClick,

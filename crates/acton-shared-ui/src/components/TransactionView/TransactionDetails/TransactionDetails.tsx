@@ -282,6 +282,7 @@ export function TransactionDetails({
           <div className={styles.labeledSectionContent}>
             <ActionsSummary
               actions={tx.outActions}
+              executorActions={tx.executorActions}
               contracts={contracts}
               contractAddress={tx.address?.toString() ?? ""}
             />

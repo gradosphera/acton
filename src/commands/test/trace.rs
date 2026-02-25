@@ -1,5 +1,6 @@
 use crate::commands::test::{Pos, TestDescriptor};
 use crate::context::{BuildCache, Emulations, KnownAddresses, to_cell};
+use retrace::trace::{ExecutedAction, ExecutedActionFailureReason, ExecutedActions};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -42,8 +43,109 @@ pub struct TransactionInfo {
     pub shard_account: String,
     pub vm_log_diff: String,
     pub executor_logs: Arc<str>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub executor_actions: Vec<ExecutorActionInfo>,
     pub actions: Option<Arc<str>>,
     pub dest_contract_info: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ExecutorActionFailureReasonInfo {
+    NotEnoughToncoinToSend {
+        remaining_balance: String,
+        required: String,
+    },
+    CannotReserveToncoin {
+        requested: String,
+        available: String,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ExecutorActionInfo {
+    SendMessage {
+        hash: String,
+        remaining_balance: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        failure_reason: Option<ExecutorActionFailureReasonInfo>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        failure_code: Option<i32>,
+    },
+    ReserveCurrency {
+        mode: i32,
+        reserve: String,
+        balance: String,
+        original_balance: String,
+        changed_remaining_balance: String,
+        changed_reserved_balance: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        failure_reason: Option<ExecutorActionFailureReasonInfo>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        failure_code: Option<i32>,
+    },
+}
+
+#[must_use]
+pub(crate) fn parse_executor_actions(logs: &str) -> Vec<ExecutorActionInfo> {
+    let executed = ExecutedActions::from(logs);
+    executed
+        .actions
+        .into_iter()
+        .map(|action| match action {
+            ExecutedAction::SendMessage {
+                hash,
+                remaining_balance,
+                failure_reason,
+                failure_code,
+            } => ExecutorActionInfo::SendMessage {
+                hash,
+                remaining_balance: remaining_balance.to_string(),
+                failure_reason: failure_reason.map(convert_failure_reason),
+                failure_code,
+            },
+            ExecutedAction::ReserveCurrency {
+                mode,
+                reserve,
+                balance,
+                original_balance,
+                changed_remaining_balance,
+                changed_reserved_balance,
+                failure_reason,
+                failure_code,
+            } => ExecutorActionInfo::ReserveCurrency {
+                mode,
+                reserve: reserve.to_string(),
+                balance: balance.to_string(),
+                original_balance: original_balance.to_string(),
+                changed_remaining_balance: changed_remaining_balance.to_string(),
+                changed_reserved_balance: changed_reserved_balance.to_string(),
+                failure_reason: failure_reason.map(convert_failure_reason),
+                failure_code,
+            },
+        })
+        .collect()
+}
+
+#[must_use]
+fn convert_failure_reason(reason: ExecutedActionFailureReason) -> ExecutorActionFailureReasonInfo {
+    match reason {
+        ExecutedActionFailureReason::NotEnoughToncoinToSend {
+            remaining_balance,
+            required,
+        } => ExecutorActionFailureReasonInfo::NotEnoughToncoinToSend {
+            remaining_balance: remaining_balance.to_string(),
+            required: required.to_string(),
+        },
+        ExecutedActionFailureReason::CannotReserveToncoin {
+            requested,
+            available,
+        } => ExecutorActionFailureReasonInfo::CannotReserveToncoin {
+            requested: requested.to_string(),
+            available: available.to_string(),
+        },
+    }
 }
 
 pub(super) fn dump_test_transactions(
@@ -84,6 +186,7 @@ pub(super) fn dump_test_transactions(
                         shard_account: Boc::encode_base64(to_cell(&tx.shard_account)),
                         vm_log_diff: vmlogs::convert_to_diff_logs(&tx.vm_log),
                         executor_logs: tx.executor_logs.clone(),
+                        executor_actions: parse_executor_actions(&tx.executor_logs),
                         actions: tx.actions.clone(),
                     }
                 })
@@ -149,4 +252,73 @@ pub(super) fn dump_test_transactions(
     fs::write(file_path, str)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_executor_actions_extracts_send_error_details() {
+        let logs = "[ 4][t 0][2026-02-25 11:22:27.910181][transaction.cpp:2649]\tprocess send message 6B4A9BAD9FCCCE4523A71307366AF36EC1C535F5D05EF2FF21E358903A399123
+[ 3][t 0][2026-02-25 11:22:27.910192][transaction.cpp:3070]\tremaining balance 997209600ng
+[ 4][t 0][2026-02-25 11:22:27.910194][transaction.cpp:2649]\tprocess send message 52B0D905B98FC395D52C1EF89AB4F9BBF869AF0B1445E18DA4691C1FD2ACC22F
+[ 4][t 0][2026-02-25 11:22:27.910199][transaction.cpp:2926]\tnot enough grams to transfer with the message : remaining balance is 997209600ng, need 1000000400000 (including forwarding fees)
+[ 4][t 0][2026-02-25 11:22:27.910201][transaction.cpp:2206]\tinvalid action 1 in action list: error code 37";
+
+        let parsed = parse_executor_actions(logs);
+        assert_eq!(parsed.len(), 2);
+
+        assert!(matches!(
+            &parsed[0],
+            ExecutorActionInfo::SendMessage {
+                failure_code: None,
+                failure_reason: None,
+                ..
+            }
+        ));
+
+        assert!(matches!(
+            &parsed[1],
+            ExecutorActionInfo::SendMessage {
+                failure_code: Some(37),
+                failure_reason: Some(
+                    ExecutorActionFailureReasonInfo::NotEnoughToncoinToSend { .. }
+                ),
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_executor_actions_extracts_reserve_error_details() {
+        let logs = "[ 4][t 0][2026-02-25 11:24:46.612154][transaction.cpp:3089]\tprocess raw reserve with mode 0
+[ 4][t 0][2026-02-25 11:24:46.612156][transaction.cpp:3108]\taction_reserve_currency: mode=0, reserve=10000000ng, balance=1098500000ng, original balance=999742800ng
+[ 3][t 0][2026-02-25 11:24:46.612158][transaction.cpp:3168]\tchanged remaining balance to 1088500000ng, reserved balance to 10000000ng
+[ 4][t 0][2026-02-25 11:24:46.612160][transaction.cpp:3089]\tprocess raw reserve with mode 0
+[ 4][t 0][2026-02-25 11:24:46.612161][transaction.cpp:3108]\taction_reserve_currency: mode=0, reserve=1000000000000ng, balance=1088500000ng, original balance=999742800ng
+[ 4][t 0][2026-02-25 11:24:46.612163][transaction.cpp:3143]\tcannot reserve 1000000000000 nanograms : only 1088500000 available
+[ 4][t 0][2026-02-25 11:24:46.612164][transaction.cpp:2206]\tinvalid action 1 in action list: error code 37";
+
+        let parsed = parse_executor_actions(logs);
+        assert_eq!(parsed.len(), 2);
+
+        assert!(matches!(
+            &parsed[0],
+            ExecutorActionInfo::ReserveCurrency {
+                failure_code: None,
+                failure_reason: None,
+                ..
+            }
+        ));
+
+        assert!(matches!(
+            &parsed[1],
+            ExecutorActionInfo::ReserveCurrency {
+                failure_code: Some(37),
+                failure_reason: Some(ExecutorActionFailureReasonInfo::CannotReserveToncoin { .. }),
+                ..
+            }
+        ));
+    }
 }

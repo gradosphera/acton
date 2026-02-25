@@ -133,6 +133,10 @@ fn assert_trace_json_contract(
                 tx["executor_logs"].as_str().is_some(),
                 "Missing executor_logs in {relative_path}"
             );
+            assert!(
+                tx["executor_actions"].is_array() || tx["executor_actions"].is_null(),
+                "executor_actions must be an array or absent in {relative_path}"
+            );
             if tx["dest_contract_info"].as_str() == Some("simple") {
                 has_dest_contract_info = true;
             }

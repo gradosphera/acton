@@ -36,9 +36,42 @@ export interface BackendTransaction {
   readonly shard_account: string
   readonly vm_log_diff: string
   readonly executor_logs: string
+  readonly executor_actions?: readonly BackendExecutorAction[]
   readonly actions?: string
   readonly dest_contract_info?: string
 }
+
+export type BackendExecutorActionFailureReason =
+  | {
+      readonly type: "not_enough_toncoin_to_send"
+      readonly remaining_balance: string
+      readonly required: string
+    }
+  | {
+      readonly type: "cannot_reserve_toncoin"
+      readonly requested: string
+      readonly available: string
+    }
+
+export type BackendExecutorAction =
+  | {
+      readonly type: "send_message"
+      readonly hash: string
+      readonly remaining_balance: string
+      readonly failure_reason?: BackendExecutorActionFailureReason
+      readonly failure_code?: number
+    }
+  | {
+      readonly type: "reserve_currency"
+      readonly mode: number
+      readonly reserve: string
+      readonly balance: string
+      readonly original_balance: string
+      readonly changed_remaining_balance: string
+      readonly changed_reserved_balance: string
+      readonly failure_reason?: BackendExecutorActionFailureReason
+      readonly failure_code?: number
+    }
 
 export interface TransactionList {
   readonly name?: string

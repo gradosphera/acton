@@ -138,6 +138,24 @@ pub struct InstalledReserveAction {
 
 /// An action that was actually executed by the sandbox during the action phase.
 /// These are extracted from the executor logs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecutedActionFailureReason {
+    /// Send message failed because there were not enough funds to cover transfer + forwarding fees.
+    NotEnoughToncoinToSend {
+        /// Remaining account balance when processing the action.
+        remaining_balance: BigInt,
+        /// Required amount including forwarding fees.
+        required: BigInt,
+    },
+    /// Reserve action failed because requested amount exceeds available balance.
+    CannotReserveToncoin {
+        /// Requested reserve amount.
+        requested: BigInt,
+        /// Available balance at reservation time.
+        available: BigInt,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub enum ExecutedAction {
     /// A message was successfully processed and sent.
@@ -146,6 +164,10 @@ pub enum ExecutedAction {
         hash: String,
         /// Account balance remaining after sending the message.
         remaining_balance: BigInt,
+        /// Optional detailed reason when this action failed.
+        failure_reason: Option<ExecutedActionFailureReason>,
+        /// Optional action-phase error code for this action.
+        failure_code: Option<i32>,
     },
     /// A currency reservation was successfully processed.
     ReserveCurrency {
@@ -161,7 +183,31 @@ pub enum ExecutedAction {
         changed_remaining_balance: BigInt,
         /// Total amount reserved so far.
         changed_reserved_balance: BigInt,
+        /// Optional detailed reason when this action failed.
+        failure_reason: Option<ExecutedActionFailureReason>,
+        /// Optional action-phase error code for this action.
+        failure_code: Option<i32>,
     },
+}
+
+impl ExecutedAction {
+    fn set_failure_reason(&mut self, reason: ExecutedActionFailureReason) {
+        match self {
+            ExecutedAction::SendMessage { failure_reason, .. }
+            | ExecutedAction::ReserveCurrency { failure_reason, .. } => {
+                *failure_reason = Some(reason);
+            }
+        }
+    }
+
+    const fn set_failure_code(&mut self, code: i32) {
+        match self {
+            ExecutedAction::SendMessage { failure_code, .. }
+            | ExecutedAction::ReserveCurrency { failure_code, .. } => {
+                *failure_code = Some(code);
+            }
+        }
+    }
 }
 
 impl TraceStep {
@@ -493,6 +539,8 @@ impl ExecutedActions {
                     actions.push(ExecutedAction::SendMessage {
                         hash: message_hash.to_string(),
                         remaining_balance: BigInt::ZERO, // Will be updated by RemainingBalance
+                        failure_reason: None,
+                        failure_code: None,
                     });
                 }
                 Ok(ExecutorLine::RemainingBalance { balance }) => {
@@ -511,6 +559,8 @@ impl ExecutedActions {
                         original_balance: BigInt::ZERO,
                         changed_remaining_balance: BigInt::ZERO, // Will be updated by ChangedBalance
                         changed_reserved_balance: BigInt::ZERO, // Will be updated by ChangedBalance
+                        failure_reason: None,
+                        failure_code: None,
                     });
                 }
                 Ok(ExecutorLine::ActionReserveCurrency {
@@ -538,6 +588,8 @@ impl ExecutedActions {
                             original_balance: original_balance.parse().unwrap_or(BigInt::ZERO),
                             changed_remaining_balance: BigInt::ZERO, // Will be updated by ChangedBalance
                             changed_reserved_balance: BigInt::ZERO, // Will be updated by ChangedBalance
+                            failure_reason: None,
+                            failure_code: None,
                         });
                     }
                 }
@@ -555,6 +607,56 @@ impl ExecutedActions {
                             remaining_balance.parse::<BigInt>().unwrap_or(BigInt::ZERO);
                         *changed_reserved_balance =
                             reserved_balance.parse::<BigInt>().unwrap_or(BigInt::ZERO);
+                    }
+                }
+                Ok(ExecutorLine::NotEnoughGramsToTransfer {
+                    remaining_balance,
+                    required,
+                }) => {
+                    if let Some(action) = actions.last_mut()
+                        && matches!(action, ExecutedAction::SendMessage { .. })
+                    {
+                        action.set_failure_reason(
+                            ExecutedActionFailureReason::NotEnoughToncoinToSend {
+                                remaining_balance: remaining_balance
+                                    .parse::<BigInt>()
+                                    .unwrap_or(BigInt::ZERO),
+                                required: required.parse::<BigInt>().unwrap_or(BigInt::ZERO),
+                            },
+                        );
+                    }
+                }
+                Ok(ExecutorLine::CannotReserve {
+                    requested,
+                    available,
+                }) => {
+                    if let Some(action) = actions.last_mut()
+                        && matches!(action, ExecutedAction::ReserveCurrency { .. })
+                    {
+                        action.set_failure_reason(
+                            ExecutedActionFailureReason::CannotReserveToncoin {
+                                requested: requested.parse::<BigInt>().unwrap_or(BigInt::ZERO),
+                                available: available.parse::<BigInt>().unwrap_or(BigInt::ZERO),
+                            },
+                        );
+                    }
+                }
+                Ok(ExecutorLine::InvalidAction {
+                    action_index,
+                    error_code,
+                }) => {
+                    let action_index = action_index.parse::<usize>().ok();
+                    let error_code = error_code.parse::<i32>().ok();
+                    if let Some(code) = error_code {
+                        if let Some(idx) = action_index {
+                            if let Some(action) = actions.get_mut(idx) {
+                                action.set_failure_code(code);
+                            } else if let Some(action) = actions.last_mut() {
+                                action.set_failure_code(code);
+                            }
+                        } else if let Some(action) = actions.last_mut() {
+                            action.set_failure_code(code);
+                        }
                     }
                 }
                 _ => {}
@@ -673,6 +775,126 @@ execute FOO
             assert!(*handled);
         } else {
             panic!("Expected Exception step at index 0");
+        }
+    }
+
+    #[test]
+    fn test_executed_actions_send_error_parsing() {
+        let logs = r"[ 4][t 0][2026-02-25 11:22:27.910181][transaction.cpp:2649]	process send message 6B4A9BAD9FCCCE4523A71307366AF36EC1C535F5D05EF2FF21E358903A399123
+[ 3][t 0][2026-02-25 11:22:27.910192][transaction.cpp:3070]	remaining balance 997209600ng
+[ 4][t 0][2026-02-25 11:22:27.910194][transaction.cpp:2649]	process send message 52B0D905B98FC395D52C1EF89AB4F9BBF869AF0B1445E18DA4691C1FD2ACC22F
+[ 4][t 0][2026-02-25 11:22:27.910199][transaction.cpp:2926]	not enough grams to transfer with the message : remaining balance is 997209600ng, need 1000000400000 (including forwarding fees)
+[ 4][t 0][2026-02-25 11:22:27.910201][transaction.cpp:2206]	invalid action 1 in action list: error code 37";
+
+        let executed = ExecutedActions::from(logs);
+        assert_eq!(executed.actions.len(), 2);
+
+        if let ExecutedAction::SendMessage {
+            hash,
+            remaining_balance,
+            failure_reason,
+            failure_code,
+        } = &executed.actions[0]
+        {
+            assert_eq!(
+                hash,
+                "6B4A9BAD9FCCCE4523A71307366AF36EC1C535F5D05EF2FF21E358903A399123"
+            );
+            assert_eq!(remaining_balance, &BigInt::from(997_209_600u64));
+            assert!(failure_reason.is_none());
+            assert!(failure_code.is_none());
+        } else {
+            panic!("Expected first action to be SendMessage");
+        }
+
+        if let ExecutedAction::SendMessage {
+            hash,
+            remaining_balance,
+            failure_reason,
+            failure_code,
+        } = &executed.actions[1]
+        {
+            assert_eq!(
+                hash,
+                "52B0D905B98FC395D52C1EF89AB4F9BBF869AF0B1445E18DA4691C1FD2ACC22F"
+            );
+            assert_eq!(remaining_balance, &BigInt::ZERO);
+            assert_eq!(failure_code, &Some(37));
+            assert_eq!(
+                failure_reason.as_ref(),
+                Some(&ExecutedActionFailureReason::NotEnoughToncoinToSend {
+                    remaining_balance: BigInt::from(997_209_600u64),
+                    required: BigInt::from(1_000_000_400_000u64),
+                })
+            );
+        } else {
+            panic!("Expected second action to be SendMessage");
+        }
+    }
+
+    #[test]
+    fn test_executed_actions_reserve_error_parsing() {
+        let logs = r"[ 4][t 0][2026-02-25 11:24:46.612154][transaction.cpp:3089]	process raw reserve with mode 0
+[ 4][t 0][2026-02-25 11:24:46.612156][transaction.cpp:3108]	action_reserve_currency: mode=0, reserve=10000000ng, balance=1098500000ng, original balance=999742800ng
+[ 3][t 0][2026-02-25 11:24:46.612158][transaction.cpp:3168]	changed remaining balance to 1088500000ng, reserved balance to 10000000ng
+[ 4][t 0][2026-02-25 11:24:46.612160][transaction.cpp:3089]	process raw reserve with mode 0
+[ 4][t 0][2026-02-25 11:24:46.612161][transaction.cpp:3108]	action_reserve_currency: mode=0, reserve=1000000000000ng, balance=1088500000ng, original balance=999742800ng
+[ 4][t 0][2026-02-25 11:24:46.612163][transaction.cpp:3143]	cannot reserve 1000000000000 nanograms : only 1088500000 available
+[ 4][t 0][2026-02-25 11:24:46.612164][transaction.cpp:2206]	invalid action 1 in action list: error code 37";
+
+        let executed = ExecutedActions::from(logs);
+        assert_eq!(executed.actions.len(), 2);
+
+        if let ExecutedAction::ReserveCurrency {
+            mode,
+            reserve,
+            balance,
+            original_balance,
+            changed_remaining_balance,
+            changed_reserved_balance,
+            failure_reason,
+            failure_code,
+        } = &executed.actions[0]
+        {
+            assert_eq!(*mode, 0);
+            assert_eq!(reserve, &BigInt::from(10_000_000u64));
+            assert_eq!(balance, &BigInt::from(1_098_500_000u64));
+            assert_eq!(original_balance, &BigInt::from(999_742_800u64));
+            assert_eq!(changed_remaining_balance, &BigInt::from(1_088_500_000u64));
+            assert_eq!(changed_reserved_balance, &BigInt::from(10_000_000u64));
+            assert!(failure_reason.is_none());
+            assert!(failure_code.is_none());
+        } else {
+            panic!("Expected first action to be ReserveCurrency");
+        }
+
+        if let ExecutedAction::ReserveCurrency {
+            mode,
+            reserve,
+            balance,
+            original_balance,
+            changed_remaining_balance,
+            changed_reserved_balance,
+            failure_reason,
+            failure_code,
+        } = &executed.actions[1]
+        {
+            assert_eq!(*mode, 0);
+            assert_eq!(reserve, &BigInt::from(1_000_000_000_000u64));
+            assert_eq!(balance, &BigInt::from(1_088_500_000u64));
+            assert_eq!(original_balance, &BigInt::from(999_742_800u64));
+            assert_eq!(changed_remaining_balance, &BigInt::ZERO);
+            assert_eq!(changed_reserved_balance, &BigInt::ZERO);
+            assert_eq!(failure_code, &Some(37));
+            assert_eq!(
+                failure_reason.as_ref(),
+                Some(&ExecutedActionFailureReason::CannotReserveToncoin {
+                    requested: BigInt::from(1_000_000_000_000u64),
+                    available: BigInt::from(1_088_500_000u64),
+                })
+            );
+        } else {
+            panic!("Expected second action to be ReserveCurrency");
         }
     }
 }
