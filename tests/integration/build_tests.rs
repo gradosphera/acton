@@ -382,13 +382,13 @@ fn test_build_gen_file_naming() {
     assert!(project.path().join("gen/my_contract_3_code.tolk").exists());
 
     let file1 = fs::read_to_string(project.path().join("gen/my_contract_code.tolk")).unwrap();
-    assert!(file1.contains("fun my_contractCompiledCode()"));
+    assert!(file1.contains("fun myContractCompiledCode()"));
 
     let file2 = fs::read_to_string(project.path().join("gen/my_contract_2_code.tolk")).unwrap();
-    assert!(file2.contains("fun my_contract_2CompiledCode()"));
+    assert!(file2.contains("fun myContract2CompiledCode()"));
 
     let file3 = fs::read_to_string(project.path().join("gen/my_contract_3_code.tolk")).unwrap();
-    assert!(file3.contains("fun my_contract_3CompiledCode()"));
+    assert!(file3.contains("fun myContract3CompiledCode()"));
 }
 
 // ========================================
@@ -647,8 +647,8 @@ fn test_build_dependency_mixed_kinds() {
             import "../gen/lib_dep_code.tolk"
 
             fun onInternalMessage(in: InMessage) {
-                val code1 = embed_depCompiledCode();
-                val code2 = lib_depCompiledCode();
+                val code1 = embedDepCompiledCode();
+                val code2 = libDepCompiledCode();
             }
             fun onBouncedMessage(_: InMessageBounced) {}
         "#,

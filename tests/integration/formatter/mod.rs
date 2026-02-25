@@ -517,7 +517,7 @@ import "../gen/fm_action_child_code.tolk"
 fun onInternalMessage(_: InMessage) {
     val addr = AutoDeployAddress {
         stateInit: ContractState {
-            code: fm_action_childCompiledCode(),
+            code: fmActionChildCompiledCode(),
             data: createEmptyCell(),
         },
     }.calculateAddress();

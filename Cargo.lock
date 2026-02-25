@@ -38,6 +38,7 @@ dependencies = [
  "fs_extra",
  "function_name",
  "globset",
+ "heck",
  "hex",
  "hmac",
  "human-panic",

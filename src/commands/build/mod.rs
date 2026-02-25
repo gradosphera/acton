@@ -4,6 +4,7 @@ use crate::stdlib;
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, ContractConfig, ContractDependency, DependencyKind};
 use anyhow::anyhow;
+use heck::ToLowerCamelCase;
 use log::debug;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -439,6 +440,8 @@ fn format_valid_function_name(dependency_key: &str) -> String {
     if !name.chars().next().unwrap_or(' ').is_alphabetic() {
         name = format!("contract_{name}");
     }
+
+    name = name.to_lower_camel_case();
 
     format!("{name}CompiledCode")
 }

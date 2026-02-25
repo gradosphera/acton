@@ -70,7 +70,7 @@ depends = ["child.lib"]
     let generated_dep = fs::read_to_string(project.path().join("gen/child.lib_code.tolk"))
         .expect("read generated dependency file");
     assert!(
-        generated_dep.contains("fun child_libCompiledCode(): cell"),
+        generated_dep.contains("fun childLibCompiledCode(): cell"),
         "generated dependency function should normalize dotted key into valid identifier"
     );
 }

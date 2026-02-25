@@ -196,6 +196,7 @@ tree-sitter = { workspace = true } # tolk parser
 clap = { workspace = true } # CLI
 anyhow = { workspace = true }
 dunce = { workspace = true }
+heck = { workspace = true }
 
 # test filtering
 regex = { workspace = true }
