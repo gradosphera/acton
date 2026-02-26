@@ -17,10 +17,10 @@ use tolk_resolver::file_index::SymbolId;
 use tolk_resolver::resolve_index::{LocalDefId, LocalDefKind, NameUse, NameUseKind, Resolved};
 use tolk_resolver::{AstNodeSpanExt, Span, Symbol, SymbolKind};
 use tolk_syntax::{
-    AsCast, Assign, AstNode, Bin, BoolLit, Call, DotAccess, DotAccessField, Expr, HasGenericParams,
-    HasName, Ident, Instantiation, IsType, Lambda, Lazy, Match, MatchArmBody, MatchPattern,
-    NotNull, NullLit, NumberLit, ObjectLit, Paren, SetAssign, StringLit, Tensor, Ternary, TopLevel,
-    Tuple, Type, Unary, Underscore, VarDecl, VarDeclPattern,
+    AsCast, Assign, AstNode, Bin, BoolLit, Call, DotAccess, DotAccessField, Expr, HasName, Ident,
+    Instantiation, IsType, Lambda, Lazy, Match, MatchArmBody, MatchPattern, NotNull, NullLit,
+    NumberLit, ObjectLit, Paren, SetAssign, StringLit, Tensor, Ternary, TopLevel, Tuple, Type,
+    Unary, Underscore, VarDecl, VarDeclPattern,
 };
 
 impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
@@ -49,7 +49,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             Expr::Assign(assignment) => self.infer_assignment(assignment, flow, as_cond),
             Expr::SetAssign(assignment) => self.infer_set_assignment(assignment, flow, as_cond),
             Expr::Unary(unary_op) => self.infer_unary_operator(unary_op, flow, as_cond),
-            Expr::Bin(binary_op) => self.infer_binary_expression(binary_op, flow, as_cond),
+            Expr::Bin(binary_op) => self.infer_binary_expression(binary_op, flow, as_cond, hint),
             Expr::Ternary(ternary_op) => {
                 self.infer_ternary_operator(ternary_op, flow, as_cond, hint)
             }
@@ -235,19 +235,25 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         match pat {
             VarDeclPattern::TensorVars(lhs_tensor) => {
                 let rhs_unwrapped = self.intrn().unwrap_alias(rhs_ty);
+                let vars: Vec<_> = lhs_tensor.vars().collect();
                 let rhs_items =
                     if let TyData::Tensor(items) = self.intrn().data(rhs_unwrapped).clone() {
-                        items
+                        Some(items)
                     } else {
-                        return;
+                        None
                     };
-
-                let vars: Vec<_> = lhs_tensor.vars().collect();
                 let mut types_list = Vec::with_capacity(vars.len());
                 for (i, element) in vars.iter().enumerate() {
                     let item_rhs_ty = rhs_items
-                        .get(i)
-                        .cloned()
+                        .as_ref()
+                        .and_then(|items| items.get(i).copied())
+                        .or_else(|| {
+                            if rhs_items.is_none() && vars.len() == 1 {
+                                Some(rhs_ty)
+                            } else {
+                                None
+                            }
+                        })
                         .unwrap_or_else(|| self.intrn().ty_undefined);
                     self.process_var_declaration_lhs_after_infer_rhs(*element, item_rhs_ty, flow);
                     types_list.push(self.ctx.get_node_type_or_unknown(&element.syntax()));
@@ -257,9 +263,13 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             }
             VarDeclPattern::TupleVars(lhs_tuple) => {
                 let rhs_unwrapped = self.intrn().unwrap_alias(rhs_ty);
+                let mut repeated_item_ty = None;
                 let rhs_items =
                     if let TyData::Tuple(items) = self.intrn().data(rhs_unwrapped).clone() {
                         items
+                    } else if let TyData::Array(item_ty) = self.intrn().data(rhs_unwrapped) {
+                        repeated_item_ty = Some(*item_ty);
+                        Vec::new()
                     } else {
                         return;
                     };
@@ -270,6 +280,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                     let item_rhs_ty = rhs_items
                         .get(i)
                         .cloned()
+                        .or(repeated_item_ty)
                         .unwrap_or_else(|| self.intrn().ty_undefined);
                     self.process_var_declaration_lhs_after_infer_rhs(*element, item_rhs_ty, flow);
                     types_list.push(self.ctx.get_node_type_or_unknown(&element.syntax()));
@@ -290,7 +301,8 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 let declared_type = if var.is_redefinition() {
                     current_ty
                 } else {
-                    self.lower(var.typ())
+                    let ty = self.lower(var.typ());
+                    self.apply_defaults_to_type(ty)
                 };
 
                 let smartcasted_type = if !var.is_redefinition()
@@ -449,21 +461,29 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             // dig recursively into v1 and v2 with corresponding rhs i-th item of a tensor
             Expr::Tensor(lhs_tensor) => {
                 let rhs_unwrapped = self.intrn().unwrap_alias(rhs_ty);
+                let elements: Vec<_> = lhs_tensor.elements().collect();
                 let rhs_items =
                     if let TyData::Tensor(items) = self.intrn().data(rhs_unwrapped).clone() {
-                        items
+                        Some(items)
                     } else {
-                        return;
+                        None
                     };
 
-                let mut types_list = Vec::with_capacity(lhs_tensor.elements().count());
-                for (i, element) in lhs_tensor.elements().enumerate() {
+                let mut types_list = Vec::with_capacity(elements.len());
+                for (i, element) in elements.iter().enumerate() {
                     let item_rhs_ty = rhs_items
-                        .get(i)
-                        .cloned()
+                        .as_ref()
+                        .and_then(|items| items.get(i).copied())
+                        .or_else(|| {
+                            if rhs_items.is_none() && elements.len() == 1 {
+                                Some(rhs_ty)
+                            } else {
+                                None
+                            }
+                        })
                         .unwrap_or_else(|| self.intrn().ty_undefined);
-                    self.process_assignment_lhs_after_infer_rhs(element, item_rhs_ty, flow);
-                    types_list.push(self.ctx.get_node_type_or_unknown(&element));
+                    self.process_assignment_lhs_after_infer_rhs(*element, item_rhs_ty, flow);
+                    types_list.push(self.ctx.get_node_type_or_unknown(element));
                 }
                 let ty = self.intrn().tensor(types_list);
                 self.ctx.set_node_type(&lhs_tensor.0, ty);
@@ -472,9 +492,13 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             // dig recursively into v1 and v2 with corresponding rhs i-th item of a tuple
             Expr::Tuple(lhs_tuple) => {
                 let rhs_unwrapped = self.intrn().unwrap_alias(rhs_ty);
+                let mut repeated_item_ty = None;
                 let rhs_items =
                     if let TyData::Tuple(items) = self.intrn().data(rhs_unwrapped).clone() {
                         items
+                    } else if let TyData::Array(item_ty) = self.intrn().data(rhs_unwrapped) {
+                        repeated_item_ty = Some(*item_ty);
+                        Vec::new()
                     } else {
                         return;
                     };
@@ -484,6 +508,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                     let item_rhs_ty = rhs_items
                         .get(i)
                         .cloned()
+                        .or(repeated_item_ty)
                         .unwrap_or_else(|| self.intrn().ty_undefined);
                     self.process_assignment_lhs_after_infer_rhs(element, item_rhs_ty, flow);
                     types_list.push(self.ctx.get_node_type_or_unknown(&element));
@@ -561,13 +586,14 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         v: Bin<'t>,
         flow: FlowContext,
         as_cond: bool,
+        hint: Option<TyId>,
     ) -> ExprFlow {
         let lhs = try_expr_flow!(flow, v.left());
         let operator = try_expr_flow!(flow, v.operator());
         let operator_name = try_expr_flow!(flow, self.text_or_none(&operator));
 
         if operator_name == "??" {
-            let after_lhs = self.infer_expr(lhs, flow, false, None);
+            let after_lhs = self.infer_expr(lhs, flow, false, hint);
             let lhs_type = self.ctx.get_node_type_or_unknown(&lhs);
 
             let Some(rhs) = v.right() else {
@@ -580,31 +606,29 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 rhs_flow.register_known_type(s_expr, self.intrn().ty_null);
             }
 
-            let after_rhs = self.infer_expr(rhs, rhs_flow, false, None);
+            let after_rhs = self.infer_expr(rhs, rhs_flow, false, hint);
             let ty_null = self.intrn().ty_null;
-            let lhs_unwrapped = self.const_intrn().unwrap_alias(lhs_type);
-            let without_null_ty =
-                if matches!(self.const_intrn().data(lhs_unwrapped), TyData::Union(_)) {
-                    self.intrn()
-                        .calculate_type_subtract_rhs_type(lhs_type, ty_null)
-                } else {
-                    lhs_type
-                };
+            let without_null_ty = self
+                .intrn()
+                .calculate_type_subtract_rhs_type(lhs_type, ty_null);
+            let mut rhs_out_flow = after_rhs.out_flow;
 
             if lhs_type == ty_null {
                 let rhs_ty = self.ctx.get_node_type_or_unknown(&rhs);
                 self.ctx.set_node_type(&v, rhs_ty);
             } else if without_null_ty == self.intrn().ty_never {
+                rhs_out_flow.mark_unreachable(UnreachableKind::CantHappen);
                 self.ctx.set_node_type(&v, lhs_type);
             } else {
                 let rhs_ty = self.ctx.get_node_type_or_unknown(&rhs);
-                let result_ty = self.intrn().calculate_type_lca(without_null_ty, rhs_ty);
+                let mut branches_unifier = TypeInferringUnifyStrategy::new();
+                branches_unifier.unify_with(without_null_ty, hint, self.intrn());
+                branches_unifier.unify_with(rhs_ty, hint, self.intrn());
+                let result_ty = branches_unifier.get_result(self.intrn());
                 self.ctx.set_node_type(&v, result_ty);
             }
 
-            let out_flow = after_lhs
-                .out_flow
-                .merge_flow(&after_rhs.out_flow, self.intrn());
+            let out_flow = after_lhs.out_flow.merge_flow(&rhs_out_flow, self.intrn());
             return ExprFlow::create(out_flow, as_cond);
         }
 
@@ -737,6 +761,8 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
     ) -> ExprFlow {
         let cond = try_expr_flow!(flow, v.condition());
         let after_cond = self.infer_expr(cond, flow, true, None);
+        let true_reachable = !after_cond.true_flow.is_unreachable();
+        let false_reachable = !after_cond.false_flow.is_unreachable();
 
         let when_true = try_expr_flow!(after_cond.out_flow, v.consequence());
         let when_false = try_expr_flow!(after_cond.out_flow, v.alternative());
@@ -749,8 +775,12 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         let mut branches_unifier = TypeInferringUnifyStrategy::new();
         let true_ty = self.ctx.get_node_type_or_unknown(&when_true);
         let false_ty = self.ctx.get_node_type_or_unknown(&when_false);
-        branches_unifier.unify_with(true_ty, hint, self.intrn());
-        branches_unifier.unify_with(false_ty, hint, self.intrn());
+        if true_reachable {
+            branches_unifier.unify_with(true_ty, hint, self.intrn());
+        }
+        if false_reachable {
+            branches_unifier.unify_with(false_ty, hint, self.intrn());
+        }
 
         // if branches_unifier.is_union_of_different_types() {
         //     // `... ? intVar : sliceVar` results in `int | slice`, probably it's not what the user expected
@@ -759,14 +789,25 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         //     // TODO: report error if hint is unknown?
         // }
 
-        let ty = branches_unifier.get_result(self.const_intrn());
+        let ty = if true_reachable && !false_reachable {
+            true_ty
+        } else if false_reachable && !true_reachable {
+            false_ty
+        } else {
+            branches_unifier.get_result(self.const_intrn())
+        };
         self.ctx.set_node_type(&v.0, ty);
 
-        let out_flow = after_true
-            .out_flow
-            .merge_flow(&after_false.out_flow, self.intrn());
+        let intrn = self.intrn();
+        let out_flow = after_true.out_flow.merge_flow(&after_false.out_flow, intrn);
+        let true_flow = after_true
+            .true_flow
+            .merge_flow(&after_false.true_flow, intrn);
+        let false_flow = after_true
+            .false_flow
+            .merge_flow(&after_false.false_flow, intrn);
 
-        ExprFlow::new(out_flow, after_true.true_flow, after_false.false_flow)
+        ExprFlow::new(out_flow, true_flow, false_flow)
     }
 
     //+ CHECKED
@@ -777,7 +818,16 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         as_cond: bool,
     ) -> ExprFlow {
         let expr = try_expr_flow!(flow, v.expr());
-        let cast_ty = self.lower(v.casted_to());
+        let mut cast_ty = self.lower(v.casted_to());
+        if !self.intrn().has_generics(cast_ty) {
+            cast_ty = self.apply_defaults_to_type(cast_ty);
+        } else if let TyData::TypeParameter {
+            default_type: Some(default_ty),
+            ..
+        } = self.intrn().data(cast_ty)
+        {
+            cast_ty = *default_ty;
+        }
 
         // for `expr as <type>`, use this type for hint, so that `t.tupleAt(0) as int` is ok
         let after_expr = self.infer_expr(expr, flow, false, Some(cast_ty));
@@ -1089,6 +1139,20 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         cur
     }
 
+    fn unwrap_not_null_and_paren(&self, expr: Expr<'t>) -> Expr<'t> {
+        let mut cur = expr;
+        loop {
+            cur = self.unwrap_not_null(cur);
+            if let Expr::Paren(par) = cur
+                && let Some(inner) = par.inner()
+            {
+                cur = inner;
+                continue;
+            }
+            return cur;
+        }
+    }
+
     /// given any expression vertex, extract SinkExpression is possible
     /// example: `x.0` is { var_ref: x, index_path: 1 }
     /// example: `x.1` is { var_ref: x, index_path: 2 }
@@ -1148,14 +1212,14 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                         break;
                     };
 
-                    if let Expr::DotAccess(parent_dot) = self.unwrap_not_null(obj) {
+                    if let Expr::DotAccess(parent_dot) = self.unwrap_not_null_and_paren(obj) {
                         cur_dot = parent_dot;
                     } else {
                         break;
                     }
                 }
 
-                if let Expr::Ident(ident) = self.unwrap_not_null(cur_dot.obj()?)
+                if let Expr::Ident(ident) = self.unwrap_not_null_and_paren(cur_dot.obj()?)
                     && let Some(usage) = self.ctx.get_resolved_node(&ident.0)
                     && let Resolved::Local(def_id) = usage.resolved
                 {
@@ -1480,8 +1544,8 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                                     name: field_name.into(),
                                     resolved: Resolved::Global(member.id),
                                 });
-                                self.ctx.set_node_type(&v, receiver_type); // `Color.Red` is `Color`
-                                self.ctx.set_node_type(&field, receiver_type); // type of field itself
+                                self.ctx.set_node_type(&v, unwrapped); // `ColorAlias.Red` is `Color`
+                                self.ctx.set_node_type(&field, unwrapped); // type of field itself
                                 return ExprFlow::create(flow, as_cond);
                             }
                         }
@@ -1655,7 +1719,13 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             }
         } else if let Some(fun_ref) = fun_ref {
             let symbol = self.ctx.type_db.project_index.resolve_symbol(fun_ref);
-            let typ = self.ctx.get_top_level_type(fun_ref);
+            let mut typ = self.ctx.get_top_level_type(fun_ref);
+            if let Some(current) = typ
+                && self.const_intrn().has_generics(current)
+            {
+                let mut substitutor = TypeSubstitutor::new_with_defaults(self.intrn());
+                typ = Some(substitutor.substitute(current, &substituted_ts.mapping));
+            }
             let f_callable = typ
                 .map(|t| self.const_intrn().unwrap_alias(t))
                 .and_then(|t| self.return_type_or_none(t));
@@ -1678,6 +1748,14 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 let func_ty = self.intrn().func(f_callable.0, return_ty);
                 self.ctx.set_node_type(&v, func_ty);
             }
+
+            self.ctx.set_resolved(NameUse {
+                decl: self.ctx.decl_start,
+                span: field.span(),
+                kind: NameUseKind::Value,
+                name: field_name.into(),
+                resolved: Resolved::Global(fun_ref),
+            });
         }
 
         ExprFlow::create(flow, as_cond)
@@ -1688,6 +1766,8 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         field_name: &SmolStr,
         receiver_type: TyId,
     ) -> Result<Option<MethodCallCandidate>, String> {
+        self.ctx.type_db.ensure_method_receivers_loaded();
+
         let key = MethodKey(receiver_type, field_name.clone());
         if let Some(cached) = self.ctx.computed_methods.get(&key) {
             return Ok(cached.clone());
@@ -1703,7 +1783,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         v: Call<'t>,
         flow: FlowContext,
         as_cond: bool,
-        _hint: Option<TyId>,
+        hint: Option<TyId>,
     ) -> ExprFlow {
         let mut flow = flow;
         let callee = try_expr_flow!(flow, v.callee());
@@ -1852,6 +1932,14 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         // for `obj.method()` obj is the first argument (passed to `self` parameter)
         if let Some(self_expr) = self_obj {
             let self_obj_ty = self.ctx.get_node_type(&self_expr);
+
+            if let Some(self_obj_ty) = self_obj_ty
+                && let Some(&receiver_ty) = self.ctx.type_db.receiver_types.get(&fun_ref)
+                && self.intrn().has_generics(receiver_ty)
+            {
+                deducing_ts.auto_deduce_from_argument(receiver_ty, self_obj_ty, self.intrn());
+            }
+
             let params = &f_callable.0;
             if let Some(&param_ty) = params.first()
                 && let Some(self_obj_ty) = self_obj_ty
@@ -1865,11 +1953,12 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 if let SymbolKind::Method {
                     is_mutable: true, ..
                 } = &declaration.kind
-                    && self.const_intrn().equals(self_obj_ty, param_ty)
                     && let Some(s_expr) = self.extract_sink_expression(self_expr)
                 {
-                    let ty = self.calc_declared_type_before_smart_cast(self_expr);
-                    self.ctx.set_node_type(&self_expr, ty);
+                    if !self.const_intrn().equals(self_obj_ty, param_ty) {
+                        let ty = self.calc_declared_type_before_smart_cast(self_expr);
+                        self.ctx.set_node_type(&self_expr, ty);
+                    }
                     flow.register_known_type(s_expr, param_ty);
                 }
             }
@@ -1927,8 +2016,14 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             return_ty = inferred_ty
         }
 
+        if let Some(hint_ty) = hint
+            && self.intrn().has_generics(return_ty)
+        {
+            deducing_ts.auto_deduce_from_argument(return_ty, hint_ty, self.intrn());
+        }
+
         let final_return_ty = if self.intrn().has_generics(return_ty) {
-            let mut substitutor = TypeSubstitutor::new(self.intrn());
+            let mut substitutor = TypeSubstitutor::new_with_defaults(self.intrn());
             substitutor.substitute(return_ty, &deducing_ts.substitutions.mapping)
         } else {
             return_ty
@@ -1964,14 +2059,15 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         hint: Option<TyId>,
     ) -> ExprFlow {
         let mut flow = flow;
-        let tensor_hint = hint.and_then(|h| {
-            let unwrapped = self.intrn().unwrap_alias(h);
-            if let TyData::Tensor(items) = self.intrn().data(unwrapped).clone() {
-                Some(items)
-            } else {
-                None
-            }
-        });
+        let tensor_hint = hint
+            .and_then(|h| self.pick_unique_tensor_hint(h))
+            .and_then(|h| {
+                if let TyData::Tensor(items) = self.intrn().data(h).clone() {
+                    Some(items)
+                } else {
+                    None
+                }
+            });
 
         let elements: Vec<_> = v.elements().collect();
         let mut types_list = Vec::with_capacity(elements.len());
@@ -2050,6 +2146,29 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         }
     }
 
+    fn pick_unique_tensor_hint(&self, hint: TyId) -> Option<TyId> {
+        let hint = self.const_intrn().unwrap_alias(hint);
+        match self.const_intrn().data(hint).clone() {
+            TyData::Tensor(_) => Some(hint),
+            TyData::Union(variants) => {
+                let mut found: Option<TyId> = None;
+                for variant in variants {
+                    if let Some(candidate) = self.pick_unique_tensor_hint(variant) {
+                        if let Some(existing) = found {
+                            if !self.const_intrn().equals(existing, candidate) {
+                                return None;
+                            }
+                        } else {
+                            found = Some(candidate);
+                        }
+                    }
+                }
+                found
+            }
+            _ => None,
+        }
+    }
+
     fn pick_unique_array_hint(&self, hint: TyId) -> Option<TyId> {
         let hint = self.const_intrn().unwrap_alias(hint);
         if self.array_element_type(hint).is_some() {
@@ -2085,6 +2204,31 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             let mut found: Option<TyId> = None;
             for variant in variants {
                 if let Some(candidate) = self.pick_unique_lisp_list_hint(variant) {
+                    if let Some(existing) = found {
+                        if !self.const_intrn().equals(existing, candidate) {
+                            return None;
+                        }
+                    } else {
+                        found = Some(candidate);
+                    }
+                }
+            }
+            return found;
+        }
+
+        None
+    }
+
+    fn pick_unique_callable_hint(&self, hint: TyId) -> Option<TyId> {
+        let hint = self.const_intrn().unwrap_alias(hint);
+        if matches!(self.const_intrn().data(hint), TyData::Func { .. }) {
+            return Some(hint);
+        }
+
+        if let TyData::Union(variants) = self.const_intrn().data(hint).clone() {
+            let mut found: Option<TyId> = None;
+            for variant in variants {
+                if let Some(candidate) = self.pick_unique_callable_hint(variant) {
                     if let Some(existing) = found {
                         if !self.const_intrn().equals(existing, candidate) {
                             return None;
@@ -2180,10 +2324,11 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             return ExprFlow::create(flow, as_cond);
         }
 
-        let mut inferred_element_ty = types_list[0];
-        for ty in types_list.iter().skip(1).copied() {
-            inferred_element_ty = self.intrn().calculate_type_lca(inferred_element_ty, ty);
+        let mut unifier = TypeInferringUnifyStrategy::new();
+        for ty in types_list.iter().copied() {
+            unifier.unify_with(ty, None, self.intrn());
         }
+        let inferred_element_ty = unifier.get_result(self.intrn());
         let ty = self.array_type_from_element(inferred_element_ty, array_hint);
 
         self.ctx.set_node_type(&v, ty);
@@ -2208,8 +2353,9 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         // > fun call(f: (int) -> slice) { ... }
         // > call(fun(i) { ... })
         // then from a hint, calculate params_types=[int], return_type=slice
-        let hint_unwrapped = hint.map(|h| self.const_intrn().unwrap_alias(h));
-        let h_callable = hint_unwrapped.and_then(|h| self.return_type_or_none(h));
+        let h_callable = hint
+            .and_then(|h| self.pick_unique_callable_hint(h))
+            .and_then(|h| self.return_type_or_none(h));
 
         let mut params_types = Vec::new();
         let mut body_start = FlowContext::new();
@@ -2401,8 +2547,11 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 match body {
                     MatchArmBody::Block(block) => {
                         arm_flow = self.process_block_stmt(block, arm_flow);
-                        // Assuming Void for block statement unless we have yield (not supported yet?)
-                        body_ty = self.intrn().ty_void;
+                        body_ty = if arm_flow.is_unreachable() {
+                            self.intrn().ty_never
+                        } else {
+                            self.intrn().ty_void
+                        };
                     }
                     MatchArmBody::Expr(expr) => {
                         let flow_res = self.infer_expr(expr, arm_flow, false, hint);
@@ -2473,22 +2622,14 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         // `User { ... }` / `UserAlias { ... }` / `Wrapper { ... }` / `Wrapper<int> { ... }`
         if let Some(type_node) = v.typ() {
             let explicit_type = self.lower(Some(type_node));
-            let unwrapped = self.const_intrn().unwrap_alias(explicit_type);
-
-            match self.const_intrn().data(unwrapped) {
-                TyData::Struct { name, def, .. } => {
-                    // `Wrapper` / `Wrapper<int>`
-                    struct_def_id = Some(*def);
-                    struct_name = Some(name.clone());
-                }
-                TyData::GenericTypeWithTs { inner_ty, .. } => {
-                    if let TyData::Struct { name, def, .. } = self.const_intrn().data(*inner_ty) {
-                        // if `type WAlias<T> = Wrapper<T>`, here `Wrapper` (generic struct)
-                        struct_def_id = Some(*def);
-                        struct_name = Some(name.clone());
-                    }
-                }
-                _ => {}
+            if let Some(def) = self.ctx.type_db.find_struct(explicit_type) {
+                struct_def_id = Some(def);
+                struct_name = self
+                    .ctx
+                    .type_db
+                    .project_index
+                    .resolve_symbol(def)
+                    .map(|sym| sym.name.clone());
             }
 
             explicit_ty = Some(explicit_type);
@@ -2510,37 +2651,36 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         if struct_def_id.is_none()
             && let Some(h) = hint
         {
-            let unwrapped = self.const_intrn().unwrap_alias(h);
-            match self.const_intrn().data(unwrapped) {
-                TyData::Struct { name, def, .. } => {
-                    struct_def_id = Some(*def);
-                    struct_name = Some(name.clone());
-                }
-                TyData::Union(variants) => {
+            if let Some(def) = self.ctx.type_db.find_struct(h) {
+                struct_def_id = Some(def);
+                struct_name = self
+                    .ctx
+                    .type_db
+                    .project_index
+                    .resolve_symbol(def)
+                    .map(|sym| sym.name.clone());
+            } else {
+                let unwrapped = self.const_intrn().unwrap_alias(h);
+                if let TyData::Union(variants) = self.const_intrn().data(unwrapped) {
                     // Find struct in variants
                     let mut found_def = None;
                     for &var in variants {
-                        let v_unwrapped = self.const_intrn().unwrap_alias(var);
-                        if let TyData::Struct { name, def, .. } =
-                            self.const_intrn().data(v_unwrapped)
-                        {
+                        if let Some(def) = self.ctx.type_db.find_struct(var) {
                             if found_def.is_some() {
                                 found_def = None; // Ambiguous
                                 break;
                             }
-                            struct_name = Some(name.clone());
-                            found_def = Some(*def);
+                            struct_name = self
+                                .ctx
+                                .type_db
+                                .project_index
+                                .resolve_symbol(def)
+                                .map(|sym| sym.name.clone());
+                            found_def = Some(def);
                         }
                     }
                     struct_def_id = found_def;
                 }
-                TyData::GenericTypeWithTs { inner_ty, .. } => {
-                    if let TyData::Struct { name, def, .. } = self.const_intrn().data(*inner_ty) {
-                        struct_def_id = Some(*def);
-                        struct_name = Some(name.clone());
-                    }
-                }
-                _ => {}
             }
         }
 
@@ -2562,21 +2702,13 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             let field_name = self.text_of(&name_node);
 
             if let Some(field) = self.ctx.type_db.find_struct_field(def_id, &field_name) {
-                self.ctx.set_resolved(NameUse {
-                    decl: self.ctx.decl_start,
-                    span: name_node.span(),
-                    kind: NameUseKind::Value,
-                    name: field.name.clone(),
-                    resolved: Resolved::Global(field.id),
-                });
-
                 let mut field_ty = field.declared_type;
                 if self.const_intrn().has_generics(field_ty) {
                     field_ty = deducing_ts.replace_ts_with_currently_deduced(field_ty, self.intrn())
                 }
 
                 if let Some(val) = arg.value() {
-                    let after_val = self.infer_expr(val, flow, false, Some(field.declared_type));
+                    let after_val = self.infer_expr(val, flow, false, Some(field_ty));
                     flow = after_val.out_flow;
 
                     let val_ty = self.ctx.get_node_type_or_unknown(&val);
@@ -2586,25 +2718,44 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
 
                     self.ctx.set_node_type(&arg, val_ty);
                 } else {
-                    // incomplete code
-                    self.ctx.set_node_type(&arg, field_ty);
+                    // shorthand field initializer: `{ fieldName }` is `{ fieldName: fieldName }`
+                    let implicit_val = Expr::Ident(name_node);
+                    let after_val = self.infer_expr(implicit_val, flow, false, Some(field_ty));
+                    flow = after_val.out_flow;
+
+                    let val_ty = self.ctx.get_node_type_or_unknown(&name_node);
+                    if self.const_intrn().has_generics(field_ty) {
+                        deducing_ts.auto_deduce_from_argument(field_ty, val_ty, self.intrn());
+                    }
+                    self.ctx.set_node_type(&arg, val_ty);
                 }
+
+                // Keep field reference for object-literal key after inferring value.
+                // For shorthand (`{ field }`), value inference must use the original local resolution.
+                self.ctx.set_resolved(NameUse {
+                    decl: self.ctx.decl_start,
+                    span: name_node.span(),
+                    kind: NameUseKind::Value,
+                    name: field.name.clone(),
+                    resolved: Resolved::Global(field.id),
+                });
             } else if let Some(val) = arg.value() {
                 // unknown field, just infer value type
                 flow = self.infer_expr(val, flow, false, None).out_flow;
             }
         }
 
-        let result_ty = if let Some(explicit_ty) = explicit_ty {
-            if self.const_intrn().has_generics(explicit_ty) {
-                let mut substitutor = TypeSubstitutor::new(self.intrn());
-                substitutor.substitute(explicit_ty, &deducing_ts.substitutions.mapping)
-            } else {
-                explicit_ty
-            }
-        } else {
-            self.intrn().struct_ty(def_id, struct_name)
-        };
+        let mut result_ty = explicit_ty.unwrap_or_else(|| {
+            self.ctx
+                .get_top_level_type(def_id)
+                .unwrap_or_else(|| self.intrn().struct_ty(def_id, struct_name.clone()))
+        });
+
+        if self.const_intrn().has_generics(result_ty) {
+            let mut substitutor = TypeSubstitutor::new_with_defaults(self.intrn());
+            result_ty = substitutor.substitute(result_ty, &deducing_ts.substitutions.mapping);
+        }
+        result_ty = self.intrn().unwrap_alias(result_ty);
 
         self.ctx.set_node_type(&v, result_ty);
         ExprFlow::create(flow, as_cond)
@@ -2619,8 +2770,27 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         let Some(expr) = v.expr() else {
             return ExprFlow::create(flow, as_cond);
         };
+        let mut flow = flow;
 
-        if let Some(resolved) = self.ctx.get_resolved_node(&expr)
+        // Dot-access instantiations (`obj.method<T>`) need dot resolution to expose method symbol.
+        if let Expr::DotAccess(dot) = expr {
+            flow = self
+                .infer_dot_access(dot, flow, false, None, None, None)
+                .out_flow;
+        }
+
+        let resolved_symbol = match expr {
+            Expr::Ident(ident) => self.ctx.get_resolved_node(&ident),
+            Expr::DotAccess(dot) => match dot.field() {
+                Some(DotAccessField::Ident(field_ident)) => {
+                    self.ctx.get_resolved_node(&field_ident)
+                }
+                _ => None,
+            },
+            _ => self.ctx.get_resolved_node(&expr),
+        };
+
+        if let Some(resolved) = resolved_symbol
             && let Resolved::Global(id) = resolved.resolved
             && let Some(symbol) = self.ctx.type_db.project_index.resolve_symbol(id)
         {
@@ -2628,62 +2798,42 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                 && let Some(ty) = self.ctx.type_db.convert_instantiated(&v, self.ctx.file_id)
             {
                 self.ctx.set_node_type(&v, ty);
-            } else {
-                // function call with explicit generics
-                // this is mess, but ok for now
-                if let Some(file) = self.ctx.type_db.file_db.get_by_id(symbol.id.file_id)
-                    && let Some(element) = file.find_syntax_declaration(symbol.id)
+            } else if let Some(instantiation_types) = v.instantiation_ts() {
+                let mut substituted_ts = GenericsSubstitutions::new();
+                let provided_types = instantiation_types
+                    .types()
+                    .map(|t| self.ctx.type_db.lower_type(self.ctx.file_id, &t))
+                    .collect::<Vec<_>>();
+
+                let type_parameters = match &symbol.kind {
+                    SymbolKind::Function {
+                        type_parameters, ..
+                    } => Some(type_parameters),
+                    SymbolKind::Method {
+                        type_parameters, ..
+                    } => Some(type_parameters),
+                    SymbolKind::GetMethod {
+                        type_parameters, ..
+                    } => Some(type_parameters),
+                    _ => None,
+                };
+
+                if let Some(type_parameters) = type_parameters {
+                    for (param, ty) in type_parameters.iter().zip(provided_types) {
+                        substituted_ts.set_type_t(param.name.to_string(), ty);
+                    }
+                }
+
+                if let Some(mut func_ty) = self
+                    .ctx
+                    .get_node_type(&expr)
+                    .or_else(|| self.ctx.get_top_level_type(symbol.id))
                 {
-                    let Some(type_parameters) = element.type_parameters() else {
-                        return ExprFlow::create(flow, as_cond);
-                    };
-                    let type_parameters = type_parameters.parameters();
-                    let Some(instantiation_types) = v.instantiation_ts() else {
-                        return ExprFlow::create(flow, as_cond);
-                    };
-                    let tys = instantiation_types
-                        .types()
-                        .map(|t| self.ctx.type_db.lower_type(file.id(), &t))
-                        .collect::<Vec<_>>();
-
-                    let mut substituted_ts = GenericsSubstitutions::new();
-                    for (param, ty) in type_parameters.zip(tys) {
-                        let Some(name) = param.name() else { continue };
-                        let Some(name) = self.ctx.type_db.file_db.text_of(file.id(), &name) else {
-                            continue;
-                        };
-
-                        substituted_ts.set_type_t(name.to_string(), ty);
+                    if self.intrn().has_generics(func_ty) {
+                        let mut substitutor = TypeSubstitutor::new_with_defaults(self.intrn());
+                        func_ty = substitutor.substitute(func_ty, &substituted_ts.mapping);
                     }
-
-                    let typ = self.ctx.get_top_level_type(symbol.id);
-                    let f_callable = typ
-                        .map(|t| self.const_intrn().unwrap_alias(t))
-                        .and_then(|t| self.return_type_or_none(t));
-
-                    if let Some(f_callable) = f_callable {
-                        let mut return_ty = f_callable.1;
-
-                        // if return type is omitted we need to infer function body first
-                        // once inferred, subsequent `return_ty` for this function will be non-auto
-                        if return_ty == self.const_intrn().ty_auto
-                            && let Some(inferred_ty) =
-                                self.infer_auto_return_type_of_function(symbol)
-                        {
-                            let func_ty = self.intrn().func(f_callable.0.clone(), inferred_ty);
-                            self.ctx.set_top_level_type(symbol.id, func_ty);
-                            return_ty = inferred_ty
-                        }
-
-                        let mut func_ty = self.intrn().func(f_callable.0, return_ty);
-
-                        if self.intrn().has_generics(func_ty) {
-                            let mut substitutor = TypeSubstitutor::new(self.intrn());
-                            func_ty = substitutor.substitute(func_ty, &substituted_ts.mapping)
-                        }
-
-                        self.ctx.set_node_type(&v, func_ty);
-                    }
+                    self.ctx.set_node_type(&v, func_ty);
                 }
             }
 
