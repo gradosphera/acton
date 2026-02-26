@@ -239,6 +239,24 @@ fun main() {
 ok
 
 ========================================================================
+Generic static call via local receiver type parameter
+========================================================================
+fun T.decodeBody(body: slice): T {
+    val ctor = T.fromSlice;
+//!     ^ (slice, UnpackOptions) -> T
+    val decoded = T.fromSlice(body);
+//!     ^ T
+    return decoded;
+}
+
+fun main(cs: slice) {
+    val parsed = int.decodeBody(cs);
+//!     ^ int
+}
+------------------------------------------------------------------------
+ok
+
+========================================================================
 Generic instance method with single argument and T receiver
 ========================================================================
 fun T.generic<U>(self, a: U): T | U {}

@@ -13,7 +13,7 @@ use crate::{try_expr_flow, try_flow};
 use smol_str::SmolStr;
 use tolk_resolver::file_index::OptionalSyntaxNodeSpanExt;
 use tolk_resolver::file_index::SymbolId;
-use tolk_resolver::resolve_index::{LocalDefId, NameUse, NameUseKind, Resolved};
+use tolk_resolver::resolve_index::{LocalDefId, LocalDefKind, NameUse, NameUseKind, Resolved};
 use tolk_resolver::{AstNodeSpanExt, Span, Symbol, SymbolKind};
 use tolk_syntax::{
     AsCast, Assign, AstNode, Bin, BoolLit, Call, DotAccess, DotAccessField, Expr, HasGenericParams,
@@ -1291,10 +1291,23 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             let sink_expr = SinkExpr::from_def(name, def_id, 0);
             let span = Span::from_def_id(def_id, resolved.span.len() as u32);
 
-            let declared_type = self
-                .ctx
-                .get_type(span)
-                .unwrap_or_else(|| self.intrn().ty_undefined);
+            let mut declared_type = self.ctx.get_type(span);
+
+            // Local type parameters declared in method receivers (`fun T.foo()`)
+            // may not have a value-type entry in flow state, so recover them from resolver locals.
+            if declared_type.is_none()
+                && let Some(resolved_uses) = self
+                    .ctx
+                    .type_db
+                    .project_index
+                    .get_resolved_uses(def_id.file_id)
+                && let Some(local) = resolved_uses.find_local(def_id)
+                && matches!(local.kind, LocalDefKind::TypeParameter)
+            {
+                declared_type = Some(self.intrn().type_parameter(local.name.to_string(), None));
+            }
+
+            let declared_type = declared_type.unwrap_or_else(|| self.intrn().ty_undefined);
 
             let declared_or_smart_casted =
                 flow.smart_cast_or_original(sink_expr, declared_type, self.intrn());
@@ -1357,32 +1370,51 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         // handle `Point.create` / `Container<int>.wrap` / `Color.Red`: lhs is a type, looking up a constant/method
         if let Some(Expr::Ident(obj)) = v.obj()
             && let Some(usage) = self.ctx.get_resolved_node(&obj)
-            && let Resolved::Global(sym_id) = usage.resolved
-            && let Some(receiver_type) = self.ctx.get_top_level_type(sym_id)
         {
-            // `Color.Red` (enum member) — just fill v->target and done
-            let unwrapped = self.intrn().unwrap_alias(receiver_type);
-            if let TyData::Enum { def, .. } = self.const_intrn().data(unwrapped) {
-                let member = self.ctx.type_db.find_enum_member(*def, &field_name);
-                if let Some(member) = member {
-                    self.ctx.set_resolved(NameUse {
-                        decl: self.ctx.decl_start,
-                        span: field.span(),
-                        kind: NameUseKind::Value,
-                        name: field_name.into(),
-                        resolved: Resolved::Global(member.id),
-                    });
-                    self.ctx.set_node_type(&v, receiver_type); // `Color.Red` is `Color`
-                    self.ctx.set_node_type(&field, receiver_type); // type of field itself
-                    return ExprFlow::create(flow, as_cond);
-                }
-            }
+            match usage.resolved {
+                Resolved::Global(sym_id) => {
+                    if let Some(receiver_type) = self.ctx.get_top_level_type(sym_id) {
+                        // `Color.Red` (enum member) — just fill v->target and done
+                        let unwrapped = self.intrn().unwrap_alias(receiver_type);
+                        if let TyData::Enum { def, .. } = self.const_intrn().data(unwrapped) {
+                            let member = self.ctx.type_db.find_enum_member(*def, &field_name);
+                            if let Some(member) = member {
+                                self.ctx.set_resolved(NameUse {
+                                    decl: self.ctx.decl_start,
+                                    span: field.span(),
+                                    kind: NameUseKind::Value,
+                                    name: field_name.into(),
+                                    resolved: Resolved::Global(member.id),
+                                });
+                                self.ctx.set_node_type(&v, receiver_type); // `Color.Red` is `Color`
+                                self.ctx.set_node_type(&field, receiver_type); // type of field itself
+                                return ExprFlow::create(flow, as_cond);
+                            }
+                        }
 
-            if let Ok(Some(candidate)) = self.choose_only_method_to_call(&field_name, receiver_type)
-            {
-                is_static_call = true;
-                fun_ref = Some(candidate.method_id);
-                substituted_ts.mapping = candidate.substitutions;
+                        if let Ok(Some(candidate)) =
+                            self.choose_only_method_to_call(&field_name, receiver_type)
+                        {
+                            is_static_call = true;
+                            fun_ref = Some(candidate.method_id);
+                            substituted_ts.mapping = candidate.substitutions;
+                        }
+                    }
+                }
+                Resolved::Local(local_id) => {
+                    if let Some(resolved_uses) = self
+                        .ctx
+                        .type_db
+                        .project_index
+                        .get_resolved_uses(local_id.file_id)
+                        && let Some(local) = resolved_uses.find_local(local_id)
+                        && matches!(local.kind, LocalDefKind::TypeParameter)
+                    {
+                        // `T.fromSlice(...)` where `T` comes from method receiver.
+                        is_static_call = true;
+                    }
+                }
+                Resolved::Unresolved => {}
             }
         }
 
