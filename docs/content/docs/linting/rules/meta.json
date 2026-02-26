@@ -20,6 +20,8 @@
     "e017-unauthorized-access",
     "e018-import-path-can-use-mappings",
     "e019-several-not-null-assertions",
+    "e020-reserve-mode-literal",
+    "e021-dangerous-send-mode-missing-safety-comment",
     "s001-name-case-checker"
   ]
 }
