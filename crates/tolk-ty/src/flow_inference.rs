@@ -373,8 +373,18 @@ impl<'db, 'a> InferenceContext<'db, 'a> {
         self.type_db.top_level_types.insert(symbol_id, ty);
     }
 
-    pub fn get_top_level_type(&self, symbol_id: SymbolId) -> Option<TyId> {
-        self.type_db.top_level_types.get(&symbol_id).cloned()
+    pub fn get_top_level_type(&mut self, symbol_id: SymbolId) -> Option<TyId> {
+        if let Some(&ty) = self.type_db.top_level_types.get(&symbol_id) {
+            // fast path
+            return Some(ty);
+        }
+
+        let kind = self
+            .type_db
+            .project_index
+            .resolve_symbol(symbol_id)
+            .map(|s| &s.kind);
+        self.type_db.get_top_level_type(kind, symbol_id)
     }
 
     pub fn set_node_type<'node, Node: AstNode<'node>>(&mut self, node: &Node, ty: TyId) {

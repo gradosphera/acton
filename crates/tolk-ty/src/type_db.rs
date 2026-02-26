@@ -258,6 +258,13 @@ impl<'a> TypeDb<'a> {
         let file_info = self.file_db.get_by_path(&file_index.path)?;
 
         let ast_decl = file_info.find_syntax_declaration(symbol.id)?;
+        if let ast::TopLevel::Constant(constant) = &ast_decl
+            && constant.typ().is_none()
+            && constant.value().is_some()
+        {
+            let _ = crate::type_inference::infer(self, file_id, symbol.id, &ast_decl);
+            return self.top_level_types.get(&symbol_id).cloned();
+        }
         let ty = self.lower_top_level_decl(file_id, &ast_decl, symbol)?;
         self.top_level_types.insert(symbol_id, ty);
         Some(ty)
