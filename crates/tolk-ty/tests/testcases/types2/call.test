@@ -153,3 +153,141 @@ fun main(cell: Cell<int>) {
 }
 ------------------------------------------------------------------------
 ok
+
+========================================================================
+Maybe unwrap and chained method call
+========================================================================
+type Maybe<X> = Value<X> | None
+
+struct (0b0) None
+
+struct (0b1) Value<X> {
+    value: X
+}
+
+fun Maybe<X>.unwrap(self): X {
+    if (self is None) {
+        throw 7;
+    }
+    return self.value;
+}
+
+struct Body {
+    marker: int
+}
+
+struct Message<T> {
+    body: T
+}
+
+fun Message<T>.loadBody(self): T {
+    return self.body;
+}
+
+fun main(v: Maybe<Message<Body>>) {
+    val body = v.unwrap().loadBody();
+//!     ^ Body
+    val marker = body.marker;
+//!     ^ int
+}
+------------------------------------------------------------------------
+ok
+
+========================================================================
+Maybe unwrap after generic method with default type parameter
+========================================================================
+type Maybe2<X> = Value2<X> | None2
+
+struct (0b0) None2
+
+struct (0b1) Value2<X> {
+    value: X
+}
+
+fun Maybe2<X>.none(): Maybe2<X> {
+    return None2{}
+}
+
+fun Maybe2<X>.unwrap(self): X {
+    if (self is None2) {
+        throw 7;
+    }
+    return self.value;
+}
+
+struct ExternalBody {
+    marker: int,
+}
+
+struct Message2<TBody> {
+    body: TBody,
+}
+
+fun Message2<TBody>.loadBody(self): TBody {
+    return self.body;
+}
+
+type SendResultList2 = array<tuple>
+
+fun SendResultList2.findExternalOutMessage<TBody = never>(self): Maybe2<Message2<TBody>> {
+    return Maybe2<Message2<TBody>>.none();
+}
+
+fun main(res: SendResultList2) {
+    val ext = res.findExternalOutMessage<ExternalBody>();
+//!     ^ Maybe2<Message2<ExternalBody>>
+    val maybeMsg = ext;
+//!     ^ Maybe2<Message2<ExternalBody>>
+    val unwrapped = maybeMsg.unwrap();
+//!     ^ Message2<ExternalBody>
+    val body = unwrapped.loadBody();
+//!     ^ ExternalBody
+    val marker = body.marker;
+//!     ^ int
+}
+------------------------------------------------------------------------
+ok
+
+========================================================================
+Negative is-check with never call narrows after if
+========================================================================
+struct Assert
+
+fun Assert.fail(): never {
+    throw 0;
+}
+
+struct (0b0) AccountNone
+struct (0b1) AccountInfo {
+    storage: AccountStorage
+}
+type Account = AccountNone | AccountInfo
+
+struct (0b00) AccountStateUninit
+struct (0b1) AccountStateActive {
+    marker: int,
+}
+struct (0b01) AccountStateFrozen {
+    hash: int,
+}
+type AccountState = AccountStateUninit | AccountStateActive | AccountStateFrozen
+
+struct AccountStorage {
+    state: AccountState,
+}
+
+fun main(account: Account) {
+    if (account !is AccountInfo) {
+        Assert.fail();
+    }
+
+    var info = account;
+    if (info.storage.state !is AccountStateActive) {
+        Assert.fail();
+    }
+
+    var active = info.storage.state;
+//!     ^ AccountStateActive
+}
+------------------------------------------------------------------------
+ok

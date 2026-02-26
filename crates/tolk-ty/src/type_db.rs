@@ -374,8 +374,6 @@ impl<'a> TypeDb<'a> {
                 };
 
                 let name = symbol.name.clone();
-                let alias_ty = self.intrn.type_alias(symbol.id, name, inner);
-
                 if let Some(type_parameters) = a.type_parameters() {
                     let type_params = type_parameters
                         .parameters()
@@ -388,9 +386,16 @@ impl<'a> TypeDb<'a> {
                         })
                         .collect::<Vec<_>>();
 
+                    let alias_ty = self.intrn.type_alias_instantiation(
+                        symbol.id,
+                        name,
+                        inner,
+                        type_params.clone(),
+                    );
                     return Some(self.intrn.generic_type_with_ts(alias_ty, type_params));
                 }
 
+                let alias_ty = self.intrn.type_alias(symbol.id, name, inner);
                 Some(alias_ty)
             }
             ast::TopLevel::Enum(_) => {
@@ -662,7 +667,33 @@ impl<'a> TypeDb<'a> {
 
             return Some(self.intrn.generic_type_with_ts(*inner_ty, tys));
         }
-        if matches!(inner_data, TyData::Struct { .. } | TyData::TypeAlias { .. }) {
+        if let TyData::TypeAlias {
+            def,
+            name,
+            inner_ty: alias_inner_ty,
+            ..
+        } = inner_data.clone()
+        {
+            let mut instantiated_inner = alias_inner_ty;
+            let resolved = self.project_index.resolve_symbol(def)?;
+            if let SymbolKind::TypeAlias {
+                type_parameters, ..
+            } = &resolved.kind
+            {
+                let mut substitution = GenericsSubstitutions::new();
+                for (param, &ty) in type_parameters.iter().zip(&tys) {
+                    substitution.set_type_t(param.name.to_string(), ty);
+                }
+                let mut substitutor = TypeSubstitutor::new(self.intrn);
+                instantiated_inner =
+                    substitutor.substitute(instantiated_inner, &substitution.mapping)
+            }
+            return Some(
+                self.intrn
+                    .type_alias_instantiation(def, name, instantiated_inner, tys),
+            );
+        }
+        if matches!(inner_data, TyData::Struct { .. }) {
             return Some(inner_ty);
         }
 

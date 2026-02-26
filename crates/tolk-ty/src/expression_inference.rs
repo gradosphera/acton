@@ -543,7 +543,15 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             }
         }
 
-        ExprFlow::create(after_rhs.out_flow, as_cond)
+        if as_cond {
+            ExprFlow::new(
+                after_rhs.out_flow,
+                after_rhs.true_flow,
+                after_rhs.false_flow,
+            )
+        } else {
+            ExprFlow::create(after_rhs.out_flow, false)
+        }
     }
 
     //+ CHECKED

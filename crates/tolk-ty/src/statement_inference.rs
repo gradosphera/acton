@@ -30,7 +30,14 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
     fn process_expr_stmt(&mut self, v: ExprStmt<'t>, flow: FlowContext) -> FlowContext {
         let expr = try_flow!(flow, v.expr());
         let expr_flow = self.infer_expr(expr, flow, false, None);
-        expr_flow.out_flow
+        let mut out_flow = expr_flow.out_flow;
+
+        let expr_ty = self.ctx.get_node_type_or_unknown(&expr);
+        if expr_ty == self.const_intrn().ty_never {
+            out_flow.mark_unreachable(UnreachableKind::CallNeverReturnFunction);
+        }
+
+        out_flow
     }
 
     //+ CHECKED

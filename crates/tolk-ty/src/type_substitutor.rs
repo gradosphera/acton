@@ -144,25 +144,50 @@ impl<'a> TypeSubstitutor<'a> {
                 let non_generic = types.iter().all(|t| !self.interner.has_generics(*t));
 
                 if non_generic {
-                    match self.interner.data(inner_ty) {
+                    match self.interner.data(inner_ty).clone() {
                         TyData::Struct { def, name, .. } => {
-                            return self.interner.struct_instantiation(
-                                *def,
-                                name.clone(),
-                                *def,
-                                types,
-                            );
+                            return self.interner.struct_instantiation(def, name, def, types);
                         }
                         TyData::TypeAlias {
                             def,
                             name,
                             inner_ty,
+                            args,
                             ..
                         } => {
+                            let mut instantiated_inner = inner_ty;
+                            let mut alias_mapping = FxHashMap::default();
+
+                            // For generic aliases represented as `GenericTypeWithTs(alias, [T1, T2, ...])`,
+                            // map those original generic placeholders to instantiated `types`.
+                            for (&param_ty, &actual_ty) in old_types.iter().zip(&types) {
+                                if let TyData::TypeParameter { name, .. } =
+                                    self.interner.data(param_ty)
+                                {
+                                    alias_mapping.insert(name.clone(), actual_ty);
+                                }
+                            }
+
+                            // Fallback for aliases that keep formal args inside `TypeAlias.args`.
+                            if let Some(alias_type_params) = args {
+                                for (&param_ty, &actual_ty) in alias_type_params.iter().zip(&types)
+                                {
+                                    if let TyData::TypeParameter { name, .. } =
+                                        self.interner.data(param_ty)
+                                    {
+                                        alias_mapping.insert(name.clone(), actual_ty);
+                                    }
+                                }
+                            }
+
+                            if !alias_mapping.is_empty() {
+                                instantiated_inner =
+                                    self.substitute(instantiated_inner, &alias_mapping);
+                            }
                             return self.interner.type_alias_instantiation(
-                                *def,
-                                name.clone(),
-                                *inner_ty,
+                                def,
+                                name,
+                                instantiated_inner,
                                 types,
                             );
                         }
