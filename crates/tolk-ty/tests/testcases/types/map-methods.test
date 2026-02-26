@@ -1,0 +1,94 @@
+========================================================================
+map generic instance method
+========================================================================
+fun map<K, V>.mapMethodInstanceUnique(self, key: K, value: V): self {}
+
+fun main(m: map<int, int>) {
+    val r = m.mapMethodInstanceUnique(1, 2);
+//!     ^ map<int, int>
+}
+------------------------------------------------------------------------
+ok
+
+========================================================================
+map generic static method
+========================================================================
+fun map<K, V>.mapMethodStaticUnique(): map<K, V> {}
+
+fun main() {
+    val r = map<int, int>.mapMethodStaticUnique();
+//!     ^ map<int, int>
+}
+------------------------------------------------------------------------
+ok
+
+========================================================================
+map method through alias
+========================================================================
+type IntMap = map<int, int>
+
+fun map<K, V>.mapMethodAliasUnique(self): V {}
+
+fun main(m: IntMap) {
+    val r = m.mapMethodAliasUnique();
+//!     ^ int
+}
+------------------------------------------------------------------------
+ok
+
+========================================================================
+map specialized instance methods with same name
+========================================================================
+fun map<int, int>.mapMethodSame(self): int {}
+fun map<int, slice>.mapMethodSame(self): slice {}
+fun map<K, V>.mapMethodSame(self): V {}
+
+fun main(mi: map<int, int>, ms: map<int, slice>, mb: map<int, builder>) {
+    val ri = mi.mapMethodSame();
+//!     ^ int
+    val rs = ms.mapMethodSame();
+//!     ^ slice
+    val rb = mb.mapMethodSame();
+//!     ^ builder
+}
+------------------------------------------------------------------------
+ok
+
+========================================================================
+map specialized static methods with same name
+========================================================================
+fun map<int, int>.mapStaticSame(): map<int, int> {}
+fun map<int, slice>.mapStaticSame(): map<int, slice> {}
+fun map<K, V>.mapStaticSame(): map<K, V> {}
+
+fun main() {
+    val ri = map<int, int>.mapStaticSame();
+//!     ^ map<int, int>
+    val rs = map<int, slice>.mapStaticSame();
+//!     ^ map<int, slice>
+    val rb = map<int, builder>.mapStaticSame();
+//!     ^ map<int, builder>
+}
+------------------------------------------------------------------------
+ok
+
+========================================================================
+map specialized methods with same name via aliases
+========================================================================
+type IntMap = map<int, int>
+type SliceMap = map<int, slice>
+
+fun map<int, int>.mapAliasSame(self): int {}
+fun map<int, slice>.mapAliasSame(self): slice {}
+fun map<K, V>.mapAliasSame(self): V {}
+
+fun main(mi: IntMap, ms: SliceMap, mb: map<int, builder>) {
+    val ri = mi.mapAliasSame();
+//!     ^ int
+    val rs = ms.mapAliasSame();
+//!     ^ slice
+    val rb = mb.mapAliasSame();
+//!     ^ builder
+}
+------------------------------------------------------------------------
+ok

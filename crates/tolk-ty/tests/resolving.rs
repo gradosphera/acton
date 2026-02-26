@@ -266,3 +266,13 @@ fn test_type_parameters() {
 fn test_array_methods() {
     run_resolve_tests_from_file(&get_test_path("array-methods.test"));
 }
+
+#[test]
+fn test_map_methods() {
+    run_resolve_tests_from_file(&get_test_path("map-methods.test"));
+}
+
+#[test]
+fn test_map_stdlib_methods() {
+    run_resolve_tests_from_file(&get_test_path("map-stdlib-methods.test"));
+}

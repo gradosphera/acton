@@ -229,6 +229,16 @@ fn test_types_array() {
 }
 
 #[test]
+fn test_types_map_methods() {
+    run_tests_from_file(&get_test_path("map-methods.test"));
+}
+
+#[test]
+fn test_types_map_stdlib_methods() {
+    run_tests_from_file(&get_test_path("map-stdlib-methods.test"));
+}
+
+#[test]
 fn test_types_funcs() {
     run_tests_from_file(&get_test_path("funcs.test"));
 }

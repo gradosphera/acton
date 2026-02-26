@@ -153,21 +153,6 @@ impl GenericSubstitutionsDeducing {
                 // `arg: Wrapper<T>` called as `f(wrappedInt)` => T is int
                 // In Rust version, we check if arg_unwrapped is also an instantiation or a struct/alias that is an instantiation
                 match arg_data {
-                    TyData::Struct {
-                        def: a_def,
-                        args: Some(a_args),
-                        ..
-                    } => {
-                        let p_data = interner.data(interner.unwrap_alias(p_inner));
-                        if let TyData::Struct { def: p_def, .. } = p_data
-                            && *p_def == a_def
-                            && p_args.len() == a_args.len()
-                        {
-                            for (&p, &a) in p_args.iter().zip(a_args.iter()) {
-                                self.consider_next_condition(p, a, interner);
-                            }
-                        }
-                    }
                     TyData::TypeAlias {
                         def: a_def,
                         args: Some(a_args),
@@ -184,17 +169,46 @@ impl GenericSubstitutionsDeducing {
                             }
                         }
                     }
-                    TyData::GenericTypeWithTs {
+                    TyData::TypeAlias {
                         inner_ty: a_inner,
-                        types: a_args,
+                        args: None,
+                        ..
                     } => {
-                        if p_inner == a_inner && p_args.len() == a_args.len() {
-                            for (&p, &a) in p_args.iter().zip(a_args.iter()) {
-                                self.consider_next_condition(p, a, interner);
+                        // `type IntMap = map<int, int>` should still deduce as `map<int, int>`.
+                        self.consider_next_condition(param_ty, a_inner, interner);
+                    }
+                    _ => {
+                        let arg_unwrapped_data =
+                            interner.data(interner.unwrap_alias(arg_ty)).clone();
+                        match arg_unwrapped_data {
+                            TyData::Struct {
+                                def: a_def,
+                                args: Some(a_args),
+                                ..
+                            } => {
+                                let p_data = interner.data(interner.unwrap_alias(p_inner));
+                                if let TyData::Struct { def: p_def, .. } = p_data
+                                    && *p_def == a_def
+                                    && p_args.len() == a_args.len()
+                                {
+                                    for (&p, &a) in p_args.iter().zip(a_args.iter()) {
+                                        self.consider_next_condition(p, a, interner);
+                                    }
+                                }
                             }
+                            TyData::GenericTypeWithTs {
+                                inner_ty: a_inner,
+                                types: a_args,
+                            } => {
+                                if p_inner == a_inner && p_args.len() == a_args.len() {
+                                    for (&p, &a) in p_args.iter().zip(a_args.iter()) {
+                                        self.consider_next_condition(p, a, interner);
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
-                    _ => {}
                 }
             }
             (

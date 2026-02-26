@@ -1,0 +1,88 @@
+========================================================================
+map generic instance method
+========================================================================
+fun map<K, V>.mapMethodInstanceUnique(self, key: K, value: V): self {}
+
+fun main(m: map<int, int>) {
+    m.<caret>mapMethodInstanceUnique(1, 2);
+}
+------------------------------------------------------------------------
+3:6 -> 0:14 resolved
+
+========================================================================
+map generic static method
+========================================================================
+fun map<K, V>.mapMethodStaticUnique(): map<K, V> {}
+
+fun main() {
+    map<int, int>.<caret>mapMethodStaticUnique();
+}
+------------------------------------------------------------------------
+3:18 -> 0:14 resolved
+
+========================================================================
+map method through alias
+========================================================================
+type IntMap = map<int, int>
+
+fun map<K, V>.mapMethodAliasUnique(self): V {}
+
+fun main(m: IntMap) {
+    m.<caret>mapMethodAliasUnique();
+}
+------------------------------------------------------------------------
+5:6 -> 2:14 resolved
+
+========================================================================
+map specialized instance methods with same name
+========================================================================
+fun map<int, int>.mapMethodSame(self): int {}
+fun map<int, slice>.mapMethodSame(self): slice {}
+fun map<K, V>.mapMethodSame(self): V {}
+
+fun main(mi: map<int, int>, ms: map<int, slice>, mb: map<int, builder>) {
+    mi.<caret>mapMethodSame();
+    ms.<caret>mapMethodSame();
+    mb.<caret>mapMethodSame();
+}
+------------------------------------------------------------------------
+5:7 -> 0:18 resolved
+6:7 -> 1:20 resolved
+7:7 -> 2:14 resolved
+
+========================================================================
+map specialized static methods with same name
+========================================================================
+fun map<int, int>.mapStaticSame(): map<int, int> {}
+fun map<int, slice>.mapStaticSame(): map<int, slice> {}
+fun map<K, V>.mapStaticSame(): map<K, V> {}
+
+fun main() {
+    map<int, int>.<caret>mapStaticSame();
+    map<int, slice>.<caret>mapStaticSame();
+    map<int, builder>.<caret>mapStaticSame();
+}
+------------------------------------------------------------------------
+5:18 -> 0:18 resolved
+6:20 -> 1:20 resolved
+7:22 -> 2:14 resolved
+
+========================================================================
+map specialized methods with same name via aliases
+========================================================================
+type IntMap = map<int, int>
+type SliceMap = map<int, slice>
+
+fun map<int, int>.mapAliasSame(self): int {}
+fun map<int, slice>.mapAliasSame(self): slice {}
+fun map<K, V>.mapAliasSame(self): V {}
+
+fun main(mi: IntMap, ms: SliceMap, mb: map<int, builder>) {
+    mi.<caret>mapAliasSame();
+    ms.<caret>mapAliasSame();
+    mb.<caret>mapAliasSame();
+}
+------------------------------------------------------------------------
+8:7 -> 3:18 resolved
+9:7 -> 4:20 resolved
+10:7 -> 5:14 resolved

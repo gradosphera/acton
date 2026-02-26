@@ -1,0 +1,118 @@
+========================================================================
+stdlib map methods on concrete map
+========================================================================
+fun main() {
+    var m = createEmptyMap<int32, cell>();
+//!     ^ map<int32, cell>
+    val c = beginCell().endCell();
+//!     ^ cell
+
+    val low = m.toLowLevelDict();
+//!     ^ dict
+    val empty = m.isEmpty();
+//!     ^ bool
+    val exists = m.exists(1);
+//!     ^ bool
+    val got = m.get(1);
+//!     ^ MapLookupResult<cell>
+    val must = m.mustGet(1);
+//!     ^ cell
+    val setRes = m.set(1, c);
+//!     ^ map<int32, cell>
+    val prev = m.setAndGetPrevious(1, c);
+//!     ^ MapLookupResult<cell>
+    val replaced = m.replaceIfExists(1, c);
+//!     ^ bool
+    val replacedPrev = m.replaceAndGetPrevious(1, c);
+//!     ^ MapLookupResult<cell>
+    val added = m.addIfNotExists(1, c);
+//!     ^ bool
+    val addOrGet = m.addOrGetExisting(1, c);
+//!     ^ MapLookupResult<cell>
+    val deleted = m.delete(1);
+//!     ^ bool
+    val deletedValue = m.deleteAndGetDeleted(1);
+//!     ^ MapLookupResult<cell>
+    val first = m.findFirst();
+//!     ^ MapEntry<int32, cell>
+    val last = m.findLast();
+//!     ^ MapEntry<int32, cell>
+    val greater = m.findKeyGreater(1);
+//!     ^ MapEntry<int32, cell>
+    val greaterOrEqual = m.findKeyGreaterOrEqual(1);
+//!     ^ MapEntry<int32, cell>
+    val less = m.findKeyLess(1);
+//!     ^ MapEntry<int32, cell>
+    val lessOrEqual = m.findKeyLessOrEqual(1);
+//!     ^ MapEntry<int32, cell>
+    val next = m.iterateNext(first);
+//!     ^ MapEntry<int32, cell>
+    val prevEntry = m.iteratePrev(last);
+//!     ^ MapEntry<int32, cell>
+}
+------------------------------------------------------------------------
+ok
+
+========================================================================
+stdlib map methods on aliases (lib-like)
+========================================================================
+struct StoragePrices {
+    gasPrice: int
+}
+
+type Config = map<uint32, cell>
+type StoragePricesDict = map<uint32, StoragePrices>
+
+fun mainAlias() {
+    val c = beginCell().endCell();
+//!     ^ cell
+    val price = StoragePrices { gasPrice: 10 };
+//!     ^ StoragePrices
+
+    var cfg: Config = createEmptyMap<uint32, cell>();
+    var prices: StoragePricesDict = createEmptyMap<uint32, StoragePrices>();
+
+    val cfgExists = cfg.exists(1 as uint32);
+//!     ^ bool
+    val cfgGet = cfg.get(1 as uint32);
+//!     ^ MapLookupResult<cell>
+    val cfgMust = cfg.mustGet(1 as uint32);
+//!     ^ cell
+    val cfgDeleted = cfg.delete(1 as uint32);
+//!     ^ bool
+    val cfgLow = cfg.toLowLevelDict();
+//!     ^ dict
+
+    val pricesSet = prices.set(1 as uint32, price);
+//!     ^ map<uint32, StoragePrices>
+    val first = prices.findFirst();
+//!     ^ MapEntry<uint32, StoragePrices>
+    val next = prices.iterateNext(first);
+//!     ^ MapEntry<uint32, StoragePrices>
+    val pricesExists = prices.exists(1 as uint32);
+//!     ^ bool
+}
+------------------------------------------------------------------------
+ok
+
+========================================================================
+stdlib map methods inside alias methods (lib-style wrappers)
+========================================================================
+type Config = map<uint32, cell>
+
+fun Config.setParamRaw(mutate self, index: uint32, data: cell) {
+    self.set(index, data);
+//!      ^ (map<uint32, cell>, uint32, cell) -> map<uint32, cell>
+}
+
+fun Config.getParamRaw(self, index: uint32): cell {
+    return self.get(index).loadValue();
+//              ^ (map<uint32, cell>, uint32) -> MapLookupResult<cell>
+}
+
+fun Config.hasParam(self, index: uint32): bool {
+    return self.exists(index);
+//              ^ (map<uint32, cell>, uint32) -> bool
+}
+------------------------------------------------------------------------
+ok

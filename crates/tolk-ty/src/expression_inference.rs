@@ -1509,6 +1509,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                         typ = substitutor.substitute(typ, &substituted_ts.mapping)
                     }
                     self.ctx.set_node_type(&v, typ);
+                    self.ctx.set_node_type(&field, typ);
                 }
                 self.ctx.set_resolved(NameUse {
                     decl: self.ctx.decl_start,

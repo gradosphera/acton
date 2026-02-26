@@ -751,14 +751,11 @@ impl<'tree> Method<'tree> {
             .flatten()
             .peekable();
 
-        let skip = if skip_self
-            && let Some(first) = params.peek()
-            && first.syntax().utf8_text(sources.as_bytes()) == Ok("self")
-        {
-            true
-        } else {
-            false
-        };
+        let skip = skip_self
+            && params
+                .peek()
+                .and_then(|first| first.name())
+                .is_some_and(|name| name.text_matches(sources, "self"));
 
         params.skip(if skip { 1 } else { 0 })
     }
