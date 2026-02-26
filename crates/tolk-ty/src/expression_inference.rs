@@ -10,6 +10,7 @@ use crate::type_substitutor::TypeSubstitutor;
 use crate::type_unify::TypeInferringUnifyStrategy;
 use crate::types::TyData;
 use crate::{try_expr_flow, try_flow};
+use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use tolk_resolver::file_index::OptionalSyntaxNodeSpanExt;
 use tolk_resolver::file_index::SymbolId;
@@ -825,6 +826,26 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                     self.ctx.set_node_type(&rhs_type, rhs_ty);
                 }
             }
+            TyData::GenericTypeWithTs { inner_ty, .. } => match self.intrn().data(inner_ty).clone()
+            {
+                TyData::Struct { def, .. } => {
+                    if let Some(inst_rhs_type) =
+                        self.try_pick_instantiated_generic_from_hint(expr_ty, def)
+                    {
+                        rhs_ty = inst_rhs_type;
+                        self.ctx.set_node_type(&rhs_type, rhs_ty);
+                    }
+                }
+                TyData::TypeAlias { def, .. } => {
+                    if let Some(inst_rhs_type) =
+                        self.try_pick_instantiated_generic_from_hint_alias(expr_ty, def)
+                    {
+                        rhs_ty = inst_rhs_type;
+                        self.ctx.set_node_type(&rhs_type, rhs_ty);
+                    }
+                }
+                _ => {}
+            },
             _ => {}
         }
 
@@ -1106,12 +1127,10 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                             let name = self.text_of(&ident);
                             let name = name.as_str();
 
-                            let obj_ty = self.ctx.get_node_type_data(&cur_dot.obj()?.syntax())?;
-                            let TyData::Struct { def, .. } = obj_ty else {
-                                return None;
-                            };
+                            let obj_ty = self.ctx.get_node_type(&cur_dot.obj()?.syntax())?;
+                            let def = self.ctx.type_db.find_struct(obj_ty)?;
 
-                            let resolved = self.ctx.type_db.project_index.resolve_symbol(*def)?;
+                            let resolved = self.ctx.type_db.project_index.resolve_symbol(def)?;
                             let SymbolKind::Struct { fields, .. } = &resolved.kind else {
                                 return None;
                             };
@@ -1159,75 +1178,142 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         None
     }
 
+    fn collect_union_variants_from_hint(&mut self, hint: TyId, depth: usize) -> Option<Vec<TyId>> {
+        if depth > 8 {
+            return None;
+        }
+
+        let unwrapped = self.const_intrn().unwrap_alias(hint);
+        match self.const_intrn().data(unwrapped).clone() {
+            TyData::Union(variants) => Some(variants),
+            TyData::TypeAlias { inner_ty, .. } => {
+                self.collect_union_variants_from_hint(inner_ty, depth + 1)
+            }
+            TyData::GenericTypeWithTs { inner_ty, types } => {
+                let inner_data = self.const_intrn().data(inner_ty).clone();
+                if let TyData::TypeAlias {
+                    inner_ty: alias_inner,
+                    args: Some(formal_args),
+                    ..
+                } = inner_data
+                {
+                    let mut mapping = FxHashMap::default();
+                    for (&formal, &actual) in formal_args.iter().zip(types.iter()) {
+                        if let TyData::TypeParameter { name, .. } = self.const_intrn().data(formal)
+                        {
+                            mapping.insert(name.clone(), actual);
+                        }
+                    }
+
+                    let instantiated = if mapping.is_empty() {
+                        alias_inner
+                    } else {
+                        let mut substitutor = TypeSubstitutor::new(self.intrn());
+                        substitutor.substitute(alias_inner, &mapping)
+                    };
+                    return self.collect_union_variants_from_hint(instantiated, depth + 1);
+                }
+
+                self.collect_union_variants_from_hint(inner_ty, depth + 1)
+            }
+            _ => None,
+        }
+    }
+
+    fn struct_def_of(&self, ty: TyId) -> Option<SymbolId> {
+        let unwrapped = self.const_intrn().unwrap_alias(ty);
+        match self.const_intrn().data(unwrapped) {
+            TyData::Struct { def, .. } => Some(*def),
+            TyData::GenericTypeWithTs { inner_ty, .. } => {
+                if let TyData::Struct { def, .. } = self.const_intrn().data(*inner_ty) {
+                    Some(*def)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn type_alias_def_of(&self, ty: TyId) -> Option<SymbolId> {
+        let unwrapped = self.const_intrn().unwrap_alias(ty);
+        match self.const_intrn().data(unwrapped) {
+            TyData::TypeAlias { def, .. } => Some(*def),
+            TyData::GenericTypeWithTs { inner_ty, .. } => {
+                if let TyData::TypeAlias { def, .. } = self.const_intrn().data(*inner_ty) {
+                    Some(*def)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
     /// helper function: given hint = `Ok<int> | Err<slice>` and struct `Ok`, return `Ok<int>`
     /// example: `match (...) { Ok => ... }` we need to deduce `Ok<T>` based on subject
     fn try_pick_instantiated_generic_from_hint(
-        &self,
+        &mut self,
         hint: TyId,
         lookup_def: SymbolId,
     ) -> Option<TyId> {
         let unwrapped = self.const_intrn().unwrap_alias(hint);
-        match self.const_intrn().data(unwrapped) {
-            // example: `var w: Ok<int> = Ok { ... }`, hint is `Ok<int>`, lookup is `Ok`
-            TyData::Struct { def, .. } => {
-                if *def == lookup_def {
-                    return Some(unwrapped);
-                }
-            }
-            // example: `fun f(): Response<int, slice> { return Err { ... } }`, hint is `Ok<int> | Err<slice>`, lookup is `Err`
-            TyData::Union(variants) => {
-                let mut only_variant = None; // hint `Ok<int8> | Ok<int16>` is ambiguous
-                for &variant in variants {
-                    let v_unwrapped = self.const_intrn().unwrap_alias(variant);
-                    if let TyData::Struct { def, .. } = self.const_intrn().data(v_unwrapped)
-                        && *def == lookup_def
-                    {
-                        if only_variant.is_some() {
-                            return None; // Ambiguous
-                        }
-                        only_variant = Some(v_unwrapped);
-                    }
-                }
-                return only_variant;
-            }
-            _ => {}
+        if self
+            .struct_def_of(unwrapped)
+            .is_some_and(|def| def == lookup_def)
+        {
+            return Some(unwrapped);
         }
-        None
+
+        let variants = self.collect_union_variants_from_hint(hint, 0)?;
+        let mut only_variant = None; // hint `Ok<int8> | Ok<int16>` is ambiguous
+        for variant in variants {
+            let v_unwrapped = self.const_intrn().unwrap_alias(variant);
+            if self
+                .struct_def_of(v_unwrapped)
+                .is_some_and(|def| def == lookup_def)
+            {
+                if only_variant.is_some() {
+                    return None; // Ambiguous
+                }
+                only_variant = Some(v_unwrapped);
+            }
+        }
+
+        only_variant
     }
 
-    // TODO: correct impl
     /// helper function, similar to the above, but for generic type aliases
     /// example: `v is OkAlias`, need to deduce `OkAlias<T>` based on type of v
     fn try_pick_instantiated_generic_from_hint_alias(
-        &self,
+        &mut self,
         hint: TyId,
         lookup_def: SymbolId,
     ) -> Option<TyId> {
         let unwrapped = self.const_intrn().unwrap_alias(hint);
-        match self.const_intrn().data(unwrapped) {
-            TyData::TypeAlias { def, .. } => {
-                if *def == lookup_def {
-                    return Some(unwrapped);
-                }
-            }
-            TyData::Union(variants) => {
-                let mut only_variant = None;
-                for &variant in variants {
-                    let v_unwrapped = self.const_intrn().unwrap_alias(variant);
-                    if let TyData::TypeAlias { def, .. } = self.const_intrn().data(v_unwrapped)
-                        && *def == lookup_def
-                    {
-                        if only_variant.is_some() {
-                            return None; // Ambiguous
-                        }
-                        only_variant = Some(v_unwrapped);
-                    }
-                }
-                return only_variant;
-            }
-            _ => {}
+        if self
+            .type_alias_def_of(unwrapped)
+            .is_some_and(|def| def == lookup_def)
+        {
+            return Some(unwrapped);
         }
-        None
+
+        let variants = self.collect_union_variants_from_hint(hint, 0)?;
+        let mut only_variant = None;
+        for variant in variants {
+            let v_unwrapped = self.const_intrn().unwrap_alias(variant);
+            if self
+                .type_alias_def_of(v_unwrapped)
+                .is_some_and(|def| def == lookup_def)
+            {
+                if only_variant.is_some() {
+                    return None; // Ambiguous
+                }
+                only_variant = Some(v_unwrapped);
+            }
+        }
+
+        only_variant
     }
 
     //+ CHECKED
@@ -2265,6 +2351,29 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                             {
                                 exact_type = inst_exact_type;
                                 self.ctx.set_node_type(&ty_node.syntax(), exact_type);
+                            }
+                        }
+                        TyData::GenericTypeWithTs { inner_ty, .. } => {
+                            match self.intrn().data(inner_ty).clone() {
+                                TyData::Struct { def, .. } => {
+                                    if let Some(inst_exact_type) = self
+                                        .try_pick_instantiated_generic_from_hint(subject_ty, def)
+                                    {
+                                        exact_type = inst_exact_type;
+                                        self.ctx.set_node_type(&ty_node.syntax(), exact_type);
+                                    }
+                                }
+                                TyData::TypeAlias { def, .. } => {
+                                    if let Some(inst_exact_type) = self
+                                        .try_pick_instantiated_generic_from_hint_alias(
+                                            subject_ty, def,
+                                        )
+                                    {
+                                        exact_type = inst_exact_type;
+                                        self.ctx.set_node_type(&ty_node.syntax(), exact_type);
+                                    }
+                                }
+                                _ => {}
                             }
                         }
                         _ => {}

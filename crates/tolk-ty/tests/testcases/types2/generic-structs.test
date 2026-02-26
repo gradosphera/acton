@@ -80,8 +80,7 @@ fun main() {
     }
 }
 ------------------------------------------------------------------------
-type inference error at offset 395: expected Ok<int>, got Ok<T>
-type inference error at offset 443: expected Err<slice>, got Err<T>
+ok
 
 ========================================================================
 Generic struct is
@@ -117,6 +116,4 @@ fun main() {
 //!                                                    ^ Ok<int>
 }
 ------------------------------------------------------------------------
-type inference error at offset 440: expected Ok<int>, got never
 type inference error at offset 503: expected OkAlias<int>, got Ok<int>
-type inference error at offset 685: expected Ok<int>, got never

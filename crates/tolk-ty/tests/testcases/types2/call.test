@@ -291,3 +291,90 @@ fun main(account: Account) {
 }
 ------------------------------------------------------------------------
 ok
+
+========================================================================
+Match smartcast on self field for generic Either
+========================================================================
+struct Cell3<T> {
+    value: T
+}
+
+fun Cell3<T>.load(self, options: int = 0): T {
+    return self.value;
+}
+
+type Either3<X, Y> = EitherLeft3<X> | EitherRight3<Y>
+
+struct EitherLeft3<X> {
+    value: X
+}
+
+struct EitherRight3<X> {
+    value: X
+}
+
+struct Message3<TBody> {
+    body: Either3<TBody, Cell3<TBody>>
+}
+
+fun Message3<TBody>.loadBody(self): TBody {
+    return match (self.body) {
+        EitherLeft3 => self.body.value,
+        EitherRight3 => self.body.value.load(0),
+    };
+}
+
+fun main(m: Message3<int>) {
+    val body = m.loadBody();
+//!     ^ int
+}
+------------------------------------------------------------------------
+ok
+
+========================================================================
+Match smartcast on self field for generic Either with object options
+========================================================================
+struct UnpackOptions4 {
+    assertEndAfterReading: bool
+}
+
+struct Cell4<T> {
+    value: T
+}
+
+fun Cell4<T>.load(self, options: UnpackOptions4 = {}): T {
+    return self.value;
+}
+
+type Either4<X, Y> = EitherLeft4<X> | EitherRight4<Y>
+
+struct EitherLeft4<X> {
+    value: X
+}
+
+struct EitherRight4<X> {
+    value: X
+}
+
+struct Info4 {
+    id: int
+}
+
+struct Message4<TBody, TInfo> {
+    info: TInfo
+    body: Either4<TBody, Cell4<TBody>>
+}
+
+fun Message4<TBody, TInfo>.loadBody(self): TBody {
+    return match (self.body) {
+        EitherLeft4 => self.body.value,
+        EitherRight4 => self.body.value.load({ assertEndAfterReading: false }),
+    };
+}
+
+fun main(m: Message4<int, Info4>) {
+    val body = m.loadBody();
+//!     ^ int
+}
+------------------------------------------------------------------------
+ok
