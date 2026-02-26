@@ -658,11 +658,13 @@ impl TypeInterner {
                 IntTy::Coins => matches!(dr, TyData::Int(IntTy::Int)),
                 _ => false,
             },
-            (TyData::Cell, TyData::Struct { .. }) => {
+            (TyData::Cell, TyData::Struct { name, .. }) => {
+                // Typed cell `Cell<T>` is assignable to untyped `cell`.
+                name.as_ref() == "Cell"
+            }
+            (TyData::Cell, TyData::GenericTypeWithTs { inner_ty, .. }) => {
                 // Cell<Something> to cell, e.g. `contract.setData(obj.toCell())`
-                if let TyData::GenericTypeWithTs { inner_ty, .. } = dr
-                    && let TyData::Struct { name, .. } = self.data(*inner_ty)
-                {
+                if let TyData::Struct { name, .. } = self.data(*inner_ty) {
                     return name.as_ref() == "Cell";
                 }
                 false
