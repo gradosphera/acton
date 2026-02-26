@@ -347,6 +347,7 @@ impl FileIndex {
             if matches!(
                 decl,
                 tolk_syntax::TopLevel::TolkRequiredVersion(_)
+                    | tolk_syntax::TopLevel::Contract(_)
                     | tolk_syntax::TopLevel::EmptyStmt(_)
                     | tolk_syntax::TopLevel::Unmapped(_)
             ) {
@@ -586,6 +587,7 @@ impl FileIndex {
                     })
                 }
                 tolk_syntax::TopLevel::TolkRequiredVersion(_) => continue,
+                tolk_syntax::TopLevel::Contract(_) => continue,
                 tolk_syntax::TopLevel::EmptyStmt(_) => continue,
                 tolk_syntax::TopLevel::Unmapped(_) => continue,
             };

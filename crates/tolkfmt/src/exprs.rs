@@ -492,12 +492,17 @@ pub fn print_tensor_expression<'a>(ctx: &Context<'_>, tensor: &Tensor) -> Option
 
 #[must_use]
 pub fn print_typed_tuple<'a>(ctx: &Context<'_>, tuple: &Tuple) -> Option<RcDoc<'a>> {
+    let tuple_type = tuple.typ();
     let elements: Vec<_> = tuple.elements().collect();
-    if elements.is_empty() {
-        return Some(RcDoc::text("[]"));
-    }
+    let tuple_doc = print_tuple_tensor(ctx, &elements, "[", "]")?;
 
-    print_tuple_tensor(ctx, &elements, "[", "]")
+    let mut docs = vec![];
+    if let Some(typ) = tuple_type {
+        docs.push(types::print_type(ctx, &typ)?);
+        docs.push(RcDoc::space());
+    }
+    docs.push(tuple_doc);
+    Some(RcDoc::concat(docs))
 }
 
 fn print_tuple_tensor<'a>(

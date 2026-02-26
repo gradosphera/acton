@@ -126,6 +126,19 @@ fn test_import() {
 }
 
 #[test]
+fn test_contract_declaration() {
+    check(
+        "contract Wallet { state: int, init: 1 + 2, storage: map<int, slice> }",
+        expect![[r#"
+                contract Wallet {
+                    state: int
+                    init: 1 + 2
+                    storage: map<int, slice>
+                }"#]],
+    );
+}
+
+#[test]
 fn test_global_var() {
     check("global x: int;", expect!["global x: int"]);
 }

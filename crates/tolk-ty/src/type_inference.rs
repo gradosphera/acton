@@ -70,6 +70,7 @@ pub fn infer(
         }
         TopLevel::Import(_)
         | TopLevel::TolkRequiredVersion(_)
+        | TopLevel::Contract(_)
         | TopLevel::EmptyStmt(_)
         | TopLevel::Unmapped(_) => {}
     }

@@ -586,6 +586,11 @@ impl<'tree> Tensor<'tree> {
 
 impl<'tree> Tuple<'tree> {
     #[must_use]
+    pub fn typ(&self) -> Option<Type<'tree>> {
+        self.0.field("type")
+    }
+
+    #[must_use]
     pub fn elements(&self) -> AstChildren<'tree, Expr<'tree>> {
         AstChildren::new(self.0)
     }

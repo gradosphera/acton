@@ -46,6 +46,18 @@ fn test_binary_operator() {
 }
 
 #[test]
+fn test_null_coalescing_operator() {
+    check(
+        "fun test() { x = a ?? b; y = a ?? b ?? c; }",
+        expect![[r#"
+                fun test() {
+                    x = a ?? b;
+                    y = a ?? b ?? c;
+                }"#]],
+    );
+}
+
+#[test]
 fn test_binary_operator_breaking() {
     // TODO:
     check_with_width(
@@ -289,19 +301,32 @@ fn test_typed_tuple() {
 }
 
 #[test]
+fn test_typed_tuple_with_type() {
+    check(
+        "fun test() { x = array<int> [1, 2]; y = map<int, slice> []; z = []; }",
+        expect![[r#"
+                fun test() {
+                    x = array<int> [1, 2];
+                    y = map<int, slice> [];
+                    z = [];
+                }"#]],
+    );
+}
+
+#[test]
 fn test_complex_tuple() {
     check(
         "
             fun foo() {
                 val x = 1;
-            
+
                 val   matrix   =   [
                     [1,   2,   3,   4,   5],
                     [6,   7,   8,   9,   10],
                     [11,  12,  13,  14,  15],
                     [16,  17,  18,  19,  20]
                 ];
-            
+
                 val y = 2;
             }",
         expect![[r#"

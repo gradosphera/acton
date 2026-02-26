@@ -12,10 +12,11 @@ use crate::ast::statements::{
     Return, Stmt, Throw, TryCatch, While,
 };
 use crate::ast::top_level::{
-    Annotation, AnnotationArgs, AnnotationList, AsmBody, Constant, EmptyStmt, Enum, EnumBody,
-    EnumMember, Func, FuncBody, GetMethod, GlobalVar, Import, Method, MethodReceiver, Parameter,
-    Struct, StructBody, StructField, TolkRequiredVersion, TopLevel, TypeAlias,
-    TypeAliasUnderlyingType, TypeParameter, TypeParameters,
+    Annotation, AnnotationArgs, AnnotationList, AsmBody, Constant, Contract, ContractBody,
+    ContractField, ContractFieldValue, EmptyStmt, Enum, EnumBody, EnumMember, Func, FuncBody,
+    GetMethod, GlobalVar, Import, Method, MethodReceiver, Parameter, Struct, StructBody,
+    StructField, TolkRequiredVersion, TopLevel, TypeAlias, TypeAliasUnderlyingType, TypeParameter,
+    TypeParameters,
 };
 use crate::ast::traits::{FunctionLike, HasAnnotations, HasGenericParams, HasName};
 use crate::ast::types::{
@@ -58,6 +59,7 @@ pub trait Walker<'tree> {
         match top_level {
             TopLevel::TolkRequiredVersion(node) => self.walk_tolk_required_version(node),
             TopLevel::Import(node) => self.walk_import(node),
+            TopLevel::Contract(node) => self.walk_contract(node),
             TopLevel::GlobalVar(node) => self.walk_global_var(node),
             TopLevel::Constant(node) => self.walk_constant(node),
             TopLevel::TypeAlias(node) => self.walk_type_alias(node),
@@ -147,6 +149,16 @@ pub trait Walker<'tree> {
     fn walk_import(&mut self, node: &Import<'tree>) -> Self::Result {
         if let Some(path) = node.path() {
             self.walk_string_lit(&path);
+        }
+        self.default_result()
+    }
+
+    fn walk_contract(&mut self, node: &Contract<'tree>) -> Self::Result {
+        if let Some(name) = node.name() {
+            self.walk_ident(&name);
+        }
+        if let Some(body) = node.body() {
+            self.walk_contract_body(&body);
         }
         self.default_result()
     }
@@ -570,6 +582,9 @@ pub trait Walker<'tree> {
     }
 
     fn walk_tuple(&mut self, node: &Tuple<'tree>) -> Self::Result {
+        if let Some(typ) = node.typ() {
+            self.visit_type(&typ);
+        }
         for element in node.elements() {
             self.walk_expr(&element);
         }
@@ -768,6 +783,26 @@ pub trait Walker<'tree> {
     fn walk_struct_body(&mut self, node: &StructBody<'tree>) -> Self::Result {
         for field in node.fields() {
             self.walk_struct_field(&field);
+        }
+        self.default_result()
+    }
+
+    fn walk_contract_body(&mut self, node: &ContractBody<'tree>) -> Self::Result {
+        for field in node.fields() {
+            self.walk_contract_field(&field);
+        }
+        self.default_result()
+    }
+
+    fn walk_contract_field(&mut self, node: &ContractField<'tree>) -> Self::Result {
+        if let Some(name) = node.name() {
+            self.walk_ident(&name);
+        }
+        if let Some(value) = node.value() {
+            match value {
+                ContractFieldValue::Type(typ) => self.visit_type(&typ),
+                ContractFieldValue::Expr(expr) => self.visit_expr(&expr),
+            };
         }
         self.default_result()
     }

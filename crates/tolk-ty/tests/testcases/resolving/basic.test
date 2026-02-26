@@ -402,3 +402,23 @@ fun main() {
 ------------------------------------------------------------------------
 6:8 -> 0:6 resolved
 7:8 -> 2:5 resolved
+
+========================================================================
+Resolve inside contract fields
+========================================================================
+type Token = int;
+const BASE = 10;
+
+fun makeToken(): Token {
+    return BASE;
+}
+
+contract Wallet {
+    tokenType: <caret>Token,
+    startBalance: <caret>BASE + 1,
+    generator: <caret>makeToken(),
+}
+------------------------------------------------------------------------
+8:15 -> 0:5 resolved
+9:18 -> 1:6 resolved
+10:15 -> 3:4 resolved

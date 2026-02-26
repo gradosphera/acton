@@ -426,6 +426,23 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
         self.default_result()
     }
 
+    fn walk_contract(&mut self, node: &ast::Contract<'tree>) -> Self::Result {
+        if let Some(body) = node.body() {
+            self.walk_contract_body(&body);
+        }
+        self.default_result()
+    }
+
+    fn walk_contract_field(&mut self, node: &ast::ContractField<'tree>) -> Self::Result {
+        if let Some(value) = node.value() {
+            match value {
+                ast::ContractFieldValue::Type(typ) => self.visit_type(&typ),
+                ast::ContractFieldValue::Expr(expr) => self.visit_expr(&expr),
+            }
+        }
+        self.default_result()
+    }
+
     fn walk_type_alias(&mut self, node: &TypeAlias<'tree>) -> Self::Result {
         self.enter_scope(); // for type parameters
         if let Some(annotations) = node.annotations() {
@@ -798,6 +815,7 @@ pub fn resolve_file(db: &FileDb, index: &ProjectIndex, file: FileId) -> Option<F
         match decl {
             ast::TopLevel::TolkRequiredVersion(_) => {}
             ast::TopLevel::Import(_) => {}
+            ast::TopLevel::Contract(decl) => resolver.walk_contract(&decl),
             ast::TopLevel::GlobalVar(decl) => resolver.walk_global_var(&decl),
             ast::TopLevel::Constant(decl) => resolver.walk_constant(&decl),
             ast::TopLevel::TypeAlias(decl) => resolver.walk_type_alias(&decl),

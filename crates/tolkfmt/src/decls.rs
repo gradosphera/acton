@@ -1,11 +1,12 @@
 use crate::{Context, comments, common, exprs, stmts, types};
 use pretty::RcDoc;
 use tolk_syntax::{
-    Annotation, AnnotationArgs, AnnotationList, AsmBody, AstNode, Constant, Enum, EnumBody,
-    EnumMember, Expr, Func, FuncBody, FunctionLike, GetMethod, GlobalVar, HasAnnotations,
-    HasGenericParams, HasName, Ident, Import, LambdaParameter, Method, MethodReceiver, Parameter,
-    SourceFile, Struct, StructBody, StructField, TolkRequiredVersion, TopLevel, Type, TypeAlias,
-    TypeAliasUnderlyingType, TypeParameter, TypeParameters,
+    Annotation, AnnotationArgs, AnnotationList, AsmBody, AstNode, Constant, Contract, ContractBody,
+    ContractField, ContractFieldValue, Enum, EnumBody, EnumMember, Expr, Func, FuncBody,
+    FunctionLike, GetMethod, GlobalVar, HasAnnotations, HasGenericParams, HasName, Ident, Import,
+    LambdaParameter, Method, MethodReceiver, Parameter, SourceFile, Struct, StructBody,
+    StructField, TolkRequiredVersion, TopLevel, Type, TypeAlias, TypeAliasUnderlyingType,
+    TypeParameter, TypeParameters,
 };
 
 #[must_use]
@@ -144,6 +145,7 @@ pub fn print_decl<'a>(ctx: &Context<'_>, decl: &TopLevel) -> Option<RcDoc<'a>> {
     match decl {
         TopLevel::TolkRequiredVersion(v) => print_tolk_required_version(ctx, v),
         TopLevel::Import(i) => print_import(ctx, i),
+        TopLevel::Contract(c) => print_contract_declaration(ctx, c),
         TopLevel::GlobalVar(g) => print_global_var_declaration(ctx, g),
         TopLevel::Constant(constant) => print_constant_declaration(ctx, constant),
         TopLevel::TypeAlias(t) => print_type_alias_declaration(ctx, t),
@@ -172,6 +174,46 @@ pub fn print_import<'a>(ctx: &Context<'_>, i: &Import) -> Option<RcDoc<'a>> {
     let path = i.path()?;
     let path_doc = common::print_node_text(ctx, &path.0)?;
     Some(RcDoc::concat([RcDoc::text("import "), path_doc]))
+}
+
+#[must_use]
+pub fn print_contract_declaration<'a>(ctx: &Context<'_>, c: &Contract) -> Option<RcDoc<'a>> {
+    let name = c.name()?;
+
+    let mut parts = vec![RcDoc::text("contract "), exprs::print_ident(ctx, &name)?];
+    if let Some(body) = c.body() {
+        parts.push(RcDoc::space());
+        parts.push(print_contract_body(ctx, &body)?);
+    }
+    Some(RcDoc::concat(parts))
+}
+
+pub fn print_contract_body<'a>(ctx: &Context<'_>, body: &ContractBody) -> Option<RcDoc<'a>> {
+    let fields: Vec<_> = body.fields().collect();
+    common::print_list(
+        ctx,
+        &fields,
+        print_contract_field_declaration,
+        |f| f.0,
+        |_| vec![],
+        common::ListOptions::curly_bracket_body(),
+    )
+}
+
+#[must_use]
+pub fn print_contract_field_declaration<'a>(
+    ctx: &Context<'_>,
+    f: &ContractField,
+) -> Option<RcDoc<'a>> {
+    let name = f.name()?;
+    let value = f.value()?;
+
+    let mut parts = vec![exprs::print_ident(ctx, &name)?, RcDoc::text(": ")];
+    parts.push(match value {
+        ContractFieldValue::Type(typ) => types::print_type(ctx, &typ)?,
+        ContractFieldValue::Expr(expr) => exprs::print_expression(ctx, &expr)?,
+    });
+    Some(RcDoc::concat(parts))
 }
 
 #[must_use]

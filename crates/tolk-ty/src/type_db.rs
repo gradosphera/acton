@@ -384,6 +384,7 @@ impl<'a> TypeDb<'a> {
             }
             ast::TopLevel::TolkRequiredVersion(_)
             | ast::TopLevel::Import(_)
+            | ast::TopLevel::Contract(_)
             | ast::TopLevel::Struct(_)
             | ast::TopLevel::EmptyStmt(_)
             | ast::TopLevel::Unmapped(_) => None,

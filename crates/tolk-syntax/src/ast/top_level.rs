@@ -13,6 +13,7 @@ use tree_sitter::Node;
 pub enum TopLevel<'tree> {
     TolkRequiredVersion(TolkRequiredVersion<'tree>),
     Import(Import<'tree>),
+    Contract(Contract<'tree>),
     GlobalVar(GlobalVar<'tree>),
     Constant(Constant<'tree>),
     TypeAlias(TypeAlias<'tree>),
@@ -47,6 +48,7 @@ impl<'tree> TopLevel<'tree> {
         match self {
             TopLevel::TolkRequiredVersion(n) => n.0,
             TopLevel::Import(n) => n.0,
+            TopLevel::Contract(n) => n.0,
             TopLevel::GlobalVar(n) => n.0,
             TopLevel::Constant(n) => n.0,
             TopLevel::TypeAlias(n) => n.0,
@@ -116,6 +118,7 @@ impl<'t> From<Node<'t>> for TopLevel<'t> {
         match node.kind_bytes() {
             b"tolk_required_version" => TopLevel::TolkRequiredVersion(TolkRequiredVersion(node)),
             b"import_directive" => TopLevel::Import(Import(node)),
+            b"contract_declaration" => TopLevel::Contract(Contract(node)),
             b"global_var_declaration" => TopLevel::GlobalVar(GlobalVar(node)),
             b"constant_declaration" => TopLevel::Constant(Constant(node)),
             b"type_alias_declaration" => TopLevel::TypeAlias(TypeAlias(node)),
@@ -257,6 +260,84 @@ impl<'tree> Import<'tree> {
     #[must_use]
     pub fn path(&self) -> Option<StringLit<'tree>> {
         self.0.field("path")
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Contract<'tree>(pub Node<'tree>);
+
+impl_ast_node!(Contract, "contract_declaration");
+
+impl<'tree> Contract<'tree> {
+    #[must_use]
+    pub fn body(&self) -> Option<ContractBody<'tree>> {
+        self.0.field("body")
+    }
+}
+
+impl<'tree> HasName<'tree> for Contract<'tree> {
+    fn name(&self) -> Option<Ident<'tree>> {
+        self.0.field("name")
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ContractBody<'tree>(pub Node<'tree>);
+
+impl_ast_node!(ContractBody, "contract_body");
+
+impl<'tree> ContractBody<'tree> {
+    pub fn fields(&self) -> AstChildren<'tree, ContractField<'tree>> {
+        AstChildren::new(self.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ContractField<'tree>(pub Node<'tree>);
+
+impl_ast_node!(ContractField, "contract_field");
+
+impl<'tree> ContractField<'tree> {
+    #[must_use]
+    pub fn value(&self) -> Option<ContractFieldValue<'tree>> {
+        self.0.field("value")
+    }
+}
+
+impl<'tree> HasName<'tree> for ContractField<'tree> {
+    fn name(&self) -> Option<Ident<'tree>> {
+        self.0.field("name")
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ContractFieldValue<'tree> {
+    Type(Type<'tree>),
+    Expr(Expr<'tree>),
+}
+
+impl<'tree> ContractFieldValue<'tree> {
+    #[must_use]
+    pub fn text(&self, source: &'tree str) -> &'tree str {
+        self.syntax().utf8_text(source.as_bytes()).unwrap_or("")
+    }
+
+    #[must_use]
+    pub const fn syntax(&self) -> Node<'tree> {
+        match self {
+            ContractFieldValue::Type(n) => n.syntax(),
+            ContractFieldValue::Expr(n) => n.syntax(),
+        }
+    }
+}
+
+impl<'t> From<Node<'t>> for ContractFieldValue<'t> {
+    fn from(node: Node<'t>) -> Self {
+        if Type::try_from_node(node).is_ok() {
+            ContractFieldValue::Type(Type::from(node))
+        } else {
+            ContractFieldValue::Expr(Expr::from(node))
+        }
     }
 }
 

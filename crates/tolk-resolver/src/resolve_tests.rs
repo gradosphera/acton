@@ -727,6 +727,94 @@ mod tests {
     }
 
     #[test]
+    fn test_contract_field_values_resolve() {
+        check_definition(
+            r#"
+                type Token = int;
+                const BASE = 10;
+
+                fun makeToken(): Token {
+                    return BASE;
+                }
+
+                contract Wallet {
+                    tokenType: <caret>Token,
+                    startBalance: <caret>BASE + 1,
+                    generator: <caret>makeToken(),
+                }
+            "#,
+            expect![[r#"
+                Token -> Global(Token at test.tolk:22-27)
+                BASE -> Global(BASE at test.tolk:57-61)
+                makeToken -> Global(makeToken at test.tolk:89-98)
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_contract_field_unresolved_value() {
+        check_definition(
+            r#"
+                contract Wallet {
+                    startBalance: <caret>missingValue + 1,
+                }
+            "#,
+            expect![[r#"
+                missingValue -> Unresolved
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_contract_field_references() {
+        check_references(
+            r#"
+                const BASE = 10;
+
+                fun f(): int {
+                    return BASE;
+                }
+
+                contract Wallet {
+                    startBalance: <def>BASE + 1,
+                }
+
+                fun main(): int {
+                    return BASE;
+                }
+            "#,
+            expect![[r#"
+                BASE at 93-97
+                BASE at 186-190
+                BASE at 276-280
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_contract_type_field_references() {
+        check_references(
+            r#"
+                type Token = int;
+
+                contract Wallet {
+                    tokenType: <def>Token,
+                }
+
+                fun main(): Token {
+                    val x: Token = 10;
+                    return x;
+                }
+            "#,
+            expect![[r#"
+                Token at 101-106
+                Token at 155-160
+                Token at 190-195
+            "#]],
+        );
+    }
+
+    #[test]
     fn test_underscore() {
         check_definition(
             r#"

@@ -212,3 +212,50 @@ fun main() {
         (assignment
           (identifier)
           (number_literal))))))
+
+========================================================================
+Contract declaration
+========================================================================
+
+contract Wallet {
+    state: int,
+    init: 1 + 2,
+}
+------------------------------------------------------------------------
+
+(source_file
+  (contract_declaration
+    (identifier)
+    (contract_body
+      (contract_field
+        (identifier)
+        (type_identifier))
+      (contract_field
+        (identifier)
+        (binary_operator
+          (number_literal)
+          (number_literal))))))
+
+========================================================================
+Typed tuple with explicit type
+========================================================================
+
+fun main() {
+    val data = int[1, 2];
+}
+------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (block_statement
+      (expression_statement
+        (assignment
+          (var_declaration_lhs
+            (var_declaration
+              (identifier)))
+          (typed_tuple
+            (type_identifier)
+            (number_literal)
+            (number_literal)))))))
