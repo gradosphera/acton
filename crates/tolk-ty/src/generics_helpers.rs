@@ -200,7 +200,25 @@ impl GenericSubstitutionsDeducing {
                                 inner_ty: a_inner,
                                 types: a_args,
                             } => {
-                                if p_inner == a_inner && p_args.len() == a_args.len() {
+                                let same_inner = if p_inner == a_inner {
+                                    true
+                                } else {
+                                    let p_unwrapped = interner.unwrap_alias(p_inner);
+                                    let a_unwrapped = interner.unwrap_alias(a_inner);
+                                    match (interner.data(p_unwrapped), interner.data(a_unwrapped)) {
+                                        (
+                                            TyData::Struct { def: p_def, .. },
+                                            TyData::Struct { def: a_def, .. },
+                                        ) => p_def == a_def,
+                                        (
+                                            TyData::TypeAlias { def: p_def, .. },
+                                            TyData::TypeAlias { def: a_def, .. },
+                                        ) => p_def == a_def,
+                                        _ => interner.equals(p_inner, a_inner),
+                                    }
+                                };
+
+                                if same_inner && p_args.len() == a_args.len() {
                                     for (&p, &a) in p_args.iter().zip(a_args.iter()) {
                                         self.consider_next_condition(p, a, interner);
                                     }

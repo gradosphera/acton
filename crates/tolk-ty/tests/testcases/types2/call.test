@@ -378,3 +378,47 @@ fun main(m: Message4<int, Info4>) {
 }
 ------------------------------------------------------------------------
 ok
+
+========================================================================
+Static generic alias method on instantiated alias with type parameter
+========================================================================
+type Either5<X, Y> = EitherLeft5<X> | EitherRight5<Y>
+
+struct EitherLeft5<X> {
+    value: X
+}
+
+struct EitherRight5<X> {
+    value: X
+}
+
+fun Either5<X, Y>.right(value: Y) {
+    return EitherRight5 { value };
+}
+
+struct Cell5<T> {
+    value: T
+}
+
+fun T.toCell(self): Cell5<T> {
+    return Cell5 { value: self };
+}
+
+struct Out5<TBody> {
+    body: Either5<TBody, Cell5<TBody>>
+}
+
+fun wrap5<TBody>(body: TBody): Out5<TBody> {
+    val wrapped = Either5<TBody, Cell5<TBody>>.right(body.toCell());
+//!     ^ EitherRight5<TBody>
+    return Out5<TBody> {
+        body: wrapped,
+    };
+}
+
+fun main() {
+    val out = wrap5(10);
+//!     ^ Out5<int>
+}
+------------------------------------------------------------------------
+ok

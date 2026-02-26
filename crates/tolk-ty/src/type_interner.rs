@@ -429,10 +429,18 @@ impl TypeInterner {
         if matches!(da, TyData::TypeAlias { .. }) {
             if matches!(db, TyData::TypeAlias { .. })
                 && let (
-                    TyData::TypeAlias { inner_ty: ia, .. },
-                    TyData::TypeAlias { inner_ty: ib, .. },
+                    TyData::TypeAlias {
+                        def: a_def,
+                        inner_ty: ia,
+                        ..
+                    },
+                    TyData::TypeAlias {
+                        def: b_def,
+                        inner_ty: ib,
+                        ..
+                    },
                 ) = (da, db)
-                && self.equals(*ia, *ib)
+                && (*a_def == *b_def || self.equals(*ia, *ib))
             {
                 return !self.are_two_equal_type_aliases_different(a, b);
             }
@@ -552,7 +560,7 @@ impl TypeInterner {
                     types: tb,
                 },
             ) => {
-                if !self.equals(*ia, *ib) {
+                if !self.same_generic_constructor(*ia, *ib) {
                     return false;
                 }
                 if ta.len() != tb.len() {
@@ -724,7 +732,7 @@ impl TypeInterner {
                     types: tr,
                 },
             ) => {
-                if !self.equals(*il, *ir) {
+                if !self.same_generic_constructor(*il, *ir) {
                     return false;
                 }
                 if tl.len() != tr.len() {
@@ -745,6 +753,38 @@ impl TypeInterner {
             (TyData::Enum { def: dl, .. }, TyData::Enum { def: dr, .. }) => dl == dr,
             (TyData::Bits { size: sl }, TyData::Bits { size: sr }) => sl == sr,
             (TyData::Bytes { size: sl }, TyData::Bytes { size: sr }) => sl == sr,
+            _ => false,
+        }
+    }
+
+    fn same_generic_constructor(&self, lhs_inner: TyId, rhs_inner: TyId) -> bool {
+        if self.equals(lhs_inner, rhs_inner) {
+            return true;
+        }
+
+        match (self.data(lhs_inner), self.data(rhs_inner)) {
+            (TyData::Struct { def: lhs_def, .. }, TyData::Struct { def: rhs_def, .. })
+                if lhs_def == rhs_def =>
+            {
+                return true;
+            }
+            (TyData::TypeAlias { def: lhs_def, .. }, TyData::TypeAlias { def: rhs_def, .. })
+                if lhs_def == rhs_def =>
+            {
+                return true;
+            }
+            _ => {}
+        }
+
+        let lhs_unwrapped = self.unwrap_alias(lhs_inner);
+        let rhs_unwrapped = self.unwrap_alias(rhs_inner);
+        match (self.data(lhs_unwrapped), self.data(rhs_unwrapped)) {
+            (TyData::Struct { def: lhs_def, .. }, TyData::Struct { def: rhs_def, .. }) => {
+                lhs_def == rhs_def
+            }
+            (TyData::TypeAlias { def: lhs_def, .. }, TyData::TypeAlias { def: rhs_def, .. }) => {
+                lhs_def == rhs_def
+            }
             _ => false,
         }
     }
