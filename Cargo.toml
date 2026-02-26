@@ -12,6 +12,7 @@ exclude = [
     "crates/acton-shared-ui",
     "crates/acton-litenode-ui",
     "crates/node_modules",
+    "crates/ton-ls/editors/zed"
 ]
 
 [workspace.package]

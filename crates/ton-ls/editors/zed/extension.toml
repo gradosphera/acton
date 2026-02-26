@@ -1,0 +1,29 @@
+id = "tolk"
+name = "Tolk"
+version = "0.0.1"
+schema_version = 1
+description = "Tolk language support for Zed (syntax highlighting via tree-sitter-tolk)."
+repository = "https://github.com/i582/acton"
+authors = ["TON Core"]
+themes = []
+icon_themes = []
+languages = ["languages/tolk"]
+capabilities = []
+
+[lib]
+kind = "Rust"
+version = "0.7.0"
+
+[grammars.tolk]
+repository = "file:///Users/petrmakhnev/emulator-rs"
+rev = "7eb066226f14a945a95887400563ad92d0b30023"
+path = "crates/tree-sitter-tolk"
+
+[language_servers.ton-ls]
+language = "Tolk"
+
+[context_servers]
+
+[agent_servers]
+
+[slash_commands]
