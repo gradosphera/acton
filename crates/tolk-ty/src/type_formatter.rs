@@ -117,6 +117,7 @@ mod tests {
         assert_eq!(formatter.format(interner.ty_never), "never");
         assert_eq!(formatter.format(interner.ty_void), "void");
         assert_eq!(formatter.format(interner.ty_null), "null");
+        assert_eq!(formatter.format(interner.ty_string), "string");
         assert_eq!(formatter.format(interner.ty_untyped_tuple), "tuple");
     }
 

@@ -45,6 +45,7 @@ pub struct TypeInterner {
     pub ty_untyped_tuple: TyId,
     pub ty_cell: TyId,
     pub ty_slice: TyId,
+    pub ty_string: TyId,
     pub ty_builder: TyId,
     pub ty_continuation: TyId,
     pub ty_address_internal: TyId,
@@ -73,6 +74,7 @@ impl TypeInterner {
             ty_untyped_tuple: TyId(0),
             ty_cell: TyId(0),
             ty_slice: TyId(0),
+            ty_string: TyId(0),
             ty_builder: TyId(0),
             ty_continuation: TyId(0),
             ty_address_internal: TyId(0),
@@ -92,6 +94,7 @@ impl TypeInterner {
         this.ty_untyped_tuple = this.intern(TyData::UntypedTuple);
         this.ty_cell = this.intern(TyData::Cell);
         this.ty_slice = this.intern(TyData::Slice);
+        this.ty_string = this.builtin("string".into());
         this.ty_builder = this.intern(TyData::Builder);
         this.ty_continuation = this.intern(TyData::Continuation);
         this.ty_address_internal = this.intern(TyData::Address(AddressKind::Internal));
@@ -552,6 +555,27 @@ impl TypeInterner {
         }
     }
 
+    fn array_element_type(&self, ty: TyId) -> Option<TyId> {
+        let ty = self.unwrap_alias(ty);
+        match self.data(ty) {
+            TyData::Struct { name, args, .. } => {
+                if name.as_ref() == "array" {
+                    return args.as_ref().and_then(|args| args.first().copied());
+                }
+                None
+            }
+            TyData::GenericTypeWithTs { inner_ty, types } => {
+                if let TyData::Struct { name, .. } = self.data(*inner_ty)
+                    && name.as_ref() == "array"
+                {
+                    return types.first().copied();
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
     /// on `var lhs: <lhs_type> = rhs`, having inferred rhs_type, check that it can be assigned without any casts
     /// the same goes for passing arguments, returning values, etc. — where the "receiver" (lhs) checks "applier" (rhs)
     /// note, that `int8 | int16` is not assignable to `int` (even though both are assignable),
@@ -677,6 +701,22 @@ impl TypeInterner {
                 tl.iter()
                     .zip(tr.iter())
                     .all(|(&el, &er)| self.can_rhs_be_assigned(el, er))
+            }
+            _ if self.array_element_type(lhs).is_some() => {
+                let Some(item_l) = self.array_element_type(lhs) else {
+                    return false;
+                };
+
+                if let Some(item_r) = self.array_element_type(rhs) {
+                    return self.can_rhs_be_assigned(item_l, item_r);
+                }
+                if let TyData::Tuple(items) = dr {
+                    return items
+                        .iter()
+                        .all(|&item| self.can_rhs_be_assigned(item_l, item));
+                }
+
+                false
             }
             (TyData::MapKV { key: kl, value: vl }, TyData::MapKV { key: kr, value: vr }) => {
                 self.equals(*kl, *kr) && self.equals(*vl, *vr)
@@ -1018,6 +1058,30 @@ impl TypeInterner {
                 types_lca.push(next);
             }
             return self.tuple(types_lca);
+        }
+
+        if let (Some(item_a), Some(item_b)) =
+            (self.array_element_type(a), self.array_element_type(b))
+        {
+            let item_lca = self.calculate_type_lca(item_a, item_b);
+
+            let pick_array_def = |this: &TypeInterner, ty: TyId| -> Option<(SymbolId, Arc<str>)> {
+                let unwrapped = this.unwrap_alias(ty);
+                match this.data(unwrapped) {
+                    TyData::Struct { def, name, .. } => Some((*def, name.clone())),
+                    TyData::GenericTypeWithTs { inner_ty, .. } => {
+                        if let TyData::Struct { def, name, .. } = this.data(*inner_ty) {
+                            return Some((*def, name.clone()));
+                        }
+                        None
+                    }
+                    _ => None,
+                }
+            };
+
+            if let Some((def, name)) = pick_array_def(self, a).or_else(|| pick_array_def(self, b)) {
+                return self.struct_instantiation(def, name, def, vec![item_lca]);
+            }
         }
 
         // became_union parameter omitted for simplicity since we don't need it

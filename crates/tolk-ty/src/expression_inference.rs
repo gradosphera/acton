@@ -106,7 +106,7 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         flow: FlowContext,
         as_cond: bool,
     ) -> ExprFlow {
-        let ty = self.intrn().ty_slice;
+        let ty = self.intrn().ty_string;
         self.ctx.set_node_type(&v, ty);
         ExprFlow::create(flow, as_cond)
     }
@@ -552,9 +552,52 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         as_cond: bool,
     ) -> ExprFlow {
         let lhs = try_expr_flow!(flow, v.left());
-        let rhs = try_expr_flow!(flow, v.right());
         let operator = try_expr_flow!(flow, v.operator());
         let operator_name = try_expr_flow!(flow, self.text_or_none(&operator));
+
+        if operator_name == "??" {
+            let after_lhs = self.infer_expr(lhs, flow, false, None);
+            let lhs_type = self.ctx.get_node_type_or_unknown(&lhs);
+
+            let Some(rhs) = v.right() else {
+                self.ctx.set_node_type(&v, lhs_type);
+                return ExprFlow::create(after_lhs.out_flow, as_cond);
+            };
+
+            let mut rhs_flow = after_lhs.out_flow.clone();
+            if let Some(s_expr) = self.extract_sink_expression(lhs) {
+                rhs_flow.register_known_type(s_expr, self.intrn().ty_null);
+            }
+
+            let after_rhs = self.infer_expr(rhs, rhs_flow, false, None);
+            let ty_null = self.intrn().ty_null;
+            let lhs_unwrapped = self.const_intrn().unwrap_alias(lhs_type);
+            let without_null_ty =
+                if matches!(self.const_intrn().data(lhs_unwrapped), TyData::Union(_)) {
+                    self.intrn()
+                        .calculate_type_subtract_rhs_type(lhs_type, ty_null)
+                } else {
+                    lhs_type
+                };
+
+            if lhs_type == ty_null {
+                let rhs_ty = self.ctx.get_node_type_or_unknown(&rhs);
+                self.ctx.set_node_type(&v, rhs_ty);
+            } else if without_null_ty == self.intrn().ty_never {
+                self.ctx.set_node_type(&v, lhs_type);
+            } else {
+                let rhs_ty = self.ctx.get_node_type_or_unknown(&rhs);
+                let result_ty = self.intrn().calculate_type_lca(without_null_ty, rhs_ty);
+                self.ctx.set_node_type(&v, result_ty);
+            }
+
+            let out_flow = after_lhs
+                .out_flow
+                .merge_flow(&after_rhs.out_flow, self.intrn());
+            return ExprFlow::create(out_flow, as_cond);
+        }
+
+        let rhs = try_expr_flow!(flow, v.right());
 
         match operator_name.as_str() {
             // comparison operators, returning bool
@@ -986,7 +1029,11 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                                         return *ty;
                                     }
                                 }
-                                _ => {}
+                                _ => {
+                                    if let Some(item_ty) = self.array_element_type(obj_ty) {
+                                        return item_ty;
+                                    }
+                                }
                             }
                         }
                     }
@@ -1423,7 +1470,17 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
                     self.ctx.set_node_type(&field, item_type);
                     return ExprFlow::create(flow, as_cond);
                 }
-                _ => {}
+                _ => {
+                    if let Some(mut inferred_type) = self.array_element_type(unwrapped_obj_type) {
+                        if let Some(s_expr) = self.extract_sink_expression(Expr::DotAccess(v)) {
+                            inferred_type =
+                                flow.smart_cast_or_original(s_expr, inferred_type, self.intrn());
+                        }
+                        self.ctx.set_node_type(&v, inferred_type);
+                        self.ctx.set_node_type(&field, inferred_type);
+                        return ExprFlow::create(flow, as_cond);
+                    }
+                }
             }
         }
 
@@ -1791,7 +1848,194 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         ExprFlow::create(flow, as_cond)
     }
 
-    //+ CHECKED
+    fn array_type_def_id(&self, ty: TyId) -> Option<SymbolId> {
+        let ty = self.const_intrn().unwrap_alias(ty);
+        match self.const_intrn().data(ty) {
+            TyData::Struct { name, def, .. } => {
+                if name.as_ref() == "array" {
+                    Some(*def)
+                } else {
+                    None
+                }
+            }
+            TyData::GenericTypeWithTs { inner_ty, .. } => {
+                if let TyData::Struct { name, def, .. } = self.const_intrn().data(*inner_ty)
+                    && name.as_ref() == "array"
+                {
+                    return Some(*def);
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn array_symbol_id(&self) -> Option<SymbolId> {
+        let symbols = self
+            .ctx
+            .type_db
+            .project_index
+            .global_symbols()
+            .get("array")?;
+        for symbol_id in symbols {
+            if let Some(symbol) = self.ctx.type_db.project_index.resolve_symbol(*symbol_id)
+                && matches!(symbol.kind, SymbolKind::Struct { .. })
+            {
+                return Some(*symbol_id);
+            }
+        }
+        None
+    }
+
+    fn array_type_from_element(&mut self, element_ty: TyId, preferred_hint: Option<TyId>) -> TyId {
+        let preferred_def = preferred_hint.and_then(|hint| self.array_type_def_id(hint));
+        let array_def = preferred_def.or_else(|| self.array_symbol_id());
+
+        if let Some(def_id) = array_def {
+            let name = self
+                .ctx
+                .type_db
+                .project_index
+                .resolve_symbol(def_id)
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| "array".into());
+
+            return self
+                .intrn()
+                .struct_instantiation(def_id, name, def_id, vec![element_ty]);
+        }
+
+        // If array type isn't available, keep old tuple fallback.
+        self.intrn().tuple(vec![element_ty])
+    }
+
+    fn array_element_type(&self, ty: TyId) -> Option<TyId> {
+        let ty = self.const_intrn().unwrap_alias(ty);
+        match self.const_intrn().data(ty) {
+            TyData::Struct { name, args, .. } => {
+                if name.as_ref() == "array" {
+                    return args
+                        .as_ref()
+                        .and_then(|args| args.first().copied())
+                        .or_else(|| Some(self.const_intrn().ty_unknown));
+                }
+                None
+            }
+            TyData::GenericTypeWithTs { inner_ty, types } => {
+                if let TyData::Struct { name, .. } = self.const_intrn().data(*inner_ty)
+                    && name.as_ref() == "array"
+                {
+                    return types
+                        .first()
+                        .copied()
+                        .or_else(|| Some(self.const_intrn().ty_unknown));
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn lisp_list_element_type(&self, ty: TyId) -> Option<TyId> {
+        let ty = self.const_intrn().unwrap_alias(ty);
+        match self.const_intrn().data(ty) {
+            TyData::Struct { name, args, .. } => {
+                if name.as_ref() == "lisp_list" {
+                    return args
+                        .as_ref()
+                        .and_then(|args| args.first().copied())
+                        .or_else(|| Some(self.const_intrn().ty_unknown));
+                }
+                None
+            }
+            TyData::GenericTypeWithTs { inner_ty, types } => {
+                if let TyData::Struct { name, .. } = self.const_intrn().data(*inner_ty)
+                    && name.as_ref() == "lisp_list"
+                {
+                    return types
+                        .first()
+                        .copied()
+                        .or_else(|| Some(self.const_intrn().ty_unknown));
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn pick_unique_tuple_hint(&self, hint: TyId) -> Option<TyId> {
+        let hint = self.const_intrn().unwrap_alias(hint);
+        match self.const_intrn().data(hint).clone() {
+            TyData::Tuple(_) => Some(hint),
+            TyData::Union(variants) => {
+                let mut found: Option<TyId> = None;
+                for variant in variants {
+                    if let Some(candidate) = self.pick_unique_tuple_hint(variant) {
+                        if let Some(existing) = found {
+                            if !self.const_intrn().equals(existing, candidate) {
+                                return None;
+                            }
+                        } else {
+                            found = Some(candidate);
+                        }
+                    }
+                }
+                found
+            }
+            _ => None,
+        }
+    }
+
+    fn pick_unique_array_hint(&self, hint: TyId) -> Option<TyId> {
+        let hint = self.const_intrn().unwrap_alias(hint);
+        if self.array_element_type(hint).is_some() {
+            return Some(hint);
+        }
+
+        if let TyData::Union(variants) = self.const_intrn().data(hint).clone() {
+            let mut found: Option<TyId> = None;
+            for variant in variants {
+                if let Some(candidate) = self.pick_unique_array_hint(variant) {
+                    if let Some(existing) = found {
+                        if !self.const_intrn().equals(existing, candidate) {
+                            return None;
+                        }
+                    } else {
+                        found = Some(candidate);
+                    }
+                }
+            }
+            return found;
+        }
+
+        None
+    }
+
+    fn pick_unique_lisp_list_hint(&self, hint: TyId) -> Option<TyId> {
+        let hint = self.const_intrn().unwrap_alias(hint);
+        if self.lisp_list_element_type(hint).is_some() {
+            return Some(hint);
+        }
+
+        if let TyData::Union(variants) = self.const_intrn().data(hint).clone() {
+            let mut found: Option<TyId> = None;
+            for variant in variants {
+                if let Some(candidate) = self.pick_unique_lisp_list_hint(variant) {
+                    if let Some(existing) = found {
+                        if !self.const_intrn().equals(existing, candidate) {
+                            return None;
+                        }
+                    } else {
+                        found = Some(candidate);
+                    }
+                }
+            }
+            return found;
+        }
+
+        None
+    }
+
     fn infer_typed_tuple(
         &mut self,
         v: Tuple<'t>,
@@ -1800,26 +2044,84 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
         hint: Option<TyId>,
     ) -> ExprFlow {
         let mut flow = flow;
-        let tuple_hint = hint.and_then(|h| {
-            let unwrapped = self.intrn().unwrap_alias(h);
-            if let TyData::Tuple(items) = self.intrn().data(unwrapped).clone() {
-                Some(items)
-            } else {
-                None
-            }
-        });
+        let explicit_type = v.typ().map(|type_node| self.lower(Some(type_node)));
+
+        let mut effective_hint = hint;
+        if effective_hint
+            .map(|h| {
+                let unwrapped = self.const_intrn().unwrap_alias(h);
+                matches!(self.const_intrn().data(unwrapped), TyData::Unknown)
+            })
+            .unwrap_or(true)
+        {
+            effective_hint = explicit_type;
+        }
+
+        let tuple_hint_items = effective_hint
+            .and_then(|h| self.pick_unique_tuple_hint(h))
+            .and_then(|h| {
+                if let TyData::Tuple(items) = self.const_intrn().data(h).clone() {
+                    Some(items)
+                } else {
+                    None
+                }
+            });
+
+        let array_hint = effective_hint.and_then(|h| self.pick_unique_array_hint(h));
+        let array_item_hint = array_hint.and_then(|h| self.array_element_type(h));
+
+        let lisp_list_hint = effective_hint.and_then(|h| self.pick_unique_lisp_list_hint(h));
+        let lisp_list_item_hint = lisp_list_hint.and_then(|h| self.lisp_list_element_type(h));
 
         let elements: Vec<_> = v.elements().collect();
         let mut types_list = Vec::with_capacity(elements.len());
         for (i, item) in elements.iter().enumerate() {
-            let item_hint = tuple_hint.as_ref().and_then(|h| h.get(i).cloned());
+            let item_hint = array_item_hint
+                .or(lisp_list_item_hint)
+                .or_else(|| tuple_hint_items.as_ref().and_then(|h| h.get(i).copied()));
+
             let after_item = self.infer_expr(*item, flow, false, item_hint);
             flow = after_item.out_flow;
             let item_ty = self.ctx.get_node_type_or_unknown(item);
             types_list.push(item_ty);
         }
 
-        let ty = self.intrn().tuple(types_list);
+        if let Some(explicit_type) = explicit_type {
+            self.ctx.set_node_type(&v, explicit_type);
+            return ExprFlow::create(flow, as_cond);
+        }
+
+        if tuple_hint_items.is_some() {
+            let ty = self.intrn().tuple(types_list);
+            self.ctx.set_node_type(&v, ty);
+            return ExprFlow::create(flow, as_cond);
+        }
+
+        if let Some(lisp_list_hint) = lisp_list_hint {
+            self.ctx.set_node_type(&v, lisp_list_hint);
+            return ExprFlow::create(flow, as_cond);
+        }
+
+        if types_list.is_empty() {
+            let ty = if let Some(array_hint) = array_hint {
+                let element_ty = self
+                    .array_element_type(array_hint)
+                    .unwrap_or_else(|| self.intrn().ty_unknown);
+                self.array_type_from_element(element_ty, Some(array_hint))
+            } else {
+                let unknown_ty = self.intrn().ty_unknown;
+                self.array_type_from_element(unknown_ty, None)
+            };
+            self.ctx.set_node_type(&v, ty);
+            return ExprFlow::create(flow, as_cond);
+        }
+
+        let mut inferred_element_ty = types_list[0];
+        for ty in types_list.iter().skip(1).copied() {
+            inferred_element_ty = self.intrn().calculate_type_lca(inferred_element_ty, ty);
+        }
+        let ty = self.array_type_from_element(inferred_element_ty, array_hint);
+
         self.ctx.set_node_type(&v, ty);
         ExprFlow::create(flow, as_cond)
     }

@@ -219,6 +219,11 @@ fn test_types_builtin() {
 }
 
 #[test]
+fn test_types_string() {
+    run_tests_from_file(&get_test_path("string.test"));
+}
+
+#[test]
 fn test_types_funcs() {
     run_tests_from_file(&get_test_path("funcs.test"));
 }
@@ -252,6 +257,16 @@ fn test_types2_auto_return_type() {
 #[test]
 fn test_types2_call() {
     run_tests_from_file(&get_test_path2("call.test"));
+}
+
+#[test]
+fn test_types2_array() {
+    run_tests_from_file(&get_test_path2("array.test"));
+}
+
+#[test]
+fn test_types2_null_coalescing() {
+    run_tests_from_file(&get_test_path2("null-coalescing.test"));
 }
 
 #[test]

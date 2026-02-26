@@ -487,6 +487,7 @@ impl<'a> TypeDb<'a> {
             "coins" => Some(self.intrn.ty_coins),
             "cell" => Some(self.intrn.ty_cell),
             "slice" => Some(self.intrn.ty_slice),
+            "string" => Some(self.intrn.ty_string),
             "builder" => Some(self.intrn.ty_builder),
             "address" => Some(self.intrn.address(AddressKind::Internal)),
             "any_address" => Some(self.intrn.address(AddressKind::Any)),
