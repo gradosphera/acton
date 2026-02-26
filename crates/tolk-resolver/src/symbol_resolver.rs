@@ -250,6 +250,20 @@ impl<'a> SymbolResolver<'a> {
                 return None;
             }
 
+            if use_kind == NameUseKind::Type
+                && let Some(base_name) = parse_builtin_type_base_name(name.as_ref())
+                && let Some(symbol_id) = self.resolve_global_type_symbol(base_name)
+            {
+                self.uses.push(NameUse {
+                    decl: decl_start,
+                    span: ident.span(),
+                    kind: use_kind,
+                    name,
+                    resolved: Resolved::Global(symbol_id),
+                });
+                return Some(());
+            }
+
             self.uses.push(NameUse {
                 decl: decl_start,
                 span: ident.span(),
@@ -397,6 +411,16 @@ impl<'a> SymbolResolver<'a> {
 
     fn file_content(&self) -> &str {
         self.file.source().source.as_ref()
+    }
+
+    fn resolve_global_type_symbol(&self, symbol_name: &str) -> Option<SymbolId> {
+        let candidates = self.env.visible.get(symbol_name)?;
+        candidates.iter().find_map(|id| {
+            self.project_index
+                .resolve_symbol(*id)
+                .filter(|sym| sym.is_type())
+                .map(|_| *id)
+        })
     }
 }
 
@@ -681,6 +705,13 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
         self.resolve_symbol(&node.0, NameUseKind::Type);
     }
 
+    fn walk_annotation(&mut self, node: &ast::Annotation<'tree>) -> Self::Result {
+        if let Some(args) = node.args() {
+            self.walk_annotation_args(&args);
+        }
+        self.default_result()
+    }
+
     fn walk_type_parameter(&mut self, node: &ast::TypeParameter<'tree>) -> Self::Result {
         if let Some(name) = node.name() {
             let name_str = name.text(self.file_content()).to_string();
@@ -789,6 +820,30 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
 
 fn norm(name: &str) -> Arc<str> {
     Arc::from(name.trim_matches('`'))
+}
+
+fn parse_builtin_type_base_name(name: &str) -> Option<&'static str> {
+    if parse_numeric_suffix(name, "int") {
+        return Some("intN");
+    }
+    if parse_numeric_suffix(name, "uint") {
+        return Some("uintN");
+    }
+    if parse_numeric_suffix(name, "bits") {
+        return Some("bitsN");
+    }
+    if parse_numeric_suffix(name, "bytes") {
+        return Some("bytesN");
+    }
+
+    None
+}
+
+fn parse_numeric_suffix(name: &str, prefix: &str) -> bool {
+    let Some(suffix) = name.strip_prefix(prefix) else {
+        return false;
+    };
+    !suffix.is_empty() && suffix.as_bytes().iter().all(u8::is_ascii_digit)
 }
 
 /// Resolves all symbols in all files present in the `ProjectIndex`.

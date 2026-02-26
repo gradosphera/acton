@@ -1102,6 +1102,48 @@ mod tests {
     }
 
     #[test]
+    fn test_uint_like_type_resolves_to_builtin_templates() {
+        check_definition(
+            r#"
+                fun main() {
+                    val a: <caret>uint128? = 0;
+                    val b: <caret>int32? = 0;
+                    val c: <caret>bits256? = null;
+                    val d: <caret>bytes32? = null;
+                }
+            "#,
+            expect![[r#"
+                uint128 -> Global(uintN at common.tolk:3633-3638)
+                int32 -> Global(intN at common.tolk:3357-3361)
+                bits256 -> Global(bitsN at common.tolk:5235-5240)
+                bytes32 -> Global(bytesN at common.tolk:5325-5331)
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_annotation_names_not_reported_as_unresolved() {
+        check_unresolved_uses(
+            r#"
+                @deprecated("x")
+                const C: int = 1;
+
+                @overflow1023_policy("suppress")
+                struct S {
+                    x: int
+                }
+
+                fun main() {
+                    unknown_symbol;
+                }
+            "#,
+            expect![[r#"
+                unknown_symbol at 240-254
+            "#]],
+        );
+    }
+
+    #[test]
     fn test_local_var_references() {
         check_references(
             r#"
@@ -1291,6 +1333,12 @@ mod tests {
             .check_references(expect);
     }
 
+    fn check_unresolved_uses(input: &str, expect: Expect) {
+        ResolveTestBuilder::new()
+            .file("test.tolk", input)
+            .check_unresolved(expect);
+    }
+
     #[test]
     fn test_import() {
         ResolveTestBuilder::new()
@@ -1402,6 +1450,7 @@ mod tests {
     enum CheckMode {
         Definition,
         References,
+        Unresolved,
     }
 
     struct ResolveTestBuilder {
@@ -1442,6 +1491,10 @@ mod tests {
 
         fn check_references(self, expect: Expect) {
             self.check_internal(expect, CheckMode::References);
+        }
+
+        fn check_unresolved(self, expect: Expect) {
+            self.check_internal(expect, CheckMode::Unresolved);
         }
 
         fn check_internal(self, expect: Expect, mode: CheckMode) {
@@ -1625,6 +1678,17 @@ mod tests {
                         } else {
                             actual.push_str("Unresolved\n");
                         }
+                    }
+                }
+                CheckMode::Unresolved => {
+                    let mut unresolved: Vec<_> = resolved_uses
+                        .uses
+                        .iter()
+                        .filter(|u| matches!(u.resolved, Resolved::Unresolved))
+                        .collect();
+                    unresolved.sort_by_key(|u| u.span.start);
+                    for usage in unresolved {
+                        actual.push_str(&format!("{} at {}\n", usage.name, usage.span));
                     }
                 }
             }
