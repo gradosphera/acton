@@ -1391,9 +1391,9 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             is_static_call = true;
         }
 
-        // check for field access (`user.id`), when obj is a struct
-        if let TyData::Struct { def, .. } = self.intrn().data(unwrapped_obj_type) {
-            let def_id = *def;
+        // check for field access (`user.id`) when obj resolves to a struct,
+        // including generic wrappers like `Expectation<T>`
+        if let Some(def_id) = self.ctx.type_db.find_struct(unwrapped_obj_type) {
             let struct_ty = self
                 .ctx
                 .type_db
@@ -1636,6 +1636,11 @@ impl<'db, 'a, 't> TypeInferenceWalker<'db, 'a> {
             .map(|t| self.const_intrn().unwrap_alias(t))
             .and_then(|t| self.return_type_or_none(t));
         let Some(f_callable) = f_callable else {
+            // fallback, at least infer arguments
+            for arg in v.arguments() {
+                let Some(arg_expr) = arg.expr() else { continue };
+                flow = self.infer_expr(arg_expr, flow, false, None).out_flow;
+            }
             return ExprFlow::create(flow, as_cond);
         };
 

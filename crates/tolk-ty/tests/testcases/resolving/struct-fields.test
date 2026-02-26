@@ -185,6 +185,21 @@ fun Data.bar(self) {
 5:9 -> 1:4 resolved
 
 ========================================================================
+Struct field access via self in generic method on generic struct
+========================================================================
+struct Expectation<T> {
+    private value: T
+    private valueType: string
+    private location: string = ""
+}
+
+fun Expectation<T>.toEqual<U>(self, expected: U) {
+    Assert.equal(self.<caret>value, expected, "expect(<actual>).toEqual(<expected>)", self.location);
+}
+------------------------------------------------------------------------
+7:22 -> 1:12 resolved
+
+========================================================================
 Struct instance field resolving for generic struct
 ========================================================================
 struct Data<T> {
