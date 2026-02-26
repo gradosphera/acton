@@ -579,3 +579,55 @@ fun test() {
 ------------------------------------------------------------------------
 7:8 -> 1:4 resolved
 8:12 -> 5:8 resolved
+
+========================================================================
+Struct field access via smartcast for generic alias receiver
+========================================================================
+type Maybe<X> = Value<X> | None
+
+struct None {}
+
+struct Value<X> {
+    value: X
+}
+
+fun Maybe<X>.unwrap(self): X {
+    if (self is None) {
+        throw 7;
+    }
+    return self.<caret>value;
+}
+------------------------------------------------------------------------
+12:16 -> 5:4 resolved
+
+========================================================================
+Struct field access via smartcast for generic alias field
+========================================================================
+struct Cell<T> {
+    value: T
+}
+
+type Either<X, Y> = EitherLeft<X> | EitherRight<Y>
+
+struct EitherLeft<X> {
+    value: X
+}
+
+struct EitherRight<X> {
+    value: X
+}
+
+struct Message<TBody> {
+    body: Either<TBody, Cell<TBody>>
+}
+
+fun Message<TBody>.check(self) {
+    if (self.body is EitherLeft<TBody>) {
+        self.body.<caret>value;
+    } else {
+        self.body.<caret>value;
+    }
+}
+------------------------------------------------------------------------
+20:18 -> 7:4 resolved
+22:18 -> 11:4 resolved

@@ -1,4 +1,5 @@
 use crate::type_formatter::TypeFormatter;
+use crate::type_substitutor::TypeSubstitutor;
 use crate::types::*;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -1113,28 +1114,28 @@ impl TypeInterner {
     /// example: `int | slice | builder | bool` - `bool | slice` = `int | builder`
     /// what for: `if (x != null)` / `if (x is T)`, to smart cast x inside if
     pub fn calculate_type_subtract_rhs_type(&mut self, ty: TyId, subtract_ty: TyId) -> TyId {
-        let lhs_unwrapped = self.unwrap_alias(ty);
-        let lhs_union = match self.data(lhs_unwrapped) {
-            TyData::Union(variants) => variants,
-            _ => return self.ty_never,
+        let lhs_union = match self.collect_union_variants_for_subtract(ty, 0) {
+            Some(variants) => variants,
+            None => return self.ty_never,
         };
 
         let mut rest_variants = Vec::new();
 
-        let sub_unwrapped = self.unwrap_alias(subtract_ty);
-        let sub_data = self.data(sub_unwrapped).clone();
-        if let TyData::Union(sub_union) = sub_data {
-            if self.has_all_variants_of(lhs_unwrapped, sub_unwrapped) {
-                rest_variants.reserve(lhs_union.len() - sub_union.len());
-                for &lhs_variant in lhs_union {
+        if let Some(sub_union) = self.collect_union_variants_for_subtract(subtract_ty, 0) {
+            let subtract_is_subset = sub_union
+                .iter()
+                .all(|&sub_variant| self.has_variant_equal_to(&lhs_union, sub_variant));
+            if subtract_is_subset {
+                rest_variants.reserve(lhs_union.len().saturating_sub(sub_union.len()));
+                for &lhs_variant in &lhs_union {
                     if !self.has_variant_equal_to(&sub_union, lhs_variant) {
                         rest_variants.push(lhs_variant);
                     }
                 }
             }
-        } else if self.has_variant_equal_to(lhs_union, subtract_ty) {
+        } else if self.has_variant_equal_to(&lhs_union, subtract_ty) {
             rest_variants.reserve(lhs_union.len() - 1);
-            for &lhs_variant in lhs_union {
+            for &lhs_variant in &lhs_union {
                 if !self.equals(lhs_variant, subtract_ty) {
                     rest_variants.push(lhs_variant);
                 }
@@ -1148,6 +1149,47 @@ impl TypeInterner {
             return rest_variants[0];
         }
         self.union(rest_variants)
+    }
+
+    fn collect_union_variants_for_subtract(&mut self, ty: TyId, depth: usize) -> Option<Vec<TyId>> {
+        if depth > 8 {
+            return None;
+        }
+
+        let unwrapped = self.unwrap_alias(ty);
+        match self.data(unwrapped).clone() {
+            TyData::Union(variants) => Some(variants),
+            TyData::TypeAlias { inner_ty, .. } => {
+                self.collect_union_variants_for_subtract(inner_ty, depth + 1)
+            }
+            TyData::GenericTypeWithTs { inner_ty, types } => {
+                let inner_data = self.data(inner_ty).clone();
+                if let TyData::TypeAlias {
+                    inner_ty: alias_inner,
+                    args: Some(formal_args),
+                    ..
+                } = inner_data
+                {
+                    let mut mapping = FxHashMap::default();
+                    for (&formal, &actual) in formal_args.iter().zip(types.iter()) {
+                        if let TyData::TypeParameter { name, .. } = self.data(formal) {
+                            mapping.insert(name.clone(), actual);
+                        }
+                    }
+
+                    let instantiated = if mapping.is_empty() {
+                        alias_inner
+                    } else {
+                        let mut substitutor = TypeSubstitutor::new(self);
+                        substitutor.substitute(alias_inner, &mapping)
+                    };
+                    return self.collect_union_variants_for_subtract(instantiated, depth + 1);
+                }
+
+                self.collect_union_variants_for_subtract(inner_ty, depth + 1)
+            }
+            _ => None,
+        }
     }
 
     pub fn as_nullable_union(&self, ty: TyId) -> Option<(TyId, TyId)> {
