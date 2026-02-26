@@ -22,6 +22,7 @@
     "e019-several-not-null-assertions",
     "e020-reserve-mode-literal",
     "e021-dangerous-send-mode-missing-safety-comment",
+    "e022-negated-is-type-can-use-not-is",
     "s001-name-case-checker"
   ]
 }

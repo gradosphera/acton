@@ -1,6 +1,6 @@
 use crate::context::Context;
 use crate::wallets::new_mnemonic;
-use nacl::sign::{generate_keypair, signature, Keypair};
+use nacl::sign::{Keypair, generate_keypair, signature};
 use num_bigint::{BigInt, Sign};
 use rand::RngCore;
 use ton_emulator::{extension, register_ext_methods};
@@ -111,11 +111,7 @@ fn raw_sign_impl(
 }
 
 extension!(seed_to_keypair in (Context) with (seed: BigInt) using seed_to_keypair_impl);
-fn seed_to_keypair_impl(
-    _ctx: &mut Context,
-    stack: &mut Tuple,
-    seed: BigInt,
-) -> anyhow::Result<()> {
+fn seed_to_keypair_impl(_ctx: &mut Context, stack: &mut Tuple, seed: BigInt) -> anyhow::Result<()> {
     let keypair = seed_to_rust_keypair(seed);
 
     let priv_as_tuple_item = TupleItem::Int(BigInt::from_bytes_be(Sign::Plus, &keypair.skey[..32]));

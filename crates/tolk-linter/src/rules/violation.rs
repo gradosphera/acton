@@ -3,8 +3,8 @@ use crate::ast::{
     acton_import_in_contract, asm_function_missing_safety_comment, compiler_error,
     deprecated_symbol_use, field_init_can_be_folded, import_path_can_use_mappings,
     message_entity_naming, method_can_be_static, mutable_parameter_can_be_immutable,
-    mutable_variable_can_be_immutable, name_case_checker, no_bounce_handler,
-    pure_function_call_unused, reserve_mode_literal, send_mode_literal,
+    mutable_variable_can_be_immutable, name_case_checker, negated_is_type_can_use_not_is,
+    no_bounce_handler, pure_function_call_unused, reserve_mode_literal, send_mode_literal,
     several_not_null_assertions, unused_import, unused_variable, used_ignored_identifier,
     write_only_variable,
 };
@@ -79,6 +79,7 @@ pub fn code_to_rule(linter: Linter, code: &str) -> Option<(RuleGroup, Rule)> {
         (Tolk, "E019") => several_not_null_assertions::SeveralNotNullAssertions,
         (Tolk, "E020") => reserve_mode_literal::ReserveModeLiteral,
         (Tolk, "E021") => DangerousSendModeMissingSafetyComment,
+        (Tolk, "E022") => negated_is_type_can_use_not_is::NegatedIsTypeCanUseNotIs,
         (Tolk, "C001") => compiler_error::CompilerError,
         (Tolk, "S001") => name_case_checker::NameCaseChecker,
         _ => return None,
