@@ -62,7 +62,7 @@ macro_rules! run_rule {
 
 pub struct Checker<'db, 'a> {
     pub file_db: &'a FileDb,
-    pub type_db: &'db mut TypeDb<'a>,
+    pub type_db: &'db TypeDb<'a>,
     pub body_types: &'a HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
     pub analysis_db: AnalysisDb,
     pub diagnostics: Vec<Diagnostic>,

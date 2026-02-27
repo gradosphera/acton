@@ -5,7 +5,7 @@ use acton_config::config::ActonConfig;
 use lsp_types::MessageType;
 use rustc_hash::FxHashSet;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 use tolk_linter::Checker;
@@ -190,7 +190,7 @@ impl Backend {
         })
     }
 
-    fn collect_analysis_roots(&self, config: &ActonConfig, initial_root: &PathBuf) -> Vec<PathBuf> {
+    fn collect_analysis_roots(&self, config: &ActonConfig, initial_root: &Path) -> Vec<PathBuf> {
         let mut roots = Vec::new();
         let mut seen = std::collections::HashSet::new();
 
@@ -200,7 +200,7 @@ impl Backend {
             }
         };
 
-        add_root(initial_root.clone());
+        add_root(initial_root.to_owned());
 
         for document in self.documents.iter() {
             let Ok(path) = document.key().to_file_path() else {

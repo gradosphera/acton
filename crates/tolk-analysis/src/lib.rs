@@ -42,7 +42,7 @@ impl AnalysisDb {
 
     pub fn use_facts(
         &mut self,
-        type_db: &mut TypeDb,
+        type_db: &TypeDb,
         body_types: &HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
         file_id: FileId,
     ) -> Option<Arc<FileUseFacts>> {

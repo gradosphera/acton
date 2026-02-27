@@ -3,6 +3,7 @@ use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, ContractConfig, LintLevel};
 use anyhow::anyhow;
 use globset::{Glob, GlobSet, GlobSetBuilder};
+use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 use serde_json;
 use std::collections::{HashMap, HashSet};
@@ -241,7 +242,7 @@ pub fn check_cmd(
             }
         }
 
-        let diagnostics = check_roots_shared(root_inputs, &file_db, fix, json, &config, &excludes)?;
+        let diagnostics = check_roots(root_inputs, &file_db, fix, json, &config, &excludes)?;
         all_diagnostics.extend(diagnostics);
     }
 
@@ -396,12 +397,14 @@ fn check_contract(
     let root = dunce::canonicalize(PathBuf::from(&config.src))?;
     let lint_settings = Checker::build_settings(acton_config, Some(contract_id));
 
-    check_root_file(
-        &root,
+    check_roots(
+        vec![RootCheckInput {
+            root,
+            lint_settings,
+        }],
         file_db,
         fix,
         json,
-        lint_settings,
         acton_config,
         excludes,
     )
@@ -431,12 +434,14 @@ fn check_test_file(
     // we can import any files in tests
     lint_settings.insert(Rule::ActonImportInContract, LintLevel::Allow);
 
-    check_root_file(
-        &root,
+    check_roots(
+        vec![RootCheckInput {
+            root,
+            lint_settings,
+        }],
         file_db,
         fix,
         json,
-        lint_settings,
         acton_config,
         excludes,
     )
@@ -491,7 +496,7 @@ fn prepare_root_check(
     })
 }
 
-fn check_roots_shared(
+fn check_roots(
     roots: Vec<RootCheckInput>,
     file_db: &FileDb,
     fix: bool,
@@ -503,28 +508,24 @@ fn check_roots_shared(
         return Ok(Vec::new());
     }
 
-    let mut prepared_roots = Vec::with_capacity(roots.len());
-    for root in roots {
-        prepared_roots.push(prepare_root_check(root, file_db, acton_config)?);
-    }
+    let prepared_roots = roots
+        .into_par_iter()
+        .map(|root| prepare_root_check(root, file_db, acton_config))
+        .collect::<anyhow::Result<Vec<_>>>()?;
 
     // First we build project index for all roots:
     // - find all reachable files
     // - parse
     // - resolve imports
-    let now = Instant::now();
     let root_paths = prepared_roots.iter().map(|r| r.root.clone()).collect();
     let mut index = ProjectIndex::builder_for_roots(file_db, root_paths)
         .with_stdlib(file_db.stdlib_path().to_owned())
         .with_mappings(&acton_config.mappings)
         .build()?;
-    log::debug!("Build shared project index took {:?}", now.elapsed());
     log::debug!("Shared index files: {}", index.files().len());
 
     // Then we can resolve all symbols once.
-    let now = Instant::now();
     resolve(file_db, &mut index);
-    log::debug!("Resolve shared project took {:?}", now.elapsed());
 
     let mut root_scopes: HashMap<FileId, FxHashSet<FileId>> = HashMap::new();
     let mut files_to_infer: FxHashSet<FileId> = FxHashSet::default();
@@ -536,7 +537,6 @@ fn check_roots_shared(
     }
 
     // Infer types once for all files needed by any root.
-    let now = Instant::now();
     let mut interner = TypeInterner::new();
     let mut type_db = TypeDb::new(&mut interner, file_db, &index);
 
@@ -560,10 +560,8 @@ fn check_roots_shared(
 
         body_types.insert(file_id, file_body_types);
     }
-    log::debug!("Infer shared types took {:?}", now.elapsed());
 
     // And finally run inspections for each root using root-scoped wrappers.
-    let now = Instant::now();
     let mut all_diagnostics = Vec::new();
 
     for root in prepared_roots {
@@ -625,152 +623,7 @@ fn check_roots_shared(
         all_diagnostics.extend(diagnostics);
     }
 
-    log::debug!("Run shared diagnostics in {:?}", now.elapsed());
     Ok(all_diagnostics)
-}
-
-fn check_root_file(
-    root: &Path,
-    file_db: &FileDb,
-    fix: bool,
-    json: bool,
-    lint_settings: HashMap<Rule, LintLevel>,
-    acton_config: &ActonConfig,
-    excludes: &LintExcludes,
-) -> anyhow::Result<Vec<Diagnostic>> {
-    let file_info = file_db.process(root)?;
-    let file_source = file_info.source().source.clone();
-
-    let mut all_diagnostics = vec![];
-
-    let has_compiler_errors =
-        compiler::check_with_compiler(root, file_db, acton_config, &mut all_diagnostics)?;
-
-    let parse_errors = file_info.source().errors();
-
-    if has_compiler_errors {
-        // don't possibly duplicate parsing errors if we have compiler errors
-        for parse_error in parse_errors {
-            let start_byte = pos::byte_offset_from_point(&parse_error.span.start, &file_source);
-            let end_byte = pos::byte_offset_from_point(&parse_error.span.end, &file_source);
-
-            let diagnostic = Diagnostic {
-                file_id: file_info.id(),
-                severity: Severity::Error,
-                code: None,
-                rule: Rule::CompilerError,
-                name: "parse-error",
-                message: parse_error.message.clone(),
-                annotations: vec![Annotation {
-                    span: Span {
-                        start: start_byte as u32,
-                        end: end_byte as u32,
-                    },
-                    message: None,
-                    is_primary: true,
-                    tags: vec![],
-                }],
-                fixes: vec![],
-                help: None,
-            };
-            all_diagnostics.push(diagnostic);
-        }
-    }
-
-    // First we need to build project index:
-    // - find all reachable files
-    // - parse
-    // - resolve imports
-    let now = Instant::now();
-    let mut index = ProjectIndex::builder(file_db, root.to_owned())
-        .with_stdlib(file_db.stdlib_path().to_owned())
-        .with_mappings(&acton_config.mappings)
-        .build()?;
-    log::debug!("Build project index took {:?}", now.elapsed());
-    log::debug!("Index: {:?}", index.files().len());
-
-    // Then we can resolve all symbols across files
-    let now = Instant::now();
-    resolve(file_db, &mut index);
-    log::debug!("Resolve project took {:?}", now.elapsed());
-
-    // Infer types of all top level declarations
-    let now = Instant::now();
-    let mut interner = TypeInterner::new();
-    let mut type_db = TypeDb::new(&mut interner, file_db, &index);
-
-    let mut body_types = HashMap::new();
-
-    let files_to_check = index.reachable_files(file_info.id());
-
-    for file_to_check in &files_to_check {
-        let Some(file_to_infer) = file_db.get_by_id(*file_to_check) else {
-            continue;
-        };
-        let mut file_body_types = HashMap::new();
-
-        for decl in file_to_infer.source().top_levels() {
-            let Some(index_decl) = file_to_infer.find_declaration(&decl) else {
-                continue;
-            };
-
-            let res = infer(&mut type_db, file_to_infer.id(), index_decl.id, &decl);
-            file_body_types.insert(index_decl.id, res);
-        }
-
-        body_types.insert(*file_to_check, file_body_types);
-    }
-    log::debug!("Infer types took {:?}", now.elapsed());
-
-    // And finally run all inspections provided by checker
-    let now = Instant::now();
-    let mut checker = Checker::new(file_db, &mut type_db, &body_types).with_settings(lint_settings);
-
-    // locals by file -> file_db -> project_index -> by usage
-    // globals one time
-    checker.run_once();
-
-    for file_to_check in files_to_check {
-        let Some(info) = file_db.get_by_id(file_to_check) else {
-            continue;
-        };
-        if !info.is_workspace_file() {
-            // we don't want to check non-workspace files
-            continue;
-        }
-        if info.id() != file_info.id() && excludes.is_match(info.path()) {
-            continue;
-        }
-
-        checker.process_file(info.source(), info.id());
-    }
-
-    checker.apply_suppressions();
-    log::debug!("Run diagnostics in {:?}", now.elapsed());
-
-    #[cfg(feature = "profile_rules")]
-    {
-        checker.print_profiling_results();
-    }
-
-    let mut diagnostics = checker.diagnostics.clone();
-    diagnostics.extend(all_diagnostics);
-    diagnostics.retain(|diagnostic| {
-        diagnostic.rule == Rule::CompilerError
-            || diagnostic.file_id == file_info.id()
-            || !excludes.is_match_file_id(file_db, diagnostic.file_id)
-    });
-
-    if !json {
-        let diagnostics_to_show = if fix {
-            fix::filter_fixed_diagnostics(&diagnostics)
-        } else {
-            diagnostics.clone()
-        };
-        let _ = render::emit_diagnostics(file_db, &diagnostics_to_show);
-    }
-
-    Ok(diagnostics)
 }
 
 fn find_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {

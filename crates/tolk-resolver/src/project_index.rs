@@ -6,6 +6,7 @@
 use crate::file_db::FileDb;
 use crate::file_index::{FileId, FileIndex, FileSource, Import, Symbol, SymbolId, SymbolKind};
 use crate::resolve_index::{FileResolveIndex, NameUse};
+use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
@@ -360,14 +361,24 @@ impl<'a> ProjectIndexBuilder<'a> {
         let mut queue = VecDeque::new();
         let mut path_to_file_id = HashMap::new();
 
-        for root_path in self.root_paths {
-            let root_path = self.file_db.canonicalize(root_path)?;
-            let root = match self.file_db.process(&root_path) {
-                Ok(info) => info.index().clone(),
-                Err(err) => {
-                    anyhow::bail!("Cannot process root file: {err}")
-                }
-            };
+        let root_paths = self
+            .root_paths
+            .into_iter()
+            .map(|root_path| self.file_db.canonicalize(root_path))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let roots = root_paths
+            .into_par_iter()
+            .map(|root_path| {
+                self.file_db
+                    .process(&root_path)
+                    .map(|info| info.index().clone())
+                    .map_err(|err| anyhow::anyhow!("Cannot process root file: {err}"))
+            })
+            .collect::<Vec<_>>();
+
+        for root in roots {
+            let root = root?;
 
             let file_id = match path_to_file_id.get(&root.path).copied() {
                 Some(existing_id) => existing_id,

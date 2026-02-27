@@ -124,6 +124,7 @@ toml_edit = "0.24.0"
 
 tokio = { version = "1.41", features = ["rt-multi-thread", "macros", "full"] }
 keyring = { version = "3.6.3", features = ["apple-native", "windows-native", "linux-native"] }
+rayon = "1.11.0"
 
 # acton fmt
 similar = { version = "2.7.0", features = ["inline"] }
@@ -218,6 +219,7 @@ log = { workspace = true } # overall logging
 fern = { workspace = true } # overall logging
 chrono = { workspace = true }
 walkdir = { workspace = true } # test discovery
+rayon = { workspace = true }
 sha2 = { workspace = true } # for cache
 xxhash-rust = { workspace = true } # fast file content hash for cache
 fs2 = { workspace = true } # build cache locking

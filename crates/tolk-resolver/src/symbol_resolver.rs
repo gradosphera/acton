@@ -11,6 +11,7 @@ use crate::resolve_index::{
     FileResolveIndex, LocalDef, LocalDefId, LocalDefKind, NameUse, NameUseKind, Resolved,
 };
 use crate::{FileIndex, SymbolKind};
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tolk_syntax::{
@@ -848,13 +849,21 @@ fn parse_numeric_suffix(name: &str, prefix: &str) -> bool {
 
 /// Resolves all symbols in all files present in the `ProjectIndex`.
 pub fn resolve(db: &FileDb, index: &mut ProjectIndex) {
-    let files = index.files().keys().cloned().collect::<Vec<_>>();
-    for file_id in files {
-        let Some(file_index) = resolve_file(db, index, file_id) else {
-            continue;
-        };
+    let resolved_files = {
+        let index_ref: &ProjectIndex = &*index;
+        index_ref
+            .files()
+            .into_par_iter()
+            .filter_map(|(&file_id, _)| {
+                resolve_file(db, index_ref, file_id)
+                    .map(|file_index| (file_id, Arc::new(file_index)))
+            })
+            .collect::<Vec<_>>()
+    };
 
-        index.resolved_uses.insert(file_id, Arc::new(file_index));
+    index.resolved_uses.clear();
+    for (file_id, file_index) in resolved_files {
+        index.resolved_uses.insert(file_id, file_index);
     }
 }
 
