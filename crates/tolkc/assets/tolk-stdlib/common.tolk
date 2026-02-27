@@ -215,7 +215,6 @@ fun createEmptyTuple(): array<unknown>
 
 /// Appends a value to array.
 /// If its size exceeds 255, throws a type check exception.
-/// todo void or self?
 @pure
 fun array<T>.push(mutate self, value: T): void
     builtin
@@ -1084,7 +1083,7 @@ fun string.beginParse(self): slice
 /// ```
 /// Unlike `beginParse()`, it works at compile-time and is allowed in constant expressions.
 @pure
-fun string.literalSlice(): slice
+fun string.literalSlice(self): slice
     builtin
 
 /// Compile-time method that calculates crc32 of a constant string.

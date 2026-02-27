@@ -12,7 +12,7 @@ tolk 1.2
  */
 
 /// Returns snake depth of a string.
-/// Example: "abcd" has depth 1, it's a flat string.
+/// Example: "abcd" has depth 0, it's a flat string.
 /// Example: "ab" + (ref "cd") has depth 1.
 /// Example: "a" + (ref "bc" + (ref "d" + (ref ""))) has depth 3.
 @pure
