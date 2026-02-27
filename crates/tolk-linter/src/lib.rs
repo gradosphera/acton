@@ -35,7 +35,7 @@ use tree_sitter::Node;
 mod profiling;
 mod rules;
 
-use crate::dfa::{random_requires_initialization, unauthorized_access};
+use crate::dfa::{divide_before_multiply, random_requires_initialization, unauthorized_access};
 #[cfg(feature = "profile_rules")]
 pub use profiling::Profiler;
 use tolk_analysis::{AnalysisDb, FileUseFacts};
@@ -227,6 +227,13 @@ impl<'a> Checker<'a> {
             .use_facts(self.type_db, self.body_types, file_id)
     }
 
+    pub fn cfg_for_symbol(
+        &mut self,
+        symbol_id: SymbolId,
+    ) -> Option<Arc<tolk_dataflow::ControlFlowGraph>> {
+        self.analysis_db.cfg_for_symbol(self.type_db, symbol_id)
+    }
+
     pub fn apply_suppressions(&mut self) {
         self.diagnostics.retain(|diag| {
             let Some(file_suppressions) = self.file_suppressions.get(&diag.file_id) else {
@@ -406,6 +413,11 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
             self.checker,
             Rule::RandomRequiresInitialization,
             random_requires_initialization::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::DivideBeforeMultiply,
+            divide_before_multiply::check_file(self.checker, self.file_id)
         );
         run_rule!(
             self.checker,

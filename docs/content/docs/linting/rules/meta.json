@@ -25,6 +25,7 @@
     "e022-negated-is-type-can-use-not-is",
     "e023-bless-call-missing-safety-comment",
     "e024-random-requires-initialization",
+    "e025-divide-before-multiply",
     "s001-name-case-checker"
   ]
 }

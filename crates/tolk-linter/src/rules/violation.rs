@@ -9,7 +9,7 @@ use crate::ast::{
     several_not_null_assertions, unused_import, unused_variable, used_ignored_identifier,
     write_only_variable,
 };
-use crate::dfa::{random_requires_initialization, unauthorized_access};
+use crate::dfa::{divide_before_multiply, random_requires_initialization, unauthorized_access};
 use serde::Serialize;
 use std::fmt::Display;
 
@@ -83,6 +83,7 @@ pub fn code_to_rule(linter: Linter, code: &str) -> Option<(RuleGroup, Rule)> {
         (Tolk, "E022") => negated_is_type_can_use_not_is::NegatedIsTypeCanUseNotIs,
         (Tolk, "E023") => BlessCallMissingSafetyComment,
         (Tolk, "E024") => random_requires_initialization::RandomRequiresInitialization,
+        (Tolk, "E025") => divide_before_multiply::DivideBeforeMultiply,
         (Tolk, "C001") => compiler_error::CompilerError,
         (Tolk, "S001") => name_case_checker::NameCaseChecker,
         _ => return None,
