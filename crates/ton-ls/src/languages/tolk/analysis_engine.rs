@@ -15,7 +15,7 @@ use tolk_linter::Checker;
 use tolk_resolver::ProjectIndex;
 use tolk_resolver::file_index::FileId;
 use tolk_resolver::symbol_resolver::resolve;
-use tolk_ty::{TypeDb, TypeInterner, infer};
+use tolk_ty::{TypeDb, infer};
 use tower_lsp::lsp_types::Url;
 use tree_sitter::Tree;
 
@@ -38,7 +38,7 @@ impl Backend {
         }
 
         let mut files_to_republish = FxHashSet::default();
-        self.reanalyze_roots(&config, &roots, &mut files_to_republish);
+        self.reanalyze_roots(&config, &roots, &mut files_to_republish, false);
         self.rebuild_analysis_cache();
         self.publish_diagnostics_for_files(files_to_republish).await;
 
@@ -98,10 +98,15 @@ impl Backend {
             .get_by_path(&canonical_path)
             .or_else(|| self.file_db.get_by_path(&path))
             .map(|info| info.id());
+        let workspace_only_change = changed_file_id
+            .and_then(|file_id| self.file_db.get_by_id(file_id))
+            .map(|file| file.is_workspace_file())
+            .unwrap_or(false);
 
         log::info!(
-            "LS invalidation input: changed={}, file_id={changed_file_id:?}, known_roots={}",
+            "LS invalidation input: changed={}, file_id={changed_file_id:?}, workspace_only_change={}, known_roots={}",
             canonical_path.display(),
+            workspace_only_change,
             known_roots.len()
         );
 
@@ -155,7 +160,12 @@ impl Backend {
         }
 
         let mut files_to_republish = FxHashSet::default();
-        self.reanalyze_roots(&acton_config, &roots_to_reanalyze, &mut files_to_republish);
+        self.reanalyze_roots(
+            &acton_config,
+            &roots_to_reanalyze,
+            &mut files_to_republish,
+            workspace_only_change,
+        );
         self.rebuild_analysis_cache();
         self.publish_diagnostics_for_files(files_to_republish).await;
     }
@@ -203,17 +213,27 @@ impl Backend {
         acton_config: &ActonConfig,
         roots: &[PathBuf],
         files_to_republish: &mut FxHashSet<FileId>,
+        workspace_only_change: bool,
     ) {
         log::info!("LS reanalyzing {} root(s)", roots.len());
         for root in roots {
             let started = Instant::now();
             let mut previous_scope_size = 0usize;
-            if let Some(existing) = self.root_analyses.get(root) {
+            let previous_root_analysis = self
+                .root_analyses
+                .get(root)
+                .map(|entry| entry.value().clone());
+            if let Some(existing) = &previous_root_analysis {
                 previous_scope_size = existing.scope_files.len();
                 files_to_republish.extend(existing.scope_files.iter().copied());
             }
 
-            match self.run_root_analysis(root.clone(), acton_config) {
+            match self.run_root_analysis(
+                root.clone(),
+                acton_config,
+                previous_root_analysis,
+                workspace_only_change,
+            ) {
                 Ok(root_analysis) => {
                     let next_scope_size = root_analysis.scope_files.len();
                     let diagnostics_count = root_analysis.analysis.diagnostics.len();
@@ -356,6 +376,8 @@ impl Backend {
         &self,
         root_path: PathBuf,
         acton_config: &ActonConfig,
+        previous_root: Option<Arc<RootAnalysis>>,
+        workspace_only_change: bool,
     ) -> anyhow::Result<RootAnalysis> {
         crate::profile!(self, "run_analysis");
         let now = Instant::now();
@@ -372,7 +394,17 @@ impl Backend {
         let resolving_time = now.elapsed();
         let now = Instant::now();
 
-        let mut interner = TypeInterner::new();
+        let can_reuse_library_types = workspace_only_change && previous_root.is_some();
+        let mut interner = previous_root
+            .as_ref()
+            .and_then(|root| {
+                if can_reuse_library_types {
+                    Some(root.analysis.type_interner.as_ref().clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
         let mut type_db = TypeDb::new(&mut interner, &self.file_db, &index);
 
         let Some(root_file_id) = index.get_file_by_path(&root_path) else {
@@ -384,7 +416,25 @@ impl Backend {
         let scope_files: FxHashSet<_> = index.reachable_files(root_file_id).into_iter().collect();
 
         let mut all_body_types = HashMap::new();
-        let mut infer_files = scope_files.iter().copied().collect::<Vec<_>>();
+        let mut reused_library_files = 0usize;
+        let mut infer_files = Vec::new();
+        for &file_id in &scope_files {
+            let Some(file_info) = self.file_db.get_by_id(file_id) else {
+                continue;
+            };
+
+            if can_reuse_library_types
+                && !file_info.is_workspace_file()
+                && let Some(previous_root) = &previous_root
+                && let Some(cached_types) = previous_root.analysis.all_body_types.get(&file_id)
+            {
+                all_body_types.insert(file_id, cached_types.clone());
+                reused_library_files += 1;
+                continue;
+            }
+
+            infer_files.push(file_id);
+        }
         infer_files.sort_unstable();
         for file_id in infer_files {
             let Some(file_info) = self.file_db.get_by_id(file_id) else {
@@ -406,12 +456,15 @@ impl Backend {
         }
 
         let type_inference_time = now.elapsed();
+        let inferred_files = all_body_types.len().saturating_sub(reused_library_files);
 
         let bodies = all_body_types.values().flat_map(|b| b.keys()).count();
         log::info!(
-            "LS root analysis stats: root={}, resolving={resolving_time:?}, type_inference={type_inference_time:?}, scope_files={}, bodies={}",
+            "LS root analysis stats: root={}, resolving={resolving_time:?}, type_inference={type_inference_time:?}, scope_files={}, inferred_files={}, reused_library_files={}, bodies={}",
             root_path.display(),
             scope_files.len(),
+            inferred_files,
+            reused_library_files,
             bodies
         );
 
