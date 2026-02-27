@@ -1,0 +1,12 @@
+[package]
+name = "js-plugin-starter"
+description = "Minimal Acton project with JS CST lint plugin"
+version = "0.1.0"
+
+[contracts.main]
+name = "Main"
+src = "contracts/main.tolk"
+depends = []
+
+[lint]
+js-plugins = ["plugins/simple-plugin.mjs"]

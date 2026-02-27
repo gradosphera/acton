@@ -2,7 +2,7 @@ use crate::ast::bless_call_missing_safety_comment::BlessCallMissingSafetyComment
 use crate::ast::dangerous_send_mode_missing_safety_comment::DangerousSendModeMissingSafetyComment;
 use crate::ast::{
     acton_import_in_contract, asm_function_missing_safety_comment, compiler_error,
-    deprecated_symbol_use, field_init_can_be_folded, import_path_can_use_mappings,
+    deprecated_symbol_use, field_init_can_be_folded, import_path_can_use_mappings, js_plugin,
     message_entity_naming, method_can_be_static, mutable_parameter_can_be_immutable,
     mutable_variable_can_be_immutable, name_case_checker, negated_is_type_can_use_not_is,
     no_bounce_handler, pure_function_call_unused, reserve_mode_literal, send_mode_literal,
@@ -84,6 +84,7 @@ pub fn code_to_rule(linter: Linter, code: &str) -> Option<(RuleGroup, Rule)> {
         (Tolk, "E023") => BlessCallMissingSafetyComment,
         (Tolk, "E024") => random_requires_initialization::RandomRequiresInitialization,
         (Tolk, "E025") => divide_before_multiply::DivideBeforeMultiply,
+        (Tolk, "E026") => js_plugin::JsPlugin,
         (Tolk, "C001") => compiler_error::CompilerError,
         (Tolk, "S001") => name_case_checker::NameCaseChecker,
         _ => return None,

@@ -23,6 +23,7 @@ mod check_explain;
 mod check_list;
 mod compiler;
 mod fix;
+mod js_plugins;
 mod json;
 mod pos;
 mod render;
@@ -138,6 +139,7 @@ pub fn check_cmd(
 
     let cwd = std::env::current_dir()?;
     let excludes = LintExcludes::from_config(&cwd, &config)?;
+    let js_plugin_paths = js_plugins::resolve_plugins(&cwd, &config)?;
 
     let now = Instant::now();
     let files = find_files(&cwd)?;
@@ -158,15 +160,30 @@ pub fn check_cmd(
 
     if let Some(target) = target {
         if target.ends_with(".tolk") {
-            let contract_diagnostics =
-                check_test_file(Path::new(&target), &file_db, fix, json, &config, &excludes)?;
+            let contract_diagnostics = check_test_file(
+                Path::new(&target),
+                &file_db,
+                fix,
+                json,
+                &config,
+                &excludes,
+                &js_plugin_paths,
+            )?;
             all_diagnostics.extend(contract_diagnostics);
         } else {
             let contract = config
                 .get_contract(&target)
                 .ok_or_else(|| anyhow!(error_fmt::contract_not_found(&config, &target)))?;
-            let contract_diagnostics =
-                check_contract(&target, contract, &file_db, fix, json, &config, &excludes)?;
+            let contract_diagnostics = check_contract(
+                &target,
+                contract,
+                &file_db,
+                fix,
+                json,
+                &config,
+                &excludes,
+                &js_plugin_paths,
+            )?;
             all_diagnostics.extend(contract_diagnostics);
         }
     } else {
@@ -183,6 +200,7 @@ pub fn check_cmd(
                 json,
                 &config,
                 &excludes,
+                &js_plugin_paths,
             )?;
             all_diagnostics.extend(contract_diagnostics);
         }
@@ -192,8 +210,15 @@ pub fn check_cmd(
                 continue;
             };
             if name.to_string_lossy().ends_with(".test.tolk") && !excludes.is_match(&file) {
-                let contract_diagnostics =
-                    check_test_file(&file, &file_db, fix, json, &config, &excludes)?;
+                let contract_diagnostics = check_test_file(
+                    &file,
+                    &file_db,
+                    fix,
+                    json,
+                    &config,
+                    &excludes,
+                    &js_plugin_paths,
+                )?;
                 all_diagnostics.extend(contract_diagnostics);
             }
         }
@@ -337,6 +362,7 @@ fn check_contract(
     json: bool,
     acton_config: &ActonConfig,
     excludes: &LintExcludes,
+    js_plugin_paths: &[PathBuf],
 ) -> anyhow::Result<Vec<Diagnostic>> {
     if !config.src.ends_with(".tolk") {
         // skip contracts with .boc sources
@@ -358,6 +384,7 @@ fn check_contract(
         lint_settings,
         acton_config,
         excludes,
+        js_plugin_paths,
     )
 }
 
@@ -368,6 +395,7 @@ fn check_test_file(
     json: bool,
     acton_config: &ActonConfig,
     excludes: &LintExcludes,
+    js_plugin_paths: &[PathBuf],
 ) -> anyhow::Result<Vec<Diagnostic>> {
     let root = dunce::canonicalize(file)?;
     let current_dir = std::env::current_dir().unwrap_or_default();
@@ -395,6 +423,7 @@ fn check_test_file(
         lint_settings,
         acton_config,
         excludes,
+        js_plugin_paths,
     )
 }
 
@@ -406,6 +435,7 @@ fn check_root_file(
     lint_settings: HashMap<Rule, LintLevel>,
     acton_config: &ActonConfig,
     excludes: &LintExcludes,
+    js_plugin_paths: &[PathBuf],
 ) -> anyhow::Result<Vec<Diagnostic>> {
     let file_info = file_db.process(root)?;
     let file_source = file_info.source().source.clone();
@@ -512,6 +542,14 @@ fn check_root_file(
         }
 
         checker.process_file(info.source(), info.id());
+
+        if !js_plugin_paths.is_empty() {
+            let plugin_diagnostics =
+                js_plugins::run_plugins_for_file(info.as_ref(), js_plugin_paths);
+            for diagnostic in plugin_diagnostics {
+                checker.emit_diagnostic(diagnostic);
+            }
+        }
     }
 
     checker.apply_suppressions();

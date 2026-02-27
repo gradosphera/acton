@@ -1,0 +1,11 @@
+warning[E026]: [tree-sitter-style-plugin] tree-sitter api probe: onInternalMessage
+  --> [ROOT]/contracts/main[LINE]
+  |
+2 |             fun onInternalMessage(_in: InMessage) {
+  |                 ^^^^^^^^^^^^^^^^^
+  |
+  = function kind: function_declaration
+
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain E026

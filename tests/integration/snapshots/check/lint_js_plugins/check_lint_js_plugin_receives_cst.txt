@@ -1,0 +1,11 @@
+warning[E026]: [cst-plugin] js plugin cst probe
+  --> [ROOT]/contracts/main[LINE]
+  |
+2 |             fun onInternalMessage(_in: InMessage) {
+  |             ^
+  |
+  = plugin can inspect tree-sitter CST
+
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain E026

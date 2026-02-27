@@ -167,6 +167,7 @@ pub struct LintConfig {
     pub exclude: Option<Vec<String>>,
     #[serde(default = "default_max_warnings")]
     pub max_warnings: usize,
+    pub js_plugins: Option<Vec<String>>,
     pub output: Option<LintOutputConfig>,
     pub rules: Option<LintRules>,
     #[serde(flatten)]
@@ -178,6 +179,7 @@ impl Default for LintConfig {
         Self {
             exclude: None,
             max_warnings: default_max_warnings(),
+            js_plugins: None,
             output: None,
             rules: None,
             metadata: BTreeMap::new(),
@@ -735,6 +737,7 @@ version = "0.1.0"
 [lint]
 exclude = ["contracts/skip.tolk"]
 max-warnings = 3
+js-plugins = ["plugins/cst-plugin.mjs"]
 
 [lint.output.sarif]
 path = ".acton/reports/lint.sarif"
@@ -754,6 +757,10 @@ unused-variable = "allow"
             &vec!["contracts/skip.tolk".to_string()]
         );
         assert_eq!(lint_settings.max_warnings, 3);
+        assert_eq!(
+            lint_settings.js_plugins.as_ref().unwrap(),
+            &vec!["plugins/cst-plugin.mjs".to_string()]
+        );
         assert_eq!(
             lint_settings
                 .output

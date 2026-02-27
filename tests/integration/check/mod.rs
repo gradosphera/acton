@@ -11,6 +11,7 @@ mod field_init_can_be_folded_tests;
 mod import_path_can_use_mappings_tests;
 mod lint_exclude_tests;
 mod lint_exit_code_tests;
+mod lint_js_plugins_tests;
 mod lint_rules_config_tests;
 mod lint_sarif_tests;
 mod message_entity_naming_tests;

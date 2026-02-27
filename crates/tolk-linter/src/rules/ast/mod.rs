@@ -6,6 +6,7 @@ pub mod dangerous_send_mode_missing_safety_comment;
 pub mod deprecated_symbol_use;
 pub mod field_init_can_be_folded;
 pub mod import_path_can_use_mappings;
+pub mod js_plugin;
 pub mod message_entity_naming;
 pub mod method_can_be_static;
 pub mod mode_literal_helpers;
