@@ -4,7 +4,8 @@ use crate::ast::name_case_checker::check_name_cases;
 use crate::ast::{
     acton_import_in_contract, bless_call_missing_safety_comment,
     dangerous_send_mode_missing_safety_comment, deprecated_symbol_use,
-    negated_is_type_can_use_not_is, no_bounce_handler, several_not_null_assertions,
+    identical_conditional_branches, negated_is_type_can_use_not_is, no_bounce_handler,
+    several_not_null_assertions,
 };
 use crate::rules::ast::{
     asm_function_missing_safety_comment, field_init_can_be_folded, import_path_can_use_mappings,
@@ -24,8 +25,8 @@ use tolk_resolver::file_index::{FileId, SymbolId};
 use tolk_resolver::resolve_index::FileResolveIndex;
 use tolk_resolver::{AstNodeSpanExt, NameUse, Resolved};
 use tolk_syntax::{
-    Call, Expr, ExprStmt, Ident, InstanceArg, NotNull, SourceFile, TopLevel, TypeIdent, Unary,
-    Walker, walk_ast,
+    Call, Expr, ExprStmt, Ident, If, IfAlt, InstanceArg, NotNull, SourceFile, Ternary, TopLevel,
+    TypeIdent, Unary, Walker, walk_ast,
 };
 use tolk_ty::InferenceResult;
 use tolk_ty::TypeDb;
@@ -477,6 +478,51 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
         if let Some(value) = node.value() {
             self.visit_expr(&value);
         }
+    }
+
+    fn walk_if(&mut self, node: &If<'file>) -> Self::Result {
+        run_rule!(
+            self.checker,
+            Rule::IdenticalConditionalBranches,
+            identical_conditional_branches::check_if(self.checker, self.file_id, node)
+        );
+
+        if let Some(condition) = node.condition() {
+            self.visit_expr(&condition);
+        }
+        if let Some(body) = node.body() {
+            self.walk_block(&body);
+        }
+        if let Some(alternative) = node.alternative() {
+            match alternative {
+                IfAlt::If(if_stmt) => {
+                    self.walk_if(&if_stmt);
+                }
+                IfAlt::Block(block) => {
+                    self.walk_block(&block);
+                }
+            }
+        }
+        self.default_result()
+    }
+
+    fn walk_ternary(&mut self, node: &Ternary<'file>) -> Self::Result {
+        run_rule!(
+            self.checker,
+            Rule::IdenticalConditionalBranches,
+            identical_conditional_branches::check_ternary(self.checker, self.file_id, node)
+        );
+
+        if let Some(condition) = node.condition() {
+            self.visit_expr(&condition);
+        }
+        if let Some(consequence) = node.consequence() {
+            self.visit_expr(&consequence);
+        }
+        if let Some(alternative) = node.alternative() {
+            self.visit_expr(&alternative);
+        }
+        self.default_result()
     }
 
     fn walk_call(&mut self, node: &Call<'file>) -> Self::Result {
