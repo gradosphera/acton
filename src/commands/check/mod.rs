@@ -3,6 +3,7 @@ use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, ContractConfig, LintLevel};
 use anyhow::anyhow;
 use globset::{Glob, GlobSet, GlobSetBuilder};
+use rustc_hash::FxHashSet;
 use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
@@ -32,6 +33,18 @@ pub(super) struct LintExcludes {
     project_root: PathBuf,
     patterns: Vec<String>,
     excludes: GlobSet,
+}
+
+struct RootCheckInput {
+    root: PathBuf,
+    lint_settings: HashMap<Rule, LintLevel>,
+}
+
+struct PreparedRootCheck {
+    root: PathBuf,
+    root_file_id: FileId,
+    lint_settings: HashMap<Rule, LintLevel>,
+    base_diagnostics: Vec<Diagnostic>,
 }
 
 impl LintExcludes {
@@ -170,21 +183,32 @@ pub fn check_cmd(
             all_diagnostics.extend(contract_diagnostics);
         }
     } else {
+        let mut root_inputs = Vec::new();
+        let mut seen_roots = HashSet::new();
+
         let contracts = config.contracts().cloned().unwrap_or_default();
         for (contract_id, contract) in contracts {
             if excludes.is_match(Path::new(&contract.src)) {
                 continue;
             }
-            let contract_diagnostics = check_contract(
-                &contract_id,
-                &contract,
-                &file_db,
-                fix,
-                json,
-                &config,
-                &excludes,
-            )?;
-            all_diagnostics.extend(contract_diagnostics);
+            if !contract.src.ends_with(".tolk") {
+                continue;
+            }
+
+            if !json {
+                println!("    {} {}", "Checking".green().bold(), contract.name);
+            }
+
+            let root = dunce::canonicalize(PathBuf::from(&contract.src))?;
+            if !seen_roots.insert(root.clone()) {
+                continue;
+            }
+
+            let lint_settings = Checker::build_settings(&config, Some(&contract_id));
+            root_inputs.push(RootCheckInput {
+                root,
+                lint_settings,
+            });
         }
 
         for file in files {
@@ -192,11 +216,33 @@ pub fn check_cmd(
                 continue;
             };
             if name.to_string_lossy().ends_with(".test.tolk") && !excludes.is_match(&file) {
-                let contract_diagnostics =
-                    check_test_file(&file, &file_db, fix, json, &config, &excludes)?;
-                all_diagnostics.extend(contract_diagnostics);
+                let root = dunce::canonicalize(&file)?;
+                if !seen_roots.insert(root.clone()) {
+                    continue;
+                }
+
+                let current_dir = std::env::current_dir().unwrap_or_default();
+                let relative_root =
+                    pathdiff::diff_paths(&root, &current_dir).unwrap_or_else(|| root.clone());
+                if !json {
+                    println!(
+                        "    {} {}",
+                        "Checking".green().bold(),
+                        relative_root.display()
+                    );
+                }
+
+                let mut lint_settings = Checker::build_settings(&config, None);
+                lint_settings.insert(Rule::ActonImportInContract, LintLevel::Allow);
+                root_inputs.push(RootCheckInput {
+                    root,
+                    lint_settings,
+                });
             }
         }
+
+        let diagnostics = check_roots_shared(root_inputs, &file_db, fix, json, &config, &excludes)?;
+        all_diagnostics.extend(diagnostics);
     }
 
     // Deduplicate all diagnostic for JSON output to avoid duplicate errors in IDEs
@@ -394,6 +440,193 @@ fn check_test_file(
         acton_config,
         excludes,
     )
+}
+
+fn prepare_root_check(
+    input: RootCheckInput,
+    file_db: &FileDb,
+    acton_config: &ActonConfig,
+) -> anyhow::Result<PreparedRootCheck> {
+    let file_info = file_db.process(&input.root)?;
+    let file_source = file_info.source().source.clone();
+
+    let mut base_diagnostics = vec![];
+    let has_compiler_errors =
+        compiler::check_with_compiler(&input.root, file_db, acton_config, &mut base_diagnostics)?;
+
+    if has_compiler_errors {
+        // don't possibly duplicate parsing errors if we have compiler errors
+        for parse_error in file_info.source().errors() {
+            let start_byte = pos::byte_offset_from_point(&parse_error.span.start, &file_source);
+            let end_byte = pos::byte_offset_from_point(&parse_error.span.end, &file_source);
+
+            let diagnostic = Diagnostic {
+                file_id: file_info.id(),
+                severity: Severity::Error,
+                code: None,
+                rule: Rule::CompilerError,
+                name: "parse-error",
+                message: parse_error.message.clone(),
+                annotations: vec![Annotation {
+                    span: Span {
+                        start: start_byte as u32,
+                        end: end_byte as u32,
+                    },
+                    message: None,
+                    is_primary: true,
+                    tags: vec![],
+                }],
+                fixes: vec![],
+                help: None,
+            };
+            base_diagnostics.push(diagnostic);
+        }
+    }
+
+    Ok(PreparedRootCheck {
+        root: input.root,
+        root_file_id: file_info.id(),
+        lint_settings: input.lint_settings,
+        base_diagnostics,
+    })
+}
+
+fn check_roots_shared(
+    roots: Vec<RootCheckInput>,
+    file_db: &FileDb,
+    fix: bool,
+    json: bool,
+    acton_config: &ActonConfig,
+    excludes: &LintExcludes,
+) -> anyhow::Result<Vec<Diagnostic>> {
+    if roots.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut prepared_roots = Vec::with_capacity(roots.len());
+    for root in roots {
+        prepared_roots.push(prepare_root_check(root, file_db, acton_config)?);
+    }
+
+    // First we build project index for all roots:
+    // - find all reachable files
+    // - parse
+    // - resolve imports
+    let now = Instant::now();
+    let root_paths = prepared_roots.iter().map(|r| r.root.clone()).collect();
+    let mut index = ProjectIndex::builder_for_roots(file_db, root_paths)
+        .with_stdlib(file_db.stdlib_path().to_owned())
+        .with_mappings(&acton_config.mappings)
+        .build()?;
+    log::debug!("Build shared project index took {:?}", now.elapsed());
+    log::debug!("Shared index files: {}", index.files().len());
+
+    // Then we can resolve all symbols once.
+    let now = Instant::now();
+    resolve(file_db, &mut index);
+    log::debug!("Resolve shared project took {:?}", now.elapsed());
+
+    let mut root_scopes: HashMap<FileId, FxHashSet<FileId>> = HashMap::new();
+    let mut files_to_infer: FxHashSet<FileId> = FxHashSet::default();
+    for root in &prepared_roots {
+        let reachable = index.reachable_files(root.root_file_id);
+        let scope_files: FxHashSet<FileId> = reachable.into_iter().collect();
+        files_to_infer.extend(scope_files.iter().copied());
+        root_scopes.insert(root.root_file_id, scope_files);
+    }
+
+    // Infer types once for all files needed by any root.
+    let now = Instant::now();
+    let mut interner = TypeInterner::new();
+    let mut type_db = TypeDb::new(&mut interner, file_db, &index);
+
+    let mut body_types = HashMap::new();
+    let mut infer_files = files_to_infer.into_iter().collect::<Vec<_>>();
+    infer_files.sort_unstable();
+    for file_id in infer_files {
+        let Some(file_to_infer) = file_db.get_by_id(file_id) else {
+            continue;
+        };
+        let mut file_body_types = HashMap::new();
+
+        for decl in file_to_infer.source().top_levels() {
+            let Some(index_decl) = file_to_infer.find_declaration(&decl) else {
+                continue;
+            };
+
+            let res = infer(&mut type_db, file_to_infer.id(), index_decl.id, &decl);
+            file_body_types.insert(index_decl.id, res);
+        }
+
+        body_types.insert(file_id, file_body_types);
+    }
+    log::debug!("Infer shared types took {:?}", now.elapsed());
+
+    // And finally run inspections for each root using root-scoped wrappers.
+    let now = Instant::now();
+    let mut all_diagnostics = Vec::new();
+
+    for root in prepared_roots {
+        let scope_files = root_scopes
+            .get(&root.root_file_id)
+            .cloned()
+            .unwrap_or_default();
+
+        let mut checker = Checker::new(file_db, &mut type_db, &body_types)
+            .with_settings(root.lint_settings)
+            .with_scope_files(scope_files.clone());
+
+        // locals by file -> file_db -> project_index -> by usage
+        // globals one time per root scope
+        checker.run_once();
+
+        let mut files_to_check = scope_files.iter().copied().collect::<Vec<_>>();
+        files_to_check.sort_unstable();
+        for file_id in files_to_check {
+            let Some(info) = file_db.get_by_id(file_id) else {
+                continue;
+            };
+            if !info.is_workspace_file() {
+                // we don't want to check non-workspace files
+                continue;
+            }
+            if info.id() != root.root_file_id && excludes.is_match(info.path()) {
+                continue;
+            }
+
+            checker.process_file(info.source(), info.id());
+        }
+
+        checker.apply_suppressions();
+
+        #[cfg(feature = "profile_rules")]
+        {
+            checker.print_profiling_results();
+        }
+
+        let mut diagnostics = checker.diagnostics;
+        diagnostics.extend(root.base_diagnostics);
+        diagnostics.retain(|diagnostic| {
+            diagnostic.rule == Rule::CompilerError
+                || diagnostic.file_id == root.root_file_id
+                || (scope_files.contains(&diagnostic.file_id)
+                    && !excludes.is_match_file_id(file_db, diagnostic.file_id))
+        });
+
+        if !json {
+            let diagnostics_to_show = if fix {
+                fix::filter_fixed_diagnostics(&diagnostics)
+            } else {
+                diagnostics.clone()
+            };
+            let _ = render::emit_diagnostics(file_db, &diagnostics_to_show);
+        }
+
+        all_diagnostics.extend(diagnostics);
+    }
+
+    log::debug!("Run shared diagnostics in {:?}", now.elapsed());
+    Ok(all_diagnostics)
 }
 
 fn check_root_file(

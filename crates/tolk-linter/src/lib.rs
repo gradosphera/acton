@@ -16,11 +16,11 @@ use crate::rules::ast::{
 use acton_config::config::{LintEntry, LintLevel};
 use rules::diagnostic::{Diagnostic, Severity};
 pub use rules::*;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tolk_resolver::file_db::FileDb;
-use tolk_resolver::file_index::{FileId, SymbolId};
+use tolk_resolver::file_index::{FileId, FileIndex, SymbolId};
 use tolk_resolver::resolve_index::FileResolveIndex;
 use tolk_resolver::{AstNodeSpanExt, NameUse, Resolved};
 use tolk_syntax::{
@@ -60,9 +60,9 @@ macro_rules! run_rule {
     }};
 }
 
-pub struct Checker<'a> {
+pub struct Checker<'db, 'a> {
     pub file_db: &'a FileDb,
-    pub type_db: &'a mut TypeDb<'a>,
+    pub type_db: &'db mut TypeDb<'a>,
     pub body_types: &'a HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
     pub analysis_db: AnalysisDb,
     pub diagnostics: Vec<Diagnostic>,
@@ -72,6 +72,8 @@ pub struct Checker<'a> {
     pub file_suppressions: FxHashMap<FileId, FxHashMap<usize, Vec<String>>>,
     /// Map from file ID to a list of line start byte offsets
     pub line_starts: FxHashMap<FileId, Vec<u32>>,
+    /// Optional analysis scope (reachable files for a specific root).
+    scope_files: Option<FxHashSet<FileId>>,
 
     #[cfg(feature = "profile_rules")]
     pub profiler: Profiler,
@@ -79,10 +81,10 @@ pub struct Checker<'a> {
 
 const SUPPRESSION_MARKER: &str = "acton-disable-next-line";
 
-impl<'a> Checker<'a> {
+impl<'db, 'a> Checker<'db, 'a> {
     pub fn new(
         file_db: &'a FileDb,
-        type_db: &'a mut TypeDb<'a>,
+        type_db: &'db mut TypeDb<'a>,
         body_types: &'a HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
     ) -> Self {
         Self {
@@ -94,6 +96,7 @@ impl<'a> Checker<'a> {
             settings: HashMap::new(),
             file_suppressions: FxHashMap::default(),
             line_starts: FxHashMap::default(),
+            scope_files: None,
             #[cfg(feature = "profile_rules")]
             profiler: Profiler::default(),
         }
@@ -143,6 +146,18 @@ impl<'a> Checker<'a> {
     pub fn with_settings(mut self, settings: HashMap<Rule, LintLevel>) -> Self {
         self.settings = settings;
         self
+    }
+
+    pub fn with_scope_files(mut self, files: FxHashSet<FileId>) -> Self {
+        self.scope_files = Some(files);
+        self
+    }
+
+    pub fn is_file_in_scope(&self, file_id: FileId) -> bool {
+        self.scope_files
+            .as_ref()
+            .map(|files| files.contains(&file_id))
+            .unwrap_or(true)
     }
 
     pub fn should_run(&self, rule: Rule) -> bool {
@@ -207,6 +222,9 @@ impl<'a> Checker<'a> {
     }
 
     pub fn resolve_index_for(&self, file_id: FileId) -> Option<Arc<FileResolveIndex>> {
+        if !self.is_file_in_scope(file_id) {
+            return None;
+        }
         self.type_db
             .project_index
             .resolved_uses
@@ -214,12 +232,49 @@ impl<'a> Checker<'a> {
             .cloned()
     }
 
-    pub fn global_usages_of(&self, symbol_id: SymbolId) -> impl Iterator<Item = &NameUse> {
-        self.type_db
+    pub fn global_usages_with_file(
+        &self,
+        symbol_id: SymbolId,
+    ) -> impl Iterator<Item = (FileId, &NameUse)> + '_ {
+        let resolved = self
+            .type_db
             .project_index
             .resolved_uses
-            .values()
-            .flat_map(move |v| v.global_usages_of(symbol_id))
+            .iter()
+            .filter(move |(file_id, _)| self.is_file_in_scope(**file_id))
+            .flat_map(move |(&file_id, index)| {
+                index
+                    .global_usages_of(symbol_id)
+                    .map(move |usage| (file_id, usage))
+            });
+
+        let inferred = self
+            .body_types
+            .iter()
+            .filter(move |(file_id, _)| self.is_file_in_scope(**file_id))
+            .flat_map(move |(&file_id, file_body_types)| {
+                file_body_types.values().flat_map(move |inference| {
+                    inference
+                        .global_usages_of(symbol_id)
+                        .map(move |usage| (file_id, usage))
+                })
+            });
+
+        resolved.chain(inferred)
+    }
+
+    pub fn global_usages_of(&self, symbol_id: SymbolId) -> impl Iterator<Item = &NameUse> {
+        self.global_usages_with_file(symbol_id)
+            .map(|(_, usage)| usage)
+    }
+
+    pub fn workspace_files(&self) -> Vec<Arc<FileIndex>> {
+        self.type_db
+            .project_index
+            .workspace_files()
+            .into_iter()
+            .filter(|file| self.is_file_in_scope(file.id))
+            .collect()
     }
 
     pub fn use_facts(&mut self, file_id: FileId) -> Option<Arc<FileUseFacts>> {
@@ -323,15 +378,15 @@ macro_rules! run_rule {
     }};
 }
 
-struct CheckerWalker<'a, 'b> {
-    checker: &'a mut Checker<'b>,
+struct CheckerWalker<'checker, 'db, 'a> {
+    checker: &'checker mut Checker<'db, 'a>,
     file_id: FileId,
     resolve_index: Option<Arc<FileResolveIndex>>,
-    current_inference: Option<&'b InferenceResult>,
+    current_inference: Option<&'a InferenceResult>,
     current_decl: Option<SymbolId>,
 }
 
-impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
+impl<'checker, 'db, 'a, 'file> Walker<'file> for CheckerWalker<'checker, 'db, 'a> {
     type Result = ();
 
     fn visit_top_level(&mut self, top_level: &TopLevel<'file>) -> Self::Result {
@@ -588,7 +643,7 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
     fn default_result(&self) -> Self::Result {}
 }
 
-impl<'a, 'b> CheckerWalker<'a, 'b> {
+impl<'checker, 'db, 'a> CheckerWalker<'checker, 'db, 'a> {
     fn resolve_ident_and_run_inspections(&mut self, node: &Node) {
         let Some(resolve_index) = &self.resolve_index else {
             return;
