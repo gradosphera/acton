@@ -55,6 +55,84 @@ export default function lint(ctx) {
 }
 "#;
 
+const REGISTERED_PLUGIN: &str = r#"
+export default {
+  register() {
+    return {
+      name: "registered-plugin",
+      rules: {
+        "no-debug-print": {
+          code: "JSP001",
+          title: "avoid debug.print in runtime paths",
+          description: "debug.print can expose runtime internals",
+          help: "remove debug.print or gate it behind explicit debug mode",
+          severity: "warning",
+        },
+      },
+    };
+  },
+  lint(ctx) {
+    const root = ctx?.tree?.rootNode;
+    if (!root) {
+      return [];
+    }
+
+    const calls = root.descendantsOfType("function_call");
+    const target = calls.find((node) => node.text.includes("debug.print("));
+    if (!target) {
+      return [];
+    }
+
+    return [
+      {
+        ruleId: "no-debug-print",
+        start: target.startIndex,
+        end: target.endIndex,
+      },
+    ];
+  },
+};
+"#;
+
+const TYPE_API_PLUGIN: &str = r#"
+export default {
+  register() {
+    return {
+      name: "type-api-plugin",
+      rules: {
+        "expr-type-probe": {
+          code: "JSP002",
+          title: "expression type probe",
+          severity: "warning",
+        },
+      },
+    };
+  },
+  lint(ctx) {
+    const root = ctx?.tree?.rootNode;
+    if (!root) {
+      return [];
+    }
+
+    const target = root.descendantsOfType("number_literal")[0];
+    if (!target) {
+      return [];
+    }
+
+    const fromCtx = ctx.typeOf(target);
+    const fromNode = target.inferredType;
+    return [
+      {
+        ruleId: "expr-type-probe",
+        message: `type api: ${fromCtx ?? "none"} / ${fromNode ?? "none"}`,
+        start: target.startIndex,
+        end: target.endIndex,
+      },
+    ];
+  },
+};
+"#;
+
 #[test]
 #[named]
 fn check_lint_js_plugin_receives_cst() {
@@ -97,6 +175,60 @@ fn check_lint_js_plugin_tree_sitter_style_api() {
             TREE_SITTER_STYLE_PLUGIN,
         )
         .with_lint_js_plugin("plugins/tree-sitter-style-plugin.mjs")
+        .build();
+
+    project.acton().init().run().success();
+
+    project
+        .acton()
+        .check()
+        .run()
+        .success()
+        .assert_stderr_snapshot_matches(&format!(
+            "integration/snapshots/check/lint_js_plugins/{}.txt",
+            function_name!()
+        ));
+}
+
+#[test]
+#[named]
+fn check_lint_js_plugin_registration_metadata() {
+    if !has_node() {
+        eprintln!("Skipping test: Node.js is not available");
+        return;
+    }
+
+    let project = ProjectBuilder::new(&format!("check-{}", function_name!()))
+        .contract("main", CONTRACT)
+        .raw_file("plugins/registered-plugin.mjs", REGISTERED_PLUGIN)
+        .with_lint_js_plugin("plugins/registered-plugin.mjs")
+        .build();
+
+    project.acton().init().run().success();
+
+    project
+        .acton()
+        .check()
+        .run()
+        .success()
+        .assert_stderr_snapshot_matches(&format!(
+            "integration/snapshots/check/lint_js_plugins/{}.txt",
+            function_name!()
+        ));
+}
+
+#[test]
+#[named]
+fn check_lint_js_plugin_expression_type_api() {
+    if !has_node() {
+        eprintln!("Skipping test: Node.js is not available");
+        return;
+    }
+
+    let project = ProjectBuilder::new(&format!("check-{}", function_name!()))
+        .contract("main", CONTRACT)
+        .raw_file("plugins/type-api-plugin.mjs", TYPE_API_PLUGIN)
+        .with_lint_js_plugin("plugins/type-api-plugin.mjs")
         .build();
 
     project.acton().init().run().success();

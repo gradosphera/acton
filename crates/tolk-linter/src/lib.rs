@@ -265,6 +265,12 @@ impl<'a> Checker<'a> {
                 if suppressed_rules.iter().any(|r| r == diag.name) {
                     return false;
                 }
+
+                if let Some(code) = &diag.code
+                    && suppressed_rules.iter().any(|r| r == code)
+                {
+                    return false;
+                }
             }
 
             true

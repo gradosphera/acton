@@ -6,9 +6,12 @@ export interface Point {
 }
 
 export interface PluginDiagnostic {
-  message: string;
+  message?: string;
+  ruleId?: string;
+  code?: string;
   severity?: Severity;
   help?: string;
+  description?: string;
   start?: number;
   end?: number;
   span?: {
@@ -59,6 +62,7 @@ export interface SyntaxNode {
   readonly previousSibling: SyntaxNode | null;
   readonly nextNamedSibling: SyntaxNode | null;
   readonly previousNamedSibling: SyntaxNode | null;
+  readonly inferredType: string | null;
 
   child(index: number): SyntaxNode | null;
   namedChild(index: number): SyntaxNode | null;
@@ -73,18 +77,45 @@ export interface SyntaxNode {
     startPosition?: Point,
     endPosition?: Point,
   ): SyntaxNode[];
+  typeOf(): string | null;
 }
 
 export interface Tree {
   rootNode: SyntaxNode;
 }
 
+export interface ExpressionType {
+  start: number;
+  end: number;
+  type: string;
+}
+
 export interface LintContext {
   filePath: string;
   source: string;
   cst: RawCstNode;
+  expressionTypes: ExpressionType[];
   tree: Tree;
   rootNode: SyntaxNode;
+  typeOf(target: SyntaxNode | ExpressionType | { start: number; end: number }): string | null;
+  typeOf(start: number, end: number): string | null;
+}
+
+export interface PluginRuleRegistration {
+  id?: string;
+  code?: string;
+  title?: string;
+  description?: string;
+  help?: string;
+  severity?: Severity;
+  docsUrl?: string;
+}
+
+export interface PluginRegistration {
+  name?: string;
+  version?: string;
+  description?: string;
+  rules?: Record<string, PluginRuleRegistration> | PluginRuleRegistration[];
 }
 
 export type LintPluginResult =
@@ -94,3 +125,9 @@ export type LintPluginResult =
   | undefined;
 
 export type LintPlugin = (ctx: LintContext) => LintPluginResult;
+
+export interface RegisteredLintPlugin {
+  lint: LintPlugin;
+  register?: () => PluginRegistration | Promise<PluginRegistration>;
+  meta?: PluginRegistration;
+}

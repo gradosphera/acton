@@ -1,4 +1,5 @@
 use acton_config::config::ActonConfig;
+use std::collections::{BTreeMap, HashMap};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -6,7 +7,8 @@ use tolk_linter::Rule;
 use tolk_linter::ast::js_plugin::JsPlugin;
 use tolk_linter::diagnostic::{Annotation, Diagnostic, Severity};
 use tolk_resolver::file_db::FileInfo;
-use tolk_resolver::file_index::Span;
+use tolk_resolver::file_index::{FileId, Span, SymbolId};
+use tolk_ty::{InferenceResult, TypeDb};
 use tree_sitter::Node;
 
 const NODE_RUNNER: &str = r#"
@@ -21,9 +23,10 @@ function comparePoints(left, right) {
 }
 
 class TsNode {
-  constructor(raw, source, parent = null, childIndex = -1) {
+  constructor(raw, source, resolveType, parent = null, childIndex = -1) {
     this._raw = raw;
     this._source = source;
+    this._resolveType = resolveType;
     this._parent = parent;
     this._childIndex = childIndex;
     this._children = null;
@@ -90,6 +93,14 @@ class TsNode {
     return this._raw.fieldName ?? null;
   }
 
+  get inferredType() {
+    return this._resolveType(this.startIndex, this.endIndex);
+  }
+
+  typeOf() {
+    return this.inferredType;
+  }
+
   get children() {
     if (this._children !== null) {
       return this._children;
@@ -97,7 +108,8 @@ class TsNode {
 
     const rawChildren = Array.isArray(this._raw.children) ? this._raw.children : [];
     this._children = rawChildren.map(
-      (child, index) => new TsNode(child, this._source, this, index),
+      (child, index) =>
+        new TsNode(child, this._source, this._resolveType, this, index),
     );
     return this._children;
   }
@@ -336,17 +348,133 @@ class TsNode {
 }
 
 class TsTree {
-  constructor(rawRootNode, source) {
-    this.rootNode = new TsNode(rawRootNode, source, null, -1);
+  constructor(rawRootNode, source, resolveType) {
+    this.rootNode = new TsNode(rawRootNode, source, resolveType, null, -1);
   }
 }
 
+function buildTypeIndex(expressionTypes) {
+  const map = new Map();
+  if (!Array.isArray(expressionTypes)) {
+    return map;
+  }
+  for (const item of expressionTypes) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    if (
+      typeof item.start !== 'number' ||
+      typeof item.end !== 'number' ||
+      typeof item.type !== 'string'
+    ) {
+      continue;
+    }
+    map.set(`${item.start}:${item.end}`, item.type);
+  }
+  return map;
+}
+
 function createPluginInput(payload) {
-  const tree = new TsTree(payload.cst, payload.source);
+  const typeIndex = buildTypeIndex(payload.expressionTypes);
+  const resolveType = (start, end) => typeIndex.get(`${start}:${end}`) ?? null;
+  const tree = new TsTree(payload.cst, payload.source, resolveType);
+  const typeOf = (target, maybeEnd) => {
+    if (target && typeof target.startIndex === 'number' && typeof target.endIndex === 'number') {
+      return resolveType(target.startIndex, target.endIndex);
+    }
+    if (target && typeof target.start === 'number' && typeof target.end === 'number') {
+      return resolveType(target.start, target.end);
+    }
+    if (typeof target === 'number' && typeof maybeEnd === 'number') {
+      return resolveType(target, maybeEnd);
+    }
+    return null;
+  };
   return {
     ...payload,
     tree,
     rootNode: tree.rootNode,
+    typeOf,
+  };
+}
+
+function normalizeRules(rawRules) {
+  const rules = {};
+  if (Array.isArray(rawRules)) {
+    for (const rule of rawRules) {
+      if (!rule || typeof rule !== 'object') {
+        continue;
+      }
+      const id = typeof rule.id === 'string' ? rule.id : null;
+      if (!id) {
+        continue;
+      }
+      const { id: _id, ...meta } = rule;
+      rules[id] = meta ?? {};
+    }
+    return rules;
+  }
+
+  if (rawRules && typeof rawRules === 'object') {
+    for (const [id, value] of Object.entries(rawRules)) {
+      if (!id) {
+        continue;
+      }
+      rules[id] = value && typeof value === 'object' ? value : {};
+    }
+  }
+  return rules;
+}
+
+function normalizeRegistration(rawRegistration) {
+  if (!rawRegistration || typeof rawRegistration !== 'object') {
+    return null;
+  }
+
+  const out = {};
+  if (typeof rawRegistration.name === 'string') {
+    out.name = rawRegistration.name;
+  }
+  if (typeof rawRegistration.version === 'string') {
+    out.version = rawRegistration.version;
+  }
+  if (typeof rawRegistration.description === 'string') {
+    out.description = rawRegistration.description;
+  }
+  const rules = normalizeRules(rawRegistration.rules);
+  if (Object.keys(rules).length > 0) {
+    out.rules = rules;
+  }
+  return out;
+}
+
+function resolvePlugin(mod) {
+  const exported = mod.default ?? mod;
+
+  let runner = null;
+  if (typeof exported === 'function') {
+    runner = exported;
+  } else if (exported && typeof exported.lint === 'function') {
+    runner = exported.lint.bind(exported);
+  } else if (typeof mod.lint === 'function') {
+    runner = mod.lint.bind(mod);
+  } else if (typeof mod.run === 'function') {
+    runner = mod.run.bind(mod);
+  }
+
+  let register = null;
+  if (exported && typeof exported.register === 'function') {
+    register = exported.register.bind(exported);
+  } else if (typeof mod.register === 'function') {
+    register = mod.register.bind(mod);
+  }
+
+  const meta = exported?.meta ?? mod.meta ?? null;
+
+  return {
+    runner,
+    register,
+    meta,
   };
 }
 
@@ -361,22 +489,24 @@ async function main() {
   const pluginInput = createPluginInput(payload);
 
   const mod = await import(pathToFileURL(pluginPath).href);
-  const candidate = mod.default ?? mod.run ?? mod;
+  const plugin = resolvePlugin(mod);
+  let registration = normalizeRegistration(plugin.meta);
 
-  let runner = null;
-  if (typeof candidate === 'function') {
-    runner = candidate;
-  } else if (candidate && typeof candidate.lint === 'function') {
-    runner = candidate.lint;
+  if (plugin.register) {
+    const declared = await plugin.register();
+    const normalized = normalizeRegistration(declared);
+    if (normalized) {
+      registration = normalized;
+    }
   }
 
-  if (!runner) {
-    throw new Error('Plugin must export default function or { lint() }');
+  if (!plugin.runner) {
+    throw new Error('Plugin must export a lint function or { lint() } object');
   }
 
-  const diagnostics = await runner(pluginInput);
+  const diagnostics = await plugin.runner(pluginInput);
   if (diagnostics == null) {
-    process.stdout.write('[]');
+    process.stdout.write(JSON.stringify({ registration, diagnostics: [] }));
     return;
   }
 
@@ -384,7 +514,7 @@ async function main() {
     throw new Error('Plugin result must be an array');
   }
 
-  process.stdout.write(JSON.stringify(diagnostics));
+  process.stdout.write(JSON.stringify({ registration, diagnostics }));
 }
 
 main().catch((err) => {
@@ -400,6 +530,7 @@ struct JsPluginInput<'a> {
     file_path: &'a str,
     source: &'a str,
     cst: JsCstNode,
+    expression_types: Vec<JsExpressionType>,
 }
 
 #[derive(serde::Serialize)]
@@ -426,14 +557,30 @@ struct JsPoint {
     column: u32,
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsExpressionType {
+    start: u32,
+    end: u32,
+    #[serde(rename = "type")]
+    ty: String,
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct JsPluginOutput {
-    message: String,
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    rule_id: Option<String>,
+    #[serde(default)]
+    code: Option<String>,
     #[serde(default)]
     severity: Option<String>,
     #[serde(default)]
     help: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
     #[serde(default)]
     start: Option<u32>,
     #[serde(default)]
@@ -447,6 +594,45 @@ struct JsPluginOutput {
 struct JsPluginSpan {
     start: u32,
     end: u32,
+}
+
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct JsPluginRunResult {
+    #[serde(default)]
+    registration: Option<JsPluginRegistration>,
+    #[serde(default)]
+    diagnostics: Vec<JsPluginOutput>,
+}
+
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct JsPluginRegistration {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    version: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    rules: BTreeMap<String, JsPluginRuleRegistration>,
+}
+
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct JsPluginRuleRegistration {
+    #[serde(default)]
+    code: Option<String>,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    help: Option<String>,
+    #[serde(default)]
+    severity: Option<String>,
+    #[serde(default)]
+    docs_url: Option<String>,
 }
 
 pub(super) fn resolve_plugins(
@@ -480,14 +666,21 @@ pub(super) fn resolve_plugins(
     Ok(resolved)
 }
 
-pub(super) fn run_plugins_for_file(file: &FileInfo, plugins: &[PathBuf]) -> Vec<Diagnostic> {
+pub(super) fn run_plugins_for_file(
+    file: &FileInfo,
+    plugins: &[PathBuf],
+    type_db: &TypeDb<'_>,
+    body_types: &HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
+) -> Vec<Diagnostic> {
     let source = file.source().source.as_ref();
     let file_path = file.path().to_string_lossy().to_string();
     let cst = build_cst(file.source().root_node());
+    let expression_types = collect_expression_types(file.id(), type_db, body_types);
     let input = JsPluginInput {
         file_path: &file_path,
         source,
         cst,
+        expression_types,
     };
     let payload = match serde_json::to_string(&input) {
         Ok(payload) => payload,
@@ -502,10 +695,17 @@ pub(super) fn run_plugins_for_file(file: &FileInfo, plugins: &[PathBuf]) -> Vec<
     let mut diagnostics = Vec::new();
     for plugin_path in plugins {
         match run_single_plugin(plugin_path, &payload) {
-            Ok(outputs) => {
-                let plugin_name = plugin_label(plugin_path);
-                for output in outputs {
-                    diagnostics.push(convert_output(file.id(), source, &plugin_name, output));
+            Ok(result) => {
+                let registration = result.registration.as_ref();
+                let plugin_name = plugin_display_name(plugin_path, registration);
+                for output in result.diagnostics {
+                    diagnostics.push(convert_output(
+                        file.id(),
+                        source,
+                        &plugin_name,
+                        registration,
+                        output,
+                    ));
                 }
             }
             Err(err) => diagnostics.push(plugin_error(
@@ -517,7 +717,31 @@ pub(super) fn run_plugins_for_file(file: &FileInfo, plugins: &[PathBuf]) -> Vec<
     diagnostics
 }
 
-fn run_single_plugin(path: &Path, payload: &str) -> Result<Vec<JsPluginOutput>, String> {
+fn collect_expression_types(
+    file_id: FileId,
+    type_db: &TypeDb<'_>,
+    body_types: &HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
+) -> Vec<JsExpressionType> {
+    let Some(file_body_types) = body_types.get(&file_id) else {
+        return vec![];
+    };
+
+    let mut by_span = BTreeMap::<(u32, u32), String>::new();
+    for inference in file_body_types.values() {
+        for (span, ty) in &inference.expression_types {
+            by_span
+                .entry((span.start, span.end))
+                .or_insert_with(|| type_db.intrn.display(*ty).to_string());
+        }
+    }
+
+    by_span
+        .into_iter()
+        .map(|((start, end), ty)| JsExpressionType { start, end, ty })
+        .collect()
+}
+
+fn run_single_plugin(path: &Path, payload: &str) -> Result<JsPluginRunResult, String> {
     let mut child = Command::new("node")
         .arg("-e")
         .arg(NODE_RUNNER)
@@ -550,7 +774,7 @@ fn run_single_plugin(path: &Path, payload: &str) -> Result<Vec<JsPluginOutput>, 
         });
     }
 
-    serde_json::from_slice::<Vec<JsPluginOutput>>(&output.stdout)
+    serde_json::from_slice::<JsPluginRunResult>(&output.stdout)
         .map_err(|err| format!("invalid plugin JSON output: {err}"))
 }
 
@@ -591,25 +815,33 @@ fn build_cst_with_field(node: Node<'_>, field_name: Option<String>) -> JsCstNode
 }
 
 fn convert_output(
-    file_id: tolk_resolver::FileId,
+    file_id: FileId,
     source: &str,
     plugin_name: &str,
+    registration: Option<&JsPluginRegistration>,
     output: JsPluginOutput,
 ) -> Diagnostic {
+    let rule_registration = find_rule_registration(registration, output.rule_id.as_deref());
+    let default_severity = parse_severity(
+        rule_registration.and_then(|rule| rule.severity.as_deref()),
+        Severity::Warning,
+    );
+
     let mut diagnostic = Diagnostic::warning_for(file_id, JsPlugin);
     diagnostic.rule = Rule::JsPlugin;
-    diagnostic.message = format!("[{plugin_name}] {}", output.message);
-    diagnostic.severity = match output.severity.as_deref() {
-        Some("error") => Severity::Error,
-        Some("info") => Severity::Info,
-        Some("warning") | Some("warn") | None => Severity::Warning,
-        Some("help") => Severity::Help,
-        Some("fatal") => Severity::Fatal,
-        Some(_) => Severity::Warning,
-    };
+    diagnostic.message = compose_message(plugin_name, &output, rule_registration);
+    diagnostic.severity = parse_severity(output.severity.as_deref(), default_severity);
+    if let Some(code) = output
+        .code
+        .as_deref()
+        .map(ToOwned::to_owned)
+        .or_else(|| rule_registration.and_then(|rule| rule.code.clone()))
+    {
+        diagnostic.code = Some(code);
+    }
 
     let span = parse_span(source, &output);
-    diagnostic.help = output.help;
+    diagnostic.help = compose_help(registration, &output, rule_registration);
     if let Some(span) = span {
         diagnostic.annotations.push(Annotation {
             span,
@@ -619,6 +851,77 @@ fn convert_output(
         });
     }
     diagnostic
+}
+
+fn find_rule_registration<'a>(
+    registration: Option<&'a JsPluginRegistration>,
+    rule_id: Option<&str>,
+) -> Option<&'a JsPluginRuleRegistration> {
+    let rule_id = rule_id?;
+    registration?.rules.get(rule_id)
+}
+
+fn parse_severity(input: Option<&str>, default: Severity) -> Severity {
+    match input {
+        Some("error") => Severity::Error,
+        Some("info") => Severity::Info,
+        Some("warning") | Some("warn") => Severity::Warning,
+        Some("help") => Severity::Help,
+        Some("fatal") => Severity::Fatal,
+        Some(_) | None => default,
+    }
+}
+
+fn compose_message(
+    plugin_name: &str,
+    output: &JsPluginOutput,
+    rule_registration: Option<&JsPluginRuleRegistration>,
+) -> String {
+    let raw = if let Some(message) = output.message.as_deref() {
+        message.to_owned()
+    } else if let Some(title) = rule_registration.and_then(|rule| rule.title.as_deref()) {
+        title.to_owned()
+    } else if let Some(rule_id) = output.rule_id.as_deref() {
+        format!("rule `{rule_id}` emitted a diagnostic")
+    } else {
+        "diagnostic emitted by JavaScript plugin".to_string()
+    };
+    format!("[{plugin_name}] {raw}")
+}
+
+fn compose_help(
+    registration: Option<&JsPluginRegistration>,
+    output: &JsPluginOutput,
+    rule_registration: Option<&JsPluginRuleRegistration>,
+) -> Option<String> {
+    if let Some(help) = &output.help {
+        return Some(help.clone());
+    }
+
+    let mut lines = Vec::new();
+
+    if let Some(description) = output
+        .description
+        .as_ref()
+        .or_else(|| rule_registration.and_then(|rule| rule.description.as_ref()))
+        .or_else(|| registration.and_then(|meta| meta.description.as_ref()))
+    {
+        lines.push(description.clone());
+    }
+
+    if let Some(help) = rule_registration.and_then(|rule| rule.help.as_ref()) {
+        lines.push(help.clone());
+    }
+
+    if let Some(docs_url) = rule_registration.and_then(|rule| rule.docs_url.as_ref()) {
+        lines.push(format!("Docs: {docs_url}"));
+    }
+
+    if lines.is_empty() {
+        None
+    } else {
+        Some(lines.join("\n"))
+    }
 }
 
 fn parse_span(source: &str, output: &JsPluginOutput) -> Option<Span> {
@@ -634,7 +937,7 @@ fn parse_span(source: &str, output: &JsPluginOutput) -> Option<Span> {
     Some(Span { start, end })
 }
 
-fn plugin_error(file_id: tolk_resolver::FileId, message: String) -> Diagnostic {
+fn plugin_error(file_id: FileId, message: String) -> Diagnostic {
     let mut diagnostic = Diagnostic::error_for(file_id, JsPlugin);
     diagnostic.rule = Rule::JsPlugin;
     diagnostic.message = message;
@@ -646,4 +949,19 @@ fn plugin_label(path: &Path) -> String {
         .and_then(|value| value.to_str())
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| path.to_string_lossy().to_string())
+}
+
+fn plugin_display_name(path: &Path, registration: Option<&JsPluginRegistration>) -> String {
+    let fallback = plugin_label(path);
+    let Some(meta) = registration else {
+        return fallback;
+    };
+    let Some(name) = meta.name.as_deref() else {
+        return fallback;
+    };
+    if let Some(version) = meta.version.as_deref() {
+        format!("{name}@{version}")
+    } else {
+        name.to_owned()
+    }
 }

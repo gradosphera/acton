@@ -4,6 +4,7 @@ use serde_sarif::sarif;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tolk_linter::Rule;
 use tolk_linter::diagnostic::{Annotation, Applicability, Diagnostic, DiagnosticTag, Severity};
 use tolk_resolver::{FileDb, Span};
 
@@ -232,13 +233,17 @@ fn diagnostic_to_rule_descriptor(
                 explanation_text
             },
         }),
-        help_uri: diagnostic.code.as_deref().map(|code| {
-            format!(
-                "{DOCS_BASE_URL}/linting/rules/{}-{}",
-                code.to_ascii_lowercase(),
-                diagnostic.rule.name()
-            )
-        }),
+        help_uri: if diagnostic.rule == Rule::JsPlugin {
+            None
+        } else {
+            diagnostic.code.as_deref().map(|code| {
+                format!(
+                    "{DOCS_BASE_URL}/linting/rules/{}-{}",
+                    code.to_ascii_lowercase(),
+                    diagnostic.rule.name()
+                )
+            })
+        },
         id: rule_id,
         message_strings: None,
         name: Some(diagnostic.rule.name().to_string()),

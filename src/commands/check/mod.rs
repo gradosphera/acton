@@ -544,8 +544,12 @@ fn check_root_file(
         checker.process_file(info.source(), info.id());
 
         if !js_plugin_paths.is_empty() {
-            let plugin_diagnostics =
-                js_plugins::run_plugins_for_file(info.as_ref(), js_plugin_paths);
+            let plugin_diagnostics = js_plugins::run_plugins_for_file(
+                info.as_ref(),
+                js_plugin_paths,
+                &*checker.type_db,
+                checker.body_types,
+            );
             for diagnostic in plugin_diagnostics {
                 checker.emit_diagnostic(diagnostic);
             }

@@ -6,10 +6,12 @@ Minimal Acton project with a JavaScript lint plugin that receives `source`, raw 
 
 - `Acton.toml` - enables JS plugin via `[lint].js-plugins`
 - `contracts/main.tolk` - sample contract
-- `plugins/simple-plugin.mjs` - sample plugin using `descendantsOfType` and `childForFieldName`
+- `plugins/simple-plugin.mjs` - sample plugin using `register()` + `lint()`
 - `plugins/acton-plugin-api.d.ts` - local typings for IDE autocompletion in JS plugins
 
 For top-level `fun` declarations, use kind `function_declaration` (from `crates/tree-sitter-tolk/grammar.js`).
+The sample plugin registers rule metadata (`code`, `title`, `description`, `help`, `severity`) and then returns diagnostics via `ruleId`.
+It also demonstrates how to find variable `profile` by name and read the inferred type of its struct literal via `ctx.typeOf(node)` / `node.inferredType`.
 
 ## Run
 
