@@ -35,7 +35,7 @@ use tree_sitter::Node;
 mod profiling;
 mod rules;
 
-use crate::dfa::unauthorized_access;
+use crate::dfa::{random_requires_initialization, unauthorized_access};
 #[cfg(feature = "profile_rules")]
 pub use profiling::Profiler;
 use tolk_analysis::{AnalysisDb, FileUseFacts};
@@ -401,6 +401,11 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
             self.checker,
             Rule::UnauthorizedAccess,
             unauthorized_access::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::RandomRequiresInitialization,
+            random_requires_initialization::check_file(self.checker, self.file_id)
         );
         run_rule!(
             self.checker,

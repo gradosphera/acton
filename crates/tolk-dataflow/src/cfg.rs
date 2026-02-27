@@ -2,6 +2,7 @@ use rustc_hash::FxHashSet;
 use std::fmt::Write;
 use std::path::Path;
 use tolk_resolver::Span;
+use tolk_resolver::file_index::SymbolId;
 use tolk_resolver::resolve_index::LocalDefId;
 
 /// Stable identifier of a control-flow node.
@@ -67,6 +68,12 @@ pub struct FlowNodeTaintFacts {
     pub has_admin_sender_check: bool,
     /// Whether this node performs storage write (`contract.setData`, `*.save()`).
     pub has_storage_write_sink: bool,
+    /// Whether this node calls `random.initialize(...)` or `random.initializeBy(...)`.
+    pub has_random_initialize_call: bool,
+    /// Whether this node calls `random.uint256(...)` or `random.range(...)`.
+    pub has_random_value_sink: bool,
+    /// Global call targets referenced in this node.
+    pub called_global_symbols: FxHashSet<SymbolId>,
 }
 
 /// Control-flow node plus dataflow-relevant read/write facts.

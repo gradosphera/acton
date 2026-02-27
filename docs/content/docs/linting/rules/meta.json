@@ -24,6 +24,7 @@
     "e021-dangerous-send-mode-missing-safety-comment",
     "e022-negated-is-type-can-use-not-is",
     "e023-bless-call-missing-safety-comment",
+    "e024-random-requires-initialization",
     "s001-name-case-checker"
   ]
 }

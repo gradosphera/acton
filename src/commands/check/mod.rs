@@ -384,6 +384,8 @@ fn check_test_file(
     let mut lint_settings = Checker::build_settings(acton_config, None);
     // we can import any files in tests
     lint_settings.insert(Rule::ActonImportInContract, LintLevel::Allow);
+    // random is not so important in tests
+    lint_settings.insert(Rule::RandomRequiresInitialization, LintLevel::Allow);
 
     check_root_file(
         &root,
