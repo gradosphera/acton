@@ -1,8 +1,11 @@
 use acton_config::config::ActonConfig;
-use rquickjs::{CatchResultExt, Context, Ctx, Function, Module, Promise, Runtime, Value};
+use rquickjs::{
+    Array, CatchResultExt, Context, Ctx, FromJs, Function, Module, Object, Promise, Runtime, Value,
+};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tolk_linter::Rule;
 use tolk_linter::ast::js_plugin::JsPlugin;
@@ -20,79 +23,141 @@ function comparePoints(left, right) {
   return left.column - right.column;
 }
 
+function toPoint(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  if (typeof value.row !== 'number' || typeof value.column !== 'number') {
+    return null;
+  }
+  return value;
+}
+
+function normalizeTypes(types) {
+  const values = Array.isArray(types) ? types : [types];
+  return values.filter((value) => typeof value === 'string');
+}
+
 class TsNode {
-  constructor(raw, source, resolveType, parent = null, childIndex = -1) {
-    this._raw = raw;
-    this._source = source;
-    this._resolveType = resolveType;
+  constructor(id, tree, parent = null, childIndex = -1) {
+    this.__id = id;
+    this._tree = tree;
     this._parent = parent;
     this._childIndex = childIndex;
-    this._children = null;
-    this._namedChildren = null;
+    this._infoCache = null;
+    this._textCache = null;
+    this._childrenCache = null;
+    this._namedChildrenCache = null;
+  }
+
+  _info() {
+    if (this._infoCache === null) {
+      this._infoCache = this._tree._bridge.nodeInfo(this.__id);
+    }
+    return this._infoCache;
+  }
+
+  _ensureParent() {
+    if (this._parent !== null) {
+      return;
+    }
+    const parentId = this._info().parentId;
+    if (typeof parentId === 'number') {
+      this._parent = this._tree._nodeFromId(parentId);
+    }
+  }
+
+  _ensureChildIndex() {
+    if (this._childIndex >= 0) {
+      return;
+    }
+    this._ensureParent();
+    if (this._parent === null) {
+      return;
+    }
+    const siblings = this._parent.children;
+    for (let i = 0; i < siblings.length; i += 1) {
+      if (siblings[i].__id === this.__id) {
+        this._childIndex = i;
+        return;
+      }
+    }
   }
 
   get type() {
-    return this._raw.kind;
+    return this._info().kind;
   }
 
   get kind() {
-    return this._raw.kind;
+    return this._info().kind;
   }
 
   get isNamed() {
-    return this._raw.named;
+    return this._info().named;
   }
 
   get hasError() {
-    return this._raw.hasError;
+    return this._info().hasError;
   }
 
   get isError() {
-    return this._raw.isError;
+    return this._info().isError;
   }
 
   get isMissing() {
-    return this._raw.isMissing;
+    return this._info().isMissing;
   }
 
   get startIndex() {
-    return this._raw.startByte;
+    return this._info().startByte;
   }
 
   get endIndex() {
-    return this._raw.endByte;
+    return this._info().endByte;
   }
 
   get startByte() {
-    return this._raw.startByte;
+    return this._info().startByte;
   }
 
   get endByte() {
-    return this._raw.endByte;
+    return this._info().endByte;
   }
 
   get startPosition() {
-    return this._raw.startPosition;
+    const info = this._info();
+    return {
+      row: info.startRow,
+      column: info.startColumn,
+    };
   }
 
   get endPosition() {
-    return this._raw.endPosition;
+    const info = this._info();
+    return {
+      row: info.endRow,
+      column: info.endColumn,
+    };
   }
 
   get text() {
-    return this._source.slice(this.startIndex, this.endIndex);
+    if (this._textCache === null) {
+      this._textCache = this._tree._bridge.nodeText(this.__id);
+    }
+    return this._textCache;
   }
 
   get parent() {
+    this._ensureParent();
     return this._parent;
   }
 
   get fieldName() {
-    return this._raw.fieldName ?? null;
+    return this._info().fieldName ?? null;
   }
 
   get inferredType() {
-    return this._resolveType(this.startIndex, this.endIndex);
+    return this._tree._bridge.typeOfNode(this.__id);
   }
 
   typeOf() {
@@ -100,24 +165,23 @@ class TsNode {
   }
 
   get children() {
-    if (this._children !== null) {
-      return this._children;
+    if (this._childrenCache !== null) {
+      return this._childrenCache;
     }
-
-    const rawChildren = Array.isArray(this._raw.children) ? this._raw.children : [];
-    this._children = rawChildren.map(
-      (child, index) =>
-        new TsNode(child, this._source, this._resolveType, this, index),
+    const ids = this._tree._bridge.childIds(this.__id);
+    this._childrenCache = ids.map((id, index) =>
+      this._tree._nodeFromId(id, this, index),
     );
-    return this._children;
+    return this._childrenCache;
   }
 
   get namedChildren() {
-    if (this._namedChildren !== null) {
-      return this._namedChildren;
+    if (this._namedChildrenCache !== null) {
+      return this._namedChildrenCache;
     }
-    this._namedChildren = this.children.filter((child) => child.isNamed);
-    return this._namedChildren;
+    const ids = this._tree._bridge.namedChildIds(this.__id);
+    this._namedChildrenCache = ids.map((id) => this._tree._nodeFromId(id));
+    return this._namedChildrenCache;
   }
 
   get childCount() {
@@ -146,19 +210,16 @@ class TsNode {
     if (typeof fieldName !== 'string') {
       return null;
     }
-    for (const child of this.children) {
-      if (child.fieldName === fieldName) {
-        return child;
-      }
-    }
-    return null;
+    const id = this._tree._bridge.childForFieldName(this.__id, fieldName);
+    return typeof id === 'number' ? this._tree._nodeFromId(id) : null;
   }
 
   childrenForFieldName(fieldName) {
     if (typeof fieldName !== 'string') {
       return [];
     }
-    return this.children.filter((child) => child.fieldName === fieldName);
+    const ids = this._tree._bridge.childrenForFieldName(this.__id, fieldName);
+    return ids.map((id) => this._tree._nodeFromId(id));
   }
 
   get firstChild() {
@@ -178,17 +239,19 @@ class TsNode {
   }
 
   get nextSibling() {
-    if (this._parent === null || this._childIndex < 0) {
+    this._ensureChildIndex();
+    if (this.parent === null || this._childIndex < 0) {
       return null;
     }
-    return this._parent.child(this._childIndex + 1);
+    return this.parent.child(this._childIndex + 1);
   }
 
   get previousSibling() {
-    if (this._parent === null || this._childIndex < 0) {
+    this._ensureChildIndex();
+    if (this.parent === null || this._childIndex < 0) {
       return null;
     }
-    return this._parent.child(this._childIndex - 1);
+    return this.parent.child(this._childIndex - 1);
   }
 
   get nextNamedSibling() {
@@ -218,182 +281,204 @@ class TsNode {
     if (startIndex < this.startIndex || endIndex > this.endIndex) {
       return null;
     }
-
-    let current = this;
-    while (true) {
-      let next = null;
-      for (const child of current.children) {
-        if (child.startIndex <= startIndex && endIndex <= child.endIndex) {
-          next = child;
-          break;
-        }
-      }
-      if (next === null) {
-        return current;
-      }
-      current = next;
-    }
+    const id = this._tree._bridge.descendantForIndex(
+      this.__id,
+      startIndex,
+      endIndex,
+      false,
+    );
+    return typeof id === 'number' ? this._tree._nodeFromId(id) : null;
   }
 
   namedDescendantForIndex(startIndex, endIndex = startIndex) {
-    const node = this.descendantForIndex(startIndex, endIndex);
-    if (node === null) {
-      return null;
-    }
-    let current = node;
-    while (current !== null && !current.isNamed) {
-      current = current.parent;
-    }
-    return current;
-  }
-
-  descendantForPosition(startPosition, endPosition = startPosition) {
-    if (!startPosition || !endPosition) {
-      return null;
-    }
     if (
-      typeof startPosition.row !== 'number' ||
-      typeof startPosition.column !== 'number' ||
-      typeof endPosition.row !== 'number' ||
-      typeof endPosition.column !== 'number'
+      !Number.isInteger(startIndex) ||
+      !Number.isInteger(endIndex) ||
+      startIndex > endIndex
     ) {
       return null;
     }
-    if (comparePoints(startPosition, endPosition) > 0) {
+    if (startIndex < this.startIndex || endIndex > this.endIndex) {
       return null;
     }
-    if (comparePoints(startPosition, this.startPosition) < 0) {
-      return null;
-    }
-    if (comparePoints(endPosition, this.endPosition) > 0) {
-      return null;
-    }
+    const id = this._tree._bridge.descendantForIndex(
+      this.__id,
+      startIndex,
+      endIndex,
+      true,
+    );
+    return typeof id === 'number' ? this._tree._nodeFromId(id) : null;
+  }
 
-    let current = this;
-    while (true) {
-      let next = null;
-      for (const child of current.children) {
-        if (
-          comparePoints(child.startPosition, startPosition) <= 0 &&
-          comparePoints(endPosition, child.endPosition) <= 0
-        ) {
-          next = child;
-          break;
-        }
-      }
-      if (next === null) {
-        return current;
-      }
-      current = next;
+  descendantForPosition(startPosition, endPosition = startPosition) {
+    const start = toPoint(startPosition);
+    const end = toPoint(endPosition);
+    if (start === null || end === null) {
+      return null;
     }
+    if (comparePoints(start, end) > 0) {
+      return null;
+    }
+    if (comparePoints(start, this.startPosition) < 0) {
+      return null;
+    }
+    if (comparePoints(end, this.endPosition) > 0) {
+      return null;
+    }
+    const id = this._tree._bridge.descendantForPosition(
+      this.__id,
+      start.row,
+      start.column,
+      end.row,
+      end.column,
+      false,
+    );
+    return typeof id === 'number' ? this._tree._nodeFromId(id) : null;
   }
 
   namedDescendantForPosition(startPosition, endPosition = startPosition) {
-    const node = this.descendantForPosition(startPosition, endPosition);
-    if (node === null) {
+    const start = toPoint(startPosition);
+    const end = toPoint(endPosition);
+    if (start === null || end === null) {
       return null;
     }
-    let current = node;
-    while (current !== null && !current.isNamed) {
-      current = current.parent;
+    if (comparePoints(start, end) > 0) {
+      return null;
     }
-    return current;
+    if (comparePoints(start, this.startPosition) < 0) {
+      return null;
+    }
+    if (comparePoints(end, this.endPosition) > 0) {
+      return null;
+    }
+    const id = this._tree._bridge.descendantForPosition(
+      this.__id,
+      start.row,
+      start.column,
+      end.row,
+      end.column,
+      true,
+    );
+    return typeof id === 'number' ? this._tree._nodeFromId(id) : null;
   }
 
   descendantsOfType(types, startPosition, endPosition) {
-    const typeList = Array.isArray(types) ? types : [types];
-    const acceptedTypes = new Set(
-      typeList.filter((value) => typeof value === 'string'),
-    );
-    if (acceptedTypes.size === 0) {
+    const normalizedTypes = normalizeTypes(types);
+    if (normalizedTypes.length === 0) {
       return [];
     }
 
-    const hasRange =
-      startPosition &&
-      endPosition &&
-      typeof startPosition.row === 'number' &&
-      typeof startPosition.column === 'number' &&
-      typeof endPosition.row === 'number' &&
-      typeof endPosition.column === 'number';
-
-    const inRange = (node) => {
-      if (!hasRange) {
-        return true;
+    let startRow = -1;
+    let startColumn = -1;
+    let endRow = -1;
+    let endColumn = -1;
+    if (startPosition !== undefined && endPosition !== undefined) {
+      const start = toPoint(startPosition);
+      const end = toPoint(endPosition);
+      if (start === null || end === null) {
+        return [];
       }
-      return (
-        comparePoints(startPosition, node.startPosition) <= 0 &&
-        comparePoints(node.endPosition, endPosition) <= 0
-      );
-    };
-
-    const out = [];
-    const visit = (node) => {
-      if (acceptedTypes.has(node.type) && inRange(node)) {
-        out.push(node);
+      if (comparePoints(start, end) > 0) {
+        return [];
       }
-      for (const child of node.children) {
-        visit(child);
-      }
-    };
-
-    for (const child of this.children) {
-      visit(child);
+      startRow = start.row;
+      startColumn = start.column;
+      endRow = end.row;
+      endColumn = end.column;
     }
 
-    return out;
+    const ids = this._tree._bridge.descendantsOfType(
+      this.__id,
+      normalizedTypes,
+      startRow,
+      startColumn,
+      endRow,
+      endColumn,
+    );
+    return ids.map((id) => this._tree._nodeFromId(id));
   }
 }
 
 class TsTree {
-  constructor(rawRootNode, source, resolveType) {
-    this.rootNode = new TsNode(rawRootNode, source, resolveType, null, -1);
+  constructor(bridge) {
+    this._bridge = bridge;
+    this._cache = new Map();
+    this.rootNode = this._nodeFromId(bridge.rootId(), null, -1);
   }
-}
 
-function buildTypeIndex(expressionTypes) {
-  const map = new Map();
-  if (!Array.isArray(expressionTypes)) {
-    return map;
-  }
-  for (const item of expressionTypes) {
-    if (!item || typeof item !== 'object') {
-      continue;
+  _nodeFromId(id, parent = null, childIndex = -1) {
+    if (typeof id !== 'number') {
+      return null;
     }
-    if (
-      typeof item.start !== 'number' ||
-      typeof item.end !== 'number' ||
-      typeof item.type !== 'string'
-    ) {
-      continue;
+    const cached = this._cache.get(id);
+    if (cached) {
+      if (parent !== null && cached._parent === null) {
+        cached._parent = parent;
+      }
+      if (childIndex >= 0 && cached._childIndex < 0) {
+        cached._childIndex = childIndex;
+      }
+      return cached;
     }
-    map.set(`${item.start}:${item.end}`, item.type);
+    const node = new TsNode(id, this, parent, childIndex);
+    this._cache.set(id, node);
+    return node;
   }
-  return map;
 }
 
 function createPluginInput(payload) {
-  const typeIndex = buildTypeIndex(payload.expressionTypes);
-  const resolveType = (start, end) => typeIndex.get(`${start}:${end}`) ?? null;
-  const tree = new TsTree(payload.cst, payload.source, resolveType);
+  const tree = new TsTree(payload.bridge);
   const typeOf = (target, maybeEnd) => {
-    if (target && typeof target.startIndex === 'number' && typeof target.endIndex === 'number') {
-      return resolveType(target.startIndex, target.endIndex);
+    if (target && typeof target.typeOf === 'function') {
+      return target.typeOf();
+    }
+    if (target && typeof target.__id === 'number') {
+      return payload.bridge.typeOfNode(target.__id);
     }
     if (target && typeof target.start === 'number' && typeof target.end === 'number') {
-      return resolveType(target.start, target.end);
+      return payload.bridge.typeOfSpan(target.start, target.end);
     }
     if (typeof target === 'number' && typeof maybeEnd === 'number') {
-      return resolveType(target, maybeEnd);
+      return payload.bridge.typeOfSpan(target, maybeEnd);
     }
     return null;
   };
-  return {
-    ...payload,
+
+  const out = {
+    filePath: payload.filePath,
+    source: payload.source,
     tree,
     rootNode: tree.rootNode,
     typeOf,
   };
+
+  Object.defineProperty(out, 'cst', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      const cst = payload.bridge.rawCst();
+      Object.defineProperty(out, 'cst', {
+        value: cst,
+        enumerable: true,
+      });
+      return cst;
+    },
+  });
+
+  Object.defineProperty(out, 'expressionTypes', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      const expressionTypes = payload.bridge.rawExpressionTypes();
+      Object.defineProperty(out, 'expressionTypes', {
+        value: expressionTypes,
+        enumerable: true,
+      });
+      return expressionTypes;
+    },
+  });
+
+  return out;
 }
 
 function normalizeRules(rawRules) {
@@ -506,46 +591,31 @@ export async function runPlugin(mod, payload) {
 }
 "#;
 
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct JsPluginInput<'a> {
-    file_path: &'a str,
-    source: &'a str,
-    cst: JsCstNode,
-    expression_types: Vec<JsExpressionType>,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct JsCstNode {
+#[derive(Clone)]
+struct CstBridgeNode {
     kind: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     field_name: Option<String>,
     named: bool,
     start_byte: u32,
     end_byte: u32,
-    start_position: JsPoint,
-    end_position: JsPoint,
+    start_row: u32,
+    start_column: u32,
+    end_row: u32,
+    end_column: u32,
     has_error: bool,
     is_error: bool,
     is_missing: bool,
-    children: Vec<JsCstNode>,
+    parent_id: Option<u32>,
+    child_ids: Vec<u32>,
+    named_child_ids: Vec<u32>,
+    children_by_field: HashMap<String, Vec<u32>>,
 }
 
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct JsPoint {
-    row: u32,
-    column: u32,
-}
-
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct JsExpressionType {
-    start: u32,
-    end: u32,
-    #[serde(rename = "type")]
-    ty: String,
+struct CstBridgeData {
+    source: String,
+    nodes: Vec<CstBridgeNode>,
+    root_id: u32,
+    type_by_span: HashMap<(u32, u32), String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -617,6 +687,618 @@ struct JsPluginRuleRegistration {
     docs_url: Option<String>,
 }
 
+fn get_optional_property<'js, T>(object: &Object<'js>, key: &str) -> rquickjs::Result<Option<T>>
+where
+    T: FromJs<'js>,
+{
+    let value: Value<'js> = object.get(key)?;
+    if value.is_null() || value.is_undefined() {
+        Ok(None)
+    } else {
+        T::from_js(object.ctx(), value).map(Some)
+    }
+}
+
+impl<'js> FromJs<'js> for JsPluginSpan {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
+        let object = Object::from_value(value)?;
+        Ok(Self {
+            start: object.get("start")?,
+            end: object.get("end")?,
+        })
+    }
+}
+
+impl<'js> FromJs<'js> for JsPluginRuleRegistration {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
+        let object = Object::from_value(value)?;
+        Ok(Self {
+            code: get_optional_property(&object, "code")?,
+            title: get_optional_property(&object, "title")?,
+            description: get_optional_property(&object, "description")?,
+            help: get_optional_property(&object, "help")?,
+            severity: get_optional_property(&object, "severity")?,
+            docs_url: get_optional_property(&object, "docsUrl")?,
+        })
+    }
+}
+
+impl<'js> FromJs<'js> for JsPluginRegistration {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
+        let object = Object::from_value(value)?;
+        Ok(Self {
+            name: get_optional_property(&object, "name")?,
+            version: get_optional_property(&object, "version")?,
+            description: get_optional_property(&object, "description")?,
+            rules: get_optional_property(&object, "rules")?.unwrap_or_default(),
+        })
+    }
+}
+
+impl<'js> FromJs<'js> for JsPluginOutput {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
+        let object = Object::from_value(value)?;
+        Ok(Self {
+            message: get_optional_property(&object, "message")?,
+            rule_id: get_optional_property(&object, "ruleId")?,
+            code: get_optional_property(&object, "code")?,
+            severity: get_optional_property(&object, "severity")?,
+            help: get_optional_property(&object, "help")?,
+            description: get_optional_property(&object, "description")?,
+            start: get_optional_property(&object, "start")?,
+            end: get_optional_property(&object, "end")?,
+            span: get_optional_property(&object, "span")?,
+        })
+    }
+}
+
+impl<'js> FromJs<'js> for JsPluginRunResult {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
+        let object = Object::from_value(value)?;
+        Ok(Self {
+            registration: get_optional_property(&object, "registration")?,
+            diagnostics: get_optional_property(&object, "diagnostics")?.unwrap_or_default(),
+        })
+    }
+}
+
+fn invalid_node_id(node_id: u32) -> rquickjs::Error {
+    rquickjs::Error::new_from_js_message(
+        "number",
+        "nodeId",
+        format!("unknown CST node id {node_id}"),
+    )
+}
+
+fn compare_rows_columns(lhs: (u32, u32), rhs: (u32, u32)) -> i32 {
+    if lhs.0 < rhs.0 {
+        -1
+    } else if lhs.0 > rhs.0 {
+        1
+    } else if lhs.1 < rhs.1 {
+        -1
+    } else if lhs.1 > rhs.1 {
+        1
+    } else {
+        0
+    }
+}
+
+impl CstBridgeData {
+    fn node(&self, node_id: u32) -> Option<&CstBridgeNode> {
+        self.nodes.get(node_id as usize)
+    }
+
+    fn child_for_field_name(&self, node_id: u32, field_name: &str) -> Option<u32> {
+        let node = self.node(node_id)?;
+        node.children_by_field
+            .get(field_name)
+            .and_then(|ids| ids.first().copied())
+    }
+
+    fn children_for_field_name(&self, node_id: u32, field_name: &str) -> Vec<u32> {
+        let Some(node) = self.node(node_id) else {
+            return vec![];
+        };
+        node.children_by_field
+            .get(field_name)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn descendant_for_index(
+        &self,
+        node_id: u32,
+        start_index: u32,
+        end_index: u32,
+        named_only: bool,
+    ) -> Option<u32> {
+        let root = self.node(node_id)?;
+        if start_index > end_index || start_index < root.start_byte || end_index > root.end_byte {
+            return None;
+        }
+
+        let mut current_id = node_id;
+        loop {
+            let current = self.node(current_id)?;
+            let mut next_id = None;
+            for child_id in &current.child_ids {
+                let child = self.node(*child_id)?;
+                if child.start_byte <= start_index && end_index <= child.end_byte {
+                    next_id = Some(*child_id);
+                    break;
+                }
+            }
+            let Some(next_id) = next_id else {
+                if !named_only {
+                    return Some(current_id);
+                }
+                let mut named_id = current_id;
+                loop {
+                    let named = self.node(named_id)?;
+                    if named.named {
+                        return Some(named_id);
+                    }
+                    named_id = named.parent_id?;
+                }
+            };
+            current_id = next_id;
+        }
+    }
+
+    fn descendant_for_position(
+        &self,
+        node_id: u32,
+        start_row: u32,
+        start_column: u32,
+        end_row: u32,
+        end_column: u32,
+        named_only: bool,
+    ) -> Option<u32> {
+        let root = self.node(node_id)?;
+        let start = (start_row, start_column);
+        let end = (end_row, end_column);
+        if compare_rows_columns(start, end) > 0 {
+            return None;
+        }
+        if compare_rows_columns(start, (root.start_row, root.start_column)) < 0 {
+            return None;
+        }
+        if compare_rows_columns(end, (root.end_row, root.end_column)) > 0 {
+            return None;
+        }
+
+        let mut current_id = node_id;
+        loop {
+            let current = self.node(current_id)?;
+            let mut next_id = None;
+            for child_id in &current.child_ids {
+                let child = self.node(*child_id)?;
+                if compare_rows_columns((child.start_row, child.start_column), start) <= 0
+                    && compare_rows_columns(end, (child.end_row, child.end_column)) <= 0
+                {
+                    next_id = Some(*child_id);
+                    break;
+                }
+            }
+            let Some(next_id) = next_id else {
+                if !named_only {
+                    return Some(current_id);
+                }
+                let mut named_id = current_id;
+                loop {
+                    let named = self.node(named_id)?;
+                    if named.named {
+                        return Some(named_id);
+                    }
+                    named_id = named.parent_id?;
+                }
+            };
+            current_id = next_id;
+        }
+    }
+
+    fn descendants_of_type(
+        &self,
+        node_id: u32,
+        types: &[String],
+        range: Option<((u32, u32), (u32, u32))>,
+    ) -> Vec<u32> {
+        let mut out = Vec::new();
+        let Some(root) = self.node(node_id) else {
+            return out;
+        };
+
+        let accepted: std::collections::HashSet<&str> = types.iter().map(String::as_str).collect();
+        if accepted.is_empty() {
+            return out;
+        }
+
+        let mut stack = root.child_ids.clone();
+        while let Some(current_id) = stack.pop() {
+            let Some(node) = self.node(current_id) else {
+                continue;
+            };
+
+            let in_range = match range {
+                Some((start, end)) => {
+                    compare_rows_columns(start, (node.start_row, node.start_column)) <= 0
+                        && compare_rows_columns((node.end_row, node.end_column), end) <= 0
+                }
+                None => true,
+            };
+            if in_range && accepted.contains(node.kind.as_str()) {
+                out.push(current_id);
+            }
+
+            for child_id in node.child_ids.iter().rev() {
+                stack.push(*child_id);
+            }
+        }
+
+        out
+    }
+
+    fn node_text(&self, node_id: u32) -> Option<String> {
+        let node = self.node(node_id)?;
+        let bytes = self.source.as_bytes();
+        let start = node.start_byte as usize;
+        let end = node.end_byte as usize;
+        if start > end || end > bytes.len() {
+            return None;
+        }
+        Some(String::from_utf8_lossy(&bytes[start..end]).to_string())
+    }
+
+    fn type_of_span(&self, start: u32, end: u32) -> Option<String> {
+        self.type_by_span.get(&(start, end)).cloned()
+    }
+
+    fn type_of_node(&self, node_id: u32) -> Option<String> {
+        let node = self.node(node_id)?;
+        self.type_of_span(node.start_byte, node.end_byte)
+    }
+}
+
+fn push_cst_bridge_node(
+    node: Node<'_>,
+    parent_id: Option<u32>,
+    field_name: Option<String>,
+    out: &mut Vec<CstBridgeNode>,
+) -> u32 {
+    let node_id = out.len() as u32;
+    let start = node.start_position();
+    let end = node.end_position();
+    out.push(CstBridgeNode {
+        kind: node.kind().to_string(),
+        field_name,
+        named: node.is_named(),
+        start_byte: node.start_byte() as u32,
+        end_byte: node.end_byte() as u32,
+        start_row: start.row as u32,
+        start_column: start.column as u32,
+        end_row: end.row as u32,
+        end_column: end.column as u32,
+        has_error: node.has_error(),
+        is_error: node.is_error(),
+        is_missing: node.is_missing(),
+        parent_id,
+        child_ids: vec![],
+        named_child_ids: vec![],
+        children_by_field: HashMap::new(),
+    });
+
+    let mut child_ids = Vec::with_capacity(node.child_count() as usize);
+    let mut named_child_ids = Vec::new();
+    let mut children_by_field: HashMap<String, Vec<u32>> = HashMap::new();
+    for idx in 0..node.child_count() {
+        if let Some(child) = node.child(idx) {
+            let child_field = node.field_name_for_child(idx as u32).map(ToOwned::to_owned);
+            let child_named = child.is_named();
+            let child_id = push_cst_bridge_node(child, Some(node_id), child_field.clone(), out);
+            child_ids.push(child_id);
+            if child_named {
+                named_child_ids.push(child_id);
+            }
+            if let Some(field) = child_field {
+                children_by_field.entry(field).or_default().push(child_id);
+            }
+        }
+    }
+
+    let current = &mut out[node_id as usize];
+    current.child_ids = child_ids;
+    current.named_child_ids = named_child_ids;
+    current.children_by_field = children_by_field;
+    node_id
+}
+
+fn build_cst_bridge(
+    root: Node<'_>,
+    source: &str,
+    type_by_span: HashMap<(u32, u32), String>,
+) -> CstBridgeData {
+    let mut nodes = Vec::new();
+    let root_id = push_cst_bridge_node(root, None, None, &mut nodes);
+    CstBridgeData {
+        source: source.to_owned(),
+        nodes,
+        root_id,
+        type_by_span,
+    }
+}
+
+fn build_node_info_object<'js>(
+    ctx: Ctx<'js>,
+    node: &CstBridgeNode,
+) -> rquickjs::Result<Object<'js>> {
+    let out = Object::new(ctx)?;
+    out.set("kind", node.kind.as_str())?;
+    if let Some(field_name) = &node.field_name {
+        out.set("fieldName", field_name.as_str())?;
+    }
+    out.set("named", node.named)?;
+    out.set("startByte", node.start_byte)?;
+    out.set("endByte", node.end_byte)?;
+    out.set("startRow", node.start_row)?;
+    out.set("startColumn", node.start_column)?;
+    out.set("endRow", node.end_row)?;
+    out.set("endColumn", node.end_column)?;
+    out.set("hasError", node.has_error)?;
+    out.set("isError", node.is_error)?;
+    out.set("isMissing", node.is_missing)?;
+    if let Some(parent_id) = node.parent_id {
+        out.set("parentId", parent_id)?;
+    }
+    Ok(out)
+}
+
+fn build_raw_cst_object<'js>(
+    ctx: Ctx<'js>,
+    bridge: &CstBridgeData,
+    node_id: u32,
+) -> rquickjs::Result<Object<'js>> {
+    let Some(node) = bridge.node(node_id) else {
+        return Err(invalid_node_id(node_id));
+    };
+
+    let out = Object::new(ctx.clone())?;
+    out.set("kind", node.kind.as_str())?;
+    if let Some(field_name) = &node.field_name {
+        out.set("fieldName", field_name.as_str())?;
+    }
+    out.set("named", node.named)?;
+    out.set("startByte", node.start_byte)?;
+    out.set("endByte", node.end_byte)?;
+
+    let start_position = Object::new(ctx.clone())?;
+    start_position.set("row", node.start_row)?;
+    start_position.set("column", node.start_column)?;
+    out.set("startPosition", start_position)?;
+
+    let end_position = Object::new(ctx.clone())?;
+    end_position.set("row", node.end_row)?;
+    end_position.set("column", node.end_column)?;
+    out.set("endPosition", end_position)?;
+
+    out.set("hasError", node.has_error)?;
+    out.set("isError", node.is_error)?;
+    out.set("isMissing", node.is_missing)?;
+
+    let children = Array::new(ctx.clone())?;
+    for (index, child_id) in node.child_ids.iter().enumerate() {
+        children.set(index, build_raw_cst_object(ctx.clone(), bridge, *child_id)?)?;
+    }
+    out.set("children", children)?;
+    Ok(out)
+}
+
+fn build_expression_types_array<'js>(
+    ctx: Ctx<'js>,
+    bridge: &CstBridgeData,
+) -> rquickjs::Result<Array<'js>> {
+    let mut spans = bridge
+        .type_by_span
+        .iter()
+        .map(|(&(start, end), ty)| (start, end, ty.as_str()))
+        .collect::<Vec<_>>();
+    spans.sort_unstable_by(|left, right| left.0.cmp(&right.0).then(left.1.cmp(&right.1)));
+
+    let array = Array::new(ctx.clone())?;
+    for (index, (start, end, ty)) in spans.into_iter().enumerate() {
+        let item = Object::new(ctx.clone())?;
+        item.set("start", start)?;
+        item.set("end", end)?;
+        item.set("type", ty)?;
+        array.set(index, item)?;
+    }
+    Ok(array)
+}
+
+fn create_bridge_object<'js>(
+    ctx: Ctx<'js>,
+    bridge: Arc<CstBridgeData>,
+) -> rquickjs::Result<Object<'js>> {
+    let bridge_object = Object::new(ctx.clone())?;
+
+    let bridge_for_root = Arc::clone(&bridge);
+    bridge_object.set(
+        "rootId",
+        Function::new(ctx.clone(), move || bridge_for_root.root_id)?,
+    )?;
+
+    let bridge_for_node_info = Arc::clone(&bridge);
+    bridge_object.set(
+        "nodeInfo",
+        Function::new(ctx.clone(), move |ctx: Ctx<'js>, node_id: u32| {
+            let Some(node) = bridge_for_node_info.node(node_id) else {
+                return Err(invalid_node_id(node_id));
+            };
+            build_node_info_object(ctx, node)
+        })?,
+    )?;
+
+    let bridge_for_children = Arc::clone(&bridge);
+    bridge_object.set(
+        "childIds",
+        Function::new(ctx.clone(), move |node_id: u32| {
+            let Some(node) = bridge_for_children.node(node_id) else {
+                return vec![];
+            };
+            node.child_ids.clone()
+        })?,
+    )?;
+
+    let bridge_for_named_children = Arc::clone(&bridge);
+    bridge_object.set(
+        "namedChildIds",
+        Function::new(ctx.clone(), move |node_id: u32| {
+            let Some(node) = bridge_for_named_children.node(node_id) else {
+                return vec![];
+            };
+            node.named_child_ids.clone()
+        })?,
+    )?;
+
+    let bridge_for_child_field = Arc::clone(&bridge);
+    bridge_object.set(
+        "childForFieldName",
+        Function::new(ctx.clone(), move |node_id: u32, field_name: String| {
+            bridge_for_child_field.child_for_field_name(node_id, &field_name)
+        })?,
+    )?;
+
+    let bridge_for_children_field = Arc::clone(&bridge);
+    bridge_object.set(
+        "childrenForFieldName",
+        Function::new(ctx.clone(), move |node_id: u32, field_name: String| {
+            bridge_for_children_field.children_for_field_name(node_id, &field_name)
+        })?,
+    )?;
+
+    let bridge_for_desc_index = Arc::clone(&bridge);
+    bridge_object.set(
+        "descendantForIndex",
+        Function::new(
+            ctx.clone(),
+            move |node_id: u32, start: u32, end: u32, named_only: bool| {
+                bridge_for_desc_index.descendant_for_index(node_id, start, end, named_only)
+            },
+        )?,
+    )?;
+
+    let bridge_for_desc_position = Arc::clone(&bridge);
+    bridge_object.set(
+        "descendantForPosition",
+        Function::new(
+            ctx.clone(),
+            move |node_id: u32,
+                  start_row: u32,
+                  start_column: u32,
+                  end_row: u32,
+                  end_column: u32,
+                  named_only: bool| {
+                bridge_for_desc_position.descendant_for_position(
+                    node_id,
+                    start_row,
+                    start_column,
+                    end_row,
+                    end_column,
+                    named_only,
+                )
+            },
+        )?,
+    )?;
+
+    let bridge_for_descendants = Arc::clone(&bridge);
+    bridge_object.set(
+        "descendantsOfType",
+        Function::new(
+            ctx.clone(),
+            move |node_id: u32,
+                  types: Vec<String>,
+                  start_row: i32,
+                  start_column: i32,
+                  end_row: i32,
+                  end_column: i32| {
+                let range = if start_row < 0 || start_column < 0 || end_row < 0 || end_column < 0 {
+                    None
+                } else {
+                    Some((
+                        (start_row as u32, start_column as u32),
+                        (end_row as u32, end_column as u32),
+                    ))
+                };
+                bridge_for_descendants.descendants_of_type(node_id, &types, range)
+            },
+        )?,
+    )?;
+
+    let bridge_for_text = Arc::clone(&bridge);
+    bridge_object.set(
+        "nodeText",
+        Function::new(ctx.clone(), move |node_id: u32| {
+            bridge_for_text.node_text(node_id).unwrap_or_default()
+        })?,
+    )?;
+
+    let bridge_for_type_span = Arc::clone(&bridge);
+    bridge_object.set(
+        "typeOfSpan",
+        Function::new(ctx.clone(), move |start: u32, end: u32| {
+            bridge_for_type_span.type_of_span(start, end)
+        })?,
+    )?;
+
+    let bridge_for_type_node = Arc::clone(&bridge);
+    bridge_object.set(
+        "typeOfNode",
+        Function::new(ctx.clone(), move |node_id: u32| {
+            bridge_for_type_node.type_of_node(node_id)
+        })?,
+    )?;
+
+    let bridge_for_raw_expression_types = Arc::clone(&bridge);
+    bridge_object.set(
+        "rawExpressionTypes",
+        Function::new(ctx.clone(), move |ctx: Ctx<'js>| {
+            build_expression_types_array(ctx, &bridge_for_raw_expression_types)
+        })?,
+    )?;
+
+    let bridge_for_raw_cst = Arc::clone(&bridge);
+    bridge_object.set(
+        "rawCst",
+        Function::new(ctx, move |ctx: Ctx<'js>| {
+            build_raw_cst_object(ctx, &bridge_for_raw_cst, bridge_for_raw_cst.root_id)
+        })?,
+    )?;
+
+    Ok(bridge_object)
+}
+
+fn create_plugin_payload<'js>(
+    ctx: Ctx<'js>,
+    file_path: &str,
+    source: &str,
+    bridge: Arc<CstBridgeData>,
+) -> Result<Object<'js>, String> {
+    let payload = Object::new(ctx.clone()).map_err(|err| err.to_string())?;
+    payload
+        .set("filePath", file_path)
+        .map_err(|err| err.to_string())?;
+    payload
+        .set("source", source)
+        .map_err(|err| err.to_string())?;
+    payload
+        .set(
+            "bridge",
+            create_bridge_object(ctx, bridge).map_err(|err| err.to_string())?,
+        )
+        .map_err(|err| err.to_string())?;
+    Ok(payload)
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 struct JsPluginInvocationTiming {
     spawn: Duration,
@@ -667,50 +1349,37 @@ pub(super) fn run_plugins_for_file(
     let source = file.source().source.as_ref();
     let file_path = file.path().to_string_lossy().to_string();
 
+    let expr_types_started = Instant::now();
+    let type_by_span = collect_expression_types(file.id(), type_db, body_types);
+    let expr_types_elapsed = expr_types_started.elapsed();
+    let expression_types_count = type_by_span.len();
+
     let cst_started = Instant::now();
-    let cst = build_cst(file.source().root_node());
+    let cst_bridge = Arc::new(build_cst_bridge(
+        file.source().root_node(),
+        source,
+        type_by_span,
+    ));
     let cst_elapsed = cst_started.elapsed();
 
-    let expr_types_started = Instant::now();
-    let expression_types = collect_expression_types(file.id(), type_db, body_types);
-    let expr_types_elapsed = expr_types_started.elapsed();
-    let expression_types_count = expression_types.len();
-
-    let input = JsPluginInput {
-        file_path: &file_path,
-        source,
-        cst,
-        expression_types,
-    };
-    let serialize_started = Instant::now();
-    let payload = match serde_json::to_string(&input) {
-        Ok(payload) => payload,
-        Err(err) => {
-            return vec![plugin_error(
-                file.id(),
-                format!("failed to serialize JS plugin input: {err}"),
-            )];
-        }
-    };
-    let serialize_elapsed = serialize_started.elapsed();
+    let serialize_elapsed = Duration::ZERO;
     let payload_prep_elapsed = cst_elapsed + expr_types_elapsed + serialize_elapsed;
 
     log::debug!(
-        "js plugin payload for '{}' prepared in {:?} (cst={:?}, expression_types={:?}, serialize={:?}, expression_type_count={}, bytes={})",
+        "js plugin payload for '{}' prepared in {:?} (cst={:?}, expression_types={:?}, serialize={:?}, expression_type_count={})",
         file_path,
         payload_prep_elapsed,
         cst_elapsed,
         expr_types_elapsed,
         serialize_elapsed,
         expression_types_count,
-        payload.len(),
     );
 
     let mut diagnostics = Vec::new();
     let mut plugin_calls_elapsed = Duration::default();
     for plugin_path in plugins {
         let plugin_started = Instant::now();
-        match run_single_plugin(plugin_path, &payload) {
+        match run_single_plugin(plugin_path, &file_path, source, Arc::clone(&cst_bridge)) {
             Ok((result, timing)) => {
                 let registration = result.registration.as_ref();
                 let plugin_name = plugin_display_name(plugin_path, registration);
@@ -770,29 +1439,28 @@ fn collect_expression_types(
     file_id: FileId,
     type_db: &TypeDb<'_>,
     body_types: &HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
-) -> Vec<JsExpressionType> {
+) -> HashMap<(u32, u32), String> {
     let Some(file_body_types) = body_types.get(&file_id) else {
-        return vec![];
+        return HashMap::new();
     };
 
-    let mut by_span = BTreeMap::<(u32, u32), String>::new();
+    let mut type_by_span = HashMap::<(u32, u32), String>::new();
     for inference in file_body_types.values() {
         for (span, ty) in &inference.expression_types {
-            by_span
+            type_by_span
                 .entry((span.start, span.end))
                 .or_insert_with(|| type_db.intrn.display(*ty).to_string());
         }
     }
 
-    by_span
-        .into_iter()
-        .map(|((start, end), ty)| JsExpressionType { start, end, ty })
-        .collect()
+    type_by_span
 }
 
 fn run_single_plugin(
     path: &Path,
-    payload: &str,
+    file_path: &str,
+    source: &str,
+    cst_bridge: Arc<CstBridgeData>,
 ) -> Result<(JsPluginRunResult, JsPluginInvocationTiming), String> {
     let total_started = Instant::now();
     let spawn_started = Instant::now();
@@ -807,15 +1475,19 @@ fn run_single_plugin(
     let write_elapsed = write_started.elapsed();
 
     let wait_started = Instant::now();
-    let output_json = context
-        .with(|ctx| run_plugin_in_quickjs(ctx, path, &plugin_source, payload))
+    let (parsed, parse_elapsed) = context
+        .with(|ctx| {
+            run_plugin_in_quickjs(
+                ctx,
+                path,
+                &plugin_source,
+                file_path,
+                source,
+                Arc::clone(&cst_bridge),
+            )
+        })
         .map_err(|err| format!("QuickJS plugin execution failed: {err}"))?;
     let wait_elapsed = wait_started.elapsed();
-
-    let parse_started = Instant::now();
-    let parsed = serde_json::from_str::<JsPluginRunResult>(&output_json)
-        .map_err(|err| format!("invalid plugin JSON output: {err}"))?;
-    let parse_elapsed = parse_started.elapsed();
     let total_elapsed = total_started.elapsed();
 
     Ok((
@@ -834,8 +1506,10 @@ fn run_plugin_in_quickjs(
     ctx: Ctx<'_>,
     plugin_path: &Path,
     plugin_source: &[u8],
-    payload: &str,
-) -> Result<String, String> {
+    file_path: &str,
+    source: &str,
+    cst_bridge: Arc<CstBridgeData>,
+) -> Result<(JsPluginRunResult, Duration), String> {
     let helper_module = Module::declare(
         ctx.clone(),
         "__acton_js_plugin_runtime__.mjs",
@@ -877,10 +1551,7 @@ fn run_plugin_in_quickjs(
         .catch(&ctx)
         .map_err(|err| err.to_string())?;
 
-    let payload_value = ctx
-        .json_parse(payload.as_bytes().to_vec())
-        .catch(&ctx)
-        .map_err(|err| err.to_string())?;
+    let payload_value = create_plugin_payload(ctx.clone(), file_path, source, cst_bridge)?;
     let execution: Promise<'_> = run_plugin
         .call((plugin_namespace, payload_value))
         .catch(&ctx)
@@ -889,53 +1560,13 @@ fn run_plugin_in_quickjs(
         .finish()
         .catch(&ctx)
         .map_err(|err| err.to_string())?;
-
-    let Some(serialized) = ctx
-        .json_stringify(output_value)
+    let decode_started = Instant::now();
+    let parsed: JsPluginRunResult = output_value
+        .get()
         .catch(&ctx)
-        .map_err(|err| err.to_string())?
-    else {
-        return Err("plugin returned a non-serializable value".to_string());
-    };
-    serialized
-        .to_string()
-        .map_err(|err| format!("failed to read plugin output string: {err}"))
-}
-
-fn build_cst(node: Node<'_>) -> JsCstNode {
-    build_cst_with_field(node, None)
-}
-
-fn build_cst_with_field(node: Node<'_>, field_name: Option<String>) -> JsCstNode {
-    let mut children = Vec::new();
-    for idx in 0..node.child_count() {
-        if let Some(child) = node.child(idx) {
-            let child_field = node.field_name_for_child(idx as u32).map(ToOwned::to_owned);
-            children.push(build_cst_with_field(child, child_field));
-        }
-    }
-
-    let start = node.start_position();
-    let end = node.end_position();
-    JsCstNode {
-        kind: node.kind().to_string(),
-        field_name,
-        named: node.is_named(),
-        start_byte: node.start_byte() as u32,
-        end_byte: node.end_byte() as u32,
-        start_position: JsPoint {
-            row: start.row as u32,
-            column: start.column as u32,
-        },
-        end_position: JsPoint {
-            row: end.row as u32,
-            column: end.column as u32,
-        },
-        has_error: node.has_error(),
-        is_error: node.is_error(),
-        is_missing: node.is_missing(),
-        children,
-    }
+        .map_err(|err| err.to_string())?;
+    let decode_elapsed = decode_started.elapsed();
+    Ok((parsed, decode_elapsed))
 }
 
 fn convert_output(
