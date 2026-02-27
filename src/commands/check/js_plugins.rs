@@ -1,8 +1,9 @@
 use acton_config::config::ActonConfig;
+use rquickjs::{CatchResultExt, Context, Ctx, Function, Module, Promise, Runtime, Value};
 use std::collections::{BTreeMap, HashMap};
-use std::io::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 use tolk_linter::Rule;
 use tolk_linter::ast::js_plugin::JsPlugin;
 use tolk_linter::diagnostic::{Annotation, Diagnostic, Severity};
@@ -11,10 +12,7 @@ use tolk_resolver::file_index::{FileId, Span, SymbolId};
 use tolk_ty::{InferenceResult, TypeDb};
 use tree_sitter::Node;
 
-const NODE_RUNNER: &str = r#"
-const fs = require('node:fs');
-const { pathToFileURL } = require('node:url');
-
+const QUICKJS_RUNNER_MODULE: &str = r#"
 function comparePoints(left, right) {
   if (left.row !== right.row) {
     return left.row - right.row;
@@ -478,17 +476,8 @@ function resolvePlugin(mod) {
   };
 }
 
-async function main() {
-  const pluginPath = process.argv[1];
-  if (!pluginPath) {
-    throw new Error('Missing plugin path');
-  }
-
-  const input = fs.readFileSync(0, 'utf8');
-  const payload = JSON.parse(input);
+export async function runPlugin(mod, payload) {
   const pluginInput = createPluginInput(payload);
-
-  const mod = await import(pathToFileURL(pluginPath).href);
   const plugin = resolvePlugin(mod);
   let registration = normalizeRegistration(plugin.meta);
 
@@ -506,22 +495,15 @@ async function main() {
 
   const diagnostics = await plugin.runner(pluginInput);
   if (diagnostics == null) {
-    process.stdout.write(JSON.stringify({ registration, diagnostics: [] }));
-    return;
+    return { registration, diagnostics: [] };
   }
 
   if (!Array.isArray(diagnostics)) {
     throw new Error('Plugin result must be an array');
   }
 
-  process.stdout.write(JSON.stringify({ registration, diagnostics }));
+  return { registration, diagnostics };
 }
-
-main().catch((err) => {
-  const text = err && err.stack ? err.stack : String(err);
-  process.stderr.write(text);
-  process.exit(1);
-});
 "#;
 
 #[derive(serde::Serialize)]
@@ -635,6 +617,15 @@ struct JsPluginRuleRegistration {
     docs_url: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+struct JsPluginInvocationTiming {
+    spawn: Duration,
+    write_input: Duration,
+    wait_for_exit: Duration,
+    parse_output: Duration,
+    total: Duration,
+}
+
 pub(super) fn resolve_plugins(
     project_root: &Path,
     config: &ActonConfig,
@@ -672,16 +663,26 @@ pub(super) fn run_plugins_for_file(
     type_db: &TypeDb<'_>,
     body_types: &HashMap<FileId, HashMap<SymbolId, InferenceResult>>,
 ) -> Vec<Diagnostic> {
+    let total_started = Instant::now();
     let source = file.source().source.as_ref();
     let file_path = file.path().to_string_lossy().to_string();
+
+    let cst_started = Instant::now();
     let cst = build_cst(file.source().root_node());
+    let cst_elapsed = cst_started.elapsed();
+
+    let expr_types_started = Instant::now();
     let expression_types = collect_expression_types(file.id(), type_db, body_types);
+    let expr_types_elapsed = expr_types_started.elapsed();
+    let expression_types_count = expression_types.len();
+
     let input = JsPluginInput {
         file_path: &file_path,
         source,
         cst,
         expression_types,
     };
+    let serialize_started = Instant::now();
     let payload = match serde_json::to_string(&input) {
         Ok(payload) => payload,
         Err(err) => {
@@ -691,13 +692,39 @@ pub(super) fn run_plugins_for_file(
             )];
         }
     };
+    let serialize_elapsed = serialize_started.elapsed();
+    let payload_prep_elapsed = cst_elapsed + expr_types_elapsed + serialize_elapsed;
+
+    log::debug!(
+        "js plugin payload for '{}' prepared in {:?} (cst={:?}, expression_types={:?}, serialize={:?}, expression_type_count={}, bytes={})",
+        file_path,
+        payload_prep_elapsed,
+        cst_elapsed,
+        expr_types_elapsed,
+        serialize_elapsed,
+        expression_types_count,
+        payload.len(),
+    );
 
     let mut diagnostics = Vec::new();
+    let mut plugin_calls_elapsed = Duration::default();
     for plugin_path in plugins {
+        let plugin_started = Instant::now();
         match run_single_plugin(plugin_path, &payload) {
-            Ok(result) => {
+            Ok((result, timing)) => {
                 let registration = result.registration.as_ref();
                 let plugin_name = plugin_display_name(plugin_path, registration);
+                log::debug!(
+                    "js plugin '{}' for '{}' took {:?} (spawn={:?}, write={:?}, wait={:?}, parse={:?}) and returned {} diagnostics",
+                    plugin_name,
+                    file_path,
+                    timing.total,
+                    timing.spawn,
+                    timing.write_input,
+                    timing.wait_for_exit,
+                    timing.parse_output,
+                    result.diagnostics.len(),
+                );
                 for output in result.diagnostics {
                     diagnostics.push(convert_output(
                         file.id(),
@@ -708,12 +735,34 @@ pub(super) fn run_plugins_for_file(
                     ));
                 }
             }
-            Err(err) => diagnostics.push(plugin_error(
-                file.id(),
-                format!("failed to run JS plugin '{}': {err}", plugin_path.display()),
-            )),
+            Err(err) => {
+                let plugin_label = plugin_label(plugin_path);
+                let plugin_elapsed = plugin_started.elapsed();
+                log::debug!(
+                    "js plugin '{}' for '{}' failed in {:?}: {}",
+                    plugin_label,
+                    file_path,
+                    plugin_elapsed,
+                    err,
+                );
+                diagnostics.push(plugin_error(
+                    file.id(),
+                    format!("failed to run JS plugin '{}': {err}", plugin_path.display()),
+                ));
+            }
         }
+        plugin_calls_elapsed += plugin_started.elapsed();
     }
+
+    log::debug!(
+        "js plugins total for '{}': {:?} (prepare_payload={:?}, plugin_calls={:?}, plugin_count={})",
+        file_path,
+        total_started.elapsed(),
+        payload_prep_elapsed,
+        plugin_calls_elapsed,
+        plugins.len(),
+    );
+
     diagnostics
 }
 
@@ -741,41 +790,116 @@ fn collect_expression_types(
         .collect()
 }
 
-fn run_single_plugin(path: &Path, payload: &str) -> Result<JsPluginRunResult, String> {
-    let mut child = Command::new("node")
-        .arg("-e")
-        .arg(NODE_RUNNER)
-        .arg(path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|err| format!("cannot start node process: {err}"))?;
+fn run_single_plugin(
+    path: &Path,
+    payload: &str,
+) -> Result<(JsPluginRunResult, JsPluginInvocationTiming), String> {
+    let total_started = Instant::now();
+    let spawn_started = Instant::now();
+    let runtime = Runtime::new().map_err(|err| format!("cannot create QuickJS runtime: {err}"))?;
+    let context =
+        Context::full(&runtime).map_err(|err| format!("cannot create QuickJS context: {err}"))?;
+    let spawn_elapsed = spawn_started.elapsed();
 
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin
-            .write_all(payload.as_bytes())
-            .map_err(|err| format!("cannot write plugin input: {err}"))?;
-    } else {
-        return Err("node stdin is not available".to_string());
-    }
+    let write_started = Instant::now();
+    let plugin_source = fs::read(path)
+        .map_err(|err| format!("cannot read JS plugin '{}': {err}", path.display()))?;
+    let write_elapsed = write_started.elapsed();
 
-    let output = child
-        .wait_with_output()
-        .map_err(|err| format!("cannot wait for node process: {err}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let details = if stderr.is_empty() { stdout } else { stderr };
-        return Err(if details.is_empty() {
-            format!("node exited with status {}", output.status)
-        } else {
-            details
-        });
-    }
+    let wait_started = Instant::now();
+    let output_json = context
+        .with(|ctx| run_plugin_in_quickjs(ctx, path, &plugin_source, payload))
+        .map_err(|err| format!("QuickJS plugin execution failed: {err}"))?;
+    let wait_elapsed = wait_started.elapsed();
 
-    serde_json::from_slice::<JsPluginRunResult>(&output.stdout)
-        .map_err(|err| format!("invalid plugin JSON output: {err}"))
+    let parse_started = Instant::now();
+    let parsed = serde_json::from_str::<JsPluginRunResult>(&output_json)
+        .map_err(|err| format!("invalid plugin JSON output: {err}"))?;
+    let parse_elapsed = parse_started.elapsed();
+    let total_elapsed = total_started.elapsed();
+
+    Ok((
+        parsed,
+        JsPluginInvocationTiming {
+            spawn: spawn_elapsed,
+            write_input: write_elapsed,
+            wait_for_exit: wait_elapsed,
+            parse_output: parse_elapsed,
+            total: total_elapsed,
+        },
+    ))
+}
+
+fn run_plugin_in_quickjs(
+    ctx: Ctx<'_>,
+    plugin_path: &Path,
+    plugin_source: &[u8],
+    payload: &str,
+) -> Result<String, String> {
+    let helper_module = Module::declare(
+        ctx.clone(),
+        "__acton_js_plugin_runtime__.mjs",
+        QUICKJS_RUNNER_MODULE,
+    )
+    .catch(&ctx)
+    .map_err(|err| err.to_string())?;
+    let (helper_module, helper_eval) = helper_module
+        .eval()
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?;
+    helper_eval
+        .finish::<()>()
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?;
+    let helper_namespace = helper_module
+        .namespace()
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?;
+    let run_plugin: Function<'_> = helper_namespace
+        .get("runPlugin")
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?;
+
+    let plugin_name = plugin_path.to_string_lossy().to_string();
+    let plugin_module = Module::declare(ctx.clone(), plugin_name, plugin_source.to_vec())
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?;
+    let (plugin_module, plugin_eval) = plugin_module
+        .eval()
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?;
+    plugin_eval
+        .finish::<()>()
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?;
+    let plugin_namespace = plugin_module
+        .namespace()
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?;
+
+    let payload_value = ctx
+        .json_parse(payload.as_bytes().to_vec())
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?;
+    let execution: Promise<'_> = run_plugin
+        .call((plugin_namespace, payload_value))
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?;
+    let output_value: Value<'_> = execution
+        .finish()
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?;
+
+    let Some(serialized) = ctx
+        .json_stringify(output_value)
+        .catch(&ctx)
+        .map_err(|err| err.to_string())?
+    else {
+        return Err("plugin returned a non-serializable value".to_string());
+    };
+    serialized
+        .to_string()
+        .map_err(|err| format!("failed to read plugin output string: {err}"))
 }
 
 fn build_cst(node: Node<'_>) -> JsCstNode {

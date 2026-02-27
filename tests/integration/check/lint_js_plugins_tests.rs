@@ -1,7 +1,6 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use function_name::named;
-use std::process::Command;
 
 const CONTRACT: &str = r#"
             fun onInternalMessage(_in: InMessage) {
@@ -136,11 +135,6 @@ export default {
 #[test]
 #[named]
 fn check_lint_js_plugin_receives_cst() {
-    if !has_node() {
-        eprintln!("Skipping test: Node.js is not available");
-        return;
-    }
-
     let project = ProjectBuilder::new(&format!("check-{}", function_name!()))
         .contract("main", CONTRACT)
         .raw_file("plugins/cst-plugin.mjs", CST_PLUGIN)
@@ -163,11 +157,6 @@ fn check_lint_js_plugin_receives_cst() {
 #[test]
 #[named]
 fn check_lint_js_plugin_tree_sitter_style_api() {
-    if !has_node() {
-        eprintln!("Skipping test: Node.js is not available");
-        return;
-    }
-
     let project = ProjectBuilder::new(&format!("check-{}", function_name!()))
         .contract("main", CONTRACT)
         .raw_file(
@@ -193,11 +182,6 @@ fn check_lint_js_plugin_tree_sitter_style_api() {
 #[test]
 #[named]
 fn check_lint_js_plugin_registration_metadata() {
-    if !has_node() {
-        eprintln!("Skipping test: Node.js is not available");
-        return;
-    }
-
     let project = ProjectBuilder::new(&format!("check-{}", function_name!()))
         .contract("main", CONTRACT)
         .raw_file("plugins/registered-plugin.mjs", REGISTERED_PLUGIN)
@@ -220,11 +204,6 @@ fn check_lint_js_plugin_registration_metadata() {
 #[test]
 #[named]
 fn check_lint_js_plugin_expression_type_api() {
-    if !has_node() {
-        eprintln!("Skipping test: Node.js is not available");
-        return;
-    }
-
     let project = ProjectBuilder::new(&format!("check-{}", function_name!()))
         .contract("main", CONTRACT)
         .raw_file("plugins/type-api-plugin.mjs", TYPE_API_PLUGIN)
@@ -242,12 +221,4 @@ fn check_lint_js_plugin_expression_type_api() {
             "integration/snapshots/check/lint_js_plugins/{}.txt",
             function_name!()
         ));
-}
-
-fn has_node() -> bool {
-    Command::new("node")
-        .arg("--version")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
 }

@@ -156,6 +156,7 @@ dunce = "1.0.5"
 path-absolutize = "3.1.1"
 tracing = "0.1"
 function_name = "0.3.0"
+rquickjs = { version = "0.11.0", features = ["loader"] }
 
 [dependencies]
 # local creates
@@ -262,6 +263,7 @@ codespan-reporting = { workspace = true }
 rustc-hash = { workspace = true }
 function_name = { workspace = true }
 path-absolutize = { workspace = true }
+rquickjs = { workspace = true }
 
 [dev-dependencies]
 snapbox = { version = "0.6.23", features = ["regex", "cmd", "dir", "term-svg"] }
