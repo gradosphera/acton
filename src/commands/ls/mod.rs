@@ -57,6 +57,8 @@ async fn ls_cmd_internal(port: Option<u16>, stdio: bool, file_db: FileDb) -> any
             file_db: Arc::new(file_db),
             documents: DashMap::new(),
             analysis: DashMap::new(),
+            root_analyses: DashMap::new(),
+            file_to_roots: DashMap::new(),
             file_urls: DashMap::new(),
             #[cfg(feature = "profiling")]
             profiling,

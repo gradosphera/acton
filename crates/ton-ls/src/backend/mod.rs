@@ -1,5 +1,7 @@
 use dashmap::DashMap;
 use lsp_types::*;
+use rustc_hash::FxHashSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tolk_resolver::file_db::FileDb;
 use tolk_resolver::file_index::FileId;
@@ -11,6 +13,7 @@ pub mod profiling;
 pub mod utils;
 
 use crate::AnalysisResult;
+use crate::languages::tolk::analysis::RootAnalysis;
 use crate::languages::tolk::semantic_tokens;
 #[cfg(feature = "profiling")]
 pub use profiling::ProfilingContext;
@@ -20,6 +23,8 @@ pub struct Backend {
     pub file_db: Arc<FileDb>,
     pub documents: DashMap<Url, String>,
     pub analysis: DashMap<Url, Arc<AnalysisResult>>,
+    pub root_analyses: DashMap<PathBuf, Arc<RootAnalysis>>,
+    pub file_to_roots: DashMap<FileId, FxHashSet<PathBuf>>,
     pub file_urls: DashMap<FileId, Url>,
     #[cfg(feature = "profiling")]
     pub profiling: Arc<ProfilingContext>,
@@ -79,6 +84,14 @@ impl LanguageServer for Backend {
         self.client
             .log_message(MessageType::INFO, "Tolk Language Server initialized")
             .await;
+        if let Err(err) = self.initialize_workspace_analysis().await {
+            self.client
+                .log_message(
+                    MessageType::ERROR,
+                    format!("Failed to initialize workspace analysis: {err}"),
+                )
+                .await;
+        }
         log::info!("Notification: initialized took {:?}", now.elapsed());
     }
 
