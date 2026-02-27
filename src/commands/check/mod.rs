@@ -196,13 +196,13 @@ pub fn check_cmd(
                 continue;
             }
 
-            if !json {
-                println!("    {} {}", "Checking".green().bold(), contract.name);
-            }
-
             let root = dunce::canonicalize(PathBuf::from(&contract.src))?;
             if !seen_roots.insert(root.clone()) {
                 continue;
+            }
+
+            if !json {
+                println!("    {} {}", "Checking".green().bold(), contract.name);
             }
 
             let lint_settings = Checker::build_settings(&config, Some(&contract_id));
