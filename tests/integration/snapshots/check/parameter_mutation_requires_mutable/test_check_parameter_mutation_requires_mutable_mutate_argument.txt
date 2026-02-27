@@ -1,0 +1,36 @@
+warning[E024]: parameter is mutated but is not declared `mutate`
+  --> [ROOT]/contracts/main[LINE]
+  |
+6 |             fun main(value: int) {
+  |                      ----- parameter is declared immutable
+7 |                 bump(mutate value);
+  |                             ^^^^^ parameter is mutated here
+  |
+  = without `mutate`, writes to this parameter do not mutate the value at the call site
+
+help: declare parameter as `mutate`, if you want to mutate the value at the call site
+  --> [ROOT]/contracts/main[LINE]
+  |
+6 |             fun main(value: int) {
+  |                      ^ mutate 
+
+help: introduce a mutable local copy, if you want to mutate the value locally
+  --> [ROOT]/contracts/main[LINE]
+  |
+6 |             fun main(value: int) {
+  |                                   ^ 
+                    var valueCopy = value;
+7 |                 bump(mutate value);
+  |                             ^^^^^ valueCopy
+
+warning[E005]: variable is only written to but never read
+  --> [ROOT]/contracts/main[LINE]
+  |
+6 |             fun main(value: int) {
+  |                      ^^^^^ variable `value` is write-only
+7 |                 bump(mutate value);
+  |                             ----- first write usage here
+
+
+Use acton check --explain <CODE> to get detailed explanation of a rule.
+For example: acton check --explain E005

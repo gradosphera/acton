@@ -9,6 +9,25 @@ use std::collections::HashMap;
 use tolk_linter::diagnostic::Diagnostic as LinterDiagnostic;
 use tolk_resolver::FileDb;
 
+fn format_fix_message(replacement: &str) -> String {
+    if !replacement.contains('\n') {
+        return replacement.to_string();
+    }
+
+    replacement
+        .split('\n')
+        .enumerate()
+        .map(|(idx, line)| {
+            if idx == 0 || line.is_empty() {
+                line.to_string()
+            } else {
+                format!("    {line}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub(super) fn emit_diagnostics(
     file_db: &FileDb,
     diagnostics: &[LinterDiagnostic],
@@ -89,9 +108,10 @@ pub(super) fn emit_diagnostics(
             for edit in &fix.edits {
                 let edit_file_id = edit.file_id;
                 let cs_file_id = *file_id_map.get(&edit_file_id).unwrap_or(&0);
+                let message = format_fix_message(&edit.replacement);
                 labels.push(
                     Label::primary(cs_file_id, edit.span.start()..edit.span.end())
-                        .with_message(&edit.replacement),
+                        .with_message(message),
                 );
             }
             let fix_diag = Diagnostic::new(Severity::Help)
