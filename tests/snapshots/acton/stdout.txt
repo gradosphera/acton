@@ -1,6 +1,6 @@
 TON blockchain development tool
 
-Usage: acton [OPTIONS] <COMMAND>
+Usage: acton[EXE] [OPTIONS] <COMMAND>
 
 Commands:
   init         Initialize a new project in the current directory
