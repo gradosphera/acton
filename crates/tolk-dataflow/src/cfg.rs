@@ -92,6 +92,8 @@ pub struct FlowNodeTaintFacts {
     pub multiplication_operations: Vec<MultiplicationOperationFact>,
     /// Spans of division operations (`/`) found in this node expression.
     pub division_spans: Vec<Span>,
+    /// Spans of division operations in direct RHS arithmetic assignment expressions.
+    pub direct_assignment_division_spans: Vec<Span>,
     /// Global call targets referenced in this node.
     pub called_global_symbols: FxHashSet<SymbolId>,
 }

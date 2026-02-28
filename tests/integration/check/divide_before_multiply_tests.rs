@@ -104,6 +104,44 @@ fn test_check_divide_before_multiply_reports_tainted_variable_through_assignment
 
 #[test]
 #[named]
+fn test_check_divide_before_multiply_allows_division_nested_inside_function_call_arguments() {
+    run_divide_before_multiply_test(
+        r#"
+            fun passthrough(x: int): int {
+                return x;
+            }
+
+            fun main(a: int, b: int, c: int) {
+                val config = passthrough(a / b);
+                debug.print(config * c);
+            }
+        "#,
+        function_name!(),
+    );
+}
+
+#[test]
+#[named]
+fn test_check_divide_before_multiply_allows_loop_carried_self_taint_when_expression_multiplies_before_dividing()
+ {
+    run_divide_before_multiply_test(
+        r#"
+            fun main(a: int) {
+                var x = a;
+                var i = 3;
+                while (i > 0) {
+                    x = x * 90 / 100;
+                    i = i - 1;
+                }
+                debug.print(x);
+            }
+        "#,
+        function_name!(),
+    );
+}
+
+#[test]
+#[named]
 fn test_check_divide_before_multiply_allows_when_division_happens_after_multiplication() {
     run_divide_before_multiply_test(
         r#"

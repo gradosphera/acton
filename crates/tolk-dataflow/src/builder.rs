@@ -737,6 +737,20 @@ impl<'idx> CfgBuilder<'idx> {
             node.taint.division_spans.dedup();
         }
 
+        let mut direct_assignment_division_spans = Vec::new();
+        collector
+            .collect_direct_assignment_division_spans(expr, &mut direct_assignment_division_spans);
+        if !direct_assignment_division_spans.is_empty() {
+            let node = self.cfg.node_mut(node_id);
+            node.taint
+                .direct_assignment_division_spans
+                .extend(direct_assignment_division_spans);
+            node.taint
+                .direct_assignment_division_spans
+                .sort_by_key(|span| (span.start, span.end));
+            node.taint.direct_assignment_division_spans.dedup();
+        }
+
         let mut multiplication_operations = Vec::new();
         collector.collect_multiplication_operations(expr, &mut multiplication_operations);
         if !multiplication_operations.is_empty() {
@@ -1105,6 +1119,57 @@ impl<'idx> UseDefCollector<'idx> {
             }
             out.push(tolk_resolver::Span::from_syntax(&node));
         }
+    }
+
+    fn collect_direct_assignment_division_spans(
+        &self,
+        expr: Expr<'_>,
+        out: &mut Vec<tolk_resolver::Span>,
+    ) {
+        let Some(rhs) = (match expr {
+            Expr::Assign(assign) => assign.right(),
+            _ => None,
+        }) else {
+            return;
+        };
+
+        let rhs = self.strip_taint_wrappers(rhs);
+        let Expr::Bin(bin) = rhs else {
+            return;
+        };
+        if !self.is_arithmetic_binary_operator(bin) {
+            return;
+        }
+
+        self.collect_division_spans(rhs, out);
+    }
+
+    fn strip_taint_wrappers<'tree>(&self, mut expr: Expr<'tree>) -> Expr<'tree> {
+        loop {
+            expr = match expr {
+                Expr::Paren(paren) => match paren.inner() {
+                    Some(inner) => inner,
+                    None => return expr,
+                },
+                Expr::NotNull(not_null) => match not_null.inner() {
+                    Some(inner) => inner,
+                    None => return expr,
+                },
+                Expr::AsCast(as_cast) => match as_cast.expr() {
+                    Some(inner) => inner,
+                    None => return expr,
+                },
+                _ => return expr,
+            };
+        }
+    }
+
+    fn is_arithmetic_binary_operator(&self, bin: Bin<'_>) -> bool {
+        let Some(source) = self.source else {
+            return false;
+        };
+
+        matches!(bin.operator_name(source), "+" | "-" | "*" | "/" | "%")
     }
 
     fn collect_called_globals(&self, expr: Expr<'_>, out: &mut FxHashSet<SymbolId>) {

@@ -88,20 +88,11 @@ impl DataflowAnalysis for DivisionTaintAnalysis {
 
         let division_origin = flow_node
             .taint
-            .division_spans
+            .direct_assignment_division_spans
             .iter()
             .copied()
             .min_by_key(|span| (span.start, span.end))
-            .map(|span| DivisionOrigin { node, span })
-            .or_else(|| {
-                flow_node
-                    .taint
-                    .has_division_operation
-                    .then_some(DivisionOrigin {
-                        node,
-                        span: flow_node.span?,
-                    })
-            });
+            .map(|span| DivisionOrigin { node, span });
 
         let origin = division_origin.or(read_origin);
         if let Some(origin) = origin {
@@ -186,6 +177,9 @@ pub fn find_issues(
                     .into_iter()
                     .filter_map(|local| dataflow.in_at(node.id).taint_origins.get(&local).copied())
                     .min_by_key(origin_sort_key)?;
+                if origin.node == node.id {
+                    return None;
+                }
                 Some((op, origin))
             })
             .min_by_key(|(op, origin)| {
