@@ -281,7 +281,7 @@ struct SearchParams {
     value: coins? = null,
     /// Exit code of the transaction.
     exitCode: int32? = null
-    /// Whether the transaction is succesfull (both compute and action phase).
+    /// Whether the transaction is successful (both compute and action phase).
     success: bool? = null,
     /// Whether the compute phase of transaction was aborted and transaction was reverted.
     aborted: bool? = null,
@@ -470,8 +470,8 @@ message$_ {X:Type} info:CommonMsgInfo
 fun net.sendExternal(msg: OutMessage): SendResultList
 ```
 
-Sends external incoming message to the spefied destination address.
-Read more about External incomming messages: https://docs.ton.org/foundations/messages/external-in#incoming-external-messages
+Sends an external incoming message to the specified destination address.
+Read more about external incoming messages: https://docs.ton.org/foundations/messages/external-in#incoming-external-messages
 
 <SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L475" />
 
