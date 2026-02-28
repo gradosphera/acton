@@ -285,7 +285,7 @@ impl FuncDecompiler {
                 .iter()
                 .map(|name| state.param_type(name))
                 .collect::<Vec<_>>();
-            let sig = render_method_signature(method, kind, &params, &param_types, return_kind);
+            let sig = render_method_signature(method, kind, &params, &param_types, &return_kind);
             helper_decls.push(format!(
                 "{};",
                 sig.strip_suffix(" {").unwrap_or(sig.as_str())
@@ -345,7 +345,7 @@ impl FuncDecompiler {
                 kind,
                 &params,
                 &param_types,
-                return_kind,
+                &return_kind,
             ));
             out.push('\n');
 
@@ -360,15 +360,26 @@ impl FuncDecompiler {
 
             if kind != MethodKind::RecvInternal
                 && !state.has_explicit_return()
-                && let Some(ret) = state.peek_expr_for_return()
             {
-                match return_kind {
-                    ReturnKind::Tuple => {
-                        let _ = writeln!(out, "    return ({ret});");
+                let return_values = state.return_exprs();
+                match return_values.len() {
+                    0 => {}
+                    1 => {
+                        if let Some(ret) = return_values.first() {
+                            match return_kind {
+                                ReturnKind::Tuple(_) => {
+                                    let _ = writeln!(out, "    return ({ret});");
+                                }
+                                ReturnKind::Unit => {}
+                                _ => {
+                                    let _ = writeln!(out, "    return {ret};");
+                                }
+                            }
+                        }
                     }
-                    ReturnKind::Unit => {}
                     _ => {
-                        let _ = writeln!(out, "    return {ret};");
+                        let joined = return_values.join(", ");
+                        let _ = writeln!(out, "    return ({joined});");
                     }
                 }
             }

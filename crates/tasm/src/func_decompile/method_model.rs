@@ -13,14 +13,14 @@ pub(crate) enum MethodKind {
     External,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ReturnKind {
     Unit,
     Int,
     Cell,
     Slice,
     Builder,
-    Tuple,
+    Tuple(Vec<ValueType>),
 }
 
 pub(crate) fn infer_params_for_method(kind: MethodKind, state: &LiftState) -> Vec<String> {
@@ -66,7 +66,7 @@ pub(crate) fn render_method_signature(
     kind: MethodKind,
     params: &[String],
     param_types: &[ValueType],
-    ret: ReturnKind,
+    ret: &ReturnKind,
 ) -> String {
     let rendered_params = render_param_list(kind, params, param_types);
     let ret_ty = return_type_name(ret);
@@ -92,6 +92,11 @@ pub(crate) fn infer_return_kind(kind: MethodKind, state: &LiftState) -> ReturnKi
         return ReturnKind::Unit;
     }
 
+    let return_types = state.return_expr_types();
+    if return_types.len() > 1 {
+        return ReturnKind::Tuple(return_types);
+    }
+
     let Some(top_ty) = state.peek_expr_type_for_return() else {
         return ReturnKind::Unit;
     };
@@ -101,18 +106,42 @@ pub(crate) fn infer_return_kind(kind: MethodKind, state: &LiftState) -> ReturnKi
         ValueType::Cell => ReturnKind::Cell,
         ValueType::Slice => ReturnKind::Slice,
         ValueType::Builder => ReturnKind::Builder,
-        ValueType::Unknown => ReturnKind::Tuple,
+        ValueType::Unknown => ReturnKind::Tuple(vec![ValueType::Unknown]),
     }
 }
 
-fn return_type_name(ret: ReturnKind) -> &'static str {
+fn return_type_name(ret: &ReturnKind) -> String {
     match ret {
-        ReturnKind::Unit => "()",
-        ReturnKind::Int => "int",
-        ReturnKind::Cell => "cell",
-        ReturnKind::Slice => "slice",
-        ReturnKind::Builder => "builder",
-        ReturnKind::Tuple => "tuple",
+        ReturnKind::Unit => "()".to_string(),
+        ReturnKind::Int => "int".to_string(),
+        ReturnKind::Cell => "cell".to_string(),
+        ReturnKind::Slice => "slice".to_string(),
+        ReturnKind::Builder => "builder".to_string(),
+        ReturnKind::Tuple(types) => {
+            if types.is_empty() {
+                "tuple".to_string()
+            } else if types.len() == 1 {
+                tuple_item_type_name(types[0]).to_string()
+            } else {
+                let items = types
+                    .iter()
+                    .copied()
+                    .map(tuple_item_type_name)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("({items})")
+            }
+        }
+    }
+}
+
+fn tuple_item_type_name(ty: ValueType) -> &'static str {
+    match ty {
+        ValueType::Int => "int",
+        ValueType::Cell => "cell",
+        ValueType::Slice => "slice",
+        ValueType::Builder => "builder",
+        ValueType::Unknown => "int",
     }
 }
 

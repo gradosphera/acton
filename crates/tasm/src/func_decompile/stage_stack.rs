@@ -133,6 +133,26 @@ impl LiftState {
         })
     }
 
+    pub(crate) fn return_exprs(&self) -> Vec<String> {
+        self.stack
+            .iter()
+            .filter_map(|v| match v {
+                StackValue::Expr(e) => Some(e.clone()),
+                StackValue::Continuation(_) => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn return_expr_types(&self) -> Vec<ValueType> {
+        self.stack
+            .iter()
+            .filter_map(|v| match v {
+                StackValue::Expr(e) => Some(self.expr_type_of(e)),
+                StackValue::Continuation(_) => None,
+            })
+            .collect()
+    }
+
     fn new_temp(&mut self) -> String {
         let name = format!("v{}", self.next_temp);
         self.next_temp += 1;
