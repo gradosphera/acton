@@ -9,6 +9,7 @@
     "fork-testing",
     "code-coverage",
     "mutation-testing",
+    "test-ui",
     "writing-your-own-matchers",
     "cookbook"
   ]
