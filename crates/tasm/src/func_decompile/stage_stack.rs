@@ -1096,14 +1096,15 @@ fn lift_plain_instruction(
         }
         "LDMSGADDR" => {
             let src = state.pop_expr_expect(lines, depth, ValueType::Slice);
-            let addr = state.new_temp();
             let remainder = state.new_temp();
+            let addr = state.new_temp();
             push_line(
                 lines,
                 depth,
-                format!("var ({addr}, {remainder}) = load_msg_addr({src});"),
+                format!("var ({remainder}, {addr}) = load_msg_addr({src});"),
             );
-            // For LDMSGADDR stack effect is addr, remainder (top).
+            // TVM stack after LDMSGADDR is addr, remainder(top); stdlib
+            // signature is (remainder, addr) because of asm(-> 1 0).
             state.push_typed_expr(addr, ValueType::Slice);
             state.push_typed_expr(remainder, ValueType::Slice);
             return;
