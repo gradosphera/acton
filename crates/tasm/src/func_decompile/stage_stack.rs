@@ -253,6 +253,16 @@ fn lift_plain_instruction(
                 depth + 1,
                 ctx,
             );
+            if let Some(cond_value) = parse_const_int_expr(&cond) {
+                state.absorb_counters(&child);
+                if cond_value != 0 {
+                    lines.extend(child_lines);
+                    state.stack = child.stack;
+                } else {
+                    state.stack = base_state.stack;
+                }
+                return;
+            }
             if !child_lines.is_empty() {
                 push_line(lines, depth, format!("if ({cond}) {{"));
                 lines.extend(child_lines);
@@ -326,6 +336,18 @@ fn lift_plain_instruction(
                 depth + 1,
                 ctx,
             );
+            if let Some(cond_value) = parse_const_int_expr(&cond) {
+                state.absorb_counters(&then_state);
+                state.absorb_counters(&else_state);
+                if cond_value != 0 {
+                    lines.extend(then_lines);
+                    state.stack = then_state.stack;
+                } else {
+                    lines.extend(else_lines);
+                    state.stack = else_state.stack;
+                }
+                return;
+            }
             if !then_lines.is_empty() || !else_lines.is_empty() {
                 push_line(lines, depth, format!("if ({cond}) {{"));
                 lines.extend(then_lines);
@@ -517,11 +539,11 @@ fn lift_plain_instruction(
             return;
         }
         "XCHG2" => {
-            // Equivalent: XCHG_0I s(i); XCHG_0I s(j)
+            // Equivalent: XCHG_1I s(i); XCHG_0I s(j)
             let i = plain.args.first().and_then(arg_stack_index);
             let j = plain.args.get(1).and_then(arg_stack_index);
             if let Some(i) = i {
-                stack_swap_from_top(state, 0, i);
+                stack_swap_from_top(state, 1, i);
             }
             if let Some(j) = j {
                 stack_swap_from_top(state, 0, j);
@@ -529,7 +551,7 @@ fn lift_plain_instruction(
             return;
         }
         "XCHG3" => {
-            // Equivalent: XCHG_IJ s2 s(i); XCHG_0I s(j); XCHG_0I s(k)
+            // Equivalent: XCHG_IJ s2 s(i); XCHG_1I s(j); XCHG_0I s(k)
             let i = plain.args.first().and_then(arg_stack_index);
             let j = plain.args.get(1).and_then(arg_stack_index);
             let k = plain.args.get(2).and_then(arg_stack_index);
@@ -537,7 +559,7 @@ fn lift_plain_instruction(
                 stack_swap_from_top(state, 2, i);
             }
             if let Some(j) = j {
-                stack_swap_from_top(state, 0, j);
+                stack_swap_from_top(state, 1, j);
             }
             if let Some(k) = k {
                 stack_swap_from_top(state, 0, k);
@@ -568,8 +590,7 @@ fn lift_plain_instruction(
                 state.stack.swap(n - 1, n - 2);
             }
             if let Some(j) = j {
-                // In TVM spec, PUXC second operand is encoded with delta -1.
-                // Disassembly prints s(j-1), while semantic target is s(j).
+                // PUXC final target is relative to stack before PUSH+SWAP.
                 stack_swap_from_top(state, 0, j + 1);
             }
             return;
@@ -592,7 +613,7 @@ fn lift_plain_instruction(
             let j = plain.args.get(1).and_then(arg_stack_index);
             let k = plain.args.get(2).and_then(arg_stack_index);
             if let Some(i) = i {
-                stack_swap_from_top(state, 0, i);
+                stack_swap_from_top(state, 1, i);
             }
             if let Some(j) = j {
                 stack_swap_from_top(state, 0, j);
@@ -616,7 +637,6 @@ fn lift_plain_instruction(
             }
             if let Some(j) = j {
                 // PUXC stage: PUSH s(j)
-                // PU2XC second operand uses delta -1 (printed as s(j-1)).
                 stack_push_from_top(state, j + 1);
                 // PUXC stage: SWAP
                 if state.stack.len() >= 2 {
@@ -626,9 +646,7 @@ fn lift_plain_instruction(
             }
             if let Some(k) = k {
                 // PUXC stage: XCHG_0I s(k-1)
-                // PU2XC third operand uses delta -2 (printed as s(k-2)).
-                // For inner PUXC semantics this targets s(k-1) => printed + 1.
-                stack_swap_from_top(state, 0, k + 1);
+                stack_swap_from_top(state, 0, k + 2);
             }
             return;
         }
@@ -642,11 +660,9 @@ fn lift_plain_instruction(
             }
             stack_swap_from_top(state, 0, 2);
             if let Some(j) = j {
-                // PUXC2 j is encoded with delta -1.
-                stack_swap_from_top(state, 0, j + 1);
+                stack_swap_from_top(state, 1, j + 1);
             }
             if let Some(k) = k {
-                // PUXC2 k is encoded with delta -1.
                 stack_swap_from_top(state, 0, k + 1);
             }
             return;
@@ -667,8 +683,7 @@ fn lift_plain_instruction(
                 }
             }
             if let Some(k) = k {
-                // XCPUXC third operand uses delta -1.
-                // Inner PUXC target is s(k), i.e. printed + 1.
+                // Inner PUXC target is s(k-1).
                 stack_swap_from_top(state, 0, k + 1);
             }
             return;
@@ -1886,4 +1901,15 @@ fn stack_set_from_top(stack: &mut Vec<StackValue>, depth_idx: usize, value: Stac
 
 fn parse_arg_param_index(name: &str) -> Option<usize> {
     name.strip_prefix("arg")?.parse::<usize>().ok()
+}
+
+fn parse_const_int_expr(expr: &str) -> Option<i128> {
+    let trimmed = expr.trim();
+    if let Ok(value) = trimmed.parse::<i128>() {
+        return Some(value);
+    }
+    if trimmed.starts_with('(') && trimmed.ends_with(')') && trimmed.len() >= 3 {
+        return trimmed[1..trimmed.len() - 1].trim().parse::<i128>().ok();
+    }
+    None
 }
