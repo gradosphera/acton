@@ -40,7 +40,8 @@ fn decompile_base64_boc_string() {
     let out = FuncDecompiler::new()
         .decompile_boc_string(&b64)
         .expect("base64 decompilation must succeed");
-    assert!(out.contains("while (true)"));
+    assert!(out.contains("do {"));
+    assert!(out.contains("until ("));
 }
 
 #[test]

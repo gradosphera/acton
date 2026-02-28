@@ -169,11 +169,10 @@ pub(crate) fn lift_instructions(
         match instruction {
             Instruction::Plain(plain) => lift_plain_instruction(plain, state, lines, depth, ctx),
             Instruction::Ref(reference) => {
-                push_line(lines, depth, ";; ref continuation".to_string());
                 if let ArgValue::Code { code, .. } = &reference.code {
-                    let mut child = state.clone();
-                    lift_instructions(&code.instructions, &mut child, lines, depth + 1, ctx);
-                    state.absorb_counters(&child);
+                    // Code refs in a continuation chain are executed sequentially
+                    // (implicit jump to next ref), so they must mutate the same state.
+                    lift_instructions(&code.instructions, state, lines, depth, ctx);
                 }
             }
             Instruction::ExoticCell(_) => {
@@ -244,11 +243,25 @@ fn lift_plain_instruction(
                 return;
             };
             let cond = state.pop_expr(lines, depth);
-            push_line(lines, depth, format!("if ({cond}) {{"));
+            let base_state = state.clone();
             let mut child = state.clone();
-            lift_instructions(&cont.instructions, &mut child, lines, depth + 1, ctx);
+            let mut child_lines = Vec::new();
+            lift_instructions(
+                &cont.instructions,
+                &mut child,
+                &mut child_lines,
+                depth + 1,
+                ctx,
+            );
+            if !child_lines.is_empty() {
+                push_line(lines, depth, format!("if ({cond}) {{"));
+                lines.extend(child_lines);
+                push_line(lines, depth, "}".to_string());
+            }
             state.absorb_counters(&child);
-            push_line(lines, depth, "}".to_string());
+            if !merge_conditional_stacks(&cond, &child, &base_state, state, lines, depth) {
+                state.stack = base_state.stack;
+            }
             return;
         }
         "IFELSE" | "IFREFELSE" => {
@@ -295,17 +308,37 @@ fn lift_plain_instruction(
                 return;
             };
 
-            push_line(lines, depth, format!("if ({cond}) {{"));
             let mut then_state = state.clone();
-            lift_instructions(&then_cont.instructions, &mut then_state, lines, depth + 1, ctx);
-            push_line(lines, depth, "} else {".to_string());
+            let mut then_lines = Vec::new();
+            lift_instructions(
+                &then_cont.instructions,
+                &mut then_state,
+                &mut then_lines,
+                depth + 1,
+                ctx,
+            );
             let mut else_state = state.clone();
-            lift_instructions(&else_cont.instructions, &mut else_state, lines, depth + 1, ctx);
-            push_line(lines, depth, "}".to_string());
+            let mut else_lines = Vec::new();
+            lift_instructions(
+                &else_cont.instructions,
+                &mut else_state,
+                &mut else_lines,
+                depth + 1,
+                ctx,
+            );
+            if !then_lines.is_empty() || !else_lines.is_empty() {
+                push_line(lines, depth, format!("if ({cond}) {{"));
+                lines.extend(then_lines);
+                push_line(lines, depth, "} else {".to_string());
+                lines.extend(else_lines);
+                push_line(lines, depth, "}".to_string());
+            }
 
             state.absorb_counters(&then_state);
             state.absorb_counters(&else_state);
-            state.stack.clear();
+            if !merge_conditional_stacks(&cond, &then_state, &else_state, state, lines, depth) {
+                state.stack.clear();
+            }
             return;
         }
         "WHILE" => {
@@ -328,7 +361,9 @@ fn lift_plain_instruction(
                 return;
             };
 
-            push_line(lines, depth, "while (true) {".to_string());
+            let loop_cond = state.new_temp();
+            push_line(lines, depth, format!("var {loop_cond} = 0;"));
+            push_line(lines, depth, "do {".to_string());
 
             let mut cond_state = state.clone();
             let mut cond_lines = Vec::new();
@@ -345,16 +380,20 @@ fn lift_plain_instruction(
             let cond_expr = cond_state
                 .peek_expr_for_return()
                 .unwrap_or_else(|| "0".to_string());
-            push_line(
-                lines,
-                depth + 1,
-                format!("if (({cond_expr}) == 0) {{ break; }}"),
-            );
+            push_line(lines, depth + 1, format!("{loop_cond} = {cond_expr};"));
+            push_line(lines, depth + 1, format!("if ({loop_cond}) {{"));
 
             let mut body_state = state.clone();
-            lift_instructions(&body_cont.instructions, &mut body_state, lines, depth + 1, ctx);
+            lift_instructions(
+                &body_cont.instructions,
+                &mut body_state,
+                lines,
+                depth + 2,
+                ctx,
+            );
 
-            push_line(lines, depth, "}".to_string());
+            push_line(lines, depth + 1, "}".to_string());
+            push_line(lines, depth, format!("}} until (({loop_cond}) == 0);"));
             state.absorb_counters(&cond_state);
             state.absorb_counters(&body_state);
             state.stack.clear();
@@ -416,6 +455,16 @@ fn lift_plain_instruction(
     }
 
     match plain.name.as_str() {
+        "XCHG" => {
+            let i = plain.args.first().and_then(arg_stack_index);
+            let j = plain.args.get(1).and_then(arg_stack_index);
+            match (i, j) {
+                (Some(i), Some(j)) => stack_swap_from_top(state, i, j),
+                (Some(i), None) => stack_swap_from_top(state, 0, i),
+                _ => {}
+            }
+            return;
+        }
         "DUP" => {
             let v = state.pop_value();
             let cloned = v.clone();
@@ -468,11 +517,11 @@ fn lift_plain_instruction(
             return;
         }
         "XCHG2" => {
-            // Equivalent: XCHG_1I s(i); XCHG_0I s(j)
+            // Equivalent: XCHG_0I s(i); XCHG_0I s(j)
             let i = plain.args.first().and_then(arg_stack_index);
             let j = plain.args.get(1).and_then(arg_stack_index);
             if let Some(i) = i {
-                stack_swap_from_top(state, 1, i);
+                stack_swap_from_top(state, 0, i);
             }
             if let Some(j) = j {
                 stack_swap_from_top(state, 0, j);
@@ -480,7 +529,7 @@ fn lift_plain_instruction(
             return;
         }
         "XCHG3" => {
-            // Equivalent: XCHG_IJ s2 s(i); XCHG_1I s(j); XCHG_0I s(k)
+            // Equivalent: XCHG_IJ s2 s(i); XCHG_0I s(j); XCHG_0I s(k)
             let i = plain.args.first().and_then(arg_stack_index);
             let j = plain.args.get(1).and_then(arg_stack_index);
             let k = plain.args.get(2).and_then(arg_stack_index);
@@ -488,7 +537,7 @@ fn lift_plain_instruction(
                 stack_swap_from_top(state, 2, i);
             }
             if let Some(j) = j {
-                stack_swap_from_top(state, 1, j);
+                stack_swap_from_top(state, 0, j);
             }
             if let Some(k) = k {
                 stack_swap_from_top(state, 0, k);
@@ -519,7 +568,9 @@ fn lift_plain_instruction(
                 state.stack.swap(n - 1, n - 2);
             }
             if let Some(j) = j {
-                stack_swap_from_top(state, 0, j);
+                // In TVM spec, PUXC second operand is encoded with delta -1.
+                // Disassembly prints s(j-1), while semantic target is s(j).
+                stack_swap_from_top(state, 0, j + 1);
             }
             return;
         }
@@ -541,7 +592,7 @@ fn lift_plain_instruction(
             let j = plain.args.get(1).and_then(arg_stack_index);
             let k = plain.args.get(2).and_then(arg_stack_index);
             if let Some(i) = i {
-                stack_swap_from_top(state, 1, i);
+                stack_swap_from_top(state, 0, i);
             }
             if let Some(j) = j {
                 stack_swap_from_top(state, 0, j);
@@ -565,7 +616,8 @@ fn lift_plain_instruction(
             }
             if let Some(j) = j {
                 // PUXC stage: PUSH s(j)
-                stack_push_from_top(state, j);
+                // PU2XC second operand uses delta -1 (printed as s(j-1)).
+                stack_push_from_top(state, j + 1);
                 // PUXC stage: SWAP
                 if state.stack.len() >= 2 {
                     let n = state.stack.len();
@@ -574,7 +626,9 @@ fn lift_plain_instruction(
             }
             if let Some(k) = k {
                 // PUXC stage: XCHG_0I s(k-1)
-                stack_swap_from_top(state, 0, k - 1);
+                // PU2XC third operand uses delta -2 (printed as s(k-2)).
+                // For inner PUXC semantics this targets s(k-1) => printed + 1.
+                stack_swap_from_top(state, 0, k + 1);
             }
             return;
         }
@@ -588,10 +642,12 @@ fn lift_plain_instruction(
             }
             stack_swap_from_top(state, 0, 2);
             if let Some(j) = j {
-                stack_swap_from_top(state, 1, j);
+                // PUXC2 j is encoded with delta -1.
+                stack_swap_from_top(state, 0, j + 1);
             }
             if let Some(k) = k {
-                stack_swap_from_top(state, 0, k);
+                // PUXC2 k is encoded with delta -1.
+                stack_swap_from_top(state, 0, k + 1);
             }
             return;
         }
@@ -611,7 +667,9 @@ fn lift_plain_instruction(
                 }
             }
             if let Some(k) = k {
-                stack_swap_from_top(state, 0, k - 1);
+                // XCPUXC third operand uses delta -1.
+                // Inner PUXC target is s(k), i.e. printed + 1.
+                stack_swap_from_top(state, 0, k + 1);
             }
             return;
         }
@@ -694,7 +752,11 @@ fn lift_plain_instruction(
                 .and_then(arg_to_string)
                 .and_then(parse_stack_depth)
             {
-                stack_set_from_top(&mut state.stack, depth_idx, top);
+                // TVM `POP sN` is equivalent to `XCHG s0 sN; DROP`.
+                // After popping top, the replacement target becomes s(N-1) in the remaining stack.
+                if depth_idx > 0 {
+                    stack_set_from_top(&mut state.stack, depth_idx - 1, top);
+                }
             }
             return;
         }
@@ -946,7 +1008,21 @@ fn lift_plain_instruction(
             state.push_typed_expr(t, ValueType::Slice);
             return;
         }
-        "LDGRAMS" | "LDMSGADDR" | "LDREF" => {
+        "LDMSGADDR" => {
+            let src = state.pop_expr(lines, depth);
+            let addr = state.new_temp();
+            let remainder = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var ({addr}, {remainder}) = load_msg_addr({src});"),
+            );
+            // For LDMSGADDR stack effect is addr, remainder (top).
+            state.push_typed_expr(addr, ValueType::Slice);
+            state.push_typed_expr(remainder, ValueType::Slice);
+            return;
+        }
+        "LDGRAMS" | "LDVARUINT16" | "LDREF" => {
             let src = state.pop_expr(lines, depth);
             let fn_name = stdlib_function_for_instruction(&plain.name)
                 .map(str::to_owned)
@@ -959,13 +1035,32 @@ fn lift_plain_instruction(
                 format!("var ({next_slice}, {value}) = {fn_name}({src});"),
             );
             let value_ty = match plain.name.as_str() {
-                "LDGRAMS" => ValueType::Int,
-                "LDMSGADDR" => ValueType::Slice,
+                "LDGRAMS" | "LDVARUINT16" => ValueType::Int,
                 "LDREF" => ValueType::Cell,
                 _ => ValueType::Unknown,
             };
             state.push_typed_expr(value, value_ty);
             state.push_typed_expr(next_slice, ValueType::Slice);
+            return;
+        }
+        "LDOPTREF" => {
+            let src = state.pop_expr(lines, depth);
+            let next_slice = state.new_temp();
+            let value = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var ({next_slice}, {value}) = load_maybe_ref({src});"),
+            );
+            state.push_typed_expr(value, ValueType::Cell);
+            state.push_typed_expr(next_slice, ValueType::Slice);
+            return;
+        }
+        "PLDOPTREF" => {
+            let src = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(lines, depth, format!("var {t} = preload_maybe_ref({src});"));
+            state.push_typed_expr(t, ValueType::Cell);
             return;
         }
         "CTOS" | "ENDC" | "HASHCU" | "SEMPTY" => {
@@ -986,6 +1081,10 @@ fn lift_plain_instruction(
         }
         "NEWC" => {
             state.push_typed_expr("begin_cell()", ValueType::Builder);
+            return;
+        }
+        "NEWDICT" => {
+            state.push_typed_expr("new_dict()", ValueType::Cell);
             return;
         }
         "DIVMOD" => {
@@ -1084,7 +1183,7 @@ fn lift_plain_instruction(
             state.push_typed_expr(t, ValueType::Builder);
             return;
         }
-        "STGRAMS" | "STSLICER" => {
+        "STGRAMS" | "STVARUINT16" | "STSLICER" => {
             let value = state.pop_expr(lines, depth);
             let builder = state.pop_expr(lines, depth);
             let t = state.new_temp();
@@ -1099,7 +1198,7 @@ fn lift_plain_instruction(
             state.push_typed_expr(t, ValueType::Builder);
             return;
         }
-        "STREF" | "STDICT" => {
+        "STREF" | "STDICT" | "STOPTREF" => {
             let builder = state.pop_expr(lines, depth);
             let value = state.pop_expr(lines, depth);
             let t = state.new_temp();
@@ -1135,6 +1234,18 @@ fn lift_plain_instruction(
             let t = state.new_temp();
             push_line(lines, depth, format!("var {t} = skip_dict({src});"));
             state.push_typed_expr(t, ValueType::Slice);
+            return;
+        }
+        "SKIPOPTREF" => {
+            let src = state.pop_expr(lines, depth);
+            let next_slice = state.new_temp();
+            let skipped = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var ({next_slice}, {skipped}) = load_maybe_ref({src});"),
+            );
+            state.push_typed_expr(next_slice, ValueType::Slice);
             return;
         }
         "ENDS" => {
@@ -1236,7 +1347,7 @@ fn lift_plain_instruction(
             return;
         }
         "CALLREF" => {
-            let cont = first_code_arg(plain);
+            let cont = first_code_arg(plain).or_else(|| state.pop_cont());
             if let Some(cont) = cont {
                 let mut child = state.clone();
                 lift_instructions(&cont.instructions, &mut child, lines, depth, ctx);
@@ -1317,9 +1428,16 @@ fn lift_plain_instruction(
         }
         "REWRITESTDADDR" => {
             let src = state.pop_expr(lines, depth);
-            let t = state.new_temp();
-            push_line(lines, depth, format!("var {t} = parse_std_addr({src});"));
-            state.push_typed_expr(t, ValueType::Unknown);
+            let workchain = state.new_temp();
+            let addr = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var ({workchain}, {addr}) = parse_std_addr({src});"),
+            );
+            // parse_std_addr returns workchain id and address integer.
+            state.push_typed_expr(workchain, ValueType::Int);
+            state.push_typed_expr(addr, ValueType::Int);
             return;
         }
         "GETORIGINALFWDFEE" => {
@@ -1564,6 +1682,49 @@ fn code_args(plain: &PlainInstruction) -> Vec<Code> {
         .collect()
 }
 
+fn merge_conditional_stacks(
+    cond: &str,
+    then_state: &LiftState,
+    else_state: &LiftState,
+    state: &mut LiftState,
+    lines: &mut Vec<String>,
+    depth: usize,
+) -> bool {
+    if then_state.stack.len() != else_state.stack.len() {
+        return false;
+    }
+
+    state.stack.clear();
+    for (then_value, else_value) in then_state.stack.iter().zip(&else_state.stack) {
+        match (then_value, else_value) {
+            (StackValue::Expr(then_expr), StackValue::Expr(else_expr)) => {
+                if then_expr == else_expr {
+                    let ty = then_state.expr_type_of(then_expr);
+                    state.push_typed_expr(then_expr.clone(), ty);
+                } else {
+                    let merged = state.new_temp();
+                    push_line(
+                        lines,
+                        depth,
+                        format!("var {merged} = ({cond}) ? ({then_expr}) : ({else_expr});"),
+                    );
+                    let then_ty = then_state.expr_type_of(then_expr);
+                    let else_ty = else_state.expr_type_of(else_expr);
+                    let merged_ty = if then_ty == else_ty {
+                        then_ty
+                    } else {
+                        ValueType::Unknown
+                    };
+                    state.push_typed_expr(merged, merged_ty);
+                }
+            }
+            _ => return false,
+        }
+    }
+
+    true
+}
+
 fn binary_symbol(name: &str) -> Option<&'static str> {
     match name {
         "ADD" => Some("+"),
@@ -1614,14 +1775,19 @@ fn stdlib_function_for_instruction(name: &str) -> Option<&'static str> {
         "CTOS" => Some("begin_parse"),
         "LDREF" => Some("load_ref"),
         "LDGRAMS" => Some("load_grams"),
+        "LDVARUINT16" => Some("load_coins"),
         "LDMSGADDR" => Some("load_msg_addr"),
+        "LDOPTREF" => Some("load_maybe_ref"),
+        "PLDOPTREF" => Some("preload_maybe_ref"),
         "SEMPTY" => Some("slice_empty?"),
         "ENDC" => Some("end_cell"),
         "HASHCU" => Some("cell_hash"),
         "STREF" => Some("store_ref"),
         "STSLICER" => Some("store_slice"),
         "STGRAMS" => Some("store_grams"),
+        "STVARUINT16" => Some("store_coins"),
         "STDICT" => Some("store_dict"),
+        "STOPTREF" => Some("store_maybe_ref"),
         _ => None,
     }
 }
