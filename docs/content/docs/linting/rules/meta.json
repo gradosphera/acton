@@ -26,6 +26,7 @@
     "e023-bless-call-missing-safety-comment",
     "e024-random-requires-initialization",
     "e025-divide-before-multiply",
+    "e026-duplicated-condition",
     "e027-identical-conditional-branches",
     "s001-name-case-checker"
   ]

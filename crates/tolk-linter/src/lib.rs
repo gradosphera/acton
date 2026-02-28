@@ -3,7 +3,7 @@ extern crate core;
 use crate::ast::name_case_checker::check_name_cases;
 use crate::ast::{
     acton_import_in_contract, bless_call_missing_safety_comment,
-    dangerous_send_mode_missing_safety_comment, deprecated_symbol_use,
+    dangerous_send_mode_missing_safety_comment, deprecated_symbol_use, duplicated_condition,
     identical_conditional_branches, negated_is_type_can_use_not_is, no_bounce_handler,
     several_not_null_assertions,
 };
@@ -481,6 +481,12 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
     }
 
     fn walk_if(&mut self, node: &If<'file>) -> Self::Result {
+        run_rule!(
+            self.checker,
+            Rule::DuplicatedCondition,
+            duplicated_condition::check_if(self.checker, self.file_id, node)
+        );
+
         run_rule!(
             self.checker,
             Rule::IdenticalConditionalBranches,

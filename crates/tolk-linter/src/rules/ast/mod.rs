@@ -4,6 +4,7 @@ pub mod bless_call_missing_safety_comment;
 pub mod compiler_error;
 pub mod dangerous_send_mode_missing_safety_comment;
 pub mod deprecated_symbol_use;
+pub mod duplicated_condition;
 pub mod field_init_can_be_folded;
 pub mod identical_conditional_branches;
 pub mod import_path_can_use_mappings;
