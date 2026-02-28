@@ -185,6 +185,7 @@ impl LiftState {
 pub(crate) struct LiftContext {
     pub(crate) calldict_arity: BTreeMap<u64, usize>,
     pub(crate) ifjmp_unit_return: bool,
+    pub(crate) pushslice_helpers: BTreeMap<String, String>,
 }
 
 #[derive(Default)]
@@ -249,7 +250,7 @@ fn lift_plain_instruction(
 
             let negate = plain.name == "IFNOTJMP";
             if negate {
-                push_line(lines, depth, format!("if (({cond}) == 0) {{"));
+                push_line(lines, depth, format!("ifnot ({cond}) {{"));
             } else {
                 push_line(lines, depth, format!("if ({cond}) {{"));
             }
@@ -320,6 +321,7 @@ fn lift_plain_instruction(
         }
         "IFELSE" | "IFREFELSE" => {
             let mut code_args = code_args(plain);
+            let merge_base_next_temp = state.next_temp;
 
             let (then_cont, else_cont, cond) = match code_args.len() {
                 n if n >= 2 => (
@@ -396,6 +398,7 @@ fn lift_plain_instruction(
             state.absorb_counters(&else_state);
             let mut pre_if_lines = Vec::new();
             let merged = merge_ifelse_stacks(
+                &cond,
                 &then_state,
                 &else_state,
                 state,
@@ -403,6 +406,7 @@ fn lift_plain_instruction(
                 &mut then_lines,
                 &mut else_lines,
                 depth,
+                merge_base_next_temp,
             );
             lines.extend(pre_if_lines);
             if !then_lines.is_empty() || !else_lines.is_empty() {
@@ -523,7 +527,7 @@ fn lift_plain_instruction(
         }
         "IFNOTRET" => {
             let cond = state.pop_expr_expect(lines, depth, ValueType::Int);
-            push_line(lines, depth, format!("if (({cond}) == 0) {{ return (); }}"));
+            push_line(lines, depth, format!("ifnot ({cond}) {{ return (); }}"));
             state.has_explicit_return = true;
             return;
         }
@@ -888,7 +892,14 @@ fn lift_plain_instruction(
     if plain.name == "PUSHSLICE" {
         if let Some(arg) = plain.args.first() {
             let slice_value = match arg {
-                ArgValue::Cell(cell) => format_func_slice_expr(cell),
+                ArgValue::Cell(cell) => {
+                    let literal = super::render::format_cell_literal(cell);
+                    if let Some(helper) = ctx.pushslice_helpers.get(&literal) {
+                        format!("{helper}()")
+                    } else {
+                        format_func_slice_expr(cell)
+                    }
+                }
                 _ => arg_to_string(arg).unwrap_or_default(),
             };
             if !slice_value.is_empty() {
@@ -1809,6 +1820,7 @@ fn merge_if_stacks(
 }
 
 fn merge_ifelse_stacks(
+    cond: &str,
     then_state: &LiftState,
     else_state: &LiftState,
     state: &mut LiftState,
@@ -1816,6 +1828,7 @@ fn merge_ifelse_stacks(
     then_lines: &mut Vec<String>,
     else_lines: &mut Vec<String>,
     depth: usize,
+    base_next_temp: usize,
 ) -> bool {
     if then_state.stack.len() != else_state.stack.len() {
         return false;
@@ -1838,14 +1851,30 @@ fn merge_ifelse_stacks(
         let then_ty = then_state.expr_type_of(then_expr);
         let else_ty = else_state.expr_type_of(else_expr);
         let merged_ty = merged_value_type(then_expr, then_ty, else_expr, else_ty);
-        let init_expr = if merged_ty == ValueType::Int { "0" } else { "null()" };
-        push_line(pre_if_lines, depth, format!("var {merged} = {init_expr};"));
-        push_line(then_lines, depth + 1, format!("{merged} = {then_expr};"));
-        push_line(else_lines, depth + 1, format!("{merged} = {else_expr};"));
+        if !is_branch_local_temp_expr(then_expr, base_next_temp)
+            && !is_branch_local_temp_expr(else_expr, base_next_temp)
+        {
+            push_line(
+                pre_if_lines,
+                depth,
+                format!("var {merged} = ({cond}) ? ({then_expr}) : ({else_expr});"),
+            );
+        } else {
+            let init_expr = if merged_ty == ValueType::Int { "0" } else { "null()" };
+            push_line(pre_if_lines, depth, format!("var {merged} = {init_expr};"));
+            push_line(then_lines, depth + 1, format!("{merged} = {then_expr};"));
+            push_line(else_lines, depth + 1, format!("{merged} = {else_expr};"));
+        }
         state.push_typed_expr(merged, merged_ty);
     }
 
     true
+}
+
+fn is_branch_local_temp_expr(expr: &str, base_next_temp: usize) -> bool {
+    expr.strip_prefix('v')
+        .and_then(|s| s.parse::<usize>().ok())
+        .is_some_and(|idx| idx >= base_next_temp)
 }
 
 fn merged_value_type(

@@ -2,12 +2,13 @@ use super::method_model::{
     MethodKind, ReturnKind, classify_method, collect_call_targets, extract_method_dictionary,
     infer_params_for_method, infer_return_kind, render_method_signature,
 };
-use super::render::format_instruction_line;
+use super::render::{format_cell_literal, format_instruction_line};
 use super::stage_patterns::{MethodPatterns, apply_pattern_rewrites};
 use super::stage_stack::{LiftContext, LiftResult, LiftState, lift_instructions};
 use crate::decompile::Disassembler;
-use crate::types::{Code, Instruction, Method};
+use crate::types::{ArgValue, Code, Instruction, Method};
 use anyhow::{Context, anyhow};
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use tycho_types::boc::Boc;
 use tycho_types::cell::Cell;
@@ -20,6 +21,41 @@ pub struct FuncDecompilerOptions {
 
 fn stdlib_include_path() -> String {
     "stdlib.fc".to_string()
+}
+
+fn collect_pushslice_helpers(methods: &[Method]) -> BTreeMap<String, String> {
+    fn walk(instructions: &[Instruction], out: &mut BTreeMap<String, String>, next_idx: &mut usize) {
+        for instruction in instructions {
+            match instruction {
+                Instruction::Plain(plain) => {
+                    if plain.name == "PUSHSLICE"
+                        && let Some(ArgValue::Cell(cell)) = plain.args.first()
+                        && cell.as_slice_allow_exotic().size_refs() == 0
+                    {
+                        let literal = format_cell_literal(cell);
+                        out.entry(literal).or_insert_with(|| {
+                            let name = format!("__tasm_slice_lit_{}", *next_idx);
+                            *next_idx += 1;
+                            name
+                        });
+                    }
+                }
+                Instruction::Ref(reference) => {
+                    if let ArgValue::Code { code, .. } = &reference.code {
+                        walk(&code.instructions, out, next_idx);
+                    }
+                }
+                Instruction::ExoticCell(_) => {}
+            }
+        }
+    }
+
+    let mut out = BTreeMap::new();
+    let mut next_idx = 0usize;
+    for method in methods {
+        walk(&method.instructions, &mut out, &mut next_idx);
+    }
+    out
 }
 
 fn initial_stack_params_for_method(kind: MethodKind, params: &[String]) -> Vec<String> {
@@ -170,9 +206,10 @@ impl FuncDecompiler {
 
         let mut methods = dict.methods.clone();
         methods.sort_by_key(|m| m.id);
+        let pushslice_helpers = collect_pushslice_helpers(&methods);
         let called_targets = collect_call_targets(&methods);
         let empty_ctx = LiftContext::default();
-        let mut calldict_arity = std::collections::BTreeMap::new();
+        let mut calldict_arity = BTreeMap::new();
         for method in &methods {
             let patterns = MethodPatterns::analyze(method);
             let kind = classify_method(method, &called_targets, &patterns);
@@ -185,6 +222,7 @@ impl FuncDecompiler {
         let lift_ctx = LiftContext {
             calldict_arity,
             ifjmp_unit_return: false,
+            pushslice_helpers: pushslice_helpers.clone(),
         };
 
         let _ = writeln!(out, ";; recovered_methods: {}", methods.len());
@@ -198,6 +236,13 @@ impl FuncDecompiler {
         }
         out.push('\n');
 
+        if !pushslice_helpers.is_empty() {
+            for (literal, name) in &pushslice_helpers {
+                let _ = writeln!(out, "slice {name}() asm \"{literal} PUSHSLICE\";");
+            }
+            out.push('\n');
+        }
+
         let mut helper_decls = Vec::new();
         for method in &methods {
             let patterns = MethodPatterns::analyze(method);
@@ -209,6 +254,7 @@ impl FuncDecompiler {
             let method_lift_ctx = LiftContext {
                 calldict_arity: lift_ctx.calldict_arity.clone(),
                 ifjmp_unit_return: false,
+                pushslice_helpers: lift_ctx.pushslice_helpers.clone(),
             };
 
             let mut infer_state = LiftState::default();
@@ -261,6 +307,7 @@ impl FuncDecompiler {
             let method_lift_ctx = LiftContext {
                 calldict_arity: lift_ctx.calldict_arity.clone(),
                 ifjmp_unit_return: kind == MethodKind::RecvInternal,
+                pushslice_helpers: lift_ctx.pushslice_helpers.clone(),
             };
 
             lift_instructions(
