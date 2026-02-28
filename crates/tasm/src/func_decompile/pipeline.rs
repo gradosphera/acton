@@ -198,6 +198,60 @@ impl FuncDecompiler {
         }
         out.push('\n');
 
+        let mut helper_decls = Vec::new();
+        for method in &methods {
+            let patterns = MethodPatterns::analyze(method);
+            let kind = classify_method(method, &called_targets, &patterns);
+            if kind != MethodKind::Helper {
+                continue;
+            }
+
+            let method_lift_ctx = LiftContext {
+                calldict_arity: lift_ctx.calldict_arity.clone(),
+                ifjmp_unit_return: false,
+            };
+
+            let mut infer_state = LiftState::default();
+            let mut infer_lines = Vec::new();
+            lift_instructions(
+                &method.instructions,
+                &mut infer_state,
+                &mut infer_lines,
+                1,
+                &method_lift_ctx,
+            );
+            let params = infer_params_for_method(kind, &infer_state);
+
+            let mut state = LiftState::default();
+            let initial_stack = initial_stack_params_for_method(kind, &params);
+            state.seed_stack_with_exprs(&initial_stack);
+            let mut lines = Vec::new();
+            lift_instructions(
+                &method.instructions,
+                &mut state,
+                &mut lines,
+                1,
+                &method_lift_ctx,
+            );
+
+            let return_kind = infer_return_kind(kind, &state);
+            let param_types = params
+                .iter()
+                .map(|name| state.param_type(name))
+                .collect::<Vec<_>>();
+            let sig = render_method_signature(method, kind, &params, &param_types, return_kind);
+            helper_decls.push(format!(
+                "{};",
+                sig.strip_suffix(" {").unwrap_or(sig.as_str())
+            ));
+        }
+        if !helper_decls.is_empty() {
+            for decl in &helper_decls {
+                let _ = writeln!(out, "{decl}");
+            }
+            out.push('\n');
+        }
+
         for method in &methods {
             let patterns = MethodPatterns::analyze(method);
             let kind = classify_method(method, &called_targets, &patterns);

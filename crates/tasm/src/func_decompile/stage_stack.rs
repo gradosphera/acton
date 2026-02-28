@@ -278,7 +278,6 @@ fn lift_plain_instruction(
             };
             let cond = state.pop_expr_expect(lines, depth, ValueType::Int);
             let base_state = state.clone();
-            let merge_base_next_temp = state.next_temp;
             let mut child = state.clone();
             let mut child_lines = Vec::new();
             lift_instructions(
@@ -298,28 +297,29 @@ fn lift_plain_instruction(
                 }
                 return;
             }
+            state.absorb_counters(&child);
+            let mut pre_if_lines = Vec::new();
+            let merged = merge_if_stacks(
+                &child,
+                &base_state,
+                state,
+                &mut pre_if_lines,
+                &mut child_lines,
+                depth,
+            );
+            lines.extend(pre_if_lines);
             if !child_lines.is_empty() {
                 push_line(lines, depth, format!("if ({cond}) {{"));
                 lines.extend(child_lines);
                 push_line(lines, depth, "}".to_string());
             }
-            state.absorb_counters(&child);
-            if !merge_conditional_stacks(
-                &cond,
-                &child,
-                &base_state,
-                state,
-                lines,
-                depth,
-                merge_base_next_temp,
-            ) {
+            if !merged {
                 state.stack = base_state.stack;
             }
             return;
         }
         "IFELSE" | "IFREFELSE" => {
             let mut code_args = code_args(plain);
-            let merge_base_next_temp = state.next_temp;
 
             let (then_cont, else_cont, cond) = match code_args.len() {
                 n if n >= 2 => (
@@ -392,6 +392,19 @@ fn lift_plain_instruction(
                 }
                 return;
             }
+            state.absorb_counters(&then_state);
+            state.absorb_counters(&else_state);
+            let mut pre_if_lines = Vec::new();
+            let merged = merge_ifelse_stacks(
+                &then_state,
+                &else_state,
+                state,
+                &mut pre_if_lines,
+                &mut then_lines,
+                &mut else_lines,
+                depth,
+            );
+            lines.extend(pre_if_lines);
             if !then_lines.is_empty() || !else_lines.is_empty() {
                 push_line(lines, depth, format!("if ({cond}) {{"));
                 lines.extend(then_lines);
@@ -399,18 +412,7 @@ fn lift_plain_instruction(
                 lines.extend(else_lines);
                 push_line(lines, depth, "}".to_string());
             }
-
-            state.absorb_counters(&then_state);
-            state.absorb_counters(&else_state);
-            if !merge_conditional_stacks(
-                &cond,
-                &then_state,
-                &else_state,
-                state,
-                lines,
-                depth,
-                merge_base_next_temp,
-            ) {
+            if !merged {
                 state.stack.clear();
             }
             return;
@@ -1769,14 +1771,13 @@ fn code_args(plain: &PlainInstruction) -> Vec<Code> {
         .collect()
 }
 
-fn merge_conditional_stacks(
-    cond: &str,
+fn merge_if_stacks(
     then_state: &LiftState,
     else_state: &LiftState,
     state: &mut LiftState,
-    lines: &mut Vec<String>,
+    pre_if_lines: &mut Vec<String>,
+    then_lines: &mut Vec<String>,
     depth: usize,
-    base_next_temp: usize,
 ) -> bool {
     if then_state.stack.len() != else_state.stack.len() {
         return false;
@@ -1784,46 +1785,85 @@ fn merge_conditional_stacks(
 
     state.stack.clear();
     for (then_value, else_value) in then_state.stack.iter().zip(&else_state.stack) {
-        match (then_value, else_value) {
-            (StackValue::Expr(then_expr), StackValue::Expr(else_expr)) => {
-                if then_expr == else_expr {
-                    let ty = then_state.expr_type_of(then_expr);
-                    state.push_typed_expr(then_expr.clone(), ty);
-                } else {
-                    // Avoid generating out-of-scope references to temporaries
-                    // that were created only inside branch blocks.
-                    if is_branch_local_temp_expr(then_expr, base_next_temp)
-                        || is_branch_local_temp_expr(else_expr, base_next_temp)
-                    {
-                        return false;
-                    }
-                    let merged = state.new_temp();
-                    push_line(
-                        lines,
-                        depth,
-                        format!("var {merged} = ({cond}) ? ({then_expr}) : ({else_expr});"),
-                    );
-                    let then_ty = then_state.expr_type_of(then_expr);
-                    let else_ty = else_state.expr_type_of(else_expr);
-                    let merged_ty = if then_ty == else_ty {
-                        then_ty
-                    } else {
-                        ValueType::Unknown
-                    };
-                    state.push_typed_expr(merged, merged_ty);
-                }
-            }
-            _ => return false,
+        let (StackValue::Expr(then_expr), StackValue::Expr(else_expr)) = (then_value, else_value)
+        else {
+            return false;
+        };
+
+        if then_expr == else_expr {
+            let ty = then_state.expr_type_of(then_expr);
+            state.push_typed_expr(then_expr.clone(), ty);
+            continue;
         }
+
+        let merged = state.new_temp();
+        push_line(pre_if_lines, depth, format!("var {merged} = {else_expr};"));
+        push_line(then_lines, depth + 1, format!("{merged} = {then_expr};"));
+        let then_ty = then_state.expr_type_of(then_expr);
+        let else_ty = else_state.expr_type_of(else_expr);
+        let merged_ty = merged_value_type(then_expr, then_ty, else_expr, else_ty);
+        state.push_typed_expr(merged, merged_ty);
     }
 
     true
 }
 
-fn is_branch_local_temp_expr(expr: &str, base_next_temp: usize) -> bool {
-    expr.strip_prefix('v')
-        .and_then(|s| s.parse::<usize>().ok())
-        .map_or(false, |idx| idx >= base_next_temp)
+fn merge_ifelse_stacks(
+    then_state: &LiftState,
+    else_state: &LiftState,
+    state: &mut LiftState,
+    pre_if_lines: &mut Vec<String>,
+    then_lines: &mut Vec<String>,
+    else_lines: &mut Vec<String>,
+    depth: usize,
+) -> bool {
+    if then_state.stack.len() != else_state.stack.len() {
+        return false;
+    }
+
+    state.stack.clear();
+    for (then_value, else_value) in then_state.stack.iter().zip(&else_state.stack) {
+        let (StackValue::Expr(then_expr), StackValue::Expr(else_expr)) = (then_value, else_value)
+        else {
+            return false;
+        };
+
+        if then_expr == else_expr {
+            let ty = then_state.expr_type_of(then_expr);
+            state.push_typed_expr(then_expr.clone(), ty);
+            continue;
+        }
+
+        let merged = state.new_temp();
+        let then_ty = then_state.expr_type_of(then_expr);
+        let else_ty = else_state.expr_type_of(else_expr);
+        let merged_ty = merged_value_type(then_expr, then_ty, else_expr, else_ty);
+        let init_expr = if merged_ty == ValueType::Int { "0" } else { "null()" };
+        push_line(pre_if_lines, depth, format!("var {merged} = {init_expr};"));
+        push_line(then_lines, depth + 1, format!("{merged} = {then_expr};"));
+        push_line(else_lines, depth + 1, format!("{merged} = {else_expr};"));
+        state.push_typed_expr(merged, merged_ty);
+    }
+
+    true
+}
+
+fn merged_value_type(
+    then_expr: &str,
+    then_ty: ValueType,
+    else_expr: &str,
+    else_ty: ValueType,
+) -> ValueType {
+    if then_ty == else_ty {
+        return then_ty;
+    }
+    if then_expr == "null()" {
+        return else_ty;
+    }
+    if else_expr == "null()" {
+        return then_ty;
+    }
+    ValueType::Unknown
 }
 
 fn binary_symbol(name: &str) -> Option<&'static str> {
