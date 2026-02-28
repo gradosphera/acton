@@ -20,6 +20,12 @@ test-integration:
     # we need test by test execution due to single debug port
     # {{ CARGO_TEST }} --test debug_test {{ TEST_SERIAL_ARGS }}
 
+test-func-decompile:
+    cargo test -p tasm --test func_decompile_golden
+
+test-func-decompile-update:
+    UPDATE_FUNC_DECOMP_GOLDEN=1 cargo test -p tasm --test func_decompile_golden
+
 test-tree-sitter:
     cd crates/tree-sitter-tolk && yarn install --immutable && yarn tree-sitter generate && yarn tree-sitter test
 

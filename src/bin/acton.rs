@@ -2,6 +2,7 @@ use acton::commands;
 use acton::commands::build::build_cmd;
 use acton::commands::check::check_cmd;
 use acton::commands::compile::compile_cmd;
+use acton::commands::decompile_func::decompile_func_cmd;
 use acton::commands::disasm::disasm_cmd;
 use acton::commands::docgen::docgen_cmd;
 use acton::commands::fmt::fmt_cmd;
@@ -469,6 +470,29 @@ enum Commands {
             help = "Follow library references and disassemble the actual library code instead of showing library hash"
         )]
         follow_libraries: bool,
+    },
+    #[command(
+        about = "Decompile TVM bitcode to approximate FunC source",
+        after_help = example_decompile_func_usage()
+    )]
+    DecompileFunc {
+        #[arg(help = "Binary/Hex/Base64 BoC file to decompile (use -s flag to pass a string)")]
+        boc_file: Option<String>,
+        #[arg(short, long, help = "BoC string in hex or base64 format")]
+        string: Option<String>,
+        #[arg(short, long, help = "Output file (if not specified, output to stdout)")]
+        output: Option<String>,
+        #[arg(
+            long,
+            help = "Disable low-level TASM fallback comments in the generated FunC"
+        )]
+        no_raw_fallback: bool,
+        #[arg(
+            long,
+            default_value_t = 256,
+            help = "Maximum number of low-level fallback lines per method"
+        )]
+        max_raw_lines: usize,
     },
     #[command(
         about = "Verify contract source code on verifier.ton.org",
@@ -1049,6 +1073,50 @@ fn example_disasm_usage() -> StyledStr {
     writer
 }
 
+fn example_decompile_func_usage() -> StyledStr {
+    use std::fmt::Write as _;
+
+    let mut writer = StyledStr::new();
+    let styled = Styles::styled();
+
+    let examples = Vec::from([
+        (
+            "Decompile from BoC file",
+            "acton decompile-func contract.boc",
+        ),
+        (
+            "Decompile from hex/base64 string",
+            "acton decompile-func -s \"b5ee9c72010104...0840f01c700f2f4\"",
+        ),
+        (
+            "Write generated FunC to a file",
+            "acton decompile-func contract.boc -o output.fc",
+        ),
+        (
+            "Disable low-level fallback comments",
+            "acton decompile-func contract.boc --no-raw-fallback",
+        ),
+        (
+            "Limit fallback lines per method",
+            "acton decompile-func contract.boc --max-raw-lines 64",
+        ),
+    ]);
+
+    let header = styled.get_header();
+    let named = Style::new().dimmed();
+    let literal = styled.get_literal();
+
+    let _ = write!(writer, "{header}Examples:{header:#}");
+
+    const USAGE_SEP: &str = "\n     ";
+    for (name, value) in &examples {
+        let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
+        let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
+    }
+
+    writer
+}
+
 fn format_examples(examples: &[(&str, &str)], link: &str) -> StyledStr {
     use std::fmt::Write as _;
 
@@ -1524,6 +1592,13 @@ fn main() {
             ),
             Err(err) => Err(err),
         },
+        Commands::DecompileFunc {
+            boc_file,
+            string,
+            output,
+            no_raw_fallback,
+            max_raw_lines,
+        } => decompile_func_cmd(boc_file, string, output, no_raw_fallback, max_raw_lines),
         Commands::Verify {
             contract_id,
             address,

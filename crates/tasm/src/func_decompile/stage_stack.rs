@@ -1,0 +1,1723 @@
+use super::render::{arg_as_i64, arg_to_string, format_instruction_line, push_line};
+use crate::types::{ArgValue, Code, Instruction, PlainInstruction};
+use std::collections::BTreeMap;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ValueType {
+    Unknown,
+    Int,
+    Cell,
+    Slice,
+    Builder,
+}
+
+#[derive(Debug, Clone)]
+enum StackValue {
+    Expr(String),
+    Continuation(Code),
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LiftState {
+    stack: Vec<StackValue>,
+    params: Vec<String>,
+    expr_types: BTreeMap<String, ValueType>,
+    next_param: usize,
+    next_temp: usize,
+    has_explicit_return: bool,
+}
+
+impl LiftState {
+    fn push_expr(&mut self, expr: impl Into<String>) {
+        let expr = expr.into();
+        let ty = infer_literal_type(&expr);
+        self.push_typed_expr(expr, ty);
+    }
+
+    fn push_typed_expr(&mut self, expr: impl Into<String>, ty: ValueType) {
+        let expr = expr.into();
+        self.expr_types.insert(expr.clone(), ty);
+        self.stack.push(StackValue::Expr(expr));
+    }
+
+    fn expr_type_of(&self, expr: &str) -> ValueType {
+        self.expr_types
+            .get(expr)
+            .copied()
+            .unwrap_or_else(|| infer_literal_type(expr))
+    }
+
+    fn push_cont(&mut self, code: Code) {
+        self.stack.push(StackValue::Continuation(code));
+    }
+
+    fn pop_value(&mut self) -> StackValue {
+        if let Some(v) = self.stack.pop() {
+            return v;
+        }
+
+        let p = format!("arg{}", self.next_param);
+        self.next_param += 1;
+        if !self.params.contains(&p) {
+            self.params.push(p.clone());
+        }
+        StackValue::Expr(p)
+    }
+
+    fn pop_expr(&mut self, lines: &mut Vec<String>, depth: usize) -> String {
+        match self.pop_value() {
+            StackValue::Expr(v) => v,
+            StackValue::Continuation(_) => {
+                let name = self.new_temp();
+                push_line(
+                    lines,
+                    depth,
+                    format!("var {name} = 0; ;; continuation used as scalar value"),
+                );
+                name
+            }
+        }
+    }
+
+    fn pop_cont(&mut self) -> Option<Code> {
+        match self.stack.last() {
+            Some(StackValue::Continuation(_)) => match self.stack.pop() {
+                Some(StackValue::Continuation(code)) => Some(code),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    pub(crate) fn peek_expr_for_return(&self) -> Option<String> {
+        self.stack.last().and_then(|v| match v {
+            StackValue::Expr(e) => Some(e.clone()),
+            StackValue::Continuation(_) => None,
+        })
+    }
+
+    pub(crate) fn peek_expr_type_for_return(&self) -> Option<ValueType> {
+        self.stack.last().and_then(|v| match v {
+            StackValue::Expr(e) => Some(self.expr_type_of(e)),
+            StackValue::Continuation(_) => None,
+        })
+    }
+
+    fn new_temp(&mut self) -> String {
+        let name = format!("v{}", self.next_temp);
+        self.next_temp += 1;
+        name
+    }
+
+    fn absorb_counters(&mut self, other: &Self) {
+        self.next_param = self.next_param.max(other.next_param);
+        self.next_temp = self.next_temp.max(other.next_temp);
+        for p in &other.params {
+            if !self.params.contains(p) {
+                self.params.push(p.clone());
+            }
+        }
+        self.has_explicit_return |= other.has_explicit_return;
+    }
+
+    pub(crate) fn params(&self) -> &[String] {
+        &self.params
+    }
+
+    pub(crate) fn has_explicit_return(&self) -> bool {
+        self.has_explicit_return
+    }
+
+    pub(crate) fn seed_stack_with_exprs(&mut self, exprs: &[String]) {
+        for expr in exprs {
+            let ty = match expr.as_str() {
+                "balance" | "msg_value" => ValueType::Int,
+                "in_msg_full" => ValueType::Cell,
+                "in_msg_body" => ValueType::Slice,
+                _ => infer_literal_type(expr),
+            };
+            self.push_typed_expr(expr.clone(), ty);
+            if let Some(idx) = parse_arg_param_index(expr) {
+                self.next_param = self.next_param.max(idx + 1);
+                if !self.params.contains(expr) {
+                    self.params.push(expr.clone());
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LiftContext {
+    pub(crate) calldict_arity: BTreeMap<u64, usize>,
+    pub(crate) ifjmp_unit_return: bool,
+}
+
+#[derive(Default)]
+pub(crate) struct LiftResult {
+    pub(crate) lines: Vec<String>,
+}
+
+pub(crate) fn lift_instructions(
+    instructions: &[Instruction],
+    state: &mut LiftState,
+    lines: &mut Vec<String>,
+    depth: usize,
+    ctx: &LiftContext,
+) {
+    for instruction in instructions {
+        match instruction {
+            Instruction::Plain(plain) => lift_plain_instruction(plain, state, lines, depth, ctx),
+            Instruction::Ref(reference) => {
+                push_line(lines, depth, ";; ref continuation".to_string());
+                if let ArgValue::Code { code, .. } = &reference.code {
+                    let mut child = state.clone();
+                    lift_instructions(&code.instructions, &mut child, lines, depth + 1, ctx);
+                    state.absorb_counters(&child);
+                }
+            }
+            Instruction::ExoticCell(_) => {
+                push_line(
+                    lines,
+                    depth,
+                    ";; exotic cell ignored in structured pass".to_string(),
+                );
+            }
+        }
+    }
+}
+
+fn lift_plain_instruction(
+    plain: &PlainInstruction,
+    state: &mut LiftState,
+    lines: &mut Vec<String>,
+    depth: usize,
+    ctx: &LiftContext,
+) {
+    if is_push_cont(&plain.name)
+        && let Some(code) = first_code_arg(plain)
+    {
+        state.push_cont(code);
+        return;
+    }
+
+    match plain.name.as_str() {
+        "IFJMP" | "IFJMPREF" | "IFNOTJMP" => {
+            let cont = first_code_arg(plain).or_else(|| state.pop_cont());
+            let Some(cont) = cont else {
+                push_line(
+                    lines,
+                    depth,
+                    format!(";; {} without continuation", plain.name),
+                );
+                return;
+            };
+            let cond = state.pop_expr(lines, depth);
+
+            let negate = plain.name == "IFNOTJMP";
+            if negate {
+                push_line(lines, depth, format!("if (({cond}) == 0) {{"));
+            } else {
+                push_line(lines, depth, format!("if ({cond}) {{"));
+            }
+
+            let mut child = state.clone();
+            lift_instructions(&cont.instructions, &mut child, lines, depth + 1, ctx);
+            state.absorb_counters(&child);
+
+            if ctx.ifjmp_unit_return {
+                push_line(lines, depth + 1, "return ();".to_string());
+                state.has_explicit_return = true;
+            }
+
+            push_line(lines, depth, "}".to_string());
+            return;
+        }
+        "IF" | "IFREF" => {
+            let cont = first_code_arg(plain).or_else(|| state.pop_cont());
+            let Some(cont) = cont else {
+                push_line(
+                    lines,
+                    depth,
+                    format!(";; {} without continuation", plain.name),
+                );
+                return;
+            };
+            let cond = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("if ({cond}) {{"));
+            let mut child = state.clone();
+            lift_instructions(&cont.instructions, &mut child, lines, depth + 1, ctx);
+            state.absorb_counters(&child);
+            push_line(lines, depth, "}".to_string());
+            return;
+        }
+        "IFELSE" | "IFREFELSE" => {
+            let mut code_args = code_args(plain);
+
+            let (then_cont, else_cont, cond) = match code_args.len() {
+                n if n >= 2 => (
+                    Some(code_args.remove(0)),
+                    Some(code_args.remove(0)),
+                    state.pop_expr(lines, depth),
+                ),
+                1 => {
+                    let inline = code_args.remove(0);
+                    let stacked = state.pop_cont();
+                    let cond = state.pop_expr(lines, depth);
+                    if plain.name == "IFREFELSE" {
+                        (Some(inline), stacked, cond)
+                    } else {
+                        (stacked, Some(inline), cond)
+                    }
+                }
+                _ => {
+                    let else_c = state.pop_cont();
+                    let then_c = state.pop_cont();
+                    let cond = state.pop_expr(lines, depth);
+                    (then_c, else_c, cond)
+                }
+            };
+
+            let Some(then_cont) = then_cont else {
+                push_line(
+                    lines,
+                    depth,
+                    ";; IFELSE missing then continuation".to_string(),
+                );
+                return;
+            };
+            let Some(else_cont) = else_cont else {
+                push_line(
+                    lines,
+                    depth,
+                    ";; IFELSE missing else continuation".to_string(),
+                );
+                return;
+            };
+
+            push_line(lines, depth, format!("if ({cond}) {{"));
+            let mut then_state = state.clone();
+            lift_instructions(&then_cont.instructions, &mut then_state, lines, depth + 1, ctx);
+            push_line(lines, depth, "} else {".to_string());
+            let mut else_state = state.clone();
+            lift_instructions(&else_cont.instructions, &mut else_state, lines, depth + 1, ctx);
+            push_line(lines, depth, "}".to_string());
+
+            state.absorb_counters(&then_state);
+            state.absorb_counters(&else_state);
+            state.stack.clear();
+            return;
+        }
+        "WHILE" => {
+            let body_cont = state.pop_cont().or_else(|| first_code_arg(plain));
+            let cond_cont = state.pop_cont();
+            let Some(cond_cont) = cond_cont else {
+                push_line(
+                    lines,
+                    depth,
+                    ";; WHILE missing condition continuation".to_string(),
+                );
+                return;
+            };
+            let Some(body_cont) = body_cont else {
+                push_line(
+                    lines,
+                    depth,
+                    ";; WHILE missing body continuation".to_string(),
+                );
+                return;
+            };
+
+            push_line(lines, depth, "while (true) {".to_string());
+
+            let mut cond_state = state.clone();
+            let mut cond_lines = Vec::new();
+            lift_instructions(
+                &cond_cont.instructions,
+                &mut cond_state,
+                &mut cond_lines,
+                depth + 1,
+                ctx,
+            );
+            for line in cond_lines {
+                lines.push(line);
+            }
+            let cond_expr = cond_state
+                .peek_expr_for_return()
+                .unwrap_or_else(|| "0".to_string());
+            push_line(
+                lines,
+                depth + 1,
+                format!("if (({cond_expr}) == 0) {{ break; }}"),
+            );
+
+            let mut body_state = state.clone();
+            lift_instructions(&body_cont.instructions, &mut body_state, lines, depth + 1, ctx);
+
+            push_line(lines, depth, "}".to_string());
+            state.absorb_counters(&cond_state);
+            state.absorb_counters(&body_state);
+            state.stack.clear();
+            return;
+        }
+        "REPEAT" => {
+            let cont = first_code_arg(plain).or_else(|| state.pop_cont());
+            let Some(cont) = cont else {
+                push_line(lines, depth, ";; REPEAT missing continuation".to_string());
+                return;
+            };
+            let count = state.pop_expr(lines, depth);
+
+            push_line(lines, depth, format!("repeat ({count}) {{"));
+            let mut child = state.clone();
+            lift_instructions(&cont.instructions, &mut child, lines, depth + 1, ctx);
+            push_line(lines, depth, "}".to_string());
+
+            state.absorb_counters(&child);
+            state.stack.clear();
+            return;
+        }
+        "UNTIL" => {
+            let cont = state.pop_cont().or_else(|| first_code_arg(plain));
+            let Some(cont) = cont else {
+                push_line(lines, depth, ";; UNTIL missing continuation".to_string());
+                return;
+            };
+
+            push_line(lines, depth, "do {".to_string());
+            let mut child = state.clone();
+            let mut block_lines = Vec::new();
+            lift_instructions(&cont.instructions, &mut child, &mut block_lines, depth + 1, ctx);
+            let cond_expr = child
+                .peek_expr_for_return()
+                .unwrap_or_else(|| "0".to_string());
+            for line in block_lines {
+                lines.push(line);
+            }
+            push_line(lines, depth, format!("}} until ({cond_expr});"));
+
+            state.absorb_counters(&child);
+            state.stack.clear();
+            return;
+        }
+        "IFRET" => {
+            let cond = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("if ({cond}) {{ return (); }}"));
+            state.has_explicit_return = true;
+            return;
+        }
+        "IFNOTRET" => {
+            let cond = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("if (({cond}) == 0) {{ return (); }}"));
+            state.has_explicit_return = true;
+            return;
+        }
+        _ => {}
+    }
+
+    match plain.name.as_str() {
+        "DUP" => {
+            let v = state.pop_value();
+            let cloned = v.clone();
+            state.stack.push(v);
+            state.stack.push(cloned);
+            return;
+        }
+        "OVER" => {
+            if state.stack.len() >= 2 {
+                let second = state.stack[state.stack.len() - 2].clone();
+                state.stack.push(second);
+            } else {
+                let v = state.pop_value();
+                state.stack.push(v.clone());
+                state.stack.push(v);
+            }
+            return;
+        }
+        "SWAP" => {
+            if state.stack.len() >= 2 {
+                let n = state.stack.len();
+                state.stack.swap(n - 1, n - 2);
+            }
+            return;
+        }
+        "XCHG_0I" => {
+            if let Some(i) = plain.args.first().and_then(arg_stack_index) {
+                stack_swap_from_top(state, 0, i);
+            }
+            return;
+        }
+        "XCHG_1I" => {
+            // second arg is the effective target depth; first is usually s1 marker
+            if let Some(i) = plain
+                .args
+                .get(1)
+                .or_else(|| plain.args.first())
+                .and_then(arg_stack_index)
+            {
+                stack_swap_from_top(state, 1, i);
+            }
+            return;
+        }
+        "XCHG_IJ" => {
+            let i = plain.args.first().and_then(arg_stack_index);
+            let j = plain.args.get(1).and_then(arg_stack_index);
+            if let (Some(i), Some(j)) = (i, j) {
+                stack_swap_from_top(state, i, j);
+            }
+            return;
+        }
+        "XCHG2" => {
+            // Equivalent: XCHG_1I s(i); XCHG_0I s(j)
+            let i = plain.args.first().and_then(arg_stack_index);
+            let j = plain.args.get(1).and_then(arg_stack_index);
+            if let Some(i) = i {
+                stack_swap_from_top(state, 1, i);
+            }
+            if let Some(j) = j {
+                stack_swap_from_top(state, 0, j);
+            }
+            return;
+        }
+        "XCHG3" => {
+            // Equivalent: XCHG_IJ s2 s(i); XCHG_1I s(j); XCHG_0I s(k)
+            let i = plain.args.first().and_then(arg_stack_index);
+            let j = plain.args.get(1).and_then(arg_stack_index);
+            let k = plain.args.get(2).and_then(arg_stack_index);
+            if let Some(i) = i {
+                stack_swap_from_top(state, 2, i);
+            }
+            if let Some(j) = j {
+                stack_swap_from_top(state, 1, j);
+            }
+            if let Some(k) = k {
+                stack_swap_from_top(state, 0, k);
+            }
+            return;
+        }
+        "XCPU" => {
+            // Equivalent: XCHG_0I s(i); PUSH s(j)
+            let i = plain.args.first().and_then(arg_stack_index);
+            let j = plain.args.get(1).and_then(arg_stack_index);
+            if let Some(i) = i {
+                stack_swap_from_top(state, 0, i);
+            }
+            if let Some(j) = j {
+                stack_push_from_top(state, j);
+            }
+            return;
+        }
+        "PUXC" => {
+            // Equivalent: PUSH s(i); SWAP; XCHG_0I s(j)
+            let i = plain.args.first().and_then(arg_stack_index);
+            let j = plain.args.get(1).and_then(arg_stack_index);
+            if let Some(i) = i {
+                stack_push_from_top(state, i);
+            }
+            if state.stack.len() >= 2 {
+                let n = state.stack.len();
+                state.stack.swap(n - 1, n - 2);
+            }
+            if let Some(j) = j {
+                stack_swap_from_top(state, 0, j);
+            }
+            return;
+        }
+        "PUSH2" => {
+            // Equivalent: PUSH s(i); PUSH s(j+1)
+            let i = plain.args.first().and_then(arg_stack_index);
+            let j = plain.args.get(1).and_then(arg_stack_index);
+            if let Some(i) = i {
+                stack_push_from_top(state, i);
+            }
+            if let Some(j) = j {
+                stack_push_from_top(state, j + 1);
+            }
+            return;
+        }
+        "XC2PU" => {
+            // Equivalent: XCHG2 s(i) s(j); PUSH s(k)
+            let i = plain.args.first().and_then(arg_stack_index);
+            let j = plain.args.get(1).and_then(arg_stack_index);
+            let k = plain.args.get(2).and_then(arg_stack_index);
+            if let Some(i) = i {
+                stack_swap_from_top(state, 1, i);
+            }
+            if let Some(j) = j {
+                stack_swap_from_top(state, 0, j);
+            }
+            if let Some(k) = k {
+                stack_push_from_top(state, k);
+            }
+            return;
+        }
+        "PU2XC" => {
+            // Equivalent: PUSH s(i); SWAP; PUXC s(j) s(k-1)
+            let i = plain.args.first().and_then(arg_stack_index);
+            let j = plain.args.get(1).and_then(arg_stack_index);
+            let k = plain.args.get(2).and_then(arg_stack_index);
+            if let Some(i) = i {
+                stack_push_from_top(state, i);
+            }
+            if state.stack.len() >= 2 {
+                let n = state.stack.len();
+                state.stack.swap(n - 1, n - 2);
+            }
+            if let Some(j) = j {
+                // PUXC stage: PUSH s(j)
+                stack_push_from_top(state, j);
+                // PUXC stage: SWAP
+                if state.stack.len() >= 2 {
+                    let n = state.stack.len();
+                    state.stack.swap(n - 1, n - 2);
+                }
+            }
+            if let Some(k) = k {
+                // PUXC stage: XCHG_0I s(k-1)
+                stack_swap_from_top(state, 0, k - 1);
+            }
+            return;
+        }
+        "PUXC2" => {
+            // Equivalent: PUSH s(i); XCHG_0I s2; XCHG2 s(j) s(k)
+            let i = plain.args.first().and_then(arg_stack_index);
+            let j = plain.args.get(1).and_then(arg_stack_index);
+            let k = plain.args.get(2).and_then(arg_stack_index);
+            if let Some(i) = i {
+                stack_push_from_top(state, i);
+            }
+            stack_swap_from_top(state, 0, 2);
+            if let Some(j) = j {
+                stack_swap_from_top(state, 1, j);
+            }
+            if let Some(k) = k {
+                stack_swap_from_top(state, 0, k);
+            }
+            return;
+        }
+        "XCPUXC" => {
+            // Equivalent: XCHG_1I s(i); PUXC s(j) s(k-1)
+            let i = plain.args.first().and_then(arg_stack_index);
+            let j = plain.args.get(1).and_then(arg_stack_index);
+            let k = plain.args.get(2).and_then(arg_stack_index);
+            if let Some(i) = i {
+                stack_swap_from_top(state, 1, i);
+            }
+            if let Some(j) = j {
+                stack_push_from_top(state, j);
+                if state.stack.len() >= 2 {
+                    let n = state.stack.len();
+                    state.stack.swap(n - 1, n - 2);
+                }
+            }
+            if let Some(k) = k {
+                stack_swap_from_top(state, 0, k - 1);
+            }
+            return;
+        }
+        "2SWAP" => {
+            if state.stack.len() >= 4 {
+                let n = state.stack.len();
+                state.stack.swap(n - 1, n - 3);
+                state.stack.swap(n - 2, n - 4);
+            }
+            return;
+        }
+        "DROP" => {
+            let _ = state.pop_value();
+            return;
+        }
+        "DROP2" | "2DROP" => {
+            let _ = state.pop_value();
+            let _ = state.pop_value();
+            return;
+        }
+        "BLKDROP" => {
+            let count = plain
+                .args
+                .first()
+                .and_then(arg_as_i64)
+                .unwrap_or(0)
+                .max(0) as usize;
+            for _ in 0..count {
+                let _ = state.pop_value();
+            }
+            return;
+        }
+        "BLKDROP2" => {
+            let i = plain
+                .args
+                .first()
+                .and_then(arg_as_i64)
+                .unwrap_or(0)
+                .max(0) as usize;
+            let j = plain
+                .args
+                .get(1)
+                .and_then(arg_as_i64)
+                .unwrap_or(0)
+                .max(0) as usize;
+            if i == 0 {
+                return;
+            }
+
+            let required = i + j;
+            if required > 0 {
+                ensure_stack_depth(state, required - 1);
+            }
+
+            let len = state.stack.len();
+            let end = len.saturating_sub(j);
+            let start = end.saturating_sub(i);
+            if start < end && end <= state.stack.len() {
+                state.stack.drain(start..end);
+            }
+            return;
+        }
+        "PUSH" => {
+            if let Some(depth_idx) = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .and_then(parse_stack_depth)
+                && let Some(value) = stack_get_from_top(&state.stack, depth_idx)
+            {
+                state.stack.push(value.clone());
+            }
+            return;
+        }
+        "POP" => {
+            let top = state.pop_value();
+            if let Some(depth_idx) = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .and_then(parse_stack_depth)
+            {
+                stack_set_from_top(&mut state.stack, depth_idx, top);
+            }
+            return;
+        }
+        "NIP" => {
+            if state.stack.len() >= 2 {
+                let top = state.stack.pop().expect("stack len checked");
+                let _ = state.stack.pop();
+                state.stack.push(top);
+            }
+            return;
+        }
+        "ROT" => {
+            if state.stack.len() >= 3 {
+                let n = state.stack.len();
+                state.stack.swap(n - 3, n - 2);
+                state.stack.swap(n - 2, n - 1);
+            }
+            return;
+        }
+        "ROTREV" => {
+            if state.stack.len() >= 3 {
+                let n = state.stack.len();
+                state.stack.swap(n - 1, n - 2);
+                state.stack.swap(n - 2, n - 3);
+            }
+            return;
+        }
+        _ => {}
+    }
+
+    if plain.name.starts_with("PUSHINT") {
+        if let Some(val) = plain.args.first().and_then(arg_to_string) {
+            state.push_expr(val);
+        } else {
+            state.push_expr("0");
+        }
+        return;
+    }
+
+    if plain.name == "PUSHPOW2" {
+        let pow = plain
+            .args
+            .first()
+            .and_then(arg_to_string)
+            .unwrap_or_else(|| "0".to_string());
+        state.push_expr(format!("(1 << {pow})"));
+        return;
+    }
+
+    if plain.name == "PUSHPOW2DEC" {
+        let pow = plain
+            .args
+            .first()
+            .and_then(arg_to_string)
+            .unwrap_or_else(|| "0".to_string());
+        state.push_expr(format!("((1 << {pow}) - 1)"));
+        return;
+    }
+
+    if plain.name == "PUSHSLICE" {
+        if let Some(slice_value) = plain.args.first().and_then(arg_to_string) {
+            state.push_expr(slice_value);
+        }
+        return;
+    }
+
+    if plain.name == "PUSHNULL" {
+        state.push_expr("null()");
+        return;
+    }
+
+    if plain.name == "SDEQ" {
+        let rhs = state.pop_expr(lines, depth);
+        let lhs = state.pop_expr(lines, depth);
+        let t = state.new_temp();
+        push_line(
+            lines,
+            depth,
+            format!("var {t} = equal_slices_bits({lhs}, {rhs});"),
+        );
+        state.push_typed_expr(t, ValueType::Int);
+        return;
+    }
+
+    if plain.name == "SBITREFS" {
+        let src = state.pop_expr(lines, depth);
+        let bits = state.new_temp();
+        let refs = state.new_temp();
+        push_line(
+            lines,
+            depth,
+            format!("var ({bits}, {refs}) = slice_bits_refs({src});"),
+        );
+        state.push_typed_expr(bits, ValueType::Int);
+        state.push_typed_expr(refs, ValueType::Int);
+        return;
+    }
+
+    if let Some(op) = binary_symbol(&plain.name) {
+        let rhs = state.pop_expr(lines, depth);
+        let lhs = state.pop_expr(lines, depth);
+        let t = state.new_temp();
+        push_line(lines, depth, format!("var {t} = ({lhs}) {op} ({rhs});"));
+        state.push_typed_expr(t, ValueType::Int);
+        return;
+    }
+
+    if let Some((op, imm)) = immediate_binary_op(plain) {
+        let lhs = state.pop_expr(lines, depth);
+        let t = state.new_temp();
+        push_line(lines, depth, format!("var {t} = ({lhs}) {op} ({imm});"));
+        state.push_typed_expr(t, ValueType::Int);
+        return;
+    }
+
+    if plain.name == "INC" || plain.name == "DEC" {
+        let lhs = state.pop_expr(lines, depth);
+        let t = state.new_temp();
+        let op = if plain.name == "INC" { "+" } else { "-" };
+        push_line(lines, depth, format!("var {t} = ({lhs}) {op} 1;"));
+        state.push_typed_expr(t, ValueType::Int);
+        return;
+    }
+
+    if plain.name == "NEGATE" {
+        let lhs = state.pop_expr(lines, depth);
+        let t = state.new_temp();
+        push_line(lines, depth, format!("var {t} = -({lhs});"));
+        state.push_typed_expr(t, ValueType::Int);
+        return;
+    }
+
+    if plain.name == "NOT" {
+        let lhs = state.pop_expr(lines, depth);
+        let t = state.new_temp();
+        push_line(lines, depth, format!("var {t} = ~({lhs});"));
+        state.push_typed_expr(t, ValueType::Int);
+        return;
+    }
+
+    match plain.name.as_str() {
+        "LDU" | "LDUX" => {
+            let dynamic_len = plain.name == "LDUX";
+            let bits = if dynamic_len {
+                state.pop_expr(lines, depth)
+            } else {
+                plain
+                    .args
+                    .first()
+                    .and_then(arg_to_string)
+                    .unwrap_or_else(|| "0".to_string())
+            };
+            let src = state.pop_expr(lines, depth);
+            let next_slice = state.new_temp();
+            let value = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var ({next_slice}, {value}) = load_uint({src}, {bits});"),
+            );
+            state.push_typed_expr(value, ValueType::Int);
+            state.push_typed_expr(next_slice, ValueType::Slice);
+            return;
+        }
+        "LDI" | "LDIX" => {
+            let dynamic_len = plain.name == "LDIX";
+            let bits = if dynamic_len {
+                state.pop_expr(lines, depth)
+            } else {
+                plain
+                    .args
+                    .first()
+                    .and_then(arg_to_string)
+                    .unwrap_or_else(|| "0".to_string())
+            };
+            let src = state.pop_expr(lines, depth);
+            let next_slice = state.new_temp();
+            let value = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var ({next_slice}, {value}) = load_int({src}, {bits});"),
+            );
+            state.push_typed_expr(value, ValueType::Int);
+            state.push_typed_expr(next_slice, ValueType::Slice);
+            return;
+        }
+        "PLDU" | "PLDUX" => {
+            let dynamic_len = plain.name == "PLDUX";
+            let bits = if dynamic_len {
+                state.pop_expr(lines, depth)
+            } else {
+                plain
+                    .args
+                    .first()
+                    .and_then(arg_to_string)
+                    .unwrap_or_else(|| "0".to_string())
+            };
+            let src = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(lines, depth, format!("var {t} = preload_uint({src}, {bits});"));
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "PLDI" | "PLDIX" => {
+            let dynamic_len = plain.name == "PLDIX";
+            let bits = if dynamic_len {
+                state.pop_expr(lines, depth)
+            } else {
+                plain
+                    .args
+                    .first()
+                    .and_then(arg_to_string)
+                    .unwrap_or_else(|| "0".to_string())
+            };
+            let src = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(lines, depth, format!("var {t} = preload_int({src}, {bits});"));
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "LDSLICEX" => {
+            let src = state.pop_expr(lines, depth);
+            let bits = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .unwrap_or_else(|| "0".to_string());
+            let next_slice = state.new_temp();
+            let loaded = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var ({next_slice}, {loaded}) = load_bits({src}, {bits});"),
+            );
+            state.push_typed_expr(loaded, ValueType::Slice);
+            state.push_typed_expr(next_slice, ValueType::Slice);
+            return;
+        }
+        "PLDSLICEX" => {
+            let src = state.pop_expr(lines, depth);
+            let bits = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .unwrap_or_else(|| "0".to_string());
+            let t = state.new_temp();
+            push_line(lines, depth, format!("var {t} = preload_bits({src}, {bits});"));
+            state.push_typed_expr(t, ValueType::Slice);
+            return;
+        }
+        "LDGRAMS" | "LDMSGADDR" | "LDREF" => {
+            let src = state.pop_expr(lines, depth);
+            let fn_name = stdlib_function_for_instruction(&plain.name)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("__{}", plain.name.to_lowercase()));
+            let next_slice = state.new_temp();
+            let value = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var ({next_slice}, {value}) = {fn_name}({src});"),
+            );
+            let value_ty = match plain.name.as_str() {
+                "LDGRAMS" => ValueType::Int,
+                "LDMSGADDR" => ValueType::Slice,
+                "LDREF" => ValueType::Cell,
+                _ => ValueType::Unknown,
+            };
+            state.push_typed_expr(value, value_ty);
+            state.push_typed_expr(next_slice, ValueType::Slice);
+            return;
+        }
+        "CTOS" | "ENDC" | "HASHCU" | "SEMPTY" => {
+            let src = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            let fn_name = stdlib_function_for_instruction(&plain.name)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("__{}", plain.name.to_lowercase()));
+            push_line(lines, depth, format!("var {t} = {fn_name}({src});"));
+            let out_ty = match plain.name.as_str() {
+                "CTOS" => ValueType::Slice,
+                "ENDC" => ValueType::Cell,
+                "HASHCU" | "SEMPTY" => ValueType::Int,
+                _ => ValueType::Unknown,
+            };
+            state.push_typed_expr(t, out_ty);
+            return;
+        }
+        "NEWC" => {
+            state.push_typed_expr("begin_cell()", ValueType::Builder);
+            return;
+        }
+        "DIVMOD" => {
+            let rhs = state.pop_expr(lines, depth);
+            let lhs = state.pop_expr(lines, depth);
+            let q = state.new_temp();
+            let r = state.new_temp();
+            push_line(lines, depth, format!("var ({q}, {r}) = divmod({lhs}, {rhs});"));
+            state.push_typed_expr(q, ValueType::Int);
+            state.push_typed_expr(r, ValueType::Int);
+            return;
+        }
+        "MULDIVMOD" => {
+            let z = state.pop_expr(lines, depth);
+            let y = state.pop_expr(lines, depth);
+            let x = state.pop_expr(lines, depth);
+            let q = state.new_temp();
+            let r = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var ({q}, {r}) = muldivmod({x}, {y}, {z});"),
+            );
+            state.push_typed_expr(q, ValueType::Int);
+            state.push_typed_expr(r, ValueType::Int);
+            return;
+        }
+        "MIN" | "MAX" => {
+            let rhs = state.pop_expr(lines, depth);
+            let lhs = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            let fn_name = if plain.name == "MIN" { "min" } else { "max" };
+            push_line(lines, depth, format!("var {t} = {fn_name}({lhs}, {rhs});"));
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "ABS" => {
+            let src = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(lines, depth, format!("var {t} = abs({src});"));
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "MULDIV" | "MULDIVR" | "MULDIVC" => {
+            let z = state.pop_expr(lines, depth);
+            let y = state.pop_expr(lines, depth);
+            let x = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            let fn_name = match plain.name.as_str() {
+                "MULDIV" => "muldiv",
+                "MULDIVR" => "muldivr",
+                "MULDIVC" => "muldivc",
+                _ => unreachable!(),
+            };
+            push_line(lines, depth, format!("var {t} = {fn_name}({x}, {y}, {z});"));
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "STU" | "STI" => {
+            let bits = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .unwrap_or_else(|| "0".to_string());
+            let builder = state.pop_expr(lines, depth);
+            let value = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            let fn_name = if plain.name == "STU" {
+                "store_uint"
+            } else {
+                "store_int"
+            };
+            push_line(
+                lines,
+                depth,
+                format!("var {t} = {fn_name}({builder}, {value}, {bits});"),
+            );
+            state.push_typed_expr(t, ValueType::Builder);
+            return;
+        }
+        "STUX" | "STIX" => {
+            let bits = state.pop_expr(lines, depth);
+            let builder = state.pop_expr(lines, depth);
+            let value = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            let fn_name = if plain.name == "STUX" {
+                "store_uint"
+            } else {
+                "store_int"
+            };
+            push_line(
+                lines,
+                depth,
+                format!("var {t} = {fn_name}({builder}, {value}, {bits});"),
+            );
+            state.push_typed_expr(t, ValueType::Builder);
+            return;
+        }
+        "STGRAMS" | "STSLICER" => {
+            let value = state.pop_expr(lines, depth);
+            let builder = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            let fn_name = stdlib_function_for_instruction(&plain.name)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("__{}", plain.name.to_lowercase()));
+            push_line(
+                lines,
+                depth,
+                format!("var {t} = {fn_name}({builder}, {value});"),
+            );
+            state.push_typed_expr(t, ValueType::Builder);
+            return;
+        }
+        "STREF" | "STDICT" => {
+            let builder = state.pop_expr(lines, depth);
+            let value = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            let fn_name = stdlib_function_for_instruction(&plain.name)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("__{}", plain.name.to_lowercase()));
+            push_line(
+                lines,
+                depth,
+                format!("var {t} = {fn_name}({builder}, {value});"),
+            );
+            state.push_typed_expr(t, ValueType::Builder);
+            return;
+        }
+        "SDSKIPFIRST" => {
+            let len = state.pop_expr(lines, depth);
+            let src = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(lines, depth, format!("var {t} = skip_bits({src}, {len});"));
+            state.push_typed_expr(t, ValueType::Slice);
+            return;
+        }
+        "INDEXVAR" => {
+            let index = state.pop_expr(lines, depth);
+            let tuple = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(lines, depth, format!("var {t} = at({tuple}, {index});"));
+            state.push_typed_expr(t, ValueType::Unknown);
+            return;
+        }
+        "SKIPDICT" => {
+            let src = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(lines, depth, format!("var {t} = skip_dict({src});"));
+            state.push_typed_expr(t, ValueType::Slice);
+            return;
+        }
+        "ENDS" => {
+            let src = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("end_parse({src});"));
+            return;
+        }
+        "GETGLOB" => {
+            let slot = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .unwrap_or_else(|| "0".to_string());
+            state.push_expr(format!("__glob_{slot}"));
+            return;
+        }
+        "SETGLOB" => {
+            let value = state.pop_expr(lines, depth);
+            let slot = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .unwrap_or_else(|| "0".to_string());
+            push_line(lines, depth, format!("__glob_{slot} = {value};"));
+            return;
+        }
+        "CALLDICT" => {
+            let target = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .unwrap_or_else(|| "0".to_string());
+            let target_id = plain
+                .args
+                .first()
+                .and_then(super::render::arg_as_u64)
+                .or_else(|| target.parse::<u64>().ok());
+            let arity = target_id
+                .and_then(|id| ctx.calldict_arity.get(&id).copied())
+                .unwrap_or(0);
+            let mut args = Vec::with_capacity(arity);
+            for _ in 0..arity {
+                args.push(state.pop_expr(lines, depth));
+            }
+            args.reverse();
+
+            let args_joined = args.join(", ");
+            let t = state.new_temp();
+            if args_joined.is_empty() {
+                push_line(lines, depth, format!("var {t} = __dict_method_{target}();"));
+            } else {
+                push_line(
+                    lines,
+                    depth,
+                    format!("var {t} = __dict_method_{target}({args_joined});"),
+                );
+            }
+            state.push_typed_expr(t, ValueType::Unknown);
+            return;
+        }
+        "CALLXARGS" => {
+            let argc = plain
+                .args
+                .first()
+                .and_then(arg_as_i64)
+                .unwrap_or(0)
+                .max(0) as usize;
+            let method_id = state.pop_expr(lines, depth);
+            let mut args = Vec::with_capacity(argc);
+            for _ in 0..argc {
+                args.push(state.pop_expr(lines, depth));
+            }
+            args.reverse();
+
+            match argc {
+                0 => push_line(lines, depth, format!("run_method0({method_id});")),
+                1 => push_line(lines, depth, format!("run_method1({method_id}, {});", args[0])),
+                2 => push_line(
+                    lines,
+                    depth,
+                    format!("run_method2({method_id}, {}, {});", args[0], args[1]),
+                ),
+                3 => push_line(
+                    lines,
+                    depth,
+                    format!(
+                        "run_method3({method_id}, {}, {}, {});",
+                        args[0], args[1], args[2]
+                    ),
+                ),
+                _ => push_line(
+                    lines,
+                    depth,
+                    format!(
+                        ";; unsupported CALLXARGS arity {argc} with method id {method_id}"
+                    ),
+                ),
+            }
+            return;
+        }
+        "CALLREF" => {
+            let cont = first_code_arg(plain);
+            if let Some(cont) = cont {
+                let mut child = state.clone();
+                lift_instructions(&cont.instructions, &mut child, lines, depth, ctx);
+                state.absorb_counters(&child);
+                state.stack = child.stack;
+                state.has_explicit_return |= child.has_explicit_return;
+                return;
+            }
+        }
+        "PUSHCTR" => {
+            match plain.args.first().and_then(arg_to_string).as_deref() {
+                Some("c4") => state.push_typed_expr("get_data()", ValueType::Cell),
+                Some("c3") => state.push_typed_expr("get_c3()", ValueType::Unknown),
+                _ => {
+                    push_line(
+                        lines,
+                        depth,
+                        format!(
+                            ";; unhandled {}",
+                            format_instruction_line(&Instruction::Plain(plain.clone()), depth)
+                        ),
+                    );
+                }
+            }
+            return;
+        }
+        "POPCTR" => {
+            let value = state.pop_expr(lines, depth);
+            match plain.args.first().and_then(arg_to_string).as_deref() {
+                Some("c4") => push_line(lines, depth, format!("set_data({value});")),
+                Some("c3") => push_line(lines, depth, format!("set_c3({value});")),
+                _ => {
+                    push_line(
+                        lines,
+                        depth,
+                        format!(
+                            ";; unhandled {}",
+                            format_instruction_line(&Instruction::Plain(plain.clone()), depth)
+                        ),
+                    );
+                }
+            }
+            return;
+        }
+        "MYADDR" => {
+            state.push_typed_expr("my_address()", ValueType::Slice);
+            return;
+        }
+        "MYCODE" => {
+            state.push_typed_expr("my_code()", ValueType::Cell);
+            return;
+        }
+        "DUEPAYMENT" => {
+            let t = state.new_temp();
+            push_line(lines, depth, format!("var {t} = my_storage_due();"));
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "ISNULL" => {
+            let src = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(lines, depth, format!("var {t} = null?({src});"));
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "NOP" => {
+            return;
+        }
+        "DUMP" => {
+            let value = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("~dump({value});"));
+            return;
+        }
+        "STRDUMP" => {
+            let value = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("~strdump({value});"));
+            return;
+        }
+        "REWRITESTDADDR" => {
+            let src = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(lines, depth, format!("var {t} = parse_std_addr({src});"));
+            state.push_typed_expr(t, ValueType::Unknown);
+            return;
+        }
+        "GETORIGINALFWDFEE" => {
+            let fwd_fee = state.pop_expr(lines, depth);
+            let workchain = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var {t} = get_original_fwd_fee({workchain}, {fwd_fee});"),
+            );
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "GETGASFEE" => {
+            let gas_used = state.pop_expr(lines, depth);
+            let workchain = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var {t} = get_compute_fee({workchain}, {gas_used});"),
+            );
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "GETFORWARDFEESIMPLE" => {
+            let cells = state.pop_expr(lines, depth);
+            let bits = state.pop_expr(lines, depth);
+            let workchain = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var {t} = get_simple_forward_fee({workchain}, {bits}, {cells});"),
+            );
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "GETFORWARDFEE" => {
+            let cells = state.pop_expr(lines, depth);
+            let bits = state.pop_expr(lines, depth);
+            let workchain = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var {t} = get_forward_fee({workchain}, {bits}, {cells});"),
+            );
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "GETSTORAGEFEE" => {
+            let cells = state.pop_expr(lines, depth);
+            let bits = state.pop_expr(lines, depth);
+            let seconds = state.pop_expr(lines, depth);
+            let workchain = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!(
+                    "var {t} = get_storage_fee({workchain}, {seconds}, {bits}, {cells});"
+                ),
+            );
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "GETPRECOMPILEDGAS" => {
+            let t = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var {t} = get_precompiled_gas_consumption();"),
+            );
+            state.push_typed_expr(t, ValueType::Int);
+            return;
+        }
+        "DICTUSETREF" => {
+            let key_len = state.pop_expr(lines, depth);
+            let dict = state.pop_expr(lines, depth);
+            let index = state.pop_expr(lines, depth);
+            let value = state.pop_expr(lines, depth);
+            let t = state.new_temp();
+            push_line(
+                lines,
+                depth,
+                format!("var {t} = udict_set_ref({dict}, {key_len}, {index}, {value});"),
+            );
+            state.push_typed_expr(t, ValueType::Cell);
+            return;
+        }
+        "THROWIF" | "THROWIFNOT" | "THROWIFNOT_SHORT" => {
+            let code = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .unwrap_or_else(|| "0".to_string());
+            let cond = state.pop_expr(lines, depth);
+            if plain.name == "THROWIF" {
+                push_line(lines, depth, format!("throw_if({code}, {cond});"));
+            } else {
+                push_line(lines, depth, format!("throw_unless({code}, {cond});"));
+            }
+            return;
+        }
+        "THROWARG" => {
+            let code = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .unwrap_or_else(|| "0".to_string());
+            let arg = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("throw_arg({arg}, {code});"));
+            return;
+        }
+        "THROWARGIF" => {
+            let code = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .unwrap_or_else(|| "0".to_string());
+            let cond = state.pop_expr(lines, depth);
+            let arg = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("throw_arg_if({arg}, {code}, {cond});"));
+            return;
+        }
+        "THROWARGIFNOT" => {
+            let code = plain
+                .args
+                .first()
+                .and_then(arg_to_string)
+                .unwrap_or_else(|| "0".to_string());
+            let cond = state.pop_expr(lines, depth);
+            let arg = state.pop_expr(lines, depth);
+            push_line(
+                lines,
+                depth,
+                format!("throw_arg_unless({arg}, {code}, {cond});"),
+            );
+            return;
+        }
+        "THROWANY" => {
+            let code = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("throw({code});"));
+            return;
+        }
+        "THROWARGANY" => {
+            let code = state.pop_expr(lines, depth);
+            let arg = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("throw_arg({arg}, {code});"));
+            return;
+        }
+        "THROWANYIFNOT" => {
+            let cond = state.pop_expr(lines, depth);
+            let code = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("throw_unless({code}, {cond});"));
+            return;
+        }
+        "THROWARGANYIFNOT" => {
+            let cond = state.pop_expr(lines, depth);
+            let code = state.pop_expr(lines, depth);
+            let arg = state.pop_expr(lines, depth);
+            push_line(
+                lines,
+                depth,
+                format!("throw_arg_unless({arg}, {code}, {cond});"),
+            );
+            return;
+        }
+        "THROWANYIF" => {
+            let cond = state.pop_expr(lines, depth);
+            let code = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("throw_if({code}, {cond});"));
+            return;
+        }
+        "THROWARGANYIF" => {
+            let cond = state.pop_expr(lines, depth);
+            let code = state.pop_expr(lines, depth);
+            let arg = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("throw_arg_if({arg}, {code}, {cond});"));
+            return;
+        }
+        "RAWRESERVE" => {
+            let mode = state.pop_expr(lines, depth);
+            let amount = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("raw_reserve({amount}, {mode});"));
+            return;
+        }
+        "SENDRAWMSG" => {
+            let mode = state.pop_expr(lines, depth);
+            let msg = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("send_raw_message({msg}, {mode});"));
+            return;
+        }
+        "SETCODE" => {
+            let code = state.pop_expr(lines, depth);
+            push_line(lines, depth, format!("set_code({code});"));
+            return;
+        }
+        "RET" | "RETALT" => {
+            push_line(lines, depth, "return ();".to_string());
+            state.has_explicit_return = true;
+            return;
+        }
+        _ => {}
+    }
+
+    push_line(
+        lines,
+        depth,
+        format!(
+            ";; unhandled {}",
+            format_instruction_line(&Instruction::Plain(plain.clone()), depth)
+        ),
+    );
+}
+
+fn is_push_cont(name: &str) -> bool {
+    name.starts_with("PUSHCONT")
+}
+
+fn first_code_arg(plain: &PlainInstruction) -> Option<Code> {
+    plain.args.iter().find_map(|arg| {
+        if let ArgValue::Code { code, .. } = arg {
+            return Some((**code).clone());
+        }
+        None
+    })
+}
+
+fn code_args(plain: &PlainInstruction) -> Vec<Code> {
+    plain
+        .args
+        .iter()
+        .filter_map(|arg| {
+            if let ArgValue::Code { code, .. } = arg {
+                return Some((**code).clone());
+            }
+            None
+        })
+        .collect()
+}
+
+fn binary_symbol(name: &str) -> Option<&'static str> {
+    match name {
+        "ADD" => Some("+"),
+        "SUB" => Some("-"),
+        "MUL" => Some("*"),
+        "DIV" => Some("/"),
+        "DIVR" => Some("~/"),
+        "DIVC" => Some("^/"),
+        "MOD" => Some("%"),
+        "MODR" => Some("~%"),
+        "MODC" => Some("^%"),
+        "LSHIFT" => Some("<<"),
+        "RSHIFT" => Some(">>"),
+        "RSHIFTR" => Some("~>>"),
+        "RSHIFTC" => Some("^>>"),
+        "AND" => Some("&"),
+        "OR" => Some("|"),
+        "XOR" => Some("^"),
+        "GREATER" => Some(">"),
+        "LESS" => Some("<"),
+        "EQUAL" => Some("=="),
+        "NEQ" => Some("!="),
+        "LEQ" => Some("<="),
+        "GEQ" => Some(">="),
+        "CMP" => Some("<=>"),
+        _ => None,
+    }
+}
+
+fn immediate_binary_op(plain: &PlainInstruction) -> Option<(&'static str, String)> {
+    let imm = plain.args.first().and_then(arg_to_string)?;
+    match plain.name.as_str() {
+        "ADDINT" => Some(("+", imm)),
+        "MULINT" => Some(("*", imm)),
+        "LSHIFT" => Some(("<<", imm)),
+        "RSHIFT" => Some((">>", imm)),
+        "RSHIFTR" => Some(("~>>", imm)),
+        "RSHIFTC" => Some(("^>>", imm)),
+        "EQINT" => Some(("==", imm)),
+        "LESSINT" => Some(("<", imm)),
+        "GTINT" => Some((">", imm)),
+        _ => None,
+    }
+}
+
+fn stdlib_function_for_instruction(name: &str) -> Option<&'static str> {
+    match name {
+        "CTOS" => Some("begin_parse"),
+        "LDREF" => Some("load_ref"),
+        "LDGRAMS" => Some("load_grams"),
+        "LDMSGADDR" => Some("load_msg_addr"),
+        "SEMPTY" => Some("slice_empty?"),
+        "ENDC" => Some("end_cell"),
+        "HASHCU" => Some("cell_hash"),
+        "STREF" => Some("store_ref"),
+        "STSLICER" => Some("store_slice"),
+        "STGRAMS" => Some("store_grams"),
+        "STDICT" => Some("store_dict"),
+        _ => None,
+    }
+}
+
+fn infer_literal_type(expr: &str) -> ValueType {
+    match expr {
+        "begin_cell()" => ValueType::Builder,
+        "get_data()" | "my_code()" => ValueType::Cell,
+        "my_address()" => ValueType::Slice,
+        _ if expr.starts_with("x{") => ValueType::Slice,
+        _ if expr.parse::<i128>().is_ok() => ValueType::Int,
+        _ => ValueType::Unknown,
+    }
+}
+
+fn parse_stack_depth(token: String) -> Option<usize> {
+    let pos = parse_stack_position(&token)?;
+    (pos >= 0).then_some(pos as usize)
+}
+
+fn arg_stack_index(arg: &ArgValue) -> Option<i64> {
+    match arg {
+        ArgValue::StackRegister(reg) => Some(reg.idx),
+        _ => arg_to_string(arg).and_then(|s| parse_stack_position(&s)),
+    }
+}
+
+fn parse_stack_position(token: &str) -> Option<i64> {
+    let raw = token.strip_prefix('s')?;
+    if raw.starts_with('(') && raw.ends_with(')') && raw.len() >= 3 {
+        return raw[1..raw.len() - 1].parse::<i64>().ok();
+    }
+    raw.parse::<i64>().ok()
+}
+
+fn normalize_stack_index(idx: i64) -> usize {
+    idx.max(0) as usize
+}
+
+fn stack_index_from_top(len: usize, depth_idx: usize) -> usize {
+    len.saturating_sub(1 + depth_idx)
+}
+
+fn fresh_param_stack_value(state: &mut LiftState) -> StackValue {
+    let p = format!("arg{}", state.next_param);
+    state.next_param += 1;
+    if !state.params.contains(&p) {
+        state.params.push(p.clone());
+    }
+    StackValue::Expr(p)
+}
+
+fn ensure_stack_depth(state: &mut LiftState, depth_idx: usize) {
+    while state.stack.len() <= depth_idx {
+        let v = fresh_param_stack_value(state);
+        state.stack.insert(0, v);
+    }
+}
+
+fn stack_swap_from_top(state: &mut LiftState, a: i64, b: i64) {
+    let a = normalize_stack_index(a);
+    let b = normalize_stack_index(b);
+    let max_depth = a.max(b);
+    ensure_stack_depth(state, max_depth);
+    let ia = stack_index_from_top(state.stack.len(), a);
+    let ib = stack_index_from_top(state.stack.len(), b);
+    state.stack.swap(ia, ib);
+}
+
+fn stack_push_from_top(state: &mut LiftState, depth: i64) {
+    let depth = normalize_stack_index(depth);
+    ensure_stack_depth(state, depth);
+    let idx = stack_index_from_top(state.stack.len(), depth);
+    if let Some(value) = state.stack.get(idx).cloned() {
+        state.stack.push(value);
+    }
+}
+
+fn stack_get_from_top(stack: &[StackValue], depth_idx: usize) -> Option<&StackValue> {
+    if stack.len() <= depth_idx {
+        return None;
+    }
+    let idx = stack.len().saturating_sub(1 + depth_idx);
+    stack.get(idx)
+}
+
+fn stack_set_from_top(stack: &mut Vec<StackValue>, depth_idx: usize, value: StackValue) {
+    if stack.len() <= depth_idx {
+        return;
+    }
+    let idx = stack.len().saturating_sub(1 + depth_idx);
+    if let Some(slot) = stack.get_mut(idx) {
+        *slot = value;
+    }
+}
+
+fn parse_arg_param_index(name: &str) -> Option<usize> {
+    name.strip_prefix("arg")?.parse::<usize>().ok()
+}
