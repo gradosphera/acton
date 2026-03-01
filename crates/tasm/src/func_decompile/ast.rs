@@ -208,11 +208,6 @@ impl MethodSignatureAst {
 
 impl StmtAst {
     #[must_use]
-    pub(crate) fn comment(line: impl Into<String>) -> Self {
-        Self::Comment(line.into())
-    }
-
-    #[must_use]
     #[cfg(test)]
     pub(crate) fn var(name: impl Into<String>, expr: ExprAst) -> Self {
         Self::VarDecl {
