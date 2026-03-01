@@ -90,18 +90,14 @@ fn select_recv_internal_params(stmts: &[StmtAst]) -> Vec<String> {
 
 fn stmt_contains_ident(stmt: &StmtAst, ident: &str) -> bool {
     match stmt {
-        StmtAst::Comment(line) => contains_ident_text(line, ident),
+        StmtAst::Comment(_) => false,
         StmtAst::VarDecl { binding, expr } => {
             tensor_contains_ident(binding, ident) || expr_contains_ident(expr, ident)
         }
-        StmtAst::Assign { target, expr } => {
-            contains_ident_text(target, ident) || expr_contains_ident(expr, ident)
-        }
+        StmtAst::Assign { target, expr } => target == ident || expr_contains_ident(expr, ident),
         StmtAst::Return(Some(expr)) => expr_contains_ident(expr, ident),
         StmtAst::Return(None) => false,
-        StmtAst::Call { callee, args } => {
-            contains_ident_text(callee, ident) || args.iter().any(|a| expr_contains_ident(a, ident))
-        }
+        StmtAst::Call { callee, args } => callee == ident || args.iter().any(|a| expr_contains_ident(a, ident)),
         StmtAst::If {
             condition,
             then_body,
@@ -109,19 +105,20 @@ fn stmt_contains_ident(stmt: &StmtAst, ident: &str) -> bool {
             ..
         } => {
             expr_contains_ident(condition, ident)
-                || then_body.iter().any(|s| stmt_contains_ident(s, ident))
+                || stmt_list_contains_ident(then_body, ident)
                 || else_body
                     .as_ref()
-                    .is_some_and(|body| body.iter().any(|s| stmt_contains_ident(s, ident)))
+                    .is_some_and(|body| stmt_list_contains_ident(body, ident))
         }
-        StmtAst::Repeat { count, body } => {
-            expr_contains_ident(count, ident) || body.iter().any(|s| stmt_contains_ident(s, ident))
-        }
+        StmtAst::Repeat { count, body } => expr_contains_ident(count, ident) || stmt_list_contains_ident(body, ident),
         StmtAst::DoUntil { body, condition } => {
-            expr_contains_ident(condition, ident)
-                || body.iter().any(|s| stmt_contains_ident(s, ident))
+            expr_contains_ident(condition, ident) || stmt_list_contains_ident(body, ident)
         }
     }
+}
+
+fn stmt_list_contains_ident(stmts: &[StmtAst], ident: &str) -> bool {
+    stmts.iter().any(|stmt| stmt_contains_ident(stmt, ident))
 }
 
 fn expr_contains_ident(expr: &ExprAst, ident: &str) -> bool {
@@ -129,6 +126,8 @@ fn expr_contains_ident(expr: &ExprAst, ident: &str) -> bool {
         ExprAst::Ident(text) => text == ident,
         ExprAst::Atom(text) => contains_ident_text(text, ident),
         ExprAst::Number(_) => false,
+        ExprAst::StringLiteral(_) => false,
+        ExprAst::CellLiteral(_) => false,
         ExprAst::NullLiteral => false,
         ExprAst::Unary { expr, .. } => expr_contains_ident(expr, ident),
         ExprAst::Binary { lhs, rhs, .. } => {

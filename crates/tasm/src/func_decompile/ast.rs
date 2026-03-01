@@ -14,19 +14,95 @@ pub(crate) struct MethodSignatureAst {
     pub qualifiers: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum UnaryOp {
+    Negate,
+    BitNot,
+}
+
+impl UnaryOp {
+    #[must_use]
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Negate => "-",
+            Self::BitNot => "~",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum BinaryOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    DivR,
+    DivC,
+    Mod,
+    ModR,
+    ModC,
+    LShift,
+    RShift,
+    RShiftR,
+    RShiftC,
+    And,
+    Or,
+    Xor,
+    Greater,
+    Less,
+    Equal,
+    NotEqual,
+    LessOrEqual,
+    GreaterOrEqual,
+    Cmp,
+}
+
+impl BinaryOp {
+    #[must_use]
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Add => "+",
+            Self::Sub => "-",
+            Self::Mul => "*",
+            Self::Div => "/",
+            Self::DivR => "~/",
+            Self::DivC => "^/",
+            Self::Mod => "%",
+            Self::ModR => "~%",
+            Self::ModC => "^%",
+            Self::LShift => "<<",
+            Self::RShift => ">>",
+            Self::RShiftR => "~>>",
+            Self::RShiftC => "^>>",
+            Self::And => "&",
+            Self::Or => "|",
+            Self::Xor => "^",
+            Self::Greater => ">",
+            Self::Less => "<",
+            Self::Equal => "==",
+            Self::NotEqual => "!=",
+            Self::LessOrEqual => "<=",
+            Self::GreaterOrEqual => ">=",
+            Self::Cmp => "<=>",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum ExprAst {
     Ident(String),
     Atom(String),
     Number(String),
+    StringLiteral(String),
+    CellLiteral(String),
     NullLiteral,
     Unary {
-        op: String,
+        op: UnaryOp,
         expr: Box<ExprAst>,
     },
     Binary {
         lhs: Box<ExprAst>,
-        op: String,
+        op: BinaryOp,
         rhs: Box<ExprAst>,
         wrap_lhs: bool,
         wrap_rhs: bool,
@@ -47,6 +123,10 @@ impl From<String> for ExprAst {
     fn from(value: String) -> Self {
         if value == "null()" {
             Self::NullLiteral
+        } else if is_string_literal(&value) {
+            Self::StringLiteral(value)
+        } else if is_cell_literal(&value) {
+            Self::CellLiteral(value)
         } else if is_ident(&value) {
             Self::Ident(value)
         } else if is_decimal_number(&value) {
@@ -70,6 +150,16 @@ fn is_decimal_number(value: &str) -> bool {
     }
     let body = s.strip_prefix('-').unwrap_or(s);
     !body.is_empty() && body.chars().all(|ch| ch.is_ascii_digit())
+}
+
+fn is_string_literal(value: &str) -> bool {
+    let s = value.trim();
+    s.len() >= 2 && s.starts_with('"') && s.ends_with('"')
+}
+
+fn is_cell_literal(value: &str) -> bool {
+    let s = value.trim();
+    (s.starts_with("x{") || s.starts_with("boc{")) && s.ends_with('}')
 }
 
 fn is_ident(value: &str) -> bool {
@@ -275,9 +365,11 @@ fn render_expr(expr: &ExprAst) -> String {
         ExprAst::Ident(s) => s.clone(),
         ExprAst::Atom(s) => s.clone(),
         ExprAst::Number(s) => s.clone(),
+        ExprAst::StringLiteral(s) => s.clone(),
+        ExprAst::CellLiteral(s) => s.clone(),
         ExprAst::NullLiteral => "null()".to_string(),
         ExprAst::Unary { op, expr } => {
-            format!("{op}({})", render_expr(expr))
+            format!("{}({})", op.as_str(), render_expr(expr))
         }
         ExprAst::Binary {
             lhs,
@@ -290,7 +382,7 @@ fn render_expr(expr: &ExprAst) -> String {
             let rhs = render_expr(rhs);
             let lhs = if *wrap_lhs { format!("({lhs})") } else { lhs };
             let rhs = if *wrap_rhs { format!("({rhs})") } else { rhs };
-            format!("{lhs} {op} {rhs}")
+            format!("{lhs} {} {rhs}", op.as_str())
         }
         ExprAst::Ternary {
             condition,

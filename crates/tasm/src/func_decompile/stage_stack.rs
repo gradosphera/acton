@@ -1,4 +1,4 @@
-use super::ast::{ExprAst, StmtAst, Var};
+use super::ast::{BinaryOp, ExprAst, StmtAst, UnaryOp, Var};
 use super::render::{arg_as_i64, format_cell_literal, format_instruction_line};
 use crate::types::{ArgValue, Code, Instruction, PlainInstruction};
 use num_bigint::BigUint;
@@ -256,7 +256,8 @@ fn lift_plain_instruction(
     depth: usize,
     ctx: &LiftContext,
 ) {
-    if is_push_cont(&plain.name)
+    let name = &plain.name;
+    if name.starts_with("PUSHCONT")
         && let Some(code) = first_code_arg(plain)
     {
         state.push_cont(code);
@@ -522,7 +523,7 @@ fn lift_plain_instruction(
                 body: do_body,
                 condition: ExprAst::Binary {
                     lhs: Box::new(ExprAst::Ident(loop_cond)),
-                    op: "==".to_string(),
+                    op: BinaryOp::Equal,
                     rhs: Box::new(ExprAst::Number("0".to_string())),
                     wrap_lhs: true,
                     wrap_rhs: false,
@@ -921,7 +922,7 @@ fn lift_plain_instruction(
         state.push_typed_expr_ast(
             ExprAst::Binary {
                 lhs: Box::new(ExprAst::Number("1".to_string())),
-                op: "<<".to_string(),
+                op: BinaryOp::LShift,
                 rhs: Box::new(pow),
                 wrap_lhs: false,
                 wrap_rhs: false,
@@ -935,7 +936,7 @@ fn lift_plain_instruction(
         let pow = first_arg_expr_or_zero(plain);
         let pow2 = ExprAst::Binary {
             lhs: Box::new(ExprAst::Number("1".to_string())),
-            op: "<<".to_string(),
+            op: BinaryOp::LShift,
             rhs: Box::new(pow),
             wrap_lhs: false,
             wrap_rhs: false,
@@ -943,7 +944,7 @@ fn lift_plain_instruction(
         state.push_typed_expr_ast(
             ExprAst::Binary {
                 lhs: Box::new(pow2),
-                op: "-".to_string(),
+                op: BinaryOp::Sub,
                 rhs: Box::new(ExprAst::Number("1".to_string())),
                 wrap_lhs: true,
                 wrap_rhs: false,
@@ -1029,12 +1030,16 @@ fn lift_plain_instruction(
     if plain.name == "INC" || plain.name == "DEC" {
         let lhs = state.pop_expr_expect(stmts, depth, ValueType::Int);
         let t = state.new_temp();
-        let op = if plain.name == "INC" { "+" } else { "-" };
+        let op = if plain.name == "INC" {
+            BinaryOp::Add
+        } else {
+            BinaryOp::Sub
+        };
         stmts.push(StmtAst::VarDecl {
             binding: t.clone().into(),
             expr: ExprAst::Binary {
                 lhs: Box::new(lhs),
-                op: op.to_string(),
+                op,
                 rhs: Box::new(ExprAst::Number("1".to_string())),
                 wrap_lhs: true,
                 wrap_rhs: false,
@@ -1049,7 +1054,7 @@ fn lift_plain_instruction(
         let t = state.new_temp();
         stmts.push(StmtAst::VarDecl {
             binding: t.clone().into(),
-            expr: unary_expr("-", lhs),
+            expr: unary_expr(UnaryOp::Negate, lhs),
         });
         state.push_typed_expr(t, ValueType::Int);
         return;
@@ -1060,7 +1065,7 @@ fn lift_plain_instruction(
         let t = state.new_temp();
         stmts.push(StmtAst::VarDecl {
             binding: t.clone().into(),
-            expr: unary_expr("~", lhs),
+            expr: unary_expr(UnaryOp::BitNot, lhs),
         });
         state.push_typed_expr(t, ValueType::Int);
         return;
@@ -1816,10 +1821,6 @@ fn lift_plain_instruction(
     );
 }
 
-fn is_push_cont(name: &str) -> bool {
-    name.starts_with("PUSHCONT")
-}
-
 fn first_code_arg(plain: &PlainInstruction) -> Option<Code> {
     plain.args.iter().find_map(|arg| {
         if let ArgValue::Code { code, .. } = arg {
@@ -1970,7 +1971,7 @@ fn expr_from_arg_value(arg: &ArgValue) -> Option<ExprAst> {
         ArgValue::UInt(value) => Some(ExprAst::Number(value.to_string())),
         ArgValue::Control(control) => Some(ExprAst::Ident(format!("c{}", control.idx))),
         ArgValue::StackRegister(reg) => Some(ExprAst::Ident(format!("s{}", reg.idx))),
-        ArgValue::Cell(cell) => Some(ExprAst::Atom(format_cell_literal(cell))),
+        ArgValue::Cell(cell) => Some(ExprAst::CellLiteral(format_cell_literal(cell))),
         ArgValue::Code { .. } | ArgValue::CodeDictionary(_) => None,
     }
 }
@@ -1986,7 +1987,11 @@ fn first_arg_expr_or_zero(plain: &PlainInstruction) -> ExprAst {
 fn arg_scalar_text(arg: &ArgValue) -> Option<String> {
     let expr = expr_from_arg_value(arg)?;
     match expr {
-        ExprAst::Ident(text) | ExprAst::Atom(text) | ExprAst::Number(text) => Some(text),
+        ExprAst::Ident(text)
+        | ExprAst::Atom(text)
+        | ExprAst::Number(text)
+        | ExprAst::StringLiteral(text)
+        | ExprAst::CellLiteral(text) => Some(text),
         ExprAst::NullLiteral => Some("null()".to_string()),
         _ => None,
     }
@@ -2016,17 +2021,17 @@ fn tensor_var(items: Vec<String>) -> Var {
     Var::tensor(items.into_iter().map(Var::name).collect())
 }
 
-fn unary_expr(op: impl Into<String>, expr: impl Into<ExprAst>) -> ExprAst {
+fn unary_expr(op: UnaryOp, expr: impl Into<ExprAst>) -> ExprAst {
     ExprAst::Unary {
-        op: op.into(),
+        op,
         expr: Box::new(expr.into()),
     }
 }
 
-fn binary_expr(lhs: impl Into<ExprAst>, op: impl Into<String>, rhs: impl Into<ExprAst>) -> ExprAst {
+fn binary_expr(lhs: impl Into<ExprAst>, op: BinaryOp, rhs: impl Into<ExprAst>) -> ExprAst {
     ExprAst::Binary {
         lhs: Box::new(lhs.into()),
-        op: op.into(),
+        op,
         rhs: Box::new(rhs.into()),
         wrap_lhs: true,
         wrap_rhs: true,
@@ -2061,47 +2066,47 @@ fn merged_value_type(
     ValueType::Unknown
 }
 
-fn binary_symbol(name: &str) -> Option<&'static str> {
+fn binary_symbol(name: &str) -> Option<BinaryOp> {
     match name {
-        "ADD" => Some("+"),
-        "SUB" => Some("-"),
-        "MUL" => Some("*"),
-        "DIV" => Some("/"),
-        "DIVR" => Some("~/"),
-        "DIVC" => Some("^/"),
-        "MOD" => Some("%"),
-        "MODR" => Some("~%"),
-        "MODC" => Some("^%"),
-        "LSHIFT" => Some("<<"),
-        "RSHIFT" => Some(">>"),
-        "RSHIFTR" => Some("~>>"),
-        "RSHIFTC" => Some("^>>"),
-        "AND" => Some("&"),
-        "OR" => Some("|"),
-        "XOR" => Some("^"),
-        "GREATER" => Some(">"),
-        "LESS" => Some("<"),
-        "EQUAL" => Some("=="),
-        "NEQ" => Some("!="),
-        "LEQ" => Some("<="),
-        "GEQ" => Some(">="),
-        "CMP" => Some("<=>"),
+        "ADD" => Some(BinaryOp::Add),
+        "SUB" => Some(BinaryOp::Sub),
+        "MUL" => Some(BinaryOp::Mul),
+        "DIV" => Some(BinaryOp::Div),
+        "DIVR" => Some(BinaryOp::DivR),
+        "DIVC" => Some(BinaryOp::DivC),
+        "MOD" => Some(BinaryOp::Mod),
+        "MODR" => Some(BinaryOp::ModR),
+        "MODC" => Some(BinaryOp::ModC),
+        "LSHIFT" => Some(BinaryOp::LShift),
+        "RSHIFT" => Some(BinaryOp::RShift),
+        "RSHIFTR" => Some(BinaryOp::RShiftR),
+        "RSHIFTC" => Some(BinaryOp::RShiftC),
+        "AND" => Some(BinaryOp::And),
+        "OR" => Some(BinaryOp::Or),
+        "XOR" => Some(BinaryOp::Xor),
+        "GREATER" => Some(BinaryOp::Greater),
+        "LESS" => Some(BinaryOp::Less),
+        "EQUAL" => Some(BinaryOp::Equal),
+        "NEQ" => Some(BinaryOp::NotEqual),
+        "LEQ" => Some(BinaryOp::LessOrEqual),
+        "GEQ" => Some(BinaryOp::GreaterOrEqual),
+        "CMP" => Some(BinaryOp::Cmp),
         _ => None,
     }
 }
 
-fn immediate_binary_op(plain: &PlainInstruction) -> Option<(&'static str, String)> {
+fn immediate_binary_op(plain: &PlainInstruction) -> Option<(BinaryOp, String)> {
     let imm = plain.args.first().and_then(arg_scalar_text)?;
     match plain.name.as_str() {
-        "ADDINT" => Some(("+", imm)),
-        "MULINT" => Some(("*", imm)),
-        "LSHIFT" => Some(("<<", imm)),
-        "RSHIFT" => Some((">>", imm)),
-        "RSHIFTR" => Some(("~>>", imm)),
-        "RSHIFTC" => Some(("^>>", imm)),
-        "EQINT" => Some(("==", imm)),
-        "LESSINT" => Some(("<", imm)),
-        "GTINT" => Some((">", imm)),
+        "ADDINT" => Some((BinaryOp::Add, imm)),
+        "MULINT" => Some((BinaryOp::Mul, imm)),
+        "LSHIFT" => Some((BinaryOp::LShift, imm)),
+        "RSHIFT" => Some((BinaryOp::RShift, imm)),
+        "RSHIFTR" => Some((BinaryOp::RShiftR, imm)),
+        "RSHIFTC" => Some((BinaryOp::RShiftC, imm)),
+        "EQINT" => Some((BinaryOp::Equal, imm)),
+        "LESSINT" => Some((BinaryOp::Less, imm)),
+        "GTINT" => Some((BinaryOp::Greater, imm)),
         _ => None,
     }
 }
@@ -2132,7 +2137,7 @@ fn func_slice_expr_from_cell_ast(cell: &tycho_types::cell::Cell) -> Option<ExprA
     let slice = cell.as_slice_allow_exotic();
     if slice.size_refs() != 0 {
         // Non-empty refs cannot be represented as a plain slice constant in FunC.
-        return Some(ExprAst::Atom("\"\"".to_string()));
+        return Some(ExprAst::StringLiteral("\"\"".to_string()));
     }
 
     let bits_hex = slice.display_data().to_string();
@@ -2142,7 +2147,7 @@ fn func_slice_expr_from_cell_ast(cell: &tycho_types::cell::Cell) -> Option<ExprA
 fn bitstring_hex_to_func_slice_ast(bits_hex: &str) -> Option<ExprAst> {
     let (bytes, bit_len) = Bitstring::from_hex_str(bits_hex).ok()?;
     if bit_len == 0 {
-        return Some(ExprAst::Atom("\"\"".to_string()));
+        return Some(ExprAst::StringLiteral("\"\"".to_string()));
     }
 
     let total_bits = bit_len as usize;
@@ -2189,6 +2194,14 @@ fn infer_expr_type(expr: &ExprAst) -> ValueType {
     match expr {
         ExprAst::Ident(_) => ValueType::Unknown,
         ExprAst::Number(_) => ValueType::Int,
+        ExprAst::StringLiteral(_) => ValueType::Slice,
+        ExprAst::CellLiteral(literal) => {
+            if literal.starts_with("x{") {
+                ValueType::Slice
+            } else {
+                ValueType::Cell
+            }
+        }
         ExprAst::NullLiteral => ValueType::Unknown,
         ExprAst::Call { callee, args } if args.is_empty() => match callee.as_str() {
             "begin_cell" => ValueType::Builder,
@@ -2305,6 +2318,7 @@ fn parse_const_int_expr_ast(expr: &ExprAst) -> Option<i128> {
     match expr {
         ExprAst::Number(value) => value.parse::<i128>().ok(),
         ExprAst::Ident(_) => None,
+        ExprAst::StringLiteral(_) | ExprAst::CellLiteral(_) => None,
         ExprAst::Atom(value) => parse_const_int_expr(value),
         _ => None,
     }
