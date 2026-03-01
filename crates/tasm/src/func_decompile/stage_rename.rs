@@ -1,14 +1,23 @@
 use super::ast::{ExprAst, StmtAst, Var};
 use std::collections::{HashMap, HashSet};
 
+const SOURCE_IN_MSG_FULL_BEGIN_PARSE: &str = "__in_msg_full_begin_parse__";
+
 pub(crate) fn improve_variable_names(stmts: &mut [StmtAst]) {
     let mut used = HashSet::new();
     collect_used_names_stmt_list(stmts, &mut used);
 
-    let in_msg_slice_bindings = collect_in_msg_slice_bindings(stmts);
+    let in_msg_slice_bindings = collect_loader_root_bindings(stmts, "in_msg_body", "in_msg_slice_");
+    let in_msg_full_slice_bindings =
+        collect_loader_root_bindings(stmts, SOURCE_IN_MSG_FULL_BEGIN_PARSE, "in_msg_full_slice_");
 
     let mut requests = Vec::new();
-    collect_rename_requests(stmts, &in_msg_slice_bindings, &mut requests);
+    collect_rename_requests(
+        stmts,
+        &in_msg_slice_bindings,
+        &in_msg_full_slice_bindings,
+        &mut requests,
+    );
 
     let mut allocator = NameAllocator::new(used);
     let mut rename_map = HashMap::new();
@@ -50,21 +59,39 @@ impl NameAllocator {
     }
 
     fn allocate(&mut self, base: &str) -> String {
-        if base == "slice" || base == "cell" || base == "builder" || base == "in_msg_slice" {
+        if is_uint_or_int_bit_base(base) {
+            if !self.used.contains(base) {
+                let name = base.to_string();
+                self.used.insert(name.clone());
+                return name;
+            }
+
             let idx = self
                 .next_index_by_base
                 .entry(base.to_string())
                 .or_insert(0_usize);
             loop {
-                let candidate = if base == "slice" {
-                    format!("slice_{idx}")
-                } else if base == "cell" {
-                    format!("cell_{idx}")
-                } else if base == "builder" {
-                    format!("builder_{idx}")
-                } else {
-                    format!("in_msg_slice_{idx}")
-                };
+                let candidate = format!("{base}_{idx}");
+                *idx += 1;
+                if !self.used.contains(&candidate) {
+                    self.used.insert(candidate.clone());
+                    return candidate;
+                }
+            }
+        }
+
+        if base == "slice"
+            || base == "cell"
+            || base == "builder"
+            || base == "in_msg_slice"
+            || base == "in_msg_full_slice"
+        {
+            let idx = self
+                .next_index_by_base
+                .entry(base.to_string())
+                .or_insert(0_usize);
+            loop {
+                let candidate = format!("{base}_{idx}");
                 *idx += 1;
                 if !self.used.contains(&candidate) {
                     self.used.insert(candidate.clone());
@@ -101,24 +128,35 @@ fn is_temp_var_name(name: &str) -> bool {
     !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
 }
 
-fn collect_in_msg_slice_bindings(stmts: &[StmtAst]) -> HashSet<String> {
+fn is_uint_or_int_bit_base(base: &str) -> bool {
+    if let Some(rest) = base.strip_prefix("uint") {
+        return !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
+    }
+    if let Some(rest) = base.strip_prefix("int") {
+        return !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
+    }
+    false
+}
+
+fn collect_loader_root_bindings(
+    stmts: &[StmtAst],
+    root: &str,
+    renamed_prefix: &str,
+) -> HashSet<String> {
     let mut sources = HashMap::new();
     collect_loader_slice_sources_stmt_list(stmts, &mut sources);
 
     let mut out = HashSet::new();
     let mut memo = HashMap::new();
     for name in sources.keys() {
-        if flows_from_in_msg_body(name, &sources, &mut memo, &mut HashSet::new()) {
+        if flows_from_loader_root(name, &sources, root, renamed_prefix, &mut memo, &mut HashSet::new()) {
             out.insert(name.clone());
         }
     }
     out
 }
 
-fn collect_loader_slice_sources_stmt_list(
-    stmts: &[StmtAst],
-    out: &mut HashMap<String, String>,
-) {
+fn collect_loader_slice_sources_stmt_list(stmts: &[StmtAst], out: &mut HashMap<String, String>) {
     for stmt in stmts {
         collect_loader_slice_sources_stmt(stmt, out);
     }
@@ -127,7 +165,12 @@ fn collect_loader_slice_sources_stmt_list(
 fn collect_loader_slice_sources_stmt(stmt: &StmtAst, out: &mut HashMap<String, String>) {
     match stmt {
         StmtAst::VarDecl { binding, expr } => {
-            if let Some((next_slice, source)) = loader_next_slice_binding_and_source(binding, expr) {
+            if let Some((next_slice, source)) = loader_next_slice_binding_and_source(binding, expr)
+            {
+                out.insert(next_slice, source);
+            }
+            if let Some((next_slice, source)) = skip_bits_binding_and_source_from_stmt(binding, expr)
+            {
                 out.insert(next_slice, source);
             }
         }
@@ -157,15 +200,37 @@ fn loader_next_slice_binding_and_source(binding: &Var, expr: &ExprAst) -> Option
     Some((next_slice, source))
 }
 
+fn skip_bits_binding_and_source_from_stmt(
+    binding: &Var,
+    expr: &ExprAst,
+) -> Option<(String, String)> {
+    let Var::Name(name) = binding else {
+        return None;
+    };
+    match expr {
+        ExprAst::Call { callee, args } if callee == "skip_bits" && args.len() == 2 => {
+            let source = source_ident_from_expr(args.first()?)?;
+            Some((name.clone(), source))
+        }
+        ExprAst::MethodCall {
+            receiver,
+            method,
+            modifying,
+            args,
+        } if method == "skip_bits" && !*modifying && args.len() == 1 => {
+            let source = source_ident_from_expr(receiver.as_ref())?;
+            Some((name.clone(), source))
+        }
+        _ => None,
+    }
+}
+
 fn source_ident_for_non_modifying_loader(expr: &ExprAst) -> Option<String> {
     match expr {
         ExprAst::Call { callee, args }
             if is_slice_remainder_loader_name(callee.as_str()) && !args.is_empty() =>
         {
-            match args.first() {
-                Some(ExprAst::Ident(name)) => Some(name.clone()),
-                _ => None,
-            }
+            source_ident_from_expr(args.first()?)
         }
         ExprAst::MethodCall {
             receiver,
@@ -173,18 +238,53 @@ fn source_ident_for_non_modifying_loader(expr: &ExprAst) -> Option<String> {
             modifying,
             args,
         } if is_slice_remainder_loader_name(method.as_str()) && !*modifying && args.is_empty() => {
-            match receiver.as_ref() {
-                ExprAst::Ident(name) => Some(name.clone()),
-                _ => None,
-            }
+            source_ident_from_expr(receiver.as_ref())
         }
         _ => None,
     }
 }
 
-fn flows_from_in_msg_body(
+fn source_ident_from_expr(expr: &ExprAst) -> Option<String> {
+    match expr {
+        ExprAst::Ident(name) => Some(name.clone()),
+        ExprAst::MethodCall {
+            receiver,
+            method,
+            modifying,
+            args,
+        } if method == "skip_bits" && !*modifying && args.len() == 1 => {
+            source_ident_from_expr(receiver.as_ref())
+        }
+        ExprAst::Call { callee, args } if callee == "skip_bits" && !args.is_empty() => {
+            source_ident_from_expr(args.first()?)
+        }
+        ExprAst::MethodCall {
+            receiver,
+            method,
+            modifying,
+            args,
+        } if matches!(receiver.as_ref(), ExprAst::Ident(name) if name == "in_msg_full")
+            && method == "begin_parse"
+            && !*modifying
+            && args.is_empty() =>
+        {
+            Some(SOURCE_IN_MSG_FULL_BEGIN_PARSE.to_string())
+        }
+        ExprAst::Call { callee, args }
+            if callee == "begin_parse"
+                && matches!(args.first(), Some(ExprAst::Ident(name)) if name == "in_msg_full") =>
+        {
+            Some(SOURCE_IN_MSG_FULL_BEGIN_PARSE.to_string())
+        }
+        _ => None,
+    }
+}
+
+fn flows_from_loader_root(
     name: &str,
     sources: &HashMap<String, String>,
+    root: &str,
+    renamed_prefix: &str,
     memo: &mut HashMap<String, bool>,
     visiting: &mut HashSet<String>,
 ) -> bool {
@@ -195,10 +295,10 @@ fn flows_from_in_msg_body(
         return false;
     }
     let result = match sources.get(name) {
-        Some(source) if source == "in_msg_body" => true,
-        Some(source) if source.starts_with("in_msg_slice") => true,
+        Some(source) if source == root => true,
+        Some(source) if source.starts_with(renamed_prefix) => true,
         Some(source) if sources.contains_key(source) => {
-            flows_from_in_msg_body(source, sources, memo, visiting)
+            flows_from_loader_root(source, sources, root, renamed_prefix, memo, visiting)
         }
         _ => false,
     };
@@ -210,6 +310,7 @@ fn flows_from_in_msg_body(
 fn collect_rename_requests(
     stmts: &[StmtAst],
     in_msg_slice_bindings: &HashSet<String>,
+    in_msg_full_slice_bindings: &HashSet<String>,
     out: &mut Vec<RenameRequest>,
 ) {
     for stmt in stmts {
@@ -233,11 +334,27 @@ fn collect_rename_requests(
                         base_name: "slice".to_string(),
                     });
                 }
+                if let Some((slice_name, _)) = skip_bits_binding_and_source_from_stmt(binding, expr)
+                {
+                    let base_name = if in_msg_slice_bindings.contains(&slice_name) {
+                        "in_msg_slice".to_string()
+                    } else if in_msg_full_slice_bindings.contains(&slice_name) {
+                        "in_msg_full_slice".to_string()
+                    } else {
+                        "slice".to_string()
+                    };
+                    out.push(RenameRequest {
+                        old_name: slice_name,
+                        base_name,
+                    });
+                }
                 if let Some(slice_name) =
                     non_modifying_loader_first_binding_from_stmt(binding, expr)
                 {
                     let base_name = if in_msg_slice_bindings.contains(&slice_name) {
                         "in_msg_slice".to_string()
+                    } else if in_msg_full_slice_bindings.contains(&slice_name) {
+                        "in_msg_full_slice".to_string()
                     } else {
                         "slice".to_string()
                     };
@@ -275,6 +392,14 @@ fn collect_rename_requests(
                     out.push(RenameRequest {
                         old_name: fwd_fee_name,
                         base_name: "fwd_fee".to_string(),
+                    });
+                }
+                if let Some((numeric_name, base_name)) =
+                    load_int_or_uint_value_binding_from_stmt(binding, expr)
+                {
+                    out.push(RenameRequest {
+                        old_name: numeric_name,
+                        base_name,
                     });
                 }
                 if let Some(num_name) = loader_value_binding_from_stmt(binding, expr, &["load_int"])
@@ -331,6 +456,14 @@ fn collect_rename_requests(
                         base_name: "msg_flags".to_string(),
                     });
                 }
+                if let Some((numeric_name, base_name)) =
+                    tuple_load_int_or_uint_value_binding_from_stmt(binding, expr)
+                {
+                    out.push(RenameRequest {
+                        old_name: numeric_name,
+                        base_name,
+                    });
+                }
                 if let Some((bits_name, refs_name)) = bits_refs_binding_from_stmt(binding, expr) {
                     out.push(RenameRequest {
                         old_name: bits_name,
@@ -347,16 +480,26 @@ fn collect_rename_requests(
                 else_body,
                 ..
             } => {
-                collect_rename_requests(then_body, in_msg_slice_bindings, out);
+                collect_rename_requests(
+                    then_body,
+                    in_msg_slice_bindings,
+                    in_msg_full_slice_bindings,
+                    out,
+                );
                 if let Some(else_body) = else_body {
-                    collect_rename_requests(else_body, in_msg_slice_bindings, out);
+                    collect_rename_requests(
+                        else_body,
+                        in_msg_slice_bindings,
+                        in_msg_full_slice_bindings,
+                        out,
+                    );
                 }
             }
             StmtAst::Repeat { body, .. } => {
-                collect_rename_requests(body, in_msg_slice_bindings, out)
+                collect_rename_requests(body, in_msg_slice_bindings, in_msg_full_slice_bindings, out)
             }
             StmtAst::DoUntil { body, .. } => {
-                collect_rename_requests(body, in_msg_slice_bindings, out)
+                collect_rename_requests(body, in_msg_slice_bindings, in_msg_full_slice_bindings, out)
             }
             StmtAst::Comment(_)
             | StmtAst::Assign { .. }
@@ -402,6 +545,117 @@ fn fwd_fee_binding_from_stmt(binding: &Var, expr: &ExprAst) -> Option<String> {
         }
         _ => None,
     }
+}
+
+fn load_int_or_uint_value_binding_from_stmt(
+    binding: &Var,
+    expr: &ExprAst,
+) -> Option<(String, String)> {
+    let Var::Name(name) = binding else {
+        return None;
+    };
+
+    let ExprAst::MethodCall {
+        method,
+        modifying,
+        args,
+        ..
+    } = expr
+    else {
+        return None;
+    };
+
+    if !*modifying || args.len() != 1 {
+        return None;
+    }
+    let kind = match method.as_str() {
+        "load_uint" => "uint",
+        "load_int" => "int",
+        _ => return None,
+    };
+    let bit_suffix = bit_suffix_for_name(args.first()?)?;
+    Some((name.clone(), format!("{kind}{bit_suffix}")))
+}
+
+fn tuple_load_int_or_uint_value_binding_from_stmt(
+    binding: &Var,
+    expr: &ExprAst,
+) -> Option<(String, String)> {
+    let Var::Tensor(items) = binding else {
+        return None;
+    };
+    if items.len() != 2 {
+        return None;
+    }
+    let value_name = match &items[1] {
+        Var::Name(name) => name.clone(),
+        Var::Tensor(_) => return None,
+    };
+
+    match expr {
+        ExprAst::Call { callee, args } if callee == "load_uint" && args.len() == 2 => {
+            let bit_suffix = bit_suffix_for_name(args.get(1)?)?;
+            Some((value_name, format!("uint{bit_suffix}")))
+        }
+        ExprAst::Call { callee, args } if callee == "load_int" && args.len() == 2 => {
+            let bit_suffix = bit_suffix_for_name(args.get(1)?)?;
+            Some((value_name, format!("int{bit_suffix}")))
+        }
+        ExprAst::MethodCall {
+            method,
+            modifying,
+            args,
+            ..
+        } if method == "load_uint" && !*modifying && args.len() == 1 => {
+            let bit_suffix = bit_suffix_for_name(args.first()?)?;
+            Some((value_name, format!("uint{bit_suffix}")))
+        }
+        ExprAst::MethodCall {
+            method,
+            modifying,
+            args,
+            ..
+        } if method == "load_int" && !*modifying && args.len() == 1 => {
+            let bit_suffix = bit_suffix_for_name(args.first()?)?;
+            Some((value_name, format!("int{bit_suffix}")))
+        }
+        _ => None,
+    }
+}
+
+fn bit_suffix_for_name(expr: &ExprAst) -> Option<String> {
+    match expr {
+        ExprAst::Number(bits) => sanitize_name_fragment(bits),
+        ExprAst::Ident(bits) => sanitize_name_fragment(bits),
+        ExprAst::Unary {
+            op: super::ast::UnaryOp::Negate,
+            expr,
+        } => match expr.as_ref() {
+            ExprAst::Number(bits) => {
+                let mut s = String::from("m");
+                s.push_str(bits);
+                sanitize_name_fragment(&s)
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn sanitize_name_fragment(text: &str) -> Option<String> {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            out.push(ch);
+        } else {
+            out.push('_');
+        }
+    }
+    while out.contains("__") {
+        out = out.replace("__", "_");
+    }
+    let out = out.trim_matches('_').to_string();
+    if out.is_empty() { None } else { Some(out) }
 }
 
 fn cell_binding_from_stmt(binding: &Var, expr: &ExprAst) -> Option<String> {
@@ -1012,6 +1266,222 @@ mod tests {
     }
 
     #[test]
+    fn renames_skip_bits_in_msg_body_loader_chain_first_binding_to_in_msg_slice() {
+        let mut body = vec![
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v41"), Var::name("v42")]),
+                expr: ExprAst::Call {
+                    callee: "load_uint".to_string(),
+                    args: vec![
+                        ExprAst::Call {
+                            callee: "skip_bits".to_string(),
+                            args: vec![ident("in_msg_body"), ExprAst::Number("32".to_string())],
+                        },
+                        ExprAst::Number("32".to_string()),
+                    ],
+                },
+            },
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v43"), Var::name("v44")]),
+                expr: ExprAst::Call {
+                    callee: "load_ref".to_string(),
+                    args: vec![ident("v41")],
+                },
+            },
+            StmtAst::Call {
+                callee: "touch_many".to_string(),
+                args: vec![ident("v41"), ident("v43")],
+            },
+        ];
+
+        improve_variable_names(&mut body);
+
+        match &body[0] {
+            StmtAst::VarDecl { binding, .. } => match binding {
+                Var::Tensor(items) => {
+                    assert!(matches!(&items[0], Var::Name(name) if name == "in_msg_slice_0"));
+                }
+                _ => panic!("expected tensor binding"),
+            },
+            _ => panic!("expected var decl"),
+        }
+        match &body[1] {
+            StmtAst::VarDecl { binding, .. } => match binding {
+                Var::Tensor(items) => {
+                    assert!(matches!(&items[0], Var::Name(name) if name == "in_msg_slice_1"));
+                }
+                _ => panic!("expected tensor binding"),
+            },
+            _ => panic!("expected var decl"),
+        }
+        match &body[2] {
+            StmtAst::Call { args, .. } => {
+                assert!(matches!(args[0], ExprAst::Ident(ref name) if name == "in_msg_slice_0"));
+                assert!(matches!(args[1], ExprAst::Ident(ref name) if name == "in_msg_slice_1"));
+            }
+            _ => panic!("expected call"),
+        }
+    }
+
+    #[test]
+    fn renames_skip_bits_result_var_from_in_msg_body_to_in_msg_slice() {
+        let mut body = vec![
+            StmtAst::VarDecl {
+                binding: Var::name("v4"),
+                expr: ExprAst::Call {
+                    callee: "skip_bits".to_string(),
+                    args: vec![ident("in_msg_body"), ExprAst::Number("32".to_string())],
+                },
+            },
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v5"), Var::name("v6")]),
+                expr: ExprAst::Call {
+                    callee: "load_uint".to_string(),
+                    args: vec![ident("v4"), ExprAst::Number("32".to_string())],
+                },
+            },
+            StmtAst::Call {
+                callee: "touch_many".to_string(),
+                args: vec![ident("v4"), ident("v5")],
+            },
+        ];
+
+        improve_variable_names(&mut body);
+
+        match &body[0] {
+            StmtAst::VarDecl { binding, .. } => {
+                assert!(matches!(binding, Var::Name(name) if name == "in_msg_slice_0"));
+            }
+            _ => panic!("expected var decl"),
+        }
+        match &body[1] {
+            StmtAst::VarDecl { binding, .. } => match binding {
+                Var::Tensor(items) => {
+                    assert!(matches!(&items[0], Var::Name(name) if name == "in_msg_slice_1"));
+                }
+                _ => panic!("expected tensor binding"),
+            },
+            _ => panic!("expected var decl"),
+        }
+        match &body[2] {
+            StmtAst::Call { args, .. } => {
+                assert!(matches!(args[0], ExprAst::Ident(ref name) if name == "in_msg_slice_0"));
+                assert!(matches!(args[1], ExprAst::Ident(ref name) if name == "in_msg_slice_1"));
+            }
+            _ => panic!("expected call"),
+        }
+    }
+
+    #[test]
+    fn renames_skip_bits_result_var_from_slice_to_slice() {
+        let mut body = vec![
+            StmtAst::VarDecl {
+                binding: Var::name("v4"),
+                expr: ExprAst::Call {
+                    callee: "skip_bits".to_string(),
+                    args: vec![ident("slice_1"), ExprAst::Number("64".to_string())],
+                },
+            },
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v5"), Var::name("v6")]),
+                expr: ExprAst::Call {
+                    callee: "load_uint".to_string(),
+                    args: vec![ident("v4"), ExprAst::Number("32".to_string())],
+                },
+            },
+            StmtAst::Call {
+                callee: "touch_many".to_string(),
+                args: vec![ident("v4"), ident("v5")],
+            },
+        ];
+
+        improve_variable_names(&mut body);
+
+        match &body[0] {
+            StmtAst::VarDecl { binding, .. } => {
+                assert!(matches!(binding, Var::Name(name) if name == "slice_0"));
+            }
+            _ => panic!("expected var decl"),
+        }
+        match &body[1] {
+            StmtAst::VarDecl { binding, .. } => match binding {
+                Var::Tensor(items) => {
+                    assert!(matches!(&items[0], Var::Name(name) if name == "slice_2"));
+                }
+                _ => panic!("expected tensor binding"),
+            },
+            _ => panic!("expected var decl"),
+        }
+        match &body[2] {
+            StmtAst::Call { args, .. } => {
+                assert!(matches!(args[0], ExprAst::Ident(ref name) if name == "slice_0"));
+                assert!(matches!(args[1], ExprAst::Ident(ref name) if name == "slice_2"));
+            }
+            _ => panic!("expected call"),
+        }
+    }
+
+    #[test]
+    fn renames_in_msg_full_begin_parse_loader_chain_first_binding_to_in_msg_full_slice() {
+        let mut body = vec![
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v5"), Var::name("v6")]),
+                expr: ExprAst::Call {
+                    callee: "load_uint".to_string(),
+                    args: vec![
+                        ExprAst::MethodCall {
+                            receiver: Box::new(ident("in_msg_full")),
+                            method: "begin_parse".to_string(),
+                            modifying: false,
+                            args: vec![],
+                        },
+                        ExprAst::Number("4".to_string()),
+                    ],
+                },
+            },
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v7"), Var::name("v8")]),
+                expr: ExprAst::Call {
+                    callee: "load_grams".to_string(),
+                    args: vec![ident("v5")],
+                },
+            },
+            StmtAst::Call {
+                callee: "touch_many".to_string(),
+                args: vec![ident("v5"), ident("v7")],
+            },
+        ];
+
+        improve_variable_names(&mut body);
+
+        match &body[0] {
+            StmtAst::VarDecl { binding, .. } => match binding {
+                Var::Tensor(items) => {
+                    assert!(matches!(&items[0], Var::Name(name) if name == "in_msg_full_slice_0"));
+                }
+                _ => panic!("expected tensor binding"),
+            },
+            _ => panic!("expected var decl"),
+        }
+        match &body[1] {
+            StmtAst::VarDecl { binding, .. } => match binding {
+                Var::Tensor(items) => {
+                    assert!(matches!(&items[0], Var::Name(name) if name == "in_msg_full_slice_1"));
+                }
+                _ => panic!("expected tensor binding"),
+            },
+            _ => panic!("expected var decl"),
+        }
+        match &body[2] {
+            StmtAst::Call { args, .. } => {
+                assert!(matches!(args[0], ExprAst::Ident(ref name) if name == "in_msg_full_slice_0"));
+                assert!(matches!(args[1], ExprAst::Ident(ref name) if name == "in_msg_full_slice_1"));
+            }
+            _ => panic!("expected call"),
+        }
+    }
+
+    #[test]
     fn picks_fresh_opcode_name_on_conflict() {
         let mut body = vec![
             StmtAst::VarDecl {
@@ -1167,6 +1637,125 @@ mod tests {
                 assert!(matches!(args[0], ExprAst::Ident(ref name) if name == "addr"));
                 assert!(matches!(args[1], ExprAst::Ident(ref name) if name == "coins"));
                 assert!(matches!(args[2], ExprAst::Ident(ref name) if name == "ref"));
+            }
+            _ => panic!("expected call"),
+        }
+    }
+
+    #[test]
+    fn renames_load_uint_and_load_int_values_to_bit_suffixed_names() {
+        let mut body = vec![
+            StmtAst::VarDecl {
+                binding: Var::name("v0"),
+                expr: ExprAst::MethodCall {
+                    receiver: Box::new(ExprAst::Call {
+                        callee: "get_data".to_string(),
+                        args: vec![],
+                    }),
+                    method: "begin_parse".to_string(),
+                    modifying: false,
+                    args: vec![],
+                },
+            },
+            StmtAst::VarDecl {
+                binding: Var::name("v1"),
+                expr: ExprAst::MethodCall {
+                    receiver: Box::new(ident("some_slice")),
+                    method: "load_uint".to_string(),
+                    modifying: true,
+                    args: vec![ExprAst::Number("32".to_string())],
+                },
+            },
+            StmtAst::VarDecl {
+                binding: Var::name("v2"),
+                expr: ExprAst::MethodCall {
+                    receiver: Box::new(ident("another_slice")),
+                    method: "load_uint".to_string(),
+                    modifying: true,
+                    args: vec![ExprAst::Number("32".to_string())],
+                },
+            },
+            StmtAst::VarDecl {
+                binding: Var::name("v3"),
+                expr: ExprAst::MethodCall {
+                    receiver: Box::new(ident("another_slice")),
+                    method: "load_int".to_string(),
+                    modifying: true,
+                    args: vec![ExprAst::Number("1".to_string())],
+                },
+            },
+            StmtAst::Call {
+                callee: "touch_many".to_string(),
+                args: vec![ident("v1"), ident("v2"), ident("v3")],
+            },
+        ];
+
+        improve_variable_names(&mut body);
+
+        match &body[1] {
+            StmtAst::VarDecl { binding, .. } => {
+                assert!(matches!(binding, Var::Name(name) if name == "uint32"));
+            }
+            _ => panic!("expected var decl"),
+        }
+        match &body[2] {
+            StmtAst::VarDecl { binding, .. } => {
+                assert!(matches!(binding, Var::Name(name) if name == "uint32_0"));
+            }
+            _ => panic!("expected var decl"),
+        }
+        match &body[3] {
+            StmtAst::VarDecl { binding, .. } => {
+                assert!(matches!(binding, Var::Name(name) if name == "int1"));
+            }
+            _ => panic!("expected var decl"),
+        }
+        match &body[4] {
+            StmtAst::Call { args, .. } => {
+                assert!(matches!(args[0], ExprAst::Ident(ref name) if name == "uint32"));
+                assert!(matches!(args[1], ExprAst::Ident(ref name) if name == "uint32_0"));
+                assert!(matches!(args[2], ExprAst::Ident(ref name) if name == "int1"));
+            }
+            _ => panic!("expected call"),
+        }
+    }
+
+    #[test]
+    fn renames_tuple_load_uint_value_to_bit_suffixed_name() {
+        let mut body = vec![
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v1"), Var::name("v6")]),
+                expr: ExprAst::Call {
+                    callee: "load_uint".to_string(),
+                    args: vec![
+                        ExprAst::Call {
+                            callee: "skip_bits".to_string(),
+                            args: vec![ident("in_msg_body"), ExprAst::Number("32".to_string())],
+                        },
+                        ExprAst::Number("32".to_string()),
+                    ],
+                },
+            },
+            StmtAst::Call {
+                callee: "touch".to_string(),
+                args: vec![ident("v6")],
+            },
+        ];
+
+        improve_variable_names(&mut body);
+
+        match &body[0] {
+            StmtAst::VarDecl { binding, .. } => match binding {
+                Var::Tensor(items) => {
+                    assert!(matches!(&items[1], Var::Name(name) if name == "uint32"));
+                }
+                _ => panic!("expected tensor binding"),
+            },
+            _ => panic!("expected var decl"),
+        }
+        match &body[1] {
+            StmtAst::Call { args, .. } => {
+                assert!(matches!(args[0], ExprAst::Ident(ref name) if name == "uint32"));
             }
             _ => panic!("expected call"),
         }
@@ -1425,6 +2014,7 @@ mod tests {
         match &body[3] {
             StmtAst::VarDecl { binding, .. } => match binding {
                 Var::Tensor(items) => {
+                    assert!(matches!(&items[0], Var::Name(name) if name == "in_msg_full_slice_0"));
                     assert!(matches!(&items[1], Var::Name(name) if name == "msg_flags"));
                 }
                 _ => panic!("expected tensor binding"),

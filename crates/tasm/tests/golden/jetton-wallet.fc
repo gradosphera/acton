@@ -2,48 +2,46 @@
 #pragma version >=0.4.0;
 
 () recv_internal(int balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
-    var (slice_0, msg_flags) = load_uint(in_msg_full.begin_parse(), 4);
+    var (in_msg_full_slice_0, msg_flags) = load_uint(in_msg_full.begin_parse(), 4);
     if (msg_flags & 1) {
-        var v4 = skip_bits(in_msg_body, 32);
+        var in_msg_slice_0 = skip_bits(in_msg_body, 32);
         var ds = get_data().begin_parse();
-        var v7 = ds~load_uint(4);
+        var uint4 = ds~load_uint(4);
         var coins = ds~load_grams();
         var addr = ds~load_msg_addr();
         var addr_2 = ds~load_msg_addr();
         end_parse(ds);
-        var (slice_1, v15) = load_uint(v4, 32);
-        throw_unless((1 << 16) - 1, (v15 == 395134233) | (v15 == 2078119902));
-        var (slice_2, coins_2) = load_grams(skip_bits(slice_1, 64));
+        var (in_msg_slice_1, uint32) = load_uint(in_msg_slice_0, 32);
+        throw_unless((1 << 16) - 1, (uint32 == 395134233) | (uint32 == 2078119902));
         set_data(begin_cell()
-            .store_uint(v7, 4)
-            .store_grams(coins + coins_2)
+            .store_uint(uint4, 4)
+            .store_grams(coins + skip_bits(in_msg_slice_1, 64)~load_grams())
             .store_slice(addr)
             .store_slice(addr_2)
             .end_cell());
         return ();
     }
-    var addr_3 = slice_0~load_msg_addr();
-    var addr_4 = slice_0~load_msg_addr();
+    var addr_3 = in_msg_full_slice_0~load_msg_addr();
+    var addr_4 = in_msg_full_slice_0~load_msg_addr();
+    var coins_2 = in_msg_full_slice_0~load_grams();
+    var slice_0 = skip_dict(in_msg_full_slice_0);
     var coins_3 = slice_0~load_grams();
-    var slice_3 = skip_dict(slice_0);
-    var coins_4 = slice_3~load_grams();
-    var (slice_4, coins_5) = load_grams(slice_3);
-    var fwd_fee = get_original_fwd_fee(0, coins_5);
-    var (in_msg_slice_0, opcode) = load_uint(in_msg_body, 32);
+    var fwd_fee = get_original_fwd_fee(0, slice_0~load_grams());
+    var (in_msg_slice_2, opcode) = load_uint(in_msg_body, 32);
     if (opcode == 260734629) {
-        var v44 = in_msg_slice_0~load_uint(64);
-        var coins_6 = in_msg_slice_0~load_grams();
-        var (in_msg_slice_1, addr_5) = load_msg_addr(in_msg_slice_0);
+        var uint64 = in_msg_slice_2~load_uint(64);
+        var coins_4 = in_msg_slice_2~load_grams();
+        var (in_msg_slice_3, addr_5) = load_msg_addr(in_msg_slice_2);
         var (workchain, addr_hash) = parse_std_addr(addr_5);
         throw_unless(333, workchain == 0);
         var ds_2 = get_data().begin_parse();
-        var v54 = ds_2~load_uint(4);
-        var coins_7 = ds_2~load_grams();
+        var uint4_0 = ds_2~load_uint(4);
+        var coins_5 = ds_2~load_grams();
         var addr_6 = ds_2~load_msg_addr();
         var addr_7 = ds_2~load_msg_addr();
         end_parse(ds_2);
         throw_unless(73, equal_slices_bits(addr_6, addr_3));
-        var v62 = coins_7 - coins_6;
+        var v62 = coins_5 - coins_4;
         throw_unless(47, v62 >= 0);
         var cell_0 = begin_cell()
             .store_uint(0, 2)
@@ -56,40 +54,40 @@
                 .end_cell())
             .store_uint(0, 1)
             .end_cell();
-        var slice_5 = begin_cell()
+        var slice_1 = begin_cell()
             .store_uint(4, 3)
             .store_int(0, 8)
             .store_uint(cell_0.cell_hash(), 256)
             .end_cell()
             .begin_parse();
-        var addr_8 = in_msg_slice_1~load_msg_addr();
-        var (slice_6, coins_8) = load_grams(skip_dict(in_msg_slice_1));
-        if (preload_uint(slice_6, 1)) {
-            var (bits, refs) = slice_bits_refs(slice_6);
+        var addr_8 = in_msg_slice_3~load_msg_addr();
+        var (slice_2, coins_6) = load_grams(skip_dict(in_msg_slice_3));
+        if (preload_uint(slice_2, 1)) {
+            var (bits, refs) = slice_bits_refs(slice_2);
             throw_unless(49, (refs == 1) & (bits == 1));
         }
         var cell_1 = begin_cell()
             .store_uint(24, 6)
-            .store_slice(slice_5)
+            .store_slice(slice_1)
             .store_grams(0)
             .store_uint(7, 108)
             .store_ref(cell_0)
             .store_ref(begin_cell()
                 .store_uint(395134233, 32)
-                .store_uint(v44, 64)
-                .store_grams(coins_6)
+                .store_uint(uint64, 64)
+                .store_grams(coins_4)
                 .store_slice(addr_6)
                 .store_slice(addr_8)
-                .store_grams(coins_8)
-                .store_slice(slice_6)
+                .store_grams(coins_6)
+                .store_slice(slice_2)
                 .end_cell())
             .end_cell();
-        var v106 = coins_8 ? 2 : 1;
+        var v106 = coins_6 ? 2 : 1;
         var precompiled_gas = get_precompiled_gas_consumption();
-        throw_unless(48, msg_value > (((((coins_8 + (v106 * fwd_fee)) + get_simple_forward_fee(0, 931, 3)) + get_compute_fee(0, null?(precompiled_gas) ? 10065 : precompiled_gas)) + get_compute_fee(0, null?(precompiled_gas) ? 10435 : precompiled_gas)) + get_storage_fee(0, 157680000, 1033, 3)));
+        throw_unless(48, msg_value > (((((coins_6 + (v106 * fwd_fee)) + get_simple_forward_fee(0, 931, 3)) + get_compute_fee(0, null?(precompiled_gas) ? 10065 : precompiled_gas)) + get_compute_fee(0, null?(precompiled_gas) ? 10435 : precompiled_gas)) + get_storage_fee(0, 157680000, 1033, 3)));
         send_raw_message(cell_1, 80);
         set_data(begin_cell()
-            .store_uint(v54, 4)
+            .store_uint(uint4_0, 4)
             .store_grams(v62)
             .store_slice(addr_6)
             .store_slice(addr_7)
@@ -98,15 +96,15 @@
     }
     if (opcode == 395134233) {
         var ds_3 = get_data().begin_parse();
-        var v131 = ds_3~load_uint(4);
-        var coins_9 = ds_3~load_grams();
+        var uint4_1 = ds_3~load_uint(4);
+        var coins_7 = ds_3~load_grams();
         var addr_9 = ds_3~load_msg_addr();
         var addr_10 = ds_3~load_msg_addr();
         end_parse(ds_3);
-        var v139 = in_msg_slice_0~load_uint(64);
-        var coins_10 = in_msg_slice_0~load_grams();
-        var addr_11 = in_msg_slice_0~load_msg_addr();
-        var (in_msg_slice_2, addr_12) = load_msg_addr(in_msg_slice_0);
+        var uint64_0 = in_msg_slice_2~load_uint(64);
+        var coins_8 = in_msg_slice_2~load_grams();
+        var addr_11 = in_msg_slice_2~load_msg_addr();
+        var (in_msg_slice_4, addr_12) = load_msg_addr(in_msg_slice_2);
         throw_unless(74, equal_slices_bits(addr_10, addr_3) | equal_slices_bits(begin_cell()
             .store_uint(4, 3)
             .store_int(0, 8)
@@ -124,20 +122,20 @@
                 .cell_hash(), 256)
             .end_cell()
             .begin_parse(), addr_3));
-        var v165 = coins_9 + coins_10;
-        var (in_msg_slice_3, coins_11) = load_grams(in_msg_slice_2);
-        if (coins_11) {
+        var v165 = coins_7 + coins_8;
+        var (in_msg_slice_5, coins_9) = load_grams(in_msg_slice_4);
+        if (coins_9) {
             send_raw_message(begin_cell()
                 .store_uint(16, 6)
                 .store_slice(addr_9)
-                .store_grams(coins_11)
+                .store_grams(coins_9)
                 .store_uint(1, 107)
                 .store_ref(begin_cell()
                     .store_uint(1935855772, 32)
-                    .store_uint(v139, 64)
-                    .store_grams(coins_10)
+                    .store_uint(uint64_0, 64)
+                    .store_grams(coins_8)
                     .store_slice(addr_11)
-                    .store_slice(in_msg_slice_3)
+                    .store_slice(in_msg_slice_5)
                     .end_cell())
                 .end_cell(), 17);
         }
@@ -149,11 +147,11 @@
                 .store_grams(0)
                 .store_uint(0, 107)
                 .store_uint(3576854235, 32)
-                .store_uint(v139, 64)
+                .store_uint(uint64_0, 64)
                 .end_cell(), 130);
         }
         set_data(begin_cell()
-            .store_uint(v131, 4)
+            .store_uint(uint4_1, 4)
             .store_grams(v165)
             .store_slice(addr_9)
             .store_slice(addr_10)
@@ -162,16 +160,16 @@
     }
     if (opcode == 1499400124) {
         var ds_4 = get_data().begin_parse();
-        var v203 = ds_4~load_uint(4);
-        var coins_12 = ds_4~load_grams();
+        var uint4_2 = ds_4~load_uint(4);
+        var coins_10 = ds_4~load_grams();
         var addr_13 = ds_4~load_msg_addr();
         var addr_14 = ds_4~load_msg_addr();
         end_parse(ds_4);
-        var v211 = in_msg_slice_0~load_uint(64);
-        var coins_13 = in_msg_slice_0~load_grams();
-        var addr_15 = in_msg_slice_0~load_msg_addr();
-        end_parse(skip_dict(in_msg_slice_0));
-        var v217 = coins_12 - coins_13;
+        var uint64_1 = in_msg_slice_2~load_uint(64);
+        var coins_11 = in_msg_slice_2~load_grams();
+        var addr_15 = in_msg_slice_2~load_msg_addr();
+        end_parse(skip_dict(in_msg_slice_2));
+        var v217 = coins_10 - coins_11;
         throw_unless(73, equal_slices_bits(addr_13, addr_3));
         throw_unless(47, v217 >= 0);
         var cell_2 = begin_cell()
@@ -181,8 +179,8 @@
             .store_uint(1, 107)
             .store_ref(begin_cell()
                 .store_uint(2078119902, 32)
-                .store_uint(v211, 64)
-                .store_grams(coins_13)
+                .store_uint(uint64_1, 64)
+                .store_grams(coins_11)
                 .store_slice(addr_13)
                 .store_slice(addr_15)
                 .end_cell())
@@ -196,7 +194,7 @@
         throw_unless(48, msg_value > ((get_forward_fee(0, 754, 1) + get_compute_fee(0, v234)) + get_compute_fee(0, 6757)));
         send_raw_message(cell_2, 80);
         set_data(begin_cell()
-            .store_uint(v203, 4)
+            .store_uint(uint4_2, 4)
             .store_grams(v217)
             .store_slice(addr_13)
             .store_slice(addr_14)
@@ -211,7 +209,7 @@
 
 (int, slice, slice, cell) method_97026() impure method_id(97026) {
     var ds = get_data().begin_parse();
-    var v2 = ds~load_uint(4);
+    var uint4 = ds~load_uint(4);
     var coins = ds~load_grams();
     var addr = ds~load_msg_addr();
     var addr_2 = ds~load_msg_addr();
@@ -221,11 +219,11 @@
 
 int method_100881() impure method_id(100881) {
     var ds = get_data().begin_parse();
-    var v2 = ds~load_uint(4);
+    var uint4 = ds~load_uint(4);
     var coins = ds~load_grams();
     var addr = ds~load_msg_addr();
     var addr_2 = ds~load_msg_addr();
     end_parse(ds);
-    return v2;
+    return uint4;
 }
 

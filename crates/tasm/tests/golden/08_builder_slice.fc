@@ -2,7 +2,7 @@
 #pragma version >=0.4.0;
 
 () recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
-    var (slice_0, v4) = load_uint(begin_cell()
+    var (slice_0, uint16) = load_uint(begin_cell()
         .store_uint(msg_value, 16)
         .end_cell()
         .begin_parse(), 16);

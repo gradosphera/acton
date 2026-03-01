@@ -242,20 +242,27 @@ fn rewrite_tuple_modifying_chain_once(stmts: &mut [StmtAst], index: &BlockDefUse
             continue;
         };
 
-        if !is_temp_ident(&receiver_name) || !has_single_immediate_use(index, def_idx, &next_name) {
+        let has_immediate_next_use = has_single_immediate_use(index, def_idx, &next_name);
+        let has_no_next_uses = has_no_uses(index, def_idx, &next_name);
+        if !(is_temp_like_ident(&receiver_name)
+            || has_no_later_uses(index, def_idx, &receiver_name))
+            || !(has_immediate_next_use || has_no_next_uses)
+        {
             continue;
         }
 
-        let next_stmt = match stmts.get_mut(def_idx + 1) {
-            Some(stmt) => stmt,
-            None => continue,
-        };
-        if !replace_first_call_input_in_stmt(
-            next_stmt,
-            &next_name,
-            ExprAst::Ident(receiver_name.clone()),
-        ) {
-            continue;
+        if has_immediate_next_use {
+            let next_stmt = match stmts.get_mut(def_idx + 1) {
+                Some(stmt) => stmt,
+                None => continue,
+            };
+            if !replace_first_call_input_in_stmt(
+                next_stmt,
+                &next_name,
+                ExprAst::Ident(receiver_name.clone()),
+            ) {
+                continue;
+            }
         }
 
         stmts[def_idx] = StmtAst::VarDecl {
@@ -337,11 +344,29 @@ fn two_name_tensor(binding: &Var) -> Option<(String, String)> {
     }
 }
 
-fn is_temp_ident(name: &str) -> bool {
+fn is_temp_like_ident(name: &str) -> bool {
     let Some(rest) = name.strip_prefix('v') else {
+        if name == "ds"
+            || name.starts_with("ds_")
+            || name.starts_with("slice_")
+            || name.starts_with("in_msg_slice_")
+            || name.starts_with("builder_")
+            || name.starts_with("cell_")
+            || name.starts_with("uint")
+            || name.starts_with("int")
+        {
+            return true;
+        }
         return false;
     };
     !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn has_no_later_uses(index: &BlockDefUseIndex, def_idx: usize, ident: &str) -> bool {
+    !index
+        .uses
+        .iter()
+        .any(|use_occurrence| use_occurrence.ident == ident && use_occurrence.stmt_idx > def_idx)
 }
 
 fn has_single_immediate_use(index: &BlockDefUseIndex, def_idx: usize, ident: &str) -> bool {
@@ -358,6 +383,12 @@ fn has_single_immediate_use(index: &BlockDefUseIndex, def_idx: usize, ident: &st
     use_occurrence.stmt_idx == def_idx + 1
         && use_occurrence.ident == ident
         && index.use_to_def.get(use_id).copied().flatten() == Some(def_idx)
+}
+
+fn has_no_uses(index: &BlockDefUseIndex, def_idx: usize, ident: &str) -> bool {
+    !index
+        .def_ident_to_uses
+        .contains_key(&(def_idx, ident.to_string()))
 }
 
 fn condition_inline_replacement(
@@ -1190,6 +1221,102 @@ mod tests {
                 assert!(matches!(args.first(), Some(ExprAst::Ident(name)) if name == "v11"));
             }
             _ => panic!("expected call"),
+        }
+    }
+
+    #[test]
+    fn folds_in_msg_body_loader_chain_into_modifying_method_calls() {
+        let mut body = vec![
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v1"), Var::name("v2")]),
+                expr: ExprAst::Call {
+                    callee: "load_uint".to_string(),
+                    args: vec![ident("in_msg_body"), num("32")],
+                },
+            },
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v3"), Var::name("v4")]),
+                expr: ExprAst::Call {
+                    callee: "load_uint".to_string(),
+                    args: vec![ident("v1"), num("64")],
+                },
+            },
+        ];
+
+        simplify_method_body(&mut body);
+
+        assert_eq!(body.len(), 2);
+        match &body[0] {
+            StmtAst::VarDecl { binding, expr } => {
+                assert!(matches!(binding, Var::Name(name) if name == "v2"));
+                match expr {
+                    ExprAst::MethodCall {
+                        receiver,
+                        method,
+                        modifying,
+                        args,
+                    } => {
+                        assert!(matches!(
+                            receiver.as_ref(),
+                            ExprAst::Ident(name) if name == "in_msg_body"
+                        ));
+                        assert_eq!(method, "load_uint");
+                        assert!(*modifying);
+                        assert_eq!(args.len(), 1);
+                        assert_eq!(args[0], num("32"));
+                    }
+                    _ => panic!("expected method call"),
+                }
+            }
+            _ => panic!("expected var decl"),
+        }
+    }
+
+    #[test]
+    fn folds_tuple_loader_when_next_slice_is_unused() {
+        let mut body = vec![
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v1"), Var::name("v2")]),
+                expr: ExprAst::Call {
+                    callee: "load_uint".to_string(),
+                    args: vec![ident("in_msg_body"), num("32")],
+                },
+            },
+            StmtAst::Call {
+                callee: "touch".to_string(),
+                args: vec![ident("v2")],
+            },
+            StmtAst::Call {
+                callee: "touch".to_string(),
+                args: vec![ident("v2")],
+            },
+        ];
+
+        simplify_method_body(&mut body);
+
+        match &body[0] {
+            StmtAst::VarDecl { binding, expr } => {
+                assert!(matches!(binding, Var::Name(name) if name == "v2"));
+                match expr {
+                    ExprAst::MethodCall {
+                        receiver,
+                        method,
+                        modifying,
+                        args,
+                    } => {
+                        assert!(matches!(
+                            receiver.as_ref(),
+                            ExprAst::Ident(name) if name == "in_msg_body"
+                        ));
+                        assert_eq!(method, "load_uint");
+                        assert!(*modifying);
+                        assert_eq!(args.len(), 1);
+                        assert_eq!(args[0], num("32"));
+                    }
+                    _ => panic!("expected method call"),
+                }
+            }
+            _ => panic!("expected var decl"),
         }
     }
 
