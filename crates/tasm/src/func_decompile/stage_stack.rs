@@ -116,6 +116,17 @@ impl LiftState {
         expr
     }
 
+    fn pop_expr_expect_ast(
+        &mut self,
+        stmts: &mut Vec<StmtAst>,
+        depth: usize,
+        expected: ValueType,
+    ) -> ExprAst {
+        let expr = self.pop_expr_ast(stmts, depth);
+        self.refine_expr_type(&expr_key(&expr), expected);
+        expr
+    }
+
     fn pop_cont(&mut self) -> Option<Code> {
         match self.stack.last() {
             Some(StackValue::Continuation(_)) => match self.stack.pop() {
@@ -126,9 +137,9 @@ impl LiftState {
         }
     }
 
-    pub(crate) fn peek_expr_for_return(&self) -> Option<String> {
+    pub(crate) fn peek_expr_ast_for_return(&self) -> Option<ExprAst> {
         self.stack.last().and_then(|v| match v {
-            StackValue::Expr(e) => Some(expr_key(e)),
+            StackValue::Expr(e) => Some(e.clone()),
             StackValue::Continuation(_) => None,
         })
     }
@@ -140,11 +151,11 @@ impl LiftState {
         })
     }
 
-    pub(crate) fn return_exprs(&self) -> Vec<String> {
+    pub(crate) fn return_expr_asts(&self) -> Vec<ExprAst> {
         self.stack
             .iter()
             .filter_map(|v| match v {
-                StackValue::Expr(e) => Some(expr_key(e)),
+                StackValue::Expr(e) => Some(e.clone()),
                 StackValue::Continuation(_) => None,
             })
             .collect()
@@ -273,7 +284,7 @@ fn lift_plain_instruction(
                 );
                 return;
             };
-            let cond = state.pop_expr_expect(stmts, depth, ValueType::Int);
+            let cond = state.pop_expr_expect_ast(stmts, depth, ValueType::Int);
             let mut child = state.clone();
             let mut then_body = Vec::new();
             lift_instructions(
@@ -310,7 +321,7 @@ fn lift_plain_instruction(
                 );
                 return;
             };
-            let cond = state.pop_expr_expect(stmts, depth, ValueType::Int);
+            let cond = state.pop_expr_expect_ast(stmts, depth, ValueType::Int);
             let base_state = state.clone();
             let mut child = state.clone();
             let mut child_stmts = Vec::new();
@@ -321,7 +332,7 @@ fn lift_plain_instruction(
                 depth + 1,
                 ctx,
             );
-            if let Some(cond_value) = parse_const_int_expr(&cond) {
+            if let Some(cond_value) = parse_const_int_expr_ast(&cond) {
                 state.absorb_counters(&child);
                 if cond_value != 0 {
                     stmts.extend(child_stmts);
@@ -363,12 +374,12 @@ fn lift_plain_instruction(
                 n if n >= 2 => (
                     Some(code_args.remove(0)),
                     Some(code_args.remove(0)),
-                    state.pop_expr_expect(stmts, depth, ValueType::Int),
+                    state.pop_expr_expect_ast(stmts, depth, ValueType::Int),
                 ),
                 1 => {
                     let inline = code_args.remove(0);
                     let stacked = state.pop_cont();
-                    let cond = state.pop_expr_expect(stmts, depth, ValueType::Int);
+                    let cond = state.pop_expr_expect_ast(stmts, depth, ValueType::Int);
                     if plain.name == "IFREFELSE" {
                         (Some(inline), stacked, cond)
                     } else {
@@ -378,7 +389,7 @@ fn lift_plain_instruction(
                 _ => {
                     let else_c = state.pop_cont();
                     let then_c = state.pop_cont();
-                    let cond = state.pop_expr_expect(stmts, depth, ValueType::Int);
+                    let cond = state.pop_expr_expect_ast(stmts, depth, ValueType::Int);
                     (then_c, else_c, cond)
                 }
             };
@@ -418,7 +429,7 @@ fn lift_plain_instruction(
                 depth + 1,
                 ctx,
             );
-            if let Some(cond_value) = parse_const_int_expr(&cond) {
+            if let Some(cond_value) = parse_const_int_expr_ast(&cond) {
                 state.absorb_counters(&then_state);
                 state.absorb_counters(&else_state);
                 if cond_value != 0 {
@@ -494,8 +505,8 @@ fn lift_plain_instruction(
                 ctx,
             );
             let cond_expr = cond_state
-                .peek_expr_for_return()
-                .unwrap_or_else(|| "0".to_string());
+                .peek_expr_ast_for_return()
+                .unwrap_or_else(|| atom_expr("0"));
             let mut body_state = state.clone();
             let mut body_stmts = Vec::new();
             lift_instructions(
@@ -509,17 +520,23 @@ fn lift_plain_instruction(
             let mut do_body = cond_stmts;
             do_body.push(StmtAst::Assign {
                 target: loop_cond.clone(),
-                expr: ExprAst::Atom(cond_expr),
+                expr: cond_expr,
             });
             do_body.push(StmtAst::If {
                 negated: false,
-                condition: loop_cond.clone(),
+                condition: atom_expr(loop_cond.clone()),
                 then_body: body_stmts,
                 else_body: None,
             });
             stmts.push(StmtAst::DoUntil {
                 body: do_body,
-                condition: format!("({loop_cond}) == 0"),
+                condition: ExprAst::Binary {
+                    lhs: Box::new(atom_expr(loop_cond)),
+                    op: "==".to_string(),
+                    rhs: Box::new(atom_expr("0")),
+                    wrap_lhs: true,
+                    wrap_rhs: false,
+                },
             });
             state.absorb_counters(&cond_state);
             state.absorb_counters(&body_state);
@@ -536,7 +553,10 @@ fn lift_plain_instruction(
             let mut child = state.clone();
             let mut body = Vec::new();
             lift_instructions(&cont.instructions, &mut child, &mut body, depth + 1, ctx);
-            stmts.push(StmtAst::Repeat { count, body });
+            stmts.push(StmtAst::Repeat {
+                count: atom_expr(count),
+                body,
+            });
 
             state.absorb_counters(&child);
             state.stack.clear();
@@ -553,8 +573,8 @@ fn lift_plain_instruction(
             let mut body = Vec::new();
             lift_instructions(&cont.instructions, &mut child, &mut body, depth + 1, ctx);
             let cond_expr = child
-                .peek_expr_for_return()
-                .unwrap_or_else(|| "0".to_string());
+                .peek_expr_ast_for_return()
+                .unwrap_or_else(|| atom_expr("0"));
             stmts.push(StmtAst::DoUntil {
                 body,
                 condition: cond_expr,
@@ -565,7 +585,7 @@ fn lift_plain_instruction(
             return;
         }
         "IFRET" => {
-            let cond = state.pop_expr_expect(stmts, depth, ValueType::Int);
+            let cond = state.pop_expr_expect_ast(stmts, depth, ValueType::Int);
             stmts.push(StmtAst::If {
                 negated: false,
                 condition: cond,
@@ -576,7 +596,7 @@ fn lift_plain_instruction(
             return;
         }
         "IFNOTRET" => {
-            let cond = state.pop_expr_expect(stmts, depth, ValueType::Int);
+            let cond = state.pop_expr_expect_ast(stmts, depth, ValueType::Int);
             stmts.push(StmtAst::If {
                 negated: true,
                 condition: cond,
@@ -1890,7 +1910,7 @@ fn merge_if_stacks(
 }
 
 fn merge_ifelse_stacks(
-    cond: &str,
+    cond: &ExprAst,
     then_state: &LiftState,
     else_state: &LiftState,
     state: &mut LiftState,
@@ -1929,7 +1949,7 @@ fn merge_ifelse_stacks(
             pre_if_stmts.push(StmtAst::VarDecl {
                 binding: merged.clone().into(),
                 expr: ExprAst::Ternary {
-                    condition: Box::new(atom_expr(cond)),
+                    condition: Box::new(cond.clone()),
                     then_expr: Box::new(then_expr.clone()),
                     else_expr: Box::new(else_expr.clone()),
                 },
@@ -2227,4 +2247,8 @@ fn parse_const_int_expr(expr: &str) -> Option<i128> {
         return trimmed[1..trimmed.len() - 1].trim().parse::<i128>().ok();
     }
     None
+}
+
+fn parse_const_int_expr_ast(expr: &ExprAst) -> Option<i128> {
+    parse_const_int_expr(&expr_key(expr))
 }

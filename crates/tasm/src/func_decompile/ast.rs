@@ -89,17 +89,17 @@ pub(crate) enum StmtAst {
     },
     If {
         negated: bool,
-        condition: String,
+        condition: ExprAst,
         then_body: Vec<StmtAst>,
         else_body: Option<Vec<StmtAst>>,
     },
     Repeat {
-        count: String,
+        count: ExprAst,
         body: Vec<StmtAst>,
     },
     DoUntil {
         body: Vec<StmtAst>,
-        condition: String,
+        condition: ExprAst,
     },
     Expr(String),
 }
@@ -221,7 +221,7 @@ fn render_stmt(stmt: &StmtAst, depth: usize, out: &mut String) {
             else_body,
         } => {
             let keyword = if *negated { "ifnot" } else { "if" };
-            let _ = writeln!(out, "{indent}{keyword} ({condition}) {{");
+            let _ = writeln!(out, "{indent}{keyword} ({}) {{", render_expr(condition));
             render_stmt_list(then_body, depth + 1, out);
             if let Some(else_body) = else_body {
                 let _ = writeln!(out, "{indent}}} else {{");
@@ -230,14 +230,14 @@ fn render_stmt(stmt: &StmtAst, depth: usize, out: &mut String) {
             let _ = writeln!(out, "{indent}}}");
         }
         StmtAst::Repeat { count, body } => {
-            let _ = writeln!(out, "{indent}repeat ({count}) {{");
+            let _ = writeln!(out, "{indent}repeat ({}) {{", render_expr(count));
             render_stmt_list(body, depth + 1, out);
             let _ = writeln!(out, "{indent}}}");
         }
         StmtAst::DoUntil { body, condition } => {
             let _ = writeln!(out, "{indent}do {{");
             render_stmt_list(body, depth + 1, out);
-            let _ = writeln!(out, "{indent}}} until ({condition});");
+            let _ = writeln!(out, "{indent}}} until ({});", render_expr(condition));
         }
         StmtAst::Expr(line) => {
             let _ = writeln!(out, "{indent}{line}");
@@ -323,13 +323,13 @@ mod tests {
                 StmtAst::var("v0", "0"),
                 StmtAst::If {
                     negated: false,
-                    condition: "arg0".to_string(),
+                    condition: ExprAst::Atom("arg0".to_string()),
                     then_body: vec![StmtAst::assign("v0", "1")],
                     else_body: Some(vec![StmtAst::assign("v0", "2")]),
                 },
                 StmtAst::DoUntil {
                     body: vec![StmtAst::assign("v0", "v0 + 1")],
-                    condition: "v0 > 10".to_string(),
+                    condition: ExprAst::Atom("v0 > 10".to_string()),
                 },
                 StmtAst::Return(Some(ExprAst::Atom("v0".to_string()))),
             ],

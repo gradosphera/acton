@@ -108,17 +108,17 @@ fn stmt_contains_ident(stmt: &StmtAst, ident: &str) -> bool {
             else_body,
             ..
         } => {
-            contains_ident_text(condition, ident)
+            expr_contains_ident(condition, ident)
                 || then_body.iter().any(|s| stmt_contains_ident(s, ident))
                 || else_body
                     .as_ref()
                     .is_some_and(|body| body.iter().any(|s| stmt_contains_ident(s, ident)))
         }
         StmtAst::Repeat { count, body } => {
-            contains_ident_text(count, ident) || body.iter().any(|s| stmt_contains_ident(s, ident))
+            expr_contains_ident(count, ident) || body.iter().any(|s| stmt_contains_ident(s, ident))
         }
         StmtAst::DoUntil { body, condition } => {
-            contains_ident_text(condition, ident)
+            expr_contains_ident(condition, ident)
                 || body.iter().any(|s| stmt_contains_ident(s, ident))
         }
     }
@@ -432,7 +432,7 @@ impl FuncDecompiler {
             if kind != MethodKind::RecvInternal
                 && !state.has_explicit_return()
             {
-                let return_values = state.return_exprs();
+                let return_values = state.return_expr_asts();
                 match return_values.len() {
                     0 => {}
                     1 => {
@@ -440,20 +440,18 @@ impl FuncDecompiler {
                             match return_kind {
                                 ReturnKind::Tuple(_) => {
                                     body.push(StmtAst::Return(Some(ExprAst::Tuple(vec![
-                                        ExprAst::Atom(ret.clone()),
+                                        ret.clone(),
                                     ]))));
                                 }
                                 ReturnKind::Unit => {}
                                 _ => {
-                                    body.push(StmtAst::Return(Some(ExprAst::Atom(ret.clone()))));
+                                    body.push(StmtAst::Return(Some(ret.clone())));
                                 }
                             }
                         }
                     }
                     _ => {
-                        body.push(StmtAst::Return(Some(ExprAst::Tuple(
-                            return_values.into_iter().map(ExprAst::Atom).collect(),
-                        ))));
+                        body.push(StmtAst::Return(Some(ExprAst::Tuple(return_values))));
                     }
                 }
             }
