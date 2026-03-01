@@ -31,14 +31,13 @@ pub(crate) struct LiftState {
 }
 
 impl LiftState {
-    fn push_expr(&mut self, expr: impl Into<ExprAst>) {
-        let expr = expr.into();
+    fn push_expr(&mut self, expr: ExprAst) {
         let ty = infer_expr_type(&expr);
         self.push_typed_expr_ast(expr, ty);
     }
 
-    fn push_typed_expr(&mut self, expr: impl Into<ExprAst>, ty: ValueType) {
-        self.push_typed_expr_ast(expr.into(), ty);
+    fn push_typed_expr(&mut self, ident: String, ty: ValueType) {
+        self.push_typed_expr_ast(ExprAst::Ident(ident), ty);
     }
 
     fn push_typed_expr_ast(&mut self, expr: ExprAst, ty: ValueType) {
@@ -187,22 +186,24 @@ impl LiftState {
     }
 
     pub(crate) fn param_type(&self, param: &str) -> ValueType {
-        self.expr_type_of(&ExprAst::from(param))
+        self.expr_type_of(&ExprAst::Ident(param.to_string()))
     }
 
-    pub(crate) fn seed_stack_with_exprs(&mut self, exprs: &[String]) {
+    pub(crate) fn seed_stack_with_exprs(&mut self, exprs: &[ExprAst]) {
         for expr in exprs {
-            let ty = match expr.as_str() {
-                "balance" | "msg_value" => ValueType::Int,
-                "in_msg_full" => ValueType::Cell,
-                "in_msg_body" => ValueType::Slice,
-                _ => infer_expr_type(&ExprAst::from(expr.clone())),
+            let ty = match expr {
+                ExprAst::Ident(name) if name == "balance" || name == "msg_value" => ValueType::Int,
+                ExprAst::Ident(name) if name == "in_msg_full" => ValueType::Cell,
+                ExprAst::Ident(name) if name == "in_msg_body" => ValueType::Slice,
+                _ => infer_expr_type(expr),
             };
-            self.push_typed_expr(expr.clone(), ty);
-            if let Some(idx) = parse_arg_param_index(expr) {
+            self.push_typed_expr_ast(expr.clone(), ty);
+            if let ExprAst::Ident(name) = expr
+                && let Some(idx) = parse_arg_param_index(name)
+            {
                 self.next_param = self.next_param.max(idx + 1);
-                if !self.params.contains(expr) {
-                    self.params.push(expr.clone());
+                if !self.params.contains(name) {
+                    self.params.push(name.clone());
                 }
             }
         }
@@ -1021,7 +1022,7 @@ fn lift_plain_instruction(
         let t = state.new_temp();
         stmts.push(StmtAst::VarDecl {
             binding: t.clone().into(),
-            expr: binary_expr(lhs, op, ExprAst::from(imm)),
+            expr: binary_expr(lhs, op, imm),
         });
         state.push_typed_expr(t, ValueType::Int);
         return;
@@ -1449,7 +1450,7 @@ fn lift_plain_instruction(
                 .first()
                 .and_then(arg_scalar_text)
                 .unwrap_or_else(|| "0".to_string());
-            state.push_expr(format!("__glob_{slot}"));
+            state.push_expr(ExprAst::Ident(format!("__glob_{slot}")));
             return;
         }
         "SETGLOB" => {
@@ -1988,7 +1989,6 @@ fn arg_scalar_text(arg: &ArgValue) -> Option<String> {
     let expr = expr_from_arg_value(arg)?;
     match expr {
         ExprAst::Ident(text)
-        | ExprAst::Atom(text)
         | ExprAst::Number(text)
         | ExprAst::StringLiteral(text)
         | ExprAst::CellLiteral(text) => Some(text),
@@ -1997,23 +1997,17 @@ fn arg_scalar_text(arg: &ArgValue) -> Option<String> {
     }
 }
 
-fn call_expr<T>(callee: impl Into<String>, args: Vec<T>) -> ExprAst
-where
-    T: Into<ExprAst>,
-{
+fn call_expr(callee: impl Into<String>, args: Vec<ExprAst>) -> ExprAst {
     ExprAst::Call {
         callee: callee.into(),
-        args: args.into_iter().map(Into::into).collect(),
+        args,
     }
 }
 
-fn push_call<T>(stmts: &mut Vec<StmtAst>, callee: impl Into<String>, args: Vec<T>)
-where
-    T: Into<ExprAst>,
-{
+fn push_call(stmts: &mut Vec<StmtAst>, callee: impl Into<String>, args: Vec<ExprAst>) {
     stmts.push(StmtAst::Call {
         callee: callee.into(),
-        args: args.into_iter().map(Into::into).collect(),
+        args,
     });
 }
 
@@ -2021,18 +2015,18 @@ fn tensor_var(items: Vec<String>) -> Var {
     Var::tensor(items.into_iter().map(Var::name).collect())
 }
 
-fn unary_expr(op: UnaryOp, expr: impl Into<ExprAst>) -> ExprAst {
+fn unary_expr(op: UnaryOp, expr: ExprAst) -> ExprAst {
     ExprAst::Unary {
         op,
-        expr: Box::new(expr.into()),
+        expr: Box::new(expr),
     }
 }
 
-fn binary_expr(lhs: impl Into<ExprAst>, op: BinaryOp, rhs: impl Into<ExprAst>) -> ExprAst {
+fn binary_expr(lhs: ExprAst, op: BinaryOp, rhs: ExprAst) -> ExprAst {
     ExprAst::Binary {
-        lhs: Box::new(lhs.into()),
+        lhs: Box::new(lhs),
         op,
-        rhs: Box::new(rhs.into()),
+        rhs: Box::new(rhs),
         wrap_lhs: true,
         wrap_rhs: true,
     }
@@ -2040,7 +2034,7 @@ fn binary_expr(lhs: impl Into<ExprAst>, op: BinaryOp, rhs: impl Into<ExprAst>) -
 
 fn is_branch_local_temp_expr(expr: &ExprAst, base_next_temp: usize) -> bool {
     match expr {
-        ExprAst::Ident(name) | ExprAst::Atom(name) => name
+        ExprAst::Ident(name) => name
             .strip_prefix('v')
             .and_then(|s| s.parse::<usize>().ok())
             .is_some_and(|idx| idx >= base_next_temp),
@@ -2095,20 +2089,21 @@ fn binary_symbol(name: &str) -> Option<BinaryOp> {
     }
 }
 
-fn immediate_binary_op(plain: &PlainInstruction) -> Option<(BinaryOp, String)> {
-    let imm = plain.args.first().and_then(arg_scalar_text)?;
-    match plain.name.as_str() {
-        "ADDINT" => Some((BinaryOp::Add, imm)),
-        "MULINT" => Some((BinaryOp::Mul, imm)),
-        "LSHIFT" => Some((BinaryOp::LShift, imm)),
-        "RSHIFT" => Some((BinaryOp::RShift, imm)),
-        "RSHIFTR" => Some((BinaryOp::RShiftR, imm)),
-        "RSHIFTC" => Some((BinaryOp::RShiftC, imm)),
-        "EQINT" => Some((BinaryOp::Equal, imm)),
-        "LESSINT" => Some((BinaryOp::Less, imm)),
-        "GTINT" => Some((BinaryOp::Greater, imm)),
-        _ => None,
-    }
+fn immediate_binary_op(plain: &PlainInstruction) -> Option<(BinaryOp, ExprAst)> {
+    let imm = plain.args.first().and_then(expr_from_arg_value)?;
+    let op = match plain.name.as_str() {
+        "ADDINT" => BinaryOp::Add,
+        "MULINT" => BinaryOp::Mul,
+        "LSHIFT" => BinaryOp::LShift,
+        "RSHIFT" => BinaryOp::RShift,
+        "RSHIFTR" => BinaryOp::RShiftR,
+        "RSHIFTC" => BinaryOp::RShiftC,
+        "EQINT" => BinaryOp::Equal,
+        "LESSINT" => BinaryOp::Less,
+        "GTINT" => BinaryOp::Greater,
+        _ => return None,
+    };
+    Some((op, imm))
 }
 
 fn stdlib_function_for_instruction(name: &str) -> Option<&'static str> {
@@ -2209,11 +2204,6 @@ fn infer_expr_type(expr: &ExprAst) -> ValueType {
             "my_address" => ValueType::Slice,
             _ => ValueType::Unknown,
         },
-        ExprAst::Atom(text) => match text.as_str() {
-            _ if text.starts_with("x{") => ValueType::Slice,
-            _ if text.parse::<i128>().is_ok() => ValueType::Int,
-            _ => ValueType::Unknown,
-        },
         _ => ValueType::Unknown,
     }
 }
@@ -2303,23 +2293,11 @@ fn parse_arg_param_index(name: &str) -> Option<usize> {
     name.strip_prefix("arg")?.parse::<usize>().ok()
 }
 
-fn parse_const_int_expr(expr: &str) -> Option<i128> {
-    let trimmed = expr.trim();
-    if let Ok(value) = trimmed.parse::<i128>() {
-        return Some(value);
-    }
-    if trimmed.starts_with('(') && trimmed.ends_with(')') && trimmed.len() >= 3 {
-        return trimmed[1..trimmed.len() - 1].trim().parse::<i128>().ok();
-    }
-    None
-}
-
 fn parse_const_int_expr_ast(expr: &ExprAst) -> Option<i128> {
     match expr {
         ExprAst::Number(value) => value.parse::<i128>().ok(),
         ExprAst::Ident(_) => None,
         ExprAst::StringLiteral(_) | ExprAst::CellLiteral(_) => None,
-        ExprAst::Atom(value) => parse_const_int_expr(value),
         _ => None,
     }
 }

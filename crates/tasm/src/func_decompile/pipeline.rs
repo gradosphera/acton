@@ -59,16 +59,19 @@ fn collect_pushslice_helpers(methods: &[Method]) -> BTreeMap<String, String> {
     out
 }
 
-fn initial_stack_params_for_method(kind: MethodKind, params: &[String]) -> Vec<String> {
+fn initial_stack_params_for_method(kind: MethodKind, params: &[String]) -> Vec<ExprAst> {
     if kind == MethodKind::RecvInternal {
         return vec![
-            "balance".to_string(),
-            "msg_value".to_string(),
-            "in_msg_full".to_string(),
-            "in_msg_body".to_string(),
+            ExprAst::Ident("balance".to_string()),
+            ExprAst::Ident("msg_value".to_string()),
+            ExprAst::Ident("in_msg_full".to_string()),
+            ExprAst::Ident("in_msg_body".to_string()),
         ];
     }
-    params.to_vec()
+    params
+        .iter()
+        .map(|name| ExprAst::Ident(name.clone()))
+        .collect()
 }
 
 fn select_recv_internal_params(stmts: &[StmtAst]) -> Vec<String> {
@@ -124,7 +127,6 @@ fn stmt_list_contains_ident(stmts: &[StmtAst], ident: &str) -> bool {
 fn expr_contains_ident(expr: &ExprAst, ident: &str) -> bool {
     match expr {
         ExprAst::Ident(text) => text == ident,
-        ExprAst::Atom(text) => contains_ident_text(text, ident),
         ExprAst::Number(_) => false,
         ExprAst::StringLiteral(_) => false,
         ExprAst::CellLiteral(_) => false,
@@ -143,46 +145,15 @@ fn expr_contains_ident(expr: &ExprAst, ident: &str) -> bool {
                 || expr_contains_ident(else_expr, ident)
         }
         ExprAst::Tuple(items) => items.iter().any(|item| expr_contains_ident(item, ident)),
-        ExprAst::Call { callee, args } => {
-            contains_ident_text(callee, ident)
-                || args.iter().any(|arg| expr_contains_ident(arg, ident))
-        }
+        ExprAst::Call { callee, args } => callee == ident || args.iter().any(|arg| expr_contains_ident(arg, ident)),
     }
 }
 
 fn tensor_contains_ident(tensor: &Var, ident: &str) -> bool {
     match tensor {
-        Var::Name(name) => name == ident || contains_ident_text(name, ident),
+        Var::Name(name) => name == ident,
         Var::Tensor(items) => items.iter().any(|item| tensor_contains_ident(item, ident)),
     }
-}
-
-fn contains_ident_text(text: &str, ident: &str) -> bool {
-    let bytes = text.as_bytes();
-    let needle = ident.as_bytes();
-    if needle.is_empty() || bytes.len() < needle.len() {
-        return false;
-    }
-
-    let mut i = 0;
-    while i + needle.len() <= bytes.len() {
-        if &bytes[i..i + needle.len()] == needle {
-            let left_ok = i == 0 || !is_ident_char(bytes[i - 1]);
-            let right_idx = i + needle.len();
-            let right_ok = right_idx == bytes.len() || !is_ident_char(bytes[right_idx]);
-            if left_ok && right_ok {
-                return true;
-            }
-            i = right_idx;
-        } else {
-            i += 1;
-        }
-    }
-    false
-}
-
-fn is_ident_char(ch: u8) -> bool {
-    ch.is_ascii_alphanumeric() || ch == b'_'
 }
 
 impl Default for FuncDecompilerOptions {

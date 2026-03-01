@@ -91,7 +91,6 @@ impl BinaryOp {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum ExprAst {
     Ident(String),
-    Atom(String),
     Number(String),
     StringLiteral(String),
     CellLiteral(String),
@@ -117,64 +116,6 @@ pub(crate) enum ExprAst {
         callee: String,
         args: Vec<ExprAst>,
     },
-}
-
-impl From<String> for ExprAst {
-    fn from(value: String) -> Self {
-        if value == "null()" {
-            Self::NullLiteral
-        } else if is_string_literal(&value) {
-            Self::StringLiteral(value)
-        } else if is_cell_literal(&value) {
-            Self::CellLiteral(value)
-        } else if is_ident(&value) {
-            Self::Ident(value)
-        } else if is_decimal_number(&value) {
-            Self::Number(value)
-        } else {
-            Self::Atom(value)
-        }
-    }
-}
-
-impl From<&str> for ExprAst {
-    fn from(value: &str) -> Self {
-        Self::from(value.to_string())
-    }
-}
-
-fn is_decimal_number(value: &str) -> bool {
-    let s = value.trim();
-    if s.is_empty() {
-        return false;
-    }
-    let body = s.strip_prefix('-').unwrap_or(s);
-    !body.is_empty() && body.chars().all(|ch| ch.is_ascii_digit())
-}
-
-fn is_string_literal(value: &str) -> bool {
-    let s = value.trim();
-    s.len() >= 2 && s.starts_with('"') && s.ends_with('"')
-}
-
-fn is_cell_literal(value: &str) -> bool {
-    let s = value.trim();
-    (s.starts_with("x{") || s.starts_with("boc{")) && s.ends_with('}')
-}
-
-fn is_ident(value: &str) -> bool {
-    let s = value.trim();
-    if s.is_empty() {
-        return false;
-    }
-    let mut chars = s.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    if !(first == '_' || first.is_ascii_alphabetic()) {
-        return false;
-    }
-    chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -273,19 +214,19 @@ impl StmtAst {
 
     #[must_use]
     #[cfg(test)]
-    pub(crate) fn var(name: impl Into<String>, expr: impl Into<ExprAst>) -> Self {
+    pub(crate) fn var(name: impl Into<String>, expr: ExprAst) -> Self {
         Self::VarDecl {
             binding: Var::Name(name.into()),
-            expr: expr.into(),
+            expr,
         }
     }
 
     #[must_use]
     #[cfg(test)]
-    pub(crate) fn assign(target: impl Into<String>, expr: impl Into<ExprAst>) -> Self {
+    pub(crate) fn assign(target: impl Into<String>, expr: ExprAst) -> Self {
         Self::Assign {
             target: target.into(),
-            expr: expr.into(),
+            expr,
         }
     }
 }
@@ -363,7 +304,6 @@ fn render_stmt(stmt: &StmtAst, depth: usize, out: &mut String) {
 fn render_expr(expr: &ExprAst) -> String {
     match expr {
         ExprAst::Ident(s) => s.clone(),
-        ExprAst::Atom(s) => s.clone(),
         ExprAst::Number(s) => s.clone(),
         ExprAst::StringLiteral(s) => s.clone(),
         ExprAst::CellLiteral(s) => s.clone(),
@@ -423,7 +363,9 @@ fn render_tensor_expr(tensor: &Var) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ExprAst, MethodAst, MethodSignatureAst, ParamAst, StmtAst, render_method_ast};
+    use super::{
+        BinaryOp, ExprAst, MethodAst, MethodSignatureAst, ParamAst, StmtAst, render_method_ast,
+    };
 
     #[test]
     fn renders_structured_ast() {
@@ -439,18 +381,36 @@ mod tests {
             },
             leading_comments: vec![";; dict_method_id: 1".to_string()],
             body: vec![
-                StmtAst::var("v0", "0"),
+                StmtAst::var("v0", ExprAst::Number("0".to_string())),
                 StmtAst::If {
                     negated: false,
-                    condition: ExprAst::Atom("arg0".to_string()),
-                    then_body: vec![StmtAst::assign("v0", "1")],
-                    else_body: Some(vec![StmtAst::assign("v0", "2")]),
+                    condition: ExprAst::Ident("arg0".to_string()),
+                    then_body: vec![StmtAst::assign("v0", ExprAst::Number("1".to_string()))],
+                    else_body: Some(vec![StmtAst::assign(
+                        "v0",
+                        ExprAst::Number("2".to_string()),
+                    )]),
                 },
                 StmtAst::DoUntil {
-                    body: vec![StmtAst::assign("v0", "v0 + 1")],
-                    condition: ExprAst::Atom("v0 > 10".to_string()),
+                    body: vec![StmtAst::assign(
+                        "v0",
+                        ExprAst::Binary {
+                            lhs: Box::new(ExprAst::Ident("v0".to_string())),
+                            op: BinaryOp::Add,
+                            rhs: Box::new(ExprAst::Number("1".to_string())),
+                            wrap_lhs: false,
+                            wrap_rhs: false,
+                        },
+                    )],
+                    condition: ExprAst::Binary {
+                        lhs: Box::new(ExprAst::Ident("v0".to_string())),
+                        op: BinaryOp::Greater,
+                        rhs: Box::new(ExprAst::Number("10".to_string())),
+                        wrap_lhs: false,
+                        wrap_rhs: false,
+                    },
                 },
-                StmtAst::Return(Some(ExprAst::Atom("v0".to_string()))),
+                StmtAst::Return(Some(ExprAst::Ident("v0".to_string()))),
             ],
         };
 
