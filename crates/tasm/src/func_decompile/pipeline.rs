@@ -126,6 +126,7 @@ fn stmt_contains_ident(stmt: &StmtAst, ident: &str) -> bool {
 
 fn expr_contains_ident(expr: &ExprAst, ident: &str) -> bool {
     match expr {
+        ExprAst::Ident(text) => text == ident,
         ExprAst::Atom(text) => contains_ident_text(text, ident),
         ExprAst::Number(_) => false,
         ExprAst::NullLiteral => false,

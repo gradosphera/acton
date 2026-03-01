@@ -16,6 +16,7 @@ pub(crate) struct MethodSignatureAst {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum ExprAst {
+    Ident(String),
     Atom(String),
     Number(String),
     NullLiteral,
@@ -46,6 +47,8 @@ impl From<String> for ExprAst {
     fn from(value: String) -> Self {
         if value == "null()" {
             Self::NullLiteral
+        } else if is_ident(&value) {
+            Self::Ident(value)
         } else if is_decimal_number(&value) {
             Self::Number(value)
         } else {
@@ -67,6 +70,21 @@ fn is_decimal_number(value: &str) -> bool {
     }
     let body = s.strip_prefix('-').unwrap_or(s);
     !body.is_empty() && body.chars().all(|ch| ch.is_ascii_digit())
+}
+
+fn is_ident(value: &str) -> bool {
+    let s = value.trim();
+    if s.is_empty() {
+        return false;
+    }
+    let mut chars = s.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first == '_' || first.is_ascii_alphabetic()) {
+        return false;
+    }
+    chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -171,27 +189,17 @@ impl StmtAst {
 
     #[must_use]
     pub(crate) fn var(name: impl Into<String>, expr: impl Into<String>) -> Self {
-        let expr = expr.into();
         Self::VarDecl {
             binding: Var::Name(name.into()),
-            expr: if expr == "null()" {
-                ExprAst::NullLiteral
-            } else {
-                ExprAst::Atom(expr)
-            },
+            expr: ExprAst::from(expr.into()),
         }
     }
 
     #[must_use]
     pub(crate) fn assign(target: impl Into<String>, expr: impl Into<String>) -> Self {
-        let expr = expr.into();
         Self::Assign {
             target: target.into(),
-            expr: if expr == "null()" {
-                ExprAst::NullLiteral
-            } else {
-                ExprAst::Atom(expr)
-            },
+            expr: ExprAst::from(expr.into()),
         }
     }
 }
@@ -203,10 +211,6 @@ pub(crate) fn render_method_ast(ast: &MethodAst, out: &mut String) {
     }
     render_stmt_list(&ast.body, 1, out);
     out.push_str("}\n\n");
-}
-
-pub(crate) fn render_expr_ast(expr: &ExprAst) -> String {
-    render_expr(expr)
 }
 
 fn render_stmt_list(stmts: &[StmtAst], depth: usize, out: &mut String) {
@@ -275,6 +279,7 @@ fn render_stmt(stmt: &StmtAst, depth: usize, out: &mut String) {
 
 fn render_expr(expr: &ExprAst) -> String {
     match expr {
+        ExprAst::Ident(s) => s.clone(),
         ExprAst::Atom(s) => s.clone(),
         ExprAst::Number(s) => s.clone(),
         ExprAst::NullLiteral => "null()".to_string(),
