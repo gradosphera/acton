@@ -116,6 +116,12 @@ pub(crate) enum ExprAst {
         callee: String,
         args: Vec<ExprAst>,
     },
+    MethodCall {
+        receiver: Box<ExprAst>,
+        method: String,
+        modifying: bool,
+        args: Vec<ExprAst>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -362,12 +368,7 @@ fn render_expr(expr: &ExprAst) -> String {
             } else {
                 else_rendered
             };
-            format!(
-                "{} ? {} : {}",
-                condition,
-                then_expr,
-                else_expr
-            )
+            format!("{} ? {} : {}", condition, then_expr, else_expr)
         }
         ExprAst::Tuple(items) => {
             let rendered = items.iter().map(render_expr).collect::<Vec<_>>().join(", ");
@@ -376,6 +377,23 @@ fn render_expr(expr: &ExprAst) -> String {
         ExprAst::Call { callee, args } => {
             let rendered_args = args.iter().map(render_expr).collect::<Vec<_>>().join(", ");
             format!("{callee}({rendered_args})")
+        }
+        ExprAst::MethodCall {
+            receiver,
+            method,
+            modifying,
+            args,
+        } => {
+            let receiver_expr = receiver.as_ref();
+            let receiver = render_expr(receiver_expr);
+            let receiver = if is_atomic_expr(receiver_expr) {
+                receiver
+            } else {
+                format!("({receiver})")
+            };
+            let rendered_args = args.iter().map(render_expr).collect::<Vec<_>>().join(", ");
+            let op = if *modifying { "~" } else { "." };
+            format!("{receiver}{op}{method}({rendered_args})")
         }
     }
 }
@@ -390,6 +408,7 @@ fn is_atomic_expr(expr: &ExprAst) -> bool {
             | ExprAst::NullLiteral
             | ExprAst::Unary { .. }
             | ExprAst::Call { .. }
+            | ExprAst::MethodCall { .. }
     )
 }
 

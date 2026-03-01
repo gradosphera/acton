@@ -1,5 +1,5 @@
-use super::inspect::{as_plain, flatten_plain_instructions};
 use super::ast::{MethodSignatureAst, ParamAst};
+use super::inspect::{as_plain, flatten_plain_instructions};
 use super::render::arg_as_u64;
 use super::stage_patterns::MethodPatterns;
 use super::stage_stack::{LiftState, ValueType};
@@ -35,10 +35,12 @@ pub(crate) fn infer_params_for_method(kind: MethodKind, state: &LiftState) -> Ve
     }
 
     let mut params = state.params().to_vec();
-    params.sort_by(|a, b| match (parse_arg_param_index(a), parse_arg_param_index(b)) {
-        (Some(ia), Some(ib)) => ia.cmp(&ib),
-        _ => a.cmp(b),
-    });
+    params.sort_by(
+        |a, b| match (parse_arg_param_index(a), parse_arg_param_index(b)) {
+            (Some(ia), Some(ib)) => ia.cmp(&ib),
+            _ => a.cmp(b),
+        },
+    );
     params
 }
 
@@ -82,10 +84,7 @@ pub(crate) fn build_method_signature_ast(
     let params = render_param_pairs(kind, params, param_types);
     let return_type = return_type_name(ret);
     let (name, qualifiers) = match kind {
-        MethodKind::RecvInternal => (
-            "recv_internal".to_string(),
-            vec!["impure".to_string()],
-        ),
+        MethodKind::RecvInternal => ("recv_internal".to_string(), vec!["impure".to_string()]),
         MethodKind::Getter => (
             format!("get_method_{}", method.id),
             vec![format!("method_id({})", method.id)],
@@ -166,27 +165,59 @@ fn tuple_item_type_name(ty: ValueType) -> &'static str {
     }
 }
 
-fn render_param_pairs(kind: MethodKind, params: &[String], param_types: &[ValueType]) -> Vec<ParamAst> {
+fn render_param_pairs(
+    kind: MethodKind,
+    params: &[String],
+    param_types: &[ValueType],
+) -> Vec<ParamAst> {
     if kind == MethodKind::RecvInternal {
         return match params.len() {
             4 => vec![
-                ParamAst { ty: "int".to_string(), name: "balance".to_string() },
-                ParamAst { ty: "int".to_string(), name: "msg_value".to_string() },
-                ParamAst { ty: "cell".to_string(), name: "in_msg_full".to_string() },
-                ParamAst { ty: "slice".to_string(), name: "in_msg_body".to_string() },
+                ParamAst {
+                    ty: "int".to_string(),
+                    name: "balance".to_string(),
+                },
+                ParamAst {
+                    ty: "int".to_string(),
+                    name: "msg_value".to_string(),
+                },
+                ParamAst {
+                    ty: "cell".to_string(),
+                    name: "in_msg_full".to_string(),
+                },
+                ParamAst {
+                    ty: "slice".to_string(),
+                    name: "in_msg_body".to_string(),
+                },
             ],
             3 => vec![
-                ParamAst { ty: "int".to_string(), name: "msg_value".to_string() },
-                ParamAst { ty: "cell".to_string(), name: "in_msg_full".to_string() },
-                ParamAst { ty: "slice".to_string(), name: "in_msg_body".to_string() },
+                ParamAst {
+                    ty: "int".to_string(),
+                    name: "msg_value".to_string(),
+                },
+                ParamAst {
+                    ty: "cell".to_string(),
+                    name: "in_msg_full".to_string(),
+                },
+                ParamAst {
+                    ty: "slice".to_string(),
+                    name: "in_msg_body".to_string(),
+                },
             ],
             2 => vec![
-                ParamAst { ty: "cell".to_string(), name: "in_msg_full".to_string() },
-                ParamAst { ty: "slice".to_string(), name: "in_msg_body".to_string() },
+                ParamAst {
+                    ty: "cell".to_string(),
+                    name: "in_msg_full".to_string(),
+                },
+                ParamAst {
+                    ty: "slice".to_string(),
+                    name: "in_msg_body".to_string(),
+                },
             ],
-            1 => vec![
-                ParamAst { ty: "slice".to_string(), name: "in_msg_body".to_string() },
-            ],
+            1 => vec![ParamAst {
+                ty: "slice".to_string(),
+                name: "in_msg_body".to_string(),
+            }],
             _ => Vec::new(),
         };
     }

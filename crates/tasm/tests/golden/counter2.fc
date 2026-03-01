@@ -3,11 +3,11 @@
 
 () recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
     var v0 = begin_parse(get_data());
-    var (v1, v2) = load_uint(v0, 32);
-    end_parse(v1);
+    var v2 = v0~load_uint(32);
+    end_parse(v0);
     if (slice_empty?(in_msg_body)) {
         var v4 = v2 + 1;
-        var v5 = store_uint(begin_cell(), v4, 32);
+        var v5 = begin_cell().store_uint(v4, 32);
         var v6 = end_cell(v5);
         set_data(v6);
         return ();
@@ -15,14 +15,14 @@
     var (v7, v8) = load_uint(in_msg_body, 32);
     if (v8 == 1) {
         var v10 = v2 + 1;
-        var v11 = store_uint(begin_cell(), v10, 32);
+        var v11 = begin_cell().store_uint(v10, 32);
         var v12 = end_cell(v11);
         set_data(v12);
         return ();
     }
     if (v8 == 2) {
         var v14 = v2 - 1;
-        var v15 = store_uint(begin_cell(), v14, 32);
+        var v15 = begin_cell().store_uint(v14, 32);
         var v16 = end_cell(v15);
         set_data(v16);
         return ();
@@ -31,8 +31,8 @@
 
 int method_127487() impure method_id(127487) {
     var v0 = begin_parse(get_data());
-    var (v1, v2) = load_uint(v0, 32);
-    end_parse(v1);
+    var v2 = v0~load_uint(32);
+    end_parse(v0);
     return v2;
 }
 

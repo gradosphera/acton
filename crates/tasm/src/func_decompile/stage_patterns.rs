@@ -1,5 +1,5 @@
-use super::inspect::flatten_plain_instructions;
 use super::ast::StmtAst;
+use super::inspect::flatten_plain_instructions;
 use super::render::{arg_as_i64, arg_as_u64};
 use crate::types::{ArgValue, Method, PlainInstruction};
 

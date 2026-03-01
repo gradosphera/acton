@@ -26,7 +26,11 @@ fn stdlib_include_path() -> String {
 }
 
 fn collect_pushslice_helpers(methods: &[Method]) -> BTreeMap<String, String> {
-    fn walk(instructions: &[Instruction], out: &mut BTreeMap<String, String>, next_idx: &mut usize) {
+    fn walk(
+        instructions: &[Instruction],
+        out: &mut BTreeMap<String, String>,
+        next_idx: &mut usize,
+    ) {
         for instruction in instructions {
             match instruction {
                 Instruction::Plain(plain) => {
@@ -76,7 +80,10 @@ fn initial_stack_params_for_method(kind: MethodKind, params: &[String]) -> Vec<E
 }
 
 fn select_recv_internal_params(stmts: &[StmtAst]) -> Vec<String> {
-    if stmts.iter().any(|stmt| stmt_contains_ident(stmt, "balance")) {
+    if stmts
+        .iter()
+        .any(|stmt| stmt_contains_ident(stmt, "balance"))
+    {
         vec![
             "balance".to_string(),
             "msg_value".to_string(),
@@ -101,7 +108,9 @@ fn stmt_contains_ident(stmt: &StmtAst, ident: &str) -> bool {
         StmtAst::Assign { target, expr } => target == ident || expr_contains_ident(expr, ident),
         StmtAst::Return(Some(expr)) => expr_contains_ident(expr, ident),
         StmtAst::Return(None) => false,
-        StmtAst::Call { callee, args } => callee == ident || args.iter().any(|a| expr_contains_ident(a, ident)),
+        StmtAst::Call { callee, args } => {
+            callee == ident || args.iter().any(|a| expr_contains_ident(a, ident))
+        }
         StmtAst::If {
             condition,
             then_body,
@@ -114,7 +123,9 @@ fn stmt_contains_ident(stmt: &StmtAst, ident: &str) -> bool {
                     .as_ref()
                     .is_some_and(|body| stmt_list_contains_ident(body, ident))
         }
-        StmtAst::Repeat { count, body } => expr_contains_ident(count, ident) || stmt_list_contains_ident(body, ident),
+        StmtAst::Repeat { count, body } => {
+            expr_contains_ident(count, ident) || stmt_list_contains_ident(body, ident)
+        }
         StmtAst::DoUntil { body, condition } => {
             expr_contains_ident(condition, ident) || stmt_list_contains_ident(body, ident)
         }
@@ -146,7 +157,13 @@ fn expr_contains_ident(expr: &ExprAst, ident: &str) -> bool {
                 || expr_contains_ident(else_expr, ident)
         }
         ExprAst::Tuple(items) => items.iter().any(|item| expr_contains_ident(item, ident)),
-        ExprAst::Call { callee, args } => callee == ident || args.iter().any(|arg| expr_contains_ident(arg, ident)),
+        ExprAst::Call { callee, args } => {
+            callee == ident || args.iter().any(|arg| expr_contains_ident(arg, ident))
+        }
+        ExprAst::MethodCall { receiver, args, .. } => {
+            expr_contains_ident(receiver, ident)
+                || args.iter().any(|arg| expr_contains_ident(arg, ident))
+        }
     }
 }
 
@@ -234,7 +251,13 @@ impl FuncDecompiler {
             let mut lift = LiftResult::default();
             let mut state = LiftState::default();
             let lift_ctx = LiftContext::default();
-            lift_instructions(&code.instructions, &mut state, &mut lift.stmts, 1, &lift_ctx);
+            lift_instructions(
+                &code.instructions,
+                &mut state,
+                &mut lift.stmts,
+                1,
+                &lift_ctx,
+            );
             let mut body = lift.stmts;
             simplify_method_body(&mut body);
             let method_ast = MethodAst {
@@ -371,22 +394,15 @@ impl FuncDecompiler {
                 .iter()
                 .map(|name| state.param_type(name))
                 .collect::<Vec<_>>();
-            let signature = build_method_signature_ast(
-                method,
-                kind,
-                &params,
-                &param_types,
-                &return_kind,
-            );
+            let signature =
+                build_method_signature_ast(method, kind, &params, &param_types, &return_kind);
             let leading_comments = Vec::new();
 
             let mut rewritten = stmts;
             apply_pattern_rewrites(&mut rewritten, &patterns);
             let mut body = rewritten;
 
-            if kind != MethodKind::RecvInternal
-                && !state.has_explicit_return()
-            {
+            if kind != MethodKind::RecvInternal && !state.has_explicit_return() {
                 let return_values = state.return_expr_asts();
                 match return_values.len() {
                     0 => {}

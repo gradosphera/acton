@@ -10,7 +10,7 @@ struct UseOccurrence {
 #[derive(Debug, Default)]
 struct BlockDefUseIndex {
     uses: Vec<UseOccurrence>,
-    def_to_uses: BTreeMap<usize, Vec<usize>>,
+    def_ident_to_uses: BTreeMap<(usize, String), Vec<usize>>,
     use_to_def: Vec<Option<usize>>,
 }
 
@@ -25,51 +25,171 @@ fn simplify_stmt_list(stmts: &mut Vec<StmtAst>) {
 
     loop {
         let index = build_block_def_use_index(stmts);
-        let mut changed = false;
-
-        for def_idx in 0..stmts.len().saturating_sub(1) {
-            let (var_name, init_expr) = match &stmts[def_idx] {
-                StmtAst::VarDecl {
-                    binding: Var::Name(name),
-                    expr,
-                } => (name.clone(), expr.clone()),
-                _ => continue,
-            };
-
-            let use_ids = match index.def_to_uses.get(&def_idx) {
-                Some(ids) if ids.len() == 1 => ids,
-                _ => continue,
-            };
-            let use_id = use_ids[0];
-            let use_occurrence = match index.uses.get(use_id) {
-                Some(occ) => occ,
-                None => continue,
-            };
-
-            if use_occurrence.stmt_idx != def_idx + 1
-                || use_occurrence.ident != var_name
-                || index.use_to_def.get(use_id).copied().flatten() != Some(def_idx)
-            {
-                continue;
-            }
-
-            let next_stmt = match stmts.get_mut(def_idx + 1) {
-                Some(stmt) => stmt,
-                None => continue,
-            };
-            let changed_next = rewrite_next_stmt_condition_site(next_stmt, &var_name, &init_expr);
-            if !changed_next {
-                continue;
-            }
-            stmts.remove(def_idx);
-            changed = true;
-            break;
+        if rewrite_tuple_modifying_chain_once(stmts, &index) {
+            continue;
         }
-
-        if !changed {
-            break;
+        if inline_condition_temp_once(stmts, &index) {
+            continue;
         }
+        break;
     }
+
+    rewrite_store_calls_stmt_list(stmts);
+}
+
+fn inline_condition_temp_once(stmts: &mut Vec<StmtAst>, index: &BlockDefUseIndex) -> bool {
+    for def_idx in 0..stmts.len().saturating_sub(1) {
+        let (var_name, init_expr) = match &stmts[def_idx] {
+            StmtAst::VarDecl {
+                binding: Var::Name(name),
+                expr,
+            } => (name.clone(), expr.clone()),
+            _ => continue,
+        };
+
+        if !has_single_immediate_use(index, def_idx, &var_name) {
+            continue;
+        }
+
+        let next_stmt = match stmts.get_mut(def_idx + 1) {
+            Some(stmt) => stmt,
+            None => continue,
+        };
+        if !rewrite_next_stmt_condition_site(next_stmt, &var_name, &init_expr) {
+            continue;
+        }
+
+        stmts.remove(def_idx);
+        return true;
+    }
+
+    false
+}
+
+fn rewrite_tuple_modifying_chain_once(stmts: &mut [StmtAst], index: &BlockDefUseIndex) -> bool {
+    for def_idx in 0..stmts.len().saturating_sub(1) {
+        let Some((next_name, value_name, method, receiver_name, method_args)) =
+            extract_tuple_call_parts(&stmts[def_idx])
+        else {
+            continue;
+        };
+
+        if !is_temp_ident(&receiver_name) || !has_single_immediate_use(index, def_idx, &next_name) {
+            continue;
+        }
+
+        let next_stmt = match stmts.get_mut(def_idx + 1) {
+            Some(stmt) => stmt,
+            None => continue,
+        };
+        if !replace_first_call_input_in_stmt(
+            next_stmt,
+            &next_name,
+            ExprAst::Ident(receiver_name.clone()),
+        ) {
+            continue;
+        }
+
+        stmts[def_idx] = StmtAst::VarDecl {
+            binding: Var::name(value_name),
+            expr: ExprAst::MethodCall {
+                receiver: Box::new(ExprAst::Ident(receiver_name)),
+                method,
+                modifying: true,
+                args: method_args,
+            },
+        };
+        return true;
+    }
+
+    false
+}
+
+fn extract_tuple_call_parts(
+    stmt: &StmtAst,
+) -> Option<(String, String, String, String, Vec<ExprAst>)> {
+    let StmtAst::VarDecl { binding, expr } = stmt else {
+        return None;
+    };
+    let (next_name, value_name) = two_name_tensor(binding)?;
+
+    match expr {
+        ExprAst::Call { callee, args } => {
+            let (receiver_name, method_args) = split_receiver_ident(args)?;
+            Some((
+                next_name,
+                value_name,
+                callee.clone(),
+                receiver_name,
+                method_args,
+            ))
+        }
+        ExprAst::MethodCall {
+            receiver,
+            method,
+            modifying,
+            args,
+        } if !*modifying => {
+            let ExprAst::Ident(receiver_name) = receiver.as_ref() else {
+                return None;
+            };
+            Some((
+                next_name,
+                value_name,
+                method.clone(),
+                receiver_name.clone(),
+                args.clone(),
+            ))
+        }
+        _ => None,
+    }
+}
+
+fn split_receiver_ident(args: &[ExprAst]) -> Option<(String, Vec<ExprAst>)> {
+    let receiver = args.first()?;
+    let ExprAst::Ident(receiver_name) = receiver else {
+        return None;
+    };
+    Some((
+        receiver_name.clone(),
+        args.iter().skip(1).cloned().collect(),
+    ))
+}
+
+fn two_name_tensor(binding: &Var) -> Option<(String, String)> {
+    let Var::Tensor(items) = binding else {
+        return None;
+    };
+    if items.len() != 2 {
+        return None;
+    }
+    match (&items[0], &items[1]) {
+        (Var::Name(a), Var::Name(b)) => Some((a.clone(), b.clone())),
+        _ => None,
+    }
+}
+
+fn is_temp_ident(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix('v') else {
+        return false;
+    };
+    !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn has_single_immediate_use(index: &BlockDefUseIndex, def_idx: usize, ident: &str) -> bool {
+    let use_ids = match index.def_ident_to_uses.get(&(def_idx, ident.to_string())) {
+        Some(ids) if ids.len() == 1 => ids,
+        _ => return false,
+    };
+    let use_id = use_ids[0];
+    let use_occurrence = match index.uses.get(use_id) {
+        Some(occ) => occ,
+        None => return false,
+    };
+
+    use_occurrence.stmt_idx == def_idx + 1
+        && use_occurrence.ident == ident
+        && index.use_to_def.get(use_id).copied().flatten() == Some(def_idx)
 }
 
 fn condition_inline_replacement(
@@ -108,19 +228,11 @@ fn rewrite_next_stmt_condition_site(
             false
         }
         StmtAst::VarDecl {
-            expr:
-                ExprAst::Ternary {
-                    condition,
-                    ..
-                },
+            expr: ExprAst::Ternary { condition, .. },
             ..
         }
         | StmtAst::Assign {
-            expr:
-                ExprAst::Ternary {
-                    condition,
-                    ..
-                },
+            expr: ExprAst::Ternary { condition, .. },
             ..
         } => {
             if let Some(replacement) = condition_inline_replacement(condition, var_name, init_expr)
@@ -131,6 +243,138 @@ fn rewrite_next_stmt_condition_site(
             false
         }
         _ => false,
+    }
+}
+
+fn replace_first_call_input_in_stmt(stmt: &mut StmtAst, ident: &str, replacement: ExprAst) -> bool {
+    match stmt {
+        StmtAst::VarDecl { expr, .. }
+        | StmtAst::Assign { expr, .. }
+        | StmtAst::Return(Some(expr)) => replace_first_call_input_in_expr(expr, ident, replacement),
+        StmtAst::Call { args, .. } => replace_ident_in_first_arg(args, ident, replacement),
+        StmtAst::Comment(_)
+        | StmtAst::Return(None)
+        | StmtAst::If { .. }
+        | StmtAst::Repeat { .. }
+        | StmtAst::DoUntil { .. } => false,
+    }
+}
+
+fn replace_first_call_input_in_expr(expr: &mut ExprAst, ident: &str, replacement: ExprAst) -> bool {
+    match expr {
+        ExprAst::Call { args, .. } => replace_ident_in_first_arg(args, ident, replacement),
+        ExprAst::MethodCall { receiver, .. } => {
+            if matches!(receiver.as_ref(), ExprAst::Ident(name) if name == ident) {
+                *receiver = Box::new(replacement);
+                return true;
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+fn replace_ident_in_first_arg(args: &mut [ExprAst], ident: &str, replacement: ExprAst) -> bool {
+    let Some(first) = args.first_mut() else {
+        return false;
+    };
+    if matches!(first, ExprAst::Ident(name) if name == ident) {
+        *first = replacement;
+        return true;
+    }
+    false
+}
+
+fn rewrite_store_calls_stmt_list(stmts: &mut [StmtAst]) {
+    for stmt in stmts {
+        rewrite_store_calls_stmt(stmt);
+    }
+}
+
+fn rewrite_store_calls_stmt(stmt: &mut StmtAst) {
+    match stmt {
+        StmtAst::Comment(_) | StmtAst::Return(None) => {}
+        StmtAst::VarDecl { expr, .. }
+        | StmtAst::Assign { expr, .. }
+        | StmtAst::Return(Some(expr)) => {
+            rewrite_store_calls_expr(expr);
+        }
+        StmtAst::Call { args, .. } => {
+            for arg in args {
+                rewrite_store_calls_expr(arg);
+            }
+        }
+        StmtAst::If {
+            condition,
+            then_body,
+            else_body,
+            ..
+        } => {
+            rewrite_store_calls_expr(condition);
+            rewrite_store_calls_stmt_list(then_body);
+            if let Some(else_body) = else_body.as_mut() {
+                rewrite_store_calls_stmt_list(else_body);
+            }
+        }
+        StmtAst::Repeat { count, body } => {
+            rewrite_store_calls_expr(count);
+            rewrite_store_calls_stmt_list(body);
+        }
+        StmtAst::DoUntil { body, condition } => {
+            rewrite_store_calls_stmt_list(body);
+            rewrite_store_calls_expr(condition);
+        }
+    }
+}
+
+fn rewrite_store_calls_expr(expr: &mut ExprAst) {
+    match expr {
+        ExprAst::Unary { expr, .. } => rewrite_store_calls_expr(expr),
+        ExprAst::Binary { lhs, rhs, .. } => {
+            rewrite_store_calls_expr(lhs);
+            rewrite_store_calls_expr(rhs);
+        }
+        ExprAst::Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
+            rewrite_store_calls_expr(condition);
+            rewrite_store_calls_expr(then_expr);
+            rewrite_store_calls_expr(else_expr);
+        }
+        ExprAst::Tuple(items) => {
+            for item in items {
+                rewrite_store_calls_expr(item);
+            }
+        }
+        ExprAst::Call { callee, args } => {
+            for arg in args.iter_mut() {
+                rewrite_store_calls_expr(arg);
+            }
+            if callee.starts_with("store_") && !args.is_empty() {
+                let mut moved_args = std::mem::take(args);
+                let receiver = moved_args.remove(0);
+                let method = std::mem::take(callee);
+                *expr = ExprAst::MethodCall {
+                    receiver: Box::new(receiver),
+                    method,
+                    modifying: false,
+                    args: moved_args,
+                };
+            }
+        }
+        ExprAst::MethodCall { receiver, args, .. } => {
+            rewrite_store_calls_expr(receiver);
+            for arg in args {
+                rewrite_store_calls_expr(arg);
+            }
+        }
+        ExprAst::Ident(_)
+        | ExprAst::Number(_)
+        | ExprAst::StringLiteral(_)
+        | ExprAst::CellLiteral(_)
+        | ExprAst::NullLiteral => {}
     }
 }
 
@@ -159,12 +403,10 @@ fn simplify_stmt(stmt: &mut StmtAst) {
 fn build_block_def_use_index(stmts: &[StmtAst]) -> BlockDefUseIndex {
     let mut defs_by_ident: HashMap<String, Vec<usize>> = HashMap::new();
     for (stmt_idx, stmt) in stmts.iter().enumerate() {
-        if let StmtAst::VarDecl {
-            binding: Var::Name(name),
-            ..
-        } = stmt
-        {
-            defs_by_ident.entry(name.clone()).or_default().push(stmt_idx);
+        if let StmtAst::VarDecl { binding, .. } = stmt {
+            for name in collect_binding_names(binding) {
+                defs_by_ident.entry(name).or_default().push(stmt_idx);
+            }
         }
     }
 
@@ -184,12 +426,33 @@ fn build_block_def_use_index(stmts: &[StmtAst]) -> BlockDefUseIndex {
                 .and_then(|defs| defs.iter().copied().filter(|d| *d < stmt_idx).max());
             index.use_to_def.push(def);
             if let Some(def_idx) = def {
-                index.def_to_uses.entry(def_idx).or_default().push(use_id);
+                index
+                    .def_ident_to_uses
+                    .entry((def_idx, ident.clone()))
+                    .or_default()
+                    .push(use_id);
             }
         }
     }
 
     index
+}
+
+fn collect_binding_names(binding: &Var) -> Vec<String> {
+    let mut out = Vec::new();
+    collect_binding_names_inner(binding, &mut out);
+    out
+}
+
+fn collect_binding_names_inner(binding: &Var, out: &mut Vec<String>) {
+    match binding {
+        Var::Name(name) => out.push(name.clone()),
+        Var::Tensor(items) => {
+            for item in items {
+                collect_binding_names_inner(item, out);
+            }
+        }
+    }
 }
 
 fn collect_stmt_idents(stmt: &StmtAst, out: &mut Vec<String>) {
@@ -265,6 +528,12 @@ fn collect_expr_idents(expr: &ExprAst, out: &mut Vec<String>) {
             }
         }
         ExprAst::Call { args, .. } => {
+            for arg in args {
+                collect_expr_idents(arg, out);
+            }
+        }
+        ExprAst::MethodCall { receiver, args, .. } => {
+            collect_expr_idents(receiver, out);
             for arg in args {
                 collect_expr_idents(arg, out);
             }
@@ -479,6 +748,108 @@ mod tests {
                 _ => panic!("expected ternary expr"),
             },
             _ => panic!("expected var decl"),
+        }
+    }
+
+    #[test]
+    fn folds_tuple_chain_into_modifying_method_calls() {
+        let mut body = vec![
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v12"), Var::name("v13")]),
+                expr: ExprAst::Call {
+                    callee: "load_grams".to_string(),
+                    args: vec![ident("v11")],
+                },
+            },
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v14"), Var::name("v15")]),
+                expr: ExprAst::Call {
+                    callee: "load_msg_addr".to_string(),
+                    args: vec![ident("v12")],
+                },
+            },
+            StmtAst::VarDecl {
+                binding: Var::tensor(vec![Var::name("v16"), Var::name("v17")]),
+                expr: ExprAst::Call {
+                    callee: "load_ref".to_string(),
+                    args: vec![ident("v14")],
+                },
+            },
+            StmtAst::Call {
+                callee: "end_parse".to_string(),
+                args: vec![ident("v16")],
+            },
+        ];
+
+        simplify_method_body(&mut body);
+
+        assert_eq!(body.len(), 4);
+        for idx in [0_usize, 1, 2] {
+            match &body[idx] {
+                StmtAst::VarDecl { binding, expr } => {
+                    assert!(matches!(binding, Var::Name(_)));
+                    match expr {
+                        ExprAst::MethodCall {
+                            receiver,
+                            modifying,
+                            ..
+                        } => {
+                            assert!(
+                                matches!(receiver.as_ref(), ExprAst::Ident(name) if name == "v11")
+                            );
+                            assert!(*modifying);
+                        }
+                        _ => panic!("expected method call"),
+                    }
+                }
+                _ => panic!("expected var decl"),
+            }
+        }
+        match &body[3] {
+            StmtAst::Call { args, .. } => {
+                assert!(matches!(args.first(), Some(ExprAst::Ident(name)) if name == "v11"));
+            }
+            _ => panic!("expected call"),
+        }
+    }
+
+    #[test]
+    fn rewrites_store_calls_to_non_modifying_method_calls() {
+        let mut body = vec![
+            StmtAst::VarDecl {
+                binding: Var::name("v23"),
+                expr: ExprAst::Call {
+                    callee: "store_grams".to_string(),
+                    args: vec![
+                        ExprAst::Call {
+                            callee: "begin_cell".to_string(),
+                            args: vec![],
+                        },
+                        ident("v22"),
+                    ],
+                },
+            },
+            StmtAst::VarDecl {
+                binding: Var::name("v24"),
+                expr: ExprAst::Call {
+                    callee: "store_slice".to_string(),
+                    args: vec![ident("v23"), ident("v15")],
+                },
+            },
+        ];
+
+        simplify_method_body(&mut body);
+
+        for stmt in &body {
+            let StmtAst::VarDecl { expr, .. } = stmt else {
+                panic!("expected var decl");
+            };
+            match expr {
+                ExprAst::MethodCall { modifying, .. } => {
+                    assert!(!*modifying);
+                }
+                _ => panic!("expected non-modifying method call"),
+            }
         }
     }
 }
