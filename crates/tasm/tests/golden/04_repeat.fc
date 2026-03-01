@@ -3,7 +3,7 @@
 
 () recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
     repeat (3) {
-        var v0 = (msg_value) + (2);
+        var v0 = msg_value + 2;
     }
 }
 

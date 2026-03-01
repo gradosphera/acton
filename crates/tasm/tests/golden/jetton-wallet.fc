@@ -4,8 +4,7 @@
 () recv_internal(int balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
     var v0 = begin_parse(in_msg_full);
     var (v1, v2) = load_uint(v0, 4);
-    var v3 = (v2) & (1);
-    if (v3) {
+    if (v2 & 1) {
         var v4 = skip_bits(in_msg_body, 32);
         var v5 = begin_parse(get_data());
         var (v6, v7) = load_uint(v5, 4);
@@ -14,13 +13,13 @@
         var (v12, v13) = load_msg_addr(v10);
         end_parse(v12);
         var (v14, v15) = load_uint(v4, 32);
-        var v16 = (v15) == (395134233);
-        var v17 = (v15) == (2078119902);
-        var v18 = (v16) | (v17);
+        var v16 = v15 == 395134233;
+        var v17 = v15 == 2078119902;
+        var v18 = v16 | v17;
         throw_unless((1 << 16) - 1, v18);
         var v19 = skip_bits(v14, 64);
         var (v20, v21) = load_grams(v19);
-        var v22 = (v9) + (v21);
+        var v22 = v9 + v21;
         var v23 = store_uint(begin_cell(), v7, 4);
         var v24 = store_grams(v23, v22);
         var v25 = store_slice(v24, v11);
@@ -37,13 +36,12 @@
     var (v37, v38) = load_grams(v35);
     var v39 = get_original_fwd_fee(0, v38);
     var (v40, v41) = load_uint(in_msg_body, 32);
-    var v42 = (v41) == (260734629);
-    if (v42) {
+    if (v41 == 260734629) {
         var (v43, v44) = load_uint(v40, 64);
         var (v45, v46) = load_grams(v43);
         var (v47, v48) = load_msg_addr(v45);
         var (v49, v50) = parse_std_addr(v48);
-        var v51 = (v49) == (0);
+        var v51 = v49 == 0;
         throw_unless(333, v51);
         var v52 = begin_parse(get_data());
         var (v53, v54) = load_uint(v52, 4);
@@ -53,8 +51,8 @@
         end_parse(v59);
         var v61 = equal_slices_bits(v58, v29);
         throw_unless(73, v61);
-        var v62 = (v56) - (v46);
-        var v63 = (v62) > (-1);
+        var v62 = v56 - v46;
+        var v63 = v62 > -1;
         throw_unless(47, v63);
         var v64 = store_uint(begin_cell(), 0, 4);
         var v65 = store_grams(v64, 0);
@@ -75,12 +73,11 @@
         var (v80, v81) = load_msg_addr(v47);
         var v82 = skip_dict(v80);
         var (v83, v84) = load_grams(v82);
-        var v85 = preload_uint(v83, 1);
-        if (v85) {
+        if (preload_uint(v83, 1)) {
             var (v86, v87) = slice_bits_refs(v83);
-            var v88 = (v87) == (1);
-            var v89 = (v86) == (1);
-            var v90 = (v88) & (v89);
+            var v88 = v87 == 1;
+            var v89 = v86 == 1;
+            var v90 = v88 & v89;
             throw_unless(49, v90);
         } else {
         }
@@ -99,23 +96,21 @@
         var v103 = store_ref(v102, v73);
         var v104 = store_ref(v103, v98);
         var v105 = end_cell(v104);
-        var v106 = (v84) ? (2) : (1);
+        var v106 = v84 ? 2 : 1;
         var v107 = get_precompiled_gas_consumption();
-        var v108 = null?(v107);
-        var v109 = (v108) ? (10065) : (v107);
-        var v110 = null?(v107);
-        var v111 = (v110) ? (10435) : (v107);
-        var v112 = (v106) * (v39);
-        var v113 = (v84) + (v112);
+        var v109 = null?(v107) ? 10065 : v107;
+        var v111 = null?(v107) ? 10435 : v107;
+        var v112 = v106 * v39;
+        var v113 = v84 + v112;
         var v114 = get_simple_forward_fee(0, 931, 3);
-        var v115 = (v113) + (v114);
+        var v115 = v113 + v114;
         var v116 = get_compute_fee(0, v109);
-        var v117 = (v115) + (v116);
+        var v117 = v115 + v116;
         var v118 = get_compute_fee(0, v111);
-        var v119 = (v117) + (v118);
+        var v119 = v117 + v118;
         var v120 = get_storage_fee(0, 157680000, 1033, 3);
-        var v121 = (v119) + (v120);
-        var v122 = (msg_value) > (v121);
+        var v121 = v119 + v120;
+        var v122 = msg_value > v121;
         throw_unless(48, v122);
         send_raw_message(v105, 80);
         var v123 = store_uint(begin_cell(), v54, 4);
@@ -126,8 +121,7 @@
         set_data(v127);
         return ();
     }
-    var v128 = (v41) == (395134233);
-    if (v128) {
+    if (v41 == 395134233) {
         var v129 = begin_parse(get_data());
         var (v130, v131) = load_uint(v129, 4);
         var (v132, v133) = load_grams(v130);
@@ -156,9 +150,9 @@
         var v161 = end_cell(v160);
         var v162 = begin_parse(v161);
         var v163 = equal_slices_bits(v162, v29);
-        var v164 = (v146) | (v163);
+        var v164 = v146 | v163;
         throw_unless(74, v164);
-        var v165 = (v133) + (v141);
+        var v165 = v133 + v141;
         var (v166, v167) = load_grams(v144);
         if (v167) {
             var v168 = store_uint(begin_cell(), 1935855772, 32);
@@ -177,12 +171,10 @@
         } else {
         }
         var v180 = preload_uint(v145, 2);
-        var v181 = (v180) == (0);
-        var v182 = ~(v181);
-        if (v182) {
-            var v183 = (balance) - (msg_value);
+        if (~ (v180 == 0)) {
+            var v183 = balance - msg_value;
             var v184 = my_storage_due();
-            var v185 = (v183) + (v184);
+            var v185 = v183 + v184;
             var v186 = get_storage_fee(0, 157680000, 1033, 3);
             var v187 = max(v185, v186);
             raw_reserve(v187, 2);
@@ -204,8 +196,7 @@
         set_data(v199);
         return ();
     }
-    var v200 = (v41) == (1499400124);
-    if (v200) {
+    if (v41 == 1499400124) {
         var v201 = begin_parse(get_data());
         var (v202, v203) = load_uint(v201, 4);
         var (v204, v205) = load_grams(v202);
@@ -217,10 +208,10 @@
         var (v214, v215) = load_msg_addr(v212);
         var v216 = skip_dict(v214);
         end_parse(v216);
-        var v217 = (v205) - (v213);
+        var v217 = v205 - v213;
         var v218 = equal_slices_bits(v207, v29);
         throw_unless(73, v218);
-        var v219 = (v217) > (-1);
+        var v219 = v217 > -1;
         throw_unless(47, v219);
         var v220 = store_uint(begin_cell(), 2078119902, 32);
         var v221 = store_uint(v220, v211, 64);
@@ -242,10 +233,10 @@
         }
         var v235 = get_forward_fee(0, 754, 1);
         var v236 = get_compute_fee(0, v234);
-        var v237 = (v235) + (v236);
+        var v237 = v235 + v236;
         var v238 = get_compute_fee(0, 6757);
-        var v239 = (v237) + (v238);
-        var v240 = (msg_value) > (v239);
+        var v239 = v237 + v238;
+        var v240 = msg_value > v239;
         throw_unless(48, v240);
         send_raw_message(v231, 80);
         var v241 = store_uint(begin_cell(), v203, 4);
@@ -256,8 +247,7 @@
         set_data(v245);
         return ();
     }
-    var v246 = (v41) == (3547469196);
-    if (v246) {
+    if (v41 == 3547469196) {
         return ();
     }
     throw((1 << 16) - 1);

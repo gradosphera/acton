@@ -30,7 +30,7 @@ fn decompile_hex_boc_string() {
     let out = FuncDecompiler::new()
         .decompile_boc_hex(&hex)
         .expect("hex decompilation must succeed");
-    assert!(out.contains("method_id"));
+    assert!(out.contains("recv_internal"));
 }
 
 #[test]

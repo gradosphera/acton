@@ -304,7 +304,19 @@ fn render_expr(expr: &ExprAst) -> String {
         ExprAst::CellLiteral(s) => s.clone(),
         ExprAst::NullLiteral => "null()".to_string(),
         ExprAst::Unary { op, expr } => {
-            format!("{}({})", op.as_str(), render_expr(expr))
+            let inner = render_expr(expr);
+            let is_bit_not = matches!(op, UnaryOp::BitNot);
+            if is_atomic_expr(expr) {
+                if is_bit_not {
+                    format!("{} {}", op.as_str(), inner)
+                } else {
+                    format!("{}{}", op.as_str(), inner)
+                }
+            } else if is_bit_not {
+                format!("{} ({})", op.as_str(), inner)
+            } else {
+                format!("{}({})", op.as_str(), inner)
+            }
         }
         ExprAst::Binary {
             lhs,
@@ -313,10 +325,18 @@ fn render_expr(expr: &ExprAst) -> String {
             wrap_lhs,
             wrap_rhs,
         } => {
-            let lhs = render_expr(lhs);
-            let rhs = render_expr(rhs);
-            let lhs = if *wrap_lhs { format!("({lhs})") } else { lhs };
-            let rhs = if *wrap_rhs { format!("({rhs})") } else { rhs };
+            let lhs_rendered = render_expr(lhs);
+            let rhs_rendered = render_expr(rhs);
+            let lhs = if *wrap_lhs && !is_atomic_expr(lhs) {
+                format!("({lhs_rendered})")
+            } else {
+                lhs_rendered
+            };
+            let rhs = if *wrap_rhs && !is_atomic_expr(rhs) {
+                format!("({rhs_rendered})")
+            } else {
+                rhs_rendered
+            };
             format!("{lhs} {} {rhs}", op.as_str())
         }
         ExprAst::Ternary {
@@ -324,11 +344,29 @@ fn render_expr(expr: &ExprAst) -> String {
             then_expr,
             else_expr,
         } => {
+            let condition_rendered = render_expr(condition);
+            let then_rendered = render_expr(then_expr);
+            let else_rendered = render_expr(else_expr);
+            let condition = if matches!(condition.as_ref(), ExprAst::Ternary { .. }) {
+                format!("({condition_rendered})")
+            } else {
+                condition_rendered
+            };
+            let then_expr = if matches!(then_expr.as_ref(), ExprAst::Ternary { .. }) {
+                format!("({then_rendered})")
+            } else {
+                then_rendered
+            };
+            let else_expr = if matches!(else_expr.as_ref(), ExprAst::Ternary { .. }) {
+                format!("({else_rendered})")
+            } else {
+                else_rendered
+            };
             format!(
-                "({}) ? ({}) : ({})",
-                render_expr(condition),
-                render_expr(then_expr),
-                render_expr(else_expr)
+                "{} ? {} : {}",
+                condition,
+                then_expr,
+                else_expr
             )
         }
         ExprAst::Tuple(items) => {
@@ -340,6 +378,19 @@ fn render_expr(expr: &ExprAst) -> String {
             format!("{callee}({rendered_args})")
         }
     }
+}
+
+fn is_atomic_expr(expr: &ExprAst) -> bool {
+    matches!(
+        expr,
+        ExprAst::Ident(_)
+            | ExprAst::Number(_)
+            | ExprAst::StringLiteral(_)
+            | ExprAst::CellLiteral(_)
+            | ExprAst::NullLiteral
+            | ExprAst::Unary { .. }
+            | ExprAst::Call { .. }
+    )
 }
 
 fn render_tensor_expr(tensor: &Var) -> String {

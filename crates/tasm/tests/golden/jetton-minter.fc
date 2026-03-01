@@ -8,12 +8,10 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
 () recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
     var v0 = begin_parse(in_msg_full);
     var (v1, v2) = load_uint(v0, 4);
-    var v3 = (v2) & (1);
-    if (v3) {
+    if (v2 & 1) {
         var v4 = skip_bits(in_msg_body, 32);
         var (v5, v6) = load_uint(v4, 32);
-        var v7 = (v6) == (395134233);
-        ifnot (v7) {
+        ifnot (v6 == 395134233) {
             return ();
         }
         var v8 = skip_bits(v5, 64);
@@ -25,7 +23,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         var (v18, v19) = load_ref(v16);
         var (v20, v21) = load_ref(v18);
         end_parse(v20);
-        var v22 = (v13) - (v10);
+        var v22 = v13 - v10;
         var v23 = store_grams(begin_cell(), v22);
         var v24 = store_slice(v23, v15);
         var v25 = store_slice(v24, v17);
@@ -51,52 +49,48 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
     var (v52, v53) = load_ref(v50);
     var (v54, v55) = load_ref(v52);
     end_parse(v54);
-    var v56 = (v42) == (1680571655);
-    if (v56) {
+    if (v42 == 1680571655) {
         var v57 = equal_slices_bits(v30, v49);
         throw_unless(73, v57);
         var (v58, v59) = load_msg_addr(v43);
         var (v60, v61) = parse_std_addr(v59);
-        var v62 = (v60) == (0);
+        var v62 = v60 == 0;
         throw_unless(333, v62);
         var (v63, v64) = load_grams(v58);
         var (v65, v66) = load_ref(v63);
         end_parse(v65);
         var v67 = begin_parse(v66);
         var (v68, v69) = load_uint(v67, 32);
-        var v70 = (v69) == (395134233);
+        var v70 = v69 == 395134233;
         throw_unless(72, v70);
         var v71 = skip_bits(v68, 64);
         var (v72, v73) = load_grams(v71);
         var (v74, v75) = load_msg_addr(v72);
         var (v76, v77) = load_msg_addr(v74);
         var (v78, v79) = load_grams(v76);
-        var v80 = preload_uint(v78, 1);
-        if (v80) {
+        if (preload_uint(v78, 1)) {
             var (v81, v82) = slice_bits_refs(v78);
-            var v83 = (v82) == (1);
-            var v84 = (v81) == (1);
-            var v85 = (v83) & (v84);
+            var v83 = v82 == 1;
+            var v84 = v81 == 1;
+            var v85 = v83 & v84;
             throw_unless(49, v85);
         } else {
         }
-        var v86 = (v79) ? (2) : (1);
+        var v86 = v79 ? 2 : 1;
         var v87 = get_precompiled_gas_consumption();
-        var v88 = null?(v87);
-        var v89 = (v88) ? (10065) : (v87);
-        var v90 = null?(v87);
-        var v91 = (v90) ? (10435) : (v87);
-        var v92 = (v86) * (v40);
-        var v93 = (v79) + (v92);
+        var v89 = null?(v87) ? 10065 : v87;
+        var v91 = null?(v87) ? 10435 : v87;
+        var v92 = v86 * v40;
+        var v93 = v79 + v92;
         var v94 = get_simple_forward_fee(0, 931, 3);
-        var v95 = (v93) + (v94);
+        var v95 = v93 + v94;
         var v96 = get_compute_fee(0, v89);
-        var v97 = (v95) + (v96);
+        var v97 = v95 + v96;
         var v98 = get_compute_fee(0, v91);
-        var v99 = (v97) + (v98);
+        var v99 = v97 + v98;
         var v100 = get_storage_fee(0, 157680000, 1033, 3);
-        var v101 = (v99) + (v100);
-        var v102 = (v64) > (v101);
+        var v101 = v99 + v100;
+        var v102 = v64 > v101;
         throw_unless(48, v102);
         raw_reserve(10000000, 0);
         var v103 = store_uint(begin_cell(), 0, 4);
@@ -123,7 +117,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         var v124 = store_ref(v123, v66);
         var v125 = end_cell(v124);
         send_raw_message(v125, 17);
-        var v126 = (v47) + (v73);
+        var v126 = v47 + v73;
         var v127 = store_grams(begin_cell(), v126);
         var v128 = store_slice(v127, v49);
         var v129 = store_slice(v128, v51);
@@ -133,8 +127,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         set_data(v132);
         return ();
     }
-    var v133 = (v42) == (2078119902);
-    if (v133) {
+    if (v42 == 2078119902) {
         var (v134, v135) = load_grams(v43);
         var (v136, v137) = load_msg_addr(v134);
         var v138 = store_uint(begin_cell(), 0, 4);
@@ -155,7 +148,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         var v153 = begin_parse(v152);
         var v154 = equal_slices_bits(v153, v30);
         throw_unless(74, v154);
-        var v155 = (v47) - (v135);
+        var v155 = v47 - v135;
         var v156 = store_grams(begin_cell(), v155);
         var v157 = store_slice(v156, v49);
         var v158 = store_slice(v157, v51);
@@ -166,9 +159,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         var (v162, v163) = load_msg_addr(v136);
         end_parse(v162);
         var v164 = preload_uint(v163, 2);
-        var v165 = (v164) == (0);
-        var v166 = ~(v165);
-        if (v166) {
+        if (~ (v164 == 0)) {
             var v167 = store_uint(begin_cell(), 16, 6);
             var v168 = store_slice(v167, v163);
             var v169 = store_grams(v168, 0);
@@ -181,8 +172,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         }
         return ();
     }
-    var v174 = (v42) == (745978227);
-    if (v174) {
+    if (v42 == 745978227) {
         var (v175, v176) = load_msg_addr(v43);
         var (v177, v178) = load_int(v175, 1);
         end_parse(v177);
@@ -201,7 +191,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         var v186 = store_uint(v185, 3513996288, 32);
         var v187 = store_uint(v186, v44, 64);
         var (v188, v189) = parse_std_addr(v176);
-        var v190 = (v188) == (0);
+        var v190 = v188 == 0;
         var v208 = null();
         if (v190) {
             var v191 = store_uint(begin_cell(), 0, 4);
@@ -231,8 +221,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         send_raw_message(v210, 80);
         return ();
     }
-    var v211 = (v42) == (1694626644);
-    if (v211) {
+    if (v42 == 1694626644) {
         var v212 = equal_slices_bits(v30, v49);
         throw_unless(73, v212);
         var (v213, v214) = load_msg_addr(v43);
@@ -246,8 +235,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         set_data(v220);
         return ();
     }
-    var v221 = (v42) == (4220051737);
-    if (v221) {
+    if (v42 == 4220051737) {
         end_parse(v43);
         var v222 = equal_slices_bits(v30, v51);
         throw_unless(73, v222);
@@ -260,8 +248,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         set_data(v228);
         return ();
     }
-    var v229 = (v42) == (1949430305);
-    if (v229) {
+    if (v42 == 1949430305) {
         var v230 = equal_slices_bits(v30, v49);
         throw_unless(73, v230);
         end_parse(v43);
@@ -274,8 +261,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         set_data(v236);
         return ();
     }
-    var v237 = (v42) == (3414567170);
-    if (v237) {
+    if (v42 == 3414567170) {
         var v238 = equal_slices_bits(v30, v49);
         throw_unless(73, v238);
         var v239 = store_slice(begin_cell(), v43);
@@ -289,8 +275,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         set_data(v246);
         return ();
     }
-    var v247 = (v42) == (621336170);
-    if (v247) {
+    if (v42 == 621336170) {
         var v248 = equal_slices_bits(v30, v49);
         throw_unless(73, v248);
         var (v249, v250) = load_ref(v43);
@@ -300,8 +285,7 @@ cell __dict_method_20(cell arg0, int arg1, slice arg2) impure method_id(20);
         set_code(v252);
         return ();
     }
-    var v253 = (v42) == (3547469196);
-    if (v253) {
+    if (v42 == 3547469196) {
         return ();
     }
     throw((1 << 16) - 1);
