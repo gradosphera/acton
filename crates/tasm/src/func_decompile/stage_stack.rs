@@ -1,4 +1,4 @@
-use super::ast::{ExprAst, StmtAst};
+use super::ast::{ExprAst, StmtAst, Var};
 use super::render::{arg_as_i64, arg_to_string, format_func_slice_expr, format_instruction_line};
 use crate::types::{ArgValue, Code, Instruction, PlainInstruction};
 use std::collections::BTreeMap;
@@ -88,7 +88,11 @@ impl LiftState {
             StackValue::Continuation(_) => {
                 let name = self.new_temp();
                 push_var(stmts, name.clone(), "0");
-                push_line(stmts, depth, ";; continuation used as scalar value".to_string());
+                push_line(
+                    stmts,
+                    depth,
+                    ";; continuation used as scalar value".to_string(),
+                );
                 name
             }
         }
@@ -328,7 +332,7 @@ fn lift_plain_instruction(
                 state,
                 &mut pre_if_stmts,
                 &mut child_stmts,
-                depth
+                depth,
             );
             stmts.extend(pre_if_stmts);
             if !child_stmts.is_empty() {
@@ -469,7 +473,7 @@ fn lift_plain_instruction(
 
             let loop_cond = state.new_temp();
             stmts.push(StmtAst::VarDecl {
-                name: loop_cond.clone(),
+                binding: Var::name(loop_cond.clone()),
                 expr: ExprAst::Atom("0".to_string()),
             });
 
@@ -808,30 +812,15 @@ fn lift_plain_instruction(
             return;
         }
         "BLKDROP" => {
-            let count = plain
-                .args
-                .first()
-                .and_then(arg_as_i64)
-                .unwrap_or(0)
-                .max(0) as usize;
+            let count = plain.args.first().and_then(arg_as_i64).unwrap_or(0).max(0) as usize;
             for _ in 0..count {
                 let _ = state.pop_value();
             }
             return;
         }
         "BLKDROP2" => {
-            let i = plain
-                .args
-                .first()
-                .and_then(arg_as_i64)
-                .unwrap_or(0)
-                .max(0) as usize;
-            let j = plain
-                .args
-                .get(1)
-                .and_then(arg_as_i64)
-                .unwrap_or(0)
-                .max(0) as usize;
+            let i = plain.args.first().and_then(arg_as_i64).unwrap_or(0).max(0) as usize;
+            let j = plain.args.get(1).and_then(arg_as_i64).unwrap_or(0).max(0) as usize;
             if i == 0 {
                 return;
             }
@@ -962,7 +951,10 @@ fn lift_plain_instruction(
         let rhs = state.pop_expr_expect(stmts, depth, ValueType::Slice);
         let lhs = state.pop_expr_expect(stmts, depth, ValueType::Slice);
         let t = state.new_temp();
-        push_var_call(stmts, t.clone(), "equal_slices_bits", vec![lhs, rhs]);
+        stmts.push(StmtAst::VarDecl {
+            binding: t.clone().into(),
+            expr: call_expr("equal_slices_bits", vec![lhs, rhs]),
+        });
         state.push_typed_expr(t, ValueType::Int);
         return;
     }
@@ -971,7 +963,10 @@ fn lift_plain_instruction(
         let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
         let bits = state.new_temp();
         let refs = state.new_temp();
-        push_var_call(stmts, format!("({bits}, {refs})"), "slice_bits_refs", vec![src]);
+        stmts.push(StmtAst::VarDecl {
+            binding: tensor_var(vec![bits.clone(), refs.clone()]),
+            expr: call_expr("slice_bits_refs", vec![src]),
+        });
         state.push_typed_expr(bits, ValueType::Int);
         state.push_typed_expr(refs, ValueType::Int);
         return;
@@ -1034,12 +1029,10 @@ fn lift_plain_instruction(
             let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
             let next_slice = state.new_temp();
             let value = state.new_temp();
-            push_var_call(
-                stmts,
-                format!("({next_slice}, {value})"),
-                "load_uint",
-                vec![src, bits],
-            );
+            stmts.push(StmtAst::VarDecl {
+                binding: tensor_var(vec![next_slice.clone(), value.clone()]),
+                expr: call_expr("load_uint", vec![src, bits]),
+            });
             state.push_typed_expr(value, ValueType::Int);
             state.push_typed_expr(next_slice, ValueType::Slice);
             return;
@@ -1058,12 +1051,10 @@ fn lift_plain_instruction(
             let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
             let next_slice = state.new_temp();
             let value = state.new_temp();
-            push_var_call(
-                stmts,
-                format!("({next_slice}, {value})"),
-                "load_int",
-                vec![src, bits],
-            );
+            stmts.push(StmtAst::VarDecl {
+                binding: tensor_var(vec![next_slice.clone(), value.clone()]),
+                expr: call_expr("load_int", vec![src, bits]),
+            });
             state.push_typed_expr(value, ValueType::Int);
             state.push_typed_expr(next_slice, ValueType::Slice);
             return;
@@ -1081,7 +1072,10 @@ fn lift_plain_instruction(
             };
             let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "preload_uint", vec![src, bits]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("preload_uint", vec![src, bits]),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
@@ -1098,7 +1092,10 @@ fn lift_plain_instruction(
             };
             let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "preload_int", vec![src, bits]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("preload_int", vec![src, bits]),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
@@ -1111,12 +1108,10 @@ fn lift_plain_instruction(
                 .unwrap_or_else(|| "0".to_string());
             let next_slice = state.new_temp();
             let loaded = state.new_temp();
-            push_var_call(
-                stmts,
-                format!("({next_slice}, {loaded})"),
-                "load_bits",
-                vec![src, bits],
-            );
+            stmts.push(StmtAst::VarDecl {
+                binding: tensor_var(vec![next_slice.clone(), loaded.clone()]),
+                expr: call_expr("load_bits", vec![src, bits]),
+            });
             state.push_typed_expr(loaded, ValueType::Slice);
             state.push_typed_expr(next_slice, ValueType::Slice);
             return;
@@ -1129,7 +1124,10 @@ fn lift_plain_instruction(
                 .and_then(arg_to_string)
                 .unwrap_or_else(|| "0".to_string());
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "preload_bits", vec![src, bits]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("preload_bits", vec![src, bits]),
+            });
             state.push_typed_expr(t, ValueType::Slice);
             return;
         }
@@ -1137,12 +1135,10 @@ fn lift_plain_instruction(
             let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
             let remainder = state.new_temp();
             let addr = state.new_temp();
-            push_var_call(
-                stmts,
-                format!("({remainder}, {addr})"),
-                "load_msg_addr",
-                vec![src],
-            );
+            stmts.push(StmtAst::VarDecl {
+                binding: tensor_var(vec![remainder.clone(), addr.clone()]),
+                expr: call_expr("load_msg_addr", vec![src]),
+            });
             // TVM stack after LDMSGADDR is addr, remainder(top); stdlib
             // signature is (remainder, addr) because of asm(-> 1 0).
             state.push_typed_expr(addr, ValueType::Slice);
@@ -1156,7 +1152,12 @@ fn lift_plain_instruction(
                 .unwrap_or_else(|| format!("__{}", plain.name.to_lowercase()));
             let next_slice = state.new_temp();
             let value = state.new_temp();
-            push_var_call(stmts, format!("({next_slice}, {value})"), fn_name, vec![src]);
+
+            stmts.push(StmtAst::VarDecl {
+                binding: tensor_var(vec![next_slice.clone(), value.clone()]),
+                expr: call_expr(fn_name, vec![src]),
+            });
+            
             let value_ty = match plain.name.as_str() {
                 "LDGRAMS" | "LDVARUINT16" => ValueType::Int,
                 "LDREF" => ValueType::Cell,
@@ -1170,12 +1171,10 @@ fn lift_plain_instruction(
             let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
             let next_slice = state.new_temp();
             let value = state.new_temp();
-            push_var_call(
-                stmts,
-                format!("({next_slice}, {value})"),
-                "load_maybe_ref",
-                vec![src],
-            );
+            stmts.push(StmtAst::VarDecl {
+                binding: tensor_var(vec![next_slice.clone(), value.clone()]),
+                expr: call_expr("load_maybe_ref", vec![src]),
+            });
             state.push_typed_expr(value, ValueType::Cell);
             state.push_typed_expr(next_slice, ValueType::Slice);
             return;
@@ -1183,7 +1182,10 @@ fn lift_plain_instruction(
         "PLDOPTREF" => {
             let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "preload_maybe_ref", vec![src]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("preload_maybe_ref", vec![src]),
+            });
             state.push_typed_expr(t, ValueType::Cell);
             return;
         }
@@ -1200,7 +1202,10 @@ fn lift_plain_instruction(
             let fn_name = stdlib_function_for_instruction(&plain.name)
                 .map(str::to_owned)
                 .unwrap_or_else(|| format!("__{}", plain.name.to_lowercase()));
-            push_var_call(stmts, t.clone(), fn_name, vec![src]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr(fn_name, vec![src]),
+            });
             let out_ty = match plain.name.as_str() {
                 "CTOS" => ValueType::Slice,
                 "ENDC" => ValueType::Cell,
@@ -1223,7 +1228,10 @@ fn lift_plain_instruction(
             let lhs = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let q = state.new_temp();
             let r = state.new_temp();
-            push_var_call(stmts, format!("({q}, {r})"), "divmod", vec![lhs, rhs]);
+            stmts.push(StmtAst::VarDecl {
+                binding: tensor_var(vec![q.clone(), r.clone()]),
+                expr: call_expr("divmod", vec![lhs, rhs]),
+            });
             state.push_typed_expr(q, ValueType::Int);
             state.push_typed_expr(r, ValueType::Int);
             return;
@@ -1234,7 +1242,10 @@ fn lift_plain_instruction(
             let x = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let q = state.new_temp();
             let r = state.new_temp();
-            push_var_call(stmts, format!("({q}, {r})"), "muldivmod", vec![x, y, z]);
+            stmts.push(StmtAst::VarDecl {
+                binding: tensor_var(vec![q.clone(), r.clone()]),
+                expr: call_expr("muldivmod", vec![x, y, z]),
+            });
             state.push_typed_expr(q, ValueType::Int);
             state.push_typed_expr(r, ValueType::Int);
             return;
@@ -1244,14 +1255,20 @@ fn lift_plain_instruction(
             let lhs = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let t = state.new_temp();
             let fn_name = if plain.name == "MIN" { "min" } else { "max" };
-            push_var_call(stmts, t.clone(), fn_name, vec![lhs, rhs]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr(fn_name, vec![lhs, rhs]),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
         "ABS" => {
             let src = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "abs", vec![src]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("abs", vec![src]),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
@@ -1266,7 +1283,10 @@ fn lift_plain_instruction(
                 "MULDIVC" => "muldivc",
                 _ => unreachable!(),
             };
-            push_var_call(stmts, t.clone(), fn_name, vec![x, y, z]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr(fn_name, vec![x, y, z]),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
@@ -1284,7 +1304,10 @@ fn lift_plain_instruction(
             } else {
                 "store_int"
             };
-            push_var_call(stmts, t.clone(), fn_name, vec![builder, value, bits]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr(fn_name, vec![builder, value, bits]),
+            });
             state.push_typed_expr(t, ValueType::Builder);
             return;
         }
@@ -1298,7 +1321,10 @@ fn lift_plain_instruction(
             } else {
                 "store_int"
             };
-            push_var_call(stmts, t.clone(), fn_name, vec![builder, value, bits]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr(fn_name, vec![builder, value, bits]),
+            });
             state.push_typed_expr(t, ValueType::Builder);
             return;
         }
@@ -1313,7 +1339,10 @@ fn lift_plain_instruction(
             let fn_name = stdlib_function_for_instruction(&plain.name)
                 .map(str::to_owned)
                 .unwrap_or_else(|| format!("__{}", plain.name.to_lowercase()));
-            push_var_call(stmts, t.clone(), fn_name, vec![builder, value]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr(fn_name, vec![builder, value]),
+            });
             state.push_typed_expr(t, ValueType::Builder);
             return;
         }
@@ -1324,7 +1353,10 @@ fn lift_plain_instruction(
             let fn_name = stdlib_function_for_instruction(&plain.name)
                 .map(str::to_owned)
                 .unwrap_or_else(|| format!("__{}", plain.name.to_lowercase()));
-            push_var_call(stmts, t.clone(), fn_name, vec![builder, value]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr(fn_name, vec![builder, value]),
+            });
             state.push_typed_expr(t, ValueType::Builder);
             return;
         }
@@ -1332,7 +1364,10 @@ fn lift_plain_instruction(
             let len = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "skip_bits", vec![src, len]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("skip_bits", vec![src, len]),
+            });
             state.push_typed_expr(t, ValueType::Slice);
             return;
         }
@@ -1340,14 +1375,20 @@ fn lift_plain_instruction(
             let index = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let tuple = state.pop_expr(stmts, depth);
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "at", vec![tuple, index]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("at", vec![tuple, index]),
+            });
             state.push_typed_expr(t, ValueType::Unknown);
             return;
         }
         "SKIPDICT" => {
             let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "skip_dict", vec![src]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("skip_dict", vec![src]),
+            });
             state.push_typed_expr(t, ValueType::Slice);
             return;
         }
@@ -1355,12 +1396,10 @@ fn lift_plain_instruction(
             let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
             let next_slice = state.new_temp();
             let skipped = state.new_temp();
-            push_var_call(
-                stmts,
-                format!("({next_slice}, {skipped})"),
-                "load_maybe_ref",
-                vec![src],
-            );
+            stmts.push(StmtAst::VarDecl {
+                binding: tensor_var(vec![next_slice.clone(), skipped.clone()]),
+                expr: call_expr("load_maybe_ref", vec![src]),
+            });
             state.push_typed_expr(next_slice, ValueType::Slice);
             return;
         }
@@ -1409,21 +1448,15 @@ fn lift_plain_instruction(
             args.reverse();
 
             let t = state.new_temp();
-            if args.is_empty() {
-                push_var_call(stmts, t.clone(), format!("__dict_method_{target}"), Vec::new());
-            } else {
-                push_var_call(stmts, t.clone(), format!("__dict_method_{target}"), args);
-            }
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr(format!("__dict_method_{target}"), args),
+            });
             state.push_typed_expr(t, ValueType::Unknown);
             return;
         }
         "CALLXARGS" => {
-            let argc = plain
-                .args
-                .first()
-                .and_then(arg_as_i64)
-                .unwrap_or(0)
-                .max(0) as usize;
+            let argc = plain.args.first().and_then(arg_as_i64).unwrap_or(0).max(0) as usize;
             let method_id = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let mut args = Vec::with_capacity(argc);
             for _ in 0..argc {
@@ -1447,9 +1480,7 @@ fn lift_plain_instruction(
                 _ => push_line(
                     stmts,
                     depth,
-                    format!(
-                        ";; unsupported CALLXARGS arity {argc} with method id {method_id}"
-                    ),
+                    format!(";; unsupported CALLXARGS arity {argc} with method id {method_id}"),
                 ),
             }
             return;
@@ -1513,14 +1544,20 @@ fn lift_plain_instruction(
         }
         "DUEPAYMENT" => {
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "my_storage_due", Vec::new());
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("my_storage_due", Vec::new()),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
         "ISNULL" => {
             let src = state.pop_expr(stmts, depth);
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "null?", vec![src]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("null?", vec![src]),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
@@ -1541,12 +1578,10 @@ fn lift_plain_instruction(
             let src = state.pop_expr_expect(stmts, depth, ValueType::Slice);
             let workchain = state.new_temp();
             let addr = state.new_temp();
-            push_var_call(
-                stmts,
-                format!("({workchain}, {addr})"),
-                "parse_std_addr",
-                vec![src],
-            );
+            stmts.push(StmtAst::VarDecl {
+                binding: tensor_var(vec![workchain.clone(), addr.clone()]),
+                expr: call_expr("parse_std_addr", vec![src]),
+            });
             // parse_std_addr returns workchain id and address integer.
             state.push_typed_expr(workchain, ValueType::Int);
             state.push_typed_expr(addr, ValueType::Int);
@@ -1557,12 +1592,10 @@ fn lift_plain_instruction(
             let workchain = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let fwd_fee = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let t = state.new_temp();
-            push_var_call(
-                stmts,
-                t.clone(),
-                "get_original_fwd_fee",
-                vec![workchain, fwd_fee],
-            );
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("get_original_fwd_fee", vec![workchain, fwd_fee]),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
@@ -1571,7 +1604,10 @@ fn lift_plain_instruction(
             let workchain = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let gas_used = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "get_compute_fee", vec![workchain, gas_used]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("get_compute_fee", vec![workchain, gas_used]),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
@@ -1582,12 +1618,10 @@ fn lift_plain_instruction(
             let bits = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let cells = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let t = state.new_temp();
-            push_var_call(
-                stmts,
-                t.clone(),
-                "get_simple_forward_fee",
-                vec![workchain, bits, cells],
-            );
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("get_simple_forward_fee", vec![workchain, bits, cells]),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
@@ -1597,7 +1631,10 @@ fn lift_plain_instruction(
             let bits = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let cells = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "get_forward_fee", vec![workchain, bits, cells]);
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("get_forward_fee", vec![workchain, bits, cells]),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
@@ -1609,18 +1646,19 @@ fn lift_plain_instruction(
             let bits = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let cells = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let t = state.new_temp();
-            push_var_call(
-                stmts,
-                t.clone(),
-                "get_storage_fee",
-                vec![workchain, seconds, bits, cells],
-            );
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("get_storage_fee", vec![workchain, seconds, bits, cells]),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
         "GETPRECOMPILEDGAS" => {
             let t = state.new_temp();
-            push_var_call(stmts, t.clone(), "get_precompiled_gas_consumption", Vec::new());
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("get_precompiled_gas_consumption", Vec::new()),
+            });
             state.push_typed_expr(t, ValueType::Int);
             return;
         }
@@ -1630,12 +1668,10 @@ fn lift_plain_instruction(
             let index = state.pop_expr_expect(stmts, depth, ValueType::Int);
             let value = state.pop_expr_expect(stmts, depth, ValueType::Cell);
             let t = state.new_temp();
-            push_var_call(
-                stmts,
-                t.clone(),
-                "udict_set_ref",
-                vec![dict, key_len, index, value],
-            );
+            stmts.push(StmtAst::VarDecl {
+                binding: t.clone().into(),
+                expr: call_expr("udict_set_ref", vec![dict, key_len, index, value]),
+            });
             state.push_typed_expr(t, ValueType::Cell);
             return;
         }
@@ -1855,9 +1891,17 @@ fn merge_ifelse_stacks(
         if !is_branch_local_temp_expr(then_expr, base_next_temp)
             && !is_branch_local_temp_expr(else_expr, base_next_temp)
         {
-            push_var(pre_if_stmts, merged.clone(), format!("({cond}) ? ({then_expr}) : ({else_expr})"));
+            push_var(
+                pre_if_stmts,
+                merged.clone(),
+                format!("({cond}) ? ({then_expr}) : ({else_expr})"),
+            );
         } else {
-            let init_expr = if merged_ty == ValueType::Int { "0" } else { "null()" };
+            let init_expr = if merged_ty == ValueType::Int {
+                "0"
+            } else {
+                "null()"
+            };
             push_var(pre_if_stmts, merged.clone(), init_expr);
             push_assign(then_stmts, merged.clone(), then_expr.clone());
             push_assign(else_stmts, merged.clone(), else_expr.clone());
@@ -1880,9 +1924,9 @@ fn push_line(stmts: &mut Vec<StmtAst>, _depth: usize, line: String) {
     }
 }
 
-fn push_var(stmts: &mut Vec<StmtAst>, name: impl Into<String>, expr: impl Into<String>) {
+fn push_var(stmts: &mut Vec<StmtAst>, binding: impl Into<Var>, expr: impl Into<String>) {
     stmts.push(StmtAst::VarDecl {
-        name: name.into(),
+        binding: binding.into(),
         expr: ExprAst::Atom(expr.into()),
     });
 }
@@ -1905,35 +1949,15 @@ fn call_expr(callee: impl Into<String>, args: Vec<String>) -> ExprAst {
     }
 }
 
-fn push_var_call(
-    stmts: &mut Vec<StmtAst>,
-    name: impl Into<String>,
-    callee: impl Into<String>,
-    args: Vec<String>,
-) {
-    stmts.push(StmtAst::VarDecl {
-        name: name.into(),
-        expr: call_expr(callee, args),
-    });
-}
-
-fn push_assign_call(
-    stmts: &mut Vec<StmtAst>,
-    target: impl Into<String>,
-    callee: impl Into<String>,
-    args: Vec<String>,
-) {
-    stmts.push(StmtAst::Assign {
-        target: target.into(),
-        expr: call_expr(callee, args),
-    });
-}
-
 fn push_call(stmts: &mut Vec<StmtAst>, callee: impl Into<String>, args: Vec<String>) {
     stmts.push(StmtAst::Call {
         callee: callee.into(),
         args: args.into_iter().map(atom_expr).collect(),
     });
+}
+
+fn tensor_var(items: Vec<String>) -> Var {
+    Var::tensor(items.into_iter().map(Var::name).collect())
 }
 
 fn is_branch_local_temp_expr(expr: &str, base_next_temp: usize) -> bool {

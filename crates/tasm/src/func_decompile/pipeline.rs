@@ -1,4 +1,4 @@
-use super::ast::{ExprAst, MethodAst, StmtAst, render_method_ast};
+use super::ast::{ExprAst, MethodAst, StmtAst, Var, render_method_ast};
 use super::method_model::{
     MethodKind, ReturnKind, build_method_signature_ast, classify_method, collect_call_targets,
     extract_method_dictionary, infer_params_for_method, infer_return_kind, render_method_signature,
@@ -91,7 +91,9 @@ fn select_recv_internal_params(stmts: &[StmtAst]) -> Vec<String> {
 fn stmt_contains_ident(stmt: &StmtAst, ident: &str) -> bool {
     match stmt {
         StmtAst::Comment(line) | StmtAst::Expr(line) => contains_ident_text(line, ident),
-        StmtAst::VarDecl { name, expr } => name == ident || expr_contains_ident(expr, ident),
+        StmtAst::VarDecl { binding, expr } => {
+            tensor_contains_ident(binding, ident) || expr_contains_ident(expr, ident)
+        }
         StmtAst::Assign { target, expr } => {
             contains_ident_text(target, ident) || expr_contains_ident(expr, ident)
         }
@@ -129,6 +131,13 @@ fn expr_contains_ident(expr: &ExprAst, ident: &str) -> bool {
             contains_ident_text(callee, ident)
                 || args.iter().any(|arg| expr_contains_ident(arg, ident))
         }
+    }
+}
+
+fn tensor_contains_ident(tensor: &Var, ident: &str) -> bool {
+    match tensor {
+        Var::Name(name) => name == ident || contains_ident_text(name, ident),
+        Var::Tensor(items) => items.iter().any(|item| tensor_contains_ident(item, ident)),
     }
 }
 

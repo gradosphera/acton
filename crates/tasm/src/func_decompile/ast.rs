@@ -24,10 +24,40 @@ pub(crate) enum ExprAst {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Var {
+    Name(String),
+    Tensor(Vec<Var>),
+}
+
+impl Var {
+    #[must_use]
+    pub(crate) fn name(name: impl Into<String>) -> Self {
+        Self::Name(name.into())
+    }
+
+    #[must_use]
+    pub(crate) fn tensor(items: Vec<Var>) -> Self {
+        Self::Tensor(items)
+    }
+}
+
+impl From<String> for Var {
+    fn from(value: String) -> Self {
+        Self::Name(value)
+    }
+}
+
+impl From<&str> for Var {
+    fn from(value: &str) -> Self {
+        Self::Name(value.to_string())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum StmtAst {
     Comment(String),
     VarDecl {
-        name: String,
+        binding: Var,
         expr: ExprAst,
     },
     Assign {
@@ -96,7 +126,7 @@ impl StmtAst {
     #[must_use]
     pub(crate) fn var(name: impl Into<String>, expr: impl Into<String>) -> Self {
         Self::VarDecl {
-            name: name.into(),
+            binding: Var::Name(name.into()),
             expr: ExprAst::Atom(expr.into()),
         }
     }
@@ -131,8 +161,13 @@ fn render_stmt(stmt: &StmtAst, depth: usize, out: &mut String) {
         StmtAst::Comment(line) => {
             let _ = writeln!(out, "{indent}{line}");
         }
-        StmtAst::VarDecl { name, expr } => {
-            let _ = writeln!(out, "{indent}var {name} = {};", render_expr(expr));
+        StmtAst::VarDecl { binding, expr } => {
+            let _ = writeln!(
+                out,
+                "{indent}var {} = {};",
+                render_tensor_expr(binding),
+                render_expr(expr)
+            );
         }
         StmtAst::Assign { target, expr } => {
             let _ = writeln!(out, "{indent}{target} = {};", render_expr(expr));
@@ -184,6 +219,20 @@ fn render_expr(expr: &ExprAst) -> String {
         ExprAst::Call { callee, args } => {
             let rendered_args = args.iter().map(render_expr).collect::<Vec<_>>().join(", ");
             format!("{callee}({rendered_args})")
+        }
+    }
+}
+
+fn render_tensor_expr(tensor: &Var) -> String {
+    match tensor {
+        Var::Name(name) => name.clone(),
+        Var::Tensor(items) => {
+            let rendered = items
+                .iter()
+                .map(render_tensor_expr)
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("({rendered})")
         }
     }
 }
