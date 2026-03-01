@@ -1,4 +1,4 @@
-use super::ast::{ExprAst, StmtAst, Var};
+use super::ast::{ExprAst, StmtAst, Var, render_expr_ast};
 use super::render::{arg_as_i64, arg_to_string, format_func_slice_expr, format_instruction_line};
 use crate::types::{ArgValue, Code, Instruction, PlainInstruction};
 use std::collections::BTreeMap;
@@ -14,7 +14,7 @@ pub(crate) enum ValueType {
 
 #[derive(Debug, Clone)]
 enum StackValue {
-    Expr(String),
+    Expr(ExprAst),
     Continuation(Code),
 }
 
@@ -32,12 +32,15 @@ impl LiftState {
     fn push_expr(&mut self, expr: impl Into<String>) {
         let expr = expr.into();
         let ty = infer_literal_type(&expr);
-        self.push_typed_expr(expr, ty);
+        self.push_typed_expr_ast(atom_expr(expr), ty);
     }
 
     fn push_typed_expr(&mut self, expr: impl Into<String>, ty: ValueType) {
-        let expr = expr.into();
-        self.expr_types.insert(expr.clone(), ty);
+        self.push_typed_expr_ast(atom_expr(expr), ty);
+    }
+
+    fn push_typed_expr_ast(&mut self, expr: ExprAst, ty: ValueType) {
+        self.expr_types.insert(expr_key(&expr), ty);
         self.stack.push(StackValue::Expr(expr));
     }
 
@@ -79,10 +82,14 @@ impl LiftState {
         if !self.params.contains(&p) {
             self.params.push(p.clone());
         }
-        StackValue::Expr(p)
+        StackValue::Expr(atom_expr(p))
     }
 
     fn pop_expr(&mut self, stmts: &mut Vec<StmtAst>, depth: usize) -> String {
+        expr_key(&self.pop_expr_ast(stmts, depth))
+    }
+
+    fn pop_expr_ast(&mut self, stmts: &mut Vec<StmtAst>, depth: usize) -> ExprAst {
         match self.pop_value() {
             StackValue::Expr(v) => v,
             StackValue::Continuation(_) => {
@@ -93,7 +100,7 @@ impl LiftState {
                     depth,
                     ";; continuation used as scalar value".to_string(),
                 );
-                name
+                atom_expr(name)
             }
         }
     }
@@ -121,14 +128,14 @@ impl LiftState {
 
     pub(crate) fn peek_expr_for_return(&self) -> Option<String> {
         self.stack.last().and_then(|v| match v {
-            StackValue::Expr(e) => Some(e.clone()),
+            StackValue::Expr(e) => Some(expr_key(e)),
             StackValue::Continuation(_) => None,
         })
     }
 
     pub(crate) fn peek_expr_type_for_return(&self) -> Option<ValueType> {
         self.stack.last().and_then(|v| match v {
-            StackValue::Expr(e) => Some(self.expr_type_of(e)),
+            StackValue::Expr(e) => Some(self.expr_type_of(&expr_key(e))),
             StackValue::Continuation(_) => None,
         })
     }
@@ -137,7 +144,7 @@ impl LiftState {
         self.stack
             .iter()
             .filter_map(|v| match v {
-                StackValue::Expr(e) => Some(e.clone()),
+                StackValue::Expr(e) => Some(expr_key(e)),
                 StackValue::Continuation(_) => None,
             })
             .collect()
@@ -147,7 +154,7 @@ impl LiftState {
         self.stack
             .iter()
             .filter_map(|v| match v {
-                StackValue::Expr(e) => Some(self.expr_type_of(e)),
+                StackValue::Expr(e) => Some(self.expr_type_of(&expr_key(e))),
                 StackValue::Continuation(_) => None,
             })
             .collect()
@@ -1178,7 +1185,7 @@ fn lift_plain_instruction(
                 binding: tensor_var(vec![next_slice.clone(), value.clone()]),
                 expr: call_expr(fn_name, vec![src]),
             });
-            
+
             let value_ty = match plain.name.as_str() {
                 "LDGRAMS" | "LDVARUINT16" => ValueType::Int,
                 "LDREF" => ValueType::Cell,
@@ -1860,17 +1867,22 @@ fn merge_if_stacks(
         };
 
         if then_expr == else_expr {
-            let ty = then_state.expr_type_of(then_expr);
-            state.push_typed_expr(then_expr.clone(), ty);
+            let ty = then_state.expr_type_of(&expr_key(then_expr));
+            state.push_typed_expr_ast(then_expr.clone(), ty);
             continue;
         }
 
         let merged = state.new_temp();
-        push_var(pre_if_stmts, merged.clone(), else_expr.clone());
-        push_assign(then_stmts, merged.clone(), then_expr.clone());
-        let then_ty = then_state.expr_type_of(then_expr);
-        let else_ty = else_state.expr_type_of(else_expr);
-        let merged_ty = merged_value_type(then_expr, then_ty, else_expr, else_ty);
+        let then_expr_text = expr_key(then_expr);
+        let else_expr_text = expr_key(else_expr);
+        pre_if_stmts.push(StmtAst::VarDecl {
+            binding: merged.clone().into(),
+            expr: else_expr.clone(),
+        });
+        push_assign_expr(then_stmts, merged.clone(), then_expr.clone());
+        let then_ty = then_state.expr_type_of(&then_expr_text);
+        let else_ty = else_state.expr_type_of(&else_expr_text);
+        let merged_ty = merged_value_type(&then_expr_text, then_ty, &else_expr_text, else_ty);
         state.push_typed_expr(merged, merged_ty);
     }
 
@@ -1900,31 +1912,40 @@ fn merge_ifelse_stacks(
         };
 
         if then_expr == else_expr {
-            let ty = then_state.expr_type_of(then_expr);
-            state.push_typed_expr(then_expr.clone(), ty);
+            let ty = then_state.expr_type_of(&expr_key(then_expr));
+            state.push_typed_expr_ast(then_expr.clone(), ty);
             continue;
         }
 
         let merged = state.new_temp();
-        let then_ty = then_state.expr_type_of(then_expr);
-        let else_ty = else_state.expr_type_of(else_expr);
-        let merged_ty = merged_value_type(then_expr, then_ty, else_expr, else_ty);
-        if !is_branch_local_temp_expr(then_expr, base_next_temp)
-            && !is_branch_local_temp_expr(else_expr, base_next_temp)
+        let then_expr_text = expr_key(then_expr);
+        let else_expr_text = expr_key(else_expr);
+        let then_ty = then_state.expr_type_of(&then_expr_text);
+        let else_ty = else_state.expr_type_of(&else_expr_text);
+        let merged_ty = merged_value_type(&then_expr_text, then_ty, &else_expr_text, else_ty);
+        if !is_branch_local_temp_expr(&then_expr_text, base_next_temp)
+            && !is_branch_local_temp_expr(&else_expr_text, base_next_temp)
         {
             pre_if_stmts.push(StmtAst::VarDecl {
                 binding: merged.clone().into(),
-                expr: ternary_expr(cond, then_expr.clone(), else_expr.clone()),
+                expr: ExprAst::Ternary {
+                    condition: Box::new(atom_expr(cond)),
+                    then_expr: Box::new(then_expr.clone()),
+                    else_expr: Box::new(else_expr.clone()),
+                },
             });
         } else {
             let init_expr = if merged_ty == ValueType::Int {
-                "0"
+                atom_expr("0")
             } else {
-                "null()"
+                ExprAst::NullLiteral
             };
-            push_var(pre_if_stmts, merged.clone(), init_expr);
-            push_assign(then_stmts, merged.clone(), then_expr.clone());
-            push_assign(else_stmts, merged.clone(), else_expr.clone());
+            pre_if_stmts.push(StmtAst::VarDecl {
+                binding: merged.clone().into(),
+                expr: init_expr,
+            });
+            push_assign_expr(then_stmts, merged.clone(), then_expr.clone());
+            push_assign_expr(else_stmts, merged.clone(), else_expr.clone());
         }
         state.push_typed_expr(merged, merged_ty);
     }
@@ -1971,6 +1992,10 @@ fn atom_expr(value: impl Into<String>) -> ExprAst {
     }
 }
 
+fn expr_key(expr: &ExprAst) -> String {
+    render_expr_ast(expr)
+}
+
 fn call_expr(callee: impl Into<String>, args: Vec<String>) -> ExprAst {
     ExprAst::Call {
         callee: callee.into(),
@@ -2003,18 +2028,6 @@ fn binary_expr(lhs: impl Into<String>, op: impl Into<String>, rhs: impl Into<Str
         rhs: Box::new(atom_expr(rhs)),
         wrap_lhs: true,
         wrap_rhs: true,
-    }
-}
-
-fn ternary_expr(
-    condition: impl Into<String>,
-    then_expr: impl Into<String>,
-    else_expr: impl Into<String>,
-) -> ExprAst {
-    ExprAst::Ternary {
-        condition: Box::new(atom_expr(condition)),
-        then_expr: Box::new(atom_expr(then_expr)),
-        else_expr: Box::new(atom_expr(else_expr)),
     }
 }
 
@@ -2154,7 +2167,7 @@ fn fresh_param_stack_value(state: &mut LiftState) -> StackValue {
     if !state.params.contains(&p) {
         state.params.push(p.clone());
     }
-    StackValue::Expr(p)
+    StackValue::Expr(atom_expr(p))
 }
 
 fn ensure_stack_depth(state: &mut LiftState, depth_idx: usize) {

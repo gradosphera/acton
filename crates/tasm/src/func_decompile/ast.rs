@@ -177,6 +177,10 @@ pub(crate) fn render_method_ast(ast: &MethodAst, out: &mut String) {
     out.push_str("}\n\n");
 }
 
+pub(crate) fn render_expr_ast(expr: &ExprAst) -> String {
+    render_expr(expr)
+}
+
 fn render_stmt_list(stmts: &[StmtAst], depth: usize, out: &mut String) {
     for stmt in stmts {
         render_stmt(stmt, depth, out);
