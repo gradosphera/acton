@@ -246,6 +246,7 @@ acton wallet airdrop [NAME]
 ```
 
 This command requests a PoW challenge from faucet, solves it locally, and submits claim for selected wallet address.
+Acton retries transient faucet errors (network/5xx) automatically with short backoff.
 
 #### Options
 
@@ -259,6 +260,26 @@ This command requests a PoW challenge from faucet, solves it locally, and submit
 ```bash
 acton wallet airdrop deployer --faucet-url https://your-faucet.example
 ```
+
+When `--json` is used:
+
+#### Success JSON
+
+| Field        | Type    | Description                                                  |
+|--------------|---------|--------------------------------------------------------------|
+| `success`    | Boolean | Always `true` for successful airdrop                         |
+| `message`    | String  | Faucet success message (or default `"Success"` if omitted)   |
+| `address`    | String  | Wallet address used for claim                                |
+| `difficulty` | Number  | PoW difficulty returned by faucet                            |
+| `nonce`      | Number  | Solved PoW nonce                                             |
+| `solve_ms`   | Number  | Time spent solving PoW challenge in milliseconds             |
+
+#### Error JSON
+
+| Field     | Type    | Description                                         |
+|-----------|---------|-----------------------------------------------------|
+| `success` | Boolean | Always `false` for failed airdrop                   |
+| `error`   | String  | Human-readable error message describing the failure |
 
 ---
 

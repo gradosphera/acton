@@ -62,6 +62,19 @@ struct FaucetMessageResponse {
     error: Option<String>,
 }
 
+struct AirdropResult {
+    address: String,
+    difficulty: u32,
+    nonce: u64,
+    solve_duration: Duration,
+    message: Option<String>,
+}
+
+const HTTP_RETRY_ATTEMPTS: usize = 3;
+const HTTP_RETRY_BACKOFF_MS: [u64; 3] = [200, 500, 1000];
+const POW_MAX_SOLVE_DURATION: Duration = Duration::from_secs(60);
+const POW_MAX_NONCE_ATTEMPTS: u64 = 1_000_000_000;
+
 impl SignMessageFormat {
     const fn as_str(self) -> &'static str {
         match self {
@@ -224,146 +237,224 @@ pub fn wallet_cmd(command: WalletCommand) -> anyhow::Result<()> {
 }
 
 fn airdrop_wallet(name: Option<String>, faucet_url: String, json: bool) -> anyhow::Result<()> {
-    let config = ActonConfig::load()?;
+    let run_result: anyhow::Result<AirdropResult> = (|| {
+        let config = ActonConfig::load()?;
 
-    let name = select_wallet(name, &config)?;
+        let name = select_wallet(name, &config)?;
 
-    let wallet = config
-        .get_wallet(&name)
-        .ok_or_else(|| anyhow!(error_fmt::wallet_not_found(&config, &name)))?;
+        let wallet = config
+            .get_wallet(&name)
+            .ok_or_else(|| anyhow!(error_fmt::wallet_not_found(&config, &name)))?;
 
-    let address = get_wallet_address(wallet)?;
+        let address = get_wallet_address(wallet)?;
 
-    if !json {
-        println!(
-            "{} Requesting airdrop for wallet {} {}",
-            "→".blue().bold(),
-            name.cyan().bold(),
-            address
-        );
-    }
-
-    let faucet_base = parse_faucet_base_url(&faucet_url)?;
-    let challenge_url = faucet_base.join("challenge").with_context(|| {
-        format!(
-            "Failed to build challenge URL from faucet base URL {}",
-            faucet_base
-        )
-    })?;
-    let claim_url = faucet_base.join("claim").with_context(|| {
-        format!(
-            "Failed to build claim URL from faucet base URL {}",
-            faucet_base
-        )
-    })?;
-
-    let client = reqwest::blocking::Client::builder()
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(60))
-        .build()
-        .context("Failed to build HTTP client")?;
-
-    // Faucet for testnet TON uses Proof-of-Work so we need to solve it to get coins
-
-    // 1. Get challenge
-    if !json {
-        println!("{} Fetching PoW challenge...", "→".blue().bold());
-    }
-    let challenge_res = client
-        .get(challenge_url)
-        .send()
-        .context("Failed to get challenge from faucet")?;
-
-    if !challenge_res.status().is_success() {
-        let status = challenge_res.status();
-        let body = challenge_res.text().unwrap_or_default();
-        if body.is_empty() {
-            anyhow::bail!("Failed to get challenge: status {status}");
+        if !json {
+            println!(
+                "{} Requesting airdrop for wallet {} {}",
+                "→".blue().bold(),
+                name.cyan().bold(),
+                address
+            );
         }
-        anyhow::bail!("Failed to get challenge: status {status}: {body}");
-    }
 
-    let challenge_data: FaucetChallengeResponse = challenge_res
-        .json()
-        .context("Failed to parse challenge response")?;
-    if challenge_data.difficulty > 256 {
-        anyhow::bail!(
-            "Invalid PoW difficulty from faucet: {} (max 256)",
-            challenge_data.difficulty
-        );
-    }
+        let faucet_base = parse_faucet_base_url(&faucet_url)?;
+        let challenge_url = faucet_base.join("challenge").with_context(|| {
+            format!(
+                "Failed to build challenge URL from faucet base URL {}",
+                faucet_base
+            )
+        })?;
+        let claim_url = faucet_base.join("claim").with_context(|| {
+            format!(
+                "Failed to build claim URL from faucet base URL {}",
+                faucet_base
+            )
+        })?;
 
-    // 2. Solve challenge
-    if !json {
-        println!(
-            "{} Solving challenge (difficulty: {} bits)...",
-            "→".blue().bold(),
-            challenge_data.difficulty
-        );
-    }
-    let start = std::time::Instant::now();
-    let nonce = solve_challenge(&challenge_data.challenge, challenge_data.difficulty)?;
-    let duration = start.elapsed();
-    if !json {
-        println!("{} Challenge solved in {:?}", "✓".green(), duration);
-    }
+        let client = reqwest::blocking::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(60))
+            .build()
+            .context("Failed to build HTTP client")?;
 
-    // 3. Send claim
-    let response = client
-        .post(claim_url)
-        .json(&serde_json::json!({
+        // Faucet for testnet TON uses Proof-of-Work so we need to solve it to get coins
+
+        // 1. Get challenge
+        if !json {
+            println!("{} Fetching PoW challenge...", "→".blue().bold());
+        }
+        let challenge_res = send_with_retry(
+            || client.get(challenge_url.clone()).send(),
+            "challenge",
+            "Failed to get challenge from faucet",
+            json,
+        )?;
+
+        if !challenge_res.status().is_success() {
+            let status = challenge_res.status();
+            let body = challenge_res.text().unwrap_or_default();
+            if body.is_empty() {
+                anyhow::bail!("Failed to get challenge: status {status}");
+            }
+            anyhow::bail!("Failed to get challenge: status {status}: {body}");
+        }
+
+        let challenge_data: FaucetChallengeResponse = challenge_res
+            .json()
+            .context("Failed to parse challenge response")?;
+        if challenge_data.difficulty > 256 {
+            anyhow::bail!(
+                "Invalid PoW difficulty from faucet: {} (max 256)",
+                challenge_data.difficulty
+            );
+        }
+
+        // 2. Solve challenge
+        if !json {
+            println!(
+                "{} Solving challenge (difficulty: {} bits)...",
+                "→".blue().bold(),
+                challenge_data.difficulty
+            );
+        }
+        let start = std::time::Instant::now();
+        let nonce = solve_challenge(&challenge_data.challenge, challenge_data.difficulty)?;
+        let duration = start.elapsed();
+        if !json {
+            println!("{} Challenge solved in {:?}", "✓".green(), duration);
+        }
+
+        // 3. Send claim
+        let claim_payload = serde_json::json!({
             "address": address,
             "challenge": challenge_data.challenge,
             "nonce": nonce
-        }))
-        .send()
-        .context("Failed to send request to faucet")?;
+        });
+        let response = send_with_retry(
+            || client.post(claim_url.clone()).json(&claim_payload).send(),
+            "claim",
+            "Failed to send request to faucet",
+            json,
+        )?;
 
-    if response.status().is_success() {
-        let res: FaucetMessageResponse =
-            response.json().context("Failed to parse faucet response")?;
-        if json {
-            println!(
-                "{}",
-                serde_json::to_string(&serde_json::json!({
-                    "success": true,
-                    "message": res.message.as_deref().unwrap_or("Success")
-                }))?
-            );
-        } else if let Some(msg) = res.message.as_deref() {
-            println!("{} {}", "✓".green(), msg);
+        if response.status().is_success() {
+            let res: FaucetMessageResponse =
+                response.json().context("Failed to parse faucet response")?;
+            Ok(AirdropResult {
+                address,
+                difficulty: challenge_data.difficulty,
+                nonce,
+                solve_duration: duration,
+                message: res.message,
+            })
         } else {
-            println!("{} Success", "✓".green());
-        }
-    } else {
-        let status = response.status();
-        let error_msg = if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            "Too many requests from your IP. Only 2 requests per 24 hours are allowed. Please try again later.".to_string()
-        } else {
-            let body_text = response.text().unwrap_or_default();
-            if let Ok(res) = serde_json::from_str::<FaucetMessageResponse>(&body_text) {
-                res.error
-                    .or(res.message)
-                    .unwrap_or_else(|| body_text.clone())
+            let status = response.status();
+            let error_msg = if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                "Too many requests from your IP. Only 2 requests per 24 hours are allowed. Please try again later.".to_string()
             } else {
-                body_text
+                let body_text = response.text().unwrap_or_default();
+                if let Ok(res) = serde_json::from_str::<FaucetMessageResponse>(&body_text) {
+                    res.error
+                        .or(res.message)
+                        .unwrap_or_else(|| body_text.clone())
+                } else {
+                    body_text
+                }
+            };
+
+            anyhow::bail!("Faucet returned error {status}: {error_msg}");
+        }
+    })();
+
+    match run_result {
+        Ok(result) => {
+            let message = result.message.as_deref().unwrap_or("Success");
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string(&serde_json::json!({
+                        "success": true,
+                        "message": message,
+                        "address": result.address,
+                        "difficulty": result.difficulty,
+                        "nonce": result.nonce,
+                        "solve_ms": result.solve_duration.as_millis(),
+                    }))?
+                );
+            } else {
+                println!("{} {}", "✓".green(), message);
+            }
+            Ok(())
+        }
+        Err(err) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string(&serde_json::json!({
+                        "success": false,
+                        "error": err.to_string()
+                    }))?
+                );
+            }
+            Err(err)
+        }
+    }
+}
+
+fn send_with_retry<F>(
+    mut send_request: F,
+    request_name: &str,
+    transport_error_context: &str,
+    json: bool,
+) -> anyhow::Result<reqwest::blocking::Response>
+where
+    F: FnMut() -> Result<reqwest::blocking::Response, reqwest::Error>,
+{
+    for attempt in 0..HTTP_RETRY_ATTEMPTS {
+        return match send_request() {
+            Ok(response) => {
+                if response.status().is_server_error() && attempt + 1 < HTTP_RETRY_ATTEMPTS {
+                    if !json {
+                        println!(
+                            "{} {} request returned {}. Retrying ({}/{})...",
+                            "↻".yellow().bold(),
+                            request_name,
+                            response.status(),
+                            attempt + 2,
+                            HTTP_RETRY_ATTEMPTS
+                        );
+                    }
+                    std::thread::sleep(http_retry_backoff(attempt));
+                    continue;
+                }
+                Ok(response)
+            }
+            Err(err) => {
+                if attempt + 1 < HTTP_RETRY_ATTEMPTS {
+                    if !json {
+                        println!(
+                            "{} {} request failed: {}. Retrying ({}/{})...",
+                            "↻".yellow().bold(),
+                            request_name,
+                            err,
+                            attempt + 2,
+                            HTTP_RETRY_ATTEMPTS
+                        );
+                    }
+                    std::thread::sleep(http_retry_backoff(attempt));
+                    continue;
+                }
+                Err(err).context(transport_error_context.to_owned())
             }
         };
-
-        let final_error = format!("Faucet returned error {status}: {error_msg}");
-        if json {
-            println!(
-                "{}",
-                serde_json::to_string(&serde_json::json!({
-                    "success": false,
-                    "error": final_error
-                }))?
-            );
-        }
-        anyhow::bail!(final_error);
     }
 
-    Ok(())
+    unreachable!("retry loop must return on success or final failure")
+}
+
+fn http_retry_backoff(attempt: usize) -> Duration {
+    let index = attempt.min(HTTP_RETRY_BACKOFF_MS.len() - 1);
+    Duration::from_millis(HTTP_RETRY_BACKOFF_MS[index])
 }
 
 fn parse_faucet_base_url(faucet_url: &str) -> anyhow::Result<reqwest::Url> {
@@ -382,16 +473,44 @@ fn parse_faucet_base_url(faucet_url: &str) -> anyhow::Result<reqwest::Url> {
     if !matches!(url.scheme(), "http" | "https") {
         anyhow::bail!("Faucet URL scheme must be http or https");
     }
+    if url.query().is_some() || url.fragment().is_some() {
+        anyhow::bail!("Faucet URL must not contain query parameters or fragments");
+    }
     Ok(url)
 }
 
 fn solve_challenge(challenge: &str, difficulty: u32) -> anyhow::Result<u64> {
+    solve_challenge_with_limits(
+        challenge,
+        difficulty,
+        POW_MAX_SOLVE_DURATION,
+        POW_MAX_NONCE_ATTEMPTS,
+    )
+}
+
+fn solve_challenge_with_limits(
+    challenge: &str,
+    difficulty: u32,
+    max_duration: Duration,
+    max_nonce_attempts: u64,
+) -> anyhow::Result<u64> {
     if difficulty > 256 {
         anyhow::bail!("PoW difficulty must be at most 256 bits");
     }
 
+    let started_at = std::time::Instant::now();
     let mut nonce: u64 = 0;
     loop {
+        if started_at.elapsed() >= max_duration {
+            anyhow::bail!(
+                "PoW solve exceeded time limit of {}s",
+                max_duration.as_secs()
+            );
+        }
+        if nonce >= max_nonce_attempts {
+            anyhow::bail!("PoW solve exceeded nonce limit of {max_nonce_attempts}");
+        }
+
         let mut hasher = Sha256::new();
         hasher.update(challenge.as_bytes());
         hasher.update(nonce.to_be_bytes());
@@ -409,7 +528,9 @@ fn solve_challenge(challenge: &str, difficulty: u32) -> anyhow::Result<u64> {
             return Ok(nonce);
         }
 
-        nonce += 1;
+        nonce = nonce
+            .checked_add(1)
+            .context("PoW nonce overflow while solving challenge")?;
     }
 }
 
@@ -1365,11 +1486,52 @@ mod wallet_name_tests {
     }
 
     #[test]
+    fn test_parse_faucet_base_url_rejects_query_and_fragment() {
+        let query_err =
+            parse_faucet_base_url("https://example.com/faucet?token=123").expect_err("must fail");
+        assert!(
+            query_err
+                .to_string()
+                .contains("must not contain query parameters or fragments"),
+            "unexpected error: {query_err}"
+        );
+
+        let fragment_err =
+            parse_faucet_base_url("https://example.com/faucet#frag").expect_err("must fail");
+        assert!(
+            fragment_err
+                .to_string()
+                .contains("must not contain query parameters or fragments"),
+            "unexpected error: {fragment_err}"
+        );
+    }
+
+    #[test]
     fn test_solve_challenge_rejects_too_high_difficulty() {
         let err = solve_challenge("abc", 257).expect_err("difficulty > 256 must fail");
         assert!(
             err.to_string()
                 .contains("PoW difficulty must be at most 256 bits"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_solve_challenge_respects_nonce_limit() {
+        let err = solve_challenge_with_limits("abc", 1, Duration::from_secs(10), 0)
+            .expect_err("must stop on nonce limit");
+        assert!(
+            err.to_string().contains("PoW solve exceeded nonce limit"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_solve_challenge_respects_time_limit() {
+        let err = solve_challenge_with_limits("abc", 1, Duration::ZERO, u64::MAX)
+            .expect_err("must stop on time limit");
+        assert!(
+            err.to_string().contains("PoW solve exceeded time limit"),
             "unexpected error: {err}"
         );
     }
