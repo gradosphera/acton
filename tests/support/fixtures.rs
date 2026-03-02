@@ -139,6 +139,7 @@ impl FixtureProject {
             build_info: false,
             force_no_color_env: true,
             color_mode: None,
+            wallet_secure_default_false: false,
         }
     }
 

@@ -3,8 +3,12 @@ use crate::support::project::ProjectBuilder;
 use acton::wallets;
 use serde_json::Value;
 use std::fs;
-#[cfg(unix)]
-use std::time::Duration;
+use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
+use std::net::TcpListener;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 use ton_api::Network;
 use tonlib_core::cell::Cell;
 use tonlib_core::tlb_types::tlb::TLB;
@@ -16,6 +20,21 @@ use tonlib_core::wallet::wallet_version::WalletVersion;
 const KEYRING_SERVICE: &str = "ton.acton.wallet";
 const TEST_MNEMONIC: &str = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later";
 const TEST_WALLET_KEYRING_SUPPORTED_ENV: &str = "ACTON_TEST_WALLET_KEYRING_SUPPORTED";
+const TEST_KEYRING_DIR_ENV: &str = "ACTON_TEST_KEYRING_DIR";
+const TEST_TONCENTER_V3_URL_ENV: &str = "ACTON_TEST_TONCENTER_V3_URL";
+
+#[derive(Clone)]
+struct ToncenterMockResponse {
+    status: u16,
+    body: String,
+}
+
+#[derive(Debug, Clone)]
+struct CapturedToncenterRequest {
+    method: String,
+    path: String,
+    headers: Vec<(String, String)>,
+}
 
 fn wallet_sign_fixture() -> (String, String, String) {
     let mnemonic = Mnemonic::from_str(TEST_MNEMONIC, &None).expect("invalid test mnemonic");
@@ -43,6 +62,155 @@ fn wallet_sign_fixture() -> (String, String, String) {
         .expect("failed to encode signed body hex boc");
 
     (body_hex, body_base64, signed_hex)
+}
+
+fn spawn_toncenter_v3_mock(
+    responses: Vec<ToncenterMockResponse>,
+) -> (
+    String,
+    thread::JoinHandle<()>,
+    Arc<Mutex<Vec<CapturedToncenterRequest>>>,
+) {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("failed to bind toncenter mock");
+    listener
+        .set_nonblocking(true)
+        .expect("failed to set toncenter mock non-blocking");
+    let addr = listener
+        .local_addr()
+        .expect("failed to get toncenter mock address");
+
+    let captured_requests = Arc::new(Mutex::new(Vec::<CapturedToncenterRequest>::new()));
+    let captured_requests_thread = Arc::clone(&captured_requests);
+
+    let handle = thread::spawn(move || {
+        for response in responses {
+            let wait_until = Instant::now() + Duration::from_secs(5);
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                        assert!(
+                            Instant::now() <= wait_until,
+                            "timed out waiting for toncenter request"
+                        );
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => panic!("toncenter mock accept failed: {err}"),
+                }
+            };
+
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .expect("failed to set toncenter mock read timeout");
+
+            let mut reader = BufReader::new(
+                stream
+                    .try_clone()
+                    .expect("failed to clone toncenter mock stream"),
+            );
+            let mut request_line = String::new();
+            let read_deadline = Instant::now() + Duration::from_secs(2);
+            loop {
+                request_line.clear();
+                match reader.read_line(&mut request_line) {
+                    Ok(0) => {
+                        assert!(
+                            Instant::now() <= read_deadline,
+                            "timed out waiting for toncenter request line"
+                        );
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Ok(_) => break,
+                    Err(err)
+                        if matches!(err.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) =>
+                    {
+                        assert!(
+                            Instant::now() <= read_deadline,
+                            "timed out waiting for toncenter request line"
+                        );
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => panic!("failed to read toncenter request line: {err}"),
+                }
+            }
+
+            let mut parts = request_line.split_whitespace();
+            let method = parts.next().unwrap_or_default().to_string();
+            let path = parts.next().unwrap_or_default().to_string();
+
+            let mut headers = Vec::new();
+            let mut content_length = 0_usize;
+            loop {
+                let mut header_line = String::new();
+                let read = reader
+                    .read_line(&mut header_line)
+                    .expect("failed to read toncenter header line");
+                if read == 0 || header_line == "\r\n" {
+                    break;
+                }
+
+                if let Some((name, value)) = header_line.split_once(':') {
+                    let name = name.trim().to_string();
+                    let value = value.trim().to_string();
+                    if name.eq_ignore_ascii_case("content-length") {
+                        content_length = value.parse().unwrap_or(0);
+                    }
+                    headers.push((name, value));
+                }
+            }
+
+            if content_length > 0 {
+                let mut request_body = vec![0_u8; content_length];
+                reader
+                    .read_exact(&mut request_body)
+                    .expect("failed to read toncenter request body");
+            }
+
+            captured_requests_thread
+                .lock()
+                .expect("captured toncenter requests mutex poisoned")
+                .push(CapturedToncenterRequest {
+                    method,
+                    path,
+                    headers,
+                });
+
+            let raw_response = format!(
+                "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.status,
+                status_text(response.status),
+                response.body.len(),
+                response.body
+            );
+            stream
+                .write_all(raw_response.as_bytes())
+                .expect("failed to write toncenter response");
+            stream.flush().expect("failed to flush toncenter response");
+        }
+    });
+
+    (format!("http://{addr}"), handle, captured_requests)
+}
+
+fn status_text(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        400 => "Bad Request",
+        404 => "Not Found",
+        429 => "Too Many Requests",
+        500 => "Internal Server Error",
+        _ => "Unknown",
+    }
+}
+
+fn expected_testnet_address(project_root: &Path, wallet_name: &str) -> String {
+    let content =
+        fs::read_to_string(project_root.join("wallets.toml")).expect("failed to read wallets.toml");
+    let value: toml::Value = toml::from_str(&content).expect("wallets.toml must be valid TOML");
+    value["wallets"][wallet_name]["expected"]["address-testnet"]
+        .as_str()
+        .expect("wallets.<name>.expected.address-testnet must be present")
+        .to_string()
 }
 
 #[test]
@@ -1504,4 +1672,540 @@ fn test_wallet_list_json() {
     assert!(wallet["address"].is_string());
     assert_eq!(wallet["kind"], "v5r1");
     assert_eq!(wallet["is_global"], false);
+}
+
+#[allow(clippy::significant_drop_tightening)]
+#[test]
+fn test_wallet_list_balance_plain_uses_mocked_toncenter() {
+    let project = ProjectBuilder::new("wallet-list-balance-plain").build();
+
+    project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("balance-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--secure=false")
+        .run()
+        .success();
+
+    let address = expected_testnet_address(project.path(), "balance-wallet");
+    let response_body = serde_json::json!({
+        "accounts": [{
+            "address": address,
+            "balance": "2445700000",
+            "code_boc": Value::Null,
+            "status": "active"
+        }]
+    })
+    .to_string();
+
+    let (toncenter_url, toncenter_handle, captured) =
+        spawn_toncenter_v3_mock(vec![ToncenterMockResponse {
+            status: 200,
+            body: response_body,
+        }]);
+
+    let output = project
+        .acton()
+        .wallet_list()
+        .arg("--balance")
+        .env(TEST_TONCENTER_V3_URL_ENV, &toncenter_url)
+        .run()
+        .success();
+
+    toncenter_handle.join().expect("mock toncenter must finish");
+
+    output.assert_contains("Available wallets:");
+    output.assert_contains("balance-wallet");
+    output.assert_contains("2.4457 TON");
+
+    let captured = captured
+        .lock()
+        .expect("captured toncenter requests mutex poisoned");
+    assert_eq!(captured.len(), 1, "expected one accountStates request");
+    assert_eq!(captured[0].method, "GET");
+    assert!(
+        captured[0].path.starts_with("/accountStates?address="),
+        "unexpected path: {}",
+        captured[0].path
+    );
+}
+
+#[allow(clippy::significant_drop_tightening)]
+#[test]
+fn test_wallet_list_balance_json_uses_env_api_key() {
+    let project = ProjectBuilder::new("wallet-list-balance-json-env-api-key").build();
+
+    project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("balance-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--secure=false")
+        .run()
+        .success();
+
+    let address = expected_testnet_address(project.path(), "balance-wallet");
+    let response_body = serde_json::json!({
+        "accounts": [{
+            "address": address,
+            "balance": "500000000",
+            "code_boc": Value::Null,
+            "status": "active"
+        }]
+    })
+    .to_string();
+
+    let (toncenter_url, toncenter_handle, captured) =
+        spawn_toncenter_v3_mock(vec![ToncenterMockResponse {
+            status: 200,
+            body: response_body,
+        }]);
+
+    let output = project
+        .acton()
+        .wallet_list()
+        .arg("--balance")
+        .arg("--json")
+        .env(TEST_TONCENTER_V3_URL_ENV, &toncenter_url)
+        .env("TONCENTER_API_KEY", "env-api-key")
+        .run()
+        .success();
+
+    toncenter_handle.join().expect("mock toncenter must finish");
+
+    let stdout = output.get_stdout();
+    let json: Value = serde_json::from_str(&stdout).expect("wallet list --json must return json");
+    assert_eq!(json["success"], true);
+    let wallets = json["wallets"].as_array().expect("wallets must be array");
+    let wallet = wallets
+        .iter()
+        .find(|w| w["name"] == "balance-wallet")
+        .expect("wallet entry must exist");
+    assert_eq!(wallet["balance"], 500000000);
+
+    let captured = captured
+        .lock()
+        .expect("captured toncenter requests mutex poisoned");
+    let header = captured[0]
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("x-api-key"))
+        .map(|(_, value)| value.as_str());
+    assert_eq!(header, Some("env-api-key"));
+}
+
+#[allow(clippy::significant_drop_tightening)]
+#[test]
+fn test_wallet_list_balance_cli_api_key_overrides_env() {
+    let project = ProjectBuilder::new("wallet-list-balance-flag-api-key").build();
+
+    project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("balance-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--secure=false")
+        .run()
+        .success();
+
+    let address = expected_testnet_address(project.path(), "balance-wallet");
+    let response_body = serde_json::json!({
+        "accounts": [{
+            "address": address,
+            "balance": "1000000000",
+            "code_boc": Value::Null,
+            "status": "active"
+        }]
+    })
+    .to_string();
+
+    let (toncenter_url, toncenter_handle, captured) =
+        spawn_toncenter_v3_mock(vec![ToncenterMockResponse {
+            status: 200,
+            body: response_body,
+        }]);
+
+    project
+        .acton()
+        .wallet_list()
+        .arg("--balance")
+        .arg("--api-key")
+        .arg("flag-api-key")
+        .env(TEST_TONCENTER_V3_URL_ENV, &toncenter_url)
+        .env("TONCENTER_API_KEY", "env-api-key")
+        .run()
+        .success();
+
+    toncenter_handle.join().expect("mock toncenter must finish");
+
+    let captured = captured
+        .lock()
+        .expect("captured toncenter requests mutex poisoned");
+    let header = captured[0]
+        .headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("x-api-key"))
+        .map(|(_, value)| value.as_str());
+    assert_eq!(header, Some("flag-api-key"));
+}
+
+#[test]
+fn test_wallet_list_balance_handles_toncenter_failure() {
+    let project = ProjectBuilder::new("wallet-list-balance-toncenter-error").build();
+
+    project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("balance-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--secure=false")
+        .run()
+        .success();
+
+    let (toncenter_url, toncenter_handle, _) =
+        spawn_toncenter_v3_mock(vec![ToncenterMockResponse {
+            status: 500,
+            body: "{}".to_string(),
+        }]);
+
+    let output = project
+        .acton()
+        .wallet_list()
+        .arg("--balance")
+        .env(TEST_TONCENTER_V3_URL_ENV, &toncenter_url)
+        .run()
+        .success();
+
+    toncenter_handle.join().expect("mock toncenter must finish");
+
+    output.assert_contains("balance-wallet");
+    output.assert_contains("0 TON");
+}
+
+#[test]
+fn test_wallet_new_secure_true_uses_keyring_when_supported() {
+    let project = ProjectBuilder::new("wallet-new-keyring-supported").build();
+    let keyring_dir = tempfile::TempDir::new().expect("failed to create keyring temp dir");
+
+    project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("secure-keyring-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--secure=true")
+        .env(TEST_WALLET_KEYRING_SUPPORTED_ENV, "1")
+        .env(TEST_KEYRING_DIR_ENV, keyring_dir.path().to_str().unwrap())
+        .run()
+        .success();
+
+    let wallets_toml = fs::read_to_string(project.path().join("wallets.toml")).unwrap();
+    assert!(wallets_toml.contains("mnemonic-keyring"));
+    assert!(!wallets_toml.contains("keys = { mnemonic = "));
+
+    let files = fs::read_dir(keyring_dir.path()).expect("failed to read test keyring dir");
+    assert!(
+        files.count() > 0,
+        "test keyring storage must contain at least one entry"
+    );
+}
+
+#[test]
+fn test_wallet_import_secure_true_uses_keyring_when_supported() {
+    let project = ProjectBuilder::new("wallet-import-keyring-supported").build();
+    let keyring_dir = tempfile::TempDir::new().expect("failed to create keyring temp dir");
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("secure-keyring-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--secure=true")
+        .arg(TEST_MNEMONIC)
+        .env(TEST_WALLET_KEYRING_SUPPORTED_ENV, "1")
+        .env(TEST_KEYRING_DIR_ENV, keyring_dir.path().to_str().unwrap())
+        .run()
+        .success();
+
+    let wallets_toml = fs::read_to_string(project.path().join("wallets.toml")).unwrap();
+    assert!(wallets_toml.contains("mnemonic-keyring"));
+    assert!(!wallets_toml.contains("keys = { mnemonic = "));
+
+    let files = fs::read_dir(keyring_dir.path()).expect("failed to read test keyring dir");
+    assert!(
+        files.count() > 0,
+        "test keyring storage must contain at least one entry"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wallet_new_all_fields_interactive() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("wallet-new-all-fields-interactive").build();
+
+    let mut session = project
+        .acton()
+        .wallet_new()
+        .env(TEST_WALLET_KEYRING_SUPPORTED_ENV, "0")
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Wallet name:");
+    session.send_line("interactive-new-wallet", "failed to send wallet name");
+
+    session.expect("Save wallet to:");
+    session.send_line("", "failed to select default local destination");
+
+    session.expect("Wallet type:");
+    session.send_line("", "failed to select default wallet type");
+
+    session.expect("Request testnet TON from faucet now?");
+    session.send_line("", "failed to keep default no-airdrop option");
+
+    session.expect("Wallet successfully created and added to");
+    session.expect(Eof);
+
+    let wallets_toml = fs::read_to_string(project.path().join("wallets.toml")).unwrap();
+    assert!(wallets_toml.contains("[wallets.interactive-new-wallet]"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wallet_sign_without_body_reads_interactive_input() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("wallet-sign-interactive-body").build();
+    let (body_hex, _, signed_hex_expected) = wallet_sign_fixture();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("sign-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let mut session = project
+        .acton()
+        .wallet_sign()
+        .arg("sign-wallet")
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("External body BoC (hex/base64) to sign:");
+    session.send_line(&body_hex, "failed to send interactive body");
+    session.expect(signed_hex_expected.as_str());
+    session.expect(Eof);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wallet_export_mnemonic_without_name_uses_single_wallet() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("wallet-export-without-name-single").build();
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+
+    project
+        .acton()
+        .env("HOME", home_path.to_str().unwrap())
+        .wallet_import()
+        .arg("--name")
+        .arg("single-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let mut session = project
+        .acton()
+        .env("HOME", home_path.to_str().unwrap())
+        .wallet_export_mnemonic()
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Type wallet name to confirm mnemonic export:");
+    session.send_line("single-wallet", "failed to confirm selected wallet");
+    session.expect(TEST_MNEMONIC);
+    session.expect(Eof);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wallet_export_mnemonic_without_name_prompts_for_wallet_selection() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("wallet-export-without-name-multiple").build();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("aaa-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("zzz-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let mut session = project
+        .acton()
+        .wallet_export_mnemonic()
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Multiple wallets configured. Please select which wallet to use:");
+    session.send_line("", "failed to pick first wallet");
+    session.expect("Type wallet name to confirm mnemonic export:");
+    session.send_line("aaa-wallet", "failed to confirm picked wallet");
+    session.expect(TEST_MNEMONIC);
+    session.expect(Eof);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wallet_remove_json_cancel_branch() {
+    use expectrl::{Eof, Regex};
+
+    let project = ProjectBuilder::new("wallet-remove-json-cancel").build();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("cancel-json-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let mut session = project
+        .acton()
+        .wallet_remove()
+        .arg("cancel-json-wallet")
+        .arg("--json")
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Remove wallet 'cancel-json-wallet'? This action cannot be undone.");
+    session.send_line("No", "failed to reject wallet removal");
+    session.expect(Regex(
+        "(?s)(\"success\"\\s*:\\s*false.*\"cancelled\"\\s*:\\s*true|\"cancelled\"\\s*:\\s*true.*\"success\"\\s*:\\s*false)",
+    ));
+    session.expect(Eof);
+
+    let wallets_toml = fs::read_to_string(project.path().join("wallets.toml")).unwrap_or_default();
+    assert!(wallets_toml.contains("[wallets.cancel-json-wallet]"));
+}
+
+#[test]
+fn test_wallet_new_rejects_invalid_keyring_support_env_value() {
+    let project = ProjectBuilder::new("wallet-new-invalid-keyring-env").build();
+
+    let output = project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("invalid-keyring-env-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .env(TEST_WALLET_KEYRING_SUPPORTED_ENV, "not-a-bool")
+        .run()
+        .failure();
+
+    output.assert_stderr_contains("Invalid value for ACTON_TEST_WALLET_KEYRING_SUPPORTED");
+}
+
+#[test]
+fn test_wallet_new_fails_with_malformed_wallets_toml() {
+    let project = ProjectBuilder::new("wallet-new-malformed-wallets-toml").build();
+
+    fs::write(project.path().join("wallets.toml"), "[wallets\n").unwrap();
+
+    let output = project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("broken-config-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .run()
+        .failure();
+
+    output.assert_stderr_contains("TOML parse error");
+}
+
+#[test]
+fn test_wallet_import_fails_with_malformed_wallets_toml() {
+    let project = ProjectBuilder::new("wallet-import-malformed-wallets-toml").build();
+
+    fs::write(project.path().join("wallets.toml"), "[wallets\n").unwrap();
+
+    let output = project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("broken-config-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .failure();
+
+    output.assert_stderr_contains("TOML parse error");
+}
+
+#[test]
+fn test_wallet_list_fails_with_malformed_wallets_toml() {
+    let project = ProjectBuilder::new("wallet-list-malformed-wallets-toml").build();
+
+    fs::write(project.path().join("wallets.toml"), "[wallets\n").unwrap();
+
+    let output = project.acton().wallet_list().run().failure();
+    output.assert_stderr_contains("TOML parse error");
 }

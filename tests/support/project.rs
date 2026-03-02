@@ -109,6 +109,13 @@ impl ProcessCommandBuilder {
         self
     }
 
+    fn has_arg_exact_or_prefixed(&self, exact: &str, prefix: &str) -> bool {
+        self.cmd.get_args().any(|arg| {
+            let arg = arg.to_string_lossy();
+            arg == exact || arg.starts_with(prefix)
+        })
+    }
+
     pub(crate) fn stdin(mut self, stream: impl snapbox::IntoData) -> Self {
         self.stdin = Some(stream.into_data());
         self
@@ -968,6 +975,7 @@ impl Project {
             build_info: false,
             force_no_color_env: true,
             color_mode: None,
+            wallet_secure_default_false: false,
         }
     }
 
@@ -1015,6 +1023,7 @@ pub(crate) struct ActonCommand {
     pub(crate) build_info: bool,
     pub(crate) force_no_color_env: bool,
     pub(crate) color_mode: Option<ColorMode>,
+    pub(crate) wallet_secure_default_false: bool,
 }
 
 #[allow(dead_code)]
@@ -1424,9 +1433,8 @@ impl ActonCommand {
             .cmd
             .arg("wallet")
             .arg("new")
-            .arg("--secure")
-            .arg("false")
             .current_dir(&self.project.path);
+        self.wallet_secure_default_false = true;
         self
     }
 
@@ -1435,9 +1443,8 @@ impl ActonCommand {
             .cmd
             .arg("wallet")
             .arg("import")
-            .arg("--secure")
-            .arg("false")
             .current_dir(&self.project.path);
+        self.wallet_secure_default_false = true;
         self
     }
 
@@ -1685,6 +1692,14 @@ impl ActonCommand {
 
         if let Some(mode) = self.color_mode {
             self.cmd = self.cmd.arg("--color").arg(mode.to_string());
+        }
+
+        // Keep tests deterministic by defaulting wallet new/import to plaintext mnemonic
+        // storage, but avoid duplicate --secure flags when tests set it explicitly.
+        if self.wallet_secure_default_false
+            && !self.cmd.has_arg_exact_or_prefixed("--secure", "--secure=")
+        {
+            self.cmd = self.cmd.arg("--secure").arg("false");
         }
 
         if self.force_no_color_env {

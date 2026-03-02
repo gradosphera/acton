@@ -14,9 +14,10 @@ use std::fs;
 use std::io::{IsTerminal, stdin, stdout};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 use toml_edit::{DocumentMut, Item, Table, value};
-use ton_api::{Network, TonApiClient};
+use ton_api::{CustomNetworkUrls, Network, TonApiClient};
 use tonlib_core::TonAddress;
 use tonlib_core::cell::Cell;
 use tonlib_core::tlb_types::tlb::TLB;
@@ -77,6 +78,7 @@ const POW_MAX_NONCE_ATTEMPTS: u64 = 1_000_000_000;
 const DEFAULT_FAUCET_URL: &str = "https://acton.monster/faucet/";
 const NEW_WALLET_AIRDROP_FAUCET_URL_ENV: &str = "ACTON_FAUCET_URL"; // for testing purpose
 const TEST_WALLET_KEYRING_SUPPORTED_ENV: &str = "ACTON_TEST_WALLET_KEYRING_SUPPORTED"; // integration tests only
+const TEST_TONCENTER_V3_URL_ENV: &str = "ACTON_TEST_TONCENTER_V3_URL"; // integration tests only
 
 impl SignMessageFormat {
     const fn as_str(self) -> &'static str {
@@ -810,10 +812,33 @@ fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::R
         return Ok(());
     }
 
-    let config = ActonConfig::load().unwrap_or_default();
-    let custom_networks = config.custom_networks();
-    let api_key = api_key.or_else(|| env::var("TONCENTER_API_KEY").ok());
-    let client = TonApiClient::new(Network::Testnet, custom_networks, api_key)?;
+    let client = if balance {
+        let config = ActonConfig::load().unwrap_or_default();
+        let mut custom_networks = config.custom_networks();
+        let api_key = api_key.or_else(|| env::var("TONCENTER_API_KEY").ok());
+        let toncenter_v3_override = env::var(TEST_TONCENTER_V3_URL_ENV).ok();
+        Some(if let Some(url) = toncenter_v3_override {
+            // test only code
+            let network_name = "__wallet_list_testnet_override".to_string();
+            let normalized = Arc::<str>::from(url.trim_end_matches('/').to_owned());
+            custom_networks.insert(
+                network_name.clone(),
+                CustomNetworkUrls {
+                    v2_url: Arc::clone(&normalized),
+                    v3_url: Some(normalized),
+                },
+            );
+            TonApiClient::new(
+                Network::Custom(Arc::from(network_name)),
+                custom_networks,
+                api_key,
+            )?
+        } else {
+            TonApiClient::new(Network::Testnet, custom_networks, api_key)?
+        })
+    } else {
+        None
+    };
 
     if !json {
         println!("Available wallets:");
@@ -834,6 +859,9 @@ fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::R
             .iter()
             .map(|(_, _, addr)| addr.as_str())
             .collect();
+        let client = client
+            .as_ref()
+            .expect("TonApiClient must be initialized when --balance is set");
         match client.get_account_states(&addresses) {
             Ok(states) => {
                 for state in states {
@@ -1599,6 +1627,40 @@ mod wallet_name_tests {
     }
 
     #[test]
+    fn test_get_wallet_address_uses_mnemonic_when_expected_testnet_missing() {
+        let mnemonic_str = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later";
+
+        let wallet = config::WalletConfig {
+            kind: "v5r1".to_string(),
+            workchain: Some(0),
+            keys: config::WalletKeys {
+                mnemonic_env: None,
+                mnemonic_file: None,
+                mnemonic: Some(mnemonic_str.to_string()),
+                mnemonic_keyring: None,
+            },
+            expected: Some(config::WalletExpectedAddresses {
+                // Should be ignored because address-testnet is missing.
+                address_mainnet: Some("invalid-mainnet-address".to_string()),
+                address_testnet: None,
+            }),
+        };
+
+        let actual =
+            get_wallet_address(&wallet).expect("must derive testnet address from mnemonic");
+
+        let mnemonic = Mnemonic::from_str(mnemonic_str, &None).expect("valid mnemonic");
+        let key_pair = mnemonic.to_key_pair().expect("keypair from mnemonic");
+        let version = WalletVersion::V5R1;
+        let wallet_id = wallets::wallet_id(version, &Network::Testnet);
+        let expected_wallet = TonWallet::new_with_params(version, key_pair, 0, wallet_id)
+            .expect("wallet from mnemonic");
+        let expected = expected_wallet.address.to_base64_url_flags(false, true);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn test_parse_faucet_base_url_normalizes_trailing_slash() {
         let base = parse_faucet_base_url("https://example.com/faucet").expect("must parse");
         assert_eq!(base.as_str(), "https://example.com/faucet/");
@@ -1684,5 +1746,34 @@ mod wallet_name_tests {
     #[test]
     fn test_should_prompt_auto_airdrop_disabled_when_flag_is_set() {
         assert!(!should_prompt_auto_airdrop(true, false, true, true));
+    }
+
+    #[test]
+    fn test_send_with_retry_retries_transport_errors() {
+        let client = reqwest::blocking::Client::builder()
+            .no_proxy()
+            .connect_timeout(Duration::from_millis(50))
+            .timeout(Duration::from_millis(100))
+            .build()
+            .expect("failed to create reqwest client");
+
+        let mut attempts = 0;
+        let err = send_with_retry(
+            || {
+                attempts += 1;
+                client.get("http://127.0.0.1:1/").send()
+            },
+            "challenge",
+            "Failed to get challenge from faucet",
+            true,
+        )
+        .expect_err("transport error path must fail");
+
+        assert_eq!(attempts, HTTP_RETRY_ATTEMPTS);
+        assert!(
+            err.to_string()
+                .contains("Failed to get challenge from faucet"),
+            "unexpected error: {err}"
+        );
     }
 }
