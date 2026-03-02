@@ -762,6 +762,106 @@ fn test_wallet_export_mnemonic_non_interactive_denies_before_name_validation() {
     output.assert_contains("Exporting mnemonic is only allowed in interactive mode");
 }
 
+#[cfg(unix)]
+#[test]
+fn test_wallet_export_mnemonic_interactive_success() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("wallet-export-mnemonic-interactive-success").build();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("my-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let mut session = project
+        .acton()
+        .wallet_export_mnemonic()
+        .arg("my-wallet")
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Type wallet name to confirm mnemonic export:");
+    session.send_line("my-wallet", "failed to confirm wallet name");
+    session.expect(TEST_MNEMONIC);
+    session.expect(Eof);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wallet_export_mnemonic_interactive_rejects_wrong_confirmation() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("wallet-export-mnemonic-interactive-reject").build();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("my-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let mut session = project
+        .acton()
+        .wallet_export_mnemonic()
+        .arg("my-wallet")
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Type wallet name to confirm mnemonic export:");
+    session.send_line("wrong-wallet", "failed to send wrong confirmation name");
+
+    session.expect("Confirmation failed: wallet name does not match");
+    session.expect(Eof);
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wallet_export_mnemonic_interactive_wallet_not_found() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("wallet-export-mnemonic-wallet-not-found").build();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("my-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let mut session = project
+        .acton()
+        .wallet_export_mnemonic()
+        .arg("unknown-wallet")
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Type wallet name to confirm mnemonic export:");
+    session.send_line("unknown-wallet", "failed to confirm unknown wallet name");
+
+    session.expect("Wallet unknown-wallet not found in wallets.toml and global.wallets.toml");
+    session.expect("Available wallets:");
+    session.expect("my-wallet");
+    session.expect(Eof);
+}
+
 #[test]
 fn test_wallet_sign_outputs_signed_body_boc_hex() {
     let project = ProjectBuilder::new("wallet-sign-hex-output").build();
@@ -1069,6 +1169,164 @@ fn test_wallet_remove_requires_confirmation_in_non_interactive_mode() {
 
     output.assert_contains("This action cannot be undone");
     output.assert_contains("Re-run with -y/--yes in non-interactive mode");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wallet_remove_interactive_cancel_branch() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("wallet-remove-interactive-cancel").build();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("cancel-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let mut session = project
+        .acton()
+        .wallet_remove()
+        .arg("cancel-wallet")
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Remove wallet 'cancel-wallet'? This action cannot be undone.");
+    session.send_line("No", "failed to send cancellation response");
+    session.expect("Wallet removal cancelled.");
+    session.expect(Eof);
+
+    let wallets_toml = fs::read_to_string(project.path().join("wallets.toml")).unwrap_or_default();
+    assert!(wallets_toml.contains("[wallets.cancel-wallet]"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wallet_remove_without_name_selects_wallet_via_prompt() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("wallet-remove-select-wallet").build();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("aaa-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("zzz-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let mut session = project
+        .acton()
+        .wallet_remove()
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Multiple wallets configured. Please select which wallet to use:");
+    session.send_line("", "failed to select default wallet");
+    session.expect("Remove wallet 'aaa-wallet'? This action cannot be undone.");
+    session.send_line("y", "failed to confirm wallet removal");
+    session.expect("Wallet");
+    session.expect("aaa-wallet");
+    session.expect("removed from wallets.toml");
+    session.expect(Eof);
+
+    let wallets_toml = fs::read_to_string(project.path().join("wallets.toml")).unwrap_or_default();
+    assert!(!wallets_toml.contains("[wallets.aaa-wallet]"));
+    assert!(wallets_toml.contains("[wallets.zzz-wallet]"));
+}
+
+#[test]
+fn test_wallet_remove_by_name_with_empty_wallets_toml() {
+    let project = ProjectBuilder::new("wallet-remove-empty-wallets-toml").build();
+
+    fs::write(
+        project.path().join("Acton.toml"),
+        format!(
+            r#"[package]
+name = "wallet-remove-empty-wallets-toml"
+description = "A test project"
+version = "0.1.0"
+license = "MIT"
+
+[wallets.config-wallet]
+kind = "v5r1"
+workchain = 0
+keys = {{ mnemonic = "{TEST_MNEMONIC}" }}
+"#
+        ),
+    )
+    .unwrap();
+    fs::write(project.path().join("wallets.toml"), "").unwrap();
+
+    let output = project
+        .acton()
+        .wallet_remove()
+        .arg("config-wallet")
+        .arg("-y")
+        .run()
+        .failure();
+
+    output.assert_stderr_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_remove_by_name_with_empty_wallets_toml.stderr.txt",
+    );
+}
+
+#[test]
+fn test_wallet_remove_by_name_with_broken_wallets_toml() {
+    let project = ProjectBuilder::new("wallet-remove-broken-wallets-toml").build();
+
+    fs::write(
+        project.path().join("Acton.toml"),
+        format!(
+            r#"[package]
+name = "wallet-remove-broken-wallets-toml"
+description = "A test project"
+version = "0.1.0"
+license = "MIT"
+
+[wallets.config-wallet]
+kind = "v5r1"
+workchain = 0
+keys = {{ mnemonic = "{TEST_MNEMONIC}" }}
+"#
+        ),
+    )
+    .unwrap();
+    fs::write(project.path().join("wallets.toml"), "[wallets\n").unwrap();
+
+    let output = project
+        .acton()
+        .wallet_remove()
+        .arg("config-wallet")
+        .arg("-y")
+        .run()
+        .failure();
+
+    output.assert_stderr_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_remove_by_name_with_broken_wallets_toml.stderr.txt",
+    );
 }
 
 #[cfg(feature = "only_ci")]

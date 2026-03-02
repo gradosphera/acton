@@ -409,6 +409,189 @@ fn test_wallet_airdrop_json_success_without_message_uses_default() {
 }
 
 #[test]
+fn test_wallet_airdrop_non_json_success_outputs_human_readable_message() {
+    let project = ProjectBuilder::new("wallet-airdrop-non-json-success").build();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("airdrop-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let (faucet_url, faucet_handle, _) = spawn_faucet_mock(vec![
+        FaucetMockResponse {
+            method: "GET",
+            path: "/faucet/challenge",
+            status: 200,
+            body: r#"{"challenge":"human-readable-success","difficulty":0}"#,
+        },
+        FaucetMockResponse {
+            method: "POST",
+            path: "/faucet/claim",
+            status: 200,
+            body: r#"{"message":"Airdrop complete"}"#,
+        },
+    ]);
+
+    let output = project
+        .acton()
+        .wallet_airdrop()
+        .arg("airdrop-wallet")
+        .arg("--faucet-url")
+        .arg(&faucet_url)
+        .run()
+        .success();
+
+    faucet_handle
+        .join()
+        .expect("mock faucet thread must finish without panic");
+
+    output.assert_contains("Requesting airdrop for wallet airdrop-wallet");
+    output.assert_contains("Fetching PoW challenge...");
+    output.assert_contains("Solving challenge (difficulty: 0 bits)...");
+    output.assert_contains("Airdrop complete");
+    output.assert_not_contains("\"success\": true");
+}
+
+#[test]
+fn test_wallet_airdrop_wallet_not_found() {
+    let project = ProjectBuilder::new("wallet-airdrop-wallet-not-found").build();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("known-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let output = project
+        .acton()
+        .wallet_airdrop()
+        .arg("missing-wallet")
+        .run()
+        .failure();
+
+    output.assert_stderr_contains(
+        "Wallet missing-wallet not found in wallets.toml and global.wallets.toml",
+    );
+    output.assert_stderr_contains("Available wallets:");
+    output.assert_stderr_contains("known-wallet");
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wallet_airdrop_without_name_fails_when_no_wallets_config_interactive() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("wallet-airdrop-no-wallets-config").build();
+    let isolated_home = project
+        .path()
+        .join("home-no-global-wallets")
+        .to_string_lossy()
+        .to_string();
+
+    let mut session = project
+        .acton()
+        .wallet_airdrop()
+        .env("HOME", &isolated_home)
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("No wallets configured in wallets.toml or global.wallets.toml.");
+    session.expect("To add a wallet use acton wallet new");
+    session.expect("See https://i582.github.io/acton/docs/setup-wallets/ for more information");
+    session.expect(Eof);
+}
+
+#[cfg(unix)]
+#[allow(clippy::significant_drop_tightening)]
+#[test]
+fn test_wallet_airdrop_without_name_selects_wallet_via_prompt() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("wallet-airdrop-select-wallet").build();
+    let isolated_home = project
+        .path()
+        .join("home-no-global-wallets")
+        .to_string_lossy()
+        .to_string();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("aaa-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("zzz-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let (faucet_url, faucet_handle, captured_requests) = spawn_faucet_mock(vec![
+        FaucetMockResponse {
+            method: "GET",
+            path: "/faucet/challenge",
+            status: 200,
+            body: r#"{"challenge":"select-wallet-success","difficulty":0}"#,
+        },
+        FaucetMockResponse {
+            method: "POST",
+            path: "/faucet/claim",
+            status: 200,
+            body: r#"{"message":"selected wallet airdrop ok"}"#,
+        },
+    ]);
+
+    let mut session = project
+        .acton()
+        .wallet_airdrop()
+        .arg("--faucet-url")
+        .arg(&faucet_url)
+        .env("HOME", &isolated_home)
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Multiple wallets configured. Please select which wallet to use:");
+    session.send_line("", "failed to select default wallet for airdrop");
+    session.expect("Requesting airdrop for wallet aaa-wallet");
+    session.expect("selected wallet airdrop ok");
+    session.expect(Eof);
+
+    faucet_handle
+        .join()
+        .expect("mock faucet thread must finish without panic");
+
+    let captured = captured_requests
+        .lock()
+        .expect("captured requests mutex poisoned");
+    assert_eq!(captured.len(), 2, "expected challenge and claim requests");
+}
+
+#[test]
 fn test_wallet_airdrop_rate_limit_uses_friendly_error_message() {
     let project = ProjectBuilder::new("wallet-airdrop-rate-limit").build();
 

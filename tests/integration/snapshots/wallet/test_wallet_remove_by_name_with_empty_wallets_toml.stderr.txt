@@ -1,0 +1,4 @@
+Error: Wallet config-wallet not found in wallets.toml and global.wallets.toml
+Available wallets:
+ acton-faucet
+ deployer
