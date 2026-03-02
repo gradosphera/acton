@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
-use std::io::{IsTerminal, Read, stdin, stdout};
+use std::io::{IsTerminal, stdin, stdout};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use toml_edit::{DocumentMut, Item, Table, value};
