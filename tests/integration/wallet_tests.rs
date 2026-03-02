@@ -1428,6 +1428,11 @@ fn test_wallet_remove_without_name_selects_wallet_via_prompt() {
 #[test]
 fn test_wallet_remove_by_name_with_empty_wallets_toml() {
     let project = ProjectBuilder::new("wallet-remove-empty-wallets-toml").build();
+    let isolated_home = project
+        .path()
+        .join("home-no-global-wallets")
+        .to_string_lossy()
+        .to_string();
 
     fs::write(
         project.path().join("Acton.toml"),
@@ -1453,6 +1458,7 @@ keys = {{ mnemonic = "{TEST_MNEMONIC}" }}
         .wallet_remove()
         .arg("config-wallet")
         .arg("-y")
+        .env("HOME", &isolated_home)
         .run()
         .failure();
 
