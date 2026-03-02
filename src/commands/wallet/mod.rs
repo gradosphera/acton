@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
-use std::io::{IsTerminal, stdin, stdout};
+use std::io::{IsTerminal, Read, stdin, stdout};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use toml_edit::{DocumentMut, Item, Table, value};
@@ -133,8 +133,8 @@ pub enum WalletCommand {
         #[arg(long, help = "Output result as JSON")]
         json: bool,
     },
-    #[command(about = "Get wallet mnemonic")]
-    Get {
+    #[command(about = "Export wallet mnemonic (interactive confirmation required)")]
+    ExportMnemonic {
         #[arg(help = "Name of the wallet (prompts if not provided)")]
         name: Option<String>,
     },
@@ -195,7 +195,7 @@ pub fn wallet_cmd(command: WalletCommand) -> anyhow::Result<()> {
             api_key,
             json,
         } => list_wallets(balance, api_key, json),
-        WalletCommand::Get { name } => get_mnemonic(name),
+        WalletCommand::ExportMnemonic { name } => export_mnemonic(name),
         WalletCommand::Sign { name, body, json } => sign_wallet_external_body(name, body, json),
         WalletCommand::Remove { name, yes, json } => remove_wallet(name, yes, json),
         WalletCommand::Airdrop {
@@ -349,10 +349,23 @@ fn solve_challenge(challenge: &str, difficulty: u32) -> u64 {
     }
 }
 
-fn get_mnemonic(name: Option<String>) -> anyhow::Result<()> {
+fn export_mnemonic(name: Option<String>) -> anyhow::Result<()> {
     let config = ActonConfig::load()?;
 
     let name = select_wallet(name, &config)?;
+
+    if !stdin().is_terminal() || !stdout().is_terminal() {
+        anyhow::bail!(
+            "Exporting mnemonic is only allowed in interactive mode for security reasons."
+        );
+    }
+
+    let confirmation = Text::new("Type wallet name to confirm mnemonic export:")
+        .prompt()
+        .context("Failed to read confirmation")?;
+    if confirmation.trim() != name {
+        anyhow::bail!("Confirmation failed: wallet name does not match");
+    }
 
     let wallet = config
         .get_wallet(&name)
@@ -360,8 +373,7 @@ fn get_mnemonic(name: Option<String>) -> anyhow::Result<()> {
 
     let mnemonic = wallets::load_mnemonic(wallet)?;
 
-    println!("Mnemonic for wallet {}:", name.cyan().bold());
-    println!("{}", mnemonic.green());
+    println!("{mnemonic}");
 
     Ok(())
 }

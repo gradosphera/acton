@@ -1141,6 +1141,10 @@ fn example_wallet_usage() -> StyledStr {
                 "Sign external wallet body BoC",
                 "acton wallet sign my-wallet --body \"B5EE9C72...\"",
             ),
+            (
+                "Export wallet mnemonic (interactive only)",
+                "acton wallet export-mnemonic my-wallet",
+            ),
         ],
         "https://i582.github.io/acton/docs/commands/wallet",
     )

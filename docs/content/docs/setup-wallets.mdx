@@ -135,10 +135,10 @@ acton wallet list --balance
 
 ### Retrieving a Wallet Mnemonic
 
-If you need to view the mnemonic phrase for a configured wallet (e.g., to import it into another app), use the `acton wallet get` command:
+If you need to export the mnemonic phrase for a configured wallet (e.g., to import it into another app), use the `acton wallet export-mnemonic` command:
 
 ```bash
-acton wallet get deployer
+acton wallet export-mnemonic deployer
 ```
 
 This will display the mnemonic phrase, regardless of whether it's stored in a plain text file, environment variable, or secure system keyring.

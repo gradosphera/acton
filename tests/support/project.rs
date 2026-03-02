@@ -1229,11 +1229,11 @@ impl ActonCommand {
         self
     }
 
-    pub(crate) fn wallet_get(mut self) -> Self {
+    pub(crate) fn wallet_export_mnemonic(mut self) -> Self {
         self.cmd = self
             .cmd
             .arg("wallet")
-            .arg("get")
+            .arg("export-mnemonic")
             .current_dir(&self.project.path);
         self
     }

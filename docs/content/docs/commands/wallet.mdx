@@ -3,7 +3,7 @@ title: "Managing Wallets"
 description: "Learn how to create and manage testnet wallets for your Acton projects"
 ---
 
-The `wallet` command allows you to generate, import, list, inspect, sign messages with, and remove wallets for testing purposes. It automatically creates wallet configurations and offers to store mnemonics securely in the system keyring or in configuration files.
+The `wallet` command allows you to generate, import, list, sign messages with, export mnemonics from, and remove wallets for testing purposes. It automatically creates wallet configurations and offers to store mnemonics securely in the system keyring or in configuration files.
 
 <Callout type="warn">
     Wallets created by this command are configured for **testnet** by default.
@@ -182,20 +182,24 @@ If `--api-key` is omitted, Acton also checks the `TONCENTER_API_KEY` environment
 
 ---
 
-### `acton wallet get`
+### `acton wallet export-mnemonic`
 
-Prints the wallet mnemonic phrase.
+Exports wallet mnemonic phrase.
 
 ```bash
-acton wallet get [NAME]
+acton wallet export-mnemonic [NAME]
 ```
+
+For security reasons:
+- export is allowed only in interactive mode (`TTY`)
+- command asks you to type wallet name to confirm export
 
 Acton reads mnemonic from any configured source (`mnemonic`, `mnemonic-keyring`, `mnemonic-env`, `mnemonic-file`).
 
 #### Example
 
 ```bash
-acton wallet get deployer
+acton wallet export-mnemonic deployer
 ```
 
 ---

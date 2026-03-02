@@ -384,9 +384,8 @@ address-testnet = "EQD_existing_address"
 }
 
 #[test]
-fn test_wallet_get_success() {
-    let project = ProjectBuilder::new("wallet-get-success").build();
-    let mnemonic = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later";
+fn test_wallet_export_mnemonic_requires_interactive_mode() {
+    let project = ProjectBuilder::new("wallet-export-mnemonic-non-interactive").build();
 
     project
         .acton()
@@ -396,33 +395,32 @@ fn test_wallet_get_success() {
         .arg("--version")
         .arg("v5r1")
         .arg("--local")
-        .arg(mnemonic)
+        .arg(TEST_MNEMONIC)
         .run()
         .success();
 
     let output = project
         .acton()
-        .wallet_get()
+        .wallet_export_mnemonic()
         .arg("my-wallet")
         .run()
-        .success();
+        .failure();
 
-    output.assert_contains("Mnemonic for wallet my-wallet:");
-    output.assert_contains(mnemonic);
+    output.assert_contains("Exporting mnemonic is only allowed in interactive mode");
 }
 
 #[test]
-fn test_wallet_get_not_found() {
-    let project = ProjectBuilder::new("wallet-get-not-found").build();
+fn test_wallet_export_mnemonic_non_interactive_denies_before_name_validation() {
+    let project = ProjectBuilder::new("wallet-export-mnemonic-no-name-validation").build();
 
     let output = project
         .acton()
-        .wallet_get()
+        .wallet_export_mnemonic()
         .arg("non-existent")
         .run()
         .failure();
 
-    output.assert_contains("Wallet non-existent not found");
+    output.assert_contains("Exporting mnemonic is only allowed in interactive mode");
 }
 
 #[test]
