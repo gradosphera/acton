@@ -4,8 +4,9 @@ use crate::ast::name_case_checker::check_name_cases;
 use crate::ast::{
     acton_import_in_contract, bless_call_missing_safety_comment,
     dangerous_send_mode_missing_safety_comment, deprecated_symbol_use, duplicated_condition,
-    identical_conditional_branches, negated_is_type_can_use_not_is, no_bounce_handler,
-    no_global_variables, several_not_null_assertions,
+    identical_conditional_branches, incoming_messages_duplicate_opcode,
+    negated_is_type_can_use_not_is, no_bounce_handler, no_global_variables,
+    several_not_null_assertions,
 };
 use crate::rules::ast::{
     asm_function_missing_safety_comment, field_init_can_be_folded, import_path_can_use_mappings,
@@ -404,6 +405,11 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
             self.checker,
             Rule::MessageShouldBeNamed,
             message_entity_naming::check_file_for_message_name(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::IncomingMessagesDuplicateOpcode,
+            incoming_messages_duplicate_opcode::check_file(self.checker, self.file_id)
         );
         run_rule!(
             self.checker,
