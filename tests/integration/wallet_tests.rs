@@ -1,11 +1,46 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
+use acton::wallets;
 use keyring::{Entry, Error as KeyringError};
 use serde_json::Value;
 use std::fs;
+use ton_api::Network;
+use tonlib_core::cell::Cell;
+use tonlib_core::tlb_types::tlb::TLB;
+use tonlib_core::wallet::mnemonic::Mnemonic;
+use tonlib_core::wallet::ton_wallet::TonWallet;
+use tonlib_core::wallet::wallet_version::WalletVersion;
 
 const KEYRING_SERVICE: &str = "ton.acton.wallet";
 const TEST_MNEMONIC: &str = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later";
+
+fn wallet_sign_fixture() -> (String, String, String) {
+    let mnemonic = Mnemonic::from_str(TEST_MNEMONIC, &None).expect("invalid test mnemonic");
+    let key_pair = mnemonic.to_key_pair().expect("mnemonic to keypair failed");
+    let version = WalletVersion::V5R1;
+    let wallet_id = wallets::wallet_id(version, &Network::Testnet);
+    let wallet = TonWallet::new_with_params(version, key_pair, 0, wallet_id)
+        .expect("failed to build test wallet");
+
+    let body = wallet
+        .create_external_body(1_700_000_000, 7, Vec::<tonlib_core::cell::ArcCell>::new())
+        .expect("failed to build external body");
+    let body_hex = body
+        .to_boc_hex(false)
+        .expect("failed to encode body hex boc");
+    let body_base64 = body
+        .to_boc_b64(false)
+        .expect("failed to encode body base64 boc");
+
+    let signed = wallet
+        .sign_external_body(&body)
+        .expect("failed to sign external body");
+    let signed_hex = signed
+        .to_boc_hex(false)
+        .expect("failed to encode signed body hex boc");
+
+    (body_hex, body_base64, signed_hex)
+}
 
 #[test]
 fn test_wallet_new_local() {
@@ -391,6 +426,146 @@ fn test_wallet_get_not_found() {
 }
 
 #[test]
+fn test_wallet_sign_outputs_signed_body_boc_hex() {
+    let project = ProjectBuilder::new("wallet-sign-hex-output").build();
+    let (body_hex, _, signed_hex_expected) = wallet_sign_fixture();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("sign-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let output = project
+        .acton()
+        .wallet_sign()
+        .arg("sign-wallet")
+        .arg("--body")
+        .arg(&body_hex)
+        .run()
+        .success();
+
+    let signed_hex = output.get_stdout().trim().to_owned();
+    assert_eq!(signed_hex, signed_hex_expected);
+    assert!(Cell::from_boc_hex(&signed_hex).is_ok());
+}
+
+#[test]
+fn test_wallet_sign_accepts_base64_body_input() {
+    let project = ProjectBuilder::new("wallet-sign-ambiguous").build();
+    let (body_hex, body_base64, signed_hex_expected) = wallet_sign_fixture();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("sign-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let output_hex = project
+        .acton()
+        .wallet_sign()
+        .arg("sign-wallet")
+        .arg("--body")
+        .arg(&body_hex)
+        .run()
+        .success();
+
+    let output_base64 = project
+        .acton()
+        .wallet_sign()
+        .arg("sign-wallet")
+        .arg("--body")
+        .arg(&body_base64)
+        .run()
+        .success();
+
+    let sig_from_hex = output_hex.get_stdout().trim().to_owned();
+    let sig_from_base64 = output_base64.get_stdout().trim().to_owned();
+    assert_eq!(sig_from_hex, signed_hex_expected);
+    assert_eq!(sig_from_base64, signed_hex_expected);
+}
+
+#[test]
+fn test_wallet_sign_json_reports_detected_format() {
+    let project = ProjectBuilder::new("wallet-sign-json").build();
+    let (_, body_base64, signed_hex_expected) = wallet_sign_fixture();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("sign-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let output = project
+        .acton()
+        .wallet_sign()
+        .arg("sign-wallet")
+        .arg("--body")
+        .arg(&body_base64)
+        .arg("--json")
+        .run()
+        .success();
+
+    let stdout = output.get_stdout();
+    let json: Value = serde_json::from_str(&stdout).unwrap();
+
+    assert_eq!(json["success"], true);
+    assert_eq!(json["wallet"], "sign-wallet");
+    assert_eq!(json["input"], "base64");
+    assert_eq!(json["output"], "hex");
+    assert_eq!(json["signed_body"], signed_hex_expected);
+
+    let signed_hex = json["signed_body"].as_str().unwrap();
+    assert!(Cell::from_boc_hex(signed_hex).is_ok());
+}
+
+#[test]
+fn test_wallet_sign_rejects_invalid_payload() {
+    let project = ProjectBuilder::new("wallet-sign-invalid-payload").build();
+
+    project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("sign-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let output = project
+        .acton()
+        .wallet_sign()
+        .arg("sign-wallet")
+        .arg("--body")
+        .arg("not-valid@@@")
+        .run()
+        .failure();
+
+    output.assert_contains("Body must be a valid BoC encoded as hex or base64");
+}
+
+#[test]
 fn test_wallet_remove_local() {
     let project = ProjectBuilder::new("wallet-remove-local").build();
 
@@ -561,7 +736,7 @@ fn test_wallet_remove_requires_confirmation_in_non_interactive_mode() {
 
 #[test]
 fn test_wallet_remove_deletes_keyring_mnemonic() {
-    if !acton::wallets::is_keyring_supported() {
+    if !wallets::is_keyring_supported() {
         return;
     }
 

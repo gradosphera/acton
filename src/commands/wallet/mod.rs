@@ -17,6 +17,8 @@ use std::str::FromStr;
 use toml_edit::{DocumentMut, Item, Table, value};
 use ton_api::{Network, TonApiClient};
 use tonlib_core::TonAddress;
+use tonlib_core::cell::Cell;
+use tonlib_core::tlb_types::tlb::TLB;
 use tonlib_core::wallet::mnemonic::Mnemonic;
 use tonlib_core::wallet::ton_wallet::TonWallet;
 use tonlib_core::wallet::wallet_version::WalletVersion;
@@ -39,6 +41,21 @@ pub enum WalletVersionArg {
     HighloadV2,
     HighloadV2R1,
     HighloadV2R2,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum SignMessageFormat {
+    Hex,
+    Base64,
+}
+
+impl SignMessageFormat {
+    const fn as_str(self) -> &'static str {
+        match self {
+            SignMessageFormat::Hex => "hex",
+            SignMessageFormat::Base64 => "base64",
+        }
+    }
 }
 
 impl From<WalletVersionArg> for WalletVersion {
@@ -121,6 +138,19 @@ pub enum WalletCommand {
         #[arg(help = "Name of the wallet (prompts if not provided)")]
         name: Option<String>,
     },
+    #[command(about = "Sign a message with wallet private key")]
+    Sign {
+        #[arg(help = "Name of the wallet (prompts if not provided)")]
+        name: Option<String>,
+        #[arg(
+            long,
+            alias = "message",
+            help = "External body BoC to sign in hex or base64. If omitted, reads from stdin or prompts interactively"
+        )]
+        body: Option<String>,
+        #[arg(long, help = "Output result as JSON")]
+        json: bool,
+    },
     #[command(about = "Remove wallet")]
     Remove {
         #[arg(help = "Name of the wallet (prompts if not provided)")]
@@ -166,6 +196,7 @@ pub fn wallet_cmd(command: WalletCommand) -> anyhow::Result<()> {
             json,
         } => list_wallets(balance, api_key, json),
         WalletCommand::Get { name } => get_mnemonic(name),
+        WalletCommand::Sign { name, body, json } => sign_wallet_external_body(name, body, json),
         WalletCommand::Remove { name, yes, json } => remove_wallet(name, yes, json),
         WalletCommand::Airdrop {
             name,
@@ -333,6 +364,88 @@ fn get_mnemonic(name: Option<String>) -> anyhow::Result<()> {
     println!("{}", mnemonic.green());
 
     Ok(())
+}
+
+fn sign_wallet_external_body(
+    name: Option<String>,
+    body: Option<String>,
+    json: bool,
+) -> anyhow::Result<()> {
+    let config = ActonConfig::load()?;
+
+    let name = select_wallet(name, &config)?;
+
+    let wallet = config
+        .get_wallet(&name)
+        .ok_or_else(|| anyhow!(error_fmt::wallet_not_found(&config, &name)))?;
+
+    let body = read_sign_body(body)?;
+    let (external_body, input) = decode_sign_input(&body)?;
+
+    let mnemonic_str = wallets::load_mnemonic(wallet)?;
+    let mnemonic = Mnemonic::from_str(&mnemonic_str, &None)?;
+    let key_pair = mnemonic.to_key_pair()?;
+    let version = parse_wallet_version(&wallet.kind)?;
+    let wallet_id = wallets::wallet_id(version, &Network::Testnet);
+    let ton_wallet =
+        TonWallet::new_with_params(version, key_pair, wallet.workchain.unwrap_or(0), wallet_id)?;
+
+    let signed_body = ton_wallet
+        .sign_external_body(&external_body)
+        .context("Failed to sign external body")?;
+    let signed_body_hex = signed_body
+        .to_boc_hex(false)
+        .context("Failed to encode signed body to hex BoC")?;
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "success": true,
+                "wallet": name,
+                "input": input.as_str(),
+                "output": "hex",
+                "signed_body": signed_body_hex,
+            }))?
+        );
+    } else {
+        println!("{signed_body_hex}");
+    }
+
+    Ok(())
+}
+
+fn read_sign_body(body: Option<String>) -> anyhow::Result<String> {
+    if let Some(body) = body {
+        return Ok(body);
+    }
+
+    Text::new("External body BoC (hex/base64) to sign:")
+        .prompt()
+        .context("Failed to read body")
+}
+
+fn decode_sign_input(body: &str) -> anyhow::Result<(Cell, SignMessageFormat)> {
+    let body = body.trim();
+    if body.is_empty() {
+        anyhow::bail!("Body cannot be empty");
+    }
+
+    if is_hex_payload(body)
+        && let Ok(cell) = Cell::from_boc_hex(body)
+    {
+        return Ok((cell, SignMessageFormat::Hex));
+    }
+
+    if let Ok(cell) = Cell::from_boc_b64(body) {
+        return Ok((cell, SignMessageFormat::Base64));
+    }
+
+    anyhow::bail!("Body must be a valid BoC encoded as hex or base64")
+}
+
+fn is_hex_payload(value: &str) -> bool {
+    value.len().is_multiple_of(2) && value.as_bytes().iter().all(u8::is_ascii_hexdigit)
 }
 
 fn remove_wallet(name: Option<String>, yes: bool, json: bool) -> anyhow::Result<()> {
@@ -1116,5 +1229,42 @@ mod wallet_name_tests {
         );
         assert_eq!(normalize_wallet_name("v5r1"), "v5r1");
         assert_eq!(normalize_wallet_name("!!!"), "");
+    }
+
+    #[test]
+    fn test_decode_sign_input_hex() {
+        let cell = Cell::default();
+        let body_hex = cell.to_boc_hex(false).expect("must encode hex boc");
+        let (decoded, format) = decode_sign_input(&body_hex).expect("must decode hex");
+        assert_eq!(decoded, cell);
+        assert_eq!(format, SignMessageFormat::Hex);
+    }
+
+    #[test]
+    fn test_decode_sign_input_base64() {
+        let cell = Cell::default();
+        let body_b64 = cell.to_boc_b64(false).expect("must encode base64 boc");
+        let (decoded, format) = decode_sign_input(&body_b64).expect("must decode base64");
+        assert_eq!(decoded, cell);
+        assert_eq!(format, SignMessageFormat::Base64);
+    }
+
+    #[test]
+    fn test_decode_sign_input_empty() {
+        let err = decode_sign_input("").expect_err("must fail for empty payload");
+        assert!(
+            err.to_string().contains("Body cannot be empty"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_decode_sign_input_invalid() {
+        let err = decode_sign_input("!@#$%").expect_err("must fail for invalid payload");
+        assert!(
+            err.to_string()
+                .contains("Body must be a valid BoC encoded as hex or base64"),
+            "unexpected error: {err}"
+        );
     }
 }

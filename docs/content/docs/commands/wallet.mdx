@@ -3,7 +3,7 @@ title: "Managing Wallets"
 description: "Learn how to create and manage testnet wallets for your Acton projects"
 ---
 
-The `wallet` command allows you to generate, import, list, inspect, and remove wallets for testing purposes. It automatically creates wallet configurations and offers to store mnemonics securely in the system keyring or in configuration files.
+The `wallet` command allows you to generate, import, list, inspect, sign messages with, and remove wallets for testing purposes. It automatically creates wallet configurations and offers to store mnemonics securely in the system keyring or in configuration files.
 
 <Callout type="warn">
     Wallets created by this command are configured for **testnet** by default.
@@ -101,7 +101,7 @@ workchain = 0
 keys = { mnemonic-keyring = "my-project:deployer" }
 ```
 
-For local wallets, keyring id usually includes project prefix (`<project>:<wallet>`).  
+For local wallets, keyring id usually includes project prefix (`<project>:<wallet>`).
 For global wallets, keyring id is wallet name.
 
 ---
@@ -196,6 +196,39 @@ Acton reads mnemonic from any configured source (`mnemonic`, `mnemonic-keyring`,
 
 ```bash
 acton wallet get deployer
+```
+
+---
+
+### `acton wallet sign`
+
+Signs wallet `external_body` BoC with the selected wallet private key using wallet-version-specific format.
+
+```bash
+acton wallet sign [NAME]
+```
+
+Input format is auto-detected:
+- `hex` (preferred when a payload can be interpreted as both `hex` and `base64`)
+- `base64`
+
+Output is always signed `external_body` BoC in `hex`.
+
+#### Options
+
+| Option         | Type   | Description                                                    |
+|----------------|--------|----------------------------------------------------------------|
+| `--body <BOC>` | String | External body BoC to sign (auto-detected as `hex` or `base64`) |
+| `--json`       | Flag   | Output result as JSON                                          |
+
+#### Examples
+
+```bash
+# Sign external body provided as hex BoC
+acton wallet sign deployer --body "B5EE9C72..."
+
+# Sign external body provided as base64 BoC
+acton wallet sign deployer --body "te6ccgEBAQEA..."
 ```
 
 ---

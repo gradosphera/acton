@@ -1238,6 +1238,15 @@ impl ActonCommand {
         self
     }
 
+    pub(crate) fn wallet_sign(mut self) -> Self {
+        self.cmd = self
+            .cmd
+            .arg("wallet")
+            .arg("sign")
+            .current_dir(&self.project.path);
+        self
+    }
+
     pub(crate) fn wallet_remove(mut self) -> Self {
         self.cmd = self
             .cmd

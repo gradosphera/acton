@@ -1137,6 +1137,10 @@ fn example_wallet_usage() -> StyledStr {
                 "Request testnet TONs from faucet",
                 "acton wallet airdrop my-wallet",
             ),
+            (
+                "Sign external wallet body BoC",
+                "acton wallet sign my-wallet --body \"B5EE9C72...\"",
+            ),
         ],
         "https://i582.github.io/acton/docs/commands/wallet",
     )
