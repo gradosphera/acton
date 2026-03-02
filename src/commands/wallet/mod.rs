@@ -76,6 +76,7 @@ const POW_MAX_SOLVE_DURATION: Duration = Duration::from_secs(60);
 const POW_MAX_NONCE_ATTEMPTS: u64 = 1_000_000_000;
 const DEFAULT_FAUCET_URL: &str = "https://acton.monster/faucet/";
 const NEW_WALLET_AIRDROP_FAUCET_URL_ENV: &str = "ACTON_FAUCET_URL"; // for testing purpose
+const TEST_WALLET_KEYRING_SUPPORTED_ENV: &str = "ACTON_TEST_WALLET_KEYRING_SUPPORTED"; // integration tests only
 
 impl SignMessageFormat {
     const fn as_str(self) -> &'static str {
@@ -1001,6 +1002,14 @@ fn get_or_prompt_name(name: Option<String>) -> anyhow::Result<String> {
 }
 
 fn get_is_global(global_flag: bool, local_flag: bool) -> anyhow::Result<bool> {
+    if global_flag && local_flag {
+        anyhow::bail!(
+            "Cannot use both {} and {} flags",
+            "--global".yellow(),
+            "--local".yellow()
+        );
+    }
+
     if global_flag {
         Ok(true)
     } else if local_flag {
@@ -1459,7 +1468,7 @@ fn show_security_warning(config_path: PathBuf) {
 }
 
 fn get_or_prompt_use_keystore(secure: Option<bool>) -> anyhow::Result<bool> {
-    let use_secure_store = if wallets::is_keyring_supported() {
+    let use_secure_store = if is_keyring_supported_for_wallet_cmd()? {
         if let Some(s) = secure {
             s
         } else {
@@ -1477,6 +1486,28 @@ fn get_or_prompt_use_keystore(secure: Option<bool>) -> anyhow::Result<bool> {
         false
     };
     Ok(use_secure_store)
+}
+
+fn is_keyring_supported_for_wallet_cmd() -> anyhow::Result<bool> {
+    match env::var(TEST_WALLET_KEYRING_SUPPORTED_ENV) {
+        Ok(raw) => {
+            let normalized = raw.trim().to_ascii_lowercase();
+            match normalized.as_str() {
+                "1" => Ok(true),
+                "0" => Ok(false),
+                _ => anyhow::bail!(
+                    "Invalid value for {}: {}. Expected one of: 1, 0",
+                    TEST_WALLET_KEYRING_SUPPORTED_ENV.yellow(),
+                    raw.yellow()
+                ),
+            }
+        }
+        Err(env::VarError::NotPresent) => Ok(wallets::is_keyring_supported()),
+        Err(err) => Err(anyhow!(
+            "Failed to read {}: {err}",
+            TEST_WALLET_KEYRING_SUPPORTED_ENV.yellow()
+        )),
+    }
 }
 
 fn parse_wallet_version(kind: &str) -> anyhow::Result<WalletVersion> {

@@ -15,6 +15,7 @@ use tonlib_core::wallet::wallet_version::WalletVersion;
 #[allow(dead_code)]
 const KEYRING_SERVICE: &str = "ton.acton.wallet";
 const TEST_MNEMONIC: &str = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later";
+const TEST_WALLET_KEYRING_SUPPORTED_ENV: &str = "ACTON_TEST_WALLET_KEYRING_SUPPORTED";
 
 fn wallet_sign_fixture() -> (String, String, String) {
     let mnemonic = Mnemonic::from_str(TEST_MNEMONIC, &None).expect("invalid test mnemonic");
@@ -108,6 +109,141 @@ fn test_wallet_new_global() {
 
     output
         .assert_snapshot_matches("integration/snapshots/wallet/test_wallet_new_global.stdout.txt");
+}
+
+#[test]
+fn test_wallet_new_rejects_conflicting_global_and_local_flags() {
+    let project = ProjectBuilder::new("wallet-new-conflicting-flags").build();
+
+    let output = project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("conflict-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--global")
+        .arg("--local")
+        .run()
+        .failure();
+
+    output.assert_stderr_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_new_rejects_conflicting_global_and_local_flags.stderr.txt",
+    );
+}
+
+#[test]
+fn test_wallet_new_global_duplicate_name() {
+    let project = ProjectBuilder::new("wallet-new-global-duplicate").build();
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+
+    project
+        .acton()
+        .env("HOME", home_path.to_str().unwrap())
+        .wallet_new()
+        .arg("--name")
+        .arg("global-duplicate")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--global")
+        .run()
+        .success();
+
+    let output = project
+        .acton()
+        .env("HOME", home_path.to_str().unwrap())
+        .wallet_new()
+        .arg("--name")
+        .arg("global-duplicate")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--global")
+        .run()
+        .failure();
+
+    output.assert_stderr_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_new_global_duplicate_name.stderr.txt",
+    );
+}
+
+#[test]
+fn test_wallet_new_secure_true_fails_when_keyring_unsupported() {
+    let project = ProjectBuilder::new("wallet-new-secure-true-unsupported").build();
+
+    let output = project
+        .acton()
+        .arg("wallet")
+        .arg("new")
+        .current_dir(project.path())
+        .arg("--name")
+        .arg("secure-unsupported")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--secure")
+        .env(TEST_WALLET_KEYRING_SUPPORTED_ENV, "0")
+        .run()
+        .failure();
+
+    output.assert_stderr_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_new_secure_true_fails_when_keyring_unsupported.stderr.txt",
+    );
+}
+
+#[test]
+fn test_wallet_new_secure_false_succeeds_when_keyring_unsupported() {
+    let project = ProjectBuilder::new("wallet-new-secure-false-unsupported").build();
+
+    let output = project
+        .acton()
+        .arg("wallet")
+        .arg("new")
+        .current_dir(project.path())
+        .arg("--name")
+        .arg("secure-false-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--secure=false")
+        .env(TEST_WALLET_KEYRING_SUPPORTED_ENV, "0")
+        .run()
+        .success();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_new_secure_false_succeeds_when_keyring_unsupported.stdout.txt",
+    );
+    output.assert_file_snapshot_matches(
+        "wallets.toml",
+        "integration/snapshots/wallet/test_wallet_new_secure_false_succeeds_when_keyring_unsupported.wallets.toml.txt",
+    );
+}
+
+#[test]
+fn test_wallet_new_falls_back_to_plain_mnemonic_when_keyring_unsupported() {
+    let project = ProjectBuilder::new("wallet-new-secure-fallback-unsupported").build();
+
+    let output = project
+        .acton()
+        .arg("wallet")
+        .arg("new")
+        .current_dir(project.path())
+        .arg("--name")
+        .arg("secure-fallback-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .env(TEST_WALLET_KEYRING_SUPPORTED_ENV, "0")
+        .run()
+        .success();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_new_falls_back_to_plain_mnemonic_when_keyring_unsupported.stdout.txt",
+    );
+    output.assert_file_snapshot_matches(
+        "wallets.toml",
+        "integration/snapshots/wallet/test_wallet_new_falls_back_to_plain_mnemonic_when_keyring_unsupported.wallets.toml.txt",
+    );
 }
 
 #[test]
@@ -294,6 +430,174 @@ fn test_wallet_import_local() {
     output.assert_file_snapshot_matches(
         "wallets.toml",
         "integration/snapshots/wallet/test_wallet_import_local.wallets.toml.txt",
+    );
+}
+
+#[test]
+fn test_wallet_import_global() {
+    let project = ProjectBuilder::new("wallet-import-global").build();
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+
+    let output = project
+        .acton()
+        .env("HOME", home_path.to_str().unwrap())
+        .wallet_import()
+        .arg("--name")
+        .arg("imported-global")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--global")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .success();
+
+    let global_wallets_dir = home_path.join(".config").join("acton").join("wallets");
+    let global_config = global_wallets_dir.join("global.wallets.toml");
+    assert!(global_config.exists());
+
+    let global_toml = fs::read_to_string(global_config).unwrap();
+    assert!(global_toml.contains("[wallets.imported-global]"));
+    assert!(global_toml.contains("kind = \"v5r1\""));
+    assert!(global_toml.contains("workchain = 0"));
+    assert!(global_toml.contains("mnemonic = \""));
+
+    let local_wallets_path = project.path().join("wallets.toml");
+    if local_wallets_path.exists() {
+        let local_toml = fs::read_to_string(local_wallets_path).unwrap();
+        assert!(!local_toml.contains("[wallets.imported-global]"));
+    }
+
+    let symlink = project.path().join("global.wallets.toml");
+    assert!(symlink.exists());
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_import_global.stdout.txt",
+    );
+}
+
+#[test]
+fn test_wallet_import_rejects_conflicting_global_and_local_flags() {
+    let project = ProjectBuilder::new("wallet-import-conflicting-flags").build();
+
+    let output = project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("import-conflict")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--global")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .failure();
+
+    output.assert_stderr_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_import_rejects_conflicting_global_and_local_flags.stderr.txt",
+    );
+}
+
+#[test]
+fn test_wallet_import_invalid_name() {
+    let project = ProjectBuilder::new("wallet-import-invalid-name").build();
+
+    let output = project
+        .acton()
+        .wallet_import()
+        .arg("--name")
+        .arg("!!!")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .run()
+        .failure();
+
+    output.assert_stderr_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_import_invalid_name.stderr.txt",
+    );
+}
+
+#[test]
+fn test_wallet_import_secure_true_fails_when_keyring_unsupported() {
+    let project = ProjectBuilder::new("wallet-import-secure-true-unsupported").build();
+
+    let output = project
+        .acton()
+        .arg("wallet")
+        .arg("import")
+        .current_dir(project.path())
+        .arg("--name")
+        .arg("import-secure-unsupported")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--secure=true")
+        .arg(TEST_MNEMONIC)
+        .env(TEST_WALLET_KEYRING_SUPPORTED_ENV, "0")
+        .run()
+        .failure();
+
+    output.assert_stderr_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_import_secure_true_fails_when_keyring_unsupported.stderr.txt",
+    );
+}
+
+#[test]
+fn test_wallet_import_secure_false_succeeds_when_keyring_unsupported() {
+    let project = ProjectBuilder::new("wallet-import-secure-false-unsupported").build();
+
+    let output = project
+        .acton()
+        .arg("wallet")
+        .arg("import")
+        .current_dir(project.path())
+        .arg("--name")
+        .arg("import-secure-false")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--secure=false")
+        .arg(TEST_MNEMONIC)
+        .env(TEST_WALLET_KEYRING_SUPPORTED_ENV, "0")
+        .run()
+        .success();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_import_secure_false_succeeds_when_keyring_unsupported.stdout.txt",
+    );
+    output.assert_file_snapshot_matches(
+        "wallets.toml",
+        "integration/snapshots/wallet/test_wallet_import_secure_false_succeeds_when_keyring_unsupported.wallets.toml.txt",
+    );
+}
+
+#[test]
+fn test_wallet_import_falls_back_to_plain_mnemonic_when_keyring_unsupported() {
+    let project = ProjectBuilder::new("wallet-import-secure-fallback-unsupported").build();
+
+    let output = project
+        .acton()
+        .arg("wallet")
+        .arg("import")
+        .current_dir(project.path())
+        .arg("--name")
+        .arg("import-secure-fallback")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg(TEST_MNEMONIC)
+        .env(TEST_WALLET_KEYRING_SUPPORTED_ENV, "0")
+        .run()
+        .success();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/wallet/test_wallet_import_falls_back_to_plain_mnemonic_when_keyring_unsupported.stdout.txt",
+    );
+    output.assert_file_snapshot_matches(
+        "wallets.toml",
+        "integration/snapshots/wallet/test_wallet_import_falls_back_to_plain_mnemonic_when_keyring_unsupported.wallets.toml.txt",
     );
 }
 
