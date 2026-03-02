@@ -14,6 +14,7 @@ use std::fs;
 use std::io::{IsTerminal, stdin, stdout};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::time::Duration;
 use toml_edit::{DocumentMut, Item, Table, value};
 use ton_api::{Network, TonApiClient};
 use tonlib_core::TonAddress;
@@ -47,6 +48,18 @@ pub enum WalletVersionArg {
 enum SignMessageFormat {
     Hex,
     Base64,
+}
+
+#[derive(serde::Deserialize)]
+struct FaucetChallengeResponse {
+    challenge: String,
+    difficulty: u32,
+}
+
+#[derive(serde::Deserialize)]
+struct FaucetMessageResponse {
+    message: Option<String>,
+    error: Option<String>,
 }
 
 impl SignMessageFormat {
@@ -164,7 +177,11 @@ pub enum WalletCommand {
     Airdrop {
         #[arg(help = "Name of the wallet (prompts if not provided)")]
         name: Option<String>,
-        #[arg(long, help = "Faucet URL", default_value = "https://acton.monster/faucet/")]
+        #[arg(
+            long,
+            help = "Faucet URL",
+            default_value = "https://acton.monster/faucet/"
+        )]
         faucet_url: String,
         #[arg(long, help = "Output result as JSON")]
         json: bool,
@@ -226,7 +243,25 @@ fn airdrop_wallet(name: Option<String>, faucet_url: String, json: bool) -> anyho
         );
     }
 
-    let client = reqwest::blocking::Client::new();
+    let faucet_base = parse_faucet_base_url(&faucet_url)?;
+    let challenge_url = faucet_base.join("challenge").with_context(|| {
+        format!(
+            "Failed to build challenge URL from faucet base URL {}",
+            faucet_base
+        )
+    })?;
+    let claim_url = faucet_base.join("claim").with_context(|| {
+        format!(
+            "Failed to build claim URL from faucet base URL {}",
+            faucet_base
+        )
+    })?;
+
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("Failed to build HTTP client")?;
 
     // Faucet for testnet TON uses Proof-of-Work so we need to solve it to get coins
 
@@ -235,34 +270,39 @@ fn airdrop_wallet(name: Option<String>, faucet_url: String, json: bool) -> anyho
         println!("{} Fetching PoW challenge...", "→".blue().bold());
     }
     let challenge_res = client
-        .get(format!("{faucet_url}/challenge"))
+        .get(challenge_url)
         .send()
         .context("Failed to get challenge from faucet")?;
 
     if !challenge_res.status().is_success() {
-        anyhow::bail!("Failed to get challenge: status {}", challenge_res.status());
+        let status = challenge_res.status();
+        let body = challenge_res.text().unwrap_or_default();
+        if body.is_empty() {
+            anyhow::bail!("Failed to get challenge: status {status}");
+        }
+        anyhow::bail!("Failed to get challenge: status {status}: {body}");
     }
 
-    let challenge_data: serde_json::Value = challenge_res
+    let challenge_data: FaucetChallengeResponse = challenge_res
         .json()
         .context("Failed to parse challenge response")?;
-    let challenge = challenge_data["challenge"]
-        .as_str()
-        .context("No challenge in response")?;
-    let difficulty = challenge_data["difficulty"]
-        .as_u64()
-        .context("No difficulty in response")? as u32;
+    if challenge_data.difficulty > 256 {
+        anyhow::bail!(
+            "Invalid PoW difficulty from faucet: {} (max 256)",
+            challenge_data.difficulty
+        );
+    }
 
     // 2. Solve challenge
     if !json {
         println!(
             "{} Solving challenge (difficulty: {} bits)...",
             "→".blue().bold(),
-            difficulty
+            challenge_data.difficulty
         );
     }
     let start = std::time::Instant::now();
-    let nonce = solve_challenge(challenge, difficulty);
+    let nonce = solve_challenge(&challenge_data.challenge, challenge_data.difficulty)?;
     let duration = start.elapsed();
     if !json {
         println!("{} Challenge solved in {:?}", "✓".green(), duration);
@@ -270,26 +310,27 @@ fn airdrop_wallet(name: Option<String>, faucet_url: String, json: bool) -> anyho
 
     // 3. Send claim
     let response = client
-        .post(format!("{faucet_url}/claim"))
+        .post(claim_url)
         .json(&serde_json::json!({
             "address": address,
-            "challenge": challenge,
+            "challenge": challenge_data.challenge,
             "nonce": nonce
         }))
         .send()
         .context("Failed to send request to faucet")?;
 
     if response.status().is_success() {
-        let res: serde_json::Value = response.json().context("Failed to parse faucet response")?;
+        let res: FaucetMessageResponse =
+            response.json().context("Failed to parse faucet response")?;
         if json {
             println!(
                 "{}",
                 serde_json::to_string(&serde_json::json!({
                     "success": true,
-                    "message": res.get("message").and_then(|m| m.as_str()).unwrap_or("Success")
+                    "message": res.message.as_deref().unwrap_or("Success")
                 }))?
             );
-        } else if let Some(msg) = res.get("message").and_then(|m| m.as_str()) {
+        } else if let Some(msg) = res.message.as_deref() {
             println!("{} {}", "✓".green(), msg);
         } else {
             println!("{} Success", "✓".green());
@@ -300,32 +341,55 @@ fn airdrop_wallet(name: Option<String>, faucet_url: String, json: bool) -> anyho
             "Too many requests from your IP. Only 2 requests per 24 hours are allowed. Please try again later.".to_string()
         } else {
             let body_text = response.text().unwrap_or_default();
-            if let Ok(res) = serde_json::from_str::<serde_json::Value>(&body_text) {
-                res.get("error")
-                    .and_then(|e| e.as_str())
-                    .map_or_else(|| body_text.clone(), ToString::to_string)
+            if let Ok(res) = serde_json::from_str::<FaucetMessageResponse>(&body_text) {
+                res.error
+                    .or(res.message)
+                    .unwrap_or_else(|| body_text.clone())
             } else {
                 body_text
             }
         };
 
+        let final_error = format!("Faucet returned error {status}: {error_msg}");
         if json {
             println!(
                 "{}",
                 serde_json::to_string(&serde_json::json!({
                     "success": false,
-                    "error": format!("Faucet returned error {}: {}", status, error_msg)
+                    "error": final_error
                 }))?
             );
-        } else {
-            anyhow::bail!("Faucet returned error {status}: {error_msg}");
         }
+        anyhow::bail!(final_error);
     }
 
     Ok(())
 }
 
-fn solve_challenge(challenge: &str, difficulty: u32) -> u64 {
+fn parse_faucet_base_url(faucet_url: &str) -> anyhow::Result<reqwest::Url> {
+    let faucet_url = faucet_url.trim();
+    if faucet_url.is_empty() {
+        anyhow::bail!("Faucet URL cannot be empty");
+    }
+
+    let mut normalized = faucet_url.to_owned();
+    if !normalized.ends_with('/') {
+        normalized.push('/');
+    }
+
+    let url = reqwest::Url::parse(&normalized)
+        .with_context(|| format!("Invalid faucet URL: {faucet_url}"))?;
+    if !matches!(url.scheme(), "http" | "https") {
+        anyhow::bail!("Faucet URL scheme must be http or https");
+    }
+    Ok(url)
+}
+
+fn solve_challenge(challenge: &str, difficulty: u32) -> anyhow::Result<u64> {
+    if difficulty > 256 {
+        anyhow::bail!("PoW difficulty must be at most 256 bits");
+    }
+
     let mut nonce: u64 = 0;
     loop {
         let mut hasher = Sha256::new();
@@ -342,7 +406,7 @@ fn solve_challenge(challenge: &str, difficulty: u32) -> u64 {
             }
         }
         if zero_bits >= difficulty {
-            return nonce;
+            return Ok(nonce);
         }
 
         nonce += 1;
@@ -1276,6 +1340,36 @@ mod wallet_name_tests {
         assert!(
             err.to_string()
                 .contains("Body must be a valid BoC encoded as hex or base64"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_parse_faucet_base_url_normalizes_trailing_slash() {
+        let base = parse_faucet_base_url("https://example.com/faucet").expect("must parse");
+        assert_eq!(base.as_str(), "https://example.com/faucet/");
+        assert_eq!(
+            base.join("challenge").expect("must join").as_str(),
+            "https://example.com/faucet/challenge"
+        );
+    }
+
+    #[test]
+    fn test_parse_faucet_base_url_rejects_invalid_scheme() {
+        let err = parse_faucet_base_url("ftp://example.com").expect_err("must reject ftp");
+        assert!(
+            err.to_string()
+                .contains("Faucet URL scheme must be http or https"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_solve_challenge_rejects_too_high_difficulty() {
+        let err = solve_challenge("abc", 257).expect_err("difficulty > 256 must fail");
+        assert!(
+            err.to_string()
+                .contains("PoW difficulty must be at most 256 bits"),
             "unexpected error: {err}"
         );
     }
