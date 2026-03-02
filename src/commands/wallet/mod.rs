@@ -164,7 +164,7 @@ pub enum WalletCommand {
     Airdrop {
         #[arg(help = "Name of the wallet (prompts if not provided)")]
         name: Option<String>,
-        #[arg(long, help = "Faucet URL", default_value = "http://localhost:3001")]
+        #[arg(long, help = "Faucet URL", default_value = "https://acton.monster/faucet/")]
         faucet_url: String,
         #[arg(long, help = "Output result as JSON")]
         json: bool,
