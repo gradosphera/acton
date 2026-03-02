@@ -75,6 +75,7 @@ const HTTP_RETRY_BACKOFF_MS: [u64; 3] = [200, 500, 1000];
 const POW_MAX_SOLVE_DURATION: Duration = Duration::from_secs(60);
 const POW_MAX_NONCE_ATTEMPTS: u64 = 1_000_000_000;
 const DEFAULT_FAUCET_URL: &str = "https://acton.monster/faucet/";
+const NEW_WALLET_AIRDROP_FAUCET_URL_ENV: &str = "ACTON_FAUCET_URL"; // for testing purpose
 
 impl SignMessageFormat {
     const fn as_str(self) -> &'static str {
@@ -1239,6 +1240,7 @@ fn new_wallet(
         is_global,
     )?;
     let auto_airdrop = resolve_auto_airdrop(airdrop, json)?;
+    let airdrop_faucet_url = auto_airdrop.then(new_wallet_airdrop_faucet_url);
 
     if json {
         let mut output = serde_json::json!({
@@ -1251,21 +1253,24 @@ fn new_wallet(
         });
 
         if auto_airdrop {
-            let airdrop_output =
-                match perform_airdrop(Some(name), DEFAULT_FAUCET_URL.to_owned(), true) {
-                    Ok(result) => serde_json::json!({
-                        "success": true,
-                        "message": result.message.as_deref().unwrap_or("Success"),
-                        "address": result.address,
-                        "difficulty": result.difficulty,
-                        "nonce": result.nonce,
-                        "solve_ms": result.solve_duration.as_millis(),
-                    }),
-                    Err(err) => serde_json::json!({
-                        "success": false,
-                        "error": err.to_string(),
-                    }),
-                };
+            let airdrop_output = match perform_airdrop(
+                Some(name),
+                airdrop_faucet_url.expect("auto_airdrop implies faucet URL exists"),
+                true,
+            ) {
+                Ok(result) => serde_json::json!({
+                    "success": true,
+                    "message": result.message.as_deref().unwrap_or("Success"),
+                    "address": result.address,
+                    "difficulty": result.difficulty,
+                    "nonce": result.nonce,
+                    "solve_ms": result.solve_duration.as_millis(),
+                }),
+                Err(err) => serde_json::json!({
+                    "success": false,
+                    "error": err.to_string(),
+                }),
+            };
             output["airdrop"] = airdrop_output;
         }
 
@@ -1286,7 +1291,11 @@ fn new_wallet(
         }
 
         if auto_airdrop {
-            match perform_airdrop(Some(name), DEFAULT_FAUCET_URL.to_owned(), false) {
+            match perform_airdrop(
+                Some(name),
+                airdrop_faucet_url.expect("auto_airdrop implies faucet URL exists"),
+                false,
+            ) {
                 Ok(result) => {
                     println!(
                         "{} {}",
@@ -1325,6 +1334,10 @@ fn new_wallet(
     }
 
     Ok(())
+}
+
+fn new_wallet_airdrop_faucet_url() -> String {
+    env::var(NEW_WALLET_AIRDROP_FAUCET_URL_ENV).unwrap_or_else(|_| DEFAULT_FAUCET_URL.to_owned())
 }
 
 fn maybe_store_mnemonic_in_keystore(

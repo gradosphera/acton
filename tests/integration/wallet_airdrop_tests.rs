@@ -1167,3 +1167,204 @@ fn test_wallet_airdrop_rejects_faucet_url_with_fragment() {
         "integration/snapshots/wallet_airdrop/test_wallet_airdrop_rejects_faucet_url_with_fragment.stderr.txt",
     );
 }
+
+#[allow(clippy::significant_drop_tightening)]
+#[test]
+fn test_wallet_new_airdrop_uses_env_faucet_url_success_non_json() {
+    let project = ProjectBuilder::new("wallet-new-airdrop-success").build();
+
+    let (faucet_url, faucet_handle, captured_requests) = spawn_faucet_mock(vec![
+        FaucetMockResponse {
+            method: "GET",
+            path: "/faucet/challenge",
+            status: 200,
+            body: r#"{"challenge":"new-wallet-ok","difficulty":0}"#,
+        },
+        FaucetMockResponse {
+            method: "POST",
+            path: "/faucet/claim",
+            status: 200,
+            body: r#"{"message":"mock airdrop success"}"#,
+        },
+    ]);
+
+    let output = project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("new-airdrop-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--airdrop")
+        .env("ACTON_FAUCET_URL", &faucet_url)
+        .run()
+        .success();
+
+    faucet_handle
+        .join()
+        .expect("mock faucet thread must finish without panic");
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/wallet_airdrop/test_wallet_new_airdrop_uses_env_faucet_url_success_non_json.stdout.txt",
+    );
+    output.assert_file_snapshot_matches(
+        "wallets.toml",
+        "integration/snapshots/wallet_airdrop/test_wallet_new_airdrop_uses_env_faucet_url_success_non_json.wallets.toml.txt",
+    );
+
+    let captured = captured_requests
+        .lock()
+        .expect("captured requests mutex poisoned");
+    let challenge_attempts = captured
+        .iter()
+        .filter(|req| req.method == "GET" && req.path == "/faucet/challenge")
+        .count();
+    let claim_attempts = captured
+        .iter()
+        .filter(|req| req.method == "POST" && req.path == "/faucet/claim")
+        .count();
+    assert_eq!(challenge_attempts, 1);
+    assert_eq!(claim_attempts, 1);
+}
+
+#[test]
+fn test_wallet_new_airdrop_failure_keeps_wallet_and_prints_warning() {
+    let project = ProjectBuilder::new("wallet-new-airdrop-fail").build();
+
+    let (faucet_url, faucet_handle, _) = spawn_faucet_mock(vec![
+        FaucetMockResponse {
+            method: "GET",
+            path: "/faucet/challenge",
+            status: 200,
+            body: r#"{"challenge":"new-wallet-fail","difficulty":0}"#,
+        },
+        FaucetMockResponse {
+            method: "POST",
+            path: "/faucet/claim",
+            status: 400,
+            body: r#"{"error":"faucet down"}"#,
+        },
+    ]);
+
+    let output = project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("new-airdrop-fail-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--airdrop")
+        .env("ACTON_FAUCET_URL", &faucet_url)
+        .run()
+        .success();
+
+    faucet_handle
+        .join()
+        .expect("mock faucet thread must finish without panic");
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/wallet_airdrop/test_wallet_new_airdrop_failure_keeps_wallet_and_prints_warning.stdout.txt",
+    );
+    output.assert_file_snapshot_matches(
+        "wallets.toml",
+        "integration/snapshots/wallet_airdrop/test_wallet_new_airdrop_failure_keeps_wallet_and_prints_warning.wallets.toml.txt",
+    );
+}
+
+#[test]
+fn test_wallet_new_airdrop_json_success_has_airdrop_block() {
+    let project = ProjectBuilder::new("wallet-new-airdrop-json-success").build();
+
+    let (faucet_url, faucet_handle, _) = spawn_faucet_mock(vec![
+        FaucetMockResponse {
+            method: "GET",
+            path: "/faucet/challenge",
+            status: 200,
+            body: r#"{"challenge":"new-wallet-json-ok","difficulty":0}"#,
+        },
+        FaucetMockResponse {
+            method: "POST",
+            path: "/faucet/claim",
+            status: 200,
+            body: r#"{"message":"json airdrop ok"}"#,
+        },
+    ]);
+
+    let output = project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("new-airdrop-json-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--airdrop")
+        .arg("--json")
+        .env("ACTON_FAUCET_URL", &faucet_url)
+        .run()
+        .success();
+
+    faucet_handle
+        .join()
+        .expect("mock faucet thread must finish without panic");
+
+    let stdout = output.get_stdout();
+    let json: Value = serde_json::from_str(&stdout).expect("wallet new --json must return JSON");
+    assert_eq!(json["success"], true);
+    assert_eq!(json["airdrop_requested"], true);
+    assert_eq!(json["airdrop"]["success"], true);
+    assert_eq!(json["airdrop"]["message"], "json airdrop ok");
+    assert!(json["airdrop"]["address"].is_string());
+}
+
+#[test]
+fn test_wallet_new_airdrop_json_failure_has_airdrop_error_block() {
+    let project = ProjectBuilder::new("wallet-new-airdrop-json-fail").build();
+
+    let (faucet_url, faucet_handle, _) = spawn_faucet_mock(vec![
+        FaucetMockResponse {
+            method: "GET",
+            path: "/faucet/challenge",
+            status: 200,
+            body: r#"{"challenge":"new-wallet-json-fail","difficulty":0}"#,
+        },
+        FaucetMockResponse {
+            method: "POST",
+            path: "/faucet/claim",
+            status: 400,
+            body: r#"{"error":"claim failed"}"#,
+        },
+    ]);
+
+    let output = project
+        .acton()
+        .wallet_new()
+        .arg("--name")
+        .arg("new-airdrop-json-fail-wallet")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .arg("--airdrop")
+        .arg("--json")
+        .env("ACTON_FAUCET_URL", &faucet_url)
+        .run()
+        .success();
+
+    faucet_handle
+        .join()
+        .expect("mock faucet thread must finish without panic");
+
+    let stdout = output.get_stdout();
+    let json: Value = serde_json::from_str(&stdout).expect("wallet new --json must return JSON");
+    assert_eq!(json["success"], true);
+    assert_eq!(json["airdrop_requested"], true);
+    assert_eq!(json["airdrop"]["success"], false);
+    assert!(
+        json["airdrop"]["error"]
+            .as_str()
+            .expect("airdrop.error must be a string")
+            .contains("Faucet returned error 400 Bad Request: claim failed")
+    );
+}
