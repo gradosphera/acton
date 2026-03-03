@@ -4,7 +4,7 @@ use crate::context::{
     AssertFailure, BuildCache, EmulationsState, KnownAddresses, TransactionGenericAssertFailure,
     WalletNotFoundFailure, to_cell,
 };
-use crate::retrace::{ExecutedAction, InstalledActions};
+use crate::retrace::{ExecutedAction, InstalledAction, InstalledActions, InvalidAction};
 use crate::{context, exit_codes, retrace};
 use acton_config::color::OwoColorize;
 use acton_config::test::BacktraceMode;
@@ -718,7 +718,9 @@ See https://i582.github.io/acton/docs/setup-wallets/ for more information
                             logs,
                             contract_letters,
                         );
-                        extra_infos.push(actions);
+                        if !actions.is_empty() {
+                            extra_infos.push(actions);
+                        }
                     }
                 }
             }
@@ -891,15 +893,20 @@ See https://i582.github.io/acton/docs/setup-wallets/ for more information
         logs: &str,
         contract_letters: &HashMap<IntAddr, String>,
     ) -> String {
-        let actions = retrace::ExecutedActions::from(logs).actions;
+        let executed = retrace::ExecutedActions::from(logs);
 
-        if actions.is_empty() {
-            return String::new();
+        if executed.actions.is_empty() {
+            return self.format_invalid_actions_retrace(
+                child_prefix,
+                tx,
+                &installed_actions,
+                &executed.invalid_actions,
+            );
         }
 
         let mut action_parts = Vec::new();
 
-        for action in &actions {
+        for action in &executed.actions {
             match action {
                 ExecutedAction::SendMessage {
                     hash,
@@ -978,7 +985,7 @@ See https://i582.github.io/acton/docs/setup-wallets/ for more information
         result.push_str("Executed actions:\n");
 
         for (idx, (message, balance, location)) in action_parts.iter().enumerate() {
-            if idx == actions.len() - 1 {
+            if idx == executed.actions.len() - 1 {
                 result.push_str(format!("{}    {} ", child_prefix, "└──".dimmed()).as_str());
             } else {
                 result.push_str(format!("{}    {} ", child_prefix, "├──".dimmed()).as_str());
@@ -1004,6 +1011,75 @@ See https://i582.github.io/acton/docs/setup-wallets/ for more information
         }
 
         result.trim_end().to_string()
+    }
+
+    fn format_invalid_actions_retrace(
+        &self,
+        child_prefix: &str,
+        tx: &Transaction,
+        installed_actions: &InstalledActions,
+        invalid_actions: &[InvalidAction],
+    ) -> String {
+        if invalid_actions.is_empty() {
+            return String::new();
+        }
+
+        let mut result = String::new();
+        result.push_str("Invalid actions:\n");
+
+        for (idx, action) in invalid_actions.iter().enumerate() {
+            if idx == invalid_actions.len() - 1 {
+                result.push_str(format!("{}    {} ", child_prefix, "└──".dimmed()).as_str());
+            } else {
+                result.push_str(format!("{}    {} ", child_prefix, "├──".dimmed()).as_str());
+            }
+
+            let reason = if action.during_preprocessing {
+                "during action list preprocessing"
+            } else {
+                "in action list"
+            };
+
+            result.push_str(
+                format!(
+                    "invalid action {}: error code {} ({reason})",
+                    action.action_index, action.error_code
+                )
+                .as_str(),
+            );
+
+            if let Some(loc) =
+                self.find_invalid_action_source_loc(tx, installed_actions, action.action_index)
+            {
+                result.push_str("  ");
+                result.push_str(
+                    format!("at {}", loc.format_normalized())
+                        .dimmed()
+                        .to_string()
+                        .as_str(),
+                );
+            }
+
+            result.push('\n');
+        }
+
+        result.trim_end().to_string()
+    }
+
+    fn find_invalid_action_source_loc(
+        &self,
+        tx: &Transaction,
+        installed_actions: &InstalledActions,
+        action_index: usize,
+    ) -> Option<SourceLocation> {
+        match installed_actions.find_by_index(action_index)? {
+            InstalledAction::Message(action) => {
+                self.find_source_loc(tx, &action.loc_hash, action.loc_offset)
+            }
+            InstalledAction::Reserve(action) => {
+                self.find_source_loc(tx, &action.loc_hash, action.loc_offset)
+            }
+        }
     }
 
     fn find_source_loc(
