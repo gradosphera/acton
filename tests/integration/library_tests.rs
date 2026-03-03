@@ -202,6 +202,40 @@ fn test_library_fetch_disasm_output() {
 }
 
 #[test]
+fn test_library_fetch_invalid_hash_format() {
+    thread::sleep(Duration::from_secs(1));
+    let project = ProjectBuilder::new("library-fetch-invalid-hash-format").build();
+
+    project
+        .acton()
+        .library()
+        .fetch("not-a-valid-hash")
+        .with_net("testnet")
+        .with_api_key(toncenter_api_key())
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_library_fetch_invalid_hash_format.stderr.txt",
+        );
+}
+
+#[test]
+fn test_library_fetch_invalid_network() {
+    let project = ProjectBuilder::new("library-fetch-invalid-network").build();
+
+    project
+        .acton()
+        .library()
+        .fetch(LIB_HASH)
+        .with_net("invalid")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_library_fetch_invalid_network.stderr.txt",
+        );
+}
+
+#[test]
 fn test_library_publish_invalid_network() {
     thread::sleep(Duration::from_secs(1));
     let project = ProjectBuilder::new("library-publish-invalid-net").build();
@@ -516,4 +550,268 @@ cells = 2
         .assert_contains("Library:     global-lib")
         .assert_contains("Contract:    GlobalLib")
         .assert_contains("Network:     mainnet");
+}
+
+#[test]
+fn test_library_publish_rejects_non_tolk_contract_source() {
+    let project = ProjectBuilder::new("library-publish-non-tolk-source").build();
+
+    let toml_content = r#"[package]
+name = "library-publish-non-tolk-source"
+description = ""
+version = "0.1.0"
+
+[contracts.simple]
+name = "Simple"
+src = "contracts/simple.fif"
+"#;
+    fs::write(project.path().join("Acton.toml"), toml_content).expect("Write Acton.toml");
+    fs::create_dir_all(project.path().join("contracts")).expect("Create contracts directory");
+    fs::write(project.path().join("contracts/simple.fif"), "TEST")
+        .expect("Write non-tolk source file");
+
+    project
+        .acton()
+        .library()
+        .publish()
+        .contract("simple")
+        .with_net("testnet")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_library_publish_rejects_non_tolk_contract_source.stderr.txt",
+        );
+}
+
+#[test]
+fn test_library_topup_no_libraries() {
+    let project = ProjectBuilder::new("library-topup-no-libraries").build();
+    let home_temp = tempfile::TempDir::new().unwrap();
+
+    project
+        .acton()
+        .env("HOME", home_temp.path().to_str().unwrap())
+        .library()
+        .arg("topup")
+        .arg("any")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_library_topup_no_libraries.stderr.txt",
+        );
+}
+
+#[test]
+fn test_library_topup_not_found() {
+    let project = ProjectBuilder::new("library-topup-not-found").build();
+    let home_temp = tempfile::TempDir::new().unwrap();
+
+    let toml_content = r#"[libraries.my-lib]
+name = "MyLib"
+hash = "..."
+code = "..."
+account = "..."
+duration = 100
+network = "testnet"
+timestamp = "2026-01-05T12:00:00Z"
+last_topup_timestamp = "2026-01-05T12:00:00Z"
+bits = 10
+cells = 1
+"#;
+    fs::write(project.path().join("libraries.toml"), toml_content).expect("Write libraries.toml");
+
+    project
+        .acton()
+        .env("HOME", home_temp.path().to_str().unwrap())
+        .library()
+        .arg("topup")
+        .arg("nonexistent")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_library_topup_not_found.stderr.txt",
+        );
+}
+
+#[test]
+fn test_library_topup_invalid_duration() {
+    let project = ProjectBuilder::new("library-topup-invalid-duration").build();
+    let home_temp = tempfile::TempDir::new().unwrap();
+
+    let libraries_toml = r#"[libraries.my-lib]
+name = "MyLib"
+hash = "..."
+code = "..."
+account = "EQD..."
+duration = 100
+network = "testnet"
+timestamp = "2026-01-05T12:00:00Z"
+last_topup_timestamp = "2026-01-05T12:00:00Z"
+bits = 10
+cells = 1
+"#;
+    fs::write(project.path().join("libraries.toml"), libraries_toml).expect("Write libraries.toml");
+
+    let wallets_toml = r#"[wallets.wallet]
+kind = "v5r1"
+workchain = 0
+keys = { mnemonic = "number bone assume survey solar debris liquid destroy minute end edge fine exhaust ginger mirror tongue proof guide blossom parrot mechanic style dad dynamic" }
+
+[wallets.wallet.expected]
+address-testnet = "kQBBSo2ccLuHuGiTn1z9Lei17LfBVOPewQmFR8pA2dAv2ixT"
+"#;
+    fs::write(project.path().join("wallets.toml"), wallets_toml).expect("Write wallets.toml");
+
+    project
+        .acton()
+        .env("HOME", home_temp.path().to_str().unwrap())
+        .library()
+        .arg("topup")
+        .arg("my-lib")
+        .wallet("wallet")
+        .with_duration("invalid-duration")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_library_topup_invalid_duration.stderr.txt",
+        );
+}
+
+#[test]
+fn test_library_topup_invalid_amount() {
+    let project = ProjectBuilder::new("library-topup-invalid-amount").build();
+    let home_temp = tempfile::TempDir::new().unwrap();
+
+    let libraries_toml = r#"[libraries.my-lib]
+name = "MyLib"
+hash = "..."
+code = "..."
+account = "EQD..."
+duration = 100
+network = "testnet"
+timestamp = "2026-01-05T12:00:00Z"
+last_topup_timestamp = "2026-01-05T12:00:00Z"
+bits = 10
+cells = 1
+"#;
+    fs::write(project.path().join("libraries.toml"), libraries_toml).expect("Write libraries.toml");
+
+    let wallets_toml = r#"[wallets.wallet]
+kind = "v5r1"
+workchain = 0
+keys = { mnemonic = "number bone assume survey solar debris liquid destroy minute end edge fine exhaust ginger mirror tongue proof guide blossom parrot mechanic style dad dynamic" }
+
+[wallets.wallet.expected]
+address-testnet = "kQBBSo2ccLuHuGiTn1z9Lei17LfBVOPewQmFR8pA2dAv2ixT"
+"#;
+    fs::write(project.path().join("wallets.toml"), wallets_toml).expect("Write wallets.toml");
+
+    project
+        .acton()
+        .env("HOME", home_temp.path().to_str().unwrap())
+        .library()
+        .arg("topup")
+        .arg("my-lib")
+        .wallet("wallet")
+        .arg("--amount")
+        .arg("1.2.3")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_library_topup_invalid_amount.stderr.txt",
+        );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_library_publish_interactive_cancel_confirmation() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("library-publish-interactive-cancel").build();
+
+    let wallets_toml = r#"[wallets.wallet]
+kind = "v5r1"
+workchain = 0
+keys = { mnemonic = "number bone assume survey solar debris liquid destroy minute end edge fine exhaust ginger mirror tongue proof guide blossom parrot mechanic style dad dynamic" }
+
+[wallets.wallet.expected]
+address-testnet = "kQBBSo2ccLuHuGiTn1z9Lei17LfBVOPewQmFR8pA2dAv2ixT"
+"#;
+    fs::write(project.path().join("wallets.toml"), wallets_toml).expect("Write wallets.toml");
+
+    let mut session = project
+        .acton()
+        .library()
+        .publish()
+        .with_code("te6cckEBAQEAAgAAAEysuc0=")
+        .with_duration("1d")
+        .wallet("wallet")
+        .with_net("testnet")
+        .arg("--amount")
+        .arg("1")
+        .arg("--local")
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Send 1 TON to publish library? Note that any extra TON will be refunded.");
+    session.send_line("No", "failed to send cancellation response");
+    session.expect(Eof);
+
+    assert!(
+        !project.path().join("libraries.toml").exists(),
+        "libraries.toml should not be created when publish is cancelled"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_library_topup_interactive_cancel_confirmation() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("library-topup-interactive-cancel").build();
+
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let libraries_toml = r#"[libraries.my-lib]
+name = "MyLib"
+hash = "..."
+code = "..."
+account = "EQD..."
+duration = 100
+network = "testnet"
+timestamp = "2026-01-05T12:00:00Z"
+last_topup_timestamp = "2026-01-05T12:00:00Z"
+bits = 10
+cells = 1
+"#;
+    fs::write(project.path().join("libraries.toml"), libraries_toml).expect("Write libraries.toml");
+
+    let wallets_toml = r#"[wallets.wallet]
+kind = "v5r1"
+workchain = 0
+keys = { mnemonic = "number bone assume survey solar debris liquid destroy minute end edge fine exhaust ginger mirror tongue proof guide blossom parrot mechanic style dad dynamic" }
+
+[wallets.wallet.expected]
+address-testnet = "kQBBSo2ccLuHuGiTn1z9Lei17LfBVOPewQmFR8pA2dAv2ixT"
+"#;
+    fs::write(project.path().join("wallets.toml"), wallets_toml).expect("Write wallets.toml");
+
+    let mut session = project
+        .acton()
+        .env("HOME", home_temp.path().to_str().unwrap())
+        .library()
+        .arg("topup")
+        .arg("my-lib")
+        .wallet("wallet")
+        .arg("--amount")
+        .arg("1")
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Send 1 TON to top-up library?");
+    session.send_line("No", "failed to send cancellation response");
+    session.expect(Eof);
+    session.assert_file_snapshot_matches(
+        "libraries.toml",
+        "integration/snapshots/test_library_topup_interactive_cancel.libraries.toml",
+    );
 }

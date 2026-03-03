@@ -928,3 +928,358 @@ fn compile_librarian_with_duration(duration: u64) -> anyhow::Result<ArcCell> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Duration as ChronoDuration;
+    use std::path::PathBuf;
+    use std::sync::{LazyLock, Mutex};
+    use tempfile::tempdir;
+
+    static CWD_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    struct CurrentDirGuard {
+        previous_dir: PathBuf,
+    }
+
+    impl CurrentDirGuard {
+        fn new(previous_dir: PathBuf) -> Self {
+            Self { previous_dir }
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.previous_dir)
+                .expect("must restore working directory after test");
+        }
+    }
+
+    #[test]
+    fn parse_ton_to_nanoton_accepts_integer_and_fractional_values() {
+        assert_eq!(
+            parse_ton_to_nanoton("1").expect("must parse integer TON"),
+            1_000_000_000
+        );
+        assert_eq!(
+            parse_ton_to_nanoton("1.5").expect("must parse fractional TON"),
+            1_500_000_000
+        );
+        assert_eq!(
+            parse_ton_to_nanoton("0.000000001").expect("must parse nanoton precision"),
+            1
+        );
+    }
+
+    #[test]
+    fn parse_ton_to_nanoton_truncates_extra_fraction_digits() {
+        assert_eq!(
+            parse_ton_to_nanoton("1.0000000009").expect("must parse and truncate"),
+            1_000_000_000
+        );
+    }
+
+    #[test]
+    fn parse_ton_to_nanoton_rejects_invalid_inputs() {
+        let dots_err = parse_ton_to_nanoton("1.2.3").expect_err("must fail on multiple dots");
+        assert!(
+            dots_err
+                .to_string()
+                .contains("Invalid TON format: multiple dots"),
+            "unexpected error: {dots_err}"
+        );
+
+        let frac_err = parse_ton_to_nanoton("1.a").expect_err("must fail on invalid fraction");
+        assert!(
+            frac_err
+                .to_string()
+                .contains("Invalid fractional part of TON amount"),
+            "unexpected error: {frac_err}"
+        );
+
+        let overflow_err = parse_ton_to_nanoton("340282366920938463463374607432")
+            .expect_err("must fail on multiplication overflow");
+        assert!(
+            overflow_err.to_string().contains("TON amount too large"),
+            "unexpected error: {overflow_err}"
+        );
+    }
+
+    #[test]
+    fn parse_duration_accepts_supported_units() {
+        assert_eq!(parse_duration("100s").expect("must parse seconds"), 100);
+        assert_eq!(parse_duration("2d").expect("must parse days"), 172_800);
+        assert_eq!(parse_duration("1y").expect("must parse years"), 31_536_000);
+        assert_eq!(
+            parse_duration("3600").expect("must parse raw seconds"),
+            3600
+        );
+    }
+
+    #[test]
+    fn parse_duration_rejects_invalid_inputs() {
+        let empty_err = parse_duration("").expect_err("must fail on empty duration");
+        assert!(
+            empty_err.to_string().contains("Duration cannot be empty"),
+            "unexpected error: {empty_err}"
+        );
+
+        let format_err = parse_duration("1h").expect_err("must fail on unsupported unit");
+        assert!(
+            format_err.to_string().contains("Invalid duration format"),
+            "unexpected error: {format_err}"
+        );
+
+        let number_err = parse_duration("abc").expect_err("must fail on non-numeric input");
+        assert!(
+            number_err.to_string().contains("Invalid duration format"),
+            "unexpected error: {number_err}"
+        );
+    }
+
+    #[test]
+    fn format_duration_formats_common_values() {
+        assert_eq!(format_duration(0), "0 second");
+        assert_eq!(format_duration(62), "1 minute 2 seconds");
+        assert_eq!(format_duration(3661), "1 hour 1 minute 1 second");
+        assert_eq!(format_duration(31_536_000 + 86_400), "1 year 1 day");
+    }
+
+    #[test]
+    fn elapsed_seconds_since_handles_invalid_future_and_past_values() {
+        assert_eq!(elapsed_seconds_since("not-a-timestamp"), None);
+
+        let future = (Local::now() + ChronoDuration::minutes(5)).to_rfc3339();
+        assert_eq!(elapsed_seconds_since(&future), Some(0));
+
+        let past = (Local::now() - ChronoDuration::minutes(2)).to_rfc3339();
+        let elapsed = elapsed_seconds_since(&past).expect("must parse and compute elapsed");
+        assert!(
+            elapsed >= 60,
+            "elapsed must be at least one minute for stable assertion: {elapsed}"
+        );
+    }
+
+    #[test]
+    fn format_relative_time_returns_original_for_invalid_timestamp() {
+        assert_eq!(format_relative_time("bad-ts"), "bad-ts");
+    }
+
+    #[test]
+    fn save_library_writes_required_fields_to_local_file() {
+        let _lock = CWD_LOCK.lock().expect("must lock cwd for this test");
+        let dir = tempdir().expect("must create temp dir");
+        let previous_dir = std::env::current_dir().expect("must get current directory");
+        std::env::set_current_dir(dir.path()).expect("must switch to temp directory");
+        let _dir_guard = CurrentDirGuard::new(previous_dir);
+
+        save_library(
+            "counter",
+            "deadbeef",
+            "te6ccgEBAQEA",
+            "EQD123",
+            3600,
+            "testnet".to_string(),
+            834,
+            5,
+            true,
+            false,
+        )
+        .expect("must save library metadata");
+
+        let content = fs::read_to_string(dir.path().join("libraries.toml"))
+            .expect("must read generated libraries.toml");
+        let doc: DocumentMut = content.parse().expect("must parse generated toml");
+        let libraries = doc["libraries"]
+            .as_table()
+            .expect("must contain [libraries] table");
+        let entry = libraries
+            .get("counter")
+            .and_then(Item::as_table)
+            .expect("must contain [libraries.counter] entry");
+
+        assert_eq!(entry.get("name").and_then(Item::as_str), Some("counter"));
+        assert_eq!(entry.get("hash").and_then(Item::as_str), Some("deadbeef"));
+        assert_eq!(
+            entry.get("code").and_then(Item::as_str),
+            Some("te6ccgEBAQEA")
+        );
+        assert_eq!(entry.get("account").and_then(Item::as_str), Some("EQD123"));
+        assert_eq!(entry.get("duration").and_then(Item::as_integer), Some(3600));
+        assert_eq!(entry.get("network").and_then(Item::as_str), Some("testnet"));
+        assert_eq!(entry.get("bits").and_then(Item::as_integer), Some(834));
+        assert_eq!(entry.get("cells").and_then(Item::as_integer), Some(5));
+
+        let timestamp = entry
+            .get("timestamp")
+            .and_then(Item::as_str)
+            .expect("must contain timestamp");
+        let last_topup = entry
+            .get("last_topup_timestamp")
+            .and_then(Item::as_str)
+            .expect("must contain last_topup_timestamp");
+
+        assert_eq!(
+            timestamp, last_topup,
+            "initial top-up timestamp must match creation timestamp"
+        );
+    }
+
+    #[test]
+    fn save_library_appends_suffix_for_duplicate_names() {
+        let _lock = CWD_LOCK.lock().expect("must lock cwd for this test");
+        let dir = tempdir().expect("must create temp dir");
+        let previous_dir = std::env::current_dir().expect("must get current directory");
+        std::env::set_current_dir(dir.path()).expect("must switch to temp directory");
+        let _dir_guard = CurrentDirGuard::new(previous_dir);
+
+        save_library(
+            "counter",
+            "hash-1",
+            "te6ccgEBAQEA",
+            "EQD1",
+            3600,
+            "testnet".to_string(),
+            100,
+            1,
+            true,
+            false,
+        )
+        .expect("must save first library entry");
+
+        save_library(
+            "counter",
+            "hash-2",
+            "te6ccgEBBgEA",
+            "EQD2",
+            7200,
+            "testnet".to_string(),
+            200,
+            2,
+            true,
+            false,
+        )
+        .expect("must save second library entry with suffix");
+
+        let content = fs::read_to_string(dir.path().join("libraries.toml"))
+            .expect("must read generated libraries.toml");
+        let doc: DocumentMut = content.parse().expect("must parse generated toml");
+        let libraries = doc["libraries"]
+            .as_table()
+            .expect("must contain [libraries] table");
+
+        assert!(libraries.contains_key("counter"), "must keep original key");
+        assert!(
+            libraries.contains_key("counter-1"),
+            "must create suffixed key for duplicate name"
+        );
+    }
+
+    #[test]
+    fn update_library_last_topup_timestamp_in_file_updates_existing_entry() {
+        let dir = tempdir().expect("must create temp dir");
+        let path = dir.path().join("libraries.toml");
+        fs::write(
+            &path,
+            r#"[libraries.my-lib]
+name = "MyLib"
+last_topup_timestamp = "2026-01-01T00:00:00Z"
+"#,
+        )
+        .expect("must write initial toml");
+
+        let updated =
+            update_library_last_topup_timestamp_in_file(&path, "my-lib", "2026-02-01T00:00:00Z")
+                .expect("must update timestamp");
+
+        assert!(updated, "must report successful update");
+        let content = fs::read_to_string(&path).expect("must read updated toml");
+        assert!(
+            content.contains(r#"last_topup_timestamp = "2026-02-01T00:00:00Z""#),
+            "updated content: {content}"
+        );
+    }
+
+    #[test]
+    fn update_library_last_topup_timestamp_in_file_returns_false_for_missing_paths_or_shape() {
+        let dir = tempdir().expect("must create temp dir");
+
+        let missing = update_library_last_topup_timestamp_in_file(
+            &dir.path().join("missing.toml"),
+            "my-lib",
+            "2026-02-01T00:00:00Z",
+        )
+        .expect("must handle missing file");
+        assert!(!missing, "missing file should return false");
+
+        let no_libraries = dir.path().join("no-libraries.toml");
+        fs::write(
+            &no_libraries,
+            r#"[package]
+name = "demo"
+"#,
+        )
+        .expect("must write toml without libraries");
+        let no_libs_result = update_library_last_topup_timestamp_in_file(
+            &no_libraries,
+            "my-lib",
+            "2026-02-01T00:00:00Z",
+        )
+        .expect("must handle missing libraries table");
+        assert!(
+            !no_libs_result,
+            "missing libraries table should return false"
+        );
+
+        let wrong_shape = dir.path().join("wrong-shape.toml");
+        fs::write(
+            &wrong_shape,
+            r#"[libraries]
+my-lib = "not-a-table"
+"#,
+        )
+        .expect("must write wrong-shape toml");
+        let wrong_shape_result = update_library_last_topup_timestamp_in_file(
+            &wrong_shape,
+            "my-lib",
+            "2026-02-01T00:00:00Z",
+        )
+        .expect("must handle wrong item shape");
+        assert!(!wrong_shape_result, "non-table entry should return false");
+
+        let missing_entry = dir.path().join("missing-entry.toml");
+        fs::write(
+            &missing_entry,
+            r#"[libraries.other]
+name = "Other"
+"#,
+        )
+        .expect("must write toml with different entry");
+        let missing_entry_result = update_library_last_topup_timestamp_in_file(
+            &missing_entry,
+            "my-lib",
+            "2026-02-01T00:00:00Z",
+        )
+        .expect("must handle missing library entry");
+        assert!(
+            !missing_entry_result,
+            "missing target entry should return false"
+        );
+    }
+
+    #[test]
+    fn update_library_last_topup_timestamp_in_file_fails_on_invalid_toml() {
+        let dir = tempdir().expect("must create temp dir");
+        let path = dir.path().join("invalid.toml");
+        fs::write(&path, "not = [valid").expect("must write invalid toml");
+
+        let err =
+            update_library_last_topup_timestamp_in_file(&path, "my-lib", "2026-02-01T00:00:00Z")
+                .expect_err("must fail on invalid toml");
+        assert!(
+            err.to_string().contains("Failed to parse"),
+            "unexpected error: {err}"
+        );
+    }
+}
