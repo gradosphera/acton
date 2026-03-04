@@ -1,5 +1,7 @@
-/// Module defining `BigArray<T>`.
-///
+/// Module defining `BigArray<T>`
+
+import "@stdlib/tvm-lowlevel"
+
 /// `BigArray<T>` is a chunked array implementation for cases when regular `array<T>`
 /// capacity (`0..255`) is not enough.
 ///
@@ -16,7 +18,7 @@
 /// val last = list.last();   // 20
 /// ```
 struct BigArray<T> {
-    private arr: [array<array<T>>, int] = [array<array<T>> [], 0]
+    private arr: [array<array<T>>, int]
 }
 
 /// Creates an empty [BigArray].
@@ -73,7 +75,7 @@ fun BigArray<T>.push(mutate self, value: T) {
     var [topLevel, itemsCount] = self.arr;
 
     if (itemsCount >= 65025) {
-        throw 5;
+        throw VmExitCode.IntegerOutOfRange;
     }
 
     val binIdx = itemsCount / 255;
