@@ -1394,9 +1394,11 @@ fn main() {
     } = Cli::parse();
     init_color_mode(color);
 
-    if let Err(err) = configure_manifest_path(manifest_path) {
-        eprintln!("{} {}", "Error:".red(), err);
-        process::exit(1);
+    if !matches!(command, Commands::Init { .. } | Commands::New { .. }) {
+        if let Err(err) = configure_manifest_path(manifest_path) {
+            eprintln!("{} {}", "Error:".red(), err);
+            process::exit(1);
+        }
     }
 
     if !matches!(command, Commands::Ls { .. }) {
