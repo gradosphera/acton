@@ -961,6 +961,117 @@ fn litenode_supports_config_endpoints() {
 }
 
 #[test]
+fn litenode_supports_v3_address_information_endpoint() {
+    let project = ProjectBuilder::new("litenode-v3-address-information")
+        .contract("getter", V3_GETTER_CONTRACT)
+        .script_file("deploy_getter", V3_DEPLOY_GETTER_SCRIPT)
+        .build();
+
+    fs::write(project.path().join("wallets.toml"), DEPLOYER_WALLET_CONFIG)
+        .expect("Failed to write wallets.toml");
+
+    let node = project
+        .litenode()
+        .before_start(|cmd| cmd.build())
+        .args(["--accounts", "deployer"])
+        .start();
+    append_localnet_network(project.path(), &node.base_url());
+
+    let script_result = project
+        .acton()
+        .script("scripts/deploy_getter.tolk")
+        .broadcast()
+        .verify_network("custom:localnet")
+        .run();
+    let script_stdout = String::from_utf8(script_result.output.get_output().stdout.clone())
+        .expect("Failed to decode deploy script stdout");
+    let script_stderr = String::from_utf8(script_result.output.get_output().stderr.clone())
+        .expect("Failed to decode deploy script stderr");
+    let script_status = script_result.output.get_output().status.code().unwrap_or(1);
+
+    assert_eq!(
+        script_status, 0,
+        "Deploy script failed with status {script_status}\nstdout:\n{script_stdout}\nstderr:\n{script_stderr}"
+    );
+
+    let getter_address = extract_marker_value(&script_stdout, "GETTER_CONTRACT=");
+    wait_until_address_state_active(&node, &getter_address, Duration::from_secs(12));
+
+    let v2_query = format!("/api/v2/getAddressInformation?address={getter_address}");
+    let v2_response = wait_for_ok_response(&node, &v2_query, Duration::from_secs(12));
+
+    let v3_query = format!("/api/v3/addressInformation?address={getter_address}");
+    let v3_response = wait_for_ok_response(&node, &v3_query, Duration::from_secs(12));
+
+    assert_eq!(
+        v3_response["result"]["balance"].as_str(),
+        v2_response["result"]["balance"].as_str()
+    );
+    assert_eq!(
+        v3_response["result"]["code"].as_str(),
+        v2_response["result"]["code"].as_str()
+    );
+    assert_eq!(
+        v3_response["result"]["data"].as_str(),
+        v2_response["result"]["data"].as_str()
+    );
+    assert_eq!(
+        v3_response["result"]["frozen_hash"].as_str(),
+        v2_response["result"]["frozen_hash"].as_str()
+    );
+    assert_eq!(
+        v3_response["result"]["last_transaction_hash"].as_str(),
+        v2_response["result"]["last_transaction_id"]["hash"].as_str()
+    );
+    assert_eq!(
+        v3_response["result"]["last_transaction_lt"].as_str(),
+        v2_response["result"]["last_transaction_id"]["lt"].as_str()
+    );
+    assert_eq!(
+        v3_response["result"]["status"].as_str(),
+        v2_response["result"]["state"].as_str()
+    );
+    assert_eq!(v3_response["result"]["status"].as_str(), Some("active"));
+
+    let missing_address = "0:1111111111111111111111111111111111111111111111111111111111111111";
+
+    let v2_missing = wait_for_ok_response(
+        &node,
+        &format!("/api/v2/getAddressInformation?address={missing_address}"),
+        Duration::from_secs(12),
+    );
+    let v3_missing_default = wait_for_ok_response(
+        &node,
+        &format!("/api/v3/addressInformation?address={missing_address}"),
+        Duration::from_secs(12),
+    );
+    let v3_missing_use_v2_false = wait_for_ok_response(
+        &node,
+        &format!("/api/v3/addressInformation?address={missing_address}&use_v2=false"),
+        Duration::from_secs(12),
+    );
+
+    assert_eq!(
+        v2_missing["result"]["state"].as_str(),
+        Some("uninitialized")
+    );
+    assert_eq!(
+        v3_missing_default["result"]["status"].as_str(),
+        Some("uninitialized")
+    );
+    assert_eq!(
+        v3_missing_use_v2_false["result"]["status"].as_str(),
+        Some("uninitialized")
+    );
+    assert_eq!(
+        v3_missing_default["result"]["status"].as_str(),
+        v3_missing_use_v2_false["result"]["status"].as_str()
+    );
+
+    node.stop();
+}
+
+#[test]
 fn litenode_supports_v3_run_get_method() {
     let project = ProjectBuilder::new("litenode-v3-run-get-method")
         .contract("getter", V3_GETTER_CONTRACT)

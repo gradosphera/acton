@@ -2,7 +2,8 @@ use super::utils::{get_extra, handle_result, parse_method_name};
 use crate::api::toncenter_v3;
 use crate::litenode::LiteNode;
 use crate::server::models::{
-    GetJettonMastersRequest, GetJettonWalletsRequest, GetTracesQuery, RunGetMethodRequest,
+    GetAddressInformationV3Request, GetJettonMastersRequest, GetJettonWalletsRequest,
+    GetTracesQuery, RunGetMethodRequest,
 };
 use axum::{
     Json,
@@ -18,6 +19,19 @@ pub async fn get_traces(
     Query(payload): Query<GetTracesQuery>,
 ) -> Json<Value> {
     handle_result(node.get_traces(payload.hash), v3::map_traces).await
+}
+
+pub async fn get_address_information_v3(
+    State(node): State<Arc<LiteNode>>,
+    Query(payload): Query<GetAddressInformationV3Request>,
+) -> Json<Value> {
+    let _use_v2 = payload.use_v2.unwrap_or(true);
+
+    handle_result(
+        node.get_address_information(payload.address, None),
+        toncenter_v3::map_address_information,
+    )
+    .await
 }
 
 pub async fn get_jetton_masters(

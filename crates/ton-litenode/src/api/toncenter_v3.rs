@@ -1,5 +1,7 @@
-use crate::litenode::LiteNodeRunGetMethodResult;
-use crate::storage::{JettonMasterMeta, JettonWalletMeta, MsgMeta, TraceNode, TransactionInfo};
+use crate::litenode::{LiteNodeAccountState, LiteNodeRunGetMethodResult};
+use crate::storage::{
+    AccountStatus, JettonMasterMeta, JettonWalletMeta, MsgMeta, TraceNode, TransactionInfo,
+};
 use base64::Engine;
 use serde_json::value::Value;
 use std::collections::HashMap;
@@ -36,6 +38,18 @@ pub fn map_jetton_wallets(wallets: &Vec<JettonWalletMeta>) -> Value {
         "address_book": {},
         "metadata": {},
         "jetton_wallets": wallets.iter().map(map_jetton_wallet).collect::<Vec<_>>()
+    })
+}
+
+pub fn map_address_information(state: &LiteNodeAccountState) -> Value {
+    serde_json::json!({
+        "balance": state.balance.to_string(),
+        "code": encode_optional_boc(state.code.as_ref()),
+        "data": encode_optional_boc(state.data.as_ref()),
+        "frozen_hash": state.frozen_hash.as_ref().map(|h| h.to_hex()).unwrap_or_default(),
+        "last_transaction_hash": state.last_transaction_id.hash.to_hex(),
+        "last_transaction_lt": state.last_transaction_id.lt.to_string(),
+        "status": map_account_status(&state.state),
     })
 }
 
@@ -258,5 +272,19 @@ fn map_stack_entry(entry: Value) -> Value {
             })
         }
         _ => entry,
+    }
+}
+
+fn encode_optional_boc(data: Option<&crate::types::BocBytes>) -> String {
+    data.map(|c| base64::engine::general_purpose::STANDARD.encode(c))
+        .unwrap_or_default()
+}
+
+const fn map_account_status(status: &AccountStatus) -> &'static str {
+    match status {
+        AccountStatus::Active => "active",
+        AccountStatus::Uninit => "uninitialized",
+        AccountStatus::Frozen => "frozen",
+        AccountStatus::Nonexist => "uninitialized",
     }
 }

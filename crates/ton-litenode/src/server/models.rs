@@ -30,6 +30,12 @@ pub struct GetAddressInformationRequest {
 }
 
 #[derive(Deserialize)]
+pub struct GetAddressInformationV3Request {
+    pub address: String,
+    pub use_v2: Option<bool>,
+}
+
+#[derive(Deserialize)]
 pub struct AddressRequest {
     pub address: String,
 }
