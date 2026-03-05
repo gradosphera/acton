@@ -252,6 +252,12 @@ pub(crate) enum Request {
         tx_hash: Hash256,
         resp: oneshot::Sender<anyhow::Result<storage::TraceNode>>,
     },
+    EmulateTrace {
+        boc: BocBytes,
+        ignore_chksig: bool,
+        mc_block_seqno: Option<u32>,
+        resp: oneshot::Sender<anyhow::Result<storage::EmulateTraceResult>>,
+    },
     GetJettonMasters {
         address: Option<Addr>,
         admin_address: Option<Addr>,
@@ -593,6 +599,28 @@ impl LiteNode {
         rx.await?
     }
 
+    pub async fn emulate_trace(
+        &self,
+        boc_str: String,
+        ignore_chksig: Option<bool>,
+        mc_block_seqno: Option<u32>,
+    ) -> anyhow::Result<storage::EmulateTraceResult> {
+        let boc = base64::engine::general_purpose::STANDARD
+            .decode(&boc_str)
+            .context("Invalid BOC base64")?
+            .into();
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::EmulateTrace {
+                boc,
+                ignore_chksig: ignore_chksig.unwrap_or(false),
+                mc_block_seqno,
+                resp,
+            })
+            .await?;
+        rx.await?
+    }
+
     pub async fn get_jetton_masters(
         &self,
         address: Option<String>,
@@ -856,6 +884,15 @@ fn process_loop_request(node: &mut Node, req: Request) {
         }
         Request::GetTraces { tx_hash, resp } => {
             let res = node.get_traces(&tx_hash);
+            let _ = resp.send(res);
+        }
+        Request::EmulateTrace {
+            boc,
+            ignore_chksig,
+            mc_block_seqno,
+            resp,
+        } => {
+            let res = node.emulate_trace_by_external_message(boc, ignore_chksig, mc_block_seqno);
             let _ = resp.send(res);
         }
         Request::GetJettonMasters {

@@ -1016,6 +1016,161 @@ fn litenode_supports_v3_message_endpoint() {
 }
 
 #[test]
+fn litenode_supports_emulate_v1_emulate_trace() {
+    let project = ProjectBuilder::new("litenode-emulate-v1-emulate-trace").build();
+    let node = project.litenode().start();
+
+    let before = wait_for_ok_response(&node, "/api/v2/getMasterchainInfo", Duration::from_secs(5));
+    let seqno_before = before["result"]["last"]["seqno"]
+        .as_i64()
+        .expect("masterchain seqno must be integer before emulate");
+
+    let response = node.post_json(
+        "/api/emulate/v1/emulateTrace",
+        &json!({
+            "boc": V3_MESSAGE_TEST_BOC,
+            "ignore_chksig": false,
+            "include_code_data": true,
+            "with_actions": true
+        }),
+    );
+
+    assert!(
+        response["trace"].is_object(),
+        "Expected object at emulateTrace.trace:\n{}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+    assert!(
+        response["transactions"].is_object(),
+        "Expected object at emulateTrace.transactions:\n{}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+    assert!(
+        response["actions"].is_array(),
+        "Expected array at emulateTrace.actions when with_actions=true:\n{}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+    assert!(
+        response["code_cells"].is_object() && response["data_cells"].is_object(),
+        "Expected code_cells/data_cells when include_code_data=true:\n{}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+    let code_cells_non_empty = response["code_cells"]
+        .as_object()
+        .is_some_and(|cells| !cells.is_empty());
+    let data_cells_non_empty = response["data_cells"]
+        .as_object()
+        .is_some_and(|cells| !cells.is_empty());
+    assert!(
+        code_cells_non_empty || data_cells_non_empty,
+        "Expected non-empty code_cells or data_cells when include_code_data=true:\n{}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+    assert!(
+        response.get("address_book").is_none() && response.get("metadata").is_none(),
+        "address_book/metadata must be absent by default:\n{}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+    assert_eq!(
+        response["mc_block_seqno"].as_i64(),
+        Some(seqno_before),
+        "Unexpected mc_block_seqno in emulateTrace response:\n{}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+
+    let response_with_seqno = node.post_json(
+        "/api/emulate/v1/emulateTrace",
+        &json!({
+            "boc": V3_MESSAGE_TEST_BOC,
+            "ignore_chksig": false,
+            "mc_block_seqno": seqno_before
+        }),
+    );
+    assert!(
+        response_with_seqno["trace"].is_object(),
+        "emulateTrace with mc_block_seqno failed: {}",
+        serde_json::to_string_pretty(&response_with_seqno).unwrap_or_default()
+    );
+    assert_eq!(
+        response_with_seqno.get("actions"),
+        None,
+        "actions must be omitted when with_actions=false:\n{}",
+        serde_json::to_string_pretty(&response_with_seqno).unwrap_or_default()
+    );
+    assert_eq!(
+        response_with_seqno["mc_block_seqno"].as_i64(),
+        Some(seqno_before),
+        "Unexpected mc_block_seqno for explicit emulate request:\n{}",
+        serde_json::to_string_pretty(&response_with_seqno).unwrap_or_default()
+    );
+
+    let after = wait_for_ok_response(&node, "/api/v2/getMasterchainInfo", Duration::from_secs(5));
+    let seqno_after = after["result"]["last"]["seqno"]
+        .as_i64()
+        .expect("masterchain seqno must be integer after emulate");
+    assert_eq!(
+        seqno_after, seqno_before,
+        "emulateTrace must not commit state. before={seqno_before}, after={seqno_after}"
+    );
+
+    let (invalid_status, invalid) = node.post_json_with_status(
+        "/api/emulate/v1/emulateTrace",
+        &json!({
+            "boc": "not-base64"
+        }),
+    );
+    assert_eq!(
+        invalid_status, 400,
+        "Invalid emulateTrace request must return 400"
+    );
+    assert!(
+        invalid["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("invalid request: invalid boc"),
+        "Unexpected error for invalid emulateTrace payload:\n{}",
+        serde_json::to_string_pretty(&invalid).unwrap_or_default()
+    );
+
+    let (missing_boc_status, missing_boc) =
+        node.post_json_with_status("/api/emulate/v1/emulateTrace", &json!({}));
+    assert_eq!(
+        missing_boc_status, 400,
+        "Missing boc emulateTrace request must return 400"
+    );
+    assert!(
+        missing_boc["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("invalid request: boc is required"),
+        "Unexpected error for missing boc emulateTrace payload:\n{}",
+        serde_json::to_string_pretty(&missing_boc).unwrap_or_default()
+    );
+
+    let (unsupported_status, unsupported) = node.post_json_with_status(
+        "/api/emulate/v1/emulateTrace",
+        &json!({
+            "boc": V3_MESSAGE_TEST_BOC,
+            "include_address_book": true
+        }),
+    );
+    assert_eq!(
+        unsupported_status, 400,
+        "include_address_book/include_metadata must return 400 when unavailable"
+    );
+    assert!(
+        unsupported["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("address book and metadata are not available"),
+        "Unexpected error for include_address_book/include_metadata:\n{}",
+        serde_json::to_string_pretty(&unsupported).unwrap_or_default()
+    );
+
+    node.stop();
+}
+
+#[test]
 fn litenode_supports_v3_address_information_endpoint() {
     let project = ProjectBuilder::new("litenode-v3-address-information")
         .contract("getter", V3_GETTER_CONTRACT)

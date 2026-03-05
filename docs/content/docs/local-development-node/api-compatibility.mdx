@@ -53,6 +53,12 @@ Acton local development node currently supports 6 TonCenter v3 endpoints:
 
 No other v3 endpoints are exposed by the local development node at the moment.
 
+## Emulate API Coverage Matrix
+
+| Method | Endpoint                       | Available in local node | Purpose                                                                      |
+|--------|--------------------------------|-------------------------|------------------------------------------------------------------------------|
+| `POST` | `/api/emulate/v1/emulateTrace` | ✅                       | Emulates external message execution trace against current state (no commit). |
+
 ## Admin API
 
 | Method | Endpoint              | Request                                               | What it does                                                                    |

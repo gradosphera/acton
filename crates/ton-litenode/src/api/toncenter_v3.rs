@@ -2,7 +2,8 @@ use crate::litenode::{
     LiteNodeAccountState, LiteNodeBlockTransactions, LiteNodeRunGetMethodResult,
 };
 use crate::storage::{
-    AccountStatus, JettonMasterMeta, JettonWalletMeta, MsgMeta, TraceNode, TransactionInfo,
+    AccountStatus, EmulateTraceResult, JettonMasterMeta, JettonWalletMeta, MsgMeta, TraceNode,
+    TransactionInfo,
 };
 use base64::Engine;
 use serde_json::value::Value;
@@ -91,6 +92,100 @@ pub fn map_traces(tn: &TraceNode) -> Value {
             map_trace(tn, &transactions, &transactions_order)
         ]
     })
+}
+
+pub fn map_emulate_trace_response(
+    emulation: &EmulateTraceResult,
+    with_actions: bool,
+    include_code_data: bool,
+    include_address_book: bool,
+    include_metadata: bool,
+) -> Value {
+    let tn = &emulation.trace;
+    let mapped = map_traces(tn);
+    let trace_entry = mapped
+        .get("traces")
+        .and_then(Value::as_array)
+        .and_then(|items| items.first())
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+
+    let mut response = serde_json::Map::new();
+    response.insert(
+        "mc_block_seqno".to_string(),
+        serde_json::json!(tn.transaction.meta.block_seqno),
+    );
+    response.insert(
+        "trace".to_string(),
+        trace_entry
+            .get("trace")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({})),
+    );
+    response.insert(
+        "transactions".to_string(),
+        trace_entry
+            .get("transactions")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({})),
+    );
+
+    if with_actions {
+        response.insert(
+            "actions".to_string(),
+            trace_entry
+                .get("actions")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([])),
+        );
+    }
+
+    if include_code_data {
+        response.insert(
+            "code_cells".to_string(),
+            map_cells_by_hash_base64(&emulation.code_cells),
+        );
+        response.insert(
+            "data_cells".to_string(),
+            map_cells_by_hash_base64(&emulation.data_cells),
+        );
+    }
+
+    if include_address_book {
+        response.insert("address_book".to_string(), serde_json::json!({}));
+    }
+
+    if include_metadata {
+        response.insert("metadata".to_string(), serde_json::json!({}));
+    }
+
+    response.insert("rand_seed".to_string(), serde_json::json!(""));
+    response.insert(
+        "is_incomplete".to_string(),
+        trace_entry
+            .get("is_incomplete")
+            .cloned()
+            .unwrap_or(Value::Bool(false)),
+    );
+
+    Value::Object(response)
+}
+
+fn map_cells_by_hash_base64(
+    cells: &HashMap<crate::types::Hash256, crate::types::BocBytes>,
+) -> Value {
+    let mut entries = cells
+        .iter()
+        .map(|(hash, boc)| (hash.to_base64(), boc.to_base64()))
+        .collect::<Vec<_>>();
+    entries.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+    let mut mapped = serde_json::Map::new();
+    for (hash, boc) in entries {
+        mapped.insert(hash, Value::String(boc));
+    }
+
+    Value::Object(mapped)
 }
 
 pub fn map_run_get_method_v3(result: &LiteNodeRunGetMethodResult) -> Value {

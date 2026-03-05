@@ -62,9 +62,12 @@ pub fn create_router(node: Arc<LiteNode>) -> Router {
         .route("/v3/jetton/masters", get(get_jetton_masters))
         .route("/v3/jetton/wallets", get(get_jetton_wallets));
 
+    let emulate_router = Router::new().route("/emulate/v1/emulateTrace", post(emulate_trace_v1));
+
     Router::new()
         .nest("/api", api_v2_router)
         .nest("/api", api_v3_router)
+        .nest("/api", emulate_router)
         .route("/admin/faucet", post(faucet))
         .route(
             "/admin/address-name",

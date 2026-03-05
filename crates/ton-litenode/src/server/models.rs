@@ -115,6 +115,17 @@ pub struct GetTracesQuery {
 }
 
 #[derive(Deserialize)]
+pub struct EmulateTraceRequest {
+    pub boc: Option<String>,
+    pub ignore_chksig: Option<bool>,
+    pub include_code_data: Option<bool>,
+    pub include_address_book: Option<bool>,
+    pub include_metadata: Option<bool>,
+    pub with_actions: Option<bool>,
+    pub mc_block_seqno: Option<u32>,
+}
+
+#[derive(Deserialize)]
 pub struct SetAddressNameRequest {
     pub address: String,
     pub name: String,
