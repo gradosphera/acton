@@ -1,5 +1,6 @@
 use crate::litenode::{
-    LiteNodeAccountState, LiteNodeBlockTransactions, LiteNodeRunGetMethodResult,
+    LiteNodeAccountState, LiteNodeBlockTransactions, LiteNodeMessage, LiteNodeRunGetMethodResult,
+    LiteNodeTransaction,
 };
 use crate::storage::{
     AccountStatus, EmulateTraceResult, JettonMasterMeta, JettonWalletMeta, MsgMeta, TraceNode,
@@ -66,6 +67,131 @@ pub fn map_send_message(bt: &LiteNodeBlockTransactions) -> Value {
         "message_hash": message_hash,
         "message_hash_norm": message_hash,
     })
+}
+
+pub fn map_transactions_response(transactions: &[LiteNodeTransaction]) -> Value {
+    serde_json::json!({
+        "address_book": {},
+        "transactions": transactions.iter().map(map_v3_transaction).collect::<Vec<_>>()
+    })
+}
+
+fn map_v3_transaction(tx: &LiteNodeTransaction) -> Value {
+    let in_msg = if tx.in_msg.hash.0 == [0; 32] {
+        Value::Null
+    } else {
+        map_v3_message(&tx.in_msg, &tx.hash, tx.utime, true)
+    };
+    let out_msgs = tx
+        .out_msgs
+        .iter()
+        .filter(|msg| msg.hash.0 != [0; 32])
+        .map(|msg| map_v3_message(msg, &tx.hash, tx.utime, false))
+        .collect::<Vec<_>>();
+
+    serde_json::json!({
+        "account": tx.address.to_string(),
+        "hash": tx.hash.to_hex(),
+        "lt": tx.transaction_id.lt.to_string(),
+        "now": tx.utime,
+        "orig_status": "active",
+        "end_status": "active",
+        "total_fees": tx.total_fees.to_string(),
+        "total_fees_extra_currencies": {},
+        "prev_trans_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "prev_trans_lt": "0",
+        "description": {
+            "type": "ord",
+            "aborted": !tx.success,
+            "compute_ph": {
+                "skipped": false,
+                "success": tx.success,
+                "exit_code": tx.exit_code,
+            },
+            "action": {
+                "success": tx.success,
+                "result_code": if tx.success { 0 } else { tx.exit_code },
+            }
+        },
+        "in_msg": in_msg,
+        "out_msgs": out_msgs,
+        "block_ref": {
+            "workchain": 0,
+            "shard": "-9223372036854775808",
+            "seqno": tx.mc_block_seqno,
+        },
+        "mc_block_seqno": tx.mc_block_seqno,
+        "emulated": false,
+        "trace_id": tx.hash.to_hex(),
+        "trace_external_hash": tx.hash.to_hex(),
+    })
+}
+
+fn map_v3_message(
+    msg: &LiteNodeMessage,
+    tx_hash: &crate::types::Hash256,
+    tx_utime: u32,
+    is_in_msg: bool,
+) -> Value {
+    let mut mapped = serde_json::json!({
+        "hash": msg.hash.to_hex(),
+        "hash_norm": msg.hash.to_hex(),
+        "source": msg.source.as_ref().map(|a| a.to_string()),
+        "destination": msg.destination.as_ref().map(|a| a.to_string()),
+        "value": msg.value.to_string(),
+        "value_extra_currencies": {},
+        "fwd_fee": msg.fwd_fee.to_string(),
+        "ihr_fee": msg.ihr_fee.to_string(),
+        "import_fee": "0",
+        "created_lt": msg.created_lt.to_string(),
+        "created_at": tx_utime.to_string(),
+        "bounce": false,
+        "bounced": false,
+        "ihr_disabled": true,
+        "message_content": {
+            "hash": msg.body_hash.to_hex(),
+            "body": base64::engine::general_purpose::STANDARD.encode(&msg.body),
+        },
+    });
+
+    if let Some(opcode) = msg.opcode
+        && let Some(root) = mapped.as_object_mut()
+    {
+        root.insert("opcode".to_string(), Value::from(i64::from(opcode)));
+    }
+
+    if !msg.init_state.is_empty()
+        && let Some(root) = mapped.as_object_mut()
+    {
+        root.insert(
+            "init_state".to_string(),
+            serde_json::json!({
+                "hash": hash_boc_hex(&msg.init_state).unwrap_or_default(),
+                "body": base64::engine::general_purpose::STANDARD.encode(&msg.init_state),
+            }),
+        );
+    }
+
+    if let Some(root) = mapped.as_object_mut() {
+        if is_in_msg {
+            root.insert(
+                "in_msg_tx_hash".to_string(),
+                Value::String(tx_hash.to_hex()),
+            );
+        } else {
+            root.insert(
+                "out_msg_tx_hash".to_string(),
+                Value::String(tx_hash.to_hex()),
+            );
+        }
+    }
+
+    mapped
+}
+
+fn hash_boc_hex(boc: &crate::types::BocBytes) -> Option<String> {
+    let cell = Boc::decode(boc).ok()?;
+    Some(crate::types::Hash256(*cell.repr_hash().as_array()).to_hex())
 }
 
 fn map_jetton_wallet(w: &JettonWalletMeta) -> Value {

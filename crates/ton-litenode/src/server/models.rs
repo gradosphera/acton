@@ -115,6 +115,41 @@ pub struct GetTracesQuery {
 }
 
 #[derive(Deserialize)]
+pub struct GetTransactionsV3Query {
+    pub workchain: Option<i32>,
+    pub shard: Option<String>,
+    pub seqno: Option<u32>,
+    pub mc_seqno: Option<u32>,
+    pub account: Option<String>,
+    pub exclude_account: Option<String>,
+    pub hash: Option<String>,
+    pub lt: Option<u64>,
+    pub start_utime: Option<u32>,
+    pub end_utime: Option<u32>,
+    pub start_lt: Option<u64>,
+    pub end_lt: Option<u64>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+    pub sort: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct GetTransactionsByMessageV3Query {
+    pub msg_hash: Option<String>,
+    pub body_hash: Option<String>,
+    pub opcode: Option<String>,
+    pub direction: Option<String>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
+#[derive(Deserialize)]
+pub struct GetPendingTransactionsV3Query {
+    pub account: Option<String>,
+    pub trace_id: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub struct EmulateTraceRequest {
     pub boc: Option<String>,
     pub ignore_chksig: Option<bool>,
