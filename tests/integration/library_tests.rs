@@ -2560,6 +2560,7 @@ fn write_deployer_wallets(project_path: &Path) {
     .expect("failed to write wallets.toml");
 }
 
+#[cfg(unix)]
 fn write_two_wallets(project_path: &Path) {
     fs::write(
         project_path.join("wallets.toml"),
