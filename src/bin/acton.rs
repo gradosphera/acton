@@ -1332,7 +1332,7 @@ fn example_completions_usage() -> StyledStr {
     )
 }
 
-fn root_help() -> StyledStr {
+fn root_help(show_global_options: bool) -> StyledStr {
     use std::collections::HashMap;
     use std::fmt::Write as _;
 
@@ -1502,23 +1502,25 @@ fn root_help() -> StyledStr {
         }
     }
 
-    let _ = write!(writer, "\n\n{header}Global options:{header:#}");
-    for (name, hint, description) in &global_options {
-        let _ = write!(
-            writer,
-            "\n  {cyan}{name:<align_name$}{cyan:#}  ",
-            align_name = align_name,
-        );
-        if hint.is_empty() {
-            let _ = write!(writer, "{:align_hint$}  ", "", align_hint = align_hint);
-        } else {
+    if show_global_options {
+        let _ = write!(writer, "\n\n{header}Global options:{header:#}");
+        for (name, hint, description) in &global_options {
             let _ = write!(
                 writer,
-                "{dimmed}{hint:<align_hint$}{dimmed:#}  ",
-                align_hint = align_hint,
+                "\n  {cyan}{name:<align_name$}{cyan:#}  ",
+                align_name = align_name,
             );
+            if hint.is_empty() {
+                let _ = write!(writer, "{:align_hint$}  ", "", align_hint = align_hint);
+            } else {
+                let _ = write!(
+                    writer,
+                    "{dimmed}{hint:<align_hint$}{dimmed:#}  ",
+                    align_hint = align_hint,
+                );
+            }
+            let _ = write!(writer, "{description}");
         }
-        let _ = write!(writer, "{description}");
     }
 
     let _ = writeln!(
@@ -1529,8 +1531,18 @@ fn root_help() -> StyledStr {
     writer
 }
 
-fn cli_command() -> clap::Command {
-    Cli::command().override_help(root_help())
+fn cli_command(show_global_options: bool) -> clap::Command {
+    Cli::command().override_help(root_help(show_global_options))
+}
+
+fn completion_command() -> clap::Command {
+    cli_command(true)
+}
+
+fn root_help_has_explicit_help_flag() -> bool {
+    env::args_os()
+        .skip(1)
+        .any(|arg| arg == "-h" || arg == "--help")
 }
 
 fn find_manifest_in_ancestors(start_dir: &Path) -> Option<PathBuf> {
@@ -1591,7 +1603,7 @@ fn configure_manifest_path(manifest_path: Option<PathBuf>) -> anyhow::Result<()>
 }
 
 fn main() {
-    CompleteEnv::with_factory(cli_command).complete();
+    CompleteEnv::with_factory(completion_command).complete();
 
     setup_panic!(
         Metadata::new("Acton", env!("CARGO_PKG_VERSION"))
@@ -1604,7 +1616,7 @@ fn main() {
         manifest_path,
         command,
     } = {
-        let matches = cli_command().get_matches();
+        let matches = cli_command(root_help_has_explicit_help_flag()).get_matches();
         Cli::from_arg_matches(&matches).unwrap_or_else(|err| err.exit())
     };
     init_color_mode(color);
