@@ -1,6 +1,7 @@
 use crate::common::{assertion, strip_ansi};
 use crate::support::project::ProjectBuilder;
 use crate::support::snapshots::normalize_output_preserve_escapes;
+use base64::Engine;
 use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
@@ -562,7 +563,14 @@ fn litenode_supports_library_publish_and_get_libraries_endpoint() {
     );
     let first = &result_items[0];
     assert_eq!(first["@type"].as_str(), Some("smc.libraryEntry"));
-    assert_eq!(first["hash"].as_str(), Some(library_hash.as_str()));
+    assert!(
+        first["hash"]
+            .as_str()
+            .is_some_and(|api_hash| hashes_equivalent(api_hash, &library_hash)),
+        "Expected API hash `{}` to represent the same value as metadata hash `{}`",
+        first["hash"].as_str().unwrap_or_default(),
+        library_hash
+    );
     assert_eq!(first["data"].as_str(), Some(library_code_b64.as_str()));
 
     #[allow(clippy::manual_strip)]
@@ -585,7 +593,14 @@ fn litenode_supports_library_publish_and_get_libraries_endpoint() {
         "Expected only found libraries in response"
     );
     assert_eq!(mixed_items[0]["@type"].as_str(), Some("smc.libraryEntry"));
-    assert_eq!(mixed_items[0]["hash"].as_str(), Some(library_hash.as_str()));
+    assert!(
+        mixed_items[0]["hash"]
+            .as_str()
+            .is_some_and(|api_hash| hashes_equivalent(api_hash, &library_hash)),
+        "Expected mixed API hash `{}` to represent the same value as metadata hash `{}`",
+        mixed_items[0]["hash"].as_str().unwrap_or_default(),
+        library_hash
+    );
     assert_eq!(
         mixed_items[0]["data"].as_str(),
         Some(library_code_b64.as_str())
@@ -630,7 +645,14 @@ fn litenode_supports_library_publish_and_get_libraries_endpoint() {
         .expect("JSON-RPC getLibraries response must contain result array");
     assert_eq!(rpc_items.len(), 1);
     assert_eq!(rpc_items[0]["@type"].as_str(), Some("smc.libraryEntry"));
-    assert_eq!(rpc_items[0]["hash"].as_str(), Some(library_hash.as_str()));
+    assert!(
+        rpc_items[0]["hash"]
+            .as_str()
+            .is_some_and(|api_hash| hashes_equivalent(api_hash, &library_hash)),
+        "Expected RPC hash `{}` to represent the same value as metadata hash `{}`",
+        rpc_items[0]["hash"].as_str().unwrap_or_default(),
+        library_hash
+    );
 
     project
         .acton()
@@ -1356,10 +1378,13 @@ fn litenode_supports_v3_transactions_endpoints() {
         .as_str()
         .expect("transaction in_msg.message_content.hash must be string")
         .to_owned();
+    let tx_hash_query = encode_query_component(&tx_hash);
+    let in_msg_hash_query = encode_query_component(&in_msg_hash);
+    let in_msg_body_hash_query = encode_query_component(&in_msg_body_hash);
 
     let by_hash = wait_for_ok_response(
         &node,
-        &format!("/api/v3/transactions?hash={tx_hash}&limit=10"),
+        &format!("/api/v3/transactions?hash={tx_hash_query}&limit=10"),
         Duration::from_secs(12),
     );
     let by_hash_txs = v3_transactions_from_response(&by_hash);
@@ -1463,7 +1488,7 @@ fn litenode_supports_v3_transactions_endpoints() {
 
     let start_utime_strict = wait_for_ok_response(
         &node,
-        &format!("/api/v3/transactions?hash={tx_hash}&start_utime={tx_now}&limit=10"),
+        &format!("/api/v3/transactions?hash={tx_hash_query}&start_utime={tx_now}&limit=10"),
         Duration::from_secs(12),
     );
     assert!(
@@ -1474,7 +1499,7 @@ fn litenode_supports_v3_transactions_endpoints() {
 
     let end_utime_strict = wait_for_ok_response(
         &node,
-        &format!("/api/v3/transactions?hash={tx_hash}&end_utime={tx_now}&limit=10"),
+        &format!("/api/v3/transactions?hash={tx_hash_query}&end_utime={tx_now}&limit=10"),
         Duration::from_secs(12),
     );
     assert!(
@@ -1485,7 +1510,7 @@ fn litenode_supports_v3_transactions_endpoints() {
 
     let start_lt_inclusive = wait_for_ok_response(
         &node,
-        &format!("/api/v3/transactions?hash={tx_hash}&start_lt={tx_lt}&limit=10"),
+        &format!("/api/v3/transactions?hash={tx_hash_query}&start_lt={tx_lt}&limit=10"),
         Duration::from_secs(12),
     );
     assert!(
@@ -1496,7 +1521,7 @@ fn litenode_supports_v3_transactions_endpoints() {
 
     let end_lt_inclusive = wait_for_ok_response(
         &node,
-        &format!("/api/v3/transactions?hash={tx_hash}&end_lt={tx_lt}&limit=10"),
+        &format!("/api/v3/transactions?hash={tx_hash_query}&end_lt={tx_lt}&limit=10"),
         Duration::from_secs(12),
     );
     assert!(
@@ -1508,7 +1533,7 @@ fn litenode_supports_v3_transactions_endpoints() {
     let start_lt_exclusive = wait_for_ok_response(
         &node,
         &format!(
-            "/api/v3/transactions?hash={tx_hash}&start_lt={}&limit=10",
+            "/api/v3/transactions?hash={tx_hash_query}&start_lt={}&limit=10",
             tx_lt.saturating_add(1)
         ),
         Duration::from_secs(12),
@@ -1522,7 +1547,7 @@ fn litenode_supports_v3_transactions_endpoints() {
     let end_lt_exclusive = wait_for_ok_response(
         &node,
         &format!(
-            "/api/v3/transactions?hash={tx_hash}&end_lt={}&limit=10",
+            "/api/v3/transactions?hash={tx_hash_query}&end_lt={}&limit=10",
             tx_lt.saturating_sub(1)
         ),
         Duration::from_secs(12),
@@ -1566,7 +1591,9 @@ fn litenode_supports_v3_transactions_endpoints() {
 
     let by_msg_hash = wait_for_ok_response(
         &node,
-        &format!("/api/v3/transactionsByMessage?msg_hash={in_msg_hash}&direction=in&limit=50"),
+        &format!(
+            "/api/v3/transactionsByMessage?msg_hash={in_msg_hash_query}&direction=in&limit=50"
+        ),
         Duration::from_secs(12),
     );
     assert!(
@@ -1577,7 +1604,7 @@ fn litenode_supports_v3_transactions_endpoints() {
 
     let by_body_hash = wait_for_ok_response(
         &node,
-        &format!("/api/v3/transactionsByMessage?body_hash={in_msg_body_hash}&limit=50"),
+        &format!("/api/v3/transactionsByMessage?body_hash={in_msg_body_hash_query}&limit=50"),
         Duration::from_secs(12),
     );
     assert!(
@@ -1588,7 +1615,9 @@ fn litenode_supports_v3_transactions_endpoints() {
 
     let direction_out = wait_for_ok_response(
         &node,
-        &format!("/api/v3/transactionsByMessage?msg_hash={in_msg_hash}&direction=out&limit=50"),
+        &format!(
+            "/api/v3/transactionsByMessage?msg_hash={in_msg_hash_query}&direction=out&limit=50"
+        ),
         Duration::from_secs(12),
     );
     assert!(
@@ -1663,7 +1692,7 @@ fn litenode_supports_v3_transactions_endpoints() {
     let pending_with_filters = wait_for_ok_response(
         &node,
         &format!(
-            "/api/v3/pendingTransactions?account={}&trace_id={tx_hash}",
+            "/api/v3/pendingTransactions?account={}&trace_id={tx_hash_query}",
             V3_TRANSACTIONS_TEST_ACCOUNT_A
         ),
         Duration::from_secs(12),
@@ -1967,6 +1996,51 @@ fn v3_transactions_from_response(response: &Value) -> &[Value] {
                 serde_json::to_string_pretty(response).unwrap_or_default()
             )
         })
+}
+
+fn hashes_equivalent(left: &str, right: &str) -> bool {
+    normalize_hash_to_bytes(left) == normalize_hash_to_bytes(right)
+}
+
+fn normalize_hash_to_bytes(hash: &str) -> Option<[u8; 32]> {
+    let trimmed = hash.trim();
+
+    if let Ok(bytes) = hex::decode(trimmed)
+        && bytes.len() == 32
+    {
+        let mut out = [0_u8; 32];
+        out.copy_from_slice(&bytes);
+        return Some(out);
+    }
+
+    for engine in [
+        &base64::engine::general_purpose::STANDARD,
+        &base64::engine::general_purpose::URL_SAFE,
+        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
+    ] {
+        if let Ok(bytes) = engine.decode(trimmed)
+            && bytes.len() == 32
+        {
+            let mut out = [0_u8; 32];
+            out.copy_from_slice(&bytes);
+            return Some(out);
+        }
+    }
+
+    None
+}
+
+fn encode_query_component(value: &str) -> String {
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(char::from(byte))
+            }
+            _ => encoded.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    encoded
 }
 
 fn contains_tx_hash(transactions: &[Value], hash: &str) -> bool {
