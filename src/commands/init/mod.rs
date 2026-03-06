@@ -2,11 +2,29 @@ use crate::commands::common::{symlink_global_libraries, symlink_global_wallets};
 use crate::stdlib;
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, ContractConfig, ContractsConfig};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::Path;
 use tree_sitter::Node;
 use walkdir::WalkDir;
+
+const GITIGNORE_GROUPS: &[(&str, &[&str])] = &[
+    (
+        "# Acton related files",
+        &[
+            ".acton/",
+            "gen/",
+            "build/",
+            "lcov.info",
+            "libraries.toml",
+            "global.libraries.toml",
+        ],
+    ),
+    (
+        "# Mnemonic and wallet files",
+        &[".env", "*.mnemonic", "wallets.toml", "global.wallets.toml"],
+    ),
+];
 
 pub fn init_cmd() -> anyhow::Result<()> {
     let acton_toml_exists = Path::new("Acton.toml").exists();
@@ -84,30 +102,21 @@ fn patch_or_create_gitignore() -> anyhow::Result<()> {
     } else {
         String::new()
     };
-    let lines = content.lines().map(str::trim).collect::<Vec<_>>();
+    let mut existing_lines = content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect::<HashSet<_>>();
 
     let mut to_add = String::new();
 
-    if !lines.contains(&".acton/") {
-        to_add.push_str("\n# Acton main directory\n.acton/\n");
-    }
-
-    let wallet_patterns = ["*.mnemonic", "wallets.toml", "global.wallets.toml"];
-    let missing_wallets: Vec<_> = wallet_patterns
-        .iter()
-        .filter(|p| !lines.contains(p))
-        .collect();
-
-    if !missing_wallets.is_empty() {
-        to_add.push_str("\n# Mnemonic and wallet files\n");
-        for p in missing_wallets {
-            to_add.push_str(p);
-            to_add.push('\n');
-        }
+    for (heading, patterns) in GITIGNORE_GROUPS {
+        append_missing_group_to_gitignore(&mut existing_lines, &mut to_add, heading, patterns);
     }
 
     if !to_add.is_empty() {
-        let mut new_content = content.clone();
+        let mut new_content = content;
         if !new_content.ends_with('\n') && !new_content.is_empty() {
             new_content.push('\n');
         }
@@ -119,6 +128,36 @@ fn patch_or_create_gitignore() -> anyhow::Result<()> {
         );
     }
     Ok(())
+}
+
+fn append_missing_group_to_gitignore(
+    existing_lines: &mut HashSet<String>,
+    output: &mut String,
+    heading: &str,
+    patterns: &[&str],
+) {
+    let missing_patterns = patterns
+        .iter()
+        .copied()
+        .filter(|pattern| !existing_lines.contains(*pattern))
+        .collect::<Vec<_>>();
+
+    if missing_patterns.is_empty() {
+        return;
+    }
+
+    output.push('\n');
+    if !existing_lines.contains(heading) {
+        output.push_str(heading);
+        output.push('\n');
+        existing_lines.insert(heading.to_string());
+    }
+
+    for pattern in missing_patterns {
+        output.push_str(pattern);
+        output.push('\n');
+        existing_lines.insert(pattern.to_string());
+    }
 }
 
 fn discover_contracts() -> BTreeMap<String, ContractConfig> {
