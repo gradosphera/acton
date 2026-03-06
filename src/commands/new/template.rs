@@ -26,6 +26,14 @@ impl ProjectTemplate {
             Self::Jetton => "jetton",
         }
     }
+
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Empty => "Minimal project skeleton",
+            Self::Counter => "Simple counter contract",
+            Self::Jetton => "Jetton minter and wallet contracts",
+        }
+    }
 }
 
 impl std::fmt::Display for ProjectTemplate {

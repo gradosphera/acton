@@ -59,6 +59,15 @@ const BASE_DOT_ENV: &str = "
 # TONCENTER_API_KEY=\"your-key-here\"
 ";
 
+#[derive(Clone, Copy)]
+struct TemplateSelectItem(ProjectTemplate);
+
+impl std::fmt::Display for TemplateSelectItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:<8} {}", self.0.as_str(), self.0.description(),)
+    }
+}
+
 pub fn new_cmd(
     path: &str,
     name: Option<String>,
@@ -108,13 +117,18 @@ pub fn new_cmd(
             .prompt()?
     };
 
-    let template_options = template::get_available_templates();
     let template = if let Some(template) = template {
         template
     } else {
+        let template_options = template::get_available_templates()
+            .into_iter()
+            .map(TemplateSelectItem)
+            .collect::<Vec<_>>();
+
         Select::new("Template:", template_options)
             .with_starting_cursor(0)
             .prompt()?
+            .0
     };
 
     let license_options = vec![
