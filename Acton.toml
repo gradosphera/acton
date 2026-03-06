@@ -1,7 +1,7 @@
 [package]
 name = "Acton"
 description = "All-in-one toolkit for TON Blockchain smartcontract development"
-version = "0.0.7"
+version = "0.0.8"
 license = "MIT"
 
 [contracts.counter]
@@ -17,6 +17,16 @@ depends = ["jetton-wallet"]
 [contracts.jetton-wallet]
 name = "Wallet"
 src = ".jetton/contracts/jetton-wallet-contract.tolk"
+depends = []
+
+[contracts.external]
+name = "External"
+src = "debug/external-low-balance-repro/contracts/external.tolk"
+depends = []
+
+[contracts.external_no_accept]
+name = "External2"
+src = "debug/external-low-balance-repro/contracts/external_no_accept.tolk"
 depends = []
 
 [test]
