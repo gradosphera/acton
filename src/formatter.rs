@@ -839,7 +839,7 @@ See https://i582.github.io/acton/docs/setup-wallets/ for more information
             );
             extra_infos.push(format!(
                 "To manually register library use {} somewhere in {}-like function",
-                "vm.registerLibrary(hash, code)".yellow(),
+                "vm.registerLibrary(code)".yellow(),
                 "setupTests()".yellow(),
             ));
             extra_infos.push("Learn more about libraries in documentation: https://i582.github.io/acton/docs/advanced/libraries/".to_owned());
