@@ -25,9 +25,9 @@ use acton_config::config::{
     ActonConfig, CheckOutputFormat, Explorer, LitenodeSettings, Network, init_manifest_path,
 };
 use acton_config::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
-use clap::builder::styling::Style;
+use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::builder::{StyledStr, Styles};
-use clap::{ColorChoice, CommandFactory};
+use clap::{ColorChoice, CommandFactory, FromArgMatches};
 use clap::{Parser, Subcommand};
 use clap_complete::CompleteEnv;
 use clap_complete::engine::{ArgValueCompleter, CompletionCandidate};
@@ -574,7 +574,7 @@ enum Commands {
         #[command(subcommand)]
         command: DocCommand,
     },
-    #[command(about = "LSP server for the TON languages and technologies")]
+    #[command(about = "Run LSP server for the TON languages and technologies")]
     Ls {
         #[arg(long, help = "Port to listen on (TCP)")]
         port: Option<u16>,
@@ -1332,6 +1332,207 @@ fn example_completions_usage() -> StyledStr {
     )
 }
 
+fn root_help() -> StyledStr {
+    use std::collections::HashMap;
+    use std::fmt::Write as _;
+
+    let mut writer = StyledStr::new();
+    let header = Style::new().bold();
+    let usage_style = Style::new().bold();
+    let dimmed = Style::new().dimmed();
+    let purple = Style::new()
+        .fg_color(Some(Color::Ansi(AnsiColor::Magenta)))
+        .bold();
+    let blue = Style::new()
+        .fg_color(Some(Color::Ansi(AnsiColor::Blue)))
+        .bold();
+    let yellow = Style::new()
+        .fg_color(Some(Color::Ansi(AnsiColor::Yellow)))
+        .bold();
+    let cyan = Style::new()
+        .fg_color(Some(Color::Ansi(AnsiColor::Cyan)))
+        .bold();
+    let white = Style::new()
+        .fg_color(Some(Color::Ansi(AnsiColor::BrightWhite)))
+        .bold();
+
+    let core_commands = vec![("new", "[PATH]"), ("init", "")];
+    let build_and_test_commands = vec![
+        ("test", "[PATH]"),
+        ("build", "[CONTRACT_ID]"),
+        ("check", "[TARGET]"),
+        ("script", "<PATH> [ARGS...]"),
+        ("fmt", "[PATHS...]"),
+    ];
+    let blockchain_commands = vec![
+        ("wallet", "<COMMAND>"),
+        ("verify", "[CONTRACT_ID]"),
+        ("library", "<COMMAND>"),
+        ("litenode", "<COMMAND>"),
+        ("retrace", "<TX_HASH>"),
+    ];
+    let tooling_commands = vec![
+        ("run", "<SCRIPT> [ARGS...]"),
+        ("compile", "<PATH>"),
+        ("wrapper", "<CONTRACT_ID>"),
+        ("disasm", "[BOC_FILE]"),
+        ("doc", "tvm <QUERY...>"),
+    ];
+    let support_commands = vec![
+        ("ls", ""),
+        ("up", ""),
+        ("help", "[COMMAND]"),
+        ("completions", "<SHELL>"),
+    ];
+
+    let command_groups = [
+        (&purple, core_commands),
+        (&blue, build_and_test_commands),
+        (&yellow, blockchain_commands),
+        (&cyan, tooling_commands),
+        (&white, support_commands),
+    ];
+    let mut command_metadata = Cli::command();
+    command_metadata.build();
+
+    let command_descriptions = command_metadata
+        .get_subcommands()
+        .map(|subcommand| {
+            (
+                subcommand.get_name().to_owned(),
+                subcommand
+                    .get_about()
+                    .map(ToString::to_string)
+                    .unwrap_or_default(),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+
+    let all_entries = command_groups
+        .iter()
+        .flat_map(|(_, entries)| entries)
+        .collect::<Vec<_>>();
+
+    let max_name = all_entries
+        .iter()
+        .map(|(name, _)| name.len())
+        .max()
+        .unwrap_or(0);
+    let max_hint = all_entries
+        .iter()
+        .map(|(_, hint)| hint.len())
+        .max()
+        .unwrap_or(0);
+    let global_options = command_metadata
+        .get_arguments()
+        .filter(|arg| !arg.is_hide_set())
+        .filter(|arg| !arg.is_positional())
+        .filter(|arg| {
+            arg.is_global_set() || matches!(arg.get_long(), Some("help") | Some("version"))
+        })
+        .filter_map(|arg| {
+            let name = match (arg.get_short(), arg.get_long()) {
+                (Some(short), Some(long)) => format!("-{short}, --{long}"),
+                (Some(short), None) => format!("-{short}"),
+                (None, Some(long)) => format!("--{long}"),
+                (None, None) => return None,
+            };
+
+            let hint = arg
+                .get_value_names()
+                .and_then(|value_names| value_names.first())
+                .map(|value_name| format!("<{value_name}>"))
+                .unwrap_or_default();
+
+            let description = arg.get_help().map(ToString::to_string).unwrap_or_default();
+            if description.is_empty() {
+                return None;
+            }
+
+            Some((name, hint, description))
+        })
+        .collect::<Vec<_>>();
+    let max_option_name = global_options
+        .iter()
+        .map(|(name, _, _)| name.len())
+        .max()
+        .unwrap_or(0);
+    let max_option_hint = global_options
+        .iter()
+        .map(|(_, hint, _)| hint.len())
+        .max()
+        .unwrap_or(0);
+    let align_name = max_name.max(max_option_name);
+    let align_hint = max_hint.max(max_option_hint);
+
+    let _ = write!(
+        writer,
+        "{purple}Acton{purple:#} is all-in-one on-chain development tool for TON.",
+    );
+    let _ = write!(
+        writer,
+        "\n\n{header}Usage:{header:#} {usage_style}acton <command> [...flags] [...args]{usage_style:#}"
+    );
+
+    let _ = write!(writer, "\n\n{header}Commands:{header:#}");
+    for (group_idx, (command_style, entries)) in command_groups.iter().enumerate() {
+        if group_idx > 0 {
+            let _ = writeln!(writer);
+        }
+        for (name, hint) in entries {
+            let description = command_descriptions
+                .get(*name)
+                .map(String::as_str)
+                .unwrap_or_default();
+            let _ = write!(
+                writer,
+                "\n  {command_style}{name:<align_name$}{command_style:#}  ",
+                align_name = align_name
+            );
+            if hint.is_empty() {
+                let _ = write!(writer, "{:align_hint$}  ", "", align_hint = align_hint);
+            } else {
+                let _ = write!(
+                    writer,
+                    "{dimmed}{hint:<align_hint$}{dimmed:#}  ",
+                    align_hint = align_hint
+                );
+            }
+            let _ = write!(writer, "{description}");
+        }
+    }
+
+    let _ = write!(writer, "\n\n{header}Global options:{header:#}");
+    for (name, hint, description) in &global_options {
+        let _ = write!(
+            writer,
+            "\n  {cyan}{name:<align_name$}{cyan:#}  ",
+            align_name = align_name,
+        );
+        if hint.is_empty() {
+            let _ = write!(writer, "{:align_hint$}  ", "", align_hint = align_hint);
+        } else {
+            let _ = write!(
+                writer,
+                "{dimmed}{hint:<align_hint$}{dimmed:#}  ",
+                align_hint = align_hint,
+            );
+        }
+        let _ = write!(writer, "{description}");
+    }
+
+    let _ = writeln!(
+        writer,
+        "\n\nLearn more about Acton:                {cyan}https://i582.github.io/acton/docs/welcome{cyan:#}"
+    );
+
+    writer
+}
+
+fn cli_command() -> clap::Command {
+    Cli::command().override_help(root_help())
+}
+
 fn find_manifest_in_ancestors(start_dir: &Path) -> Option<PathBuf> {
     let git_boundary = start_dir
         .ancestors()
@@ -1390,7 +1591,7 @@ fn configure_manifest_path(manifest_path: Option<PathBuf>) -> anyhow::Result<()>
 }
 
 fn main() {
-    CompleteEnv::with_factory(Cli::command).complete();
+    CompleteEnv::with_factory(cli_command).complete();
 
     setup_panic!(
         Metadata::new("Acton", env!("CARGO_PKG_VERSION"))
@@ -1402,7 +1603,10 @@ fn main() {
         color,
         manifest_path,
         command,
-    } = Cli::parse();
+    } = {
+        let matches = cli_command().get_matches();
+        Cli::from_arg_matches(&matches).unwrap_or_else(|err| err.exit())
+    };
     init_color_mode(color);
 
     if !matches!(command, Commands::Init | Commands::New { .. })
