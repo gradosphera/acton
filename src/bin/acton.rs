@@ -10,7 +10,7 @@ use acton::commands::init::init_cmd;
 use acton::commands::internal::internal_register_contract;
 use acton::commands::library::{fetch_cmd, info_cmd, publish_cmd};
 use acton::commands::ls::ls_cmd;
-use acton::commands::new::new_cmd;
+use acton::commands::new::{ProjectTemplate, new_cmd};
 use acton::commands::retrace::retrace_cmd;
 use acton::commands::run::run_cmd;
 use acton::commands::script::script_cmd;
@@ -86,8 +86,8 @@ enum Commands {
         name: Option<String>,
         #[arg(long, help = "Project description")]
         description: Option<String>,
-        #[arg(long, help = "Project template")]
-        template: Option<String>,
+        #[arg(long, value_enum, help = "Project template")]
+        template: Option<ProjectTemplate>,
         #[arg(long, help = "License")]
         license: Option<String>,
     },

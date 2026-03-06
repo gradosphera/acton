@@ -10,6 +10,7 @@ use std::path::Path;
 
 mod licenses;
 mod template;
+pub use template::ProjectTemplate;
 
 const BASE_GITIGNORE: &str = "
 # Acton main directory
@@ -62,7 +63,7 @@ pub fn new_cmd(
     path: &str,
     name: Option<String>,
     description: Option<String>,
-    template: Option<String>,
+    template: Option<ProjectTemplate>,
     license: Option<String>,
 ) -> anyhow::Result<()> {
     let project_path = if path == "." {
@@ -114,7 +115,6 @@ pub fn new_cmd(
         Select::new("Template:", template_options)
             .with_starting_cursor(0)
             .prompt()?
-            .to_string()
     };
 
     let license_options = vec![
@@ -151,48 +151,52 @@ pub fn new_cmd(
     std::env::set_current_dir(&project_path)?;
 
     // use `.` since we explicitly change current dir to project dir
-    template::create_project_from_template(&template, Path::new("."))?;
+    template::create_project_from_template(template, Path::new("."))?;
 
     let mut contracts = BTreeMap::new();
-    if template == "empty" {
-        contracts.insert(
-            "empty".to_owned(),
-            ContractConfig {
-                name: "Empty".to_owned(),
-                src: "contracts/contract.tolk".to_owned(),
-                depends: Some(vec![]),
-                output: None,
-            },
-        );
-    } else if template == "counter" {
-        contracts.insert(
-            "counter".to_owned(),
-            ContractConfig {
-                name: "counter".to_owned(),
-                src: "contracts/counter.tolk".to_owned(),
-                depends: Some(vec![]),
-                output: None,
-            },
-        );
-    } else if template == "jetton" {
-        contracts.insert(
-            "jetton_minter".to_owned(),
-            ContractConfig {
-                name: "Minter".to_owned(),
-                src: "contracts/jetton-minter-contract.tolk".to_owned(),
-                depends: Some(vec![]),
-                output: None,
-            },
-        );
-        contracts.insert(
-            "jetton_wallet".to_owned(),
-            ContractConfig {
-                name: "Wallet".to_owned(),
-                src: "contracts/jetton-wallet-contract.tolk".to_owned(),
-                depends: Some(vec![]),
-                output: None,
-            },
-        );
+    match template {
+        ProjectTemplate::Empty => {
+            contracts.insert(
+                "empty".to_owned(),
+                ContractConfig {
+                    name: "Empty".to_owned(),
+                    src: "contracts/contract.tolk".to_owned(),
+                    depends: Some(vec![]),
+                    output: None,
+                },
+            );
+        }
+        ProjectTemplate::Counter => {
+            contracts.insert(
+                "counter".to_owned(),
+                ContractConfig {
+                    name: "counter".to_owned(),
+                    src: "contracts/counter.tolk".to_owned(),
+                    depends: Some(vec![]),
+                    output: None,
+                },
+            );
+        }
+        ProjectTemplate::Jetton => {
+            contracts.insert(
+                "jetton_minter".to_owned(),
+                ContractConfig {
+                    name: "Minter".to_owned(),
+                    src: "contracts/jetton-minter-contract.tolk".to_owned(),
+                    depends: Some(vec![]),
+                    output: None,
+                },
+            );
+            contracts.insert(
+                "jetton_wallet".to_owned(),
+                ContractConfig {
+                    name: "Wallet".to_owned(),
+                    src: "contracts/jetton-wallet-contract.tolk".to_owned(),
+                    depends: Some(vec![]),
+                    output: None,
+                },
+            );
+        }
     }
 
     config.contracts = Some(ContractsConfig { contracts });
@@ -263,7 +267,11 @@ pub fn new_cmd(
         project_name.cyan().bold()
     );
     println!("  {} {}", "Description:".bright_black(), description);
-    println!("  {} {}", "Template:".bright_black(), template.cyan());
+    println!(
+        "  {} {}",
+        "Template:".bright_black(),
+        template.to_string().cyan()
+    );
     println!("  {} {}", "License:".bright_black(), license.cyan());
     println!();
     println!("Created {} with project configuration", "Acton.toml".cyan());

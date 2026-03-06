@@ -80,6 +80,25 @@ fn test_new_counter_project_non_interactive() {
 }
 
 #[test]
+fn test_new_invalid_template() {
+    let project = ProjectBuilder::new("new-invalid-template")
+        .without_acton_toml()
+        .build();
+
+    project
+        .acton()
+        .arg("new")
+        .arg(&project.path().join("foobar").display().to_string())
+        .arg("--template")
+        .arg("unknown-template")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_new_invalid_template.stderr.txt",
+        );
+}
+
+#[test]
 fn test_new_empty_project_in_existed_directory() {
     let project = ProjectBuilder::new("foobar")
         .contract("foo", "")
