@@ -457,11 +457,20 @@ impl TonApiClient {
             return anyhow!("TonCenter API returned status: {status}");
         };
 
-        anyhow!(
-            data.error
-                .trim_start_matches("LITE_SERVER_UNKNOWN: ")
-                .to_owned()
-        )
+        let raw_msg = data
+            .error
+            .trim_start_matches("LITE_SERVER_UNKNOWN: ")
+            .to_owned();
+
+        if raw_msg
+            == "cannot apply external message to current state : Failed to unpack account state"
+        {
+            return anyhow!(
+                "external message not accepted because account has no state; check if wallet/contract is deployed"
+            );
+        }
+
+        anyhow!(raw_msg)
     }
 }
 
