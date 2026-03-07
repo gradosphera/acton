@@ -1516,12 +1516,12 @@ impl ActonCommand {
         self
     }
 
-    /// Generate dependency graph SVG (only for build command)
+    /// Generate dependency graph DOT (only for build command)
     ///
     /// # Examples
     /// ```
-    /// .build().with_graph(None)           // Generate deps.svg (default)
-    /// .build().with_graph(Some("my.svg")) // Generate my.svg
+    /// .build().with_graph(None)           // Generate deps.dot (default)
+    /// .build().with_graph(Some("my.dot")) // Generate my.dot
     /// ```
     pub(crate) fn with_graph(mut self, path: Option<&str>) -> Self {
         self.build_graph = Some(path.map(ToString::to_string));

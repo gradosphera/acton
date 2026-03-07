@@ -102,11 +102,11 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
 
     if let Some(graph_path) = &graph_output {
         let output_path = if graph_path.is_empty() {
-            "deps.svg"
+            "deps.dot"
         } else {
             graph_path
         };
-        dep_graph::generate_dependency_graph_svg(
+        dep_graph::generate_dependency_graph_dot(
             &filtered_compilation_order,
             contracts,
             output_path,

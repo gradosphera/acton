@@ -77,14 +77,8 @@ jobs:
         if: steps.cache-ton-artifacts.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build pkg-config autoconf automake libssl-dev libtool zlib1g-dev libsecp256k1-dev libmicrohttpd-dev libsodium-dev liblz4-dev libjemalloc-dev ccache clang-16 llvm-16 libc++-16-dev libc++abi-16-dev graphviz
+          sudo apt-get install -y build-essential cmake ninja-build pkg-config autoconf automake libssl-dev libtool zlib1g-dev libsecp256k1-dev libmicrohttpd-dev libsodium-dev liblz4-dev libjemalloc-dev ccache clang-16 llvm-16 libc++-16-dev libc++abi-16-dev
           echo "/usr/lib/llvm-16/bin" >> "$GITHUB_PATH"
-
-      - name: Install system dependencies (cache exist)
-        if: steps.cache-ton-artifacts.outputs.cache-hit == 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y graphviz
 
       - name: Maximize Build Space
         if: steps.cache-ton-artifacts.outputs.cache-hit != 'true'

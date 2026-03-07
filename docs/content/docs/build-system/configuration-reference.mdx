@@ -23,11 +23,11 @@ acton build [OPTIONS] [CONTRACT]
 
 ### Options
 
-| Flag              | Description                                                                                                  |
-|-------------------|--------------------------------------------------------------------------------------------------------------|
-| `--clear-cache`   | Clear the compilation cache before building. Forces recompilation of all contracts regardless of cache state |
-| `--graph [PATH]`  | Generate a visual dependency graph as an SVG file. Requires Graphviz to be installed. Defaults to `deps.svg` |
-| `--out-dir [DIR]` | Directory to save build artifacts. Defaults to `build/`                                                      |
+| Flag                  | Description                                                                                                                                                  |
+|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--clear-cache`       | Clear the compilation cache before building. Forces recompilation of all contracts regardless of cache state                                                 |
+| `--graph [PATH]`      | Generate a dependency graph in DOT format. Defaults to `deps.dot`                                                                                            |
+| `--out-dir [DIR]`     | Directory to save build artifacts. Defaults to `build/`                                                                                                      |
 | `--output-fift [DIR]` | Directory to save compiled Fift files (`<contract>.fif`) for `.tolk` sources. Precompiled `.boc` entries are skipped. If omitted, no Fift files are written. |
 
 ### Examples
@@ -46,7 +46,7 @@ acton build --clear-cache
 acton build --graph
 
 # Build with custom graph path
-acton build --graph diagrams/dependencies.svg
+acton build --graph diagrams/dependencies.dot
 
 # Build with custom output directory for JSON artifacts
 acton build --out-dir artifacts/
@@ -66,7 +66,7 @@ Use `[build]` to configure default outputs for `acton build`:
 output-fift = "build/fift"
 ```
 
-When enabled, Acton writes one file per compiled `.tolk` contract: `<output-fift>/<contract-key>.fif`.  
+When enabled, Acton writes one file per compiled `.tolk` contract: `<output-fift>/<contract-key>.fif`.
 Contracts with `src = "*.boc"` are not recompiled, so no `.fif` file is produced for them.
 
 CLI flags have priority over config values. Example:
@@ -210,13 +210,13 @@ Mappings follow these rules:
 
 ## Dependency Graph Visualization
 
-Generate a visual representation of contract dependencies:
+Generate a DOT representation of contract dependencies:
 
 ```bash
-acton build --graph deps.svg
+acton build --graph deps.dot
 ```
 
-Requires [Graphviz](https://graphviz.org/) to be installed:
+To render DOT into SVG manually (optional), use [Graphviz](https://graphviz.org/):
 
 ```bash
 # macOS
@@ -229,7 +229,7 @@ sudo apt-get install graphviz
 # Download from https://graphviz.org/download/
 ```
 
-The generated SVG shows:
+The generated DOT contains:
 - Contract boxes with names and keys
 - Arrows indicating dependencies
 - Edge labels showing dependency kind (`embed code` or `library ref`)

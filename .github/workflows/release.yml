@@ -109,11 +109,6 @@ jobs:
           restore-keys: ton-artifacts-${{ matrix.os }}-
           fail-on-cache-miss: true
 
-      - name: Install system dependencies (cache exist)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y graphviz
-
       - name: Copy TON artifacts to objs directory
         run: |
           mkdir -p objs

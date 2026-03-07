@@ -385,10 +385,7 @@ enum Commands {
         contract_id: Option<String>,
         #[arg(long, help = "Clear compilation cache before building")]
         clear_cache: bool,
-        #[arg(
-            long,
-            help = "Generate dependency graph as SVG file (requires graphviz)"
-        )]
+        #[arg(long, help = "Generate dependency graph as DOT file")]
         graph: Option<String>,
         #[arg(
             long,
@@ -1014,8 +1011,8 @@ fn example_build_usage() -> StyledStr {
             "acton build --clear-cache",
         ),
         (
-            "Generate dependency graph as SVG file",
-            "acton build --graph deps.svg",
+            "Generate dependency graph as DOT file",
+            "acton build --graph deps.dot",
         ),
         (
             "Save compiled Fift files to a custom directory",

@@ -502,11 +502,11 @@ fn test_build_with_graph_default_path() {
         .success()
         .assert_contains("dependency graph");
 
-    let svg_file = project.path().join("deps.svg");
-    assert!(svg_file.exists(), "deps.svg should be created");
+    let dot_file = project.path().join("deps.dot");
+    assert!(dot_file.exists(), "deps.dot should be created");
 
-    let content = fs::read_to_string(&svg_file).expect("Should read SVG");
-    assert!(!content.is_empty(), "deps.svg should not be empty");
+    let content = fs::read_to_string(&dot_file).expect("Should read DOT");
+    assert!(!content.is_empty(), "deps.dot should not be empty");
 }
 
 #[test]
@@ -519,18 +519,18 @@ fn test_build_with_graph_custom_path() {
     project
         .acton()
         .build()
-        .with_graph(Some("custom_graph.svg"))
+        .with_graph(Some("custom_graph.dot"))
         .run()
         .success();
 
-    let svg_file = project.path().join("custom_graph.svg");
-    assert!(svg_file.exists(), "custom_graph.svg should be created");
+    let dot_file = project.path().join("custom_graph.dot");
+    assert!(dot_file.exists(), "custom_graph.dot should be created");
 
-    let default_svg = project.path().join("deps.svg");
-    assert!(!default_svg.exists(), "deps.svg should not be created");
+    let default_dot = project.path().join("deps.dot");
+    assert!(!default_dot.exists(), "deps.dot should not be created");
 
-    let content = fs::read_to_string(&svg_file).expect("Should read SVG");
-    assert!(!content.is_empty(), "deps.svg should not be empty");
+    let content = fs::read_to_string(&dot_file).expect("Should read DOT");
+    assert!(!content.is_empty(), "deps.dot should not be empty");
 }
 
 #[test]
@@ -548,7 +548,7 @@ fn test_build_combined_flags() {
         .build()
         .clear_cache()
         .contract("target")
-        .with_graph(Some("filtered.svg"))
+        .with_graph(Some("filtered.dot"))
         .run()
         .success();
 
@@ -561,8 +561,8 @@ fn test_build_combined_flags() {
     assert!(compiled.contains(&"target".to_string()));
     assert!(!compiled.contains(&"independent".to_string()));
 
-    let svg_file = project.path().join("filtered.svg");
-    assert!(svg_file.exists(), "filtered.svg should be created");
+    let dot_file = project.path().join("filtered.dot");
+    assert!(dot_file.exists(), "filtered.dot should be created");
 }
 
 // ========================================

@@ -42,11 +42,11 @@ System dependencies:
 
 - macOS:
   ```bash
-  brew install libsodium libmicrohttpd pkg-config graphviz
+  brew install libsodium libmicrohttpd pkg-config
   ```
 - Linux (Debian/Ubuntu):
   ```bash
-  sudo apt install libsodium-dev libmicrohttpd-dev pkg-config graphviz
+  sudo apt install libsodium-dev libmicrohttpd-dev pkg-config
   ```
 
 For first-time Linux TON artifact builds (closer to CI), install the extended
@@ -58,7 +58,7 @@ sudo apt-get install -y \
   build-essential cmake ninja-build pkg-config autoconf automake \
   libssl-dev libtool zlib1g-dev libsecp256k1-dev libmicrohttpd-dev \
   libsodium-dev liblz4-dev libjemalloc-dev ccache \
-  clang-16 llvm-16 libc++-16-dev libc++abi-16-dev graphviz
+  clang-16 llvm-16 libc++-16-dev libc++abi-16-dev
 ```
 
 ## Build Setup (TON artifacts)
