@@ -75,7 +75,7 @@ pub fn verify_cmd(
     println!(
         "  {} Code hash: {}",
         "→".blue().bold(),
-        hex::encode(code_hash).dimmed()
+        format!("0x{}", hex::encode(code_hash)).dimmed()
     );
 
     let contract_address = if let Some(addr) = address {

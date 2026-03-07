@@ -90,7 +90,7 @@ pub fn publish_cmd(
     println!(
         "  {} Library hash: {}",
         "→".blue().bold(),
-        hex::encode(library_hash).dimmed()
+        format!("0x{}", hex::encode(library_hash)).dimmed()
     );
 
     let duration_seconds = if let Some(d) = duration_arg {
@@ -239,7 +239,7 @@ pub fn publish_cmd(
     println!(
         "  {} Library should be available soon at hash: {}",
         "→".blue().bold(),
-        hex::encode(library_hash).dimmed()
+        format!("0x{}", hex::encode(library_hash)).dimmed()
     );
 
     save_library(
@@ -291,7 +291,7 @@ pub fn fetch_cmd(
     let client = TonApiClient::new(network, custom_networks, api_key)?;
 
     if !json {
-        println!("  {} Fetching library: {}", "→".blue().bold(), hash);
+        println!("  {} Fetching library: 0x{hash}", "→".blue().bold());
     }
 
     let hash = HashBytes::from_str(&hash).context("Invalid library hash format")?;
@@ -414,7 +414,11 @@ pub fn info_cmd(name: Option<String>, api_key: Option<String>) -> anyhow::Result
     );
     println!("{:<w$} {}", "Contract:".dimmed(), lib.name);
     println!("{:<w$} {}", "Network:".dimmed(), lib.network);
-    println!("{:<w$} {}", "Hash:".dimmed(), lib.hash.yellow());
+    println!(
+        "{:<w$} {}",
+        "Hash:".dimmed(),
+        format!("0x{}", lib.hash).yellow()
+    );
     println!("{:<w$} {}", "Account:".dimmed(), lib.account.yellow());
     println!(
         "{:<w$} {} ({}s)",

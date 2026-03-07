@@ -252,7 +252,7 @@ fn handle_compilation_result(
         }
         println!("Code in base64: {}", code_boc64.dimmed());
         println!("Code in hex: {}", code_hex.dimmed());
-        println!("Code hash hex: {}", code_hash_hex.dimmed());
+        println!("Code hash hex: {}", format!("0x{code_hash_hex}").dimmed());
     }
     Ok(())
 }

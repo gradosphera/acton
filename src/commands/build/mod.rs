@@ -186,7 +186,7 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
                 println!();
                 println!("   {} of {}", "Artifacts".green().bold(), name);
                 println!("        {} {}", "Code".cyan(), code.dimmed());
-                println!("        {} {}", "Hash".cyan(), hash.dimmed());
+                println!("        {} {}", "Hash".cyan(), format!("0x{hash}").dimmed());
             }
         }
 
