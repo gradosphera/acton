@@ -800,7 +800,7 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
     let result = match compilation_result {
         tolkc::CompilerResult::Success(result) => result,
         tolkc::CompilerResult::Error(error) => {
-            let normalized_filepath = error.message.replace(&tmp_test_filename, filepath);
+            let normalized_filepath = error.message.replace(".test.tolk.test.tolk", ".test.tolk");
             let trimmed_message = normalized_filepath.trim();
             anyhow::bail!(trimmed_message.to_string())
         }
