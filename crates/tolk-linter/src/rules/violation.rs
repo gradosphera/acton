@@ -1,5 +1,6 @@
 use crate::ast::bless_call_missing_safety_comment::BlessCallMissingSafetyComment;
 use crate::ast::dangerous_send_mode_missing_safety_comment::DangerousSendModeMissingSafetyComment;
+use crate::ast::enum_cast_missing_safety_comment::EnumCastMissingSafetyComment;
 use crate::ast::{
     acton_import_in_contract, asm_function_missing_safety_comment, compiler_error,
     deprecated_symbol_use, duplicated_condition, field_init_can_be_folded,
@@ -90,6 +91,7 @@ pub fn code_to_rule(linter: Linter, code: &str) -> Option<(RuleGroup, Rule)> {
         (Tolk, "E027") => identical_conditional_branches::IdenticalConditionalBranches,
         (Tolk, "E028") => no_global_variables::NoGlobalVariables,
         (Tolk, "E029") => incoming_messages_duplicate_opcode::IncomingMessagesDuplicateOpcode,
+        (Tolk, "E030") => EnumCastMissingSafetyComment,
         (Tolk, "C001") => compiler_error::CompilerError,
         (Tolk, "S001") => name_case_checker::NameCaseChecker,
         _ => return None,

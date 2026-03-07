@@ -4,9 +4,9 @@ use crate::ast::name_case_checker::check_name_cases;
 use crate::ast::{
     acton_import_in_contract, bless_call_missing_safety_comment,
     dangerous_send_mode_missing_safety_comment, deprecated_symbol_use, duplicated_condition,
-    identical_conditional_branches, incoming_messages_duplicate_opcode,
-    negated_is_type_can_use_not_is, no_bounce_handler, no_global_variables,
-    several_not_null_assertions,
+    enum_cast_missing_safety_comment, identical_conditional_branches,
+    incoming_messages_duplicate_opcode, negated_is_type_can_use_not_is, no_bounce_handler,
+    no_global_variables, several_not_null_assertions,
 };
 use crate::rules::ast::{
     asm_function_missing_safety_comment, field_init_can_be_folded, import_path_can_use_mappings,
@@ -26,8 +26,8 @@ use tolk_resolver::file_index::{FileId, SymbolId};
 use tolk_resolver::resolve_index::FileResolveIndex;
 use tolk_resolver::{AstNodeSpanExt, NameUse, Resolved};
 use tolk_syntax::{
-    Call, Expr, ExprStmt, GlobalVar, HasName, Ident, If, IfAlt, InstanceArg, NotNull, SourceFile,
-    Ternary, TopLevel, TypeIdent, Unary, Walker, walk_ast,
+    AsCast, Call, Expr, ExprStmt, GlobalVar, HasName, Ident, If, IfAlt, InstanceArg, NotNull,
+    SourceFile, Ternary, TopLevel, TypeIdent, Unary, Walker, walk_ast,
 };
 use tolk_ty::InferenceResult;
 use tolk_ty::TypeDb;
@@ -630,6 +630,27 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
         }
         for arg in node.arguments() {
             self.walk_call_argument(&arg);
+        }
+        self.default_result()
+    }
+
+    fn walk_as_cast(&mut self, node: &AsCast<'file>) -> Self::Result {
+        run_rule!(
+            self.checker,
+            Rule::EnumCastMissingSafetyComment,
+            enum_cast_missing_safety_comment::check_as_cast(
+                self.checker,
+                self.file_id,
+                node,
+                self.current_inference
+            )
+        );
+
+        if let Some(expr) = node.expr() {
+            self.visit_expr(&expr);
+        }
+        if let Some(casted_to) = node.casted_to() {
+            self.visit_type(&casted_to);
         }
         self.default_result()
     }
