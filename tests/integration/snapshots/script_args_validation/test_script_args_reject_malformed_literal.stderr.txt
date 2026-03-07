@@ -1,0 +1,3 @@
+Warning: failed to initialize debug logging (Operation not permitted (os error 1)). Continuing without file logging.
+Hint: set ACTON_LOG_DIR to a writable directory.
+Error: Failed to parse argument [ 10

@@ -1,0 +1,3 @@
+  Installing standard library [ACTON_VERSION]
+  ✓ Cache cleared
+15
