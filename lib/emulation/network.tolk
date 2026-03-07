@@ -401,7 +401,7 @@ fun SendResultList.findTransaction<Msg = unknown>(self, params: SearchParams = {
 fun net.send(from: address, message: OutMessage): SendResultList {
     val rawRes = ffi.sendMessageFrom(message.messageCell, from.toCell());
     if (rawRes == null) {
-        Assert.fail("ffi.sendMessageFrom unexpectedly returned null")
+        Assert.fail(format1("Cannot send message from {}", from))
     }
     return rawRes;
 }
