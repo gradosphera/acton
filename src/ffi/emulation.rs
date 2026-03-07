@@ -261,10 +261,11 @@ fn send_message_impl(
     let world_state = &mut ctx.chain.world_state;
 
     let emulations = if ctx.debug.is_enabled() {
-        send_message_debug(ctx, &msg, &libs, Some(src))?
+        send_message_debug(ctx, &msg, &libs, Some(src))
     } else {
-        emulator.send_message(world_state, msg, &libs, Some(src))?
-    };
+        emulator.send_message(world_state, msg, &libs, Some(src))
+    }
+    .context("Cannot send message")?;
 
     if let [SendMessageResult::Error(error), ..] = &emulations[..]
         && emulations.len() == 1
@@ -278,8 +279,8 @@ fn send_message_impl(
             stack.push(TupleItem::Null);
             return Ok(());
         }
-        ctx.asserts
-            .fail(format!("Cannot send message: {}", error.error));
+
+        anyhow::bail!("Cannot send message: {}", error.error)
     }
 
     let successful_emulations = emulations.iter().filter_map(|emulation| match emulation {
