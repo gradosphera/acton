@@ -3410,10 +3410,12 @@ version = "0.0.8"
 dependencies = [
  "anyhow",
  "hex",
+ "num-bigint",
  "pkg-config",
  "rustc-hash",
  "serde",
  "serde_json",
+ "tvmffi",
  "tycho-types",
 ]
 

@@ -17,6 +17,8 @@ anyhow = { workspace = true }
 hex = { workspace = true }
 tycho-types = { workspace = true }
 rustc-hash = { workspace = true }
+num-bigint = { workspace = true }
+tvmffi = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.build-dependencies]
 pkg-config = { workspace = true }

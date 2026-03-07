@@ -102,7 +102,8 @@ impl StepExecutor {
             .transpose()?;
         let libs_ptr = libs_cstr.as_ref().map_or(null(), |c| c.as_ptr());
 
-        let internal_params = EmulationInternalParams::from(params);
+        let internal_params = EmulationInternalParams::try_from(params)
+            .context("cannot build internal emulator params")?;
         let params_str =
             serde_json::to_string(&internal_params).context("cannot serialize params to JSON")?;
         let params_cstr = CString::new(params_str).context("params string contains null bytes")?;
