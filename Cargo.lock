@@ -3463,9 +3463,7 @@ version = "0.0.8"
 dependencies = [
  "acton-config",
  "anyhow",
- "chrono",
  "dashmap 7.0.0-rc2",
- "fern",
  "log",
  "lsp-types",
  "rustc-hash",

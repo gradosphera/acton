@@ -43,9 +43,9 @@ clippy:
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
 check-udeps:
-    cargo +nightly udeps --workspace
+    cargo +nightly udeps --workspace --all-targets --all-features --locked
 
-check: fmt-check clippy test
+check: fmt-check clippy check-udeps test
 
 coverage-setup:
     cargo install cargo-llvm-cov

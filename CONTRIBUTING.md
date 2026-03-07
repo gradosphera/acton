@@ -28,11 +28,17 @@ To build and test Acton locally, install:
    ```bash
    cargo install cargo-nextest
    ```
-4. Bun (required for UI packages)
+4. `cargo-udeps` (unused dependency linter)
+   ```bash
+   cargo install cargo-udeps --locked
+   rustup toolchain install nightly --profile minimal
+   rustup component add rust-src --toolchain nightly
+   ```
+5. Bun (required for UI packages)
    ```bash
    curl -fsSL https://bun.sh/install | bash
    ```
-5. `cargo-llvm-cov` (optional, for coverage)
+6. `cargo-llvm-cov` (optional, for coverage)
    ```bash
    cargo install cargo-llvm-cov
    rustup component add llvm-tools-preview
@@ -159,6 +165,7 @@ Rust:
 just fmt
 just fmt-check
 just clippy
+just check-udeps
 ```
 
 UI:
@@ -275,6 +282,7 @@ just check
 ```
 
 This command runs `fmt-check`, `clippy`, and `test`.
+It also runs `check-udeps` to detect unused Rust dependencies.
 
 If your PR touches UI code (`crates/acton-test-ui`, `crates/acton-litenode-ui`,
 `crates/acton-shared-ui`, or root UI config in `package.json`), you must also

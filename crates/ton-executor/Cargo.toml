@@ -18,7 +18,7 @@ hex = { workspace = true }
 tycho-types = { workspace = true }
 rustc-hash = { workspace = true }
 
-[build-dependencies]
+[target.'cfg(target_os = "linux")'.build-dependencies]
 pkg-config = { workspace = true }
 
 [lints]
