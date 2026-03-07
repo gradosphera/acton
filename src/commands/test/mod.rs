@@ -376,6 +376,9 @@ impl<'a> TestRunner<'a> {
                 )
             };
 
+        let mut captured_stdout = captured_stdout;
+        Self::append_debug_output(&mut captured_stdout, &result);
+
         Ok(TestResult {
             get_result: result,
             captured_stdout,
@@ -384,6 +387,30 @@ impl<'a> TestRunner<'a> {
             expected_exit_code,
             accounts: world_state.take_accounts(),
         })
+    }
+
+    fn append_debug_output(stdout: &mut String, get_result: &GetMethodResult) {
+        let GetMethodResult::Success(result) = get_result else {
+            return;
+        };
+
+        let debug_output = result
+            .vm_log
+            .lines()
+            .filter_map(|line| line.strip_prefix("#DEBUG#:"))
+            .map(str::trim_start)
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        if debug_output.is_empty() {
+            return;
+        }
+
+        if !stdout.is_empty() && !stdout.ends_with('\n') {
+            stdout.push('\n');
+        }
+        stdout.push_str(&debug_output);
+        stdout.push('\n');
     }
 }
 

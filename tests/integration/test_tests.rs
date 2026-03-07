@@ -161,6 +161,89 @@ fn test_no_arg_get_method_call_2() {
 }
 
 #[test]
+fn test_debug_dump_stack_output() {
+    let project = ProjectBuilder::new("test-debug-dump-stack-output")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r"
+            get fun `test-debug-dump-stack-output`() {
+                debug.dumpStack();
+            }
+        ",
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_contains("Test output:")
+        .assert_snapshot_matches("integration/snapshots/test_debug_dump_stack_output.stdout.txt");
+}
+
+#[test]
+fn test_debug_dump_stack_output_mixed_with_stdout_and_stderr() {
+    let project = ProjectBuilder::new("test-debug-dump-stack-mixed-output")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/io"
+
+            get fun `test-debug-dump-stack-mixed-output`() {
+                println("before");
+                debug.dumpStack();
+                println("after");
+                eprintln("err");
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_contains("Test output:")
+        .assert_contains("Test stderr:")
+        .assert_snapshot_matches(
+            "integration/snapshots/test_debug_dump_stack_output_mixed_with_stdout_and_stderr.stdout.txt",
+        );
+}
+
+#[test]
+fn test_debug_dump_stack_output_multiple_debug_lines() {
+    let project = ProjectBuilder::new("test-debug-dump-stack-multiple-debug-lines")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            get fun `test-debug-dump-stack-multiple-debug-lines`() {
+                debug.printString("dbg-line");
+                debug.dumpStack();
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_contains("dbg-line")
+        .assert_snapshot_matches(
+            "integration/snapshots/test_debug_dump_stack_output_multiple_debug_lines.stdout.txt",
+        );
+}
+
+#[test]
 fn test_test_file_not_found() {
     let project = ProjectBuilder::new("test-not-found").build();
 
