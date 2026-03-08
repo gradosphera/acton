@@ -151,6 +151,7 @@ jobs:
         run: |
           just fmt
           just clippy
+          just check-docgen
 
   create-canary-release:
     needs: [ build-linux ]

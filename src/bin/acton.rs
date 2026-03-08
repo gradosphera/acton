@@ -628,6 +628,11 @@ enum Commands {
     Docgen {
         #[arg(short, long, help = "Output directory path")]
         output: Option<String>,
+        #[arg(
+            long,
+            help = "Check if generated documentation is up to date without writing files"
+        )]
+        check: bool,
     },
     #[command(name = "internal-register-contract", hide = true)]
     InternalRegisterContract {
@@ -1989,7 +1994,7 @@ fn main() {
             clap_complete::generate(shell, &mut Cli::command(), "acton", &mut std::io::stdout());
             Ok(())
         }
-        Commands::Docgen { output } => docgen_cmd(output),
+        Commands::Docgen { output, check } => docgen_cmd(output, check),
         Commands::Ls {
             port,
             stdio,

@@ -45,7 +45,10 @@ clippy:
 check-udeps:
     cargo +nightly udeps --workspace --all-targets --all-features --locked
 
-check: fmt-check clippy check-udeps test
+check-docgen:
+    cargo run -- docgen --check # always use latest acton
+
+check: fmt-check check-docgen clippy check-udeps test
 
 coverage-setup:
     cargo install cargo-llvm-cov

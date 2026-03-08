@@ -223,6 +223,8 @@ Regenerate auto-generated MDX documentation from Acton sources:
 ./target/debug/acton docgen
 # or
 cargo run --bin acton -- docgen
+# check mode (fails with exit code 1 and prints diff if docs are stale)
+cargo run --bin acton -- docgen --check
 ```
 
 This updates generated docs under:
