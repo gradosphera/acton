@@ -12,6 +12,7 @@ fun onBouncedMessage(_: InMessageBounced) {}
 get fun currentCounter(): int { return 0 }
 get fun currentCounter2(arg: int): int { return arg }
 get fun currentCounter3(arg: int): int { return arg + 10 }
+get fun currentCounterFail(): int { throw 10 }
 get fun getCell(): cell { return beginCell().storeInt(32, 32).endCell() }
 ";
 
@@ -158,6 +159,34 @@ fn test_no_arg_get_method_call_2() {
         .run()
         .failure()
         .assert_snapshot_matches("integration/snapshots/test_no_arg_get_method_call_2.stdout.txt");
+}
+
+#[test]
+fn test_get_method_call_shows_exit_code_variant() {
+    ProjectBuilder::new("simple")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            (TEST_PREPARE.to_string()
+                + r#"
+
+            get fun `test-foo`() {
+                val (counter, deployer) = setupTest();
+
+                val counterRes = net.runGetMethod<int, tuple>(counter.address, "currentCounterFail");
+                println(format1("Counter: {}", counterRes));
+            }
+        "#)
+            .as_str(),
+        )
+        .build()
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_get_method_call_shows_exit_code_variant.stdout.txt",
+        );
 }
 
 #[test]

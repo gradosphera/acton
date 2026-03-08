@@ -2026,6 +2026,15 @@ impl<'a> FormatterContext<'a> {
     }
 
     #[must_use]
+    pub fn format_exit_code_with_number(code: i32) -> String {
+        if let Some(info) = exit_codes::find(code) {
+            return format!("{code} ({}): {}", info.name, info.description);
+        }
+
+        code.to_string()
+    }
+
+    #[must_use]
     pub fn account_code(
         accounts: &FxHashMap<StdAddr, ShardAccount>,
         addr: &StdAddr,

@@ -990,7 +990,7 @@ fn run_get_method_impl(
                 }
                 anyhow::bail!(
                     "Cannot execute get method {get_method_presentation}: exit code {}",
-                    FormatterContext::format_exit_code(result.vm_exit_code)
+                    FormatterContext::format_exit_code_with_number(result.vm_exit_code)
                 );
             }
 
