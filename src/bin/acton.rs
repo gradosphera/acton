@@ -23,7 +23,7 @@ use acton_config::color::OwoColorize;
 use acton_config::color::{ColorMode, init_color_mode};
 use acton_config::config::{
     ActonConfig, CheckOutputFormat, Explorer, LitenodeSettings, Network, init_manifest_path,
-    project_root as configured_project_root,
+    init_project_root, project_root as configured_project_root,
 };
 use acton_config::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
 use clap::builder::styling::{AnsiColor, Color, Style};
@@ -60,7 +60,12 @@ struct Cli {
     )]
     color: ColorMode,
 
-    #[arg(long, global = true, value_name = "PATH", help = "Path to Acton.toml")]
+    #[arg(
+        long,
+        global = true,
+        value_name = "PATH",
+        help = "Path to Acton.toml"
+    )]
     manifest_path: Option<PathBuf>,
     #[arg(
         long = "project-root",
@@ -113,7 +118,7 @@ enum Commands {
         after_help = example_test_usage()
     )]
     Test {
-        #[arg(help = "Test file or directory containing test files (default: current directory)")]
+        #[arg(help = "Test file or directory containing test files (default: project root)")]
         path: Option<String>,
         // Filtering
         #[arg(
@@ -580,7 +585,7 @@ enum Commands {
         after_help = example_fmt_usage()
     )]
     Fmt {
-        #[arg(help = "Files or directories to format (defaults to current directory)")]
+        #[arg(help = "Files or directories to format (defaults to project root)")]
         paths: Vec<String>,
         #[arg(long, help = "Check if files are formatted without overwriting them")]
         check: bool,
@@ -868,7 +873,7 @@ fn example_test_usage() -> StyledStr {
     let styled = Styles::styled();
 
     let exampled_command = Vec::from([
-        ("Run all tests in current directory", "acton test"),
+        ("Run all tests in project root", "acton test"),
         ("Run tests in specific file", "acton test my_test.tolk"),
         (
             "Run tests in directory with regex filter",
@@ -1587,13 +1592,15 @@ fn find_manifest_in_ancestors(start_dir: &Path) -> Option<PathBuf> {
             Some(boundary) => dir.starts_with(boundary),
             None => true,
         })
-        .map(|dir| dir.join("Acton.toml"))
-        .find(|candidate| candidate.is_file())
+        .find_map(|dir| {
+            let candidate = dir.join("Acton.toml");
+            candidate.is_file().then_some(candidate)
+        })
 }
 
 fn resolve_manifest_path(
     manifest_path: Option<PathBuf>,
-    project_root: Option<PathBuf>,
+    resolved_project_root: &Path,
 ) -> anyhow::Result<PathBuf> {
     let cwd = env::current_dir()?;
 
@@ -1611,6 +1618,12 @@ fn resolve_manifest_path(
         return Ok(resolved);
     }
 
+    Ok(resolved_project_root.join("Acton.toml"))
+}
+
+fn resolve_project_root(project_root: Option<PathBuf>) -> anyhow::Result<PathBuf> {
+    let cwd = env::current_dir()?;
+
     if let Some(project_root) = project_root {
         let resolved_project_root = if project_root.is_absolute() {
             project_root
@@ -1625,22 +1638,26 @@ fn resolve_manifest_path(
             );
         }
 
-        return Ok(resolved_project_root.join("Acton.toml"));
+        return Ok(resolved_project_root);
     }
 
-    if let Some(found_manifest_path) = find_manifest_in_ancestors(&cwd) {
-        return Ok(found_manifest_path);
+    if let Some(found_manifest_path) = find_manifest_in_ancestors(&cwd)
+        && let Some(parent) = found_manifest_path.parent()
+    {
+        return Ok(parent.to_path_buf());
     }
 
-    Ok(cwd.join("Acton.toml"))
+    Ok(cwd)
 }
 
-fn configure_manifest_path(
+fn configure_project_roots(
     manifest_path: Option<PathBuf>,
     project_root: Option<PathBuf>,
 ) -> anyhow::Result<()> {
-    let resolved_manifest_path = resolve_manifest_path(manifest_path, project_root)?;
+    let resolved_project_root = resolve_project_root(project_root)?;
+    let resolved_manifest_path = resolve_manifest_path(manifest_path, &resolved_project_root)?;
 
+    init_project_root(&resolved_project_root)?;
     init_manifest_path(&resolved_manifest_path)?;
 
     Ok(())
@@ -1667,7 +1684,7 @@ fn main() {
     init_color_mode(color);
 
     if !matches!(command, Commands::Init | Commands::New { .. })
-        && let Err(err) = configure_manifest_path(manifest_path, project_root)
+        && let Err(err) = configure_project_roots(manifest_path, project_root)
     {
         eprintln!("{} {}", "Error:".red(), err);
         process::exit(1);

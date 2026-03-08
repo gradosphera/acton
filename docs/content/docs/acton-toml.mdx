@@ -6,6 +6,23 @@ icon: FileText
 
 The `Acton.toml` file is the manifest for your Acton project. It defines package metadata, contract definitions, test settings, and custom scripts.
 
+## Project Root Resolution
+
+Acton resolves project root for each CLI invocation using global flags:
+
+- `--project-root <PATH>` sets project root explicitly (no search).
+- Without `--project-root`, Acton searches from current directory up through
+  parent directories for `Acton.toml` (up to git boundary) and uses its
+  directory as project root.
+- If no `Acton.toml` is found in that search range, project root falls back to
+  current working directory.
+- `--manifest-path <PATH>` selects `Acton.toml` for config loading only and
+  does not change project root resolution.
+
+This matters for all relative paths from config sections (for example
+`[contracts].src`, `[build]`, `[test]`, and `[mappings]`), because they are
+resolved relative to project root for the current invocation.
+
 ## Root Section
 
 The top-level of `Acton.toml` contains the following sections:
@@ -329,7 +346,7 @@ import "@utils/logic" // Resolves to ./libs/utils/logic.tolk
 
 - **Exact Match**: Acton matches the first part of the path (before the first slash) against the defined mappings. For example, in `import "@core/math"`, it looks for the `@core` mapping.
 - **Normalization**: If a mapping key doesn't start with `@` (preferred), Acton automatically prepends it.
-- **Relative Paths**: Relative paths in mappings are resolved relative to the project root (where `Acton.toml` is located).
+- **Relative Paths**: Relative paths in mappings are resolved relative to project root for the current invocation.
 
 ## Additional Properties
 

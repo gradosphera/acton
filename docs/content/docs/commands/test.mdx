@@ -11,18 +11,18 @@ The `test` command runs your Tolk smart contract tests. It discovers and execute
 acton test
 ```
 
-This command will discover and run all test files in the current directory and subdirectories.
+This command discovers and runs all test files in project root and its subdirectories.
 
 ## Command Options
 
 ### Discovery Options
 
-| Option                 | Type      | Description                                                |
-|------------------------|-----------|------------------------------------------------------------|
-| `<PATH>`               | File path | Test file or directory to run (default: current directory) |
-| `--filter <PATTERN>`   | String    | Regex pattern to filter test names                         |
-| `--exclude <PATTERNS>` | Array     | Glob patterns to exclude test files                        |
-| `--include <PATTERNS>` | Array     | Glob patterns to include only test files                   |
+| Option                 | Type      | Description                                           |
+|------------------------|-----------|-------------------------------------------------------|
+| `<PATH>`               | File path | Test file or directory to run (default: project root) |
+| `--filter <PATTERN>`   | String    | Regex pattern to filter test names                    |
+| `--exclude <PATTERNS>` | Array     | Glob patterns to exclude test files                   |
+| `--include <PATTERNS>` | Array     | Glob patterns to include only test files              |
 
 ### Execution Options
 
@@ -102,7 +102,7 @@ comparison mode and does not overwrite the snapshot file.
 ### Basic test execution
 
 ```bash
-# Run all tests in current directory
+# Run all tests in project root
 acton test
 
 # Run tests in specific directory
@@ -170,6 +170,16 @@ acton test --backtrace full
 Acton automatically discovers test files by:
 - Finding files ending with `.test.tolk`
 - Searching in the specified directory and subdirectories
+
+<Callout type="info">
+Path behavior:
+
+- If `<PATH>` is omitted, Acton discovers tests from project root.
+- Global project root/manifest resolution is described in
+  [`Project Root Resolution`](/docs/acton-toml/#project-root-resolution).
+- If `<PATH>` is provided and relative, it is resolved from your current working directory.
+- Use `--project-root` to run from another directory while keeping project-relative defaults in the target project.
+</Callout>
 
 ## Configuration
 

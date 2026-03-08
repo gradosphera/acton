@@ -535,11 +535,6 @@ pub fn init_manifest_path(path: impl AsRef<Path>) -> Result<()> {
         resolved = resolved.join("Acton.toml");
     }
 
-    let resolved_root = resolved
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."));
-
     match MANIFEST_PATH.set(resolved.clone()) {
         Ok(()) => Ok(()),
         Err(existing) if existing == resolved => Ok(()),
@@ -547,11 +542,20 @@ pub fn init_manifest_path(path: impl AsRef<Path>) -> Result<()> {
             "Manifest path already initialized to {}",
             existing.display()
         )),
-    }?;
+    }
+}
 
-    match PROJECT_ROOT.set(resolved_root.clone()) {
+pub fn init_project_root(path: impl AsRef<Path>) -> Result<()> {
+    let path = path.as_ref();
+    let resolved = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        path.absolutize()?.to_path_buf()
+    };
+
+    match PROJECT_ROOT.set(resolved.clone()) {
         Ok(()) => Ok(()),
-        Err(existing) if existing == resolved_root => Ok(()),
+        Err(existing) if existing == resolved => Ok(()),
         Err(existing) => Err(anyhow!(
             "Project root already initialized to {}",
             existing.display()

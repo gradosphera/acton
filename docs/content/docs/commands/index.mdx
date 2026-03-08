@@ -6,6 +6,29 @@ icon: Terminal
 
 This section contains reference documentation for all Acton CLI commands.
 
+## Global Project Selection Flags
+
+These global flags control how Acton selects project files and where it treats
+as project root:
+
+- `--project-root <PATH>` sets project root explicitly.
+- `--manifest-path <PATH>` selects which `Acton.toml` to load for config and
+  does not change project root resolution.
+- Full resolution rules are documented in
+  [`Project Root Resolution`](/docs/acton-toml/#project-root-resolution).
+
+Use `--project-root` when running commands from outside the project directory,
+and you want project-relative outputs (for example `.acton`, `wallets.toml`,
+`test-results`) to be written into that project.
+
+```bash
+# Run tests from a sibling directory as if you were in ../my-project
+acton --project-root ../my-project test
+
+# Load config from another manifest without changing project root resolution
+acton --manifest-path ../my-project/Acton.toml wallet new --local
+```
+
 <Cards>
     <Card href="/docs/commands/new" title="Creating projects">
         Learn how to initialize new Acton projects using the new command

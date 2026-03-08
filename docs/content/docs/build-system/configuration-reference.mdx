@@ -215,7 +215,7 @@ import "@core/math.tolk"
 
 Mappings follow these rules:
 1. **Normalization**: Any mapping key missing the `@` prefix will have it added automatically.
-2. **Resolution**: Mappings are resolved relative to the project root with Acton.toml.
+2. **Resolution**: Mappings are resolved relative to project root for the current invocation.
 3. **Exact Match**: When importing, the first part of the path (before the first slash) is used to look up the mapping. For example, `import "@core/math.tolk"` will look for a mapping named `@core`.
 
 ## Dependency Graph Visualization

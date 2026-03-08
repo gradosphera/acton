@@ -57,8 +57,8 @@ fn test_script_ensure_latest_uses_project_root_from_nested_directory() {
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .script(script_path.to_string_lossy().as_ref())
         .current_dir(&nested_dir)
         .run()

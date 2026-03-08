@@ -54,8 +54,8 @@ fn test_build_ensure_latest_uses_project_root_from_nested_directory() {
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .build()
         .current_dir(&nested_dir)
         .run()

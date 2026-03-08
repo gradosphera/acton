@@ -313,8 +313,7 @@ fn test_manifest_path_allows_running_outside_project_root() {
         .path()
         .parent()
         .expect("Project should have a parent directory");
-    let manifest_path = project.path().join("Acton.toml");
-    let manifest_path = manifest_path.to_string_lossy().to_string();
+    let project_root = project.path().to_string_lossy().to_string();
 
     project
         .acton()
@@ -328,8 +327,8 @@ fn test_manifest_path_allows_running_outside_project_root() {
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg(&manifest_path)
+        .arg("--project-root")
+        .arg(&project_root)
         .check()
         .current_dir(project_parent)
         .run()
@@ -350,12 +349,12 @@ fn test_manifest_path_accepts_project_directory() {
         .path()
         .parent()
         .expect("Project should have a parent directory");
-    let manifest_dir = project.path().to_string_lossy().to_string();
+    let project_root = project.path().to_string_lossy().to_string();
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg(&manifest_dir)
+        .arg("--project-root")
+        .arg(&project_root)
         .check()
         .current_dir(project_parent)
         .run()
@@ -382,12 +381,12 @@ fn test_manifest_path_accepts_relative_path_from_parent() {
         .expect("Project directory should have a name")
         .to_string_lossy()
         .to_string();
-    let relative_manifest_path = format!("{project_dir_name}/Acton.toml");
+    let relative_project_root = project_dir_name;
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg(&relative_manifest_path)
+        .arg("--project-root")
+        .arg(&relative_project_root)
         .check()
         .current_dir(project_parent)
         .run()
@@ -423,8 +422,53 @@ fn test_manifest_path_missing_file_returns_clear_error() {
 }
 
 #[test]
-fn test_manifest_path_build_works_from_nested_directory() {
-    let project = ProjectBuilder::new("manifest-path-build-from-nested")
+fn test_manifest_path_uses_explicit_path_and_keeps_project_root_auto_detection() {
+    let project = ProjectBuilder::new("manifest-path-search-ancestors").build();
+    project.acton().init().run().success();
+
+    let nested_dir = project.path().join("nested/deeper");
+    fs::create_dir_all(&nested_dir).expect("Failed to create nested test directory");
+
+    let root_wallets = project.path().join("wallets.toml");
+    let nested_wallets = nested_dir.join("wallets.toml");
+    assert!(
+        !root_wallets.exists(),
+        "wallets.toml must not exist before wallet command"
+    );
+    assert!(
+        !nested_wallets.exists(),
+        "wallets.toml must not exist before wallet command in nested directory"
+    );
+
+    project
+        .acton()
+        .arg("--manifest-path")
+        .arg("../Acton.toml")
+        .wallet_new()
+        .arg("--name")
+        .arg("manifest-path-search-up")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .current_dir(&nested_dir)
+        .run()
+        .success();
+
+    assert!(
+        root_wallets.exists(),
+        "wallets.toml must be written in auto-detected project root: {}",
+        root_wallets.display()
+    );
+    assert!(
+        !nested_wallets.exists(),
+        "wallets.toml must not be written in nested cwd: {}",
+        nested_wallets.display()
+    );
+}
+
+#[test]
+fn test_project_root_build_from_nested_directory_snapshot_and_cache() {
+    let project = ProjectBuilder::new("project-root-build-from-nested-snapshot-cache")
         .contract("simple", SIMPLE_CONTRACT)
         .build();
     project.acton().init().run().success();
@@ -434,8 +478,8 @@ fn test_manifest_path_build_works_from_nested_directory() {
 
     let output = project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .build()
         .current_dir(&nested_dir)
         .run()
@@ -443,11 +487,11 @@ fn test_manifest_path_build_works_from_nested_directory() {
 
     output
         .assert_snapshot_matches(
-            "integration/snapshots/flags/test_manifest_path_build_works_from_nested_directory.stdout.txt",
+            "integration/snapshots/flags/test_project_root_build_from_nested_directory_snapshot_and_cache.stdout.txt",
         )
         .assert_file_snapshot_matches(
             "build/simple.json",
-            "integration/snapshots/flags/test_manifest_path_build_works_from_nested_directory.build_simple_json.txt",
+            "integration/snapshots/flags/test_project_root_build_from_nested_directory_snapshot_and_cache.build_simple_json.txt",
         );
 
     assert!(
@@ -634,8 +678,8 @@ fn test_project_root_full_flow_from_sibling_directory_on_new_project() {
 }
 
 #[test]
-fn test_manifest_path_check_works_from_nested_directory() {
-    let project = ProjectBuilder::new("manifest-path-check-from-nested")
+fn test_project_root_check_works_from_nested_directory() {
+    let project = ProjectBuilder::new("project-root-check-from-nested")
         .contract("simple", SIMPLE_CONTRACT)
         .build();
     project.acton().init().run().success();
@@ -645,20 +689,20 @@ fn test_manifest_path_check_works_from_nested_directory() {
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .check()
         .current_dir(&nested_dir)
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/flags/test_manifest_path_check_works_from_nested_directory.stdout.txt",
+            "integration/snapshots/flags/test_project_root_check_works_from_nested_directory.stdout.txt",
         );
 }
 
 #[test]
-fn test_manifest_path_test_works_from_nested_directory() {
-    let project = ProjectBuilder::new("manifest-path-test-from-nested")
+fn test_project_root_test_works_from_nested_directory() {
+    let project = ProjectBuilder::new("project-root-test-from-nested")
         .contract("simple", SIMPLE_CONTRACT)
         .test_file("manifest_path", PASSING_TEST)
         .build();
@@ -669,14 +713,14 @@ fn test_manifest_path_test_works_from_nested_directory() {
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .test()
         .current_dir(&nested_dir)
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/flags/test_manifest_path_test_works_from_nested_directory.stdout.txt",
+            "integration/snapshots/flags/test_project_root_test_works_from_nested_directory.stdout.txt",
         );
 }
 
@@ -698,8 +742,8 @@ fn test_manifest_path_test_save_test_trace_default_writes_to_project_root() {
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .test()
         .arg("--save-test-trace")
         .current_dir(&nested_dir)
@@ -737,8 +781,8 @@ fn test_manifest_path_test_junit_default_writes_to_project_root() {
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .test()
         .with_reporter("junit")
         .current_dir(&nested_dir)
@@ -775,8 +819,8 @@ fn test_manifest_path_test_profiling_snapshots_use_project_root() {
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .test()
         .arg("--snapshot")
         .arg(baseline_filename)
@@ -797,8 +841,8 @@ fn test_manifest_path_test_profiling_snapshots_use_project_root() {
 
     let output = project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .test()
         .arg("--baseline-snapshot")
         .arg(baseline_filename)
@@ -830,8 +874,8 @@ fn test_manifest_path_fmt_works_from_nested_directory() {
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .fmt()
         .current_dir(&nested_dir)
         .run()
@@ -897,8 +941,8 @@ fn test_manifest_path_run_works_from_nested_directory_and_uses_project_root() {
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .run_script_cmd("emit-file")
         .current_dir(&nested_dir)
         .run()
@@ -917,7 +961,7 @@ fn test_manifest_path_run_works_from_nested_directory_and_uses_project_root() {
 }
 
 #[test]
-fn test_manifest_path_wallet_new_local_writes_to_project_root() {
+fn test_manifest_path_wallet_new_local_writes_to_project_root_with_manifest_path() {
     let project = ProjectBuilder::new("manifest-path-wallet-local-root").build();
     project.acton().init().run().success();
 
@@ -933,8 +977,8 @@ fn test_manifest_path_wallet_new_local_writes_to_project_root() {
 
     project
         .acton()
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .wallet_new()
         .arg("--name")
         .arg("manifest-path-local-wallet")
@@ -958,27 +1002,30 @@ fn test_manifest_path_wallet_new_local_writes_to_project_root() {
 }
 
 #[test]
-fn test_manifest_path_wallet_new_global_creates_symlink_in_project_root() {
+fn test_manifest_path_wallet_new_global_creates_symlink_in_project_root_with_manifest_path() {
     let project = ProjectBuilder::new("manifest-path-wallet-global-symlink-root").build();
-    project.acton().init().run().success();
-
     let home = tempfile::TempDir::new().expect("failed to create temp HOME");
     let home_str = home
         .path()
         .to_str()
         .expect("temp HOME path must be valid UTF-8");
+    project.acton().env("HOME", home_str).init().run().success();
 
     let nested_dir = project.path().join("nested");
     fs::create_dir_all(&nested_dir).expect("Failed to create nested test directory");
 
     let root_symlink = project.path().join("global.wallets.toml");
     let nested_symlink = nested_dir.join("global.wallets.toml");
+    assert!(
+        !root_symlink.exists(),
+        "global.wallets.toml symlink must not exist before wallet command"
+    );
 
     project
         .acton()
         .env("HOME", home_str)
-        .arg("--manifest-path")
-        .arg("../Acton.toml")
+        .arg("--project-root")
+        .arg("..")
         .wallet_new()
         .arg("--name")
         .arg("manifest-path-global-wallet")
@@ -992,6 +1039,90 @@ fn test_manifest_path_wallet_new_global_creates_symlink_in_project_root() {
     assert!(
         root_symlink.exists(),
         "global.wallets.toml symlink must be created in project root: {}",
+        root_symlink.display()
+    );
+    assert!(
+        !nested_symlink.exists(),
+        "global.wallets.toml symlink must not be created in nested cwd: {}",
+        nested_symlink.display()
+    );
+}
+
+#[test]
+fn test_manifest_path_wallet_new_local_writes_to_project_root() {
+    let project = ProjectBuilder::new("manifest-path-wallet-local-cwd").build();
+    project.acton().init().run().success();
+
+    let nested_dir = project.path().join("nested");
+    fs::create_dir_all(&nested_dir).expect("Failed to create nested test directory");
+
+    let root_wallets = project.path().join("wallets.toml");
+    let nested_wallets = nested_dir.join("wallets.toml");
+
+    project
+        .acton()
+        .arg("--manifest-path")
+        .arg("../Acton.toml")
+        .wallet_new()
+        .arg("--name")
+        .arg("manifest-path-local-wallet-cwd")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--local")
+        .current_dir(&nested_dir)
+        .run()
+        .success();
+
+    assert!(
+        root_wallets.exists(),
+        "wallets.toml must be written in auto-detected project root: {}",
+        root_wallets.display()
+    );
+    assert!(
+        !nested_wallets.exists(),
+        "wallets.toml must not be written in nested cwd: {}",
+        nested_wallets.display()
+    );
+}
+
+#[test]
+fn test_manifest_path_wallet_new_global_creates_symlink_in_project_root() {
+    let project = ProjectBuilder::new("manifest-path-wallet-global-cwd").build();
+    let home = tempfile::TempDir::new().expect("failed to create temp HOME");
+    let home_str = home
+        .path()
+        .to_str()
+        .expect("temp HOME path must be valid UTF-8");
+    project.acton().env("HOME", home_str).init().run().success();
+
+    let nested_dir = project.path().join("nested");
+    fs::create_dir_all(&nested_dir).expect("Failed to create nested test directory");
+
+    let root_symlink = project.path().join("global.wallets.toml");
+    let nested_symlink = nested_dir.join("global.wallets.toml");
+    assert!(
+        !root_symlink.exists(),
+        "global.wallets.toml symlink must not exist before wallet command"
+    );
+
+    project
+        .acton()
+        .env("HOME", home_str)
+        .arg("--manifest-path")
+        .arg("../Acton.toml")
+        .wallet_new()
+        .arg("--name")
+        .arg("manifest-path-global-wallet-cwd")
+        .arg("--version")
+        .arg("v5r1")
+        .arg("--global")
+        .current_dir(&nested_dir)
+        .run()
+        .success();
+
+    assert!(
+        root_symlink.exists(),
+        "global.wallets.toml symlink must be created in auto-detected project root: {}",
         root_symlink.display()
     );
     assert!(

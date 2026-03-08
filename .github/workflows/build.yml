@@ -135,9 +135,12 @@ jobs:
           just build-ui
           cargo build --bin acton
 
+      - name: Add acton to PATH
+        run: echo "${GITHUB_WORKSPACE}/target/debug" >> "$GITHUB_PATH"
+
       - name: Test acton binary
         run: |
-          ./target/debug/acton --help
+          acton --help
 
       - name: Run tests
         run: |
@@ -145,7 +148,7 @@ jobs:
 
       - name: Run Acton tests
         run: |
-          ./target/debug/acton test
+          acton test
 
       - name: Run formatter and linter
         run: |
