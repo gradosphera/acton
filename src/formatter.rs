@@ -20,7 +20,8 @@ use ton_api::Network;
 use ton_source_map::{DebugLocation, SourceLocation};
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, HashBytes, Load};
+use tycho_types::cell::{Cell, CellBuilder, CellSlice, HashBytes, Load};
+use tycho_types::dict;
 use tycho_types::models::{
     AccountState, AccountStatus, Base64StdAddrFlags, ComputePhase, ComputePhaseSkipReason,
     DisplayBase64StdAddr, ExecutedComputePhase, IntAddr, MsgInfo, RelaxedMessage, RelaxedMsgInfo,
@@ -44,6 +45,29 @@ struct SendResult {
 struct TransactionNode {
     send_result: SendResult,
     children: Vec<TransactionNode>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum MapScalarType {
+    Int { bits: u16, signed: bool },
+    VarInt { len_bits: u8, signed: bool },
+    Bool,
+    Address,
+    Cell,
+    String,
+}
+
+impl MapScalarType {
+    const fn bit_len(self) -> u16 {
+        match self {
+            Self::Int { bits, .. } => bits,
+            Self::Bool => 1,
+            // Std addr without anycast.
+            Self::Address => StdAddr::BITS_WITHOUT_ANYCAST,
+            // Variable-length integers are not valid dict keys.
+            Self::VarInt { .. } | Self::Cell | Self::String => 0,
+        }
+    }
 }
 
 /// Context for formatting `TupleItems` with rich information
@@ -1427,6 +1451,12 @@ See https://i582.github.io/acton/docs/setup-wallets/ for more information
                     return self.format_transaction_list(items);
                 }
 
+                if type_name.starts_with("map<")
+                    && let Some(formatted_map) = self.format_map(type_name, items, root, colorize)
+                {
+                    return formatted_map;
+                }
+
                 let abi = self.contract_abi.find_any_type(type_name);
 
                 // Format structure as Foo { ... }
@@ -1540,7 +1570,7 @@ See https://i582.github.io/acton/docs/setup-wallets/ for more information
             && inner.first() == Some(&TupleItem::Null)
             && matches!(inner.last(), Some(&TupleItem::Int(_)))
         {
-            return format!("{inner_type}{{}}");
+            return format!("{inner_type} {{}}");
         }
 
         self.format_internal(
@@ -1551,6 +1581,333 @@ See https://i582.github.io/acton/docs/setup-wallets/ for more information
             root,
             colorize,
         )
+    }
+
+    fn format_map(
+        &self,
+        type_name: &str,
+        items: &Tuple,
+        is_root: bool,
+        colorize: bool,
+    ) -> Option<String> {
+        let map_item = items.iter().find(|item| {
+            matches!(
+                item,
+                TupleItem::Null | TupleItem::Cell(_) | TupleItem::Slice(_)
+            )
+        })?;
+
+        let dict_root = match map_item {
+            TupleItem::Null => None,
+            TupleItem::Cell(cell) | TupleItem::Slice(cell) => Some(cell.clone()),
+            _ => return Some(format!("{type_name} {{...}}")),
+        };
+
+        let Some((key_type_name, value_type_name)) = Self::parse_map_type(type_name) else {
+            return Some(self.format_map_raw(type_name, &dict_root, colorize));
+        };
+
+        let Some(key_type) = Self::parse_map_key_type(&key_type_name) else {
+            return Some(self.format_map_raw(type_name, &dict_root, colorize));
+        };
+        let value_type = Self::parse_map_value_type(&value_type_name);
+        let allow_raw_value_fallback = value_type.is_none()
+            && !value_type_name.ends_with('?')
+            && !value_type_name.starts_with("map<");
+
+        let mut entries = Vec::new();
+        for entry in dict::RawIter::new(&dict_root, key_type.bit_len()) {
+            let Ok((key_data, mut value_slice)) = entry else {
+                return Some(format!("{type_name} {{...}}"));
+            };
+
+            let key = {
+                let mut key_slice = key_data.as_data_slice();
+                self.format_map_scalar(&mut key_slice, key_type, colorize)
+                    .unwrap_or_else(|_| "<key>".to_owned())
+            };
+
+            let value = if let Some(value_type) = value_type {
+                self.format_map_scalar(&mut value_slice, value_type, colorize)
+                    .unwrap_or_else(|err| format!("<value: {err}>"))
+            } else if allow_raw_value_fallback {
+                self.format_map_raw_value(value_slice, colorize)
+                    .unwrap_or_else(|err| format!("<value: {err}>"))
+            } else {
+                "<value>".to_owned()
+            };
+
+            entries.push((key, value));
+        }
+
+        if entries.is_empty() {
+            return Some(format!("{type_name} {{}}"));
+        }
+
+        if !is_root {
+            let mut formatted_entries = Vec::with_capacity(entries.len());
+            for (key, value) in entries {
+                formatted_entries.push(format!("{key}: {value}"));
+            }
+            return Some(format!("{type_name} {{{}}}", formatted_entries.join(", ")));
+        }
+
+        let mut result = String::new();
+        writeln!(result, "{type_name} {{").ok();
+        for (key, value) in entries.iter() {
+            writeln!(result, "    {key}: {value},").ok();
+        }
+        result.push('}');
+
+        Some(result)
+    }
+
+    fn parse_map_type(type_name: &str) -> Option<(String, String)> {
+        let type_name = type_name.trim();
+        let inner = type_name.strip_prefix("map<")?.strip_suffix('>')?;
+        let split_idx = Self::find_top_level_comma(inner)?;
+        let key_type = inner[..split_idx].trim().to_owned();
+        let value_type = inner[split_idx + 1..].trim().to_owned();
+        Some((key_type, value_type))
+    }
+
+    fn find_top_level_comma(source: &str) -> Option<usize> {
+        let mut angle_depth = 0usize;
+        let mut paren_depth = 0usize;
+        let mut square_depth = 0usize;
+
+        for (idx, ch) in source.char_indices() {
+            match ch {
+                '<' => angle_depth += 1,
+                '>' => angle_depth = angle_depth.saturating_sub(1),
+                '(' => paren_depth += 1,
+                ')' => paren_depth = paren_depth.saturating_sub(1),
+                '[' => square_depth += 1,
+                ']' => square_depth = square_depth.saturating_sub(1),
+                ',' if angle_depth == 0 && paren_depth == 0 && square_depth == 0 => {
+                    return Some(idx);
+                }
+                _ => {}
+            }
+        }
+
+        None
+    }
+
+    fn parse_map_key_type(type_name: &str) -> Option<MapScalarType> {
+        let type_name = type_name.trim();
+        match type_name {
+            "bool" => Some(MapScalarType::Bool),
+            "address" | "any_address" => Some(MapScalarType::Address),
+            "int" => Some(MapScalarType::Int {
+                bits: 257,
+                signed: true,
+            }),
+            "uint" => Some(MapScalarType::Int {
+                bits: 256,
+                signed: false,
+            }),
+            _ => {
+                if let Some(bits) = type_name.strip_prefix("int") {
+                    return bits
+                        .parse::<u16>()
+                        .ok()
+                        .map(|bits| MapScalarType::Int { bits, signed: true });
+                }
+                if let Some(bits) = type_name.strip_prefix("uint") {
+                    return bits.parse::<u16>().ok().map(|bits| MapScalarType::Int {
+                        bits,
+                        signed: false,
+                    });
+                }
+                None
+            }
+        }
+    }
+
+    fn parse_map_value_type(type_name: &str) -> Option<MapScalarType> {
+        let type_name = type_name.trim();
+        if type_name.ends_with('?') || type_name.starts_with("map<") {
+            return None;
+        }
+
+        if type_name == "cell" || type_name.starts_with("Cell<") {
+            return Some(MapScalarType::Cell);
+        }
+        if type_name == "string" {
+            return Some(MapScalarType::String);
+        }
+
+        match type_name {
+            "bool" => Some(MapScalarType::Bool),
+            "address" | "any_address" => Some(MapScalarType::Address),
+            "coins" => Some(MapScalarType::VarInt {
+                len_bits: 4,
+                signed: false,
+            }),
+            "int" => Some(MapScalarType::Int {
+                bits: 257,
+                signed: true,
+            }),
+            "uint" => Some(MapScalarType::Int {
+                bits: 256,
+                signed: false,
+            }),
+            _ => {
+                if let Some(bits) = type_name.strip_prefix("int") {
+                    return bits
+                        .parse::<u16>()
+                        .ok()
+                        .map(|bits| MapScalarType::Int { bits, signed: true });
+                }
+                if let Some(bits) = type_name.strip_prefix("uint") {
+                    return bits.parse::<u16>().ok().map(|bits| MapScalarType::Int {
+                        bits,
+                        signed: false,
+                    });
+                }
+                if let Some(bytes) = type_name.strip_prefix("varint") {
+                    return match bytes {
+                        "16" => Some(MapScalarType::VarInt {
+                            len_bits: 4,
+                            signed: true,
+                        }),
+                        "32" => Some(MapScalarType::VarInt {
+                            len_bits: 5,
+                            signed: true,
+                        }),
+                        _ => None,
+                    };
+                }
+                if let Some(bytes) = type_name.strip_prefix("varuint") {
+                    return match bytes {
+                        "16" => Some(MapScalarType::VarInt {
+                            len_bits: 4,
+                            signed: false,
+                        }),
+                        "32" => Some(MapScalarType::VarInt {
+                            len_bits: 5,
+                            signed: false,
+                        }),
+                        _ => None,
+                    };
+                }
+                None
+            }
+        }
+    }
+
+    fn format_map_scalar(
+        &self,
+        slice: &mut CellSlice<'_>,
+        ty: MapScalarType,
+        colorize: bool,
+    ) -> Result<String, String> {
+        match ty {
+            MapScalarType::Int { bits, signed } => {
+                if !signed && bits == 256 {
+                    let value = format!("0x{}", slice.load_u256().map_err(|e| e.to_string())?);
+                    return Ok(if colorize {
+                        value.yellow().to_string()
+                    } else {
+                        value
+                    });
+                }
+
+                let value = slice
+                    .load_bigint(bits, signed)
+                    .map_err(|e| e.to_string())?
+                    .to_string();
+                Ok(if colorize {
+                    value.yellow().to_string()
+                } else {
+                    value
+                })
+            }
+            MapScalarType::VarInt { len_bits, signed } => {
+                let value = slice
+                    .load_var_bigint(u16::from(len_bits), signed)
+                    .map_err(|e| e.to_string())?
+                    .to_string();
+                Ok(if colorize {
+                    value.yellow().to_string()
+                } else {
+                    value
+                })
+            }
+            MapScalarType::Bool => {
+                let value = slice.load_bit().map_err(|e| e.to_string())?.to_string();
+                Ok(if colorize {
+                    value.yellow().to_string()
+                } else {
+                    value
+                })
+            }
+            MapScalarType::Address => {
+                let value =
+                    self.address_to_string(&IntAddr::load_from(slice).map_err(|e| e.to_string())?);
+                Ok(if colorize {
+                    value.cyan().to_string()
+                } else {
+                    value
+                })
+            }
+            MapScalarType::Cell => {
+                let value =
+                    Boc::encode_hex(&slice.load_reference_cloned().map_err(|e| e.to_string())?);
+                Ok(if colorize {
+                    value.dimmed().to_string()
+                } else {
+                    value
+                })
+            }
+            MapScalarType::String => {
+                let cell = slice.load_reference_cloned().map_err(|e| e.to_string())?;
+                if let Some(string) = Tuple::parse_snake_string(&cell) {
+                    let value = format!("\"{string}\"");
+                    return Ok(if colorize {
+                        value.green().to_string()
+                    } else {
+                        value
+                    });
+                }
+
+                let value = Boc::encode_hex(&cell);
+                Ok(if colorize {
+                    value.dimmed().to_string()
+                } else {
+                    value
+                })
+            }
+        }
+    }
+
+    fn format_map_raw_value(&self, slice: CellSlice<'_>, colorize: bool) -> Result<String, String> {
+        let mut builder = CellBuilder::new();
+        builder.store_slice(slice).map_err(|e| e.to_string())?;
+        let cell = builder.build().map_err(|e| e.to_string())?;
+        let value = Boc::encode_hex(&cell);
+
+        Ok(if colorize {
+            value.dimmed().to_string()
+        } else {
+            value
+        })
+    }
+
+    fn format_map_raw(&self, type_name: &str, root: &Option<Cell>, colorize: bool) -> String {
+        let Some(cell) = root else {
+            return format!("{type_name} {{}}");
+        };
+
+        let raw = Boc::encode_hex(cell);
+        let raw = if colorize {
+            raw.dimmed().to_string()
+        } else {
+            raw
+        };
+
+        format!("{type_name} {{raw: {raw}}}")
     }
 
     fn format_structure(
