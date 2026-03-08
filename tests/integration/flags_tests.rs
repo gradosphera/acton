@@ -15,6 +15,39 @@ get fun `test-manifest-path-works`() {
 }
 "#;
 
+const PROFILED_TEST: &str = r#"
+import "../../lib/testing/expect"
+import "../../lib/build/build"
+import "../../lib/emulation/network"
+
+get fun `test-profiled-transaction`() {
+    val init = ContractState {
+        code: build("simple"),
+        data: createEmptyCell(),
+    };
+    val address = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    val deployer = net.treasury("deployer");
+    val deployMessage = createMessage({
+        bounce: false,
+        value: ton("1.0"),
+        dest: {
+            stateInit: init,
+        },
+    });
+    val deployResult = net.send(deployer.address, deployMessage);
+    expect(deployResult.size()).toEqual(1);
+
+    val ping = createMessage({
+        bounce: false,
+        value: ton("0.2"),
+        dest: address,
+    });
+    val pingResult = net.send(deployer.address, ping);
+    expect(pingResult.size()).toEqual(1);
+}
+"#;
+
 #[test]
 fn test_run_specific_test_file() {
     let project = ProjectBuilder::new("multi-file")
@@ -446,6 +479,141 @@ fn test_manifest_path_test_works_from_nested_directory() {
         .assert_snapshot_matches(
             "integration/snapshots/flags/test_manifest_path_test_works_from_nested_directory.stdout.txt",
         );
+}
+
+#[test]
+fn test_manifest_path_test_save_test_trace_default_writes_to_project_root() {
+    let project = ProjectBuilder::new("manifest-path-trace-root")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("manifest_path", PROFILED_TEST)
+        .build();
+    project.acton().init().run().success();
+
+    let nested_dir = project.path().join("nested");
+    fs::create_dir_all(&nested_dir).expect("Failed to create nested test directory");
+
+    let root_trace = project
+        .path()
+        .join(".acton/traces/test-profiled-transaction_trace.json");
+    let nested_trace = nested_dir.join(".acton/traces/test-profiled-transaction_trace.json");
+
+    project
+        .acton()
+        .arg("--manifest-path")
+        .arg("../Acton.toml")
+        .test()
+        .arg("--save-test-trace")
+        .current_dir(&nested_dir)
+        .run()
+        .success()
+        .assert_file_exists(".acton/traces/test-profiled-transaction_trace.json");
+
+    assert!(
+        root_trace.exists(),
+        "trace file must be written in project root: {}",
+        root_trace.display()
+    );
+    assert!(
+        !nested_trace.exists(),
+        "trace file must not be written in nested cwd: {}",
+        nested_trace.display()
+    );
+}
+
+#[test]
+fn test_manifest_path_test_junit_default_writes_to_project_root() {
+    let project = ProjectBuilder::new("manifest-path-junit-root")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("manifest_path", PASSING_TEST)
+        .build();
+    project.acton().init().run().success();
+
+    let nested_dir = project.path().join("nested");
+    fs::create_dir_all(&nested_dir).expect("Failed to create nested test directory");
+
+    let root_report = project
+        .path()
+        .join("test-results/TEST-manifest_path.test.tolk.xml");
+    let nested_report = nested_dir.join("test-results/TEST-manifest_path.test.tolk.xml");
+
+    project
+        .acton()
+        .arg("--manifest-path")
+        .arg("../Acton.toml")
+        .test()
+        .with_reporter("junit")
+        .current_dir(&nested_dir)
+        .run()
+        .success()
+        .assert_file_exists("test-results/TEST-manifest_path.test.tolk.xml");
+
+    assert!(
+        root_report.exists(),
+        "junit report must be written in project root: {}",
+        root_report.display()
+    );
+    assert!(
+        !nested_report.exists(),
+        "junit report must not be written in nested cwd: {}",
+        nested_report.display()
+    );
+}
+
+#[test]
+fn test_manifest_path_test_profiling_snapshots_use_project_root() {
+    let project = ProjectBuilder::new("manifest-path-profiling-root")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("manifest_path", PROFILED_TEST)
+        .build();
+    project.acton().init().run().success();
+
+    let nested_dir = project.path().join("nested");
+    fs::create_dir_all(&nested_dir).expect("Failed to create nested test directory");
+
+    let baseline_filename = "profile-baseline.json";
+    let root_baseline = project.path().join(baseline_filename);
+    let nested_baseline = nested_dir.join(baseline_filename);
+
+    project
+        .acton()
+        .arg("--manifest-path")
+        .arg("../Acton.toml")
+        .test()
+        .arg("--snapshot")
+        .arg(baseline_filename)
+        .current_dir(&nested_dir)
+        .run()
+        .success();
+
+    assert!(
+        root_baseline.exists(),
+        "snapshot must be written in project root: {}",
+        root_baseline.display()
+    );
+    assert!(
+        !nested_baseline.exists(),
+        "snapshot must not be written in nested cwd: {}",
+        nested_baseline.display()
+    );
+
+    let output = project
+        .acton()
+        .arg("--manifest-path")
+        .arg("../Acton.toml")
+        .test()
+        .arg("--baseline-snapshot")
+        .arg(baseline_filename)
+        .current_dir(&nested_dir)
+        .run()
+        .success();
+    output.assert_contains("Baseline: profile-baseline.json");
+
+    let stderr = output.get_normalized_stderr();
+    assert!(
+        !stderr.contains("Warning: Failed to load baseline gas snapshot"),
+        "baseline snapshot must be loaded from project root, stderr:\n{}",
+        stderr
+    );
 }
 
 #[test]

@@ -10,7 +10,7 @@ use crate::formatter::FormatterContext;
 use crate::wallets;
 use crate::{ffi, stdlib};
 use acton_config::color::OwoColorize;
-use acton_config::config::{ActonConfig, Explorer};
+use acton_config::config::{ActonConfig, Explorer, project_root as configured_project_root};
 use anyhow::anyhow;
 use log::error;
 use rustc_hash::FxHashMap;
@@ -53,7 +53,7 @@ pub fn script_cmd(
     net: Option<String>,
     explorer: Option<Explorer>,
 ) -> anyhow::Result<()> {
-    stdlib::ensure_latest(Path::new("."))?;
+    stdlib::ensure_latest(configured_project_root())?;
 
     if clear_cache {
         let mut file_cache = FileBuildCache::new(None)?;

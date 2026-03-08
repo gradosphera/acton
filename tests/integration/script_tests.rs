@@ -26,6 +26,56 @@ fn test_script_simple_execution() {
 }
 
 #[test]
+fn test_script_ensure_latest_uses_project_root_from_nested_directory() {
+    let project = ProjectBuilder::new("script-ensure-latest-project-root")
+        .script_file(
+            "hello",
+            r#"
+            import "../../lib/io"
+
+            fun main() {
+                println("Hello from nested script!");
+            }
+        "#,
+        )
+        .build();
+
+    let nested_dir = project.path().join("nested");
+    fs::create_dir_all(&nested_dir).expect("Failed to create nested test directory");
+
+    let root_stdlib = project.path().join(".acton/tolk-stdlib");
+    let nested_stdlib = nested_dir.join(".acton/tolk-stdlib");
+    let script_path = project.path().join("scripts/hello.tolk");
+    assert!(
+        !root_stdlib.exists(),
+        "stdlib must not exist before script command"
+    );
+    assert!(
+        !nested_stdlib.exists(),
+        "stdlib must not exist in nested cwd before script command"
+    );
+
+    project
+        .acton()
+        .arg("--manifest-path")
+        .arg("../Acton.toml")
+        .script(script_path.to_string_lossy().as_ref())
+        .current_dir(&nested_dir)
+        .run()
+        .success()
+        .assert_contains("Hello from nested script!");
+
+    assert!(
+        root_stdlib.exists(),
+        "stdlib should be installed in project root"
+    );
+    assert!(
+        !nested_stdlib.exists(),
+        "stdlib must not be installed in nested cwd"
+    );
+}
+
+#[test]
 fn test_script_with_calculations() {
     let project = ProjectBuilder::new("script-calc")
         .script_file(

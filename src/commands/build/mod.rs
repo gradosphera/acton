@@ -2,7 +2,10 @@ use crate::commands::common::error_fmt;
 use crate::file_build_cache::FileBuildCache;
 use crate::stdlib;
 use acton_config::color::OwoColorize;
-use acton_config::config::{ActonConfig, ContractConfig, ContractDependency, DependencyKind};
+use acton_config::config::{
+    ActonConfig, ContractConfig, ContractDependency, DependencyKind,
+    project_root as configured_project_root,
+};
 use anyhow::anyhow;
 use heck::ToLowerCamelCase;
 use log::debug;
@@ -10,7 +13,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tempfile::TempDir;
 use tycho_types::boc::Boc;
@@ -26,7 +29,8 @@ pub fn build_cmd(
     output_fift: Option<String>,
     show_info: bool,
 ) -> anyhow::Result<()> {
-    stdlib::ensure_latest(Path::new("."))?;
+    let project_root = configured_project_root();
+    stdlib::ensure_latest(project_root)?;
 
     // Due to global variables, we need to enable debug mode for emulator as early as possible
     // since first compilation WITHOUT debug mode will set debug=false forever
@@ -41,30 +45,34 @@ pub fn build_cmd(
     println!("   {} contracts", "Compiling".green().bold());
 
     let config = ActonConfig::load()?;
-    let out_dir = non_empty_path(out_dir)
-        .or_else(|| {
-            config
-                .build
-                .as_ref()
-                .and_then(|build| non_empty_path(build.out_dir.clone()))
-        })
-        .unwrap_or_else(|| "build".to_string());
-    let gen_dir = non_empty_path(gen_dir)
-        .or_else(|| {
-            config
-                .build
-                .as_ref()
-                .and_then(|build| non_empty_path(build.gen_dir.clone()))
-        })
-        .unwrap_or_else(|| "gen".to_string());
-    let output_fift_dir = non_empty_path(output_fift).or_else(|| {
+    let out_dir = resolve_build_output_dir(
+        out_dir,
         config
             .build
             .as_ref()
-            .and_then(|build| non_empty_path(build.output_fift.clone()))
-    });
+            .and_then(|build| non_empty_path(build.out_dir.clone())),
+        "build",
+        project_root,
+    );
+    let gen_dir = resolve_build_output_dir(
+        gen_dir,
+        config
+            .build
+            .as_ref()
+            .and_then(|build| non_empty_path(build.gen_dir.clone())),
+        "gen",
+        project_root,
+    );
+    let output_fift_dir = resolve_optional_build_output_dir(
+        output_fift,
+        config
+            .build
+            .as_ref()
+            .and_then(|build| non_empty_path(build.output_fift.clone())),
+        project_root,
+    );
 
-    if !Path::new(&out_dir).exists() {
+    if !out_dir.exists() {
         fs::create_dir_all(&out_dir)?;
     }
 
@@ -134,7 +142,7 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
         let Some(contract_config) = contracts.get(&parent_contract) else {
             continue;
         };
-        let contract_path = &contract_config.src;
+        let contract_path = resolve_project_config_path(project_root, &contract_config.src);
 
         generate_dependency_files(
             &parent_contract,
@@ -142,18 +150,24 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
             &compiled_contracts,
             &compile_errors,
             &config,
-            Path::new(&gen_dir),
+            &gen_dir,
+            project_root,
         )?;
 
-        let (code_boc64, code_hash, fift_code) =
-            match process_contract(&mut file_cache, contract_config, contract_path, &config) {
-                Ok((code, hash, fift_code)) => (code, hash, fift_code),
-                Err(err) => {
-                    failure_count += 1;
-                    compile_errors.insert(parent_contract.clone(), err);
-                    continue;
-                }
-            };
+        let (code_boc64, code_hash, fift_code) = match process_contract(
+            &mut file_cache,
+            contract_config,
+            &contract_config.src,
+            &contract_path,
+            &config,
+        ) {
+            Ok((code, hash, fift_code)) => (code, hash, fift_code),
+            Err(err) => {
+                failure_count += 1;
+                compile_errors.insert(parent_contract.clone(), err);
+                continue;
+            }
+        };
 
         compiled_contracts.insert(parent_contract.clone(), code_boc64.clone());
 
@@ -172,7 +186,7 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
             );
         }
 
-        if let Err(e) = save_boc_file(contract_config, &code_boc64) {
+        if let Err(e) = save_boc_file(project_root, contract_config, &code_boc64) {
             eprintln!(
                 "Warning: Failed to save cached BoC file for {}: {}",
                 contract_config.name, e
@@ -229,11 +243,12 @@ See https://i582.github.io/acton/docs/build-system/configuration-reference/#cont
 fn process_contract(
     file_cache: &mut FileBuildCache,
     contract_config: &ContractConfig,
-    contract_path: &String,
+    contract_src: &str,
+    contract_path: &Path,
     acton_config: &ActonConfig,
 ) -> anyhow::Result<(String, String, Option<String>)> {
-    let (code_boc64, code_hash, fift_code) = if contract_path.ends_with(".boc") {
-        debug!("Loading BoC file: {contract_path}");
+    let (code_boc64, code_hash, fift_code) = if contract_src.ends_with(".boc") {
+        debug!("Loading BoC file: {}", contract_path.display());
         match fs::read(contract_path) {
             Ok(boc_data) => match Boc::decode(&boc_data) {
                 Ok(boc) => {
@@ -241,35 +256,35 @@ fn process_contract(
                     (code_boc64, boc.repr_hash().to_string(), None)
                 }
                 Err(e) => {
-                    anyhow::bail!("Failed to decode BoC file {contract_path}: {e}");
+                    anyhow::bail!("Failed to decode BoC file {contract_src}: {e}");
                 }
             },
             Err(e) => {
-                anyhow::bail!("Failed to read BoC file {contract_path}: {e}");
+                anyhow::bail!("Failed to read BoC file {contract_src}: {e}");
             }
         }
     } else {
-        let cached_result = file_cache.get(contract_path, false, 2, "1.3");
+        let cached_result = file_cache.get(contract_src, false, 2, "1.3");
 
         if let Some(cached_result) = cached_result {
-            debug!("Cache hit, use cached result for '{contract_path}'");
+            debug!("Cache hit, use cached result for '{contract_src}'");
             (
                 cached_result.code_boc64,
                 cached_result.code_hash_hex,
                 Some(cached_result.fift_code),
             )
         } else {
-            debug!("Cache miss, recompile '{contract_path}'");
+            debug!("Cache miss, recompile '{}'", contract_path.display());
             let compile_start = Instant::now();
             println!("   {} {}", "Compiling".green().bold(), contract_config.name);
 
             let compiler = tolkc::Compiler::new(2).with_mappings(&acton_config.mappings);
-            let compilation_result = compiler.compile(Path::new(contract_path), false);
+            let compilation_result = compiler.compile(contract_path, false);
             let compile_time = compile_start.elapsed();
 
             match compilation_result {
                 tolkc::CompilerResult::Success(result) => {
-                    if let Err(e) = file_cache.put(contract_path, &result, false, 2, "1.3") {
+                    if let Err(e) = file_cache.put(contract_src, &result, false, 2, "1.3") {
                         eprintln!(
                             "Warning: Failed to cache compilation result for {}: {}",
                             contract_config.name, e
@@ -285,7 +300,12 @@ fn process_contract(
                     )
                 }
                 tolkc::CompilerResult::Error(error) => {
-                    anyhow::bail!(error.message);
+                    let message = rewrite_compiler_error_paths_for_display(
+                        &error.message,
+                        contract_src,
+                        contract_path,
+                    );
+                    anyhow::bail!(message);
                 }
             }
         }
@@ -293,14 +313,25 @@ fn process_contract(
     Ok((code_boc64, code_hash, fift_code))
 }
 
-fn save_boc_file(contract_config: &ContractConfig, code_boc64: &str) -> anyhow::Result<()> {
-    if let Some(output_path) = &contract_config.output {
-        if let Some(parent_dir) = Path::new(&output_path).parent()
+fn save_boc_file(
+    project_root: &Path,
+    contract_config: &ContractConfig,
+    code_boc64: &str,
+) -> anyhow::Result<()> {
+    if let Some(config_output_path) = &contract_config.output {
+        let output_path = resolve_project_config_path(project_root, config_output_path);
+        let display_parent_dir = Path::new(config_output_path)
+            .parent()
+            .or_else(|| output_path.parent());
+        if let Some(parent_dir) = output_path.parent()
             && let Err(err) = fs::create_dir_all(parent_dir)
         {
             anyhow::bail!(
                 "Failed to create directory for BoC file {}: {}",
-                parent_dir.display(),
+                display_parent_dir.map_or_else(
+                    || parent_dir.display().to_string(),
+                    |path| path.display().to_string()
+                ),
                 err
             );
         }
@@ -312,7 +343,7 @@ fn save_boc_file(contract_config: &ContractConfig, code_boc64: &str) -> anyhow::
 }
 
 fn save_build_artifact(
-    out_dir: &str,
+    out_dir: &Path,
     contract_key: &str,
     code_boc64: &str,
     code_hash: &str,
@@ -325,19 +356,19 @@ fn save_build_artifact(
     });
 
     let filename = format!("{contract_key}.json");
-    let path = Path::new(out_dir).join(filename);
+    let path = out_dir.join(filename);
     fs::write(path, serde_json::to_string_pretty(&json_data)?)?;
 
     Ok(())
 }
 
 fn save_fift_file(
-    output_fift_dir: &str,
+    output_fift_dir: &Path,
     contract_key: &str,
     fift_code: &str,
 ) -> anyhow::Result<()> {
     let filename = format!("{contract_key}.fif");
-    let path = Path::new(output_fift_dir).join(filename);
+    let path = output_fift_dir.join(filename);
 
     if let Some(parent_dir) = path.parent()
         && let Err(err) = fs::create_dir_all(parent_dir)
@@ -362,6 +393,7 @@ pub(crate) fn generate_dependency_files(
     failed_contracts: &BTreeMap<String, anyhow::Error>,
     acton_config: &ActonConfig,
     gen_dir: &Path,
+    project_root: &Path,
 ) -> anyhow::Result<()> {
     let Some(depends) = &config.depends else {
         return Ok(());
@@ -378,6 +410,7 @@ pub(crate) fn generate_dependency_files(
             failed_contracts,
             acton_config,
             gen_dir,
+            project_root,
         )?;
     }
 
@@ -398,6 +431,7 @@ fn generate_single_dependency_file(
     failed_contracts: &BTreeMap<String, anyhow::Error>,
     acton_config: &ActonConfig,
     gen_dir: &Path,
+    project_root: &Path,
 ) -> anyhow::Result<()> {
     create_gen_dir(gen_dir)?;
     let dependency_contract = dependency.name();
@@ -428,30 +462,80 @@ fn generate_single_dependency_file(
         acton_config,
     );
 
-    let output_filename = dependency
-        .compiled_code_out_path()
-        .unwrap_or(
-            gen_dir
-                .join(format!("{dependency_contract}_code.tolk"))
-                .to_str()
-                .ok_or_else(|| anyhow!("Path.to_str() failed"))?,
-        )
-        .to_string();
-
-    let path = Path::new(&output_filename);
-    let dir = path.parent();
+    let output_path = if let Some(output_path) = dependency.compiled_code_out_path() {
+        resolve_project_config_path(project_root, output_path)
+    } else {
+        gen_dir.join(format!("{dependency_contract}_code.tolk"))
+    };
+    let dir = output_path.parent();
 
     if let Some(dir) = dir {
         fs::create_dir_all(dir)?;
     }
 
-    fs::write(&output_filename, content)?;
+    fs::write(output_path, content)?;
 
     Ok(())
 }
 
 fn non_empty_path(path: Option<String>) -> Option<String> {
     path.filter(|value| !value.is_empty())
+}
+
+fn rewrite_compiler_error_paths_for_display(
+    message: &str,
+    contract_src: &str,
+    contract_path: &Path,
+) -> String {
+    if Path::new(contract_src).is_absolute() || !message.contains("Failed to locate ") {
+        return message.to_string();
+    }
+
+    let absolute_contract_path = contract_path.to_string_lossy();
+    let absolute_prefix = format!("Failed to locate {}", absolute_contract_path);
+    let relative_prefix = format!("Failed to locate {contract_src}");
+
+    if message.contains(&absolute_prefix) {
+        message.replacen(&absolute_prefix, &relative_prefix, 1)
+    } else {
+        message.to_string()
+    }
+}
+
+fn resolve_build_output_dir(
+    cli_path: Option<String>,
+    config_path: Option<String>,
+    default_dir: &str,
+    project_root: &Path,
+) -> PathBuf {
+    if let Some(cli_path) = non_empty_path(cli_path) {
+        return PathBuf::from(cli_path);
+    }
+    if let Some(config_path) = non_empty_path(config_path) {
+        return resolve_project_config_path(project_root, &config_path);
+    }
+    project_root.join(default_dir)
+}
+
+fn resolve_optional_build_output_dir(
+    cli_path: Option<String>,
+    config_path: Option<String>,
+    project_root: &Path,
+) -> Option<PathBuf> {
+    if let Some(cli_path) = non_empty_path(cli_path) {
+        return Some(PathBuf::from(cli_path));
+    }
+    non_empty_path(config_path)
+        .map(|config_path| resolve_project_config_path(project_root, &config_path))
+}
+
+fn resolve_project_config_path(project_root: &Path, path: &str) -> PathBuf {
+    let path = Path::new(path);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        project_root.join(path)
+    }
 }
 
 fn format_valid_function_name(dependency_key: &str) -> String {

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use ton_emulator::emulator::SendMessageResultSuccess;
 use tycho_types::models::{ComputePhase, MsgInfo, TxInfo};
@@ -21,7 +22,7 @@ pub(super) fn collect_profile(runner: &TestRunner) -> anyhow::Result<()> {
     }
 
     let baseline_snapshot = if let Some(baseline_path) = &runner.config.baseline_snapshot {
-        match load_gas_snapshot(baseline_path) {
+        match load_gas_snapshot(&runner.project_root, baseline_path) {
             Ok(snapshot) => Some(snapshot),
             Err(err) => {
                 eprintln!("Warning: Failed to load baseline gas snapshot '{baseline_path}': {err}",);
@@ -54,7 +55,7 @@ pub(super) fn collect_profile(runner: &TestRunner) -> anyhow::Result<()> {
                 anyhow::bail!("Failed to create gas snapshot: {err}")
             }
         };
-        if let Err(err) = save_gas_snapshot(&snapshot, snapshot_filename) {
+        if let Err(err) = save_gas_snapshot(&snapshot, &runner.project_root, snapshot_filename) {
             anyhow::bail!("Failed to save gas snapshot: {err}")
         }
     }
@@ -804,17 +805,32 @@ fn create_gas_snapshot(
     })
 }
 
-fn save_gas_snapshot(snapshot: &GasSnapshot, filename: &str) -> anyhow::Result<()> {
+fn save_gas_snapshot(
+    snapshot: &GasSnapshot,
+    project_root: &Path,
+    filename: &str,
+) -> anyhow::Result<()> {
     let json = serde_json::to_string_pretty(snapshot)?;
-    fs::write(filename, json)?;
+    let path = resolve_snapshot_path(project_root, filename);
+    fs::write(path, json)?;
     println!("Gas snapshot saved to {filename}");
     Ok(())
 }
 
-fn load_gas_snapshot(filename: &str) -> anyhow::Result<GasSnapshot> {
-    let content = fs::read_to_string(filename)?;
+fn load_gas_snapshot(project_root: &Path, filename: &str) -> anyhow::Result<GasSnapshot> {
+    let path = resolve_snapshot_path(project_root, filename);
+    let content = fs::read_to_string(path)?;
     let snapshot: GasSnapshot = serde_json::from_str(&content)?;
     Ok(snapshot)
+}
+
+fn resolve_snapshot_path(project_root: &Path, filename: &str) -> PathBuf {
+    let path = Path::new(filename);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        project_root.join(path)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

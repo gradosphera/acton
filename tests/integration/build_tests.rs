@@ -33,6 +33,45 @@ fn test_build_simple_contract() {
 }
 
 #[test]
+fn test_build_ensure_latest_uses_project_root_from_nested_directory() {
+    let project = ProjectBuilder::new("build-ensure-latest-project-root")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    let nested_dir = project.path().join("nested");
+    fs::create_dir_all(&nested_dir).expect("Failed to create nested test directory");
+
+    let root_stdlib = project.path().join(".acton/tolk-stdlib");
+    let nested_stdlib = nested_dir.join(".acton/tolk-stdlib");
+    assert!(
+        !root_stdlib.exists(),
+        "stdlib must not exist before build command"
+    );
+    assert!(
+        !nested_stdlib.exists(),
+        "stdlib must not exist in nested cwd before build command"
+    );
+
+    project
+        .acton()
+        .arg("--manifest-path")
+        .arg("../Acton.toml")
+        .build()
+        .current_dir(&nested_dir)
+        .run()
+        .success();
+
+    assert!(
+        root_stdlib.exists(),
+        "stdlib should be installed in project root"
+    );
+    assert!(
+        !nested_stdlib.exists(),
+        "stdlib must not be installed in nested cwd"
+    );
+}
+
+#[test]
 fn test_build_with_dependency() {
     let project = ProjectBuilder::new("build-with-dep")
         .contract("child", SIMPLE_CONTRACT)

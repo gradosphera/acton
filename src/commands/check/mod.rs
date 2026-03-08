@@ -155,8 +155,8 @@ pub fn check_cmd(
     let files = find_files(&project_root)?;
     log::info!("found {} files in {:?}", files.len(), now.elapsed());
 
-    let stdlib = find_stdlib()?;
-    let acton_stdlib = find_acton_stdlib()?;
+    let stdlib = find_stdlib(&project_root)?;
+    let acton_stdlib = find_acton_stdlib(&project_root)?;
     let common_tolk = stdlib.join("common.tolk");
 
     let file_db = FileDb::new(stdlib, Some(acton_stdlib));
@@ -396,8 +396,8 @@ fn show_plain_report(
     Ok(())
 }
 
-fn find_stdlib() -> anyhow::Result<PathBuf> {
-    let path_to_stdlib = PathBuf::from(".acton/tolk-stdlib");
+fn find_stdlib(project_root: &Path) -> anyhow::Result<PathBuf> {
+    let path_to_stdlib = project_root.join(".acton/tolk-stdlib");
     if !path_to_stdlib.exists() {
         anyhow::bail!(
             "cannot find Tolk stdlib in .acton/, did you run {}?",
@@ -408,8 +408,8 @@ fn find_stdlib() -> anyhow::Result<PathBuf> {
     Ok(dunce::canonicalize(path_to_stdlib)?)
 }
 
-fn find_acton_stdlib() -> anyhow::Result<PathBuf> {
-    let path_to_acton = PathBuf::from(".acton");
+fn find_acton_stdlib(project_root: &Path) -> anyhow::Result<PathBuf> {
+    let path_to_acton = project_root.join(".acton");
     if !path_to_acton.exists() {
         anyhow::bail!(
             "cannot find Acton in .acton/, did you run {}?",

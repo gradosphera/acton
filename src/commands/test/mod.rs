@@ -82,6 +82,7 @@ pub struct TestResult {
 #[derive(Debug)]
 pub struct TestRunner<'a> {
     config: TestConfig,
+    project_root: PathBuf,
     acton_config: ActonConfig,
     build_cache: BuildCache,
     file_build_cache: &'a mut FileBuildCache,
@@ -111,6 +112,7 @@ impl<'a> TestRunner<'a> {
         } else {
             DapTransport::dummy()
         };
+        let project_root = configured_project_root().to_path_buf();
 
         let mut ref_contracts = BTreeMap::new();
         if let Some(contracts) = acton_config.contracts() {
@@ -154,6 +156,7 @@ impl<'a> TestRunner<'a> {
 
         Self {
             config,
+            project_root,
             acton_config,
             build_cache: BuildCache::new(),
             file_build_cache: cache,
@@ -417,12 +420,16 @@ impl<'a> TestRunner<'a> {
 }
 
 pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()> {
+    let project_root = configured_project_root();
+    let mut config = config.clone();
+    resolve_test_output_paths_from_project_root(&mut config, project_root);
+
     // First we need to build all contracts and generate all dependency files with code
     build_cmd(None, config.clear_cache, None, None, None, None, false)?;
     println!("     {} tests", "Running".green().bold());
 
-    // If path is omitted, default to current directory
-    let path = path.unwrap_or_else(|| ".".to_string());
+    // If path is omitted, default to project root.
+    let path = path.unwrap_or_else(|| project_root.to_string_lossy().to_string());
 
     if !fs::exists(&path).unwrap_or(false) {
         anyhow::bail!(error_fmt::file_not_found(&path));
@@ -464,7 +471,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     let reports_for_ui = ui_reporter.as_ref().map(UiReporter::get_reports_arc);
 
     let mut global_reporter = ReporterManager::new();
-    TestRunner::setup_reporters(&mut global_reporter, config, ui_reporter);
+    TestRunner::setup_reporters(&mut global_reporter, &config, ui_reporter);
     global_reporter.init()?;
     global_reporter.on_testing_started()?;
 
@@ -480,7 +487,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         config.clone(),
         &mut file_cache,
         &mut global_reporter,
-        build_overrides_for_mutations(config)?,
+        build_overrides_for_mutations(&config)?,
     );
 
     for (index, file) in test_files.iter().enumerate() {
@@ -602,6 +609,26 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         process::exit(1)
     }
     Ok(())
+}
+
+fn resolve_test_output_paths_from_project_root(config: &mut TestConfig, project_root: &Path) {
+    config.save_test_trace = config
+        .save_test_trace
+        .as_deref()
+        .map(|path| resolve_project_relative_path(project_root, path));
+    config.junit_path = config
+        .junit_path
+        .as_deref()
+        .map(|path| resolve_project_relative_path(project_root, path));
+}
+
+fn resolve_project_relative_path(project_root: &Path, path: &str) -> String {
+    let path = Path::new(path);
+    if path.is_absolute() {
+        path.to_string_lossy().to_string()
+    } else {
+        project_root.join(path).to_string_lossy().to_string()
+    }
 }
 
 fn build_overrides_for_mutations(config: &TestConfig) -> anyhow::Result<BTreeMap<String, Cell>> {
