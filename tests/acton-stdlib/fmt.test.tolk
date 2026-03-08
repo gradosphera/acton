@@ -109,7 +109,7 @@ get fun `test-format-message`() {
         dest: kQC0663BO7-gCwST4bHolxt85JLRMaFVZgJfblE7oumFduR9 (counter),
         value: CurrencyCollection {
             grams: 1999900000,
-            other: null
+            other: map<int32, varuint32> {}
         },
         extraFlags: 0,
         fwdFee: 266669,
