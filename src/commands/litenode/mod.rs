@@ -29,6 +29,7 @@ pub async fn litenode_start_cmd(
     fork_net: Option<String>,
     fork_block_number: Option<u64>,
     accounts: Vec<String>,
+    rate_limit: Option<u32>,
     load_state: Option<String>,
     dump_state: Option<String>,
     api_key: Option<String>,
@@ -72,6 +73,7 @@ pub async fn litenode_start_cmd(
             db_path,
             fork_network,
             fork_block_number,
+            rate_limit_rps: rate_limit,
         },
     )
     .await;

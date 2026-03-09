@@ -389,6 +389,53 @@ fn litenode_supports_pre_start_commands_and_get_out_msg_queue_size() {
 }
 
 #[test]
+fn litenode_can_rate_limit_api_endpoints_to_simulate_provider_limits() {
+    let project = ProjectBuilder::new("litenode-rate-limit").build();
+    let node = project.litenode().args(["--rate-limit", "1"]).start();
+
+    thread::sleep(Duration::from_millis(1100));
+
+    let first = node.get_json("/api/v2/getMasterchainInfo");
+    assert_eq!(
+        first["ok"].as_bool(),
+        Some(true),
+        "Expected first API request to succeed:\n{}",
+        serde_json::to_string_pretty(&first).unwrap_or_default()
+    );
+
+    let (status, rate_limited) = node.get_json_with_status("/api/v2/getMasterchainInfo");
+    assert_eq!(status, 429, "Expected second request to be rate-limited");
+    assert_eq!(rate_limited["ok"].as_bool(), Some(false));
+    assert_eq!(rate_limited["code"].as_i64(), Some(429));
+    assert!(
+        rate_limited["error"]
+            .as_str()
+            .is_some_and(|msg| msg.contains("Rate limit exceeded")),
+        "Expected rate-limit error message, got:\n{}",
+        serde_json::to_string_pretty(&rate_limited).unwrap_or_default()
+    );
+
+    let (admin_status, admin_response) = node.get_json_with_status("/admin/state-source");
+    assert_eq!(
+        admin_status, 200,
+        "Admin endpoints must stay available when API rate-limit is enabled"
+    );
+    assert_eq!(admin_response["ok"].as_bool(), Some(true));
+
+    thread::sleep(Duration::from_millis(1100));
+
+    let (status_after_window, api_after_window) =
+        node.get_json_with_status("/api/v2/getMasterchainInfo");
+    assert_eq!(
+        status_after_window, 200,
+        "Expected API requests to recover after rate-limit window"
+    );
+    assert_eq!(api_after_window["ok"].as_bool(), Some(true));
+
+    node.stop();
+}
+
+#[test]
 fn litenode_script_println_net_send_in_broadcast_shows_synthetic_hint() {
     let project = ProjectBuilder::new("litenode-broadcast-println-net-send")
         .contract("child", CHILD_CONTRACT)

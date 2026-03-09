@@ -208,6 +208,7 @@ pub struct LitenodeSettings {
     pub fork_net: Option<String>,
     pub fork_block_number: Option<u64>,
     pub accounts: Option<Vec<String>>,
+    pub rate_limit: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -1060,6 +1061,7 @@ port = 3015
 fork-net = "testnet"
 fork-block-number = 1234567
 accounts = ["deployer", "user"]
+rate-limit = 3
 "#;
 
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
@@ -1071,5 +1073,6 @@ accounts = ["deployer", "user"]
             litenode.accounts,
             Some(vec!["deployer".to_string(), "user".to_string()])
         );
+        assert_eq!(litenode.rate_limit, Some(3));
     }
 }

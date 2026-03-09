@@ -217,6 +217,11 @@
           "items": {
             "type": "string"
           }
+        },
+        "rate-limit": {
+          "type": "integer",
+          "description": "Maximum number of API requests per second served by LiteNode `/api` endpoints",
+          "minimum": 1
         }
       }
     },

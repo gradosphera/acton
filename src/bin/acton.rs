@@ -682,6 +682,13 @@ pub enum LitenodeCommand {
         db_path: Option<String>,
         #[arg(
             long,
+            value_name = "RPS",
+            value_parser = clap::value_parser!(u32).range(1..),
+            help = "Maximum API requests per second to simulate provider rate limits (default: [litenode].rate-limit)"
+        )]
+        rate_limit: Option<u32>,
+        #[arg(
+            long,
             help = "Load LiteNode state from JSON snapshot before startup",
             conflicts_with = "db_path", // for now
             value_name = "PATH"
@@ -847,6 +854,10 @@ fn example_litenode_usage() -> StyledStr {
             (
                 "Dump network state to JSON snapshot on shutdown",
                 "acton litenode start --dump-state snapshots/localnet.json",
+            ),
+            (
+                "Simulate provider API limits (1 request/sec)",
+                "acton litenode start --rate-limit 1",
             ),
             (
                 "Request 100 TON from faucet to specified address",
@@ -2052,11 +2063,17 @@ fn main() {
                 accounts,
                 api_key,
                 db_path,
+                rate_limit,
                 load_state,
                 dump_state,
             } => {
-                let resolved_litenode =
-                    resolve_litenode_settings(port, fork_net, fork_block_number, accounts);
+                let resolved_litenode = resolve_litenode_settings(
+                    port,
+                    fork_net,
+                    fork_block_number,
+                    accounts,
+                    rate_limit,
+                );
                 let rt = tokio::runtime::Builder::new_multi_thread()
                     .enable_all()
                     .build()
@@ -2068,6 +2085,7 @@ fn main() {
                         resolved_litenode.fork_net,
                         resolved_litenode.fork_block_number,
                         resolved_litenode.accounts,
+                        resolved_litenode.rate_limit,
                         load_state,
                         dump_state,
                         api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
@@ -2114,10 +2132,11 @@ struct ResolvedLitenodeSettings {
     fork_net: Option<String>,
     fork_block_number: Option<u64>,
     accounts: Vec<String>,
+    rate_limit: Option<u32>,
 }
 
 fn resolve_litenode_port(cli_port: Option<u16>) -> u16 {
-    resolve_litenode_settings(cli_port, None, None, None).port
+    resolve_litenode_settings(cli_port, None, None, None, None).port
 }
 
 fn resolve_litenode_settings(
@@ -2125,6 +2144,7 @@ fn resolve_litenode_settings(
     cli_fork_net: Option<String>,
     cli_fork_block_number: Option<u64>,
     cli_accounts: Option<Vec<String>>,
+    cli_rate_limit: Option<u32>,
 ) -> ResolvedLitenodeSettings {
     let config = load_litenode_settings_from_config();
     ResolvedLitenodeSettings {
@@ -2132,6 +2152,7 @@ fn resolve_litenode_settings(
         fork_net: cli_fork_net.or(config.fork_net),
         fork_block_number: cli_fork_block_number.or(config.fork_block_number),
         accounts: cli_accounts.or(config.accounts).unwrap_or_default(),
+        rate_limit: cli_rate_limit.or(config.rate_limit),
     }
 }
 
