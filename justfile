@@ -48,6 +48,8 @@ check-udeps:
 check-docgen:
     cargo run -- docgen --check # always use latest acton
 
+check-ci: fmt-check check-docgen clippy
+
 check: fmt-check check-docgen clippy check-udeps test
 
 coverage-setup:

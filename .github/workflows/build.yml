@@ -152,9 +152,7 @@ jobs:
 
       - name: Run formatter and linter
         run: |
-          just fmt
-          just clippy
-          just check-docgen
+          just check-ci
 
   create-canary-release:
     needs: [ build-linux ]

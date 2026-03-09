@@ -60,12 +60,7 @@ struct Cli {
     )]
     color: ColorMode,
 
-    #[arg(
-        long,
-        global = true,
-        value_name = "PATH",
-        help = "Path to Acton.toml"
-    )]
+    #[arg(long, global = true, value_name = "PATH", help = "Path to Acton.toml")]
     manifest_path: Option<PathBuf>,
     #[arg(
         long = "project-root",
