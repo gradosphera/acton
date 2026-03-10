@@ -44,6 +44,7 @@ clippy:
 
 check-udeps:
     cargo +nightly udeps --workspace --all-targets --all-features --locked
+    cargo deny check
 
 check-docgen:
     cargo run -- docgen --check # always use latest acton
