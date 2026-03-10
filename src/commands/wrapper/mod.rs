@@ -20,6 +20,7 @@ struct WrapperModel {
     wrapper_path: PathBuf,
     test_path: PathBuf,
     mappings: Option<BTreeMap<String, String>>,
+    format_options: tolkfmt::FormatOptions,
 }
 
 fn build_model(
@@ -29,6 +30,18 @@ fn build_model(
     storage_struct_name: Option<String>,
 ) -> anyhow::Result<WrapperModel> {
     let config = ActonConfig::load().map_err(|e| anyhow!("Failed to load Acton.toml: {e}"))?;
+
+    let format_options = {
+        let fmt_settings = config.fmt.as_ref();
+        let width = fmt_settings.and_then(|s| s.width).unwrap_or(100);
+        let separate_import_groups = fmt_settings
+            .and_then(|s| s.separate_import_groups)
+            .unwrap_or(false);
+        tolkfmt::FormatOptions {
+            width,
+            separate_import_groups,
+        }
+    };
     let project_root = project_root().to_path_buf();
 
     let contract_config = config
@@ -128,7 +141,29 @@ fn build_model(
         wrapper_path,
         test_path,
         mappings,
+        format_options,
     })
+}
+
+fn format_generated_tolk(
+    model: &WrapperModel,
+    raw: String,
+    output_path: &Path,
+    artifact_label: &str,
+) -> String {
+    match tolkfmt::format_source(&raw, model.format_options) {
+        Ok(formatted) => formatted,
+        Err(err) => {
+            eprintln!(
+                "{} Failed to format generated {} {}: {}. Writing unformatted output.",
+                "Error:".red().bold(),
+                artifact_label,
+                output_path.display().to_string().yellow(),
+                err
+            );
+            raw
+        }
+    }
 }
 
 pub fn wrapper_cmd(
@@ -169,10 +204,13 @@ pub fn wrapper_cmd(
         (wrapper_code, test_code)
     };
 
+    let wrapper_code = format_generated_tolk(&model, wrapper_code, &model.wrapper_path, "wrapper");
+
     fs::write(&model.wrapper_path, wrapper_code)
         .map_err(|e| anyhow!("Failed to write wrapper file: {e}"))?;
 
     if generate_test_stub {
+        let test_code = format_generated_tolk(&model, test_code, &model.test_path, "test stub");
         fs::write(&model.test_path, test_code)
             .map_err(|e| anyhow!("Failed to write test file: {e}"))?;
     }

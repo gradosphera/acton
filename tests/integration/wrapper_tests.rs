@@ -66,6 +66,127 @@ fn test_wrapper_generation_without_test_stub() {
 }
 
 #[test]
+fn test_wrapper_generation_from_jetton_template_passes_fmt_check() {
+    let workspace = ProjectBuilder::new("wrapper_jetton_template")
+        .without_acton_toml()
+        .build();
+
+    let generated_project_name = "generated-jetton";
+    let generated_project_path = workspace.path().join(generated_project_name);
+    let generated_project_path_str = generated_project_path.display().to_string();
+
+    workspace
+        .acton()
+        .arg("new")
+        .arg(&generated_project_path_str)
+        .arg("--name")
+        .arg(generated_project_name)
+        .arg("--description")
+        .arg("Jetton wrapper generation fmt check")
+        .arg("--template")
+        .arg("jetton")
+        .arg("--license")
+        .arg("MIT")
+        .current_dir(workspace.path())
+        .run()
+        .success();
+
+    assert!(generated_project_path.join("Acton.toml").exists());
+
+    let tests_dir = generated_project_path.join("tests");
+    if tests_dir.exists() {
+        fs::remove_dir_all(&tests_dir).expect("Failed to remove template tests directory");
+    }
+    fs::create_dir_all(generated_project_path.join("tests/wrappers"))
+        .expect("Failed to recreate wrappers directory");
+
+    let minter_output = workspace
+        .acton()
+        .arg("--project-root")
+        .arg(&generated_project_path_str)
+        .wrapper("jetton_minter")
+        .storage_struct("MinterStorage")
+        .generate_test_stub()
+        .current_dir(workspace.path())
+        .run()
+        .success();
+    minter_output.assert_contains("Generated");
+
+    let wallet_output = workspace
+        .acton()
+        .arg("--project-root")
+        .arg(&generated_project_path_str)
+        .wrapper("jetton_wallet")
+        .storage_struct("WalletStorage")
+        .generate_test_stub()
+        .current_dir(workspace.path())
+        .run()
+        .success();
+    wallet_output.assert_contains("Generated");
+
+    assert!(
+        generated_project_path
+            .join("tests/wrappers/JettonMinterContract.tolk")
+            .exists()
+    );
+    assert!(
+        generated_project_path
+            .join("tests/wrappers/JettonWalletContract.tolk")
+            .exists()
+    );
+    assert!(
+        generated_project_path
+            .join("tests/jetton_minter.test.tolk")
+            .exists()
+    );
+    assert!(
+        generated_project_path
+            .join("tests/jetton_wallet.test.tolk")
+            .exists()
+    );
+
+    wallet_output
+        .assert_file_snapshot_matches(
+            generated_project_path
+                .join("tests/wrappers/JettonMinterContract.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_from_jetton_template_passes_fmt_check/jetton_minter_wrapper.tolk.txt",
+        )
+        .assert_file_snapshot_matches(
+            generated_project_path
+                .join("tests/wrappers/JettonWalletContract.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_from_jetton_template_passes_fmt_check/jetton_wallet_wrapper.tolk.txt",
+        )
+        .assert_file_snapshot_matches(
+            generated_project_path
+                .join("tests/jetton_minter.test.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_from_jetton_template_passes_fmt_check/jetton_minter_test.tolk.txt",
+        )
+        .assert_file_snapshot_matches(
+            generated_project_path
+                .join("tests/jetton_wallet.test.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_from_jetton_template_passes_fmt_check/jetton_wallet_test.tolk.txt",
+        );
+
+    workspace
+        .acton()
+        .arg("--project-root")
+        .arg(&generated_project_path_str)
+        .fmt()
+        .arg("--check")
+        .current_dir(workspace.path())
+        .run()
+        .success();
+}
+
+#[test]
 fn test_wrapper_generation_with_types_and_storage_in_the_same_file() {
     let project = ProjectBuilder::new("wrapper_simple")
         .contract(

@@ -2,7 +2,8 @@ import "@stdlib/gas-payments"
 import "@acton/emulation/network"
 import "@acton/testing/expect"
 import "@acton/testing/transaction_expect"
-import "../../other/nested/wrapper"
+import "@contracts/messages"
+import "wrappers/JettonMinterContract"
 
 /// Example test case demonstrating the basic flow
 get fun `test-basic-flow`() {
@@ -22,7 +23,12 @@ fun setupTest() {
     val not_deployer = net.treasury("not_deployer");
 
     // Initialize and deploy the contract with default values
-    val contract = MyContract.fromStorage();
+    val contract = JettonMinterContract.fromStorage({
+        totalSupply: 0,
+        adminAddress: address("[WALLET_ADDRESS_BASE]"),
+        content: createEmptyCell(),
+        jettonWalletCode: createEmptyCell(),
+    });
     val res = contract.deploy(deployer.address, { value: ton("1") });
     expect(res).toHaveSuccessfulDeploy({ to: contract.address });
 

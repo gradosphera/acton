@@ -13,19 +13,16 @@ struct Main {
 
 /// Creates a contract wrapper instance from the storage data
 fun Main.fromStorage(toShard: AddressShardingOptions? = null) {
-    val stateInit = ContractState {
-        code: build("main"),
-        data: createEmptyCell(),
-    };
+    val stateInit = ContractState { code: build("main"), data: createEmptyCell() };
     val address = toShard == null
         ? AutoDeployAddress { stateInit }.calculateAddress()
         : AutoDeployAddress { stateInit, toShard }.calculateAddress();
-    return Main { address, stateInit }
+    return Main { address, stateInit };
 }
 
 /// Creates a contract wrapper instance from the address
 fun Main.fromAddress(address: address) {
-    return Main { address }
+    return Main { address };
 }
 
 /// Deploys the contract to the blockchain
@@ -36,11 +33,9 @@ fun Main.deploy(self, from: address, config: SendParams = {}): SendResultList {
     val genericMsg = createMessage({
         bounce: config.bounce,
         value: config.value,
-        dest: {
-            stateInit: self.stateInit,
-        },
+        dest: { stateInit: self.stateInit },
     });
-    return net.send(from, genericMsg)
+    return net.send(from, genericMsg);
 }
 
 fun Main.sendPong(self, from: address, value: int, config: SendParams = {}): SendResultList {
@@ -48,11 +43,9 @@ fun Main.sendPong(self, from: address, value: int, config: SendParams = {}): Sen
         bounce: config.bounce,
         value: config.value,
         dest: self.address,
-        body: Pong {
-            value,
-        },
+        body: Pong { value },
     });
-    return net.send(from, genericMsg)
+    return net.send(from, genericMsg);
 }
 
 /// Send message to the contract with a custom body cell
@@ -63,5 +56,5 @@ fun Main.sendAny(self, from: address, body: cell, config: SendParams = {}): Send
         dest: self.address,
         body,
     });
-    return net.send(from, genericMsg)
+    return net.send(from, genericMsg);
 }
