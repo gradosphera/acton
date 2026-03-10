@@ -14,8 +14,9 @@ enum ImportGroup {
     Stdlib,
     Acton,
     Other,
-    RelativeParent,
+    Plain,
     RelativeCurrent,
+    RelativeParent,
 }
 
 #[derive(Clone)]
@@ -42,12 +43,13 @@ fn import_group(path: &str) -> ImportGroup {
         ImportGroup::Acton
     } else if path.starts_with('@') {
         ImportGroup::Other
+    } else if !path.starts_with("./") && !path.starts_with("../") {
+        ImportGroup::Plain
     } else if path.starts_with("./") {
         ImportGroup::RelativeCurrent
     } else if path.starts_with("../") {
         ImportGroup::RelativeParent
     } else {
-        // Plain imports like `import "foo"` are resolved relative to current directory.
         ImportGroup::RelativeCurrent
     }
 }

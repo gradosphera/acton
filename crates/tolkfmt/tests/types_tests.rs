@@ -23,7 +23,7 @@ fn test_single_type_instantiated_ts() {
 
 #[test]
 fn test_type_instantiated_ts_breaking() {
-    check_with_width_without_trees(
+    check_with_width(
         "const x: VeryLongTypeName<FirstType, SecondType, ThirdType> = 0;",
         expect![[r#"
                 const x: VeryLongTypeName<
