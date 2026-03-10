@@ -149,6 +149,7 @@ fn print_tuple_tensor_type<'a>(
         |_| vec![],
         common::ListOptions {
             brackets: (RcDoc::text(open_quote), RcDoc::text(close_quote)),
+            never_break_if_items_lt: 3,
             ..Default::default()
         },
     )

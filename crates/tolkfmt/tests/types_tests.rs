@@ -82,6 +82,15 @@ fn test_tensor_type_breaking() {
 }
 
 #[test]
+fn test_tensor_type_two_elements_do_not_break() {
+    check_with_width(
+        "const x: (FirstVeryLongType, SecondVeryLongType) = 0;",
+        expect!["const x: (FirstVeryLongType, SecondVeryLongType) = 0"],
+        25,
+    );
+}
+
+#[test]
 fn test_tuple_type() {
     check(
         "const x: [int, slice] = 0;",
@@ -105,6 +114,15 @@ fn test_tuple_type_breaking() {
                     ThirdType,
                 ] = 0"#]],
         30,
+    );
+}
+
+#[test]
+fn test_tuple_type_two_elements_do_not_break() {
+    check_with_width(
+        "const x: [FirstVeryLongType, SecondVeryLongType] = 0;",
+        expect!["const x: [FirstVeryLongType, SecondVeryLongType] = 0"],
+        25,
     );
 }
 
