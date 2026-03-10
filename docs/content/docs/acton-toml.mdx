@@ -136,7 +136,7 @@ Configures defaults for `acton fmt`.
 | `ignore`                 | `string[]` | -       | Glob patterns of files to exclude from formatting. |
 | `separate-import-groups` | `boolean`  | `false` | Adds an empty line between import groups.          |
 
-Import groups are ordered as: `@stdlib`, `@acton`, `@<other>`, `../`, `./` (plain imports like `import "foo"` are treated as `./` group).
+Import groups are ordered as: `@stdlib`, `@acton`, `@<other>`, plain imports (`import "foo"`), `./`, `../`.
 
 Example:
 ```toml
