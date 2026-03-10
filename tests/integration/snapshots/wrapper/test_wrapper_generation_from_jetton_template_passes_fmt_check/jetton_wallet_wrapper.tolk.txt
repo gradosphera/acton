@@ -17,7 +17,10 @@ fun JettonWalletContract.fromStorage(
     storage: WalletStorage,
     toShard: AddressShardingOptions? = null,
 ) {
-    val stateInit = ContractState { code: build("jetton_wallet"), data: storage.toCell() };
+    val stateInit = ContractState {
+        code: build("jetton_wallet"),
+        data: storage.toCell(),
+    };
     val address = toShard == null
         ? AutoDeployAddress { stateInit }.calculateAddress()
         : AutoDeployAddress { stateInit, toShard }.calculateAddress();
@@ -111,12 +114,7 @@ fun JettonWalletContract.sendAskToBurn(
         bounce: config.bounce,
         value: config.value,
         dest: self.address,
-        body: AskToBurn {
-            queryId,
-            jettonAmount,
-            sendExcessesTo,
-            customPayload,
-        },
+        body: AskToBurn { queryId, jettonAmount, sendExcessesTo, customPayload },
     });
     return net.send(from, genericMsg);
 }

@@ -285,7 +285,10 @@ fn test_object_literal() {
         "fun test() { x = Point { x: 10, y: 20 }; }",
         expect![[r#"
                 fun test() {
-                    x = Point { x: 10, y: 20 };
+                    x = Point {
+                        x: 10,
+                        y: 20,
+                    };
                 }"#]],
     );
 }
@@ -302,12 +305,52 @@ fn test_object_literal_without_type() {
 }
 
 #[test]
+fn test_object_literal_without_type_mixed_two_fields_stays_single_line() {
+    check(
+        "fun test() { x = { x, y: 20 }; }",
+        expect![[r#"
+                fun test() {
+                    x = { x, y: 20 };
+                }"#]],
+    );
+}
+
+#[test]
+fn test_object_literal_without_type_shorthand_all_uses_default_threshold() {
+    check(
+        "fun test() { x = { x, y, z }; }",
+        expect![[r#"
+                fun test() {
+                    x = {
+                        x,
+                        y,
+                        z,
+                    };
+                }"#]],
+    );
+}
+
+#[test]
 fn test_object_literal_shorthand() {
     check(
         "fun test() { x = Point { x, y }; }",
         expect![[r#"
                 fun test() {
                     x = Point { x, y };
+                }"#]],
+    );
+}
+
+#[test]
+fn test_object_literal_two_fields_mixed_forces_multiline() {
+    check(
+        "fun test() { x = Point { x, y: 20 }; }",
+        expect![[r#"
+                fun test() {
+                    x = Point {
+                        x,
+                        y: 20,
+                    };
                 }"#]],
     );
 }
@@ -1113,7 +1156,10 @@ fn test_object_literal_typed() {
         "fun test() { x = Point { x: 10, y: 20 }; }",
         expect![[r#"
                 fun test() {
-                    x = Point { x: 10, y: 20 };
+                    x = Point {
+                        x: 10,
+                        y: 20,
+                    };
                 }"#]],
     );
 }
@@ -1124,12 +1170,24 @@ fn test_object_literal_shorthand_all() {
         "fun test() { x = Point { x, y, z }; }",
         expect![[r#"
                 fun test() {
+                    x = Point { x, y, z };
+                }"#]],
+    );
+}
+
+#[test]
+fn test_object_literal_shorthand_all_breaks_by_width() {
+    check_with_width(
+        "fun test() { x = Point { firstVeryLongFieldName, secondVeryLongFieldName, thirdVeryLongFieldName }; }",
+        expect![[r#"
+                fun test() {
                     x = Point {
-                        x,
-                        y,
-                        z,
+                        firstVeryLongFieldName,
+                        secondVeryLongFieldName,
+                        thirdVeryLongFieldName,
                     };
                 }"#]],
+        40,
     );
 }
 

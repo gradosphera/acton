@@ -662,6 +662,7 @@ pub fn print_match_arm<'a>(ctx: &Context<'_>, arm: &MatchArm) -> Option<RcDoc<'a
 #[must_use]
 pub fn print_object_literal<'a>(ctx: &Context<'_>, obj: &ObjectLit) -> Option<RcDoc<'a>> {
     let typ = obj.typ();
+    let has_type_name = typ.is_some();
     let mut docs = vec![];
     if let Some(typ) = typ {
         docs.push(types::print_type(ctx, &typ)?);
@@ -669,13 +670,19 @@ pub fn print_object_literal<'a>(ctx: &Context<'_>, obj: &ObjectLit) -> Option<Rc
     }
 
     let args: Vec<_> = obj.arguments().collect();
-    let args_doc = print_object_literal_body(ctx, &args)?;
+    let args_doc = print_object_literal_body(ctx, &args, has_type_name)?;
     docs.push(args_doc);
 
     Some(RcDoc::group(RcDoc::concat(docs)))
 }
 
-pub fn print_object_literal_body<'a>(ctx: &Context, args: &[InstanceArg]) -> Option<RcDoc<'a>> {
+pub fn print_object_literal_body<'a>(
+    ctx: &Context,
+    args: &[InstanceArg],
+    has_type_name: bool,
+) -> Option<RcDoc<'a>> {
+    let multiline_threshold = object_literal_multiline_threshold(ctx, args, has_type_name);
+
     common::print_list(
         ctx,
         args,
@@ -684,28 +691,66 @@ pub fn print_object_literal_body<'a>(ctx: &Context, args: &[InstanceArg]) -> Opt
         |_| vec![],
         common::ListOptions {
             brackets: (RcDoc::text("{"), RcDoc::text("}")),
-            multiline_threshold: 2,
+            multiline_threshold,
             single_line_edge_space: true,
             ..Default::default()
         },
     )
 }
 
+fn object_literal_multiline_threshold(
+    ctx: &Context<'_>,
+    args: &[InstanceArg],
+    has_type_name: bool,
+) -> usize {
+    if !has_type_name {
+        return 2;
+    }
+
+    if args.len() < 2 {
+        return 2;
+    }
+
+    if args
+        .iter()
+        .all(|arg| is_shorthand_instance_argument(ctx, arg))
+    {
+        // Keep compact form when it fits into line width.
+        usize::MAX
+    } else {
+        // For 2+ args, only all-shorthand literals may stay one-line.
+        0
+    }
+}
+
+fn is_shorthand_instance_argument(ctx: &Context<'_>, arg: &InstanceArg) -> bool {
+    let Some(name) = arg.name() else {
+        return false;
+    };
+
+    let Some(val) = arg.value() else {
+        // Defensive fallback: no explicit value means no `:`.
+        return true;
+    };
+
+    let name_text = name.text(ctx.code.as_ref().as_ref()).to_string();
+    let val_text = val.text(ctx.code.as_ref().as_ref());
+    val_text == name_text
+}
+
 #[must_use]
 pub fn print_instance_argument<'a>(ctx: &Context<'_>, arg: &InstanceArg) -> Option<RcDoc<'a>> {
     let name = arg.name()?;
-    let name_text = name.text(ctx.code.as_ref().as_ref()).to_string();
     let name_doc = print_ident(ctx, &name)?;
 
-    // TODO: check logic with TS
     let mut parts = vec![name_doc];
-    if let Some(val) = arg.value() {
-        let val_text = val.text(ctx.code.as_ref().as_ref());
-        if val_text != name_text {
-            let val_doc = print_expression(ctx, &val)?;
-            parts.push(RcDoc::text(": "));
-            parts.push(val_doc);
-        }
+
+    if !is_shorthand_instance_argument(ctx, arg)
+        && let Some(val) = arg.value()
+    {
+        let val_doc = print_expression(ctx, &val)?;
+        parts.push(RcDoc::text(": "));
+        parts.push(val_doc);
     }
 
     Some(RcDoc::concat(parts))

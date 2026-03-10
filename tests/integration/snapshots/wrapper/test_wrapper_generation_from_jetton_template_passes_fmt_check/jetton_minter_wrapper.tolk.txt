@@ -17,7 +17,10 @@ fun JettonMinterContract.fromStorage(
     storage: MinterStorage,
     toShard: AddressShardingOptions? = null,
 ) {
-    val stateInit = ContractState { code: build("jetton_minter"), data: storage.toCell() };
+    val stateInit = ContractState {
+        code: build("jetton_minter"),
+        data: storage.toCell(),
+    };
     val address = toShard == null
         ? AutoDeployAddress { stateInit }.calculateAddress()
         : AutoDeployAddress { stateInit, toShard }.calculateAddress();
@@ -55,12 +58,7 @@ fun JettonMinterContract.sendBurnNotificationForMinter(
         bounce: config.bounce,
         value: config.value,
         dest: self.address,
-        body: BurnNotificationForMinter {
-            queryId,
-            jettonAmount,
-            burnInitiator,
-            sendExcessesTo,
-        },
+        body: BurnNotificationForMinter { queryId, jettonAmount, burnInitiator, sendExcessesTo },
     });
     return net.send(from, genericMsg);
 }
@@ -77,11 +75,7 @@ fun JettonMinterContract.sendRequestWalletAddress(
         bounce: config.bounce,
         value: config.value,
         dest: self.address,
-        body: RequestWalletAddress {
-            queryId,
-            ownerAddress,
-            includeOwnerAddress,
-        },
+        body: RequestWalletAddress { queryId, ownerAddress, includeOwnerAddress },
     });
     return net.send(from, genericMsg);
 }

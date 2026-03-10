@@ -13,7 +13,10 @@ struct Main {
 
 /// Creates a contract wrapper instance from the storage data
 fun Main.fromStorage(toShard: AddressShardingOptions? = null) {
-    val stateInit = ContractState { code: build("main"), data: createEmptyCell() };
+    val stateInit = ContractState {
+        code: build("main"),
+        data: createEmptyCell(),
+    };
     val address = toShard == null
         ? AutoDeployAddress { stateInit }.calculateAddress()
         : AutoDeployAddress { stateInit, toShard }.calculateAddress();
