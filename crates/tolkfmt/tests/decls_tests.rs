@@ -595,6 +595,17 @@ fn test_function_with_annotations() {
 }
 
 #[test]
+fn test_function_doc_comment_with_annotation() {
+    check(
+        "/// Returns value\n@pure\nfun foo() {}",
+        expect![[r#"
+                /// Returns value
+                @pure
+                fun foo() {}"#]],
+    );
+}
+
+#[test]
 fn test_function_generics() {
     check(
         "fun identity<T>(x: T): T { return x; }",
@@ -725,6 +736,72 @@ fn test_annotation_empty_args() {
         expect![[r#"
                 @deprecated()
                 fun foo() {}"#]],
+    );
+}
+
+#[test]
+fn test_annotation_empty_args_inline_comment() {
+    check(
+        "@foo() // comment\nfun main() {}",
+        expect![[r#"
+                @foo() // comment
+                fun main() {}"#]],
+    );
+}
+
+#[test]
+fn test_annotation_with_arguments_inline_comment() {
+    check(
+        "@deprecated(\"use bar instead\") // comment\nfun foo() {}",
+        expect![[r#"
+                @deprecated("use bar instead") // comment
+                fun foo() {}"#]],
+    );
+}
+
+#[test]
+fn test_multiple_annotations_with_inline_comments() {
+    check(
+        "@pure // first\n@test() // second\nfun foo() {}",
+        expect![[r#"
+                @pure // first
+                @test() // second
+                fun foo() {}"#]],
+    );
+}
+
+#[test]
+fn test_annotation_list_last_annotation_inline_comment() {
+    check(
+        "@pure\n@test() // trailing list\nfun foo() {}",
+        expect![[r#"
+                @pure
+                @test() // trailing list
+                fun foo() {}"#]],
+    );
+}
+
+#[test]
+fn test_method_annotation_inline_comment() {
+    check(
+        "@pure() // comment\nfun int.abs(): int { return self; }",
+        expect![[r#"
+                @pure() // comment
+                fun int.abs(): int {
+                    return self;
+                }"#]],
+    );
+}
+
+#[test]
+fn test_get_method_annotation_inline_comment() {
+    check(
+        "@pure() // comment\nget fun value(): int { return 42; }",
+        expect![[r#"
+                @pure() // comment
+                get fun value(): int {
+                    return 42;
+                }"#]],
     );
 }
 
