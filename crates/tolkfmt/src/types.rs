@@ -174,6 +174,16 @@ pub fn print_type_instantiated_ts<'a>(
     let args = inst.arguments()?;
     let types: Vec<_> = args.types().collect();
 
+    if types.len() == 1 {
+        let single_type_doc = print_type(ctx, &types[0])?;
+        return Some(RcDoc::concat([
+            name_doc,
+            RcDoc::text("<"),
+            single_type_doc,
+            RcDoc::text(">"),
+        ]));
+    }
+
     let types_doc = common::print_list(
         ctx,
         &types,

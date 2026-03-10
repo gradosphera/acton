@@ -22,6 +22,15 @@ fn test_single_type_instantiated_ts() {
 }
 
 #[test]
+fn test_single_type_instantiated_ts_does_not_break_on_small_width() {
+    check_with_width(
+        "const x: VeryLongContainer<int> = 0;",
+        expect!["const x: VeryLongContainer<int> = 0"],
+        20,
+    );
+}
+
+#[test]
 fn test_type_instantiated_ts_breaking() {
     check_with_width(
         "const x: VeryLongTypeName<FirstType, SecondType, ThirdType> = 0;",
