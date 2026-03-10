@@ -236,12 +236,7 @@ pub fn check_cmd(
             output::github::write_report(&mut writer, &all_diagnostics, &file_db, &project_root)?;
         }
         CheckOutputFormat::Gitlab => {
-            output::gitlab_code_quality::write_report(
-                &mut writer,
-                &all_diagnostics,
-                &file_db,
-                &project_root,
-            )?;
+            output::gitlab::write_report(&mut writer, &all_diagnostics, &file_db, &project_root)?;
         }
     }
 
