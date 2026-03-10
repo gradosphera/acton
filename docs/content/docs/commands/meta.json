@@ -4,6 +4,7 @@
     "compile",
     "wrapper",
     "disasm",
+    "retrace",
     "test",
     "check",
     "script",
