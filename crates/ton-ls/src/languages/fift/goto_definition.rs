@@ -8,17 +8,14 @@ impl Backend {
         &self,
         params: GotoDefinitionParams,
     ) -> Option<GotoDefinitionResponse> {
-        crate::profile!(self, "fift-goto_definition");
-        let now = std::time::Instant::now();
+        crate::profile!(self, "fift: goto_definition");
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
         let file = self.registry.find_fift_file(&uri)?;
 
         let range = find_definition_range(&file, position)?;
 
-        let result = Some(GotoDefinitionResponse::Scalar(Location::new(uri, range)));
-        log::info!("Response: fift goto_definition took {:?}", now.elapsed());
-        result
+        Some(GotoDefinitionResponse::Scalar(Location::new(uri, range)))
     }
 }
 

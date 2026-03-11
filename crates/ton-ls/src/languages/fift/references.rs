@@ -5,10 +5,8 @@ use lsp_types::{Location, Position, Range, ReferenceParams};
 
 impl Backend {
     pub async fn handle_fift_references(&self, params: ReferenceParams) -> Option<Vec<Location>> {
-        crate::profile!(self, "fift-references");
-        let now = std::time::Instant::now();
+        crate::profile!(self, "fift: references");
         let uri = params.text_document_position.text_document.uri;
-        log::info!("Request: fift references for {}", uri);
 
         let file = self.registry.find_fift_file(&uri)?;
 
@@ -22,13 +20,7 @@ impl Backend {
             .into_iter()
             .map(|range| Location::new(uri.clone(), range))
             .collect::<Vec<_>>();
-        let result = Some(locations);
-        log::info!(
-            "Response: fift references took {:?}, found {} references",
-            now.elapsed(),
-            result.as_ref().map_or(0, Vec::len),
-        );
-        result
+        Some(locations)
     }
 }
 

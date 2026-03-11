@@ -10,11 +10,8 @@ struct HoverTarget<'a> {
 
 impl Backend {
     pub async fn handle_tasm_hover(&self, params: HoverParams) -> Option<Hover> {
-        crate::profile!(self, "tasm-hover");
-        let now = std::time::Instant::now();
+        crate::profile!(self, "tasm: hover");
         let uri = params.text_document_position_params.text_document.uri;
-        log::info!("Request: tasm hover for {}", uri);
-
         let file = self.registry.find_tasm_file(&uri)?;
 
         let position = params.text_document_position_params.position;
@@ -23,15 +20,13 @@ impl Backend {
         let tasm_spec = get_tasm_spec()?;
 
         let markdown = build_hover_markdown(target.name, tasm_spec)?;
-        let result = Some(Hover {
+        Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: markdown,
             }),
             range: Some(target.range),
-        });
-        log::info!("Response: tasm hover took {:?}", now.elapsed(),);
-        result
+        })
     }
 }
 

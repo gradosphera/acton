@@ -7,11 +7,8 @@ impl Backend {
         &self,
         params: FoldingRangeParams,
     ) -> Option<Vec<FoldingRange>> {
-        crate::profile!(self, "folding_range");
-        let now = std::time::Instant::now();
+        crate::profile!(self, "tasm: folding_range");
         let uri = params.text_document.uri;
-        log::info!("Request: folding_range for {}", uri);
-
         let file = self.registry.find_tasm_file(&uri)?;
 
         let mut ranges = Vec::new();
@@ -20,13 +17,7 @@ impl Backend {
         }
         ranges.sort_by_key(|range| (range.start_line, range.end_line));
 
-        let result = Some(ranges);
-        log::info!(
-            "Response: folding_range took {:?}, found {} ranges",
-            now.elapsed(),
-            result.as_ref().map_or(0, Vec::len),
-        );
-        result
+        Some(ranges)
     }
 }
 

@@ -16,10 +16,8 @@ const ACTON_SCHEMA_JSON: &str = include_str!(concat!(
 
 impl Backend {
     pub async fn handle_toml_hover(&self, params: HoverParams) -> Option<Hover> {
-        crate::profile!(self, "toml-hover");
-        let now = std::time::Instant::now();
+        crate::profile!(self, "toml: hover");
         let uri = params.text_document_position_params.text_document.uri;
-        log::info!("Request: toml hover for {}", uri);
 
         let path = uri.to_file_path().ok()?;
         if !is_acton_toml(&path) {
@@ -29,26 +27,21 @@ impl Backend {
         let file = self.registry.find_toml_file(&uri)?;
 
         let node = file.node_at(params.text_document_position_params.position)?;
-
         let schema_path = find_schema_path(&file, node)?;
 
         let schema = get_acton_schema_store()?;
-
         let doc = schema.summary_for_path(&schema_path)?;
 
         let markdown = build_hover_markdown(&schema_path, &doc)?;
-
         let range = file.range_of(node);
 
-        let result = Some(Hover {
+        Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: markdown,
             }),
             range: Some(range),
-        });
-        log::info!("Response: toml hover took {:?}", now.elapsed(),);
-        result
+        })
     }
 }
 

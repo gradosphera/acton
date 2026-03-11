@@ -8,11 +8,8 @@ pub const STACK_EFFECT_CODE_LENS_COMMAND: &str = "tonls.tasm.stackEffect";
 
 impl Backend {
     pub async fn handle_tasm_code_lens(&self, params: CodeLensParams) -> Option<Vec<CodeLens>> {
-        crate::profile!(self, "tasm-code-lens");
-        let now = std::time::Instant::now();
+        crate::profile!(self, "tasm: code_lens");
         let uri = params.text_document.uri;
-        log::info!("Request: tasm code_lens for {}", uri);
-
         let file = self.registry.find_tasm_file(&uri)?;
 
         let tasm_spec = get_tasm_spec();
@@ -23,13 +20,7 @@ impl Backend {
         }
         lenses.sort_by_key(|lens| (lens.range.start.line, lens.range.start.character));
 
-        let result = Some(lenses);
-        log::info!(
-            "Response: tasm code_lens took {:?}, found {} lenses",
-            now.elapsed(),
-            result.as_ref().map_or(0, Vec::len),
-        );
-        result
+        Some(lenses)
     }
 }
 

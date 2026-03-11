@@ -11,10 +11,8 @@ struct HoverTarget {
 
 impl Backend {
     pub async fn handle_fift_hover(&self, params: HoverParams) -> Option<Hover> {
-        crate::profile!(self, "fift-hover");
-        let now = std::time::Instant::now();
+        crate::profile!(self, "fift: hover");
         let uri = params.text_document_position_params.text_document.uri;
-        log::info!("Request: fift hover for {}", uri);
 
         let position = params.text_document_position_params.position;
         let file = self.registry.find_fift_file(&uri)?;
@@ -24,15 +22,13 @@ impl Backend {
 
         let markdown = build_hover_markdown(&target.name, tasm_spec)?;
 
-        let result = Some(Hover {
+        Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: markdown,
             }),
             range: Some(target.range),
-        });
-        log::info!("Response: fift hover took {:?}", now.elapsed(),);
-        result
+        })
     }
 }
 

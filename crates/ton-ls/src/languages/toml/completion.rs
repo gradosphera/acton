@@ -16,10 +16,8 @@ impl Backend {
         &self,
         params: CompletionParams,
     ) -> Option<CompletionResponse> {
-        crate::profile!(self, "toml-completion");
-        let now = std::time::Instant::now();
+        crate::profile!(self, "toml: completion");
         let uri = params.text_document_position.text_document.uri;
-        log::info!("Request: toml completion for {}", uri);
 
         let path = uri.to_file_path().ok()?;
         if !is_acton_toml(&path) {
@@ -67,9 +65,7 @@ impl Backend {
             return None;
         }
 
-        let result = Some(CompletionResponse::Array(items));
-        log::info!("Response: toml completion took {:?}", now.elapsed(),);
-        result
+        Some(CompletionResponse::Array(items))
     }
 }
 

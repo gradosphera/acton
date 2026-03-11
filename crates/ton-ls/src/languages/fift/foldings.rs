@@ -8,21 +8,12 @@ impl Backend {
         &self,
         params: FoldingRangeParams,
     ) -> Option<Vec<FoldingRange>> {
-        crate::profile!(self, "fift-folding_range");
-        let now = std::time::Instant::now();
+        crate::profile!(self, "fift: folding_range");
         let uri = params.text_document.uri;
-        log::info!("Request: fift folding_range for {}", uri);
 
         let file = self.registry.find_fift_file(&uri)?;
 
-        let ranges = collect_ranges(file.syntax());
-        let result = Some(ranges);
-        log::info!(
-            "Response: fift folding_range took {:?}, found {} ranges",
-            now.elapsed(),
-            result.as_ref().map_or(0, Vec::len),
-        );
-        result
+        Some(collect_ranges(file.syntax()))
     }
 }
 

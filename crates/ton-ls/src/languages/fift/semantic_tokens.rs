@@ -16,18 +16,12 @@ impl Backend {
         &self,
         params: SemanticTokensParams,
     ) -> Option<SemanticTokensResult> {
-        crate::profile!(self, "fift-semantic_tokens");
-        let now = std::time::Instant::now();
+        crate::profile!(self, "fift: semantic_tokens");
         let uri = params.text_document.uri;
-        log::info!("Request: fift semantic_tokens_full for {}", uri);
 
         let file = self.registry.find_fift_file(&uri)?;
         let data = collect_function_tokens(&file);
 
-        log::info!(
-            "Response: fift semantic_tokens_full took {:?}",
-            now.elapsed()
-        );
         Some(Tokens(SemanticTokens {
             result_id: Some(semantic_tokens_result_id()),
             data,
