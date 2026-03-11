@@ -1,6 +1,6 @@
-# Tolk VS Code Extension
+# Tolk & TASM VS Code Extension
 
-Simple extension to support Tolk language using `acton`.
+Simple extension to support Tolk and TASM languages using `acton`.
 
 ## Installation
 

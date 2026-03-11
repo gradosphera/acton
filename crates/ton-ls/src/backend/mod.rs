@@ -13,6 +13,7 @@ pub mod profiling;
 pub mod utils;
 
 use crate::AnalysisResult;
+use crate::backend::utils::{SourceLanguage, detect_language, get_byte_offset};
 use crate::languages::tasm;
 use crate::languages::tolk::semantic_tokens;
 #[cfg(feature = "profiling")]
@@ -44,6 +45,8 @@ impl LanguageServer for Backend {
                 )),
                 definition_provider: Some(OneOf::Left(true)),
                 references_provider: Some(OneOf::Left(true)),
+                folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
                 inlay_hint_provider: Some(OneOf::Left(true)),
                 workspace_symbol_provider: Some(OneOf::Left(true)),
                 code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
@@ -101,12 +104,19 @@ impl LanguageServer for Backend {
         let now = std::time::Instant::now();
         log::info!("Notification: did_open for {}", params.text_document.uri);
         self.update_document(&params.text_document.uri, params.text_document.text);
-        self.analyze(params.text_document.uri).await;
+        if detect_language(&params.text_document.uri) == SourceLanguage::Tolk {
+            self.analyze(params.text_document.uri).await;
+        }
         log::info!("Notification: did_open took {:?}", now.elapsed());
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        self.handle_did_change(params).await;
+        match detect_language(&params.text_document.uri) {
+            SourceLanguage::Tolk => self.handle_did_change(params).await,
+            SourceLanguage::Tasm | SourceLanguage::Unknown => {
+                self.handle_text_only_did_change(params)
+            }
+        }
     }
 
     async fn did_save(&self, _params: DidSaveTextDocumentParams) {}
@@ -115,19 +125,31 @@ impl LanguageServer for Backend {
         &self,
         params: GotoDefinitionParams,
     ) -> LspResult<Option<GotoDefinitionResponse>> {
-        self.handle_goto_definition(params).await
+        match detect_language(&params.text_document_position_params.text_document.uri) {
+            SourceLanguage::Tolk => self.handle_goto_definition(params).await,
+            SourceLanguage::Tasm | SourceLanguage::Unknown => Ok(None),
+        }
     }
 
     async fn references(&self, params: ReferenceParams) -> LspResult<Option<Vec<Location>>> {
-        self.handle_references(params).await
+        match detect_language(&params.text_document_position.text_document.uri) {
+            SourceLanguage::Tolk => self.handle_references(params).await,
+            SourceLanguage::Tasm | SourceLanguage::Unknown => Ok(None),
+        }
     }
 
     async fn inlay_hint(&self, params: InlayHintParams) -> LspResult<Option<Vec<InlayHint>>> {
-        self.handle_inlay_hint(params).await
+        match detect_language(&params.text_document.uri) {
+            SourceLanguage::Tolk => self.handle_inlay_hint(params).await,
+            SourceLanguage::Tasm | SourceLanguage::Unknown => Ok(None),
+        }
     }
 
     async fn code_action(&self, params: CodeActionParams) -> LspResult<Option<CodeActionResponse>> {
-        self.handle_code_action(params).await
+        match detect_language(&params.text_document.uri) {
+            SourceLanguage::Tolk => self.handle_code_action(params).await,
+            SourceLanguage::Tasm | SourceLanguage::Unknown => Ok(None),
+        }
     }
 
     async fn symbol(
@@ -141,11 +163,52 @@ impl LanguageServer for Backend {
         &self,
         params: SemanticTokensParams,
     ) -> LspResult<Option<SemanticTokensResult>> {
-        self.handle_semantic_tokens_full(params).await
+        match detect_language(&params.text_document.uri) {
+            SourceLanguage::Tolk => self.handle_semantic_tokens_full(params).await,
+            SourceLanguage::Tasm | SourceLanguage::Unknown => Ok(None),
+        }
+    }
+
+    async fn folding_range(
+        &self,
+        params: FoldingRangeParams,
+    ) -> LspResult<Option<Vec<FoldingRange>>> {
+        match detect_language(&params.text_document.uri) {
+            SourceLanguage::Tasm => self.handle_tasm_folding_range(params).await,
+            SourceLanguage::Tolk | SourceLanguage::Unknown => Ok(None),
+        }
+    }
+
+    async fn hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
+        match detect_language(&params.text_document_position_params.text_document.uri) {
+            SourceLanguage::Tasm => self.handle_tasm_hover(params).await,
+            SourceLanguage::Tolk | SourceLanguage::Unknown => Ok(None),
+        }
     }
 }
 
 impl Backend {
+    fn handle_text_only_did_change(&self, params: DidChangeTextDocumentParams) {
+        let uri = params.text_document.uri;
+        let mut text = self
+            .documents
+            .get(&uri)
+            .map(|d| d.clone())
+            .unwrap_or_default();
+
+        for change in params.content_changes {
+            if let Some(range) = change.range {
+                let start_byte = get_byte_offset(&text, range.start);
+                let old_end_byte = get_byte_offset(&text, range.end);
+                text.replace_range(start_byte..old_end_byte, &change.text);
+            } else {
+                text = change.text;
+            }
+        }
+
+        self.update_document(&uri, text);
+    }
+
     pub fn get_file_url(&self, file_info: &tolk_resolver::file_db::FileInfo) -> Option<Url> {
         use crate::backend::utils::FileInfoExt;
         let url = self

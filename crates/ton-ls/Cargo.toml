@@ -20,6 +20,7 @@ tolk-syntax = { workspace = true }
 tolk-linter = { workspace = true }
 tolk-analysis = { workspace = true }
 tasm-syntax = { workspace = true }
+tasm = { workspace = true }
 rustc-hash = { workspace = true }
 tower-lsp = { workspace = true }
 lsp-types = { workspace = true }

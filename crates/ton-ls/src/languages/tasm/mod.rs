@@ -1,4 +1,4 @@
-pub fn init() {
-    let res = tasm_syntax::parse("PUSHINT_4 1");
-    println!("{:?}", res);
-}
+pub mod foldings;
+pub mod hover;
+
+pub fn init() {}

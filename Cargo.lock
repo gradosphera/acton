@@ -3644,6 +3644,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
+ "tasm",
  "tasm-syntax",
  "tokio",
  "tolk-analysis",

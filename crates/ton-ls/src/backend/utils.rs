@@ -1,8 +1,30 @@
 use lsp_types::*;
+use std::path::Path;
 use std::sync::Arc;
 use tolk_resolver::FileInfo;
 use tolk_resolver::file_index::Span;
 use tree_sitter::Point;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceLanguage {
+    Tolk,
+    Tasm,
+    Unknown,
+}
+
+#[must_use]
+pub fn detect_language(uri: &Url) -> SourceLanguage {
+    let ext = Path::new(uri.path())
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase());
+
+    match ext.as_deref() {
+        Some("tolk") => SourceLanguage::Tolk,
+        Some("tasm") => SourceLanguage::Tasm,
+        _ => SourceLanguage::Unknown,
+    }
+}
 
 pub trait SpanExt {
     fn start_position(&self, file: &Arc<FileInfo>) -> Position;
@@ -143,6 +165,13 @@ fn offset_to_pos_internal(line_offsets: &[usize], source: &str, offset: usize) -
 pub fn offset_to_lsp_pos(offset: usize, text: &str) -> Position {
     let offsets = compute_offsets(text);
     offset_to_pos_internal(&offsets, text, offset)
+}
+
+pub fn offsets_to_lsp_range(start_offset: usize, end_offset: usize, text: &str) -> Range {
+    Range::new(
+        offset_to_lsp_pos(start_offset, text),
+        offset_to_lsp_pos(end_offset, text),
+    )
 }
 
 pub fn ranges_intersect(a: &Range, b: &Range) -> bool {
