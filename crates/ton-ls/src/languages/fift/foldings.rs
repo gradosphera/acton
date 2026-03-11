@@ -15,24 +15,11 @@ impl Backend {
         let uri = params.text_document.uri;
         log::info!("Request: fift folding_range for {}", uri);
 
-        let Some(source) = self
-            .documents
-            .get(&uri)
-            .map(|text| text.clone())
-            .or_else(|| {
-                uri.to_file_path()
-                    .ok()
-                    .and_then(|path| std::fs::read_to_string(path).ok())
-            })
-        else {
+        let Some(snapshot) = self.registry.find_fift_file(&uri) else {
             return Ok(None);
         };
 
-        let Ok(source_file) = fift_syntax::parse(&source) else {
-            return Ok(None);
-        };
-
-        let ranges = collect_ranges(&source_file);
+        let ranges = collect_ranges(snapshot.source_file.as_ref());
 
         log::info!(
             "Response: fift folding_range took {:?}, found {} ranges",

@@ -20,29 +20,17 @@ impl Backend {
         let uri = params.text_document.uri;
         log::info!("Request: tasm code_lens for {}", uri);
 
-        let Some(source) = self
-            .documents
-            .get(&uri)
-            .map(|text| text.clone())
-            .or_else(|| {
-                uri.to_file_path()
-                    .ok()
-                    .and_then(|path| std::fs::read_to_string(path).ok())
-            })
-        else {
+        let Some(snapshot) = self.registry.find_tasm_file(&uri) else {
             return Ok(None);
         };
 
-        let Ok(source_file) = tasm_syntax::parse(&source) else {
-            return Ok(None);
-        };
-
+        let source = snapshot.text.as_ref();
+        let source_file = snapshot.source_file.as_ref();
         let instruction_docs = get_instruction_docs_index();
         let mut lenses = Vec::new();
         for top_level in source_file.top_levels() {
-            collect_top_level(top_level, &source, instruction_docs, &mut lenses);
+            collect_top_level(top_level, source, instruction_docs, &mut lenses);
         }
-
         lenses.sort_by_key(|lens| (lens.range.start.line, lens.range.start.character));
 
         log::info!(

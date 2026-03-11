@@ -30,25 +30,19 @@ impl Backend {
             return Ok(None);
         }
 
-        let Some(source) = self
-            .documents
-            .get(&uri)
-            .map(|text| text.clone())
-            .or_else(|| std::fs::read_to_string(&path).ok())
-        else {
+        let Some(snapshot) = self.registry.find_toml_file(&uri) else {
             return Ok(None);
         };
 
-        let Ok(source_file) = toml_syntax::parse(&source) else {
-            return Ok(None);
-        };
+        let source = snapshot.text.as_ref();
+        let source_file = snapshot.source_file.as_ref();
 
-        let point = get_point(&source, params.text_document_position_params.position);
+        let point = get_point(source, params.text_document_position_params.position);
         let Some(node) = node_at_position(source_file.root_node(), point) else {
             return Ok(None);
         };
 
-        let Some(schema_path) = find_schema_path(&source_file, node, &source) else {
+        let Some(schema_path) = find_schema_path(source_file, node, source) else {
             return Ok(None);
         };
 
@@ -64,7 +58,7 @@ impl Backend {
             return Ok(None);
         };
 
-        let range = offsets_to_lsp_range(node.start_byte(), node.end_byte(), &source);
+        let range = offsets_to_lsp_range(node.start_byte(), node.end_byte(), source);
 
         log::info!("Response: toml hover took {:?}", now.elapsed());
         Ok(Some(Hover {

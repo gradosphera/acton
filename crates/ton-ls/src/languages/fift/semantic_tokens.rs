@@ -39,18 +39,11 @@ impl Backend {
     }
 
     fn fift_semantic_tokens(&self, uri: &Url) -> Option<Vec<SemanticToken>> {
-        let source = self
-            .documents
-            .get(uri)
-            .map(|text| text.clone())
-            .or_else(|| {
-                uri.to_file_path()
-                    .ok()
-                    .and_then(|path| std::fs::read_to_string(path).ok())
-            })?;
-
-        let source_file = fift_syntax::parse(&source).ok()?;
-        Some(collect_function_tokens(&source_file, &source))
+        let snapshot = self.registry.find_fift_file(uri)?;
+        Some(collect_function_tokens(
+            snapshot.source_file.as_ref(),
+            snapshot.text.as_ref(),
+        ))
     }
 }
 

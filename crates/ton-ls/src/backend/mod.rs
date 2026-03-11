@@ -13,7 +13,9 @@ pub mod profiling;
 pub mod utils;
 
 use crate::AnalysisResult;
-use crate::backend::utils::{SourceLanguage, detect_language, get_byte_offset};
+use crate::backend::utils::{SourceLanguage, detect_language};
+use crate::languages::engine::edits::apply_lsp_changes;
+use crate::languages::engine::registry::SelfContainedLanguageRegistry;
 use crate::languages::tasm;
 use crate::languages::tolk::semantic_tokens;
 #[cfg(feature = "profiling")]
@@ -27,6 +29,7 @@ pub struct Backend {
     pub documents: DashMap<Url, String>,
     pub analysis: DashMap<Url, Arc<AnalysisResult>>,
     pub file_urls: DashMap<FileId, Url>,
+    pub registry: SelfContainedLanguageRegistry,
     #[cfg(feature = "profiling")]
     pub profiling: Arc<ProfilingContext>,
 }
@@ -125,25 +128,53 @@ impl LanguageServer for Backend {
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let now = std::time::Instant::now();
-        log::info!("Notification: did_open for {}", params.text_document.uri);
-        self.update_document(&params.text_document.uri, params.text_document.text);
-        if detect_language(&params.text_document.uri) == SourceLanguage::Tolk {
-            self.analyze(params.text_document.uri).await;
+        let uri = params.text_document.uri;
+        let version = params.text_document.version;
+        let text = params.text_document.text;
+        let language = detect_language(&uri);
+
+        log::info!("Notification: did_open for {}", uri);
+
+        self.update_document(&uri, text.clone());
+
+        if language.is_self_contained()
+            && let Err(error) = self.registry.did_open(language, &uri, version, &text)
+        {
+            log::warn!("Failed to initialize self-contained cache for {uri}: {error}");
+        }
+
+        if language == SourceLanguage::Tolk {
+            self.analyze(uri).await;
         }
         log::info!("Notification: did_open took {:?}", now.elapsed());
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        match detect_language(&params.text_document.uri) {
-            SourceLanguage::Tolk => self.handle_did_change(params).await,
-            SourceLanguage::Tasm
-            | SourceLanguage::Fift
-            | SourceLanguage::Toml
-            | SourceLanguage::Unknown => self.handle_text_only_did_change(params),
+        let language = detect_language(&params.text_document.uri);
+        if language == SourceLanguage::Tolk {
+            self.handle_did_change(params).await;
+            return;
         }
+
+        if language.is_self_contained() {
+            self.handle_self_contained_did_change(language, params);
+            return;
+        }
+
+        self.handle_text_only_did_change(params);
     }
 
     async fn did_save(&self, _params: DidSaveTextDocumentParams) {}
+
+    async fn did_close(&self, params: DidCloseTextDocumentParams) {
+        let uri = params.text_document.uri;
+        let language = detect_language(&uri);
+
+        if language.is_self_contained() {
+            self.documents.remove(&uri);
+            self.registry.did_close(language, &uri);
+        }
+    }
 
     async fn goto_definition(
         &self,
@@ -256,25 +287,52 @@ impl LanguageServer for Backend {
 }
 
 impl Backend {
+    fn handle_self_contained_did_change(
+        &self,
+        language: SourceLanguage,
+        params: DidChangeTextDocumentParams,
+    ) {
+        let uri = params.text_document.uri;
+        let version = params.text_document.version;
+        match self
+            .registry
+            .did_change(language, &uri, version, &params.content_changes)
+        {
+            Ok(Some(updated_text)) => {
+                self.update_document(&uri, updated_text);
+            }
+            Ok(None) => {
+                let current_text = self
+                    .documents
+                    .get(&uri)
+                    .map(|d| d.clone())
+                    .unwrap_or_default();
+                let applied = apply_lsp_changes(&current_text, &params.content_changes);
+                self.update_document(&uri, applied.text);
+                log::debug!("No self-contained snapshot found for {uri} during did_change");
+            }
+            Err(error) => {
+                let current_text = self
+                    .documents
+                    .get(&uri)
+                    .map(|d| d.clone())
+                    .unwrap_or_default();
+                let applied = apply_lsp_changes(&current_text, &params.content_changes);
+                self.update_document(&uri, applied.text);
+                log::warn!("Failed to sync self-contained cache for {uri}: {error}");
+            }
+        }
+    }
+
     fn handle_text_only_did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri;
-        let mut text = self
+        let current_text = self
             .documents
             .get(&uri)
             .map(|d| d.clone())
             .unwrap_or_default();
-
-        for change in params.content_changes {
-            if let Some(range) = change.range {
-                let start_byte = get_byte_offset(&text, range.start);
-                let old_end_byte = get_byte_offset(&text, range.end);
-                text.replace_range(start_byte..old_end_byte, &change.text);
-            } else {
-                text = change.text;
-            }
-        }
-
-        self.update_document(&uri, text);
+        let applied = apply_lsp_changes(&current_text, &params.content_changes);
+        self.update_document(&uri, applied.text);
     }
 
     pub fn get_file_url(&self, file_info: &tolk_resolver::file_db::FileInfo) -> Option<Url> {

@@ -1,5 +1,6 @@
 use crate::backend::Backend;
 use crate::backend::utils::{get_point, offsets_to_lsp_range};
+use crate::languages::engine::cache::ParsedSnapshot;
 use crate::languages::instruction_docs::{build_hover_markdown, get_instruction_docs_index};
 use lsp_types::{Hover, HoverContents, HoverParams, MarkupContent, MarkupKind, Range};
 use tower_lsp::jsonrpc::Result as LspResult;
@@ -18,25 +19,14 @@ impl Backend {
         let uri = params.text_document_position_params.text_document.uri;
         log::info!("Request: tasm hover for {}", uri);
 
-        let Some(source) = self
-            .documents
-            .get(&uri)
-            .map(|text| text.clone())
-            .or_else(|| {
-                uri.to_file_path()
-                    .ok()
-                    .and_then(|path| std::fs::read_to_string(path).ok())
-            })
-        else {
+        let Some(snapshot) = self.registry.find_tasm_file(&uri) else {
             return Ok(None);
         };
 
-        let Ok(source_file) = tasm_syntax::parse(&source) else {
-            return Ok(None);
-        };
-
-        let point = get_point(&source, params.text_document_position_params.position);
-        let Some(target) = find_instruction_hover_target(&source_file, &source, point) else {
+        let Some(target) = find_hover_target_for_snapshot(
+            &snapshot,
+            params.text_document_position_params.position,
+        ) else {
             return Ok(None);
         };
 
@@ -57,6 +47,16 @@ impl Backend {
             range: Some(target.range),
         }))
     }
+}
+
+fn find_hover_target_for_snapshot(
+    snapshot: &ParsedSnapshot<tasm_syntax::SourceFile>,
+    position: lsp_types::Position,
+) -> Option<HoverTarget> {
+    let source = snapshot.text.as_ref();
+    let source_file = snapshot.source_file.as_ref();
+    let point = get_point(source, position);
+    find_instruction_hover_target(source_file, source, point)
 }
 
 fn find_instruction_hover_target(

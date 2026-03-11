@@ -30,28 +30,22 @@ impl Backend {
             return Ok(None);
         }
 
-        let Some(source) = self
-            .documents
-            .get(&uri)
-            .map(|text| text.clone())
-            .or_else(|| std::fs::read_to_string(&path).ok())
-        else {
+        let Some(snapshot) = self.registry.find_toml_file(&uri) else {
             return Ok(None);
         };
 
-        let Ok(source_file) = toml_syntax::parse(&source) else {
-            return Ok(None);
-        };
+        let source = snapshot.text.as_ref();
+        let source_file = snapshot.source_file.as_ref();
 
-        let point = get_point(&source, params.text_document_position.position);
-        let cursor_offset = get_byte_offset(&source, params.text_document_position.position);
+        let point = get_point(source, params.text_document_position.position);
+        let cursor_offset = get_byte_offset(source, params.text_document_position.position);
         let node = node_at_position(source_file.root_node(), point);
 
         let Some(schema) = get_acton_schema_store() else {
             return Ok(None);
         };
 
-        let context = build_completion_context(&source_file, node, cursor_offset, &source);
+        let context = build_completion_context(source_file, node, cursor_offset, source);
         let items = match context {
             TomlCompletionContext::Keys {
                 object_path,

@@ -14,28 +14,14 @@ impl Backend {
         let uri = params.text_document.uri;
         log::info!("Request: folding_range for {}", uri);
 
-        let Some(source) = self
-            .documents
-            .get(&uri)
-            .map(|text| text.clone())
-            .or_else(|| {
-                uri.to_file_path()
-                    .ok()
-                    .and_then(|path| std::fs::read_to_string(path).ok())
-            })
-        else {
-            return Ok(None);
-        };
-
-        let Ok(source_file) = tasm_syntax::parse(&source) else {
+        let Some(snapshot) = self.registry.find_tasm_file(&uri) else {
             return Ok(None);
         };
 
         let mut ranges = Vec::new();
-        for top_level in source_file.top_levels() {
+        for top_level in snapshot.source_file.top_levels() {
             collect_top_level(top_level, &mut ranges);
         }
-
         ranges.sort_by_key(|range| (range.start_line, range.end_line));
 
         log::info!(

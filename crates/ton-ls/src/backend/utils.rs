@@ -14,6 +14,13 @@ pub enum SourceLanguage {
     Unknown,
 }
 
+impl SourceLanguage {
+    #[must_use]
+    pub const fn is_self_contained(self) -> bool {
+        matches!(self, Self::Tasm | Self::Fift | Self::Toml)
+    }
+}
+
 #[must_use]
 pub fn detect_language(uri: &Url) -> SourceLanguage {
     let ext = Path::new(uri.path())
