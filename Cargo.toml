@@ -37,6 +37,7 @@ ton-abi = { path = "crates/ton-abi" }
 ton-emulator = { path = "crates/ton-emulator" }
 ton-executor = { path = "crates/ton-executor" }
 tolk-syntax = { path = "crates/tolk-syntax" }
+tasm-syntax = { path = "crates/tasm-syntax" }
 tolk-resolver = { path = "crates/tolk-resolver" }
 tolk-ty = { path = "crates/tolk-ty" }
 tolk-analysis = { path = "crates/tolk-analysis" }
@@ -56,6 +57,7 @@ ton-litenode = { path = "crates/ton-litenode" }
 ton-ls = { path = "crates/ton-ls" }
 ton-indexer = { path = "crates/ton-indexer" }
 tree-sitter-tolk = { path = "crates/tree-sitter-tolk" }
+tree-sitter-tasm = { path = "crates/tree-sitter-tasm" }
 
 # remote crates
 rusqlite = { version = "0.31", features = ["bundled"] }
@@ -140,6 +142,7 @@ codespan-reporting = "0.11.1"
 # acton ls
 tower-lsp = "0.20"
 lsp-types = "0.94.1"
+tree-sitter-language = "0.1"
 
 # other
 rustc-hash = "2.1.1"
@@ -162,6 +165,8 @@ dunce = "1.0.5"
 path-absolutize = "3.1.1"
 tracing = "0.1"
 function_name = "0.3.0"
+
+cc = "1.2"
 
 [dependencies]
 # local creates

@@ -13,6 +13,7 @@ pub mod profiling;
 pub mod utils;
 
 use crate::AnalysisResult;
+use crate::languages::tasm;
 use crate::languages::tolk::semantic_tokens;
 #[cfg(feature = "profiling")]
 pub use profiling::ProfilingContext;
@@ -32,6 +33,8 @@ pub struct Backend {
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> LspResult<InitializeResult> {
+        tasm::init();
+
         let now = std::time::Instant::now();
         log::info!("Request: initialize");
         let res = Ok(InitializeResult {
