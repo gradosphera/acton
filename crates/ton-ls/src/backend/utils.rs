@@ -10,6 +10,7 @@ pub enum SourceLanguage {
     Tolk,
     Tasm,
     Fift,
+    Toml,
     Unknown,
 }
 
@@ -24,6 +25,7 @@ pub fn detect_language(uri: &Url) -> SourceLanguage {
         Some("tolk") => SourceLanguage::Tolk,
         Some("tasm") => SourceLanguage::Tasm,
         Some("fif") | Some("fift") => SourceLanguage::Fift,
+        Some("toml") => SourceLanguage::Toml,
         _ => SourceLanguage::Unknown,
     }
 }

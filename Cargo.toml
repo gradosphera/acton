@@ -39,6 +39,8 @@ ton-executor = { path = "crates/ton-executor" }
 tolk-syntax = { path = "crates/tolk-syntax" }
 tasm-syntax = { path = "crates/tasm-syntax" }
 fift-syntax = { path = "crates/fift-syntax" }
+toml-syntax = { path = "crates/toml-syntax" }
+ton-json-schema = { path = "crates/ton-json-schema" }
 ton-syntax = { path = "crates/ton-syntax" }
 tolk-resolver = { path = "crates/tolk-resolver" }
 tolk-ty = { path = "crates/tolk-ty" }
@@ -61,6 +63,7 @@ ton-indexer = { path = "crates/ton-indexer" }
 tree-sitter-tolk = { path = "crates/tree-sitter-tolk" }
 tree-sitter-tasm = { path = "crates/tree-sitter-tasm" }
 tree-sitter-fift = { path = "crates/tree-sitter-fift" }
+tree-sitter-toml-ng = "0.7.0"
 
 # remote crates
 rusqlite = { version = "0.31", features = ["bundled"] }
@@ -88,6 +91,9 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 serde-sarif = "0.8.0"
 toml = "0.9.8"
+jsonschema = { version = "0.45.0", default-features = false }
+referencing = "0.45.0"
+jsonptr = "0.7.1"
 
 include_dir = "0.7" # include stdlib and Acton lib
 inquire = "0.9.1" # for interactive cli

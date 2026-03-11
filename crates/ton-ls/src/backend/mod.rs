@@ -45,6 +45,15 @@ impl LanguageServer for Backend {
                 references_provider: Some(OneOf::Left(true)),
                 folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                completion_provider: Some(CompletionOptions {
+                    resolve_provider: Some(false),
+                    trigger_characters: Some(vec![
+                        ".".to_string(),
+                        "\"".to_string(),
+                        "'".to_string(),
+                    ]),
+                    ..Default::default()
+                }),
                 code_lens_provider: Some(CodeLensOptions {
                     resolve_provider: Some(false),
                 }),
@@ -127,9 +136,10 @@ impl LanguageServer for Backend {
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         match detect_language(&params.text_document.uri) {
             SourceLanguage::Tolk => self.handle_did_change(params).await,
-            SourceLanguage::Tasm | SourceLanguage::Fift | SourceLanguage::Unknown => {
-                self.handle_text_only_did_change(params)
-            }
+            SourceLanguage::Tasm
+            | SourceLanguage::Fift
+            | SourceLanguage::Toml
+            | SourceLanguage::Unknown => self.handle_text_only_did_change(params),
         }
     }
 
@@ -142,7 +152,7 @@ impl LanguageServer for Backend {
         match detect_language(&params.text_document_position_params.text_document.uri) {
             SourceLanguage::Tolk => self.handle_goto_definition(params).await,
             SourceLanguage::Fift => self.handle_fift_goto_definition(params).await,
-            SourceLanguage::Tasm | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Tasm | SourceLanguage::Toml | SourceLanguage::Unknown => Ok(None),
         }
     }
 
@@ -150,21 +160,27 @@ impl LanguageServer for Backend {
         match detect_language(&params.text_document_position.text_document.uri) {
             SourceLanguage::Tolk => self.handle_references(params).await,
             SourceLanguage::Fift => self.handle_fift_references(params).await,
-            SourceLanguage::Tasm | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Tasm | SourceLanguage::Toml | SourceLanguage::Unknown => Ok(None),
         }
     }
 
     async fn inlay_hint(&self, params: InlayHintParams) -> LspResult<Option<Vec<InlayHint>>> {
         match detect_language(&params.text_document.uri) {
             SourceLanguage::Tolk => self.handle_inlay_hint(params).await,
-            SourceLanguage::Tasm | SourceLanguage::Fift | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Tasm
+            | SourceLanguage::Fift
+            | SourceLanguage::Toml
+            | SourceLanguage::Unknown => Ok(None),
         }
     }
 
     async fn code_action(&self, params: CodeActionParams) -> LspResult<Option<CodeActionResponse>> {
         match detect_language(&params.text_document.uri) {
             SourceLanguage::Tolk => self.handle_code_action(params).await,
-            SourceLanguage::Tasm | SourceLanguage::Fift | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Tasm
+            | SourceLanguage::Fift
+            | SourceLanguage::Toml
+            | SourceLanguage::Unknown => Ok(None),
         }
     }
 
@@ -182,7 +198,7 @@ impl LanguageServer for Backend {
         match detect_language(&params.text_document.uri) {
             SourceLanguage::Tolk => self.handle_semantic_tokens_full(params).await,
             SourceLanguage::Fift => self.handle_fift_semantic_tokens_full(params).await,
-            SourceLanguage::Tasm | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Tasm | SourceLanguage::Toml | SourceLanguage::Unknown => Ok(None),
         }
     }
 
@@ -193,7 +209,7 @@ impl LanguageServer for Backend {
         match detect_language(&params.text_document.uri) {
             SourceLanguage::Tasm => self.handle_tasm_folding_range(params).await,
             SourceLanguage::Fift => self.handle_fift_folding_range(params).await,
-            SourceLanguage::Tolk | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Tolk | SourceLanguage::Toml | SourceLanguage::Unknown => Ok(None),
         }
     }
 
@@ -201,14 +217,28 @@ impl LanguageServer for Backend {
         match detect_language(&params.text_document_position_params.text_document.uri) {
             SourceLanguage::Tasm => self.handle_tasm_hover(params).await,
             SourceLanguage::Fift => self.handle_fift_hover(params).await,
+            SourceLanguage::Toml => self.handle_toml_hover(params).await,
             SourceLanguage::Tolk | SourceLanguage::Unknown => Ok(None),
+        }
+    }
+
+    async fn completion(&self, params: CompletionParams) -> LspResult<Option<CompletionResponse>> {
+        match detect_language(&params.text_document_position.text_document.uri) {
+            SourceLanguage::Toml => self.handle_toml_completion(params).await,
+            SourceLanguage::Tolk
+            | SourceLanguage::Tasm
+            | SourceLanguage::Fift
+            | SourceLanguage::Unknown => Ok(None),
         }
     }
 
     async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {
         match detect_language(&params.text_document.uri) {
             SourceLanguage::Tasm => self.handle_tasm_code_lens(params).await,
-            SourceLanguage::Tolk | SourceLanguage::Fift | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Tolk
+            | SourceLanguage::Fift
+            | SourceLanguage::Toml
+            | SourceLanguage::Unknown => Ok(None),
         }
     }
 

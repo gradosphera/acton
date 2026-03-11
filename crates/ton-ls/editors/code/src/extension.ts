@@ -56,9 +56,14 @@ export function activate(context: vscode.ExtensionContext) {
             { scheme: 'file', language: 'tolk' },
             { scheme: 'file', language: 'tasm' },
             { scheme: 'file', language: 'fift' },
+            { scheme: 'file', language: 'toml', pattern: '**/Acton.toml' },
+            { scheme: 'file', pattern: '**/Acton.toml' },
         ],
         synchronize: {
-            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{tolk,tasm,fif,fift}'),
+            fileEvents: [
+                vscode.workspace.createFileSystemWatcher('**/*.{tolk,tasm,fif,fift}'),
+                vscode.workspace.createFileSystemWatcher('**/Acton.toml'),
+            ],
         },
     };
 
