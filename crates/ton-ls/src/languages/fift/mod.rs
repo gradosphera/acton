@@ -1,3 +1,4 @@
+pub mod foldings;
 pub mod goto_definition;
 pub mod hover;
 pub mod psi;

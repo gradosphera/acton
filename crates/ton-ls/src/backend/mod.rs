@@ -192,7 +192,8 @@ impl LanguageServer for Backend {
     ) -> LspResult<Option<Vec<FoldingRange>>> {
         match detect_language(&params.text_document.uri) {
             SourceLanguage::Tasm => self.handle_tasm_folding_range(params).await,
-            SourceLanguage::Tolk | SourceLanguage::Fift | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Fift => self.handle_fift_folding_range(params).await,
+            SourceLanguage::Tolk | SourceLanguage::Unknown => Ok(None),
         }
     }
 
