@@ -134,14 +134,16 @@ impl LanguageServer for Backend {
     ) -> LspResult<Option<GotoDefinitionResponse>> {
         match detect_language(&params.text_document_position_params.text_document.uri) {
             SourceLanguage::Tolk => self.handle_goto_definition(params).await,
-            SourceLanguage::Tasm | SourceLanguage::Fift | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Fift => self.handle_fift_goto_definition(params).await,
+            SourceLanguage::Tasm | SourceLanguage::Unknown => Ok(None),
         }
     }
 
     async fn references(&self, params: ReferenceParams) -> LspResult<Option<Vec<Location>>> {
         match detect_language(&params.text_document_position.text_document.uri) {
             SourceLanguage::Tolk => self.handle_references(params).await,
-            SourceLanguage::Tasm | SourceLanguage::Fift | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Fift => self.handle_fift_references(params).await,
+            SourceLanguage::Tasm | SourceLanguage::Unknown => Ok(None),
         }
     }
 
