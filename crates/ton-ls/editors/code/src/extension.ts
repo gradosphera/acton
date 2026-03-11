@@ -55,9 +55,10 @@ export function activate(context: vscode.ExtensionContext) {
         documentSelector: [
             { scheme: 'file', language: 'tolk' },
             { scheme: 'file', language: 'tasm' },
+            { scheme: 'file', language: 'fift' },
         ],
         synchronize: {
-            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{tolk,tasm}'),
+            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{tolk,tasm,fif,fift}'),
         },
     };
 

@@ -1,7 +1,7 @@
 {
   "name": "tolk-vscode",
-  "displayName": "Tolk & TASM Support",
-  "description": "Language support for Tolk and TASM",
+  "displayName": "Tolk, TASM & Fift Support",
+  "description": "Language support for Tolk, TASM and Fift",
   "version": "0.0.1",
   "publisher": "petrmakhnev",
   "engines": {
@@ -12,7 +12,8 @@
   ],
   "activationEvents": [
     "onLanguage:tolk",
-    "onLanguage:tasm"
+    "onLanguage:tasm",
+    "onLanguage:fift"
   ],
   "main": "./out/extension",
   "contributes": {
@@ -34,6 +35,17 @@
         ],
         "extensions": [
           ".tasm"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "fift",
+        "aliases": [
+          "Fift"
+        ],
+        "extensions": [
+          ".fif",
+          ".fift"
         ],
         "configuration": "./language-configuration.json"
       }

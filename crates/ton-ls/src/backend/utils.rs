@@ -9,6 +9,7 @@ use tree_sitter::Point;
 pub enum SourceLanguage {
     Tolk,
     Tasm,
+    Fift,
     Unknown,
 }
 
@@ -22,6 +23,7 @@ pub fn detect_language(uri: &Url) -> SourceLanguage {
     match ext.as_deref() {
         Some("tolk") => SourceLanguage::Tolk,
         Some("tasm") => SourceLanguage::Tasm,
+        Some("fif") | Some("fift") => SourceLanguage::Fift,
         _ => SourceLanguage::Unknown,
     }
 }
