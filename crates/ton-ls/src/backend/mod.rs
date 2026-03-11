@@ -61,11 +61,18 @@ impl LanguageServer for Backend {
                     SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(
                         SemanticTokensRegistrationOptions {
                             text_document_registration_options: TextDocumentRegistrationOptions {
-                                document_selector: Some(vec![DocumentFilter {
-                                    language: Some("tolk".to_string()),
-                                    scheme: Some("file".to_string()),
-                                    pattern: None,
-                                }]),
+                                document_selector: Some(vec![
+                                    DocumentFilter {
+                                        language: Some("tolk".to_string()),
+                                        scheme: Some("file".to_string()),
+                                        pattern: None,
+                                    },
+                                    DocumentFilter {
+                                        language: Some("fift".to_string()),
+                                        scheme: Some("file".to_string()),
+                                        pattern: None,
+                                    },
+                                ]),
                             },
                             semantic_tokens_options: SemanticTokensOptions {
                                 work_done_progress_options: WorkDoneProgressOptions {
@@ -174,7 +181,8 @@ impl LanguageServer for Backend {
     ) -> LspResult<Option<SemanticTokensResult>> {
         match detect_language(&params.text_document.uri) {
             SourceLanguage::Tolk => self.handle_semantic_tokens_full(params).await,
-            SourceLanguage::Tasm | SourceLanguage::Fift | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Fift => self.handle_fift_semantic_tokens_full(params).await,
+            SourceLanguage::Tasm | SourceLanguage::Unknown => Ok(None),
         }
     }
 

@@ -1,3 +1,4 @@
+use crate::languages::fift::traverse::PreorderTraverse;
 use fift_syntax::{AstNode, DefinitionKind, TopLevel};
 use tree_sitter::Node;
 
@@ -112,36 +113,40 @@ impl<'tree> FiftReferent<'tree> {
             result.push(resolved_definition);
         }
 
-        visit_tree(self.source_file.root_node(), &mut |node| {
+        for node in PreorderTraverse::new(self.source_file.root_node().walk()) {
+            if !node.is_named() {
+                continue;
+            }
+
             if node.kind() != "identifier" {
-                return;
+                continue;
             }
 
             let Ok(text) = node.utf8_text(source.as_bytes()) else {
-                return;
+                continue;
             };
             if text.trim() != word {
-                return;
+                continue;
             }
 
             let Some(parent) = node.parent() else {
-                return;
+                continue;
             };
 
             if is_definition_name(parent, node) {
-                return;
+                continue;
             }
 
             let Some(definition) = FiftReference::new(node, self.source_file)
                 .and_then(|reference| reference.resolve())
             else {
-                return;
+                continue;
             };
 
             if definition == resolved_definition {
                 result.push(node);
             }
-        });
+        }
 
         result
     }
@@ -184,28 +189,4 @@ fn is_definition_name(parent: Node<'_>, node: Node<'_>) -> bool {
             | "method_definition"
             | "declaration"
     )
-}
-
-fn visit_tree<'tree>(node: Node<'tree>, visit: &mut impl FnMut(Node<'tree>)) {
-    let mut cursor = node.walk();
-
-    loop {
-        let current = cursor.node();
-        if current.is_named() {
-            visit(current);
-        }
-
-        if cursor.goto_first_child() {
-            continue;
-        }
-
-        loop {
-            if cursor.goto_next_sibling() {
-                break;
-            }
-            if !cursor.goto_parent() {
-                return;
-            }
-        }
-    }
 }
