@@ -1,13 +1,12 @@
 use crate::backend::Backend;
-use crate::backend::utils::{get_point, offsets_to_lsp_range};
+use crate::languages::engine::cache::ParsedSnapshot;
 use lsp_types::{Hover, HoverContents, HoverParams, MarkupContent, MarkupKind};
 use serde_json::Value as JsonValue;
 use std::path::Path;
 use std::sync::OnceLock;
 use toml_syntax::{Key, Pair, TopLevel, Value as TomlValue};
 use ton_json_schema::{SchemaDoc, SchemaPathSegment, SchemaStore};
-use tower_lsp::jsonrpc::Result as LspResult;
-use tree_sitter::{Node, Point};
+use tree_sitter::Node;
 
 static ACTON_SCHEMA_STORE: OnceLock<Option<SchemaStore>> = OnceLock::new();
 const ACTON_SCHEMA_JSON: &str = include_str!(concat!(
@@ -16,58 +15,40 @@ const ACTON_SCHEMA_JSON: &str = include_str!(concat!(
 ));
 
 impl Backend {
-    pub async fn handle_toml_hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
+    pub async fn handle_toml_hover(&self, params: HoverParams) -> Option<Hover> {
         crate::profile!(self, "toml-hover");
         let now = std::time::Instant::now();
-
         let uri = params.text_document_position_params.text_document.uri;
         log::info!("Request: toml hover for {}", uri);
 
-        let Ok(path) = uri.to_file_path() else {
-            return Ok(None);
-        };
+        let path = uri.to_file_path().ok()?;
         if !is_acton_toml(&path) {
-            return Ok(None);
+            return None;
         }
 
-        let Some(snapshot) = self.registry.find_toml_file(&uri) else {
-            return Ok(None);
-        };
+        let file = self.registry.find_toml_file(&uri)?;
 
-        let source = snapshot.text.as_ref();
-        let source_file = snapshot.source_file.as_ref();
+        let node = file.node_at(params.text_document_position_params.position)?;
 
-        let point = get_point(source, params.text_document_position_params.position);
-        let Some(node) = node_at_position(source_file.root_node(), point) else {
-            return Ok(None);
-        };
+        let schema_path = find_schema_path(&file, node)?;
 
-        let Some(schema_path) = find_schema_path(source_file, node, source) else {
-            return Ok(None);
-        };
+        let schema = get_acton_schema_store()?;
 
-        let Some(schema) = get_acton_schema_store() else {
-            return Ok(None);
-        };
+        let doc = schema.summary_for_path(&schema_path)?;
 
-        let Some(doc) = schema.summary_for_path(&schema_path) else {
-            return Ok(None);
-        };
+        let markdown = build_hover_markdown(&schema_path, &doc)?;
 
-        let Some(markdown) = build_hover_markdown(&schema_path, &doc) else {
-            return Ok(None);
-        };
+        let range = file.range_of(node);
 
-        let range = offsets_to_lsp_range(node.start_byte(), node.end_byte(), source);
-
-        log::info!("Response: toml hover took {:?}", now.elapsed());
-        Ok(Some(Hover {
+        let result = Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: markdown,
             }),
             range: Some(range),
-        }))
+        });
+        log::info!("Response: toml hover took {:?}", now.elapsed(),);
+        result
     }
 }
 
@@ -83,16 +64,13 @@ pub(super) fn get_acton_schema_store() -> Option<&'static SchemaStore> {
         .as_ref()
 }
 
-fn node_at_position(root: Node<'_>, point: Point) -> Option<Node<'_>> {
-    root.descendant_for_point_range(point, point)
-}
-
 pub(super) fn find_schema_path(
-    source_file: &toml_syntax::SourceFile,
+    file: &ParsedSnapshot<toml_syntax::SourceFile>,
     target: Node<'_>,
-    source: &str,
 ) -> Option<Vec<SchemaPathSegment>> {
+    let source = file.source();
     let mut current_table = Vec::new();
+    let source_file = file.syntax();
 
     for top_level in source_file.top_levels() {
         let syntax = top_level.syntax();
@@ -366,38 +344,27 @@ fn format_json_value(value: &JsonValue) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
-    fn parse_source(source: &str) -> toml_syntax::SourceFile {
-        toml_syntax::parse(source).expect("toml should parse")
-    }
-
-    fn node_at_offset<'tree>(root: Node<'tree>, source: &str, offset: usize) -> Node<'tree> {
-        let mut row = 0usize;
-        let mut column = 0usize;
-        for (index, byte) in source.bytes().enumerate() {
-            if index >= offset {
-                break;
-            }
-            if byte == b'\n' {
-                row += 1;
-                column = 0;
-            } else {
-                column += 1;
-            }
-        }
-        let point = Point::new(row, column);
-        root.descendant_for_point_range(point, point)
-            .expect("node at offset must exist")
+    fn parse_snapshot(source: &str) -> ParsedSnapshot<toml_syntax::SourceFile> {
+        ParsedSnapshot::new(
+            lsp_types::Url::parse("file:///tmp/Acton.toml").expect("snapshot uri should parse"),
+            1,
+            Arc::from(source),
+            Arc::new(toml_syntax::parse(source).expect("toml should parse")),
+        )
     }
 
     #[test]
     fn resolves_pair_path_inside_table() {
         let source = "[package]\nname = \"Acton\"\n";
-        let file = parse_source(source);
+        let snapshot = parse_snapshot(source);
         let offset = source.find("name").expect("name key exists");
-        let node = node_at_offset(file.root_node(), source, offset);
+        let node = snapshot
+            .node_at(snapshot.position(offset))
+            .expect("node at offset must exist");
 
-        let path = find_schema_path(&file, node, source).expect("schema path should resolve");
+        let path = find_schema_path(&snapshot, node).expect("schema path should resolve");
 
         assert_eq!(
             path,
@@ -411,11 +378,13 @@ mod tests {
     #[test]
     fn resolves_dotted_table_path() {
         let source = "[networks.localnet]\nv2-url = \"http://localhost\"\n";
-        let file = parse_source(source);
+        let snapshot = parse_snapshot(source);
         let offset = source.find("v2-url").expect("key exists");
-        let node = node_at_offset(file.root_node(), source, offset);
+        let node = snapshot
+            .node_at(snapshot.position(offset))
+            .expect("node at offset must exist");
 
-        let path = find_schema_path(&file, node, source).expect("schema path should resolve");
+        let path = find_schema_path(&snapshot, node).expect("schema path should resolve");
 
         assert_eq!(
             path,
@@ -430,11 +399,13 @@ mod tests {
     #[test]
     fn resolves_inline_table_path_inside_array() {
         let source = "[contracts.acton_jetton_minter]\ndepends = [{ name = \"wallet\", function = \"actonJettonWalletCompiledCode\" }]\n";
-        let file = parse_source(source);
+        let snapshot = parse_snapshot(source);
         let offset = source.find("function").expect("inline table key exists");
-        let node = node_at_offset(file.root_node(), source, offset);
+        let node = snapshot
+            .node_at(snapshot.position(offset))
+            .expect("node at offset must exist");
 
-        let path = find_schema_path(&file, node, source).expect("schema path should resolve");
+        let path = find_schema_path(&snapshot, node).expect("schema path should resolve");
 
         assert_eq!(
             path,

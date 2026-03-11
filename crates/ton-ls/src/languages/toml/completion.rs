@@ -1,5 +1,5 @@
 use crate::backend::Backend;
-use crate::backend::utils::{get_byte_offset, get_point};
+use crate::languages::engine::cache::ParsedSnapshot;
 use crate::languages::toml::hover::{find_schema_path, get_acton_schema_store, is_acton_toml};
 use lsp_types::{
     CompletionItem, CompletionItemKind, CompletionParams, CompletionResponse, Documentation,
@@ -9,43 +9,32 @@ use serde_json::Value;
 use std::collections::HashSet;
 use toml_syntax::TopLevel;
 use ton_json_schema::{CompletionProperty, SchemaDoc, SchemaPathSegment};
-use tower_lsp::jsonrpc::Result as LspResult;
-use tree_sitter::{Node, Point};
+use tree_sitter::Node;
 
 impl Backend {
     pub async fn handle_toml_completion(
         &self,
         params: CompletionParams,
-    ) -> LspResult<Option<CompletionResponse>> {
+    ) -> Option<CompletionResponse> {
         crate::profile!(self, "toml-completion");
         let now = std::time::Instant::now();
-
         let uri = params.text_document_position.text_document.uri;
         log::info!("Request: toml completion for {}", uri);
 
-        let Ok(path) = uri.to_file_path() else {
-            return Ok(None);
-        };
+        let path = uri.to_file_path().ok()?;
         if !is_acton_toml(&path) {
-            return Ok(None);
+            return None;
         }
 
-        let Some(snapshot) = self.registry.find_toml_file(&uri) else {
-            return Ok(None);
-        };
+        let file = self.registry.find_toml_file(&uri)?;
 
-        let source = snapshot.text.as_ref();
-        let source_file = snapshot.source_file.as_ref();
+        let position = params.text_document_position.position;
+        let cursor_offset = file.position_to_offset(position);
+        let node = file.node_at(position);
 
-        let point = get_point(source, params.text_document_position.position);
-        let cursor_offset = get_byte_offset(source, params.text_document_position.position);
-        let node = node_at_position(source_file.root_node(), point);
+        let schema = get_acton_schema_store()?;
 
-        let Some(schema) = get_acton_schema_store() else {
-            return Ok(None);
-        };
-
-        let context = build_completion_context(source_file, node, cursor_offset, source);
+        let context = build_completion_context(&file, node, cursor_offset);
         let items = match context {
             TomlCompletionContext::Keys {
                 object_path,
@@ -75,21 +64,13 @@ impl Backend {
         };
 
         if items.is_empty() {
-            return Ok(None);
+            return None;
         }
 
-        log::info!(
-            "Response: toml completion took {:?}, found {} items",
-            now.elapsed(),
-            items.len()
-        );
-
-        Ok(Some(CompletionResponse::Array(items)))
+        let result = Some(CompletionResponse::Array(items));
+        log::info!("Response: toml completion took {:?}", now.elapsed(),);
+        result
     }
-}
-
-fn node_at_position(root: Node<'_>, point: Point) -> Option<Node<'_>> {
-    root.descendant_for_point_range(point, point)
 }
 
 enum TomlCompletionContext {
@@ -105,21 +86,21 @@ enum TomlCompletionContext {
 }
 
 fn build_completion_context(
-    source_file: &toml_syntax::SourceFile,
+    file: &ParsedSnapshot<toml_syntax::SourceFile>,
     node: Option<Node<'_>>,
     cursor_offset: usize,
-    source: &str,
 ) -> TomlCompletionContext {
+    let source = file.source();
     let Some(node) = node else {
         let in_table_header = is_in_table_header_brackets(source, cursor_offset);
         return TomlCompletionContext::Keys {
             object_path: Vec::new(),
-            existing_keys: collect_existing_property_keys(source_file, &[], None, source),
+            existing_keys: collect_existing_property_keys(file, &[], None),
             in_table_header,
         };
     };
 
-    let full_path = find_schema_path(source_file, node, source).unwrap_or_default();
+    let full_path = find_schema_path(file, node).unwrap_or_default();
 
     if is_in_pair_value(node) {
         return TomlCompletionContext::Values {
@@ -132,8 +113,7 @@ fn build_completion_context(
         || is_in_table_header_brackets(source, cursor_offset)
     {
         let object_path = truncate_last_path_segment(full_path);
-        let existing_keys =
-            collect_existing_property_keys(source_file, &object_path, Some(node), source);
+        let existing_keys = collect_existing_property_keys(file, &object_path, Some(node));
         return TomlCompletionContext::Keys {
             object_path,
             existing_keys,
@@ -147,8 +127,7 @@ fn build_completion_context(
         full_path
     };
 
-    let existing_keys =
-        collect_existing_property_keys(source_file, &object_path, Some(node), source);
+    let existing_keys = collect_existing_property_keys(file, &object_path, Some(node));
     TomlCompletionContext::Keys {
         object_path,
         existing_keys,
@@ -241,10 +220,9 @@ fn contains_node(container: Node<'_>, node: Node<'_>) -> bool {
 }
 
 fn collect_existing_property_keys(
-    source_file: &toml_syntax::SourceFile,
+    file: &ParsedSnapshot<toml_syntax::SourceFile>,
     object_path: &[SchemaPathSegment],
     cursor_node: Option<Node<'_>>,
-    source: &str,
 ) -> HashSet<String> {
     let mut result = HashSet::new();
 
@@ -255,7 +233,7 @@ fn collect_existing_property_keys(
             return;
         }
 
-        let Some(path) = find_schema_path(source_file, pair_node, source) else {
+        let Some(path) = find_schema_path(file, pair_node) else {
             return;
         };
 
@@ -265,7 +243,7 @@ fn collect_existing_property_keys(
         result.insert(key);
     };
 
-    for top_level in source_file.top_levels() {
+    for top_level in file.syntax().top_levels() {
         match top_level {
             TopLevel::Pair(pair) => push_pair(pair.0),
             TopLevel::Table(table) => {
@@ -653,15 +631,20 @@ version = "1.0.0"
 [package]
 type = "contract"
 "#;
-        let file = toml_syntax::parse(source).expect("valid toml");
+        let snapshot = ParsedSnapshot::new(
+            lsp_types::Url::parse("file:///tmp/Acton.toml").expect("snapshot uri should parse"),
+            1,
+            source,
+            std::sync::Arc::new(toml_syntax::parse(source).expect("valid toml")),
+        );
 
-        let root = collect_existing_property_keys(&file, &[], None, source);
+        let root = collect_existing_property_keys(&snapshot, &[], None);
         assert!(root.contains("name"));
         assert!(root.contains("version"));
         assert!(root.contains("package"));
 
         let package_path = [SchemaPathSegment::Key("package".to_string())];
-        let package = collect_existing_property_keys(&file, &package_path, None, source);
+        let package = collect_existing_property_keys(&snapshot, &package_path, None);
         assert!(package.contains("type"));
     }
 

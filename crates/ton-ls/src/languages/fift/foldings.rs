@@ -1,32 +1,28 @@
 use crate::backend::Backend;
 use crate::languages::fift::traverse::PreorderTraverse;
 use lsp_types::{FoldingRange, FoldingRangeKind, FoldingRangeParams};
-use tower_lsp::jsonrpc::Result as LspResult;
 use tree_sitter::Node;
 
 impl Backend {
     pub async fn handle_fift_folding_range(
         &self,
         params: FoldingRangeParams,
-    ) -> LspResult<Option<Vec<FoldingRange>>> {
+    ) -> Option<Vec<FoldingRange>> {
         crate::profile!(self, "fift-folding_range");
         let now = std::time::Instant::now();
-
         let uri = params.text_document.uri;
         log::info!("Request: fift folding_range for {}", uri);
 
-        let Some(snapshot) = self.registry.find_fift_file(&uri) else {
-            return Ok(None);
-        };
+        let file = self.registry.find_fift_file(&uri)?;
 
-        let ranges = collect_ranges(snapshot.source_file.as_ref());
-
+        let ranges = collect_ranges(file.syntax());
+        let result = Some(ranges);
         log::info!(
             "Response: fift folding_range took {:?}, found {} ranges",
             now.elapsed(),
-            ranges.len()
+            result.as_ref().map_or(0, Vec::len),
         );
-        Ok(Some(ranges))
+        result
     }
 }
 

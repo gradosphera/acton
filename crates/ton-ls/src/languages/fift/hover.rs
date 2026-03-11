@@ -1,10 +1,8 @@
 use crate::backend::Backend;
-use crate::backend::utils::{get_point, offsets_to_lsp_range};
 use crate::languages::engine::cache::ParsedSnapshot;
-use crate::languages::instruction_docs::{build_hover_markdown, get_instruction_docs_index};
+use crate::languages::instruction_docs::{build_hover_markdown, get_tasm_spec};
 use lsp_types::{Hover, HoverContents, HoverParams, MarkupContent, MarkupKind, Range};
-use tower_lsp::jsonrpc::Result as LspResult;
-use tree_sitter::{Node, Point};
+use tree_sitter::Node;
 
 struct HoverTarget {
     name: String,
@@ -12,86 +10,62 @@ struct HoverTarget {
 }
 
 impl Backend {
-    pub async fn handle_fift_hover(&self, params: HoverParams) -> LspResult<Option<Hover>> {
+    pub async fn handle_fift_hover(&self, params: HoverParams) -> Option<Hover> {
         crate::profile!(self, "fift-hover");
         let now = std::time::Instant::now();
-
         let uri = params.text_document_position_params.text_document.uri;
         log::info!("Request: fift hover for {}", uri);
 
-        let Some(snapshot) = self.registry.find_fift_file(&uri) else {
-            return Ok(None);
-        };
+        let position = params.text_document_position_params.position;
+        let file = self.registry.find_fift_file(&uri)?;
+        let target = find_hover_target(&file, position)?;
 
-        let Some(target) = find_hover_target_for_snapshot(
-            &snapshot,
-            params.text_document_position_params.position,
-        ) else {
-            return Ok(None);
-        };
+        let tasm_spec = get_tasm_spec()?;
 
-        let Some(spec_index) = get_instruction_docs_index() else {
-            return Ok(None);
-        };
+        let markdown = build_hover_markdown(&target.name, tasm_spec)?;
 
-        let Some(markdown) = build_hover_markdown(&target.name, spec_index) else {
-            return Ok(None);
-        };
-
-        log::info!("Response: fift hover took {:?}", now.elapsed());
-        Ok(Some(Hover {
+        let result = Some(Hover {
             contents: HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
                 value: markdown,
             }),
             range: Some(target.range),
-        }))
+        });
+        log::info!("Response: fift hover took {:?}", now.elapsed(),);
+        result
     }
 }
 
-fn find_hover_target_for_snapshot(
-    snapshot: &ParsedSnapshot<fift_syntax::SourceFile>,
+fn find_hover_target(
+    file: &ParsedSnapshot<fift_syntax::SourceFile>,
     position: lsp_types::Position,
 ) -> Option<HoverTarget> {
-    let source = snapshot.text.as_ref();
-    let source_file = snapshot.source_file.as_ref();
-    let point = get_point(source, position);
-    find_hover_target(source_file, source, point)
-}
+    let node = file.node_at(position)?;
 
-fn find_hover_target(
-    source_file: &fift_syntax::SourceFile,
-    source: &str,
-    point: Point,
-) -> Option<HoverTarget> {
-    let root = source_file.root_node();
-    let node = node_at_position(root, point)?;
-
-    let raw_name = node.utf8_text(source.as_bytes()).ok()?.trim();
+    let raw_name = file.text_of(node);
     if raw_name.is_empty() {
         return None;
     }
 
-    let name = adjusted_hover_name(node, source).unwrap_or_else(|| raw_name.to_string());
+    let name = adjusted_hover_name(file, node).unwrap_or_else(|| raw_name.to_string());
 
-    let range = offsets_to_lsp_range(node.start_byte(), node.end_byte(), source);
+    let range = file.range_of(node);
     Some(HoverTarget { name, range })
 }
 
-fn node_at_position(root: Node<'_>, point: Point) -> Option<Node<'_>> {
-    root.descendant_for_point_range(point, point)
-}
-
-fn adjusted_hover_name(node: Node<'_>, source: &str) -> Option<String> {
+fn adjusted_hover_name(
+    file: &ParsedSnapshot<fift_syntax::SourceFile>,
+    node: Node<'_>,
+) -> Option<String> {
     let instruction = enclosing_instruction(node)?;
     let name_node = instruction.named_child(0)?;
-    let instruction_name = name_node.utf8_text(source.as_bytes()).ok()?.trim();
+    let instruction_name = file.text_of(name_node).trim();
     if instruction_name.is_empty() {
         return None;
     }
 
-    let args = collect_inline_argument_nodes(instruction, source);
-    Some(adjust_name(instruction_name, &args, source))
+    let args = collect_inline_argument_nodes(file, instruction);
+    Some(adjust_name(file, instruction_name, &args))
 }
 
 fn enclosing_instruction(mut node: Node<'_>) -> Option<Node<'_>> {
@@ -104,8 +78,8 @@ fn enclosing_instruction(mut node: Node<'_>) -> Option<Node<'_>> {
 }
 
 fn collect_inline_argument_nodes<'tree>(
+    file: &ParsedSnapshot<fift_syntax::SourceFile>,
     instruction: Node<'tree>,
-    source: &str,
 ) -> Vec<Node<'tree>> {
     let mut args_reversed = Vec::new();
     let mut next_start = instruction.start_byte();
@@ -115,7 +89,7 @@ fn collect_inline_argument_nodes<'tree>(
         if current.kind() != "instruction" {
             break;
         }
-        if contains_line_break(source, current.end_byte(), next_start) {
+        if contains_line_break(file.source(), current.end_byte(), next_start) {
             break;
         }
 
@@ -138,7 +112,11 @@ fn contains_line_break(source: &str, start: usize, end: usize) -> bool {
     slice.bytes().any(|byte| matches!(byte, b'\n' | b'\r'))
 }
 
-fn adjust_name(name: &str, args: &[Node<'_>], source: &str) -> String {
+fn adjust_name(
+    file: &ParsedSnapshot<fift_syntax::SourceFile>,
+    name: &str,
+    args: &[Node<'_>],
+) -> String {
     let name = name.trim().to_ascii_uppercase();
 
     if name == "PUSHINT" {
@@ -148,9 +126,7 @@ fn adjust_name(name: &str, args: &[Node<'_>], source: &str) -> String {
 
         let arg = args
             .first()
-            .and_then(|node| node.utf8_text(source.as_bytes()).ok())
-            .map(str::trim)
-            .and_then(|text| text.parse::<i64>().ok());
+            .and_then(|&node| file.text_of(node).trim().parse::<i64>().ok());
 
         let Some(arg) = arg else {
             return "PUSHINT_4".to_string();
@@ -170,7 +146,7 @@ fn adjust_name(name: &str, args: &[Node<'_>], source: &str) -> String {
     }
 
     if name == "PUSH" {
-        if args.len() == 1 && is_stack_register(args[0], source) {
+        if args.len() == 1 && is_stack_register(file, args[0]) {
             return "PUSH".to_string();
         }
         if args.len() == 2 {
@@ -193,16 +169,12 @@ fn adjust_name(name: &str, args: &[Node<'_>], source: &str) -> String {
     name
 }
 
-fn is_stack_register(node: Node<'_>, source: &str) -> bool {
+fn is_stack_register(file: &ParsedSnapshot<fift_syntax::SourceFile>, node: Node<'_>) -> bool {
     if node.kind() == "stack_ref" {
         return true;
     }
 
-    let Ok(text) = node.utf8_text(source.as_bytes()) else {
-        return false;
-    };
-
-    let text = text.trim();
+    let text = file.text_of(node).trim();
     let Some(rest) = text.strip_prefix('s').or_else(|| text.strip_prefix('S')) else {
         return false;
     };

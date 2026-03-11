@@ -1,63 +1,54 @@
 use crate::backend::Backend;
-use crate::backend::utils::offsets_to_lsp_range;
-use crate::languages::instruction_docs::{
-    InstructionDocsIndex, get_instruction_docs_index, stack_effect_title,
-};
+use crate::languages::engine::cache::ParsedSnapshot;
+use crate::languages::instruction_docs::{InstructionDocsIndex, get_tasm_spec, stack_effect_title};
 use lsp_types::{CodeLens, CodeLensParams, Command};
 use tasm_syntax::{Argument, AstNode, Code, Dictionary, Expr, TopLevel};
-use tower_lsp::jsonrpc::Result as LspResult;
 
 pub const STACK_EFFECT_CODE_LENS_COMMAND: &str = "tonls.tasm.stackEffect";
 
 impl Backend {
-    pub async fn handle_tasm_code_lens(
-        &self,
-        params: CodeLensParams,
-    ) -> LspResult<Option<Vec<CodeLens>>> {
+    pub async fn handle_tasm_code_lens(&self, params: CodeLensParams) -> Option<Vec<CodeLens>> {
         crate::profile!(self, "tasm-code-lens");
         let now = std::time::Instant::now();
-
         let uri = params.text_document.uri;
         log::info!("Request: tasm code_lens for {}", uri);
 
-        let Some(snapshot) = self.registry.find_tasm_file(&uri) else {
-            return Ok(None);
-        };
+        let file = self.registry.find_tasm_file(&uri)?;
 
-        let source = snapshot.text.as_ref();
-        let source_file = snapshot.source_file.as_ref();
-        let instruction_docs = get_instruction_docs_index();
+        let tasm_spec = get_tasm_spec();
+
         let mut lenses = Vec::new();
-        for top_level in source_file.top_levels() {
-            collect_top_level(top_level, source, instruction_docs, &mut lenses);
+        for top_level in file.syntax().top_levels() {
+            collect_top_level(top_level, &file, tasm_spec, &mut lenses);
         }
         lenses.sort_by_key(|lens| (lens.range.start.line, lens.range.start.character));
 
+        let result = Some(lenses);
         log::info!(
             "Response: tasm code_lens took {:?}, found {} lenses",
             now.elapsed(),
-            lenses.len()
+            result.as_ref().map_or(0, Vec::len),
         );
-        Ok(Some(lenses))
+        result
     }
 }
 
 fn collect_top_level(
     top_level: TopLevel<'_>,
-    source: &str,
-    instruction_docs: Option<&InstructionDocsIndex>,
+    file: &ParsedSnapshot<tasm_syntax::SourceFile>,
+    tasm_spec: Option<&InstructionDocsIndex>,
     lenses: &mut Vec<CodeLens>,
 ) {
     match top_level {
         TopLevel::Instruction(node) => {
-            push_instruction_code_lens(node, source, instruction_docs, lenses);
+            push_instruction_code_lens(node, file, tasm_spec, lenses);
             for arg in node.args() {
-                collect_argument(arg, source, instruction_docs, lenses);
+                collect_argument(arg, file, tasm_spec, lenses);
             }
         }
         TopLevel::ExplicitRef(node) => {
             if let Some(code) = node.code() {
-                collect_code(code, source, instruction_docs, lenses);
+                collect_code(code, file, tasm_spec, lenses);
             }
         }
         TopLevel::EmbedSlice(_) => {}
@@ -68,25 +59,25 @@ fn collect_top_level(
 
 fn collect_argument(
     argument: Argument<'_>,
-    source: &str,
+    file: &ParsedSnapshot<tasm_syntax::SourceFile>,
     instruction_docs: Option<&InstructionDocsIndex>,
     lenses: &mut Vec<CodeLens>,
 ) {
     if let Some(expr) = argument.expr() {
-        collect_expr(expr, source, instruction_docs, lenses);
+        collect_expr(expr, file, instruction_docs, lenses);
     }
 }
 
 fn collect_expr(
     expr: Expr<'_>,
-    source: &str,
+    file: &ParsedSnapshot<tasm_syntax::SourceFile>,
     instruction_docs: Option<&InstructionDocsIndex>,
     lenses: &mut Vec<CodeLens>,
 ) {
     match expr {
-        Expr::Code(code) => collect_code(code, source, instruction_docs, lenses),
+        Expr::Code(code) => collect_code(code, file, instruction_docs, lenses),
         Expr::Dictionary(dictionary) => {
-            collect_dictionary(dictionary, source, instruction_docs, lenses)
+            collect_dictionary(dictionary, file, instruction_docs, lenses)
         }
         Expr::IntegerLit(_)
         | Expr::DataLiteral(_)
@@ -98,33 +89,33 @@ fn collect_expr(
 
 fn collect_code(
     code: Code<'_>,
-    source: &str,
+    file: &ParsedSnapshot<tasm_syntax::SourceFile>,
     instruction_docs: Option<&InstructionDocsIndex>,
     lenses: &mut Vec<CodeLens>,
 ) {
     if let Some(instructions) = code.instructions() {
         for top_level in instructions.items() {
-            collect_top_level(top_level, source, instruction_docs, lenses);
+            collect_top_level(top_level, file, instruction_docs, lenses);
         }
     }
 }
 
 fn collect_dictionary(
     dictionary: Dictionary<'_>,
-    source: &str,
+    file: &ParsedSnapshot<tasm_syntax::SourceFile>,
     instruction_docs: Option<&InstructionDocsIndex>,
     lenses: &mut Vec<CodeLens>,
 ) {
     for entry in dictionary.entries() {
         if let Some(code) = entry.code() {
-            collect_code(code, source, instruction_docs, lenses);
+            collect_code(code, file, instruction_docs, lenses);
         }
     }
 }
 
 fn push_instruction_code_lens(
     instruction: tasm_syntax::Instruction<'_>,
-    source: &str,
+    file: &ParsedSnapshot<tasm_syntax::SourceFile>,
     instruction_docs: Option<&InstructionDocsIndex>,
     lenses: &mut Vec<CodeLens>,
 ) {
@@ -132,17 +123,13 @@ fn push_instruction_code_lens(
         return;
     };
 
-    let instruction_name = name_node.text(source).trim();
+    let instruction_name = file.text_of(name_node.syntax());
     if instruction_name.is_empty() {
         return;
     }
 
     let title = stack_effect_title(instruction_name, instruction_docs);
-    let range = offsets_to_lsp_range(
-        name_node.syntax().start_byte(),
-        name_node.syntax().end_byte(),
-        source,
-    );
+    let range = file.range_of(name_node.syntax());
 
     lenses.push(CodeLens {
         range,

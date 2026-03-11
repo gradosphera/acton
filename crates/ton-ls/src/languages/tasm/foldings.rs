@@ -1,36 +1,32 @@
 use crate::backend::Backend;
 use lsp_types::{FoldingRange, FoldingRangeKind, FoldingRangeParams};
 use tasm_syntax::{Argument, AstNode, Code, Dictionary, Expr, TopLevel};
-use tower_lsp::jsonrpc::Result as LspResult;
 
 impl Backend {
     pub async fn handle_tasm_folding_range(
         &self,
         params: FoldingRangeParams,
-    ) -> LspResult<Option<Vec<FoldingRange>>> {
+    ) -> Option<Vec<FoldingRange>> {
         crate::profile!(self, "folding_range");
         let now = std::time::Instant::now();
-
         let uri = params.text_document.uri;
         log::info!("Request: folding_range for {}", uri);
 
-        let Some(snapshot) = self.registry.find_tasm_file(&uri) else {
-            return Ok(None);
-        };
+        let file = self.registry.find_tasm_file(&uri)?;
 
         let mut ranges = Vec::new();
-        for top_level in snapshot.source_file.top_levels() {
+        for top_level in file.syntax().top_levels() {
             collect_top_level(top_level, &mut ranges);
         }
         ranges.sort_by_key(|range| (range.start_line, range.end_line));
 
+        let result = Some(ranges);
         log::info!(
             "Response: folding_range took {:?}, found {} ranges",
             now.elapsed(),
-            ranges.len()
+            result.as_ref().map_or(0, Vec::len),
         );
-
-        Ok(Some(ranges))
+        result
     }
 }
 

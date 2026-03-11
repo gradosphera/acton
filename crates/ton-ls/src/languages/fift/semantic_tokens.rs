@@ -1,7 +1,6 @@
 use crate::backend::Backend;
-use crate::backend::utils::offsets_to_lsp_range;
+use crate::languages::engine::cache::ParsedSnapshot;
 use crate::languages::fift::psi::FiftReference;
-use crate::languages::fift::traverse::PreorderTraverse;
 use crate::languages::semantic_tokens::{
     SemanticTokensBuilder as CommonSemanticTokensBuilder, semantic_tokens_result_id,
 };
@@ -10,49 +9,35 @@ use lsp_types::{
     SemanticToken, SemanticTokens, SemanticTokensParams, SemanticTokensResult,
     SemanticTokensResult::Tokens,
 };
-use tower_lsp::jsonrpc::Result as LspResult;
-use tower_lsp::lsp_types::Url;
 use tree_sitter::Node;
 
 impl Backend {
     pub async fn handle_fift_semantic_tokens_full(
         &self,
         params: SemanticTokensParams,
-    ) -> LspResult<Option<SemanticTokensResult>> {
+    ) -> Option<SemanticTokensResult> {
         crate::profile!(self, "fift-semantic_tokens");
         let now = std::time::Instant::now();
         let uri = params.text_document.uri;
         log::info!("Request: fift semantic_tokens_full for {}", uri);
 
-        let Some(data) = self.fift_semantic_tokens(&uri) else {
-            return Ok(None);
-        };
+        let file = self.registry.find_fift_file(&uri)?;
+        let data = collect_function_tokens(&file);
 
         log::info!(
             "Response: fift semantic_tokens_full took {:?}",
             now.elapsed()
         );
-        Ok(Some(Tokens(SemanticTokens {
+        Some(Tokens(SemanticTokens {
             result_id: Some(semantic_tokens_result_id()),
             data,
-        })))
-    }
-
-    fn fift_semantic_tokens(&self, uri: &Url) -> Option<Vec<SemanticToken>> {
-        let snapshot = self.registry.find_fift_file(uri)?;
-        Some(collect_function_tokens(
-            snapshot.source_file.as_ref(),
-            snapshot.text.as_ref(),
-        ))
+        }))
     }
 }
 
-fn collect_function_tokens(
-    source_file: &fift_syntax::SourceFile,
-    source: &str,
-) -> Vec<SemanticToken> {
+fn collect_function_tokens(file: &ParsedSnapshot<fift_syntax::SourceFile>) -> Vec<SemanticToken> {
     let mut builder = CommonSemanticTokensBuilder::new();
-    for node in PreorderTraverse::new(source_file.root_node().walk()) {
+    for node in file.traverse() {
         if !node.is_named() {
             continue;
         }
@@ -60,7 +45,7 @@ fn collect_function_tokens(
         if is_function_definition(node.kind())
             && let Some(name_node) = node.child_by_field_name("name")
         {
-            push_function_token(&mut builder, name_node, source);
+            push_function_token(&mut builder, name_node, file);
         }
 
         if node.kind() == "identifier" {
@@ -69,11 +54,11 @@ fn collect_function_tokens(
             };
 
             if !is_definition_name(parent, node)
-                && FiftReference::new(node, source_file)
+                && FiftReference::new(node, file.syntax())
                     .and_then(|reference| reference.resolve())
                     .is_some()
             {
-                push_function_token(&mut builder, node, source);
+                push_function_token(&mut builder, node, file);
             }
         }
     }
@@ -102,7 +87,11 @@ fn is_definition_name(parent: Node<'_>, node: Node<'_>) -> bool {
     is_function_definition(parent.kind())
 }
 
-fn push_function_token(builder: &mut CommonSemanticTokensBuilder, node: Node<'_>, source: &str) {
-    let range = offsets_to_lsp_range(node.start_byte(), node.end_byte(), source);
+fn push_function_token(
+    builder: &mut CommonSemanticTokensBuilder,
+    node: Node<'_>,
+    file: &ParsedSnapshot<fift_syntax::SourceFile>,
+) {
+    let range = file.range_of(node);
     builder.add_token_at_range(range, TokenType::Function as u32, 0);
 }

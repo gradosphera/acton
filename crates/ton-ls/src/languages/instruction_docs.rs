@@ -68,7 +68,7 @@ impl InstructionDocsIndex {
     }
 }
 
-pub fn get_instruction_docs_index() -> Option<&'static InstructionDocsIndex> {
+pub fn get_tasm_spec() -> Option<&'static InstructionDocsIndex> {
     INSTRUCTION_DOCS_INDEX
         .get_or_init(|| match InstructionDocsIndex::load() {
             Ok(index) => Some(index),
@@ -80,13 +80,13 @@ pub fn get_instruction_docs_index() -> Option<&'static InstructionDocsIndex> {
         .as_ref()
 }
 
-pub fn build_hover_markdown(name: &str, docs: &InstructionDocsIndex) -> Option<String> {
-    if let Some(alias) = docs.alias(name) {
-        let actual_instruction = docs.instruction(&alias.actual_name);
+pub fn build_hover_markdown(name: &str, tasp_spec: &InstructionDocsIndex) -> Option<String> {
+    if let Some(alias) = tasp_spec.alias(name) {
+        let actual_instruction = tasp_spec.instruction(&alias.actual_name);
         return Some(format_alias_markdown(alias, actual_instruction));
     }
 
-    let instruction = docs.instruction(name)?;
+    let instruction = tasp_spec.instruction(name)?;
     Some(format_instruction_markdown(&instruction.name, instruction))
 }
 

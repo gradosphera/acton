@@ -1,59 +1,44 @@
 use crate::backend::Backend;
-use crate::backend::utils::{get_point, offsets_to_lsp_range};
+use crate::languages::engine::cache::ParsedSnapshot;
 use crate::languages::fift::psi::FiftReferent;
-use lsp_types::{Location, Range, ReferenceParams};
-use tower_lsp::jsonrpc::Result as LspResult;
-use tree_sitter::{Node, Point};
+use lsp_types::{Location, Position, Range, ReferenceParams};
 
 impl Backend {
-    pub async fn handle_fift_references(
-        &self,
-        params: ReferenceParams,
-    ) -> LspResult<Option<Vec<Location>>> {
+    pub async fn handle_fift_references(&self, params: ReferenceParams) -> Option<Vec<Location>> {
         crate::profile!(self, "fift-references");
         let now = std::time::Instant::now();
-
         let uri = params.text_document_position.text_document.uri;
         log::info!("Request: fift references for {}", uri);
 
-        let Some(snapshot) = self.registry.find_fift_file(&uri) else {
-            return Ok(None);
-        };
+        let file = self.registry.find_fift_file(&uri)?;
 
-        let source = snapshot.text.as_ref();
-        let source_file = snapshot.source_file.as_ref();
-        let point = get_point(source, params.text_document_position.position);
-        let Some(ranges) = find_reference_ranges(
-            source_file,
-            source,
-            point,
+        let ranges = find_reference_ranges(
+            &file,
+            params.text_document_position.position,
             params.context.include_declaration,
-        ) else {
-            return Ok(None);
-        };
+        )?;
 
         let locations = ranges
             .into_iter()
             .map(|range| Location::new(uri.clone(), range))
             .collect::<Vec<_>>();
-
+        let result = Some(locations);
         log::info!(
             "Response: fift references took {:?}, found {} references",
             now.elapsed(),
-            locations.len()
+            result.as_ref().map_or(0, Vec::len),
         );
-        Ok(Some(locations))
+        result
     }
 }
 
 fn find_reference_ranges(
-    source_file: &fift_syntax::SourceFile,
-    source: &str,
-    point: Point,
+    file: &ParsedSnapshot<fift_syntax::SourceFile>,
+    position: Position,
     include_definition: bool,
 ) -> Option<Vec<Range>> {
-    let node = node_at_position(source_file.root_node(), point)?;
-    let referent = FiftReferent::new(node, source_file);
+    let node = file.node_at(position)?;
+    let referent = FiftReferent::new(node, file.syntax());
     referent.resolved()?;
 
     let ranges = referent
@@ -61,20 +46,26 @@ fn find_reference_ranges(
         .into_iter()
         .map(|node| {
             let target = node.child_by_field_name("name").unwrap_or(node);
-            offsets_to_lsp_range(target.start_byte(), target.end_byte(), source)
+            file.range_of(target)
         })
         .collect::<Vec<_>>();
 
     Some(ranges)
 }
 
-fn node_at_position(root: Node<'_>, point: Point) -> Option<Node<'_>> {
-    root.descendant_for_point_range(point, point)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+
+    fn parse_snapshot(source: &str) -> ParsedSnapshot<fift_syntax::SourceFile> {
+        ParsedSnapshot::new(
+            lsp_types::Url::parse("file:///tmp/test.fift").expect("snapshot uri should parse"),
+            1,
+            Arc::from(source),
+            Arc::new(fift_syntax::parse(source).expect("failed to parse fixture")),
+        )
+    }
 
     #[test]
     fn finds_reference_ranges() {
@@ -90,16 +81,16 @@ foo PROC:<{
 END>c
 "#;
 
-        let source_file = fift_syntax::parse(source).expect("failed to parse fixture");
+        let snapshot = parse_snapshot(source);
         let offset = source.find("  foo").expect("reference must exist") + 2;
-        let point = offset_to_point(source, offset);
+        let position = offset_to_position(source, offset);
 
         let without_def =
-            find_reference_ranges(&source_file, source, point, false).expect("ranges must resolve");
+            find_reference_ranges(&snapshot, position, false).expect("ranges must resolve");
         assert_eq!(without_def.len(), 3);
 
         let with_def =
-            find_reference_ranges(&source_file, source, point, true).expect("ranges must resolve");
+            find_reference_ranges(&snapshot, position, true).expect("ranges must resolve");
         assert_eq!(with_def.len(), 4);
     }
 
@@ -114,28 +105,28 @@ foo PROC:<{ }>
 END>c
 "#;
 
-        let source_file = fift_syntax::parse(source).expect("failed to parse fixture");
+        let snapshot = parse_snapshot(source);
         let offset = source.find("missing").expect("reference must exist");
-        let point = offset_to_point(source, offset);
-        assert!(find_reference_ranges(&source_file, source, point, false).is_none());
+        let position = offset_to_position(source, offset);
+        assert!(find_reference_ranges(&snapshot, position, false).is_none());
     }
 
-    fn offset_to_point(source: &str, byte_offset: usize) -> Point {
-        let mut row = 0usize;
-        let mut column = 0usize;
+    fn offset_to_position(source: &str, byte_offset: usize) -> Position {
+        let mut line = 0usize;
+        let mut character = 0usize;
 
         for (index, byte) in source.bytes().enumerate() {
             if index >= byte_offset {
                 break;
             }
             if byte == b'\n' {
-                row += 1;
-                column = 0;
+                line += 1;
+                character = 0;
             } else {
-                column += 1;
+                character += 1;
             }
         }
 
-        Point::new(row, column)
+        Position::new(line as u32, character as u32)
     }
 }
