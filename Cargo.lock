@@ -973,6 +973,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
+name = "fift-syntax"
+version = "0.0.11"
+dependencies = [
+ "anyhow",
+ "memchr",
+ "tree-sitter",
+ "tree-sitter-fift",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3639,6 +3649,7 @@ version = "0.0.11"
 dependencies = [
  "anyhow",
  "dashmap 7.0.0-rc2",
+ "fift-syntax",
  "log",
  "lsp-types",
  "rustc-hash",
@@ -3894,6 +3905,15 @@ dependencies = [
  "regex-syntax",
  "serde_json",
  "streaming-iterator",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-fift"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "tree-sitter",
  "tree-sitter-language",
 ]
 

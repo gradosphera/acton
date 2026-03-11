@@ -38,6 +38,7 @@ ton-emulator = { path = "crates/ton-emulator" }
 ton-executor = { path = "crates/ton-executor" }
 tolk-syntax = { path = "crates/tolk-syntax" }
 tasm-syntax = { path = "crates/tasm-syntax" }
+fift-syntax = { path = "crates/fift-syntax" }
 tolk-resolver = { path = "crates/tolk-resolver" }
 tolk-ty = { path = "crates/tolk-ty" }
 tolk-analysis = { path = "crates/tolk-analysis" }
@@ -58,6 +59,7 @@ ton-ls = { path = "crates/ton-ls" }
 ton-indexer = { path = "crates/ton-indexer" }
 tree-sitter-tolk = { path = "crates/tree-sitter-tolk" }
 tree-sitter-tasm = { path = "crates/tree-sitter-tasm" }
+tree-sitter-fift = { path = "crates/tree-sitter-fift" }
 
 # remote crates
 rusqlite = { version = "0.31", features = ["bundled"] }

@@ -14,8 +14,8 @@ pub mod utils;
 
 use crate::AnalysisResult;
 use crate::backend::utils::{SourceLanguage, detect_language, get_byte_offset};
-use crate::languages::tasm;
 use crate::languages::tolk::semantic_tokens;
+use crate::languages::{fift, tasm};
 #[cfg(feature = "profiling")]
 pub use profiling::ProfilingContext;
 
@@ -35,6 +35,7 @@ pub struct Backend {
 impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> LspResult<InitializeResult> {
         tasm::init();
+        fift::init();
 
         let now = std::time::Instant::now();
         log::info!("Request: initialize");
