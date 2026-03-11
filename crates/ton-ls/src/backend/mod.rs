@@ -47,6 +47,15 @@ impl LanguageServer for Backend {
                 references_provider: Some(OneOf::Left(true)),
                 folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                code_lens_provider: Some(CodeLensOptions {
+                    resolve_provider: Some(false),
+                }),
+                execute_command_provider: Some(ExecuteCommandOptions {
+                    commands: vec![tasm::code_lenses::STACK_EFFECT_CODE_LENS_COMMAND.to_string()],
+                    work_done_progress_options: WorkDoneProgressOptions {
+                        work_done_progress: None,
+                    },
+                }),
                 inlay_hint_provider: Some(OneOf::Left(true)),
                 workspace_symbol_provider: Some(OneOf::Left(true)),
                 code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
@@ -184,6 +193,25 @@ impl LanguageServer for Backend {
             SourceLanguage::Tasm => self.handle_tasm_hover(params).await,
             SourceLanguage::Tolk | SourceLanguage::Unknown => Ok(None),
         }
+    }
+
+    async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {
+        match detect_language(&params.text_document.uri) {
+            SourceLanguage::Tasm => self.handle_tasm_code_lens(params).await,
+            SourceLanguage::Tolk | SourceLanguage::Unknown => Ok(None),
+        }
+    }
+
+    async fn execute_command(
+        &self,
+        params: ExecuteCommandParams,
+    ) -> LspResult<Option<serde_json::Value>> {
+        if params.command == tasm::code_lenses::STACK_EFFECT_CODE_LENS_COMMAND {
+            return Ok(None);
+        }
+
+        log::warn!("Unknown execute command: {}", params.command);
+        Ok(None)
     }
 }
 
