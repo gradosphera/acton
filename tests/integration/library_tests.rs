@@ -1327,7 +1327,7 @@ fn test_library_publish_custom_network_missing_v2_url_fails() {
         r#"
 
 [networks.broken]
-v3-url = "http://127.0.0.1:1/api/v3"
+api = { v3 = "http://127.0.0.1:1/api/v3" }
 "#,
     );
     fs::write(&acton_toml_path, acton_toml).expect("failed to write malformed custom network");
@@ -1346,7 +1346,7 @@ v3-url = "http://127.0.0.1:1/api/v3"
         .arg("custom:broken")
         .run()
         .failure()
-        .assert_stderr_contains("v2-url");
+        .assert_stderr_contains("missing field `v2`");
 }
 
 #[cfg(unix)]
@@ -3022,7 +3022,7 @@ fn append_custom_network(project_path: &Path, network_name: &str, v2_url: &str) 
         r#"
 
 [networks.{network_name}]
-v2-url = "{v2_url}"
+api = {{ v2 = "{v2_url}" }}
 "#
     ));
     fs::write(&acton_toml_path, acton_toml)
@@ -3047,7 +3047,7 @@ fn append_localnet_network(project_path: &Path, base_url: &str) {
         r#"
 
 [networks.localnet]
-v2-url = "{base_url}/api/v2"
+api = {{ v2 = "{base_url}/api/v2", v3 = "{base_url}/api/v3" }}
 "#
     ));
     fs::write(&acton_toml_path, acton_toml).expect("failed to write Acton.toml with localnet");

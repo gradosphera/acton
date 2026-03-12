@@ -40,7 +40,7 @@ impl Network {
     ) -> anyhow::Result<&CustomNetworkUrls> {
         custom_networks.get("localnet").ok_or_else(|| {
             anyhow::anyhow!(
-                "localnet is not configured. Add [networks.localnet] with v2-url and v3-url to Acton.toml"
+                "localnet is not configured. Add [networks.localnet] with api = {{ v2 = \"...\", v3 = \"...\" }} to Acton.toml"
             )
         })
     }

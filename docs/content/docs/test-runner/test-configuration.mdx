@@ -186,7 +186,7 @@ api-key = "YOUR_API_KEY"
 Using a custom network:
 ```toml
 [networks.my-local-node]
-v2-url = "http://localhost:8081/api/v2/jsonRPC"
+api = { v2 = "http://localhost:8081/api/v2/jsonRPC" }
 
 [test]
 fork-net = "my-local-node"

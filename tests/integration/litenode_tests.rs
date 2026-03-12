@@ -2015,7 +2015,7 @@ fn append_localnet_network(project_path: &Path, base_url: &str) {
         r#"
 
 [networks.localnet]
-v2-url = "{base_url}/api/v2"
+api = {{ v2 = "{base_url}/api/v2", v3 = "{base_url}/api/v3" }}
 "#
     ));
     fs::write(&acton_toml_path, acton_toml).expect("Failed to write Acton.toml with localnet");

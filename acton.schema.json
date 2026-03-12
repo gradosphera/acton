@@ -38,15 +38,21 @@
       "description": "Custom network configurations",
       "additionalProperties": {
         "type": "object",
-        "required": ["v2-url", "v3-url"],
+        "required": ["api"],
         "properties": {
-          "v2-url": {
-            "type": "string",
-            "description": "The URL for the TonCenter API v2"
-          },
-          "v3-url": {
-            "type": "string",
-            "description": "The URL for the TonCenter API v3"
+          "api": {
+            "type": "object",
+            "required": ["v2"],
+            "properties": {
+              "v2": {
+                "type": "string",
+                "description": "The URL for the TonCenter API v2"
+              },
+              "v3": {
+                "type": "string",
+                "description": "The URL for the TonCenter API v3"
+              }
+            }
           }
         }
       }

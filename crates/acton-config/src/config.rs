@@ -53,10 +53,14 @@ pub enum ContractDependency {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+pub struct CustomNetworkApiConfig {
+    pub v2: String,
+    pub v3: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomNetworkConfig {
-    pub v2_url: String,
-    pub v3_url: Option<String>,
+    pub api: CustomNetworkApiConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -485,9 +489,10 @@ impl ActonConfig {
                 result.insert(
                     name.clone(),
                     CustomNetworkUrls {
-                        v2_url: Arc::from(config.v2_url.trim_end_matches("/")),
+                        v2_url: Arc::from(config.api.v2.trim_end_matches("/")),
                         v3_url: config
-                            .v3_url
+                            .api
+                            .v3
                             .as_ref()
                             .map(|s| Arc::from(s.trim_end_matches("/"))),
                     },
@@ -802,6 +807,59 @@ depends = []
         assert_eq!(wallet.name, "Wallet V5");
         assert_eq!(wallet.src, "wallet-v5.tolk");
         assert_eq!(wallet.depends, Some(vec![]));
+    }
+
+    #[test]
+    fn test_networks_api_config_parsing() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[networks.localnet]
+api = { v2 = "http://localhost:3010/api/v2/", v3 = "http://localhost:3010/api/v3/" }
+
+[networks.my-custom]
+api = { v2 = "https://example.com/api/v2/" }
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let networks = config.custom_networks();
+
+        let localnet = networks
+            .get("localnet")
+            .expect("localnet config should be present");
+        assert_eq!(localnet.v2_url.as_ref(), "http://localhost:3010/api/v2");
+        assert_eq!(
+            localnet.v3_url.as_deref(),
+            Some("http://localhost:3010/api/v3")
+        );
+
+        let custom = networks
+            .get("my-custom")
+            .expect("custom network config should be present");
+        assert_eq!(custom.v2_url.as_ref(), "https://example.com/api/v2");
+        assert_eq!(custom.v3_url, None);
+    }
+
+    #[test]
+    fn test_networks_legacy_v2_url_is_rejected() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[networks.localnet]
+v2-url = "http://localhost:3010/api/v2"
+"#;
+
+        let err = toml::from_str::<ActonConfig>(toml_content).expect_err("legacy key must fail");
+        assert!(
+            err.to_string().contains("missing field `api`"),
+            "unexpected parse error: {err}"
+        );
     }
 
     #[test]

@@ -370,9 +370,9 @@ mod tests {
 
     #[test]
     fn resolves_dotted_table_path() {
-        let source = "[networks.localnet]\nv2-url = \"http://localhost\"\n";
+        let source = "[networks.localnet]\napi = { v2 = \"http://localhost\" }\n";
         let snapshot = parse_snapshot(source);
-        let offset = source.find("v2-url").expect("key exists");
+        let offset = source.find("v2 =").expect("key exists");
         let node = snapshot
             .node_at(snapshot.position(offset))
             .expect("node at offset must exist");
@@ -384,7 +384,8 @@ mod tests {
             vec![
                 SchemaPathSegment::Key("networks".to_string()),
                 SchemaPathSegment::Key("localnet".to_string()),
-                SchemaPathSegment::Key("v2-url".to_string())
+                SchemaPathSegment::Key("api".to_string()),
+                SchemaPathSegment::Key("v2".to_string())
             ]
         );
     }

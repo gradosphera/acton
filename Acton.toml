@@ -29,8 +29,7 @@ port = 3010
 accounts = ["local-wallet"]
 
 [networks.localnet]
-v2-url = "http://localhost:3010/api/v2"
-v3-url = "http://localhost:3010/api/v3"
+api = { v2 = "http://localhost:3010/api/v2", v3 = "http://localhost:3010/api/v3" }
 
 [mappings]
 acton = ".acton"

@@ -75,8 +75,7 @@ fn test_hover_networks_dynamic_tables() {
         function_name!(),
         r#"
             [networks.<caret>mainnet]
-            <caret>v2-url = "https://toncenter.com/api/v2"
-            <caret>v3-url = "https://toncenter.com/api/v3"
+            api = { <caret>v2 = "https://toncenter.com/api/v2", <caret>v3 = "https://toncenter.com/api/v3" }
         "#,
         expect![[r#"
             ```toml
@@ -88,7 +87,7 @@ fn test_hover_networks_dynamic_tables() {
             ---
 
             ```toml
-            networks.mainnet.v2-url
+            networks.mainnet.api.v2
             ```
 
             The URL for the TonCenter API v2
@@ -98,7 +97,7 @@ fn test_hover_networks_dynamic_tables() {
             ---
 
             ```toml
-            networks.mainnet.v3-url
+            networks.mainnet.api.v3
             ```
 
             The URL for the TonCenter API v3

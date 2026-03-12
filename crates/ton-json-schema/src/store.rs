@@ -599,9 +599,14 @@ mod tests {
                 "network": {
                     "type": "object",
                     "properties": {
-                        "v2-url": {
-                            "type": "string",
-                            "description": "TonCenter v2 endpoint"
+                        "api": {
+                            "type": "object",
+                            "properties": {
+                                "v2": {
+                                    "type": "string",
+                                    "description": "TonCenter v2 endpoint"
+                                }
+                            }
                         }
                     }
                 }
@@ -631,7 +636,8 @@ mod tests {
             .summary_for_path(&[
                 SchemaPathSegment::from("networks"),
                 SchemaPathSegment::from("mainnet"),
-                SchemaPathSegment::from("v2-url"),
+                SchemaPathSegment::from("api"),
+                SchemaPathSegment::from("v2"),
             ])
             .expect("summary should exist");
 
