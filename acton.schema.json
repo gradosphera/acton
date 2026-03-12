@@ -56,7 +56,7 @@
           },
           "explorer": {
             "type": "string",
-            "description": "Base URL used to build transaction links for this network. If omitted, links are derived from api.v2"
+            "description": "Base URL used to build transaction links for this network. Acton appends /tx/<hash> automatically (adds /tx/ if missing). If omitted, links are derived from api.v2"
           }
         }
       }

@@ -292,17 +292,17 @@ unused-variable = "allow" # Disable for counter contract only
 
 Defines custom networks that can be used for deployment, testing, and interaction. Each key is a unique network identifier.
 
-| Field      | Type     | Required | Description                                                                                  |
-|:-----------|:---------|:---------|:---------------------------------------------------------------------------------------------|
-| `api.v2`   | `string` | **Yes**  | The URL for the TonCenter v2 API.                                                            |
-| `api.v3`   | `string` | No       | The URL for the TonCenter v3 API.                                                            |
-| `explorer` | `string` | No       | Base URL for transaction links in this network. If omitted, links are derived from `api.v2`. |
+| Field      | Type     | Required | Description                                                                                                                                                     |
+|:-----------|:---------|:---------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `api.v2`   | `string` | **Yes**  | The URL for the TonCenter v2 API.                                                                                                                               |
+| `api.v3`   | `string` | No       | The URL for the TonCenter v3 API.                                                                                                                               |
+| `explorer` | `string` | No       | Base URL for transaction links in this network. Acton appends `/tx/<hash>` automatically (adds `/tx/` if missing). If omitted, links are derived from `api.v2`. |
 
 Example:
 ```toml
 [networks.my-custom-net]
 api = { v2 = "https://my-custom-net.com/api/v2", v3 = "https://my-custom-net.com/api/v3" }
-explorer = "https://my-custom-net.com/explorer/tx"
+explorer = "https://my-custom-net.com/explorer"
 ```
 
 You can then use this network in commands like `acton test --fork-net custom:my-custom-net`, `acton script --net custom:my-custom-net` or in scripts.

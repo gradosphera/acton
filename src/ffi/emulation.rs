@@ -1445,7 +1445,7 @@ fn configured_network_transaction_link(
     }
 
     let mut explorer_base = reqwest::Url::parse(network_urls.v2_url.as_ref()).ok()?;
-    explorer_base.set_path("/explorer/tx");
+    explorer_base.set_path("/explorer");
     explorer_base.set_query(None);
     explorer_base.set_fragment(None);
 
@@ -1455,11 +1455,14 @@ fn configured_network_transaction_link(
 fn explorer_transaction_link(explorer_base: &str, tx_hash_hex: &str) -> Option<String> {
     let mut url = reqwest::Url::parse(explorer_base).ok()?;
     let base_path = url.path().trim_end_matches('/');
-    let path = if base_path.is_empty() {
-        format!("/{tx_hash_hex}")
+    let tx_base = if base_path.is_empty() {
+        "/tx".to_string()
+    } else if base_path.ends_with("/tx") {
+        base_path.to_string()
     } else {
-        format!("{base_path}/{tx_hash_hex}")
+        format!("{base_path}/tx")
     };
+    let path = format!("{tx_base}/{tx_hash_hex}");
     url.set_path(&path);
     url.set_query(None);
     url.set_fragment(None);
@@ -1580,12 +1583,38 @@ mod tests {
         let urls = acton_config::config::CustomNetworkUrls {
             v2_url: Arc::from("http://localhost:3010/api/v2"),
             v3_url: None,
-            explorer_url: Some(Arc::from("https://explorer.example/tx")),
+            explorer_url: Some(Arc::from("https://explorer.example/explorer")),
         };
 
         let url = configured_network_transaction_link(&urls, "abc123")
             .expect("explorer link should be built");
-        assert_eq!(url, "https://explorer.example/tx/abc123");
+        assert_eq!(url, "https://explorer.example/explorer/tx/abc123");
+    }
+
+    #[test]
+    fn configured_network_transaction_link_keeps_existing_tx_suffix() {
+        let urls = acton_config::config::CustomNetworkUrls {
+            v2_url: Arc::from("http://localhost:3010/api/v2"),
+            v3_url: None,
+            explorer_url: Some(Arc::from("https://explorer.example/explorer/tx/")),
+        };
+
+        let url = configured_network_transaction_link(&urls, "abc123")
+            .expect("explorer link should be built");
+        assert_eq!(url, "https://explorer.example/explorer/tx/abc123");
+    }
+
+    #[test]
+    fn configured_network_transaction_link_appends_tx_for_host_only_explorer() {
+        let urls = acton_config::config::CustomNetworkUrls {
+            v2_url: Arc::from("http://localhost:3010/api/v2"),
+            v3_url: None,
+            explorer_url: Some(Arc::from("http://localhost:3006")),
+        };
+
+        let url = configured_network_transaction_link(&urls, "abc123")
+            .expect("explorer link should be built");
+        assert_eq!(url, "http://localhost:3006/tx/abc123");
     }
 
     #[test]

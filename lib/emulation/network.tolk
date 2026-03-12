@@ -782,6 +782,7 @@ fun net.getDeployedCode(addr: address): cell? {
 /// Returns true if transaction is found and false otherwise.
 /// For `custom:<name>` and `localnet` networks, transaction links in the output
 /// use `[networks.<name>].explorer` from `Acton.toml` as base URL.
+/// Acton appends `/tx/<hash>` automatically (adds `/tx/` if missing).
 /// If `explorer` is not set, Acton falls back to deriving explorer link from
 /// `[networks.<name>].api.v2`.
 ///

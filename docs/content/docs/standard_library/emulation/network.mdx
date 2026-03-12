@@ -825,6 +825,7 @@ maximum number of attempts is reached.
 Returns true if transaction is found and false otherwise.
 For `custom:<name>` and `localnet` networks, transaction links in the output
 use `[networks.<name>].explorer` from `Acton.toml` as base URL.
+Acton appends `/tx/<hash>` automatically (adds `/tx/` if missing).
 If `explorer` is not set, Acton falls back to deriving explorer link from
 `[networks.<name>].api.v2`.
 
@@ -843,7 +844,7 @@ val ok = net.waitForTransaction(inMsg.info.dest, bodyHashSlice, true, 20, 2000);
 
 See [SendResultList.wait](#sendresultlistwait) for high-level API.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L802" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L803" />
 
 ## `net.randomAddress`
 
@@ -862,7 +863,7 @@ val address = net.randomAddress("random_user");
 val masterchain_address = net.randomAddress("random_user", -1);
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L828" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L829" />
 
 ## `net.registerAddress`
 
@@ -883,7 +884,7 @@ Example:
 net.registerAddress(address, "my_address");
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L869" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L870" />
 
 ## `net.registerCodeCell`
 
@@ -901,7 +902,7 @@ Example:
 net.registerCodeCell(code, "my_code");
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L882" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L883" />
 
 ## `net.getAccountState`
 
@@ -925,7 +926,7 @@ if (state != null) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L901" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L902" />
 
 ## `net.getAccountStorageFee`
 
@@ -945,7 +946,7 @@ if (storage_fee != null) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L921" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L922" />
 
 ## `net.loadLibrary`
 
@@ -957,7 +958,7 @@ Load library from the real blockchain by hash.
 
 Returns null if library is not found.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L933" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L934" />
 
 ## `net.fetchAndRegisterLibrary`
 
@@ -969,7 +970,7 @@ Load library from the real blockchain by hash and register it in current blockch
 
 Returns false if library is not found.
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L940" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L941" />
 
 ## `net.setNow`
 
@@ -987,7 +988,7 @@ val future_time = net.now() + 1000; // 1000 seconds from now
 net.setNow(future_time);
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L958" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L959" />
 
 ## `net.now`
 
@@ -1005,7 +1006,7 @@ val current_time = net.now();
 println1("Current emulation time: {}", current_time);
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L971" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L972" />
 
 ## `net.topUp`
 
@@ -1020,7 +1021,7 @@ Example:
 net.topUp(address, ton("10"));
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L981" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L982" />
 
 ## `net.balance`
 
@@ -1038,7 +1039,7 @@ val balance = net.balance(address);
 println1("{:ton}", balance);
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1000" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1001" />
 
 ## `net.getAccount`
 
@@ -1059,7 +1060,7 @@ if (acc is AccountInfo) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1020" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1021" />
 
 ## `net.setAccount`
 
@@ -1078,7 +1079,7 @@ val acc = net.getAccount(addr);
 net.setAccount(addr, acc);
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1035" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1036" />
 
 ## `net.getShardAccount`
 
@@ -1098,7 +1099,7 @@ if (shard != null) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1062" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1063" />
 
 ## `net.setShardAccount`
 
@@ -1118,7 +1119,7 @@ if (shard != null) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1081" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1082" />
 
 ## `net.setConfig`
 
@@ -1159,7 +1160,7 @@ if (success) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1121" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1122" />
 
 ## `net.getConfig`
 
@@ -1191,7 +1192,7 @@ val globalVersion = config.getGlobalVersion();
 println(format1("Network version: {}", globalVersion.version));
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1174" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1175" />
 
 ## `crc16`
 
@@ -1206,7 +1207,7 @@ Example:
 val crc = crc16("hello");
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1184" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1185" />
 
 ## `tuple.fromTuple`
 
@@ -1214,7 +1215,7 @@ val crc = crc16("hello");
 fun tuple.fromTuple(data: tuple): tuple
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1186" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1187" />
 
 ## `T.externalOutPrefix`
 
@@ -1222,7 +1223,7 @@ fun tuple.fromTuple(data: tuple): tuple
 fun T.externalOutPrefix(): int
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1190" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1191" />
 
 ## `T.externalOutPrefixLen`
 
@@ -1230,7 +1231,7 @@ fun T.externalOutPrefix(): int
 fun T.externalOutPrefixLen(): int
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1198" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1199" />
 
 ## `T.decodeExternalOutBody`
 
@@ -1238,7 +1239,7 @@ fun T.externalOutPrefixLen(): int
 fun T.decodeExternalOutBody(body: RemainingBitsAndRefs): T
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1206" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1207" />
 
 ## `T.getDeclaredPackPrefix2`
 
@@ -1246,5 +1247,5 @@ fun T.decodeExternalOutBody(body: RemainingBitsAndRefs): T
 fun T.getDeclaredPackPrefix2(): int
 ```
 
-<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1262" />
+<SourceCodeLink href="https://github.com/i582/acton/blob/master/lib/emulation/network.tolk#L1263" />
 
