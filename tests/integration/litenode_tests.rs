@@ -285,6 +285,27 @@ fun main() {
 "#;
 
 #[test]
+fn litenode_starts_and_serves_masterchain_info() {
+    let project = ProjectBuilder::new("litenode-smoke-masterchain-info").build();
+    let node = project.litenode().start();
+
+    let response = node.get_json("/api/v2/getMasterchainInfo");
+    assert_eq!(
+        response["ok"].as_bool(),
+        Some(true),
+        "Expected getMasterchainInfo to succeed:\n{}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+    assert!(
+        response["result"]["last"]["seqno"].as_u64().is_some(),
+        "Expected getMasterchainInfo result.last.seqno to be present:\n{}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
+
+    node.stop();
+}
+
+#[test]
 fn litenode_supports_pre_start_commands_and_get_out_msg_queue_size() {
     let project = ProjectBuilder::new("litenode-pre-start-commands")
         .contract("child", CHILD_CONTRACT)

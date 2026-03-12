@@ -38,19 +38,17 @@
       "description": "Custom network configurations",
       "additionalProperties": {
         "type": "object",
-        "required": ["api"],
         "properties": {
           "api": {
             "type": "object",
-            "required": ["v2"],
             "properties": {
               "v2": {
                 "type": "string",
-                "description": "The URL for the TonCenter API v2"
+                "description": "The URL for the TonCenter API v2. For localnet this defaults to http://localhost:<litenode.port>/api/v2 (port 3000 fallback)"
               },
               "v3": {
                 "type": "string",
-                "description": "The URL for the TonCenter API v3"
+                "description": "The URL for the TonCenter API v3. For localnet this defaults to http://localhost:<litenode.port>/api/v3 (port 3000 fallback)"
               }
             }
           },

@@ -40,9 +40,7 @@ impl Network {
         custom_networks: &HashMap<String, CustomNetworkUrls>,
     ) -> anyhow::Result<&CustomNetworkUrls> {
         custom_networks.get("localnet").ok_or_else(|| {
-            anyhow::anyhow!(
-                "localnet is not configured. Add [networks.localnet] with api = {{ v2 = \"...\", v3 = \"...\" }} to Acton.toml"
-            )
+            anyhow::anyhow!("localnet urls are not available in network configuration")
         })
     }
 

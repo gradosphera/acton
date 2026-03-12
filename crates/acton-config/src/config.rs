@@ -52,16 +52,18 @@ pub enum ContractDependency {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct CustomNetworkApiConfig {
-    pub v2: String,
+    pub v2: Option<String>,
     pub v3: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct CustomNetworkConfig {
     pub explorer: Option<String>,
-    pub api: CustomNetworkApiConfig,
+    pub api: Option<CustomNetworkApiConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -485,16 +487,62 @@ impl ActonConfig {
     #[must_use]
     pub fn custom_networks(&self) -> HashMap<String, CustomNetworkUrls> {
         let mut result = HashMap::new();
+
+        let localnet_port = self
+            .litenode
+            .as_ref()
+            .and_then(|cfg| cfg.port)
+            .unwrap_or(5411);
+        let default_localnet_v2 = format!("http://localhost:{localnet_port}/api/v2");
+        let default_localnet_v3 = format!("http://localhost:{localnet_port}/api/v3");
+
+        let localnet_config = self
+            .networks
+            .as_ref()
+            .and_then(|networks| networks.get("localnet"));
+        let localnet_v2 = localnet_config
+            .and_then(|config| config.api.as_ref())
+            .and_then(|api| api.v2.as_deref())
+            .unwrap_or(default_localnet_v2.as_str());
+        let localnet_v3 = localnet_config
+            .and_then(|config| config.api.as_ref())
+            .and_then(|api| api.v3.as_deref())
+            .unwrap_or(default_localnet_v3.as_str());
+
+        result.insert(
+            "localnet".to_string(),
+            CustomNetworkUrls {
+                v2_url: Arc::from(localnet_v2.trim_end_matches("/")),
+                v3_url: Some(Arc::from(localnet_v3.trim_end_matches("/"))),
+                explorer_url: localnet_config
+                    .and_then(|config| config.explorer.as_ref())
+                    .map(|s| Arc::from(s.trim_end_matches("/"))),
+            },
+        );
+
         if let Some(networks) = &self.networks {
             for (name, config) in networks {
+                if name == "localnet" {
+                    continue;
+                }
+
+                let Some(v2_url) = config
+                    .api
+                    .as_ref()
+                    .and_then(|api| api.v2.as_ref())
+                    .map(String::as_str)
+                else {
+                    continue;
+                };
+
                 result.insert(
                     name.clone(),
                     CustomNetworkUrls {
-                        v2_url: Arc::from(config.api.v2.trim_end_matches("/")),
+                        v2_url: Arc::from(v2_url.trim_end_matches("/")),
                         v3_url: config
                             .api
-                            .v3
                             .as_ref()
+                            .and_then(|api| api.v3.as_ref())
                             .map(|s| Arc::from(s.trim_end_matches("/"))),
                         explorer_url: config
                             .explorer
@@ -855,6 +903,61 @@ api = { v2 = "https://example.com/api/v2/" }
     }
 
     #[test]
+    fn test_localnet_api_defaults_to_litenode_port() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[litenode]
+port = 3015
+
+[networks.localnet]
+explorer = "http://localhost:3015/explorer"
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let networks = config.custom_networks();
+        let localnet = networks
+            .get("localnet")
+            .expect("localnet config should always be present");
+
+        assert_eq!(localnet.v2_url.as_ref(), "http://localhost:3015/api/v2");
+        assert_eq!(
+            localnet.v3_url.as_deref(),
+            Some("http://localhost:3015/api/v3")
+        );
+        assert_eq!(
+            localnet.explorer_url.as_deref(),
+            Some("http://localhost:3015/explorer")
+        );
+    }
+
+    #[test]
+    fn test_localnet_api_defaults_to_5411_without_litenode_port() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let networks = config.custom_networks();
+        let localnet = networks
+            .get("localnet")
+            .expect("localnet config should always be present");
+
+        assert_eq!(localnet.v2_url.as_ref(), "http://localhost:5411/api/v2");
+        assert_eq!(
+            localnet.v3_url.as_deref(),
+            Some("http://localhost:5411/api/v3")
+        );
+        assert_eq!(localnet.explorer_url, None);
+    }
+
+    #[test]
     fn test_networks_legacy_v2_url_is_rejected() {
         let toml_content = r#"
 [package]
@@ -868,7 +971,7 @@ v2-url = "http://localhost:3010/api/v2"
 
         let err = toml::from_str::<ActonConfig>(toml_content).expect_err("legacy key must fail");
         assert!(
-            err.to_string().contains("missing field `api`"),
+            err.to_string().contains("unknown field `v2-url`"),
             "unexpected parse error: {err}"
         );
     }

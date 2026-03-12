@@ -1319,6 +1319,7 @@ fn test_library_publish_custom_network_unknown_fails() {
 #[test]
 fn test_library_publish_custom_network_missing_v2_url_fails() {
     let project = ProjectBuilder::new("library-publish-custom-network-missing-v2").build();
+    write_deployer_wallets(project.path());
 
     let acton_toml_path = project.path().join("Acton.toml");
     let mut acton_toml =
@@ -1338,6 +1339,7 @@ api = { v3 = "http://127.0.0.1:1/api/v3" }
         .publish()
         .with_code("te6cckEBAQEAAgAAAEysuc0=")
         .with_duration("1d")
+        .wallet("deployer")
         .arg("--amount")
         .arg("1")
         .arg("--yes")
@@ -1346,7 +1348,7 @@ api = { v3 = "http://127.0.0.1:1/api/v3" }
         .arg("custom:broken")
         .run()
         .failure()
-        .assert_stderr_contains("missing field `v2`");
+        .assert_stderr_contains("unknown custom network: broken");
 }
 
 #[cfg(unix)]
