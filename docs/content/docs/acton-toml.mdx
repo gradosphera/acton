@@ -290,24 +290,32 @@ unused-variable = "allow" # Disable for counter contract only
 
 ## `[networks]` Section
 
-Defines custom networks that can be used for deployment, testing, and interaction. Each key is a unique network identifier.
+Defines network settings used by `--net`/`--fork-net`.
 
-| Field      | Type     | Required    | Description                                                                                                                                                     |
-|:-----------|:---------|:------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `api.v2`   | `string` | Custom only | The URL for the TonCenter v2 API. For `localnet`, defaults to `http://localhost:<litenode.port>/api/v2` (or port `5411` if not set).                            |
-| `api.v3`   | `string` | No          | The URL for the TonCenter v3 API.                                                                                                                               |
-| `explorer` | `string` | No          | Base URL for transaction links in this network. Acton appends `/tx/<hash>` automatically (adds `/tx/` if missing). If omitted, links are derived from `api.v2`. |
+- `mainnet` and `testnet` are built in.
+- `localnet` is a first-class network and is always available.
+- Extra entries under `[networks.<name>]` are used as `custom:<name>`.
+
+| Field      | Type     | Required                                | Description                                                                                                                                                                                                                                                                                     |
+|:-----------|:---------|:----------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `api.v2`   | `string` | Yes for custom, optional for `localnet` | TonCenter API v2 URL. For `localnet`, if omitted, Acton uses `http://localhost:<litenode.port>/api/v2`; if `[litenode].port` is not set, it falls back to port `5411`.                                                                                                                          |
+| `api.v3`   | `string` | No                                      | TonCenter API v3 URL. For `localnet`, if omitted, Acton uses `http://localhost:<litenode.port>/api/v3`; if `[litenode].port` is not set, it falls back to port `5411`.                                                                                                                          |
+| `explorer` | `string` | No                                      | Base explorer URL for transaction links. Acton appends `/tx/<hash>` automatically (adds `/tx/` if missing). If omitted, Acton derives explorer links from `api.v2` (`<scheme>://<host>/explorer/tx/<hash>`). For default `localnet`, this becomes `http://localhost:<port>/explorer/tx/<hash>`. |
 
 Example:
 ```toml
+[networks.localnet]
+explorer = "http://localhost:3006"
+
 [networks.my-custom-net]
 api = { v2 = "https://my-custom-net.com/api/v2", v3 = "https://my-custom-net.com/api/v3" }
 explorer = "https://my-custom-net.com/explorer"
 ```
 
-You can then use this network in commands like `acton test --fork-net custom:my-custom-net`, `acton script --net custom:my-custom-net` or in scripts.
-
-For `localnet`, `api.v2`/`api.v3` are optional: when omitted, Acton derives them from `[litenode].port` (fallback `3000`).
+You can use these networks in commands like:
+- `acton script --net localnet`
+- `acton script --net custom:my-custom-net`
+- `acton test --fork-net custom:my-custom-net`
 
 ---
 
