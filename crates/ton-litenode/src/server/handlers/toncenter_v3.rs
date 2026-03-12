@@ -1,23 +1,25 @@
-use super::utils::{get_extra, handle_result, parse_method_name};
+use super::utils::parse_method_name;
 use crate::api::toncenter_v3;
 use crate::litenode::{LiteNode, LiteNodeTransaction};
 use crate::server::models::{
     EmulateTraceRequest, GetAddressInformationV3Request, GetJettonMastersRequest,
-    GetJettonWalletsRequest, GetPendingTransactionsV3Query, GetTracesQuery,
+    GetJettonWalletsRequest, GetNftItemsRequest, GetPendingTransactionsV3Query, GetTracesQuery,
     GetTransactionsByMessageV3Query, GetTransactionsV3Query, RunGetMethodRequest, SendBocRequest,
 };
+use crate::storage::JettonMasterMeta;
 use crate::types::{Addr, Hash256};
 use axum::{
     Json,
     body::Bytes,
     extract::{Query, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
 };
 use base64::Engine;
 use serde_json::Value;
 use serde_json::json;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::future::Future;
 use std::sync::Arc;
 use toncenter_v3 as v3;
 use tycho_types::models::{StdAddr, StdAddrFormat};
@@ -25,17 +27,17 @@ use tycho_types::models::{StdAddr, StdAddrFormat};
 pub async fn get_traces(
     State(node): State<Arc<LiteNode>>,
     Query(payload): Query<GetTracesQuery>,
-) -> Json<Value> {
-    handle_result(node.get_traces(payload.hash), v3::map_traces).await
+) -> impl IntoResponse {
+    handle_v3_result(node.get_traces(payload.hash), v3::map_traces).await
 }
 
 pub async fn get_address_information_v3(
     State(node): State<Arc<LiteNode>>,
     Query(payload): Query<GetAddressInformationV3Request>,
-) -> Json<Value> {
+) -> impl IntoResponse {
     let _use_v2 = payload.use_v2.unwrap_or(true);
 
-    handle_result(
+    handle_v3_result(
         node.get_address_information(payload.address, None),
         toncenter_v3::map_address_information,
     )
@@ -45,13 +47,13 @@ pub async fn get_address_information_v3(
 pub async fn get_transactions_v3(
     State(node): State<Arc<LiteNode>>,
     Query(payload): Query<GetTransactionsV3Query>,
-) -> Json<Value> {
+) -> impl IntoResponse {
     let parsed = match parse_transactions_v3_query(payload) {
         Ok(parsed) => parsed,
         Err(e) => return v3_bad_request(e.to_string()),
     };
 
-    handle_result(node.get_all_transactions(), move |txs| {
+    handle_v3_result(node.get_all_transactions(), move |txs| {
         let filtered = filter_transactions_v3(txs, &parsed);
         v3::map_transactions_response(&filtered)
     })
@@ -61,13 +63,13 @@ pub async fn get_transactions_v3(
 pub async fn get_transactions_by_message_v3(
     State(node): State<Arc<LiteNode>>,
     Query(payload): Query<GetTransactionsByMessageV3Query>,
-) -> Json<Value> {
+) -> impl IntoResponse {
     let parsed = match parse_transactions_by_message_v3_query(payload) {
         Ok(parsed) => parsed,
         Err(e) => return v3_bad_request(e.to_string()),
     };
 
-    handle_result(node.get_all_transactions(), move |txs| {
+    handle_v3_result(node.get_all_transactions(), move |txs| {
         let filtered = filter_transactions_by_message_v3(txs, &parsed);
         v3::map_transactions_response(&filtered)
     })
@@ -77,13 +79,13 @@ pub async fn get_transactions_by_message_v3(
 pub async fn get_pending_transactions_v3(
     State(node): State<Arc<LiteNode>>,
     Query(payload): Query<GetPendingTransactionsV3Query>,
-) -> Json<Value> {
+) -> impl IntoResponse {
     let parsed = match parse_pending_transactions_v3_query(payload) {
         Ok(parsed) => parsed,
         Err(e) => return v3_bad_request(e.to_string()),
     };
 
-    handle_result(node.get_pending_transactions(), move |txs| {
+    handle_v3_result(node.get_pending_transactions(), move |txs| {
         let filtered = filter_pending_transactions_v3(txs, &parsed);
         v3::map_transactions_response(&filtered)
     })
@@ -135,8 +137,8 @@ pub async fn emulate_trace_v1(State(node): State<Arc<LiteNode>>, body: Bytes) ->
 pub async fn get_jetton_masters(
     State(node): State<Arc<LiteNode>>,
     Query(payload): Query<GetJettonMastersRequest>,
-) -> Json<Value> {
-    handle_result(
+) -> impl IntoResponse {
+    handle_v3_result(
         node.get_jetton_masters(
             payload.address,
             payload.admin_address,
@@ -151,17 +153,61 @@ pub async fn get_jetton_masters(
 pub async fn get_jetton_wallets(
     State(node): State<Arc<LiteNode>>,
     Query(payload): Query<GetJettonWalletsRequest>,
-) -> Json<Value> {
-    handle_result(
-        node.get_jetton_wallets(
+) -> impl IntoResponse {
+    let wallets = match node
+        .get_jetton_wallets(
             payload.address,
             payload.owner_address,
             payload.jetton_address,
             payload.exclude_zero_balance,
             payload.limit,
             payload.offset,
+        )
+        .await
+    {
+        Ok(wallets) => wallets,
+        Err(e) => return request_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    };
+
+    let mut masters_by_jetton: HashMap<Addr, JettonMasterMeta> = HashMap::new();
+    let unique_jettons: BTreeSet<Addr> =
+        wallets.iter().map(|wallet| wallet.jetton_address).collect();
+    for jetton_address in unique_jettons {
+        let lookup_result = node
+            .get_jetton_masters(Some(jetton_address.to_string()), None, Some(1), Some(0))
+            .await;
+        if let Ok(mut masters) = lookup_result
+            && let Some(master) = masters.pop()
+        {
+            masters_by_jetton.insert(jetton_address, master);
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(v3::map_jetton_wallets_with_metadata(
+            &wallets,
+            &masters_by_jetton,
+        )),
+    )
+        .into_response()
+}
+
+pub async fn get_nft_items(
+    State(node): State<Arc<LiteNode>>,
+    Query(payload): Query<GetNftItemsRequest>,
+) -> impl IntoResponse {
+    handle_v3_result(
+        node.get_nft_items(
+            payload.address,
+            payload.owner_address,
+            payload.collection_address,
+            payload.index,
+            payload.sort_by_last_transaction_lt,
+            payload.limit,
+            payload.offset,
         ),
-        v3::map_jetton_wallets,
+        v3::map_nft_items,
     )
     .await
 }
@@ -169,39 +215,25 @@ pub async fn get_jetton_wallets(
 pub async fn send_message_v3(
     State(node): State<Arc<LiteNode>>,
     Json(payload): Json<SendBocRequest>,
-) -> Json<Value> {
-    handle_result(node.send_boc(payload.boc), toncenter_v3::map_send_message).await
+) -> impl IntoResponse {
+    handle_v3_result(node.send_boc(payload.boc), toncenter_v3::map_send_message).await
 }
 
 pub async fn run_get_method_v3(
     State(node): State<Arc<LiteNode>>,
     Json(payload): Json<RunGetMethodRequest>,
-) -> Json<Value> {
+) -> impl IntoResponse {
     let method_str = match parse_method_name(&payload.method) {
         Ok(s) => s,
-        Err(e) => {
-            return Json(json!({
-                "ok": false,
-                "error": e.to_string(),
-                "code": 400,
-                "@extra": get_extra()
-            }));
-        }
+        Err(e) => return v3_bad_request(e.to_string()),
     };
 
     let stack = match normalize_v3_stack(payload.stack) {
         Ok(stack) => stack,
-        Err(e) => {
-            return Json(json!({
-                "ok": false,
-                "error": e.to_string(),
-                "code": 400,
-                "@extra": get_extra()
-            }));
-        }
+        Err(e) => return v3_bad_request(e.to_string()),
     };
 
-    handle_result(
+    handle_v3_result(
         node.run_get_method(payload.address, method_str, stack, payload.seqno),
         toncenter_v3::map_run_get_method_v3,
     )
@@ -684,11 +716,30 @@ fn emulate_error_response(
     (status, Json(json!({ "error": error.into() })))
 }
 
-fn v3_bad_request(error: impl Into<String>) -> Json<Value> {
-    Json(json!({
-        "ok": false,
-        "error": error.into(),
-        "code": 400,
-        "@extra": get_extra(),
-    }))
+async fn handle_v3_result<T, F>(
+    result: impl Future<Output = anyhow::Result<T>>,
+    mapper: F,
+) -> Response
+where
+    F: FnOnce(&T) -> Value,
+{
+    match result.await {
+        Ok(res) => (StatusCode::OK, Json(mapper(&res))).into_response(),
+        Err(e) => request_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+fn v3_bad_request(error: impl Into<String>) -> Response {
+    request_error(StatusCode::BAD_REQUEST, error)
+}
+
+fn request_error(status: StatusCode, error: impl Into<String>) -> Response {
+    (
+        status,
+        Json(json!({
+            "error": error.into(),
+            "code": status.as_u16(),
+        })),
+    )
+        .into_response()
 }

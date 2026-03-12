@@ -73,7 +73,8 @@ pub fn create_router(node: Arc<LiteNode>, rate_limit_rps: Option<u32>) -> Router
         .route("/v3/message", post(send_message_v3))
         .route("/v3/runGetMethod", post(run_get_method_v3))
         .route("/v3/jetton/masters", get(get_jetton_masters))
-        .route("/v3/jetton/wallets", get(get_jetton_wallets));
+        .route("/v3/jetton/wallets", get(get_jetton_wallets))
+        .route("/v3/nft/items", get(get_nft_items));
 
     let emulate_router = Router::new().route("/emulate/v1/emulateTrace", post(emulate_trace_v1));
 
