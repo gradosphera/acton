@@ -14,6 +14,7 @@ pub mod utils;
 
 use crate::AnalysisResult;
 use crate::backend::utils::{SourceLanguage, detect_language};
+// use crate::completion::data::CompletionItemDataEnvelope;
 use crate::languages::engine::edits::apply_lsp_changes;
 use crate::languages::engine::registry::SelfContainedLanguageRegistry;
 use crate::languages::tasm;
@@ -49,7 +50,7 @@ impl LanguageServer for Backend {
                 folding_range_provider: Some(FoldingRangeProviderCapability::Simple(true)),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions {
-                    resolve_provider: Some(false),
+                    resolve_provider: Some(true),
                     trigger_characters: Some(vec![
                         ".".to_string(),
                         "\"".to_string(),
@@ -187,10 +188,8 @@ impl LanguageServer for Backend {
         match detect_language(&params.text_document_position_params.text_document.uri) {
             SourceLanguage::Tolk => self.handle_goto_definition(params).await,
             SourceLanguage::Fift => Ok(self.handle_fift_goto_definition(params).await),
-            SourceLanguage::Tasm
-            | SourceLanguage::Tlb
-            | SourceLanguage::Toml
-            | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Tlb => Ok(self.handle_tlb_goto_definition(params).await),
+            SourceLanguage::Tasm | SourceLanguage::Toml | SourceLanguage::Unknown => Ok(None),
         }
     }
 
@@ -198,10 +197,8 @@ impl LanguageServer for Backend {
         match detect_language(&params.text_document_position.text_document.uri) {
             SourceLanguage::Tolk => self.handle_references(params).await,
             SourceLanguage::Fift => Ok(self.handle_fift_references(params).await),
-            SourceLanguage::Tasm
-            | SourceLanguage::Tlb
-            | SourceLanguage::Toml
-            | SourceLanguage::Unknown => Ok(None),
+            SourceLanguage::Tlb => Ok(self.handle_tlb_references(params).await),
+            SourceLanguage::Tasm | SourceLanguage::Toml | SourceLanguage::Unknown => Ok(None),
         }
     }
 
@@ -271,13 +268,28 @@ impl LanguageServer for Backend {
 
     async fn completion(&self, params: CompletionParams) -> LspResult<Option<CompletionResponse>> {
         match detect_language(&params.text_document_position.text_document.uri) {
+            SourceLanguage::Tlb => Ok(self.handle_tlb_completion(params).await),
             SourceLanguage::Toml => Ok(self.handle_toml_completion(params).await),
             SourceLanguage::Tolk
             | SourceLanguage::Tasm
             | SourceLanguage::Fift
-            | SourceLanguage::Tlb
             | SourceLanguage::Unknown => Ok(None),
         }
+    }
+
+    async fn completion_resolve(&self, item: CompletionItem) -> LspResult<CompletionItem> {
+        // if let Some(data) = item.data.as_ref()
+        //     && let Some(envelope) = CompletionItemDataEnvelope::from_json_value(data)
+        // {
+        //     log::debug!(
+        //         "Completion resolve request for language={} provider={} id={}",
+        //         envelope.language,
+        //         envelope.provider,
+        //         envelope.resolve_id
+        //     );
+        // }
+
+        Ok(item)
     }
 
     async fn code_lens(&self, params: CodeLensParams) -> LspResult<Option<Vec<CodeLens>>> {

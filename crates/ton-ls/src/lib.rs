@@ -1,4 +1,5 @@
 pub mod backend;
+mod completion;
 mod languages;
 
 pub use backend::Backend;
