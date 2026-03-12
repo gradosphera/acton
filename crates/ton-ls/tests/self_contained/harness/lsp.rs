@@ -1,9 +1,10 @@
 use anyhow::bail;
 use lsp_types::{
-    CodeLensParams, FoldingRangeParams, GotoDefinitionParams, HoverParams, InitializeResult,
-    PartialResultParams, Position, ReferenceContext, ReferenceParams, SemanticTokensLegend,
-    SemanticTokensParams, SemanticTokensRegistrationOptions, SemanticTokensServerCapabilities,
-    TextDocumentIdentifier, TextDocumentPositionParams, Url, WorkDoneProgressParams,
+    CodeLensParams, CompletionContext, CompletionParams, FoldingRangeParams, GotoDefinitionParams,
+    HoverParams, InitializeResult, PartialResultParams, Position, ReferenceContext,
+    ReferenceParams, SemanticTokensLegend, SemanticTokensParams, SemanticTokensRegistrationOptions,
+    SemanticTokensServerCapabilities, TextDocumentIdentifier, TextDocumentPositionParams, Url,
+    WorkDoneProgressParams,
 };
 
 pub(crate) fn uri_for_case(case_name: &str, extension: &str) -> Url {
@@ -11,9 +12,14 @@ pub(crate) fn uri_for_case(case_name: &str, extension: &str) -> Url {
     if file_name.is_empty() {
         file_name = "unnamed".to_owned();
     }
-    let path = std::env::temp_dir()
+    let root = std::env::temp_dir()
         .join("ton-ls-self-contained-tests")
-        .join(format!("{file_name}.{extension}"));
+        .join(file_name);
+    let path = if extension.eq_ignore_ascii_case("toml") {
+        root.join("Acton.toml")
+    } else {
+        root.join(format!("case.{extension}"))
+    };
     Url::from_file_path(path).expect("self-contained test URI must be valid file URI")
 }
 
@@ -99,6 +105,25 @@ pub(crate) fn code_lens_params(uri: Url) -> CodeLensParams {
         partial_result_params: PartialResultParams {
             partial_result_token: Option::<lsp_types::ProgressToken>::None,
         },
+    }
+}
+
+pub(crate) fn completion_params(uri: Url, position: Position) -> CompletionParams {
+    CompletionParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri },
+            position,
+        },
+        work_done_progress_params: WorkDoneProgressParams {
+            work_done_token: Option::<lsp_types::ProgressToken>::None,
+        },
+        partial_result_params: PartialResultParams {
+            partial_result_token: Option::<lsp_types::ProgressToken>::None,
+        },
+        context: Some(CompletionContext {
+            trigger_kind: lsp_types::CompletionTriggerKind::INVOKED,
+            trigger_character: None,
+        }),
     }
 }
 

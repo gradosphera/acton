@@ -1,6 +1,7 @@
 use lsp_types::{
-    CodeLens, FoldingRange, GotoDefinitionResponse, Hover, HoverContents, LanguageString, Location,
-    MarkedString, Position, SemanticToken, SemanticTokensLegend,
+    CodeLens, CompletionResponse, FoldingRange, GotoDefinitionResponse, Hover, HoverContents,
+    InsertTextFormat, LanguageString, Location, MarkedString, Position, SemanticToken,
+    SemanticTokensLegend,
 };
 
 use crate::self_contained::harness::lsp::slice_line_utf16;
@@ -101,6 +102,41 @@ pub(crate) fn render_code_lenses(response: Option<Vec<CodeLens>>) -> String {
         })
         .collect::<Vec<_>>();
     parts.join("\n")
+}
+
+pub(crate) fn render_completion_items(response: Option<CompletionResponse>) -> String {
+    let Some(response) = response else {
+        return "<none>".to_owned();
+    };
+
+    let items = match response {
+        CompletionResponse::Array(items) => items,
+        CompletionResponse::List(list) => list.items,
+    };
+    if items.is_empty() {
+        return "<none>".to_owned();
+    }
+
+    items
+        .into_iter()
+        .enumerate()
+        .map(|(idx, item)| {
+            let format = match item.insert_text_format {
+                Some(InsertTextFormat::SNIPPET) => "snippet",
+                _ => "plain",
+            };
+            let kind = item
+                .kind
+                .map(|kind| format!("{kind:?}"))
+                .unwrap_or_else(|| "None".to_owned());
+            let detail = item.detail.unwrap_or_default();
+            format!(
+                "{idx}: label={} kind={} detail={} format={}",
+                item.label, kind, detail, format
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 pub(crate) fn render_semantic_tokens(

@@ -82,14 +82,6 @@ fn strip_carets(input: &str) -> anyhow::Result<(String, Vec<RawCaret>)> {
             bail!("invalid caret marker `{marker}`");
         };
 
-        let after_marker = input[end + 1..]
-            .chars()
-            .next()
-            .ok_or_else(|| anyhow!("caret marker must be inline before token"))?;
-        if after_marker.is_whitespace() {
-            bail!("caret marker must be inline before token, got whitespace after marker");
-        }
-
         carets.push(RawCaret {
             name,
             offset: clean.len(),
