@@ -93,7 +93,7 @@ pub fn verify_cmd(
         "  {} Contract address: {}",
         "→".blue().bold(),
         contract_address
-            .to_base64_url_flags(true, network == Network::Testnet)
+            .to_base64_url_flags(true, network.uses_testnet_address_format())
             .dimmed()
     );
 
@@ -111,7 +111,7 @@ pub fn verify_cmd(
         wallet
             .wallet
             .address
-            .to_base64_url_flags(true, network == Network::Testnet)
+            .to_base64_url_flags(true, network.uses_testnet_address_format())
             .dimmed()
     );
 
@@ -187,11 +187,11 @@ pub fn verify_cmd(
     let sources_object = SourcesObject {
         known_contract_hash: contract_hash.clone(),
         known_contract_address: contract_address
-            .to_base64_url_flags(true, network == Network::Testnet),
+            .to_base64_url_flags(true, network.uses_testnet_address_format()),
         sender_address: wallet
             .wallet
             .address
-            .to_base64_url_flags(true, network == Network::Testnet),
+            .to_base64_url_flags(true, network.uses_testnet_address_format()),
         sources: sources_meta,
         compiler: CompilerSettings::Tolk {
             compiler_settings: TolkCompilerSettings {
@@ -525,7 +525,9 @@ fn get_backend_info(network: &Network, config: &BackendsConfig) -> anyhow::Resul
             backends: config.backends_testnet.clone(),
             id: "orbs-testnet".to_string(),
         }),
-        _ => anyhow::bail!("Unsupported network: {network}. Supported networks: mainnet, testnet"),
+        _ => anyhow::bail!(
+            "Unsupported network: {network}. Verification backends are available only for mainnet and testnet"
+        ),
     }
 }
 
@@ -535,7 +537,7 @@ fn remove_random<T>(els: &mut Vec<T>) -> T {
 }
 
 fn show_verifier_link(network: &Network, contract_address: TonAddress) {
-    let is_testnet = network == &Network::Testnet;
+    let is_testnet = network.uses_testnet_address_format();
     println!(
         "View at: {}",
         format!(

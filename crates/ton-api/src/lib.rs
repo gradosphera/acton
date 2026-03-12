@@ -120,9 +120,8 @@ impl TonApiClient {
             return;
         }
 
-        if let Network::Custom(name) = &self.network
-            && name.as_ref() == "localnet"
-        {
+        if self.network == Network::Localnet {
+            // we don't have rate limit on localnet by default
             return;
         }
 

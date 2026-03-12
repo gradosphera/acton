@@ -320,7 +320,7 @@ fn litenode_supports_pre_start_commands_and_get_out_msg_queue_size() {
         .acton()
         .script("scripts/deploy.tolk")
         .broadcast()
-        .verify_network("custom:localnet")
+        .verify_network("localnet")
         .run();
     let script_stdout = String::from_utf8(script_result.output.get_output().stdout.clone())
         .expect("Failed to decode deploy script stdout");
@@ -456,7 +456,7 @@ fn litenode_script_println_net_send_in_broadcast_shows_synthetic_hint() {
         .acton()
         .script("scripts/deploy.tolk")
         .broadcast()
-        .verify_network("custom:localnet")
+        .verify_network("localnet")
         .run()
         .success();
 
@@ -492,7 +492,7 @@ fn litenode_supports_try_locate_transaction_endpoints() {
         .acton()
         .script("scripts/deploy.tolk")
         .broadcast()
-        .verify_network("custom:localnet")
+        .verify_network("localnet")
         .run();
     let script_stdout = String::from_utf8(script_result.output.get_output().stdout.clone())
         .expect("Failed to decode deploy script stdout");
@@ -610,7 +610,7 @@ fn litenode_supports_library_publish_and_get_libraries_endpoint() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -767,7 +767,7 @@ fn litenode_supports_library_publish_and_get_libraries_endpoint() {
         .library()
         .fetch(&library_hash)
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--api-key")
         .arg("local-test-api-key")
         .arg("--output")
@@ -822,7 +822,7 @@ fn litenode_supports_library_ref_contract_deploy_and_destroy_flow() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -838,7 +838,7 @@ fn litenode_supports_library_ref_contract_deploy_and_destroy_flow() {
         .acton()
         .script("scripts/deploy_manager_and_worker.tolk")
         .broadcast()
-        .verify_network("custom:localnet")
+        .verify_network("localnet")
         .run();
     let deploy_stdout = String::from_utf8(deploy_result.output.get_output().stdout.clone())
         .expect("Failed to decode deploy script stdout");
@@ -905,7 +905,7 @@ fn litenode_supports_library_ref_contract_deploy_and_destroy_flow() {
         .acton()
         .script("scripts/destroy_worker_via_manager.tolk")
         .broadcast()
-        .verify_network("custom:localnet")
+        .verify_network("localnet")
         .run();
     let destroy_stdout = String::from_utf8(destroy_result.output.get_output().stdout.clone())
         .expect("Failed to decode destroy script stdout");
@@ -1343,7 +1343,7 @@ fn litenode_supports_v3_address_information_endpoint() {
         .acton()
         .script("scripts/deploy_getter.tolk")
         .broadcast()
-        .verify_network("custom:localnet")
+        .verify_network("localnet")
         .run();
     let script_stdout = String::from_utf8(script_result.output.get_output().stdout.clone())
         .expect("Failed to decode deploy script stdout");
@@ -1889,7 +1889,7 @@ fn litenode_supports_v3_run_get_method() {
         .acton()
         .script("scripts/deploy_getter.tolk")
         .broadcast()
-        .verify_network("custom:localnet")
+        .verify_network("localnet")
         .run();
     let script_stdout = String::from_utf8(script_result.output.get_output().stdout.clone())
         .expect("Failed to decode deploy script stdout");

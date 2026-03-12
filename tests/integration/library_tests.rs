@@ -862,7 +862,7 @@ fn test_library_publish_happy_path_litenode_saves_local_metadata() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -886,7 +886,7 @@ fn test_library_publish_happy_path_litenode_saves_local_metadata() {
 
     let (library_id, library) = read_first_library_entry(&libraries_path);
     assert_eq!(library_id, "library_contract");
-    assert_eq!(library.network, "custom:localnet");
+    assert_eq!(library.network, "localnet");
     assert_eq!(library.hash.len(), 64);
     assert!(
         !library.account.is_empty(),
@@ -918,7 +918,7 @@ fn test_library_publish_happy_path_litenode_saves_global_metadata_with_flag() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -948,7 +948,7 @@ fn test_library_publish_happy_path_litenode_saves_global_metadata_with_flag() {
     );
 
     let (_, library) = read_first_library_entry(&global_path);
-    assert_eq!(library.network, "custom:localnet");
+    assert_eq!(library.network, "localnet");
     assert_eq!(library.hash.len(), 64);
 
     wait_for_library_in_api(&node, &library.hash, Duration::from_secs(12));
@@ -979,7 +979,7 @@ fn test_library_publish_interactive_save_location_defaults_to_local_litenode() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -1029,7 +1029,7 @@ fn test_library_topup_happy_path_litenode_updates_last_topup_timestamp() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -1089,7 +1089,7 @@ fn test_library_info_shows_balance_and_runway_on_litenode() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -1138,7 +1138,7 @@ fn test_library_info_shows_runway_warning_when_exhausted_on_litenode() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -1186,7 +1186,7 @@ fn test_library_fetch_json_with_output_behavior_is_stable_on_litenode() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -1208,7 +1208,7 @@ fn test_library_fetch_json_with_output_behavior_is_stable_on_litenode() {
         .library()
         .fetch(&library.hash)
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--json")
         .arg("--output")
         .arg(output_file)
@@ -1250,7 +1250,7 @@ fn test_library_fetch_json_with_disasm_behavior_is_stable_on_litenode() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -1271,7 +1271,7 @@ fn test_library_fetch_json_with_disasm_behavior_is_stable_on_litenode() {
         .library()
         .fetch(&library.hash)
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--json")
         .arg("--disasm")
         .arg("--api-key")
@@ -1373,7 +1373,7 @@ fn test_library_publish_interactive_selects_global_storage() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -1428,7 +1428,7 @@ fn test_library_topup_reports_metadata_update_failure_after_successful_send() {
         .arg("--wallet")
         .arg("deployer")
         .arg("--net")
-        .arg("custom:localnet")
+        .arg("localnet")
         .arg("--duration")
         .arg("1y")
         .arg("--amount")
@@ -1501,7 +1501,7 @@ fn test_library_info_interactive_library_select() {
             .arg("--wallet")
             .arg("deployer")
             .arg("--net")
-            .arg("custom:localnet")
+            .arg("localnet")
             .arg("--duration")
             .arg("1y")
             .arg("--amount")
@@ -1552,7 +1552,7 @@ fn test_library_topup_interactive_library_and_wallet_select() {
             .arg("--wallet")
             .arg("deployer")
             .arg("--net")
-            .arg("custom:localnet")
+            .arg("localnet")
             .arg("--duration")
             .arg("1y")
             .arg("--amount")

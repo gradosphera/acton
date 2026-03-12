@@ -1383,7 +1383,13 @@ fn get_transaction_link(
     tx: TonCenterTransaction,
     hex: String,
 ) -> String {
-    let network_prefix = if ctx.network() == Network::Testnet {
+    if ctx.network() == Network::Localnet
+        && let Some(url) = localnet_transaction_link(ctx, &hex)
+    {
+        return url;
+    }
+
+    let network_prefix = if ctx.network().uses_testnet_address_format() {
         "testnet."
     } else {
         ""
@@ -1403,6 +1409,21 @@ fn get_transaction_link(
         ),
         Explorer::Tonviewer => format!("https://{network_prefix}tonviewer.com/transaction/{hex}"),
     }
+}
+
+fn localnet_transaction_link(ctx: &Context, tx_hash_hex: &str) -> Option<String> {
+    let localnet_v2 = ctx
+        .env
+        .config
+        .custom_networks()
+        .get("localnet")
+        .map(|urls| urls.v2_url.to_string())?;
+
+    let mut url = reqwest::Url::parse(&localnet_v2).ok()?;
+    url.set_path(&format!("/explorer/tx/{tx_hash_hex}"));
+    url.set_query(None);
+    url.set_fragment(None);
+    Some(url.to_string())
 }
 
 extension!(get_config in (Context) using get_config_impl);

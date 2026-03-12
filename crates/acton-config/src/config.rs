@@ -739,6 +739,7 @@ impl TestSettings {
                     .and_then(|n| match n.to_lowercase().as_str() {
                         "mainnet" => Some(Network::Mainnet),
                         "testnet" => Some(Network::Testnet),
+                        "localnet" => Some(Network::Localnet),
                         _ => None,
                     })
             }),
