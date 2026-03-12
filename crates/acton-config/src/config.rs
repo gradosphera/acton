@@ -60,6 +60,7 @@ pub struct CustomNetworkApiConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomNetworkConfig {
+    pub explorer: Option<String>,
     pub api: CustomNetworkApiConfig,
 }
 
@@ -495,6 +496,10 @@ impl ActonConfig {
                             .v3
                             .as_ref()
                             .map(|s| Arc::from(s.trim_end_matches("/"))),
+                        explorer_url: config
+                            .explorer
+                            .as_ref()
+                            .map(|s| Arc::from(s.trim_end_matches("/"))),
                     },
                 );
             }
@@ -819,6 +824,7 @@ version = "0.1.0"
 
 [networks.localnet]
 api = { v2 = "http://localhost:3010/api/v2/", v3 = "http://localhost:3010/api/v3/" }
+explorer = "http://localhost:3010/explorer/"
 
 [networks.my-custom]
 api = { v2 = "https://example.com/api/v2/" }
@@ -835,12 +841,17 @@ api = { v2 = "https://example.com/api/v2/" }
             localnet.v3_url.as_deref(),
             Some("http://localhost:3010/api/v3")
         );
+        assert_eq!(
+            localnet.explorer_url.as_deref(),
+            Some("http://localhost:3010/explorer")
+        );
 
         let custom = networks
             .get("my-custom")
             .expect("custom network config should be present");
         assert_eq!(custom.v2_url.as_ref(), "https://example.com/api/v2");
         assert_eq!(custom.v3_url, None);
+        assert_eq!(custom.explorer_url, None);
     }
 
     #[test]

@@ -7,6 +7,7 @@ use std::sync::Arc;
 pub struct CustomNetworkUrls {
     pub v2_url: Arc<str>,
     pub v3_url: Option<Arc<str>>,
+    pub explorer_url: Option<Arc<str>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -145,6 +146,7 @@ mod tests {
             CustomNetworkUrls {
                 v2_url: Arc::from("http://localhost:3010/api/v2"),
                 v3_url: Some(Arc::from("http://localhost:3010/api/v3")),
+                explorer_url: None,
             },
         );
 

@@ -1383,13 +1383,22 @@ fn get_transaction_link(
     tx: TonCenterTransaction,
     hex: String,
 ) -> String {
-    if ctx.network() == Network::Localnet
-        && let Some(url) = localnet_transaction_link(ctx, &hex)
-    {
-        return url;
+    let network = ctx.network();
+    match &network {
+        Network::Localnet => {
+            if let Some(url) = localnet_transaction_link(ctx, &hex) {
+                return url;
+            }
+        }
+        Network::Custom(network_name) => {
+            if let Some(url) = custom_network_transaction_link(ctx, network_name.as_ref(), &hex) {
+                return url;
+            }
+        }
+        Network::Mainnet | Network::Testnet => {}
     }
 
-    let network_prefix = if ctx.network().uses_testnet_address_format() {
+    let network_prefix = if network.uses_testnet_address_format() {
         "testnet."
     } else {
         ""
@@ -1411,16 +1420,47 @@ fn get_transaction_link(
     }
 }
 
-fn localnet_transaction_link(ctx: &Context, tx_hash_hex: &str) -> Option<String> {
-    let localnet_v2 = ctx
-        .env
-        .config
-        .custom_networks()
-        .get("localnet")
-        .map(|urls| urls.v2_url.to_string())?;
+fn custom_network_transaction_link(
+    ctx: &Context,
+    network_name: &str,
+    tx_hash_hex: &str,
+) -> Option<String> {
+    let custom_networks = ctx.env.config.custom_networks();
+    let network_urls = custom_networks.get(network_name)?;
+    configured_network_transaction_link(network_urls, tx_hash_hex)
+}
 
-    let mut url = reqwest::Url::parse(&localnet_v2).ok()?;
-    url.set_path(&format!("/explorer/tx/{tx_hash_hex}"));
+fn localnet_transaction_link(ctx: &Context, tx_hash_hex: &str) -> Option<String> {
+    let custom_networks = ctx.env.config.custom_networks();
+    let localnet_urls = custom_networks.get("localnet")?;
+    configured_network_transaction_link(localnet_urls, tx_hash_hex)
+}
+
+fn configured_network_transaction_link(
+    network_urls: &acton_config::config::CustomNetworkUrls,
+    tx_hash_hex: &str,
+) -> Option<String> {
+    if let Some(explorer_url) = network_urls.explorer_url.as_deref() {
+        return explorer_transaction_link(explorer_url, tx_hash_hex);
+    }
+
+    let mut explorer_base = reqwest::Url::parse(network_urls.v2_url.as_ref()).ok()?;
+    explorer_base.set_path("/explorer/tx");
+    explorer_base.set_query(None);
+    explorer_base.set_fragment(None);
+
+    explorer_transaction_link(explorer_base.as_str(), tx_hash_hex)
+}
+
+fn explorer_transaction_link(explorer_base: &str, tx_hash_hex: &str) -> Option<String> {
+    let mut url = reqwest::Url::parse(explorer_base).ok()?;
+    let base_path = url.path().trim_end_matches('/');
+    let path = if base_path.is_empty() {
+        format!("/{tx_hash_hex}")
+    } else {
+        format!("{base_path}/{tx_hash_hex}")
+    };
+    url.set_path(&path);
     url.set_query(None);
     url.set_fragment(None);
     Some(url.to_string())
@@ -1528,4 +1568,36 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         35 => save_trace_name : 2,
         36 => run_tick_tock : 2,
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn configured_network_transaction_link_prefers_explorer_url() {
+        let urls = acton_config::config::CustomNetworkUrls {
+            v2_url: Arc::from("http://localhost:3010/api/v2"),
+            v3_url: None,
+            explorer_url: Some(Arc::from("https://explorer.example/tx")),
+        };
+
+        let url = configured_network_transaction_link(&urls, "abc123")
+            .expect("explorer link should be built");
+        assert_eq!(url, "https://explorer.example/tx/abc123");
+    }
+
+    #[test]
+    fn configured_network_transaction_link_falls_back_to_v2() {
+        let urls = acton_config::config::CustomNetworkUrls {
+            v2_url: Arc::from("http://localhost:3010/api/v2"),
+            v3_url: None,
+            explorer_url: None,
+        };
+
+        let url = configured_network_transaction_link(&urls, "abc123")
+            .expect("fallback link should be built");
+        assert_eq!(url, "http://localhost:3010/explorer/tx/abc123");
+    }
 }

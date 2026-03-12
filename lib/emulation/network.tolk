@@ -780,6 +780,10 @@ fun net.getDeployedCode(addr: address): cell? {
 /// maximum number of attempts is reached.
 ///
 /// Returns true if transaction is found and false otherwise.
+/// For `custom:<name>` and `localnet` networks, transaction links in the output
+/// use `[networks.<name>].explorer` from `Acton.toml` as base URL.
+/// If `explorer` is not set, Acton falls back to deriving explorer link from
+/// `[networks.<name>].api.v2`.
 ///
 /// Example:
 /// ```tolk

@@ -53,6 +53,10 @@
                 "description": "The URL for the TonCenter API v3"
               }
             }
+          },
+          "explorer": {
+            "type": "string",
+            "description": "Base URL used to build transaction links for this network. If omitted, links are derived from api.v2"
           }
         }
       }
