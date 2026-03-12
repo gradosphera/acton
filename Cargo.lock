@@ -3882,7 +3882,9 @@ version = "0.0.11"
 dependencies = [
  "anyhow",
  "dashmap 7.0.0-rc2",
+ "expect-test",
  "fift-syntax",
+ "function_name",
  "log",
  "lsp-types",
  "rustc-hash",
@@ -3890,6 +3892,7 @@ dependencies = [
  "tasm",
  "tasm-syntax",
  "tlb-syntax",
+ "tokio",
  "tolk-linter",
  "tolk-resolver",
  "tolk-syntax",
