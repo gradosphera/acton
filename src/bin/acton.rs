@@ -656,7 +656,7 @@ enum Commands {
 pub enum LitenodeCommand {
     #[command(about = "Start the lightweight TON node")]
     Start {
-        #[arg(long, help = "LiteNode server port (default: [litenode].port or 3000)")]
+        #[arg(long, help = "LiteNode server port (default: [litenode].port or 5411)")]
         port: Option<u16>,
         #[arg(
             long,
@@ -2148,7 +2148,7 @@ fn resolve_litenode_settings(
 ) -> ResolvedLitenodeSettings {
     let config = load_litenode_settings_from_config();
     ResolvedLitenodeSettings {
-        port: cli_port.or(config.port).unwrap_or(3000),
+        port: cli_port.or(config.port).unwrap_or(5411),
         fork_net: cli_fork_net.or(config.fork_net),
         fork_block_number: cli_fork_block_number.or(config.fork_block_number),
         accounts: cli_accounts.or(config.accounts).unwrap_or_default(),
