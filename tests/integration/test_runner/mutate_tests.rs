@@ -40,6 +40,19 @@ fun onInternalMessage(in: InMessage) {
 fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
+const COMPILE_ERROR_MUTATION_CONTRACT: &str = r#"
+get fun mustFail(): int {
+    throw 5;
+}
+
+get fun addOne(x: int): int {
+    return x + 1;
+}
+
+fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
 fn mutation_project(name: &str) -> Project {
     ProjectBuilder::new(name)
         .contract("simple", MUTATION_CONTRACT)
@@ -180,9 +193,9 @@ fn mutate_contract_with_library_ref_dependency() {
         .arg("main")
         .run()
         .success()
-        .assert_contains("Files:    2")
-        .assert_contains("Mutants:  2")
-        .assert_contains("Compile errors       0");
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_contract_with_library_ref_dependency.stdout.txt",
+        );
 }
 
 #[test]
@@ -200,9 +213,9 @@ fn mutate_contract_with_dependencies_and_clear_cache() {
         .clear_cache()
         .run()
         .success()
-        .assert_contains("Files:    2")
-        .assert_contains("Mutants:  2")
-        .assert_contains("Compile errors       0");
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_contract_with_dependencies_and_clear_cache.stdout.txt",
+        );
 }
 
 #[test]
@@ -219,7 +232,25 @@ fn mutate_reports_dependency_build_failure() {
         .arg("main")
         .run()
         .failure()
-        .assert_stderr_contains("Failed to prepare project for mutation testing:")
-        .assert_stderr_contains("In dependency:")
-        .assert_stderr_contains("Build failed with");
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_reports_dependency_build_failure.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_compile_errors_are_excluded_from_score() {
+    ProjectBuilder::new("j-mutate-compile-errors-excluded-from-score")
+        .contract("main", COMPILE_ERROR_MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("main")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_compile_errors_are_excluded_from_score.stdout.txt",
+        );
 }
