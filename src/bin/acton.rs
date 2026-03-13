@@ -6,6 +6,7 @@ use acton::commands::disasm::disasm_cmd;
 use acton::commands::doc::doc_tvm_cmd;
 use acton::commands::docgen::docgen_cmd;
 use acton::commands::fmt::fmt_cmd;
+use acton::commands::func2tolk::func2tolk_cmd;
 use acton::commands::init::init_cmd;
 use acton::commands::internal::internal_register_contract;
 use acton::commands::library::{fetch_cmd, info_cmd, publish_cmd};
@@ -621,6 +622,24 @@ enum Commands {
         list: bool,
         #[arg(long, hide = true, help = "Check for updates and return info as JSON")]
         check: bool,
+    },
+    #[command(
+        name = "func2tolk",
+        about = "Convert FunC files to Tolk via @ton/convert-func-to-tolk",
+        after_help = example_func2tolk_usage()
+    )]
+    Func2Tolk {
+        #[arg(help = "Path to a .fc/.func file or a directory containing them")]
+        path: String,
+        #[arg(long, help = "Output path")]
+        output: Option<String>,
+        #[arg(
+            long,
+            help = "Insert /* _WARNING_ */ comments in output instead of printing warnings only"
+        )]
+        warnings_as_comments: bool,
+        #[arg(long, help = "Don't transform snake_case to camelCase")]
+        no_camel_case: bool,
     },
     #[command(
         about = "Generate shell completions for selected shell",
@@ -1373,6 +1392,26 @@ fn example_completions_usage() -> StyledStr {
     )
 }
 
+fn example_func2tolk_usage() -> StyledStr {
+    format_examples(
+        &[
+            (
+                "Convert all .fc/.func files in a directory",
+                "acton func2tolk contracts",
+            ),
+            (
+                "Convert a single file and add warning comments",
+                "acton func2tolk jetton-minter.fc --warnings-as-comments",
+            ),
+            (
+                "Convert without camelCase renaming",
+                "acton func2tolk jetton-minter.fc --no-camel-case",
+            ),
+        ],
+        "https://github.com/ton-blockchain/convert-func-to-tolk",
+    )
+}
+
 fn root_help(show_global_options: bool) -> StyledStr {
     use std::collections::HashMap;
     use std::fmt::Write as _;
@@ -1423,6 +1462,7 @@ fn root_help(show_global_options: bool) -> StyledStr {
         ("ls", ""),
         ("up", ""),
         ("help", "[COMMAND]"),
+        ("func2tolk", "<PATH>"),
         ("completions", "<SHELL>"),
     ];
 
@@ -2028,6 +2068,12 @@ fn main() {
             }
             result
         }
+        Commands::Func2Tolk {
+            path,
+            output,
+            warnings_as_comments,
+            no_camel_case,
+        } => func2tolk_cmd(path, output, warnings_as_comments, no_camel_case),
         Commands::Fmt { paths, check } => fmt_cmd(paths, check),
         Commands::Doc { command } => match command {
             DocCommand::Tvm {

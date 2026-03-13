@@ -6,6 +6,7 @@ pub mod disasm;
 pub mod doc;
 pub mod docgen;
 pub mod fmt;
+pub mod func2tolk;
 pub mod init;
 pub mod internal;
 pub mod library;
