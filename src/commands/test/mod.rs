@@ -425,8 +425,11 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     let mut config = config.clone();
     resolve_test_output_paths_from_project_root(&mut config, project_root);
 
-    // First we need to build all contracts and generate all dependency files with code
-    build_cmd(None, config.clear_cache, None, None, None, None, false)?;
+    // First we need to build all contracts and generate all dependency files with code.
+    // Internal mutation child runs may skip this via environment variable.
+    if need_to_build() {
+        build_cmd(None, config.clear_cache, None, None, None, None, false)?;
+    }
     println!("     {} tests", "Running".green().bold());
 
     // If path is omitted, default to project root.
@@ -621,6 +624,14 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         process::exit(1)
     }
     Ok(())
+}
+
+fn need_to_build() -> bool {
+    let Ok(value) = std::env::var("ACTON_INTERNAL_SKIP_BUILD") else {
+        return true;
+    };
+
+    value.trim() != "1"
 }
 
 fn resolve_test_output_paths_from_project_root(config: &mut TestConfig, project_root: &Path) {

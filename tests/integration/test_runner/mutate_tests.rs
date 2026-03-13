@@ -277,3 +277,69 @@ fn mutate_reports_no_mutation_points() {
             "integration/snapshots/test-runner/test_runner_mutate/mutate_reports_no_mutation_points.stdout.txt",
         );
 }
+
+#[test]
+#[ignore = "benchmark scenario for local perf tracking"]
+fn mutate_benchmark_large_mutant_set() {
+    use std::fmt::Write as _;
+    use std::time::Instant;
+
+    let mut asserts = String::new();
+    for _ in 0..120 {
+        writeln!(&mut asserts, "    assert (in.valueCoins > 0) throw 5;")
+            .expect("write benchmark contract");
+    }
+
+    let contract = format!(
+        r#"
+fun onInternalMessage(in: InMessage) {{
+{asserts}
+}}
+
+fun onBouncedMessage(_: InMessageBounced) {{}}
+"#
+    );
+
+    let start = Instant::now();
+    let output = ProjectBuilder::new("j-mutate-benchmark-large-mutant-set")
+        .contract("main", &contract)
+        .test_file("mutation", PASSING_TEST)
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("main")
+        .run()
+        .success();
+    let elapsed = start.elapsed();
+
+    let stdout = output.get_normalized_stdout();
+    let mutant_count = stdout
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("Mutants:"))
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .expect("mutation output must contain mutant count");
+
+    assert!(
+        mutant_count >= 100,
+        "expected at least 100 mutants in benchmark scenario, got {mutant_count}\n{stdout}"
+    );
+
+    if let Some(max_ms) = std::env::var("MUTATION_BENCH_MAX_MS")
+        .ok()
+        .and_then(|value| value.parse::<u128>().ok())
+    {
+        assert!(
+            elapsed.as_millis() <= max_ms,
+            "mutation benchmark regression: elapsed={}ms exceeds MUTATION_BENCH_MAX_MS={}ms",
+            elapsed.as_millis(),
+            max_ms
+        );
+    }
+
+    eprintln!(
+        "mutation benchmark: {} mutants processed in {:?}",
+        mutant_count, elapsed
+    );
+}

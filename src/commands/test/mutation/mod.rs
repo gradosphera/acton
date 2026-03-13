@@ -373,6 +373,12 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
         global_mutations.len().to_string().bright_cyan()
     );
 
+    // Default behavior in mutation child test runs is to skip per-mutant rebuilds.
+    // Any explicit value other than "1" turns this optimization off.
+    let skip_build_for_child_tests = std::env::var("ACTON_INTERNAL_SKIP_BUILD")
+        .map(|value| value.trim() == "1")
+        .unwrap_or(true);
+
     let mut results = Vec::new();
 
     for (index, global_mutation) in global_mutations.iter().enumerate() {
@@ -434,6 +440,9 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
             .arg("--fail-fast")
             .arg("--mutate-overrides")
             .arg(format!("{mutate_contract}:{code_b64}"));
+        if skip_build_for_child_tests {
+            cmd.env("ACTON_INTERNAL_SKIP_BUILD", "1");
+        }
 
         if let Some(filter) = &config.filter {
             cmd.arg("--filter").arg(filter);
