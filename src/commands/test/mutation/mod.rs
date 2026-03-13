@@ -229,6 +229,34 @@ fn apply_mutation(source: &str, candidate: &MutationCandidate) -> String {
     }
 }
 
+fn prepare_project_for_mutation(config: &TestConfig) -> anyhow::Result<()> {
+    // Ensure generated dependency files (e.g. gen/*_code.tolk) exist before collecting
+    // file dependencies and compiling mutants.
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("acton"));
+    let mut cmd = process::Command::new(exe);
+    cmd.arg("build");
+    if config.clear_cache {
+        cmd.arg("--clear-cache");
+    }
+
+    let output = cmd.output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let details = if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        format!("exit status {}", output.status)
+    };
+
+    anyhow::bail!("Failed to prepare project for mutation testing: {details}");
+}
+
 pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Result<()> {
     let Some(mutate_contract) = &config.mutate_contract else {
         anyhow::bail!("Provide --mutate-contract flag to specify a contract to mutate")
@@ -240,6 +268,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
             mutate_contract
         ))
     })?;
+    prepare_project_for_mutation(config)?;
 
     let all_disable_rules = &config.disable_rules;
     let project_root = dunce::canonicalize(configured_project_root())

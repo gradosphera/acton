@@ -21,6 +21,25 @@ get fun `test-always-pass`() {
 }
 "#;
 
+const DEPENDENT_MUTATION_CONTRACT: &str = r#"
+import "../gen/dependency_code.tolk"
+
+fun onInternalMessage(in: InMessage) {
+    assert (in.valueCoins > 0) throw 5;
+    val code = dependencyCompiledCode();
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
+const BROKEN_DEPENDENCY_MUTATION_CONTRACT: &str = r#"
+fun onInternalMessage(in: InMessage) {
+    THIS IS A SYNTAX ERROR
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
 fn mutation_project(name: &str) -> Project {
     ProjectBuilder::new(name)
         .contract("simple", MUTATION_CONTRACT)
@@ -122,4 +141,85 @@ disable-rules = ["remove_assert", "flip_plus", "flip_gt_ge"]
         .assert_snapshot_matches(
             "integration/snapshots/test-runner/test_runner_mutate/mutate_uses_disable_rules_from_config.stdout.txt",
         );
+}
+
+#[test]
+fn mutate_contract_with_dependencies() {
+    ProjectBuilder::new("j-mutate-contract-with-dependencies")
+        .contract("dependency", MUTATION_CONTRACT)
+        .contract_with_deps("main", DEPENDENT_MUTATION_CONTRACT, vec!["dependency"])
+        .test_file("mutation", PASSING_TEST)
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("main")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_contract_with_dependencies.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_contract_with_library_ref_dependency() {
+    ProjectBuilder::new("j-mutate-contract-with-library-ref-dependency")
+        .contract("dependency", MUTATION_CONTRACT)
+        .contract_with_detailed_deps(
+            "main",
+            DEPENDENT_MUTATION_CONTRACT,
+            vec![("dependency", Some("library_ref"), None, None)],
+        )
+        .test_file("mutation", PASSING_TEST)
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("main")
+        .run()
+        .success()
+        .assert_contains("Files:    2")
+        .assert_contains("Mutants:  2")
+        .assert_contains("Compile errors       0");
+}
+
+#[test]
+fn mutate_contract_with_dependencies_and_clear_cache() {
+    ProjectBuilder::new("j-mutate-contract-with-dependencies-clear-cache")
+        .contract("dependency", MUTATION_CONTRACT)
+        .contract_with_deps("main", DEPENDENT_MUTATION_CONTRACT, vec!["dependency"])
+        .test_file("mutation", PASSING_TEST)
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("main")
+        .clear_cache()
+        .run()
+        .success()
+        .assert_contains("Files:    2")
+        .assert_contains("Mutants:  2")
+        .assert_contains("Compile errors       0");
+}
+
+#[test]
+fn mutate_reports_dependency_build_failure() {
+    ProjectBuilder::new("j-mutate-dependency-build-failure")
+        .contract("dependency", BROKEN_DEPENDENCY_MUTATION_CONTRACT)
+        .contract_with_deps("main", DEPENDENT_MUTATION_CONTRACT, vec!["dependency"])
+        .test_file("mutation", PASSING_TEST)
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("main")
+        .run()
+        .failure()
+        .assert_stderr_contains("Failed to prepare project for mutation testing:")
+        .assert_stderr_contains("In dependency:")
+        .assert_stderr_contains("Build failed with");
 }
