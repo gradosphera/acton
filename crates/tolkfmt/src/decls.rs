@@ -8,6 +8,7 @@ use tolk_syntax::{
     StructField, TolkRequiredVersion, TopLevel, Type, TypeAlias, TypeAliasUnderlyingType,
     TypeParameter, TypeParameters,
 };
+use tree_sitter::Node;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum ImportGroup {
@@ -286,7 +287,7 @@ pub fn print_contract_body<'a>(ctx: &Context<'_>, body: &ContractBody) -> Option
         &fields,
         print_contract_field_declaration,
         |f| f.0,
-        |_| vec![],
+        |_| collect_lonely_body_comments(body.0),
         common::ListOptions::curly_bracket_body(),
     )
 }
@@ -423,7 +424,7 @@ pub fn print_struct_body<'a>(ctx: &Context<'_>, body: &StructBody) -> Option<RcD
         &fields,
         print_struct_field_declaration,
         |f| f.0,
-        |_| vec![],
+        |_| collect_lonely_body_comments(body.0),
         common::ListOptions::curly_bracket_body(),
     )
 }
@@ -484,9 +485,16 @@ pub fn print_enum_body<'a>(ctx: &Context<'_>, body: &EnumBody) -> Option<RcDoc<'
         &members,
         print_enum_member_declaration,
         |m| m.0,
-        |_| vec![],
+        |_| collect_lonely_body_comments(body.0),
         common::ListOptions::curly_bracket_body(),
     )
+}
+
+fn collect_lonely_body_comments(body: Node) -> Vec<Node> {
+    let mut cursor = body.walk();
+    body.named_children(&mut cursor)
+        .filter(|node| node.kind() == "comment")
+        .collect()
 }
 
 #[must_use]
@@ -644,7 +652,7 @@ fn is_single_triple_quoted_asm_body(ctx: &Context<'_>, asm: &AsmBody<'_>) -> boo
 }
 
 pub trait ParameterTrait {
-    fn syntax<'tree>(&self) -> tree_sitter::Node<'tree>
+    fn syntax<'tree>(&self) -> Node<'tree>
     where
         Self: 'tree;
     fn mutate(&self) -> bool;
@@ -660,7 +668,7 @@ pub trait ParameterTrait {
 }
 
 impl ParameterTrait for Parameter<'_> {
-    fn syntax<'t>(&self) -> tree_sitter::Node<'t>
+    fn syntax<'t>(&self) -> Node<'t>
     where
         Self: 't,
     {
@@ -690,7 +698,7 @@ impl ParameterTrait for Parameter<'_> {
 }
 
 impl ParameterTrait for LambdaParameter<'_> {
-    fn syntax<'t>(&self) -> tree_sitter::Node<'t>
+    fn syntax<'t>(&self) -> Node<'t>
     where
         Self: 't,
     {

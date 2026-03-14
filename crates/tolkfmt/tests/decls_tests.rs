@@ -142,6 +142,42 @@ fn test_contract_declaration() {
 }
 
 #[test]
+fn test_empty_contract_declaration_with_comments() {
+    check(
+        "contract Contract {\n// storage: Storage\n// incomingMessages: AllowedMessages\n}",
+        expect![[r#"
+                contract Contract {
+                    // storage: Storage
+                    // incomingMessages: AllowedMessages
+                }"#]],
+    );
+}
+
+#[test]
+fn test_empty_struct_declaration_with_comments() {
+    check(
+        "struct Storage {\n// counter: int\n// owner: address\n}",
+        expect![[r#"
+                struct Storage {
+                    // counter: int
+                    // owner: address
+                }"#]],
+    );
+}
+
+#[test]
+fn test_empty_enum_declaration_with_comments() {
+    check(
+        "enum Mode {\n// User\n// Admin\n}",
+        expect![[r#"
+                enum Mode {
+                    // User
+                    // Admin
+                }"#]],
+    );
+}
+
+#[test]
 fn test_global_var() {
     check("global x: int;", expect!["global x: int"]);
 }
