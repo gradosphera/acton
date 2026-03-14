@@ -3,7 +3,7 @@ use super::handlers::*;
 use crate::litenode::LiteNode;
 use axum::{
     Json, Router,
-    http::StatusCode,
+    http::{HeaderValue, Method, StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -12,15 +12,10 @@ use std::sync::Arc;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::key_extractor::GlobalKeyExtractor;
 use tower_governor::{GovernorError, GovernorLayer};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 pub fn create_router(node: Arc<LiteNode>, rate_limit_rps: Option<u32>) -> Router {
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
     let api_v2_router = Router::new()
         .route("/v2", post(json_rpc))
         .route("/v2/jsonRPC", post(json_rpc))
@@ -82,6 +77,16 @@ pub fn create_router(node: Arc<LiteNode>, rate_limit_rps: Option<u32>) -> Router
         .merge(api_v2_router)
         .merge(api_v3_router)
         .merge(emulate_router);
+    let admin_router = Router::new()
+        .route("/faucet", post(faucet))
+        .route(
+            "/address-name",
+            get(get_address_name).post(set_address_name),
+        )
+        .route(
+            "/state-source",
+            get(get_state_source).post(set_state_source),
+        );
 
     if let Some(limit) = rate_limit_rps {
         let mut governor_config = GovernorConfigBuilder::default();
@@ -99,18 +104,37 @@ pub fn create_router(node: Arc<LiteNode>, rate_limit_rps: Option<u32>) -> Router
 
     Router::new()
         .nest("/api", api_router)
-        .route("/admin/faucet", post(faucet))
-        .route(
-            "/admin/address-name",
-            get(get_address_name).post(set_address_name),
-        )
-        .route(
-            "/admin/state-source",
-            get(get_state_source).post(set_state_source),
-        )
-        .layer(cors)
+        .nest("/admin", admin_router)
+        .layer(loopback_cors())
         .layer(TraceLayer::new_for_http())
         .with_state(node)
+}
+
+fn loopback_cors() -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::predicate(
+            |origin: &HeaderValue, _request_parts: &Parts| is_loopback_origin(origin),
+        ))
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([header::ACCEPT, header::CONTENT_TYPE])
+}
+
+fn is_loopback_origin(origin: &HeaderValue) -> bool {
+    let Ok(origin) = origin.to_str() else {
+        return false;
+    };
+    let Ok(uri) = origin.parse::<axum::http::Uri>() else {
+        return false;
+    };
+    matches!(uri.scheme_str(), Some("http") | Some("https"))
+        && uri.host().is_some_and(is_loopback_host)
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost")
+        || host == "127.0.0.1"
+        || host == "::1"
+        || host == "[::1]"
 }
 
 fn governor_error_response(error: GovernorError, max_requests_per_second: u32) -> Response {
