@@ -45,7 +45,7 @@ fun MyContract.sendMessageWithConflicts(
     self,
     from: address,
     from_: address,
-    config_: int,
+    config_: int32,
     other: uint32,
     config: SendParams = {},
 ): SendResultList {

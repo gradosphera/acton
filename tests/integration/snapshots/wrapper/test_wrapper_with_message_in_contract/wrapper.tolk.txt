@@ -4,7 +4,7 @@ import "@acton/emulation/network"
 import "@acton/testing/assert"
 import "@acton/testing/expect"
 import "@acton/types/message"
-import "../../contracts/types"
+import "../../contracts/my_contract"
 
 struct MyContract {
     address: address
@@ -37,6 +37,21 @@ fun MyContract.deploy(self, from: address, config: SendParams = {}): SendResultL
         bounce: config.bounce,
         value: config.value,
         dest: { stateInit: self.stateInit },
+    });
+    return net.send(from, genericMsg);
+}
+
+fun MyContract.sendIncrement(
+    self,
+    from: address,
+    value: int32,
+    config: SendParams = {},
+): SendResultList {
+    val genericMsg = createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: Increment { value },
     });
     return net.send(from, genericMsg);
 }

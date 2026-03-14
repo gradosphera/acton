@@ -6,7 +6,6 @@ import "@acton/testing/expect"
 import "@acton/types/message"
 import "@core/types"
 import "../../contracts/main"
-import "../../contracts/types"
 
 struct Main {
     address: address
@@ -53,7 +52,7 @@ fun Main.sendIncrement(self, from: address, value: int32, config: SendParams = {
     return net.send(from, genericMsg);
 }
 
-fun Main.sendDecrement(self, from: address, value: int, config: SendParams = {}): SendResultList {
+fun Main.sendDecrement(self, from: address, value: int32, config: SendParams = {}): SendResultList {
     val genericMsg = createMessage({
         bounce: config.bounce,
         value: config.value,

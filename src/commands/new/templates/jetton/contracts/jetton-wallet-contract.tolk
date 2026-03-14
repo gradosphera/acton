@@ -4,7 +4,12 @@ import "jetton-utils"
 import "messages"
 import "storage"
 
-type AllowedMessageToWallet = AskToTransfer | AskToBurn | InternalTransferStep
+contract JettonWallet {
+    storage: WalletStorage
+    incomingMessages: AllowedMessageToWallet
+}
+
+type AllowedMessageToWallet = InternalTransferStep | AskToTransfer | AskToBurn
 
 type BounceOpToHandle = InternalTransferStep | BurnNotificationForMinter
 

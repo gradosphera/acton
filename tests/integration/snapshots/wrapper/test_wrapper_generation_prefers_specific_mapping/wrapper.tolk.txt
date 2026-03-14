@@ -41,7 +41,7 @@ fun Main.deploy(self, from: address, config: SendParams = {}): SendResultList {
     return net.send(from, genericMsg);
 }
 
-fun Main.sendPong(self, from: address, value: int, config: SendParams = {}): SendResultList {
+fun Main.sendPong(self, from: address, value: int32, config: SendParams = {}): SendResultList {
     val genericMsg = createMessage({
         bounce: config.bounce,
         value: config.value,

@@ -315,8 +315,6 @@ enum Commands {
         test: bool,
         #[arg(long, help = "Output path for test file", help_heading = "Tests")]
         test_output: Option<String>,
-        #[arg(long, help = "Storage struct name to use for wrapper generation")]
-        storage_struct: Option<String>,
     },
     #[command(
         about = "Execute a Tolk script file",
@@ -1850,14 +1848,7 @@ fn main() {
             output: wrapper_output,
             test_output,
             test,
-            storage_struct,
-        } => wrapper_cmd(
-            &contract_id,
-            wrapper_output,
-            test_output,
-            test,
-            storage_struct,
-        ),
+        } => wrapper_cmd(&contract_id, wrapper_output, test_output, test),
         Commands::Script {
             path,
             args,

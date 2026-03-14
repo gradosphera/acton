@@ -4,10 +4,15 @@ import "jetton-utils"
 import "messages"
 import "storage"
 
+contract JettonMinter {
+    storage: MinterStorage
+    incomingMessages: AllowedMessageToMinter
+}
+
 type AllowedMessageToMinter =
-    | MintNewJettons
     | BurnNotificationForMinter
     | RequestWalletAddress
+    | MintNewJettons
     | ChangeMinterAdmin
     | ChangeMinterContent
 

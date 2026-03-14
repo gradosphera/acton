@@ -4,7 +4,6 @@ import "@acton/testing/expect"
 import "@acton/testing/transaction_expect"
 import "@core/types"
 import "wrappers/Main"
-import "../contracts/types"
 
 /// Example test case demonstrating the basic flow
 get fun `test-basic-flow`() {

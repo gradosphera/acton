@@ -60,7 +60,7 @@ fun MyContract.sendIncrement(
 fun MyContract.sendDecrement(
     self,
     from: address,
-    value: int,
+    value: int32,
     config: SendParams = {},
 ): SendResultList {
     val genericMsg = createMessage({
