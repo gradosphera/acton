@@ -27,6 +27,8 @@ docs/out
 .DS_Store
 Thumbs.db
 
+.env
+
 gen/
 *.mnemonic
 wallets.toml
