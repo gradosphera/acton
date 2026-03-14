@@ -1722,6 +1722,13 @@ fn main() {
             .authors("TON Core")
             .homepage("https://github.com/i582/acton")
     );
+    let _crash_handler = acton::crash::install().map_err(|err| {
+        eprintln!(
+            "Warning: failed to install fatal signal handler ({err}). Continuing without fatal signal diagnostics."
+        );
+        err
+    }).ok();
+
     dotenv().ok();
     let Cli {
         color,

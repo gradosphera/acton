@@ -122,6 +122,7 @@ pathdiff = "0.2.3"
 strsim = "0.11.1"
 clap_complete = { version = "4.5.61", features = ["unstable-dynamic"] }
 human-panic = "2.0.5" # better panic handling
+crash-handler = "0.7.0" # low-level fatal signal/exception handling
 
 # acton up
 semver = "1.0.27"
@@ -253,6 +254,7 @@ pathdiff = { workspace = true }
 strsim = { workspace = true }
 clap_complete = { workspace = true }
 human-panic = { workspace = true } # better panic handling
+crash-handler = { workspace = true } # low-level fatal signal/exception handling
 
 # acton up
 semver = { workspace = true }
