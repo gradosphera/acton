@@ -61,6 +61,22 @@ const BASE_DOT_ENV: &str = "
 # TONCENTER_API_KEY=\"your-key-here\"
 ";
 
+const BASE_EDITORCONFIG: &str = "
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.tolk]
+indent_size = 4
+max_line_length = 100
+";
+
 #[derive(Clone, Copy)]
 struct TemplateSelectItem(ProjectTemplate);
 
@@ -243,6 +259,7 @@ pub fn new_cmd(
 
     fs::write(".gitignore", BASE_GITIGNORE.trim_start())?;
     fs::write(".env", BASE_DOT_ENV.trim_start())?;
+    fs::write(".editorconfig", BASE_EDITORCONFIG.trim_start())?;
 
     if let Err(e) = symlink_global_wallets() {
         println!(

@@ -41,6 +41,7 @@ fn test_new_empty_project_non_interactive() {
     assert!(project.path().join("foobar/tests").exists());
     assert!(project.path().join("foobar/LICENSE").exists());
     assert!(project.path().join("foobar/.gitignore").exists());
+    assert!(project.path().join("foobar/.editorconfig").exists());
 }
 
 #[test]
@@ -522,4 +523,31 @@ fn test_new_empty_project_with_dot_env() {
     assert!(project.path().join("foobar/LICENSE").exists());
     assert!(project.path().join("foobar/.gitignore").exists());
     assert!(project.path().join("foobar/.env").exists());
+    assert!(project.path().join("foobar/.editorconfig").exists());
+}
+
+#[test]
+fn test_new_empty_project_writes_editorconfig_with_tolk_rules() {
+    let project = ProjectBuilder::new("new-editorconfig")
+        .without_acton_toml()
+        .build();
+
+    project
+        .acton()
+        .arg("new")
+        .arg(&project.path().join("foobar").display().to_string())
+        .arg("--name")
+        .arg("test-project")
+        .arg("--description")
+        .arg("test description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            "foobar/.editorconfig",
+            "integration/snapshots/test_new_empty_project_editorconfig.gen",
+        );
 }
