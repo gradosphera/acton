@@ -1366,7 +1366,7 @@ fn new_wallet(
             );
 
             println!(
-                "\nTo get testnet coins, check official documentation: {}",
+                "\nTo get testnet coins run `acton wallet airdrop` or check official documentation: {}",
                 "https://docs.ton.org/ecosystem/wallet-apps/get-coins#how-to-get-coins-on-testnet"
                     .underline(),
             );
