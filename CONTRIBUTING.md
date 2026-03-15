@@ -65,39 +65,79 @@ sudo apt-get install -y \
   clang-16 llvm-16 libc++-16-dev libc++abi-16-dev
 ```
 
-## Build Setup (TON artifacts)
+## Building from source
 
 Acton links static TON artifacts (`libemulator.a`, `libtolk.a`) from the
 `i582/ton` fork branch `pmakhnev/acton`.
 
+### Option 1: download prebuilt `objs` from releases
+
+Stable Acton releases also ship prebuilt TON artifact archives. If you do not
+want to build `objs` manually, download the asset matching your platform from a
+stable release, extract it into `objs/`, and then continue with `just build-ui`
+and `cargo build`.
+
+Available asset names:
+
+- `ton-objs-linux-x86_64.tar.gz`
+- `ton-objs-linux-aarch64.tar.gz`
+- `ton-objs-macos-x86_64.tar.gz`
+- `ton-objs-macos-aarch64.tar.gz`
+
+Example:
+
 ```bash
-# 1) clone TON repository (from Acton repo root)
-git clone --branch pmakhnev/acton https://github.com/i582/ton.git ton-repo
+mkdir -p dist objs
+ARCHIVE_NAME=ton-objs-linux-x86_64.tar.gz # change for your platform
+curl -fL "https://github.com/i582/acton/releases/latest/download/${ARCHIVE_NAME}" \
+  -o "dist/${ARCHIVE_NAME}"
+tar -C objs -xzf "dist/${ARCHIVE_NAME}"
 
-# 2) build TON static artifacts (example for Linux)
-cd ton-repo
-./assembly/native/build-ubuntu-static.sh -a -c
-cd ..
-
-# 3) copy artifacts into Acton
-mkdir -p objs
-cp ton-repo/artifacts/libemulator.a objs/
-cp ton-repo/artifacts/libtolk.a objs/
-
-# 4) build UI assets (required)
 just build-ui
-
-# 5) build Acton
 cargo build
 ./target/debug/acton --help
 ```
 
-For macOS artifact build, use:
+The extracted archive already contains `libemulator.a` and `libtolk.a` at the
+archive root, so unpacking it into `objs/` is enough.
+
+### Option 2: build TON artifacts manually
+
+Clone the TON repository from the Acton repo root:
+
+```bash
+git clone --branch pmakhnev/acton https://github.com/i582/ton.git ton-repo --recurse-submodules
+```
+
+Build the static artifacts with the script for your platform.
+
+Ubuntu/Debian-like Linux:
 
 ```bash
 cd ton-repo
-./assembly/native/build-macos-static.sh -a
+sh ./assembly/native/build-ubuntu-static.sh -a -c
 cd ..
+```
+
+macOS:
+
+```bash
+cd ton-repo
+sh ./assembly/native/build-macos-static.sh -a -c
+cd ..
+```
+
+Then copy the generated archives into Acton and build the project:
+
+```bash
+mkdir -p objs
+cp ton-repo/artifacts/libemulator.a objs/
+cp ton-repo/artifacts/libtolk.a objs/
+
+just build-ui
+
+cargo build
+./target/debug/acton --help
 ```
 
 ## Running Acton locally

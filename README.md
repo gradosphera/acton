@@ -7,8 +7,6 @@ It combines project scaffolding, build, testing, scripting, wallet and network
 operations, verification, linting, formatting, and low-level VM tooling in one
 CLI.
 
-Documentation: https://i582.github.io/acton/docs/welcome
-
 <br clear="right" />
 
 ## Why Acton
@@ -19,46 +17,58 @@ Documentation: https://i582.github.io/acton/docs/welcome
 - Tolk-first workflow with built-in wrappers, testing utilities, and scripts.
 - Local development node with faucet, forking, snapshots, and persistence.
 
-### Build from source
+## Install
 
-Acton links static TON artifacts (`libemulator.a`, `libtolk.a`) from the
-`i582/ton` fork branch `pmakhnev/acton`.
+The recommended way to get Acton today is to download a prebuilt binary from
+the latest release:
+
+| Platform | Architecture | Download                                                                                                        |
+|----------|--------------|-----------------------------------------------------------------------------------------------------------------|
+| macOS    | ARM64        | [acton-macos-aarch64.tar.gz](https://github.com/i582/acton/releases/latest/download/acton-macos-aarch64.tar.gz) |
+| macOS    | x86_64       | [acton-macos-x86_64.tar.gz](https://github.com/i582/acton/releases/latest/download/acton-macos-x86_64.tar.gz)   |
+| Linux    | x86_64       | [acton-linux-x86_64.tar.gz](https://github.com/i582/acton/releases/latest/download/acton-linux-x86_64.tar.gz)   |
+| Linux    | ARM64        | [acton-linux-aarch64.tar.gz](https://github.com/i582/acton/releases/latest/download/acton-linux-aarch64.tar.gz) |
+
+After extracting the archive, make sure `acton` is on your `PATH` and verify
+the installation:
 
 ```bash
-# 1) clone repositories
-git clone https://github.com/i582/acton.git
-git clone --branch pmakhnev/acton https://github.com/i582/ton.git ton-repo --recurse-submodules
-
-# 2) build TON static artifacts (example for Linux)
-cd ton-repo
-sh ./assembly/native/build-ubuntu-static.sh -a -c
-# or sh ./assembly/native/build-macos-static.sh -a -c
-cd ..
-
-# 3) copy artifacts into Acton
-mkdir -p acton/objs
-cp ton-repo/artifacts/libemulator.a acton/objs/
-cp ton-repo/artifacts/libtolk.a acton/objs/
-
-# 4) build UI assets (required)
-cd acton
-just build-ui
-
-# 5) build Acton
-cargo build
-./target/debug/acton --help
+acton --version
 ```
 
-## Run
+For more installation details, see the
+[installation guide](https://i582.github.io/acton/docs/installation).
 
+## From zero to testnet
+
+```bash
+# Create a new project from the built-in counter template
+acton new first_counter --template counter
+cd first_counter
+
+# Build and test locally
+acton build
+acton test
+
+# Create and fund a local testnet wallet
+acton wallet new --name deployer --local --airdrop
+
+# Deploy to TON testnet
+acton script scripts/deploy.tolk --broadcast --net testnet
 ```
-target/debug/acton test foo.test.tolk
-# or target/release/acton test foo.test.tolk
-```
 
-## Development
+For a step-by-step walkthrough, see the
+[quickstart guide](https://i582.github.io/acton/docs/quickstart).
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+## Building from source
+
+Source builds are intended for contributors and local development. See
+[Building from source](CONTRIBUTING.md#building-from-source) in CONTRIBUTING.md.
+
+## Contributing
+
+Contributor setup, test workflows, UI build steps, and docs workflows are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
