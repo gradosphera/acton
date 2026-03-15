@@ -140,7 +140,7 @@ opener = "0.8.4"
 # acton wallet
 hmac = "0.12.1"
 ring = "0.17"
-nacl = "0.5.3"
+ed25519-dalek = "2.2.0"
 toml_edit = "0.24.0"
 
 tokio = { version = "1.41", features = ["rt-multi-thread", "macros", "full"] }
@@ -271,7 +271,7 @@ opener = { workspace = true }
 # acton wallet
 hmac = { workspace = true }
 ring = { workspace = true }
-nacl = { workspace = true }
+ed25519-dalek = { workspace = true }
 toml_edit = { workspace = true }
 
 tokio = { workspace = true }
