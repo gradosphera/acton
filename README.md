@@ -7,6 +7,8 @@ It combines project scaffolding, build, testing, scripting, wallet and network
 operations, verification, linting, formatting, and low-level VM tooling in one
 CLI.
 
+Documentation: https://i582.github.io/acton/docs/welcome
+
 <br clear="right" />
 
 ## Why Acton
