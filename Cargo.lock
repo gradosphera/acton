@@ -3718,6 +3718,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
+ "ton-objs",
  "ton-source-map",
 ]
 
@@ -3849,10 +3850,10 @@ dependencies = [
  "anyhow",
  "hex",
  "num-bigint",
- "pkg-config",
  "rustc-hash",
  "serde",
  "serde_json",
+ "ton-objs",
  "tvmffi",
  "tycho-types",
 ]
@@ -3944,6 +3945,13 @@ version = "0.0.13"
 dependencies = [
  "anyhow",
  "serde",
+]
+
+[[package]]
+name = "ton-objs"
+version = "0.0.13"
+dependencies = [
+ "pkg-config",
 ]
 
 [[package]]
