@@ -1401,8 +1401,8 @@ fn maybe_store_mnemonic_in_keystore(
 }
 
 fn keyring_id_for_wallet(name: &str, project_name: Option<String>) -> String {
-    if let Some(pn) = project_name {
-        format!("{pn}:{name}")
+    if let Some(project) = project_name {
+        format!("{project}:{name}")
     } else {
         name.to_string()
     }

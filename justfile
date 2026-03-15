@@ -48,10 +48,13 @@ clippy:
 check-deps:
     cargo shear
 
+typos:
+    typos .
+
 check-docgen:
     cargo run -- docgen --check # always use latest acton
 
-check-ci: fmt-check check-docgen check-deps clippy
+check-ci: fmt-check check-docgen check-deps clippy typos
 
 check: check-ci test
 

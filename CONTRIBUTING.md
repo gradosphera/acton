@@ -32,11 +32,15 @@ To build and test Acton locally, install:
    ```bash
    cargo install cargo-shear --locked
    ```
-5. Bun (required for UI packages)
+5. `typos-cli` (spell checker used by `just typos`)
+   ```bash
+   cargo install typos-cli --locked
+   ```
+6. Bun (required for UI packages)
    ```bash
    curl -fsSL https://bun.sh/install | bash
    ```
-6. `cargo-llvm-cov` (optional, for coverage)
+7. `cargo-llvm-cov` (optional, for coverage)
    ```bash
    cargo install cargo-llvm-cov
    rustup component add llvm-tools-preview
@@ -204,6 +208,7 @@ just fmt
 just fmt-check
 just clippy
 just check-deps
+just typos
 ```
 
 UI:
@@ -215,6 +220,9 @@ just check-ui
 
 `just check-ui` runs `lint:fix` and may modify files.
 Run it until no further changes are produced, then stage updated files.
+
+`just typos` checks the repository from the root using `_typos.toml`.
+It skips `docs/` and selected generated or imported trees with high false-positive rates.
 
 ## Coverage
 
@@ -321,8 +329,9 @@ Every pull request must pass all checks from:
 just check
 ```
 
-This command runs `fmt-check`, `clippy`, and `test`.
+This command runs `fmt-check`, `clippy`, `typos`, and `test`.
 It also runs `check-deps` to detect unused Rust dependencies.
+`typos` uses `_typos.toml` excludes for `docs/` and selected generated or imported trees.
 
 If your PR touches UI code (`crates/acton-test-ui`, `crates/acton-litenode-ui`,
 `crates/acton-shared-ui`, or root UI config in `package.json`), you must also
