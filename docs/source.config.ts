@@ -37,6 +37,7 @@ const actonTraceGrammar: LanguageRegistration = {
     name: 'acton-trace',
 };
 
+// @ts-expect-error CLI grammar type is wider than LanguageRegistration
 const actonCliGrammar: LanguageRegistration = {
     ...actonCliGrammarRaw,
     name: 'acton-cli',
