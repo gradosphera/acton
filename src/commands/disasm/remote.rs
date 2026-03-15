@@ -1,16 +1,17 @@
 use crate::commands::common::error_fmt;
 use acton_config::color::OwoColorize;
 use anyhow::Context;
-use std::str::FromStr;
 use ton_api::{Network, TonApiClient};
-use tonlib_core::TonAddress;
+use tycho_types::models::{StdAddr, StdAddrFormat};
 
 pub(super) fn fetch_contract_boc(
     network: Option<Network>,
     address: &str,
     api_key: Option<&str>,
 ) -> anyhow::Result<String> {
-    TonAddress::from_str(address).with_context(|| error_fmt::invalid_address(address))?;
+    StdAddr::from_str_ext(address, StdAddrFormat::any())
+        .map_err(|_| anyhow::anyhow!("Invalid address"))
+        .with_context(|| error_fmt::invalid_address(address))?;
 
     if let Some(network) = network {
         let config = acton_config::config::ActonConfig::load().unwrap_or_default();

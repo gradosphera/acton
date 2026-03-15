@@ -17,12 +17,13 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tonlib_core::TonHash;
-use tonlib_core::tlb_types::block::coins::{CurrencyCollection, Grams};
-use tonlib_core::tlb_types::primitives::either::EitherRef;
 use tycho_types::boc::Boc;
+use tycho_types::boc::BocRepr;
 use tycho_types::cell::{CellBuilder, CellFamily, Store};
-use tycho_types::models::{AccountState, LibDescr, Message, MsgInfo, ShardAccount};
+use tycho_types::models::{
+    AccountState, CurrencyCollection, IntAddr, IntMsgInfo, LibDescr, Message, MsgInfo,
+    OwnedMessage, ShardAccount, StdAddr, StdAddrFormat,
+};
 use tycho_types::prelude::HashBytes;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -771,11 +772,7 @@ impl Node {
     }
 
     fn parse_addr_internal(&self, s: &str) -> Option<Addr> {
-        let (int_addr, _) = tycho_types::models::StdAddr::from_str_ext(
-            s,
-            tycho_types::models::StdAddrFormat::any(),
-        )
-        .ok()?;
+        let (int_addr, _) = StdAddr::from_str_ext(s, StdAddrFormat::any()).ok()?;
         Some(Addr {
             workchain: int_addr.workchain as i32,
             addr: int_addr.address.0,
@@ -1558,34 +1555,41 @@ impl Node {
             anyhow::bail!("Giver has insufficient balance");
         }
 
-        use tonlib_core::cell::ArcCell;
-        use tonlib_core::tlb_types::block::message::{CommonMsgInfo, IntMsgInfo, Message};
-        use tonlib_core::tlb_types::tlb::TLB;
-        use tonlib_core::types::TonAddress;
-
-        let src = TonAddress::new(GIVER_ADDR.workchain, TonHash::from(&GIVER_ADDR.addr));
-        let dst = TonAddress::new(addr.workchain, TonHash::from(&addr.addr));
+        let src_addr = IntAddr::Std(StdAddr::new(
+            GIVER_ADDR
+                .workchain
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("Invalid giver workchain {}", GIVER_ADDR.workchain))?,
+            HashBytes(GIVER_ADDR.addr),
+        ));
+        let dst_addr = IntAddr::Std(StdAddr::new(
+            addr.workchain
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("Invalid destination workchain {}", addr.workchain))?,
+            HashBytes(addr.addr),
+        ));
 
         let message_info = IntMsgInfo {
             ihr_disabled: true,
             bounce: false,
             bounced: false,
-            src: src.to_msg_address(),
-            dest: dst.to_msg_address(),
-            value: CurrencyCollection::new(amount.into()),
-            ihr_fee: Grams::new(0u64.into()),
-            fwd_fee: Grams::new(0u64.into()),
+            src: src_addr,
+            dst: dst_addr,
+            ihr_fee: Default::default(),
+            value: CurrencyCollection::new(amount),
+            fwd_fee: Default::default(),
             created_at: 0,
             created_lt: 0,
         };
 
-        let message = Message {
-            info: CommonMsgInfo::Int(message_info),
+        let message = OwnedMessage {
+            info: MsgInfo::Int(message_info),
             init: None,
-            body: EitherRef::new(ArcCell::default()),
+            body: Default::default(),
+            layout: None,
         };
 
-        let boc = message.to_cell()?.to_boc(false)?;
+        let boc = BocRepr::encode(message)?;
         let hash = compute_boc_hash(&boc)?;
         self.cas.put(boc.clone().into(), hash);
 
@@ -1695,11 +1699,11 @@ fn parse_msg_meta(boc: &[u8], hash: Hash256) -> anyhow::Result<MsgMeta> {
     })
 }
 
-const fn convert_addr(addr: &tycho_types::models::IntAddr) -> Addr {
+const fn convert_addr(addr: &IntAddr) -> Addr {
     let mut bytes = [0u8; 32];
     let (workchain, address) = match addr {
-        tycho_types::models::IntAddr::Std(std) => (std.workchain as i32, std.address.0),
-        tycho_types::models::IntAddr::Var(var) => (var.workchain, {
+        IntAddr::Std(std) => (std.workchain as i32, std.address.0),
+        IntAddr::Var(var) => (var.workchain, {
             // skipped from TVM 11
             [0u8; 32]
         }),

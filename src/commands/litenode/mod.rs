@@ -1,8 +1,8 @@
+use crate::context::Wallet;
 use crate::wallets;
 use acton_config::color::OwoColorize;
 use acton_config::config::ActonConfig;
 use anyhow::Context;
-use num_bigint::BigUint;
 use retrace::Network;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -12,11 +12,13 @@ use ton_litenode::remote::RemoteProvider;
 use ton_litenode::storage::AccountStatus;
 use ton_litenode::{LiteNode, ServerArgs, run_server};
 use tonlib_core::cell::ArcCell;
-use tonlib_core::tlb_types::block::coins::{CurrencyCollection, Grams};
-use tonlib_core::tlb_types::block::message::{CommonMsgInfo, IntMsgInfo, Message};
-use tonlib_core::tlb_types::primitives::either::EitherRef;
 use tonlib_core::tlb_types::tlb::TLB;
-use tonlib_core::wallet::ton_wallet::TonWallet;
+use tycho_types::boc::BocRepr;
+use tycho_types::cell::{CellBuilder, CellSliceParts};
+use tycho_types::models::{
+    Base64StdAddrFlags, CurrencyCollection, DisplayBase64StdAddr, IntAddr, IntMsgInfo, MsgInfo,
+    OwnedMessage, StdAddr,
+};
 
 const STARTUP_ACCOUNT_TOPUP_NANOTONS: u128 = 100_000_000_000; // 100 TON
 const STARTUP_DEPLOY_TRANSFER_NANOTONS: u128 = 50_000_000; // 0.05 TON
@@ -109,7 +111,7 @@ async fn setup_startup_accounts(node: &Arc<LiteNode>, accounts: &[String]) -> an
     }
 
     for (wallet_name, wallet) in selected_wallets {
-        let address = wallet.wallet.address.to_base64_url_flags(false, true);
+        let address = format_std_address(&wallet.address(), &Network::Localnet);
 
         node.faucet(address.clone(), STARTUP_ACCOUNT_TOPUP_NANOTONS)
             .await
@@ -121,7 +123,7 @@ async fn setup_startup_accounts(node: &Arc<LiteNode>, accounts: &[String]) -> an
             .with_context(|| format!("Failed to fetch state for wallet '{wallet_name}'"))?;
 
         if wallet_state != AccountStatus::Active {
-            let deploy_boc = build_wallet_deploy_message(&wallet.wallet)?;
+            let deploy_boc = build_wallet_deploy_message(&wallet)?;
             node.send_boc(deploy_boc)
                 .await
                 .with_context(|| format!("Failed to deploy wallet '{wallet_name}'"))?;
@@ -144,33 +146,50 @@ async fn setup_startup_accounts(node: &Arc<LiteNode>, accounts: &[String]) -> an
     Ok(())
 }
 
-fn build_wallet_deploy_message(wallet: &TonWallet) -> anyhow::Result<String> {
+fn build_wallet_deploy_message(wallet: &Wallet) -> anyhow::Result<String> {
     let expire_at = (SystemTime::now() + Duration::from_secs(WALLET_MSG_TTL_SECONDS))
         .duration_since(UNIX_EPOCH)?
         .as_secs() as u32;
 
+    let wallet_addr = wallet.address();
     let message_info = IntMsgInfo {
         ihr_disabled: true,
         bounce: false,
         bounced: false,
-        src: wallet.address.to_msg_address(),
-        dest: wallet.address.to_msg_address(),
-        value: CurrencyCollection::new(BigUint::from(STARTUP_DEPLOY_TRANSFER_NANOTONS)),
-        ihr_fee: Grams::new(BigUint::from(0u64)),
-        fwd_fee: Grams::new(BigUint::from(0u64)),
+        src: IntAddr::Std(wallet_addr.clone()),
+        dst: IntAddr::Std(wallet_addr),
+        value: CurrencyCollection::new(STARTUP_DEPLOY_TRANSFER_NANOTONS),
+        ihr_fee: Default::default(),
+        fwd_fee: Default::default(),
         created_at: 0,
         created_lt: 0,
     };
 
-    let message = Message {
-        info: CommonMsgInfo::Int(message_info),
+    let message = OwnedMessage {
+        info: MsgInfo::Int(message_info),
         init: None,
-        body: EitherRef::new(ArcCell::default()),
+        body: CellSliceParts::from(CellBuilder::new().build()?),
+        layout: None,
     };
 
-    let message_cell = message.to_cell()?;
-    let external = wallet.create_external_msg(expire_at, 0, true, vec![message_cell.to_arc()])?;
+    let message_cell_boc = BocRepr::encode(message)?;
+    let message_cell = ArcCell::from_boc(&message_cell_boc)?;
+    let external = wallet
+        .wallet
+        .create_external_msg(expire_at, 0, true, vec![message_cell])?;
     Ok(external.to_boc_b64(false)?)
+}
+
+fn format_std_address(address: &StdAddr, network: &Network) -> String {
+    DisplayBase64StdAddr {
+        addr: address,
+        flags: Base64StdAddrFlags {
+            testnet: network.uses_testnet_address_format(),
+            base64_url: true,
+            bounceable: true,
+        },
+    }
+    .to_string()
 }
 
 pub async fn litenode_airdrop_cmd(address: &str, amount_ton: f64, port: u16) -> anyhow::Result<()> {

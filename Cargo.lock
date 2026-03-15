@@ -3974,7 +3974,6 @@ dependencies = [
  "ton-executor",
  "ton-indexer",
  "ton-networks",
- "tonlib-core",
  "tower-http",
  "tower_governor",
  "tracing",
