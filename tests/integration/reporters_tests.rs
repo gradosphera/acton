@@ -49,6 +49,59 @@ fun setupTest() {
 }
 "#;
 
+const TEAMCITY_COMPLEX_COMPARISON_TESTS: &str = r#"
+import "../../lib/testing/expect"
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+struct Segment {
+    start: Point,
+    end: Point,
+}
+
+fun balances(first: int32, second: int32): map<int32, int32> {
+    var value = createEmptyMap<int32, int32>();
+    value.set(1, first);
+    value.set(2, second);
+    return value;
+}
+
+get fun test_tuple_diff() {
+    expect((10, 20, 30)).toEqual((10, 20, 31));
+}
+
+get fun test_struct_diff() {
+    expect(Point { x: 1, y: 2 }).toEqual(Point { x: 1, y: 3 });
+}
+
+get fun test_nested_struct_diff() {
+    val actual = Segment {
+        start: Point { x: 1, y: 2 },
+        end: Point { x: 3, y: 4 },
+    };
+    val expected = Segment {
+        start: Point { x: 1, y: 9 },
+        end: Point { x: 3, y: 4 },
+    };
+
+    expect(actual).toEqual(expected);
+}
+
+get fun test_nullable_diff() {
+    val actual: int? = 10;
+    val expected: int? = null;
+
+    expect(actual).toEqual(expected);
+}
+
+get fun test_map_diff() {
+    expect(balances(10, 20)).toEqual(balances(10, 30));
+}
+"#;
+
 #[test]
 fn test_teamcity_reporter_basic_passing() {
     FixtureProject::load("basic")
@@ -263,6 +316,22 @@ fn test_teamcity_reporter_escapes_location_hint_special_chars() {
         .assert_passed(1)
         .assert_snapshot_matches(
             "integration/snapshots/test_teamcity_reporter_escapes_location_hint_special_chars.stdout.txt",
+        );
+}
+
+#[test]
+fn test_teamcity_reporter_comparison_failure_snapshots_complex_values() {
+    ProjectBuilder::new("teamcity_complex_comparison_failures")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("complex_diffs", TEAMCITY_COMPLEX_COMPARISON_TESTS)
+        .build()
+        .acton()
+        .test()
+        .with_reporter("teamcity")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_teamcity_comparison_failures_complex_values.stdout.txt",
         );
 }
 
