@@ -3920,6 +3920,7 @@ dependencies = [
  "anyhow",
  "hex",
  "num-bigint",
+ "parking_lot",
  "rustc-hash",
  "serde",
  "serde_json",

@@ -20,6 +20,7 @@ tycho-types = { workspace = true }
 rustc-hash = { workspace = true }
 num-bigint = { workspace = true }
 tvmffi = { workspace = true }
+parking_lot = { workspace = true }
 
 [lints]
 workspace = true
