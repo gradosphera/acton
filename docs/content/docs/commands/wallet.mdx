@@ -276,45 +276,57 @@ acton wallet sign deployer --body "te6ccgEBAQEA..."
 
 ### `acton wallet airdrop`
 
-Requests testnet TON from a faucet.
+Requests TON from a faucet for the selected wallet.
 
 ```bash
 acton wallet airdrop [NAME]
 ```
 
-This command requests a PoW challenge from faucet, solves it locally, and submits claim for selected wallet address.
-Acton retries transient faucet errors (network/5xx) automatically with short backoff.
+With the default `--net testnet`, Acton requests a PoW challenge from faucet, solves it locally, and submits a claim for the selected wallet address.
+With `--net localnet`, Acton sends a fixed `100 TON` airdrop through the local LiteNode admin faucet using `[litenode].port`.
+Acton retries transient faucet errors (network/5xx) automatically with short backoff for the testnet backend.
 If `[NAME]` is omitted, Acton auto-selects a wallet (single wallet) or asks you to choose (multiple wallets).
 
 #### Options
 
-| Option                 | Type   | Description                          |
-|------------------------|--------|--------------------------------------|
-| `--faucet-url <URL>`   | String | Faucet URL (default: `https://acton.monster/faucet/`) |
-| `--json`               | Flag   | Output result as JSON                |
+| Option                 | Type   | Description                                                                  |
+|------------------------|--------|------------------------------------------------------------------------------|
+| `--net <NETWORK>`      | Enum   | Airdrop backend: `testnet` (default) or `localnet`                           |
+| `--faucet-url <URL>`   | String | Faucet URL for `--net testnet` (default: `https://acton.monster/faucet/`)    |
+| `--json`               | Flag   | Output result as JSON                                                        |
 
 `--faucet-url` validation rules:
 - only `http` / `https` schemes are allowed
 - query parameters and URL fragments are not allowed
+- cannot be used together with `--net localnet`
 
-#### Example
+#### Examples
 
 ```bash
+# Default testnet backend
 acton wallet airdrop deployer --faucet-url https://your-faucet.example
+
+# Localnet backend via LiteNode faucet
+acton wallet airdrop deployer --net localnet
 ```
 
 When `--json` is used:
 
 #### Success JSON
 
-| Field        | Type    | Description                                                  |
-|--------------|---------|--------------------------------------------------------------|
-| `success`    | Boolean | Always `true` for successful airdrop                         |
-| `message`    | String  | Faucet success message (or default `"Success"` if omitted)   |
-| `address`    | String  | Wallet address used for claim                                |
-| `difficulty` | Number  | PoW difficulty returned by faucet                            |
-| `nonce`      | Number  | Solved PoW nonce                                             |
-| `solve_ms`   | Number  | Time spent solving PoW challenge in milliseconds             |
+| Field     | Type    | Description                                                |
+|-----------|---------|------------------------------------------------------------|
+| `success` | Boolean | Always `true` for successful airdrop                       |
+| `message` | String  | Human-readable success message                             |
+| `address` | String  | Wallet address used for claim                              |
+
+For `--net testnet`, success JSON also includes:
+
+| Field        | Type   | Description                                      |
+|--------------|--------|--------------------------------------------------|
+| `difficulty` | Number | PoW difficulty returned by faucet                |
+| `nonce`      | Number | Solved PoW nonce                                 |
+| `solve_ms`   | Number | Time spent solving PoW challenge in milliseconds |
 
 #### Error JSON
 

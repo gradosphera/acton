@@ -45,6 +45,13 @@ pub enum WalletVersionArg {
     HighloadV2R2,
 }
 
+#[derive(clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq)]
+#[clap(rename_all = "lowercase")]
+pub enum WalletAirdropNetworkArg {
+    Testnet,
+    Localnet,
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum SignMessageFormat {
     Hex,
@@ -65,10 +72,24 @@ struct FaucetMessageResponse {
 
 struct AirdropResult {
     address: String,
-    difficulty: u32,
-    nonce: u64,
-    solve_duration: Duration,
+    difficulty: Option<u32>,
+    nonce: Option<u64>,
+    solve_duration: Option<Duration>,
     message: Option<String>,
+}
+
+enum AirdropTarget {
+    Testnet { faucet_url: String },
+    Localnet { port: u16, amount_ton: f64 },
+}
+
+impl AirdropTarget {
+    const fn network(&self) -> Network {
+        match self {
+            Self::Testnet { .. } => Network::Testnet,
+            Self::Localnet { .. } => Network::Localnet,
+        }
+    }
 }
 
 const HTTP_RETRY_ATTEMPTS: usize = 3;
@@ -76,6 +97,8 @@ const HTTP_RETRY_BACKOFF_MS: [u64; 3] = [200, 500, 1000];
 const POW_MAX_SOLVE_DURATION: Duration = Duration::from_secs(60);
 const POW_MAX_NONCE_ATTEMPTS: u64 = 1_000_000_000;
 const DEFAULT_FAUCET_URL: &str = "https://acton.monster/faucet/";
+const DEFAULT_LITENODE_PORT: u16 = 5411;
+const LOCALNET_WALLET_AIRDROP_AMOUNT_TON: f64 = 100.0;
 const NEW_WALLET_AIRDROP_FAUCET_URL_ENV: &str = "ACTON_FAUCET_URL"; // for testing purpose
 const TEST_WALLET_KEYRING_SUPPORTED_ENV: &str = "ACTON_TEST_WALLET_KEYRING_SUPPORTED"; // integration tests only
 const TEST_TONCENTER_V3_URL_ENV: &str = "ACTON_TEST_TONCENTER_V3_URL"; // integration tests only
@@ -197,16 +220,19 @@ pub enum WalletCommand {
         #[arg(long, help = "Output result as JSON")]
         json: bool,
     },
-    #[command(about = "Request testnet TONs from faucet")]
+    #[command(about = "Request TON coins from testnet or localnet faucet")]
     Airdrop {
         #[arg(help = "Name of the wallet (prompts if not provided)")]
         name: Option<String>,
         #[arg(
             long,
-            help = "Faucet URL",
-            default_value = "https://acton.monster/faucet/"
+            value_enum,
+            default_value = "testnet",
+            help = "Airdrop network backend"
         )]
-        faucet_url: String,
+        net: WalletAirdropNetworkArg,
+        #[arg(long, help = "Faucet URL for testnet airdrop backend")]
+        faucet_url: Option<String>,
         #[arg(long, help = "Output result as JSON")]
         json: bool,
     },
@@ -242,30 +268,40 @@ pub fn wallet_cmd(command: WalletCommand) -> anyhow::Result<()> {
         WalletCommand::Remove { name, yes, json } => remove_wallet(name, yes, json),
         WalletCommand::Airdrop {
             name,
+            net,
             faucet_url,
             json,
-        } => airdrop_wallet(name, faucet_url, json),
+        } => airdrop_wallet(name, net, faucet_url, json),
     }
 }
 
-fn airdrop_wallet(name: Option<String>, faucet_url: String, json: bool) -> anyhow::Result<()> {
-    let run_result = perform_airdrop(name, faucet_url, json);
+fn airdrop_wallet(
+    name: Option<String>,
+    net: WalletAirdropNetworkArg,
+    faucet_url: Option<String>,
+    json: bool,
+) -> anyhow::Result<()> {
+    let run_result = perform_airdrop(name, resolve_airdrop_target(net, faucet_url)?, json);
 
     match run_result {
         Ok(result) => {
             let message = result.message.as_deref().unwrap_or("Success");
             if json {
-                println!(
-                    "{}",
-                    serde_json::to_string(&serde_json::json!({
-                        "success": true,
-                        "message": message,
-                        "address": result.address,
-                        "difficulty": result.difficulty,
-                        "nonce": result.nonce,
-                        "solve_ms": result.solve_duration.as_millis(),
-                    }))?
-                );
+                let mut payload = serde_json::json!({
+                    "success": true,
+                    "message": message,
+                    "address": result.address,
+                });
+                if let Some(difficulty) = result.difficulty {
+                    payload["difficulty"] = serde_json::json!(difficulty);
+                }
+                if let Some(nonce) = result.nonce {
+                    payload["nonce"] = serde_json::json!(nonce);
+                }
+                if let Some(solve_duration) = result.solve_duration {
+                    payload["solve_ms"] = serde_json::json!(solve_duration.as_millis());
+                }
+                println!("{}", serde_json::to_string(&payload)?);
             } else {
                 println!("{} {}", "✓".green(), message);
             }
@@ -288,7 +324,7 @@ fn airdrop_wallet(name: Option<String>, faucet_url: String, json: bool) -> anyho
 
 fn perform_airdrop(
     name: Option<String>,
-    faucet_url: String,
+    target: AirdropTarget,
     json: bool,
 ) -> anyhow::Result<AirdropResult> {
     let config = ActonConfig::load()?;
@@ -299,7 +335,7 @@ fn perform_airdrop(
         .get_wallet(&name)
         .ok_or_else(|| anyhow!(error_fmt::wallet_not_found(&config, &name)))?;
 
-    let address = get_wallet_address(wallet)?;
+    let address = get_wallet_address(wallet, target.network())?;
 
     if !json {
         println!(
@@ -310,6 +346,45 @@ fn perform_airdrop(
         );
     }
 
+    match target {
+        AirdropTarget::Testnet { faucet_url } => perform_testnet_airdrop(address, faucet_url, json),
+        AirdropTarget::Localnet { port, amount_ton } => {
+            perform_localnet_airdrop(address, amount_ton, port)
+        }
+    }
+}
+
+fn resolve_airdrop_target(
+    net: WalletAirdropNetworkArg,
+    faucet_url: Option<String>,
+) -> anyhow::Result<AirdropTarget> {
+    match net {
+        WalletAirdropNetworkArg::Testnet => Ok(AirdropTarget::Testnet {
+            faucet_url: faucet_url.unwrap_or_else(|| DEFAULT_FAUCET_URL.to_owned()),
+        }),
+        WalletAirdropNetworkArg::Localnet => {
+            if faucet_url.is_some() {
+                anyhow::bail!("--faucet-url can only be used with --net testnet");
+            }
+            let port = ActonConfig::load()
+                .ok()
+                .and_then(|config| config.litenode)
+                .and_then(|litenode| litenode.port)
+                .unwrap_or(DEFAULT_LITENODE_PORT);
+
+            Ok(AirdropTarget::Localnet {
+                port,
+                amount_ton: LOCALNET_WALLET_AIRDROP_AMOUNT_TON,
+            })
+        }
+    }
+}
+
+fn perform_testnet_airdrop(
+    address: String,
+    faucet_url: String,
+    json: bool,
+) -> anyhow::Result<AirdropResult> {
     let faucet_base = parse_faucet_base_url(&faucet_url)?;
     let challenge_url = faucet_base.join("challenge").with_context(|| {
         format!(
@@ -395,9 +470,9 @@ fn perform_airdrop(
             response.json().context("Failed to parse faucet response")?;
         Ok(AirdropResult {
             address,
-            difficulty: challenge_data.difficulty,
-            nonce,
-            solve_duration: duration,
+            difficulty: Some(challenge_data.difficulty),
+            nonce: Some(nonce),
+            solve_duration: Some(duration),
             message: res.message,
         })
     } else {
@@ -416,6 +491,61 @@ fn perform_airdrop(
         };
 
         anyhow::bail!("Faucet returned error {status}: {error_msg}");
+    }
+}
+
+fn perform_localnet_airdrop(
+    address: String,
+    amount_ton: f64,
+    port: u16,
+) -> anyhow::Result<AirdropResult> {
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .context("Failed to build HTTP client")?;
+    let amount_nanotons = (amount_ton * 1_000_000_000.0) as u128;
+
+    let response = client
+        .post(format!("http://localhost:{port}/admin/faucet"))
+        .json(&serde_json::json!({
+            "address": address,
+            "amount": amount_nanotons,
+        }))
+        .send()
+        .context(
+            "Failed to send request to localnet faucet. Make sure `acton litenode start` is running",
+        )?;
+
+    if response.status().is_success() {
+        let json: serde_json::Value = response
+            .json()
+            .context("Failed to parse localnet faucet response")?;
+        if json.get("ok").and_then(|v| v.as_bool()).unwrap_or(false)
+            || json
+                .get("success")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        {
+            let message = format!("Successfully airdropped {amount_ton} TON on localnet");
+            Ok(AirdropResult {
+                address,
+                difficulty: None,
+                nonce: None,
+                solve_duration: None,
+                message: Some(message),
+            })
+        } else {
+            let error = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Unknown error");
+            anyhow::bail!("Localnet faucet returned error: {error}");
+        }
+    } else {
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+        anyhow::bail!("Localnet faucet returned error {status}: {body}");
     }
 }
 
@@ -851,7 +981,7 @@ fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::R
 
     let mut wallets_data = Vec::new();
     for (name, wallet_config) in wallets {
-        let Ok(address) = get_wallet_address(wallet_config) else {
+        let Ok(address) = get_wallet_address(wallet_config, Network::Testnet) else {
             error!("cannot get wallet address for {name}"); // very unlikely
             continue;
         };
@@ -936,7 +1066,7 @@ fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::R
     Ok(())
 }
 
-fn get_wallet_address(wallet: &config::WalletConfig) -> anyhow::Result<String> {
+fn get_wallet_address(wallet: &config::WalletConfig, network: Network) -> anyhow::Result<String> {
     if let Some(expected) = &wallet.expected
         && let Some(addr) = &expected.address_testnet
     {
@@ -948,7 +1078,7 @@ fn get_wallet_address(wallet: &config::WalletConfig) -> anyhow::Result<String> {
 
     let mnemonic = Mnemonic::from_str(&mnemonic_str, None)?;
     let version = parse_wallet_version(&wallet.kind)?;
-    let wallet_id = wallets::wallet_id(version, &Network::Testnet);
+    let wallet_id = wallets::wallet_id(version, &network);
     let ton_wallet = TonWallet::new_with_params(
         version,
         mnemonic.to_key_pair()?,
@@ -1296,17 +1426,28 @@ fn new_wallet(
         if auto_airdrop {
             let airdrop_output = match perform_airdrop(
                 Some(name),
-                airdrop_faucet_url.expect("auto_airdrop implies faucet URL exists"),
+                AirdropTarget::Testnet {
+                    faucet_url: airdrop_faucet_url.expect("auto_airdrop implies faucet URL exists"),
+                },
                 true,
             ) {
-                Ok(result) => serde_json::json!({
-                    "success": true,
-                    "message": result.message.as_deref().unwrap_or("Success"),
-                    "address": result.address,
-                    "difficulty": result.difficulty,
-                    "nonce": result.nonce,
-                    "solve_ms": result.solve_duration.as_millis(),
-                }),
+                Ok(result) => {
+                    let mut airdrop_json = serde_json::json!({
+                        "success": true,
+                        "message": result.message.as_deref().unwrap_or("Success"),
+                        "address": result.address,
+                    });
+                    if let Some(difficulty) = result.difficulty {
+                        airdrop_json["difficulty"] = serde_json::json!(difficulty);
+                    }
+                    if let Some(nonce) = result.nonce {
+                        airdrop_json["nonce"] = serde_json::json!(nonce);
+                    }
+                    if let Some(solve_duration) = result.solve_duration {
+                        airdrop_json["solve_ms"] = serde_json::json!(solve_duration.as_millis());
+                    }
+                    airdrop_json
+                }
                 Err(err) => serde_json::json!({
                     "success": false,
                     "error": err.to_string(),
@@ -1339,7 +1480,9 @@ fn new_wallet(
         if auto_airdrop {
             match perform_airdrop(
                 Some(name),
-                airdrop_faucet_url.expect("auto_airdrop implies faucet URL exists"),
+                AirdropTarget::Testnet {
+                    faucet_url: airdrop_faucet_url.expect("auto_airdrop implies faucet URL exists"),
+                },
                 false,
             ) {
                 Ok(result) => {
@@ -1660,8 +1803,8 @@ mod wallet_name_tests {
             }),
         };
 
-        let actual =
-            get_wallet_address(&wallet).expect("must derive testnet address from mnemonic");
+        let actual = get_wallet_address(&wallet, Network::Testnet)
+            .expect("must derive testnet address from mnemonic");
 
         let mnemonic = Mnemonic::from_str(mnemonic_str, None).expect("valid mnemonic");
         let key_pair = mnemonic.to_key_pair().expect("keypair from mnemonic");

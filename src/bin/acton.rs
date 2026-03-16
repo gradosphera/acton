@@ -1241,8 +1241,12 @@ fn example_wallet_usage() -> StyledStr {
                 "acton wallet list -b",
             ),
             (
-                "Request testnet TONs from faucet",
+                "Request TONs from testnet faucet",
                 "acton wallet airdrop my-wallet",
+            ),
+            (
+                "Request 100 TON from localnet faucet for a wallet (for manual control see `acton litenode airdrop`)",
+                "acton wallet airdrop my-wallet --net localnet",
             ),
             (
                 "Sign external wallet body BoC",
