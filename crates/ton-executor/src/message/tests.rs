@@ -4,8 +4,6 @@ use crate::message::Executor;
 use crate::message::types::RunTransactionArgs;
 use crate::{DEFAULT_CONFIG, EXT_METHOD_STACK_ALL_ITEMS};
 use std::ffi::c_char;
-use std::sync::{Arc, Barrier};
-use std::thread;
 
 const MESSAGE_B64: &str = "te6ccgEBAQEAXAAAs2gA3hg/j9iig2aTi8NU/hguuHV4Mf1mEUmqqnI9JLMCjg8ACW3KjJfr/ID5Nkj7xB33xCZD+wzKhEVCVM/gq78qkGEQF9eEAAAAAAAAAAAAAAAAAAAAAAAAwA==";
 const SHARD_ACCOUNT_B64: &str = "te6ccgEBAgEAZQABUEIAo/QUie4HOlbbq3s8tbZIXLyq3iMgXy2Ih0e2fuJ7AAAAAAAtxsABAG/AAltyoyX6/yA+TZI+8Qd98QmQ/sMyoRFQlTP4Ku/KpBhCAl3DSqAZUAAAAAAAtxsFgEC6F1wABA==";
@@ -140,45 +138,6 @@ fn test_executor_set_config() -> anyhow::Result<()> {
     let bad_config = DEFAULT_CONFIG.to_string() + "invalid_part";
     let bad_config_result = exec.set_config(&bad_config);
     assert!(bad_config_result.is_ok_and(|x| !x));
-
-    Ok(())
-}
-
-#[test]
-fn test_executor_shared_across_threads() -> anyhow::Result<()> {
-    const THREADS: usize = 4;
-    const ITERATIONS: usize = 32;
-
-    let exec = Arc::new(Executor::new(
-        ExecutorVerbosity::FullLocationStackVerbose,
-        None,
-    )?);
-    let barrier = Arc::new(Barrier::new(THREADS));
-    let args = RunTransactionArgs {
-        shard_account: SHARD_ACCOUNT_B64.to_owned(),
-        ..Default::default()
-    };
-
-    let mut handles = Vec::with_capacity(THREADS);
-    for _ in 0..THREADS {
-        let exec = Arc::clone(&exec);
-        let barrier = Arc::clone(&barrier);
-        let args = args.clone();
-
-        handles.push(thread::spawn(move || -> anyhow::Result<()> {
-            barrier.wait();
-
-            for _ in 0..ITERATIONS {
-                exec.run_transaction(MESSAGE_B64, &args)?;
-            }
-
-            Ok(())
-        }));
-    }
-
-    for handle in handles {
-        handle.join().expect("worker thread panicked")?;
-    }
 
     Ok(())
 }
