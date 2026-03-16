@@ -108,6 +108,7 @@ export interface BackendContractInfo {
   readonly code_boc64: string
   readonly source_map: unknown
   readonly abi?: Abi
+  readonly compiler_abi?: unknown
 }
 
 export * from "./transaction"

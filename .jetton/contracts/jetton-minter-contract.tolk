@@ -7,6 +7,7 @@ import "fees-management"
 contract JettonMinter {
     incomingMessages: AllowedMessageToMinter
     storage: MinterStorage
+    forceAbiExport: TransferNotificationForRecipient | ReturnExcessesBack
 }
 
 type AllowedMessageToMinter =

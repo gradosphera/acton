@@ -32,6 +32,7 @@ import {
 } from "@acton/shared-ui"
 
 import {useContracts} from "../../hooks/useContracts"
+import {applyParsedBodies} from "../../utils/transactionBodies"
 
 import styles from "./TestDetails.module.css"
 
@@ -95,7 +96,25 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
   const headerDropdownRef = useRef<HTMLDivElement | null>(null)
   const gridDropdownRef = useRef<HTMLDivElement | null>(null)
 
-  const contractNames = useMemo(() => trace?.contracts ?? [], [trace])
+  const contractNames = useMemo(() => {
+    const names = new Set<string>(trace?.contracts ?? [])
+
+    for (const traceItem of trace?.traces ?? []) {
+      for (const transaction of traceItem.transactions) {
+        if (transaction.dest_contract_info) {
+          names.add(transaction.dest_contract_info)
+        }
+      }
+    }
+
+    for (const transaction of test.failed_transactions ?? []) {
+      if (transaction.dest_contract_info) {
+        names.add(transaction.dest_contract_info)
+      }
+    }
+
+    return [...names]
+  }, [trace, test.failed_transactions])
   const {contracts: backendContracts} = useContracts(contractNames)
 
   const ides: IDEConfig[] = useMemo(
@@ -249,9 +268,15 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
     })
   }, [trace])
 
+  const parsedTraceTransactionsWithBodies = useMemo((): TransactionInfo[][] => {
+    return parsedTraceTransactions.map(transactions =>
+      applyParsedBodies(transactions, backendContracts),
+    )
+  }, [backendContracts, parsedTraceTransactions])
+
   const parsedTransactions = useMemo(() => {
-    return parsedTraceTransactions[selectedTraceIndex] ?? []
-  }, [parsedTraceTransactions, selectedTraceIndex])
+    return parsedTraceTransactionsWithBodies[selectedTraceIndex] ?? []
+  }, [parsedTraceTransactionsWithBodies, selectedTraceIndex])
 
   const allContracts = useMemo(() => Object.values(backendContracts), [backendContracts])
 
@@ -296,7 +321,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
       return opcodeName ?? `0x${opcode.toString(16)}`
     }
 
-    return parsedTraceTransactions.map((transactions, traceIndex) => {
+    return parsedTraceTransactionsWithBodies.map((transactions, traceIndex) => {
       const traceName = formatTraceName(trace?.traces[traceIndex]?.name, traceIndex)
       let totalGasUsed = 0n
       let totalGasFees = 0n
@@ -336,17 +361,17 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
         totalFees,
       }
     })
-  }, [allContracts, backendContracts, parsedTraceTransactions, trace])
+  }, [allContracts, backendContracts, parsedTraceTransactionsWithBodies, trace])
 
   const failedTransactions = useMemo(() => {
     if (!test.failed_transactions) return []
     try {
-      return processTransactions(test.failed_transactions)
+      return applyParsedBodies(processTransactions(test.failed_transactions), backendContracts)
     } catch (error) {
       console.error("Failed to process failed transactions", error)
       return []
     }
-  }, [test.failed_transactions])
+  }, [backendContracts, test.failed_transactions])
 
   const contracts = useMemo(() => {
     const map = new Map<string, ContractData>()

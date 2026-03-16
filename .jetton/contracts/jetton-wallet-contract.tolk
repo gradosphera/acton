@@ -7,6 +7,7 @@ import "storage"
 contract JettonWallet {
     incomingMessages: AllowedMessageToWallet
     storage: WalletStorage
+    forceAbiExport: TransferNotificationForRecipient | ReturnExcessesBack
 }
 
 type AllowedMessageToWallet =
