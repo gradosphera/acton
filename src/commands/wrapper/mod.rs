@@ -40,14 +40,14 @@ struct TypescriptGeneratorAbi {
 }
 
 fn build_model(
+    config: &ActonConfig,
     contract_id: &str,
     wrapper_output: Option<String>,
     wrapper_output_dir: Option<String>,
     test_output: Option<String>,
+    test_output_dir: Option<String>,
     generate_typescript: bool,
 ) -> anyhow::Result<WrapperModel> {
-    let config = ActonConfig::load().map_err(|e| anyhow!("Failed to load Acton.toml: {e}"))?;
-
     let format_options = {
         let fmt_settings = config.fmt.as_ref();
         let width = fmt_settings.and_then(|s| s.width).unwrap_or(100);
@@ -63,7 +63,7 @@ fn build_model(
 
     let contract_config = config
         .get_contract(contract_id)
-        .ok_or_else(|| anyhow!(error_fmt::contract_not_found(&config, contract_id)))?;
+        .ok_or_else(|| anyhow!(error_fmt::contract_not_found(config, contract_id)))?;
 
     let contract_path = project_root.join(&contract_config.src);
 
@@ -106,9 +106,12 @@ fn build_model(
         .unwrap_or(contract_id);
 
     let contract_name = to_pascal_case(file_stem);
+    let configured_tolk_output_dir = config.tolk_wrapper_output_dir().map(ToOwned::to_owned);
     let configured_typescript_output_dir = config
         .typescript_wrapper_output_dir()
         .map(ToOwned::to_owned);
+    let configured_tolk_test_output_dir =
+        config.tolk_wrapper_test_output_dir().map(ToOwned::to_owned);
     let storage = abi.resolve_storage_struct()?;
     let incoming_messages = abi.resolve_incoming_message_structs()?;
     let storage_path = storage
@@ -120,19 +123,22 @@ fn build_model(
         .filter_map(|message| find_type_path(&fallback_abi, &message.name))
         .collect::<BTreeSet<_>>();
 
-    let default_test = project_root
-        .join("tests")
-        .join(format!("{contract_id}.test.tolk"));
-
     let wrapper_path = resolve_wrapper_path(
         &project_root,
         &contract_name,
         wrapper_output,
         wrapper_output_dir,
+        configured_tolk_output_dir,
         configured_typescript_output_dir,
         generate_typescript,
     );
-    let test_path = test_output.map_or(default_test, PathBuf::from);
+    let test_path = resolve_test_path(
+        &project_root,
+        contract_id,
+        test_output,
+        test_output_dir,
+        configured_tolk_test_output_dir,
+    );
 
     let message_paths = message_paths.into_iter().collect();
 
@@ -179,18 +185,32 @@ pub fn wrapper_cmd(
     wrapper_output: Option<String>,
     wrapper_output_dir: Option<String>,
     test_output: Option<String>,
+    test_output_dir: Option<String>,
     generate_test_stub: bool,
     generate_typescript: bool,
 ) -> anyhow::Result<()> {
-    if generate_typescript && (generate_test_stub || test_output.is_some()) {
-        anyhow::bail!("`acton wrapper --ts` does not support `--test` or `--test-output`");
+    let config = ActonConfig::load().map_err(|e| anyhow!("Failed to load Acton.toml: {e}"))?;
+
+    let explicit_test_request = generate_test_stub
+        || has_non_empty_path(test_output.as_deref())
+        || has_non_empty_path(test_output_dir.as_deref());
+
+    if generate_typescript && explicit_test_request {
+        anyhow::bail!(
+            "`acton wrapper --ts` does not support `--test`, `--test-output`, or `--test-output-dir`"
+        );
     }
 
+    let generate_test_stub =
+        !generate_typescript && (explicit_test_request || config.tolk_wrapper_generate_test());
+
     let model = build_model(
+        &config,
         contract_id,
         wrapper_output,
         wrapper_output_dir,
         test_output,
+        test_output_dir,
         generate_typescript,
     )?;
 
@@ -251,6 +271,7 @@ fn resolve_wrapper_path(
     contract_name: &str,
     wrapper_output: Option<String>,
     wrapper_output_dir: Option<String>,
+    configured_tolk_output_dir: Option<String>,
     configured_ts_output_dir: Option<String>,
     generate_typescript: bool,
 ) -> PathBuf {
@@ -273,8 +294,38 @@ fn resolve_wrapper_path(
         return project_root.join(&file_name);
     }
 
+    if let Some(configured_tolk_output_dir) = non_empty_path(configured_tolk_output_dir) {
+        return resolve_project_config_path(project_root, &configured_tolk_output_dir)
+            .join(&file_name);
+    }
+
     // default path for Tolk wrappers
     project_root.join("tests").join("wrappers").join(&file_name)
+}
+
+fn resolve_test_path(
+    project_root: &Path,
+    contract_id: &str,
+    test_output: Option<String>,
+    test_output_dir: Option<String>,
+    configured_tolk_test_output_dir: Option<String>,
+) -> PathBuf {
+    if let Some(test_output) = non_empty_path(test_output) {
+        return PathBuf::from(test_output);
+    }
+
+    let file_name = format!("{contract_id}.test.tolk");
+
+    if let Some(test_output_dir) = non_empty_path(test_output_dir) {
+        return PathBuf::from(test_output_dir).join(&file_name);
+    }
+
+    if let Some(configured_tolk_test_output_dir) = non_empty_path(configured_tolk_test_output_dir) {
+        return resolve_project_config_path(project_root, &configured_tolk_test_output_dir)
+            .join(&file_name);
+    }
+
+    project_root.join("tests").join(&file_name)
 }
 
 fn wrapper_file_name(contract_name: &str, generate_typescript: bool) -> String {
@@ -290,6 +341,10 @@ fn non_empty_path(path: Option<String>) -> Option<String> {
             Some(path)
         }
     })
+}
+
+fn has_non_empty_path(path: Option<&str>) -> bool {
+    path.is_some_and(|path| !path.trim().is_empty())
 }
 
 fn resolve_project_config_path(project_root: &Path, path: &str) -> PathBuf {

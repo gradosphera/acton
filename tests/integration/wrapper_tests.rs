@@ -112,6 +112,62 @@ fn test_wrapper_generation_without_test_stub() {
     );
 }
 
+#[test]
+fn test_wrapper_generation_uses_tolk_config_defaults() {
+    let project = ProjectBuilder::new("wrapper_tolk_config_defaults")
+        .contract("my_contract", SIMPLE_CONTRACT)
+        .with_wrappers_tolk_output_dir("tests/generated-wrappers")
+        .with_wrappers_tolk_generate_test(true)
+        .with_wrappers_tolk_test_output_dir("tests/generated-tests")
+        .build();
+
+    let output = project.acton().wrapper("my_contract").run().success();
+
+    output
+        .assert_contains("Generated")
+        .assert_contains("tests/generated-wrappers/MyContract.tolk")
+        .assert_contains("tests/generated-tests/my_contract.test.tolk");
+
+    assert!(
+        project
+            .path()
+            .join("tests/generated-wrappers/MyContract.tolk")
+            .exists()
+    );
+    assert!(
+        project
+            .path()
+            .join("tests/generated-tests/my_contract.test.tolk")
+            .exists()
+    );
+}
+
+#[test]
+fn test_wrapper_generation_test_output_dir_flag() {
+    let project = ProjectBuilder::new("wrapper_test_output_dir_flag")
+        .contract("my_contract", SIMPLE_CONTRACT)
+        .build();
+
+    let output = project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .test_output_dir("generated-tests")
+        .run()
+        .success();
+
+    output
+        .assert_contains("Generated")
+        .assert_contains("generated-tests/my_contract.test.tolk");
+
+    assert!(
+        project
+            .path()
+            .join("generated-tests/my_contract.test.tolk")
+            .exists()
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn test_wrapper_generation_typescript_defaults_to_project_root() {
@@ -223,6 +279,44 @@ fn test_wrapper_generation_typescript_output_dir_flag_overrides_config() {
             .join("wrappers-config/MyContract.ts")
             .exists(),
         "CLI output dir should override config output dir"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wrapper_generation_typescript_ignores_tolk_test_defaults() {
+    let project = ProjectBuilder::new("wrapper_typescript_ignores_tolk_defaults")
+        .contract("my_contract", SIMPLE_CONTRACT)
+        .with_wrappers_tolk_generate_test(true)
+        .with_wrappers_tolk_test_output_dir("tests/generated-tests")
+        .with_wrappers_typescript_output_dir("./wrappers")
+        .raw_file("bin/npx", FAKE_TYPESCRIPT_GENERATOR)
+        .build();
+    let (capture_path, path_env) = setup_fake_typescript_generator(project.path());
+
+    let output = project
+        .acton()
+        .wrapper("my_contract")
+        .generate_typescript_wrapper()
+        .env("PATH", &path_env)
+        .env(
+            "ACTON_TS_WRAPPER_CAPTURE",
+            capture_path.to_str().expect("capture path"),
+        )
+        .run()
+        .success();
+
+    output
+        .assert_contains("Generated")
+        .assert_contains("wrappers/MyContract.ts");
+
+    assert!(project.path().join("wrappers/MyContract.ts").exists());
+    assert!(
+        !project
+            .path()
+            .join("tests/generated-tests/my_contract.test.tolk")
+            .exists(),
+        "Tolk test defaults should be ignored in TypeScript mode"
     );
 }
 

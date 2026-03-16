@@ -250,7 +250,16 @@ pub struct BuildSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WrappersConfig {
+    pub tolk: Option<TolkWrapperSettings>,
     pub typescript: Option<TypescriptWrapperSettings>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct TolkWrapperSettings {
+    pub output_dir: Option<String>,
+    pub generate_test: Option<bool>,
+    pub test_output_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -533,6 +542,30 @@ impl ActonConfig {
     #[must_use]
     pub fn get_library(&self, name: &str) -> Option<&LibraryConfig> {
         self.libraries.as_ref()?.libraries.get(name)
+    }
+
+    #[must_use]
+    pub fn tolk_wrapper_output_dir(&self) -> Option<&str> {
+        self.wrappers.as_ref()?.tolk.as_ref()?.output_dir.as_deref()
+    }
+
+    #[must_use]
+    pub fn tolk_wrapper_generate_test(&self) -> bool {
+        self.wrappers
+            .as_ref()
+            .and_then(|wrappers| wrappers.tolk.as_ref())
+            .and_then(|tolk| tolk.generate_test)
+            .unwrap_or(false)
+    }
+
+    #[must_use]
+    pub fn tolk_wrapper_test_output_dir(&self) -> Option<&str> {
+        self.wrappers
+            .as_ref()?
+            .tolk
+            .as_ref()?
+            .test_output_dir
+            .as_deref()
     }
 
     #[must_use]
@@ -1391,11 +1424,25 @@ name = "test-project"
 description = "Test project"
 version = "0.1.0"
 
+[wrappers.tolk]
+output-dir = "tests/generated-wrappers"
+generate-test = true
+test-output-dir = "tests/generated-tests"
+
 [wrappers.typescript]
 output-dir = "./wrappers"
 "#;
 
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        assert_eq!(
+            config.tolk_wrapper_output_dir(),
+            Some("tests/generated-wrappers")
+        );
+        assert!(config.tolk_wrapper_generate_test());
+        assert_eq!(
+            config.tolk_wrapper_test_output_dir(),
+            Some("tests/generated-tests")
+        );
         assert_eq!(config.typescript_wrapper_output_dir(), Some("./wrappers"));
     }
 

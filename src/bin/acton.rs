@@ -342,9 +342,18 @@ enum Commands {
         test_output: Option<String>,
         #[arg(
             long,
-            help = "Generate a TypeScript wrapper in the project root via gen-typescript-from-tolk",
+            help = "Output directory for generated test file",
+            value_name = "DIR",
+            help_heading = "Tests",
+            conflicts_with = "test_output",
+            requires = "test"
+        )]
+        test_output_dir: Option<String>,
+        #[arg(
+            long,
+            help = "Generate a TypeScript wrapper via gen-typescript-from-tolk",
             help_heading = "TypeScript",
-            conflicts_with_all = ["test", "test_output"]
+            conflicts_with_all = ["test", "test_output", "test_output_dir"]
         )]
         ts: bool,
     },
@@ -1949,6 +1958,7 @@ fn main() {
             output: wrapper_output,
             output_dir: wrapper_output_dir,
             test_output,
+            test_output_dir,
             test,
             ts,
         } => wrapper_cmd(
@@ -1956,6 +1966,7 @@ fn main() {
             wrapper_output,
             wrapper_output_dir,
             test_output,
+            test_output_dir,
             test,
             ts,
         ),

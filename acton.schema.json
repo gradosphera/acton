@@ -207,6 +207,24 @@
       "type": "object",
       "description": "Default settings for wrapper generation",
       "properties": {
+        "tolk": {
+          "type": "object",
+          "description": "Default settings for Tolk wrapper generation",
+          "properties": {
+            "output-dir": {
+              "type": "string",
+              "description": "Directory where `acton wrapper` writes generated Tolk wrappers by default"
+            },
+            "generate-test": {
+              "type": "boolean",
+              "description": "Generate a Tolk test stub by default for `acton wrapper`"
+            },
+            "test-output-dir": {
+              "type": "string",
+              "description": "Directory where generated Tolk test stubs are written by default"
+            }
+          }
+        },
         "typescript": {
           "type": "object",
           "description": "Default settings for TypeScript wrapper generation",

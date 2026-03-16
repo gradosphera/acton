@@ -23,6 +23,9 @@ pub(crate) struct ProjectBuilder {
     lint_max_warnings: Option<usize>,
     lint_output_format: Option<String>,
     test_config: Option<TestConfig>,
+    wrappers_tolk_output_dir: Option<String>,
+    wrappers_tolk_generate_test: Option<bool>,
+    wrappers_tolk_test_output_dir: Option<String>,
     wrappers_typescript_output_dir: Option<String>,
     license: Option<String>,
     create_acton_toml: bool,
@@ -312,6 +315,9 @@ impl ProjectBuilder {
             lint_max_warnings: None,
             lint_output_format: None,
             test_config: None,
+            wrappers_tolk_output_dir: None,
+            wrappers_tolk_generate_test: None,
+            wrappers_tolk_test_output_dir: None,
             wrappers_typescript_output_dir: None,
             license: Some("MIT".to_string()),
             create_acton_toml: true,
@@ -612,6 +618,21 @@ impl ProjectBuilder {
         self
     }
 
+    pub(crate) fn with_wrappers_tolk_output_dir(mut self, path: &str) -> Self {
+        self.wrappers_tolk_output_dir = Some(path.to_string());
+        self
+    }
+
+    pub(crate) fn with_wrappers_tolk_generate_test(mut self, enabled: bool) -> Self {
+        self.wrappers_tolk_generate_test = Some(enabled);
+        self
+    }
+
+    pub(crate) fn with_wrappers_tolk_test_output_dir(mut self, path: &str) -> Self {
+        self.wrappers_tolk_test_output_dir = Some(path.to_string());
+        self
+    }
+
     pub(crate) fn build(self) -> Project {
         let project_path = self.temp_dir.path().join(&self.name);
         fs::create_dir_all(&project_path).expect("Failed to create project dir");
@@ -678,6 +699,9 @@ impl ProjectBuilder {
                 self.lint_max_warnings,
                 self.lint_output_format,
                 &self.test_config,
+                self.wrappers_tolk_output_dir.as_deref(),
+                self.wrappers_tolk_generate_test,
+                self.wrappers_tolk_test_output_dir.as_deref(),
                 self.wrappers_typescript_output_dir.as_deref(),
                 &self.license,
             );
@@ -716,6 +740,9 @@ impl ProjectBuilder {
         lint_max_warnings: Option<usize>,
         lint_output_format: Option<String>,
         test_config: &Option<TestConfig>,
+        wrappers_tolk_output_dir: Option<&str>,
+        wrappers_tolk_generate_test: Option<bool>,
+        wrappers_tolk_test_output_dir: Option<&str>,
         wrappers_typescript_output_dir: Option<&str>,
         license: &Option<String>,
     ) {
@@ -814,9 +841,27 @@ version = "0.1.0"
             toml_content.push('\n');
         }
 
+        if wrappers_tolk_output_dir.is_some()
+            || wrappers_tolk_generate_test.is_some()
+            || wrappers_tolk_test_output_dir.is_some()
+        {
+            toml_content.push_str("[wrappers.tolk]\n");
+            if let Some(path) = wrappers_tolk_output_dir {
+                toml_content.push_str(&format!("output-dir = \"{path}\"\n"));
+            }
+            if let Some(enabled) = wrappers_tolk_generate_test {
+                toml_content.push_str(&format!("generate-test = {enabled}\n"));
+            }
+            if let Some(path) = wrappers_tolk_test_output_dir {
+                toml_content.push_str(&format!("test-output-dir = \"{path}\"\n"));
+            }
+            toml_content.push('\n');
+        }
+
         if let Some(path) = wrappers_typescript_output_dir {
             toml_content.push_str("[wrappers.typescript]\n");
-            toml_content.push_str(&format!("output-dir = \"{path}\"\n\n"));
+            toml_content.push_str(&format!("output-dir = \"{path}\"\n"));
+            toml_content.push('\n');
         }
 
         if !scripts.is_empty() {
@@ -1101,6 +1146,11 @@ impl ActonCommand {
     /// Specify output test file
     pub(crate) fn test_output(mut self, path: &str) -> Self {
         self.cmd = self.cmd.arg("--test-output").arg(path);
+        self
+    }
+
+    pub(crate) fn test_output_dir(mut self, path: &str) -> Self {
+        self.cmd = self.cmd.arg("--test-output-dir").arg(path);
         self
     }
 

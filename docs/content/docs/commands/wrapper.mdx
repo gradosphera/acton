@@ -15,14 +15,15 @@ Where `<CONTRACT_ID>` is the key defined in your `Acton.toml` (e.g., `[contract.
 
 ## Options
 
-| Option                 | Description                                                                                                                                           |
-|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `<CONTRACT_ID>`        | The ID of the contract as defined in `Acton.toml`.                                                                                                    |
-| `-o, --output <PATH>`  | Exact path where the wrapper file will be generated. Conflicts with `--output-dir`.                                                                   |
-| `--output-dir <DIR>`   | Output directory for the generated wrapper file. Acton uses `<ContractName>.tolk` or `<ContractName>.ts` as the file name. Conflicts with `--output`. |
-| `-t, --test`           | If set, generates a test stub file at `tests/<contract_id>.test.tolk`. Not supported with `--ts`.                                                     |
-| `--test-output <PATH>` | Path where the test stub file will be generated (requires `--test` flag). Not supported with `--ts`.                                                  |
-| `--ts`                 | Generate a TypeScript wrapper through `gen-typescript-from-tolk`.                                                                                     |
+| Option                    | Description                                                                                                                                              |
+|---------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `<CONTRACT_ID>`           | The ID of the contract as defined in `Acton.toml`.                                                                                                       |
+| `-o, --output <PATH>`     | Exact path where the wrapper file will be generated. Conflicts with `--output-dir`.                                                                      |
+| `--output-dir <DIR>`      | Output directory for the generated wrapper file. Acton uses `<ContractName>.tolk` or `<ContractName>.ts` as the file name. Conflicts with `--output`.    |
+| `-t, --test`              | If set, generates a test stub file at `tests/<contract_id>.test.tolk`. Not supported with `--ts`.                                                        |
+| `--test-output <PATH>`    | Path where the test stub file will be generated (requires `--test` flag). Not supported with `--ts`.                                                     |
+| `--test-output-dir <DIR>` | Output directory for the generated test stub file. Acton uses `<contract_id>.test.tolk` as the file name (requires `--test`). Not supported with `--ts`. |
+| `--ts`                    | Generate a TypeScript wrapper through `gen-typescript-from-tolk`.                                                                                        |
 
 ## Features
 
@@ -78,6 +79,15 @@ Generates:
 *   `tests/wrappers/Counter.tolk`
 *   `tests/counter.test.tolk` (ready to run with `acton test counter.test.tolk`)
 
+You can make these defaults project-wide via `Acton.toml`:
+
+```toml
+[wrappers.tolk]
+output-dir = "tests/wrappers"
+generate-test = true
+test-output-dir = "tests"
+```
+
 ### Generate a TypeScript wrapper
 
 ```bash
@@ -105,4 +115,23 @@ acton wrapper counter --output-dir tests/generated
 
 # Custom test path
 acton wrapper counter --test --test-output tests/my_contract/test.tolk
+
+# Custom test output directory
+acton wrapper counter --test --test-output-dir tests/generated
 ```
+
+### Configure default output directories
+
+```toml
+[wrappers.tolk]
+output-dir = "tests/generated-wrappers"
+generate-test = true
+test-output-dir = "tests/generated-tests"
+
+[wrappers.typescript]
+output-dir = "./wrappers"
+```
+
+With this config:
+- `acton wrapper counter` writes `tests/generated-wrappers/Counter.tolk` and `tests/generated-tests/counter.test.tolk`
+- `acton wrapper counter --ts` writes `wrappers/Counter.ts`
