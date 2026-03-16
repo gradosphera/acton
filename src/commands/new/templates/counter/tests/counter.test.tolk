@@ -5,6 +5,11 @@ import "@acton/testing/transaction_expect"
 import "@contracts/types"
 import "@wrappers/Counter"
 
+get fun `test deploy starts at zero`() {
+    val (contract, _, _) = setupTest();
+    expect(contract.currentCounter()).toEqual(0);
+}
+
 get fun `test increase counter`() {
     val (contract, deployer, _) = setupTest();
 
@@ -15,6 +20,18 @@ get fun `test increase counter`() {
     });
 
     expect(contract.currentCounter()).toEqual(123);
+}
+
+get fun `test any account can increase counter`() {
+    val (contract, _, notDeployer) = setupTest();
+
+    val res = contract.sendIncreaseCounter(notDeployer.address, 7);
+    expect(res).toHaveSuccessfulTx<IncreaseCounter>({
+        from: notDeployer.address,
+        to: contract.address,
+    });
+
+    expect(contract.currentCounter()).toEqual(7);
 }
 
 get fun `test reset counter`() {
@@ -42,7 +59,7 @@ get fun `test unknown message`() {
     expect(res).toHaveFailedTx({
         from: deployer.address,
         to: contract.address,
-        exitCode: 0xFFFF,
+        exitCode: Errors.InvalidMessage as int,
     });
 
     // empty message

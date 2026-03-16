@@ -202,7 +202,7 @@ pub fn new_cmd(
             contracts.insert(
                 "counter".to_owned(),
                 ContractConfig {
-                    name: "counter".to_owned(),
+                    name: "Counter".to_owned(),
                     src: "contracts/counter.tolk".to_owned(),
                     depends: Some(vec![]),
                     output: None,
@@ -213,7 +213,7 @@ pub fn new_cmd(
             contracts.insert(
                 "jetton_minter".to_owned(),
                 ContractConfig {
-                    name: "Minter".to_owned(),
+                    name: "JettonMinter".to_owned(),
                     src: "contracts/jetton-minter-contract.tolk".to_owned(),
                     depends: Some(vec![]),
                     output: None,
@@ -222,7 +222,7 @@ pub fn new_cmd(
             contracts.insert(
                 "jetton_wallet".to_owned(),
                 ContractConfig {
-                    name: "Wallet".to_owned(),
+                    name: "JettonWallet".to_owned(),
                     src: "contracts/jetton-wallet-contract.tolk".to_owned(),
                     depends: Some(vec![]),
                     output: None,

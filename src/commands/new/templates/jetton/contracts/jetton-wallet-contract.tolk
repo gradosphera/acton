@@ -41,7 +41,7 @@ fun onInternalMessage(in: InMessage) {
                         storage.minterAddress,
                         contract.getCode(),
                     )
-                ) throw ERR_INVALID_WALLET;
+                ) throw Errors.InvalidWallet;
             }
             storage.jettonBalance += msg.jettonAmount;
             storage.save();
@@ -80,12 +80,12 @@ fun onInternalMessage(in: InMessage) {
         }
 
         AskToTransfer => {
-            assert (msg.forwardPayload.remainingBitsCount()) throw ERR_INVALID_PAYLOAD;
-            assert (msg.transferRecipient.getWorkchain() == BASECHAIN) throw ERR_WRONG_WORKCHAIN;
+            assert (msg.forwardPayload.remainingBitsCount()) throw Errors.InvalidPayload;
+            assert (msg.transferRecipient.getWorkchain() == BASECHAIN) throw Errors.WrongWorkchain;
 
             var storage = lazy WalletStorage.load();
-            assert (in.senderAddress == storage.ownerAddress) throw ERR_NOT_FROM_OWNER;
-            assert (storage.jettonBalance >= msg.jettonAmount) throw ERR_NOT_ENOUGH_BALANCE;
+            assert (in.senderAddress == storage.ownerAddress) throw Errors.NotFromOwner;
+            assert (storage.jettonBalance >= msg.jettonAmount) throw Errors.NotEnoughBalance;
             storage.jettonBalance -= msg.jettonAmount;
             storage.save();
 
@@ -97,7 +97,7 @@ fun onInternalMessage(in: InMessage) {
                 // but last one is optional (it is ok if it fails)
                 forwardedMessagesCount * in.originalForwardFee +
                 (2 * JETTON_WALLET_GAS_CONSUMPTION + MIN_TONS_FOR_STORAGE)
-            ) throw ERR_NOT_ENOUGH_TON;
+            ) throw Errors.NotEnoughTon;
 
             val deployMsg = createMessage({
                 bounce: BounceMode.Only256BitsOfBody,
@@ -121,8 +121,8 @@ fun onInternalMessage(in: InMessage) {
 
         AskToBurn => {
             var storage = lazy WalletStorage.load();
-            assert (in.senderAddress == storage.ownerAddress) throw ERR_NOT_FROM_OWNER;
-            assert (storage.jettonBalance >= msg.jettonAmount) throw ERR_NOT_ENOUGH_BALANCE;
+            assert (in.senderAddress == storage.ownerAddress) throw Errors.NotFromOwner;
+            assert (storage.jettonBalance >= msg.jettonAmount) throw Errors.NotEnoughBalance;
             storage.jettonBalance -= msg.jettonAmount;
             storage.save();
 
@@ -144,7 +144,7 @@ fun onInternalMessage(in: InMessage) {
 
         else => {
             // ignore empty messages, "wrong opcode" for others
-            assert (in.body.isEmpty()) throw 0xFFFF;
+            assert (in.body.isEmpty()) throw Errors.InvalidMessage;
         }
     }
 }

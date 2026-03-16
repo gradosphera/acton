@@ -1,3 +1,7 @@
+enum Errors {
+    InvalidMessage = 0xFFFF
+}
+
 struct Storage {
     id: uint32
     counter: uint32

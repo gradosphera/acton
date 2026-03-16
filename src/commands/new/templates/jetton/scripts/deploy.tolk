@@ -38,9 +38,9 @@ fun buildOnchainMetadata(info: JettonInfo): cell {
 
 fun main() {
     val content = buildOnchainMetadata({
-        name: env<string>("JETTON_NAME") ?? "SomeJetton",
-        description: env<string>("JETTON_DESCRIPTION") ?? "Sone jetton",
-        symbol: env<string>("JETTON_SYMBOL") ?? "JTTT",
+        name: env<string>("JETTON_NAME") ?? "StarterJetton",
+        description: env<string>("JETTON_DESCRIPTION") ?? "A starter jetton template",
+        symbol: env<string>("JETTON_SYMBOL") ?? "SJTN",
         image: env<string>("JETTON_IMAGE") ?? "https://ton.org/download/ton_symbol.svg",
     });
 
@@ -56,7 +56,11 @@ fun main() {
 
     println("Deploying Jetton contract...");
     val deployRes = minter.sendDeploy(deployer.address, { value: ton("0.03") });
-    deployRes.wait();
+    if (!deployRes.wait()) {
+        return;
+    }
+
+    println1("Deployed Jetton minter to {}", minter.address);
 
     println1("Minting tokens: {}", supply);
     val mintRes = minter.sendMint(

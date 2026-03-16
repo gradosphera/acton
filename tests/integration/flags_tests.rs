@@ -655,7 +655,7 @@ fn test_project_root_full_flow_from_sibling_directory_on_new_project() {
         .run()
         .success();
     test_output
-        .assert_passed(1)
+        .assert_passed(4)
         .assert_snapshot_matches(
             "integration/snapshots/flags/test_project_root_full_flow_from_sibling_directory_on_new_project.test.stdout.txt",
         );

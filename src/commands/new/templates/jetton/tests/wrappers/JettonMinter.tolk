@@ -92,14 +92,14 @@ fun JettonMinter.sendMint(
     return net.send(from, mintMsg);
 }
 
-fun JettonMinter.sendChangeAdmin(self, from: address, newOwner: address): SendResultList {
+fun JettonMinter.sendChangeAdmin(self, from: address, newAdminAddress: address): SendResultList {
     val changeMsg = createMessage({
         bounce: false,
         value: ton("0.05"),
         dest: self.address,
         body: ChangeMinterAdmin {
             queryId: 0,
-            newAdminAddress: newOwner,
+            newAdminAddress,
         },
     });
     return net.send(from, changeMsg);

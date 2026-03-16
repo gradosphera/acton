@@ -29,7 +29,7 @@ fun onInternalMessage(in: InMessage) {
                     contract.getAddress(),
                     storage.jettonWalletCode,
                 )
-            ) throw ERR_UNAUTHORIZED_BURN;
+            ) throw Errors.UnauthorizedBurn;
 
             storage.totalSupply -= msg.jettonAmount;
             storage.save();
@@ -50,7 +50,7 @@ fun onInternalMessage(in: InMessage) {
         RequestWalletAddress => {
             assert (
                 in.valueCoins > in.originalForwardFee + MINIMAL_MESSAGE_VALUE_BOUND
-            ) throw ERR_NOT_ENOUGH_AMOUNT_TO_RESPOND;
+            ) throw Errors.NotEnoughAmountToRespond;
 
             val respondOwnerAddress: Cell<address>? = msg.includeOwnerAddress
                 ? msg.ownerAddress.toCell()
@@ -81,7 +81,7 @@ fun onInternalMessage(in: InMessage) {
 
         MintNewJettons => {
             var storage = lazy MinterStorage.load();
-            assert (in.senderAddress == storage.adminAddress) throw ERR_NOT_FROM_ADMIN;
+            assert (in.senderAddress == storage.adminAddress) throw Errors.NotFromAdmin;
 
             val internalTransferMsg = lazy msg.internalTransferMsg.load();
             storage.totalSupply += internalTransferMsg.jettonAmount;
@@ -102,21 +102,21 @@ fun onInternalMessage(in: InMessage) {
 
         ChangeMinterAdmin => {
             var storage = lazy MinterStorage.load();
-            assert (in.senderAddress == storage.adminAddress) throw ERR_NOT_FROM_ADMIN;
+            assert (in.senderAddress == storage.adminAddress) throw Errors.NotFromAdmin;
             storage.adminAddress = msg.newAdminAddress;
             storage.save();
         }
 
         ChangeMinterContent => {
             var storage = lazy MinterStorage.load();
-            assert (in.senderAddress == storage.adminAddress) throw ERR_NOT_FROM_ADMIN;
+            assert (in.senderAddress == storage.adminAddress) throw Errors.NotFromAdmin;
             storage.content = msg.newContent;
             storage.save();
         }
 
         else => {
             // ignore empty messages, "wrong opcode" for others
-            assert (in.body.isEmpty()) throw 0xFFFF;
+            assert (in.body.isEmpty()) throw Errors.InvalidMessage;
         }
     }
 }

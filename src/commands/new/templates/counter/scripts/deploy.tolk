@@ -3,7 +3,7 @@ import "@acton/build/build"
 import "@acton/emulation/network"
 import "@contracts/types"
 
-import "@tests/wrappers/Counter"
+import "@wrappers/Counter"
 
 fun main() {
     val deployer = net.wallet("deployer");
@@ -13,7 +13,10 @@ fun main() {
         counter: 0,
     });
     val res = counter.deploy(deployer.address, { value: ton("0.005") });
-    res.wait();
+    if (!res.wait()) {
+        return;
+    }
 
     println1("Deployed counter to {}", counter.address);
+    println1("Current counter value is {}", counter.currentCounter());
 }

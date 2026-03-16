@@ -12,6 +12,8 @@ tests, and a deployment script you can extend.
 - `tests/contract.test.tolk` covers deployment and ownership transfer.
 - `scripts/deploy.tolk` deploys the contract with `deployer` as the initial
   owner.
+- `.github/workflows/ci.yml` runs build, test, lint, and format checks on
+  GitHub Actions.
 
 ## Build
 
@@ -64,6 +66,15 @@ acton run deploy-testnet
 
 If you hit rate limits while talking to Toncenter, set `TONCENTER_API_KEY` in
 `.env`.
+
+## CI
+
+The generated project includes `.github/workflows/ci.yml`, which runs:
+
+- `acton build`
+- `acton test`
+- `acton check --output-format github`
+- `acton fmt --check`
 
 ## Documentation
 

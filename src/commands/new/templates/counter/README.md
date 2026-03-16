@@ -6,9 +6,12 @@ counter contract, wrapper helpers, tests, and a ready-to-run deployment script.
 ## What Is Included
 
 - `contracts/counter.tolk` implements the counter contract.
-- `contracts/types.tolk` defines storage and message types.
+- `contracts/types.tolk` defines storage, message types, and starter errors.
+- `tests/wrappers/Counter.tolk` is the wrapper used by tests and scripts.
 - `tests/counter.test.tolk` covers increment, reset, and invalid-message flows.
 - `scripts/deploy.tolk` deploys the contract with initial counter state.
+- `.github/workflows/ci.yml` runs build, test, lint, and format checks on
+  GitHub Actions.
 
 ## Build
 
@@ -21,6 +24,21 @@ acton build
 ```bash
 acton test
 ```
+
+## Try It In Emulation
+
+```bash
+acton run deploy-emulation
+```
+
+## Customize The Starter
+
+1. Extend `contracts/types.tolk` with your storage, messages, and errors.
+2. Update `contracts/counter.tolk` with your contract logic.
+3. Adjust `tests/wrappers/Counter.tolk` to match the new ABI, or regenerate it
+   with `acton wrapper counter`.
+4. Extend `tests/counter.test.tolk` with the scenarios you care about.
+5. Update `scripts/deploy.tolk` with the storage and deployment flow you want.
 
 ## Deploy To Testnet
 
@@ -48,9 +66,19 @@ acton run deploy-testnet
 If you need higher Toncenter limits for blockchain queries, set
 `TONCENTER_API_KEY` in `.env`.
 
+## CI
+
+The generated project includes `.github/workflows/ci.yml`, which runs:
+
+- `acton build`
+- `acton test`
+- `acton check --output-format github`
+- `acton fmt --check`
+
 ## Documentation
 
 - Quickstart: https://i582.github.io/acton/docs/quickstart
 - Testing: https://i582.github.io/acton/docs/commands/test
 - Scripts and deployment: https://i582.github.io/acton/docs/commands/script
+- Wrappers: https://i582.github.io/acton/docs/commands/wrapper
 - Wallets: https://i582.github.io/acton/docs/commands/wallet

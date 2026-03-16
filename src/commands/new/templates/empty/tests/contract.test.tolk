@@ -40,6 +40,24 @@ get fun `test non-owner cannot transfer ownership`() {
     expect(contract.owner()).toEqual(deployer.address);
 }
 
+get fun `test unknown message fails with named error`() {
+    val (contract, deployer, _) = setupTest();
+
+    val res = contract.sendAny(
+        deployer.address,
+        beginCell().storeUint(0x999, 32).endCell(),
+        { value: ton("0.05") },
+    );
+    expect(res).toHaveFailedTx({
+        from: deployer.address,
+        to: contract.address,
+        exitCode: Errors.InvalidMessage as int,
+    });
+
+    val res2 = contract.sendAny(deployer.address, createEmptyCell(), { value: ton("0.05") });
+    expect(res2).toHaveSuccessfulTx({ from: deployer.address, to: contract.address });
+}
+
 fun setupTest(): (Empty, Treasury, Treasury) {
     val deployer = net.treasury("deployer");
     val notDeployer = net.treasury("not_deployer");

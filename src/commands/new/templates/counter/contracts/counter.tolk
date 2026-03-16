@@ -22,7 +22,7 @@ fun onInternalMessage(in: InMessage) {
             storage.save();
         }
         else => {
-            assert (in.body.isEmpty()) throw 0xFFFF;
+            assert (in.body.isEmpty()) throw Errors.InvalidMessage;
         }
     }
 }
