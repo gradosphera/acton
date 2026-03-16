@@ -310,8 +310,20 @@ enum Commands {
     Wrapper {
         #[arg(help = "Contract ID to generate wrapper", value_name = "CONTRACT_ID", add = ArgValueCompleter::new(complete_contracts))]
         contract_id: String,
-        #[arg(long, short, help = "Output path for wrapper file")]
+        #[arg(
+            long,
+            short,
+            help = "Output path for generated wrapper file",
+            conflicts_with = "output_dir"
+        )]
         output: Option<String>,
+        #[arg(
+            long,
+            help = "Output directory for generated wrapper file",
+            value_name = "DIR",
+            conflicts_with = "output"
+        )]
+        output_dir: Option<String>,
 
         #[arg(
             long,
@@ -321,8 +333,20 @@ enum Commands {
             help_heading = "Tests"
         )]
         test: bool,
-        #[arg(long, help = "Output path for test file", help_heading = "Tests")]
+        #[arg(
+            long,
+            help = "Output path for test file",
+            help_heading = "Tests",
+            requires = "test"
+        )]
         test_output: Option<String>,
+        #[arg(
+            long,
+            help = "Generate a TypeScript wrapper in the project root via gen-typescript-from-tolk",
+            help_heading = "TypeScript",
+            conflicts_with_all = ["test", "test_output"]
+        )]
+        ts: bool,
     },
     #[command(
         about = "Execute a Tolk script file",
@@ -1269,6 +1293,14 @@ fn example_wrapper_usage() -> StyledStr {
                 "Generate wrapper and stub test for minter",
                 "acton wrapper minter --test",
             ),
+            (
+                "Generate a TypeScript wrapper for minter",
+                "acton wrapper minter --ts",
+            ),
+            (
+                "Generate a TypeScript wrapper for minter into wrappers/",
+                "acton wrapper minter --ts --output-dir wrappers",
+            ),
         ],
         "https://i582.github.io/acton/docs/test-runner/generating-wrappers",
     )
@@ -1915,9 +1947,18 @@ fn main() {
         Commands::Wrapper {
             contract_id,
             output: wrapper_output,
+            output_dir: wrapper_output_dir,
             test_output,
             test,
-        } => wrapper_cmd(&contract_id, wrapper_output, test_output, test),
+            ts,
+        } => wrapper_cmd(
+            &contract_id,
+            wrapper_output,
+            wrapper_output_dir,
+            test_output,
+            test,
+            ts,
+        ),
         Commands::Script {
             path,
             args,

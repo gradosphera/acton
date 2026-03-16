@@ -23,6 +23,7 @@ pub(crate) struct ProjectBuilder {
     lint_max_warnings: Option<usize>,
     lint_output_format: Option<String>,
     test_config: Option<TestConfig>,
+    wrappers_typescript_output_dir: Option<String>,
     license: Option<String>,
     create_acton_toml: bool,
 }
@@ -311,6 +312,7 @@ impl ProjectBuilder {
             lint_max_warnings: None,
             lint_output_format: None,
             test_config: None,
+            wrappers_typescript_output_dir: None,
             license: Some("MIT".to_string()),
             create_acton_toml: true,
         }
@@ -605,6 +607,11 @@ impl ProjectBuilder {
         self
     }
 
+    pub(crate) fn with_wrappers_typescript_output_dir(mut self, path: &str) -> Self {
+        self.wrappers_typescript_output_dir = Some(path.to_string());
+        self
+    }
+
     pub(crate) fn build(self) -> Project {
         let project_path = self.temp_dir.path().join(&self.name);
         fs::create_dir_all(&project_path).expect("Failed to create project dir");
@@ -671,6 +678,7 @@ impl ProjectBuilder {
                 self.lint_max_warnings,
                 self.lint_output_format,
                 &self.test_config,
+                self.wrappers_typescript_output_dir.as_deref(),
                 &self.license,
             );
         }
@@ -708,6 +716,7 @@ impl ProjectBuilder {
         lint_max_warnings: Option<usize>,
         lint_output_format: Option<String>,
         test_config: &Option<TestConfig>,
+        wrappers_typescript_output_dir: Option<&str>,
         license: &Option<String>,
     ) {
         use std::fmt::Write as _;
@@ -803,6 +812,11 @@ version = "0.1.0"
                 toml_content.push_str(&format!("\"{prefix}\" = \"{target}\"\n"));
             }
             toml_content.push('\n');
+        }
+
+        if let Some(path) = wrappers_typescript_output_dir {
+            toml_content.push_str("[wrappers.typescript]\n");
+            toml_content.push_str(&format!("output-dir = \"{path}\"\n\n"));
         }
 
         if !scripts.is_empty() {
@@ -1068,9 +1082,19 @@ impl ActonCommand {
         self
     }
 
+    pub(crate) fn generate_typescript_wrapper(mut self) -> Self {
+        self.cmd = self.cmd.arg("--ts");
+        self
+    }
+
     /// Specify output wrapper file
     pub(crate) fn wrapper_output(mut self, path: &str) -> Self {
         self.cmd = self.cmd.arg("--output").arg(path);
+        self
+    }
+
+    pub(crate) fn wrapper_output_dir(mut self, path: &str) -> Self {
+        self.cmd = self.cmd.arg("--output-dir").arg(path);
         self
     }
 

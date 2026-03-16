@@ -111,6 +111,7 @@ pub struct ActonConfig {
     pub lint: Option<LintConfig>,
     pub fmt: Option<FmtSettings>,
     pub build: Option<BuildSettings>,
+    pub wrappers: Option<WrappersConfig>,
     pub litenode: Option<LitenodeSettings>,
     pub scripts: Option<BTreeMap<String, String>>,
     #[serde(skip)] // we build wallets manually
@@ -248,6 +249,17 @@ pub struct BuildSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WrappersConfig {
+    pub typescript: Option<TypescriptWrapperSettings>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct TypescriptWrapperSettings {
+    pub output_dir: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct LitenodeSettings {
     pub port: Option<u16>,
@@ -335,6 +347,7 @@ impl Default for ActonConfig {
                 separate_import_groups: None,
             }),
             build: None,
+            wrappers: None,
             litenode: None,
             wallets: None,
             libraries: None,
@@ -520,6 +533,16 @@ impl ActonConfig {
     #[must_use]
     pub fn get_library(&self, name: &str) -> Option<&LibraryConfig> {
         self.libraries.as_ref()?.libraries.get(name)
+    }
+
+    #[must_use]
+    pub fn typescript_wrapper_output_dir(&self) -> Option<&str> {
+        self.wrappers
+            .as_ref()?
+            .typescript
+            .as_ref()?
+            .output_dir
+            .as_deref()
     }
 
     #[must_use]
@@ -1358,6 +1381,22 @@ output-fift = "build/fift"
         assert_eq!(build.out_dir.as_deref(), Some("artifacts/build"));
         assert_eq!(build.gen_dir.as_deref(), Some("artifacts/gen"));
         assert_eq!(build.output_fift.as_deref(), Some("build/fift"));
+    }
+
+    #[test]
+    fn test_wrappers_typescript_settings_parsing() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[wrappers.typescript]
+output-dir = "./wrappers"
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        assert_eq!(config.typescript_wrapper_output_dir(), Some("./wrappers"));
     }
 
     #[test]

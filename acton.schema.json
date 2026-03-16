@@ -203,6 +203,22 @@
         }
       }
     },
+    "wrappers": {
+      "type": "object",
+      "description": "Default settings for wrapper generation",
+      "properties": {
+        "typescript": {
+          "type": "object",
+          "description": "Default settings for TypeScript wrapper generation",
+          "properties": {
+            "output-dir": {
+              "type": "string",
+              "description": "Directory where `acton wrapper --ts` writes generated TypeScript wrappers by default"
+            }
+          }
+        }
+      }
+    },
     "litenode": {
       "type": "object",
       "description": "Default settings for `acton litenode` commands",

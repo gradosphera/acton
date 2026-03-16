@@ -1,11 +1,58 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
+use serde_json::Value;
+use std::env;
 use std::fs;
+use std::path::{Path, PathBuf};
 
 const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
 ";
+
+#[cfg(unix)]
+const FAKE_TYPESCRIPT_GENERATOR: &str = r#"#!/bin/sh
+set -eu
+
+if [ "${1:-}" = "--yes" ]; then
+    shift
+fi
+
+if [ "${1:-}" != "gen-typescript-from-tolk" ] && [ "${1:-}" != "gen-typescript-from-tolk-dev" ]; then
+    echo "unexpected package: ${1:-}" >&2
+    exit 1
+fi
+
+printf '%s' "${2:-}" > "$ACTON_TS_WRAPPER_CAPTURE"
+printf '%s\n' '// generated ts wrapper' 'export const marker = "ts";'
+"#;
+
+#[cfg(unix)]
+fn make_typescript_wrapper_project(name: &str) -> crate::support::project::Project {
+    ProjectBuilder::new(name)
+        .contract("my_contract", SIMPLE_CONTRACT)
+        .raw_file("bin/npx", FAKE_TYPESCRIPT_GENERATOR)
+        .build()
+}
+
+#[cfg(unix)]
+fn setup_fake_typescript_generator(project_root: &Path) -> (PathBuf, String) {
+    use std::os::unix::fs::PermissionsExt;
+
+    let npx_path = project_root.join("bin/npx");
+    let mut permissions = fs::metadata(&npx_path).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&npx_path, permissions).unwrap();
+
+    let capture_path = project_root.join("typescript-abi.json");
+    let path_env = format!(
+        "{}:{}",
+        project_root.join("bin").display(),
+        env::var("PATH").unwrap_or_default()
+    );
+
+    (capture_path, path_env)
+}
 
 #[test]
 fn test_wrapper_generation_defaults() {
@@ -63,6 +110,136 @@ fn test_wrapper_generation_without_test_stub() {
         !project.path().join("tests/my_contract.test.tolk").exists(),
         "Test file should not exist"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wrapper_generation_typescript_defaults_to_project_root() {
+    let project = make_typescript_wrapper_project("wrapper_typescript");
+    let (capture_path, path_env) = setup_fake_typescript_generator(project.path());
+
+    let output = project
+        .acton()
+        .wrapper("my_contract")
+        .generate_typescript_wrapper()
+        .env("PATH", &path_env)
+        .env(
+            "ACTON_TS_WRAPPER_CAPTURE",
+            capture_path.to_str().expect("capture path"),
+        )
+        .run()
+        .success();
+
+    output
+        .assert_contains("Generated")
+        .assert_contains("MyContract.ts");
+
+    assert_eq!(
+        fs::read_to_string(project.path().join("MyContract.ts")).unwrap(),
+        "// generated ts wrapper\nexport const marker = \"ts\";\n"
+    );
+
+    let abi_json: Value = serde_json::from_str(&fs::read_to_string(&capture_path).unwrap())
+        .expect("captured ABI JSON should be valid");
+    assert_eq!(abi_json["contractName"], "MyContract");
+    assert_eq!(abi_json["compilerName"], "tolk");
+    assert!(
+        abi_json["codeBoc64"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty())
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wrapper_generation_typescript_uses_config_output_dir_relative_to_project_root() {
+    let project = ProjectBuilder::new("wrapper_typescript_config_output_dir")
+        .contract("my_contract", SIMPLE_CONTRACT)
+        .with_wrappers_typescript_output_dir("./wrappers")
+        .raw_file("bin/npx", FAKE_TYPESCRIPT_GENERATOR)
+        .build();
+    let (capture_path, path_env) = setup_fake_typescript_generator(project.path());
+    let project_root = project.path().display().to_string();
+
+    let output = project
+        .acton()
+        .arg("--project-root")
+        .arg(&project_root)
+        .wrapper("my_contract")
+        .generate_typescript_wrapper()
+        .env("PATH", &path_env)
+        .env(
+            "ACTON_TS_WRAPPER_CAPTURE",
+            capture_path.to_str().expect("capture path"),
+        )
+        .current_dir(project.path().parent().expect("project parent"))
+        .run()
+        .success();
+
+    output
+        .assert_contains("Generated")
+        .assert_contains("wrappers/MyContract.ts");
+
+    assert_eq!(
+        fs::read_to_string(project.path().join("wrappers/MyContract.ts")).unwrap(),
+        "// generated ts wrapper\nexport const marker = \"ts\";\n"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_wrapper_generation_typescript_output_dir_flag_overrides_config() {
+    let project = ProjectBuilder::new("wrapper_typescript_output_dir_flag")
+        .contract("my_contract", SIMPLE_CONTRACT)
+        .with_wrappers_typescript_output_dir("./wrappers-config")
+        .raw_file("bin/npx", FAKE_TYPESCRIPT_GENERATOR)
+        .build();
+    let (capture_path, path_env) = setup_fake_typescript_generator(project.path());
+
+    let output = project
+        .acton()
+        .wrapper("my_contract")
+        .generate_typescript_wrapper()
+        .wrapper_output_dir("wrappers-cli")
+        .env("PATH", &path_env)
+        .env(
+            "ACTON_TS_WRAPPER_CAPTURE",
+            capture_path.to_str().expect("capture path"),
+        )
+        .run()
+        .success();
+
+    output
+        .assert_contains("Generated")
+        .assert_contains("wrappers-cli/MyContract.ts");
+
+    assert_eq!(
+        fs::read_to_string(project.path().join("wrappers-cli/MyContract.ts")).unwrap(),
+        "// generated ts wrapper\nexport const marker = \"ts\";\n"
+    );
+    assert!(
+        !project
+            .path()
+            .join("wrappers-config/MyContract.ts")
+            .exists(),
+        "CLI output dir should override config output dir"
+    );
+}
+
+#[test]
+fn test_wrapper_generation_typescript_conflicts_with_test_stub() {
+    let project = ProjectBuilder::new("wrapper_typescript_conflict")
+        .contract("my_contract", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .generate_typescript_wrapper()
+        .generate_test_stub()
+        .run()
+        .failure()
+        .assert_stderr_contains("cannot be used with '--test'");
 }
 
 #[test]
@@ -615,6 +792,39 @@ fn test_wrapper_custom_output() {
             project.path().join("custom/test.tolk").to_str().expect(""),
             "integration/snapshots/wrapper/test_wrapper_custom_output/test.tolk.txt",
         );
+}
+
+#[test]
+fn test_wrapper_output_dir_places_wrapper_in_directory() {
+    let project = ProjectBuilder::new("wrapper_output_dir")
+        .contract("my_contract", SIMPLE_CONTRACT)
+        .build();
+
+    let output = project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .wrapper_output_dir("custom")
+        .run()
+        .success();
+
+    output
+        .assert_contains("Generated")
+        .assert_contains("custom/MyContract.tolk")
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("custom/MyContract.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_without_test_stub/wrapper.tolk.txt",
+        );
+
+    let test_code = fs::read_to_string(project.path().join("tests/my_contract.test.tolk")).unwrap();
+    assert!(
+        test_code.contains("import \"../custom/MyContract\""),
+        "test stub should import wrapper from custom directory:\n{test_code}"
+    );
 }
 
 #[test]

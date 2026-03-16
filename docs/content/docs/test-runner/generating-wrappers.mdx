@@ -202,8 +202,20 @@ You can customize the output paths:
 # Generate wrapper in a specific file
 acton wrapper counter --output tests/my_wrapper.tolk
 
+# Generate wrapper into a specific directory
+acton wrapper counter --output-dir tests/generated
+
 # Generate a test file alongside the wrapper
 acton wrapper counter --test --test-output tests/my.test.tolk
 ```
+
+For TypeScript wrappers, you can also configure the default output directory in `Acton.toml`:
+
+```toml
+[wrappers.typescript]
+output-dir = "./wrappers"
+```
+
+Then `acton wrapper counter --ts` writes `wrappers/Counter.ts` by default.
 
 See the [wrapper command reference](/docs/commands/wrapper) for more details about CLI options.

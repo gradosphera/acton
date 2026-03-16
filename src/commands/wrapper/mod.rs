@@ -1,21 +1,26 @@
 use crate::commands::common::error_fmt;
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, project_root};
-use anyhow::anyhow;
+use anyhow::{Context, anyhow};
 use heck::ToLowerCamelCase;
+use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
 use tolkc::CompilerResult;
 use tolkc::abi::{ABIGetMethod, ABIResolvedStruct, ContractABI};
 use ton_abi::ContractAbi as LegacyContractAbi;
+
+const TYPESCRIPT_WRAPPER_PACKAGE: &str = "gen-typescript-from-tolk-dev";
 
 struct WrapperModel {
     project_root: PathBuf,
     contract_id: String,
     contract_name: String,
     abi: ContractABI,
+    code_boc64: String,
     storage: Option<ABIResolvedStruct>,
     incoming_messages: Vec<ABIResolvedStruct>,
     storage_path: Option<PathBuf>,
@@ -26,10 +31,20 @@ struct WrapperModel {
     format_options: tolkfmt::FormatOptions,
 }
 
+#[derive(Serialize)]
+struct TypescriptGeneratorAbi {
+    #[serde(flatten)]
+    abi: ContractABI,
+    #[serde(rename = "codeBoc64")]
+    code_boc64: String,
+}
+
 fn build_model(
     contract_id: &str,
     wrapper_output: Option<String>,
+    wrapper_output_dir: Option<String>,
     test_output: Option<String>,
+    generate_typescript: bool,
 ) -> anyhow::Result<WrapperModel> {
     let config = ActonConfig::load().map_err(|e| anyhow!("Failed to load Acton.toml: {e}"))?;
 
@@ -68,10 +83,13 @@ fn build_model(
     let contract_path_str = contract_path.to_str().unwrap_or_default();
     let mappings = config.mappings();
     let compiler = tolkc::Compiler::new(2).with_mappings(&mappings);
-    let abi = match compiler.compile(&contract_path, false) {
-        CompilerResult::Success(result) => result
-            .abi
-            .ok_or_else(|| anyhow!("Compiler did not produce ABI for {}", contract_id.yellow()))?,
+    let (abi, code_boc64) = match compiler.compile(&contract_path, false) {
+        CompilerResult::Success(result) => (
+            result.abi.ok_or_else(|| {
+                anyhow!("Compiler did not produce ABI for {}", contract_id.yellow())
+            })?,
+            result.code_boc64,
+        ),
         CompilerResult::Error(error) => {
             anyhow::bail!(
                 "Failed to compile contract {} for wrapper generation: {}",
@@ -88,6 +106,9 @@ fn build_model(
         .unwrap_or(contract_id);
 
     let contract_name = to_pascal_case(file_stem);
+    let configured_typescript_output_dir = config
+        .typescript_wrapper_output_dir()
+        .map(ToOwned::to_owned);
     let storage = abi.resolve_storage_struct()?;
     let incoming_messages = abi.resolve_incoming_message_structs()?;
     let storage_path = storage
@@ -99,16 +120,18 @@ fn build_model(
         .filter_map(|message| find_type_path(&fallback_abi, &message.name))
         .collect::<BTreeSet<_>>();
 
-    let default_wrapper = project_root
-        .join("tests")
-        .join("wrappers")
-        .join(format!("{contract_name}.tolk"));
-
     let default_test = project_root
         .join("tests")
         .join(format!("{contract_id}.test.tolk"));
 
-    let wrapper_path = wrapper_output.map_or(default_wrapper, PathBuf::from);
+    let wrapper_path = resolve_wrapper_path(
+        &project_root,
+        &contract_name,
+        wrapper_output,
+        wrapper_output_dir,
+        configured_typescript_output_dir,
+        generate_typescript,
+    );
     let test_path = test_output.map_or(default_test, PathBuf::from);
 
     let message_paths = message_paths.into_iter().collect();
@@ -118,6 +141,7 @@ fn build_model(
         contract_id: contract_id.to_owned(),
         contract_name,
         abi,
+        code_boc64,
         storage,
         incoming_messages,
         storage_path,
@@ -153,32 +177,52 @@ fn format_generated_tolk(
 pub fn wrapper_cmd(
     contract_id: &str,
     wrapper_output: Option<String>,
+    wrapper_output_dir: Option<String>,
     test_output: Option<String>,
     generate_test_stub: bool,
+    generate_typescript: bool,
 ) -> anyhow::Result<()> {
-    let model = build_model(contract_id, wrapper_output, test_output)?;
+    if generate_typescript && (generate_test_stub || test_output.is_some()) {
+        anyhow::bail!("`acton wrapper --ts` does not support `--test` or `--test-output`");
+    }
+
+    let model = build_model(
+        contract_id,
+        wrapper_output,
+        wrapper_output_dir,
+        test_output,
+        generate_typescript,
+    )?;
 
     if let Some(parent) = model.wrapper_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| anyhow!("Failed to create directory {}: {}", parent.display(), e))?;
     }
-    if let Some(parent) = model.test_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| anyhow!("Failed to create directory {}: {}", parent.display(), e))?;
-    }
 
-    let wrapper_code = generate_wrapper(&model);
-    let test_code = generate_test(&model);
+    if generate_typescript {
+        let wrapper_code = generate_typescript_wrapper(&model)?;
+        fs::write(&model.wrapper_path, wrapper_code)
+            .map_err(|e| anyhow!("Failed to write wrapper file: {e}"))?;
+    } else {
+        let wrapper_code = generate_wrapper(&model);
+        let wrapper_code =
+            format_generated_tolk(&model, wrapper_code, &model.wrapper_path, "wrapper");
 
-    let wrapper_code = format_generated_tolk(&model, wrapper_code, &model.wrapper_path, "wrapper");
+        fs::write(&model.wrapper_path, wrapper_code)
+            .map_err(|e| anyhow!("Failed to write wrapper file: {e}"))?;
 
-    fs::write(&model.wrapper_path, wrapper_code)
-        .map_err(|e| anyhow!("Failed to write wrapper file: {e}"))?;
+        if generate_test_stub {
+            if let Some(parent) = model.test_path.parent() {
+                fs::create_dir_all(parent).map_err(|e| {
+                    anyhow!("Failed to create directory {}: {}", parent.display(), e)
+                })?;
+            }
 
-    if generate_test_stub {
-        let test_code = format_generated_tolk(&model, test_code, &model.test_path, "test stub");
-        fs::write(&model.test_path, test_code)
-            .map_err(|e| anyhow!("Failed to write test file: {e}"))?;
+            let test_code = generate_test(&model);
+            let test_code = format_generated_tolk(&model, test_code, &model.test_path, "test stub");
+            fs::write(&model.test_path, test_code)
+                .map_err(|e| anyhow!("Failed to write test file: {e}"))?;
+        }
     }
 
     let wrapper_relative = model
@@ -200,6 +244,108 @@ pub fn wrapper_cmd(
     }
 
     Ok(())
+}
+
+fn resolve_wrapper_path(
+    project_root: &Path,
+    contract_name: &str,
+    wrapper_output: Option<String>,
+    wrapper_output_dir: Option<String>,
+    configured_ts_output_dir: Option<String>,
+    generate_typescript: bool,
+) -> PathBuf {
+    if let Some(wrapper_output) = non_empty_path(wrapper_output) {
+        return PathBuf::from(wrapper_output);
+    }
+
+    let file_name = wrapper_file_name(contract_name, generate_typescript);
+
+    if let Some(wrapper_output_dir) = non_empty_path(wrapper_output_dir) {
+        return PathBuf::from(wrapper_output_dir).join(&file_name);
+    }
+
+    if generate_typescript {
+        if let Some(configured_ts_output_dir) = non_empty_path(configured_ts_output_dir) {
+            return resolve_project_config_path(project_root, &configured_ts_output_dir)
+                .join(&file_name);
+        }
+
+        return project_root.join(&file_name);
+    }
+
+    // default path for Tolk wrappers
+    project_root.join("tests").join("wrappers").join(&file_name)
+}
+
+fn wrapper_file_name(contract_name: &str, generate_typescript: bool) -> String {
+    let extension = if generate_typescript { "ts" } else { "tolk" };
+    format!("{contract_name}.{extension}")
+}
+
+fn non_empty_path(path: Option<String>) -> Option<String> {
+    path.and_then(|path| {
+        if path.trim().is_empty() {
+            None
+        } else {
+            Some(path)
+        }
+    })
+}
+
+fn resolve_project_config_path(project_root: &Path, path: &str) -> PathBuf {
+    let path = Path::new(path);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        project_root.join(path)
+    }
+}
+
+fn generate_typescript_wrapper(model: &WrapperModel) -> anyhow::Result<String> {
+    let abi_json = serialize_typescript_abi(model)?;
+
+    let output = Command::new("npx")
+        .env("npm_config_update_notifier", "false")
+        .arg("--yes")
+        .arg(TYPESCRIPT_WRAPPER_PACKAGE)
+        .arg(abi_json)
+        .output()
+        .with_context(|| {
+            format!(
+                "Failed to execute `npx {TYPESCRIPT_WRAPPER_PACKAGE}`. Ensure Node.js/npm is installed and `npx` is available in PATH."
+            )
+        })?;
+
+    if !output.status.success() {
+        let code = output.status.code().unwrap_or(1);
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        let details = if !stderr.is_empty() {
+            stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            "no output".to_owned()
+        };
+
+        anyhow::bail!("`npx {TYPESCRIPT_WRAPPER_PACKAGE}` failed with exit code {code}: {details}");
+    }
+
+    String::from_utf8(output.stdout)
+        .context("TypeScript wrapper generator emitted non-UTF-8 output")
+}
+
+fn serialize_typescript_abi(model: &WrapperModel) -> anyhow::Result<String> {
+    let mut abi = model.abi.clone();
+    if abi.contract_name.is_empty() {
+        abi.contract_name = model.contract_name.clone();
+    }
+
+    serde_json::to_string(&TypescriptGeneratorAbi {
+        abi,
+        code_boc64: model.code_boc64.clone(),
+    })
+    .context("Failed to encode ABI JSON for TypeScript wrapper generation")
 }
 
 fn find_type_path(fallback_abi: &LegacyContractAbi, type_name: &str) -> Option<PathBuf> {
