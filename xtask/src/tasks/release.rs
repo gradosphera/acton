@@ -243,7 +243,7 @@ fn show_created_commit_numstat(context: &ReleaseContext) -> Result<()> {
     let commit_numstat = context.git.show_commit_numstat("HEAD")?;
 
     println!("Created commit numstat:\n");
-    println!("{}", commit_numstat);
+    println!("{commit_numstat}");
 
     Ok(())
 }

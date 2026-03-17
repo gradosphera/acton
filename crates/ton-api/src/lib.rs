@@ -90,7 +90,7 @@ impl TonApiClient {
         for attempt in 0..HTTP_RETRY_ATTEMPTS {
             self.maybe_wait_for_rate_limit();
             let request = build_request();
-            log::info!("Send {:?}", request);
+            log::info!("Send {request:?}");
             return match request.send() {
                 Ok(response) => {
                     if Self::should_retry_status(response.status())
@@ -133,7 +133,7 @@ impl TonApiClient {
             let elapsed = last.elapsed();
             if elapsed < TONCENTER_MIN_REQUEST_INTERVAL {
                 let wait_for = TONCENTER_MIN_REQUEST_INTERVAL - elapsed;
-                log::debug!("throttle for {:?}", wait_for);
+                log::debug!("throttle for {wait_for:?}");
                 std::thread::sleep(TONCENTER_MIN_REQUEST_INTERVAL - elapsed);
             }
         }

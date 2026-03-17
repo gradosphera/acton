@@ -54,15 +54,18 @@ impl Network {
             Network::Localnet => Network::localnet_urls(custom_networks)?
                 .v3_url
                 .as_ref()
-                .map(|s| s.to_string())
+                .map(ToString::to_string)
                 .ok_or_else(|| anyhow::anyhow!("v3_url not configured for localnet network")),
             Network::Custom(name) => {
                 let Some(urls) = custom_networks.get(name.as_ref()) else {
                     anyhow::bail!("unknown custom network: {name}")
                 };
-                urls.v3_url.as_ref().map(|s| s.to_string()).ok_or_else(|| {
-                    anyhow::anyhow!("v3_url not configured for custom network: {name}")
-                })
+                urls.v3_url
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("v3_url not configured for custom network: {name}")
+                    })
             }
         }
     }
@@ -115,7 +118,7 @@ impl std::fmt::Display for Network {
             Network::Mainnet => write!(f, "mainnet"),
             Network::Testnet => write!(f, "testnet"),
             Network::Localnet => write!(f, "localnet"),
-            Network::Custom(s) => write!(f, "{}", s),
+            Network::Custom(s) => write!(f, "{s}"),
         }
     }
 }

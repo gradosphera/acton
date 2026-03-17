@@ -51,14 +51,14 @@ pub fn docgen_cmd(output: Option<String>, check: bool) -> Result<()> {
 fn resolve_output_paths(output: Option<String>) -> DocgenOutputPaths {
     let stdlib_output = output.unwrap_or_else(|| DEFAULT_STDLIB_OUT.to_string());
     let stdlib_out_dir = PathBuf::from(&stdlib_output);
-    let tolk_stdlib_out_dir = stdlib_out_dir
-        .parent()
-        .map(|parent| parent.join("tolk_standard_library"))
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_TOLK_STDLIB_OUT));
-    let linter_out_dir = stdlib_out_dir
-        .parent()
-        .map(|parent| parent.join("linting").join("rules"))
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_LINTER_OUT));
+    let tolk_stdlib_out_dir = stdlib_out_dir.parent().map_or_else(
+        || PathBuf::from(DEFAULT_TOLK_STDLIB_OUT),
+        |parent| parent.join("tolk_standard_library"),
+    );
+    let linter_out_dir = stdlib_out_dir.parent().map_or_else(
+        || PathBuf::from(DEFAULT_LINTER_OUT),
+        |parent| parent.join("linting").join("rules"),
+    );
 
     DocgenOutputPaths {
         stdlib_out_dir,

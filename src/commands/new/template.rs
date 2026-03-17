@@ -19,6 +19,7 @@ pub enum ProjectTemplate {
 }
 
 impl ProjectTemplate {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Empty => "empty",
@@ -27,6 +28,7 @@ impl ProjectTemplate {
         }
     }
 
+    #[must_use]
     pub const fn description(self) -> &'static str {
         match self {
             Self::Empty => "Minimal project skeleton",

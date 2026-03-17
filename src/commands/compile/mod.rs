@@ -77,7 +77,7 @@ pub fn compile_cmd(
     let mut compiler = tolkc::Compiler::new(2);
     if let Some(acton_config) = &acton_config {
         let mappings = acton_config.mappings();
-        compiler = compiler.with_mappings(&mappings)
+        compiler = compiler.with_mappings(&mappings);
     }
 
     let compilation_result = compiler.compile(Path::new(path), with_debug_info);

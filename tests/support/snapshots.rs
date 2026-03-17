@@ -60,7 +60,7 @@ fn build_redactions(project_path: &Path) -> snapbox::Redactions {
 
     let tmp_dir_raw = project_path.to_string_lossy().to_string();
     let tmp_dir_unix = if cfg!(windows) {
-        tmp_dir_raw.replace("\\", "/")
+        tmp_dir_raw.replace('\\', "/")
     } else {
         tmp_dir_raw.clone()
     };
@@ -140,7 +140,7 @@ fn build_redactions(project_path: &Path) -> snapbox::Redactions {
         .insert("[LAST_TOPUP_AT]", regex!(r"Last top-up: .*"))
         .unwrap();
     redactions
-        .insert("[ACTON_VERSION]", format!("v{}", current_version))
+        .insert("[ACTON_VERSION]", format!("v{current_version}"))
         .unwrap();
     redactions
         .insert("[ACTON_DOCS_URL]", "https://i582.github.io/acton/docs")

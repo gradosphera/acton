@@ -9,7 +9,7 @@ fn test_check_missing_contract_header_reports_contract_entrypoint_without_header
     run_rule_test(
         "missing_contract_header",
         RULE_CODE,
-        r#"
+        r"
             struct Storage {
                 owner: address
             }
@@ -17,9 +17,9 @@ fn test_check_missing_contract_header_reports_contract_entrypoint_without_header
             fun onInternalMessage(in: InMessage) {
                 debug.print(in.senderAddress);
             }
-        "#,
+        ",
         function_name!(),
-    )
+    );
 }
 
 #[test]
@@ -28,7 +28,7 @@ fn test_check_missing_contract_header_skips_file_with_contract_header() {
     run_rule_test(
         "missing_contract_header",
         RULE_CODE,
-        r#"
+        r"
             struct Storage {
                 owner: address
             }
@@ -40,7 +40,7 @@ fn test_check_missing_contract_header_skips_file_with_contract_header() {
             fun onInternalMessage(in: InMessage) {
                 debug.print(in.senderAddress);
             }
-        "#,
+        ",
         function_name!(),
-    )
+    );
 }

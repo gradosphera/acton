@@ -391,7 +391,7 @@ fn show_plain_report(
                 "Use {} to get detailed explanation of a rule.",
                 "acton check --explain <CODE>".yellow()
             );
-            eprintln!("For example: acton check --explain {}", code);
+            eprintln!("For example: acton check --explain {code}");
         }
     }
 

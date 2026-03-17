@@ -15,11 +15,11 @@ get fun `test-manifest-path-works`() {
 }
 "#;
 
-const UNFORMATTED_FMT_TOLK: &str = r#"
+const UNFORMATTED_FMT_TOLK: &str = r"
 fun onInternalMessage(in:InMessage){
 val x=1;
 }
-"#;
+";
 
 const PROFILED_TEST: &str = r#"
 import "../../lib/testing/expect"
@@ -895,8 +895,7 @@ fn test_manifest_path_test_profiling_snapshots_use_project_root() {
     let stderr = output.get_normalized_stderr();
     assert!(
         !stderr.contains("Warning: Failed to load baseline gas snapshot"),
-        "baseline snapshot must be loaded from project root, stderr:\n{}",
-        stderr
+        "baseline snapshot must be loaded from project root, stderr:\n{stderr}"
     );
 }
 
@@ -973,8 +972,7 @@ fn test_fail_on_diff_succeeds_when_profile_matches_baseline() {
     let stderr = output.get_normalized_stderr();
     assert!(
         !stderr.contains("Profiling drift detected"),
-        "unexpected drift error in stderr:\n{}",
-        stderr
+        "unexpected drift error in stderr:\n{stderr}"
     );
 }
 

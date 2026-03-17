@@ -114,11 +114,11 @@ mod tests {
     #[test]
     fn lazy_expression_is_treated_as_effect_free() {
         with_first_expr(
-            r#"
+            r"
                 fun main() {
                     lazy expensive();
                 }
-            "#,
+            ",
             |expr| {
                 assert!(is_effect_free_expression(&expr));
             },

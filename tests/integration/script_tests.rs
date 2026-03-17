@@ -9,13 +9,13 @@ fn script_body_project(project_name: &str) -> ProjectBuilder {
     ProjectBuilder::new(project_name)
         .file(
             "contracts/script_body_messages",
-            r#"
+            r"
 struct (0xF8000001) ScriptBodyMsg {
     queryId: uint64
     recipient: address
     amount: coins
 }
-"#,
+",
         )
         .contract(
             "script_body_sink",
@@ -791,10 +791,10 @@ fn test_script_to_have_tx_not_found_shows_transaction_search_details() {
     let project = ProjectBuilder::new("script-tx-not-found")
         .contract(
             "simple",
-            r#"
+            r"
             fun onInternalMessage(_: InMessage) {}
             fun onBouncedMessage(_: InMessageBounced) {}
-        "#,
+        ",
         )
         .script_file(
             "tx_not_found",

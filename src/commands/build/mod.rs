@@ -76,11 +76,11 @@ pub fn build_cmd(
         fs::create_dir_all(&out_dir)?;
     }
 
-    let contracts = match config.contracts() {
-        Some(contracts) => contracts,
-        None => {
-            println!(
-                "No contracts section found in Acton.toml. Add at least one contract.
+    let contracts = if let Some(contracts) = config.contracts() {
+        contracts
+    } else {
+        println!(
+                    "No contracts section found in Acton.toml. Add at least one contract.
 To add a contract add the following section to Acton.toml:
 
 [contracts.my-contract]
@@ -89,9 +89,8 @@ src = \"contracts/my-contract.tolk\"
 depends = []
 
 See https://i582.github.io/acton/docs/build-system/configuration-reference/#contracts-section for more information"
-            );
-            return Ok(());
-        }
+                );
+        return Ok(());
     };
 
     if contracts.is_empty() {
@@ -493,7 +492,7 @@ fn rewrite_compiler_error_paths_for_display(
     }
 
     let absolute_contract_path = contract_path.to_string_lossy();
-    let absolute_prefix = format!("Failed to locate {}", absolute_contract_path);
+    let absolute_prefix = format!("Failed to locate {absolute_contract_path}");
     let relative_prefix = format!("Failed to locate {contract_src}");
 
     if message.contains(&absolute_prefix) {

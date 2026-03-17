@@ -352,7 +352,7 @@ pub fn verify_cmd(
         bounced: false,
         src: IntAddr::Std(wallet.address()),
         dst: IntAddr::Std(registry_address),
-        value: CurrencyCollection::new(100_000_000u64 as u128), // 0.1 TON
+        value: CurrencyCollection::new(u128::from(100_000_000u64)), // 0.1 TON
         ihr_fee: Default::default(),
         fwd_fee: Default::default(),
         created_at: 0,

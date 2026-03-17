@@ -3,12 +3,12 @@ use crate::support::project::ProjectBuilder;
 use function_name::named;
 use std::fs;
 
-const UNAUTHORIZED_ACCESS_SAMPLE: &str = r#"
+const UNAUTHORIZED_ACCESS_SAMPLE: &str = r"
             fun onInternalMessage(in: InMessage) {
                 val _sender = in.senderAddress;
                 contract.setData(contract.getData());
             }
-        "#;
+        ";
 
 #[test]
 #[named]

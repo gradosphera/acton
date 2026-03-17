@@ -606,11 +606,11 @@ impl ActonConfig {
         result.insert(
             "localnet".to_string(),
             CustomNetworkUrls {
-                v2_url: Arc::from(localnet_v2.trim_end_matches("/")),
-                v3_url: Some(Arc::from(localnet_v3.trim_end_matches("/"))),
+                v2_url: Arc::from(localnet_v2.trim_end_matches('/')),
+                v3_url: Some(Arc::from(localnet_v3.trim_end_matches('/'))),
                 explorer_url: localnet_config
                     .and_then(|config| config.explorer.as_ref())
-                    .map(|s| Arc::from(s.trim_end_matches("/"))),
+                    .map(|s| Arc::from(s.trim_end_matches('/'))),
             },
         );
 
@@ -632,16 +632,16 @@ impl ActonConfig {
                 result.insert(
                     name.clone(),
                     CustomNetworkUrls {
-                        v2_url: Arc::from(v2_url.trim_end_matches("/")),
+                        v2_url: Arc::from(v2_url.trim_end_matches('/')),
                         v3_url: config
                             .api
                             .as_ref()
                             .and_then(|api| api.v3.as_ref())
-                            .map(|s| Arc::from(s.trim_end_matches("/"))),
+                            .map(|s| Arc::from(s.trim_end_matches('/'))),
                         explorer_url: config
                             .explorer
                             .as_ref()
-                            .map(|s| Arc::from(s.trim_end_matches("/"))),
+                            .map(|s| Arc::from(s.trim_end_matches('/'))),
                     },
                 );
             }
@@ -821,13 +821,11 @@ pub fn normalize_mappings(
                 let normalized_path = if value_path.is_absolute() {
                     value_path
                         .absolutize()
-                        .map(|path| path.to_path_buf())
-                        .unwrap_or_else(|_| value_path.to_path_buf())
+                        .map_or_else(|_| value_path.to_path_buf(), |path| path.to_path_buf())
                 } else {
                     value_path
                         .absolutize_from(base_dir)
-                        .map(|path| path.to_path_buf())
-                        .unwrap_or_else(|_| base_dir.join(value_path))
+                        .map_or_else(|_| base_dir.join(value_path), |path| path.to_path_buf())
                 };
 
                 (

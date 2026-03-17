@@ -181,11 +181,11 @@ pub fn open_wallets(
                 Network::Mainnet => expected
                     .address_mainnet
                     .as_ref()
-                    .map(|a| TonAddress::from_str(&a.to_string())),
+                    .map(|a| TonAddress::from_str(&a.clone())),
                 Network::Testnet | Network::Localnet => expected
                     .address_testnet
                     .as_ref()
-                    .map(|a| TonAddress::from_str(&a.to_string())),
+                    .map(|a| TonAddress::from_str(&a.clone())),
                 _ => None,
             };
 
@@ -200,8 +200,7 @@ pub fn open_wallets(
                                 false,
                             );
                             anyhow::bail!(
-                                "Wallet address mismatch for '{name}' on '{net}':\n  Expected: {expected_addr}\n  Derived:  {}\n\nPossible causes:\n  - Wrong mnemonic/private key\n  - Incorrect 'kind' or 'workchain'\n  - Keys rotated but expected.address-{net} not updated",
-                                derived_address,
+                                "Wallet address mismatch for '{name}' on '{net}':\n  Expected: {expected_addr}\n  Derived:  {derived_address}\n\nPossible causes:\n  - Wrong mnemonic/private key\n  - Incorrect 'kind' or 'workchain'\n  - Keys rotated but expected.address-{net} not updated",
                             );
                         }
                     }

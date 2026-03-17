@@ -1582,9 +1582,7 @@ fn root_help(show_global_options: bool) -> StyledStr {
         .get_arguments()
         .filter(|arg| !arg.is_hide_set())
         .filter(|arg| !arg.is_positional())
-        .filter(|arg| {
-            arg.is_global_set() || matches!(arg.get_long(), Some("help") | Some("version"))
-        })
+        .filter(|arg| arg.is_global_set() || matches!(arg.get_long(), Some("help" | "version")))
         .filter_map(|arg| {
             let name = match (arg.get_short(), arg.get_long()) {
                 (Some(short), Some(long)) => format!("-{short}, --{long}"),
@@ -1641,17 +1639,12 @@ fn root_help(show_global_options: bool) -> StyledStr {
                 .unwrap_or_default();
             let _ = write!(
                 writer,
-                "\n  {command_style}{name:<align_name$}{command_style:#}  ",
-                align_name = align_name
+                "\n  {command_style}{name:<align_name$}{command_style:#}  "
             );
             if hint.is_empty() {
                 let _ = write!(writer, "{:align_hint$}  ", "", align_hint = align_hint);
             } else {
-                let _ = write!(
-                    writer,
-                    "{dimmed}{hint:<align_hint$}{dimmed:#}  ",
-                    align_hint = align_hint
-                );
+                let _ = write!(writer, "{dimmed}{hint:<align_hint$}{dimmed:#}  ");
             }
             let _ = write!(writer, "{description}");
         }
@@ -1660,19 +1653,11 @@ fn root_help(show_global_options: bool) -> StyledStr {
     if show_global_options {
         let _ = write!(writer, "\n\n{header}Global options:{header:#}");
         for (name, hint, description) in &global_options {
-            let _ = write!(
-                writer,
-                "\n  {cyan}{name:<align_name$}{cyan:#}  ",
-                align_name = align_name,
-            );
+            let _ = write!(writer, "\n  {cyan}{name:<align_name$}{cyan:#}  ",);
             if hint.is_empty() {
                 let _ = write!(writer, "{:align_hint$}  ", "", align_hint = align_hint);
             } else {
-                let _ = write!(
-                    writer,
-                    "{dimmed}{hint:<align_hint$}{dimmed:#}  ",
-                    align_hint = align_hint,
-                );
+                let _ = write!(writer, "{dimmed}{hint:<align_hint$}{dimmed:#}  ",);
             }
             let _ = write!(writer, "{description}");
         }
@@ -2292,7 +2277,7 @@ fn print_error(err: &anyhow::Error) {
     for cause in err.chain().skip(1) {
         eprintln!("\nCaused by:");
         for line in cause.to_string().lines() {
-            eprintln!("  {}", line);
+            eprintln!("  {line}");
         }
     }
 }

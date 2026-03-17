@@ -173,11 +173,11 @@ fn assert_trace_json_contract(
 fn save_test_trace_without_path_uses_default_directory() {
     let project = trace_project(
         "h-save-trace-default-dir",
-        r#"
+        r"
         get fun `test-default-trace`() {
             deployCounter();
         }
-        "#,
+        ",
     );
 
     let output = project
@@ -210,11 +210,11 @@ fn save_test_trace_without_path_uses_default_directory() {
 fn save_test_trace_with_custom_directory_uses_regular_non_ui_flow() {
     let project = trace_project(
         "h-save-trace-custom-dir",
-        r#"
+        r"
         get fun `test-custom-trace`() {
             deployCounter();
         }
-        "#,
+        ",
     );
 
     let output = project
@@ -252,7 +252,7 @@ fn save_test_trace_with_custom_directory_uses_regular_non_ui_flow() {
 fn save_test_trace_creates_trace_per_test_and_single_contract_file() {
     let project = trace_project(
         "h-save-trace-multi",
-        r#"
+        r"
         get fun `test-trace-first`() {
             deployCounter();
         }
@@ -260,7 +260,7 @@ fn save_test_trace_creates_trace_per_test_and_single_contract_file() {
         get fun `test-trace-second`() {
             deployCounter();
         }
-        "#,
+        ",
     );
 
     let output = project
@@ -379,13 +379,11 @@ fn save_test_trace_keeps_custom_trace_names() {
 
     assert!(
         trace_names.contains(&"deploy-counter"),
-        "Expected custom name `deploy-counter` in trace names: {:?}",
-        trace_names
+        "Expected custom name `deploy-counter` in trace names: {trace_names:?}"
     );
     assert!(
         trace_names.contains(&"ping-counter"),
-        "Expected custom name `ping-counter` in trace names: {:?}",
-        trace_names
+        "Expected custom name `ping-counter` in trace names: {trace_names:?}"
     );
 }
 
@@ -393,11 +391,11 @@ fn save_test_trace_keeps_custom_trace_names() {
 fn regular_run_without_trace_flag_does_not_create_trace_artifacts() {
     let project = trace_project(
         "h-regular-run-no-trace",
-        r#"
+        r"
         get fun `test-no-trace`() {
             deployCounter();
         }
-        "#,
+        ",
     );
 
     let output = project.acton().test().run().success();
@@ -420,11 +418,11 @@ fn regular_run_without_trace_flag_does_not_create_trace_artifacts() {
 fn save_test_trace_can_be_enabled_after_regular_run() {
     let project = trace_project(
         "h-trace-after-regular-run",
-        r#"
+        r"
         get fun `test-after-regular`() {
             deployCounter();
         }
-        "#,
+        ",
     );
 
     let regular_output = project.acton().test().run().success();

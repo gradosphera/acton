@@ -3,14 +3,14 @@ use crate::support::fixtures::FixtureProject;
 use crate::support::project::ProjectBuilder;
 use std::fs;
 
-const CP_SIMPLE_CONTRACT: &str = r#"
+const CP_SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
 
 get fun ping(): int {
     return 42;
 }
-"#;
+";
 
 #[test]
 fn net_is_deployed_transitions_false_to_true_on_deterministic_deploy_path() {

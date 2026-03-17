@@ -387,17 +387,11 @@ fn perform_testnet_airdrop(
 ) -> anyhow::Result<AirdropResult> {
     let faucet_base = parse_faucet_base_url(&faucet_url)?;
     let challenge_url = faucet_base.join("challenge").with_context(|| {
-        format!(
-            "Failed to build challenge URL from faucet base URL {}",
-            faucet_base
-        )
+        format!("Failed to build challenge URL from faucet base URL {faucet_base}")
     })?;
-    let claim_url = faucet_base.join("claim").with_context(|| {
-        format!(
-            "Failed to build claim URL from faucet base URL {}",
-            faucet_base
-        )
-    })?;
+    let claim_url = faucet_base
+        .join("claim")
+        .with_context(|| format!("Failed to build claim URL from faucet base URL {faucet_base}"))?;
 
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
@@ -521,10 +515,13 @@ fn perform_localnet_airdrop(
         let json: serde_json::Value = response
             .json()
             .context("Failed to parse localnet faucet response")?;
-        if json.get("ok").and_then(|v| v.as_bool()).unwrap_or(false)
+        if json
+            .get("ok")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
             || json
                 .get("success")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false)
         {
             let message = format!("Successfully airdropped {amount_ton} TON on localnet");
@@ -867,8 +864,7 @@ fn confirm_wallet_removal(name: &str, yes: bool, json: bool) -> anyhow::Result<b
     }
 
     let confirmed = Confirm::new(&format!(
-        "Remove wallet '{}'? This action cannot be undone.",
-        name
+        "Remove wallet '{name}'? This action cannot be undone."
     ))
     .with_default(false)
     .prompt()?;

@@ -106,6 +106,7 @@ pub trait ViolationMetadata {
     fn rule() -> Rule;
 
     /// Returns the code for this violation
+    #[must_use]
     fn code() -> Option<&'static str> {
         Linter::Tolk.code_for_rule(Self::rule())
     }

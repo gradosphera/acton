@@ -1316,12 +1316,11 @@ fn wait_for_transaction_impl(
 
     let custom_networks = ctx.env.config.custom_networks();
     let api_key = ctx.env.api_key.clone();
-    let api_client = match TonApiClient::new(network, custom_networks, api_key) {
-        Ok(client) => client,
-        Err(_) => {
-            stack.push_bool(false);
-            return Ok(());
-        }
+    let api_client = if let Ok(client) = TonApiClient::new(network, custom_networks, api_key) {
+        client
+    } else {
+        stack.push_bool(false);
+        return Ok(());
     };
 
     let ext_message_hash_bytes = ext_message_hash.as_slice();
@@ -1353,8 +1352,7 @@ fn wait_for_transaction_impl(
                     if !quiet {
                         let hex = base64::engine::general_purpose::STANDARD
                             .decode(tx.transaction_id.hash.clone())
-                            .map(hex::encode)
-                            .unwrap_or_else(|_| tx.transaction_id.hash.clone());
+                            .map_or_else(|_| tx.transaction_id.hash.clone(), hex::encode);
                         println!("Transaction successfully applied!");
 
                         let url = get_transaction_link(ctx, address_str, tx, hex);

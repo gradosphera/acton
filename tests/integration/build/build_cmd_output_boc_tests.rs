@@ -11,9 +11,9 @@ fn artifact_boc_bytes(project_path: &Path, contract_key: &str) -> Vec<u8> {
         .join("build")
         .join(format!("{contract_key}.json"));
     let artifact = fs::read_to_string(&artifact_path)
-        .unwrap_or_else(|e| panic!("read {:?}: {}", artifact_path, e));
-    let json: Value = serde_json::from_str(&artifact)
-        .unwrap_or_else(|e| panic!("parse {:?}: {}", artifact_path, e));
+        .unwrap_or_else(|e| panic!("read {artifact_path:?}: {e}"));
+    let json: Value =
+        serde_json::from_str(&artifact).unwrap_or_else(|e| panic!("parse {artifact_path:?}: {e}"));
     let boc64 = json["code_boc64"]
         .as_str()
         .expect("build artifact must contain `code_boc64` string");
@@ -25,15 +25,14 @@ fn artifact_boc_bytes(project_path: &Path, contract_key: &str) -> Vec<u8> {
 
 fn assert_output_matches_artifact(project_path: &Path, output_path: &str, contract_key: &str) {
     let full_output_path = project_path.join(output_path);
-    let output = fs::read(&full_output_path)
-        .unwrap_or_else(|e| panic!("read {:?}: {}", full_output_path, e));
+    let output =
+        fs::read(&full_output_path).unwrap_or_else(|e| panic!("read {full_output_path:?}: {e}"));
     Boc::decode(output.clone()).expect("output file must contain valid boc");
 
     let expected = artifact_boc_bytes(project_path, contract_key);
     assert_eq!(
         output, expected,
-        "output file `{}` must match build artifact `build/{}.json` code",
-        output_path, contract_key
+        "output file `{output_path}` must match build artifact `build/{contract_key}.json` code"
     );
 }
 
@@ -42,10 +41,10 @@ fn build_writes_boc_output_file_and_matches_artifact() {
     let project = ProjectBuilder::new("build-cmd-boc-output-success")
         .contract_with_output(
             "simple",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "artifacts/simple.boc",
         )
         .build();
@@ -66,10 +65,10 @@ fn build_creates_missing_parent_directories_for_boc_output() {
     let project = ProjectBuilder::new("build-cmd-boc-output-nested")
         .contract_with_output(
             "simple",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "nested/dir/simple.boc",
         )
         .build();
@@ -89,26 +88,26 @@ fn build_writes_boc_output_files_for_multiple_contracts() {
     let project = ProjectBuilder::new("build-cmd-boc-output-multi")
         .contract_with_output(
             "alpha",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "outputs/alpha.boc",
         )
         .contract_with_output(
             "beta",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "outputs/nested/beta.boc",
         )
         .contract(
             "gamma",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 
@@ -133,10 +132,10 @@ fn build_overwrites_existing_boc_output_file() {
     let project = ProjectBuilder::new("build-cmd-boc-output-overwrite")
         .contract_with_output(
             "simple",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "simple.boc",
         )
         .build();
@@ -167,22 +166,22 @@ fn build_overwrites_shared_boc_output_with_last_compiled_contract() {
     let project = ProjectBuilder::new("build-cmd-boc-output-shared-overwrite")
         .contract_with_output(
             "alpha",
-            r#"
+            r"
 fun onInternalMessage(in: InMessage) {
     assert (in.body.isEmpty()) throw 100;
 }
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "shared/output.boc",
         )
         .contract_with_output(
             "beta",
-            r#"
+            r"
 fun onInternalMessage(in: InMessage) {
     assert (in.body.isEmpty()) throw 101;
 }
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "shared/output.boc",
         )
         .build();
@@ -234,30 +233,30 @@ fn build_handles_file_vs_directory_boc_output_collision_with_mixed_results() {
     let project = ProjectBuilder::new("build-cmd-boc-output-file-vs-directory-collision")
         .contract_with_output(
             "flat",
-            r#"
+            r"
 fun onInternalMessage(in: InMessage) {
     assert (in.body.isEmpty()) throw 100;
 }
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "collision_target",
         )
         .contract_with_output(
             "nested",
-            r#"
+            r"
 fun onInternalMessage(in: InMessage) {
     assert (in.body.isEmpty()) throw 101;
 }
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "collision_target/nested.boc",
         )
         .contract_with_output(
             "independent",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "artifacts/independent.boc",
         )
         .build();
@@ -316,26 +315,26 @@ fn build_warns_for_multiple_contracts_sharing_blocked_boc_output_but_writes_othe
     let project = ProjectBuilder::new("build-cmd-boc-output-shared-path-blocked")
         .contract_with_output(
             "alpha",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "blocked_output",
         )
         .contract_with_output(
             "beta",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "blocked_output",
         )
         .contract_with_output(
             "gamma",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "artifacts/gamma.boc",
         )
         .build();
@@ -368,10 +367,10 @@ fn build_warns_but_succeeds_when_boc_output_path_is_directory() {
     let project = ProjectBuilder::new("build-cmd-boc-output-directory-conflict")
         .contract_with_output(
             "simple",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "blocked_output",
         )
         .build();
@@ -393,18 +392,18 @@ fn build_warns_for_dot_directory_output_path_but_writes_other_contract_outputs()
     let project = ProjectBuilder::new("build-cmd-boc-output-dot-directory")
         .contract_with_output(
             "valid",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "artifacts/valid.boc",
         )
         .contract_with_output(
             "invalid",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "./",
         )
         .build();
@@ -421,10 +420,10 @@ fn build_warns_but_succeeds_when_boc_output_parent_is_a_file() {
     let project = ProjectBuilder::new("build-cmd-boc-output-parent-file-conflict")
         .contract_with_output(
             "simple",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
             "blocked_parent/simple.boc",
         )
         .build();
@@ -447,10 +446,10 @@ fn build_rejects_boc_flag() {
     let project = ProjectBuilder::new("build-cmd-boc-flag-rejected")
         .contract(
             "simple",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 

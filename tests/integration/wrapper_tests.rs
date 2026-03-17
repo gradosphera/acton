@@ -826,7 +826,7 @@ fn test_wrapper_generation_with_snake_case_getters() {
     let project = ProjectBuilder::new("wrapper_getters")
         .contract(
             "my_contract",
-            r#"
+            r"
                 contract MyContract {}
 
                 fun onInternalMessage(_in: InMessage) {}
@@ -838,7 +838,7 @@ fn test_wrapper_generation_with_snake_case_getters() {
                 get fun get_total_supply(owner_address: address): int {
                     return 0;
                 }
-            "#,
+            ",
         )
         .build();
 
@@ -1175,7 +1175,7 @@ fn test_generated_wrapper_test_runs_with_contract_local_types() {
 
     fs::write(
         generated_project_path.join("contracts/counter.tolk"),
-        r#"
+        r"
                 struct Storage {
                     counter: uint32
                 }
@@ -1191,7 +1191,7 @@ fn test_generated_wrapper_test_runs_with_contract_local_types() {
 
                 fun onInternalMessage(_: InMessage) {}
                 fun onBouncedMessage(_: InMessageBounced) {}
-            "#,
+            ",
     )
     .expect("Failed to write contract");
 
@@ -1260,7 +1260,7 @@ fn test_wrapper_generation_with_mappings() {
         .mapping("@core", "./libs/core")
         .file(
             "libs/core/types",
-            r#"
+            r"
                 struct (0x00000001) Increment {
                     value: int32
                 }
@@ -1270,7 +1270,7 @@ fn test_wrapper_generation_with_mappings() {
                 }
 
                 type AllowedMessage = Increment | Decrement;
-            "#,
+            ",
         )
         .contract(
             "main",
@@ -1327,7 +1327,7 @@ fn test_wrapper_generation_with_wrappers_mapping() {
         .mapping("wrappers", "tests/wrappers")
         .file(
             "contracts/types",
-            r#"
+            r"
                 struct Storage {
                     counter: int32
                 }
@@ -1337,7 +1337,7 @@ fn test_wrapper_generation_with_wrappers_mapping() {
                 }
 
                 type AllowedMessage = Ping;
-            "#,
+            ",
         )
         .contract(
             "main",
@@ -1392,13 +1392,13 @@ fn test_wrapper_generation_prefers_specific_mapping() {
         .mapping("core_sub", "libs/core")
         .file(
             "libs/core/types",
-            r#"
+            r"
                 struct (0x00000002) Pong {
                     value: int32
                 }
 
                 type AllowedMessage = Pong;
-            "#,
+            ",
         )
         .contract(
             "main",
@@ -1452,7 +1452,7 @@ fn test_wrapper_generation_with_import_mappings() {
         .mapping("wrappers", "tests/wrappers")
         .file(
             "contracts/types",
-            r#"
+            r"
                 struct Storage {
                     counter: int32
                 }
@@ -1462,7 +1462,7 @@ fn test_wrapper_generation_with_import_mappings() {
                 }
 
                 type AllowedMessage = Increment;
-            "#,
+            ",
         )
         .contract(
             "my_contract",

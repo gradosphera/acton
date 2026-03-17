@@ -137,16 +137,17 @@ impl LiteNodeHandle {
             .client
             .get(&url)
             .send()
-            .unwrap_or_else(|e| panic!("Failed GET {}: {}", url, e));
+            .unwrap_or_else(|e| panic!("Failed GET {url}: {e}"));
         let status = response.status();
         let body = response
             .text()
-            .unwrap_or_else(|e| panic!("Failed to read GET {} response body: {}", url, e));
-        if !status.is_success() {
-            panic!("GET {} failed with status {}: {}", url, status, body);
-        }
+            .unwrap_or_else(|e| panic!("Failed to read GET {url} response body: {e}"));
+        assert!(
+            status.is_success(),
+            "GET {url} failed with status {status}: {body}"
+        );
         serde_json::from_str(&body)
-            .unwrap_or_else(|e| panic!("GET {} returned invalid JSON: {}\n{}", url, e, body))
+            .unwrap_or_else(|e| panic!("GET {url} returned invalid JSON: {e}\n{body}"))
     }
 
     pub(crate) fn get_json_with_status(&self, path: &str) -> (u16, Value) {
@@ -155,13 +156,13 @@ impl LiteNodeHandle {
             .client
             .get(&url)
             .send()
-            .unwrap_or_else(|e| panic!("Failed GET {}: {}", url, e));
+            .unwrap_or_else(|e| panic!("Failed GET {url}: {e}"));
         let status = response.status().as_u16();
         let body = response
             .text()
-            .unwrap_or_else(|e| panic!("Failed to read GET {} response body: {}", url, e));
+            .unwrap_or_else(|e| panic!("Failed to read GET {url} response body: {e}"));
         let json = serde_json::from_str(&body)
-            .unwrap_or_else(|e| panic!("GET {} returned invalid JSON: {}\n{}", url, e, body));
+            .unwrap_or_else(|e| panic!("GET {url} returned invalid JSON: {e}\n{body}"));
         (status, json)
     }
 
@@ -172,16 +173,17 @@ impl LiteNodeHandle {
             .post(&url)
             .json(payload)
             .send()
-            .unwrap_or_else(|e| panic!("Failed POST {}: {}", url, e));
+            .unwrap_or_else(|e| panic!("Failed POST {url}: {e}"));
         let status = response.status();
         let body = response
             .text()
-            .unwrap_or_else(|e| panic!("Failed to read POST {} response body: {}", url, e));
-        if !status.is_success() {
-            panic!("POST {} failed with status {}: {}", url, status, body);
-        }
+            .unwrap_or_else(|e| panic!("Failed to read POST {url} response body: {e}"));
+        assert!(
+            status.is_success(),
+            "POST {url} failed with status {status}: {body}"
+        );
         serde_json::from_str(&body)
-            .unwrap_or_else(|e| panic!("POST {} returned invalid JSON: {}\n{}", url, e, body))
+            .unwrap_or_else(|e| panic!("POST {url} returned invalid JSON: {e}\n{body}"))
     }
 
     pub(crate) fn post_json_with_status(&self, path: &str, payload: &Value) -> (u16, Value) {
@@ -191,13 +193,13 @@ impl LiteNodeHandle {
             .post(&url)
             .json(payload)
             .send()
-            .unwrap_or_else(|e| panic!("Failed POST {}: {}", url, e));
+            .unwrap_or_else(|e| panic!("Failed POST {url}: {e}"));
         let status = response.status().as_u16();
         let body = response
             .text()
-            .unwrap_or_else(|e| panic!("Failed to read POST {} response body: {}", url, e));
+            .unwrap_or_else(|e| panic!("Failed to read POST {url} response body: {e}"));
         let json = serde_json::from_str(&body)
-            .unwrap_or_else(|e| panic!("POST {} returned invalid JSON: {}\n{}", url, e, body));
+            .unwrap_or_else(|e| panic!("POST {url} returned invalid JSON: {e}\n{body}"));
         (status, json)
     }
 
@@ -216,12 +218,9 @@ impl LiteNodeHandle {
             if let Some(status) = self
                 .child_mut()
                 .try_wait()
-                .map_err(|e| format!("Failed to poll LiteNode process: {}", e))?
+                .map_err(|e| format!("Failed to poll LiteNode process: {e}"))?
             {
-                return Err(format!(
-                    "LiteNode exited before ready with status {}",
-                    status
-                ));
+                return Err(format!("LiteNode exited before ready with status {status}"));
             }
 
             for url in &probe_urls {
@@ -284,10 +283,7 @@ impl LiteNodeHandle {
     fn terminate_and_collect_output(&mut self) -> String {
         self.terminate();
         let (stdout, stderr) = take_child_output(self.child.as_mut());
-        format!(
-            "LiteNode stdout:\n{}\n\nLiteNode stderr:\n{}",
-            stdout, stderr
-        )
+        format!("LiteNode stdout:\n{stdout}\n\nLiteNode stderr:\n{stderr}")
     }
 }
 
@@ -310,7 +306,7 @@ fn normalize_path(path: &str) -> String {
     if path.starts_with('/') {
         path.to_string()
     } else {
-        format!("/{}", path)
+        format!("/{path}")
     }
 }
 

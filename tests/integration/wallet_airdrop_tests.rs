@@ -212,11 +212,11 @@ fn append_litenode_port(project_path: &Path, port: u16) {
     let mut acton_toml =
         fs::read_to_string(&acton_toml_path).expect("Failed to read generated Acton.toml");
     acton_toml.push_str(&format!(
-        r#"
+        r"
 
 [litenode]
 port = {port}
-"#
+"
     ));
     fs::write(&acton_toml_path, acton_toml).expect("Failed to write Acton.toml with litenode port");
 }
@@ -460,7 +460,7 @@ fn test_wallet_airdrop_json_success_without_message_uses_default() {
             method: "POST",
             path: "/faucet/claim",
             status: 200,
-            body: r#"{}"#,
+            body: r"{}",
         },
     ]);
 

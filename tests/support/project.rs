@@ -527,7 +527,7 @@ impl ProjectBuilder {
     /// ```
     pub(crate) fn test_file_from_path(mut self, name: &str, path: &str) -> Self {
         let code = fs::read_to_string(path)
-            .unwrap_or_else(|e| panic!("Failed to read test file from {}: {}", path, e));
+            .unwrap_or_else(|e| panic!("Failed to read test file from {path}: {e}"));
         self.tests.push((name.to_string(), code));
         self
     }
@@ -540,7 +540,7 @@ impl ProjectBuilder {
     /// ```
     pub(crate) fn contract_from_path(mut self, name: &str, path: &str) -> Self {
         let code = fs::read_to_string(path)
-            .unwrap_or_else(|e| panic!("Failed to read contract file from {}: {}", path, e));
+            .unwrap_or_else(|e| panic!("Failed to read contract file from {path}: {e}"));
         self.contracts.push(ContractDef {
             name: name.to_string(),
             code: ContractSource::Tolk(code),
@@ -559,7 +559,7 @@ impl ProjectBuilder {
     /// ```
     pub(crate) fn file_from_path(mut self, dest_path: &str, src_path: &str) -> Self {
         let code = fs::read_to_string(src_path)
-            .unwrap_or_else(|e| panic!("Failed to read file from {}: {}", src_path, e));
+            .unwrap_or_else(|e| panic!("Failed to read file from {src_path}: {e}"));
         self.files.push((dest_path.to_string(), code));
         self
     }

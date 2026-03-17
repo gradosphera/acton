@@ -119,10 +119,7 @@ fn resolve_api_token(api_token: Option<&str>) -> Result<String> {
         return Ok(api_token);
     }
 
-    bail!(
-        "Ubicloud API token is required. Pass --api-token or set {}",
-        DEFAULT_API_TOKEN_ENV
-    );
+    bail!("Ubicloud API token is required. Pass --api-token or set {DEFAULT_API_TOKEN_ENV}");
 }
 
 fn print_prune_plan(
@@ -134,14 +131,8 @@ fn print_prune_plan(
     to_delete: &[crate::modules::ubicloud::GithubCacheEntry],
     to_keep: &[crate::modules::ubicloud::GithubCacheEntry],
 ) {
-    println!(
-        "Prune plan for {}/{} in project `{}`",
-        installation, repository, project
-    );
-    println!(
-        "Keeping the last {} cache entries from the current Ubicloud API response order.",
-        keep
-    );
+    println!("Prune plan for {installation}/{repository} in project `{project}`");
+    println!("Keeping the last {keep} cache entries from the current Ubicloud API response order.");
 
     println!();
     print_entries_table("Cache entries to keep", to_keep);

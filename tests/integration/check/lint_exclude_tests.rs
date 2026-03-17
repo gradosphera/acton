@@ -2,23 +2,23 @@ use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use function_name::named;
 
-const UNUSED_VARIABLE_CONTRACT: &str = r#"
+const UNUSED_VARIABLE_CONTRACT: &str = r"
             fun main() {
                 val x = 1;
             }
-        "#;
+        ";
 
-const HELPER_WITH_UNUSED_VARIABLE: &str = r#"
+const HELPER_WITH_UNUSED_VARIABLE: &str = r"
             fun dangerous() {
                 val helper_unused = 1;
             }
-        "#;
+        ";
 
-const BROKEN_HELPER: &str = r#"
+const BROKEN_HELPER: &str = r"
             fun broken(value: int): int {
                 return value +
             }
-        "#;
+        ";
 
 #[test]
 #[named]
