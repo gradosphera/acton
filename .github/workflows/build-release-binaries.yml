@@ -25,7 +25,7 @@ jobs:
             os: linux
             arch: aarch64
     env:
-      TARGET_NAME: ${{ matrix.os }}-${{ matrix.arch }}
+      TARGET_NAME: ${{ matrix.os }}-unknown-${{ matrix.arch }}-gnu
 
     permissions:
       contents: read
@@ -44,7 +44,7 @@ jobs:
           lookup-only: true
 
       - name: Install Rust
-        run: rustup toolchain install
+        run: rustup target add "${TARGET_NAME}"
 
       - name: Installing additional Rust components
         uses: taiki-e/install-action@d6e286fa45544157a02d45a43742857ebbc25d12 # v2.68.16
@@ -81,7 +81,7 @@ jobs:
           CXX: clang++-16
         run: |
           just build-ui
-          cargo build --profile release-size --bin acton
+          cargo build --profile release-size --target "${TARGET_NAME}" --bin acton
 
       - name: Test acton binary
         run: |
@@ -118,13 +118,13 @@ jobs:
       matrix:
         include:
           - runner: macos-15-intel
-            os: macos
+            os: apple-darwin
             arch: x86_64
           - runner: macos-15
-            os: macos
+            os: apple-darwin
             arch: aarch64
     env:
-      TARGET_NAME: ${{ matrix.os }}-${{ matrix.arch }}
+      TARGET_NAME: ${{ matrix.arch }}-${{ matrix.os }}
 
     permissions:
       contents: read
@@ -143,7 +143,7 @@ jobs:
           lookup-only: true
 
       - name: Install Rust
-        run: rustup toolchain install
+        run: rustup target add "${TARGET_NAME}"
 
       - name: Installing additional Rust components
         uses: taiki-e/install-action@d6e286fa45544157a02d45a43742857ebbc25d12 # v2.68.16
@@ -170,7 +170,7 @@ jobs:
       - name: Build acton binary
         run: |
           just build-ui
-          cargo build --profile release-size --bin acton
+          cargo build --profile release-size --target "${TARGET_NAME} --bin acton
 
       - name: Test acton binary
         run: |
