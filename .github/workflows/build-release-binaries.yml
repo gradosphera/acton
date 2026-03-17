@@ -111,6 +111,7 @@ jobs:
           if-no-files-found: error
 
   build-macos:
+    if: false # after moving to cargo-dist, we'll return
     name: Build macOS (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     strategy:
