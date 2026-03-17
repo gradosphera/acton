@@ -81,6 +81,7 @@ jobs:
 
       - name: Build acton binary
         env:
+          ACTON_RELEASE_CHANNEL: trunk
           CC: clang-16
           CXX: clang++-16
         run: |
