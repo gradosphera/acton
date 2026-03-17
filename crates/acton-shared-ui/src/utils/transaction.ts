@@ -69,6 +69,8 @@ export function processTransactions(transactions: BackendTransaction[]): Transac
       shardAccountBefore: tx.shard_account_before,
       shardAccountAfter: tx.shard_account,
       parsedBody: undefined,
+      parsedStorageBefore: undefined,
+      parsedStorageAfter: undefined,
       children: [],
       parent: undefined,
     }

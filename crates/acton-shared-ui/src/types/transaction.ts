@@ -7,6 +7,11 @@ export interface ParsedTransactionBody {
   readonly value: ParsedValue
 }
 
+export interface ParsedContractStorage {
+  readonly name: string
+  readonly value: ParsedValue
+}
+
 export interface ParsedValueObjectEntry {
   readonly key: string
   readonly value: ParsedValue
@@ -61,6 +66,8 @@ export interface TransactionInfo {
   readonly shardAccountBefore: string
   readonly shardAccountAfter: string
   parsedBody: ParsedTransactionBody | undefined
+  parsedStorageBefore: ParsedContractStorage | undefined
+  parsedStorageAfter: ParsedContractStorage | undefined
   parent: TransactionInfo | undefined
   children: readonly TransactionInfo[]
 }

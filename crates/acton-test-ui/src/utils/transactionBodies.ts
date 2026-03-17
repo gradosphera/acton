@@ -1,6 +1,7 @@
-import {Address, Cell, Dictionary, Slice} from "@ton/core"
+import {Address, Builder, Cell, Dictionary, loadShardAccount, Slice} from "@ton/core"
 import type {
   BackendContractInfo,
+  ParsedContractStorage,
   ParsedTransactionBody,
   ParsedValue,
   TransactionInfo,
@@ -148,6 +149,25 @@ const isCellWrapperObject = (value: Record<string, unknown>): value is {ref: unk
   )
 }
 
+const HEX_PREVIEW_HEAD_LENGTH = 24
+const HEX_PREVIEW_TAIL_LENGTH = 8
+
+const formatHexPreview = (hex: string): string => {
+  if (hex.length <= HEX_PREVIEW_HEAD_LENGTH + HEX_PREVIEW_TAIL_LENGTH) {
+    return `0x${hex}`
+  }
+
+  return `0x${hex.slice(0, HEX_PREVIEW_HEAD_LENGTH)}…${hex.slice(-HEX_PREVIEW_TAIL_LENGTH)}`
+}
+
+const formatSerializedCellPreview = (
+  typeName: "Cell" | "Slice" | "Builder",
+  cell: Cell,
+): string => {
+  const hex = cell.toBoc({idx: false, crc32: false}).toString("hex")
+  return `${typeName}(${formatHexPreview(hex)})`
+}
+
 const toParsedValue = (value: unknown): ParsedValue => {
   if (value === null) {
     return {kind: "null"}
@@ -169,8 +189,16 @@ const toParsedValue = (value: unknown): ParsedValue => {
     return {kind: "address", value: value.toString()}
   }
 
-  if (value instanceof Cell || value instanceof Slice) {
-    return {kind: "scalar", value: value.toString()}
+  if (value instanceof Cell) {
+    return {kind: "scalar", value: formatSerializedCellPreview("Cell", value)}
+  }
+
+  if (value instanceof Slice) {
+    return {kind: "scalar", value: formatSerializedCellPreview("Slice", value.asCell())}
+  }
+
+  if (value instanceof Builder) {
+    return {kind: "scalar", value: formatSerializedCellPreview("Builder", value.asCell())}
   }
 
   if (value instanceof Dictionary) {
@@ -268,6 +296,64 @@ const tryDecodeWithAbi = (
   return undefined
 }
 
+const getStorageCandidates = (compilerAbi: ContractABI): readonly Ty[] => {
+  const candidates = [compilerAbi.storage.storageTy, compilerAbi.storage.storageAtDeploymentTy]
+    .filter((ty): ty is Ty => ty !== undefined && ty.kind !== "nullLiteral")
+    .map(ty => [getBodyTypeKey(ty), ty] as const)
+
+  return [...new Map(candidates).values()]
+}
+
+const getStorageDataSlice = (shardAccountBase64: string): Slice | undefined => {
+  try {
+    const shard = loadShardAccount(Cell.fromBase64(shardAccountBase64).beginParse())
+    const state = shard.account?.storage.state
+    if (state?.type !== "active" || !state.state.data) {
+      return undefined
+    }
+
+    return state.state.data.beginParse()
+  } catch {
+    return undefined
+  }
+}
+
+const tryDecodeStorageWithAbi = (
+  shardAccountBase64: string,
+  compilerAbi: ContractABI,
+): ParsedContractStorage | undefined => {
+  const baseSlice = getStorageDataSlice(shardAccountBase64)
+  if (!baseSlice) {
+    return undefined
+  }
+
+  const candidates = getStorageCandidates(compilerAbi)
+  if (candidates.length === 0) {
+    return undefined
+  }
+
+  const ctx = new DynamicCtx(compilerAbi)
+
+  for (const candidate of candidates) {
+    const parser = baseSlice.clone()
+    try {
+      const decoded: unknown = unpackFromSliceDynamic(ctx, candidate, parser) as unknown
+      if (parser.remainingBits !== 0 || parser.remainingRefs !== 0) {
+        continue
+      }
+
+      return {
+        name: getBodyTypeName(candidate),
+        value: toParsedValue(decoded),
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return undefined
+}
+
 export const applyParsedBodies = (
   transactions: TransactionInfo[],
   backendContracts: Record<string, BackendContractInfo>,
@@ -278,12 +364,16 @@ export const applyParsedBodies = (
 
   for (const tx of transactions) {
     tx.parsedBody = undefined
+    tx.parsedStorageBefore = undefined
+    tx.parsedStorageAfter = undefined
 
     const targetAbi = tx.contractName
       ? getCompilerAbi(backendContracts[tx.contractName])
       : undefined
     if (targetAbi) {
       tx.parsedBody = tryDecodeWithAbi(tx, targetAbi)
+      tx.parsedStorageBefore = tryDecodeStorageWithAbi(tx.shardAccountBefore, targetAbi)
+      tx.parsedStorageAfter = tryDecodeStorageWithAbi(tx.shardAccountAfter, targetAbi)
       if (tx.parsedBody) {
         continue
       }
