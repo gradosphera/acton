@@ -12,7 +12,7 @@ use crate::rules::ast::{
     asm_function_missing_safety_comment, field_init_can_be_folded, import_path_can_use_mappings,
     message_entity_naming, method_can_be_static, mutable_parameter_can_be_immutable,
     mutable_variable_can_be_immutable, pure_function_call_unused, reserve_mode_literal,
-    send_mode_literal, unused_import, unused_variable, used_ignored_identifier,
+    send_mode_literal, unused_expression, unused_import, unused_variable, used_ignored_identifier,
     write_only_variable,
 };
 use acton_config::config::{LintEntry, LintLevel};
@@ -475,6 +475,11 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
 
     fn walk_expr_stmt(&mut self, node: &ExprStmt<'file>) -> Self::Result {
         if let Some(expr) = node.expr() {
+            run_rule!(
+                self.checker,
+                Rule::UnusedExpression,
+                unused_expression::check_expr_stmt(self.checker, self.file_id, &expr)
+            );
             if let Expr::Call(call) = &expr {
                 run_rule!(
                     self.checker,

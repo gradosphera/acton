@@ -74,6 +74,32 @@
       "name": "used-ignored-identifier",
       "severity": "warning",
       "source": "tolk"
+    },
+    {
+      "annotations": [
+        {
+          "is_primary": true,
+          "message": "expression result is ignored",
+          "range": {
+            "end": {
+              "character": 22,
+              "line": 3
+            },
+            "start": {
+              "character": 16,
+              "line": 3
+            }
+          }
+        }
+      ],
+      "code": "E032",
+      "file": "[ROOT]/contracts/main.tolk",
+      "fixes": [],
+      "help": "remove the expression or replace it with an assignment / mutation if you meant to update state",
+      "message": "unused expression has no effect",
+      "name": "unused-expression",
+      "severity": "warning",
+      "source": "tolk"
     }
   ],
   "success": true

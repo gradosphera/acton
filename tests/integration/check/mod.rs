@@ -39,6 +39,7 @@ mod send_mode_literal_tests;
 mod several_not_null_assertions_tests;
 mod type_inference_regressions_tests;
 mod unauthorized_access_tests;
+mod unused_expression_tests;
 mod unused_import_tests;
 mod unused_variable_tests;
 mod used_ignored_identifier_tests;
