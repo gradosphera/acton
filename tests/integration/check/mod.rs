@@ -25,6 +25,7 @@ mod lint_output_sarif_tests;
 mod lint_rules_config_tests;
 mod message_entity_naming_tests;
 mod method_can_be_static_tests;
+mod missing_contract_header_tests;
 mod mutable_parameter_can_be_immutable_tests;
 mod mutable_variable_can_be_immutable_tests;
 mod name_case_checker_tests;

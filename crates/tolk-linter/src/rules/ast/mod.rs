@@ -13,6 +13,7 @@ pub mod import_path_can_use_mappings;
 pub mod incoming_messages_duplicate_opcode;
 pub mod message_entity_naming;
 pub mod method_can_be_static;
+pub mod missing_contract_header;
 pub mod mode_literal_helpers;
 pub mod mutable_parameter_can_be_immutable;
 pub mod mutable_variable_can_be_immutable;

@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::str::Utf8Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use tolk_syntax::{AstNode, ast};
+use tolk_syntax::{AstNode, CONTRACT_ENTRYPOINTS, HasName, ast};
 use tree_sitter::{Node, Tree};
 
 /// Holds information about a single processed source file.
@@ -45,6 +45,20 @@ impl FileInfo {
 
     pub const fn source(&self) -> &ast::SourceFile {
         &self.source
+    }
+
+    pub fn has_contract_declaration(&self) -> bool {
+        self.source
+            .top_levels()
+            .any(|top_level| matches!(top_level, ast::TopLevel::Contract(_)))
+    }
+
+    pub fn is_contract_entry(&self) -> bool {
+        self.source
+            .functions()
+            .filter_map(|func| func.name())
+            .filter_map(|name| self.text(&name.0).ok())
+            .any(|name| CONTRACT_ENTRYPOINTS.contains(&name))
     }
 
     pub fn line_offsets(&self) -> &[usize] {

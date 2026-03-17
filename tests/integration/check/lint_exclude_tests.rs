@@ -142,6 +142,7 @@ fn check_lint_exclude_does_not_hide_compiler_errors_from_excluded_files() {
             "#,
         )
         .file("contracts/broken_helper", BROKEN_HELPER)
+        .with_lint_level("missing-contract-header", "allow")
         .with_lint_level("explicit-return-type", "allow")
         .with_lint_exclude("contracts/broken_helper.tolk")
         .build();

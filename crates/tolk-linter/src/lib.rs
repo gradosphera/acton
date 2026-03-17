@@ -5,8 +5,8 @@ use crate::ast::{
     acton_import_in_contract, bless_call_missing_safety_comment,
     dangerous_send_mode_missing_safety_comment, deprecated_symbol_use, duplicated_condition,
     enum_cast_missing_safety_comment, explicit_return_type, identical_conditional_branches,
-    incoming_messages_duplicate_opcode, negated_is_type_can_use_not_is, no_bounce_handler,
-    no_global_variables, several_not_null_assertions,
+    incoming_messages_duplicate_opcode, missing_contract_header, negated_is_type_can_use_not_is,
+    no_bounce_handler, no_global_variables, several_not_null_assertions,
 };
 use crate::rules::ast::{
     asm_function_missing_safety_comment, field_init_can_be_folded, import_path_can_use_mappings,
@@ -158,6 +158,13 @@ impl<'a> Checker<'a> {
 
     pub fn project_root(&self) -> Option<&Path> {
         self.project_root.as_deref()
+    }
+
+    pub fn is_contract_root_file(&self, file_id: FileId) -> bool {
+        self.file_db
+            .get_by_id(file_id)
+            .map(|f| f.is_contract_entry())
+            .unwrap_or(false)
     }
 
     pub fn should_run(&self, rule: Rule) -> bool {
@@ -423,6 +430,11 @@ impl<'a, 'b, 'file> Walker<'file> for CheckerWalker<'a, 'b> {
             self.checker,
             Rule::IncomingMessagesDuplicateOpcode,
             incoming_messages_duplicate_opcode::check_file(self.checker, self.file_id)
+        );
+        run_rule!(
+            self.checker,
+            Rule::MissingContractHeader,
+            missing_contract_header::check_file(self.checker, self.file_id)
         );
         run_rule!(
             self.checker,

@@ -9,6 +9,15 @@ use crate::ast::{
 use crate::{AstNodeBytesKind, impl_ast_node};
 use tree_sitter::Node;
 
+pub const CONTRACT_ENTRYPOINTS: &[&str] = &[
+    "onInternalMessage",
+    "onExternalMessage",
+    "onRunTickTock",
+    "onSplitPrepare",
+    "onSplitInstall",
+    "onBouncedMessage",
+];
+
 #[derive(Clone, Copy, Debug)]
 pub enum TopLevel<'tree> {
     TolkRequiredVersion(TolkRequiredVersion<'tree>),
