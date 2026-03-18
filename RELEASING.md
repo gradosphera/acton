@@ -32,6 +32,8 @@ cargo xtask release --version 0.22.0
 - `yq` v4 installed
 - local `master` branch with no uncommitted changes
 - successful GitHub Actions build for the current `master` `HEAD`
+- release notes reviewed in `CHANGELOG.md`
+- no unresolved release-blocking issues for the target version
 
 ## What the release xtask does
 

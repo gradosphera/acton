@@ -8,6 +8,12 @@ that are built and checked with Bun.
 This guide covers local setup, build steps, and contributor workflows used in
 this repository.
 
+## Useful references
+
+- Public project overview: [README.md](README.md)
+- Security reporting policy: [SECURITY.md](SECURITY.md)
+- Maintainer release process: [RELEASING.md](RELEASING.md)
+
 ## Command conventions
 
 - Unless stated otherwise, run commands from the repository root.
@@ -388,9 +394,3 @@ Rules:
 ## AI Policy
 
 Do what you want and how it is convenient for you.
-
-## Additional references
-
-- Task catalog: [`justfile`](justfile)
-- Release process: [`RELEASING.md`](RELEASING.md)
-- Main user docs: https://i582.github.io/acton/docs/welcome
