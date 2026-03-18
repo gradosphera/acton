@@ -20,7 +20,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Acton
-        uses: i582/setup-acton@master
+        uses: ton-blockchain/setup-acton@master
 
       - name: Build
         run: acton build

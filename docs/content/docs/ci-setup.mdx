@@ -14,7 +14,7 @@ Acton offers an easy-to-use GitHub action for configuring Acton:
 
 ```yaml
 - name: Setup Acton
-  uses: i582/setup-acton@master
+  uses: ton-blockchain/setup-acton@master
 ```
 
 `setup-acton` downloads a release binary, adds it to `PATH`, and exposes `acton-path` output.
@@ -40,7 +40,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Acton
-        uses: i582/setup-acton@master
+        uses: ton-blockchain/setup-acton@master
 
       - name: Verify version
         run: acton --version
@@ -102,7 +102,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Acton
-        uses: i582/setup-acton@master
+        uses: ton-blockchain/setup-acton@master
 
       - name: Verify version
         run: acton --version
