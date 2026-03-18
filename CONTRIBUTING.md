@@ -319,7 +319,7 @@ Use this as a quick local matrix before pushing:
 | Standard library / docgen inputs (`lib/`, `crates/tolkc/assets/tolk-stdlib`, linter rule metadata) | `just check` + `acton docgen` and commit generated docs                                                    |
 | Docs site content/config (`docs/`)                                                                 | `cd docs && yarn install --immutable && yarn build`                                                        |
 | Tree-sitter grammar (`crates/tree-sitter-tolk`)                                                    | `just check` + `just test-tree-sitter` (and `just update-test-tree-sitter` when needed)                    |
-| Release preparation                                                                                | Ensure versions are synced in `Acton.toml`, `Cargo.toml` (`workspace.package.version`), and `package.json` |
+| Release preparation (maintainers)                                                                  | Follow [RELEASING.md](RELEASING.md)                                                                        |
 
 ## PR requirements
 
@@ -349,37 +349,6 @@ just precommit
 ```
 
 `just precommit` additionally runs UI formatting/lint and full build steps.
-
-## Release workflow (maintainers)
-
-Use the release `xtask` instead of manual version bump/tag/release steps:
-
-```bash
-cargo xtask release --version <major.minor.patch>
-```
-
-Example:
-
-```bash
-cargo xtask release --version 0.22.0
-```
-
-Prerequisites:
-
-- `gh` CLI installed and authenticated (`gh auth status`)
-- `yq` v4 installed (the `xtask` uses it to update `package.json`)
-- local `master` branch with no uncommitted changes
-
-What `cargo xtask release` does:
-
-- validates version format (`X.Y.Z`) and that `vX.Y.Z` does not exist on `origin`
-- fetches `origin/master` and checks local `master` is up to date
-- verifies GitHub Actions runs for current `master` `HEAD` are all successful
-- bumps versions in `Acton.toml`, `Cargo.toml`, and `package.json`
-- runs `cargo update --workspace` to refresh `Cargo.lock`
-- creates commit `chore(acton): bump to version \`X.Y.Z\`` and tag `vX.Y.Z`
-- asks for explicit confirmation (`yes`) before pushing `master` and the tag
-- pushes to `origin` and creates GitHub Release with generated notes
 
 ## Commit message style
 
@@ -423,4 +392,5 @@ Do what you want and how it is convenient for you.
 ## Additional references
 
 - Task catalog: [`justfile`](justfile)
+- Release process: [`RELEASING.md`](RELEASING.md)
 - Main user docs: https://i582.github.io/acton/docs/welcome
