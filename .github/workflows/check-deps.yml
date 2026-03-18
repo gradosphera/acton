@@ -27,7 +27,7 @@ jobs:
     name: Check Dependencies
     strategy:
       matrix:
-        os: [ ubicloud-standard-2-ubuntu-2204 ]
+        os: [ ubuntu-22.04 ]
     runs-on: ${{ matrix.os }}
 
     permissions:

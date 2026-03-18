@@ -25,7 +25,7 @@ jobs:
     strategy: &runner_strategy
       matrix:
         include:
-          - runner: ubicloud-standard-4-ubuntu-2204
+          - runner: ubuntu-22.04
             os: linux
             arch: x86_64
     runs-on: ${{ matrix.runner }}
@@ -178,7 +178,7 @@ jobs:
   create-trunk-release:
     name: Create Trunk Release
     needs: [ build ]
-    runs-on: ubicloud-standard-2
+    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master' && github.repository == 'ton-blockchain/acton'
 
     permissions:
