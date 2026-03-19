@@ -171,7 +171,6 @@ jobs:
           if-no-files-found: error
 
   build-objs-macos:
-    if: false
     name: Prepare TON objects (${{ matrix.os }}-${{ matrix.arch }})
     needs: [ prepare ]
     strategy:
