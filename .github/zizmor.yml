@@ -11,7 +11,7 @@ rules:
         actions/labeler: ref-pin
         actions/setup-node: ref-pin
         actions/upload-artifact: ref-pin
-        i582/setup-acton: ref-pin
+        ton-blockchain/setup-acton: ref-pin
         zizmorcore/zizmor-action: ref-pin
   dangerous-triggers:
     ignore:
