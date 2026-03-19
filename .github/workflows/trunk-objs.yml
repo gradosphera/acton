@@ -171,6 +171,7 @@ jobs:
           if-no-files-found: error
 
   build-objs-macos:
+    if: false
     name: Prepare TON objects (${{ matrix.os }}-${{ matrix.arch }})
     needs: [ prepare ]
     strategy:
@@ -276,7 +277,7 @@ jobs:
 
   create-trunk-objs-release:
     name: Create Trunk Objs Release
-    needs: [ prepare, build-objs-linux, build-objs-macos ]
+    needs: [ prepare, build-objs-linux ]
     runs-on: ubicloud-standard-2
     if: github.ref == 'refs/heads/master'
 
