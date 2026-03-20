@@ -290,7 +290,7 @@ fn resolve_wrapper_path(
                 .join(&file_name);
         }
 
-        return project_root.join(&file_name);
+        return project_root.join("wrappers").join(&file_name);
     }
 
     if let Some(configured_tolk_output_dir) = non_empty_path(configured_tolk_output_dir) {

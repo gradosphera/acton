@@ -1313,12 +1313,12 @@ fn example_wrapper_usage() -> StyledStr {
                 "acton wrapper minter --test",
             ),
             (
-                "Generate a TypeScript wrapper for minter",
+                "Generate a TypeScript wrapper for minter into wrappers/",
                 "acton wrapper minter --ts",
             ),
             (
-                "Generate a TypeScript wrapper for minter into wrappers/",
-                "acton wrapper minter --ts --output-dir wrappers",
+                "Generate a TypeScript wrapper for minter into generated/",
+                "acton wrapper minter --ts --output-dir generated",
             ),
         ],
         "https://i582.github.io/acton/docs/test-runner/generating-wrappers",

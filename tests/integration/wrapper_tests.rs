@@ -170,7 +170,7 @@ fn test_wrapper_generation_test_output_dir_flag() {
 
 #[cfg(unix)]
 #[test]
-fn test_wrapper_generation_typescript_defaults_to_project_root() {
+fn test_wrapper_generation_typescript_defaults_to_wrappers_dir() {
     let project = make_typescript_wrapper_project("wrapper_typescript");
     let (capture_path, path_env) = setup_fake_typescript_generator(project.path());
 
@@ -188,10 +188,10 @@ fn test_wrapper_generation_typescript_defaults_to_project_root() {
 
     output
         .assert_contains("Generated")
-        .assert_contains("MyContract.ts");
+        .assert_contains("wrappers/MyContract.ts");
 
     assert_eq!(
-        fs::read_to_string(project.path().join("MyContract.ts")).unwrap(),
+        fs::read_to_string(project.path().join("wrappers/MyContract.ts")).unwrap(),
         "// generated ts wrapper\nexport const marker = \"ts\";\n"
     );
 
