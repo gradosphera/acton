@@ -14,7 +14,7 @@ dependencies = [
 
 [[package]]
 name = "acton"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "acton-config",
  "anyhow",
@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "acton-config"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "clap",
@@ -1102,7 +1102,7 @@ dependencies = [
 
 [[package]]
 name = "dap-client"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
@@ -1577,7 +1577,7 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
 name = "fift-syntax"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "ton-syntax",
@@ -3527,7 +3527,7 @@ dependencies = [
 
 [[package]]
 name = "retrace"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "base64",
@@ -4297,7 +4297,7 @@ dependencies = [
 
 [[package]]
 name = "tasm"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "num-bigint",
@@ -4311,7 +4311,7 @@ dependencies = [
 
 [[package]]
 name = "tasm-syntax"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "ton-syntax",
@@ -4513,7 +4513,7 @@ dependencies = [
 
 [[package]]
 name = "tlb-syntax"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "ton-syntax",
@@ -4623,7 +4623,7 @@ dependencies = [
 
 [[package]]
 name = "tolk-analysis"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "bitflags 2.9.4",
  "rustc-hash 2.1.1",
@@ -4635,7 +4635,7 @@ dependencies = [
 
 [[package]]
 name = "tolk-dataflow"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "rustc-hash 2.1.1",
  "tolk-resolver",
@@ -4644,7 +4644,7 @@ dependencies = [
 
 [[package]]
 name = "tolk-linter"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "acton-config",
  "dunce",
@@ -4664,7 +4664,7 @@ dependencies = [
 
 [[package]]
 name = "tolk-macros"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "heck 0.5.0",
  "itertools",
@@ -4675,7 +4675,7 @@ dependencies = [
 
 [[package]]
 name = "tolk-resolver"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "dashmap 7.0.0-rc2",
@@ -4691,7 +4691,7 @@ dependencies = [
 
 [[package]]
 name = "tolk-syntax"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "ton-syntax",
@@ -4701,7 +4701,7 @@ dependencies = [
 
 [[package]]
 name = "tolk-ty"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "dunce",
  "log",
@@ -4714,7 +4714,7 @@ dependencies = [
 
 [[package]]
 name = "tolkc"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "dunce",
@@ -4728,7 +4728,7 @@ dependencies = [
 
 [[package]]
 name = "tolkfmt"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -4756,7 +4756,7 @@ dependencies = [
 
 [[package]]
 name = "toml-syntax"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "ton-syntax",
@@ -4885,7 +4885,7 @@ dependencies = [
 
 [[package]]
 name = "ton-abi"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "crc",
@@ -4902,7 +4902,7 @@ dependencies = [
 
 [[package]]
 name = "ton-api"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "log",
@@ -4917,7 +4917,7 @@ dependencies = [
 
 [[package]]
 name = "ton-emulator"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "acton-config",
  "anyhow",
@@ -4932,7 +4932,7 @@ dependencies = [
 
 [[package]]
 name = "ton-executor"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "hex",
@@ -4948,7 +4948,7 @@ dependencies = [
 
 [[package]]
 name = "ton-indexer"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "base64",
@@ -4963,7 +4963,7 @@ dependencies = [
 
 [[package]]
 name = "ton-json-schema"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "jsonptr",
@@ -4975,7 +4975,7 @@ dependencies = [
 
 [[package]]
 name = "ton-litenode"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "acton-config",
  "anyhow",
@@ -5000,7 +5000,7 @@ dependencies = [
 
 [[package]]
 name = "ton-ls"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "dashmap 7.0.0-rc2",
@@ -5028,7 +5028,7 @@ dependencies = [
 
 [[package]]
 name = "ton-networks"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "schemars 0.8.22",
@@ -5037,14 +5037,14 @@ dependencies = [
 
 [[package]]
 name = "ton-objs"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "pkg-config",
 ]
 
 [[package]]
 name = "ton-source-map"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "pathdiff",
@@ -5054,7 +5054,7 @@ dependencies = [
 
 [[package]]
 name = "ton-syntax"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "memchr",
@@ -5383,7 +5383,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tvmffi"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "anyhow",
  "num-bigint",
@@ -5621,7 +5621,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vmlogs"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "thiserror 2.0.18",
  "winnow 0.7.13",
@@ -6176,7 +6176,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.0.21"
 dependencies = [
  "acton-config",
  "anyhow",
