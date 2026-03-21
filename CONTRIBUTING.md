@@ -255,17 +255,19 @@ just build-ui
 
 ## Documentation workflows
 
-Documentation site (Next.js in `docs/`, package manager: Yarn):
+Documentation site (Next.js in `docs/`, package manager: Yarn via Corepack):
 
 ```bash
+corepack enable
 cd docs
-yarn install --immutable
+yarn install --immutable --check-cache --check-resolutions
 yarn dev
 ```
 
 Build docs:
 
 ```bash
+corepack enable
 cd docs
 yarn build
 ```
@@ -297,7 +299,9 @@ generated documentation changes is required. This includes:
 After doc updates (manual or generated), validate docs build:
 
 ```bash
+corepack enable
 cd docs
+yarn install --immutable --check-cache --check-resolutions
 yarn build
 ```
 
@@ -330,7 +334,7 @@ Use this as a quick local matrix before pushing:
 | Rust-only code                                                                                     | `just check`                                                                                               |
 | UI code (`crates/acton-*-ui`, root `package.json`)                                                 | `just check` + `just build-ui` + `just check-ui`                                                           |
 | Standard library / docgen inputs (`lib/`, `crates/tolkc/assets/tolk-stdlib`, linter rule metadata) | `just check` + `acton docgen` and commit generated docs                                                    |
-| Docs site content/config (`docs/`)                                                                 | `cd docs && yarn install --immutable && yarn build`                                                        |
+| Docs site content/config (`docs/`)                                                                 | `corepack enable && cd docs && yarn install --immutable --check-cache --check-resolutions && yarn build`   |
 | Tree-sitter grammar (`crates/tree-sitter-*`)                                                       | `just check` + `just test-tree-sitter-all` (and `just update-test-tree-sitter` when Tolk snapshots change) |
 | Release preparation (maintainers)                                                                  | Follow [RELEASING.md](RELEASING.md)                                                                        |
 
