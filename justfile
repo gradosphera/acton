@@ -68,9 +68,12 @@ check-docgen:
 check-schema:
     cargo run -p xtask -- schema --check
 
+check-deny:
+    cargo deny check
+
 check-ci: fmt-check check-docgen check-deps clippy typos check-schema
 
-check: check-ci check-schema test
+check: check-ci check-deny check-schema test
 
 coverage-setup:
     cargo install cargo-llvm-cov
