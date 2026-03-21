@@ -1,4 +1,4 @@
-use crate::common::{acton_exe, assert_ui};
+use crate::common::{acton_exe, acton_path_env, assert_ui};
 use crate::support::assertions::TestOutput;
 use crate::support::tempdir::create_tmp_dir;
 use acton_config::color::ColorMode;
@@ -1014,7 +1014,7 @@ pub(crate) struct Project {
 impl Project {
     #[allow(dead_code)]
     pub(crate) fn acton(&self) -> ActonCommand {
-        let cmd = ProcessCommandBuilder::new(acton_exe());
+        let cmd = ProcessCommandBuilder::new(acton_exe()).env("PATH", acton_path_env());
         ActonCommand {
             cmd,
             project: Arc::new(ProjectRef {
