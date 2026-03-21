@@ -15,6 +15,7 @@ const GITHUB_REPOSITORY_URL: &str = "https://github.com/ton-blockchain/acton";
 const ACTON_TOML_PATH: &str = "Acton.toml";
 const CARGO_TOML_PATH: &str = "Cargo.toml";
 const CARGO_LOCK_PATH: &str = "Cargo.lock";
+const CHANGELOG_PATH: &str = "CHANGELOG.md";
 const PACKAGE_JSON_PATH: &str = "package.json";
 
 #[derive(Args)]
@@ -68,6 +69,10 @@ fn release_workflow() -> Workflow<'static, ReleaseContext> {
             WorkflowStep {
                 name: "check release version format",
                 run: check_release_version_format,
+            },
+            WorkflowStep {
+                name: "check changelog has release entry",
+                run: check_changelog_has_release_entry,
             },
             WorkflowStep {
                 name: "current branch is master",
@@ -146,6 +151,25 @@ fn check_release_version_format(context: &ReleaseContext) -> Result<()> {
             "release version `{}` must contain only numeric version parts",
             context.version
         );
+    }
+
+    Ok(())
+}
+
+fn check_changelog_has_release_entry(context: &ReleaseContext) -> Result<()> {
+    let changelog_contents = fs::read_to_string(CHANGELOG_PATH)
+        .with_context(|| format!("failed to read {CHANGELOG_PATH}"))?;
+
+    ensure_changelog_has_release_entry(&changelog_contents, &context.version)
+        .with_context(|| format!("failed to validate {CHANGELOG_PATH}"))
+}
+
+fn ensure_changelog_has_release_entry(changelog_contents: &str, version: &str) -> Result<()> {
+    let changelog =
+        parse_changelog::parse(changelog_contents).context("failed to parse changelog")?;
+
+    if changelog.get(version).is_none() {
+        bail!("CHANGELOG.md does not contain a release entry for version `{version}`");
     }
 
     Ok(())
@@ -315,4 +339,41 @@ fn run_cargo_lock_update() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_changelog_has_release_entry;
+
+    const CHANGELOG: &str = r#"# Changelog
+
+All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+### Added
+
+- No unreleased entries yet.
+
+## [0.0.21] - 21.03.2026
+
+### Added
+
+- Added changelog validation to release automation.
+"#;
+
+    #[test]
+    fn accepts_existing_release_entry() {
+        ensure_changelog_has_release_entry(CHANGELOG, "0.0.21").unwrap();
+    }
+
+    #[test]
+    fn rejects_missing_release_entry() {
+        let error = ensure_changelog_has_release_entry(CHANGELOG, "0.0.22").unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "CHANGELOG.md does not contain a release entry for version `0.0.22`"
+        );
+    }
 }

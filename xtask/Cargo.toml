@@ -25,3 +25,4 @@ toml_edit = { workspace = true }
 owo-colors = { workspace = true }
 reqwest = { workspace = true }
 urlencoding = { workspace = true }
+parse-changelog = { workspace = true }

@@ -40,6 +40,7 @@ cargo xtask release --version 0.22.0
 `cargo xtask release`:
 
 - validates that the version is in `X.Y.Z` format
+- verifies that `CHANGELOG.md` contains a section for `X.Y.Z`
 - checks that the current branch is `master`
 - checks that `origin` does not already have tag `vX.Y.Z`
 - verifies the worktree is clean
