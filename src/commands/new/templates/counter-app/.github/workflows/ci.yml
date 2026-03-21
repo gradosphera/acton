@@ -26,7 +26,7 @@ jobs:
           cache: npm
 
       - name: Setup Acton
-        uses: i582/setup-acton@master
+        uses: i582/setup-acton@82b1fb8d8f60584dd552f4014b3cd2de2e599dfb
 
       - name: Install Node dependencies
         run: npm ci
