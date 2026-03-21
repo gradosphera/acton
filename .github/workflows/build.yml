@@ -214,7 +214,7 @@ jobs:
             os: apple-darwin
             arch: aarch64
     runs-on: ${{ matrix.runner }}
-    if: true
+    if: github.ref == 'refs/heads/master'
     env:
       OBJS_NAME: ton-objs-macos-${{ matrix.arch }}
       TARGET_NAME: ${{ matrix.arch }}-${{ matrix.os }}
