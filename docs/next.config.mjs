@@ -17,7 +17,7 @@ const config = {
     root: docsRoot,
   },
   basePath: isProd ? `/${repoName}` : "",
-  assetPrefix: isProd ? `https://i582.github.io/${repoName}/` : "",
+  assetPrefix: isProd ? `https://ton-blockchain.github.io/${repoName}/` : "",
 };
 
 export default withMDX(config);

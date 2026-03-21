@@ -27,8 +27,8 @@ version = "0.0.21"
 authors = ["TON Core"]
 edition = "2024"
 rust-version = "1.93.0"
-homepage = "https://i582.github.io/acton"
-documentation = "https://i582.github.io/acton/docs/welcome"
+homepage = "https://ton-blockchain.github.io/acton"
+documentation = "https://ton-blockchain.github.io/acton/docs/welcome"
 repository = "https://github.com/ton-blockchain/acton"
 license = "MIT OR Apache-2.0"
 
