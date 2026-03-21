@@ -25,7 +25,6 @@ jobs:
     env:
       TARGET_NAME: ${{ matrix.target_name }}
       PROJECT_NAME: release-check-${{ matrix.target_name }}
-      PROJECT_DIR: ${{ runner.temp }}/release-check-${{ matrix.target_name }}
 
     permissions:
       contents: read
@@ -67,24 +66,24 @@ jobs:
 
       - name: Build counter project
         shell: bash
-        working-directory: ${{ env.PROJECT_DIR }}
+        working-directory: ${{ runner.temp }}/${{ env.PROJECT_NAME }}
         run: |
           acton build
 
       - name: Test counter project
         shell: bash
-        working-directory: ${{ env.PROJECT_DIR }}
+        working-directory: ${{ runner.temp }}/${{ env.PROJECT_NAME }}
         run: |
           acton test
 
       - name: Check counter project
         shell: bash
-        working-directory: ${{ env.PROJECT_DIR }}
+        working-directory: ${{ runner.temp }}/${{ env.PROJECT_NAME }}
         run: |
           acton check
 
       - name: Format counter project
         shell: bash
-        working-directory: ${{ env.PROJECT_DIR }}
+        working-directory: ${{ runner.temp }}/${{ env.PROJECT_NAME }}
         run: |
           acton fmt
