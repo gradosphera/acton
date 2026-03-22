@@ -48,6 +48,15 @@ fn git_config_set(project_root: &Path, key: &str, value: &str) {
     );
 }
 
+fn git_config_add(project_root: &Path, key: &str, value: &str) {
+    let output = git(project_root, &["config", "--local", "--add", key, value]);
+    assert!(
+        output.status.success(),
+        "git config --add failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 fn git_config_set_file(config_path: &Path, key: &str, value: &str) {
     let output = Command::new("git")
         .args(["config", "--file"])
@@ -153,6 +162,28 @@ fn test_hooks_new_fails_when_githooks_exists() {
         .failure()
         .assert_stderr_snapshot_matches(
             "integration/snapshots/hooks/test_hooks_new_existing_pre_commit.stderr.txt",
+        );
+}
+
+#[test]
+fn test_hooks_new_fails_when_githooks_directory_exists_without_pre_commit() {
+    let project = ProjectBuilder::new("hooks-new-existing-dir")
+        .raw_file(".githooks/post-commit", "#!/bin/sh\n")
+        .build();
+    init_git_repo(project.path());
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .current_dir(project.path())
+        .arg("hooks")
+        .arg("new")
+        .arg("--template")
+        .arg("default")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/hooks/test_hooks_new_existing_githooks_dir.stderr.txt",
         );
 }
 
@@ -322,6 +353,25 @@ fn test_hooks_install_fails_when_githooks_is_missing() {
 }
 
 #[test]
+fn test_hooks_install_fails_without_local_git_directory() {
+    let project = ProjectBuilder::new("hooks-install-missing-local-git")
+        .raw_file(".githooks/pre-commit", "#!/bin/sh\n")
+        .build();
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .current_dir(project.path())
+        .arg("hooks")
+        .arg("install")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/hooks/test_hooks_manage_missing_local_git_dir.stderr.txt",
+        );
+}
+
+#[test]
 fn test_hooks_install_fails_when_local_hooks_are_already_configured() {
     let project = ProjectBuilder::new("hooks-install-existing-local-hooks")
         .raw_file(".githooks/pre-commit", "#!/bin/sh\n")
@@ -339,6 +389,27 @@ fn test_hooks_install_fails_when_local_hooks_are_already_configured() {
         .failure()
         .assert_stderr_snapshot_matches(
             "integration/snapshots/hooks/test_hooks_install_existing_local_hooks.stderr.txt",
+        );
+}
+
+#[test]
+fn test_hooks_install_reports_equivalent_local_hooks_path_as_installed() {
+    let project = ProjectBuilder::new("hooks-install-equivalent-local-hooks")
+        .raw_file(".githooks/pre-commit", "#!/bin/sh\n")
+        .build();
+    init_git_repo(project.path());
+    git_config_set(project.path(), "core.hooksPath", "./.githooks");
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .current_dir(project.path())
+        .arg("hooks")
+        .arg("install")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/hooks/test_hooks_install_existing_equivalent_local_hooks.stderr.txt",
         );
 }
 
@@ -425,6 +496,41 @@ fn test_hooks_status_reports_mismatch() {
 }
 
 #[test]
+fn test_hooks_status_fails_without_local_git_directory() {
+    let project = ProjectBuilder::new("hooks-status-missing-local-git").build();
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .current_dir(project.path())
+        .arg("hooks")
+        .arg("status")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/hooks/test_hooks_manage_missing_local_git_dir.stderr.txt",
+        );
+}
+
+#[test]
+fn test_hooks_status_reports_equivalent_local_hooks_path_as_installed() {
+    let project = ProjectBuilder::new("hooks-status-equivalent-local-hooks")
+        .raw_file(".githooks/pre-commit", "#!/bin/sh\n")
+        .build();
+    init_git_repo(project.path());
+    git_config_set(project.path(), "core.hooksPath", "./.githooks");
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("hooks")
+        .arg("status")
+        .run()
+        .success()
+        .assert_snapshot_matches("integration/snapshots/hooks/test_hooks_status.stdout.txt");
+}
+
+#[test]
 fn test_hooks_status_ignores_global_hooks_path() {
     let project = ProjectBuilder::new("hooks-status-global-only").build();
     init_git_repo(project.path());
@@ -445,6 +551,61 @@ fn test_hooks_status_ignores_global_hooks_path() {
         .success()
         .assert_snapshot_matches(
             "integration/snapshots/hooks/test_hooks_status_not_installed.stdout.txt",
+        );
+}
+
+#[test]
+fn test_hooks_uninstall_succeeds_when_hooks_are_not_installed() {
+    let project = ProjectBuilder::new("hooks-uninstall-not-installed").build();
+    init_git_repo(project.path());
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("hooks")
+        .arg("uninstall")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/hooks/test_hooks_uninstall_not_installed.stdout.txt",
+        );
+
+    assert_eq!(git_config_get(project.path(), "core.hooksPath"), None);
+}
+
+#[test]
+fn test_hooks_uninstall_removes_all_local_hooks_path_values() {
+    let project = ProjectBuilder::new("hooks-uninstall-multiple-values").build();
+    init_git_repo(project.path());
+    git_config_add(project.path(), "core.hooksPath", ".githooks");
+    git_config_add(project.path(), "core.hooksPath", "other-hooks");
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("hooks")
+        .arg("uninstall")
+        .run()
+        .success()
+        .assert_snapshot_matches("integration/snapshots/hooks/test_hooks_uninstall.stdout.txt");
+
+    assert_eq!(git_config_get(project.path(), "core.hooksPath"), None);
+}
+
+#[test]
+fn test_hooks_uninstall_fails_without_local_git_directory() {
+    let project = ProjectBuilder::new("hooks-uninstall-missing-local-git").build();
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .current_dir(project.path())
+        .arg("hooks")
+        .arg("uninstall")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/hooks/test_hooks_manage_missing_local_git_dir.stderr.txt",
         );
 }
 

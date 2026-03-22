@@ -19,6 +19,9 @@ Creates a `.githooks/` scaffold in the resolved project root.
 acton hooks new
 ```
 
+`acton hooks new` only works when the resolved project root already contains a
+local `.git` directory.
+
 If local Git hooks are already configured for the repository, `acton hooks new`
 fails and asks you to run `acton hooks uninstall` first.
 
@@ -70,6 +73,9 @@ Configures the Git repository for the resolved project root to use `.githooks/`:
 acton hooks install
 ```
 
+`acton hooks install` only works when the resolved project root already contains
+a local `.git` directory.
+
 Internally this runs:
 
 ```bash
@@ -85,6 +91,10 @@ Git hooks installed successfully from .githooks
 If `core.hooksPath` is already set locally for this repository, `acton hooks install`
 fails and asks you to run `acton hooks uninstall` first.
 
+Equivalent local paths that resolve to the same hooks directory, such as
+`./.githooks` or an absolute path to the same directory, also count as already
+installed.
+
 If `.githooks/` does not exist yet, `acton hooks install` fails and asks you to
 run `acton hooks new` first.
 
@@ -98,6 +108,9 @@ Reports whether the Git repository for the resolved project root already points
 ```bash
 acton hooks status
 ```
+
+`acton hooks status` only works when the resolved project root already contains
+a local `.git` directory.
 
 Possible outputs:
 
@@ -113,6 +126,8 @@ Git hooks are not installed
 
 `status` checks the repository's local Git config only. Global or system
 `core.hooksPath` values do not count as installed for the current project.
+Equivalent local paths that resolve to the same `.githooks/` directory count as
+installed.
 
 ---
 
@@ -125,16 +140,25 @@ project root:
 acton hooks uninstall
 ```
 
+`acton hooks uninstall` only works when the resolved project root already
+contains a local `.git` directory.
+
 Internally this runs:
 
 ```bash
-git config --local --unset core.hooksPath
+git config --local --unset-all core.hooksPath
 ```
 
 On success, Acton prints:
 
 ```text
 Git hooks uninstalled successfully
+```
+
+If no local `core.hooksPath` is configured, `uninstall` succeeds and prints:
+
+```text
+Git hooks are not installed
 ```
 
 ## Recommended Workflow

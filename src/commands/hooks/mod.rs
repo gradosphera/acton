@@ -1,6 +1,7 @@
 use acton_config::config::project_root as configured_project_root;
 use clap::Subcommand;
 use inquire::Select;
+use path_absolutize::Absolutize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Output;
@@ -11,6 +12,8 @@ const PRE_COMMIT_HOOK_FILE: &str = "pre-commit";
 const DEFAULT_PRE_COMMIT_HOOK: &str = include_str!("templates/.githooks/pre-commit");
 const HOOKS_UNINSTALL_HINT: &str = "Run `acton hooks uninstall` first.";
 const HOOKS_NEW_HINT: &str = "Run `acton hooks new` first.";
+const HOOKS_REPO_REQUIRED_MESSAGE: &str =
+    "Git hooks can only be managed in a project root containing .git. Run `git init` first.";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, clap::ValueEnum)]
 pub enum HooksTemplate {
@@ -74,11 +77,9 @@ pub fn hooks_cmd(command: HooksCommand) -> anyhow::Result<()> {
 }
 
 fn hooks_new_cmd(template: Option<HooksTemplate>) -> anyhow::Result<()> {
-    if !has_local_git_repository() {
-        anyhow::bail!(
-            "Hooks scaffold can only be created in a project root containing .git. Run `git init` first."
-        );
-    }
+    ensure_local_git_repository(
+        "Hooks scaffold can only be created in a project root containing .git. Run `git init` first.",
+    )?;
 
     if let Some(hooks_path) = local_hooks_path()? {
         anyhow::bail!(
@@ -90,6 +91,13 @@ fn hooks_new_cmd(template: Option<HooksTemplate>) -> anyhow::Result<()> {
         anyhow::bail!(
             "Found existing pre-commit hook at {}. Delete it before running `acton hooks new`.",
             pre_commit_path.display()
+        );
+    }
+
+    if hooks_dir().exists() {
+        anyhow::bail!(
+            "Hooks directory {} already exists. Delete it before running `acton hooks new`.",
+            DEFAULT_HOOKS_PATH
         );
     }
 
@@ -133,6 +141,33 @@ fn scaffold_pre_commit_path() -> Option<PathBuf> {
 
 fn has_local_git_repository() -> bool {
     configured_project_root().join(".git").exists()
+}
+
+fn ensure_local_git_repository(message: &'static str) -> anyhow::Result<()> {
+    if has_local_git_repository() {
+        Ok(())
+    } else {
+        anyhow::bail!(message);
+    }
+}
+
+fn resolve_hooks_path(path: &Path) -> anyhow::Result<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        configured_project_root().join(path)
+    };
+
+    if let Ok(canonical_path) = dunce::canonicalize(&absolute) {
+        return Ok(canonical_path);
+    }
+
+    Ok(absolute.absolutize()?.into_owned())
+}
+
+fn hooks_path_matches_default(hooks_path: &str) -> anyhow::Result<bool> {
+    Ok(resolve_hooks_path(Path::new(hooks_path))?
+        == resolve_hooks_path(Path::new(DEFAULT_HOOKS_PATH))?)
 }
 
 fn create_hooks_scaffold(template: HooksTemplate) -> anyhow::Result<()> {
@@ -201,6 +236,8 @@ fn local_hooks_path() -> anyhow::Result<Option<String>> {
 }
 
 fn hooks_install_cmd() -> anyhow::Result<()> {
+    ensure_local_git_repository(HOOKS_REPO_REQUIRED_MESSAGE)?;
+
     if !hooks_dir().is_dir() {
         anyhow::bail!(
             "Hooks directory {} does not exist. {HOOKS_NEW_HINT}",
@@ -209,7 +246,7 @@ fn hooks_install_cmd() -> anyhow::Result<()> {
     }
 
     if let Some(hooks_path) = local_hooks_path()? {
-        if hooks_path == DEFAULT_HOOKS_PATH {
+        if hooks_path_matches_default(&hooks_path)? {
             anyhow::bail!("Git hooks are already installed. {HOOKS_UNINSTALL_HINT}");
         }
 
@@ -245,8 +282,10 @@ fn hooks_install_cmd() -> anyhow::Result<()> {
 }
 
 fn hooks_status_cmd() -> anyhow::Result<()> {
+    ensure_local_git_repository(HOOKS_REPO_REQUIRED_MESSAGE)?;
+
     match local_hooks_path()? {
-        Some(hooks_path) if hooks_path == DEFAULT_HOOKS_PATH => {
+        Some(hooks_path) if hooks_path_matches_default(&hooks_path)? => {
             println!("Git hooks are installed");
         }
         Some(_) | None => {
@@ -258,7 +297,14 @@ fn hooks_status_cmd() -> anyhow::Result<()> {
 }
 
 fn hooks_uninstall_cmd() -> anyhow::Result<()> {
-    let output = git_config_output(&["--unset", GIT_HOOKS_PATH_KEY])?;
+    ensure_local_git_repository(HOOKS_REPO_REQUIRED_MESSAGE)?;
+
+    if local_hooks_path()?.is_none() {
+        println!("Git hooks are not installed");
+        return Ok(());
+    }
+
+    let output = git_config_output(&["--unset-all", GIT_HOOKS_PATH_KEY])?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
