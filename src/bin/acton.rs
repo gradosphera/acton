@@ -8,6 +8,7 @@ use acton::commands::docgen::docgen_cmd;
 use acton::commands::doctor::doctor_cmd;
 use acton::commands::fmt::fmt_cmd;
 use acton::commands::func2tolk::{default_func2tolk_version, func2tolk_cmd};
+use acton::commands::hooks::{HooksCommand, hooks_cmd};
 use acton::commands::init::init_cmd;
 use acton::commands::internal::internal_register_contract;
 use acton::commands::library::{fetch_cmd, info_cmd, publish_cmd};
@@ -115,6 +116,11 @@ enum Commands {
     Wallet {
         #[command(subcommand)]
         command: WalletCommand,
+    },
+    #[command(about = "Manage git hooks for the current project")]
+    Hooks {
+        #[command(subcommand)]
+        command: HooksCommand,
     },
     #[command(
         about = "Execute tests in file or directory",
@@ -1559,6 +1565,7 @@ fn root_help(show_global_options: bool) -> StyledStr {
         ("ls", ""),
         ("up", ""),
         ("help", "[COMMAND]"),
+        ("hooks", "<COMMAND>"),
         ("doctor", ""),
         ("func2tolk", "<PATH>"),
         ("completions", "<SHELL>"),
@@ -2217,6 +2224,7 @@ fn main() {
             no_camel_case,
             version,
         } => func2tolk_cmd(path, output, warnings_as_comments, no_camel_case, version),
+        Commands::Hooks { command } => hooks_cmd(command),
         Commands::Doctor => doctor_cmd(),
         Commands::Completions { shell } => {
             clap_complete::generate(shell, &mut Cli::command(), "acton", &mut std::io::stdout());
