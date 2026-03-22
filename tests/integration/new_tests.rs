@@ -5,6 +5,7 @@ use serde_json::Value as JsonValue;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -52,12 +53,11 @@ fn run_npm_command(
     cache_dir: &Path,
     args: &[&str],
 ) -> std::process::Output {
-    std::process::Command::new("npm")
+    Command::new("npm")
         .args(args)
         .current_dir(project_dir)
         .env("PATH", path_env)
         .env("ACTON_BIN", acton_exe())
-        .env("ACTON_LOG_DIR", ".acton/logs")
         .env("NPM_CONFIG_CACHE", cache_dir)
         .env("NPM_CONFIG_AUDIT", "false")
         .env("NPM_CONFIG_FUND", "false")
@@ -72,7 +72,7 @@ fn run_npm_command(
 
 #[cfg(unix)]
 fn is_npm_available() -> bool {
-    std::process::Command::new("npm")
+    Command::new("npm")
         .arg("--version")
         .output()
         .map(|output| output.status.success())
@@ -99,6 +99,20 @@ fn npm_failure_looks_environment_specific(output: &std::process::Output) -> bool
     ]
     .iter()
     .any(|pattern| combined.contains(pattern))
+}
+
+fn git_config_get(project_root: &Path, key: &str) -> Option<String> {
+    let output = Command::new("git")
+        .args(["config", "--local", "--get", key])
+        .current_dir(project_root)
+        .output()
+        .unwrap();
+
+    if output.status.success() {
+        Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+    } else {
+        None
+    }
 }
 
 #[test]
@@ -234,6 +248,44 @@ fn test_new_counter_project_with_app_flag() {
 }
 
 #[test]
+fn test_new_empty_project_with_hooks_flag() {
+    let project = ProjectBuilder::new("new-empty-hooks")
+        .without_acton_toml()
+        .build();
+
+    let output = project
+        .acton()
+        .arg("new")
+        .arg(&project.path().join("foobar").display().to_string())
+        .arg("--name")
+        .arg("hooks-project")
+        .arg("--description")
+        .arg("hooks description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .arg("--hooks")
+        .run()
+        .success();
+
+    output
+        .assert_contains("Created new Acton project")
+        .assert_contains("Template: empty")
+        .assert_contains("Git hooks: installed")
+        .assert_file_snapshot_matches(
+            "foobar/.githooks/pre-commit",
+            "integration/snapshots/hooks/test_hooks_new_default.pre-commit.txt",
+        );
+
+    let project_dir = project.path().join("foobar");
+    assert_eq!(
+        git_config_get(&project_dir, "core.hooksPath").as_deref(),
+        Some(".githooks")
+    );
+}
+
+#[test]
 fn test_new_counter_project_rejects_app_value_syntax() {
     let project = ProjectBuilder::new("new-counter-app-false")
         .without_acton_toml()
@@ -256,6 +308,32 @@ fn test_new_counter_project_rejects_app_value_syntax() {
         .failure()
         .assert_stderr_snapshot_matches(
             "integration/snapshots/test_new_counter_project_rejects_app_value_syntax.stderr.txt",
+        );
+}
+
+#[test]
+fn test_new_project_rejects_hooks_value_syntax() {
+    let project = ProjectBuilder::new("new-hooks-false")
+        .without_acton_toml()
+        .build();
+
+    project
+        .acton()
+        .arg("new")
+        .arg(&project.path().join("foobar").display().to_string())
+        .arg("--name")
+        .arg("hooks-project")
+        .arg("--description")
+        .arg("hooks description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .arg("--hooks=false")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_new_project_rejects_hooks_value_syntax.stderr.txt",
         );
 }
 
@@ -286,6 +364,33 @@ fn test_new_empty_project_rejects_app_flag() {
 }
 
 #[test]
+fn test_new_hooks_flag_requires_git() {
+    let project = ProjectBuilder::new("new-hooks-requires-git")
+        .without_acton_toml()
+        .build();
+
+    project
+        .acton()
+        .env("PATH", "")
+        .arg("new")
+        .arg(&project.path().join("foobar").display().to_string())
+        .arg("--name")
+        .arg("hooks-project")
+        .arg("--description")
+        .arg("hooks description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .arg("--hooks")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_new_hooks_flag_requires_git.stderr.txt",
+        );
+}
+
+#[test]
 fn test_new_invalid_template() {
     let project = ProjectBuilder::new("new-invalid-template")
         .without_acton_toml()
@@ -302,6 +407,54 @@ fn test_new_invalid_template() {
         .assert_stderr_snapshot_matches(
             "integration/snapshots/test_new_invalid_template.stderr.txt",
         );
+}
+
+#[cfg(unix)]
+#[test]
+fn test_new_empty_project_prompts_for_hooks() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("new-empty-hooks-interactive")
+        .without_acton_toml()
+        .build();
+
+    let mut session = project
+        .acton()
+        .arg("new")
+        .arg(&project.path().join("foobar").display().to_string())
+        .arg("--name")
+        .arg("interactive-hooks")
+        .arg("--description")
+        .arg("interactive hooks description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Install the default Git hooks?");
+    session.send_line("y", "failed to confirm Git hooks");
+    session.expect("Created new Acton project");
+    session.expect("Project name: interactive-hooks");
+    session.expect("Description: interactive hooks description");
+    session.expect("Template: empty");
+    session.expect("Git hooks: installed");
+    session.expect("License: MIT");
+    session.expect("Created Acton.toml with project configuration");
+    session.expect("acton build");
+    session.expect("acton test");
+    session.expect(Eof);
+    session.assert_file_snapshot_matches(
+        "foobar/.githooks/pre-commit",
+        "integration/snapshots/hooks/test_hooks_new_default.pre-commit.txt",
+    );
+
+    let project_dir = project.path().join("foobar");
+    assert_eq!(
+        git_config_get(&project_dir, "core.hooksPath").as_deref(),
+        Some(".githooks")
+    );
 }
 
 #[cfg(unix)]
@@ -330,6 +483,8 @@ fn test_new_counter_project_prompts_for_app_when_supported() {
 
     session.expect("Include the TypeScript app scaffold?");
     session.send_line("y", "failed to confirm TypeScript app scaffold");
+    session.expect("Install the default Git hooks?");
+    session.send_line("", "failed to keep default no-hooks choice");
     session.expect("Created new Acton project");
     session.expect("Project name: interactive-counter");
     session.expect("Description: interactive description");
@@ -380,6 +535,8 @@ fn test_new_counter_project_interactive_decline_keeps_standard_layout() {
 
     session.expect("Include the TypeScript app scaffold?");
     session.send_line("", "failed to keep default no-app choice");
+    session.expect("Install the default Git hooks?");
+    session.send_line("", "failed to keep default no-hooks choice");
     session.expect("Created new Acton project");
     session.expect("Project name: interactive-counter");
     session.expect("Description: interactive description");
@@ -509,7 +666,6 @@ fn test_new_counter_app_project_supports_npm_scripts() {
         .acton()
         .script("contracts/scripts/deploy.tolk")
         .current_dir(&project_dir)
-        .env("ACTON_LOG_DIR", ".acton/logs")
         .run()
         .success();
 
@@ -517,7 +673,6 @@ fn test_new_counter_app_project_supports_npm_scripts() {
         .acton()
         .check()
         .current_dir(&project_dir)
-        .env("ACTON_LOG_DIR", ".acton/logs")
         .run()
         .success();
 
@@ -526,7 +681,6 @@ fn test_new_counter_app_project_supports_npm_scripts() {
         .fmt()
         .arg("--check")
         .current_dir(&project_dir)
-        .env("ACTON_LOG_DIR", ".acton/logs")
         .run()
         .success();
 
@@ -542,9 +696,11 @@ fn test_new_empty_project_in_existed_directory() {
         .build();
 
     let dir = project.path().parent().expect("Should be parent directory");
+    let log_dir = project.path().join(".acton/logs").display().to_string();
 
     let output = project
         .acton()
+        .env("ACTON_LOG_DIR", &log_dir)
         .arg("new")
         .arg(&dir.join("foobar").display().to_string())
         .arg("--name")
@@ -568,9 +724,11 @@ fn test_new_empty_project_in_existed_directory_with_acton_toml() {
     let project = ProjectBuilder::new("foobar").contract("foo", "").build();
 
     let dir = project.path().parent().expect("Should be parent directory");
+    let log_dir = project.path().join(".acton/logs").display().to_string();
 
     let output = project
         .acton()
+        .env("ACTON_LOG_DIR", &log_dir)
         .arg("new")
         .arg(&dir.join("foobar").display().to_string())
         .arg("--name")

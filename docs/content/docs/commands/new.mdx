@@ -17,14 +17,15 @@ This command creates a new project in the specified directory. If the directory 
 
 ## Command Options
 
-| Option                | Type   | Description                                                        |
-|-----------------------|--------|--------------------------------------------------------------------|
-| `<PATH>`              | String | Directory to create the project in (use `.` for current directory) |
-| `--name <NAME>`       | String | Project name (defaults to directory name)                          |
-| `--desc <DESC>`       | String | Project description                                                |
-| `--template <NAME>`   | String | Project template to use (empty, counter, jetton)                   |
-| `--license <LICENSE>` | String | Project license (MIT, Apache-2.0, etc.)                            |
-| `--app`               | Bool   | Include the template's TypeScript app scaffold when available      |
+| Option                 | Type   | Description                                                        |
+|------------------------|--------|--------------------------------------------------------------------|
+| `<PATH>`               | String | Directory to create the project in (use `.` for current directory) |
+| `--name <NAME>`        | String | Project name (defaults to directory name)                          |
+| `--description <DESC>` | String | Project description                                                |
+| `--template <NAME>`    | String | Project template to use (empty, counter, jetton)                   |
+| `--license <LICENSE>`  | String | Project license (MIT, Apache-2.0, etc.)                            |
+| `--app`                | Bool   | Include the template's TypeScript app scaffold when available      |
+| `--hooks`              | Bool   | Create `.githooks/` and install the default local Git hooks        |
 
 ## Interactive Mode
 
@@ -37,12 +38,18 @@ $ acton new my-project
 ? Template: counter
 ? License: MIT
 ? Include the TypeScript app scaffold? No
+? Install the default Git hooks? No
 ```
 
 If the selected template supports a TypeScript app scaffold and you do not pass
 `--app`, Acton asks whether you want to include it. In non-interactive
 environments, the app scaffold is not included unless you pass `--app`
 explicitly.
+
+If `git` is available, and you do not pass `--hooks`, Acton also asks whether it
+should create and install the default project-local Git hooks. In
+non-interactive environments, hooks are not installed unless you pass
+`--hooks` explicitly.
 
 ## Examples
 
@@ -69,17 +76,20 @@ acton new token-project --template jetton --desc "My Awesome Token"
 
 # Create the counter template with the TypeScript app scaffold
 acton new counter-dapp --template counter --app
+
+# Create a project and install the default Git hooks immediately
+acton new my-project --template empty --license MIT --hooks
 ```
 
 ## Templates
 
 Acton provides several built-in templates:
 
-| Template | Description |
-|----------|-------------|
-| `empty`  | Minimal structure with a single empty contract. Best for experienced users. |
-| `counter`| Simple counter contract with tests and deployment script. Good for learning. Supports an optional TypeScript app scaffold via `--app`. |
-| `jetton` | Complete Jetton (token) implementation with Minter and Wallet contracts. |
+| Template  | Description                                                                                                                            |
+|-----------|----------------------------------------------------------------------------------------------------------------------------------------|
+| `empty`   | Minimal structure with a single empty contract. Best for experienced users.                                                            |
+| `counter` | Simple counter contract with tests and deployment script. Good for learning. Supports an optional TypeScript app scaffold via `--app`. |
+| `jetton`  | Complete Jetton (token) implementation with Minter and Wallet contracts.                                                               |
 
 ## Project Structure
 
@@ -165,6 +175,16 @@ After creation, install frontend dependencies with:
 ```bash
 npm install
 ```
+
+## Git Hooks
+
+When you pass `--hooks` or confirm the interactive prompt, `acton new`:
+
+- creates `.githooks/pre-commit`
+- writes the default hook that runs `acton check` and `acton fmt --check`
+- sets the repository-local `core.hooksPath` to `.githooks`
+
+This requires the `git` command to be available in `PATH`.
 
 ## Learn More
 

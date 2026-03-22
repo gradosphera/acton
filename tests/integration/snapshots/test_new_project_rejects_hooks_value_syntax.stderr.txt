@@ -1,4 +1,4 @@
-error: unexpected value 'false' for '--app' found; no more were expected
+error: unexpected value 'false' for '--hooks' found; no more were expected
 
 Usage: acton new <PATH|--name <NAME>|--description <DESCRIPTION>|--template <TEMPLATE>|--license <LICENSE>|--app|--hooks>
 

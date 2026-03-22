@@ -1,4 +1,5 @@
 use crate::commands::common::{symlink_global_libraries, symlink_global_wallets};
+use crate::commands::hooks::scaffold_and_install_default_hooks;
 use crate::stdlib;
 use acton_config::color::OwoColorize;
 use acton_config::config::{
@@ -97,6 +98,7 @@ pub fn new_cmd(
     template: Option<ProjectTemplate>,
     license: Option<String>,
     app: bool,
+    hooks: bool,
 ) -> anyhow::Result<()> {
     let project_path = if path == "." {
         std::env::current_dir()?
@@ -154,7 +156,9 @@ pub fn new_cmd(
             .0
     };
 
+    let git_available = is_git_available();
     let include_app = resolve_include_app(template, app)?;
+    let include_hooks = resolve_include_hooks(hooks, git_available)?;
     let scaffold = template::project_scaffold(template, include_app).ok_or_else(|| {
         anyhow!(
             "Template {} does not include a TypeScript app scaffold",
@@ -264,8 +268,12 @@ pub fn new_cmd(
         );
     }
 
-    if is_git_available() {
+    if git_available {
         initialize_git_repository()?;
+        if include_hooks {
+            scaffold_and_install_default_hooks(Path::new("."))?;
+        }
+        stage_git_repository()?;
     } else {
         println!(
             "  {} git command not found, skipping git repository initialization",
@@ -291,6 +299,9 @@ pub fn new_cmd(
             "TypeScript app:".bright_black(),
             "included".cyan()
         );
+    }
+    if include_hooks {
+        println!("  {} {}", "Git hooks:".bright_black(), "installed".cyan());
     }
     println!("  {} {}", "License:".bright_black(), license.cyan());
     println!();
@@ -332,6 +343,29 @@ fn resolve_include_app(template: ProjectTemplate, app: bool) -> anyhow::Result<b
 
     if stdin().is_terminal() && stdout().is_terminal() {
         Confirm::new("Include the TypeScript app scaffold?")
+            .with_default(false)
+            .prompt()
+            .map_err(Into::into)
+    } else {
+        Ok(false)
+    }
+}
+
+fn resolve_include_hooks(hooks: bool, git_available: bool) -> anyhow::Result<bool> {
+    if hooks {
+        if !git_available {
+            anyhow::bail!("Git hooks require the `git` command to be available in PATH");
+        }
+
+        return Ok(true);
+    }
+
+    if !git_available {
+        return Ok(false);
+    }
+
+    if stdin().is_terminal() && stdout().is_terminal() {
+        Confirm::new("Install the default Git hooks?")
             .with_default(false)
             .prompt()
             .map_err(Into::into)
@@ -604,6 +638,10 @@ fn initialize_git_repository() -> anyhow::Result<()> {
         .then_some(())
         .ok_or_else(|| anyhow::anyhow!("Failed to initialize git repository"))?;
 
+    Ok(())
+}
+
+fn stage_git_repository() -> anyhow::Result<()> {
     std::process::Command::new("git")
         .args(["add", "."])
         .status()?

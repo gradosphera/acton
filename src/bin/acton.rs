@@ -108,6 +108,8 @@ enum Commands {
             help = "Include the template's TypeScript app scaffold when available"
         )]
         app: bool,
+        #[arg(long, help = "Create and install the default project-local Git hooks")]
+        hooks: bool,
     },
     #[command(
         about = "Manage wallets",
@@ -1884,7 +1886,8 @@ fn main() {
             template,
             license,
             app,
-        } => new_cmd(&path, name, description, template, license, app),
+            hooks,
+        } => new_cmd(&path, name, description, template, license, app, hooks),
         Commands::Test {
             path,
             filter,
