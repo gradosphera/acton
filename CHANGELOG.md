@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - No unreleased entries yet.
 
+## [0.1.1] - 22.03.2026
+
+Added TON objs files to releases.
+
 ## [0.1.0] - 22.03.2026
 
 Acton 0.1.0 is the first semi-stable beta release with a complete installation and delivery story.
