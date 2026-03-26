@@ -335,7 +335,7 @@ fn perform_airdrop(
         .get_wallet(&name)
         .ok_or_else(|| anyhow!(error_fmt::wallet_not_found(&config, &name)))?;
 
-    let address = get_wallet_address(wallet, target.network())?;
+    let address = get_wallet_address(&name, wallet, target.network())?;
 
     if !json {
         println!(
@@ -701,7 +701,7 @@ fn export_mnemonic(name: Option<String>) -> anyhow::Result<()> {
         .get_wallet(&name)
         .ok_or_else(|| anyhow!(error_fmt::wallet_not_found(&config, &name)))?;
 
-    let mnemonic = wallets::load_mnemonic(wallet)?;
+    let mnemonic = wallets::load_mnemonic(&name, wallet)?;
 
     println!("{mnemonic}");
 
@@ -724,7 +724,7 @@ fn sign_wallet_external_body(
     let body = read_sign_body(body)?;
     let (external_body, input) = decode_sign_input(&body)?;
 
-    let mnemonic_str = wallets::load_mnemonic(wallet)?;
+    let mnemonic_str = wallets::load_mnemonic(&name, wallet)?;
     let mnemonic = Mnemonic::from_str(&mnemonic_str, None)?;
     let key_pair = mnemonic.to_key_pair()?;
     let version = parse_wallet_version(&wallet.kind)?;
@@ -812,7 +812,7 @@ fn remove_wallet(name: Option<String>, yes: bool, json: bool) -> anyhow::Result<
 
     let keyring_mnemonic_removed = if let Some(keyring_id) = wallet.keys.mnemonic_keyring.as_deref()
     {
-        wallets::delete_mnemonic_from_keyring(keyring_id)?;
+        wallets::delete_mnemonic_from_keyring(keyring_id, &name)?;
         true
     } else {
         false
@@ -977,7 +977,7 @@ fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::R
 
     let mut wallets_data = Vec::new();
     for (name, wallet_config) in wallets {
-        let Ok(address) = get_wallet_address(wallet_config, Network::Testnet) else {
+        let Ok(address) = get_wallet_address(name, wallet_config, Network::Testnet) else {
             error!("cannot get wallet address for {name}"); // very unlikely
             continue;
         };
@@ -1062,7 +1062,11 @@ fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::R
     Ok(())
 }
 
-fn get_wallet_address(wallet: &config::WalletConfig, network: Network) -> anyhow::Result<String> {
+fn get_wallet_address(
+    wallet_name: &str,
+    wallet: &config::WalletConfig,
+    network: Network,
+) -> anyhow::Result<String> {
     if let Some(expected) = &wallet.expected
         && let Some(addr) = &expected.address_testnet
     {
@@ -1070,7 +1074,7 @@ fn get_wallet_address(wallet: &config::WalletConfig, network: Network) -> anyhow
         return Ok(format_testnet_wallet_address(&addr));
     }
 
-    let mnemonic_str = wallets::load_mnemonic(wallet)?;
+    let mnemonic_str = wallets::load_mnemonic(wallet_name, wallet)?;
 
     let mnemonic = Mnemonic::from_str(&mnemonic_str, None)?;
     let version = parse_wallet_version(&wallet.kind)?;
@@ -1369,7 +1373,6 @@ fn new_wallet(
     airdrop: bool,
     json: bool,
 ) -> anyhow::Result<()> {
-    let config = ActonConfig::load().ok();
     let name = get_or_prompt_name(name)?;
     let is_global = get_is_global(global_flag, local_flag)?;
     let config_path = get_config_path(&name, is_global)?;
@@ -1388,14 +1391,13 @@ fn new_wallet(
 
     let use_secure_store = get_or_prompt_use_keystore(secure)?;
 
-    let project_name = if is_global {
-        None
-    } else {
-        config.map(|c| c.package.name)
-    };
-
-    let (mnemonic_str_opt, mnemonic_keyring_opt) =
-        maybe_store_mnemonic_in_keystore(&name, &mnemonic_str, use_secure_store, project_name)?;
+    let (mnemonic_str_opt, mnemonic_keyring_opt) = maybe_store_mnemonic_in_keystore(
+        &config_path,
+        &name,
+        &mnemonic_str,
+        use_secure_store,
+        is_global,
+    )?;
 
     save_wallet_to_config(
         &config_path,
@@ -1526,14 +1528,15 @@ fn new_wallet_airdrop_faucet_url() -> String {
 }
 
 fn maybe_store_mnemonic_in_keystore(
+    config_path: &Path,
     name: &str,
     mnemonic_str: &str,
     use_secure_store: bool,
-    project_name: Option<String>,
+    is_global: bool,
 ) -> anyhow::Result<(Option<String>, Option<String>)> {
     let (mnemonic_str_opt, mnemonic_keyring_opt) = if use_secure_store {
-        let keyring_id = keyring_id_for_wallet(name, project_name);
-        wallets::store_mnemonic_in_keyring(&keyring_id, mnemonic_str)?;
+        let keyring_id = keyring_id_for_scope(config_path, is_global)?;
+        wallets::store_mnemonic_in_keyring(&keyring_id, name, mnemonic_str)?;
         (None, Some(keyring_id))
     } else {
         (Some(mnemonic_str.to_owned()), None)
@@ -1541,12 +1544,37 @@ fn maybe_store_mnemonic_in_keystore(
     Ok((mnemonic_str_opt, mnemonic_keyring_opt))
 }
 
-fn keyring_id_for_wallet(name: &str, project_name: Option<String>) -> String {
-    if let Some(project) = project_name {
-        format!("{project}:{name}")
-    } else {
-        name.to_string()
+fn keyring_id_for_scope(config_path: &Path, is_global: bool) -> anyhow::Result<String> {
+    if let Some(existing) = existing_keyring_id(config_path)? {
+        return Ok(existing);
     }
+
+    if is_global {
+        return Ok("global".to_string());
+    }
+
+    let project_root = dunce::canonicalize(configured_project_root())
+        .unwrap_or_else(|_| configured_project_root().to_path_buf());
+    let digest = Sha256::digest(project_root.as_os_str().to_string_lossy().as_bytes());
+    Ok(format!("local:{}", hex::encode(&digest[..8])))
+}
+
+fn existing_keyring_id(config_path: &Path) -> anyhow::Result<Option<String>> {
+    if !config_path.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(config_path)
+        .with_context(|| format!("Failed to read {}", config_path.display()))?;
+    let wallets: WalletsFile = toml::from_str(&content)
+        .with_context(|| format!("Failed to parse {} as TOML", config_path.display()))?;
+
+    Ok(wallets.wallets.and_then(|wallets| {
+        wallets
+            .wallets
+            .into_values()
+            .find_map(|wallet| wallet.keys.mnemonic_keyring)
+    }))
 }
 
 fn import_wallet(
@@ -1558,7 +1586,6 @@ fn import_wallet(
     secure: Option<bool>,
     json: bool,
 ) -> anyhow::Result<()> {
-    let config = ActonConfig::load().ok();
     let name = get_or_prompt_name(name)?;
     let is_global = get_is_global(global_flag, local_flag)?;
     let config_path = get_config_path(&name, is_global)?;
@@ -1582,14 +1609,13 @@ fn import_wallet(
 
     let use_secure_store = get_or_prompt_use_keystore(secure)?;
 
-    let project_name = if is_global {
-        None
-    } else {
-        config.map(|c| c.package.name)
-    };
-
-    let (mnemonic_str_opt, mnemonic_keyring_opt) =
-        maybe_store_mnemonic_in_keystore(&name, &mnemonic_str, use_secure_store, project_name)?;
+    let (mnemonic_str_opt, mnemonic_keyring_opt) = maybe_store_mnemonic_in_keystore(
+        &config_path,
+        &name,
+        &mnemonic_str,
+        use_secure_store,
+        is_global,
+    )?;
 
     save_wallet_to_config(
         &config_path,
@@ -1799,7 +1825,7 @@ mod wallet_name_tests {
             }),
         };
 
-        let actual = get_wallet_address(&wallet, Network::Testnet)
+        let actual = get_wallet_address("wallet", &wallet, Network::Testnet)
             .expect("must derive testnet address from mnemonic");
 
         let mnemonic = Mnemonic::from_str(mnemonic_str, None).expect("valid mnemonic");
