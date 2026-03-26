@@ -1,0 +1,3 @@
+  Installing standard library [ACTON_VERSION]
+Exiting with code 777
+Script finished with [EXIT_STATUS] 777

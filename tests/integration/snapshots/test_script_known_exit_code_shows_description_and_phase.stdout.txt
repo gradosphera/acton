@@ -1,0 +1,5 @@
+  Installing standard library [ACTON_VERSION]
+Exiting with code 2
+Script finished with [EXIT_STATUS] 2
+Description: Stack underflow
+Phase: Compute phase

@@ -5,6 +5,7 @@ use crate::context::{
 };
 use crate::debugger::any_executor::AnyExecutor;
 use crate::debugger::debug_context::DebugContext;
+use crate::exit_codes;
 use crate::file_build_cache::FileBuildCache;
 use crate::formatter::FormatterContext;
 use crate::wallets;
@@ -16,6 +17,7 @@ use log::error;
 use rustc_hash::FxHashMap;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
+use std::io::{Write, stderr, stdout};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -36,6 +38,10 @@ use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder, HashBytes};
 use tycho_types::models::{Base64StdAddrFlags, DisplayBase64StdAddr, StateInit, StdAddr};
 use vmlogs::parser::{CellLike, VmStackValue, vm_stack_value};
+
+const ASSERTION_FAILED_EXIT_CODE: i32 = 567;
+const CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT: i32 = 678;
+const CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE: i32 = 679;
 
 #[allow(clippy::too_many_arguments)]
 pub fn script_cmd(
@@ -310,37 +316,70 @@ fn print_script_result(ctx: &Context<'_>, result: ScriptResult) {
         GetMethodResult::Success(success_result) => {
             let exit_code = success_result.vm_exit_code;
 
-            if exit_code != 0
-                && let Some(assert_failure) = ctx.asserts.assert_failure.as_ref()
-            {
-                let formatter = FormatterContext::from_context(ctx);
+            if exit_code != 0 {
+                print_nonzero_script_exit_code(exit_code);
 
-                if let AssertFailure::WalletNotFound(failure) = assert_failure {
-                    let message = formatter.format_wallet_not_found_message(failure);
-                    let highlighted_message = FormatterContext::highlight_actual_expected(&message);
-                    eprintln!("{} {}", "Error:".bright_red(), highlighted_message);
+                if let Some(assert_failure) = ctx.asserts.assert_failure.as_ref() {
+                    let formatter = FormatterContext::from_context(ctx);
 
-                    if let Some(location) = &failure.location {
-                        println!("{} at {}", "└─".dimmed(), location.format().dimmed());
-                    }
-                } else {
-                    let detailed_message = formatter
-                        .format_detailed_assert_failure(assert_failure, ctx.env.abi.clone());
+                    if let AssertFailure::WalletNotFound(failure) = assert_failure {
+                        let message = formatter.format_wallet_not_found_message(failure);
+                        let highlighted_message =
+                            FormatterContext::highlight_actual_expected(&message);
+                        eprintln!("{} {}", "Error:".bright_red(), highlighted_message);
 
-                    if detailed_message.is_empty() {
-                        println!("{}", "└─".dimmed());
+                        if let Some(location) = &failure.location {
+                            println!("{} at {}", "└─".dimmed(), location.format().dimmed());
+                        }
                     } else {
-                        println!("{detailed_message}");
+                        let detailed_message = formatter
+                            .format_detailed_assert_failure(assert_failure, ctx.env.abi.clone());
+
+                        if detailed_message.is_empty() {
+                            println!("{}", "└─".dimmed());
+                        } else {
+                            println!("{detailed_message}");
+                        }
                     }
                 }
+
+                let _ = stdout().flush();
+                let _ = stderr().flush();
             }
 
-            std::process::exit(exit_code);
+            std::process::exit(if exit_code == 0 { 0 } else { 1 });
         }
         GetMethodResult::Error(error) => {
             println!("{} {}", "Execution error:".red(), error.error.red());
+            let _ = stdout().flush();
+            let _ = stderr().flush();
             std::process::exit(1);
         }
+    }
+}
+
+fn print_nonzero_script_exit_code(exit_code: i32) {
+    if exit_code == ASSERTION_FAILED_EXIT_CODE {
+        return;
+    }
+
+    println!(
+        "Script finished with exit code {}",
+        exit_code.to_string().yellow(),
+    );
+
+    if let Some(info) = exit_codes::find(exit_code) {
+        println!("Description: {}", info.description.dimmed());
+        println!("Phase: {}", info.phase.dimmed());
+    }
+
+    if exit_code == CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT {
+        println!(
+            "Cannot run method of not deployed contract, make sure you're deployed contract first or passed {}",
+            "--fork-net".yellow(),
+        );
+    } else if exit_code == CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE {
+        println!("Cannot run method of contract without code");
     }
 }
 

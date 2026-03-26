@@ -715,23 +715,25 @@ fn test_script_with_clear_cache() {
 fn test_script_custom_exit_code() {
     let project = ProjectBuilder::new("script-exit")
         .script_file(
-            "exit_42",
+            "exit_777",
             r#"
             import "../../lib/io"
 
             fun main() {
-                println("Exiting with code 42");
-                throw 42
+                println("Exiting with code 777");
+                throw 777
             }
         "#,
         )
         .build();
 
-    project
+    let output = project
         .acton()
-        .script("scripts/exit_42.tolk")
+        .script("scripts/exit_777.tolk")
         .run()
-        .code(42);
+        .code(1);
+
+    output.assert_snapshot_matches("integration/snapshots/test_script_custom_exit_code.stdout.txt");
 }
 
 #[test]
@@ -749,7 +751,38 @@ fn test_script_success_exit_code() {
         )
         .build();
 
-    project.acton().script("scripts/success.tolk").run().code(0);
+    project
+        .acton()
+        .script("scripts/success.tolk")
+        .run()
+        .code(0)
+        .assert_snapshot_matches("integration/snapshots/test_script_success_exit_code.stdout.txt");
+}
+
+#[test]
+fn test_script_known_exit_code_shows_description_and_phase() {
+    let project = ProjectBuilder::new("script-known-exit")
+        .script_file(
+            "exit_2",
+            r#"
+            import "../../lib/io"
+
+            fun main() {
+                println("Exiting with code 2");
+                throw 2
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/exit_2.tolk")
+        .run()
+        .code(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/test_script_known_exit_code_shows_description_and_phase.stdout.txt",
+        );
 }
 
 // ========================================
@@ -836,6 +869,75 @@ fn test_script_to_have_tx_not_found_shows_transaction_search_details() {
         .failure()
         .assert_snapshot_matches(
             "integration/snapshots/test_script_to_have_tx_not_found_shows_transaction_search_details.stdout.txt",
+        );
+}
+
+#[test]
+fn test_script_run_get_method_on_undeployed_contract_shows_actionable_error() {
+    let project = ProjectBuilder::new("script-get-method-undeployed")
+        .script_file(
+            "get_undeployed",
+            r#"
+            import "../../lib/emulation/network"
+
+            fun main() {
+                val target = net.randomAddress("target");
+                val _: int = net.runGetMethod(target, "seqno");
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/get_undeployed.tolk")
+        .run()
+        .code(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/test_script_run_get_method_on_undeployed_contract_shows_actionable_error.stdout.txt",
+        );
+}
+
+#[test]
+fn test_script_run_get_method_on_contract_without_code_shows_actionable_error() {
+    let project = ProjectBuilder::new("script-get-method-null-code")
+        .script_file(
+            "get_null_code",
+            r#"
+            import "../../lib/emulation/network"
+
+            fun main() {
+                val deployer = net.treasury("deployer");
+                val address = AutoDeployAddress {
+                    stateInit: beginCell()
+                        .storeBool(false) // fixed_prefix_length:(Maybe (## 5))
+                        .storeBool(false) // special:(Maybe TickTock)
+                        .storeBool(false) // code:(Maybe ^Cell)
+                        .storeBool(false) // data:(Maybe ^Cell)
+                        .storeBool(false) // library:(Maybe ^Cell)
+                        .endCell(),
+                };
+
+                val outMsg = createMessage({
+                    bounce: BounceMode.NoBounce,
+                    value: ton("0.1"),
+                    dest: address,
+                });
+                net.send(deployer.address, outMsg);
+
+                val _: int = net.runGetMethod(address.calculateAddress(), "counter");
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/get_null_code.tolk")
+        .run()
+        .code(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/test_script_run_get_method_on_contract_without_code_shows_actionable_error.stdout.txt",
         );
 }
 
