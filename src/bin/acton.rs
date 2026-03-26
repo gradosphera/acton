@@ -110,6 +110,8 @@ enum Commands {
         app: bool,
         #[arg(long, help = "Create and install the default project-local Git hooks")]
         hooks: bool,
+        #[arg(long, help = "Include an AGENTS.md file with coding-agent guidance")]
+        agents: bool,
     },
     #[command(
         about = "Manage wallets",
@@ -1286,6 +1288,10 @@ fn example_new_usage() -> StyledStr {
                 "Create a counter project with the TypeScript app scaffold",
                 "acton new my-project --template counter --app",
             ),
+            (
+                "Create a project with AGENTS.md guidance for coding agents",
+                "acton new my-project --template empty --agents",
+            ),
         ],
         "https://ton-blockchain.github.io/acton/docs/commands/new",
     )
@@ -1889,7 +1895,17 @@ fn main() {
             license,
             app,
             hooks,
-        } => new_cmd(&path, name, description, template, license, app, hooks),
+            agents,
+        } => new_cmd(
+            &path,
+            name,
+            description,
+            template,
+            license,
+            app,
+            hooks,
+            agents,
+        ),
         Commands::Test {
             path,
             filter,

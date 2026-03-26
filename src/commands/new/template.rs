@@ -1,5 +1,7 @@
 use clap::ValueEnum;
 use include_dir::{Dir, include_dir};
+use std::ffi::OsStr;
+use std::fs;
 use std::path::Path;
 
 static EMPTY_TEMPLATE_DIR: Dir<'static> =
@@ -13,6 +15,8 @@ static COUNTER_APP_TEMPLATE_DIR: Dir<'static> =
 
 static JETTON_TEMPLATE_DIR: Dir<'static> =
     include_dir!("$CARGO_MANIFEST_DIR/src/commands/new/templates/jetton");
+
+const AGENTS_FILE_NAME: &str = "AGENTS.md";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ProjectLayout {
@@ -229,7 +233,43 @@ pub(super) const fn project_scaffold(
 pub(super) fn create_project_from_scaffold(
     scaffold: ProjectScaffold,
     target_dir: &Path,
+    include_agents: bool,
 ) -> anyhow::Result<()> {
-    scaffold.dir.extract(target_dir)?;
+    extract_template_dir(scaffold.dir, target_dir, include_agents)?;
     Ok(())
+}
+
+fn extract_template_dir(
+    dir: &Dir<'static>,
+    base_path: &Path,
+    include_agents: bool,
+) -> std::io::Result<()> {
+    for entry in dir.entries() {
+        if !include_agents && should_skip_entry(entry.path()) {
+            continue;
+        }
+
+        let path = base_path.join(entry.path());
+
+        if let Some(subdir) = entry.as_dir() {
+            fs::create_dir_all(&path)?;
+            extract_template_dir(subdir, base_path, include_agents)?;
+            continue;
+        }
+
+        if let Some(file) = entry.as_file() {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+
+            fs::write(path, file.contents())?;
+        }
+    }
+
+    Ok(())
+}
+
+fn should_skip_entry(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|name| name == OsStr::new(AGENTS_FILE_NAME))
 }

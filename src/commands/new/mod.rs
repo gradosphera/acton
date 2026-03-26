@@ -91,6 +91,7 @@ impl std::fmt::Display for TemplateSelectItem {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn new_cmd(
     path: &str,
     name: Option<String>,
@@ -99,6 +100,7 @@ pub fn new_cmd(
     license: Option<String>,
     app: bool,
     hooks: bool,
+    agents: bool,
 ) -> anyhow::Result<()> {
     let project_path = if path == "." {
         std::env::current_dir()?
@@ -159,6 +161,7 @@ pub fn new_cmd(
     let git_available = is_git_available();
     let include_app = resolve_include_app(template, app)?;
     let include_hooks = resolve_include_hooks(hooks, git_available)?;
+    let include_agents = resolve_include_agents(agents)?;
     let scaffold = template::project_scaffold(template, include_app).ok_or_else(|| {
         anyhow!(
             "Template {} does not include a TypeScript app scaffold",
@@ -200,7 +203,7 @@ pub fn new_cmd(
     std::env::set_current_dir(&project_path)?;
 
     // use `.` since we explicitly change current dir to project dir
-    template::create_project_from_scaffold(scaffold, Path::new("."))?;
+    template::create_project_from_scaffold(scaffold, Path::new("."), include_agents)?;
 
     let mut contracts = BTreeMap::new();
     for contract in scaffold.contracts() {
@@ -303,6 +306,9 @@ pub fn new_cmd(
     if include_hooks {
         println!("  {} {}", "Git hooks:".bright_black(), "installed".cyan());
     }
+    if include_agents {
+        println!("  {} {}", "AGENTS.md:".bright_black(), "included".cyan());
+    }
     println!("  {} {}", "License:".bright_black(), license.cyan());
     println!();
     println!("Created {} with project configuration", "Acton.toml".cyan());
@@ -366,6 +372,21 @@ fn resolve_include_hooks(hooks: bool, git_available: bool) -> anyhow::Result<boo
 
     if stdin().is_terminal() && stdout().is_terminal() {
         Confirm::new("Install the default Git hooks?")
+            .with_default(false)
+            .prompt()
+            .map_err(Into::into)
+    } else {
+        Ok(false)
+    }
+}
+
+fn resolve_include_agents(agents: bool) -> anyhow::Result<bool> {
+    if agents {
+        return Ok(true);
+    }
+
+    if stdin().is_terminal() && stdout().is_terminal() {
+        Confirm::new("Include AGENTS.md guidance for coding agents?")
             .with_default(false)
             .prompt()
             .map_err(Into::into)

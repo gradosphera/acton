@@ -155,6 +155,7 @@ fn test_new_empty_project_non_interactive() {
     assert!(project.path().join("foobar/LICENSE").exists());
     assert!(project.path().join("foobar/.gitignore").exists());
     assert!(project.path().join("foobar/.editorconfig").exists());
+    assert!(!project.path().join("foobar/AGENTS.md").exists());
 }
 
 #[test]
@@ -286,6 +287,40 @@ fn test_new_empty_project_with_hooks_flag() {
 }
 
 #[test]
+fn test_new_empty_project_with_agents_flag() {
+    let project = ProjectBuilder::new("new-empty-agents")
+        .without_acton_toml()
+        .build();
+
+    let output = project
+        .acton()
+        .arg("new")
+        .arg(&project.path().join("foobar").display().to_string())
+        .arg("--name")
+        .arg("agents-project")
+        .arg("--description")
+        .arg("agents description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .arg("--agents")
+        .run()
+        .success();
+
+    output
+        .assert_contains("Created new Acton project")
+        .assert_contains("Template: empty")
+        .assert_contains("AGENTS.md: included")
+        .assert_file_snapshot_matches(
+            "foobar/AGENTS.md",
+            "integration/snapshots/test_new_empty_project_with_agents_flag.agents.md.gen",
+        );
+
+    assert!(project.path().join("foobar/AGENTS.md").exists());
+}
+
+#[test]
 fn test_new_counter_project_rejects_app_value_syntax() {
     let project = ProjectBuilder::new("new-counter-app-false")
         .without_acton_toml()
@@ -334,6 +369,32 @@ fn test_new_project_rejects_hooks_value_syntax() {
         .failure()
         .assert_stderr_snapshot_matches(
             "integration/snapshots/test_new_project_rejects_hooks_value_syntax.stderr.txt",
+        );
+}
+
+#[test]
+fn test_new_project_rejects_agents_value_syntax() {
+    let project = ProjectBuilder::new("new-agents-false")
+        .without_acton_toml()
+        .build();
+
+    project
+        .acton()
+        .arg("new")
+        .arg(&project.path().join("foobar").display().to_string())
+        .arg("--name")
+        .arg("agents-project")
+        .arg("--description")
+        .arg("agents description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .arg("--agents=false")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_new_project_rejects_agents_value_syntax.stderr.txt",
         );
 }
 
@@ -435,6 +496,8 @@ fn test_new_empty_project_prompts_for_hooks() {
 
     session.expect("Install the default Git hooks?");
     session.send_line("y", "failed to confirm Git hooks");
+    session.expect("Include AGENTS.md guidance for coding agents?");
+    session.send_line("", "failed to keep default no-agents choice");
     session.expect("Created new Acton project");
     session.expect("Project name: interactive-hooks");
     session.expect("Description: interactive hooks description");
@@ -455,6 +518,7 @@ fn test_new_empty_project_prompts_for_hooks() {
         git_config_get(&project_dir, "core.hooksPath").as_deref(),
         Some(".githooks")
     );
+    assert!(!project_dir.join("AGENTS.md").exists());
 }
 
 #[cfg(unix)]
@@ -485,6 +549,8 @@ fn test_new_counter_project_prompts_for_app_when_supported() {
     session.send_line("y", "failed to confirm TypeScript app scaffold");
     session.expect("Install the default Git hooks?");
     session.send_line("", "failed to keep default no-hooks choice");
+    session.expect("Include AGENTS.md guidance for coding agents?");
+    session.send_line("", "failed to keep default no-agents choice");
     session.expect("Created new Acton project");
     session.expect("Project name: interactive-counter");
     session.expect("Description: interactive description");
@@ -507,6 +573,7 @@ fn test_new_counter_project_prompts_for_app_when_supported() {
 
     assert!(project.path().join("foobar/package.json").exists());
     assert!(project.path().join("foobar/app/src/App.tsx").exists());
+    assert!(!project.path().join("foobar/AGENTS.md").exists());
 }
 
 #[cfg(unix)]
@@ -537,6 +604,8 @@ fn test_new_counter_project_interactive_decline_keeps_standard_layout() {
     session.send_line("", "failed to keep default no-app choice");
     session.expect("Install the default Git hooks?");
     session.send_line("", "failed to keep default no-hooks choice");
+    session.expect("Include AGENTS.md guidance for coding agents?");
+    session.send_line("", "failed to keep default no-agents choice");
     session.expect("Created new Acton project");
     session.expect("Project name: interactive-counter");
     session.expect("Description: interactive description");
@@ -555,6 +624,51 @@ fn test_new_counter_project_interactive_decline_keeps_standard_layout() {
     assert!(project_dir.join("contracts/counter.tolk").exists());
     assert!(!project_dir.join("package.json").exists());
     assert!(!project_dir.join("app").exists());
+    assert!(!project_dir.join("AGENTS.md").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn test_new_empty_project_prompts_for_agents() {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("new-empty-agents-interactive")
+        .without_acton_toml()
+        .build();
+
+    let mut session = project
+        .acton()
+        .arg("new")
+        .arg(&project.path().join("foobar").display().to_string())
+        .arg("--name")
+        .arg("interactive-agents")
+        .arg("--description")
+        .arg("interactive agents description")
+        .arg("--template")
+        .arg("empty")
+        .arg("--license")
+        .arg("MIT")
+        .spawn_pty()
+        .set_expect_timeout(Some(Duration::from_secs(20)));
+
+    session.expect("Install the default Git hooks?");
+    session.send_line("", "failed to keep default no-hooks choice");
+    session.expect("Include AGENTS.md guidance for coding agents?");
+    session.send_line("y", "failed to confirm AGENTS.md guidance");
+    session.expect("Created new Acton project");
+    session.expect("Project name: interactive-agents");
+    session.expect("Description: interactive agents description");
+    session.expect("Template: empty");
+    session.expect("AGENTS.md: included");
+    session.expect("License: MIT");
+    session.expect("Created Acton.toml with project configuration");
+    session.expect("acton build");
+    session.expect("acton test");
+    session.expect(Eof);
+    session.assert_file_snapshot_matches(
+        "foobar/AGENTS.md",
+        "integration/snapshots/test_new_empty_project_with_agents_flag.agents.md.gen",
+    );
 }
 
 #[cfg(unix)]
