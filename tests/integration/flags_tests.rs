@@ -1,4 +1,5 @@
 use crate::support::TestOutputExt;
+use crate::support::compilation::extract_compiled_contracts;
 use crate::support::project::ProjectBuilder;
 use std::fs;
 
@@ -105,6 +106,96 @@ get fun `test-build-path-from-project-root`() {
     expect(byPath).toEqual(byName);
 }
 "#;
+
+const ROOT_TEST_IMPORT: &str = "../../lib/testing/expect";
+const NESTED_TEST_IMPORT: &str = "../../../lib/testing/expect";
+
+fn passing_test_file(import_path: &str, test_name: &str, expected: i32) -> String {
+    format!(
+        r#"
+import "{import_path}"
+
+get fun `{test_name}`() {{
+    expect({expected}).toEqual({expected});
+}}
+"#
+    )
+}
+
+fn body_printing_test_project(project_name: &str) -> ProjectBuilder {
+    ProjectBuilder::new(project_name)
+        .file(
+            "contracts/test_body_messages",
+            r"
+struct (0xF8000001) TestBodyMsg {
+    queryId: uint64
+    recipient: address
+    amount: coins
+}
+",
+        )
+        .contract(
+            "test_body_sink",
+            r#"
+import "test_body_messages"
+
+contract TestBodySink {
+    incomingMessages: TestBodyMsg
+}
+
+fun onInternalMessage(in: InMessage) {
+    if (in.body.isEmpty()) {
+        return;
+    }
+
+    val _msg = lazy TestBodyMsg.fromSlice(in.body);
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+"#,
+        )
+        .test_file(
+            "print_bodies",
+            r#"
+import "../../lib/build/build"
+import "../../lib/emulation/network"
+import "../../lib/io"
+import "../../lib/testing/expect"
+import "../contracts/test_body_messages"
+
+get fun `test-show-bodies-prints-decoded-transaction-body`() {
+    val sender = net.treasury("sender");
+    val init = ContractState {
+        code: build("test_body_sink"),
+        data: createEmptyCell(),
+    };
+    val sinkAddress = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("1"),
+        dest: {
+            stateInit: init,
+        },
+    }));
+
+    val txs = net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("0.1"),
+        dest: sinkAddress,
+        body: TestBodyMsg {
+            queryId: 11,
+            recipient: sender.address,
+            amount: ton("0.02"),
+        },
+    }));
+
+    expect(txs).toHaveLength(1);
+    println(txs);
+}
+"#,
+        )
+}
 
 #[test]
 fn test_run_specific_test_file() {
@@ -280,6 +371,64 @@ fn test_filter_with_no_matches() {
 }
 
 #[test]
+fn test_include_flag_filters_test_files() {
+    let project = ProjectBuilder::new("include-test-files")
+        .contract("simple", SIMPLE_CONTRACT)
+        .raw_file(
+            "tests/smoke/alpha.test.tolk",
+            &passing_test_file(NESTED_TEST_IMPORT, "test-alpha-file", 1),
+        )
+        .raw_file(
+            "tests/slow/beta.test.tolk",
+            &passing_test_file(NESTED_TEST_IMPORT, "test-beta-file", 2),
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .path("tests")
+        .include_pattern("tests/smoke/**")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_contains("alpha-file")
+        .assert_not_contains("beta-file")
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_include_flag_filters_test_files.stdout.txt",
+        );
+}
+
+#[test]
+fn test_exclude_flag_filters_test_files() {
+    let project = ProjectBuilder::new("exclude-test-files")
+        .contract("simple", SIMPLE_CONTRACT)
+        .raw_file(
+            "tests/smoke/alpha.test.tolk",
+            &passing_test_file(NESTED_TEST_IMPORT, "test-alpha-file", 1),
+        )
+        .raw_file(
+            "tests/slow/beta.test.tolk",
+            &passing_test_file(NESTED_TEST_IMPORT, "test-beta-file", 2),
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .path("tests")
+        .exclude_pattern("tests/slow/**")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_contains("alpha-file")
+        .assert_not_contains("beta-file")
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_exclude_flag_filters_test_files.stdout.txt",
+        );
+}
+
+#[test]
 fn test_fail_fast() {
     let project = ProjectBuilder::new("fail-fast")
         .contract("simple", SIMPLE_CONTRACT)
@@ -341,6 +490,97 @@ fn test_fail_fast() {
         .assert_not_contains("third-pass")
         .assert_not_contains("fourth-pass")
         .assert_snapshot_matches("integration/snapshots/flags/test_with_fail_fast.stdout.txt");
+}
+
+#[test]
+fn test_show_bodies_flag_decodes_transaction_bodies_in_test_output() {
+    body_printing_test_project("test-show-bodies-flag")
+        .build()
+        .acton()
+        .test()
+        .show_bodies()
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_show_bodies_flag_decodes_transaction_bodies_in_test_output.stdout.txt",
+        );
+}
+
+#[test]
+fn test_junit_path_flag_writes_report_to_custom_directory() {
+    let project = ProjectBuilder::new("test-junit-path-flag")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            &passing_test_file(ROOT_TEST_IMPORT, "test-junit-custom-path", 1),
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .test()
+        .with_reporter("junit")
+        .arg("--junit-path")
+        .arg("custom-reports/nested")
+        .run()
+        .success();
+
+    output
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_junit_path_flag_writes_report_to_custom_directory.stdout.txt",
+        )
+        .assert_file_snapshot_matches(
+            "custom-reports/nested/TEST-test.test.tolk.xml",
+            "integration/snapshots/flags/test_junit_path_flag_writes_report_to_custom_directory.xml.gen",
+        );
+
+    let default_report = project.path().join("test-results/TEST-test.test.tolk.xml");
+    assert!(
+        !default_report.exists(),
+        "default junit report should not be written when --junit-path is set: {}",
+        default_report.display()
+    );
+}
+
+#[test]
+fn test_clear_cache_flag_recompiles_contracts_before_running_tests() {
+    let project = ProjectBuilder::new("test-clear-cache-flag")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            &passing_test_file(ROOT_TEST_IMPORT, "test-clear-cache", 1),
+        )
+        .build();
+
+    let first_run = project.acton().test().run().success();
+    let first_compiled = extract_compiled_contracts(&first_run.get_normalized_stdout());
+    assert_eq!(
+        first_compiled,
+        vec!["simple".to_owned()],
+        "first test run should compile the contract"
+    );
+
+    let cached_run = project.acton().test().run().success();
+    let cached_compiled = extract_compiled_contracts(&cached_run.get_normalized_stdout());
+    assert!(
+        cached_compiled.is_empty(),
+        "cached test run should not recompile contracts, got: {cached_compiled:?}"
+    );
+
+    let cleared_run = project.acton().test().clear_cache().run().success();
+    let cleared_compiled = extract_compiled_contracts(&cleared_run.get_normalized_stdout());
+    assert_eq!(
+        cleared_compiled,
+        vec!["simple".to_owned()],
+        "clear-cache test run should recompile the contract"
+    );
+
+    cleared_run
+        .assert_passed(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_clear_cache_flag_recompiles_contracts_before_running_tests.stdout.txt",
+        );
 }
 
 #[test]
