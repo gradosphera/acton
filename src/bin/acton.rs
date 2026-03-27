@@ -8,6 +8,7 @@ use acton::commands::docgen::docgen_cmd;
 use acton::commands::doctor::doctor_cmd;
 use acton::commands::fmt::fmt_cmd;
 use acton::commands::func2tolk::{default_func2tolk_version, func2tolk_cmd};
+use acton::commands::help::print_command_manual;
 use acton::commands::hooks::{HooksCommand, hooks_cmd};
 use acton::commands::init::init_cmd;
 use acton::commands::internal::internal_register_contract;
@@ -49,7 +50,8 @@ use ton_source_map::SourceMap;
 #[derive(Parser)]
 #[command(
     name = "acton",
-    version = get_acton_version()
+    version = get_acton_version(),
+    disable_help_subcommand = true
 )]
 #[command(about = "TON blockchain development tool")]
 #[command(color = ColorChoice::Auto)]
@@ -84,13 +86,14 @@ struct Cli {
 enum Commands {
     #[command(
         about = "Initialize a new project in the current directory",
-        long_about = "Initialize a new project in the current directory. This is useful for adding Acton support to an existing project."
+        long_about = "Initialize a new project in the current directory. This is useful for adding Acton support to an existing project.",
+        after_help = detailed_help_pointer("init")
     )]
     Init,
     #[command(
         about = "Create a new project in a specified directory",
         long_about = "Create a new project in a specified directory. This will create a new directory with a basic project template.",
-        after_help = example_new_usage()
+        after_help = detailed_help_pointer("new")
     )]
     New {
         #[arg(help = "Directory to create the project in (use '.' for the current directory)")]
@@ -114,21 +117,32 @@ enum Commands {
         agents: bool,
     },
     #[command(
+        about = "Print this message or the help of a given top-level command",
+        after_help = detailed_help_pointer("help")
+    )]
+    Help {
+        #[arg(help = "Top-level command to get help for")]
+        command: Option<String>,
+    },
+    #[command(
         about = "Manage wallets",
-        after_help = example_wallet_usage()
+        after_help = detailed_help_pointer("wallet")
     )]
     Wallet {
         #[command(subcommand)]
         command: WalletCommand,
     },
-    #[command(about = "Manage git hooks for the current project")]
+    #[command(
+        about = "Manage git hooks for the current project",
+        after_help = detailed_help_pointer("hooks")
+    )]
     Hooks {
         #[command(subcommand)]
         command: HooksCommand,
     },
     #[command(
         about = "Execute tests in file or directory",
-        after_help = example_test_usage()
+        after_help = detailed_help_pointer("test")
     )]
     Test {
         #[arg(help = "Test file or directory containing test files (default: project root)")]
@@ -320,7 +334,7 @@ enum Commands {
     },
     #[command(
         about = "Generate wrapper and optionally stub test file for a contract",
-        after_help = example_wrapper_usage()
+        after_help = detailed_help_pointer("wrapper")
     )]
     Wrapper {
         #[arg(help = "Contract ID to generate wrapper", value_name = "CONTRACT_ID", add = ArgValueCompleter::new(complete_contracts))]
@@ -374,7 +388,7 @@ enum Commands {
     },
     #[command(
         about = "Execute a Tolk script file",
-        after_help = example_script_usage()
+        after_help = detailed_help_pointer("script")
     )]
     Script {
         #[arg(help = "Script file to execute")]
@@ -457,7 +471,7 @@ enum Commands {
     },
     #[command(
         about = "Build the specified contract or all contracts",
-        after_help = example_build_usage()
+        after_help = detailed_help_pointer("build")
     )]
     Build {
         #[arg(help = "Contract ID to build (defaults to all if not specified)", value_name = "CONTRACT_ID", add = ArgValueCompleter::new(complete_contracts))]
@@ -489,7 +503,7 @@ enum Commands {
     },
     #[command(
         about = "Run a script defined in Acton.toml",
-        after_help = example_run_usage()
+        after_help = detailed_help_pointer("run")
     )]
     Run {
         #[arg(help = "Name of the script to run", add = ArgValueCompleter::new(complete_scripts))]
@@ -503,7 +517,7 @@ enum Commands {
     },
     #[command(
         about = "Compile a Tolk file",
-        after_help = example_compile_usage()
+        after_help = detailed_help_pointer("compile")
     )]
     Compile {
         #[arg(help = "Tolk file to compile")]
@@ -525,7 +539,7 @@ enum Commands {
     },
     #[command(
         about = "Disassemble TVM bitcode to human-readable TASM",
-        after_help = example_disasm_usage()
+        after_help = detailed_help_pointer("disasm")
     )]
     Disasm {
         #[arg(help = "Binary/Hex/Base64 BoC file to disassemble (use -s flag to pass a string)")]
@@ -557,7 +571,7 @@ enum Commands {
     },
     #[command(
         about = "Verify contract source code on verifier.ton.org",
-        after_help = example_verify_usage()
+        after_help = detailed_help_pointer("verify")
     )]
     Verify {
         #[arg(help = "Contract ID to verify (prompts if not provided)", value_name = "CONTRACT_ID", add = ArgValueCompleter::new(complete_contracts))]
@@ -578,7 +592,10 @@ enum Commands {
         #[arg(long, help = "TonCenter API key for blockchain queries")]
         api_key: Option<String>,
     },
-    #[command(about = "Check Tolk files in the project for errors")]
+    #[command(
+        about = "Check Tolk files in the project for errors",
+        after_help = detailed_help_pointer("check")
+    )]
     Check {
         #[arg(help = "Contract ID to check or path to a .tolk file")]
         target: Option<String>,
@@ -611,7 +628,7 @@ enum Commands {
     },
     #[command(
         about = "Retrace a transaction by its hash",
-        after_help = example_retrace_usage()
+        after_help = detailed_help_pointer("retrace")
     )]
     Retrace {
         #[arg(help = "Transaction hash in hex format to retrace")]
@@ -631,7 +648,7 @@ enum Commands {
     },
     #[command(
         about = "Manage TON libraries",
-        after_help = example_library_usage()
+        after_help = detailed_help_pointer("library")
     )]
     Library {
         #[command(subcommand)]
@@ -639,7 +656,7 @@ enum Commands {
     },
     #[command(
         about = "Manage lightweight TON node",
-        after_help = example_litenode_usage()
+        after_help = detailed_help_pointer("litenode")
     )]
     Litenode {
         #[command(subcommand)]
@@ -647,7 +664,7 @@ enum Commands {
     },
     #[command(
         about = "Format Tolk source files",
-        after_help = example_fmt_usage()
+        after_help = detailed_help_pointer("fmt")
     )]
     Fmt {
         #[arg(help = "Files or directories to format (defaults to project root)")]
@@ -657,13 +674,16 @@ enum Commands {
     },
     #[command(
         about = "Lookup reference documentation",
-        after_help = example_doc_usage()
+        after_help = detailed_help_pointer("doc")
     )]
     Doc {
         #[command(subcommand)]
         command: DocCommand,
     },
-    #[command(about = "Run LSP server for the TON languages and technologies")]
+    #[command(
+        about = "Run LSP server for the TON languages and technologies",
+        after_help = detailed_help_pointer("ls")
+    )]
     Ls {
         #[arg(long, help = "Port to listen on (TCP)")]
         port: Option<u16>,
@@ -676,7 +696,7 @@ enum Commands {
     },
     #[command(
         about = "Manage Acton versions",
-        after_help = example_up_usage()
+        after_help = detailed_help_pointer("up")
     )]
     Up {
         #[arg(
@@ -706,7 +726,7 @@ enum Commands {
     #[command(
         name = "func2tolk",
         about = "Convert FunC files to Tolk via @ton/convert-func-to-tolk",
-        after_help = example_func2tolk_usage()
+        after_help = detailed_help_pointer("func2tolk")
     )]
     Func2Tolk {
         #[arg(help = "Path to a .fc/.func file or a directory containing them")]
@@ -729,12 +749,12 @@ enum Commands {
     },
     #[command(
         about = "Inspect resolved project environment",
-        after_help = example_doctor_usage()
+        after_help = detailed_help_pointer("doctor")
     )]
     Doctor,
     #[command(
         about = "Generate shell completions for selected shell",
-        after_help = example_completions_usage()
+        after_help = detailed_help_pointer("completions")
     )]
     Completions {
         #[clap(value_enum)]
@@ -820,7 +840,7 @@ pub enum LitenodeCommand {
         #[arg(
             long,
             short,
-            help = "LiteNode server port (default: [litenode].port or 3000)"
+            help = "LiteNode server port (default: [litenode].port or 5411)"
         )]
         port: Option<u16>,
     },
@@ -931,114 +951,6 @@ const fn get_acton_version() -> &'static str {
     acton::build_info::LONG_VERSION
 }
 
-fn example_litenode_usage() -> StyledStr {
-    format_examples(
-        &[
-            (
-                "Start the lightweight TON node (port from [litenode].port or 3000)",
-                "acton litenode start",
-            ),
-            (
-                "Start LiteNode with state forked from a network",
-                "acton litenode start --fork-net testnet",
-            ),
-            (
-                "Fork LiteNode from a specific historical block",
-                "acton litenode start --fork-net testnet --fork-block-number 55000000",
-            ),
-            (
-                "Auto-fund and deploy configured wallets",
-                "acton litenode start --accounts deployer,user",
-            ),
-            (
-                "Load network state from JSON snapshot",
-                "acton litenode start --load-state snapshots/localnet.json",
-            ),
-            (
-                "Dump network state to JSON snapshot on shutdown",
-                "acton litenode start --dump-state snapshots/localnet.json",
-            ),
-            (
-                "Simulate provider API limits (1 request/sec)",
-                "acton litenode start --rate-limit 1",
-            ),
-            (
-                "Request 100 TON from faucet to specified address",
-                "acton litenode airdrop UQA_ftKIJsHEAE_UgtFOUK15hPzycZooFuUr8duyY9T3kwwM",
-            ),
-            (
-                "Request specific amount of TON from faucet",
-                "acton litenode airdrop UQA_ftKIJsHEAE_UgtFOUK15hPzycZooFuUr8duyY9T3kwwM --amount 50",
-            ),
-        ],
-        "",
-    )
-}
-
-fn example_test_usage() -> StyledStr {
-    use std::fmt::Write as _;
-
-    let mut writer = StyledStr::new();
-    let styled = Styles::styled();
-
-    let exampled_command = Vec::from([
-        ("Run all tests in project root", "acton test"),
-        ("Run tests in specific file", "acton test my_test.tolk"),
-        (
-            "Run tests in directory with regex filter",
-            "acton test . --filter \"wallet.*\"",
-        ),
-        (
-            "Exclude tests",
-            "acton test . --exclude \"**/integration/**\"",
-        ),
-        (
-            "Exclude multiple patterns",
-            "acton test . --exclude \"**/e2e/**\" --exclude \"**/gas/**\"",
-        ),
-        (
-            "Include only specific directories",
-            "acton test . --include \"**/unit/**\" --include \"**/wallet/**\"",
-        ),
-        (
-            "Enable coverage collection",
-            "acton test . --coverage --coverage-format lcov",
-        ),
-        (
-            "Run with teamcity service messages",
-            "acton test . --reporter console,teamcity",
-        ),
-        (
-            "Generate JUnit XML report",
-            "acton test . --reporter junit --junit-path ./test-results",
-        ),
-        (
-            "Generate merged JUnit XML report",
-            "acton test . --reporter junit --junit-merge",
-        ),
-        ("Run in debug mode", "acton test my_test.tolk --debug"),
-    ]);
-
-    let header = styled.get_header();
-    let named = Style::new().dimmed();
-    let example = styled.get_literal();
-
-    let _ = write!(writer, "{header}Examples:{header:#}",);
-
-    const USAGE_SEP: &str = "\n     ";
-    for (name, value) in &exampled_command {
-        let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
-        let _ = writeln!(writer, "{USAGE_SEP}{example}{value}{example:#}");
-    }
-
-    let _ = write!(
-        writer,
-        "\nFor more information, see https://ton-blockchain.github.io/acton/docs/test-runner"
-    );
-
-    writer
-}
-
 fn complete_contracts(current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
     let Some(config) = load_config_for_completion() else {
         return vec![];
@@ -1088,441 +1000,17 @@ fn load_config_for_completion() -> Option<ActonConfig> {
     None
 }
 
-fn example_build_usage() -> StyledStr {
+fn detailed_help_pointer(command: &str) -> StyledStr {
     use std::fmt::Write as _;
 
     let mut writer = StyledStr::new();
-    let styled = Styles::styled();
-
-    let dim = |text: &str| text.dimmed().to_string();
-    let green = |text: &str| text.green().to_string();
-
-    let config_example = [
-        format!("{}contracts.wallet{}", dim("["), dim("]")),
-        format!("     name{}{}", dim(" = "), green("\"Wallet Contract\"")),
-        format!(
-            "     src{}{}",
-            dim(" = "),
-            green("\"contracts/wallet.tolk\"")
-        ),
-        format!("     output{}{}", dim(" = "), green("\"wallet.boc\"")),
-        format!(
-            "     depends{}{}{}{}",
-            dim(" = "),
-            dim("["),
-            green("\"child\""),
-            dim("]")
-        ),
-        format!(
-            "     {}",
-            dim("# or as library with custom function name and output path")
-        ),
-        format!("     depends{}{}", dim(" = "), dim("[")),
-        format!(
-            "       {} name{}{}{} kind{}{}{} function{}{}{} path{}{} {}",
-            dim("{"),
-            dim(" = "),
-            green("\"child\""),
-            dim(","),
-            dim(" = "),
-            green("\"library_ref\""),
-            dim(","),
-            dim(" = "),
-            green("\"getChildCode\""),
-            dim(","),
-            dim(" = "),
-            green("\"child_dep.tolk\""),
-            dim("}")
-        ),
-        format!("     {}", dim("]")),
-    ]
-    .join("\n");
-
-    let build_config_example = [
-        format!("{}build{}", dim("["), dim("]")),
-        format!("     out-dir{}{}", dim(" = "), green("\"build\"")),
-        format!("     gen-dir{}{}", dim(" = "), green("\"gen\"")),
-        format!("     output-fift{}{}", dim(" = "), green("\"build/fift\"")),
-    ]
-    .join("\n");
-
-    let build_examples = Vec::from([
-        ("Build all contracts", "acton build"),
-        ("Build specific contract", "acton build wallet"),
-        (
-            "Build contracts with fresh cache",
-            "acton build --clear-cache",
-        ),
-        (
-            "Generate dependency graph as DOT file",
-            "acton build --graph deps.dot",
-        ),
-        (
-            "Save generated dependency files to a custom directory",
-            "acton build --gen-dir build/gen",
-        ),
-        (
-            "Save compiled Fift files to a custom directory",
-            "acton build --output-fift build/fift",
-        ),
-    ]);
-
-    let header = styled.get_header();
-    let named = Style::new().dimmed();
-    let literal = styled.get_literal();
-
-    let _ = write!(writer, "{header}Configuration:{header:#}");
+    let styles = Styles::styled();
+    let literal = styles.get_literal();
     let _ = write!(
         writer,
-        "\n     {named}# Configure contracts in Acton.toml{named:#}"
+        "Run '{literal}acton help {command}{literal:#}' for more detailed information."
     );
-    let _ = write!(writer, "\n     {config_example}");
-    let _ = write!(
-        writer,
-        "\n\n     {named}# Optional build output settings{named:#}"
-    );
-    let _ = write!(writer, "\n     {build_config_example}");
-    let _ = write!(writer, "\n\n{header}Examples:{header:#}");
-
-    const USAGE_SEP: &str = "\n     ";
-    for (name, value) in &build_examples {
-        let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
-        let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
-    }
-
-    let _ = write!(
-        writer,
-        "\nFor more information, see https://ton-blockchain.github.io/acton/docs/build-system"
-    );
-
     writer
-}
-
-fn example_disasm_usage() -> StyledStr {
-    use std::fmt::Write as _;
-
-    let mut writer = StyledStr::new();
-    let styled = Styles::styled();
-
-    let disasm_examples = Vec::from([
-        ("Disassemble from BoC file", "acton disasm contract.boc"),
-        (
-            "Disassemble from hex/base64 string",
-            "acton disasm -s \"b5ee9c72010104...0840f01c700f2f4\"",
-        ),
-        (
-            "Disassemble from blockchain address",
-            "acton disasm --address UQA...wwM",
-        ),
-        (
-            "Disassemble with output to file",
-            "acton disasm contract.boc -o output.tasm",
-        ),
-        (
-            "Disassemble with cell hashes and offsets",
-            "acton disasm contract.boc --show-hashes --show-offsets",
-        ),
-        (
-            "Disassemble from testnet address",
-            "acton disasm --address kQAl...g44 --net testnet",
-        ),
-    ]);
-
-    let header = styled.get_header();
-    let named = Style::new().dimmed();
-    let literal = styled.get_literal();
-
-    let _ = write!(writer, "{header}Examples:{header:#}");
-
-    const USAGE_SEP: &str = "\n     ";
-    for (name, value) in &disasm_examples {
-        let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
-        let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
-    }
-
-    let _ = write!(
-        writer,
-        "\nFor more information, see https://ton-blockchain.github.io/acton/docs/commands/disasm"
-    );
-
-    writer
-}
-
-fn format_examples(examples: &[(&str, &str)], link: &str) -> StyledStr {
-    use std::fmt::Write as _;
-
-    let mut writer = StyledStr::new();
-    let styled = Styles::styled();
-
-    let header = styled.get_header();
-    let named = Style::new().dimmed();
-    let literal = styled.get_literal();
-
-    let _ = write!(writer, "{header}Examples:{header:#}");
-
-    const USAGE_SEP: &str = "\n     ";
-    for (name, value) in examples {
-        let _ = write!(writer, "{USAGE_SEP}{named}# {name}{named:#}");
-        let _ = writeln!(writer, "{USAGE_SEP}{literal}{value}{literal:#}");
-    }
-
-    if !link.is_empty() {
-        let _ = write!(writer, "\nFor more information, see {link}");
-    }
-
-    writer
-}
-
-fn example_new_usage() -> StyledStr {
-    format_examples(
-        &[
-            (
-                "Create a new project named my-project",
-                "acton new my-project",
-            ),
-            (
-                "Create a project non-interactively with all metadata",
-                "acton new my-project --name \"My Project\" --description \"Cool description\" --template counter --license MIT",
-            ),
-            (
-                "Create a counter project with the TypeScript app scaffold",
-                "acton new my-project --template counter --app",
-            ),
-            (
-                "Create a project with AGENTS.md guidance for coding agents",
-                "acton new my-project --template empty --agents",
-            ),
-        ],
-        "https://ton-blockchain.github.io/acton/docs/commands/new",
-    )
-}
-
-fn example_wallet_usage() -> StyledStr {
-    format_examples(
-        &[
-            (
-                "Create a new wallet named my-wallet",
-                "acton wallet new my-wallet",
-            ),
-            (
-                "List all configured wallets with balances",
-                "acton wallet list -b",
-            ),
-            (
-                "Request TONs from testnet faucet",
-                "acton wallet airdrop my-wallet",
-            ),
-            (
-                "Request 100 TON from localnet faucet for a wallet (for manual control see `acton litenode airdrop`)",
-                "acton wallet airdrop my-wallet --net localnet",
-            ),
-            (
-                "Sign external wallet body BoC",
-                "acton wallet sign my-wallet --body \"B5EE9C72...\"",
-            ),
-            (
-                "Export wallet mnemonic (interactive only)",
-                "acton wallet export-mnemonic my-wallet",
-            ),
-        ],
-        "https://ton-blockchain.github.io/acton/docs/commands/wallet",
-    )
-}
-
-fn example_wrapper_usage() -> StyledStr {
-    format_examples(
-        &[
-            ("Generate wrapper for minter", "acton wrapper minter"),
-            (
-                "Generate wrapper and stub test for minter",
-                "acton wrapper minter --test",
-            ),
-            (
-                "Generate a TypeScript wrapper for minter into wrappers/",
-                "acton wrapper minter --ts",
-            ),
-            (
-                "Generate a TypeScript wrapper for minter into generated/",
-                "acton wrapper minter --ts --output-dir generated",
-            ),
-        ],
-        "https://ton-blockchain.github.io/acton/docs/test-runner/generating-wrappers",
-    )
-}
-
-fn example_script_usage() -> StyledStr {
-    format_examples(
-        &[
-            (
-                "Execute a deploy script in local emulator",
-                "acton script scripts/deploy.tolk",
-            ),
-            (
-                "Execute a deploy script and broadcast to testnet network",
-                "acton script scripts/deploy.tolk --broadcast",
-            ),
-            (
-                "Execute a deploy script and broadcast to mainnet network",
-                "acton script scripts/deploy.tolk --broadcast --net mainnet",
-            ),
-        ],
-        "https://ton-blockchain.github.io/acton/docs/scripting",
-    )
-}
-
-fn example_run_usage() -> StyledStr {
-    format_examples(
-        &[(
-            "Run a custom script named 'deploy' with arguments",
-            "acton run deploy 1 2 3",
-        )],
-        "https://ton-blockchain.github.io/acton/docs/commands/run",
-    )
-}
-
-fn example_compile_usage() -> StyledStr {
-    format_examples(
-        &[(
-            "Compile a Tolk contract and save as BOC",
-            "acton compile contracts/main.tolk --boc main.boc",
-        )],
-        "https://ton-blockchain.github.io/acton/docs/commands/compile",
-    )
-}
-
-fn example_verify_usage() -> StyledStr {
-    format_examples(
-        &[(
-            "Verify a contract with a specific address",
-            "acton verify minter --address UQA...wwM",
-        )],
-        "https://ton-blockchain.github.io/acton/docs/contract-verification",
-    )
-}
-
-fn example_retrace_usage() -> StyledStr {
-    format_examples(
-        &[(
-            "Retrace a transaction by its hash",
-            "acton retrace 287f...9e0",
-        )],
-        "",
-    )
-}
-
-fn example_library_usage() -> StyledStr {
-    format_examples(
-        &[
-            (
-                "Publish a contract as a library",
-                "acton library publish minter",
-            ),
-            ("Fetch a library by its hash", "acton library fetch <HASH>"),
-            (
-                "Show information about a library",
-                "acton library info my-lib",
-            ),
-            (
-                "Top up a library for 1 year",
-                "acton library topup my-lib --duration 1y",
-            ),
-        ],
-        "https://ton-blockchain.github.io/acton/docs/advanced/libraries",
-    )
-}
-
-fn example_up_usage() -> StyledStr {
-    format_examples(
-        &[
-            ("Upgrade Acton to the latest stable version", "acton up"),
-            ("Switch to the trunk release", "acton up --trunk"),
-            ("List all available versions", "acton up --list"),
-        ],
-        "https://ton-blockchain.github.io/acton/docs/installation",
-    )
-}
-
-fn example_doctor_usage() -> StyledStr {
-    format_examples(&[("Show environment diagnostics", "acton doctor")], "")
-}
-
-fn example_fmt_usage() -> StyledStr {
-    format_examples(
-        &[
-            ("Format all Tolk files in the current project", "acton fmt"),
-            (
-                "Format specific files or directories",
-                "acton fmt contracts/ scripts/",
-            ),
-            ("Check if all files are formatted", "acton fmt --check"),
-        ],
-        "",
-    )
-}
-
-fn example_doc_usage() -> StyledStr {
-    format_examples(
-        &[
-            (
-                "Show text documentation for TVM instruction ADD",
-                "acton doc tvm ADD",
-            ),
-            (
-                "Show text documentation for several instructions",
-                "acton doc tvm ADD SUB",
-            ),
-            (
-                "Show raw JSON entry for TVM instruction SENDRAWMSG",
-                "acton doc tvm SENDRAWMSG --json",
-            ),
-            (
-                "Find TVM instructions by fuzzy query",
-                "acton doc tvm SENRAWMSG --find",
-            ),
-            (
-                "Find by fuzzy query in names and descriptions",
-                "acton doc tvm outcomng --find --description",
-            ),
-        ],
-        "",
-    )
-}
-
-fn example_completions_usage() -> StyledStr {
-    format_examples(
-        &[
-            (
-                "Generate dynamic Bash completions",
-                "source <(COMPLETE=bash acton)",
-            ),
-            ("Generate static Zsh completions", "acton completions zsh"),
-        ],
-        "https://ton-blockchain.github.io/acton/docs/commands/shell-completions",
-    )
-}
-
-fn example_func2tolk_usage() -> StyledStr {
-    format_examples(
-        &[
-            (
-                "Convert all .fc/.func files in a directory",
-                "acton func2tolk contracts",
-            ),
-            (
-                "Convert a single file and add warning comments",
-                "acton func2tolk jetton-minter.fc --warnings-as-comments",
-            ),
-            (
-                "Convert without camelCase renaming",
-                "acton func2tolk jetton-minter.fc --no-camel-case",
-            ),
-            (
-                "Use a specific converter version",
-                "acton func2tolk jetton-minter.fc --version 1.0.0",
-            ),
-        ],
-        "https://github.com/ton-blockchain/convert-func-to-tolk",
-    )
 }
 
 fn root_help(show_global_options: bool) -> StyledStr {
@@ -1704,6 +1192,11 @@ fn root_help(show_global_options: bool) -> StyledStr {
         }
     }
 
+    let _ = write!(
+        writer,
+        "\n\nUse {cyan}acton help <command>{cyan:#} for detailed manuals with behavior, config, and examples."
+    );
+
     let _ = writeln!(
         writer,
         "\n\nLearn more about Acton:                {cyan}https://ton-blockchain.github.io/acton/docs/welcome{cyan:#}"
@@ -1724,6 +1217,48 @@ fn root_help_has_explicit_help_flag() -> bool {
     env::args_os()
         .skip(1)
         .any(|arg| arg == "-h" || arg == "--help")
+}
+
+fn render_help_command(command: Option<String>) -> anyhow::Result<()> {
+    match command.as_deref() {
+        None => {
+            cli_command(true).print_help()?;
+            println!();
+            Ok(())
+        }
+        Some(command) => {
+            if print_command_manual(command)? {
+                return Ok(());
+            }
+
+            let mut cli = Cli::command();
+            cli.build();
+            if let Some(subcommand) = cli.find_subcommand_mut(command) {
+                subcommand.print_long_help()?;
+                println!();
+                return Ok(());
+            }
+
+            let mut message = format!("no such command: `{command}`");
+            if let Some((suggestion, _)) = cli
+                .get_subcommands()
+                .map(|subcommand| subcommand.get_name())
+                .filter(|name| *name != "help")
+                .map(|name| (name, strsim::jaro_winkler(command, name)))
+                .filter(|(_, score)| *score >= 0.80)
+                .max_by(|left, right| left.1.total_cmp(&right.1))
+            {
+                message.push_str(&format!(
+                    "\n\nhelp: a command with a similar name exists: `{suggestion}`"
+                ));
+            }
+            message.push_str("\n\nhelp: view all commands with `acton --help`");
+
+            Cli::command()
+                .error(clap::error::ErrorKind::InvalidSubcommand, message)
+                .exit();
+        }
+    }
 }
 
 fn find_manifest_in_ancestors(start_dir: &Path) -> Option<PathBuf> {
@@ -1868,14 +1403,16 @@ fn main() {
     };
     init_color_mode(color);
 
-    if !matches!(command, Commands::Init | Commands::New { .. })
-        && let Err(err) = configure_project_roots(manifest_path, project_root)
+    if !matches!(
+        command,
+        Commands::Init | Commands::New { .. } | Commands::Help { .. }
+    ) && let Err(err) = configure_project_roots(manifest_path, project_root)
     {
         eprintln!("{} {}", "Error:".red(), err);
         process::exit(1);
     }
 
-    if !matches!(command, Commands::Ls { .. })
+    if !matches!(command, Commands::Ls { .. } | Commands::Help { .. })
         && let Err(err) = setup_logging()
     {
         eprintln!(
@@ -1886,6 +1423,7 @@ fn main() {
 
     let result = match command {
         Commands::Init => init_cmd(),
+        Commands::Help { command } => render_help_command(command),
         Commands::Wallet { command } => wallet_cmd(command),
         Commands::New {
             path,
