@@ -9,8 +9,16 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::OpenOptions;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 use std::{env, fs};
+
+const DOCTOR_API_CONNECT_TIMEOUT: Duration = Duration::from_secs(4);
+const DOCTOR_API_REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
+const DOCTOR_TONCENTER_REQUEST_STAGGER: Duration = Duration::from_secs(1);
+const DOCTOR_API_TARGETS_JSON_ENV: &str = "ACTON_DOCTOR_API_TARGETS_JSON";
+const DEFAULT_DTON_API_KEY: &str = "fpYxhGTWfIe3ZEf2s6vvgAGmps_qnNmD";
 
 #[derive(Debug, Serialize)]
 struct DoctorPath {
@@ -126,6 +134,70 @@ struct DoctorReport {
     stdlib: DoctorStdlib,
     logging: DoctorLogging,
     environment: DoctorEnvironment,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum DoctorApiMethod {
+    Get,
+    PostJson,
+}
+
+impl DoctorApiMethod {
+    const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Get => "GET",
+            Self::PostJson => "POST",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DoctorApiTarget {
+    name: String,
+    method: DoctorApiMethod,
+    url: String,
+    display_url: String,
+    body: Option<serde_json::Value>,
+    sequence_group: Option<String>,
+    sequence_delay_after: Duration,
+    retry_on_429_after: Option<Duration>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct DoctorApiTargetOverride {
+    name: String,
+    method: DoctorApiMethod,
+    url: String,
+    #[serde(default)]
+    display_url: Option<String>,
+    #[serde(default)]
+    body: Option<serde_json::Value>,
+    #[serde(default)]
+    sequence_group: Option<String>,
+    #[serde(default)]
+    sequence_delay_after_ms: Option<u64>,
+    #[serde(default)]
+    retry_on_429_after_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+struct DoctorApiCheck {
+    name: String,
+    method: String,
+    url: String,
+    ok: bool,
+    status_code: Option<u16>,
+    duration_ms: u128,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct DoctorApiChecks {
+    healthy: usize,
+    total: usize,
+    checks: Vec<DoctorApiCheck>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -535,6 +607,279 @@ fn read_first_existing(paths: &[&Path]) -> Option<String> {
     None
 }
 
+fn build_doctor_api_targets() -> Result<Vec<DoctorApiTarget>> {
+    if let Ok(raw) = env::var(DOCTOR_API_TARGETS_JSON_ENV) {
+        let overrides: Vec<DoctorApiTargetOverride> = serde_json::from_str(&raw)?;
+        let targets = overrides
+            .into_iter()
+            .map(|item| DoctorApiTarget {
+                display_url: item.display_url.unwrap_or_else(|| item.url.clone()),
+                name: item.name,
+                method: item.method,
+                url: item.url,
+                body: item.body,
+                sequence_group: item.sequence_group,
+                sequence_delay_after: Duration::from_millis(
+                    item.sequence_delay_after_ms.unwrap_or_default(),
+                ),
+                retry_on_429_after: item.retry_on_429_after_ms.map(Duration::from_millis),
+            })
+            .collect();
+        return Ok(targets);
+    }
+
+    let dton_api_key = env::var("DTON_API_KEY").unwrap_or_else(|_| DEFAULT_DTON_API_KEY.to_owned());
+
+    Ok(build_default_doctor_api_targets(&dton_api_key))
+}
+
+fn build_default_doctor_api_targets(dton_api_key: &str) -> Vec<DoctorApiTarget> {
+    let graphql_probe = Some(serde_json::json!({
+        "query": "query { __typename }",
+        "variables": {}
+    }));
+
+    vec![
+        DoctorApiTarget {
+            name: "toncenter_v2_mainnet".to_string(),
+            method: DoctorApiMethod::Get,
+            url: "https://toncenter.com/api/v2/getMasterchainInfo".to_string(),
+            display_url: "https://toncenter.com/api/v2/getMasterchainInfo".to_string(),
+            body: None,
+            sequence_group: Some("toncenter".to_string()),
+            sequence_delay_after: DOCTOR_TONCENTER_REQUEST_STAGGER,
+            retry_on_429_after: Some(DOCTOR_TONCENTER_REQUEST_STAGGER),
+        },
+        DoctorApiTarget {
+            name: "toncenter_v2_testnet".to_string(),
+            method: DoctorApiMethod::Get,
+            url: "https://testnet.toncenter.com/api/v2/getMasterchainInfo".to_string(),
+            display_url: "https://testnet.toncenter.com/api/v2/getMasterchainInfo".to_string(),
+            body: None,
+            sequence_group: Some("toncenter".to_string()),
+            sequence_delay_after: DOCTOR_TONCENTER_REQUEST_STAGGER,
+            retry_on_429_after: Some(DOCTOR_TONCENTER_REQUEST_STAGGER),
+        },
+        DoctorApiTarget {
+            name: "toncenter_v3_mainnet".to_string(),
+            method: DoctorApiMethod::Get,
+            url: "https://toncenter.com/api/v3/masterchainInfo".to_string(),
+            display_url: "https://toncenter.com/api/v3/masterchainInfo".to_string(),
+            body: None,
+            sequence_group: Some("toncenter".to_string()),
+            sequence_delay_after: DOCTOR_TONCENTER_REQUEST_STAGGER,
+            retry_on_429_after: Some(DOCTOR_TONCENTER_REQUEST_STAGGER),
+        },
+        DoctorApiTarget {
+            name: "toncenter_v3_testnet".to_string(),
+            method: DoctorApiMethod::Get,
+            url: "https://testnet.toncenter.com/api/v3/masterchainInfo".to_string(),
+            display_url: "https://testnet.toncenter.com/api/v3/masterchainInfo".to_string(),
+            body: None,
+            sequence_group: Some("toncenter".to_string()),
+            sequence_delay_after: DOCTOR_TONCENTER_REQUEST_STAGGER,
+            retry_on_429_after: Some(DOCTOR_TONCENTER_REQUEST_STAGGER),
+        },
+        DoctorApiTarget {
+            name: "tonhub_v4_mainnet".to_string(),
+            method: DoctorApiMethod::Get,
+            url: "https://mainnet-v4.tonhubapi.com/block/latest".to_string(),
+            display_url: "https://mainnet-v4.tonhubapi.com/block/latest".to_string(),
+            body: None,
+            sequence_group: None,
+            sequence_delay_after: Duration::ZERO,
+            retry_on_429_after: None,
+        },
+        DoctorApiTarget {
+            name: "tonhub_v4_testnet".to_string(),
+            method: DoctorApiMethod::Get,
+            url: "https://testnet-v4.tonhubapi.com/block/latest".to_string(),
+            display_url: "https://testnet-v4.tonhubapi.com/block/latest".to_string(),
+            body: None,
+            sequence_group: None,
+            sequence_delay_after: Duration::ZERO,
+            retry_on_429_after: None,
+        },
+        DoctorApiTarget {
+            name: "dton_graphql_mainnet".to_string(),
+            method: DoctorApiMethod::PostJson,
+            url: format!("https://dton.io/{dton_api_key}/graphql"),
+            display_url: "https://dton.io/[DTON_API_KEY]/graphql".to_string(),
+            body: graphql_probe,
+            sequence_group: None,
+            sequence_delay_after: Duration::ZERO,
+            retry_on_429_after: None,
+        },
+        DoctorApiTarget {
+            name: "verifier_backends_config".to_string(),
+            method: DoctorApiMethod::Get,
+            url: "https://raw.githubusercontent.com/ton-community/contract-verifier-config/main/config.json".to_string(),
+            display_url: "https://raw.githubusercontent.com/ton-community/contract-verifier-config/main/config.json".to_string(),
+            body: None,
+            sequence_group: None,
+            sequence_delay_after: Duration::ZERO,
+            retry_on_429_after: None,
+        },
+    ]
+}
+
+fn send_doctor_api_request(
+    client: &reqwest::blocking::Client,
+    target: &DoctorApiTarget,
+) -> Result<reqwest::blocking::Response, reqwest::Error> {
+    match (&target.method, &target.body) {
+        (DoctorApiMethod::Get, _) => client.get(&target.url),
+        (DoctorApiMethod::PostJson, Some(body)) => client.post(&target.url).json(body),
+        (DoctorApiMethod::PostJson, None) => client.post(&target.url),
+    }
+    .header("User-Agent", "acton-doctor")
+    .send()
+}
+
+fn run_doctor_api_check(target: DoctorApiTarget) -> DoctorApiCheck {
+    let started = Instant::now();
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(DOCTOR_API_CONNECT_TIMEOUT)
+        .timeout(DOCTOR_API_REQUEST_TIMEOUT)
+        .build();
+
+    let (ok, status_code, error) = match client {
+        Ok(client) => match send_doctor_api_request(&client, &target) {
+            Ok(response) => {
+                let mut status = response.status().as_u16();
+                if status == 429
+                    && let Some(retry_delay) = target.retry_on_429_after
+                {
+                    std::thread::sleep(retry_delay);
+                    match send_doctor_api_request(&client, &target) {
+                        Ok(retry_response) => {
+                            status = retry_response.status().as_u16();
+                            (
+                                status == 200,
+                                Some(status),
+                                (status != 200).then(|| format!("HTTP {status}")),
+                            )
+                        }
+                        Err(err) => (false, None, Some(err.to_string())),
+                    }
+                } else {
+                    (
+                        status == 200,
+                        Some(status),
+                        (status != 200).then(|| format!("HTTP {status}")),
+                    )
+                }
+            }
+            Err(err) => (false, None, Some(err.to_string())),
+        },
+        Err(err) => (false, None, Some(err.to_string())),
+    };
+
+    let duration_ms = started.elapsed().as_millis();
+
+    DoctorApiCheck {
+        name: target.name,
+        method: target.method.as_str().to_string(),
+        url: target.display_url,
+        ok,
+        status_code,
+        duration_ms,
+        error,
+    }
+}
+
+fn run_doctor_api_group(group: Vec<(usize, DoctorApiTarget)>) -> Vec<(usize, DoctorApiCheck)> {
+    let group_len = group.len();
+    let mut results = Vec::with_capacity(group_len);
+
+    for (position, (index, target)) in group.into_iter().enumerate() {
+        let sequence_delay_after = target.sequence_delay_after;
+        results.push((index, run_doctor_api_check(target)));
+
+        if position + 1 < group_len && !sequence_delay_after.is_zero() {
+            std::thread::sleep(sequence_delay_after);
+        }
+    }
+
+    results
+}
+
+fn collect_doctor_api_checks() -> DoctorApiChecks {
+    let targets = match build_doctor_api_targets() {
+        Ok(targets) => targets,
+        Err(err) => {
+            return DoctorApiChecks {
+                healthy: 0,
+                total: 1,
+                checks: vec![DoctorApiCheck {
+                    name: "api_targets".to_string(),
+                    method: "<config>".to_string(),
+                    url: format!("env:{DOCTOR_API_TARGETS_JSON_ENV}"),
+                    ok: false,
+                    status_code: None,
+                    duration_ms: 0,
+                    error: Some(err.to_string()),
+                }],
+            };
+        }
+    };
+
+    let total = targets.len();
+    let mut groups = Vec::<Vec<(usize, DoctorApiTarget)>>::new();
+    let mut grouped_indexes = BTreeMap::<String, usize>::new();
+
+    for (index, target) in targets.into_iter().enumerate() {
+        if let Some(group_name) = target.sequence_group.clone() {
+            let group_index = match grouped_indexes.get(&group_name) {
+                Some(index) => *index,
+                None => {
+                    let next_index = groups.len();
+                    grouped_indexes.insert(group_name, next_index);
+                    groups.push(Vec::new());
+                    next_index
+                }
+            };
+            groups[group_index].push((index, target));
+        } else {
+            groups.push(vec![(index, target)]);
+        }
+    }
+
+    let mut handles = Vec::with_capacity(groups.len());
+    for group in groups {
+        handles.push(std::thread::spawn(move || run_doctor_api_group(group)));
+    }
+
+    let mut indexed = Vec::with_capacity(total);
+    for handle in handles {
+        match handle.join() {
+            Ok(results) => indexed.extend(results),
+            Err(_) => indexed.push((
+                usize::MAX,
+                DoctorApiCheck {
+                    name: "api_check".to_string(),
+                    method: "<thread>".to_string(),
+                    url: "<unknown>".to_string(),
+                    ok: false,
+                    status_code: None,
+                    duration_ms: 0,
+                    error: Some("API check thread panicked".to_string()),
+                },
+            )),
+        }
+    }
+
+    indexed.sort_by_key(|(index, _)| *index);
+    let checks: Vec<_> = indexed.into_iter().map(|(_, check)| check).collect();
+    let healthy = checks.iter().filter(|check| check.ok).count();
+
+    DoctorApiChecks {
+        healthy,
+        total: checks.len(),
+        checks,
+    }
+}
+
 fn print_section(title: &str) {
     println!("{}", title.bold().cyan());
 }
@@ -774,8 +1119,40 @@ fn print_report(report: &DoctorReport) {
     );
 }
 
+fn print_api_checks(report: &DoctorApiChecks) {
+    print_kv("healthy", format!("{}/{}", report.healthy, report.total));
+
+    for check in &report.checks {
+        let status = if check.ok {
+            format!("{} [200, {} ms]", "ok".green(), check.duration_ms)
+        } else if let Some(code) = check.status_code {
+            format!(
+                "{} [{code}, {} ms]",
+                "failed".bright_red(),
+                check.duration_ms
+            )
+        } else {
+            format!("{} [{} ms]", "unreachable".bright_red(), check.duration_ms)
+        };
+
+        print_kv(
+            &check.name,
+            format!("{status} {} {}", check.method.dimmed(), check.url),
+        );
+
+        if let Some(error) = &check.error {
+            print_kv(&format!("{}.error", check.name), error);
+        }
+    }
+}
+
 pub fn doctor_cmd() -> Result<()> {
     let report = collect_doctor_report()?;
     print_report(&report);
+    println!();
+    print_section("API Reachability");
+    let _ = std::io::stdout().flush();
+    let api_checks = collect_doctor_api_checks();
+    print_api_checks(&api_checks);
     Ok(())
 }
