@@ -108,6 +108,25 @@ struct DoctorLogging {
 }
 
 #[derive(Debug, Serialize)]
+struct DoctorNativeLibrary {
+    load_ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ton_commit_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ton_commit_date: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct DoctorNativeLibraries {
+    emulator: DoctorNativeLibrary,
+    tolk: DoctorNativeLibrary,
+}
+
+#[derive(Debug, Serialize)]
 struct DoctorEnvironmentVars {
     home: Option<String>,
     userprofile: Option<String>,
@@ -132,6 +151,7 @@ struct DoctorReport {
     config_overlays: DoctorConfigOverlays,
     manifest: DoctorManifest,
     stdlib: DoctorStdlib,
+    native_libraries: DoctorNativeLibraries,
     logging: DoctorLogging,
     environment: DoctorEnvironment,
 }
@@ -472,6 +492,44 @@ fn inspect_stdlib(acton_dir: &Path, stdlib_path: &Path) -> DoctorStdlib {
     }
 }
 
+fn inspect_native_libraries() -> DoctorNativeLibraries {
+    let emulator = match ton_executor::native_emulator_version() {
+        Ok(version) => DoctorNativeLibrary {
+            load_ok: true,
+            version: None,
+            ton_commit_hash: Some(version.ton_commit_hash),
+            ton_commit_date: Some(version.ton_commit_date),
+            error: None,
+        },
+        Err(err) => DoctorNativeLibrary {
+            load_ok: false,
+            version: None,
+            ton_commit_hash: None,
+            ton_commit_date: None,
+            error: Some(err.to_string()),
+        },
+    };
+
+    let tolk = match tolkc::native_tolk_version() {
+        Ok(version) => DoctorNativeLibrary {
+            load_ok: true,
+            version: Some(version.version),
+            ton_commit_hash: Some(version.ton_commit_hash),
+            ton_commit_date: Some(version.ton_commit_date),
+            error: None,
+        },
+        Err(err) => DoctorNativeLibrary {
+            load_ok: false,
+            version: None,
+            ton_commit_hash: None,
+            ton_commit_date: None,
+            error: Some(err.to_string()),
+        },
+    };
+
+    DoctorNativeLibraries { emulator, tolk }
+}
+
 fn non_empty_env_string(var: &str) -> Option<String> {
     env::var(var).ok().filter(|value| !value.is_empty())
 }
@@ -533,6 +591,7 @@ fn collect_doctor_report() -> Result<DoctorReport> {
 
     let stdlib_path = acton_dir.join("tolk-stdlib");
     let stdlib = inspect_stdlib(&acton_dir, &stdlib_path);
+    let native_libraries = inspect_native_libraries();
     let wallets_overlay = inspect_wallet_overlays(&local_wallets, global_wallets.as_deref());
     let libraries_overlay = inspect_library_overlays(&local_libraries, global_libraries.as_deref());
     let (resolved_log_dir, log_dir_source) = resolve_acton_log_dir(&project_root);
@@ -572,6 +631,7 @@ fn collect_doctor_report() -> Result<DoctorReport> {
         },
         manifest: manifest_status,
         stdlib,
+        native_libraries,
         logging: DoctorLogging {
             acton_log_dir_env: non_empty_env_string("ACTON_LOG_DIR"),
             resolved_dir: describe_path(&resolved_log_dir, Some(log_dir_source)),
@@ -1056,6 +1116,89 @@ fn print_report(report: &DoctorReport) {
         report.stdlib.revision.as_deref().unwrap_or("<unknown>"),
     );
     print_kv("source", &report.stdlib.source);
+    println!();
+
+    print_section("Native Libraries");
+    print_kv(
+        "emulator.load_ok",
+        report.native_libraries.emulator.load_ok.to_string(),
+    );
+    print_kv(
+        "emulator.version",
+        report
+            .native_libraries
+            .emulator
+            .version
+            .as_deref()
+            .unwrap_or("<n/a>"),
+    );
+    print_kv(
+        "emulator.ton_commit_hash",
+        report
+            .native_libraries
+            .emulator
+            .ton_commit_hash
+            .as_deref()
+            .unwrap_or("<unknown>"),
+    );
+    print_kv(
+        "emulator.ton_commit_date",
+        report
+            .native_libraries
+            .emulator
+            .ton_commit_date
+            .as_deref()
+            .unwrap_or("<unknown>"),
+    );
+    print_kv(
+        "emulator.error",
+        report
+            .native_libraries
+            .emulator
+            .error
+            .as_deref()
+            .unwrap_or("<none>"),
+    );
+    print_kv(
+        "tolk.load_ok",
+        report.native_libraries.tolk.load_ok.to_string(),
+    );
+    print_kv(
+        "tolk.version",
+        report
+            .native_libraries
+            .tolk
+            .version
+            .as_deref()
+            .unwrap_or("<unknown>"),
+    );
+    print_kv(
+        "tolk.ton_commit_hash",
+        report
+            .native_libraries
+            .tolk
+            .ton_commit_hash
+            .as_deref()
+            .unwrap_or("<unknown>"),
+    );
+    print_kv(
+        "tolk.ton_commit_date",
+        report
+            .native_libraries
+            .tolk
+            .ton_commit_date
+            .as_deref()
+            .unwrap_or("<unknown>"),
+    );
+    print_kv(
+        "tolk.error",
+        report
+            .native_libraries
+            .tolk
+            .error
+            .as_deref()
+            .unwrap_or("<none>"),
+    );
     println!();
 
     print_section("Logging");

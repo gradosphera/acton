@@ -14,8 +14,8 @@ description: "Reference manual for the acton doctor command"
 Print a diagnostic report for the current Acton environment.
 
 The report is intended to help debug project resolution, manifest parsing,
-wallet and library overlays, bundled standard-library state, logging paths, and
-relevant environment variables.
+wallet and library overlays, bundled standard-library state, native emulator
+and Tolk library metadata, logging paths, and relevant environment variables.
 
 ## DISPLAY OPTIONS
 
@@ -85,6 +85,8 @@ This conflicts with `--manifest-path`.
 - `Acton.toml` existence and parse status
 - wallet and library overlay load status
 - bundled stdlib health and version
+- native emulator/Tolk version metadata, including the TON commit hash and date
+  embedded in the linked libraries
 - resolved logging directory and debug log path
 - selected environment variables such as `HOME`, `SHELL`, and `NO_COLOR`
 

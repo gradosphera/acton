@@ -11,8 +11,8 @@ acton\-doctor \[em] Inspect the resolved Acton project environment
 Print a diagnostic report for the current Acton environment.
 .sp
 The report is intended to help debug project resolution, manifest parsing,
-wallet and library overlays, bundled standard\-library state, logging paths, and
-relevant environment variables.
+wallet and library overlays, bundled standard\-library state, native emulator
+and Tolk library metadata, logging paths, and relevant environment variables.
 .SH "DISPLAY OPTIONS"
 .sp
 \fB\-\-color\fR \fIwhen\fR
@@ -60,6 +60,11 @@ libraries
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'bundled stdlib health and version
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'native emulator/Tolk version metadata, including the TON commit hash and date
+embedded in the linked libraries
 .RE
 .sp
 .RS 4

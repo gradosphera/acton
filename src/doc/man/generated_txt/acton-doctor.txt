@@ -11,7 +11,8 @@ DESCRIPTION
 
        The report is intended to help debug project resolution, manifest
        parsing, wallet and library overlays, bundled standard-library state,
-       logging paths, and relevant environment variables.
+       native emulator and Tolk library metadata, logging paths, and relevant
+       environment variables.
 
 DISPLAY OPTIONS
        --color when
@@ -45,6 +46,9 @@ REPORT SECTIONS
        o  wallet and library overlay load status
 
        o  bundled stdlib health and version
+
+       o  native emulator/Tolk version metadata, including the TON commit hash
+          and date embedded in the linked libraries
 
        o  resolved logging directory and debug log path
 
