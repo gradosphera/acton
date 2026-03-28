@@ -1520,11 +1520,14 @@ fn new_wallet(
             );
 
             println!(
-                "\nTo get testnet coins run `acton wallet airdrop` or check official documentation: {}",
+                "\nTo get testnet coins run {} or check official documentation: {}",
+                "acton wallet airdrop".yellow(),
                 "https://docs.ton.org/ecosystem/wallet-apps/get-coins#how-to-get-coins-on-testnet"
                     .underline(),
             );
         }
+
+        print_wallet_balance_hint();
 
         if !use_secure_store {
             show_security_warning(config_path);
@@ -1668,11 +1671,20 @@ fn import_wallet(
             );
         }
 
+        print_wallet_balance_hint();
+
         if !use_secure_store {
             show_security_warning(config_path);
         }
     }
     Ok(())
+}
+
+fn print_wallet_balance_hint() {
+    println!(
+        "\nTo check wallet balances run {}.",
+        "acton wallet list --balance".yellow()
+    );
 }
 
 fn show_security_warning(config_path: PathBuf) {
