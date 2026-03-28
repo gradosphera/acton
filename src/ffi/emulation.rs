@@ -1535,6 +1535,37 @@ fn set_shard_account_impl(
     Ok(())
 }
 
+extension!(save_world_state_snapshot in (Context) with (path: String) using save_world_state_snapshot_impl);
+fn save_world_state_snapshot_impl(
+    ctx: &mut Context,
+    stack: &mut Tuple,
+    path: String,
+) -> anyhow::Result<()> {
+    let success = ctx
+        .chain
+        .world_state
+        .snapshot()
+        .and_then(|snapshot| serde_json::to_string_pretty(&snapshot).map_err(Into::into))
+        .is_ok_and(|json| fs::write(&path, json).is_ok());
+    stack.push_bool(success);
+    Ok(())
+}
+
+extension!(load_world_state_snapshot in (Context) with (path: String) using load_world_state_snapshot_impl);
+fn load_world_state_snapshot_impl(
+    ctx: &mut Context,
+    stack: &mut Tuple,
+    path: String,
+) -> anyhow::Result<()> {
+    let success = fs::read_to_string(&path)
+        .ok()
+        .and_then(|content| serde_json::from_str(&content).ok())
+        .and_then(|snapshot| ctx.chain.world_state.load_snapshot(snapshot).ok())
+        .is_some();
+    stack.push_bool(success);
+    Ok(())
+}
+
 pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context) {
     register_ext_methods!(executor, ctx, {
         6 => build : 2,
@@ -1566,6 +1597,8 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         34 => set_shard_account : 2,
         35 => save_trace_name : 2,
         36 => run_tick_tock : 2,
+        37 => save_world_state_snapshot : 1,
+        38 => load_world_state_snapshot : 1,
     });
 }
 

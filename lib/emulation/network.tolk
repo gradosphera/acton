@@ -1089,6 +1089,34 @@ fun net.setShardAccount(addr: address, account: ShardAccount?): void {
     ffi.setShardAccount(addr, account.toCell());
 }
 
+/// Save the current emulation world state to a JSON snapshot file.
+///
+/// Returns `true` on successful write and `false` on serialization or host I/O failure.
+///
+/// Example:
+/// ```tolk
+/// net.topUp(addr, ton("3"));
+/// val saved = net.saveSnapshot("world-state.json");
+/// expect(saved).toBeTrue();
+/// ```
+fun net.saveSnapshot(path: string): bool {
+    return ffi.saveWorldStateSnapshot(path);
+}
+
+/// Load an emulation world state from a JSON snapshot file.
+///
+/// On success, replaces the current local emulation state with the snapshot contents.
+/// Returns `false` when the file is missing, malformed, or cannot be applied.
+///
+/// Example:
+/// ```tolk
+/// val loaded = net.loadSnapshot("world-state.json");
+/// expect(loaded).toBeTrue();
+/// ```
+fun net.loadSnapshot(path: string): bool {
+    return ffi.loadWorldStateSnapshot(path);
+}
+
 /// Sets the blockchain configuration.
 ///
 /// This function updates the entire blockchain configuration with a new configuration dict.
@@ -1312,3 +1340,5 @@ fun ffi.getShardAccount(addr: address): cell? asm "33 EXTCALL";
 fun ffi.setShardAccount(addr: address, account: cell?): void asm "34 EXTCALL";
 fun ffi.saveTraceName(txs: SendResultList, name: string): void asm "35 EXTCALL";
 fun ffi.runTickTock(onAccount: address, isTock: bool): SendResultList asm "36 EXTCALL";
+fun ffi.saveWorldStateSnapshot(path: string): bool asm "37 EXTCALL";
+fun ffi.loadWorldStateSnapshot(path: string): bool asm "38 EXTCALL";
