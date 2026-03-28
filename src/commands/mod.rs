@@ -17,6 +17,7 @@ pub mod litenode;
 pub mod ls;
 pub mod new;
 pub mod retrace;
+pub mod rpc;
 pub mod run;
 pub mod script;
 pub mod test;

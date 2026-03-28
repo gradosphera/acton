@@ -17,6 +17,7 @@
     "verify",
     "library",
     "wallet",
+    "rpc",
     "litenode",
     "doc",
     "ls",

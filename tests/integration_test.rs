@@ -26,6 +26,7 @@ const MANUAL_COMMANDS: &[&str] = &[
     "verify",
     "library",
     "wallet",
+    "rpc",
     "litenode",
     "doc",
     "ls",
@@ -105,6 +106,27 @@ fn test_acton_help_new() {
         .assert()
         .success()
         .stdout_eq(snapbox::file!["snapshots/help_new/stdout.txt"])
+        .stderr_eq(snapbox::str![""]);
+}
+
+#[test]
+fn test_acton_rpc_help() {
+    snapbox::cmd::Command::acton_ui()
+        .arg("rpc")
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::file!["snapshots/rpc/stdout.txt"])
+        .stderr_eq(snapbox::str![""]);
+}
+
+#[test]
+fn test_acton_rpc_info_help() {
+    snapbox::cmd::Command::acton_ui()
+        .args(["rpc", "info", "--help"])
+        .assert()
+        .success()
+        .stdout_eq(snapbox::file!["snapshots/rpc_info/stdout.txt"])
         .stderr_eq(snapbox::str![""]);
 }
 

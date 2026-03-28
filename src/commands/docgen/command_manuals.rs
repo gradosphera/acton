@@ -135,6 +135,13 @@ pub(super) const COMMAND_MANUALS: &[CommandManualSpec] = &[
         docs_description: "Reference manual for the acton wallet command",
     },
     CommandManualSpec {
+        command: "rpc",
+        source_name: "acton-rpc.md",
+        docs_slug: "rpc",
+        docs_title: "acton rpc",
+        docs_description: "Reference manual for the acton rpc command",
+    },
+    CommandManualSpec {
         command: "litenode",
         source_name: "acton-litenode.md",
         docs_slug: "litenode",

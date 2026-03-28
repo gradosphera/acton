@@ -16,6 +16,7 @@ use acton::commands::library::{fetch_cmd, info_cmd, publish_cmd};
 use acton::commands::ls::ls_cmd;
 use acton::commands::new::{ProjectTemplate, new_cmd};
 use acton::commands::retrace::retrace_cmd;
+use acton::commands::rpc::{RpcCommand, rpc_cmd};
 use acton::commands::run::run_cmd;
 use acton::commands::script::script_cmd;
 use acton::commands::test::{mutation, test_cmd};
@@ -139,6 +140,14 @@ enum Commands {
     Hooks {
         #[command(subcommand)]
         command: HooksCommand,
+    },
+    #[command(
+        about = "Inspect remote account and contract state",
+        after_help = detailed_help_pointer("rpc")
+    )]
+    Rpc {
+        #[command(subcommand)]
+        command: RpcCommand,
     },
     #[command(
         about = "Execute tests in file or directory",
@@ -1047,6 +1056,7 @@ fn root_help(show_global_options: bool) -> StyledStr {
     ];
     let blockchain_commands = vec![
         ("wallet", "<COMMAND>"),
+        ("rpc", "<COMMAND>"),
         ("verify", "[CONTRACT_ID]"),
         ("library", "<COMMAND>"),
         ("litenode", "<COMMAND>"),
@@ -1405,8 +1415,8 @@ fn main() {
 
     if !matches!(
         command,
-        Commands::Init | Commands::New { .. } | Commands::Help { .. }
-    ) && let Err(err) = configure_project_roots(manifest_path, project_root)
+        Commands::Init | Commands::New { .. } | Commands::Help { .. } | Commands::Rpc { .. }
+    ) && let Err(err) = configure_project_roots(manifest_path.clone(), project_root.clone())
     {
         eprintln!("{} {}", "Error:".red(), err);
         process::exit(1);
@@ -1425,6 +1435,16 @@ fn main() {
         Commands::Init => init_cmd(),
         Commands::Help { command } => render_help_command(command),
         Commands::Wallet { command } => wallet_cmd(command),
+        Commands::Rpc { command } => {
+            if manifest_path.is_some() || project_root.is_some() {
+                match configure_project_roots(manifest_path, project_root) {
+                    Ok(()) => rpc_cmd(command),
+                    Err(err) => Err(err),
+                }
+            } else {
+                rpc_cmd(command)
+            }
+        }
         Commands::New {
             path,
             name,
