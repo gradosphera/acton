@@ -259,7 +259,7 @@ fun SendResultList.wait(
     self,
     quiet: bool = false,
     attempts: int = 20,
-    sleepDuration: int = 2000,
+    sleepDuration: int = 1000,
 ): bool {
     if (!net.isBroadcasting()) {
         // in emulation mode we don't need to wait for anything
@@ -863,7 +863,7 @@ fun net.getDeployedCode(addr: address): cell? {
 /// body.skipBits(1); // skip Either tag bit
 /// val bodyHashSlice = beginCell().storeUint(body.hash(), 256).toSlice();
 ///
-/// val ok = net.waitForTransaction(inMsg.info.dest, bodyHashSlice, true, 20, 2000);
+/// val ok = net.waitForTransaction(inMsg.info.dest, bodyHashSlice, true, 20, 1000);
 /// ```
 ///
 /// See [SendResultList.wait] for high-level API.
@@ -872,7 +872,7 @@ fun net.waitForTransaction(
     messageBodyHash: slice,
     quiet: bool = false,
     attempts: int = 20,
-    sleepDuration: int = 2000,
+    sleepDuration: int = 1000,
 ): bool {
     return ffi.waitForTransaction(
         addr.toCell(),

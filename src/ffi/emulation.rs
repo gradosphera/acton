@@ -1647,6 +1647,9 @@ fn get_wallet_by_name_impl(
     Ok(())
 }
 
+const WAIT_FOR_TRANSACTION_DEFAULT_SLEEP_MS: u64 = 1000;
+const WAIT_FOR_TRANSACTION_SETTLE_DELAY_MS: u64 = 1000;
+
 extension!(wait_for_transaction in (Context) with (sleep_duration: BigInt, attempts: BigInt, quiet: bool, ext_message_hash: HashBytes, address: StdAddr) using wait_for_transaction_impl);
 #[allow(clippy::too_many_arguments)]
 fn wait_for_transaction_impl(
@@ -1665,7 +1668,9 @@ fn wait_for_transaction_impl(
     }
 
     let attempts = attempts.to_u32().unwrap_or(20);
-    let sleep_duration_ms = sleep_duration.to_u64().unwrap_or(2000);
+    let sleep_duration_ms = sleep_duration
+        .to_u64()
+        .unwrap_or(WAIT_FOR_TRANSACTION_DEFAULT_SLEEP_MS);
 
     if attempts == 0 {
         anyhow::bail!("Attempt number must be positive");
@@ -1708,7 +1713,8 @@ fn wait_for_transaction_impl(
                     .context("Failed to decode message body hash")?;
 
                 if msg_hash_bytes == ext_message_hash_bytes {
-                    std::thread::sleep(Duration::from_millis(1000)); // wait a bit more for txs in row
+                    // Keep a short settle delay so the next related tx is more likely to be visible.
+                    std::thread::sleep(Duration::from_millis(WAIT_FOR_TRANSACTION_SETTLE_DELAY_MS));
 
                     if !quiet {
                         let hex = base64::engine::general_purpose::STANDARD
