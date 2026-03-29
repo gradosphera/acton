@@ -29,6 +29,7 @@ pub fn verify_cmd(
     api_key: Option<String>,
 ) -> anyhow::Result<()> {
     let config = ActonConfig::load()?;
+    let (network, verifier_network) = parse_verification_network(&network)?;
 
     let contract_key = select_contract(contract_id, &config)?;
     let contract = config
@@ -36,8 +37,6 @@ pub fn verify_cmd(
         .ok_or_else(|| anyhow!(error_fmt::contract_not_found(&config, &contract_key)))?;
     let contract_path = dunce::canonicalize(contract.src.clone())
         .unwrap_or_else(|_| PathBuf::from(contract.src.clone()));
-
-    let network = Network::from_str(&network)?;
 
     println!("  {} Contract: {}", "→".blue().bold(), contract_key.cyan());
 
@@ -115,7 +114,7 @@ pub fn verify_cmd(
 
     println!("  {} Fetching backends configuration", "→".blue().bold());
     let backends_config = get_backends()?;
-    let mut backend_info = get_backend_info(&network, &backends_config)?;
+    let mut backend_info = verifier_network.backend_info(&backends_config);
 
     println!(
         "  {} Found {} backend{} for {}",
@@ -492,6 +491,50 @@ struct BackendInfo {
     id: String,
 }
 
+#[derive(Clone, Copy)]
+enum VerificationBackendNetwork {
+    Mainnet,
+    Testnet,
+}
+
+impl VerificationBackendNetwork {
+    fn from_network(network: &Network, requested_network: &str) -> anyhow::Result<Self> {
+        match network {
+            Network::Mainnet => Ok(Self::Mainnet),
+            Network::Testnet => Ok(Self::Testnet),
+            _ => anyhow::bail!(
+                "Unsupported verification network {}. Verification backends are available only for {} and {}",
+                requested_network.yellow(),
+                "mainnet".yellow(),
+                "testnet".yellow(),
+            ),
+        }
+    }
+
+    fn backend_info(self, config: &BackendsConfig) -> BackendInfo {
+        match self {
+            Self::Mainnet => BackendInfo {
+                source_registry: "EQD-BJSVUJviud_Qv7Ymfd3qzXdrmV525e3YDzWQoHIAiInL".to_string(),
+                backends: config.backends.clone(),
+                id: "orbs.com".to_string(),
+            },
+            Self::Testnet => BackendInfo {
+                source_registry: "EQCsdKYwUaXkgJkz2l0ol6qT_WxeRbE_wBCwnEybmR0u5TO8".to_string(),
+                backends: config.backends_testnet.clone(),
+                id: "orbs-testnet".to_string(),
+            },
+        }
+    }
+}
+
+fn parse_verification_network(
+    requested_network: &str,
+) -> anyhow::Result<(Network, VerificationBackendNetwork)> {
+    let network = Network::from_str(requested_network)?;
+    let verifier_network = VerificationBackendNetwork::from_network(&network, requested_network)?;
+    Ok((network, verifier_network))
+}
+
 fn get_backends() -> anyhow::Result<BackendsConfig> {
     let url =
         "https://raw.githubusercontent.com/ton-community/contract-verifier-config/main/config.json";
@@ -507,25 +550,6 @@ fn get_backends() -> anyhow::Result<BackendsConfig> {
 
     Ok(config)
 }
-
-fn get_backend_info(network: &Network, config: &BackendsConfig) -> anyhow::Result<BackendInfo> {
-    match network {
-        Network::Mainnet => Ok(BackendInfo {
-            source_registry: "EQD-BJSVUJviud_Qv7Ymfd3qzXdrmV525e3YDzWQoHIAiInL".to_string(),
-            backends: config.backends.clone(),
-            id: "orbs.com".to_string(),
-        }),
-        Network::Testnet => Ok(BackendInfo {
-            source_registry: "EQCsdKYwUaXkgJkz2l0ol6qT_WxeRbE_wBCwnEybmR0u5TO8".to_string(),
-            backends: config.backends_testnet.clone(),
-            id: "orbs-testnet".to_string(),
-        }),
-        _ => anyhow::bail!(
-            "Unsupported network: {network}. Verification backends are available only for mainnet and testnet"
-        ),
-    }
-}
-
 fn remove_random<T>(els: &mut Vec<T>) -> T {
     let index = (rand::random::<usize>()) % els.len();
     els.remove(index)
