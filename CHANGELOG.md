@@ -8,6 +8,30 @@ All notable changes to this project will be documented in this file.
 
 - No unreleased entries yet.
 
+## [0.1.4] - 29.03.2026
+
+Acton 0.1.4 adds remote account inspection and deeper test-runner control,
+while improving wallet, broadcast, and diagnostics workflows around real-network
+interactions.
+
+### Added
+
+- Added `acton rpc info` to inspect a remote account, print status and hash metadata, match local contracts by `code_hash`, and decode on-chain storage through local ABI metadata when available.
+- Added iterative test-runner execution via `net.sendIter()` and `TxCursor` for partial transaction-chain execution, targeted stopping, and interleaving multiple message cascades against shared emulated state.
+- Added world-state snapshot APIs `net.saveSnapshot()` and `net.loadSnapshot()` to persist local emulator state as JSON fixtures and restore it in later test runs.
+
+### Changed
+
+- Changed interactive testnet airdrops in `acton wallet new` and `acton wallet airdrop` to wait briefly for balance confirmation by default, with `--no-wait-airdrop` available to skip the wait.
+- Changed broadcast-mode transaction waiting defaults to poll more frequently after submission, reducing unnecessary delay once the message is already on the network.
+- Improved real-network send diagnostics across wallet-driven workflows to explain common failures such as missing wallet state, insufficient balance, stale seqno, expired messages, and the right `acton wallet airdrop` fix for testnet or localnet.
+- Improved wallet creation and import output with a clearer follow-up hint for checking balances via `acton wallet list --balance`.
+
+### Fixed
+
+- Fixed `acton doctor` API reachability checks to degrade more gracefully in restricted sandboxed environments instead of failing with opaque proxy-discovery panics.
+- Fixed test-runner `isContractDeployed()` detection for missing and explicit-null account states.
+
 ## [0.1.3] - 28.03.2026
 
 Acton 0.1.3 expands built-in command manuals and diagnostics, improves Linux
