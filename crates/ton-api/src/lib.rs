@@ -550,16 +550,36 @@ impl TonApiClient {
             .trim_start_matches("LITE_SERVER_UNKNOWN: ")
             .to_owned();
 
-        if raw_msg
-            == "cannot apply external message to current state : Failed to unpack account state"
-        {
-            return anyhow!(
-                "external message not accepted because account has no state; check if wallet/contract is deployed"
-            );
+        if let Some(message) = normalize_toncenter_error_message(&raw_msg) {
+            return anyhow!(message);
         }
 
         anyhow!(raw_msg)
     }
+}
+
+fn normalize_toncenter_error_message(raw_msg: &str) -> Option<&'static str> {
+    if raw_msg == "cannot apply external message to current state : Failed to unpack account state"
+    {
+        return Some(
+            "external message not accepted because account has no state; check if wallet/contract is deployed",
+        );
+    }
+
+    if raw_msg.starts_with(
+        "cannot apply external message to current state : External message was not accepted: cannot run message on account:",
+    ) && raw_msg.contains("before smart-contract execution")
+    {
+        return Some(
+            "wallet/contract rejected the external message before contract execution; likely causes:
+- not enough balance
+- wallet/contract is not deployed
+- seqno is stale
+- message expired",
+        );
+    }
+
+    None
 }
 
 #[derive(Deserialize, Clone)]
@@ -662,4 +682,41 @@ fn should_disable_system_proxy() -> bool {
     std::env::var("ACTON_DISABLE_SYSTEM_PROXY")
         .map(|value| value.trim() == "1")
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_toncenter_error_message;
+
+    #[test]
+    fn normalize_toncenter_error_message_maps_missing_account_state() {
+        assert_eq!(
+            normalize_toncenter_error_message(
+                "cannot apply external message to current state : Failed to unpack account state",
+            ),
+            Some(
+                "external message not accepted because account has no state; check if wallet/contract is deployed",
+            ),
+        );
+    }
+
+    #[test]
+    fn normalize_toncenter_error_message_maps_pre_execution_wallet_rejection() {
+        assert_eq!(
+            normalize_toncenter_error_message(
+                "cannot apply external message to current state : External message was not accepted: cannot run message on account: inbound external message rejected by account 3029B3EAEDA86A5381D86100F2A8B761C38DE45642EDB6E4BB1CCA2E6DD7FFED before smart-contract execution",
+            ),
+            Some(
+                "wallet/contract rejected the external message before contract execution; likely causes:\n- not enough balance\n- wallet/contract is not deployed\n- seqno is stale\n- message expired",
+            ),
+        );
+    }
+
+    #[test]
+    fn normalize_toncenter_error_message_preserves_other_errors() {
+        assert_eq!(
+            normalize_toncenter_error_message("mock toncenter failure"),
+            None,
+        );
+    }
 }
