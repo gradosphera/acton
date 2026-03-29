@@ -859,6 +859,32 @@ fn test_script_known_exit_code_shows_backtrace_with_full_mode() {
         );
 }
 
+#[test]
+fn test_script_invalid_message_exit_code_shows_description_and_phase() {
+    let project = ProjectBuilder::new("script-invalid-message-exit")
+        .script_file(
+            "exit_65535",
+            r#"
+            import "../../lib/io"
+
+            fun main() {
+                println("Exiting with code 65535");
+                throw 65535
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/exit_65535.tolk")
+        .run()
+        .code(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/test_script_invalid_message_exit_code_shows_description_and_phase.stdout.txt",
+        );
+}
+
 // ========================================
 // Snapshot Tests
 // ========================================
