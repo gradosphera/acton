@@ -261,8 +261,7 @@ fun onBouncedMessage(_: InMessageBounced) {}
         )
         .build();
 
-    let output = project.acton().build().clear_cache().run().success();
-    output.assert_contains("Finished");
+    let output = project.acton().build().clear_cache().run().failure();
 
     let compiled = extract_compiled_contracts(&output.get_normalized_stdout());
     assert_eq!(
@@ -281,18 +280,18 @@ fun onBouncedMessage(_: InMessageBounced) {}
         .expect("nested contract should be compiled");
 
     let stderr = output.get_normalized_stderr();
-    let boc_warning_count = stderr
-        .matches("Warning: Failed to save cached BoC file for")
-        .count();
+    let boc_error_count = stderr.matches("Failed to save BoC file").count()
+        + stderr
+            .matches("Failed to create directory for BoC file")
+            .count();
     assert_eq!(
-        boc_warning_count, 1,
+        boc_error_count, 1,
         "exactly one contract output should fail for file-vs-directory collision"
     );
 
     assert_output_matches_artifact(project.path(), "artifacts/independent.boc", "independent");
 
     if flat_idx < nested_idx {
-        output.assert_stderr_contains("Warning: Failed to save cached BoC file for nested");
         output.assert_stderr_contains("Failed to create directory for BoC file collision_target");
         assert_output_matches_artifact(project.path(), "collision_target", "flat");
         assert!(
@@ -300,7 +299,7 @@ fun onBouncedMessage(_: InMessageBounced) {}
             "nested output should not exist when its parent path is occupied by a file"
         );
     } else {
-        output.assert_stderr_contains("Warning: Failed to save cached BoC file for flat");
+        output.assert_stderr_contains("Failed to save BoC file collision_target");
         output.assert_stderr_contains("Is a directory");
         assert_output_matches_artifact(project.path(), "collision_target/nested.boc", "nested");
         assert!(
@@ -311,7 +310,7 @@ fun onBouncedMessage(_: InMessageBounced) {}
 }
 
 #[test]
-fn build_warns_for_multiple_contracts_sharing_blocked_boc_output_but_writes_other_outputs() {
+fn build_fails_for_multiple_contracts_sharing_blocked_boc_output_but_writes_other_outputs() {
     let project = ProjectBuilder::new("build-cmd-boc-output-shared-path-blocked")
         .contract_with_output(
             "alpha",
@@ -340,18 +339,16 @@ fun onBouncedMessage(_: InMessageBounced) {}
         .build();
     fs::create_dir(project.path().join("blocked_output")).expect("create blocked output directory");
 
-    let output = project.acton().build().run().success();
-    output.assert_contains("Finished");
-    output.assert_stderr_contains("Warning: Failed to save cached BoC file for alpha");
-    output.assert_stderr_contains("Warning: Failed to save cached BoC file for beta");
+    let output = project.acton().build().run().failure();
+    output.assert_stderr_contains("Failed to save BoC file blocked_output");
     output.assert_stderr_contains("Is a directory");
 
     let stderr = output.get_normalized_stderr();
-    let boc_warning_count = stderr
-        .matches("Warning: Failed to save cached BoC file for")
+    let boc_error_count = stderr
+        .matches("Failed to save BoC file blocked_output")
         .count();
     assert_eq!(
-        boc_warning_count, 2,
+        boc_error_count, 2,
         "exactly two contract outputs should fail when both target a blocked directory path"
     );
 
@@ -363,7 +360,7 @@ fun onBouncedMessage(_: InMessageBounced) {}
 }
 
 #[test]
-fn build_warns_but_succeeds_when_boc_output_path_is_directory() {
+fn build_fails_when_boc_output_path_is_directory() {
     let project = ProjectBuilder::new("build-cmd-boc-output-directory-conflict")
         .contract_with_output(
             "simple",
@@ -376,9 +373,8 @@ fun onBouncedMessage(_: InMessageBounced) {}
         .build();
     fs::create_dir(project.path().join("blocked_output")).expect("create conflicting directory");
 
-    let output = project.acton().build().run().success();
-    output.assert_contains("Finished");
-    output.assert_stderr_contains("Warning: Failed to save cached BoC file for simple");
+    let output = project.acton().build().run().failure();
+    output.assert_stderr_contains("Failed to save BoC file blocked_output");
     output.assert_stderr_contains("Is a directory");
 
     assert!(
@@ -388,7 +384,7 @@ fun onBouncedMessage(_: InMessageBounced) {}
 }
 
 #[test]
-fn build_warns_for_dot_directory_output_path_but_writes_other_contract_outputs() {
+fn build_fails_for_dot_directory_output_path_but_writes_other_contract_outputs() {
     let project = ProjectBuilder::new("build-cmd-boc-output-dot-directory")
         .contract_with_output(
             "valid",
@@ -408,15 +404,14 @@ fun onBouncedMessage(_: InMessageBounced) {}
         )
         .build();
 
-    let output = project.acton().build().run().success();
-    output.assert_contains("Finished");
-    output.assert_stderr_contains("Warning: Failed to save cached BoC file for invalid");
+    let output = project.acton().build().run().failure();
+    output.assert_stderr_contains("Failed to save BoC file");
 
     assert_output_matches_artifact(project.path(), "artifacts/valid.boc", "valid");
 }
 
 #[test]
-fn build_warns_but_succeeds_when_boc_output_parent_is_a_file() {
+fn build_fails_when_boc_output_parent_is_a_file() {
     let project = ProjectBuilder::new("build-cmd-boc-output-parent-file-conflict")
         .contract_with_output(
             "simple",
@@ -430,9 +425,7 @@ fun onBouncedMessage(_: InMessageBounced) {}
     fs::write(project.path().join("blocked_parent"), "not-a-directory")
         .expect("create conflicting parent file");
 
-    let output = project.acton().build().run().success();
-    output.assert_contains("Finished");
-    output.assert_stderr_contains("Warning: Failed to save cached BoC file for simple");
+    let output = project.acton().build().run().failure();
     output.assert_stderr_contains("Failed to create directory for BoC file blocked_parent");
 
     assert!(

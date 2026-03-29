@@ -565,21 +565,17 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
             match format_type {
                 CoverageFormat::Lcov => {
                     let lcov_path = config.coverage_file.as_deref().unwrap_or("lcov.info");
-                    if let Err(err) = generate_lcov_file(&coverage, lcov_path) {
-                        eprintln!("Warning: Failed to generate LCOV file '{lcov_path}': {err}");
-                    } else {
-                        println!("LCOV file saved in {lcov_path}");
-                    }
+                    generate_lcov_file(&coverage, lcov_path).map_err(|err| {
+                        anyhow!("Failed to generate LCOV file '{lcov_path}': {err}")
+                    })?;
+                    println!("LCOV file saved in {lcov_path}");
                 }
                 CoverageFormat::Text => {
                     let text_path = config.coverage_file.as_deref().unwrap_or("coverage.txt");
-                    if let Err(err) = generate_text_file(&coverage, text_path) {
-                        eprintln!(
-                            "Warning: Failed to generate text coverage file '{text_path}': {err}"
-                        );
-                    } else {
-                        println!("Text coverage file saved in {text_path}");
-                    }
+                    generate_text_file(&coverage, text_path).map_err(|err| {
+                        anyhow!("Failed to generate text coverage file '{text_path}': {err}")
+                    })?;
+                    println!("Text coverage file saved in {text_path}");
                 }
             }
         }

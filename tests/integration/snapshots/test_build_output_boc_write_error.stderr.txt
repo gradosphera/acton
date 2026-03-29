@@ -1,1 +1,4 @@
-Warning: Failed to save cached BoC file for simple: Permission denied ([OS_ERROR])
+Error: In simple:
+
+Failed to save BoC file readonly/output.boc: Permission denied ([OS_ERROR])
+Build failed with 1 error

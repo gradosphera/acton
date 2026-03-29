@@ -105,7 +105,7 @@ See https://ton-blockchain.github.io/acton/docs/build-system/configuration-refer
     }
 
     let mut file_cache = FileBuildCache::new(None)?;
-    let mut failure_count = 0;
+    let mut error_count = 0;
     let total_start = Instant::now();
 
     let flatten_contracts = contracts.iter().collect::<Vec<_>>();
@@ -135,6 +135,7 @@ See https://ton-blockchain.github.io/acton/docs/build-system/configuration-refer
 
     let mut compiled_contracts: HashMap<String, String> = HashMap::new();
     let mut compile_errors = BTreeMap::new();
+    let mut artifact_errors = BTreeMap::<String, Vec<String>>::new();
     let mut build_info = Vec::new();
 
     for parent_contract in filtered_compilation_order {
@@ -162,7 +163,7 @@ See https://ton-blockchain.github.io/acton/docs/build-system/configuration-refer
         ) {
             Ok((code, hash, fift_code)) => (code, hash, fift_code),
             Err(err) => {
-                failure_count += 1;
+                error_count += 1;
                 compile_errors.insert(parent_contract.clone(), err);
                 continue;
             }
@@ -178,34 +179,35 @@ See https://ton-blockchain.github.io/acton/docs/build-system/configuration-refer
             ));
         }
 
-        if let Err(e) = save_build_artifact(&out_dir, &parent_contract, &code_boc64, &code_hash) {
-            eprintln!(
-                "Warning: Failed to save build artifact file for {}: {}",
-                contract_config.name, e
-            );
+        if let Err(err) = save_build_artifact(
+            project_root,
+            &out_dir,
+            &parent_contract,
+            &code_boc64,
+            &code_hash,
+        ) {
+            record_contract_error(&mut artifact_errors, &parent_contract, err);
+            error_count += 1;
         }
 
-        if let Err(e) = save_boc_file(project_root, contract_config, &code_boc64) {
-            eprintln!(
-                "Warning: Failed to save cached BoC file for {}: {}",
-                contract_config.name, e
-            );
+        if let Err(err) = save_boc_file(project_root, contract_config, &code_boc64) {
+            record_contract_error(&mut artifact_errors, &parent_contract, err);
+            error_count += 1;
         }
 
         if let Some(output_fift_dir) = &output_fift_dir
             && let Some(fift_code) = &fift_code
-            && let Err(e) = save_fift_file(output_fift_dir, &parent_contract, fift_code)
+            && let Err(err) =
+                save_fift_file(project_root, output_fift_dir, &parent_contract, fift_code)
         {
-            eprintln!(
-                "Warning: Failed to save Fift file for {}: {}",
-                contract_config.name, e
-            );
+            record_contract_error(&mut artifact_errors, &parent_contract, err);
+            error_count += 1;
         }
     }
 
     let total_elapsed = total_start.elapsed();
 
-    if failure_count == 0 {
+    if error_count == 0 {
         println!("    {} in {:?}", "Finished".green().bold(), total_elapsed);
 
         if !build_info.is_empty() {
@@ -219,24 +221,50 @@ See https://ton-blockchain.github.io/acton/docs/build-system/configuration-refer
 
         Ok(())
     } else {
-        let mut whole_error = String::new();
+        let mut summary_errors = BTreeMap::<String, Vec<String>>::new();
 
         for (contract, err) in compile_errors {
-            whole_error += format!("In {}:\n\n{err}\n", contract.yellow()).as_str();
+            summary_errors
+                .entry(contract)
+                .or_default()
+                .push(err.to_string());
+        }
+
+        for (contract, errors) in artifact_errors {
+            summary_errors.entry(contract).or_default().extend(errors);
+        }
+
+        let mut whole_error = String::new();
+
+        for (contract, errors) in summary_errors {
+            whole_error += format!("In {}:\n\n", contract.yellow()).as_str();
+            whole_error += errors.join("\n\n").as_str();
+            whole_error.push('\n');
         }
 
         whole_error.push_str(
             format!(
                 "{} with {} error{}",
                 "Build failed".red(),
-                failure_count,
-                if failure_count == 1 { "" } else { "s" }
+                error_count,
+                if error_count == 1 { "" } else { "s" }
             )
             .as_str(),
         );
 
         Err(anyhow!(whole_error))
     }
+}
+
+fn record_contract_error(
+    contract_errors: &mut BTreeMap<String, Vec<String>>,
+    contract: &str,
+    error: anyhow::Error,
+) {
+    contract_errors
+        .entry(contract.to_string())
+        .or_default()
+        .push(error.to_string());
 }
 
 fn process_contract(
@@ -318,7 +346,11 @@ fn save_boc_file(
     contract_config: &ContractConfig,
     code_boc64: &str,
 ) -> anyhow::Result<()> {
-    if let Some(config_output_path) = &contract_config.output {
+    if let Some(config_output_path) = contract_config
+        .output
+        .as_deref()
+        .filter(|path| !path.is_empty())
+    {
         let output_path = resolve_project_config_path(project_root, config_output_path);
         let display_parent_dir = Path::new(config_output_path)
             .parent()
@@ -337,12 +369,19 @@ fn save_boc_file(
         }
 
         let code = Boc::decode_base64(code_boc64)?;
-        fs::write(output_path, Boc::encode(code))?;
+        fs::write(&output_path, Boc::encode(code)).map_err(|err| {
+            anyhow!(
+                "Failed to save BoC file {}: {}",
+                Path::new(config_output_path).display(),
+                err
+            )
+        })?;
     }
     Ok(())
 }
 
 fn save_build_artifact(
+    project_root: &Path,
     out_dir: &Path,
     contract_key: &str,
     code_boc64: &str,
@@ -357,12 +396,20 @@ fn save_build_artifact(
 
     let filename = format!("{contract_key}.json");
     let path = out_dir.join(filename);
-    fs::write(path, serde_json::to_string_pretty(&json_data)?)?;
+    let display_path = path.strip_prefix(project_root).unwrap_or(&path);
+    fs::write(&path, serde_json::to_string_pretty(&json_data)?).map_err(|err| {
+        anyhow!(
+            "Failed to save build artifact file {}: {}",
+            display_path.display(),
+            err
+        )
+    })?;
 
     Ok(())
 }
 
 fn save_fift_file(
+    project_root: &Path,
     output_fift_dir: &Path,
     contract_key: &str,
     fift_code: &str,
@@ -380,8 +427,14 @@ fn save_fift_file(
         );
     }
 
-    fs::write(&path, fift_code)
-        .map_err(|err| anyhow!("Failed to save Fift file {}: {}", path.display(), err))?;
+    let display_path = path.strip_prefix(project_root).unwrap_or(&path);
+    fs::write(&path, fift_code).map_err(|err| {
+        anyhow!(
+            "Failed to save Fift file {}: {}",
+            display_path.display(),
+            err
+        )
+    })?;
 
     Ok(())
 }
