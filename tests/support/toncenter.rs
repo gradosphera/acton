@@ -133,6 +133,21 @@ api = {{ v2 = "{v2_url}" }}
         .expect("failed to write Acton.toml with custom network");
 }
 
+pub(crate) fn append_localnet_network(project_path: &Path, v2_url: &str) {
+    let acton_toml_path = project_path.join("Acton.toml");
+    let mut acton_toml =
+        fs::read_to_string(&acton_toml_path).expect("failed to read generated Acton.toml");
+    acton_toml.push_str(&format!(
+        r#"
+
+[networks.localnet]
+api = {{ v2 = "{v2_url}" }}
+"#
+    ));
+    fs::write(&acton_toml_path, acton_toml)
+        .expect("failed to write Acton.toml with localnet network");
+}
+
 pub(crate) fn toncenter_v2_seqno_ok_response() -> ToncenterV2MockResponse {
     ToncenterV2MockResponse {
         status: 200,

@@ -1,8 +1,8 @@
 use crate::support::TestOutputExt;
-use crate::support::project::ProjectBuilder;
+use crate::support::project::{Project, ProjectBuilder};
 use crate::support::toncenter::{
-    append_custom_network, spawn_toncenter_v2_mock, toncenter_v2_error_response,
-    toncenter_v2_seqno_ok_response,
+    append_custom_network, append_localnet_network, spawn_toncenter_v2_mock,
+    toncenter_v2_error_response, toncenter_v2_seqno_ok_response,
 };
 
 use std::fs;
@@ -10,6 +10,40 @@ use tycho_types::boc::Boc;
 use tycho_types::cell::CellBuilder;
 
 const DEPLOYER_MNEMONIC: &str = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later";
+
+fn build_broadcast_wallet_error_project(project_name: &str) -> Project {
+    let project = ProjectBuilder::new(project_name)
+        .script_file(
+            "deploy",
+            r#"
+            import "../../lib/emulation/network"
+
+            fun main() {
+                val wallet = net.wallet("deployer");
+                net.send(wallet.address, createMessage({
+                    bounce: false,
+                    value: ton("0.05"),
+                    dest: address("EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ"),
+                }));
+            }
+        "#,
+        )
+        .build();
+
+    fs::write(project.path().join("mnemonic.txt"), DEPLOYER_MNEMONIC)
+        .expect("failed to write mnemonic");
+    fs::write(
+        project.path().join("wallets.toml"),
+        r#"[wallets.deployer]
+kind = "v4r2"
+workchain = 0
+keys = { mnemonic-file = "mnemonic.txt" }
+"#,
+    )
+    .expect("failed to write wallets.toml");
+
+    project
+}
 
 fn script_body_project(project_name: &str) -> ProjectBuilder {
     ProjectBuilder::new(project_name)
@@ -1269,35 +1303,7 @@ version = "0.1.0"
 
 #[test]
 fn test_script_broadcast_wallet_rejection_shows_actionable_toncenter_hint() {
-    let project = ProjectBuilder::new("script-broadcast-wallet-rejection")
-        .script_file(
-            "deploy",
-            r#"
-            import "../../lib/emulation/network"
-
-            fun main() {
-                val wallet = net.wallet("deployer");
-                net.send(wallet.address, createMessage({
-                    bounce: false,
-                    value: ton("0.05"),
-                    dest: address("EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ"),
-                }));
-            }
-        "#,
-        )
-        .build();
-
-    fs::write(project.path().join("mnemonic.txt"), DEPLOYER_MNEMONIC)
-        .expect("failed to write mnemonic");
-    fs::write(
-        project.path().join("wallets.toml"),
-        r#"[wallets.deployer]
-kind = "v4r2"
-workchain = 0
-keys = { mnemonic-file = "mnemonic.txt" }
-"#,
-    )
-    .expect("failed to write wallets.toml");
+    let project = build_broadcast_wallet_error_project("script-broadcast-wallet-rejection");
 
     let (mock_url, mock_handle) = spawn_toncenter_v2_mock(vec![
         toncenter_v2_seqno_ok_response(),
@@ -1321,6 +1327,142 @@ keys = { mnemonic-file = "mnemonic.txt" }
 
     output.assert_snapshot_matches(
         "integration/snapshots/test_script_broadcast_wallet_rejection_shows_actionable_toncenter_hint.stdout.txt",
+    );
+
+    mock_handle.join().expect("mock toncenter v2 must finish");
+}
+
+#[test]
+fn test_script_broadcast_missing_account_state_without_state_init_shows_wallet_setup_hint() {
+    let project =
+        build_broadcast_wallet_error_project("script-broadcast-wallet-missing-account-state");
+
+    let (mock_url, mock_handle) = spawn_toncenter_v2_mock(vec![
+        toncenter_v2_seqno_ok_response(),
+        toncenter_v2_error_response(
+            400,
+            "LITE_SERVER_UNKNOWN: cannot apply external message to current state : Failed to unpack account state",
+        ),
+    ]);
+    append_custom_network(project.path(), "mock-v2-missing-account", &mock_url);
+
+    let output = project
+        .acton()
+        .env("ACTON_DISABLE_SYSTEM_PROXY", "1")
+        .script("scripts/deploy.tolk")
+        .broadcast()
+        .verify_network("custom:mock-v2-missing-account")
+        .arg("--api-key")
+        .arg("test-api-key")
+        .run()
+        .failure();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/test_script_broadcast_missing_account_state_without_state_init_shows_wallet_setup_hint.stdout.txt",
+    );
+
+    mock_handle.join().expect("mock toncenter v2 must finish");
+}
+
+#[test]
+fn test_script_broadcast_missing_account_state_on_localnet_shows_localnet_airdrop_hint() {
+    let project =
+        build_broadcast_wallet_error_project("script-broadcast-wallet-missing-account-localnet");
+
+    let (mock_url, mock_handle) = spawn_toncenter_v2_mock(vec![
+        toncenter_v2_seqno_ok_response(),
+        toncenter_v2_error_response(
+            400,
+            "LITE_SERVER_UNKNOWN: cannot apply external message to current state : Failed to unpack account state",
+        ),
+    ]);
+    append_localnet_network(project.path(), &format!("{mock_url}/api/v2"));
+
+    let output = project
+        .acton()
+        .env("ACTON_DISABLE_SYSTEM_PROXY", "1")
+        .script("scripts/deploy.tolk")
+        .broadcast()
+        .verify_network("localnet")
+        .arg("--api-key")
+        .arg("test-api-key")
+        .run()
+        .failure();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/test_script_broadcast_missing_account_state_on_localnet_shows_localnet_airdrop_hint.stdout.txt",
+    );
+
+    mock_handle.join().expect("mock toncenter v2 must finish");
+}
+
+#[test]
+fn test_script_broadcast_missing_account_state_with_state_init_shows_deploy_hint() {
+    let project =
+        build_broadcast_wallet_error_project("script-broadcast-wallet-missing-account-with-init");
+
+    let (mock_url, mock_handle) = spawn_toncenter_v2_mock(vec![
+        toncenter_v2_error_response(400, "account is not active"),
+        toncenter_v2_error_response(
+            400,
+            "LITE_SERVER_UNKNOWN: cannot apply external message to current state : Failed to unpack account state",
+        ),
+    ]);
+    append_custom_network(
+        project.path(),
+        "mock-v2-missing-account-with-init",
+        &mock_url,
+    );
+
+    let output = project
+        .acton()
+        .env("ACTON_DISABLE_SYSTEM_PROXY", "1")
+        .script("scripts/deploy.tolk")
+        .broadcast()
+        .verify_network("custom:mock-v2-missing-account-with-init")
+        .arg("--api-key")
+        .arg("test-api-key")
+        .run()
+        .failure();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/test_script_broadcast_missing_account_state_with_state_init_shows_deploy_hint.stdout.txt",
+    );
+
+    mock_handle.join().expect("mock toncenter v2 must finish");
+}
+
+#[test]
+fn test_script_broadcast_wallet_rejection_with_state_init_shows_deploy_hint() {
+    let project =
+        build_broadcast_wallet_error_project("script-broadcast-wallet-rejection-with-init");
+
+    let (mock_url, mock_handle) = spawn_toncenter_v2_mock(vec![
+        toncenter_v2_error_response(400, "account is not active"),
+        toncenter_v2_error_response(
+            400,
+            "LITE_SERVER_UNKNOWN: cannot apply external message to current state : External message was not accepted: cannot run message on account: inbound external message rejected by account 3029B3EAEDA86A5381D86100F2A8B761C38DE45642EDB6E4BB1CCA2E6DD7FFED before smart-contract execution",
+        ),
+    ]);
+    append_custom_network(
+        project.path(),
+        "mock-v2-wallet-rejection-with-init",
+        &mock_url,
+    );
+
+    let output = project
+        .acton()
+        .env("ACTON_DISABLE_SYSTEM_PROXY", "1")
+        .script("scripts/deploy.tolk")
+        .broadcast()
+        .verify_network("custom:mock-v2-wallet-rejection-with-init")
+        .arg("--api-key")
+        .arg("test-api-key")
+        .run()
+        .failure();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/test_script_broadcast_wallet_rejection_with_state_init_shows_deploy_hint.stdout.txt",
     );
 
     mock_handle.join().expect("mock toncenter v2 must finish");

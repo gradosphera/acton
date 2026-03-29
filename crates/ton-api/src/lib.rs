@@ -3,6 +3,7 @@ use num_bigint::{BigInt, ToBigInt};
 use reqwest::blocking::Response;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 pub use ton_networks::{CustomNetworkUrls, Network};
@@ -16,6 +17,46 @@ const HTTP_REQUEST_TIMEOUT_SECS: u64 = 30;
 const TONCENTER_MIN_REQUEST_INTERVAL: Duration = Duration::from_millis(1100);
 static TONCENTER_REQUEST_GATE: LazyLock<Mutex<Option<Instant>>> =
     LazyLock::new(|| Mutex::new(None));
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SendBocErrorKind {
+    MissingAccountState,
+    RejectedBeforeExecution,
+    Other,
+}
+
+#[derive(Debug, Clone)]
+pub struct SendBocError {
+    kind: SendBocErrorKind,
+    raw: String,
+}
+
+impl SendBocError {
+    fn new(kind: SendBocErrorKind, raw: impl Into<String>) -> Self {
+        Self {
+            kind,
+            raw: raw.into(),
+        }
+    }
+
+    #[must_use]
+    pub const fn kind(&self) -> SendBocErrorKind {
+        self.kind
+    }
+
+    #[must_use]
+    pub fn raw(&self) -> &str {
+        &self.raw
+    }
+}
+
+impl fmt::Display for SendBocError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.raw)
+    }
+}
+
+impl std::error::Error for SendBocError {}
 
 pub struct TonApiClient {
     client: reqwest::blocking::Client,
@@ -305,21 +346,24 @@ impl TonApiClient {
     }
 
     /// Send BOC to network
-    pub fn send_boc(&self, boc: &str) -> anyhow::Result<()> {
-        let url = format!(
-            "{}/sendBoc",
-            self.network.toncenter_v2_url(&self.custom_networks)?
-        );
+    pub fn send_boc(&self, boc: &str) -> Result<(), SendBocError> {
+        let base_url = self
+            .network
+            .toncenter_v2_url(&self.custom_networks)
+            .map_err(|err| SendBocError::new(SendBocErrorKind::Other, format!("{err:#}")))?;
+        let url = format!("{base_url}/sendBoc");
 
         let json = serde_json::json!({ "boc": boc });
 
-        let response = self.send_with_retry(
-            || self.build_post_request(&url).json(&json),
-            "Failed to send BOC",
-        )?;
+        let response = self
+            .send_with_retry(
+                || self.build_post_request(&url).json(&json),
+                "Failed to send BOC",
+            )
+            .map_err(|err| SendBocError::new(SendBocErrorKind::Other, format!("{err:#}")))?;
 
         if !response.status().is_success() {
-            return Err(Self::handle_fail(response));
+            return Err(Self::handle_send_boc_fail(response));
         }
 
         Ok(())
@@ -556,6 +600,39 @@ impl TonApiClient {
 
         anyhow!(raw_msg)
     }
+
+    fn handle_send_boc_fail(response: Response) -> SendBocError {
+        let status = response.status();
+        let Ok(data) = response.json::<TonCenterErrorResponse>() else {
+            return SendBocError::new(
+                SendBocErrorKind::Other,
+                format!("TonCenter API returned status: {status}"),
+            );
+        };
+
+        let raw_msg = data
+            .error
+            .trim_start_matches("LITE_SERVER_UNKNOWN: ")
+            .to_owned();
+
+        SendBocError::new(classify_toncenter_send_boc_error(&raw_msg), raw_msg)
+    }
+}
+
+fn classify_toncenter_send_boc_error(raw_msg: &str) -> SendBocErrorKind {
+    if raw_msg == "cannot apply external message to current state : Failed to unpack account state"
+    {
+        return SendBocErrorKind::MissingAccountState;
+    }
+
+    if raw_msg.starts_with(
+        "cannot apply external message to current state : External message was not accepted: cannot run message on account:",
+    ) && raw_msg.contains("before smart-contract execution")
+    {
+        return SendBocErrorKind::RejectedBeforeExecution;
+    }
+
+    SendBocErrorKind::Other
 }
 
 fn normalize_toncenter_error_message(raw_msg: &str) -> Option<&'static str> {
@@ -707,7 +784,11 @@ mod tests {
                 "cannot apply external message to current state : External message was not accepted: cannot run message on account: inbound external message rejected by account 3029B3EAEDA86A5381D86100F2A8B761C38DE45642EDB6E4BB1CCA2E6DD7FFED before smart-contract execution",
             ),
             Some(
-                "wallet/contract rejected the external message before contract execution; likely causes:\n- not enough balance\n- wallet/contract is not deployed\n- seqno is stale\n- message expired",
+                r#"wallet/contract rejected the external message before contract execution; likely causes:
+- not enough balance
+- wallet/contract is not deployed
+- seqno is stale
+- message expired"#,
             ),
         );
     }

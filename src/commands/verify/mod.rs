@@ -1,4 +1,5 @@
 use crate::commands::common::{error_fmt, select_contract, select_wallet};
+use crate::external_send::{SendBocContext, format_send_boc_error};
 use crate::wallets::open_wallets;
 use acton_config::color::OwoColorize;
 use acton_config::config::ActonConfig;
@@ -374,8 +375,12 @@ pub fn verify_cmd(
             .wallet
             .create_ext_in_msg(vec![message_cell], seqno, expire_at, need_state_init)?;
 
+    let boc = &external.to_boc_base64()?;
+    let network_name = network.to_string();
+    let context = SendBocContext::wallet(&wallet, &network_name, seqno, need_state_init);
     api_client
-        .send_boc(&external.to_boc_base64()?)
+        .send_boc(boc)
+        .map_err(|error| format_send_boc_error(error, context))
         .context("Failed to send verification transaction")?;
 
     println!("  {} Transaction sent successfully", "✓".green().bold());

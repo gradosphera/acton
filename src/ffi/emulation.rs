@@ -5,6 +5,7 @@ use crate::context::{
 };
 use crate::debugger::any_executor::AnyExecutor;
 use crate::debugger::debug_context::StepMode;
+use crate::external_send::{SendBocContext, format_send_boc_error};
 use crate::ffi::assert::parse_search_params;
 use crate::retrace;
 use acton_config::color::OwoColorize;
@@ -811,7 +812,12 @@ fn send_wallet_message(
             .wallet
             .create_ext_in_msg(vec![message_ton], seqno, expire_at, need_state_init)?;
 
-    client.send_boc(&external.to_boc_base64()?)?;
+    let boc = &external.to_boc_base64()?;
+    let network_name = network.to_string();
+    let context = SendBocContext::wallet(&wallet, &network_name, seqno, need_state_init);
+    client
+        .send_boc(boc)
+        .map_err(|error| format_send_boc_error(error, context))?;
 
     Ok(())
 }
