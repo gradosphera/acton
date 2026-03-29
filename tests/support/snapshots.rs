@@ -160,6 +160,9 @@ fn build_redactions(project_path: &Path) -> snapbox::Redactions {
             "https://ton-blockchain.github.io/acton/docs",
         )
         .unwrap();
+    redactions
+        .insert("[OS_ERROR]", regex!(r"os error \d+"))
+        .unwrap();
 
     redactions
 }

@@ -1,1 +1,1 @@
-Warning: Failed to save cached BoC file for simple: Permission denied (os error 13)
+Warning: Failed to save cached BoC file for simple: Permission denied ([OS_ERROR])
