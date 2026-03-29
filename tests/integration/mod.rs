@@ -28,6 +28,7 @@ mod reporters_tests;
 mod retrace_tests;
 mod rpc_tests;
 mod run_tests;
+mod scenarios;
 mod script_tests;
 mod stdlib_tests;
 mod test_runner;
