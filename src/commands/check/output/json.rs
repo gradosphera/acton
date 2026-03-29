@@ -5,11 +5,12 @@ use tolk_resolver::{FileDb, Span};
 
 pub(crate) fn write_report(
     writer: &mut dyn Write,
+    success: bool,
     all_diagnostics: &[Diagnostic],
     file_db: &FileDb,
 ) -> anyhow::Result<()> {
     let json_output = serde_json::json!({
-        "success": true,
+        "success": success,
         "diagnostics": all_diagnostics.iter().map(|d| diagnostic_to_json(d, file_db)).collect::<Vec<_>>()
     });
     let json = serde_json::to_string_pretty(&json_output)?;
