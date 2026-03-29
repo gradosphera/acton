@@ -21,6 +21,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;
 use std::fs;
 use std::io::{Write, stderr, stdout};
+use std::net::TcpListener;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -96,6 +97,11 @@ pub fn script_cmd(
         Some(net) => Some(Network::from_str(net)?),
         None => None,
     };
+    let debug_listener = if debug {
+        Some(crate::debugger::dap::reserve_dap_listener(debug_port)?)
+    } else {
+        None
+    };
 
     run_script_file(
         path,
@@ -104,7 +110,7 @@ pub fn script_cmd(
         stack,
         debug,
         backtrace,
-        debug_port,
+        debug_listener,
         fork_net,
         api_key,
         fork_block_number,
@@ -128,7 +134,7 @@ fn run_script_file(
     stack: Tuple,
     debug: bool,
     backtrace: Option<BacktraceMode>,
-    debug_port: u16,
+    debug_listener: Option<TcpListener>,
     fork_net: Option<String>,
     api_key: Option<String>,
     fork_block_number: Option<u64>,
@@ -155,7 +161,7 @@ fn run_script_file(
                 result.source_map.unwrap_or_default().into(),
                 debug,
                 backtrace,
-                debug_port,
+                debug_listener,
                 ExecutorVerbosity::FullLocationStackVerbose,
                 fork_net,
                 api_key,
@@ -187,7 +193,7 @@ fn execute_script(
     source_map: Arc<SourceMap>,
     debug: bool,
     backtrace: Option<BacktraceMode>,
-    debug_port: u16,
+    debug_listener: Option<TcpListener>,
     verbosity: ExecutorVerbosity,
     fork_net: Option<String>,
     api_key: Option<String>,
@@ -293,7 +299,9 @@ fn execute_script(
         let mut executor = StepGetExecutor::new(&stack, &params, Some(DEFAULT_CONFIG))?;
         ffi::register(&mut executor, &mut ctx);
 
-        let transport = crate::debugger::start_dap_server(debug_port);
+        let listener = debug_listener
+            .ok_or_else(|| anyhow!("internal error: debug listener was not reserved"))?;
+        let transport = crate::debugger::dap::start_dap_server_with_listener(listener)?;
 
         let mut dbg_ctx = DebugContext::new(
             transport,

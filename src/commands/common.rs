@@ -123,6 +123,13 @@ pub mod error_fmt {
     }
 
     #[must_use]
+    pub fn port_bind_failure(server: &str, address: &str, flag: &str) -> String {
+        format!(
+            "Failed to start {server} on {address}\nChoose another port with {flag}\nOr stop the process currently listening on that port"
+        )
+    }
+
+    #[must_use]
     pub fn script_not_found(config: &ActonConfig, name: &str) -> String {
         let Some(available) = available_scripts(config) else {
             return format!(

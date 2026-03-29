@@ -8,7 +8,7 @@ use crate::commands::test::reporting::console::{ConsoleConfig, ConsoleReporter};
 use crate::commands::test::reporting::dot::DotReporter;
 use crate::commands::test::reporting::junit::{JUnitConfig, JUnitReporter};
 use crate::commands::test::reporting::teamcity::TeamCityReporter;
-use crate::commands::test::reporting::ui::{UiReporter, start_ui_server};
+use crate::commands::test::reporting::ui::{UiReporter, reserve_ui_listener, start_ui_server};
 use crate::commands::test::reporting::{
     ReporterManager, TestExecutionContext, TestFailureExecutionContext, TestReport, TestStatus,
     TestSuiteStats, extract_suite_name,
@@ -20,9 +20,9 @@ use crate::context::{
 use crate::debugger::any_executor::AnyExecutor;
 use crate::debugger::dap::DapTransport;
 use crate::debugger::debug_context::DebugContext;
-use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
 use crate::formatter::FormatterContext;
+use crate::{debugger, ffi};
 use acton_config::color::OwoColorize;
 use acton_config::config::{
     ActonConfig, ContractDependency, DependencyKind, project_root as configured_project_root,
@@ -38,6 +38,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
@@ -103,12 +104,13 @@ impl<'a> TestRunner<'a> {
     pub fn new(
         acton_config: ActonConfig,
         config: TestConfig,
+        debug_listener: Option<TcpListener>,
         cache: &'a mut FileBuildCache,
         reporter_manager: &'a mut ReporterManager,
         mutation_overrides: BTreeMap<String, Cell>,
-    ) -> TestRunner<'a> {
-        let transport = if config.debug {
-            crate::debugger::start_dap_server(config.debug_port)
+    ) -> anyhow::Result<TestRunner<'a>> {
+        let transport = if let Some(listener) = debug_listener {
+            debugger::dap::start_dap_server_with_listener(listener)?
         } else {
             DapTransport::dummy()
         };
@@ -154,7 +156,7 @@ impl<'a> TestRunner<'a> {
             }
         }
 
-        Self {
+        Ok(Self {
             config,
             project_root,
             acton_config,
@@ -169,7 +171,7 @@ impl<'a> TestRunner<'a> {
             ref_contracts,
             remote_cache: RemoteSnapshotCache::new(),
             abi_parse_cache: ContractAbiParseCache::new(),
-        }
+        })
     }
 
     fn setup_reporters(
@@ -475,6 +477,17 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     };
 
     let acton_config = ActonConfig::load()?;
+    let debug_listener = if config.debug {
+        Some(debugger::dap::reserve_dap_listener(config.debug_port)?)
+    } else {
+        None
+    };
+    // try to reserve port before test run for better UX
+    let ui_listener = if config.ui {
+        Some(reserve_ui_listener(config.ui_port)?)
+    } else {
+        None
+    };
 
     let ui_reporter = if config.ui {
         Some(UiReporter::new())
@@ -499,10 +512,11 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     let mut runner = TestRunner::new(
         acton_config,
         config.clone(),
+        debug_listener,
         &mut file_cache,
         &mut global_reporter,
         build_overrides_for_mutations(&config)?,
-    );
+    )?;
 
     for (index, file) in test_files.iter().enumerate() {
         let result = run_tests_for_file(&mut runner, file);
@@ -592,6 +606,8 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     if config.ui
         && let Some(reports) = reports_for_ui
     {
+        let listener =
+            ui_listener.ok_or_else(|| anyhow!("internal error: UI listener was not reserved"))?;
         let reports = reports.lock().expect("cannot lock mutex").clone();
         let trace_dir = config.save_test_trace.clone();
         let project_root = dunce::canonicalize(configured_project_root())
@@ -606,9 +622,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?;
-        rt.block_on(async {
-            start_ui_server(reports, trace_dir, project_root, config.ui_port).await
-        })?;
+        rt.block_on(async { start_ui_server(reports, trace_dir, project_root, listener).await })?;
     }
 
     if let Some(filter) = &config.filter

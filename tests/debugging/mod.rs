@@ -297,7 +297,7 @@ fn execute_script<'a>(
     let mut executor = StepGetExecutor::new(&stack, &params, Some(DEFAULT_CONFIG))?;
     ffi::register(&mut executor, &mut ctx);
 
-    let transport = debugger::start_dap_server(debug_port);
+    let transport = debugger::start_dap_server(debug_port)?;
 
     let mut dbg_ctx = DebugContext::new(
         transport,

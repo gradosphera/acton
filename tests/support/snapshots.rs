@@ -149,6 +149,12 @@ fn build_redactions(project_path: &Path) -> snapbox::Redactions {
         )
         .unwrap();
     redactions
+        .insert(
+            "[LOCALHOST_ADDR]",
+            regex!(r"(?:localhost|127\.0\.0\.1):\d+"),
+        )
+        .unwrap();
+    redactions
         .insert("[LAST_TOPUP_AT]", regex!(r"Last top-up: .*"))
         .unwrap();
     redactions
