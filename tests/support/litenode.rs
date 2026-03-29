@@ -4,6 +4,7 @@ use reqwest::blocking::Client;
 use serde_json::Value;
 use std::io::Read;
 use std::net::TcpListener;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -13,6 +14,7 @@ const STOP_TIMEOUT: Duration = Duration::from_secs(3);
 
 pub(crate) struct LiteNodeBuilder<'a> {
     project: &'a Project,
+    current_dir: PathBuf,
     port: u16,
     args: Vec<String>,
     ready_timeout: Duration,
@@ -30,10 +32,16 @@ impl<'a> LiteNodeBuilder<'a> {
     fn new(project: &'a Project) -> Self {
         Self {
             project,
+            current_dir: project.path().to_path_buf(),
             port: find_available_port(),
             args: Vec::new(),
             ready_timeout: DEFAULT_READY_TIMEOUT,
         }
+    }
+
+    pub(crate) fn current_dir(mut self, path: impl AsRef<Path>) -> Self {
+        self.current_dir = path.as_ref().to_path_buf();
+        self
     }
 
     pub(crate) fn port(mut self, port: u16) -> Self {
@@ -75,7 +83,7 @@ impl<'a> LiteNodeBuilder<'a> {
             .arg("--port")
             .arg(self.port.to_string());
         cmd.args(&self.args)
-            .current_dir(self.project.path())
+            .current_dir(&self.current_dir)
             .env("NO_COLOR", "1")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

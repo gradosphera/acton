@@ -1,6 +1,6 @@
 use crate::common::acton_exe;
 use crate::support::TestOutputExt;
-use crate::support::project::ProjectBuilder;
+use crate::support::project::{Project, ProjectBuilder};
 use serde_json::Value as JsonValue;
 use std::env;
 use std::fs;
@@ -17,6 +17,8 @@ const ACTON_SHIM: &str = r#"#!/bin/sh
 set -eu
 exec "$ACTON_BIN" "$@"
 "#;
+
+const LOCALNET_TEST_MNEMONIC: &str = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later";
 
 #[cfg(unix)]
 fn make_executable(path: &Path) {
@@ -233,6 +235,97 @@ fn git_config_get(project_root: &Path, key: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+fn write_localnet_wallet_config(project_dir: &Path, wallet_name: &str) {
+    let wallets_toml = format!(
+        r#"[wallets."{wallet_name}"]
+kind = "v4r2"
+workchain = 0
+keys = {{ mnemonic = "{LOCALNET_TEST_MNEMONIC}" }}
+"#
+    );
+    fs::write(project_dir.join("wallets.toml"), wallets_toml)
+        .expect("Failed to write localnet wallets.toml");
+}
+
+fn append_localnet_network(project_dir: &Path, base_url: &str) {
+    let acton_toml_path = project_dir.join("Acton.toml");
+    let mut acton_toml =
+        fs::read_to_string(&acton_toml_path).expect("Failed to read generated Acton.toml");
+    acton_toml.push_str(&format!(
+        r#"
+
+[networks.localnet]
+api = {{ v2 = "{base_url}/api/v2", v3 = "{base_url}/api/v3" }}
+"#
+    ));
+    fs::write(&acton_toml_path, acton_toml).expect("Failed to write Acton.toml with localnet");
+}
+
+fn assert_new_project_localnet_deploy_snapshot(
+    fixture_name: &str,
+    template: &str,
+    app: bool,
+    wallet_name: &str,
+    deploy_script_path: &str,
+    snapshot_path: &str,
+) {
+    let project = ProjectBuilder::new(fixture_name)
+        .without_acton_toml()
+        .build();
+    let project_dir = project.path().join("foobar");
+
+    create_project_from_template(&project, &project_dir, template, app);
+
+    project
+        .acton()
+        .current_dir(&project_dir)
+        .arg("build")
+        .run()
+        .success();
+
+    write_localnet_wallet_config(&project_dir, wallet_name);
+
+    let node = project
+        .litenode()
+        .current_dir(&project_dir)
+        .args(["--accounts", wallet_name])
+        .start();
+    append_localnet_network(&project_dir, &node.base_url());
+
+    project
+        .acton()
+        .script(deploy_script_path)
+        .current_dir(&project_dir)
+        .broadcast()
+        .verify_network("localnet")
+        .run()
+        .success()
+        .assert_snapshot_matches(snapshot_path);
+
+    node.stop();
+}
+
+fn create_project_from_template(project: &Project, project_dir: &Path, template: &str, app: bool) {
+    let mut cmd = project
+        .acton()
+        .arg("new")
+        .arg(&project_dir.display().to_string())
+        .arg("--name")
+        .arg("test-project")
+        .arg("--description")
+        .arg("test description")
+        .arg("--template")
+        .arg(template)
+        .arg("--license")
+        .arg("MIT");
+
+    if app {
+        cmd = cmd.arg("--app");
+    }
+
+    cmd.run().success();
 }
 
 #[test]
@@ -1108,6 +1201,54 @@ fn test_new_counter_app_project_supports_npm_scripts() {
 
     assert!(project_dir.join("build/counter.json").exists());
     assert!(project_dir.join("dist/index.html").exists());
+}
+
+#[test]
+fn test_new_empty_project_localnet_deploy_snapshot() {
+    assert_new_project_localnet_deploy_snapshot(
+        "new-empty-localnet-deploy",
+        "empty",
+        false,
+        "deployer",
+        "scripts/deploy.tolk",
+        "integration/snapshots/test_new_empty_project_localnet_deploy.stdout.txt",
+    );
+}
+
+#[test]
+fn test_new_counter_project_localnet_deploy_snapshot() {
+    assert_new_project_localnet_deploy_snapshot(
+        "new-counter-localnet-deploy",
+        "counter",
+        false,
+        "deployer",
+        "scripts/deploy.tolk",
+        "integration/snapshots/test_new_counter_project_localnet_deploy.stdout.txt",
+    );
+}
+
+#[test]
+fn test_new_counter_app_project_localnet_deploy_snapshot() {
+    assert_new_project_localnet_deploy_snapshot(
+        "new-counter-app-localnet-deploy",
+        "counter",
+        true,
+        "deployer",
+        "contracts/scripts/deploy.tolk",
+        "integration/snapshots/test_new_counter_app_project_localnet_deploy.stdout.txt",
+    );
+}
+
+#[test]
+fn test_new_jetton_project_localnet_deploy_snapshot() {
+    assert_new_project_localnet_deploy_snapshot(
+        "new-jetton-localnet-deploy",
+        "jetton",
+        false,
+        "deployer",
+        "scripts/deploy.tolk",
+        "integration/snapshots/test_new_jetton_project_localnet_deploy.stdout.txt",
+    );
 }
 
 #[test]

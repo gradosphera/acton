@@ -4,7 +4,7 @@ import "@contracts/types"
 import "@wrappers/Counter"
 
 fun main() {
-    val deployer = net.wallet("deployer-1");
+    val deployer = net.wallet("deployer");
 
     val counter = Counter.fromStorage(Storage {
         id: 0,

@@ -137,6 +137,12 @@ fn build_redactions(project_path: &Path) -> snapbox::Redactions {
         .insert("[DEPLOYED_AT]", regex!(r"Deployed at: .*"))
         .unwrap();
     redactions
+        .insert(
+            "[EXPLORER_TX_URL]",
+            regex!(r"http://(?:localhost|127\.0\.0\.1):\d+/explorer/tx/[0-9a-fA-F]+"),
+        )
+        .unwrap();
+    redactions
         .insert("[LAST_TOPUP_AT]", regex!(r"Last top-up: .*"))
         .unwrap();
     redactions

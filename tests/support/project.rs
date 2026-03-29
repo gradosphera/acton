@@ -231,6 +231,19 @@ impl PtySession {
         self
     }
 
+    /// Assert that a pattern does not appear before timeout or EOF.
+    pub(crate) fn expect_no_match<N>(&mut self, needle: N) -> &mut Self
+    where
+        N: expectrl::Needle + NeedleLabel,
+    {
+        let label = needle.needle_label();
+        match self.inner.expect(needle) {
+            Err(expectrl::Error::ExpectTimeout | expectrl::Error::Eof) => self,
+            Ok(_) => panic!("Expected PTY output to not match {label}"),
+            Err(err) => panic!("Expected PTY output to not match {label}, got error: {err}"),
+        }
+    }
+
     /// Expect a pattern and panic with a custom message on failure.
     #[allow(dead_code)]
     #[allow(non_snake_case)]
