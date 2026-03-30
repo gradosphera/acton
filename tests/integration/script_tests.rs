@@ -1328,6 +1328,33 @@ version = "0.1.0"
 }
 
 #[test]
+fn test_script_broadcast_treasury_recommends_wallet_api() {
+    let project = ProjectBuilder::new("script-broadcast-treasury-recommends-wallet")
+        .script_file(
+            "deploy",
+            r#"
+            import "../../lib/emulation/network"
+
+            fun main() {
+                net.treasury("deployer");
+            }
+        "#,
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .script("scripts/deploy.tolk")
+        .broadcast()
+        .run()
+        .failure();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/test_script_broadcast_treasury_recommends_wallet_api.stdout.txt",
+    );
+}
+
+#[test]
 fn test_script_broadcast_wallet_rejection_shows_actionable_toncenter_hint() {
     let project = build_broadcast_wallet_error_project("script-broadcast-wallet-rejection");
 

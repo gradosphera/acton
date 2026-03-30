@@ -619,7 +619,13 @@ struct Treasury {
 ///     // ...
 /// }
 /// ```
+///
+/// Note: in scripts always use [net.wallet] instead.
 fun net.treasury(name: string): Treasury {
+    if (net.isBroadcasting()) {
+        Assert.fail("Cannot use treasury in broadcast mode, don't use `net.treasury()` in scripts, use `net.wallet()` instead")
+    }
+
     val stateInit: ContractState = {
         code: __treasuryCode(),
         data: beginCell().storeSlice(name.beginParse()).endCell(),
@@ -629,13 +635,13 @@ fun net.treasury(name: string): Treasury {
     val address = AutoDeployAddress { stateInit }.calculateAddress();
     net.registerAddress(address, name);
 
-    val msg = createMessage({
+    val deployMsg = createMessage({
         bounce: false,
         value: ton("10000"),
         dest: { workchain: 0, stateInit },
     });
     // Deploy treasury
-    net.send(deployer, msg);
+    net.send(deployer, deployMsg);
     return Treasury { address };
 }
 
@@ -650,7 +656,7 @@ struct Wallet {
 /// Without `--broadcast`, the wallet refers to an internal wallet, created in the
 /// same way as in `net.treasury`.
 ///
-/// Note: in tests, use `net.treasury`.
+/// Note: in tests, use [net.treasury].
 ///
 /// Example:
 /// ```tolk
@@ -1046,6 +1052,9 @@ fun net.now(): uint32 {
 /// ```tolk
 /// net.topUp(address, ton("10"));
 /// ```
+///
+/// Note: This function for tests only!
+/// For testnet TON airdrop use `acton wallet airdrop command.
 fun net.topUp(to: address, amount: coins): void {
     val treasury = net.treasury("treasury");
     val topupMsg = createMessage({
