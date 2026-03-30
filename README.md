@@ -67,7 +67,7 @@ acton build
 acton test
 
 # Create and fund a local testnet wallet
-acton wallet new --name deployer --local --airdrop
+acton wallet new --name deployer --local --airdrop --version v5r1
 
 # Deploy to TON testnet
 acton script scripts/deploy.tolk --broadcast --net testnet
