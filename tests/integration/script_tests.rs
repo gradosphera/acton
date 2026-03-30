@@ -1779,6 +1779,39 @@ fn test_script_env_vars_extended() {
 }
 
 #[test]
+fn test_script_env_vars_support_coins() {
+    let project = ProjectBuilder::new("script-env-vars-coins")
+        .script_file(
+            "env_coins",
+            r#"
+            import "../../lib/io"
+            import "../../lib/env"
+
+            fun main() {
+                val amount = env<coins>("TEST_COINS");
+                if (amount != null) {
+                    println1("coins: {:ton}", amount);
+                }
+
+                val fallback = envOr<coins>("TEST_COINS_MISSING", ton("0.75"));
+                println1("coins_default: {:ton}", fallback);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/env_coins.tolk")
+        .env("TEST_COINS", "1500000000")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_script_env_vars_support_coins.stdout.txt",
+        );
+}
+
+#[test]
 fn test_script_env_or_vars() {
     let project = ProjectBuilder::new("script-env-or-vars")
         .script_file(
