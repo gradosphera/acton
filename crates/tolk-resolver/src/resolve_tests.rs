@@ -1128,6 +1128,7 @@ mod tests {
                 @deprecated("x")
                 const C: int = 1;
 
+                @abi.minimalMsgValue(1)
                 @overflow1023_policy("suppress")
                 struct S {
                     x: int
@@ -1138,7 +1139,7 @@ mod tests {
                 }
             "#,
             expect![[r"
-                unknown_symbol at 240-254
+                unknown_symbol at 280-294
             "]],
         );
     }
