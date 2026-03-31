@@ -44,6 +44,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::{fs, process};
 use tolk_syntax::{AstNode, HasName, SourceFile};
+use tolkc::TolkSourceMap;
 use ton_abi::{ContractAbi, ContractAbiParseCache, contract_abi, contract_abi_with_file};
 use ton_emulator::emulator::Emulator;
 use ton_emulator::world_state::{
@@ -795,7 +796,9 @@ fn compile_test_file(
                 fift_code: cache_entry.fift_code,
                 code_boc64: cache_entry.code_boc64,
                 code_hash_hex: cache_entry.code_hash_hex,
+                debug_mark_base64: cache_entry.debug_mark_base64,
                 source_map: cache_entry.source_map,
+                new_source_map: cache_entry.new_source_map,
                 abi: cache_entry.abi,
             },
         ));
@@ -874,6 +877,11 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
 
     let code_cell = Boc::decode_base64(&result.code_boc64)?;
     let source_map = result.source_map.unwrap_or_default();
+    let tolk_source_map = Arc::new(TolkSourceMap::from_code_cell(
+        result.new_source_map.unwrap_or_default(),
+        &code_cell,
+        result.debug_mark_base64.as_deref(),
+    )?);
     let compiler_abi = result.abi.map(Arc::new);
     let stats = run_file_tests(
         runner,
@@ -883,10 +891,12 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
         Arc::new(abi),
         compiler_abi,
         Arc::new(source_map),
+        tolk_source_map,
     )?;
     Ok(stats)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_file_tests(
     runner: &mut TestRunner,
     file_path: &str,
@@ -895,6 +905,7 @@ fn run_file_tests(
     abi: Arc<ContractAbi>,
     compiler_abi: Option<Arc<tolkc::abi::ContractABI>>,
     source_map: Arc<SourceMap>,
+    tolk_source_map: Arc<TolkSourceMap>,
 ) -> anyhow::Result<TestStats> {
     let file_path = Path::new(file_path).absolutize()?;
     let filtered_tests = if let Some(pattern) = &runner.config.filter {
@@ -944,6 +955,7 @@ fn run_file_tests(
             abi: abi.clone(),
             compiler_abi: compiler_abi.clone(),
             source_map: source_map.clone(),
+            tolk_source_map: tolk_source_map.clone(),
             show_bodies: runner.config.show_bodies,
             backtrace: runner.config.backtrace,
             execution: None,
@@ -999,6 +1011,14 @@ fn run_file_tests(
             get_result,
             ..
         } = result;
+        let mut assert_failure = assert_failure;
+
+        if let (Some(AssertFailure::GetMethod(failure)), GetMethodResult::Success(result)) =
+            (&mut assert_failure, &get_result)
+        {
+            failure.caller_trace =
+                crate::retrace::find_execution_trace(&result.vm_log, &tolk_source_map);
+        }
 
         let (exit_code, gas_used) = match &get_result {
             GetMethodResult::Success(result) => {
@@ -1132,12 +1152,14 @@ fn run_file_tests(
                 runner.emulations.save_get_method(&test.name, get_result);
                 // TODO: remove this memoize somehow
                 let content: Arc<str> = fs::read_to_string(&file_path).unwrap_or_default().into();
+                let code_boc64 = Boc::encode_base64(code);
                 runner.build_cache.memoize(
                     &test.name,
                     &file_path,
-                    &Boc::encode_base64(code),
+                    &code_boc64,
                     *code.repr_hash(),
                     source_map.clone(),
+                    tolk_source_map.clone(),
                     Some(
                         contract_abi(content, file_path.to_string_lossy().as_ref(), &mappings)
                             .into(),
