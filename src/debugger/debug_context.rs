@@ -683,10 +683,6 @@ impl DebugContext {
         self.stepper.thread_id
     }
 
-    fn normalize_path(file: &str) -> String {
-        file.replace(".test.tolk.test.tolk", ".test.tolk")
-    }
-
     fn get_root_function_name(&self, thread_id: i64) -> Arc<str> {
         if thread_id == 1 {
             self.test_name.clone()
@@ -701,7 +697,7 @@ impl DebugContext {
         function_name: Arc<str>,
         pos: &BytecodeLocation,
     ) -> StackFrame {
-        let file_path = Self::normalize_path(&loc.loc.file.clone());
+        let file_path = loc.loc.file.clone();
         let file_name = std::path::Path::new(&file_path)
             .file_name()
             .and_then(|n| n.to_str())
@@ -813,7 +809,8 @@ impl DebugContext {
 
     fn check_breakpoint(&mut self, step: &DebugStep) -> Option<i64> {
         let loc = step.loc.as_ref()?;
-        let normalized_path = PathBuf::from(Self::normalize_path(&loc.loc.file));
+        let file = &loc.loc.file;
+        let normalized_path = PathBuf::from(file);
 
         let file_breakpoints = self.breakpoints.get(&normalized_path)?;
 

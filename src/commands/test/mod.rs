@@ -3,7 +3,6 @@ use crate::commands::common::error_fmt;
 use crate::commands::test::coverage::{
     collect_coverage, generate_lcov_file, generate_text_file, print_coverage_summary,
 };
-use crate::commands::test::instrumentation::prepare_test_file;
 use crate::commands::test::reporting::console::{ConsoleConfig, ConsoleReporter};
 use crate::commands::test::reporting::dot::DotReporter;
 use crate::commands::test::reporting::junit::{JUnitConfig, JUnitReporter};
@@ -63,7 +62,6 @@ use walkdir::WalkDir;
 
 mod annotations;
 mod coverage;
-mod instrumentation;
 pub mod mutation;
 mod profiling;
 pub mod reporting;
@@ -746,10 +744,6 @@ pub fn find_test_files_recursively(
             let rel = path.strip_prefix(project_root).unwrap_or(path);
 
             if let Some(name) = rel.file_name().and_then(|s| s.to_str()) {
-                if name.ends_with(".test.tolk.test.tolk") {
-                    // skip temp test file
-                    continue;
-                }
                 if !name.ends_with(".test.tolk") {
                     continue;
                 }
@@ -805,7 +799,9 @@ fn compile_test_file(
     }
 
     let mappings = acton_config.mappings();
-    let compiler = tolkc::Compiler::new(0).with_mappings(&mappings);
+    let compiler = tolkc::Compiler::new(0)
+        .with_mappings(&mappings)
+        .with_allow_no_entrypoint(true);
     let compilation_result = compiler.compile(Path::new(file), need_debug_info);
     match &compilation_result {
         tolkc::CompilerResult::Success(result) => {
@@ -835,8 +831,6 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
     let file = tolk_syntax::parse(&content);
     let tests = find_all_test(filepath, &file, &content);
 
-    let executable_code = prepare_test_file(&file, &content);
-    let tmp_test_filename = filepath.to_owned() + ".test.tolk";
     let mappings = runner.acton_config.mappings();
 
     let abi = contract_abi_with_file(
@@ -847,8 +841,6 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
         Some(&mut runner.abi_parse_cache),
     );
 
-    fs::write(&tmp_test_filename, executable_code)?;
-
     let config = &runner.config;
     let need_debug_info =
         config.debug || config.backtrace == Some(BacktraceMode::Full) || config.coverage;
@@ -856,11 +848,10 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
     let now = Instant::now();
     let compilation_result = compile_test_file(
         runner.file_build_cache,
-        &tmp_test_filename,
+        filepath,
         need_debug_info,
         &runner.acton_config,
     )?;
-    let _ = fs::remove_file(&tmp_test_filename);
     debug!(
         "Test file '{filepath}' compilation time: {:?}",
         now.elapsed()
@@ -869,8 +860,7 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
     let result = match compilation_result {
         tolkc::CompilerResult::Success(result) => result,
         tolkc::CompilerResult::Error(error) => {
-            let normalized_filepath = error.message.replace(".test.tolk.test.tolk", ".test.tolk");
-            let trimmed_message = normalized_filepath.trim();
+            let trimmed_message = error.message.trim();
             anyhow::bail!(trimmed_message.to_string())
         }
     };
