@@ -39,17 +39,7 @@ pub fn find_exception_info(
     tolk_source_map: &TolkSourceMap,
 ) -> Option<TolkExceptionInfo> {
     let source_map = &tolk_source_map.source_map;
-    let marks_dict = tolk_source_map.marks_dict.as_deref()?;
-    let vm_lines = vmlogs::parser::parse_lines(vm_logs);
-    let description = vm_lines
-        .iter()
-        .rfind(|line| matches!(line, Ok(VmLine::VmException { .. })))
-        .and_then(|line| match line {
-            Ok(VmLine::VmException { message, .. }) => Some((*message).to_string()),
-            _ => None,
-        })
-        .unwrap_or_default();
-    let mut replayer = TolkReplayer::new(source_map.clone(), marks_dict, &vm_lines);
+    let (mut replayer, description) = create_tolk_replayer(vm_logs, tolk_source_map)?;
     replayer.set_exception_breakpoints(ExceptionBreakMode::Uncaught);
 
     while !replayer.is_finished() {
@@ -86,9 +76,7 @@ pub fn find_execution_trace(
     tolk_source_map: &TolkSourceMap,
 ) -> Option<TolkTraceInfo> {
     let source_map = &tolk_source_map.source_map;
-    let marks_dict = tolk_source_map.marks_dict.as_deref()?;
-    let vm_lines = vmlogs::parser::parse_lines(vm_logs);
-    let mut replayer = TolkReplayer::new(source_map.clone(), marks_dict, &vm_lines);
+    let (mut replayer, _) = create_tolk_replayer(vm_logs, tolk_source_map)?;
 
     while !replayer.is_finished() {
         replayer.step(StepMode::StepInto);
@@ -108,6 +96,36 @@ pub fn find_execution_trace(
         backtrace: find_backtrace(source_map, &replayer.call_stack(), &loc),
         loc,
     })
+}
+
+#[must_use]
+pub fn build_tolk_replayer(vm_logs: &str, tolk_source_map: &TolkSourceMap) -> Option<TolkReplayer> {
+    create_tolk_replayer(vm_logs, tolk_source_map).map(|(replayer, _)| replayer)
+}
+
+fn create_tolk_replayer(
+    vm_logs: &str,
+    tolk_source_map: &TolkSourceMap,
+) -> Option<(TolkReplayer, String)> {
+    let vm_lines = vmlogs::parser::parse_lines(vm_logs);
+    let description = exception_description(&vm_lines);
+    let marks_dict = tolk_source_map.marks_dict.as_deref()?;
+
+    Some((
+        TolkReplayer::new(tolk_source_map.source_map.clone(), marks_dict, &vm_lines),
+        description,
+    ))
+}
+
+fn exception_description(vm_lines: &[Result<VmLine<'_>, String>]) -> String {
+    vm_lines
+        .iter()
+        .rfind(|line| matches!(line, Ok(VmLine::VmException { .. })))
+        .and_then(|line| match line {
+            Ok(VmLine::VmException { message, .. }) => Some((*message).to_string()),
+            _ => None,
+        })
+        .unwrap_or_default()
 }
 
 fn find_backtrace(
