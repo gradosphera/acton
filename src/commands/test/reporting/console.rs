@@ -440,7 +440,7 @@ fn process_nonzero_exit_code(
         exit_code.to_string().yellow()
     );
 
-    let exit_code_info = retrace::find_exception_info(&result.vm_log, &test.tolk_source_map);
+    let exit_code_info = retrace::find_exception_info(&result.vm_log, &test.source_map);
     let get_method_info = fmt.find_failed_get_method_exception(test);
 
     let mut groups: Vec<(String, Vec<String>)> = Vec::new();

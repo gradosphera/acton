@@ -27,15 +27,13 @@ pub struct TolkExceptionInfo {
 }
 
 #[must_use]
-pub fn find_exception_info(
-    vm_logs: &str,
-    tolk_source_map: &TolkSourceMap,
-) -> Option<TolkExceptionInfo> {
-    let source_map = &tolk_source_map.source_map;
+pub fn find_exception_info(vm_logs: &str, source_map: &TolkSourceMap) -> Option<TolkExceptionInfo> {
     let vm_lines = vmlogs::parser::parse_lines(vm_logs);
     let description = exception_description(&vm_lines);
-    let mut replayer = TolkReplayer::new(tolk_source_map, &vm_lines).ok()?;
+    let mut replayer = TolkReplayer::new(source_map, &vm_lines).ok()?;
     replayer.set_exception_breakpoints(ExceptionBreakMode::Uncaught);
+
+    let source_map = &source_map.source_map;
 
     while !replayer.is_finished() {
         replayer.step(StepMode::StepInto);
@@ -66,20 +64,16 @@ pub fn find_exception_info(
 }
 
 #[must_use]
-pub fn find_execution_trace(
-    vm_logs: &str,
-    tolk_source_map: &TolkSourceMap,
-) -> Option<TolkTraceInfo> {
-    let source_map = &tolk_source_map.source_map;
+pub fn find_execution_trace(vm_logs: &str, source_map: &TolkSourceMap) -> Option<TolkTraceInfo> {
     let vm_lines = vmlogs::parser::parse_lines(vm_logs);
-    let mut replayer = TolkReplayer::new(tolk_source_map, &vm_lines).ok()?;
+    let mut replayer = TolkReplayer::new(source_map, &vm_lines).ok()?;
 
     while !replayer.is_finished() {
         replayer.step(StepMode::StepInto);
     }
 
     let loc = to_source_location(
-        source_map,
+        &source_map.source_map,
         replayer.current_file_id(),
         replayer.current_line(),
         replayer.current_column(),
@@ -89,7 +83,7 @@ pub fn find_execution_trace(
     }
 
     Some(TolkTraceInfo {
-        backtrace: find_backtrace(source_map, &replayer.call_stack(), &loc),
+        backtrace: find_backtrace(&source_map.source_map, &replayer.call_stack(), &loc),
         loc,
     })
 }
@@ -169,15 +163,15 @@ fn to_source_location(
 
 #[must_use]
 pub fn find_source_loc(
-    tolk_source_map: &TolkSourceMap,
+    source_map: &TolkSourceMap,
     hash: &str,
     offset: u16,
 ) -> Option<SourceLocation> {
-    if tolk_source_map.source_map.is_empty() {
+    if source_map.source_map.is_empty() {
         return None;
     }
 
-    tolk_source_map.find_source_loc(hash, offset)
+    source_map.find_source_loc(hash, offset)
 }
 
 #[must_use]

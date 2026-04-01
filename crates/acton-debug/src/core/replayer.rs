@@ -507,30 +507,30 @@ pub struct TolkReplayer {
 
 impl TolkReplayer {
     pub fn new(
-        tolk_source_map: &TolkSourceMap,
+        source_map: &TolkSourceMap,
         vm_lines: &[Result<VmLine<'_>, String>],
     ) -> anyhow::Result<Self> {
-        let marks_dict = tolk_source_map
+        let marks_dict = source_map
             .marks_dict
             .as_deref()
             .ok_or_else(|| anyhow!("Compiler did not return debug info for Tolk debug session"))?;
         Ok(Self::new_with_boxed_runtime_source(
-            tolk_source_map.source_map.clone(),
+            source_map.source_map.clone(),
             marks_dict,
             Box::new(VmLogRuntimeEventSource::new(vm_lines)),
         ))
     }
 
     pub fn new_live_vm(
-        tolk_source_map: &TolkSourceMap,
+        source_map: &TolkSourceMap,
         executor: DebugExecutorHandle,
     ) -> anyhow::Result<Self> {
-        let marks_dict = tolk_source_map
+        let marks_dict = source_map
             .marks_dict
             .as_deref()
             .ok_or_else(|| anyhow!("Compiler did not return debug info for Tolk debug session"))?;
         Ok(Self::new_with_boxed_runtime_source(
-            tolk_source_map.source_map.clone(),
+            source_map.source_map.clone(),
             marks_dict,
             Box::new(LiveVmRuntimeEventSource::new(executor)),
         ))

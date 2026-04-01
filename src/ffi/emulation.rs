@@ -155,7 +155,7 @@ fn build_impl(
 
         let code_cell = Boc::decode_base64(&cached_entry.code_boc64)
             .map_err(|e| anyhow::anyhow!("Failed to decode cached code BoC for {path}: {e}"))?;
-        let tolk_source_map = Arc::new(TolkSourceMap::from_code_cell(
+        let source_map = Arc::new(TolkSourceMap::from_code_cell(
             cached_entry.new_source_map.clone().unwrap_or_default(),
             &code_cell,
             cached_entry.debug_mark_base64.as_deref(),
@@ -166,7 +166,7 @@ fn build_impl(
             Path::new(&path),
             &cached_entry.code_boc64,
             HashBytes::from_str(&cached_entry.code_hash_hex)?,
-            tolk_source_map,
+            source_map,
             Some(contract_abi(content, &path, &mappings).into()),
             cached_entry.abi.clone().map(Into::into),
         );
@@ -200,7 +200,7 @@ fn build_impl(
             let code_cell = Boc::decode_base64(&success.code_boc64).map_err(|e| {
                 anyhow::anyhow!("Failed to decode compiled code BoC for {path}: {e}")
             })?;
-            let tolk_source_map = Arc::new(TolkSourceMap::from_code_cell(
+            let source_map = Arc::new(TolkSourceMap::from_code_cell(
                 success.new_source_map.unwrap_or_default(),
                 &code_cell,
                 success.debug_mark_base64.as_deref(),
@@ -210,7 +210,7 @@ fn build_impl(
                 Path::new(&path),
                 &success.code_boc64,
                 HashBytes::from_str(&success.code_hash_hex)?,
-                tolk_source_map,
+                source_map,
                 Some(contract_abi(content, &path, &mappings).into()),
                 success.abi.clone().map(Into::into),
             );
@@ -892,9 +892,9 @@ fn send_message_debug(
         .build_cache
         .result_for_code(&code)
         .map(|(_, result)| result);
-    let tolk_source_map = compilation_result
+    let source_map = compilation_result
         .as_ref()
-        .map(|result| result.tolk_source_map.clone());
+        .map(|result| result.source_map.clone());
 
     let msg_cell = Emulator::patch_message(
         ctx.chain.world_state.get_config(),
@@ -933,7 +933,7 @@ fn send_message_debug(
             thread_id: 2,
             name: "Send internal message".to_string(),
             executor: step_executor.clone().into(),
-            tolk_source_map,
+            source_map,
             stop_on_entry: need_to_stop_on_entry,
         })
         .context("Cannot start nested debug context")?;
@@ -1357,9 +1357,9 @@ fn run_get_method_impl(
         .build_cache
         .result_for_code(&Some(code))
         .map(|(_, result)| result);
-    let tolk_source_map = compilation_result
+    let source_map = compilation_result
         .as_ref()
-        .map(|result| result.tolk_source_map.clone())
+        .map(|result| result.source_map.clone())
         .unwrap_or_else(|| Arc::new(TolkSourceMap::without_debug_info()));
 
     let config_b64 = world_state.get_config_b64();
@@ -1381,7 +1381,7 @@ fn run_get_method_impl(
                 thread_id: 2,
                 name: "Run get method".to_string(),
                 executor: step_executor.clone().into(),
-                tolk_source_map: Some(tolk_source_map.clone()),
+                source_map: Some(source_map.clone()),
                 stop_on_entry: need_to_stop_on_entry,
             })
             .context("Cannot send response")?;
@@ -1465,8 +1465,8 @@ fn run_get_method_impl(
                     None
                 };
 
-                let location = retrace::find_exception_info(&result.vm_log, &tolk_source_map)
-                    .map(|info| info.loc);
+                let location =
+                    retrace::find_exception_info(&result.vm_log, &source_map).map(|info| info.loc);
 
                 *ctx.asserts.assert_failure =
                     Some(AssertFailure::GetMethod(GetMethodAssertFailure {
@@ -1474,7 +1474,7 @@ fn run_get_method_impl(
                         vm_exit_code: result.vm_exit_code,
                         suggested_name,
                         vm_log: result.vm_log,
-                        tolk_source_map,
+                        source_map,
                         caller_trace: None,
                         location,
                     }));

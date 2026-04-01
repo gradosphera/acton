@@ -59,7 +59,7 @@ pub struct GetMethodAssertFailure {
     pub vm_exit_code: i32,
     pub suggested_name: Option<String>,
     pub vm_log: Arc<str>,
-    pub tolk_source_map: Arc<TolkSourceMap>,
+    pub source_map: Arc<TolkSourceMap>,
     pub caller_trace: Option<TolkTraceInfo>,
     pub location: Option<SourceLocation>,
 }
@@ -158,7 +158,7 @@ impl BuildCache {
         path: &Path,
         code: &str,
         code_hash: HashBytes,
-        tolk_source_map: Arc<TolkSourceMap>,
+        source_map: Arc<TolkSourceMap>,
         abi: Option<Arc<ContractAbi>>,
         compiler_abi: Option<Arc<CompilerContractABI>>,
     ) {
@@ -168,7 +168,7 @@ impl BuildCache {
                 name: name.to_owned(),
                 code_boc64: code.to_owned(),
                 code_hash,
-                tolk_source_map,
+                source_map,
                 abi,
                 compiler_abi,
             },
@@ -191,7 +191,7 @@ pub struct CompilationResult {
     pub name: String,
     pub code_boc64: String,
     pub code_hash: HashBytes,
-    pub tolk_source_map: Arc<TolkSourceMap>,
+    pub source_map: Arc<TolkSourceMap>,
     pub abi: Option<Arc<ContractAbi>>,
     pub compiler_abi: Option<Arc<CompilerContractABI>>,
 }

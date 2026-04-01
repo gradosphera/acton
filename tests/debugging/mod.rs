@@ -173,7 +173,7 @@ pub(crate) fn run_script_file(
 ) -> anyhow::Result<String> {
     let script_path = Path::new(file_path);
 
-    let (abi, code_cell, tolk_source_map) = {
+    let (abi, code_cell, source_map) = {
         let _compile_guard = DEBUG_COMPILER_LOCK
             .lock()
             .expect("debug compiler lock poisoned");
@@ -192,13 +192,13 @@ pub(crate) fn run_script_file(
             CompilerResult::Success(result) => {
                 let code = Boc::decode_base64(&result.code_boc64)?;
                 let code_cell = TonCell::from_boc_base64(&result.code_boc64)?;
-                let tolk_source_map = Arc::new(TolkSourceMap::from_code_cell(
+                let source_map = Arc::new(TolkSourceMap::from_code_cell(
                     result.new_source_map.unwrap_or_default(),
                     &code,
                     result.debug_mark_base64.as_deref(),
                 )?);
 
-                (abi, code_cell, tolk_source_map)
+                (abi, code_cell, source_map)
             }
             CompilerResult::Error(error) => {
                 anyhow::bail!("Cannot compile script file {}", error.message)
@@ -211,7 +211,7 @@ pub(crate) fn run_script_file(
         &code_cell,
         &data_cell,
         abi.into(),
-        tolk_source_map,
+        source_map,
         debug_port,
         debug_listener,
         ExecutorVerbosity::FullLocationStackVerbose,
@@ -225,7 +225,7 @@ fn execute_script<'a>(
     code_cell: &'a TonCell,
     data_cell: &'a TonCell,
     abi: Arc<ContractAbi>,
-    tolk_source_map: Arc<TolkSourceMap>,
+    source_map: Arc<TolkSourceMap>,
     debug_port: u16,
     debug_listener: Option<TcpListener>,
     verbosity: ExecutorVerbosity,
@@ -323,7 +323,7 @@ fn execute_script<'a>(
         start_dap_server(debug_port)?
     };
     executor.prepare(0, &stack)?;
-    let replayer = TolkReplayer::new_live_vm(tolk_source_map.as_ref(), executor.clone().into())?;
+    let replayer = TolkReplayer::new_live_vm(source_map.as_ref(), executor.clone().into())?;
     let mut dbg_session = ReplayerDebugSession::new(transport, replayer, "main".into());
     ctx.debug = DebugCtx::new(&mut dbg_session);
 

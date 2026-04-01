@@ -228,7 +228,7 @@ impl<'a> TestRunner<'a> {
         code_cell: &Cell,
         dest_address: &str,
         abi: Arc<ContractAbi>,
-        tolk_source_map: Arc<TolkSourceMap>,
+        source_map: Arc<TolkSourceMap>,
     ) -> anyhow::Result<TestResult> {
         let verbosity = self.minimal_log_verbosity();
 
@@ -325,7 +325,7 @@ impl<'a> TestRunner<'a> {
                 ffi::register(&mut executor, &mut ctx);
                 executor.prepare(test.id, &stack)?;
                 let replayer =
-                    TolkReplayer::new_live_vm(tolk_source_map.as_ref(), executor.clone().into())?;
+                    TolkReplayer::new_live_vm(source_map.as_ref(), executor.clone().into())?;
                 let mut dbg_session =
                     ReplayerDebugSession::new(self.transport.clone(), replayer, test.name.clone());
                 ctx.debug = DebugCtx::new(&mut dbg_session);
@@ -861,7 +861,7 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
     };
 
     let code_cell = Boc::decode_base64(&result.code_boc64)?;
-    let tolk_source_map = Arc::new(TolkSourceMap::from_code_cell(
+    let source_map = Arc::new(TolkSourceMap::from_code_cell(
         result.new_source_map.unwrap_or_default(),
         &code_cell,
         result.debug_mark_base64.as_deref(),
@@ -874,7 +874,7 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
         &code_cell,
         Arc::new(abi),
         compiler_abi,
-        tolk_source_map,
+        source_map,
     )?;
     Ok(stats)
 }
@@ -887,7 +887,7 @@ fn run_file_tests(
     code: &Cell,
     abi: Arc<ContractAbi>,
     compiler_abi: Option<Arc<tolkc::abi::ContractABI>>,
-    tolk_source_map: Arc<TolkSourceMap>,
+    source_map: Arc<TolkSourceMap>,
 ) -> anyhow::Result<TestStats> {
     let file_path = Path::new(file_path).absolutize()?;
     let filtered_tests = if let Some(pattern) = &runner.config.filter {
@@ -936,7 +936,7 @@ fn run_file_tests(
             location: None,
             abi: abi.clone(),
             compiler_abi: compiler_abi.clone(),
-            tolk_source_map: tolk_source_map.clone(),
+            source_map: source_map.clone(),
             show_bodies: runner.config.show_bodies,
             backtrace: runner.config.backtrace,
             execution: None,
@@ -965,13 +965,8 @@ fn run_file_tests(
         }
 
         let start_time = Instant::now();
-        let result = runner.execute_test(
-            test,
-            code,
-            &dest_address,
-            abi.clone(),
-            tolk_source_map.clone(),
-        );
+        let result =
+            runner.execute_test(test, code, &dest_address, abi.clone(), source_map.clone());
         let result = match result {
             Ok(result) => result,
             Err(err) => {
@@ -1002,7 +997,7 @@ fn run_file_tests(
         if let (Some(AssertFailure::GetMethod(failure)), GetMethodResult::Success(result)) =
             (&mut assert_failure, &get_result)
         {
-            failure.caller_trace = retrace::find_execution_trace(&result.vm_log, &tolk_source_map);
+            failure.caller_trace = retrace::find_execution_trace(&result.vm_log, &source_map);
         }
 
         let (exit_code, gas_used) = match &get_result {
@@ -1143,7 +1138,7 @@ fn run_file_tests(
                     &file_path,
                     &code_boc64,
                     *code.repr_hash(),
-                    tolk_source_map.clone(),
+                    source_map.clone(),
                     Some(
                         contract_abi(content, file_path.to_string_lossy().as_ref(), &mappings)
                             .into(),

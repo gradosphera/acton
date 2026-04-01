@@ -931,11 +931,10 @@ impl ReplayerDebugSession {
     }
 
     pub fn begin_child_context(&mut self, spec: ChildDebugContextSpec) -> anyhow::Result<bool> {
-        let Some(tolk_source_map) = spec.tolk_source_map else {
+        let Some(source_map) = spec.source_map else {
             return Ok(false);
         };
-        let Ok(mut replayer) = TolkReplayer::new_live_vm(tolk_source_map.as_ref(), spec.executor)
-        else {
+        let Ok(mut replayer) = TolkReplayer::new_live_vm(source_map.as_ref(), spec.executor) else {
             return Ok(false);
         };
         replayer.set_exception_breakpoints(self.exception_mode);

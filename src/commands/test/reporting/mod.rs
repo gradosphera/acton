@@ -71,7 +71,7 @@ pub struct TestReport {
     #[serde(skip)]
     pub compiler_abi: Option<Arc<CompilerContractABI>>,
     #[serde(skip)]
-    pub tolk_source_map: Arc<TolkSourceMap>,
+    pub source_map: Arc<TolkSourceMap>,
     #[serde(skip)]
     pub show_bodies: bool,
     #[serde(skip)]

@@ -152,7 +152,7 @@ fn run_script_file(
         tolkc::CompilerResult::Success(result) => {
             let code_cell = Boc::decode_base64(&result.code_boc64)?;
             let data_cell = CellBuilder::new().build()?;
-            let tolk_source_map = Arc::new(TolkSourceMap::from_code_cell(
+            let source_map = Arc::new(TolkSourceMap::from_code_cell(
                 result.new_source_map.unwrap_or_default(),
                 &code_cell,
                 result.debug_mark_base64.as_deref(),
@@ -163,7 +163,7 @@ fn run_script_file(
                 &data_cell,
                 stack,
                 Arc::new(abi),
-                tolk_source_map,
+                source_map,
                 debug,
                 backtrace,
                 debug_listener,
@@ -186,7 +186,7 @@ fn run_script_file(
 
 struct ScriptResult {
     result: GetMethodResult,
-    tolk_source_map: Arc<TolkSourceMap>,
+    source_map: Arc<TolkSourceMap>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -195,7 +195,7 @@ fn execute_script(
     data_cell: &Cell,
     stack: Tuple,
     abi: Arc<ContractAbi>,
-    tolk_source_map: Arc<TolkSourceMap>,
+    source_map: Arc<TolkSourceMap>,
     debug: bool,
     backtrace: Option<BacktraceMode>,
     debug_listener: Option<TcpListener>,
@@ -299,8 +299,9 @@ fn execute_script(
         network: net.cloned(),
     };
 
+    let stack_b64 = Boc::encode_base64(serialize_tuple(&stack)?);
+
     if debug {
-        let stack_b64 = Boc::encode_base64(serialize_tuple(&stack)?);
         let mut executor = StepGetExecutor::new(&stack_b64, &params, Some(DEFAULT_CONFIG))?;
         ffi::register(&mut executor, &mut ctx);
 
@@ -308,36 +309,22 @@ fn execute_script(
             .ok_or_else(|| anyhow!("internal error: debug listener was not reserved"))?;
         let transport = start_dap_server_with_listener(listener)?;
         executor.prepare(0, &stack_b64)?;
-        let replayer =
-            TolkReplayer::new_live_vm(tolk_source_map.as_ref(), executor.clone().into())?;
+        let replayer = TolkReplayer::new_live_vm(source_map.as_ref(), executor.clone().into())?;
 
         let mut dbg_session = ReplayerDebugSession::new(transport, replayer, "main".into());
         ctx.debug = DebugCtx::new(&mut dbg_session);
         ctx.debug.process_incoming_requests(true)?;
 
         let result = executor.finish(&params.code)?;
-        print_script_result(
-            &ctx,
-            ScriptResult {
-                result,
-                tolk_source_map,
-            },
-        );
+        print_script_result(&ctx, ScriptResult { result, source_map });
         return Ok(());
     }
 
     let mut executor = GetExecutor::new(&params)?;
     ffi::register(&mut executor, &mut ctx);
+    let result = executor.run_get_method(&stack_b64, &params, Some(DEFAULT_CONFIG))?;
 
-    let stack = Boc::encode_base64(serialize_tuple(&stack)?);
-    let result = executor.run_get_method(&stack, &params, Some(DEFAULT_CONFIG))?;
-    print_script_result(
-        &ctx,
-        ScriptResult {
-            result,
-            tolk_source_map,
-        },
-    );
+    print_script_result(&ctx, ScriptResult { result, source_map });
     Ok(())
 }
 
@@ -417,8 +404,7 @@ fn format_nonzero_script_exit_code_details<'a>(
 ) -> String {
     let formatter = FormatterContext::from_context(ctx);
     let mut details = String::new();
-    let exit_code_info =
-        retrace::find_exception_info(&result.vm_log, &script_result.tolk_source_map);
+    let exit_code_info = retrace::find_exception_info(&result.vm_log, &script_result.source_map);
 
     if let Some(info) = &exit_code_info {
         writeln!(

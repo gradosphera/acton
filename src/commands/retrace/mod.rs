@@ -17,7 +17,7 @@ use tycho_types::models::{IntAddr, OutAction, RelaxedMsgInfo};
 
 struct ContractTraceArtifacts {
     code_cell: Cell,
-    tolk_source_map: tolkc::TolkSourceMap,
+    source_map: tolkc::TolkSourceMap,
 }
 
 #[allow(unsafe_code)]
@@ -88,7 +88,7 @@ pub fn retrace_cmd(
                     if let Some(port) = dap_port {
                         let vm_logs = &result.emulated_tx.vm_logs;
                         let vm_lines = vmlogs::parser::parse_lines(vm_logs);
-                        let replayer = TolkReplayer::new(&artifacts.tolk_source_map, &vm_lines)
+                        let replayer = TolkReplayer::new(&artifacts.source_map, &vm_lines)
                             .with_context(|| {
                                 format!(
                                     "Cannot build replayer for contract {}",
@@ -485,7 +485,7 @@ fn build_contract_trace_artifacts(contract_name: &str) -> anyhow::Result<Contrac
                 )
             })?;
 
-            let tolk_source_map = tolkc::TolkSourceMap::from_code_cell(
+            let source_map = tolkc::TolkSourceMap::from_code_cell(
                 source_map,
                 &code_cell,
                 Some(&debug_mark_base64),
@@ -493,7 +493,7 @@ fn build_contract_trace_artifacts(contract_name: &str) -> anyhow::Result<Contrac
 
             Ok(ContractTraceArtifacts {
                 code_cell,
-                tolk_source_map,
+                source_map,
             })
         }
         tolkc::CompilerResult::Error(error) => {
