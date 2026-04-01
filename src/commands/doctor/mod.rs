@@ -30,6 +30,10 @@ struct DoctorPath {
     writable: bool,
     canonical_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    size_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    size_human: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     resolution_source: Option<String>,
 }
 
@@ -264,6 +268,24 @@ fn is_writable(path: &Path) -> bool {
 }
 
 fn describe_path(path: &Path, resolution_source: Option<&str>) -> DoctorPath {
+    describe_path_with_options(path, resolution_source, false)
+}
+
+fn describe_path_with_size(path: &Path, resolution_source: Option<&str>) -> DoctorPath {
+    describe_path_with_options(path, resolution_source, true)
+}
+
+fn describe_path_with_options(
+    path: &Path,
+    resolution_source: Option<&str>,
+    include_size: bool,
+) -> DoctorPath {
+    let size_bytes = if include_size {
+        path_size_bytes(path)
+    } else {
+        None
+    };
+
     DoctorPath {
         path: path.display().to_string(),
         exists: path.exists(),
@@ -271,7 +293,60 @@ fn describe_path(path: &Path, resolution_source: Option<&str>) -> DoctorPath {
         canonical_path: dunce::canonicalize(path)
             .ok()
             .map(|resolved| resolved.display().to_string()),
+        size_human: size_bytes.map(format_size_human),
+        size_bytes,
         resolution_source: resolution_source.map(ToOwned::to_owned),
+    }
+}
+
+fn path_size_bytes(path: &Path) -> Option<u64> {
+    let metadata = fs::symlink_metadata(path).ok()?;
+    accumulate_path_size(path, &metadata).ok()
+}
+
+fn accumulate_path_size(path: &Path, metadata: &fs::Metadata) -> std::io::Result<u64> {
+    let file_type = metadata.file_type();
+    if file_type.is_symlink() {
+        return Ok(0);
+    }
+
+    if file_type.is_file() {
+        return Ok(metadata.len());
+    }
+
+    if !file_type.is_dir() {
+        return Ok(0);
+    }
+
+    let mut total = 0_u64;
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let entry_path = entry.path();
+        let entry_metadata = fs::symlink_metadata(&entry_path)?;
+        total = total.saturating_add(accumulate_path_size(&entry_path, &entry_metadata)?);
+    }
+
+    Ok(total)
+}
+
+fn format_size_human(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+
+    let mut value = bytes as f64;
+    let mut unit_index = 0_usize;
+    while value >= 1024.0 && unit_index + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit_index += 1;
+    }
+
+    if value >= 10.0 {
+        format!("{value:.0} {}", UNITS[unit_index])
+    } else {
+        format!("{value:.1} {}", UNITS[unit_index])
     }
 }
 
@@ -618,7 +693,7 @@ fn collect_doctor_report() -> Result<DoctorReport> {
             project_root: describe_path(&project_root, Some(project_root_source)),
             manifest_path: describe_path(&manifest_path, Some(manifest_source)),
             acton_dir: describe_path(&acton_dir, None),
-            cache_dir: describe_path(&cache_dir, None),
+            cache_dir: describe_path_with_size(&cache_dir, None),
             wallets: describe_path(&local_wallets, None),
             global_wallets: global_wallets
                 .as_deref()
@@ -1049,6 +1124,14 @@ fn print_path(label: &str, value: &DoctorPath) {
         && canonical_path != &value.path
     {
         print_kv(&format!("{label}.canonical"), canonical_path);
+    }
+
+    if let Some(size_human) = &value.size_human {
+        let size_value = match value.size_bytes {
+            Some(bytes) => format!("{size_human} ({bytes} bytes)"),
+            None => size_human.clone(),
+        };
+        print_kv(&format!("{label}.size"), size_value);
     }
 }
 

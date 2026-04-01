@@ -3,7 +3,6 @@ use crate::support::project::Project;
 use crate::support::snapshots::normalize_output;
 use crate::support::tempdir::create_tmp_dir;
 use anyhow::Context;
-use dap::responses::ExceptionInfoResponse;
 use dap::types::StackFrame;
 use std::cmp::max;
 use std::fs;
@@ -405,10 +404,6 @@ impl DebugActionExecutor<'_> {
         }
         Ok(())
         // self.record_state_with_action("continue".to_string())
-    }
-
-    pub(crate) fn exception_info(&mut self) -> anyhow::Result<ExceptionInfoResponse> {
-        self.client.exception_info(1)
     }
 }
 
