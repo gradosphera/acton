@@ -86,7 +86,7 @@ Step 7 (step_over):
   Variables:
     storage = <optimized out>
     init = ContractState
-    address = slice{9c72010101010024000043801734cc6d0446d75f78d903765d8c0ec61613f1c466aebc29399a9161953c278d90}
+    address = 0:b9a663682236bafbc6c81bb2ec607630b09f8e233575e149ccd48b0ca9e13c6c
 
 Step 8 (step_over):
   Code:

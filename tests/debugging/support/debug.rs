@@ -15,6 +15,15 @@ use std::time::Duration;
 use tempfile::TempDir;
 use tvmffi::stack::{Tuple, TupleItem};
 
+pub(crate) fn render_variable_value(var: &dap::types::Variable) -> String {
+    match (var.value.as_str(), var.type_field.as_deref()) {
+        ("", Some(type_name)) => type_name.to_string(),
+        ("(last seen)", Some(type_name)) => format!("{type_name} (last seen)"),
+        ("(lazy, unresolved)", Some(type_name)) => format!("{type_name} (lazy, unresolved)"),
+        _ => var.value.clone(),
+    }
+}
+
 pub(crate) struct ProjectRef {
     pub path: PathBuf,
 }
@@ -538,7 +547,11 @@ impl ExecutionTrace {
             if !step.variables.is_empty() {
                 result.push_str("  Variables:\n");
                 for var in &step.variables {
-                    result.push_str(&format!("    {} = {}\n", var.name, var.value));
+                    result.push_str(&format!(
+                        "    {} = {}\n",
+                        var.name,
+                        render_variable_value(var)
+                    ));
                 }
             }
 

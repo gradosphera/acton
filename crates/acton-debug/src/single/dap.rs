@@ -279,15 +279,16 @@ fn format_frame_name(f: &replayer::CallFrameInfo) -> String {
 }
 
 fn debug_value_to_variable(state: &mut DapState, name: String, dv: &RenderedValue) -> Variable {
+    let (value, type_field) = dv.dap_parts_for_client();
     let (value, var_ref) = if dv.has_children() {
-        (dv.dap_value(), state.store_debug_value(dv.clone()))
+        (value, state.store_debug_value(dv.clone()))
     } else {
-        (dv.dap_value(), 0)
+        (value, 0)
     };
     Variable {
         name,
         value,
-        type_field: None,
+        type_field,
         presentation_hint: None,
         evaluate_name: None,
         variables_reference: var_ref,
@@ -724,11 +725,11 @@ fn handle_variables(
 
 fn expand_debug_value(state: &mut DapState, dv: &RenderedValue) -> Vec<Variable> {
     match dv {
-        RenderedValue::Struct { fields, .. } => fields
+        RenderedValue::Struct { fields, .. } | RenderedValue::Address { fields, .. } => fields
             .iter()
             .map(|(name, val)| debug_value_to_variable(state, name.clone(), val))
             .collect(),
-        RenderedValue::Tensor { items } | RenderedValue::ArrayOf { items } => items
+        RenderedValue::Tensor { items, .. } | RenderedValue::ArrayOf { items, .. } => items
             .iter()
             .enumerate()
             .map(|(i, val)| debug_value_to_variable(state, i.to_string(), val))

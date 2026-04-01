@@ -1166,7 +1166,7 @@ impl TolkReplayer {
 
         match return_ty {
             Some(ty) => debug_print_from_stack(&self.source_map, &values, ty),
-            None => RenderedValue::Leaf("return type not found".to_string()),
+            None => RenderedValue::leaf("return type not found"),
         }
     }
 
@@ -1220,12 +1220,12 @@ impl TolkReplayer {
                         ty,
                         last_seen,
                     ),
-                    None => RenderedValue::Leaf("var.ty_idx not found".to_string()),
+                    None => RenderedValue::leaf("var.ty_idx not found"),
                 }
             } else {
                 match self.source_map.resolve_ty(var.ty_idx) {
                     Some(ty) => debug_print_from_stack(&self.source_map, &slot_values, ty),
-                    None => RenderedValue::Leaf("var.ty_idx not found".to_string()),
+                    None => RenderedValue::leaf("var.ty_idx not found"),
                 }
             };
             result.push(LocalVarRendered {
@@ -1238,7 +1238,7 @@ impl TolkReplayer {
             let slot_values: Vec<SlotValue> = values.iter().map(SlotValue::Live).collect();
             let debug_val = match self.source_map.resolve_ty(*ty_idx) {
                 Some(ty) => debug_print_from_stack(&self.source_map, &slot_values, ty),
-                None => RenderedValue::Leaf("var.ty_idx not found".to_string()),
+                None => RenderedValue::leaf("var.ty_idx not found"),
             };
             result.push(LocalVarRendered {
                 var_name: format!("global {name}"),

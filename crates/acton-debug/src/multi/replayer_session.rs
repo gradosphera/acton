@@ -570,14 +570,16 @@ impl ReplayerDebugSession {
     }
 
     fn debug_value_to_named_variable(&mut self, name: String, dv: &RenderedValue) -> Variable {
+        let (value, type_field) = dv.dap_parts_for_client();
         let (value, var_ref) = if dv.has_children() {
-            (dv.dap_value(), self.store_debug_value(dv.clone()))
+            (value, self.store_debug_value(dv.clone()))
         } else {
-            (dv.dap_value(), 0)
+            (value, 0)
         };
         Variable {
             name,
             value,
+            type_field,
             variables_reference: var_ref,
             ..Default::default()
         }
@@ -585,11 +587,11 @@ impl ReplayerDebugSession {
 
     fn expand_debug_value(&mut self, dv: &RenderedValue) -> Vec<Variable> {
         match dv {
-            RenderedValue::Struct { fields, .. } => fields
+            RenderedValue::Struct { fields, .. } | RenderedValue::Address { fields, .. } => fields
                 .iter()
                 .map(|(name, val)| self.debug_value_to_named_variable(name.clone(), val))
                 .collect(),
-            RenderedValue::Tensor { items } | RenderedValue::ArrayOf { items } => items
+            RenderedValue::Tensor { items, .. } | RenderedValue::ArrayOf { items, .. } => items
                 .iter()
                 .enumerate()
                 .map(|(i, val)| self.debug_value_to_named_variable(i.to_string(), val))
