@@ -2,7 +2,11 @@ use std::collections::HashMap;
 use std::fmt::{self, Write};
 use tolkc::source_map::SourceMap;
 use tolkc::types_kernel::{Ty, calc_width_on_stack, instantiate_generics};
-use vmlogs::parser::{CellSlice, VmStackValue};
+use tvmffi::from_stack::FromStack;
+use tvmffi::stack::{Tuple, TupleItem};
+use tycho_types::boc::Boc;
+use tycho_types::models::StdAddr;
+use vmlogs::parser::{CellLike, CellSlice, VmStackValue};
 
 // ---------------------------------------------------------------------------
 // RenderedValue — structured intermediate format for rendered values
@@ -209,6 +213,10 @@ fn get_bits_u8(nibbles: &[u8], start: usize, count: usize) -> u8 {
 /// `bits: start..end` are positions within cell data.
 /// addr_std = `10` (2b) + `0` (1b anycast) + workchain (8b) + hash (256b) = 267 bits.
 fn try_parse_address(cs: &CellSlice) -> Option<String> {
+    if cs.bits.is_none() && cs.refs.is_none() {
+        return try_parse_full_address_hex(&cs.value);
+    }
+
     let (start_s, end_s) = cs.bits.as_ref()?;
     let start: usize = start_s.parse().ok()?;
     let end: usize = end_s.parse().ok()?;
@@ -235,6 +243,38 @@ fn try_parse_address(cs: &CellSlice) -> Option<String> {
         write!(hash, "{:02x}", get_bits_u8(&nibbles, start + 11 + i * 8, 8)).ok()?;
     }
     Some(format!("{}:{}", wc, hash))
+}
+
+fn try_parse_full_address_hex(hex: &str) -> Option<String> {
+    let cell = Boc::decode_hex(hex).ok()?;
+    StdAddr::from_item(TupleItem::Slice(cell))
+        .ok()
+        .map(|addr| addr.to_string())
+}
+
+fn try_parse_string_hex(hex: &str) -> Option<String> {
+    let cell = Boc::decode_hex(hex).ok()?;
+    Tuple::parse_snake_string(&cell)
+}
+
+fn try_parse_string_cell_like(cell: &CellLike) -> Option<String> {
+    match cell {
+        CellLike::Cell(hex) | CellLike::Builder(hex) => try_parse_string_hex(hex),
+    }
+}
+
+fn try_parse_string_slice(cs: &CellSlice) -> Option<String> {
+    if cs.bits.is_none() && cs.refs.is_none() {
+        return try_parse_string_hex(&cs.value);
+    }
+
+    None
+}
+
+fn render_cell_like(cell: &CellLike) -> String {
+    match cell {
+        CellLike::Cell(hex) | CellLike::Builder(hex) => format!("cell{{{hex}}}"),
+    }
 }
 
 /// Convert a range of bits from nibbles to a hex string.
@@ -436,21 +476,33 @@ fn debug_format(
         },
 
         Ty::Cell => match r.read_slot() {
-            SlotValue::Live(VmStackValue::Cell(_)) => RenderedValue::Leaf("cell".to_string()),
+            SlotValue::Live(VmStackValue::Cell(cell)) => {
+                RenderedValue::Leaf(render_cell_like(cell))
+            }
             SlotValue::Live(VmStackValue::Null) => RenderedValue::Leaf("null".to_string()),
             _ => RenderedValue::Leaf("not a TVM cell".to_string()),
         },
 
         Ty::CellOf { inner } => match r.read_slot() {
-            SlotValue::Live(VmStackValue::Cell(_)) => RenderedValue::Leaf(format!("Cell<{inner}>")),
+            SlotValue::Live(VmStackValue::Cell(cell)) => {
+                RenderedValue::Leaf(format!("Cell<{inner}> {}", render_cell_like(cell)))
+            }
             SlotValue::Live(VmStackValue::Null) => RenderedValue::Leaf("null".to_string()),
             _ => RenderedValue::Leaf("not a TVM cell".to_string()),
         },
 
         Ty::String => match r.read_slot() {
-            SlotValue::Live(VmStackValue::Cell(_)) => {
-                RenderedValue::Leaf("string (contents unavailable)".to_string())
-            }
+            SlotValue::Live(VmStackValue::String(s)) => RenderedValue::Leaf(format!("\"{s}\"")),
+            SlotValue::Live(VmStackValue::Cell(cell)) => RenderedValue::Leaf(
+                try_parse_string_cell_like(cell)
+                    .map(|string| format!("\"{string}\""))
+                    .unwrap_or_else(|| render_cell_like(cell)),
+            ),
+            SlotValue::Live(VmStackValue::CellSlice(cs)) => RenderedValue::Leaf(
+                try_parse_string_slice(cs)
+                    .map(|string| format!("\"{string}\""))
+                    .unwrap_or_else(|| render_slice(cs)),
+            ),
             SlotValue::Live(VmStackValue::Null) => RenderedValue::Leaf("null".to_string()),
             _ => RenderedValue::Leaf("not a TVM cell".to_string()),
         },

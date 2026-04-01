@@ -236,7 +236,7 @@ impl DapClient {
             supports_start_debugging_request: Some(false),
         }))?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("Initialize response: {response:?}");
 
         match response.body {
@@ -252,7 +252,7 @@ impl DapClient {
             additional_data: None,
         }))?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("Launch response: {response:?}");
         Ok(())
     }
@@ -270,7 +270,7 @@ impl DapClient {
             source_modified: None,
         }))?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("SetBreakpoints response: {response:?}");
 
         match response.body {
@@ -284,7 +284,7 @@ impl DapClient {
     pub fn configuration_done(&mut self) -> Result<()> {
         let seq = self.send_request(Command::ConfigurationDone)?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("ConfigurationDone response: {response:?}");
         Ok(())
     }
@@ -295,7 +295,7 @@ impl DapClient {
             single_thread: None,
         }))?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("Continue response: {response:?}");
 
         match response.body {
@@ -309,7 +309,7 @@ impl DapClient {
     pub fn threads(&mut self) -> Result<ThreadsResponse> {
         let seq = self.send_request(Command::Threads)?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("Threads response: {response:?}");
 
         match response.body {
@@ -328,7 +328,7 @@ impl DapClient {
             format: None,
         }))?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("StackTrace response: {response:?}");
 
         match response.body {
@@ -343,7 +343,7 @@ impl DapClient {
     pub fn scopes(&mut self, frame_id: i64) -> Result<ScopesResponse> {
         let seq = self.send_request(Command::Scopes(ScopesArguments { frame_id }))?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("Scopes response: {response:?}");
 
         match response.body {
@@ -361,7 +361,7 @@ impl DapClient {
             format: None,
         }))?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("Variables response: {response:?}");
 
         match response.body {
@@ -380,7 +380,7 @@ impl DapClient {
             granularity: None,
         }))?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("StepIn response: {response:?}");
         Ok(())
     }
@@ -392,7 +392,7 @@ impl DapClient {
             granularity: None,
         }))?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("StepOver response: {response:?}");
         Ok(())
     }
@@ -404,7 +404,7 @@ impl DapClient {
             granularity: None,
         }))?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("StepOut response: {response:?}");
         Ok(())
     }
@@ -414,7 +414,7 @@ impl DapClient {
             restart: Some(false),
         }))?;
 
-        let response = self.wait_for_response(seq, Duration::from_secs(5))?;
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
         debug!("Terminate response: {response:?}");
         Ok(())
     }
