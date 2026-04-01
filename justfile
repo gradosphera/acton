@@ -11,7 +11,6 @@ build:
 build-dev:
     cargo build
 
-[arg("force", long, value="--force")]
 sync-artifacts force="":
     cargo xtask sync-artifacts {{force}}
 

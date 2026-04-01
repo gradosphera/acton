@@ -301,6 +301,28 @@ impl LiveVmRuntimeEventSource {
             pending_events: VecDeque::new(),
         }
     }
+
+    fn push_snapshot_events(&mut self) {
+        let snapshot = self.executor.snapshot();
+        if let Some(values) = snapshot.stack_values {
+            self.pending_events
+                .push_back(RuntimeEvent::Stack { values });
+        }
+        if let Some(position) = snapshot.code_position {
+            self.pending_events.push_back(RuntimeEvent::Position {
+                cell_hash: position.cell_hash,
+                offset: position.offset,
+            });
+        }
+    }
+
+    fn push_uncaught_exception_events(&mut self, errno: String) {
+        self.pending_events.push_back(RuntimeEvent::Exception {
+            errno: errno.clone(),
+        });
+        self.pending_events
+            .push_back(RuntimeEvent::ExceptionHandler { errno });
+    }
 }
 
 impl RuntimeEventSource for LiveVmRuntimeEventSource {
@@ -323,16 +345,14 @@ impl RuntimeEventSource for LiveVmRuntimeEventSource {
                 PendingLiveInstruction::ImplicitJmpRef => {}
             }
 
-            let snapshot = self.executor.snapshot();
-            if let Some(values) = snapshot.stack_values {
-                self.pending_events
-                    .push_back(RuntimeEvent::Stack { values });
-            }
-            if let Some(position) = snapshot.code_position {
-                self.pending_events.push_back(RuntimeEvent::Position {
-                    cell_hash: position.cell_hash,
-                    offset: position.offset,
-                });
+            if is_end {
+                if let Some(errno) = self.executor.uncaught_exception_code() {
+                    self.push_uncaught_exception_events(errno);
+                } else {
+                    self.push_snapshot_events();
+                }
+            } else {
+                self.push_snapshot_events();
             }
 
             self.terminated = is_end;
@@ -354,17 +374,14 @@ impl RuntimeEventSource for LiveVmRuntimeEventSource {
         }
 
         let is_end = self.executor.step();
-        let snapshot = self.executor.snapshot();
-
-        if let Some(values) = snapshot.stack_values {
-            self.pending_events
-                .push_back(RuntimeEvent::Stack { values });
-        }
-        if let Some(position) = snapshot.code_position {
-            self.pending_events.push_back(RuntimeEvent::Position {
-                cell_hash: position.cell_hash,
-                offset: position.offset,
-            });
+        if is_end {
+            if let Some(errno) = self.executor.uncaught_exception_code() {
+                self.push_uncaught_exception_events(errno);
+            } else {
+                self.push_snapshot_events();
+            }
+        } else {
+            self.push_snapshot_events();
         }
 
         self.terminated = is_end;

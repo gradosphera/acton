@@ -10,7 +10,7 @@ use acton_debug::ReplayerDebugSession;
 use acton_debug::replayer::TolkReplayer;
 use acton_debug::{start_dap_server, start_dap_server_with_listener};
 use dap::events::Event;
-use dap::responses::ContinueResponse;
+use dap::responses::{ContinueResponse, ExceptionInfoResponse};
 use dap::types::StackFrame;
 use dap_client::DapClient;
 use owo_colors::OwoColorize;
@@ -121,6 +121,13 @@ impl DebuggerClient {
     ) -> anyhow::Result<Vec<dap::types::Variable>> {
         let variables = self.client.variables(thread_id)?;
         Ok(variables.variables)
+    }
+
+    pub(crate) fn exception_info(
+        &mut self,
+        thread_id: i64,
+    ) -> anyhow::Result<ExceptionInfoResponse> {
+        self.client.exception_info(thread_id)
     }
 
     #[allow(dead_code)]

@@ -1,5 +1,6 @@
 use crate::debugging::support::assertions::{DebugTestOutput, DebugTestOutputExt};
 use crate::debugging::support::debug::DebugBuilder;
+use dap::types::ExceptionBreakMode;
 
 #[test]
 fn test_match_over_numbers_with_first_matching() -> anyhow::Result<()> {
@@ -287,6 +288,85 @@ fun main() {
     debug_output.assert_trace_snapshot_matches(
         "debugging/snapshots/match/over_lazy_message_else_matching.trace.txt",
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_match_over_lazy_message_else_matching_exception_info() -> anyhow::Result<()> {
+    let code = r"
+struct (0x00000001) First {
+    id: int32
+}
+struct (0x00000002) Second {
+    data: bool
+}
+struct (0x00000003) Third
+
+type Msg = First | Second
+
+fun main() {
+    val msg = lazy Msg.fromCell(Third {}.toCell());
+    match (msg) {
+        First => {
+            return 10
+        }
+        Second => {
+            return 20
+        }
+        else => {
+            throw 0xFFFF
+        }
+    }
+
+    return 0;
+}
+";
+
+    let session = DebugBuilder::new("debug-callback")
+        .code(code)
+        .expect_execution_error("VM exit code 65535")
+        .build();
+
+    let mut client = session.start();
+    let mut exception_info = None;
+
+    let _ = client.execute(|executor| {
+        executor.step_over_times(3)?;
+        exception_info = Some(executor.exception_info()?);
+        executor.step_over_times(10)?;
+        Ok(())
+    })?;
+
+    let exception_info = exception_info.expect("exception info should be available");
+    assert_eq!(exception_info.exception_id, "65535");
+    assert!(matches!(
+        exception_info.break_mode,
+        ExceptionBreakMode::Unhandled
+    ));
+
+    let description = exception_info
+        .description
+        .expect("exception description should be available");
+    assert_eq!(description, "Uncaught TVM exception 65535 (InvalidMessage)");
+
+    let details = exception_info
+        .details
+        .expect("exception details should be available");
+    assert_eq!(details.type_name.as_deref(), Some("TVMException"));
+    assert_eq!(
+        details.full_type_name.as_deref(),
+        Some("TVM.UncaughtException")
+    );
+
+    let message = details
+        .message
+        .expect("exception message should be present");
+    assert!(message.contains("Invalid message"));
+    assert!(message.contains("Phase: Compute phase"));
+    assert!(message.contains("Location: debug_script.tolk:22"));
+
+    assert!(details.stack_trace.is_none());
 
     Ok(())
 }

@@ -3,7 +3,6 @@ use crate::context::{
     AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
     EmulationsState, Env, IoContext, KnownAddresses,
 };
-use crate::exit_codes;
 use crate::file_build_cache::FileBuildCache;
 use crate::formatter::FormatterContext;
 use crate::retrace;
@@ -12,6 +11,7 @@ use crate::{ffi, stdlib};
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, Explorer, project_root};
 use acton_config::test::BacktraceMode;
+use acton_debug::exit_codes;
 use acton_debug::replayer::TolkReplayer;
 use acton_debug::{ReplayerDebugSession, reserve_dap_listener, start_dap_server_with_listener};
 use anyhow::anyhow;

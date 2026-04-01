@@ -3,13 +3,13 @@ use crossbeam_channel::{Receiver, Sender};
 use dap::events::Event;
 use dap::prelude::{Command, Request, Response, ResponseBody};
 use dap::requests::{
-    ContinueArguments, InitializeArguments, LaunchRequestArguments, NextArguments, ScopesArguments,
-    SetBreakpointsArguments, StackTraceArguments, StepInArguments, StepOutArguments,
-    TerminateArguments, VariablesArguments,
+    ContinueArguments, ExceptionInfoArguments, InitializeArguments, LaunchRequestArguments,
+    NextArguments, ScopesArguments, SetBreakpointsArguments, StackTraceArguments, StepInArguments,
+    StepOutArguments, TerminateArguments, VariablesArguments,
 };
 use dap::responses::{
-    ContinueResponse, ScopesResponse, SetBreakpointsResponse, StackTraceResponse, ThreadsResponse,
-    VariablesResponse,
+    ContinueResponse, ExceptionInfoResponse, ScopesResponse, SetBreakpointsResponse,
+    StackTraceResponse, ThreadsResponse, VariablesResponse,
 };
 use dap::types::{Capabilities, Source, SourceBreakpoint};
 use log::{debug, info};
@@ -368,6 +368,24 @@ impl DapClient {
             Some(ResponseBody::Variables(result)) => Ok(result),
             _ => Ok(VariablesResponse {
                 variables: Vec::new(),
+            }),
+        }
+    }
+
+    pub fn exception_info(&mut self, thread_id: i64) -> Result<ExceptionInfoResponse> {
+        let seq =
+            self.send_request(Command::ExceptionInfo(ExceptionInfoArguments { thread_id }))?;
+
+        let response = self.wait_for_response(seq, Duration::from_secs(10))?;
+        debug!("ExceptionInfo response: {response:?}");
+
+        match response.body {
+            Some(ResponseBody::ExceptionInfo(result)) => Ok(result),
+            _ => Ok(ExceptionInfoResponse {
+                exception_id: String::new(),
+                break_mode: dap::types::ExceptionBreakMode::Never,
+                description: None,
+                details: None,
             }),
         }
     }

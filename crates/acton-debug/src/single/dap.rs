@@ -18,6 +18,7 @@ use dap::types::{
     Source, StackFrame, StackFramePresentationhint, StoppedEventReason, Variable,
 };
 
+use crate::core::exception_format::{build_exception_details, exception_overview};
 use crate::replayer::{self, StepMode, TolkReplayer};
 use crate::transport::{DapConnection, IncomingRequest};
 use crate::types_render::RenderedValue;
@@ -87,7 +88,7 @@ impl DapState {
         Self {
             replayer: None,
             pending_breakpoints: HashMap::new(),
-            pending_exception_mode: replayer::ExceptionBreakMode::Never,
+            pending_exception_mode: replayer::ExceptionBreakMode::Uncaught,
             config_done: false,
             next_breakpoint_id: 1,
             resolved_breakpoints: HashMap::new(),
@@ -227,8 +228,8 @@ fn step_and_notify(
     if finished {
         send_terminated(server)?;
     } else if let Some(exc) = state.replayer.as_ref().and_then(|r| r.last_exception()) {
-        let text = format!("Exit code {}", exc.errno);
-        send_stopped_exception(server, &text)?;
+        let overview = exception_overview(exc);
+        send_stopped_exception(server, &overview.stop_description, &overview.stop_text)?;
     } else if let Some(ids) = state.current_breakpoint_ids() {
         send_stopped(
             server,
@@ -244,11 +245,12 @@ fn step_and_notify(
 
 fn send_stopped_exception(
     server: &mut DapConnection<impl BufRead, impl Write>,
+    description: &str,
     text: &str,
 ) -> anyhow::Result<()> {
     server.send_event(Event::Stopped(events::StoppedEventBody {
         reason: StoppedEventReason::Exception,
-        description: Some("Paused on exception".to_string()),
+        description: Some(description.to_string()),
         thread_id: Some(THREAD_ID),
         preserve_focus_hint: None,
         text: Some(text.to_string()),
@@ -483,7 +485,8 @@ fn handle_set_exception_breakpoints(
 }
 
 fn handle_exception_info(state: &DapState, req: Request) -> Response {
-    let exc = state.replayer.as_ref().and_then(|r| r.last_exception());
+    let replayer = state.replayer.as_ref();
+    let exc = replayer.and_then(|r| r.last_exception());
     match exc {
         Some(info) => {
             let break_mode = if info.is_uncaught {
@@ -491,14 +494,15 @@ fn handle_exception_info(state: &DapState, req: Request) -> Response {
             } else {
                 ExceptionBreakMode::Always
             };
+            let overview = exception_overview(info);
             req.success(ResponseBody::ExceptionInfo(ExceptionInfoResponse {
                 exception_id: info.errno.clone(),
-                description: Some(format!("TVM exit code {}", info.errno)),
+                description: Some(overview.info_description),
                 break_mode,
-                details: None,
+                details: Some(build_exception_details(info)),
             }))
         }
-        None => req.error("No exception"),
+        _ => req.error("No exception"),
     }
 }
 
@@ -521,6 +525,9 @@ fn handle_configuration_done(
 
     if finished {
         send_terminated(server)?;
+    } else if let Some(exc) = state.replayer.as_ref().and_then(|r| r.last_exception()) {
+        let overview = exception_overview(exc);
+        send_stopped_exception(server, &overview.stop_description, &overview.stop_text)?;
     } else if let Some(ids) = state.current_breakpoint_ids() {
         send_stopped(
             server,
