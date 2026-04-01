@@ -5,9 +5,9 @@ use crate::context::{
     TransactionGenericAssertFailure, WalletNotFoundFailure, to_cell,
 };
 use crate::retrace::{
-    ExecutedAction, InstalledAction, InstalledActions, InvalidAction, TolkBacktraceFrame,
+    self, ExecutedAction, InstalledAction, InstalledActions, InvalidAction, TolkBacktraceFrame,
 };
-use crate::{context, exit_codes, retrace};
+use crate::{context, exit_codes};
 use acton_config::color::OwoColorize;
 use acton_config::test::BacktraceMode;
 use num_bigint::BigInt;

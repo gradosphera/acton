@@ -1,8 +1,9 @@
 use super::{TestExecutionContext, TestReport, TestReporter, TestStatus, TestSuiteStats};
 use crate::commands::test::TestDescriptor;
 use crate::context::AssertFailure;
+use crate::exit_codes;
 use crate::formatter::FormatterContext;
-use crate::{exit_codes, retrace};
+use crate::retrace;
 use acton_config::color::OwoColorize;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};

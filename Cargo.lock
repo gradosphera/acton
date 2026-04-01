@@ -17,6 +17,7 @@ name = "acton"
 version = "0.1.4"
 dependencies = [
  "acton-config",
+ "acton-debug",
  "acton-mdman",
  "anyhow",
  "axum",
@@ -28,7 +29,6 @@ dependencies = [
  "comfy-table",
  "crash-handler",
  "crc",
- "crossbeam-channel",
  "dap",
  "dap-client",
  "dashmap 7.0.0-rc2",
@@ -116,6 +116,22 @@ dependencies = [
  "serde_json",
  "toml",
  "ton-networks",
+]
+
+[[package]]
+name = "acton-debug"
+version = "0.1.4"
+dependencies = [
+ "anyhow",
+ "crossbeam-channel",
+ "dap",
+ "log",
+ "serde_json",
+ "tolkc",
+ "ton-executor",
+ "tvmffi",
+ "tycho-types",
+ "vmlogs",
 ]
 
 [[package]]
@@ -5194,7 +5210,6 @@ dependencies = [
  "anyhow",
  "pathdiff",
  "serde",
- "tycho-types",
 ]
 
 [[package]]

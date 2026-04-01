@@ -1,10 +1,10 @@
-mod dap;
-
 use crate::commands::common::error_fmt;
 use crate::formatter::FormatterContext;
 use crate::stdlib;
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, project_root as configured_project_root};
+use acton_debug::replayer::TolkReplayer;
+use acton_debug::serve_single_replayer_dap;
 use anyhow::{Context, anyhow};
 use retrace::{ComputeInfo, Network, retrace};
 use std::collections::HashMap;
@@ -86,18 +86,17 @@ pub fn retrace_cmd(
                     ensure_contract_matches_transaction(contract_name, &result, artifacts)?;
 
                     if let Some(port) = dap_port {
-                        let replayer = crate::retrace::build_tolk_replayer(
-                            &result.emulated_tx.vm_logs,
-                            &artifacts.tolk_source_map,
-                        )
-                        .ok_or_else(|| {
-                            anyhow!(
-                                "Cannot build replayer for contract {}",
-                                contract_name.yellow()
-                            )
-                        })?;
+                        let vm_logs = &result.emulated_tx.vm_logs;
+                        let vm_lines = vmlogs::parser::parse_lines(vm_logs);
+                        let replayer = TolkReplayer::new(&artifacts.tolk_source_map, &vm_lines)
+                            .with_context(|| {
+                                format!(
+                                    "Cannot build replayer for contract {}",
+                                    contract_name.yellow()
+                                )
+                            })?;
 
-                        dap::serve_retrace_dap(replayer, port)
+                        serve_single_replayer_dap(replayer, port)
                             .map_err(|err| anyhow!(err.to_string()))?;
                     }
                 }
@@ -113,6 +112,11 @@ pub fn retrace_cmd(
         anyhow::bail!("Failed to retrace transaction in any network: {e}");
     }
     anyhow::bail!("Failed to retrace transaction");
+}
+
+#[allow(dead_code)]
+pub(crate) fn serve_prepared_retrace_dap(replayer: TolkReplayer, port: u16) -> anyhow::Result<()> {
+    serve_single_replayer_dap(replayer, port).map_err(|err| anyhow!(err.to_string()))
 }
 
 fn print_retrace_result(

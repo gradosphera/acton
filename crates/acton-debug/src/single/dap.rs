@@ -1,25 +1,25 @@
-//! DAP (Debug Adapter Protocol) server for Tolk retrace sessions.
+//! Standalone DAP (Debug Adapter Protocol) server for a single `TolkReplayer`.
 //! Mirrors `tolk-replay` DAP as closely as possible, but:
 //! 1. uses tolerant request parsing for custom VS Code messages
 //! 2. attaches to an already prepared `TolkReplayer`
 
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 
-use dap::base_message::{BaseMessage, Sendable};
 use dap::prelude::*;
 use dap::responses::{
-    ContinueResponse, ExceptionInfoResponse, ScopesResponse, SetBreakpointsResponse,
-    SetExceptionBreakpointsResponse, StackTraceResponse, ThreadsResponse, VariablesResponse,
+    ContinueResponse, EvaluateResponse, ExceptionInfoResponse, ScopesResponse,
+    SetBreakpointsResponse, SetExceptionBreakpointsResponse, StackTraceResponse, ThreadsResponse,
+    VariablesResponse,
 };
 use dap::types::{
-    ExceptionBreakMode, ExceptionBreakpointsFilter, Scope, ScopePresentationhint, Source,
-    StackFrame, StackFramePresentationhint, StoppedEventReason, Variable,
+    Breakpoint, ExceptionBreakMode, ExceptionBreakpointsFilter, Scope, ScopePresentationhint,
+    Source, StackFrame, StackFramePresentationhint, StoppedEventReason, Variable,
 };
-use serde_json::Value;
 
 use crate::replayer::{self, StepMode, TolkReplayer};
+use crate::transport::{DapConnection, IncomingRequest};
 use crate::types_render::RenderedValue;
 
 const THREAD_ID: i64 = 1;
@@ -54,142 +54,24 @@ fn make_capabilities() -> types::Capabilities {
 }
 
 // ---------------------------------------------------------------------------
-// Transport
-// ---------------------------------------------------------------------------
-
-#[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
-enum IncomingRequest {
-    Known(Request),
-    Unsupported { seq: i64, command: String },
-}
-
-/// Local transport with the same API surface we use from `dap::Server`,
-/// but with tolerant parsing of unknown custom requests.
-struct Server<R: BufRead, W: Write> {
-    input_buffer: R,
-    output_buffer: BufWriter<W>,
-    sequence_number: i64,
-}
-
-impl<R: BufRead, W: Write> Server<R, W> {
-    fn new(input: R, output: W) -> Self {
-        Self {
-            input_buffer: input,
-            output_buffer: BufWriter::new(output),
-            sequence_number: 0,
-        }
-    }
-
-    #[allow(clippy::never_loop)]
-    fn poll_request(&mut self) -> Result<Option<IncomingRequest>, Box<dyn std::error::Error>> {
-        loop {
-            let mut content_length = None;
-
-            loop {
-                let mut line = String::new();
-                let read_size = self.input_buffer.read_line(&mut line)?;
-                if read_size == 0 {
-                    return Ok(None);
-                }
-
-                let trimmed = line.trim_end();
-                if trimmed.is_empty() {
-                    if content_length.is_some() {
-                        break;
-                    }
-                    continue;
-                }
-
-                let Some((header, value)) = trimmed.split_once(':') else {
-                    return Err(format!("Invalid DAP header: {trimmed}").into());
-                };
-
-                if header == "Content-Length" {
-                    content_length = Some(value.trim().parse()?);
-                }
-            }
-
-            let Some(content_length) = content_length else {
-                return Err("Missing Content-Length header".into());
-            };
-
-            let mut content = vec![0; content_length];
-            self.input_buffer.read_exact(&mut content)?;
-
-            let value: Value = serde_json::from_slice(&content)?;
-            match serde_json::from_value::<Request>(value.clone()) {
-                Ok(request) => return Ok(Some(IncomingRequest::Known(request))),
-                Err(err) => {
-                    let is_request = value.get("type").and_then(Value::as_str) == Some("request");
-                    let seq = value.get("seq").and_then(Value::as_i64);
-                    let command = value
-                        .get("command")
-                        .and_then(Value::as_str)
-                        .map(str::to_owned);
-
-                    if is_request && let (Some(seq), Some(command)) = (seq, command) {
-                        return Ok(Some(IncomingRequest::Unsupported { seq, command }));
-                    }
-
-                    return Err(format!("Error while deserializing DAP request: {err}").into());
-                }
-            }
-        }
-    }
-
-    fn send(&mut self, body: Sendable) -> Result<(), Box<dyn std::error::Error>> {
-        self.sequence_number += 1;
-        let message = BaseMessage {
-            seq: self.sequence_number,
-            message: body,
-        };
-        self.send_json_value(&serde_json::to_value(message)?)
-    }
-
-    fn respond(&mut self, response: Response) -> Result<(), Box<dyn std::error::Error>> {
-        self.send(Sendable::Response(response))
-    }
-
-    fn send_event(&mut self, event: Event) -> Result<(), Box<dyn std::error::Error>> {
-        self.send(Sendable::Event(event))
-    }
-
-    fn respond_custom_success(
-        &mut self,
-        request_seq: i64,
-        command: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.sequence_number += 1;
-        self.send_json_value(&serde_json::json!({
-            "seq": self.sequence_number,
-            "type": "response",
-            "request_seq": request_seq,
-            "success": true,
-            "command": command,
-        }))
-    }
-
-    fn send_json_value(&mut self, value: &Value) -> Result<(), Box<dyn std::error::Error>> {
-        let json = serde_json::to_string(value)?;
-        write!(self.output_buffer, "Content-Length: {}\r\n\r\n", json.len())?;
-        write!(self.output_buffer, "{json}")?;
-        self.output_buffer.flush()?;
-        Ok(())
-    }
-}
-
-// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
-type PendingBreakpoints = HashMap<String, Vec<i64>>;
+type PendingBreakpoints = HashMap<String, Vec<SourceBreakpointInfo>>;
+
+#[derive(Debug, Clone)]
+struct SourceBreakpointInfo {
+    id: i64,
+    line: i64,
+}
 
 struct DapState {
     replayer: Option<TolkReplayer>,
     pending_breakpoints: PendingBreakpoints,
     pending_exception_mode: replayer::ExceptionBreakMode,
     config_done: bool,
+    next_breakpoint_id: i64,
+    resolved_breakpoints: HashMap<(usize, usize), Vec<i64>>,
 
     next_req_id: i64,
     /// Maps frame ref_id (returned in StackTrace) → depth_from_top (0 = innermost).
@@ -207,6 +89,8 @@ impl DapState {
             pending_breakpoints: HashMap::new(),
             pending_exception_mode: replayer::ExceptionBreakMode::Never,
             config_done: false,
+            next_breakpoint_id: 1,
+            resolved_breakpoints: HashMap::new(),
             // Keep structured variable refs in a separate numeric range so they
             // never collide with stable frame ids derived from stack depth.
             next_req_id: 1_000_000,
@@ -217,10 +101,24 @@ impl DapState {
 
     fn apply_pending_breakpoints(&mut self) {
         if let Some(ref mut r) = self.replayer {
-            for (path, lines) in &self.pending_breakpoints {
+            r.clear_all_breakpoints();
+            self.resolved_breakpoints.clear();
+
+            for (path, breakpoints) in &self.pending_breakpoints {
                 if let Some(file_id) = r.file_id_by_path(path) {
-                    let line_ints: Vec<usize> = lines.iter().map(|&l| l as usize).collect();
-                    r.set_breakpoints(file_id, &line_ints);
+                    let requested_lines = breakpoints
+                        .iter()
+                        .map(|bp| bp.line.max(1) as usize)
+                        .collect::<Vec<_>>();
+                    let resolved_lines = r.resolve_breakpoint_lines(file_id, &requested_lines);
+                    r.set_breakpoints(file_id, &requested_lines);
+
+                    for (bp, resolved_line) in breakpoints.iter().zip(resolved_lines) {
+                        self.resolved_breakpoints
+                            .entry((file_id, resolved_line))
+                            .or_default()
+                            .push(bp.id);
+                    }
                 }
             }
         }
@@ -256,6 +154,23 @@ impl DapState {
             true
         }
     }
+
+    fn current_breakpoint_ids(&self) -> Option<Vec<i64>> {
+        let r = self.replayer.as_ref()?;
+        let file_id = r.current_file_id();
+        let line = r.current_line();
+        self.resolved_breakpoints.get(&(file_id, line)).cloned()
+    }
+
+    fn resolve_breakpoint_lines_for_path(
+        &self,
+        path: &str,
+        requested_lines: &[usize],
+    ) -> Option<Vec<usize>> {
+        let r = self.replayer.as_ref()?;
+        let file_id = r.file_id_by_path(path)?;
+        Some(r.resolve_breakpoint_lines(file_id, requested_lines))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -278,24 +193,24 @@ fn build_source(replayer: &TolkReplayer, file_id: usize) -> Source {
 }
 
 fn send_stopped(
-    server: &mut Server<impl BufRead, impl Write>,
+    server: &mut DapConnection<impl BufRead, impl Write>,
     reason: StoppedEventReason,
-) -> Result<(), Box<dyn std::error::Error>> {
+    description: Option<String>,
+    hit_breakpoint_ids: Option<Vec<i64>>,
+) -> anyhow::Result<()> {
     server.send_event(Event::Stopped(events::StoppedEventBody {
         reason,
-        description: None,
+        description,
         thread_id: Some(THREAD_ID),
         preserve_focus_hint: None,
         text: None,
         all_threads_stopped: Some(true),
-        hit_breakpoint_ids: None,
+        hit_breakpoint_ids,
     }))?;
     Ok(())
 }
 
-fn send_terminated(
-    server: &mut Server<impl BufRead, impl Write>,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn send_terminated(server: &mut DapConnection<impl BufRead, impl Write>) -> anyhow::Result<()> {
     server.send_event(Event::Exited(events::ExitedEventBody { exit_code: 0 }))?;
     server.send_event(Event::Terminated(Some(
         events::TerminatedEventBody::default(),
@@ -306,24 +221,31 @@ fn send_terminated(
 fn step_and_notify(
     state: &mut DapState,
     step_mode: StepMode,
-    server: &mut Server<impl BufRead, impl Write>,
-) -> Result<(), Box<dyn std::error::Error>> {
+    server: &mut DapConnection<impl BufRead, impl Write>,
+) -> anyhow::Result<()> {
     let finished = state.do_step(step_mode);
     if finished {
         send_terminated(server)?;
     } else if let Some(exc) = state.replayer.as_ref().and_then(|r| r.last_exception()) {
         let text = format!("Exit code {}", exc.errno);
         send_stopped_exception(server, &text)?;
+    } else if let Some(ids) = state.current_breakpoint_ids() {
+        send_stopped(
+            server,
+            StoppedEventReason::Breakpoint,
+            Some("Breakpoint hit".to_string()),
+            Some(ids),
+        )?;
     } else {
-        send_stopped(server, StoppedEventReason::Step)?;
+        send_stopped(server, StoppedEventReason::Step, None, None)?;
     }
     Ok(())
 }
 
 fn send_stopped_exception(
-    server: &mut Server<impl BufRead, impl Write>,
+    server: &mut DapConnection<impl BufRead, impl Write>,
     text: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> anyhow::Result<()> {
     server.send_event(Event::Stopped(events::StoppedEventBody {
         reason: StoppedEventReason::Exception,
         description: Some("Paused on exception".to_string()),
@@ -382,8 +304,8 @@ fn debug_value_to_variable(state: &mut DapState, name: String, dv: &RenderedValu
 fn handle_request(
     state: &mut DapState,
     req: Request,
-    server: &mut Server<impl BufRead, impl Write>,
-) -> Result<(), Box<dyn std::error::Error>> {
+    server: &mut DapConnection<impl BufRead, impl Write>,
+) -> anyhow::Result<()> {
     let response = match req.command.clone() {
         Command::Initialize(_) => {
             let resp = req.success(ResponseBody::Initialize(make_capabilities()));
@@ -433,6 +355,15 @@ fn handle_request(
             state.replayer = None;
             req.success(ResponseBody::Disconnect)
         }
+        Command::Evaluate(args) => req.success(ResponseBody::Evaluate(EvaluateResponse {
+            result: args.expression,
+            type_field: None,
+            presentation_hint: None,
+            variables_reference: 0,
+            named_variables: None,
+            indexed_variables: None,
+            memory_reference: None,
+        })),
         _ => req.error("Unsupported command"),
     };
 
@@ -444,7 +375,7 @@ fn handle_launch(
     state: &mut DapState,
     _args: &requests::LaunchRequestArguments,
     req: Request,
-) -> Result<Response, Box<dyn std::error::Error>> {
+) -> anyhow::Result<Response> {
     if let Some(ref mut r) = state.replayer {
         r.set_exception_breakpoints(state.pending_exception_mode);
         state.apply_pending_breakpoints();
@@ -459,7 +390,7 @@ fn handle_attach(
     state: &mut DapState,
     _args: &requests::AttachRequestArguments,
     req: Request,
-) -> Result<Response, Box<dyn std::error::Error>> {
+) -> anyhow::Result<Response> {
     if let Some(ref mut r) = state.replayer {
         r.set_exception_breakpoints(state.pending_exception_mode);
         state.apply_pending_breakpoints();
@@ -481,40 +412,49 @@ fn handle_set_breakpoints(
         .clone()
         .or_else(|| args.source.name.clone())
         .unwrap_or_default();
-    let lines: Vec<i64> = args
+    let requested_lines = args
         .breakpoints
         .as_deref()
         .unwrap_or_default()
         .iter()
-        .map(|bp| bp.line)
-        .collect();
-    state
-        .pending_breakpoints
-        .insert(path.clone(), lines.clone());
-
-    if let Some(ref mut r) = state.replayer
-        && let Some(file_id) = r.file_id_by_path(&path)
+        .map(|bp| bp.line.max(1) as usize)
+        .collect::<Vec<_>>();
+    let resolved_lines = state.resolve_breakpoint_lines_for_path(&path, &requested_lines);
+    let mut source_breakpoints = Vec::new();
+    let mut breakpoints = Vec::new();
+    for (idx, bp) in args
+        .breakpoints
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .enumerate()
     {
-        let line_ints: Vec<usize> = lines.iter().map(|&l| l as usize).collect();
-        r.set_breakpoints(file_id, &line_ints);
+        let id = state.next_breakpoint_id;
+        state.next_breakpoint_id += 1;
+
+        source_breakpoints.push(SourceBreakpointInfo { id, line: bp.line });
+        breakpoints.push(Breakpoint {
+            id: Some(id),
+            verified: true,
+            source: Some(args.source.clone()),
+            line: Some(
+                resolved_lines
+                    .as_ref()
+                    .and_then(|lines| lines.get(idx).copied())
+                    .map_or(bp.line, |line| line as i64),
+            ),
+            column: bp.column,
+            ..Default::default()
+        });
     }
 
-    let source = args.source.clone();
-    let breakpoints = lines
-        .iter()
-        .map(|&line| types::Breakpoint {
-            id: None,
-            verified: true,
-            message: None,
-            source: Some(source.clone()),
-            line: Some(line),
-            column: None,
-            end_line: None,
-            end_column: None,
-            instruction_reference: None,
-            offset: None,
-        })
-        .collect();
+    if source_breakpoints.is_empty() {
+        state.pending_breakpoints.remove(&path);
+    } else {
+        state.pending_breakpoints.insert(path, source_breakpoints);
+    }
+    state.apply_pending_breakpoints();
+
     req.success(ResponseBody::SetBreakpoints(SetBreakpointsResponse {
         breakpoints,
     }))
@@ -563,14 +503,14 @@ fn handle_exception_info(state: &DapState, req: Request) -> Response {
 
 fn handle_configuration_done(
     state: &mut DapState,
-    server: &mut Server<impl BufRead, impl Write>,
+    server: &mut DapConnection<impl BufRead, impl Write>,
     req: Request,
-) -> Result<Response, Box<dyn std::error::Error>> {
+) -> anyhow::Result<Response> {
     state.config_done = true;
     let has_breakpoints = state
         .pending_breakpoints
         .values()
-        .any(|lines| !lines.is_empty());
+        .any(|breakpoints| !breakpoints.is_empty());
     let step_mode = if has_breakpoints {
         StepMode::RunUntilBreakpoint
     } else {
@@ -580,8 +520,15 @@ fn handle_configuration_done(
 
     if finished {
         send_terminated(server)?;
+    } else if let Some(ids) = state.current_breakpoint_ids() {
+        send_stopped(
+            server,
+            StoppedEventReason::Breakpoint,
+            Some("Breakpoint hit".to_string()),
+            Some(ids),
+        )?;
     } else {
-        send_stopped(server, StoppedEventReason::Entry)?;
+        send_stopped(server, StoppedEventReason::Entry, None, None)?;
     }
     Ok(req.success(ResponseBody::ConfigurationDone))
 }
@@ -594,6 +541,8 @@ fn handle_stack_trace(state: &mut DapState, req: Request) -> Response {
         let file_id = r.current_file_id();
         let line = r.current_line();
         let column = r.current_column();
+        let end_line = r.current_end_line();
+        let end_column = r.current_end_column();
         let top_source = build_source(r, file_id);
         let top_name = call_stack
             .last()
@@ -608,6 +557,8 @@ fn handle_stack_trace(state: &mut DapState, req: Request) -> Response {
             source: Option<Source>,
             line: i64,
             col: i64,
+            end_line: i64,
+            end_column: i64,
         }
 
         let n = call_stack.len();
@@ -616,13 +567,15 @@ fn handle_stack_trace(state: &mut DapState, req: Request) -> Response {
             let frame_idx = n - 1 - depth;
             let frame = &call_stack[frame_idx];
             let child_frame = &call_stack[frame_idx + 1];
-            let (source, line, col) = match &child_frame.call_site_loc {
+            let (source, line, col, end_line, end_column) = match &child_frame.call_site_loc {
                 Some(loc) => (
                     Some(build_source(r, loc.file_id())),
                     loc.start_line() as i64,
                     loc.start_col() as i64,
+                    loc.end_line() as i64,
+                    loc.end_col() as i64,
                 ),
-                None => (None, 0, 0),
+                None => (None, 0, 0, 0, 0),
             };
             parents.push(ParentData {
                 name: format_frame_name(frame),
@@ -630,12 +583,16 @@ fn handle_stack_trace(state: &mut DapState, req: Request) -> Response {
                 source,
                 line,
                 col,
+                end_line,
+                end_column,
             });
         }
 
         (
             line,
             column,
+            end_line,
+            end_column,
             top_name,
             top_is_builtin,
             top_source,
@@ -644,8 +601,17 @@ fn handle_stack_trace(state: &mut DapState, req: Request) -> Response {
         )
     });
 
-    let Some((line, column, top_name, top_is_builtin, top_source, parents, stopped_on_exception)) =
-        collected
+    let Some((
+        line,
+        column,
+        end_line,
+        end_column,
+        top_name,
+        top_is_builtin,
+        top_source,
+        parents,
+        stopped_on_exception,
+    )) = collected
     else {
         return req.success(ResponseBody::StackTrace(StackTraceResponse {
             stack_frames: Vec::new(),
@@ -671,8 +637,8 @@ fn handle_stack_trace(state: &mut DapState, req: Request) -> Response {
         source: Some(top_source),
         line: line as i64,
         column: column as i64,
-        end_line: None,
-        end_column: None,
+        end_line: (end_line > 0).then_some(end_line as i64),
+        end_column: (end_column > 0).then_some(end_column as i64),
         can_restart: None,
         module_id: None,
         presentation_hint: top_hint,
@@ -692,8 +658,8 @@ fn handle_stack_trace(state: &mut DapState, req: Request) -> Response {
             source: p.source,
             line: p.line,
             column: p.col,
-            end_line: None,
-            end_column: None,
+            end_line: (p.end_line > 0).then_some(p.end_line),
+            end_column: (p.end_column > 0).then_some(p.end_column),
             can_restart: None,
             module_id: None,
             presentation_hint: hint,
@@ -776,10 +742,7 @@ fn expand_debug_value(state: &mut DapState, dv: &RenderedValue) -> Vec<Variable>
 // Entry point
 // ---------------------------------------------------------------------------
 
-pub(super) fn serve_retrace_dap(
-    replayer: TolkReplayer,
-    port: u16,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn serve_single_replayer_dap(replayer: TolkReplayer, port: u16) -> anyhow::Result<()> {
     let address = format!("127.0.0.1:{port}");
     let listener = TcpListener::bind(&address)?;
 
@@ -790,7 +753,7 @@ pub(super) fn serve_retrace_dap(
 
     let input = BufReader::new(stream.try_clone()?);
     let output = stream;
-    let mut server = Server::new(input, output);
+    let mut server = DapConnection::new(input, output);
     let mut state = DapState::new();
     state.replayer = Some(replayer);
 

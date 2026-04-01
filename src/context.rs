@@ -1,8 +1,10 @@
-use crate::debugger::debug_context::DebugContext;
 use crate::file_build_cache::FileBuildCache;
+use crate::retrace::TolkTraceInfo;
 use acton_config::config;
 use acton_config::config::{ActonConfig, ContractConfig, Explorer, WalletsConfig};
 use acton_config::test::BacktraceMode;
+use acton_debug::replayer::StepMode;
+use acton_debug::{ChildDebugContextSpec, ReplayerDebugSession};
 use num_bigint::BigInt;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeMap;
@@ -18,7 +20,7 @@ use ton_emulator::emulator::{Emulator, SendMessageResult, SendMessageResultSucce
 use ton_emulator::world_state::WorldState;
 use ton_executor::ExecutorVerbosity;
 use ton_executor::get::GetMethodResultSuccess;
-use ton_source_map::{SourceLocation, SourceMap};
+use ton_source_map::SourceLocation;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Store};
 use tycho_types::dict::Dict;
@@ -58,7 +60,7 @@ pub struct GetMethodAssertFailure {
     pub suggested_name: Option<String>,
     pub vm_log: Arc<str>,
     pub tolk_source_map: Arc<TolkSourceMap>,
-    pub caller_trace: Option<crate::retrace::TolkTraceInfo>,
+    pub caller_trace: Option<TolkTraceInfo>,
     pub location: Option<SourceLocation>,
 }
 
@@ -156,7 +158,6 @@ impl BuildCache {
         path: &Path,
         code: &str,
         code_hash: HashBytes,
-        source_map: Arc<SourceMap>,
         tolk_source_map: Arc<TolkSourceMap>,
         abi: Option<Arc<ContractAbi>>,
         compiler_abi: Option<Arc<CompilerContractABI>>,
@@ -167,7 +168,6 @@ impl BuildCache {
                 name: name.to_owned(),
                 code_boc64: code.to_owned(),
                 code_hash,
-                source_map,
                 tolk_source_map,
                 abi,
                 compiler_abi,
@@ -191,7 +191,6 @@ pub struct CompilationResult {
     pub name: String,
     pub code_boc64: String,
     pub code_hash: HashBytes,
-    pub source_map: Arc<SourceMap>,
     pub tolk_source_map: Arc<TolkSourceMap>,
     pub abi: Option<Arc<ContractAbi>>,
     pub compiler_abi: Option<Arc<CompilerContractABI>>,
@@ -638,7 +637,7 @@ pub struct BuildContext<'a> {
 
 pub enum DebugCtx<'a> {
     Disabled,
-    Enabled { inner: &'a mut DebugContext },
+    Enabled { inner: &'a mut ReplayerDebugSession },
 }
 
 impl Context<'_> {
@@ -713,7 +712,7 @@ impl ChainContext<'_> {
 }
 
 impl<'a> DebugCtx<'a> {
-    pub const fn new(inner: &'a mut DebugContext) -> DebugCtx<'a> {
+    pub const fn new(inner: &'a mut ReplayerDebugSession) -> DebugCtx<'a> {
         DebugCtx::Enabled { inner }
     }
 
@@ -722,13 +721,48 @@ impl<'a> DebugCtx<'a> {
         matches!(self, DebugCtx::Enabled { .. })
     }
 
-    pub fn ctx(&mut self) -> &mut DebugContext {
+    fn session(&mut self) -> &mut ReplayerDebugSession {
         match self {
             DebugCtx::Enabled { inner: ctx, .. } => ctx,
             DebugCtx::Disabled => {
                 panic!("Debug context accessed from non debug context");
             }
         }
+    }
+
+    pub fn process_incoming_requests(&mut self, terminate_at_end: bool) -> anyhow::Result<()> {
+        self.session().process_incoming_requests(terminate_at_end)
+    }
+
+    #[must_use]
+    pub fn need_to_stop_child_thread_on_start(&mut self) -> bool {
+        self.session().need_to_stop_child_thread_on_start()
+    }
+
+    pub fn begin_child_context(&mut self, spec: ChildDebugContextSpec) -> anyhow::Result<bool> {
+        self.session().begin_child_context(spec)
+    }
+
+    pub fn finish_child_context(&mut self, thread_id: i64) -> anyhow::Result<()> {
+        self.session().finish_child_context(thread_id)
+    }
+
+    pub fn step(&mut self, mode: StepMode) -> bool {
+        self.session().step(mode)
+    }
+
+    #[must_use]
+    pub fn active_context_is_terminated(&mut self) -> bool {
+        self.session().active_context_is_terminated()
+    }
+
+    #[must_use]
+    pub fn performing_step(&mut self) -> Option<StepMode> {
+        self.session().performing_step()
+    }
+
+    pub fn advance_parent_after_child_return(&mut self) -> anyhow::Result<()> {
+        self.session().advance_parent_after_child_return()
     }
 }
 

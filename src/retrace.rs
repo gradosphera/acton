@@ -1,17 +1,10 @@
-use crate::replayer::{CallFrameInfo, ExceptionBreakMode, StepMode, TolkReplayer};
-pub use retrace::trace::{
+pub use ::retrace::trace::{
     ExecutedAction, ExecutedActions, InstalledAction, InstalledActions, InvalidAction,
 };
+use acton_debug::replayer::{CallFrameInfo, ExceptionBreakMode, StepMode, TolkReplayer};
 use tolkc::TolkSourceMap;
-use ton_source_map::{DebugLocation, SourceLocation};
+use ton_source_map::SourceLocation;
 use vmlogs::parser::VmLine;
-
-#[derive(Debug)]
-pub struct ExceptionInfo {
-    pub description: String,
-    pub loc: Option<SourceLocation>,
-    pub backtrace: Vec<DebugLocation>,
-}
 
 #[derive(Debug, Clone)]
 pub struct TolkBacktraceFrame {
@@ -39,7 +32,9 @@ pub fn find_exception_info(
     tolk_source_map: &TolkSourceMap,
 ) -> Option<TolkExceptionInfo> {
     let source_map = &tolk_source_map.source_map;
-    let (mut replayer, description) = create_tolk_replayer(vm_logs, tolk_source_map)?;
+    let vm_lines = vmlogs::parser::parse_lines(vm_logs);
+    let description = exception_description(&vm_lines);
+    let mut replayer = TolkReplayer::new(tolk_source_map, &vm_lines).ok()?;
     replayer.set_exception_breakpoints(ExceptionBreakMode::Uncaught);
 
     while !replayer.is_finished() {
@@ -76,7 +71,8 @@ pub fn find_execution_trace(
     tolk_source_map: &TolkSourceMap,
 ) -> Option<TolkTraceInfo> {
     let source_map = &tolk_source_map.source_map;
-    let (mut replayer, _) = create_tolk_replayer(vm_logs, tolk_source_map)?;
+    let vm_lines = vmlogs::parser::parse_lines(vm_logs);
+    let mut replayer = TolkReplayer::new(tolk_source_map, &vm_lines).ok()?;
 
     while !replayer.is_finished() {
         replayer.step(StepMode::StepInto);
@@ -96,25 +92,6 @@ pub fn find_execution_trace(
         backtrace: find_backtrace(source_map, &replayer.call_stack(), &loc),
         loc,
     })
-}
-
-#[must_use]
-pub fn build_tolk_replayer(vm_logs: &str, tolk_source_map: &TolkSourceMap) -> Option<TolkReplayer> {
-    create_tolk_replayer(vm_logs, tolk_source_map).map(|(replayer, _)| replayer)
-}
-
-fn create_tolk_replayer(
-    vm_logs: &str,
-    tolk_source_map: &TolkSourceMap,
-) -> Option<(TolkReplayer, String)> {
-    let vm_lines = vmlogs::parser::parse_lines(vm_logs);
-    let description = exception_description(&vm_lines);
-    let marks_dict = tolk_source_map.marks_dict.as_deref()?;
-
-    Some((
-        TolkReplayer::new(tolk_source_map.source_map.clone(), marks_dict, &vm_lines),
-        description,
-    ))
 }
 
 fn exception_description(vm_lines: &[Result<VmLine<'_>, String>]) -> String {
@@ -197,7 +174,6 @@ pub fn find_source_loc(
     offset: u16,
 ) -> Option<SourceLocation> {
     if tolk_source_map.source_map.is_empty() {
-        // `--backtrace full` is not enabled
         return None;
     }
 
@@ -206,5 +182,5 @@ pub fn find_source_loc(
 
 #[must_use]
 pub fn find_installed_actions(vm_logs: &str) -> InstalledActions {
-    retrace::trace::Trace::new(vm_logs, None).actions()
+    ::retrace::trace::Trace::new(vm_logs, None).actions()
 }
