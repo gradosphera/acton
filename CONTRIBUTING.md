@@ -30,7 +30,7 @@ To build and test Acton locally, install:
    ```bash
    cargo install just
    ```
-3. `cargo-nextest` (recommended test runner)
+3. `cargo-nextest` (required Rust test runner for non-doc tests)
    ```bash
    cargo install cargo-nextest
    ```
@@ -208,10 +208,10 @@ Run specific suites:
 
 ```bash
 # Integration tests
-cargo test --test integration_test
+cargo nextest run --test integration_test
 
 # Debugger tests (sequential due to shared debug port)
-cargo test --test debug_test -- --test-threads 1
+cargo nextest run --test debug_test --test-threads 1
 ```
 
 Keep temp test artifacts:
@@ -222,11 +222,12 @@ DISABLE_TMP_DIR_CLEANUP_IN_TESTS=1 just test
 
 Notes:
 
-- `just test` automatically uses `cargo nextest` when available, otherwise
-  falls back to `cargo test`.
-- Some suites are intentionally run serially (see `justfile`) due to external
-  rate limits / shared resources.
-- CI test behavior is slightly different (`only_ci` feature is enabled in CI).
+- `just test` uses `cargo nextest run` for Rust test targets and
+  `cargo test --workspace --doc` for doctests.
+- `retrace` tests stay inside the shared workspace run, but are serialized via
+  a nextest test group because they hit rate-limited remote APIs.
+- CI test behavior is slightly different: the `ci` nextest profile and
+  `only_ci` feature are enabled in CI.
   For parity, run:
   ```bash
   CI=1 just test

@@ -618,11 +618,10 @@ impl<'t> TypeInferenceWalker<'_, '_> {
             };
             let rhs_out_flow = after_rhs.out_flow;
 
+            let rhs_ty = self.ctx.get_node_type_or_unknown(&rhs);
             if lhs_type == ty_null {
-                let rhs_ty = self.ctx.get_node_type_or_unknown(&rhs);
                 self.ctx.set_node_type(&v, rhs_ty);
             } else {
-                let rhs_ty = self.ctx.get_node_type_or_unknown(&rhs);
                 let mut branches_unifier = TypeInferringUnifyStrategy::new();
                 branches_unifier.unify_with(lhs_branch_ty, hint, self.intrn());
                 branches_unifier.unify_with(rhs_ty, hint, self.intrn());
