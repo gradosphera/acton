@@ -9,6 +9,8 @@ cargo-dist-version = "0.31.0"
 dist = false
 # CI backends to support
 ci = "github"
+# Skip checking whether the specified configuration files are up to date
+allow-dirty = ["ci"]
 # The installers to generate for each app
 installers = ["shell"]
 # The archive format to use for non-windows builds (defaults .tar.xz)
