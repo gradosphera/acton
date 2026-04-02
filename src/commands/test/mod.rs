@@ -2,7 +2,7 @@ use crate::commands::build::build_cmd;
 use crate::commands::common::error_fmt;
 use crate::commands::test::coverage::{
     collect_coverage, generate_lcov_file, generate_lcov_report, generate_text_file,
-    print_coverage_summary,
+    print_coverage_summary, total_line_coverage_percentage,
 };
 use crate::commands::test::reporting::console::{ConsoleConfig, ConsoleReporter};
 use crate::commands::test::reporting::dot::DotReporter;
@@ -553,6 +553,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     runner.reporter_manager.on_testing_finished(&global_stats)?;
 
     let mut coverage_lcov = None;
+    let mut coverage_threshold_failed = false;
 
     if config.coverage {
         let project_root = configured_project_root().to_path_buf();
@@ -601,6 +602,26 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
                     })?;
                     println!("Text coverage file saved in {text_path}");
                 }
+            }
+        }
+
+        if !config.ui
+            && let Some(minimum_percent) = config.coverage_minimum_percent
+        {
+            if !minimum_percent.is_finite() || !(0.0..=100.0).contains(&minimum_percent) {
+                anyhow::bail!(
+                    "coverage minimum percent must be between 0 and 100, got {minimum_percent}"
+                );
+            }
+            let actual_percent = total_line_coverage_percentage(&coverage);
+            if actual_percent < minimum_percent {
+                coverage_threshold_failed = true;
+                println!(
+                    "\n{}: total line coverage {:.2}% is below the required minimum of {:.2}%.",
+                    "Error".red(),
+                    actual_percent,
+                    minimum_percent
+                );
             }
         }
     }
@@ -658,7 +679,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         process::exit(1);
     }
 
-    if total_failed > 0 {
+    if total_failed > 0 || coverage_threshold_failed {
         process::exit(1)
     }
     Ok(())

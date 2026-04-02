@@ -540,6 +540,21 @@ const fn zero_based_line(line: usize) -> i64 {
     line.saturating_sub(1) as i64
 }
 
+pub(super) fn total_line_coverage_percentage(coverage: &Coverage) -> f64 {
+    let total_executable_lines: usize = coverage
+        .files
+        .iter()
+        .map(|f| f.executable_lines_count)
+        .sum();
+    let total_covered_lines: usize = coverage.files.iter().map(|f| f.covered_lines_count).sum();
+
+    if total_executable_lines == 0 {
+        0.0
+    } else {
+        total_covered_lines as f64 / total_executable_lines as f64 * 100.0
+    }
+}
+
 pub(super) fn print_coverage_summary(coverage: &Coverage) {
     if coverage.files.is_empty() {
         // Empty coverage info, likely compilation error
@@ -563,7 +578,7 @@ pub(super) fn print_coverage_summary(coverage: &Coverage) {
     }
 
     if total_executable_lines > 0 {
-        let total_percentage = total_covered_lines as f64 / total_executable_lines as f64 * 100.0;
+        let total_percentage = total_line_coverage_percentage(coverage);
         let (total_covered_color, total_percentage_color) = match total_percentage as u32 {
             0..=50 => (Color::DarkRed, Color::DarkRed),
             51..=80 => (Color::DarkYellow, Color::DarkYellow),
@@ -732,11 +747,7 @@ fn generate_text_report(coverage: &Coverage) -> String {
         .map(|f| f.executable_lines_count)
         .sum();
     let covered_lines: usize = coverage.files.iter().map(|f| f.covered_lines_count).sum();
-    let coverage_percentage = if total_lines > 0 {
-        (covered_lines as f64 / total_lines as f64) * 100.0
-    } else {
-        0.0
-    };
+    let coverage_percentage = total_line_coverage_percentage(coverage);
 
     result.push_str("Coverage Summary:\n");
     result.push_str(&format!(

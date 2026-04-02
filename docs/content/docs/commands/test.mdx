@@ -190,6 +190,22 @@ Output file for the coverage report.
 <CommandOption>
 <CommandOptionTitle>
 
+`--coverage-minimum-percent` _percent_
+
+</CommandOptionTitle>
+
+Fail when total line coverage is below this percentage.
+
+Valid range: `0` to `100`.
+
+Ignored with `--ui`.
+
+</CommandOption>
+
+
+<CommandOption>
+<CommandOptionTitle>
+
 `--coverage-include-wrappers`
 
 </CommandOptionTitle>
@@ -562,6 +578,8 @@ junit-merge = false
 
 [test.coverage]
 enabled = true
+# valid range: 0..=100
+minimum-percent = 85
 include-tests = true
 include-wrappers = true
 ```
@@ -577,6 +595,8 @@ CLI flags override config values for the current invocation.
   inspecting transaction trees
 - You can combine `--coverage` and `--ui` to inspect the current run's coverage
   directly in the browser UI
+- `--coverage-minimum-percent` and `[test.coverage].minimum-percent` are ignored
+  when `--ui` is enabled
 - `--fork-net` keeps execution local while resolving blockchain state remotely
 
 ## EXIT STATUS
@@ -584,7 +604,8 @@ CLI flags override config values for the current invocation.
 - `0`: All selected tests passed, or a non-mutating reporting mode completed
   successfully.
 - `1`: At least one test failed, profiling drift was detected with
-  `--fail-on-diff`, no tests matched after filtering, or infrastructure such as
+  `--fail-on-diff`, line coverage was below the configured minimum in non-UI
+  coverage mode, no tests matched after filtering, or infrastructure such as
   compilation, trace export, UI startup, or remote-state resolution failed.
 
 ## EXAMPLES
@@ -607,25 +628,31 @@ CLI flags override config values for the current invocation.
    acton test --coverage --coverage-format lcov --reporter junit --junit-path test-results
    ```
 
-4. Compare gas usage against a baseline:
+4. Fail the run when line coverage drops below 85%:
+
+   ```bash
+   acton test --coverage --coverage-minimum-percent 85
+   ```
+
+5. Compare gas usage against a baseline:
 
    ```bash
    acton test --baseline-snapshot .acton/gas-baseline.json --fail-on-diff
    ```
 
-5. Run mutation testing for one contract:
+6. Run mutation testing for one contract:
 
    ```bash
    acton test --mutate --mutate-contract wallet
    ```
 
-6. Debug a forked-state failure with traces and the UI:
+7. Debug a forked-state failure with traces and the UI:
 
    ```bash
    acton test tests/wallet.test.tolk --fork-net testnet --fork-block-number 55000000 --save-test-trace --ui
    ```
 
-7. Enforce a gas baseline in CI:
+8. Enforce a gas baseline in CI:
 
    ```bash
    acton test --baseline-snapshot .acton/gas-baseline.json --fail-on-diff --reporter console,junit

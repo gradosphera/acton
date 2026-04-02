@@ -210,6 +210,14 @@ enum Commands {
         coverage_file: Option<String>,
         #[arg(
             long,
+            value_name = "PERCENT",
+            value_parser = parse_coverage_percent,
+            help = "Fail if total line coverage is below this percentage",
+            help_heading = "Coverage"
+        )]
+        coverage_minimum_percent: Option<f64>,
+        #[arg(
+            long,
             help = "Include files from the @wrappers mapping in coverage reports",
             help_heading = "Coverage"
         )]
@@ -1503,6 +1511,7 @@ fn main() {
             coverage,
             coverage_format,
             coverage_file,
+            coverage_minimum_percent,
             coverage_include_wrappers,
             coverage_include_tests,
             exclude,
@@ -1535,6 +1544,7 @@ fn main() {
                     coverage,
                     coverage_format,
                     coverage_file,
+                    coverage_minimum_percent,
                     coverage_include_wrappers,
                     coverage_include_tests,
                     exclude,
@@ -2081,6 +2091,7 @@ fn create_test_config(
     coverage: bool,
     coverage_format: Option<CoverageFormat>,
     coverage_file: Option<String>,
+    coverage_minimum_percent: Option<f64>,
     coverage_include_wrappers: bool,
     coverage_include_tests: bool,
     exclude: Vec<String>,
@@ -2119,6 +2130,7 @@ fn create_test_config(
             if coverage { Some(true) } else { None },
             coverage_format,
             coverage_file,
+            coverage_minimum_percent,
             if coverage_include_wrappers {
                 Some(true)
             } else {
@@ -2165,6 +2177,7 @@ fn create_test_config(
         debug_port: debug_port.unwrap_or(12345),
         backtrace,
         coverage,
+        coverage_minimum_percent,
         coverage_include_wrappers,
         coverage_include_tests,
         filter,
@@ -2191,4 +2204,16 @@ fn create_test_config(
         ui_port,
         fork_net,
     }
+}
+
+fn parse_coverage_percent(raw: &str) -> Result<f64, String> {
+    let value = raw
+        .parse::<f64>()
+        .map_err(|err| format!("invalid coverage percentage '{raw}': {err}"))?;
+
+    if !value.is_finite() || !(0.0..=100.0).contains(&value) {
+        return Err("--coverage-minimum-percent must be between 0 and 100".to_string());
+    }
+
+    Ok(value)
 }

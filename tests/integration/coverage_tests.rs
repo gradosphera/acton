@@ -156,6 +156,34 @@ fn build_coverage_scope_project(name: &str) -> Project {
         .build()
 }
 
+fn build_partial_coverage_project(name: &str) -> ProjectBuilder {
+    ProjectBuilder::new(name)
+        .contract("simple", SIMPLE_CONTRACT)
+        .file(
+            "code/math",
+            r"
+            fun classify(x: int): int {
+                if (x > 0) {
+                    return 1;
+                } else {
+                    return -1;
+                }
+            }
+        ",
+        )
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/testing/expect"
+            import "../code/math"
+
+            get fun `test-partial-coverage`() {
+                expect(classify(2)).toEqual(1);
+            }
+        "#,
+        )
+}
+
 #[test]
 fn test_coverage_basic_output() {
     let project = ProjectBuilder::new("coverage-basic")
@@ -1391,6 +1419,77 @@ fn test_coverage_text_output_write_error_is_non_zero() {
         .failure()
         .assert_stderr_snapshot_matches(
             "integration/snapshots/test_coverage_text_output_write_error.stderr.txt",
+        );
+}
+
+#[test]
+fn test_coverage_minimum_percent_via_cli_fails_when_total_coverage_is_too_low() {
+    let project = build_partial_coverage_project("coverage-min-percent-cli").build();
+
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file("threshold.txt")
+        .with_coverage_minimum_percent(100.0)
+        .run()
+        .failure()
+        .assert_passed(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/test_coverage_minimum_percent_via_cli.stdout.txt",
+        )
+        .assert_file_snapshot_matches(
+            "threshold.txt",
+            "integration/snapshots/test_coverage_minimum_percent_via_cli.txt",
+        );
+}
+
+#[test]
+fn test_coverage_minimum_percent_via_config_fails_when_total_coverage_is_too_low() {
+    let project = build_partial_coverage_project("coverage-min-percent-config")
+        .with_test_config(TestConfig {
+            coverage: Some(true),
+            coverage_format: Some("text".to_owned()),
+            coverage_file: Some("threshold.txt".to_owned()),
+            coverage_minimum_percent: Some(100.0),
+            ..Default::default()
+        })
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_passed(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/test_coverage_minimum_percent_via_config.stdout.txt",
+        )
+        .assert_file_snapshot_matches(
+            "threshold.txt",
+            "integration/snapshots/test_coverage_minimum_percent_via_config.txt",
+        );
+}
+
+#[test]
+fn test_coverage_minimum_percent_from_config_rejects_invalid_values() {
+    let project = build_partial_coverage_project("coverage-min-percent-invalid")
+        .with_test_config(TestConfig {
+            coverage: Some(true),
+            coverage_format: Some("text".to_owned()),
+            coverage_minimum_percent: Some(101.0),
+            ..Default::default()
+        })
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_coverage_minimum_percent_invalid_config.stderr.txt",
         );
 }
 

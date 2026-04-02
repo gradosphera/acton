@@ -237,6 +237,8 @@ pub struct TestCoverageSettings {
     pub format: Option<String>,
     /// Path to save the coverage report
     pub output_file: Option<String>,
+    /// Minimum total line coverage percentage required for a non-UI coverage run
+    pub minimum_percent: Option<f64>,
     /// Include files from the `@wrappers` mapping in coverage reports
     pub include_wrappers: Option<bool>,
     /// Include `.test.tolk` files in coverage reports
@@ -1107,6 +1109,12 @@ impl TestSettings {
             .and_then(|coverage| coverage.output_file.clone())
     }
 
+    fn coverage_minimum_percent_value(&self) -> Option<f64> {
+        self.coverage
+            .as_ref()
+            .and_then(|coverage| coverage.minimum_percent)
+    }
+
     fn coverage_include_wrappers_value(&self) -> Option<bool> {
         self.coverage
             .as_ref()
@@ -1132,6 +1140,7 @@ impl TestSettings {
         coverage_override: Option<bool>,
         coverage_format_override: Option<CoverageFormat>,
         coverage_file_override: Option<String>,
+        coverage_minimum_percent_override: Option<f64>,
         coverage_include_wrappers_override: Option<bool>,
         coverage_include_tests_override: Option<bool>,
         exclude_override: Option<Vec<String>>,
@@ -1197,6 +1206,8 @@ impl TestSettings {
                     })
             }),
             coverage_file: coverage_file_override.or_else(|| self.coverage_file_value()),
+            coverage_minimum_percent: coverage_minimum_percent_override
+                .or_else(|| self.coverage_minimum_percent_value()),
             coverage_include_wrappers: coverage_include_wrappers_override
                 .unwrap_or_else(|| self.coverage_include_wrappers_value().unwrap_or(false)),
             coverage_include_tests: coverage_include_tests_override
@@ -1516,6 +1527,7 @@ junit-merge = true
 enabled = true
 format = "lcov"
 output-file = "coverage.txt"
+minimum-percent = 85
 include-wrappers = true
 include-tests = true
 "#;
@@ -1538,6 +1550,7 @@ include-tests = true
         assert_eq!(coverage.enabled, Some(true));
         assert_eq!(coverage.format, Some("lcov".to_string()));
         assert_eq!(coverage.output_file, Some("coverage.txt".to_string()));
+        assert_eq!(coverage.minimum_percent, Some(85.0));
         assert_eq!(coverage.include_wrappers, Some(true));
         assert_eq!(coverage.include_tests, Some(true));
         assert_eq!(

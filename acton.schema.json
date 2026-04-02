@@ -591,6 +591,11 @@
           "description": "Include files from the `@wrappers` mapping in coverage reports",
           "type": "boolean"
         },
+        "minimum-percent": {
+          "description": "Minimum total line coverage percentage required for a non-UI coverage run",
+          "type": "number",
+          "format": "double"
+        },
         "output-file": {
           "description": "Path to save the coverage report",
           "type": "string"

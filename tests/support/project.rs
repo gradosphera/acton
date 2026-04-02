@@ -64,6 +64,7 @@ pub(crate) struct TestConfig {
     pub coverage: Option<bool>,
     pub coverage_format: Option<String>,
     pub coverage_file: Option<String>,
+    pub coverage_minimum_percent: Option<f64>,
     pub coverage_include_wrappers: Option<bool>,
     pub coverage_include_tests: Option<bool>,
     pub junit_path: Option<String>,
@@ -1004,6 +1005,7 @@ version = "0.1.0"
             if config.coverage.is_some()
                 || config.coverage_format.is_some()
                 || config.coverage_file.is_some()
+                || config.coverage_minimum_percent.is_some()
                 || config.coverage_include_wrappers.is_some()
                 || config.coverage_include_tests.is_some()
             {
@@ -1019,6 +1021,11 @@ version = "0.1.0"
 
                 if let Some(coverage_file) = &config.coverage_file {
                     toml_content.push_str(&format!("output-file = \"{coverage_file}\"\n"));
+                }
+
+                if let Some(coverage_minimum_percent) = config.coverage_minimum_percent {
+                    toml_content
+                        .push_str(&format!("minimum-percent = {coverage_minimum_percent}\n"));
                 }
 
                 if let Some(coverage_include_wrappers) = config.coverage_include_wrappers {
@@ -1472,6 +1479,15 @@ impl ActonCommand {
     /// Enable coverage with custom output file
     pub(crate) fn with_coverage_file(mut self, file: &str) -> Self {
         self.cmd = self.cmd.arg("--coverage-file").arg(file);
+        self
+    }
+
+    /// Require a minimum total line coverage percentage.
+    pub(crate) fn with_coverage_minimum_percent(mut self, percent: f64) -> Self {
+        self.cmd = self
+            .cmd
+            .arg("--coverage-minimum-percent")
+            .arg(percent.to_string());
         self
     }
 

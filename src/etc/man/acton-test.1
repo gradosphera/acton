@@ -84,6 +84,15 @@ Possible values: \fBlcov\fR, \fBtext\fR
 Output file for the coverage report.
 .RE
 .sp
+\fB\-\-coverage\-minimum\-percent\fR \fIpercent\fR
+.RS 4
+Fail when total line coverage is below this percentage.
+.sp
+Valid range: \fB0\fR to \fB100\fR\&.
+.sp
+Ignored with \fB\-\-ui\fR\&.
+.RE
+.sp
 \fB\-\-coverage\-include\-wrappers\fR
 .RS 4
 Include files from the \fB@wrappers\fR mapping in coverage reports.
@@ -282,6 +291,8 @@ junit\-merge = false
 
 [test.coverage]
 enabled = true
+# valid range: 0..=100
+minimum\-percent = 85
 include\-tests = true
 include\-wrappers = true
 .fi
@@ -310,6 +321,11 @@ directly in the browser UI
 .RE
 .sp
 .RS 4
+\h'-04'\(bu\h'+03'\fB\-\-coverage\-minimum\-percent\fR and \fB[test.coverage].minimum\-percent\fR are ignored
+when \fB\-\-ui\fR is enabled
+.RE
+.sp
+.RS 4
 \h'-04'\(bu\h'+03'\fB\-\-fork\-net\fR keeps execution local while resolving blockchain state remotely
 .RE
 .SH "EXIT STATUS"
@@ -321,7 +337,8 @@ successfully.
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'\fB1\fR: At least one test failed, profiling drift was detected with
-\fB\-\-fail\-on\-diff\fR, no tests matched after filtering, or infrastructure such as
+\fB\-\-fail\-on\-diff\fR, line coverage was below the configured minimum in non\-UI
+coverage mode, no tests matched after filtering, or infrastructure such as
 compilation, trace export, UI startup, or remote\-state resolution failed.
 .RE
 .SH "EXAMPLES"
@@ -357,7 +374,17 @@ acton test \-\-coverage \-\-coverage\-format lcov \-\-reporter junit \-\-junit\-
 .RE
 .sp
 .RS 4
-\h'-04' 4.\h'+01'Compare gas usage against a baseline:
+\h'-04' 4.\h'+01'Fail the run when line coverage drops below 85%:
+.sp
+.RS 4
+.nf
+acton test \-\-coverage \-\-coverage\-minimum\-percent 85
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 5.\h'+01'Compare gas usage against a baseline:
 .sp
 .RS 4
 .nf
@@ -367,7 +394,7 @@ acton test \-\-baseline\-snapshot .acton/gas\-baseline.json \-\-fail\-on\-diff
 .RE
 .sp
 .RS 4
-\h'-04' 5.\h'+01'Run mutation testing for one contract:
+\h'-04' 6.\h'+01'Run mutation testing for one contract:
 .sp
 .RS 4
 .nf
@@ -377,7 +404,7 @@ acton test \-\-mutate \-\-mutate\-contract wallet
 .RE
 .sp
 .RS 4
-\h'-04' 6.\h'+01'Debug a forked\-state failure with traces and the UI:
+\h'-04' 7.\h'+01'Debug a forked\-state failure with traces and the UI:
 .sp
 .RS 4
 .nf
@@ -387,7 +414,7 @@ acton test tests/wallet.test.tolk \-\-fork\-net testnet \-\-fork\-block\-number 
 .RE
 .sp
 .RS 4
-\h'-04' 7.\h'+01'Enforce a gas baseline in CI:
+\h'-04' 8.\h'+01'Enforce a gas baseline in CI:
 .sp
 .RS 4
 .nf
