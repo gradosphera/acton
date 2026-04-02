@@ -250,6 +250,10 @@ pub struct TestSettings {
     pub coverage_format: Option<String>,
     /// Path to save the coverage report
     pub coverage_file: Option<String>,
+    /// Include files from the `@wrappers` mapping in coverage reports
+    pub coverage_include_wrappers: Option<bool>,
+    /// Include `.test.tolk` files in coverage reports
+    pub coverage_include_tests: Option<bool>,
     /// Glob patterns to exclude from testing
     pub exclude: Option<Vec<String>>,
     /// Glob patterns to include in testing
@@ -1092,6 +1096,8 @@ impl TestSettings {
         coverage_override: Option<bool>,
         coverage_format_override: Option<CoverageFormat>,
         coverage_file_override: Option<String>,
+        coverage_include_wrappers_override: Option<bool>,
+        coverage_include_tests_override: Option<bool>,
         exclude_override: Option<Vec<String>>,
         include_override: Option<Vec<String>>,
         clear_cache_override: Option<bool>,
@@ -1156,6 +1162,10 @@ impl TestSettings {
                     })
             }),
             coverage_file: coverage_file_override.or_else(|| self.coverage_file.clone()),
+            coverage_include_wrappers: coverage_include_wrappers_override
+                .unwrap_or_else(|| self.coverage_include_wrappers.unwrap_or(false)),
+            coverage_include_tests: coverage_include_tests_override
+                .unwrap_or_else(|| self.coverage_include_tests.unwrap_or(false)),
             exclude_patterns: exclude_override
                 .unwrap_or_else(|| self.exclude.clone().unwrap_or_default()),
             include_patterns: include_override
@@ -1464,6 +1474,8 @@ debug-port = 9999
 backtrace = "full"
 coverage = true
 coverage-format = "lcov"
+coverage-include-wrappers = true
+coverage-include-tests = true
 exclude = ["**/integration/**"]
 include = ["**/unit/**"]
 junit-path = "custom-reports"
@@ -1483,6 +1495,8 @@ junit-merge = true
         assert_eq!(test_settings.backtrace, Some("full".to_string()));
         assert_eq!(test_settings.coverage, Some(true));
         assert_eq!(test_settings.coverage_format, Some("lcov".to_string()));
+        assert_eq!(test_settings.coverage_include_wrappers, Some(true));
+        assert_eq!(test_settings.coverage_include_tests, Some(true));
         assert_eq!(
             test_settings.exclude,
             Some(vec!["**/integration/**".to_string()])

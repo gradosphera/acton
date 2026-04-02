@@ -45,6 +45,8 @@ pub(super) fn collect_coverage(
     emulations: &EmulationsState,
     build_cache: &BuildCache,
     wrapper_roots: &[PathBuf],
+    include_wrappers: bool,
+    include_tests: bool,
 ) -> Coverage {
     // To build coverage we need two things: source maps and virtual machine logs.
     //
@@ -59,9 +61,11 @@ pub(super) fn collect_coverage(
     // Not all lines of code in source code can be executed, for example, struct definitions
     // or comments. We collect executable lines from the same stoppable debug marks the
     // replayer relies on, so the denominator matches the source-level lines we can actually hit.
-    let executable_lines_per_file = build_executable_lines_per_files(&data, wrapper_roots);
+    let executable_lines_per_file =
+        build_executable_lines_per_files(&data, wrapper_roots, include_wrappers, include_tests);
     // Having source-level replay over VM logs, we can collect visited lines and branch hits.
-    let result = collect_executed_lines_per_files(&data, wrapper_roots);
+    let result =
+        collect_executed_lines_per_files(&data, wrapper_roots, include_wrappers, include_tests);
     let (line_hits_per_file, branch_sites_per_file) = (result.lines, result.branches);
 
     // Now having all this information, we can trivially determine how many executable
@@ -175,6 +179,8 @@ enum BranchInstructionKind {
 fn collect_executed_lines_per_files(
     data: &[SourceMapAndLogs],
     wrapper_roots: &[PathBuf],
+    include_wrappers: bool,
+    include_tests: bool,
 ) -> ExecutedLinesForFile {
     let mut line_hits_per_file: HashMap<String, BTreeMap<i64, u64>> = HashMap::new();
     let mut branch_sites_per_file: HashMap<String, BTreeMap<BranchSiteId, BranchSiteCoverage>> =
@@ -200,6 +206,8 @@ fn collect_executed_lines_per_files(
                         &mut last_recorded_loc,
                         replayer,
                         wrapper_roots,
+                        include_wrappers,
+                        include_tests,
                     ) {
                         last_coverage_loc = Some(loc);
                     }
@@ -215,6 +223,8 @@ fn collect_executed_lines_per_files(
                         &last_coverage_loc,
                         instr_name,
                         wrapper_roots,
+                        include_wrappers,
+                        include_tests,
                     );
                 }
                 _ => {}
@@ -233,8 +243,11 @@ fn record_current_line_hit(
     last_recorded_loc: &mut Option<(String, i64)>,
     replayer: &TolkReplayer,
     wrapper_roots: &[PathBuf],
+    include_wrappers: bool,
+    include_tests: bool,
 ) -> Option<(String, i64)> {
-    let (file, line) = current_coverage_loc(replayer, wrapper_roots)?;
+    let (file, line) =
+        current_coverage_loc(replayer, wrapper_roots, include_wrappers, include_tests)?;
 
     if last_recorded_loc.as_ref() == Some(&(file.clone(), line)) {
         return Some((file, line));
@@ -251,6 +264,8 @@ fn record_current_line_hit(
 fn current_coverage_loc(
     replayer: &TolkReplayer,
     wrapper_roots: &[PathBuf],
+    include_wrappers: bool,
+    include_tests: bool,
 ) -> Option<(String, i64)> {
     let line = replayer.current_line();
     if line == 0 {
@@ -263,7 +278,7 @@ fn current_coverage_loc(
         .unwrap_or_else(|| replayer.current_file_name())
         .to_owned();
 
-    if is_ignored_coverage_file(&file, wrapper_roots) {
+    if is_ignored_coverage_file(&file, wrapper_roots, include_wrappers, include_tests) {
         return None;
     }
 
@@ -282,6 +297,7 @@ fn coverage_location_for_range(
     Some((file, zero_based_line(range.start_line())))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_branch_instruction(
     branch_sites_per_file: &mut HashMap<String, BTreeMap<BranchSiteId, BranchSiteCoverage>>,
     replayer: &TolkReplayer,
@@ -289,13 +305,20 @@ fn process_branch_instruction(
     last_coverage_loc: &Option<(String, i64)>,
     instr_name: &str,
     wrapper_roots: &[PathBuf],
+    include_wrappers: bool,
+    include_tests: bool,
 ) {
     let Some(kind) = classify_branch_instruction(instr_name) else {
         return;
     };
-    let Some((file, line)) =
-        branch_coverage_loc(replayer, wrapper_roots, last_coverage_loc, instr_name)
-    else {
+    let Some((file, line)) = branch_coverage_loc(
+        replayer,
+        wrapper_roots,
+        last_coverage_loc,
+        instr_name,
+        include_wrappers,
+        include_tests,
+    ) else {
         return;
     };
     let Some(site_id) = current_branch_site_id(replayer) else {
@@ -334,6 +357,8 @@ fn process_branch_instruction(
 fn build_executable_lines_per_files(
     data: &[SourceMapAndLogs],
     wrapper_roots: &[PathBuf],
+    include_wrappers: bool,
+    include_tests: bool,
 ) -> HashMap<String, BTreeSet<i64>> {
     let mut seen_source_maps = HashSet::new();
     let mut executable_lines_per_file: HashMap<String, BTreeSet<i64>> = HashMap::new();
@@ -348,7 +373,13 @@ fn build_executable_lines_per_files(
             continue;
         }
 
-        build_executable_lines_per_file(&mut executable_lines_per_file, source_map, wrapper_roots);
+        build_executable_lines_per_file(
+            &mut executable_lines_per_file,
+            source_map,
+            wrapper_roots,
+            include_wrappers,
+            include_tests,
+        );
     }
 
     executable_lines_per_file
@@ -358,6 +389,8 @@ fn build_executable_lines_per_file(
     executable_lines_per_file: &mut HashMap<String, BTreeSet<i64>>,
     source_map: &TolkSourceMap,
     wrapper_roots: &[PathBuf],
+    include_wrappers: bool,
+    include_tests: bool,
 ) {
     let source_map = &source_map.source_map;
 
@@ -377,7 +410,7 @@ fn build_executable_lines_per_file(
             continue;
         };
 
-        if is_ignored_coverage_file(&file, wrapper_roots) {
+        if is_ignored_coverage_file(&file, wrapper_roots, include_wrappers, include_tests) {
             continue;
         }
 
@@ -445,8 +478,12 @@ fn branch_coverage_loc(
     wrapper_roots: &[PathBuf],
     last_coverage_loc: &Option<(String, i64)>,
     instr_name: &str,
+    include_wrappers: bool,
+    include_tests: bool,
 ) -> Option<(String, i64)> {
-    if let Some(loc) = current_coverage_loc(replayer, wrapper_roots) {
+    if let Some(loc) =
+        current_coverage_loc(replayer, wrapper_roots, include_wrappers, include_tests)
+    {
         return Some(loc);
     }
 
@@ -479,18 +516,24 @@ fn current_branch_site_id(replayer: &TolkReplayer) -> Option<BranchSiteId> {
     })
 }
 
-fn is_ignored_coverage_file(file: &str, wrapper_roots: &[PathBuf]) -> bool {
+fn is_ignored_coverage_file(
+    file: &str,
+    wrapper_roots: &[PathBuf],
+    include_wrappers: bool,
+    include_tests: bool,
+) -> bool {
     let path = Path::new(file);
+    let is_wrapper_file = wrapper_roots.iter().any(|root| path.starts_with(root))
+        || path
+            .components()
+            .any(|component| component.as_os_str() == "wrappers");
 
     file.is_empty()
         || file.contains("@stdlib/")
         || file.contains("/lib/")
         || file.contains("/.acton/")
-        || file.contains(".test.tolk")
-        || wrapper_roots.iter().any(|root| path.starts_with(root))
-        || path
-            .components()
-            .any(|component| component.as_os_str() == "wrappers")
+        || (!include_tests && file.contains(".test.tolk"))
+        || (!include_wrappers && is_wrapper_file)
 }
 
 const fn zero_based_line(line: usize) -> i64 {

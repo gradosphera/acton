@@ -70,6 +70,8 @@ pub struct TestConfig {
     pub debug_port: u16,
     pub backtrace: Option<BacktraceMode>,
     pub coverage: bool,
+    pub coverage_include_wrappers: bool,
+    pub coverage_include_tests: bool,
     pub filter: Option<String>,
     pub coverage_format: Option<CoverageFormat>,
     pub coverage_file: Option<String>,

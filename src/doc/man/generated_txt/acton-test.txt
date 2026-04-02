@@ -61,6 +61,12 @@ OPTIONS
        --coverage-file path
            Output file for the coverage report.
 
+       --coverage-include-wrappers
+           Include files from the @wrappers mapping in coverage reports.
+
+       --coverage-include-tests
+           Include .test.tolk files in coverage reports.
+
    Profiling Options
        --snapshot path
            Write gas usage statistics to a JSON snapshot file.
@@ -171,6 +177,9 @@ REPORTING AND ARTIFACTS
        o  --coverage-file matters only with --coverage; without an explicit
           path, Acton writes lcov.info for lcov and coverage.txt for text
 
+       o  coverage excludes .test.tolk files and @wrappers sources by default;
+          use --coverage-include-tests or --coverage-include-wrappers to opt in
+
        o  --save-test-trace without a value writes traces to .acton/traces
 
        o  gas snapshot files are written only to the explicit paths passed to
@@ -182,6 +191,8 @@ CONFIGURATION
            [test]
            reporter = ["console"]
            coverage = true
+           coverage-include-tests = true
+           coverage-include-wrappers = true
            filter = "test-.*"
            junit-path = "reports"
            junit-merge = false

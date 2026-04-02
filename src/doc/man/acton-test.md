@@ -94,6 +94,14 @@ Possible values: `lcov`, `text`
 Output file for the coverage report.
 {{/option}}
 
+{{#option "`--coverage-include-wrappers`" }}
+Include files from the `@wrappers` mapping in coverage reports.
+{{/option}}
+
+{{#option "`--coverage-include-tests`" }}
+Include `.test.tolk` files in coverage reports.
+{{/option}}
+
 {{/options}}
 
 ### Profiling Options
@@ -234,6 +242,8 @@ Acton discovers tests by finding files that end with `.test.tolk`.
   directory is `test-results`
 - `--coverage-file` matters only with `--coverage`; without an explicit path,
   Acton writes `lcov.info` for `lcov` and `coverage.txt` for `text`
+- coverage excludes `.test.tolk` files and `@wrappers` sources by default;
+  use `--coverage-include-tests` or `--coverage-include-wrappers` to opt in
 - `--save-test-trace` without a value writes traces to `.acton/traces`
 - gas snapshot files are written only to the explicit paths passed to
   `--snapshot` or `--baseline-snapshot`
@@ -246,6 +256,8 @@ Defaults can be configured in `Acton.toml`:
 [test]
 reporter = ["console"]
 coverage = true
+coverage-include-tests = true
+coverage-include-wrappers = true
 filter = "test-.*"
 junit-path = "reports"
 junit-merge = false

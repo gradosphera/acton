@@ -58,6 +58,18 @@ acton test counter.test.tolk --coverage
 acton test --filter "test-increase" --coverage
 ```
 
+By default, Acton excludes:
+
+- `.test.tolk` files
+- files under the `@wrappers` mapping
+
+Use these flags when you want them in the report:
+
+```bash
+acton test --coverage --coverage-include-tests
+acton test --coverage --coverage-include-wrappers
+```
+
 ## Understanding Coverage Reports
 
 When you enable coverage, you'll see a detailed report after test execution:

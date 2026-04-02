@@ -49,6 +49,8 @@ fn merge_test_config(
         None,
         None,
         None,
+        None,
+        None,
         false,
         None,
         None,

@@ -64,6 +64,8 @@ pub(crate) struct TestConfig {
     pub coverage: Option<bool>,
     pub coverage_format: Option<String>,
     pub coverage_file: Option<String>,
+    pub coverage_include_wrappers: Option<bool>,
+    pub coverage_include_tests: Option<bool>,
     pub junit_path: Option<String>,
     pub junit_merge: Option<bool>,
     pub fail_on_diff: Option<bool>,
@@ -995,6 +997,18 @@ version = "0.1.0"
                 toml_content.push_str(&format!("coverage-file = \"{coverage_file}\"\n"));
             }
 
+            if let Some(coverage_include_wrappers) = config.coverage_include_wrappers {
+                toml_content.push_str(&format!(
+                    "coverage-include-wrappers = {coverage_include_wrappers}\n"
+                ));
+            }
+
+            if let Some(coverage_include_tests) = config.coverage_include_tests {
+                toml_content.push_str(&format!(
+                    "coverage-include-tests = {coverage_include_tests}\n"
+                ));
+            }
+
             if let Some(junit_path) = &config.junit_path {
                 toml_content.push_str(&format!("junit-path = \"{junit_path}\"\n"));
             }
@@ -1452,6 +1466,18 @@ impl ActonCommand {
     /// Enable coverage with custom output file
     pub(crate) fn with_coverage_file(mut self, file: &str) -> Self {
         self.cmd = self.cmd.arg("--coverage-file").arg(file);
+        self
+    }
+
+    /// Include files under the `@wrappers` mapping in coverage reports.
+    pub(crate) fn with_coverage_include_wrappers(mut self) -> Self {
+        self.cmd = self.cmd.arg("--coverage-include-wrappers");
+        self
+    }
+
+    /// Include `.test.tolk` files in coverage reports.
+    pub(crate) fn with_coverage_include_tests(mut self) -> Self {
+        self.cmd = self.cmd.arg("--coverage-include-tests");
         self
     }
 

@@ -555,14 +555,30 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     let mut coverage_lcov = None;
 
     if config.coverage {
+        let project_root = configured_project_root().to_path_buf();
         let wrapper_roots: Vec<_> = runner
             .acton_config
             .mappings()
             .into_iter()
             .flat_map(|mappings| mappings.into_iter())
-            .filter_map(|(key, path)| (key == "@wrappers").then(|| PathBuf::from(path)))
+            .filter_map(|(key, path)| (key == "@wrappers").then_some(path))
+            .map(PathBuf::from)
+            .map(|path| {
+                let path = if path.is_absolute() {
+                    path
+                } else {
+                    project_root.join(path)
+                };
+                dunce::canonicalize(&path).unwrap_or(path)
+            })
             .collect();
-        let coverage = collect_coverage(&runner.emulations, &runner.build_cache, &wrapper_roots);
+        let coverage = collect_coverage(
+            &runner.emulations,
+            &runner.build_cache,
+            &wrapper_roots,
+            config.coverage_include_wrappers,
+            config.coverage_include_tests,
+        );
         print_coverage_summary(&coverage);
         if config.ui {
             coverage_lcov = Some(generate_lcov_report(&coverage));

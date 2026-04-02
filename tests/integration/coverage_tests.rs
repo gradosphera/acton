@@ -120,6 +120,42 @@ fn build_jetton_template_project(name: &str) -> Project {
     project
 }
 
+fn build_coverage_scope_project(name: &str) -> Project {
+    ProjectBuilder::new(name)
+        .contract("simple", SIMPLE_CONTRACT)
+        .file(
+            "code/math",
+            r"
+            fun addOne(x: int): int {
+                return x + 1;
+            }
+        ",
+        )
+        .file(
+            "generated/abi/TestWrapper",
+            r#"
+            import "../../code/math"
+
+            fun callThroughWrapper(x: int): int {
+                return addOne(x);
+            }
+        "#,
+        )
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/testing/expect"
+            import "@wrappers/TestWrapper"
+
+            get fun `test-coverage-scope`() {
+                expect(callThroughWrapper(5)).toEqual(6);
+            }
+        "#,
+        )
+        .mapping("wrappers", "generated/abi")
+        .build()
+}
+
 #[test]
 fn test_coverage_basic_output() {
     let project = ProjectBuilder::new("coverage-basic")
@@ -1181,6 +1217,141 @@ fn test_coverage_text_custom_filename_from_config() {
         !default_path.exists(),
         "Default coverage.txt should not exist when custom filename is specified"
     );
+}
+
+#[test]
+fn test_coverage_wrappers_are_excluded_by_default_and_can_be_included() {
+    let project = build_coverage_scope_project("coverage-scope-wrappers");
+
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file("default-coverage.txt")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_file_exists("default-coverage.txt")
+        .assert_file_snapshot_matches(
+            "default-coverage.txt",
+            "integration/snapshots/test_coverage_scope_default.txt",
+        );
+
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_include_wrappers()
+        .with_coverage_file("with-wrappers.txt")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_file_exists("with-wrappers.txt")
+        .assert_file_snapshot_matches(
+            "with-wrappers.txt",
+            "integration/snapshots/test_coverage_scope_with_wrappers.txt",
+        )
+        .assert_file_contains("with-wrappers.txt", "generated/abi/TestWrapper.tolk")
+        .assert_file_contains("with-wrappers.txt", "callThroughWrapper");
+}
+
+#[test]
+fn test_coverage_tests_are_excluded_by_default_and_can_be_included() {
+    let project = build_coverage_scope_project("coverage-scope-tests");
+
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file("default-coverage.txt")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_file_exists("default-coverage.txt")
+        .assert_file_snapshot_matches(
+            "default-coverage.txt",
+            "integration/snapshots/test_coverage_scope_default.txt",
+        );
+
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_include_tests()
+        .with_coverage_file("with-tests.txt")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_file_exists("with-tests.txt")
+        .assert_file_snapshot_matches(
+            "with-tests.txt",
+            "integration/snapshots/test_coverage_scope_with_tests.txt",
+        )
+        .assert_file_contains("with-tests.txt", "tests/test.test.tolk")
+        .assert_file_contains("with-tests.txt", "test-coverage-scope");
+}
+
+#[test]
+fn test_coverage_include_wrappers_and_tests_from_config() {
+    let project = ProjectBuilder::new("coverage-scope-config")
+        .contract("simple", SIMPLE_CONTRACT)
+        .file(
+            "code/math",
+            r"
+            fun addOne(x: int): int {
+                return x + 1;
+            }
+        ",
+        )
+        .file(
+            "generated/abi/TestWrapper",
+            r#"
+            import "../../code/math"
+
+            fun callThroughWrapper(x: int): int {
+                return addOne(x);
+            }
+        "#,
+        )
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/testing/expect"
+            import "@wrappers/TestWrapper"
+
+            get fun `test-config-coverage-scope`() {
+                expect(callThroughWrapper(5)).toEqual(6);
+            }
+        "#,
+        )
+        .mapping("wrappers", "generated/abi")
+        .with_test_config(TestConfig {
+            coverage: Some(true),
+            coverage_format: Some("text".to_owned()),
+            coverage_file: Some("from-config.txt".to_owned()),
+            coverage_include_wrappers: Some(true),
+            coverage_include_tests: Some(true),
+            ..Default::default()
+        })
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_file_exists("from-config.txt")
+        .assert_file_snapshot_matches(
+            "from-config.txt",
+            "integration/snapshots/test_coverage_scope_from_config.txt",
+        )
+        .assert_file_contains("from-config.txt", "generated/abi/TestWrapper.tolk")
+        .assert_file_contains("from-config.txt", "tests/test.test.tolk");
 }
 
 #[test]

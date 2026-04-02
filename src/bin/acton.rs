@@ -208,6 +208,18 @@ enum Commands {
             help_heading = "Coverage"
         )]
         coverage_file: Option<String>,
+        #[arg(
+            long,
+            help = "Include files from the @wrappers mapping in coverage reports",
+            help_heading = "Coverage"
+        )]
+        coverage_include_wrappers: bool,
+        #[arg(
+            long,
+            help = "Include .test.tolk files in coverage reports",
+            help_heading = "Coverage"
+        )]
+        coverage_include_tests: bool,
 
         // Profiling
         #[arg(
@@ -1491,6 +1503,8 @@ fn main() {
             coverage,
             coverage_format,
             coverage_file,
+            coverage_include_wrappers,
+            coverage_include_tests,
             exclude,
             include,
             clear_cache,
@@ -1521,6 +1535,8 @@ fn main() {
                     coverage,
                     coverage_format,
                     coverage_file,
+                    coverage_include_wrappers,
+                    coverage_include_tests,
                     exclude,
                     include,
                     clear_cache,
@@ -2065,6 +2081,8 @@ fn create_test_config(
     coverage: bool,
     coverage_format: Option<CoverageFormat>,
     coverage_file: Option<String>,
+    coverage_include_wrappers: bool,
+    coverage_include_tests: bool,
     exclude: Vec<String>,
     include: Vec<String>,
     clear_cache: bool,
@@ -2101,6 +2119,16 @@ fn create_test_config(
             if coverage { Some(true) } else { None },
             coverage_format,
             coverage_file,
+            if coverage_include_wrappers {
+                Some(true)
+            } else {
+                None
+            },
+            if coverage_include_tests {
+                Some(true)
+            } else {
+                None
+            },
             if exclude.is_empty() {
                 None
             } else {
@@ -2137,6 +2165,8 @@ fn create_test_config(
         debug_port: debug_port.unwrap_or(12345),
         backtrace,
         coverage,
+        coverage_include_wrappers,
+        coverage_include_tests,
         filter,
         coverage_format,
         coverage_file,

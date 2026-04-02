@@ -599,6 +599,14 @@
             }
           ]
         },
+        "coverage-include-tests": {
+          "description": "Include `.test.tolk` files in coverage reports",
+          "type": "boolean"
+        },
+        "coverage-include-wrappers": {
+          "description": "Include files from the `@wrappers` mapping in coverage reports",
+          "type": "boolean"
+        },
         "debug": {
           "description": "Enable debug mode for tests",
           "type": "boolean"

@@ -83,6 +83,16 @@ Possible values: \fBlcov\fR, \fBtext\fR
 .RS 4
 Output file for the coverage report.
 .RE
+.sp
+\fB\-\-coverage\-include\-wrappers\fR
+.RS 4
+Include files from the \fB@wrappers\fR mapping in coverage reports.
+.RE
+.sp
+\fB\-\-coverage\-include\-tests\fR
+.RS 4
+Include \fB\&.test.tolk\fR files in coverage reports.
+.RE
 .SS "Profiling Options"
 .sp
 \fB\-\-snapshot\fR \fIpath\fR
@@ -247,6 +257,11 @@ Acton writes \fBlcov.info\fR for \fBlcov\fR and \fBcoverage.txt\fR for \fBtext\f
 .RE
 .sp
 .RS 4
+\h'-04'\(bu\h'+03'coverage excludes \fB\&.test.tolk\fR files and \fB@wrappers\fR sources by default;
+use \fB\-\-coverage\-include\-tests\fR or \fB\-\-coverage\-include\-wrappers\fR to opt in
+.RE
+.sp
+.RS 4
 \h'-04'\(bu\h'+03'\fB\-\-save\-test\-trace\fR without a value writes traces to \fB\&.acton/traces\fR
 .RE
 .sp
@@ -262,6 +277,8 @@ Defaults can be configured in \fBActon.toml\fR:
 [test]
 reporter = ["console"]
 coverage = true
+coverage\-include\-tests = true
+coverage\-include\-wrappers = true
 filter = "test\-.*"
 junit\-path = "reports"
 junit\-merge = false
