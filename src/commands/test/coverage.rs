@@ -358,42 +358,6 @@ const fn zero_based_line(line: usize) -> i64 {
     line.saturating_sub(1) as i64
 }
 
-#[allow(dead_code)] // maybe for command like coverage merge
-pub(super) fn merge_coverages(coverages: &Vec<Coverage>) -> Coverage {
-    let mut merged_files: HashMap<String, FileCoverage> = HashMap::new();
-
-    for coverage in coverages {
-        for file_coverage in &coverage.files {
-            let file = &file_coverage.file;
-            if let Some(existing) = merged_files.get_mut(file) {
-                // If in one coverage the lines were covered as: 1, 1, 0, 1,
-                //                            and in another as: 1, 1, 1, 0,
-                //                        then we get as result: 2, 2, 1, 1.
-                for (&line, &hits) in &file_coverage.line_hits {
-                    *existing.line_hits.entry(line).or_insert(0) += hits;
-                }
-
-                // If for some reason between coverages a specific file has a different number
-                // of executable lines, then we add all executable lines from the second coverage, so that
-                // the executable lines in the result are the union of all executable lines.
-                if file_coverage.executable_lines_count != existing.executable_lines_count {
-                    for line in &file_coverage.executable_lines {
-                        existing.executable_lines.insert(*line);
-                    }
-                    existing.executable_lines_count = existing.executable_lines.len();
-                }
-                existing.covered_lines_count = existing.line_hits.len();
-            } else {
-                merged_files.insert(file.clone(), file_coverage.clone());
-            }
-        }
-    }
-
-    Coverage {
-        files: merged_files.into_values().collect(),
-    }
-}
-
 pub(super) fn print_coverage_summary(coverage: &Coverage) {
     if coverage.files.is_empty() {
         // Empty coverage info, likely compilation error
@@ -494,7 +458,7 @@ pub(super) fn generate_lcov_file(
     let mut lcov_content = String::new();
 
     for file_coverage in &coverage.files {
-        if file_coverage.line_hits.is_empty() {
+        if file_coverage.executable_lines_count == 0 {
             continue;
         }
 
@@ -573,7 +537,7 @@ fn generate_text_report(coverage: &Coverage) -> String {
     result.push('\n');
 
     for file_coverage in &coverage.files {
-        if file_coverage.line_hits.is_empty() {
+        if file_coverage.executable_lines_count == 0 {
             continue;
         }
 

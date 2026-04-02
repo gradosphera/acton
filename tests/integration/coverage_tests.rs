@@ -410,6 +410,84 @@ fn test_coverage_lcov_snapshot() {
 }
 
 #[test]
+fn test_coverage_exports_files_with_zero_hits() {
+    let project = ProjectBuilder::new("coverage-zero-hit-file")
+        .contract("simple", SIMPLE_CONTRACT)
+        .file(
+            "code/main",
+            r"
+            fun used(x: int): int {
+                return x + 1;
+            }
+        ",
+        )
+        .file(
+            "code/unused",
+            r"
+            fun neverCalled(x: int): int {
+                return x * 2;
+            }
+        ",
+        )
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/testing/expect"
+            import "../code/main"
+            import "../code/unused"
+
+            get fun `test-used-only`() {
+                val result = used(2);
+                expect(result).toEqual(3);
+            }
+
+            get fun `test-unused-helper-reference`() {
+                val result = neverCalled(10);
+                expect(result).toEqual(20);
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .filter("test-used-only")
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file("zero-hit-coverage.txt")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_file_snapshot_matches(
+            "zero-hit-coverage.txt",
+            "integration/snapshots/test_coverage_zero_hit_file.txt",
+        );
+
+    let lcov_path = project.path().join("zero-hit-lcov.info");
+
+    let output = project
+        .acton()
+        .test()
+        .filter("test-used-only")
+        .with_coverage()
+        .with_coverage_format("lcov")
+        .with_coverage_file("zero-hit-lcov.info")
+        .run()
+        .success();
+
+    output
+        .assert_passed(1)
+        .assert_contains("LCOV file saved in zero-hit-lcov.info");
+
+    let lcov_content = fs::read_to_string(&lcov_path).expect("Should read zero-hit-lcov.info");
+    assertion().eq(
+        normalize_output(lcov_content.as_str(), project.path()),
+        snapbox::file!("snapshots/test_coverage_zero_hit_file.lcov"),
+    );
+}
+
+#[test]
 fn test_counter_template_coverage_text_snapshots() {
     let project =
         build_counter_template_project("coverage-counter-template", COUNTER_TEMPLATE_TESTS);
