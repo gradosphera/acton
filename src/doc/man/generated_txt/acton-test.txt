@@ -162,6 +162,9 @@ REPORTING AND ARTIFACTS
 
        o  --ui adds the browser UI in addition to text reporters
 
+       o  --coverage --ui adds a Coverage tab to the browser UI for browsing
+          coverage summaries, files, and annotated source
+
        o  --junit-path matters when the JUnit reporter is enabled; the default
           output directory is test-results
 
@@ -193,6 +196,9 @@ NOTES
 
        o  The UI and trace export features are useful for debugging failing
           tests and inspecting transaction trees
+
+       o  You can combine --coverage and --ui to inspect the current run’s
+          coverage directly in the browser UI
 
        o  --fork-net keeps execution local while resolving blockchain state
           remotely

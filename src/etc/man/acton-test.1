@@ -232,6 +232,11 @@ Acton discovers tests by finding files that end with \fB\&.test.tolk\fR\&.
 .RE
 .sp
 .RS 4
+\h'-04'\(bu\h'+03'\fB\-\-coverage \-\-ui\fR adds a \fBCoverage\fR tab to the browser UI for browsing
+coverage summaries, files, and annotated source
+.RE
+.sp
+.RS 4
 \h'-04'\(bu\h'+03'\fB\-\-junit\-path\fR matters when the JUnit reporter is enabled; the default output
 directory is \fBtest\-results\fR
 .RE
@@ -278,6 +283,11 @@ comparison mode and does not overwrite the snapshot file
 .RS 4
 \h'-04'\(bu\h'+03'The UI and trace export features are useful for debugging failing tests and
 inspecting transaction trees
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'You can combine \fB\-\-coverage\fR and \fB\-\-ui\fR to inspect the current run\[cq]s coverage
+directly in the browser UI
 .RE
 .sp
 .RS 4

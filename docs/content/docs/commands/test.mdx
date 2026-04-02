@@ -513,6 +513,8 @@ Acton discovers tests by finding files that end with `.test.tolk`.
 
 - `--reporter` on the CLI overrides `[test].reporter` for the current run
 - `--ui` adds the browser UI in addition to text reporters
+- `--coverage --ui` adds a `Coverage` tab to the browser UI for browsing
+  coverage summaries, files, and annotated source
 - `--junit-path` matters when the JUnit reporter is enabled; the default output
   directory is `test-results`
 - `--coverage-file` matters only with `--coverage`; without an explicit path,
@@ -543,6 +545,8 @@ CLI flags override config values for the current invocation.
 - `--fail-on-diff` requires `--baseline-snapshot`
 - The UI and trace export features are useful for debugging failing tests and
   inspecting transaction trees
+- You can combine `--coverage` and `--ui` to inspect the current run's coverage
+  directly in the browser UI
 - `--fork-net` keeps execution local while resolving blockchain state remotely
 
 ## EXIT STATUS

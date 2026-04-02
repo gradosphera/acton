@@ -32,6 +32,7 @@ pub(crate) struct UiServerState {
     pub trace_dir: Option<PathBuf>,
     pub project_root: String,
     pub project_root_path: PathBuf,
+    pub coverage_lcov: Option<Arc<str>>,
 }
 
 pub(crate) struct UiReporter {
@@ -70,6 +71,7 @@ pub(crate) async fn start_ui_server(
     reports: Vec<TestReport>,
     trace_dir: Option<String>,
     project_root: String,
+    coverage_lcov: Option<String>,
     listener: std::net::TcpListener,
 ) -> anyhow::Result<()> {
     let project_root_path =
@@ -82,6 +84,7 @@ pub(crate) async fn start_ui_server(
         trace_dir,
         project_root,
         project_root_path,
+        coverage_lcov: coverage_lcov.map(Arc::<str>::from),
     });
 
     let app = build_ui_api_router(state);
@@ -126,6 +129,7 @@ fn build_ui_api_router(state: Arc<UiServerState>) -> Router {
         .route("/api/trace/{name}", get(handle_api_trace))
         .route("/api/contract/{name}", get(handle_api_contract))
         .route("/api/file", get(handle_api_file))
+        .route("/api/coverage.lcov", get(handle_api_coverage_lcov))
         .route("/api/config", get(handle_api_config))
         .with_state(state)
 }
@@ -296,6 +300,18 @@ async fn handle_api_config(State(state): State<Arc<UiServerState>>) -> impl Into
     Json(ConfigResponse {
         project_root: state.project_root.clone(),
     })
+}
+
+async fn handle_api_coverage_lcov(State(state): State<Arc<UiServerState>>) -> impl IntoResponse {
+    let Some(coverage_lcov) = &state.coverage_lcov else {
+        return (StatusCode::NOT_FOUND, "Coverage not enabled").into_response();
+    };
+
+    (
+        [("content-type", "text/plain; charset=utf-8")],
+        coverage_lcov.to_string(),
+    )
+        .into_response()
 }
 
 async fn handle_api_trace(

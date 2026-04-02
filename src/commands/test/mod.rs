@@ -1,7 +1,8 @@
 use crate::commands::build::build_cmd;
 use crate::commands::common::error_fmt;
 use crate::commands::test::coverage::{
-    collect_coverage, generate_lcov_file, generate_text_file, print_coverage_summary,
+    collect_coverage, generate_lcov_file, generate_lcov_report, generate_text_file,
+    print_coverage_summary,
 };
 use crate::commands::test::reporting::console::{ConsoleConfig, ConsoleReporter};
 use crate::commands::test::reporting::dot::DotReporter;
@@ -551,6 +552,8 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     };
     runner.reporter_manager.on_testing_finished(&global_stats)?;
 
+    let mut coverage_lcov = None;
+
     if config.coverage {
         let wrapper_roots: Vec<_> = runner
             .acton_config
@@ -561,6 +564,9 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
             .collect();
         let coverage = collect_coverage(&runner.emulations, &runner.build_cache, &wrapper_roots);
         print_coverage_summary(&coverage);
+        if config.ui {
+            coverage_lcov = Some(generate_lcov_report(&coverage));
+        }
 
         if let Some(format_type) = &config.coverage_format {
             println!();
@@ -620,7 +626,9 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?;
-        rt.block_on(async { start_ui_server(reports, trace_dir, project_root, listener).await })?;
+        rt.block_on(async {
+            start_ui_server(reports, trace_dir, project_root, coverage_lcov, listener).await
+        })?;
     }
 
     if let Some(filter) = &config.filter

@@ -17,6 +17,7 @@ Documentation: https://ton-blockchain.github.io/acton/docs/welcome
   deploy, verify.
 - Native speed (Rust-based toolchain and test runtime).
 - Tolk-first workflow with built-in wrappers, testing utilities, and scripts.
+- Browser test UI for failed tests, traces, logs, and coverage inspection.
 - Local development node with faucet, forking, snapshots, and persistence.
 
 ## Install
