@@ -13,10 +13,10 @@ Annotated Code:
  7   |                                                                              |
  8   | type AllowedMessage = IncreaseCounter | ResetCounter                         |
  9   |                                                                              |
-10 ✓ | fun onInternalMessage(in: InMessage) {                                       | hits:3
+10 ✓ | fun onInternalMessage(in: InMessage) {                                       | hits:3 branches:true=0 false=3
 11 ✓ |     val msg = lazy AllowedMessage.fromSlice(in.body);                        | hits:3
 12   |                                                                              |
-13 ✓ |     match (msg) {                                                            | hits:3
+13 ✓ |     match (msg) {                                                            | hits:3 branches:site0 true=0 false=3; site1 true=0 false=3
 14 ✗ |         IncreaseCounter => {                                                 | hits:0
 15 ✗ |             var storage = lazy Storage.load();                               | hits:0
 16 ✗ |             storage.counter += msg.increaseBy;                               | hits:0

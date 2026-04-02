@@ -49,10 +49,10 @@ Annotated Code:
  16   |     | ChangeMinterAdmin                                                                             |
  17   |     | ChangeMinterContent                                                                           |
  18   |                                                                                                     |
- 19 ✓ | fun onInternalMessage(in: InMessage) {                                                              | hits:77
+ 19 ✓ | fun onInternalMessage(in: InMessage) {                                                              | hits:77 branches:throw=0 continue=77
  20 ✓ |     val msg = lazy AllowedMessageToMinter.fromSlice(in.body);                                       | hits:77
  21   |                                                                                                     |
- 22 ✓ |     match (msg) {                                                                                   | hits:77
+ 22 ✓ |     match (msg) {                                                                                   | hits:77 branches:site0 true=3 false=43; site1 true=3 false=46; site2 true=3 false=74; site3 true=6 false=68; site4 true=19 false=49
  23 ✓ |         BurnNotificationForMinter => {                                                              | hits:3
  24 ✓ |             var storage = lazy MinterStorage.load();                                                | hits:3
  25 ✓ |             assert (                                                                                | hits:6 branches:throw=1 continue=2
@@ -67,7 +67,7 @@ Annotated Code:
  34 ✓ |             storage.totalSupply -= msg.jettonAmount;                                                | hits:2
  35 ✓ |             storage.save();                                                                         | hits:2
  36   |                                                                                                     |
- 37 ✓ |             if (msg.sendExcessesTo == null) {                                                       | hits:2
+ 37 ✓ |             if (msg.sendExcessesTo == null) {                                                       | hits:2 branches:true=0 false=2
  38   |                 return;                                                                             |
  39   |             }                                                                                       |
  40   |                                                                                                     |
@@ -85,12 +85,12 @@ Annotated Code:
  52 ✓ |                 in.valueCoins > in.originalForwardFee + MINIMAL_MESSAGE_VALUE_BOUND                 | hits:6
  53   |             ) throw Errors.NotEnoughAmountToRespond;                                                |
  54   |                                                                                                     |
- 55 ✓ |             val respondOwnerAddress: Cell<address>? = msg.includeOwnerAddress                       | hits:10
+ 55 ✓ |             val respondOwnerAddress: Cell<address>? = msg.includeOwnerAddress                       | hits:10 branches:true=3 false=2
  56 ✓ |                 ? msg.ownerAddress.toCell()                                                         | hits:3
  57 ✓ |                 : null;                                                                             | hits:2
  58   |                                                                                                     |
  59 ✓ |             var walletAddress: address? = null;                                                     | hits:5
- 60 ✓ |             if (msg.ownerAddress.getWorkchain() == BASECHAIN) {                                     | hits:5
+ 60 ✓ |             if (msg.ownerAddress.getWorkchain() == BASECHAIN) {                                     | hits:5 branches:true=3 false=2
  61 ✓ |                 val storage = lazy MinterStorage.load();                                            | hits:3
  62 ✓ |                 walletAddress = calcAddressOfJettonWallet(                                          | hits:9
  63   |                     msg.ownerAddress,                                                               |
@@ -192,7 +192,7 @@ Annotated Code:
  17 ✓ |     in.bouncedBody.skipBouncedPrefix();                                                             | hits:2
  18   |                                                                                                     |
  19 ✓ |     val msg = lazy BounceOpToHandle.fromSlice(in.bouncedBody);                                      | hits:2
- 20 ✓ |     val restoreAmount = match (msg) {                                                               | hits:4
+ 20 ✓ |     val restoreAmount = match (msg) {                                                               | hits:4 branches:site0 true=1 false=0; site1 true=1 false=1
  21 ✓ |         InternalTransferStep => msg.jettonAmount,      // safe to fetch jettonAmount, because       | hits:1
  22 ✓ |         BurnNotificationForMinter => msg.jettonAmount, // it's in the beginning of a message        | hits:1
  23   |     };                                                                                              |
@@ -202,13 +202,13 @@ Annotated Code:
  27 ✓ |     storage.save();                                                                                 | hits:2
  28   | }                                                                                                   |
  29   |                                                                                                     |
- 30 ✓ | fun onInternalMessage(in: InMessage) {                                                              | hits:38
+ 30 ✓ | fun onInternalMessage(in: InMessage) {                                                              | hits:38 branches:true=2 false=36
  31 ✓ |     val msg = lazy AllowedMessageToWallet.fromSlice(in.body);                                       | hits:36
  32   |                                                                                                     |
- 33 ✓ |     match (msg) {                                                                                   | hits:36
+ 33 ✓ |     match (msg) {                                                                                   | hits:36 branches:site0 true=4 false=1; site1 true=9 false=5; site2 true=22 false=14
  34 ✓ |         InternalTransferStep => {                                                                   | hits:22
  35 ✓ |             var storage = lazy WalletStorage.load();                                                | hits:22
- 36 ✓ |             if (in.senderAddress != storage.minterAddress) {                                        | hits:22
+ 36 ✓ |             if (in.senderAddress != storage.minterAddress) {                                        | hits:22 branches:true=18 false=4
  37 ✓ |                 assert (                                                                            | hits:4 branches:throw=1 continue=3
  38 ✓ |                     in.senderAddress ==                                                             | hits:8
  39 ✓ |                     calcAddressOfJettonWallet(                                                      | hits:4
@@ -226,7 +226,7 @@ Annotated Code:
  51 ✓ |             val storageFee = MIN_TONS_FOR_STORAGE - min(tonBalanceBeforeMsg, MIN_TONS_FOR_STORAGE); | hits:21
  52 ✓ |             msgValue -= (storageFee + JETTON_WALLET_GAS_CONSUMPTION);                               | hits:21
  53   |                                                                                                     |
- 54 ✓ |             if (msg.forwardTonAmount) {                                                             | hits:21
+ 54 ✓ |             if (msg.forwardTonAmount) {                                                             | hits:21 branches:true=20 false=1
  55 ✓ |                 msgValue -= (msg.forwardTonAmount + in.originalForwardFee);                         | hits:20
  56   |                                                                                                     |
  57 ✓ |                 val notifyOwnerMsg = createMessage({                                                | hits:20
@@ -243,7 +243,7 @@ Annotated Code:
  68 ✓ |                 notifyOwnerMsg.send(SEND_MODE_PAY_FEES_SEPARATELY);                                 | hits:20
  69   |             }                                                                                       |
  70   |                                                                                                     |
- 71 ✓ |             if (msg.sendExcessesTo != null & (msgValue > 0)) {                                      | hits:21
+ 71 ✓ |             if (msg.sendExcessesTo != null & (msgValue > 0)) {                                      | hits:21 branches:true=21 false=0
  72 ✓ |                 val excessesMsg = createMessage({                                                   | hits:21
  73 ✓ |                     bounce: BounceMode.NoBounce,                                                    | hits:21
  74 ✓ |                     dest: msg.sendExcessesTo!,                                                      | hits:21
@@ -256,7 +256,7 @@ Annotated Code:
  81   |                                                                                                     |
  82 ✓ |         AskToTransfer => {                                                                          | hits:9
  83 ✓ |             assert (msg.forwardPayload.remainingBitsCount()) throw Errors.InvalidPayload;           | hits:9 branches:throw=1 continue=8
- 84 ✓ |             assert (msg.transferRecipient.getWorkchain() == BASECHAIN) throw Errors.WrongWorkchain; | hits:8
+ 84 ✓ |             assert (msg.transferRecipient.getWorkchain() == BASECHAIN) throw Errors.WrongWorkchain; | hits:8 branches:throw=1 continue=7
  85   |                                                                                                     |
  86 ✓ |             var storage = lazy WalletStorage.load();                                                | hits:7
  87 ✓ |             assert (in.senderAddress == storage.ownerAddress) throw Errors.NotFromOwner;            | hits:7 branches:throw=1 continue=6
@@ -264,7 +264,7 @@ Annotated Code:
  89 ✓ |             storage.jettonBalance -= msg.jettonAmount;                                              | hits:5
  90 ✓ |             storage.save();                                                                         | hits:5
  91   |                                                                                                     |
- 92 ✓ |             val forwardedMessagesCount = msg.forwardTonAmount ? 2 : 1;                              | hits:5
+ 92 ✓ |             val forwardedMessagesCount = msg.forwardTonAmount ? 2 : 1;                              | hits:5 branches:true=3 false=2
  93 ✓ |             assert (                                                                                | hits:5 branches:throw=1 continue=4
  94 ✓ |                 in.valueCoins >                                                                     | hits:10
  95 ✓ |                 msg.forwardTonAmount +                                                              | hits:10

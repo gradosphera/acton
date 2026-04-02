@@ -609,6 +609,213 @@ fn test_coverage_empty_functions_snapshot() {
 }
 
 #[test]
+fn test_coverage_runtime_branch_opcodes_text_snapshot() {
+    let project = ProjectBuilder::new("coverage-runtime-branches")
+        .contract("simple", SIMPLE_CONTRACT)
+        .file(
+            "code/branches",
+            r"
+            fun choose(x: int): int {
+                if (x > 0) {
+                    return 1;
+                } else {
+                    return 2;
+                }
+            }
+
+            fun loopToTwo(x: int): int {
+                var value = x;
+                while (value < 2) {
+                    value += 1;
+                }
+                return value;
+            }
+
+            fun both(a: bool, b: bool): bool {
+                return a && b;
+            }
+
+            fun either(a: bool, b: bool): bool {
+                return a || b;
+            }
+
+            fun ternary(flag: bool): int {
+                return flag ? 1 : 2;
+            }
+
+            fun nullableTernary(foo: int?): int {
+                return foo != null ? foo : 100;
+            }
+        ",
+        )
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/testing/expect"
+            import "../code/branches"
+
+            get fun `test choose positive`() {
+                expect(choose(10)).toEqual(1);
+            }
+
+            get fun `test choose non positive`() {
+                expect(choose(-10)).toEqual(2);
+            }
+
+            get fun `test loop enters`() {
+                expect(loopToTwo(0)).toEqual(2);
+            }
+
+            get fun `test loop skips`() {
+                expect(loopToTwo(3)).toEqual(3);
+            }
+
+            get fun `test both short circuits`() {
+                expect(both(false, true)).toEqual(false);
+                expect(both(true, true)).toEqual(true);
+            }
+
+            get fun `test either short circuits`() {
+                expect(either(true, false)).toEqual(true);
+                expect(either(false, false)).toEqual(false);
+            }
+
+            get fun `test ternary true and false`() {
+                expect(ternary(true)).toEqual(1);
+                expect(ternary(false)).toEqual(2);
+            }
+
+            get fun `test nullable ternary`() {
+                expect(nullableTernary(7)).toEqual(7);
+                expect(nullableTernary(null)).toEqual(100);
+            }
+        "#,
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file("runtime-branches.txt")
+        .run()
+        .success();
+
+    output.assert_passed(8).assert_file_snapshot_matches(
+        "runtime-branches.txt",
+        "integration/snapshots/test_coverage_runtime_branch_opcodes.txt",
+    );
+
+    let report = fs::read_to_string(project.path().join("runtime-branches.txt"))
+        .expect("Should read runtime-branches.txt");
+    let normalized = normalize_output(report.as_str(), project.path());
+
+    assert!(
+        normalized.contains("branches:true="),
+        "expected generic true/false branch annotations in coverage output:\n{normalized}"
+    );
+    let Some(nullable_ternary_line) = normalized
+        .lines()
+        .find(|line| line.contains("return foo != null ? foo : 100;"))
+    else {
+        panic!("coverage output did not contain nullable ternary line:\n{normalized}");
+    };
+    assert!(
+        nullable_ternary_line.contains("site0")
+            && nullable_ternary_line.contains("site1")
+            && nullable_ternary_line.contains("site2"),
+        "expected nullable ternary line to keep separate branch sites:\n{nullable_ternary_line}"
+    );
+}
+
+#[test]
+fn test_coverage_keeps_multiple_branch_sites_on_same_line_separate() {
+    let project = ProjectBuilder::new("coverage-multiple-branch-sites")
+        .contract("simple", SIMPLE_CONTRACT)
+        .file(
+            "code/multi_branch",
+            r"
+            fun coalesce(foo: int?): int {
+                return foo != null ? foo : 100;
+            }
+        ",
+        )
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/testing/expect"
+            import "../code/multi_branch"
+
+            get fun `test nullable value`() {
+                expect(coalesce(7)).toEqual(7);
+            }
+
+            get fun `test null value`() {
+                expect(coalesce(null)).toEqual(100);
+            }
+        "#,
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file("multi-branch-sites.txt")
+        .run()
+        .success();
+
+    output.assert_passed(2).assert_file_snapshot_matches(
+        "multi-branch-sites.txt",
+        "integration/snapshots/test_coverage_multiple_branch_sites_same_line.txt",
+    );
+
+    let report = fs::read_to_string(project.path().join("multi-branch-sites.txt"))
+        .expect("Should read multi-branch-sites.txt");
+    let normalized = normalize_output(report.as_str(), project.path());
+    let Some(line) = normalized
+        .lines()
+        .find(|line| line.contains("return foo != null ? foo : 100;"))
+    else {
+        panic!("coverage output did not contain the multi-site line:\n{normalized}");
+    };
+    assert!(
+        line.contains("site0") && line.contains("site1"),
+        "expected separate branch sites on the same line:\n{line}"
+    );
+
+    let lcov_path = project.path().join("multi-branch-sites.lcov");
+    let output = project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("lcov")
+        .with_coverage_file("multi-branch-sites.lcov")
+        .run()
+        .success();
+
+    output.assert_passed(2);
+
+    let lcov_content = fs::read_to_string(&lcov_path).expect("Should read multi-branch-sites.lcov");
+    let normalized_lcov = normalize_output(lcov_content.as_str(), project.path());
+    assertion().eq(
+        normalized_lcov.as_str(),
+        snapbox::file!("snapshots/test_coverage_multiple_branch_sites_same_line.lcov"),
+    );
+
+    let branch_records = normalized_lcov
+        .lines()
+        .filter(|line| line.starts_with("BRDA:"))
+        .count();
+    assert_eq!(
+        branch_records, 4,
+        "expected two branch sites (four BRDA records), got:\n{normalized_lcov}"
+    );
+}
+
+#[test]
 fn test_counter_template_coverage_text_snapshots() {
     let project =
         build_counter_template_project("coverage-counter-template", COUNTER_TEMPLATE_TESTS);
@@ -656,6 +863,17 @@ fn test_counter_template_coverage_text_snapshots() {
             "counter-template-non-branch.txt",
             "integration/snapshots/test_counter_template_coverage_non_branch.txt",
         );
+}
+
+fn assert_branch_counts(report: &str, code_snippet: &str, expected: &str) {
+    let Some(line) = report.lines().find(|line| line.contains(code_snippet)) else {
+        panic!("coverage output did not contain line for `{code_snippet}`:\n{report}");
+    };
+
+    assert!(
+        line.contains(expected),
+        "coverage line for `{code_snippet}` did not contain `{expected}`:\n{line}"
+    );
 }
 
 #[test]
@@ -713,6 +931,62 @@ fn test_jetton_template_coverage_text_snapshots() {
             "jetton-template-all.txt",
             "integration/snapshots/test_jetton_template_coverage_all.txt",
         );
+    let all_report = fs::read_to_string(project.path().join("jetton-template-all.txt"))
+        .expect("Should read jetton-template-all.txt");
+    let all_report = normalize_output(all_report.as_str(), project.path());
+    assert_branch_counts(
+        &all_report,
+        "val forwardedMessagesCount = msg.forwardTonAmount ? 2 : 1;",
+        "false=",
+    );
+
+    project
+        .acton()
+        .test()
+        .filter("test no forward ton amount no forward")
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file("jetton-template-no-forward-only.txt")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_file_snapshot_matches(
+            "jetton-template-no-forward-only.txt",
+            "integration/snapshots/test_jetton_template_coverage_no_forward_only.txt",
+        );
+    let no_forward_report =
+        fs::read_to_string(project.path().join("jetton-template-no-forward-only.txt"))
+            .expect("Should read jetton-template-no-forward-only.txt");
+    let no_forward_report = normalize_output(no_forward_report.as_str(), project.path());
+    assert_branch_counts(
+        &no_forward_report,
+        "val forwardedMessagesCount = msg.forwardTonAmount ? 2 : 1;",
+        "true=0 false=1",
+    );
+
+    project
+        .acton()
+        .test()
+        .filter("test wallet owner should be able to send jettons")
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file("jetton-template-forward-only.txt")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_file_snapshot_matches(
+            "jetton-template-forward-only.txt",
+            "integration/snapshots/test_jetton_template_coverage_forward_only.txt",
+        );
+    let forward_report =
+        fs::read_to_string(project.path().join("jetton-template-forward-only.txt"))
+            .expect("Should read jetton-template-forward-only.txt");
+    let forward_report = normalize_output(forward_report.as_str(), project.path());
+    assert_branch_counts(
+        &forward_report,
+        "val forwardedMessagesCount = msg.forwardTonAmount ? 2 : 1;",
+        "true=1 false=0",
+    );
 
     project
         .acton()

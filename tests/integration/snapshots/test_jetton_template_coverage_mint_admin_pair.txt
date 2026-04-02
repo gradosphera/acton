@@ -49,10 +49,10 @@ Annotated Code:
  16   |     | ChangeMinterAdmin                                                                             |
  17   |     | ChangeMinterContent                                                                           |
  18   |                                                                                                     |
- 19 ✓ | fun onInternalMessage(in: InMessage) {                                                              | hits:9
+ 19 ✓ | fun onInternalMessage(in: InMessage) {                                                              | hits:9 branches:throw=0 continue=9
  20 ✓ |     val msg = lazy AllowedMessageToMinter.fromSlice(in.body);                                       | hits:9
  21   |                                                                                                     |
- 22 ✓ |     match (msg) {                                                                                   | hits:9
+ 22 ✓ |     match (msg) {                                                                                   | hits:9 branches:site0 true=0 false=5; site1 true=0 false=5; site2 true=0 false=9; site3 true=0 false=9; site4 true=4 false=5
  23 ✗ |         BurnNotificationForMinter => {                                                              | hits:0
  24 ✗ |             var storage = lazy MinterStorage.load();                                                | hits:0
  25 ✗ |             assert (                                                                                | hits:0
@@ -202,13 +202,13 @@ Annotated Code:
  27 ✗ |     storage.save();                                                                                 | hits:0
  28   | }                                                                                                   |
  29   |                                                                                                     |
- 30 ✓ | fun onInternalMessage(in: InMessage) {                                                              | hits:3
+ 30 ✓ | fun onInternalMessage(in: InMessage) {                                                              | hits:3 branches:true=0 false=3
  31 ✓ |     val msg = lazy AllowedMessageToWallet.fromSlice(in.body);                                       | hits:3
  32   |                                                                                                     |
- 33 ✓ |     match (msg) {                                                                                   | hits:3
+ 33 ✓ |     match (msg) {                                                                                   | hits:3 branches:true=3 false=0
  34 ✓ |         InternalTransferStep => {                                                                   | hits:3
  35 ✓ |             var storage = lazy WalletStorage.load();                                                | hits:3
- 36 ✓ |             if (in.senderAddress != storage.minterAddress) {                                        | hits:3
+ 36 ✓ |             if (in.senderAddress != storage.minterAddress) {                                        | hits:3 branches:true=3 false=0
  37 ✗ |                 assert (                                                                            | hits:0
  38 ✗ |                     in.senderAddress ==                                                             | hits:0
  39 ✗ |                     calcAddressOfJettonWallet(                                                      | hits:0
@@ -226,7 +226,7 @@ Annotated Code:
  51 ✓ |             val storageFee = MIN_TONS_FOR_STORAGE - min(tonBalanceBeforeMsg, MIN_TONS_FOR_STORAGE); | hits:3
  52 ✓ |             msgValue -= (storageFee + JETTON_WALLET_GAS_CONSUMPTION);                               | hits:3
  53   |                                                                                                     |
- 54 ✓ |             if (msg.forwardTonAmount) {                                                             | hits:3
+ 54 ✓ |             if (msg.forwardTonAmount) {                                                             | hits:3 branches:true=3 false=0
  55 ✓ |                 msgValue -= (msg.forwardTonAmount + in.originalForwardFee);                         | hits:3
  56   |                                                                                                     |
  57 ✓ |                 val notifyOwnerMsg = createMessage({                                                | hits:3
@@ -243,7 +243,7 @@ Annotated Code:
  68 ✓ |                 notifyOwnerMsg.send(SEND_MODE_PAY_FEES_SEPARATELY);                                 | hits:3
  69   |             }                                                                                       |
  70   |                                                                                                     |
- 71 ✓ |             if (msg.sendExcessesTo != null & (msgValue > 0)) {                                      | hits:3
+ 71 ✓ |             if (msg.sendExcessesTo != null & (msgValue > 0)) {                                      | hits:3 branches:true=3 false=0
  72 ✓ |                 val excessesMsg = createMessage({                                                   | hits:3
  73 ✓ |                     bounce: BounceMode.NoBounce,                                                    | hits:3
  74 ✓ |                     dest: msg.sendExcessesTo!,                                                      | hits:3

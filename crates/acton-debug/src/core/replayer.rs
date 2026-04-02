@@ -206,6 +206,12 @@ fn convert_vm_lines(parsed: &[Result<VmLine<'_>, String>]) -> Vec<OwnedVmLine> {
 // (cell_hash, offset) -> sorted vec of mark_id into source_map.debug_marks
 type MarksLookup = HashMap<(String, i32), Vec<usize>>;
 
+#[derive(Debug, Clone)]
+struct VmCodePosition {
+    cell_hash: String,
+    offset: i32,
+}
+
 pub struct VmLogRuntimeEventSource {
     vm_lines: Vec<OwnedVmLine>,
     cur_vm_line_idx: usize,
@@ -479,6 +485,8 @@ pub struct TolkReplayer {
 
     // source location where execution last stopped (file, line, column)
     current_loc: SrcRange,
+    // raw VM code position for the instruction currently being executed
+    current_vm_position: Option<VmCodePosition>,
 
     // source-level call stack: one entry per function (including inlined and built-in)
     call_stack: Vec<CallFrame>,
@@ -574,6 +582,7 @@ impl TolkReplayer {
             runtime_source,
             call_stack: Vec::new(),
             current_loc: SrcRange(vec![0, 0, 0, 0, 0]),
+            current_vm_position: None,
             exec_stack: vec![NoinlineExecState::new()],
             global_var_values: HashMap::new(),
             tvm_stack_values: Vec::new(),
@@ -650,6 +659,12 @@ impl TolkReplayer {
 
     pub fn current_column(&self) -> usize {
         self.current_loc.start_col()
+    }
+
+    pub fn current_vm_position(&self) -> Option<(&str, i32)> {
+        self.current_vm_position
+            .as_ref()
+            .map(|position| (position.cell_hash.as_str(), position.offset))
     }
 
     pub fn current_end_line(&self) -> usize {
@@ -786,6 +801,10 @@ impl TolkReplayer {
                     return Some(Tick::TvmStackValues { values });
                 }
                 RuntimeEvent::Position { cell_hash, offset } => {
+                    self.current_vm_position = Some(VmCodePosition {
+                        cell_hash: cell_hash.clone(),
+                        offset,
+                    });
                     if !self.prev_was_pushcont {
                         let key = (cell_hash, offset);
                         if let Some(mark_indices) = self.marks_lookup.get(&key) {

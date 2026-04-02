@@ -49,10 +49,10 @@ Annotated Code:
  16   |     | ChangeMinterAdmin                                                                             |
  17   |     | ChangeMinterContent                                                                           |
  18   |                                                                                                     |
- 19 ✓ | fun onInternalMessage(in: InMessage) {                                                              | hits:2
+ 19 ✓ | fun onInternalMessage(in: InMessage) {                                                              | hits:2 branches:throw=0 continue=2
  20 ✓ |     val msg = lazy AllowedMessageToMinter.fromSlice(in.body);                                       | hits:2
  21   |                                                                                                     |
- 22 ✓ |     match (msg) {                                                                                   | hits:2
+ 22 ✓ |     match (msg) {                                                                                   | hits:2 branches:site0 true=0 false=1; site1 true=0 false=1; site2 true=0 false=2; site3 true=0 false=2; site4 true=1 false=1
  23 ✗ |         BurnNotificationForMinter => {                                                              | hits:0
  24 ✗ |             var storage = lazy MinterStorage.load();                                                | hits:0
  25 ✗ |             assert (                                                                                | hits:0
