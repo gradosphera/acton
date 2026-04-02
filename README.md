@@ -4,8 +4,8 @@
 
 Acton is an all-in-one TON smart contract development toolkit written in Rust.
 It combines project scaffolding, build, testing, scripting, wallet and network
-operations, verification, linting, formatting, and low-level VM tooling in one
-CLI.
+operations, verification, linting, formatting, debugging, and low-level VM
+tooling in one CLI.
 
 Documentation: https://ton-blockchain.github.io/acton/docs/welcome
 
@@ -13,8 +13,8 @@ Documentation: https://ton-blockchain.github.io/acton/docs/welcome
 
 ## Why Acton
 
-- Single CLI for the full contract lifecycle: create, build, test, deploy,
-  verify.
+- Single CLI for the full contract lifecycle: create, build, test, debug,
+  deploy, verify.
 - Native speed (Rust-based toolchain and test runtime).
 - Tolk-first workflow with built-in wrappers, testing utilities, and scripts.
 - Local development node with faucet, forking, snapshots, and persistence.
