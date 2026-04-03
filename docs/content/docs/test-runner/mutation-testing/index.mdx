@@ -32,9 +32,9 @@ Beyond testing gaps, mutation testing can also reveal implementation issues. For
 2.  **Compilation**: Each mutant is compiled. If a mutant doesn't compile (e.g., syntax error), it's discarded.
 3.  **Testing**: Acton runs your test suite against each valid mutant.
 4.  **Reporting**:
-    - **Killed**: The tests failed (good!).
-    - **Survived**: The tests passed (bad!). This indicates a gap in testing.
-    - **Compile errors**: Mutants that fail to compile are reported separately and excluded from the mutation score.
+- **Killed**: The tests failed (good!).
+- **Survived**: The tests passed (bad!). This indicates a gap in testing.
+- **Compile errors**: Mutants that fail to compile are reported separately and excluded from the mutation score.
 
 ## Running Mutation Tests
 
@@ -68,7 +68,10 @@ Mutation testing analyzes the contract specified by `--mutate-contract` and its 
 
 ## Mutation Rules
 
-Acton includes several built-in mutation rules categorized by their impact level.
+Acton currently includes 49 built-in mutation rules for assertions, storage and
+upgrade calls, external-message handling, control flow, arithmetic,
+comparisons, booleans, logical operators, and bitwise or shift operators.
+
 See [Mutation Rules](/docs/test-runner/mutation-testing/rules) for complete list.
 
 ## Interpreting Results
@@ -106,12 +109,12 @@ For survived mutants, Acton provides a diff showing exactly what was changed and
   Level: critical
   Group: assertion
   at contracts/jetton-minter.tolk:46:13
-    44 │ 
+    44 │
     45 │         RequestWalletAddress => {
     46 │             assert (
     47 │                 in.valueCoins > in.originalForwardFee + MINIMAL_MESSAGE_VALUE_BOUND
     48 │             ) throw ERR_NOT_ENOUGH_AMOUNT_TO_RESPOND;
-    49 │ 
+    49 │
     50 │             var respondOwnerAddress: Cell<address>? = msg.includeOwnerAddress
 
   Why it's bad: This assertion is not covered by tests. This could lead to security vulnerabilities if the condition is not enforced.
