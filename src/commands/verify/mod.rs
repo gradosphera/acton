@@ -23,6 +23,8 @@ const MAINNET_SOURCE_REGISTRY: &str = "EQD-BJSVUJviud_Qv7Ymfd3qzXdrmV525e3YDzWQo
 const TESTNET_SOURCE_REGISTRY: &str = "EQCsdKYwUaXkgJkz2l0ol6qT_WxeRbE_wBCwnEybmR0u5TO8";
 const MAINNET_VERIFIER_BACKEND: &str = "https://verifier-mainnet.tonstudio.io";
 const TESTNET_VERIFIER_BACKEND: &str = "https://verifier-testnet.tonstudio.io";
+const VERIFY_BACKEND_ENV: &str = "ACTON_VERIFY_BACKEND";
+const VERIFY_BACKENDS_ENV: &str = "ACTON_VERIFY_BACKENDS";
 
 #[allow(clippy::too_many_arguments)]
 pub fn verify_cmd(
@@ -123,6 +125,16 @@ pub fn verify_cmd(
     println!("  {} Using built-in verifier backends", "→".blue().bold());
     let backends_config = get_backends()?;
     let mut backend_info = get_backend_info(&network, &backends_config)?;
+    let backends_override = parse_backend_list_env(VERIFY_BACKENDS_ENV);
+
+    if let Some(overridden_backends) = &backends_override {
+        println!(
+            "  {} Using signer backend override list from {}",
+            "→".blue().bold(),
+            VERIFY_BACKENDS_ENV.dimmed()
+        );
+        backend_info.backends = overridden_backends.clone();
+    }
 
     println!(
         "  {} Found {} backend{} for {}",
@@ -212,10 +224,7 @@ pub fn verify_cmd(
 
     let sign_client =
         build_verify_http_client().context("Failed to create HTTP client for verifier backend")?;
-    let backend_override = std::env::var("ACTON_VERIFY_BACKEND")
-        .ok()
-        .map(|s| s.trim().trim_end_matches('/').to_string())
-        .filter(|s| !s.is_empty());
+    let backend_override = parse_backend_env(VERIFY_BACKEND_ENV);
     let first_backend = backend_override
         .clone()
         .unwrap_or_else(|| remove_random(&mut backend_info.backends));
@@ -251,6 +260,13 @@ pub fn verify_cmd(
                 "    {} Backend override: {}",
                 "→".dimmed(),
                 backend_override.dimmed()
+            );
+        }
+        if let Some(backends_override) = &backends_override {
+            println!(
+                "    {} Signer backends override: {}",
+                "→".dimmed(),
+                backends_override.join(", ").dimmed()
             );
         }
     }
@@ -730,6 +746,34 @@ fn build_verify_http_client() -> anyhow::Result<reqwest::blocking::Client> {
         .pool_max_idle_per_host(0)
         .build()
         .context("Failed to build verifier HTTP client")
+}
+
+fn parse_backend_env(var_name: &str) -> Option<String> {
+    std::env::var(var_name)
+        .ok()
+        .and_then(|s| normalize_backend_url(&s))
+}
+
+fn parse_backend_list_env(var_name: &str) -> Option<Vec<String>> {
+    let backends = parse_backend_list(&std::env::var(var_name).ok()?);
+    if backends.is_empty() {
+        None
+    } else {
+        Some(backends)
+    }
+}
+
+fn normalize_backend_url(raw: &str) -> Option<String> {
+    let normalized = raw.trim().trim_end_matches('/').to_string();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
+fn parse_backend_list(raw: &str) -> Vec<String> {
+    raw.split(',').filter_map(normalize_backend_url).collect()
 }
 
 fn build_verify_form(
