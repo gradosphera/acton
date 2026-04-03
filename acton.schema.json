@@ -469,6 +469,18 @@
       "description": "Configuration for mutation testing",
       "type": "object",
       "properties": {
+        "diff": {
+          "description": "Diff scope used to limit mutation testing to changed lines",
+          "allOf": [
+            {
+              "$ref": "#/definitions/MutationDiffMode"
+            }
+          ]
+        },
+        "diff-ref": {
+          "description": "Base ref used by diff-based mutation testing modes",
+          "type": "string"
+        },
         "disable-rules": {
           "description": "List of mutation rules to disable",
           "type": "array",
@@ -484,6 +496,32 @@
           }
         }
       }
+    },
+    "MutationDiffMode": {
+      "description": "Diff scopes supported by mutation testing filters",
+      "oneOf": [
+        {
+          "description": "Mutate only lines changed in the current worktree compared to HEAD",
+          "type": "string",
+          "enum": [
+            "worktree"
+          ]
+        },
+        {
+          "description": "Mutate only lines changed compared to a specific ref or commit",
+          "type": "string",
+          "enum": [
+            "ref"
+          ]
+        },
+        {
+          "description": "Mutate only lines changed on the current branch since its merge-base",
+          "type": "string",
+          "enum": [
+            "branch"
+          ]
+        }
+      ]
     },
     "MutationLevel": {
       "description": "Mutation levels supported by mutation testing filters",

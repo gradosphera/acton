@@ -139,10 +139,32 @@ OPTIONS
        --mutate-contract contract-id
            Contract ID to mutate during mutation testing.
 
+       --mutation-diff mode
+           Limit mutation testing to changed lines in the selected diff scope.
+
+           Accepted values: worktree, ref, branch.
+
+           o  worktree compares the current worktree with HEAD and includes
+              untracked files
+
+           o  ref compares against the explicit ref passed with
+              --mutation-diff-ref
+
+           o  branch compares against the merge-base with the current branch
+              upstream, or against --mutation-diff-ref when provided
+
+       --mutation-diff-ref ref
+           Base ref used by diff-based mutation testing modes.
+
+           Required with --mutation-diff ref. Optional with --mutation-diff
+           branch. Use it with branch when the current branch has no upstream
+           or when you want a different comparison base such as origin/main.
+
        --mutation-levels level[,level…]
            Run only selected mutation levels.
 
-           Accepted values: critical, major, minor.
+           Accepted values: critical, major, minor. Useful for faster local
+           runs such as critical,major.
 
        --disable-rule rule
            Disable a specific mutation rule.
@@ -228,6 +250,12 @@ CONFIGURATION
            minimum-percent = 85
            include-tests = true
            include-wrappers = true
+           
+           [test.mutation]
+           diff = "branch"
+           diff-ref = "origin/main"
+           mutation-levels = ["critical", "major"]
+           disable-rules = ["flip_plus"]
 
        CLI flags override config values for the current invocation.
 
@@ -248,6 +276,14 @@ NOTES
 
        o  --fork-net keeps execution local while resolving blockchain state
           remotely
+
+       o  --mutation-diff worktree is intended for uncommitted local changes
+
+       o  --mutation-diff ref requires --mutation-diff-ref
+
+       o  --mutation-diff branch uses the upstream branch merge-base by default
+
+       o  mutation scores in filtered runs only cover the selected mutants
 
 EXIT STATUS
        o  0: All selected tests passed, or a non-mutating reporting mode
@@ -284,13 +320,21 @@ EXAMPLES
 
               acton test --mutate --mutate-contract wallet
 
-       7. Debug a forked-state failure with traces and the UI:
+       7. Run mutation testing only for changed lines in the current worktree:
+
+              acton test --mutate --mutate-contract wallet --mutation-diff worktree
+
+       8. Run mutation testing for selected levels on the current branch:
+
+              acton test --mutate --mutate-contract wallet --mutation-diff branch --mutation-levels critical,major
+
+       9. Debug a forked-state failure with traces and the UI:
 
               acton test tests/wallet.test.tolk --fork-net testnet --fork-block-number 55000000 --save-test-trace --ui
 
-       8. Enforce a gas baseline in CI:
+       10. Enforce a gas baseline in CI:
 
-              acton test --baseline-snapshot .acton/gas-baseline.json --fail-on-diff --reporter console,junit
+           acton test --baseline-snapshot .acton/gas-baseline.json --fail-on-diff --reporter console,junit
 
 SEE ALSO
        o  acton help wrapper

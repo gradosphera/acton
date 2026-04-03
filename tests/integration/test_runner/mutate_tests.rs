@@ -1,5 +1,8 @@
 use crate::support::TestOutputExt;
 use crate::support::project::{Project, ProjectBuilder};
+use std::fs;
+use std::path::Path;
+use std::process::{Command, Output};
 
 const MUTATION_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {
@@ -58,11 +61,86 @@ fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
 ";
 
+const MUTATION_CONTRACT_ARITHMETIC_CHANGED: &str = r"
+fun onInternalMessage(in: InMessage) {
+    assert (in.valueCoins > 0) throw 5;
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+
+get fun addOne(x: int): int {
+    return x + 2;
+}
+";
+
 fn mutation_project(name: &str) -> Project {
     ProjectBuilder::new(name)
         .contract("simple", MUTATION_CONTRACT)
         .test_file("mutation", PASSING_TEST)
         .build()
+}
+
+fn git(project_root: &Path, args: &[&str]) -> Output {
+    Command::new("git")
+        .args(args)
+        .current_dir(project_root)
+        .output()
+        .unwrap_or_else(|err| panic!("failed to run git {:?}: {err}", args))
+}
+
+fn git_ok(project_root: &Path, args: &[&str], context: &str) {
+    let output = git(project_root, args);
+    assert!(
+        output.status.success(),
+        "{context} failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn init_git_repo(project_root: &Path) {
+    git_ok(project_root, &["init", "-q"], "git init");
+    git_ok(
+        project_root,
+        &["branch", "-M", "main"],
+        "git branch -M main",
+    );
+    git_ok(
+        project_root,
+        &["config", "user.email", "acton-tests@example.com"],
+        "git config user.email",
+    );
+    git_ok(
+        project_root,
+        &["config", "user.name", "Acton Tests"],
+        "git config user.name",
+    );
+}
+
+fn commit_all(project_root: &Path, message: &str) {
+    git_ok(project_root, &["add", "."], "git add");
+    git_ok(project_root, &["commit", "-qm", message], "git commit");
+}
+
+fn checkout_new_branch(project_root: &Path, branch: &str) {
+    git_ok(
+        project_root,
+        &["checkout", "-qb", branch],
+        "git checkout -b",
+    );
+}
+
+fn set_upstream(project_root: &Path, target: &str) {
+    git_ok(
+        project_root,
+        &["branch", "--set-upstream-to", target],
+        "git branch --set-upstream-to",
+    );
+}
+
+fn write_simple_contract(project: &Project, source: &str) {
+    fs::write(project.path().join("contracts/simple.tolk"), source)
+        .expect("failed to update simple contract");
 }
 
 #[test]
@@ -128,6 +206,180 @@ fn mutate_disable_rule_filters_mutants() {
 }
 
 #[test]
+fn mutate_diff_ref_requires_ref() {
+    mutation_project("j-mutate-diff-ref-requires-ref")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-diff")
+        .arg("ref")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_diff_ref_requires_ref.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_diff_ref_without_mode_is_rejected() {
+    mutation_project("j-mutate-diff-ref-without-mode")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-diff-ref")
+        .arg("HEAD")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_diff_ref_without_mode_is_rejected.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_diff_worktree_rejects_ref() {
+    mutation_project("j-mutate-diff-worktree-rejects-ref")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-diff")
+        .arg("worktree")
+        .arg("--mutation-diff-ref")
+        .arg("HEAD")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_diff_worktree_rejects_ref.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_diff_worktree_filters_mutants() {
+    let project = mutation_project("j-mutate-diff-worktree");
+    init_git_repo(project.path());
+    commit_all(project.path(), "initial");
+    write_simple_contract(&project, MUTATION_CONTRACT_ARITHMETIC_CHANGED);
+
+    project
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-diff")
+        .arg("worktree")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_diff_worktree_filters_mutants.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_diff_branch_requires_upstream_or_ref() {
+    let project = mutation_project("j-mutate-diff-branch-missing-upstream");
+    init_git_repo(project.path());
+    commit_all(project.path(), "initial");
+    checkout_new_branch(project.path(), "feature/no-upstream");
+    write_simple_contract(&project, MUTATION_CONTRACT_ARITHMETIC_CHANGED);
+
+    project
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-diff")
+        .arg("branch")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_diff_branch_requires_upstream_or_ref.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_diff_ref_filters_mutants() {
+    let project = mutation_project("j-mutate-diff-ref");
+    init_git_repo(project.path());
+    commit_all(project.path(), "initial");
+    write_simple_contract(&project, MUTATION_CONTRACT_ARITHMETIC_CHANGED);
+    commit_all(project.path(), "change arithmetic");
+
+    project
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-diff")
+        .arg("ref")
+        .arg("--mutation-diff-ref")
+        .arg("HEAD~1")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_diff_ref_filters_mutants.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_diff_branch_filters_mutants() {
+    let project = mutation_project("j-mutate-diff-branch");
+    init_git_repo(project.path());
+    commit_all(project.path(), "initial");
+    checkout_new_branch(project.path(), "feature/mutation-diff");
+    set_upstream(project.path(), "main");
+    write_simple_contract(&project, MUTATION_CONTRACT_ARITHMETIC_CHANGED);
+    commit_all(project.path(), "change arithmetic");
+
+    project
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-diff")
+        .arg("branch")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_diff_branch_filters_mutants.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_diff_branch_with_explicit_ref_filters_mutants() {
+    let project = mutation_project("j-mutate-diff-branch-explicit-ref");
+    init_git_repo(project.path());
+    commit_all(project.path(), "initial");
+    checkout_new_branch(project.path(), "feature/mutation-diff-explicit-ref");
+    write_simple_contract(&project, MUTATION_CONTRACT_ARITHMETIC_CHANGED);
+    commit_all(project.path(), "change arithmetic");
+
+    project
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-diff")
+        .arg("branch")
+        .arg("--mutation-diff-ref")
+        .arg("main")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_diff_branch_with_explicit_ref_filters_mutants.stdout.txt",
+        );
+}
+
+#[test]
 fn mutate_levels_filter_mutants_from_cli() {
     mutation_project("j-mutate-levels-cli")
         .acton()
@@ -141,6 +393,45 @@ fn mutate_levels_filter_mutants_from_cli() {
         .success()
         .assert_snapshot_matches(
             "integration/snapshots/test-runner/test_runner_mutate/mutate_levels_filter_mutants_from_cli.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_uses_mutation_diff_from_config() {
+    let project = ProjectBuilder::new("j-mutate-config-diff-worktree")
+        .without_acton_toml()
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .raw_file(
+            "Acton.toml",
+            r#"[package]
+name = "j-mutate-config-diff-worktree"
+description = "A test project"
+version = "0.1.0"
+
+[contracts.simple]
+name = "simple"
+src = "contracts/simple.tolk"
+
+[test.mutation]
+diff = "worktree"
+"#,
+        )
+        .build();
+    init_git_repo(project.path());
+    commit_all(project.path(), "initial");
+    write_simple_contract(&project, MUTATION_CONTRACT_ARITHMETIC_CHANGED);
+
+    project
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_uses_mutation_diff_from_config.stdout.txt",
         );
 }
 

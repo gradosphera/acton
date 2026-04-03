@@ -200,11 +200,42 @@ Run tests in mutation testing mode.
 Contract ID to mutate during mutation testing.
 .RE
 .sp
+\fB\-\-mutation\-diff\fR \fImode\fR
+.RS 4
+Limit mutation testing to changed lines in the selected diff scope.
+.sp
+Accepted values: \fBworktree\fR, \fBref\fR, \fBbranch\fR\&.
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBworktree\fR compares the current worktree with \fBHEAD\fR and includes untracked
+files
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBref\fR compares against the explicit ref passed with \fB\-\-mutation\-diff\-ref\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBbranch\fR compares against the merge\-base with the current branch upstream, or
+against \fB\-\-mutation\-diff\-ref\fR when provided
+.RE
+.RE
+.sp
+\fB\-\-mutation\-diff\-ref\fR \fIref\fR
+.RS 4
+Base ref used by diff\-based mutation testing modes.
+.sp
+Required with \fB\-\-mutation\-diff ref\fR\&. Optional with \fB\-\-mutation\-diff branch\fR\&.
+Use it with \fBbranch\fR when the current branch has no upstream or when you want a
+different comparison base such as \fBorigin/main\fR\&.
+.RE
+.sp
 \fB\-\-mutation\-levels\fR \fIlevel[,level\[u2026]]\fR
 .RS 4
 Run only selected mutation levels.
 .sp
 Accepted values: \fBcritical\fR, \fBmajor\fR, \fBminor\fR\&.
+Useful for faster local runs such as \fBcritical,major\fR\&.
 .RE
 .sp
 \fB\-\-disable\-rule\fR \fIrule\fR
@@ -326,6 +357,12 @@ enabled = true
 minimum\-percent = 85
 include\-tests = true
 include\-wrappers = true
+
+[test.mutation]
+diff = "branch"
+diff\-ref = "origin/main"
+mutation\-levels = ["critical", "major"]
+disable\-rules = ["flip_plus"]
 .fi
 .RE
 .sp
@@ -358,6 +395,22 @@ when \fB\-\-ui\fR is enabled
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'\fB\-\-fork\-net\fR keeps execution local while resolving blockchain state remotely
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-diff worktree\fR is intended for uncommitted local changes
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-diff ref\fR requires \fB\-\-mutation\-diff\-ref\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-diff branch\fR uses the upstream branch merge\-base by default
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'mutation scores in filtered runs only cover the selected mutants
 .RE
 .SH "EXIT STATUS"
 .sp
@@ -435,7 +488,27 @@ acton test \-\-mutate \-\-mutate\-contract wallet
 .RE
 .sp
 .RS 4
-\h'-04' 7.\h'+01'Debug a forked\-state failure with traces and the UI:
+\h'-04' 7.\h'+01'Run mutation testing only for changed lines in the current worktree:
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract wallet \-\-mutation\-diff worktree
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 8.\h'+01'Run mutation testing for selected levels on the current branch:
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract wallet \-\-mutation\-diff branch \-\-mutation\-levels critical,major
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 9.\h'+01'Debug a forked\-state failure with traces and the UI:
 .sp
 .RS 4
 .nf
@@ -445,13 +518,13 @@ acton test tests/wallet.test.tolk \-\-fork\-net testnet \-\-fork\-block\-number 
 .RE
 .sp
 .RS 4
-\h'-04' 8.\h'+01'Enforce a gas baseline in CI:
+\h'-04' 10.\h'+01'Enforce a gas baseline in CI:
+.RE
 .sp
 .RS 4
 .nf
 acton test \-\-baseline\-snapshot .acton/gas\-baseline.json \-\-fail\-on\-diff \-\-reporter console,junit
 .fi
-.RE
 .RE
 .SH "SEE ALSO"
 .sp

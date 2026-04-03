@@ -227,14 +227,31 @@ Per-test annotations can override individual values with
 
 ### Mutation Testing Configuration
 
-The `[test.mutation]` subsection allows filtering mutation runs by level and
-disabling specific mutation rules.
-Available rule IDs are documented in [Mutation Rules](/docs/test-runner/mutation-testing/rules).
+The `[test.mutation]` subsection configures default filters for
+`acton test --mutate`. Available rule IDs are documented in
+[Mutation Rules](/docs/test-runner/mutation-testing/rules).
 
 | Field             | Type       | Description                                                       |
 |:------------------|:-----------|:------------------------------------------------------------------|
+| `diff`            | `string`   | Changed-line scope: `worktree`, `ref`, or `branch`.               |
+| `diff-ref`        | `string`   | Base ref used by `ref` mode and optional override for `branch`.   |
 | `mutation-levels` | `string[]` | List of mutation levels to run: `critical`, `major`, `minor`.     |
 | `disable-rules`   | `string[]` | List of rule IDs to disable during mutation testing.              |
+
+- `diff = "worktree"` compares the current worktree with `HEAD`. Use it for
+  uncommitted local changes. Untracked files are treated as fully changed.
+- `diff = "ref"` compares against an explicit ref, tag, or commit and requires
+  `diff-ref`.
+- `diff = "branch"` compares the current branch against the merge-base with its
+  upstream branch. Use `diff-ref` to override the base branch explicitly, or
+  when the current branch has no upstream.
+- `mutation-levels` keeps only selected rule levels. For example,
+  `["critical", "major"]` skips `minor` mutations.
+- `disable-rules` excludes individual rule IDs after diff and level filters are
+  applied.
+
+All filters compose, and the reported mutation score reflects only the mutants
+that remain after filtering.
 
 Example:
 ```toml
@@ -255,9 +272,15 @@ max-test-rejects = 4096
 seed = 42
 
 [test.mutation]
+diff = "branch"
+diff-ref = "origin/main"
 mutation-levels = ["critical", "major"]
 disable-rules = ["flip_plus"]
 ```
+
+CLI flags such as `--mutation-diff`, `--mutation-diff-ref`,
+`--mutation-levels`, and `--disable-rule` override these defaults for the
+current run.
 
 `fail-on-diff` is used together with baseline comparison mode (`acton test --baseline-snapshot <FILE>`).
 

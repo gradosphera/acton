@@ -220,10 +220,31 @@ Run tests in mutation testing mode.
 Contract ID to mutate during mutation testing.
 {{/option}}
 
+{{#option "`--mutation-diff` _mode_" }}
+Limit mutation testing to changed lines in the selected diff scope.
+
+Accepted values: `worktree`, `ref`, `branch`.
+
+- `worktree` compares the current worktree with `HEAD` and includes untracked
+  files
+- `ref` compares against the explicit ref passed with `--mutation-diff-ref`
+- `branch` compares against the merge-base with the current branch upstream, or
+  against `--mutation-diff-ref` when provided
+{{/option}}
+
+{{#option "`--mutation-diff-ref` _ref_" }}
+Base ref used by diff-based mutation testing modes.
+
+Required with `--mutation-diff ref`. Optional with `--mutation-diff branch`.
+Use it with `branch` when the current branch has no upstream or when you want a
+different comparison base such as `origin/main`.
+{{/option}}
+
 {{#option "`--mutation-levels` _level[,level...]_" }}
 Run only selected mutation levels.
 
 Accepted values: `critical`, `major`, `minor`.
+Useful for faster local runs such as `critical,major`.
 {{/option}}
 
 {{#option "`--disable-rule` _rule_" }}
@@ -293,6 +314,12 @@ enabled = true
 minimum-percent = 85
 include-tests = true
 include-wrappers = true
+
+[test.mutation]
+diff = "branch"
+diff-ref = "origin/main"
+mutation-levels = ["critical", "major"]
+disable-rules = ["flip_plus"]
 ```
 
 CLI flags override config values for the current invocation.
@@ -309,6 +336,10 @@ CLI flags override config values for the current invocation.
 - `--coverage-minimum-percent` and `[test.coverage].minimum-percent` are ignored
   when `--ui` is enabled
 - `--fork-net` keeps execution local while resolving blockchain state remotely
+- `--mutation-diff worktree` is intended for uncommitted local changes
+- `--mutation-diff ref` requires `--mutation-diff-ref`
+- `--mutation-diff branch` uses the upstream branch merge-base by default
+- mutation scores in filtered runs only cover the selected mutants
 
 ## EXIT STATUS
 
@@ -357,13 +388,25 @@ CLI flags override config values for the current invocation.
    acton test --mutate --mutate-contract wallet
    ```
 
-7. Debug a forked-state failure with traces and the UI:
+7. Run mutation testing only for changed lines in the current worktree:
+
+   ```bash
+   acton test --mutate --mutate-contract wallet --mutation-diff worktree
+   ```
+
+8. Run mutation testing for selected levels on the current branch:
+
+   ```bash
+   acton test --mutate --mutate-contract wallet --mutation-diff branch --mutation-levels critical,major
+   ```
+
+9. Debug a forked-state failure with traces and the UI:
 
    ```bash
    acton test tests/wallet.test.tolk --fork-net testnet --fork-block-number 55000000 --save-test-trace --ui
    ```
 
-8. Enforce a gas baseline in CI:
+10. Enforce a gas baseline in CI:
 
    ```bash
    acton test --baseline-snapshot .acton/gas-baseline.json --fail-on-diff --reporter console,junit

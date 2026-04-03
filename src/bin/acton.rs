@@ -31,7 +31,9 @@ use acton_config::config::{
     init_manifest_path_with_source, init_project_root_with_source,
     project_root as configured_project_root,
 };
-use acton_config::test::{BacktraceMode, CoverageFormat, MutationLevel, ReportFormat, TestConfig};
+use acton_config::test::{
+    BacktraceMode, CoverageFormat, MutationDiffMode, MutationLevel, ReportFormat, TestConfig,
+};
 use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::builder::{StyledStr, Styles};
 use clap::{ColorChoice, CommandFactory, FromArgMatches};
@@ -346,6 +348,21 @@ enum Commands {
             value_name = "CONTRACT_ID"
         )]
         mutate_contract: Option<String>,
+        #[arg(
+            long,
+            value_enum,
+            help = "Limit mutation testing to changed lines in the selected diff scope",
+            help_heading = "Mutation Testing",
+            value_name = "MODE"
+        )]
+        mutation_diff: Option<MutationDiffMode>,
+        #[arg(
+            long,
+            help = "Base ref used by diff-based mutation testing modes",
+            help_heading = "Mutation Testing",
+            value_name = "REF"
+        )]
+        mutation_diff_ref: Option<String>,
         #[arg(
             long,
             value_enum,
@@ -1544,6 +1561,8 @@ fn main() {
             mutate,
             mutate_overrides,
             mutate_contract,
+            mutation_diff,
+            mutation_diff_ref,
             mutation_levels,
             disable_rule,
             fail_fast,
@@ -1587,6 +1606,8 @@ fn main() {
                     mutate,
                     mutate_overrides,
                     mutate_contract,
+                    mutation_diff,
+                    mutation_diff_ref,
                     mutation_levels,
                     disable_rule,
                     fuzz_seed,
@@ -2130,6 +2151,8 @@ fn create_test_config(
     mutate: bool,
     mutate_overrides: Option<String>,
     mutate_contract: Option<String>,
+    mutation_diff: Option<MutationDiffMode>,
+    mutation_diff_ref: Option<String>,
     mutation_levels: Vec<MutationLevel>,
     disable_rules: Vec<String>,
     fuzz_seed: Option<u64>,
@@ -2185,6 +2208,8 @@ fn create_test_config(
             mutate,
             mutate_overrides,
             mutate_contract,
+            mutation_diff,
+            mutation_diff_ref,
             mutation_levels,
             disable_rules,
             fuzz_seed,
@@ -2222,6 +2247,8 @@ fn create_test_config(
         mutate,
         mutate_overrides,
         mutate_contract,
+        mutation_diff,
+        mutation_diff_ref,
         mutation_levels,
         disable_rules,
         fuzz_runs: None,

@@ -46,11 +46,86 @@ acton test --mutate --mutate-contract wallet
 
 ### Options
 
-| Option                            | Description                                                    |
-|-----------------------------------|----------------------------------------------------------------|
-| `--mutate`                        | Enables mutation testing mode.                                 |
-| `--mutate-contract <CONTRACT_ID>` | Specifies which contract from `Acton.toml` to mutate.          |
-| `--disable-rule <RULE>`           | Disables specific mutation rules (can be used multiple times). |
+| Option                            | Description                                                                       |
+|-----------------------------------|-----------------------------------------------------------------------------------|
+| `--mutate`                        | Enables mutation testing mode.                                                    |
+| `--mutate-contract <CONTRACT_ID>` | Specifies which contract from `Acton.toml` to mutate.                             |
+| `--mutation-diff <MODE>`          | Limits mutation testing to changed lines in `worktree`, `ref`, or `branch` scope. |
+| `--mutation-diff-ref <REF>`       | Base ref used by `ref` mode and optional override for `branch` mode.              |
+| `--mutation-levels <LEVELS>`      | Runs only selected mutation levels such as `critical,major`.                      |
+| `--disable-rule <RULE>`           | Disables specific mutation rules (can be used multiple times).                    |
+
+### Scoping Mutation Runs
+
+Mutation testing can be expensive because each valid mutant is compiled and
+tested separately. In practice, most local runs should use one or more filters
+to keep the scope small and the feedback fast.
+
+#### Changed-line modes
+
+Use `--mutation-diff` to mutate only code that intersects changed lines.
+
+- `worktree`: compares the current worktree with `HEAD`. This is the best mode
+  for uncommitted local changes. Untracked files are treated as fully changed.
+- `ref`: compares the current checkout against an explicit ref, tag, or commit.
+  This mode requires `--mutation-diff-ref <REF>`.
+- `branch`: compares the current branch against the merge-base with its upstream
+  branch. If the branch has no upstream, pass `--mutation-diff-ref <REF>` to
+  choose the base explicitly, for example `origin/main`.
+
+Examples:
+
+```bash
+# Only mutate lines changed in the current worktree
+acton test --mutate --mutate-contract wallet --mutation-diff worktree
+
+# Compare against an explicit ref or commit
+acton test --mutate --mutate-contract wallet --mutation-diff ref --mutation-diff-ref HEAD~1
+
+# Compare the current branch against its upstream merge-base
+acton test --mutate --mutate-contract wallet --mutation-diff branch
+
+# Compare the current branch against a specific branch instead of upstream
+acton test --mutate --mutate-contract wallet --mutation-diff branch --mutation-diff-ref origin/main
+```
+
+#### Level and rule filters
+
+Use `--mutation-levels` to restrict the run to selected rule levels:
+
+```bash
+acton test --mutate --mutate-contract wallet --mutation-levels critical,major
+```
+
+Use `--disable-rule` to exclude noisy or intentionally ignored rules:
+
+```bash
+acton test --mutate --mutate-contract wallet --disable-rule flip_plus --disable-rule flip_minus
+```
+
+All mutation filters compose. For example, this command runs only `critical`
+mutations on lines changed in the current worktree and skips one specific rule:
+
+```bash
+acton test --mutate --mutate-contract wallet --mutation-diff worktree --mutation-levels critical --disable-rule remove_logical_not
+```
+
+The reported mutation score always reflects only the mutants that remain after
+all filters are applied.
+
+#### Config defaults
+
+You can store the same filters in `Acton.toml`:
+
+```toml
+[test.mutation]
+diff = "branch"
+diff-ref = "origin/main"
+mutation-levels = ["critical", "major"]
+disable-rules = ["flip_plus"]
+```
+
+CLI flags override `[test.mutation]` for the current run.
 
 ### Requirements
 

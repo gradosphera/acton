@@ -1,4 +1,6 @@
-use crate::test::{BacktraceMode, CoverageFormat, MutationLevel, ReportFormat, TestConfig};
+use crate::test::{
+    BacktraceMode, CoverageFormat, MutationDiffMode, MutationLevel, ReportFormat, TestConfig,
+};
 use anyhow::{Result, anyhow};
 use path_absolutize::Absolutize;
 use schemars::JsonSchema;
@@ -483,6 +485,10 @@ pub struct MutationConfig {
     pub disable_rules: Option<Vec<String>>,
     /// List of mutation levels to run
     pub mutation_levels: Option<Vec<MutationLevel>>,
+    /// Diff scope used to limit mutation testing to changed lines
+    pub diff: Option<MutationDiffMode>,
+    /// Base ref used by diff-based mutation testing modes
+    pub diff_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -1185,6 +1191,8 @@ impl TestSettings {
         mutate_override: bool,
         mutate_overrides_override: Option<String>,
         mutate_contract_override: Option<String>,
+        mutation_diff_override: Option<MutationDiffMode>,
+        mutation_diff_ref_override: Option<String>,
         mutation_levels_override: Vec<MutationLevel>,
         disable_rules_override: Vec<String>,
         fuzz_seed_override: Option<u64>,
@@ -1283,6 +1291,13 @@ impl TestSettings {
             } else {
                 mutation_levels_override
             },
+            mutation_diff: mutation_diff_override
+                .or_else(|| self.mutation.as_ref().and_then(|mutation| mutation.diff)),
+            mutation_diff_ref: mutation_diff_ref_override.or_else(|| {
+                self.mutation
+                    .as_ref()
+                    .and_then(|mutation| mutation.diff_ref.clone())
+            }),
             disable_rules: if disable_rules_override.is_empty() {
                 self.mutation
                     .as_ref()
@@ -1366,6 +1381,30 @@ mutation-levels = ["critical", "major"]
             mutation.mutation_levels,
             Some(vec![MutationLevel::Critical, MutationLevel::Major])
         );
+    }
+
+    #[test]
+    fn test_mutation_diff_parsing() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[test.mutation]
+diff = "branch"
+diff-ref = "origin/main"
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let mutation = config
+            .test
+            .as_ref()
+            .and_then(|test| test.mutation.as_ref())
+            .expect("mutation config should be present");
+
+        assert_eq!(mutation.diff, Some(MutationDiffMode::Branch));
+        assert_eq!(mutation.diff_ref.as_deref(), Some("origin/main"));
     }
 
     #[test]

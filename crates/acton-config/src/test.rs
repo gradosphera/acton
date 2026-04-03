@@ -93,6 +93,37 @@ impl std::fmt::Display for MutationLevel {
     }
 }
 
+/// Diff scopes supported by mutation testing filters
+#[derive(
+    clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Hash,
+)]
+#[clap(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum MutationDiffMode {
+    /// Mutate only lines changed in the current worktree compared to HEAD
+    Worktree,
+    /// Mutate only lines changed compared to a specific ref or commit
+    Ref,
+    /// Mutate only lines changed on the current branch since its merge-base
+    Branch,
+}
+
+impl MutationDiffMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            MutationDiffMode::Worktree => "worktree",
+            MutationDiffMode::Ref => "ref",
+            MutationDiffMode::Branch => "branch",
+        }
+    }
+}
+
+impl std::fmt::Display for MutationDiffMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TestConfig {
     pub report_formats: Vec<ReportFormat>,
@@ -123,6 +154,8 @@ pub struct TestConfig {
     pub mutate_overrides: Option<String>,
     pub mutate_contract: Option<String>,
     pub mutation_levels: Vec<MutationLevel>,
+    pub mutation_diff: Option<MutationDiffMode>,
+    pub mutation_diff_ref: Option<String>,
     pub disable_rules: Vec<String>,
     pub fuzz_runs: Option<usize>,
     pub fuzz_max_test_rejects: Option<usize>,

@@ -1,5 +1,6 @@
 use crate::commands::common::error_fmt;
 use crate::commands::test::TestConfig;
+use crate::commands::test::mutation::diff::collect_mutation_diff_scope;
 use crate::commands::test::mutation::rules::{MutationEdit, MutationMatcher, MutationRule, rules};
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, project_root as configured_project_root};
@@ -11,6 +12,7 @@ use std::{fs, process};
 use tempfile::TempDir;
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 
+mod diff;
 mod rules;
 
 #[derive(Clone)]
@@ -259,7 +261,11 @@ fn prepare_project_for_mutation(config: &TestConfig) -> anyhow::Result<()> {
 
 pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Result<()> {
     let Some(mutate_contract) = &config.mutate_contract else {
-        anyhow::bail!("Provide --mutate-contract flag to specify a contract to mutate")
+        anyhow::bail!(
+            "Provide {} {} to choose which contract to mutate",
+            "--mutate-contract".yellow(),
+            "<CONTRACT_ID>".yellow()
+        )
     };
     let acton_config = ActonConfig::load()?;
     let contract = acton_config.get_contract(mutate_contract).ok_or_else(|| {
@@ -268,12 +274,15 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
             mutate_contract
         ))
     })?;
+
+    let project_root = dunce::canonicalize(configured_project_root())
+        .unwrap_or_else(|_| configured_project_root().to_path_buf());
+    let mutation_diff_scope = collect_mutation_diff_scope(&project_root, config)?;
+
     prepare_project_for_mutation(config)?;
 
     let all_disable_rules = &config.disable_rules;
     let selected_mutation_levels = &config.mutation_levels;
-    let project_root = dunce::canonicalize(configured_project_root())
-        .unwrap_or_else(|_| configured_project_root().to_path_buf());
 
     let mut sources = Vec::new();
 
@@ -363,6 +372,11 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
         let candidates =
             collect_mutations(source.tree.root_node(), &source.content, &filtered_rules)?;
         for candidate in candidates {
+            if let Some(diff_scope) = &mutation_diff_scope
+                && !diff_scope.matches_candidate(source, &candidate)
+            {
+                continue;
+            }
             global_mutations.push(GlobalMutation {
                 candidate,
                 source_index: idx,
@@ -374,6 +388,16 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
     println!("{}", "─".repeat(60).dimmed());
     println!("Contract: {}", contract.name.bright_white());
     println!("Source:   {}", contract.src.dimmed());
+    if let Some(diff_scope) = &mutation_diff_scope {
+        println!("Diff:     {}", diff_scope.label.bright_cyan());
+        println!(
+            "Changed:  {}",
+            diff_scope
+                .changed_source_count(&sources)
+                .to_string()
+                .bright_cyan()
+        );
+    }
     if !selected_mutation_levels.is_empty() {
         let levels = selected_mutation_levels
             .iter()
