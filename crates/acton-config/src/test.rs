@@ -62,6 +62,29 @@ impl std::fmt::Display for CoverageFormat {
     }
 }
 
+/// Profile export formats supported by `acton test`
+#[derive(
+    clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema,
+)]
+#[clap(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+pub enum ProfileFormat {
+    /// Chrome DevTools `.cpuprofile` output
+    #[default]
+    Cpuprofile,
+    /// Folded stack output for flamegraph-style tooling
+    Collapsed,
+}
+
+impl std::fmt::Display for ProfileFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProfileFormat::Cpuprofile => write!(f, "cpuprofile"),
+            ProfileFormat::Collapsed => write!(f, "collapsed"),
+        }
+    }
+}
+
 /// Mutation levels supported by mutation testing filters
 #[derive(
     clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Hash,
@@ -145,6 +168,9 @@ pub struct TestConfig {
     pub junit_merge: bool,
     pub snapshot: Option<String>,
     pub baseline_snapshot: Option<String>,
+    pub cpuprofile: Option<String>,
+    pub profile_format: ProfileFormat,
+    pub profile_include_tests: bool,
     pub fail_on_diff: bool,
     pub fork_net: Option<Network>,
     pub api_key: Option<String>,

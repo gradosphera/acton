@@ -1,5 +1,6 @@
 use crate::test::{
-    BacktraceMode, CoverageFormat, MutationDiffMode, MutationLevel, ReportFormat, TestConfig,
+    BacktraceMode, CoverageFormat, MutationDiffMode, MutationLevel, ProfileFormat, ReportFormat,
+    TestConfig,
 };
 use anyhow::{Result, anyhow};
 use path_absolutize::Absolutize;
@@ -280,6 +281,12 @@ pub struct TestSettings {
     pub coverage: Option<TestCoverageSettings>,
     /// Default fuzz settings for parameterized tests
     pub fuzz: Option<TestFuzzSettings>,
+    /// Output path for gas-based execution profiling
+    pub cpuprofile: Option<String>,
+    /// Export format for execution profiling
+    pub profile_format: Option<String>,
+    /// Include unit-test get-method execution in the generated profile
+    pub profile_include_tests: Option<bool>,
     /// Glob patterns to exclude from testing
     pub exclude: Option<Vec<String>>,
     /// Glob patterns to include in testing
@@ -1184,6 +1191,9 @@ impl TestSettings {
         junit_merge_override: bool,
         snapshot_override: Option<String>,
         baseline_gas_override: Option<String>,
+        cpuprofile_override: Option<String>,
+        profile_format_override: Option<ProfileFormat>,
+        profile_include_tests_override: Option<bool>,
         fork_net_override: Option<Network>,
         api_key_override: Option<String>,
         fork_block_number_override: Option<u64>,
@@ -1267,6 +1277,19 @@ impl TestSettings {
             junit_merge: junit_merge_override || self.junit_merge.unwrap_or(false),
             snapshot: snapshot_override,
             baseline_snapshot: baseline_gas_override,
+            cpuprofile: cpuprofile_override.or_else(|| self.cpuprofile.clone()),
+            profile_format: profile_format_override.unwrap_or_else(|| {
+                self.profile_format
+                    .as_ref()
+                    .and_then(|f| match f.to_lowercase().as_str() {
+                        "cpuprofile" => Some(ProfileFormat::Cpuprofile),
+                        "collapsed" => Some(ProfileFormat::Collapsed),
+                        _ => None,
+                    })
+                    .unwrap_or_default()
+            }),
+            profile_include_tests: profile_include_tests_override
+                .unwrap_or_else(|| self.profile_include_tests.unwrap_or(false)),
             fork_net: fork_net_override.or_else(|| {
                 self.fork_net
                     .as_ref()
@@ -1623,6 +1646,9 @@ reporter = ["console", "junit"]
 debug = true
 debug-port = 9999
 backtrace = "full"
+cpuprofile = "gas.cpuprofile"
+profile-format = "collapsed"
+profile-include-tests = true
 exclude = ["**/integration/**"]
 include = ["**/unit/**"]
 junit-path = "custom-reports"
@@ -1670,6 +1696,9 @@ seed = 42
         assert_eq!(fuzz.runs, Some(512));
         assert_eq!(fuzz.max_test_rejects, Some(4096));
         assert_eq!(fuzz.seed, Some(42));
+        assert_eq!(test_settings.cpuprofile, Some("gas.cpuprofile".to_string()));
+        assert_eq!(test_settings.profile_format, Some("collapsed".to_string()));
+        assert_eq!(test_settings.profile_include_tests, Some(true));
         assert_eq!(
             test_settings.exclude,
             Some(vec!["**/integration/**".to_string()])

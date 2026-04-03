@@ -231,7 +231,7 @@ impl<'a> TestRunner<'a> {
             return ExecutorVerbosity::FullLocationStackVerbose;
         }
 
-        if self.config.coverage {
+        if self.config.coverage || self.config.cpuprofile.is_some() {
             // for coverage, we need at least locations to map to actual source code
             return ExecutorVerbosity::FullLocationStackVerbose;
         }
@@ -345,7 +345,8 @@ impl<'a> TestRunner<'a> {
                 known_code_cells: &mut self.known_code_cells,
                 need_debug_info: self.config.debug
                     || self.config.backtrace == Some(BacktraceMode::Full)
-                    || self.config.coverage,
+                    || self.config.coverage
+                    || self.config.cpuprofile.is_some(),
                 backtrace: self.config.backtrace,
             },
             debug: DebugCtx::Disabled,
@@ -710,7 +711,10 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
 
     runner.reporter_manager.finalize()?;
 
-    if config.snapshot.is_some() || config.baseline_snapshot.is_some() {
+    if config.snapshot.is_some()
+        || config.baseline_snapshot.is_some()
+        || config.cpuprofile.is_some()
+    {
         match profiling::collect_profile(&runner) {
             Ok(()) => {}
             Err(err) => {
@@ -971,8 +975,10 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
     );
 
     let config = &runner.config;
-    let need_debug_info =
-        config.debug || config.backtrace == Some(BacktraceMode::Full) || config.coverage;
+    let need_debug_info = config.debug
+        || config.backtrace == Some(BacktraceMode::Full)
+        || config.coverage
+        || config.cpuprofile.is_some();
 
     let now = Instant::now();
     let compilation_result = compile_test_file(
@@ -1257,14 +1263,26 @@ fn run_file_tests(
 
         runner.reporter_manager.on_test_finished(&test_report)?;
 
-        if runner.config.coverage {
-            // For coverage, we need to process test logs as well for unit tests coverage,
-            // so register it here manually
+        if runner.config.coverage
+            || (runner.config.cpuprofile.is_some() && runner.config.profile_include_tests)
+        {
+            // For coverage, we need to process test logs as well for unit tests coverage.
+            // CPU profiling uses the same metadata path only when unit-test/get-method
+            // execution is explicitly included.
+            let mut saved_get_method = false;
             if !executed_get_methods.is_empty() {
                 for get_result in executed_get_methods {
                     runner.emulations.save_get_method(&test.name, get_result);
                 }
+                saved_get_method = true;
+            } else if let GetMethodResult::Success(get_result) = &get_result {
+                runner
+                    .emulations
+                    .save_get_method(&test.name, get_result.clone());
+                saved_get_method = true;
+            }
 
+            if saved_get_method {
                 // TODO: remove this memoize somehow
                 let content: Arc<str> = fs::read_to_string(&file_path).unwrap_or_default().into();
                 let code_boc64 = Boc::encode_base64(code);

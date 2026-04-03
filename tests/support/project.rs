@@ -67,6 +67,9 @@ pub(crate) struct TestConfig {
     pub coverage_minimum_percent: Option<f64>,
     pub coverage_include_wrappers: Option<bool>,
     pub coverage_include_tests: Option<bool>,
+    pub cpuprofile: Option<String>,
+    pub profile_format: Option<String>,
+    pub profile_include_tests: Option<bool>,
     pub junit_path: Option<String>,
     pub junit_merge: Option<bool>,
     pub fuzz_runs: Option<usize>,
@@ -81,7 +84,7 @@ pub(crate) struct TestConfig {
 fn is_json_like_snapshot_file(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| matches!(ext, "json" | "sarif"))
+        .is_some_and(|ext| matches!(ext, "json" | "sarif" | "cpuprofile"))
 }
 
 #[allow(dead_code)]
@@ -989,6 +992,19 @@ version = "0.1.0"
                 toml_content.push_str(&format!("backtrace = \"{backtrace}\"\n"));
             }
 
+            if let Some(cpuprofile) = &config.cpuprofile {
+                toml_content.push_str(&format!("cpuprofile = \"{cpuprofile}\"\n"));
+            }
+
+            if let Some(profile_format) = &config.profile_format {
+                toml_content.push_str(&format!("profile-format = \"{profile_format}\"\n"));
+            }
+
+            if let Some(profile_include_tests) = config.profile_include_tests {
+                toml_content.push_str(&format!(
+                    "profile-include-tests = {profile_include_tests}\n"
+                ));
+            }
             if let Some(junit_path) = &config.junit_path {
                 toml_content.push_str(&format!("junit-path = \"{junit_path}\"\n"));
             }
@@ -1522,6 +1538,24 @@ impl ActonCommand {
     /// Include `.test.tolk` files in coverage reports.
     pub(crate) fn with_coverage_include_tests(mut self) -> Self {
         self.cmd = self.cmd.arg("--coverage-include-tests");
+        self
+    }
+
+    /// Write an execution profile with gas-based samples.
+    pub(crate) fn with_cpuprofile(mut self, file: &str) -> Self {
+        self.cmd = self.cmd.arg("--cpuprofile").arg(file);
+        self
+    }
+
+    /// Select the execution profile export format (e.g. "cpuprofile", "collapsed").
+    pub(crate) fn with_profile_format(mut self, format: &str) -> Self {
+        self.cmd = self.cmd.arg("--profile-format").arg(format);
+        self
+    }
+
+    /// Include unit-test get-method execution in the generated profile.
+    pub(crate) fn with_profile_include_tests(mut self) -> Self {
+        self.cmd = self.cmd.arg("--profile-include-tests");
         self
     }
 

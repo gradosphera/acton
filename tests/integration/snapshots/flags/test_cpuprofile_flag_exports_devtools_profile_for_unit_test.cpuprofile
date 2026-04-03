@@ -1,0 +1,69 @@
+{
+  "nodes": [
+    {
+      "id": 1,
+      "callFrame": {
+        "functionName": "(root)",
+        "scriptId": "0",
+        "url": "",
+        "lineNumber": -1,
+        "columnNumber": -1
+      },
+      "hitCount": 0,
+      "children": [
+        2
+      ]
+    },
+    {
+      "id": 2,
+      "callFrame": {
+        "functionName": "test-cpuprofile",
+        "scriptId": "0",
+        "url": "",
+        "lineNumber": -1,
+        "columnNumber": -1
+      },
+      "hitCount": 0,
+      "children": [
+        3,
+        4
+      ]
+    },
+    {
+      "id": 3,
+      "callFrame": {
+        "functionName": "(bootstrap)",
+        "scriptId": "0",
+        "url": "",
+        "lineNumber": -1,
+        "columnNumber": -1
+      },
+      "hitCount": 2,
+      "children": []
+    },
+    {
+      "id": 4,
+      "callFrame": {
+        "functionName": "test-cpuprofile",
+        "scriptId": "1",
+        "url": "[ROOT]/tests/profile.test.tolk",
+        "lineNumber": 5,
+        "columnNumber": 8
+      },
+      "hitCount": 1,
+      "children": []
+    }
+  ],
+  "startTime": 0,
+  "endTime": 265,
+  "samples": [
+    3,
+    3,
+    4
+  ],
+  "timeDeltas": [
+    34,
+    226,
+    5
+  ]
+}

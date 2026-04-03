@@ -32,7 +32,8 @@ use acton_config::config::{
     project_root as configured_project_root,
 };
 use acton_config::test::{
-    BacktraceMode, CoverageFormat, MutationDiffMode, MutationLevel, ReportFormat, TestConfig,
+    BacktraceMode, CoverageFormat, MutationDiffMode, MutationLevel, ProfileFormat, ReportFormat,
+    TestConfig,
 };
 use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::builder::{StyledStr, Styles};
@@ -258,6 +259,25 @@ enum Commands {
             requires = "baseline_snapshot"
         )]
         fail_on_diff: bool,
+        #[arg(
+            long,
+            help = "Write an execution profile with gas-based samples",
+            help_heading = "Profiling"
+        )]
+        cpuprofile: Option<String>,
+        #[arg(
+            long,
+            value_enum,
+            help = "Output execution profile in specified format",
+            help_heading = "Profiling"
+        )]
+        profile_format: Option<ProfileFormat>,
+        #[arg(
+            long,
+            help = "Include unit-test get-method execution in the profile",
+            help_heading = "Profiling"
+        )]
+        profile_include_tests: bool,
 
         // Reporting
         #[arg(
@@ -1555,6 +1575,9 @@ fn main() {
             snapshot,
             baseline_snapshot,
             fail_on_diff,
+            cpuprofile,
+            profile_format,
+            profile_include_tests,
             fork_net,
             api_key,
             save_test_trace,
@@ -1592,6 +1615,13 @@ fn main() {
                     junit_merge,
                     snapshot,
                     baseline_snapshot,
+                    cpuprofile,
+                    profile_format,
+                    if profile_include_tests {
+                        Some(true)
+                    } else {
+                        None
+                    },
                     fail_on_diff,
                     fork_net,
                     api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
@@ -2143,6 +2173,9 @@ fn create_test_config(
     junit_merge: bool,
     snapshot: Option<String>,
     baseline_snapshot: Option<String>,
+    cpuprofile: Option<String>,
+    profile_format: Option<ProfileFormat>,
+    profile_include_tests: Option<bool>,
     fail_on_diff: bool,
     fork_net: Option<Network>,
     api_key: Option<String>,
@@ -2201,6 +2234,9 @@ fn create_test_config(
             junit_merge,
             snapshot,
             baseline_snapshot,
+            cpuprofile,
+            profile_format,
+            profile_include_tests,
             fork_net,
             api_key,
             fork_block_number,
@@ -2240,6 +2276,9 @@ fn create_test_config(
         junit_merge,
         snapshot,
         baseline_snapshot,
+        cpuprofile,
+        profile_format: profile_format.unwrap_or_default(),
+        profile_include_tests: profile_include_tests.unwrap_or(false),
         fail_on_diff,
         api_key,
         fork_block_number,

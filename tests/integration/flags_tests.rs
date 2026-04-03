@@ -99,6 +99,16 @@ get fun `test-profiled-transaction`() {
 }
 "#;
 
+const CPU_PROFILED_UNIT_TEST: &str = r#"
+fun add(a: int, b: int): int {
+    return a + b;
+}
+
+get fun `test-cpuprofile`() {
+    add(2, 3);
+}
+"#;
+
 const BUILD_WITH_PROJECT_ROOT_RELATIVE_PATH_TEST: &str = r#"
 import "../../lib/build/build"
 import "../../lib/testing/expect"
@@ -1140,6 +1150,75 @@ fn test_manifest_path_test_profiling_snapshots_use_project_root() {
         !stderr.contains("Warning: Failed to load baseline gas snapshot"),
         "baseline snapshot must be loaded from project root, stderr:\n{stderr}"
     );
+}
+
+#[test]
+fn test_cpuprofile_flag_exports_devtools_profile_for_unit_test() {
+    let project = ProjectBuilder::new("cpuprofile-flag")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("profile", CPU_PROFILED_UNIT_TEST)
+        .build();
+
+    let output = project
+        .acton()
+        .test()
+        .with_cpuprofile("gas.cpuprofile")
+        .with_profile_include_tests()
+        .run()
+        .success();
+
+    output
+        .assert_contains("CPU profile saved to gas.cpuprofile")
+        .assert_file_snapshot_matches(
+            "gas.cpuprofile",
+            "integration/snapshots/flags/test_cpuprofile_flag_exports_devtools_profile_for_unit_test.cpuprofile",
+        );
+}
+
+#[test]
+fn test_profile_format_collapsed_exports_collapsed_stacks_for_unit_test() {
+    let project = ProjectBuilder::new("collapsed-profile-flag")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("profile", CPU_PROFILED_UNIT_TEST)
+        .build();
+
+    let output = project
+        .acton()
+        .test()
+        .with_cpuprofile("gas.collapsed")
+        .with_profile_format("collapsed")
+        .with_profile_include_tests()
+        .run()
+        .success();
+
+    output
+        .assert_contains("CPU profile saved to gas.collapsed")
+        .assert_file_snapshot_matches(
+            "gas.collapsed",
+            "integration/snapshots/flags/test_profile_format_collapsed_exports_collapsed_stacks_for_unit_test.collapsed",
+        );
+}
+
+#[test]
+fn test_cpuprofile_defaults_to_messages_only() {
+    let project = ProjectBuilder::new("cpuprofile-default-messages-only")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("profile", CPU_PROFILED_UNIT_TEST)
+        .build();
+
+    let output = project
+        .acton()
+        .test()
+        .with_cpuprofile("gas.cpuprofile")
+        .run()
+        .success();
+
+    output
+        .assert_contains("CPU profile saved to gas.cpuprofile")
+        .assert_file_snapshot_matches(
+            "gas.cpuprofile",
+            "integration/snapshots/flags/test_cpuprofile_defaults_to_messages_only.cpuprofile",
+        );
 }
 
 #[test]
