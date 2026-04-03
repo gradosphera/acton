@@ -721,6 +721,10 @@
             }
           ]
         },
+        "cpuprofile": {
+          "description": "Output path for gas-based execution profiling",
+          "type": "string"
+        },
         "debug": {
           "description": "Enable debug mode for tests",
           "type": "boolean"
@@ -796,6 +800,14 @@
               "$ref": "#/definitions/MutationConfig"
             }
           ]
+        },
+        "profile-format": {
+          "description": "Export format for execution profiling",
+          "type": "string"
+        },
+        "profile-include-tests": {
+          "description": "Include unit-test get-method execution in the generated profile",
+          "type": "boolean"
         },
         "reporter": {
           "description": "List of test reporters to use",

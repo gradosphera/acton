@@ -109,6 +109,51 @@ get fun `test-cpuprofile`() {
 }
 "#;
 
+const PROFILED_MESSAGE_CONTRACT_A: &str = r"
+fun touchOne(): int {
+    return 1;
+}
+
+fun onInternalMessage(_: InMessage) {
+    touchOne();
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+";
+
+const CPU_PROFILED_MULTI_CONTRACT_MESSAGES_TEST: &str = r#"
+import "../../lib/testing/expect"
+import "../../lib/build/build"
+import "../../lib/emulation/network"
+import "../../lib/types/big_array"
+
+get fun `test-cpuprofile-contract-entrypoints`() {
+    val simpleInit = ContractState {
+        code: build("simple"),
+        data: createEmptyCell(),
+    };
+
+    val simpleAddress = AutoDeployAddress { stateInit: simpleInit }.calculateAddress();
+    val deployer = net.treasury("deployer");
+
+    val simpleDeploy = createMessage({
+        bounce: false,
+        value: ton("1.0"),
+        dest: {
+            stateInit: simpleInit,
+        },
+    });
+    expect(net.send(deployer.address, simpleDeploy).size()).toEqual(1);
+
+    val simplePing = createMessage({
+        bounce: false,
+        value: ton("0.2"),
+        dest: simpleAddress,
+    });
+    expect(net.send(deployer.address, simplePing).size()).toEqual(1);
+}
+"#;
+
 const BUILD_WITH_PROJECT_ROOT_RELATIVE_PATH_TEST: &str = r#"
 import "../../lib/build/build"
 import "../../lib/testing/expect"
@@ -1218,6 +1263,29 @@ fn test_cpuprofile_defaults_to_messages_only() {
         .assert_file_snapshot_matches(
             "gas.cpuprofile",
             "integration/snapshots/flags/test_cpuprofile_defaults_to_messages_only.cpuprofile",
+        );
+}
+
+#[test]
+fn test_profile_messages_prefix_entrypoints_with_contract_name() {
+    let project = ProjectBuilder::new("cpuprofile-message-entrypoints")
+        .contract("simple", PROFILED_MESSAGE_CONTRACT_A)
+        .test_file("profile", CPU_PROFILED_MULTI_CONTRACT_MESSAGES_TEST)
+        .build();
+
+    let output = project
+        .acton()
+        .test()
+        .with_cpuprofile("gas.collapsed")
+        .with_profile_format("collapsed")
+        .run()
+        .success();
+
+    output
+        .assert_contains("CPU profile saved to gas.collapsed")
+        .assert_file_snapshot_matches(
+            "gas.collapsed",
+            "integration/snapshots/flags/test_profile_messages_prefix_entrypoints_with_contract_name.collapsed",
         );
 }
 

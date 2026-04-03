@@ -958,26 +958,25 @@ fn collect_profile_executions(runner: &TestRunner) -> Vec<ProfileExecutionInput>
             continue;
         };
 
-        for (trace_index, trace_transactions) in emulations.messages.iter().enumerate() {
-            let trace_name = emulations
-                .trace_name(trace_transactions)
-                .map_or_else(|| format!("Trace {}", trace_index + 1), ToString::to_string);
-
-            for (tx_index, tx) in trace_transactions.iter().enumerate() {
+        for trace_transactions in &emulations.messages {
+            for tx in trace_transactions {
                 let Some((_, build_result)) = runner.build_cache.result_for_code(&tx.code) else {
                     continue;
                 };
 
                 executions.push(ProfileExecutionInput {
-                    label: format!("{test_name}::{trace_name}::tx#{}", tx_index + 1),
                     vm_log: tx.vm_log.clone(),
                     source_map: build_result.source_map.clone(),
+                    contract_display_name: Some(resolve_contract_display_name(
+                        runner,
+                        build_result.name.as_str(),
+                    )),
                 });
             }
         }
 
         if runner.config.profile_include_tests {
-            for (get_index, get_result) in emulations.get_methods.iter().enumerate() {
+            for get_result in &emulations.get_methods {
                 let Ok(code) = Boc::decode_base64(get_result.code.as_ref()) else {
                     continue;
                 };
@@ -986,22 +985,24 @@ fn collect_profile_executions(runner: &TestRunner) -> Vec<ProfileExecutionInput>
                     continue;
                 };
 
-                let label = if emulations.get_methods.len() == 1 {
-                    test_name.clone()
-                } else {
-                    format!("{test_name}::get#{}", get_index + 1)
-                };
-
                 executions.push(ProfileExecutionInput {
-                    label,
                     vm_log: get_result.vm_log.clone(),
                     source_map: build_result.source_map.clone(),
+                    contract_display_name: None,
                 });
             }
         }
     }
 
     executions
+}
+
+fn resolve_contract_display_name(runner: &TestRunner, contract_id: &str) -> String {
+    runner
+        .acton_config
+        .get_contract(contract_id)
+        .map(|contract| contract.name.clone())
+        .unwrap_or_else(|| contract_id.to_string())
 }
 
 fn collect_execution_samples(execution: &ProfileExecutionInput) -> Vec<ProfileSample> {
@@ -1090,45 +1091,36 @@ fn record_execution_sample(
         return None;
     }
 
+    let frames = build_profile_frames(execution.contract_display_name.as_deref(), replayer);
+
+    if frames.is_empty() {
+        return None;
+    }
+
     Some(ProfileSample {
         thread_name: "acton".to_string(),
-        frames: build_profile_frames(
-            execution.label.as_str(),
-            execution.source_map.as_ref(),
-            replayer,
-        ),
+        frames,
         weight: step.gas,
     })
 }
 
 fn build_profile_frames(
-    execution_label: &str,
-    source_map: &tolkc::TolkSourceMap,
+    contract_display_name: Option<&str>,
     replayer: &TolkReplayer,
 ) -> Vec<ProfileFrameSpec> {
-    let mut frames = vec![ProfileFrameSpec::synthetic(execution_label)];
     let call_stack = replayer.call_stack();
 
     if call_stack.is_empty() {
-        if let Some(function) = source_map
-            .source_map
-            .innermost_function_at(replayer.current_file_id(), replayer.current_line())
-        {
-            let (url, line_number, column_number) = frame_location(replayer, &function.ident_loc);
-            frames.push(ProfileFrameSpec {
-                function_name: function.name.clone(),
-                url,
-                line_number,
-                column_number,
-            });
-        } else {
-            frames.push(ProfileFrameSpec::bootstrap(replayer));
-        }
-        return frames;
+        return vec![];
     }
 
+    let mut frames = Vec::with_capacity(call_stack.len());
     for frame in &call_stack {
-        frames.push(ProfileFrameSpec::from_call_frame(frame, replayer));
+        frames.push(ProfileFrameSpec::from_call_frame(
+            frame,
+            contract_display_name,
+            replayer,
+        ));
     }
 
     frames
@@ -1159,9 +1151,9 @@ fn save_collapsed_profile(
 
 #[derive(Debug, Clone)]
 struct ProfileExecutionInput {
-    label: String,
     vm_log: Arc<str>,
     source_map: Arc<tolkc::TolkSourceMap>,
+    contract_display_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -1186,30 +1178,11 @@ struct ProfileFrameSpec {
 }
 
 impl ProfileFrameSpec {
-    fn synthetic(name: &str) -> Self {
-        Self {
-            function_name: name.to_string(),
-            url: String::new(),
-            line_number: -1,
-            column_number: -1,
-        }
-    }
-
-    fn bootstrap(replayer: &TolkReplayer) -> Self {
-        let url = replayer
-            .file_full_path(replayer.current_file_id())
-            .unwrap_or_default()
-            .to_string();
-
-        Self {
-            function_name: "(bootstrap)".to_string(),
-            url,
-            line_number: zero_based_line(replayer.current_line()),
-            column_number: zero_based_column(replayer.current_column()),
-        }
-    }
-
-    fn from_call_frame(frame: &CallFrameInfo, replayer: &TolkReplayer) -> Self {
+    fn from_call_frame(
+        frame: &CallFrameInfo,
+        contract_display_name: Option<&str>,
+        replayer: &TolkReplayer,
+    ) -> Self {
         let location = frame
             .definition_loc
             .as_ref()
@@ -1219,12 +1192,35 @@ impl ProfileFrameSpec {
             .unwrap_or_else(|| (String::new(), -1, -1));
 
         Self {
-            function_name: frame.f_name.clone(),
+            function_name: format_profile_function_name(
+                frame.f_name.as_str(),
+                contract_display_name,
+            ),
             url,
             line_number,
             column_number,
         }
     }
+}
+
+fn format_profile_function_name(
+    function_name: &str,
+    contract_display_name: Option<&str>,
+) -> String {
+    if is_contract_entrypoint(function_name)
+        && let Some(contract_display_name) = contract_display_name
+    {
+        return format!("{contract_display_name}:{function_name}");
+    }
+
+    function_name.to_string()
+}
+
+fn is_contract_entrypoint(function_name: &str) -> bool {
+    matches!(
+        function_name,
+        "onInternalMessage" | "onExternalMessage" | "onBouncedMessage" | "onRunTickTock"
+    )
 }
 
 fn frame_location(
@@ -1675,5 +1671,44 @@ fn color_by_percent(change_percent: Option<f64>) -> Color {
         Some(percent) if percent < -SIGNIFICANT_PERCENT_CHANGE => Color::DarkGreen,
         Some(percent) if percent > SIGNIFICANT_PERCENT_CHANGE => Color::DarkRed,
         Some(_) => Color::Grey,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{format_profile_function_name, is_contract_entrypoint};
+
+    #[test]
+    fn prefixes_contract_name_for_contract_entrypoints() {
+        assert_eq!(
+            format_profile_function_name("onInternalMessage", Some("Jetton Minter")),
+            "Jetton Minter:onInternalMessage"
+        );
+        assert_eq!(
+            format_profile_function_name("onInternalMessage", Some("Wallet")),
+            "Wallet:onInternalMessage"
+        );
+        assert_eq!(
+            format_profile_function_name("onExternalMessage", Some("Wallet")),
+            "Wallet:onExternalMessage"
+        );
+        assert_eq!(
+            format_profile_function_name("onBouncedMessage", Some("Wallet")),
+            "Wallet:onBouncedMessage"
+        );
+    }
+
+    #[test]
+    fn keeps_non_entrypoint_names_unchanged() {
+        assert_eq!(
+            format_profile_function_name("helper", Some("Jetton Minter")),
+            "helper"
+        );
+        assert_eq!(
+            format_profile_function_name("onInternalMessage", None),
+            "onInternalMessage"
+        );
+        assert!(is_contract_entrypoint("onInternalMessage"));
+        assert!(!is_contract_entrypoint("helper"));
     }
 }
