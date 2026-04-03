@@ -34,10 +34,8 @@ pub(crate) fn poll_request<R: BufRead>(
             return Err(anyhow!("Invalid DAP header: {trimmed}"));
         };
 
-        if header == "Content-Length" {
+        if header.trim().eq_ignore_ascii_case("Content-Length") {
             content_length = Some(value.trim().parse()?);
-        } else {
-            return Err(anyhow!("Invalid DAP header: {trimmed}"));
         }
     }
 
@@ -90,5 +88,56 @@ fn normalize_request_value(value: &mut Value) {
 
     if let Some(object) = value.as_object_mut() {
         object.remove("arguments");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::IncomingRequest;
+    use super::poll_request;
+    use dap::requests::Command;
+    use std::io::Cursor;
+
+    #[test]
+    fn poll_request_ignores_extra_headers() {
+        let payload = r#"{"seq":1,"type":"request","command":"configurationDone","arguments":{}}"#;
+        let mut input = Cursor::new(framed_message(
+            payload,
+            &[("Content-Type", "application/vscode-jsonrpc; charset=utf-8")],
+        ));
+
+        let request = poll_request(&mut input).unwrap().unwrap();
+
+        assert!(matches!(
+            request,
+            IncomingRequest::Known(req) if matches!(req.command, Command::ConfigurationDone)
+        ));
+    }
+
+    #[test]
+    fn poll_request_accepts_case_insensitive_content_length() {
+        let payload = r#"{"seq":2,"type":"request","command":"configurationDone","arguments":{}}"#;
+        let mut input =
+            Cursor::new(format!("content-length: {}\r\n\r\n{payload}", payload.len()).into_bytes());
+
+        let request = poll_request(&mut input).unwrap().unwrap();
+
+        assert!(matches!(
+            request,
+            IncomingRequest::Known(req) if matches!(req.command, Command::ConfigurationDone)
+        ));
+    }
+
+    fn framed_message(payload: &str, headers: &[(&str, &str)]) -> Vec<u8> {
+        let mut framed = format!("Content-Length: {}\r\n", payload.len());
+        for (header, value) in headers {
+            framed.push_str(header);
+            framed.push_str(": ");
+            framed.push_str(value);
+            framed.push_str("\r\n");
+        }
+        framed.push_str("\r\n");
+        framed.push_str(payload);
+        framed.into_bytes()
     }
 }

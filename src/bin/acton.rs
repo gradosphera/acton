@@ -2,6 +2,7 @@ use acton::commands;
 use acton::commands::build::build_cmd;
 use acton::commands::check::check_cmd;
 use acton::commands::compile::compile_cmd;
+use acton::commands::debug_mcp::debug_mcp_cmd;
 use acton::commands::disasm::disasm_cmd;
 use acton::commands::doc::doc_tvm_cmd;
 use acton::commands::docgen::docgen_cmd;
@@ -740,6 +741,11 @@ enum Commands {
         no_log: bool,
     },
     #[command(
+        name = "debug-mcp",
+        about = "Run the Acton debug MCP server over stdio"
+    )]
+    DebugMcp,
+    #[command(
         about = "Manage Acton versions",
         after_help = detailed_help_pointer("up")
     )]
@@ -1106,6 +1112,7 @@ fn root_help(show_global_options: bool) -> StyledStr {
         ("doc", "tvm <QUERY...>"),
     ];
     let support_commands = vec![
+        ("debug-mcp", ""),
         ("ls", ""),
         ("up", ""),
         ("help", "[COMMAND]"),
@@ -1458,8 +1465,10 @@ fn main() {
         process::exit(1);
     }
 
-    if !matches!(command, Commands::Ls { .. } | Commands::Help { .. })
-        && let Err(err) = setup_logging()
+    if !matches!(
+        command,
+        Commands::Ls { .. } | Commands::Help { .. } | Commands::DebugMcp
+    ) && let Err(err) = setup_logging()
     {
         eprintln!(
             "{} failed to initialize debug logging ({err}). Continuing without file logging.\nHint: set ACTON_LOG_DIR to a writable directory.",
@@ -1856,6 +1865,7 @@ fn main() {
             Ok(())
         }
         Commands::Docgen { output, check } => docgen_cmd(output, check),
+        Commands::DebugMcp => debug_mcp_cmd(),
         Commands::Ls {
             port,
             stdio,
