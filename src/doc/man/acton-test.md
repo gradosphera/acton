@@ -54,6 +54,10 @@ May be passed multiple times.
 Stop after the first failing test.
 {{/option}}
 
+{{#option "`--fuzz-seed` _seed_" }}
+Seed for reproducible fuzz runs.
+{{/option}}
+
 {{/options}}
 
 ### Debugging Options
@@ -255,6 +259,11 @@ Acton discovers tests by finding files that end with `.test.tolk`.
 - `--save-test-trace` without a value writes traces to `.acton/traces`
 - gas snapshot files are written only to the explicit paths passed to
   `--snapshot` or `--baseline-snapshot`
+- `[test.fuzz]` applies only to parameterized tests that explicitly opt in with
+  `@test({ fuzz: true })` or `@test({ fuzz: ... })`
+- `--fuzz-seed` overrides `[test.fuzz].seed` for the current run
+- fuzz tests show the seed in console output; if `[test.fuzz].seed` is omitted,
+  Acton picks a new seed for each `acton test` run
 
 ## CONFIGURATION
 
@@ -266,6 +275,11 @@ reporter = ["console"]
 filter = "test-.*"
 junit-path = "reports"
 junit-merge = false
+
+[test.fuzz]
+runs = 512
+max-test-rejects = 4096
+seed = 42
 
 [test.coverage]
 enabled = true
