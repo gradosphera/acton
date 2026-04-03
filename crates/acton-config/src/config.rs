@@ -1,4 +1,4 @@
-use crate::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
+use crate::test::{BacktraceMode, CoverageFormat, MutationLevel, ReportFormat, TestConfig};
 use anyhow::{Result, anyhow};
 use path_absolutize::Absolutize;
 use schemars::JsonSchema;
@@ -481,6 +481,8 @@ const fn default_litenode_port() -> Option<u16> {
 pub struct MutationConfig {
     /// List of mutation rules to disable
     pub disable_rules: Option<Vec<String>>,
+    /// List of mutation levels to run
+    pub mutation_levels: Option<Vec<MutationLevel>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -1183,6 +1185,7 @@ impl TestSettings {
         mutate_override: bool,
         mutate_overrides_override: Option<String>,
         mutate_contract_override: Option<String>,
+        mutation_levels_override: Vec<MutationLevel>,
         disable_rules_override: Vec<String>,
         fuzz_seed_override: Option<u64>,
         fail_on_diff_override: Option<bool>,
@@ -1272,6 +1275,14 @@ impl TestSettings {
             mutate: mutate_override,
             mutate_overrides: mutate_overrides_override,
             mutate_contract: mutate_contract_override,
+            mutation_levels: if mutation_levels_override.is_empty() {
+                self.mutation
+                    .as_ref()
+                    .and_then(|m| m.mutation_levels.clone())
+                    .unwrap_or_default()
+            } else {
+                mutation_levels_override
+            },
             disable_rules: if disable_rules_override.is_empty() {
                 self.mutation
                     .as_ref()
@@ -1330,6 +1341,31 @@ depends = []
         assert_eq!(wallet.name, "Wallet V5");
         assert_eq!(wallet.src, "wallet-v5.tolk");
         assert_eq!(wallet.depends, Some(vec![]));
+    }
+
+    #[test]
+    fn test_mutation_levels_parsing() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[test.mutation]
+mutation-levels = ["critical", "major"]
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let mutation = config
+            .test
+            .as_ref()
+            .and_then(|test| test.mutation.as_ref())
+            .expect("mutation config should be present");
+
+        assert_eq!(
+            mutation.mutation_levels,
+            Some(vec![MutationLevel::Critical, MutationLevel::Major])
+        );
     }
 
     #[test]

@@ -128,6 +128,23 @@ fn mutate_disable_rule_filters_mutants() {
 }
 
 #[test]
+fn mutate_levels_filter_mutants_from_cli() {
+    mutation_project("j-mutate-levels-cli")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-levels")
+        .arg("critical,major")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_levels_filter_mutants_from_cli.stdout.txt",
+        );
+}
+
+#[test]
 fn mutate_uses_disable_rules_from_config() {
     ProjectBuilder::new("j-mutate-config-disable-rules")
         .without_acton_toml()
@@ -158,6 +175,40 @@ disable-rules = ["remove_assert", "flip_plus", "flip_gt_ge"]
         .success()
         .assert_snapshot_matches(
             "integration/snapshots/test-runner/test_runner_mutate/mutate_uses_disable_rules_from_config.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_uses_mutation_levels_from_config() {
+    ProjectBuilder::new("j-mutate-config-mutation-levels")
+        .without_acton_toml()
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .raw_file(
+            "Acton.toml",
+            r#"[package]
+name = "j-mutate-config-mutation-levels"
+description = "A test project"
+version = "0.1.0"
+
+[contracts.simple]
+name = "simple"
+src = "contracts/simple.tolk"
+
+[test.mutation]
+mutation-levels = ["critical"]
+"#,
+        )
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_uses_mutation_levels_from_config.stdout.txt",
         );
 }
 

@@ -139,6 +139,11 @@ OPTIONS
        --mutate-contract contract-id
            Contract ID to mutate during mutation testing.
 
+       --mutation-levels level[,level…]
+           Run only selected mutation levels.
+
+           Accepted values: critical, major, minor.
+
        --disable-rule rule
            Disable a specific mutation rule.
 

@@ -271,6 +271,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
     prepare_project_for_mutation(config)?;
 
     let all_disable_rules = &config.disable_rules;
+    let selected_mutation_levels = &config.mutation_levels;
     let project_root = dunce::canonicalize(configured_project_root())
         .unwrap_or_else(|_| configured_project_root().to_path_buf());
 
@@ -349,6 +350,12 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
     let filtered_rules: Vec<MutationRule> = mutation_rules
         .into_iter()
         .filter(|rule| !all_disable_rules.contains(&rule.name.to_string()))
+        .filter(|rule| {
+            selected_mutation_levels.is_empty()
+                || selected_mutation_levels
+                    .iter()
+                    .any(|level| level.as_str() == rule.level.label())
+        })
         .collect();
 
     let mut global_mutations = Vec::new();
@@ -367,6 +374,14 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
     println!("{}", "─".repeat(60).dimmed());
     println!("Contract: {}", contract.name.bright_white());
     println!("Source:   {}", contract.src.dimmed());
+    if !selected_mutation_levels.is_empty() {
+        let levels = selected_mutation_levels
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("Levels:   {}", levels.bright_cyan());
+    }
     println!("Files:    {}", sources.len().to_string().bright_cyan());
     println!(
         "Mutants:  {}\n",

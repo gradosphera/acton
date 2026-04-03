@@ -4,8 +4,10 @@ description: "Reference of all available mutation rules in Acton"
 ---
 
 This page lists all 49 mutation rules available in Acton, categorized by their type.
-Use these rule IDs with `acton test --disable-rule <RULE>` or in
+Use rule IDs with `acton test --disable-rule <RULE>` or
 `[test.mutation].disable-rules` inside `Acton.toml`.
+Use mutation levels with `acton test --mutation-levels critical,major` or
+`[test.mutation].mutation-levels = ["critical", "major"]`.
 
 ## Critical Rules
 

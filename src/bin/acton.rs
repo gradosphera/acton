@@ -31,7 +31,7 @@ use acton_config::config::{
     init_manifest_path_with_source, init_project_root_with_source,
     project_root as configured_project_root,
 };
-use acton_config::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
+use acton_config::test::{BacktraceMode, CoverageFormat, MutationLevel, ReportFormat, TestConfig};
 use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::builder::{StyledStr, Styles};
 use clap::{ColorChoice, CommandFactory, FromArgMatches};
@@ -346,6 +346,15 @@ enum Commands {
             value_name = "CONTRACT_ID"
         )]
         mutate_contract: Option<String>,
+        #[arg(
+            long,
+            value_enum,
+            value_delimiter = ',',
+            help = "Run only selected mutation levels (comma-separated)",
+            help_heading = "Mutation Testing",
+            value_name = "LEVEL[,LEVEL...]"
+        )]
+        mutation_levels: Vec<MutationLevel>,
         #[arg(
             long,
             help = "Disable specific mutation rules",
@@ -1535,6 +1544,7 @@ fn main() {
             mutate,
             mutate_overrides,
             mutate_contract,
+            mutation_levels,
             disable_rule,
             fail_fast,
             fuzz_seed,
@@ -1577,6 +1587,7 @@ fn main() {
                     mutate,
                     mutate_overrides,
                     mutate_contract,
+                    mutation_levels,
                     disable_rule,
                     fuzz_seed,
                     Some(fail_fast),
@@ -2119,6 +2130,7 @@ fn create_test_config(
     mutate: bool,
     mutate_overrides: Option<String>,
     mutate_contract: Option<String>,
+    mutation_levels: Vec<MutationLevel>,
     disable_rules: Vec<String>,
     fuzz_seed: Option<u64>,
     fail_fast: Option<bool>,
@@ -2173,6 +2185,7 @@ fn create_test_config(
             mutate,
             mutate_overrides,
             mutate_contract,
+            mutation_levels,
             disable_rules,
             fuzz_seed,
             if fail_on_diff { Some(true) } else { None },
@@ -2209,6 +2222,7 @@ fn create_test_config(
         mutate,
         mutate_overrides,
         mutate_contract,
+        mutation_levels,
         disable_rules,
         fuzz_runs: None,
         fuzz_max_test_rejects: None,

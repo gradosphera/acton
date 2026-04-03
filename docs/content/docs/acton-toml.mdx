@@ -227,12 +227,14 @@ Per-test annotations can override individual values with
 
 ### Mutation Testing Configuration
 
-The `[test.mutation]` subsection allows disabling specific mutation rules.
+The `[test.mutation]` subsection allows filtering mutation runs by level and
+disabling specific mutation rules.
 Available rule IDs are documented in [Mutation Rules](/docs/test-runner/mutation-testing/rules).
 
-| Field           | Type       | Description                                          |
-|:----------------|:-----------|:-----------------------------------------------------|
-| `disable-rules` | `string[]` | List of rule IDs to disable during mutation testing. |
+| Field             | Type       | Description                                                       |
+|:------------------|:-----------|:------------------------------------------------------------------|
+| `mutation-levels` | `string[]` | List of mutation levels to run: `critical`, `major`, `minor`.     |
+| `disable-rules`   | `string[]` | List of rule IDs to disable during mutation testing.              |
 
 Example:
 ```toml
@@ -253,6 +255,7 @@ max-test-rejects = 4096
 seed = 42
 
 [test.mutation]
+mutation-levels = ["critical", "major"]
 disable-rules = ["flip_plus"]
 ```
 

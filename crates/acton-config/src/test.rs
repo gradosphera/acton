@@ -62,6 +62,37 @@ impl std::fmt::Display for CoverageFormat {
     }
 }
 
+/// Mutation levels supported by mutation testing filters
+#[derive(
+    clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Hash,
+)]
+#[clap(rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum MutationLevel {
+    /// Security-sensitive control-flow, persistence, and upgrade mutations
+    Critical,
+    /// High-signal behavioral mutations such as arithmetic and comparisons
+    Major,
+    /// Broader low-priority mutations such as bitwise variants
+    Minor,
+}
+
+impl MutationLevel {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            MutationLevel::Critical => "critical",
+            MutationLevel::Major => "major",
+            MutationLevel::Minor => "minor",
+        }
+    }
+}
+
+impl std::fmt::Display for MutationLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TestConfig {
     pub report_formats: Vec<ReportFormat>,
@@ -91,6 +122,7 @@ pub struct TestConfig {
     pub mutate: bool,
     pub mutate_overrides: Option<String>,
     pub mutate_contract: Option<String>,
+    pub mutation_levels: Vec<MutationLevel>,
     pub disable_rules: Vec<String>,
     pub fuzz_runs: Option<usize>,
     pub fuzz_max_test_rejects: Option<usize>,

@@ -220,6 +220,12 @@ Run tests in mutation testing mode.
 Contract ID to mutate during mutation testing.
 {{/option}}
 
+{{#option "`--mutation-levels` _level[,level...]_" }}
+Run only selected mutation levels.
+
+Accepted values: `critical`, `major`, `minor`.
+{{/option}}
+
 {{#option "`--disable-rule` _rule_" }}
 Disable a specific mutation rule.
 

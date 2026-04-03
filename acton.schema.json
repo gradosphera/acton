@@ -475,8 +475,41 @@
           "items": {
             "type": "string"
           }
+        },
+        "mutation-levels": {
+          "description": "List of mutation levels to run",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MutationLevel"
+          }
         }
       }
+    },
+    "MutationLevel": {
+      "description": "Mutation levels supported by mutation testing filters",
+      "oneOf": [
+        {
+          "description": "Security-sensitive control-flow, persistence, and upgrade mutations",
+          "type": "string",
+          "enum": [
+            "critical"
+          ]
+        },
+        {
+          "description": "High-signal behavioral mutations such as arithmetic and comparisons",
+          "type": "string",
+          "enum": [
+            "major"
+          ]
+        },
+        {
+          "description": "Broader low-priority mutations such as bitwise variants",
+          "type": "string",
+          "enum": [
+            "minor"
+          ]
+        }
+      ]
     },
     "Network": {
       "oneOf": [
