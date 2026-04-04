@@ -236,6 +236,7 @@ The `[test.mutation]` subsection configures default filters for
 | `diff`            | `string`   | Changed-line scope: `worktree`, `ref`, or `branch`.               |
 | `diff-ref`        | `string`   | Base ref used by `ref` mode and optional override for `branch`.   |
 | `mutation-levels` | `string[]` | List of mutation levels to run: `critical`, `major`, `minor`.     |
+| `minimum-percent` | `float`    | Minimum mutation score required for the run to succeed.           |
 | `disable-rules`   | `string[]` | List of rule IDs to disable during mutation testing.              |
 
 - `diff = "worktree"` compares the current worktree with `HEAD`. Use it for
@@ -247,11 +248,14 @@ The `[test.mutation]` subsection configures default filters for
   when the current branch has no upstream.
 - `mutation-levels` keeps only selected rule levels. For example,
   `["critical", "major"]` skips `minor` mutations.
+- `minimum-percent` fails the run when the resulting mutation score drops below
+  the threshold. Valid range: `0..=100`.
 - `disable-rules` excludes individual rule IDs after diff and level filters are
   applied.
 
 All filters compose, and the reported mutation score reflects only the mutants
-that remain after filtering.
+that remain after filtering. Compile errors are excluded from the score, and
+`minimum-percent` applies to that final mutation score.
 
 Example:
 ```toml
@@ -275,12 +279,13 @@ seed = 42
 diff = "branch"
 diff-ref = "origin/main"
 mutation-levels = ["critical", "major"]
+minimum-percent = 85
 disable-rules = ["flip_plus"]
 ```
 
 CLI flags such as `--mutation-diff`, `--mutation-diff-ref`,
-`--mutation-levels`, and `--disable-rule` override these defaults for the
-current run.
+`--mutation-levels`, `--mutation-minimum-percent`, and `--disable-rule`
+override these defaults for the current run.
 
 `fail-on-diff` is used together with baseline comparison mode (`acton test --baseline-snapshot <FILE>`).
 

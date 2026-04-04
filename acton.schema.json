@@ -488,6 +488,11 @@
             "type": "string"
           }
         },
+        "minimum-percent": {
+          "description": "Minimum mutation score percentage required for the run to succeed",
+          "type": "number",
+          "format": "double"
+        },
         "mutation-levels": {
           "description": "List of mutation levels to run",
           "type": "array",

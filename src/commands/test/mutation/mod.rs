@@ -267,6 +267,11 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
             "<CONTRACT_ID>".yellow()
         )
     };
+    if let Some(minimum_percent) = config.mutation_minimum_percent
+        && (!minimum_percent.is_finite() || !(0.0..=100.0).contains(&minimum_percent))
+    {
+        anyhow::bail!("mutation minimum percent must be between 0 and 100, got {minimum_percent}");
+    }
     let acton_config = ActonConfig::load()?;
     let contract = acton_config.get_contract(mutate_contract).ok_or_else(|| {
         anyhow!(error_fmt::contract_not_found(
@@ -532,6 +537,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
     } else {
         0.0
     };
+    let mut mutation_threshold_failed = false;
 
     println!();
 
@@ -592,6 +598,18 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
         }
     );
 
+    if let Some(minimum_percent) = config.mutation_minimum_percent
+        && mutation_score < minimum_percent
+    {
+        mutation_threshold_failed = true;
+        println!(
+            "\n{}: mutation score {:.2}% is below the required minimum of {:.2}%.",
+            "Error".red(),
+            mutation_score,
+            minimum_percent
+        );
+    }
+
     if results.is_empty() {
         println!("\n{} No mutation points found.\n", "○".dimmed());
     } else if survived_count > 0 {
@@ -642,6 +660,10 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
             "✓".green().bold(),
             "Excellent!".green().bold()
         );
+    }
+
+    if mutation_threshold_failed {
+        process::exit(1);
     }
 
     Ok(())

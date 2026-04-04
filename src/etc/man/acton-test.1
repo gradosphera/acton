@@ -238,6 +238,13 @@ Accepted values: \fBcritical\fR, \fBmajor\fR, \fBminor\fR\&.
 Useful for faster local runs such as \fBcritical,major\fR\&.
 .RE
 .sp
+\fB\-\-mutation\-minimum\-percent\fR \fIpercent\fR
+.RS 4
+Fail if mutation score is below this percentage.
+.sp
+Valid range: \fB0..=100\fR\&.
+.RE
+.sp
 \fB\-\-disable\-rule\fR \fIrule\fR
 .RS 4
 Disable a specific mutation rule.
@@ -362,6 +369,7 @@ include\-wrappers = true
 diff = "branch"
 diff\-ref = "origin/main"
 mutation\-levels = ["critical", "major"]
+minimum\-percent = 85
 disable\-rules = ["flip_plus"]
 .fi
 .RE
@@ -412,6 +420,11 @@ when \fB\-\-ui\fR is enabled
 .RS 4
 \h'-04'\(bu\h'+03'mutation scores in filtered runs only cover the selected mutants
 .RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-minimum\-percent\fR and \fB[test.mutation].minimum\-percent\fR apply to
+that filtered mutation score after compile errors are excluded
+.RE
 .SH "EXIT STATUS"
 .sp
 .RS 4
@@ -422,7 +435,8 @@ successfully.
 .RS 4
 \h'-04'\(bu\h'+03'\fB1\fR: At least one test failed, profiling drift was detected with
 \fB\-\-fail\-on\-diff\fR, line coverage was below the configured minimum in non\-UI
-coverage mode, no tests matched after filtering, or infrastructure such as
+coverage mode, mutation score was below the configured minimum in mutation
+mode, no tests matched after filtering, or infrastructure such as
 compilation, trace export, UI startup, or remote\-state resolution failed.
 .RE
 .SH "EXAMPLES"
@@ -508,17 +522,27 @@ acton test \-\-mutate \-\-mutate\-contract wallet \-\-mutation\-diff branch \-\-
 .RE
 .sp
 .RS 4
-\h'-04' 9.\h'+01'Debug a forked\-state failure with traces and the UI:
+\h'-04' 9.\h'+01'Fail the run when mutation score drops below 85%:
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract wallet \-\-mutation\-minimum\-percent 85
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 10.\h'+01'Debug a forked\-state failure with traces and the UI:
+.RE
 .sp
 .RS 4
 .nf
 acton test tests/wallet.test.tolk \-\-fork\-net testnet \-\-fork\-block\-number 55000000 \-\-save\-test\-trace \-\-ui
 .fi
 .RE
-.RE
 .sp
 .RS 4
-\h'-04' 10.\h'+01'Enforce a gas baseline in CI:
+\h'-04' 11.\h'+01'Enforce a gas baseline in CI:
 .RE
 .sp
 .RS 4

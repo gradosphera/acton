@@ -65,6 +65,7 @@ fn merge_test_config(
         None,
         None,
         vec![],
+        None,
         vec![],
         None,
         None,

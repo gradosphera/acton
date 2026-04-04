@@ -397,6 +397,23 @@ fn mutate_levels_filter_mutants_from_cli() {
 }
 
 #[test]
+fn mutate_minimum_percent_via_cli_fails_when_score_is_too_low() {
+    mutation_project("j-mutate-minimum-percent-cli")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-minimum-percent")
+        .arg("100")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_minimum_percent_via_cli.stdout.txt",
+        );
+}
+
+#[test]
 fn mutate_uses_mutation_diff_from_config() {
     let project = ProjectBuilder::new("j-mutate-config-diff-worktree")
         .without_acton_toml()
@@ -470,6 +487,40 @@ disable-rules = ["remove_assert", "flip_plus", "flip_gt_ge"]
 }
 
 #[test]
+fn mutate_uses_minimum_percent_from_config() {
+    ProjectBuilder::new("j-mutate-config-minimum-percent")
+        .without_acton_toml()
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .raw_file(
+            "Acton.toml",
+            r#"[package]
+name = "j-mutate-config-minimum-percent"
+description = "A test project"
+version = "0.1.0"
+
+[contracts.simple]
+name = "simple"
+src = "contracts/simple.tolk"
+
+[test.mutation]
+minimum-percent = 100
+"#,
+        )
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_uses_minimum_percent_from_config.stdout.txt",
+        );
+}
+
+#[test]
 fn mutate_uses_mutation_levels_from_config() {
     ProjectBuilder::new("j-mutate-config-mutation-levels")
         .without_acton_toml()
@@ -500,6 +551,40 @@ mutation-levels = ["critical"]
         .success()
         .assert_snapshot_matches(
             "integration/snapshots/test-runner/test_runner_mutate/mutate_uses_mutation_levels_from_config.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_rejects_invalid_minimum_percent_from_config() {
+    ProjectBuilder::new("j-mutate-config-invalid-minimum-percent")
+        .without_acton_toml()
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .raw_file(
+            "Acton.toml",
+            r#"[package]
+name = "j-mutate-config-invalid-minimum-percent"
+description = "A test project"
+version = "0.1.0"
+
+[contracts.simple]
+name = "simple"
+src = "contracts/simple.tolk"
+
+[test.mutation]
+minimum-percent = 101
+"#,
+        )
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_rejects_invalid_minimum_percent_from_config.stderr.txt",
         );
 }
 

@@ -485,6 +485,8 @@ pub struct MutationConfig {
     pub disable_rules: Option<Vec<String>>,
     /// List of mutation levels to run
     pub mutation_levels: Option<Vec<MutationLevel>>,
+    /// Minimum mutation score percentage required for the run to succeed
+    pub minimum_percent: Option<f64>,
     /// Diff scope used to limit mutation testing to changed lines
     pub diff: Option<MutationDiffMode>,
     /// Base ref used by diff-based mutation testing modes
@@ -1149,6 +1151,12 @@ impl TestSettings {
             .and_then(|coverage| coverage.include_tests)
     }
 
+    fn mutation_minimum_percent_value(&self) -> Option<f64> {
+        self.mutation
+            .as_ref()
+            .and_then(|mutation| mutation.minimum_percent)
+    }
+
     fn fuzz_runs_value(&self) -> Option<usize> {
         self.fuzz.as_ref().and_then(|fuzz| fuzz.runs)
     }
@@ -1194,6 +1202,7 @@ impl TestSettings {
         mutation_diff_override: Option<MutationDiffMode>,
         mutation_diff_ref_override: Option<String>,
         mutation_levels_override: Vec<MutationLevel>,
+        mutation_minimum_percent_override: Option<f64>,
         disable_rules_override: Vec<String>,
         fuzz_seed_override: Option<u64>,
         fail_on_diff_override: Option<bool>,
@@ -1291,6 +1300,8 @@ impl TestSettings {
             } else {
                 mutation_levels_override
             },
+            mutation_minimum_percent: mutation_minimum_percent_override
+                .or_else(|| self.mutation_minimum_percent_value()),
             mutation_diff: mutation_diff_override
                 .or_else(|| self.mutation.as_ref().and_then(|mutation| mutation.diff)),
             mutation_diff_ref: mutation_diff_ref_override.or_else(|| {
@@ -1381,6 +1392,28 @@ mutation-levels = ["critical", "major"]
             mutation.mutation_levels,
             Some(vec![MutationLevel::Critical, MutationLevel::Major])
         );
+    }
+
+    #[test]
+    fn test_mutation_minimum_percent_parsing() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[test.mutation]
+minimum-percent = 85
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let mutation = config
+            .test
+            .as_ref()
+            .and_then(|test| test.mutation.as_ref())
+            .expect("mutation config should be present");
+
+        assert_eq!(mutation.minimum_percent, Some(85.0));
     }
 
     #[test]

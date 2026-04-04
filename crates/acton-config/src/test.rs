@@ -154,6 +154,7 @@ pub struct TestConfig {
     pub mutate_overrides: Option<String>,
     pub mutate_contract: Option<String>,
     pub mutation_levels: Vec<MutationLevel>,
+    pub mutation_minimum_percent: Option<f64>,
     pub mutation_diff: Option<MutationDiffMode>,
     pub mutation_diff_ref: Option<String>,
     pub disable_rules: Vec<String>,

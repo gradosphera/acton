@@ -247,6 +247,12 @@ Accepted values: `critical`, `major`, `minor`.
 Useful for faster local runs such as `critical,major`.
 {{/option}}
 
+{{#option "`--mutation-minimum-percent` _percent_" }}
+Fail if mutation score is below this percentage.
+
+Valid range: `0..=100`.
+{{/option}}
+
 {{#option "`--disable-rule` _rule_" }}
 Disable a specific mutation rule.
 
@@ -319,6 +325,7 @@ include-wrappers = true
 diff = "branch"
 diff-ref = "origin/main"
 mutation-levels = ["critical", "major"]
+minimum-percent = 85
 disable-rules = ["flip_plus"]
 ```
 
@@ -340,6 +347,8 @@ CLI flags override config values for the current invocation.
 - `--mutation-diff ref` requires `--mutation-diff-ref`
 - `--mutation-diff branch` uses the upstream branch merge-base by default
 - mutation scores in filtered runs only cover the selected mutants
+- `--mutation-minimum-percent` and `[test.mutation].minimum-percent` apply to
+  that filtered mutation score after compile errors are excluded
 
 ## EXIT STATUS
 
@@ -347,7 +356,8 @@ CLI flags override config values for the current invocation.
   successfully.
 - `1`: At least one test failed, profiling drift was detected with
   `--fail-on-diff`, line coverage was below the configured minimum in non-UI
-  coverage mode, no tests matched after filtering, or infrastructure such as
+  coverage mode, mutation score was below the configured minimum in mutation
+  mode, no tests matched after filtering, or infrastructure such as
   compilation, trace export, UI startup, or remote-state resolution failed.
 
 ## EXAMPLES
@@ -400,13 +410,19 @@ CLI flags override config values for the current invocation.
    acton test --mutate --mutate-contract wallet --mutation-diff branch --mutation-levels critical,major
    ```
 
-9. Debug a forked-state failure with traces and the UI:
+9. Fail the run when mutation score drops below 85%:
+
+   ```bash
+   acton test --mutate --mutate-contract wallet --mutation-minimum-percent 85
+   ```
+
+10. Debug a forked-state failure with traces and the UI:
 
    ```bash
    acton test tests/wallet.test.tolk --fork-net testnet --fork-block-number 55000000 --save-test-trace --ui
    ```
 
-10. Enforce a gas baseline in CI:
+11. Enforce a gas baseline in CI:
 
    ```bash
    acton test --baseline-snapshot .acton/gas-baseline.json --fail-on-diff --reporter console,junit

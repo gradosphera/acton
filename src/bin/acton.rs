@@ -374,6 +374,14 @@ enum Commands {
         mutation_levels: Vec<MutationLevel>,
         #[arg(
             long,
+            value_name = "PERCENT",
+            value_parser = parse_mutation_percent,
+            help = "Fail if mutation score is below this percentage",
+            help_heading = "Mutation Testing"
+        )]
+        mutation_minimum_percent: Option<f64>,
+        #[arg(
+            long,
             help = "Disable specific mutation rules",
             help_heading = "Mutation Testing",
             value_name = "RULE"
@@ -1564,6 +1572,7 @@ fn main() {
             mutation_diff,
             mutation_diff_ref,
             mutation_levels,
+            mutation_minimum_percent,
             disable_rule,
             fail_fast,
             fuzz_seed,
@@ -1609,6 +1618,7 @@ fn main() {
                     mutation_diff,
                     mutation_diff_ref,
                     mutation_levels,
+                    mutation_minimum_percent,
                     disable_rule,
                     fuzz_seed,
                     Some(fail_fast),
@@ -2154,6 +2164,7 @@ fn create_test_config(
     mutation_diff: Option<MutationDiffMode>,
     mutation_diff_ref: Option<String>,
     mutation_levels: Vec<MutationLevel>,
+    mutation_minimum_percent: Option<f64>,
     disable_rules: Vec<String>,
     fuzz_seed: Option<u64>,
     fail_fast: Option<bool>,
@@ -2211,6 +2222,7 @@ fn create_test_config(
             mutation_diff,
             mutation_diff_ref,
             mutation_levels,
+            mutation_minimum_percent,
             disable_rules,
             fuzz_seed,
             if fail_on_diff { Some(true) } else { None },
@@ -2250,6 +2262,7 @@ fn create_test_config(
         mutation_diff,
         mutation_diff_ref,
         mutation_levels,
+        mutation_minimum_percent,
         disable_rules,
         fuzz_runs: None,
         fuzz_max_test_rejects: None,
@@ -2262,12 +2275,20 @@ fn create_test_config(
 }
 
 fn parse_coverage_percent(raw: &str) -> Result<f64, String> {
+    parse_minimum_percent(raw, "coverage percentage", "--coverage-minimum-percent")
+}
+
+fn parse_mutation_percent(raw: &str) -> Result<f64, String> {
+    parse_minimum_percent(raw, "mutation percentage", "--mutation-minimum-percent")
+}
+
+fn parse_minimum_percent(raw: &str, kind: &str, flag: &str) -> Result<f64, String> {
     let value = raw
         .parse::<f64>()
-        .map_err(|err| format!("invalid coverage percentage '{raw}': {err}"))?;
+        .map_err(|err| format!("invalid {kind} '{raw}': {err}"))?;
 
     if !value.is_finite() || !(0.0..=100.0).contains(&value) {
-        return Err("--coverage-minimum-percent must be between 0 and 100".to_string());
+        return Err(format!("{flag} must be between 0 and 100"));
     }
 
     Ok(value)
