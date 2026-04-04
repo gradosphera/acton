@@ -44,6 +44,8 @@ pub fn build_cmd(
 
     println!("   {} contracts", "Compiling".green().bold());
 
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
     let config = ActonConfig::load()?;
     let out_dir = resolve_build_output_dir(
         out_dir,
