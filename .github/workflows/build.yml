@@ -6,7 +6,7 @@ on:
       - master
   push:
     branches:
-      - master
+      - '**'
   workflow_dispatch:
 
 concurrency:
@@ -18,6 +18,7 @@ permissions: { }
 env:
   ENABLE_MIRRORING_RELEASE: 'true'
   PUBLIC_ACTON_REPOSITORY: i582/acton-public
+  ACTON_STATS_REPOSITORY: i582/acton-stats
 
 jobs:
   build-linux:
@@ -103,6 +104,21 @@ jobs:
       - name: Run Acton tests
         run: |
           acton test
+
+      - name: Collect jetton template stats
+        run: |
+          cargo xtask template-stats \
+            --template jetton \
+            --output "${RUNNER_TEMP}/jetton-template-stats-${TARGET_NAME}.jsonl"
+
+      - name: Upload jetton template stats artifact
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: template-stats-${{ env.TARGET_NAME }}
+          path: ${{ runner.temp }}/jetton-template-stats-${{ env.TARGET_NAME }}.jsonl
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Prepare trunk archive
         if: github.ref == 'refs/heads/master' && github.repository == 'ton-blockchain/acton'
@@ -321,9 +337,82 @@ jobs:
             --binary "${GITHUB_WORKSPACE}/target/${TARGET_NAME}/release/acton" \
             --target "${TARGET_NAME}"
 
+  publish-template-stats:
+    name: Publish template stats
+    needs: [ build-linux ]
+    runs-on: ubicloud-standard-2-ubuntu-2204
+    if: github.event_name == 'push' && github.repository == 'ton-blockchain/acton'
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download template stats artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: template-stats-*
+          path: stats-artifacts
+          merge-multiple: true
+
+      - name: Check out acton-stats repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.ACTON_STATS_REPOSITORY }}
+          token: ${{ secrets.ACTON_PUBLIC }}
+          path: acton-stats
+          ref: master
+
+      - name: Publish template stats
+        shell: bash
+        env:
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t stats_files < <(find stats-artifacts -type f -name '*.jsonl' | sort)
+
+          if [[ "${#stats_files[@]}" -eq 0 ]]; then
+            echo "No template stats artifacts found" >&2
+            exit 1
+          fi
+
+          safe_ref=$(printf '%s' "${GITHUB_REF_NAME}" | sed 's#[^A-Za-z0-9._-]#_#g')
+          date_path=$(date -u +%Y/%m/%d)
+          dest_dir="acton-stats/data/${GITHUB_REPOSITORY}/jetton/branches/${safe_ref}/${date_path}/${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "${dest_dir}"
+
+          for src in "${stats_files[@]}"; do
+            cp "${src}" "${dest_dir}/$(basename "${src}")"
+          done
+
+          cd acton-stats
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+
+          if git diff --cached --quiet; then
+            echo "No template stats changes to publish"
+            exit 0
+          fi
+
+          commit_body=$(cat <<EOF
+          Source workflow: ${RUN_URL}
+          Template: jetton
+          Repository: ${GITHUB_REPOSITORY}
+          Branch: ${GITHUB_REF_NAME}
+          Run: ${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT}
+          EOF
+          )
+
+          git commit \
+            -m "chore: publish Acton template stats for ${GITHUB_SHA}" \
+            -m "${commit_body}"
+
+          git push origin HEAD:master
+
   create-trunk-release:
     name: Create Trunk Release
-    needs: [ build-linux, build-macos, lint, ui ]
+    needs: [ build-linux, build-macos, lint, ui, publish-template-stats ]
     runs-on: ubicloud-standard-2-ubuntu-2204
     if: github.ref == 'refs/heads/master' && github.repository == 'ton-blockchain/acton'
 

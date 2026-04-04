@@ -21,6 +21,7 @@ enum CliCommand {
     Release(tasks::release::ReleaseArgs),
     Schema(tasks::schema::SchemaArgs),
     SyncArtifacts(tasks::sync_artifacts::SyncArtifactsArgs),
+    TemplateStats(tasks::template_stats::TemplateStatsArgs),
 }
 
 fn main() -> Result<()> {
@@ -34,5 +35,6 @@ fn main() -> Result<()> {
         CliCommand::Release(args) => tasks::release::run(args),
         CliCommand::Schema(args) => tasks::schema::run(args),
         CliCommand::SyncArtifacts(args) => tasks::sync_artifacts::run(args),
+        CliCommand::TemplateStats(args) => tasks::template_stats::run(args),
     }
 }

@@ -6402,11 +6402,13 @@ dependencies = [
  "indicatif",
  "owo-colors",
  "parse-changelog",
+ "quick-junit",
  "reqwest",
  "schemars 0.8.22",
  "serde",
  "serde_json",
  "tar",
+ "tempfile",
  "toml_edit 0.24.0+spec-1.1.0",
  "urlencoding",
 ]

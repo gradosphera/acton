@@ -28,4 +28,6 @@ urlencoding = { workspace = true }
 flate2 = { workspace = true }
 tar = { workspace = true }
 indicatif = { workspace = true }
+quick-junit = { workspace = true }
+tempfile = { workspace = true }
 parse-changelog = { version = "0.6.15", default-features = false }
