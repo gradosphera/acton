@@ -1302,6 +1302,7 @@ impl TestSettings {
             },
             mutation_minimum_percent: mutation_minimum_percent_override
                 .or_else(|| self.mutation_minimum_percent_value()),
+            mutation_ids: Vec::new(),
             mutation_diff: mutation_diff_override
                 .or_else(|| self.mutation.as_ref().and_then(|mutation| mutation.diff)),
             mutation_diff_ref: mutation_diff_ref_override.or_else(|| {

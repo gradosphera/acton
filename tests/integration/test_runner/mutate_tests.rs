@@ -397,6 +397,93 @@ fn mutate_levels_filter_mutants_from_cli() {
 }
 
 #[test]
+fn mutate_id_filters_specific_mutant_from_cli() {
+    mutation_project("j-mutate-id-cli")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-id")
+        .arg("2")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_id_filters_specific_mutant_from_cli.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_id_rejects_unknown_mutant() {
+    mutation_project("j-mutate-id-missing")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-id")
+        .arg("10")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_id_rejects_unknown_mutant.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_id_accepts_comma_separated_list() {
+    mutation_project("j-mutate-id-list")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-id")
+        .arg("1,3")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_id_accepts_comma_separated_list.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_id_zero_is_rejected() {
+    mutation_project("j-mutate-id-zero")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-id")
+        .arg("0")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_id_zero_is_rejected.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_id_must_match_current_filters() {
+    mutation_project("j-mutate-id-with-filters")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-levels")
+        .arg("critical")
+        .arg("--mutation-id")
+        .arg("2")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_id_must_match_current_filters.stderr.txt",
+        );
+}
+
+#[test]
 fn mutate_minimum_percent_via_cli_fails_when_score_is_too_low() {
     mutation_project("j-mutate-minimum-percent-cli")
         .acton()

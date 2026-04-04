@@ -373,6 +373,15 @@ enum Commands {
         )]
         mutation_levels: Vec<MutationLevel>,
         #[arg(
+            long = "mutation-id",
+            value_delimiter = ',',
+            value_parser = parse_mutation_id,
+            help = "Run only specific mutation IDs from a previous mutation report",
+            help_heading = "Mutation Testing",
+            value_name = "ID"
+        )]
+        id: Vec<usize>,
+        #[arg(
             long,
             value_name = "PERCENT",
             value_parser = parse_mutation_percent,
@@ -1572,6 +1581,7 @@ fn main() {
             mutation_diff,
             mutation_diff_ref,
             mutation_levels,
+            id,
             mutation_minimum_percent,
             disable_rule,
             fail_fast,
@@ -1618,6 +1628,7 @@ fn main() {
                     mutation_diff,
                     mutation_diff_ref,
                     mutation_levels,
+                    id,
                     mutation_minimum_percent,
                     disable_rule,
                     fuzz_seed,
@@ -2164,6 +2175,7 @@ fn create_test_config(
     mutation_diff: Option<MutationDiffMode>,
     mutation_diff_ref: Option<String>,
     mutation_levels: Vec<MutationLevel>,
+    mutation_ids: Vec<usize>,
     mutation_minimum_percent: Option<f64>,
     disable_rules: Vec<String>,
     fuzz_seed: Option<u64>,
@@ -2176,7 +2188,7 @@ fn create_test_config(
     if let Ok(acton_config) = acton_config
         && let Some(test_settings) = &acton_config.test
     {
-        return test_settings.to_test_config(
+        let mut config = test_settings.to_test_config(
             filter,
             report_formats,
             show_bodies,
@@ -2230,6 +2242,8 @@ fn create_test_config(
             ui,
             Some(ui_port),
         );
+        config.mutation_ids = mutation_ids;
+        return config;
     }
 
     TestConfig {
@@ -2262,6 +2276,7 @@ fn create_test_config(
         mutation_diff,
         mutation_diff_ref,
         mutation_levels,
+        mutation_ids,
         mutation_minimum_percent,
         disable_rules,
         fuzz_runs: None,
@@ -2280,6 +2295,18 @@ fn parse_coverage_percent(raw: &str) -> Result<f64, String> {
 
 fn parse_mutation_percent(raw: &str) -> Result<f64, String> {
     parse_minimum_percent(raw, "mutation percentage", "--mutation-minimum-percent")
+}
+
+fn parse_mutation_id(raw: &str) -> Result<usize, String> {
+    let value = raw
+        .parse::<usize>()
+        .map_err(|err| format!("invalid mutation ID '{raw}': {err}"))?;
+
+    if value == 0 {
+        return Err("--mutation-id must be 1 or greater".to_string());
+    }
+
+    Ok(value)
 }
 
 fn parse_minimum_percent(raw: &str, kind: &str, flag: &str) -> Result<f64, String> {

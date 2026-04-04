@@ -7,6 +7,7 @@ use acton_config::config::{ActonConfig, project_root as configured_project_root}
 use anyhow::anyhow;
 use path_absolutize::Absolutize;
 use serde_json::Value;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::{fs, process};
 use tempfile::TempDir;
@@ -22,7 +23,7 @@ struct MutationCandidate<'a> {
 }
 
 struct MutationResult<'a> {
-    index: usize,
+    id: usize,
     rule: MutationRule,
     node: Node<'a>,
     line: usize,
@@ -40,6 +41,7 @@ struct MutationSource {
 }
 
 struct GlobalMutation<'a> {
+    id: usize,
     candidate: MutationCandidate<'a>,
     source_index: usize,
 }
@@ -383,10 +385,39 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
                 continue;
             }
             global_mutations.push(GlobalMutation {
+                id: 0,
                 candidate,
                 source_index: idx,
             });
         }
+    }
+
+    for (index, mutation) in global_mutations.iter_mut().enumerate() {
+        mutation.id = index + 1;
+    }
+
+    let available_mutation_count = global_mutations.len();
+
+    if !config.mutation_ids.is_empty() {
+        let requested_ids: BTreeSet<_> = config.mutation_ids.iter().copied().collect();
+        let missing_ids: Vec<_> = requested_ids
+            .iter()
+            .copied()
+            .filter(|id| *id > available_mutation_count)
+            .collect();
+
+        if !missing_ids.is_empty() {
+            let missing = missing_ids
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            anyhow::bail!(
+                "Unknown mutation ID(s): {missing}. Run the same mutation command without --id to list available IDs"
+            );
+        }
+
+        global_mutations.retain(|mutation| requested_ids.contains(&mutation.id));
     }
 
     println!("{}", "Mutation Testing".bold());
@@ -411,6 +442,17 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
             .join(", ");
         println!("Levels:   {}", levels.bright_cyan());
     }
+    if !config.mutation_ids.is_empty() {
+        let mut ids = config.mutation_ids.clone();
+        ids.sort_unstable();
+        ids.dedup();
+        let ids = ids
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("IDs:      {}", ids.bright_cyan());
+    }
     println!("Files:    {}", sources.len().to_string().bright_cyan());
     println!(
         "Mutants:  {}\n",
@@ -425,17 +467,18 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
 
     let mut results = Vec::new();
 
-    for (index, global_mutation) in global_mutations.iter().enumerate() {
+    for global_mutation in &global_mutations {
         let mutation = &global_mutation.candidate;
         let source_idx = global_mutation.source_index;
+        let mutation_id = global_mutation.id;
         let source = &sources[source_idx];
         let pos = mutation.node.start_position();
 
         print!(
             "  {} Mutation {}/{} ",
             "◉".cyan(),
-            (index + 1).to_string().bright_white(),
-            global_mutations.len()
+            mutation_id.to_string().bright_white(),
+            available_mutation_count
         );
         print!(
             "{} ",
@@ -463,7 +506,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
             println!("{}", "COMPILE ERROR".yellow().bold());
 
             results.push(MutationResult {
-                index,
+                id: mutation_id,
                 rule: mutation.rule.clone(),
                 node: mutation.node,
                 line: pos.row + 1,
@@ -511,7 +554,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
         }
 
         results.push(MutationResult {
-            index,
+            id: mutation_id,
             rule: mutation.rule.clone(),
             node: mutation.node,
             line: pos.row + 1,
@@ -617,7 +660,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
         println!("{}", "─".repeat(60).dimmed());
 
         for result in results.iter().filter(|r| r.survived) {
-            println!("\n  {} Mutation #{}", "✗".red().bold(), (result.index + 1));
+            println!("\n  {} Mutation #{}", "✗".red().bold(), result.id);
             println!(
                 "  {}  {} {}",
                 "Rule:".dimmed(),

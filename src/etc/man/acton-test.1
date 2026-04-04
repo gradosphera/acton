@@ -238,6 +238,15 @@ Accepted values: \fBcritical\fR, \fBmajor\fR, \fBminor\fR\&.
 Useful for faster local runs such as \fBcritical,major\fR\&.
 .RE
 .sp
+\fB\-\-mutation\-id\fR \fIid\fR
+.RS 4
+Run only specific mutation IDs from a previous mutation report.
+.sp
+Pass the mutation number shown in the report, and use the same mutation filters
+such as \fB\-\-mutation\-diff\fR, \fB\-\-mutation\-levels\fR, and \fB\-\-disable\-rule\fR as the
+original run. May be passed multiple times or as a comma\-separated list.
+.RE
+.sp
 \fB\-\-mutation\-minimum\-percent\fR \fIpercent\fR
 .RS 4
 Fail if mutation score is below this percentage.
@@ -418,6 +427,11 @@ when \fB\-\-ui\fR is enabled
 .RE
 .sp
 .RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-id\fR expects mutation numbers from a previous run with the same mutation
+filters
+.RE
+.sp
+.RS 4
 \h'-04'\(bu\h'+03'mutation scores in filtered runs only cover the selected mutants
 .RE
 .sp
@@ -522,17 +536,27 @@ acton test \-\-mutate \-\-mutate\-contract wallet \-\-mutation\-diff branch \-\-
 .RE
 .sp
 .RS 4
-\h'-04' 9.\h'+01'Fail the run when mutation score drops below 85%:
+\h'-04' 9.\h'+01'Re\-run one specific mutant from a previous report:
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract wallet \-\-mutation\-id 2
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 10.\h'+01'Fail the run when mutation score drops below 85%:
+.RE
 .sp
 .RS 4
 .nf
 acton test \-\-mutate \-\-mutate\-contract wallet \-\-mutation\-minimum\-percent 85
 .fi
 .RE
-.RE
 .sp
 .RS 4
-\h'-04' 10.\h'+01'Debug a forked\-state failure with traces and the UI:
+\h'-04' 11.\h'+01'Debug a forked\-state failure with traces and the UI:
 .RE
 .sp
 .RS 4
@@ -542,7 +566,7 @@ acton test tests/wallet.test.tolk \-\-fork\-net testnet \-\-fork\-block\-number 
 .RE
 .sp
 .RS 4
-\h'-04' 11.\h'+01'Enforce a gas baseline in CI:
+\h'-04' 12.\h'+01'Enforce a gas baseline in CI:
 .RE
 .sp
 .RS 4

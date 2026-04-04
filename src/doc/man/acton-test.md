@@ -247,6 +247,14 @@ Accepted values: `critical`, `major`, `minor`.
 Useful for faster local runs such as `critical,major`.
 {{/option}}
 
+{{#option "`--mutation-id` _id_" }}
+Run only specific mutation IDs from a previous mutation report.
+
+Pass the mutation number shown in the report, and use the same mutation filters
+such as `--mutation-diff`, `--mutation-levels`, and `--disable-rule` as the
+original run. May be passed multiple times or as a comma-separated list.
+{{/option}}
+
 {{#option "`--mutation-minimum-percent` _percent_" }}
 Fail if mutation score is below this percentage.
 
@@ -346,6 +354,8 @@ CLI flags override config values for the current invocation.
 - `--mutation-diff worktree` is intended for uncommitted local changes
 - `--mutation-diff ref` requires `--mutation-diff-ref`
 - `--mutation-diff branch` uses the upstream branch merge-base by default
+- `--mutation-id` expects mutation numbers from a previous run with the same mutation
+  filters
 - mutation scores in filtered runs only cover the selected mutants
 - `--mutation-minimum-percent` and `[test.mutation].minimum-percent` apply to
   that filtered mutation score after compile errors are excluded
@@ -410,19 +420,25 @@ CLI flags override config values for the current invocation.
    acton test --mutate --mutate-contract wallet --mutation-diff branch --mutation-levels critical,major
    ```
 
-9. Fail the run when mutation score drops below 85%:
+9. Re-run one specific mutant from a previous report:
+
+   ```bash
+   acton test --mutate --mutate-contract wallet --mutation-id 2
+   ```
+
+10. Fail the run when mutation score drops below 85%:
 
    ```bash
    acton test --mutate --mutate-contract wallet --mutation-minimum-percent 85
    ```
 
-10. Debug a forked-state failure with traces and the UI:
+11. Debug a forked-state failure with traces and the UI:
 
    ```bash
    acton test tests/wallet.test.tolk --fork-net testnet --fork-block-number 55000000 --save-test-trace --ui
    ```
 
-11. Enforce a gas baseline in CI:
+12. Enforce a gas baseline in CI:
 
    ```bash
    acton test --baseline-snapshot .acton/gas-baseline.json --fail-on-diff --reporter console,junit
