@@ -483,6 +483,8 @@ const fn default_litenode_port() -> Option<u16> {
 pub struct MutationConfig {
     /// List of mutation rules to disable
     pub disable_rules: Option<Vec<String>>,
+    /// Path to a JSON file with custom query-based mutation rules
+    pub rules_file: Option<String>,
     /// List of mutation levels to run
     pub mutation_levels: Option<Vec<MutationLevel>>,
     /// Minimum mutation score percentage required for the run to succeed
@@ -1292,6 +1294,10 @@ impl TestSettings {
             mutate: mutate_override,
             mutate_overrides: mutate_overrides_override,
             mutate_contract: mutate_contract_override,
+            mutation_rules_file: self
+                .mutation
+                .as_ref()
+                .and_then(|mutation| mutation.rules_file.clone()),
             mutation_session_id: None,
             mutation_levels: if mutation_levels_override.is_empty() {
                 self.mutation
@@ -1440,6 +1446,33 @@ diff-ref = "origin/main"
 
         assert_eq!(mutation.diff, Some(MutationDiffMode::Branch));
         assert_eq!(mutation.diff_ref.as_deref(), Some("origin/main"));
+    }
+
+    #[test]
+    fn test_mutation_rules_file_parsing() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[contracts.counter]
+name = "Counter Contract"
+src = "counter.tolk"
+depends = []
+
+[test.mutation]
+rules-file = "mutation-rules.json"
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let mutation = config
+            .test
+            .as_ref()
+            .and_then(|test| test.mutation.as_ref())
+            .expect("mutation settings should be present");
+
+        assert_eq!(mutation.rules_file.as_deref(), Some("mutation-rules.json"));
     }
 
     #[test]

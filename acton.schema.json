@@ -499,6 +499,10 @@
           "items": {
             "$ref": "#/definitions/MutationLevel"
           }
+        },
+        "rules-file": {
+          "description": "Path to a JSON file with custom query-based mutation rules",
+          "type": "string"
         }
       }
     },

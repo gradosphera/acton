@@ -238,6 +238,7 @@ The `[test.mutation]` subsection configures default filters for
 | `mutation-levels` | `string[]` | List of mutation levels to run: `critical`, `major`, `minor`.     |
 | `minimum-percent` | `float`    | Minimum mutation score required for the run to succeed.           |
 | `disable-rules`   | `string[]` | List of rule IDs to disable during mutation testing.              |
+| `rules-file`      | `string`   | Path to a JSON file with custom query-based mutation rules.       |
 
 - `diff = "worktree"` compares the current worktree with `HEAD`. Use it for
   uncommitted local changes. Untracked files are treated as fully changed.
@@ -252,6 +253,8 @@ The `[test.mutation]` subsection configures default filters for
   the threshold. Valid range: `0..=100`.
 - `disable-rules` excludes individual rule IDs after diff and level filters are
   applied.
+- `rules-file` adds custom query-based rules from JSON. If a custom rule uses
+  the same ID as a built-in rule, it overrides the built-in one.
 
 All filters compose, and the reported mutation score reflects only the mutants
 that remain after filtering. Compile errors are excluded from the score, and
@@ -281,10 +284,12 @@ diff-ref = "origin/main"
 mutation-levels = ["critical", "major"]
 minimum-percent = 85
 disable-rules = ["flip_plus"]
+rules-file = "mutation-rules.json"
 ```
 
 CLI flags such as `--mutation-diff`, `--mutation-diff-ref`,
-`--mutation-levels`, `--mutation-minimum-percent`, and `--disable-rule`
+`--mutation-levels`, `--mutation-minimum-percent`, `--disable-rule`, and
+`--mutation-rules-file`
 override these defaults for the current run.
 
 `fail-on-diff` is used together with baseline comparison mode (`acton test --baseline-snapshot <FILE>`).

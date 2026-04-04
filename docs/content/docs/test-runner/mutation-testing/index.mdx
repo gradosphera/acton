@@ -53,6 +53,7 @@ acton test --mutate --mutate-contract wallet
 | `--mutation-diff <MODE>`          | Limits mutation testing to changed lines in `worktree`, `ref`, or `branch` scope.  |
 | `--mutation-diff-ref <REF>`       | Base ref used by `ref` mode and optional override for `branch` mode.               |
 | `--mutation-levels <LEVELS>`      | Runs only selected mutation levels such as `critical,major`.                       |
+| `--mutation-rules-file <PATH>`    | Loads custom query-based mutation rules from a JSON file.                          |
 | `--mutation-session-id <ID>`      | Reuses a session ID and appends progress to `.acton/mutation-sessions/<ID>.jsonl`. |
 | `--mutation-id <ID>`              | Re-runs only specific mutation IDs from a previous mutation report.                |
 | `--mutation-minimum-percent <P>`  | Fails the run when the mutation score drops below the required percentage.         |
@@ -115,6 +116,46 @@ acton test --mutate --mutate-contract wallet --mutation-diff worktree --mutation
 
 The reported mutation score always reflects only the mutants that remain after
 all filters are applied.
+
+#### Custom JSON rules
+
+Use `--mutation-rules-file` when you want to add project-specific query-based
+mutations without recompiling Acton.
+
+Custom rules are merged with the built-in set. If a custom rule uses the same
+rule ID as a built-in rule, the custom rule overrides it.
+
+Example:
+
+```json
+[
+  {
+    "name": "flip_plus_custom",
+    "description": "Replace + with *",
+    "explanation": "Custom arithmetic mutation loaded from JSON.",
+    "level": "major",
+    "group": "arithmetic",
+    "matcher": {
+      "type": "query",
+      "query": "(binary_operator operator_name: \"+\" @op)",
+      "capture": "op"
+    },
+    "edit": {
+      "type": "replace",
+      "replacement": "*"
+    }
+  }
+]
+```
+
+Then run:
+
+```bash
+acton test --mutate --mutate-contract wallet --mutation-rules-file mutation-rules.json
+```
+
+Currently, JSON rules support only the serializable `query` matcher and `remove`
+or `replace` edits.
 
 #### Session logs and resume
 

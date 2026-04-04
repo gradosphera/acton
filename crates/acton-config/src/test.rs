@@ -153,6 +153,7 @@ pub struct TestConfig {
     pub mutate: bool,
     pub mutate_overrides: Option<String>,
     pub mutate_contract: Option<String>,
+    pub mutation_rules_file: Option<String>,
     pub mutation_session_id: Option<String>,
     pub mutation_levels: Vec<MutationLevel>,
     pub mutation_minimum_percent: Option<f64>,

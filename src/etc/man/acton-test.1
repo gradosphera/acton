@@ -238,6 +238,15 @@ Accepted values: \fBcritical\fR, \fBmajor\fR, \fBminor\fR\&.
 Useful for faster local runs such as \fBcritical,major\fR\&.
 .RE
 .sp
+\fB\-\-mutation\-rules\-file\fR \fIpath\fR
+.RS 4
+Load custom query\-based mutation rules from a JSON file.
+.sp
+Custom rules are merged with built\-in rules. If a custom rule uses the same
+rule ID, it overrides the built\-in one. Relative paths are resolved from the
+project root.
+.RE
+.sp
 \fB\-\-mutation\-session\-id\fR \fIid\fR
 .RS 4
 Use a specific mutation session ID for progress logging and resume.
@@ -435,6 +444,11 @@ when \fB\-\-ui\fR is enabled
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'\fB\-\-mutation\-diff branch\fR uses the upstream branch merge\-base by default
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-rules\-file\fR loads custom query\-based rules from JSON and custom
+rules override built\-in rules with the same ID
 .RE
 .sp
 .RS 4

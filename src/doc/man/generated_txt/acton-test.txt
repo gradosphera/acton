@@ -166,6 +166,13 @@ OPTIONS
            Accepted values: critical, major, minor. Useful for faster local
            runs such as critical,major.
 
+       --mutation-rules-file path
+           Load custom query-based mutation rules from a JSON file.
+
+           Custom rules are merged with built-in rules. If a custom rule uses
+           the same rule ID, it overrides the built-in one. Relative paths are
+           resolved from the project root.
+
        --mutation-session-id id
            Use a specific mutation session ID for progress logging and resume.
 
@@ -305,6 +312,9 @@ NOTES
        o  --mutation-diff ref requires --mutation-diff-ref
 
        o  --mutation-diff branch uses the upstream branch merge-base by default
+
+       o  --mutation-rules-file loads custom query-based rules from JSON and
+          custom rules override built-in rules with the same ID
 
        o  --mutation-session-id writes append-only JSONL progress to
           .acton/mutation-sessions/<ID>.jsonl

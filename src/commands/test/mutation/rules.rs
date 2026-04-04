@@ -1,3 +1,9 @@
+use anyhow::Context;
+use path_absolutize::Absolutize;
+use serde::Deserialize;
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::Path;
 use tree_sitter::Node;
 
 pub(super) fn rules() -> Vec<MutationRule> {
@@ -591,13 +597,14 @@ pub(super) fn rules() -> Vec<MutationRule> {
     ]
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) enum MutationEdit {
     Remove,
-    Replace { replacement: &'static str },
+    Replace { replacement: String },
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub(super) enum MutationLevel {
     Critical,
     Major,
@@ -616,7 +623,7 @@ impl MutationLevel {
 
 pub(super) type NodePredicate = for<'a> fn(Node<'a>, &str) -> anyhow::Result<bool>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) enum MutationMatcher {
     Query {
         query: &'static str,
@@ -627,54 +634,181 @@ pub(super) enum MutationMatcher {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct MutationRule {
-    pub name: &'static str,
-    pub description: &'static str,
-    pub explanation: &'static str,
+    pub name: String,
+    pub description: String,
+    pub explanation: String,
     pub level: MutationLevel,
-    pub group: &'static str,
+    pub group: String,
     pub edit: MutationEdit,
     pub matcher: MutationMatcher,
 }
 
 impl MutationRule {
-    const fn remove(
-        name: &'static str,
-        description: &'static str,
-        explanation: &'static str,
+    fn remove(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        explanation: impl Into<String>,
         level: MutationLevel,
-        group: &'static str,
+        group: impl Into<String>,
         matcher: MutationMatcher,
     ) -> Self {
         Self {
-            name,
-            description,
-            explanation,
+            name: name.into(),
+            description: description.into(),
+            explanation: explanation.into(),
             level,
-            group,
+            group: group.into(),
             edit: MutationEdit::Remove,
             matcher,
         }
     }
 
-    const fn replace(
-        name: &'static str,
-        description: &'static str,
-        explanation: &'static str,
+    fn replace(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        explanation: impl Into<String>,
         level: MutationLevel,
-        group: &'static str,
+        group: impl Into<String>,
         matcher: MutationMatcher,
-        replacement: &'static str,
+        replacement: impl Into<String>,
     ) -> Self {
         Self {
-            name,
-            description,
-            explanation,
+            name: name.into(),
+            description: description.into(),
+            explanation: explanation.into(),
             level,
-            group,
-            edit: MutationEdit::Replace { replacement },
+            group: group.into(),
+            edit: MutationEdit::Replace {
+                replacement: replacement.into(),
+            },
             matcher,
         }
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum MutationRulesFile {
+    Bare(Vec<CustomMutationRule>),
+    Wrapped { rules: Vec<CustomMutationRule> },
+}
+
+impl MutationRulesFile {
+    fn into_rules(self) -> Vec<CustomMutationRule> {
+        match self {
+            Self::Bare(rules) => rules,
+            Self::Wrapped { rules } => rules,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+struct CustomMutationRule {
+    name: String,
+    description: String,
+    explanation: String,
+    level: MutationLevel,
+    group: String,
+    matcher: CustomMutationMatcher,
+    edit: CustomMutationEdit,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+enum CustomMutationMatcher {
+    Query { query: String, capture: String },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+enum CustomMutationEdit {
+    Remove,
+    Replace { replacement: String },
+}
+
+impl From<CustomMutationRule> for MutationRule {
+    fn from(rule: CustomMutationRule) -> Self {
+        let matcher = match rule.matcher {
+            CustomMutationMatcher::Query { query, capture } => MutationMatcher::Query {
+                query: Box::leak(query.into_boxed_str()),
+                capture: Box::leak(capture.into_boxed_str()),
+            },
+        };
+        let edit = match rule.edit {
+            CustomMutationEdit::Remove => MutationEdit::Remove,
+            CustomMutationEdit::Replace { replacement } => MutationEdit::Replace { replacement },
+        };
+
+        Self {
+            name: rule.name,
+            description: rule.description,
+            explanation: rule.explanation,
+            level: rule.level,
+            group: rule.group,
+            edit,
+            matcher,
+        }
+    }
+}
+
+pub(super) fn load_custom_rules(
+    project_root: &Path,
+    path: &str,
+) -> anyhow::Result<Vec<MutationRule>> {
+    let resolved_path = Path::new(path)
+        .absolutize_from(project_root)
+        .unwrap_or_else(|_| Path::new(path).into())
+        .to_path_buf();
+    let file_contents = fs::read_to_string(&resolved_path).with_context(|| {
+        format!(
+            "Failed to read custom mutation rules file '{}'",
+            resolved_path.display()
+        )
+    })?;
+    let file: MutationRulesFile = serde_json::from_str(&file_contents).with_context(|| {
+        format!(
+            "Failed to parse custom mutation rules file '{}' as JSON",
+            resolved_path.display()
+        )
+    })?;
+
+    let custom_rules = file.into_rules();
+    let mut seen_names = HashSet::new();
+    for rule in &custom_rules {
+        if !seen_names.insert(rule.name.clone()) {
+            anyhow::bail!(
+                "Custom mutation rules file '{}' contains duplicate rule name '{}'",
+                resolved_path.display(),
+                rule.name
+            );
+        }
+    }
+
+    Ok(custom_rules.into_iter().map(MutationRule::from).collect())
+}
+
+pub(super) fn merge_rules(
+    built_in_rules: Vec<MutationRule>,
+    custom_rules: Vec<MutationRule>,
+) -> Vec<MutationRule> {
+    let mut merged_rules = built_in_rules;
+    let mut built_in_rule_indexes = merged_rules
+        .iter()
+        .enumerate()
+        .map(|(index, rule)| (rule.name.clone(), index))
+        .collect::<HashMap<_, _>>();
+
+    for rule in custom_rules {
+        if let Some(index) = built_in_rule_indexes.get(&rule.name).copied() {
+            merged_rules[index] = rule;
+        } else {
+            built_in_rule_indexes.insert(rule.name.clone(), merged_rules.len());
+            merged_rules.push(rule);
+        }
+    }
+
+    merged_rules
 }

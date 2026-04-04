@@ -350,6 +350,13 @@ enum Commands {
         mutate_contract: Option<String>,
         #[arg(
             long,
+            help = "Path to a JSON file with custom query-based mutation rules",
+            help_heading = "Mutation Testing",
+            value_name = "PATH"
+        )]
+        mutation_rules_file: Option<String>,
+        #[arg(
+            long,
             help = "Session ID used for mutation progress logging and resume",
             help_heading = "Mutation Testing",
             value_name = "ID"
@@ -1585,6 +1592,7 @@ fn main() {
             mutate,
             mutate_overrides,
             mutate_contract,
+            mutation_rules_file,
             mutation_session_id,
             mutation_diff,
             mutation_diff_ref,
@@ -1633,6 +1641,7 @@ fn main() {
                     mutate,
                     mutate_overrides,
                     mutate_contract,
+                    mutation_rules_file,
                     mutation_session_id,
                     mutation_diff,
                     mutation_diff_ref,
@@ -2181,6 +2190,7 @@ fn create_test_config(
     mutate: bool,
     mutate_overrides: Option<String>,
     mutate_contract: Option<String>,
+    mutation_rules_file: Option<String>,
     mutation_session_id: Option<String>,
     mutation_diff: Option<MutationDiffMode>,
     mutation_diff_ref: Option<String>,
@@ -2253,6 +2263,9 @@ fn create_test_config(
             Some(ui_port),
         );
         config.mutation_ids = mutation_ids;
+        if mutation_rules_file.is_some() {
+            config.mutation_rules_file = mutation_rules_file;
+        }
         config.mutation_session_id = mutation_session_id;
         return config;
     }
@@ -2284,6 +2297,7 @@ fn create_test_config(
         mutate,
         mutate_overrides,
         mutate_contract,
+        mutation_rules_file,
         mutation_session_id,
         mutation_diff,
         mutation_diff_ref,

@@ -77,6 +77,44 @@ get fun addOne(x: int): int {
 }
 ";
 
+const CUSTOM_MUTATION_RULES_JSON: &str = r#"[
+  {
+    "name": "flip_plus_custom",
+    "description": "Replace + with *",
+    "explanation": "Custom arithmetic mutation loaded from JSON.",
+    "level": "major",
+    "group": "arithmetic",
+    "matcher": {
+      "type": "query",
+      "query": "(binary_operator operator_name: \"+\" @op)",
+      "capture": "op"
+    },
+    "edit": {
+      "type": "replace",
+      "replacement": "*"
+    }
+  }
+]"#;
+
+const CUSTOM_MUTATION_RULES_OVERRIDE_JSON: &str = r#"[
+  {
+    "name": "flip_plus",
+    "description": "Replace + with *",
+    "explanation": "Custom override mutation loaded from JSON.",
+    "level": "major",
+    "group": "arithmetic",
+    "matcher": {
+      "type": "query",
+      "query": "(binary_operator operator_name: \"+\" @op)",
+      "capture": "op"
+    },
+    "edit": {
+      "type": "replace",
+      "replacement": "*"
+    }
+  }
+]"#;
+
 fn mutation_project(name: &str) -> Project {
     ProjectBuilder::new(name)
         .contract("simple", MUTATION_CONTRACT)
@@ -571,6 +609,226 @@ fn mutate_id_must_match_current_filters() {
         .failure()
         .assert_stderr_snapshot_matches(
             "integration/snapshots/test-runner/test_runner_mutate/mutate_id_must_match_current_filters.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_custom_rules_file_via_cli() {
+    ProjectBuilder::new("j-mutate-custom-rules-cli")
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .raw_file("mutation-rules.json", CUSTOM_MUTATION_RULES_JSON)
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-rules-file")
+        .arg("mutation-rules.json")
+        .arg("--disable-rule")
+        .arg("remove_assert")
+        .arg("--disable-rule")
+        .arg("flip_plus")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_custom_rules_file_via_cli.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_custom_rules_file_overrides_builtin_rule_by_name() {
+    ProjectBuilder::new("j-mutate-custom-rules-override")
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .raw_file("mutation-rules.json", CUSTOM_MUTATION_RULES_OVERRIDE_JSON)
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-rules-file")
+        .arg("mutation-rules.json")
+        .arg("--disable-rule")
+        .arg("remove_assert")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_custom_rules_file_overrides_builtin_rule_by_name.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_custom_rules_file_from_config() {
+    ProjectBuilder::new("j-mutate-custom-rules-config")
+        .without_acton_toml()
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .raw_file("mutation-rules.json", CUSTOM_MUTATION_RULES_JSON)
+        .raw_file(
+            "Acton.toml",
+            r#"[package]
+name = "j-mutate-custom-rules-config"
+description = "A test project"
+version = "0.1.0"
+
+[contracts.simple]
+name = "simple"
+src = "contracts/simple.tolk"
+
+[test.mutation]
+rules-file = "mutation-rules.json"
+disable-rules = ["remove_assert", "flip_plus"]
+"#,
+        )
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_custom_rules_file_from_config.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_custom_rules_file_cli_overrides_config() {
+    ProjectBuilder::new("j-mutate-custom-rules-cli-overrides-config")
+        .without_acton_toml()
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .raw_file("mutation-rules.json", CUSTOM_MUTATION_RULES_JSON)
+        .raw_file(
+            "Acton.toml",
+            r#"[package]
+name = "j-mutate-custom-rules-cli-overrides-config"
+description = "A test project"
+version = "0.1.0"
+
+[contracts.simple]
+name = "simple"
+src = "contracts/simple.tolk"
+
+[test.mutation]
+rules-file = "missing-rules.json"
+disable-rules = ["remove_assert", "flip_plus"]
+"#,
+        )
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-rules-file")
+        .arg("mutation-rules.json")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_custom_rules_file_cli_overrides_config.stdout.txt",
+        );
+}
+
+#[test]
+fn mutate_custom_rules_file_rejects_invalid_json() {
+    ProjectBuilder::new("j-mutate-custom-rules-invalid-json")
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .raw_file("mutation-rules.json", "{ invalid json")
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-rules-file")
+        .arg("mutation-rules.json")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_custom_rules_file_rejects_invalid_json.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_custom_rules_file_rejects_missing_file() {
+    ProjectBuilder::new("j-mutate-custom-rules-missing-file")
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-rules-file")
+        .arg("missing-rules.json")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_custom_rules_file_rejects_missing_file.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_custom_rules_file_rejects_duplicate_rule_names() {
+    ProjectBuilder::new("j-mutate-custom-rules-duplicate-names")
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", PASSING_TEST)
+        .raw_file(
+            "mutation-rules.json",
+            r#"[
+  {
+    "name": "dup_rule",
+    "description": "Replace + with *",
+    "explanation": "First duplicate rule.",
+    "level": "major",
+    "group": "arithmetic",
+    "matcher": {
+      "type": "query",
+      "query": "(binary_operator operator_name: \"+\" @op)",
+      "capture": "op"
+    },
+    "edit": {
+      "type": "replace",
+      "replacement": "*"
+    }
+  },
+  {
+    "name": "dup_rule",
+    "description": "Replace + with -",
+    "explanation": "Second duplicate rule.",
+    "level": "major",
+    "group": "arithmetic",
+    "matcher": {
+      "type": "query",
+      "query": "(binary_operator operator_name: \"+\" @op)",
+      "capture": "op"
+    },
+    "edit": {
+      "type": "replace",
+      "replacement": "-"
+    }
+  }
+]"#,
+        )
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-rules-file")
+        .arg("mutation-rules.json")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_custom_rules_file_rejects_duplicate_rule_names.stderr.txt",
         );
 }
 

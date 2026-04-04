@@ -247,6 +247,14 @@ Accepted values: `critical`, `major`, `minor`.
 Useful for faster local runs such as `critical,major`.
 {{/option}}
 
+{{#option "`--mutation-rules-file` _path_" }}
+Load custom query-based mutation rules from a JSON file.
+
+Custom rules are merged with built-in rules. If a custom rule uses the same
+rule ID, it overrides the built-in one. Relative paths are resolved from the
+project root.
+{{/option}}
+
 {{#option "`--mutation-session-id` _id_" }}
 Use a specific mutation session ID for progress logging and resume.
 
@@ -364,6 +372,8 @@ CLI flags override config values for the current invocation.
 - `--mutation-diff worktree` is intended for uncommitted local changes
 - `--mutation-diff ref` requires `--mutation-diff-ref`
 - `--mutation-diff branch` uses the upstream branch merge-base by default
+- `--mutation-rules-file` loads custom query-based rules from JSON and custom
+  rules override built-in rules with the same ID
 - `--mutation-session-id` writes append-only JSONL progress to
   `.acton/mutation-sessions/<ID>.jsonl`
 - pressing `Ctrl+C` during mutation testing stops the run without finalizing the

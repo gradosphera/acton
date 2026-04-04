@@ -1,7 +1,9 @@
 use crate::commands::common::error_fmt;
 use crate::commands::test::TestConfig;
 use crate::commands::test::mutation::diff::collect_mutation_diff_scope;
-use crate::commands::test::mutation::rules::{MutationEdit, MutationMatcher, MutationRule, rules};
+use crate::commands::test::mutation::rules::{
+    MutationEdit, MutationMatcher, MutationRule, load_custom_rules, merge_rules, rules,
+};
 use crate::commands::test::mutation::session::{
     MutationRecord, MutationSessionEvent, MutationStatus, append_mutation_session_event,
     load_or_create_mutation_session, mutation_summary,
@@ -232,7 +234,7 @@ fn collect_mutations<'a>(
 }
 
 fn apply_mutation(source: &str, candidate: &MutationCandidate) -> String {
-    match candidate.rule.edit {
+    match &candidate.rule.edit {
         MutationEdit::Remove => remove_node_from_source(source, &candidate.node),
         MutationEdit::Replace { replacement } => {
             replace_node_in_source(source, &candidate.node, replacement)
@@ -598,7 +600,14 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
         fs::write(&dest_path, &source.content)?;
     }
 
-    let mutation_rules = rules();
+    let mutation_rules = if let Some(custom_rules_file) = &config.mutation_rules_file {
+        merge_rules(
+            rules(),
+            load_custom_rules(&project_root, custom_rules_file)?,
+        )
+    } else {
+        rules()
+    };
     let filtered_rules: Vec<MutationRule> = mutation_rules
         .into_iter()
         .filter(|rule| !all_disable_rules.contains(&rule.name.to_string()))
