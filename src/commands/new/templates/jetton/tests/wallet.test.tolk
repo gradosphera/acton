@@ -55,7 +55,7 @@ get fun `test minter admin should be able to mint jettons`() {
     expect(mintResult).toHaveTx({
         from: wallet.address,
         to: minter.address,
-        exitCode: Errors.InvalidMessage as int,
+        exitCode: 1,
     });
 
     // check state
