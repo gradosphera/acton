@@ -316,16 +316,16 @@ fn mutate_reports_summary() {
 }
 
 #[test]
-fn mutate_disable_rule_filters_mutants() {
+fn mutate_disable_rules_filter_mutants() {
     mutation_project("j-mutate-disable-rule")
         .acton()
         .test()
         .arg("--mutate")
         .arg("--mutate-contract")
         .arg("simple")
-        .arg("--disable-rule")
+        .arg("--mutation-disable-rules")
         .arg("remove_assert")
-        .arg("--disable-rule")
+        .arg("--mutation-disable-rules")
         .arg("flip_plus")
         .run()
         .success()
@@ -660,9 +660,9 @@ fn mutate_custom_rules_file_via_cli() {
         .arg("simple")
         .arg("--mutation-rules-file")
         .arg("mutation-rules.json")
-        .arg("--disable-rule")
+        .arg("--mutation-disable-rules")
         .arg("remove_assert")
-        .arg("--disable-rule")
+        .arg("--mutation-disable-rules")
         .arg("flip_plus")
         .run()
         .success()
@@ -685,7 +685,7 @@ fn mutate_custom_rules_file_overrides_builtin_rule_by_name() {
         .arg("simple")
         .arg("--mutation-rules-file")
         .arg("mutation-rules.json")
-        .arg("--disable-rule")
+        .arg("--mutation-disable-rules")
         .arg("remove_assert")
         .run()
         .success()

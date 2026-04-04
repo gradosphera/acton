@@ -276,7 +276,7 @@ own isolated mutation workspace and reuses it across multiple mutants.
 Run only specific mutation IDs from a previous mutation report.
 
 Pass the mutation number shown in the report, and use the same mutation filters
-such as `--mutation-diff`, `--mutation-levels`, and `--disable-rule` as the
+such as `--mutation-diff`, `--mutation-levels`, and `--mutation-disable-rules` as the
 original run. May be passed multiple times or as a comma-separated list.
 {{/option}}
 
@@ -286,7 +286,7 @@ Fail if mutation score is below this percentage.
 Valid range: `0..=100`.
 {{/option}}
 
-{{#option "`--disable-rule` _rule_" }}
+{{#option "`--mutation-disable-rules` _rule_" }}
 Disable a specific mutation rule.
 
 May be passed multiple times.

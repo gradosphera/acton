@@ -58,7 +58,7 @@ acton test --mutate --mutate-contract wallet
 | `--mutation-workers <N>`          | Overrides mutation parallelism. Defaults to the host's available parallelism.      |
 | `--mutation-id <ID>`              | Re-runs only specific mutation IDs from a previous mutation report.                |
 | `--mutation-minimum-percent <P>`  | Fails the run when the mutation score drops below the required percentage.         |
-| `--disable-rule <RULE>`           | Disables specific mutation rules (can be used multiple times).                     |
+| `--mutation-disable-rules <RULE>` | Disables specific mutation rules (can be used multiple times).                     |
 
 ### Parallel Workers
 
@@ -119,17 +119,17 @@ Use `--mutation-levels` to restrict the run to selected rule levels:
 acton test --mutate --mutate-contract wallet --mutation-levels critical,major
 ```
 
-Use `--disable-rule` to exclude noisy or intentionally ignored rules:
+Use `--mutation-disable-rules` to exclude noisy or intentionally ignored rules:
 
 ```bash
-acton test --mutate --mutate-contract wallet --disable-rule flip_plus --disable-rule flip_minus
+acton test --mutate --mutate-contract wallet --mutation-disable-rules flip_plus --mutation-disable-rules flip_minus
 ```
 
 All mutation filters compose. For example, this command runs only `critical`
 mutations on lines changed in the current worktree and skips one specific rule:
 
 ```bash
-acton test --mutate --mutate-contract wallet --mutation-diff worktree --mutation-levels critical --disable-rule remove_logical_not
+acton test --mutate --mutate-contract wallet --mutation-diff worktree --mutation-levels critical --mutation-disable-rules remove_logical_not
 ```
 
 The reported mutation score always reflects only the mutants that remain after
@@ -212,7 +212,7 @@ acton test --mutate --mutate-contract wallet --mutation-id 1,3
 ```
 
 If you also use filters such as `--mutation-diff`, `--mutation-levels`, or
-`--disable-rule`, the IDs must still exist after those filters are applied.
+`--mutation-disable-rules`, the IDs must still exist after those filters are applied.
 When you combine this with `--mutation-session-id`, the session must be created
 with the same filtered mutation set.
 

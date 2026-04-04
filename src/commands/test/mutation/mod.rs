@@ -657,7 +657,7 @@ fn mutation_resume_command(path: &Option<String>, config: &TestConfig, session_i
     }
 
     for rule in &config.disable_rules {
-        args.push("--disable-rule".to_owned());
+        args.push("--mutation-disable-rules".to_owned());
         args.push(shell_quote(rule));
     }
 

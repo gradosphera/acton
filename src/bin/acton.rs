@@ -417,7 +417,7 @@ enum Commands {
             help_heading = "Mutation Testing",
             value_name = "RULE"
         )]
-        disable_rule: Vec<String>,
+        mutation_disable_rules: Vec<String>,
         #[arg(
             long,
             help = "Open test results in a browser",
@@ -1608,7 +1608,7 @@ fn main() {
             mutation_levels,
             id,
             mutation_minimum_percent,
-            disable_rule,
+            mutation_disable_rules,
             fail_fast,
             fuzz_seed,
             fork_block_number,
@@ -1658,7 +1658,7 @@ fn main() {
                     mutation_levels,
                     id,
                     mutation_minimum_percent,
-                    disable_rule,
+                    mutation_disable_rules,
                     fuzz_seed,
                     Some(fail_fast),
                     ui,

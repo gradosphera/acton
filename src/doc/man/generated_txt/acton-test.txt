@@ -194,15 +194,15 @@ OPTIONS
 
            Pass the mutation number shown in the report, and use the same
            mutation filters such as --mutation-diff, --mutation-levels, and
-           --disable-rule as the original run. May be passed multiple times or
-           as a comma-separated list.
+           --mutation-disable-rules as the original run. May be passed multiple
+           times or as a comma-separated list.
 
        --mutation-minimum-percent percent
            Fail if mutation score is below this percentage.
 
            Valid range: 0..=100.
 
-       --disable-rule rule
+       --mutation-disable-rules rule
            Disable a specific mutation rule.
 
            May be passed multiple times.
