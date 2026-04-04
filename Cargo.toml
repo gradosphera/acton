@@ -115,6 +115,7 @@ log = "0.4.29" # overall logging
 fern = "0.7.1" # overall logging
 chrono = { version = "0.4", features = ["serde"] }
 walkdir = "2.5" # test discovery
+rayon = "1.11.0"
 sha2 = "0.10" # for cache
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] } # fast file content hash for cache
 fs2 = "0.4" # build cache locking
@@ -250,6 +251,7 @@ log = { workspace = true } # overall logging
 fern = { workspace = true } # overall logging
 chrono = { workspace = true }
 walkdir = { workspace = true } # test discovery
+rayon = { workspace = true }
 sha2 = { workspace = true } # for cache
 xxhash-rust = { workspace = true } # fast file content hash for cache
 fs2 = { workspace = true } # build cache locking

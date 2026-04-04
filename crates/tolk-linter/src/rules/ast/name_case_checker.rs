@@ -7,7 +7,6 @@ use tolk_macros::ViolationMetadata;
 use tolk_resolver::Symbol;
 use tolk_resolver::file_index::FileId;
 use tolk_resolver::resolve_index::LocalDefKind;
-use tolk_ty::GlobalUsages;
 
 /// ### What it does
 /// Checks identifier naming style and suggests consistent casing.
@@ -98,12 +97,11 @@ fn check_case(symbol: &Symbol, checker: &mut Checker, symbol_def_file_id: FileId
         },
     ];
 
-    let usages = GlobalUsages::new(checker.type_db.project_index, checker.body_types);
-    for usage in usages.for_symbol(symbol.id) {
+    for (usage_file_id, usage) in checker.global_usages_with_file(symbol.id) {
         edits.push(Edit {
-            span: usage.usage.span,
+            span: usage.span,
             replacement: correct_case.clone(),
-            file_id: usage.file_id,
+            file_id: usage_file_id,
         });
     }
 
@@ -123,7 +121,7 @@ fn check_case(symbol: &Symbol, checker: &mut Checker, symbol_def_file_id: FileId
 }
 
 pub fn check_name_cases(checker: &mut Checker) -> Option<()> {
-    for file_index in checker.type_db.project_index.workspace_files() {
+    for file_index in checker.workspace_files() {
         let file_id = file_index.id;
         let Some(resolve_index) = checker.resolve_index_for(file_id) else {
             continue;

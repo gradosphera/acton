@@ -6,7 +6,8 @@
 use crate::file_db::FileDb;
 use crate::file_index::{FileId, FileIndex, FileSource, Import, Symbol, SymbolId, SymbolKind};
 use crate::resolve_index::{FileResolveIndex, NameUse};
-use rustc_hash::FxHashMap;
+use rayon::prelude::*;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -61,6 +62,14 @@ impl ProjectIndex {
     /// Creates a new builder for `ProjectIndex`.
     pub fn builder(file_db: &'_ FileDb, root_path: PathBuf) -> ProjectIndexBuilder<'_> {
         ProjectIndexBuilder::new(file_db, root_path)
+    }
+
+    /// Creates a new builder for `ProjectIndex` with multiple roots.
+    pub fn builder_for_roots(
+        file_db: &'_ FileDb,
+        root_paths: Vec<PathBuf>,
+    ) -> ProjectIndexBuilder<'_> {
+        ProjectIndexBuilder::new_multi(file_db, root_paths)
     }
 
     #[must_use]
@@ -161,19 +170,28 @@ impl ProjectIndex {
     /// Returns a list of all file IDs that are recursively reachable from the given file.
     #[must_use]
     pub fn reachable_files(&self, file_id: FileId) -> Vec<FileId> {
-        // TODO: add common.tolk
+        let Some(_) = self.files.get(&file_id) else {
+            return Vec::new();
+        };
+
         let mut queue = VecDeque::new();
         queue.push_back(file_id);
 
-        let mut result = vec![file_id];
+        let mut visited = FxHashSet::default();
+        visited.insert(file_id);
+
+        let mut result = Vec::new();
         while let Some(file_id) = queue.pop_front() {
+            result.push(file_id);
             let Some(imports) = self.imports.get(&file_id) else {
                 continue;
             };
 
-            let imported_files = imports.iter().filter_map(|import| import.target);
-            result.extend(imported_files.clone());
-            queue.extend(imported_files);
+            for imported_file in imports.iter().filter_map(|import| import.target) {
+                if visited.insert(imported_file) {
+                    queue.push_back(imported_file);
+                }
+            }
         }
 
         result
@@ -309,16 +327,20 @@ impl ProjectIndex {
 /// A builder for creating a `ProjectIndex`.
 pub struct ProjectIndexBuilder<'a> {
     file_db: &'a FileDb,
-    root_path: PathBuf,
+    root_paths: Vec<PathBuf>,
     stdlib_path: Option<PathBuf>,
     mappings: FxHashMap<String, String>,
 }
 
 impl<'a> ProjectIndexBuilder<'a> {
     pub fn new(file_db: &'a FileDb, root_path: PathBuf) -> Self {
+        Self::new_multi(file_db, vec![root_path])
+    }
+
+    pub fn new_multi(file_db: &'a FileDb, root_paths: Vec<PathBuf>) -> Self {
         Self {
             file_db,
-            root_path,
+            root_paths,
             stdlib_path: None,
             mappings: FxHashMap::default(),
         }
@@ -354,26 +376,49 @@ impl<'a> ProjectIndexBuilder<'a> {
     /// Builds the `ProjectIndex` by recursively following imports from the root file.
     pub fn build(self) -> anyhow::Result<ProjectIndex> {
         let mut errors = vec![];
-        let root_path = self.file_db.canonicalize(self.root_path)?;
-
-        let root = match self.file_db.process(&root_path) {
-            Ok(info) => info.index().clone(),
-            Err(err) => {
-                anyhow::bail!("Cannot process root file: {err}")
-            }
-        };
+        if self.root_paths.is_empty() {
+            anyhow::bail!("No root files provided");
+        }
 
         let mut files = FxHashMap::default();
         let mut queue = VecDeque::new();
-        queue.extend(
-            root.imports
-                .iter()
-                .map(|import| (root.id, import.path.clone())),
-        );
-
         let mut path_to_file_id = HashMap::new();
-        path_to_file_id.insert(root.path.clone(), root.id);
-        files.insert(root.id, root);
+
+        let root_paths = self
+            .root_paths
+            .into_iter()
+            .map(|root_path| self.file_db.canonicalize(root_path))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let roots = root_paths
+            .into_par_iter()
+            .map(|root_path| {
+                self.file_db
+                    .process(&root_path)
+                    .map(|info| info.index().clone())
+                    .map_err(|err| anyhow::anyhow!("Cannot process root file: {err}"))
+            })
+            .collect::<Vec<_>>();
+
+        for root in roots {
+            let root = root?;
+
+            let file_id = match path_to_file_id.get(&root.path).copied() {
+                Some(existing_id) => existing_id,
+                None => {
+                    let file_id = root.id;
+                    path_to_file_id.insert(root.path.clone(), file_id);
+                    files.insert(file_id, root.clone());
+                    file_id
+                }
+            };
+
+            queue.extend(
+                root.imports
+                    .iter()
+                    .map(|import| (file_id, import.path.clone())),
+            );
+        }
 
         // process common.tolk file if stdlib_path is provided
         if let Some(ref stdlib) = self.stdlib_path {

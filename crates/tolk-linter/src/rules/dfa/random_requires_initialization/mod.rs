@@ -117,13 +117,13 @@ enum CachedSummary {
     Ready(analysis::InitializationSummary),
 }
 
-struct RandomSummaryComputer<'a, 'b> {
-    checker: &'a mut Checker<'b>,
+struct RandomSummaryComputer<'checker, 'db, 'a> {
+    checker: &'checker mut Checker<'db, 'a>,
     summary_cache: FxHashMap<SymbolId, CachedSummary>,
 }
 
-impl<'a, 'b> RandomSummaryComputer<'a, 'b> {
-    fn new(checker: &'a mut Checker<'b>) -> Self {
+impl<'checker, 'db, 'a> RandomSummaryComputer<'checker, 'db, 'a> {
+    fn new(checker: &'checker mut Checker<'db, 'a>) -> Self {
         Self {
             checker,
             summary_cache: FxHashMap::default(),
@@ -181,7 +181,7 @@ impl<'a, 'b> RandomSummaryComputer<'a, 'b> {
     }
 }
 
-impl analysis::SummaryProvider for RandomSummaryComputer<'_, '_> {
+impl analysis::SummaryProvider for RandomSummaryComputer<'_, '_, '_> {
     fn summary_for(&mut self, symbol_id: SymbolId) -> analysis::InitializationSummary {
         self.summary_for_symbol(symbol_id)
     }
