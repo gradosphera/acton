@@ -29,6 +29,7 @@ dependencies = [
  "comfy-table",
  "crash-handler",
  "crc",
+ "crossbeam-channel",
  "ctrlc",
  "dap",
  "dap-client",

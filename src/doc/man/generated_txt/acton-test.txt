@@ -182,6 +182,13 @@ OPTIONS
            you stop the run with Ctrl+C, Acton prints a resume command that
            includes the same session ID.
 
+       --mutation-workers count
+           Override the number of mutation workers.
+
+           By default, Acton uses the host’s available parallelism. Each
+           worker keeps its own isolated mutation workspace and reuses it
+           across multiple mutants.
+
        --mutation-id id
            Run only specific mutation IDs from a previous mutation report.
 
@@ -319,6 +326,9 @@ NOTES
        o  --mutation-session-id writes append-only JSONL progress to
           .acton/mutation-sessions/<ID>.jsonl
 
+       o  --mutation-workers defaults to the host’s available parallelism;
+          each worker reuses its own isolated mutation workspace
+
        o  pressing Ctrl+C during mutation testing stops the run without
           finalizing the session and prints a resume command for the same
           session ID
@@ -387,11 +397,15 @@ EXAMPLES
 
            acton test --mutate --mutate-contract wallet --mutation-minimum-percent 85
 
-       12. Debug a forked-state failure with traces and the UI:
+       12. Limit mutation testing to four workers:
+
+           acton test --mutate --mutate-contract wallet --mutation-workers 4
+
+       13. Debug a forked-state failure with traces and the UI:
 
            acton test tests/wallet.test.tolk --fork-net testnet --fork-block-number 55000000 --save-test-trace --ui
 
-       13. Enforce a gas baseline in CI:
+       14. Enforce a gas baseline in CI:
 
            acton test --baseline-snapshot .acton/gas-baseline.json --fail-on-diff --reporter console,junit
 

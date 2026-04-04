@@ -55,9 +55,27 @@ acton test --mutate --mutate-contract wallet
 | `--mutation-levels <LEVELS>`      | Runs only selected mutation levels such as `critical,major`.                       |
 | `--mutation-rules-file <PATH>`    | Loads custom query-based mutation rules from a JSON file.                          |
 | `--mutation-session-id <ID>`      | Reuses a session ID and appends progress to `.acton/mutation-sessions/<ID>.jsonl`. |
+| `--mutation-workers <N>`          | Overrides mutation parallelism. Defaults to the host's available parallelism.      |
 | `--mutation-id <ID>`              | Re-runs only specific mutation IDs from a previous mutation report.                |
 | `--mutation-minimum-percent <P>`  | Fails the run when the mutation score drops below the required percentage.         |
 | `--disable-rule <RULE>`           | Disables specific mutation rules (can be used multiple times).                     |
+
+### Parallel Workers
+
+Mutation testing can spawn a lot of compile and test workers. By default, Acton
+uses the host's available parallelism and keeps one isolated mutation
+workspace per worker.
+
+Use `--mutation-workers <N>` when you want to cap or raise concurrency for a
+specific run:
+
+```bash
+acton test --mutate --mutate-contract wallet --mutation-workers 4
+```
+
+This is useful when you want to reduce CPU, disk, or process pressure on a
+laptop or CI machine. Results are still reported incrementally as workers
+finish, while output stays ordered by mutation ID.
 
 ### Scoping Mutation Runs
 

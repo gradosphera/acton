@@ -258,6 +258,14 @@ If you stop the run with \fBCtrl+C\fR, Acton prints a resume command that includ
 the same session ID.
 .RE
 .sp
+\fB\-\-mutation\-workers\fR \fIcount\fR
+.RS 4
+Override the number of mutation workers.
+.sp
+By default, Acton uses the host\[cq]s available parallelism. Each worker keeps its
+own isolated mutation workspace and reuses it across multiple mutants.
+.RE
+.sp
 \fB\-\-mutation\-id\fR \fIid\fR
 .RS 4
 Run only specific mutation IDs from a previous mutation report.
@@ -457,6 +465,11 @@ rules override built\-in rules with the same ID
 .RE
 .sp
 .RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-workers\fR defaults to the host\[cq]s available parallelism; each
+worker reuses its own isolated mutation workspace
+.RE
+.sp
+.RS 4
 \h'-04'\(bu\h'+03'pressing \fBCtrl+C\fR during mutation testing stops the run without finalizing the
 session and prints a resume command for the same session ID
 .RE
@@ -601,7 +614,17 @@ acton test \-\-mutate \-\-mutate\-contract wallet \-\-mutation\-minimum\-percent
 .RE
 .sp
 .RS 4
-\h'-04' 12.\h'+01'Debug a forked\-state failure with traces and the UI:
+\h'-04' 12.\h'+01'Limit mutation testing to four workers:
+.RE
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract wallet \-\-mutation\-workers 4
+.fi
+.RE
+.sp
+.RS 4
+\h'-04' 13.\h'+01'Debug a forked\-state failure with traces and the UI:
 .RE
 .sp
 .RS 4
@@ -611,7 +634,7 @@ acton test tests/wallet.test.tolk \-\-fork\-net testnet \-\-fork\-block\-number 
 .RE
 .sp
 .RS 4
-\h'-04' 13.\h'+01'Enforce a gas baseline in CI:
+\h'-04' 14.\h'+01'Enforce a gas baseline in CI:
 .RE
 .sp
 .RS 4

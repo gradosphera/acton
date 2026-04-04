@@ -364,6 +364,14 @@ enum Commands {
         mutation_session_id: Option<String>,
         #[arg(
             long,
+            value_parser = parse_mutation_workers,
+            help = "Number of worker threads used for mutation testing (defaults to available parallelism)",
+            help_heading = "Mutation Testing",
+            value_name = "N"
+        )]
+        mutation_workers: Option<usize>,
+        #[arg(
+            long,
             value_enum,
             help = "Limit mutation testing to changed lines in the selected diff scope",
             help_heading = "Mutation Testing",
@@ -1594,6 +1602,7 @@ fn main() {
             mutate_contract,
             mutation_rules_file,
             mutation_session_id,
+            mutation_workers,
             mutation_diff,
             mutation_diff_ref,
             mutation_levels,
@@ -1643,6 +1652,7 @@ fn main() {
                     mutate_contract,
                     mutation_rules_file,
                     mutation_session_id,
+                    mutation_workers,
                     mutation_diff,
                     mutation_diff_ref,
                     mutation_levels,
@@ -2192,6 +2202,7 @@ fn create_test_config(
     mutate_contract: Option<String>,
     mutation_rules_file: Option<String>,
     mutation_session_id: Option<String>,
+    mutation_workers: Option<usize>,
     mutation_diff: Option<MutationDiffMode>,
     mutation_diff_ref: Option<String>,
     mutation_levels: Vec<MutationLevel>,
@@ -2267,6 +2278,7 @@ fn create_test_config(
             config.mutation_rules_file = mutation_rules_file;
         }
         config.mutation_session_id = mutation_session_id;
+        config.mutation_workers = mutation_workers;
         return config;
     }
 
@@ -2299,6 +2311,7 @@ fn create_test_config(
         mutate_contract,
         mutation_rules_file,
         mutation_session_id,
+        mutation_workers,
         mutation_diff,
         mutation_diff_ref,
         mutation_levels,
@@ -2330,6 +2343,18 @@ fn parse_mutation_id(raw: &str) -> Result<usize, String> {
 
     if value == 0 {
         return Err("--mutation-id must be 1 or greater".to_string());
+    }
+
+    Ok(value)
+}
+
+fn parse_mutation_workers(raw: &str) -> Result<usize, String> {
+    let value = raw
+        .parse::<usize>()
+        .map_err(|err| format!("invalid mutation worker count '{raw}': {err}"))?;
+
+    if value == 0 {
+        return Err("--mutation-workers must be 1 or greater".to_string());
     }
 
     Ok(value)

@@ -594,6 +594,40 @@ fn mutate_id_zero_is_rejected() {
 }
 
 #[test]
+fn mutate_workers_zero_is_rejected() {
+    mutation_project("j-mutate-workers-zero")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-workers")
+        .arg("0")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_workers_zero_is_rejected.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_workers_requires_numeric_value() {
+    mutation_project("j-mutate-workers-invalid")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--mutation-workers")
+        .arg("abc")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_workers_requires_numeric_value.stderr.txt",
+        );
+}
+
+#[test]
 fn mutate_id_must_match_current_filters() {
     mutation_project("j-mutate-id-with-filters")
         .acton()
@@ -923,6 +957,18 @@ fn mutate_session_resume_skips_completed_mutants() {
         .iter()
         .find(|line| line.contains("\"event\":\"mutation_completed\""))
         .expect("missing mutation_completed line");
+    let completed_event = serde_json::from_str::<Value>(first_completed_line)
+        .expect("failed to parse first mutation_completed event");
+    let completed_id = completed_event
+        .get("record")
+        .and_then(|record| record.get("id"))
+        .and_then(Value::as_u64)
+        .expect("missing completed mutation ID") as usize;
+    let remaining_id = match completed_id {
+        1 => 2,
+        2 => 1,
+        other => panic!("unexpected completed mutation ID {other}"),
+    };
     fs::write(
         &progress_path,
         format!("{session_started_line}\n{first_completed_line}\n"),
@@ -941,14 +987,22 @@ fn mutate_session_resume_skips_completed_mutants() {
         .arg("1,2")
         .run()
         .success();
-
-    output
-        .assert_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_mutate/mutate_session_resume_skips_completed_mutants.stdout.txt",
-        )
-        .assert_stderr_snapshot_matches(
-            "integration/snapshots/test-runner/test_runner_mutate/mutate_session_resume_skips_completed_mutants.stderr.txt",
-        );
+    let stdout = output.get_normalized_stdout();
+    assert!(
+        stdout.contains(&format!("Mutation {remaining_id}/3")),
+        "expected resumed run to execute remaining mutation {remaining_id}, got:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains(&format!("Mutation {completed_id}/3")),
+        "expected resumed run to skip completed mutation {completed_id}, got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Total mutants        2"),
+        "expected resumed summary in stdout, got:\n{stdout}"
+    );
+    output.assert_stderr_snapshot_matches(
+        "integration/snapshots/test-runner/test_runner_mutate/mutate_session_resume_skips_completed_mutants.stderr.txt",
+    );
 
     let resumed_events = read_jsonl_events(&progress_path);
     assert_eq!(

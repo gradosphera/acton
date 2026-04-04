@@ -567,6 +567,21 @@ the same session ID.
 <CommandOption>
 <CommandOptionTitle>
 
+`--mutation-workers` _count_
+
+</CommandOptionTitle>
+
+Override the number of mutation workers.
+
+By default, Acton uses the host's available parallelism. Each worker keeps its
+own isolated mutation workspace and reuses it across multiple mutants.
+
+</CommandOption>
+
+
+<CommandOption>
+<CommandOptionTitle>
+
 `--mutation-id` _id_
 
 </CommandOptionTitle>
@@ -749,6 +764,8 @@ CLI flags override config values for the current invocation.
   rules override built-in rules with the same ID
 - `--mutation-session-id` writes append-only JSONL progress to
   `.acton/mutation-sessions/<ID>.jsonl`
+- `--mutation-workers` defaults to the host's available parallelism; each
+  worker reuses its own isolated mutation workspace
 - pressing `Ctrl+C` during mutation testing stops the run without finalizing the
   session and prints a resume command for the same session ID
 - `--mutation-id` expects mutation numbers from a previous run with the same mutation
@@ -835,13 +852,19 @@ CLI flags override config values for the current invocation.
    acton test --mutate --mutate-contract wallet --mutation-minimum-percent 85
    ```
 
-12. Debug a forked-state failure with traces and the UI:
+12. Limit mutation testing to four workers:
+
+   ```bash
+   acton test --mutate --mutate-contract wallet --mutation-workers 4
+   ```
+
+13. Debug a forked-state failure with traces and the UI:
 
    ```bash
    acton test tests/wallet.test.tolk --fork-net testnet --fork-block-number 55000000 --save-test-trace --ui
    ```
 
-13. Enforce a gas baseline in CI:
+14. Enforce a gas baseline in CI:
 
    ```bash
    acton test --baseline-snapshot .acton/gas-baseline.json --fail-on-diff --reporter console,junit

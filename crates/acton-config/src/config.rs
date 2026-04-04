@@ -1299,6 +1299,7 @@ impl TestSettings {
                 .as_ref()
                 .and_then(|mutation| mutation.rules_file.clone()),
             mutation_session_id: None,
+            mutation_workers: None,
             mutation_levels: if mutation_levels_override.is_empty() {
                 self.mutation
                     .as_ref()
