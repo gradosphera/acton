@@ -119,3 +119,27 @@ jobs:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
 ```
+
+## GitLab CI
+
+If you run CI on GitLab, you can use the published Acton Docker image.
+This example also uploads a GitLab Code Quality report for merge requests:
+
+```yaml title=".gitlab-ci.yml"
+image: ghcr.io/ton-blockchain/acton:<version>
+
+stages:
+  - validate
+
+validate:
+  stage: validate
+  script:
+    - acton --version
+    - acton build
+    - acton test
+    - acton check --output-format gitlab --output-file gl-code-quality-report.json
+    - acton fmt --check
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
+```
