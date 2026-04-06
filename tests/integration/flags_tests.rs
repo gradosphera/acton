@@ -1143,6 +1143,31 @@ fn test_manifest_path_test_profiling_snapshots_use_project_root() {
 }
 
 #[test]
+fn test_snapshot_nested_output_creates_parent_directories() {
+    let project = ProjectBuilder::new("profiling-snapshot-nested-output")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("profile", PROFILED_TEST)
+        .build();
+    project.acton().init().run().success();
+
+    let snapshot_path = "build/profiles/profile-baseline.json";
+
+    project
+        .acton()
+        .test()
+        .arg("--snapshot")
+        .arg(snapshot_path)
+        .run()
+        .success()
+        .assert_contains("Gas snapshot saved to build/profiles/profile-baseline.json");
+
+    assert!(
+        project.path().join(snapshot_path).exists(),
+        "snapshot file should be created with missing parent dirs"
+    );
+}
+
+#[test]
 fn test_fail_on_diff_exits_non_zero_for_profile_drift() {
     let project = ProjectBuilder::new("profiling-fail-on-diff")
         .contract("simple", SIMPLE_CONTRACT)

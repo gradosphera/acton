@@ -727,6 +727,7 @@ pub(super) fn generate_lcov_file(
     coverage: &Coverage,
     output_path: &str,
 ) -> Result<(), std::io::Error> {
+    ensure_output_parent_dir(output_path)?;
     fs::write(output_path, generate_lcov_report(coverage))
 }
 
@@ -734,8 +735,19 @@ pub(super) fn generate_text_file(
     coverage: &Coverage,
     output_path: &str,
 ) -> Result<(), std::io::Error> {
+    ensure_output_parent_dir(output_path)?;
     let text_content = generate_text_report(coverage);
     fs::write(output_path, text_content)
+}
+
+fn ensure_output_parent_dir(output_path: &str) -> Result<(), std::io::Error> {
+    let path = Path::new(output_path);
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)?;
+    }
+    Ok(())
 }
 
 fn generate_text_report(coverage: &Coverage) -> String {

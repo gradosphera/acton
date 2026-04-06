@@ -1532,3 +1532,45 @@ fn test_coverage_lcov_output_write_error_is_non_zero() {
             "integration/snapshots/test_coverage_lcov_output_write_error.stderr.txt",
         );
 }
+
+#[test]
+fn test_coverage_text_output_creates_parent_directories() {
+    let project = build_partial_coverage_project("coverage-text-nested-output").build();
+
+    let coverage_path = "build/reports/text/output.txt";
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file(coverage_path)
+        .run()
+        .success()
+        .assert_contains("Text coverage file saved in build/reports/text/output.txt");
+
+    assert!(
+        project.path().join(coverage_path).exists(),
+        "text coverage file should be created with missing parent dirs"
+    );
+}
+
+#[test]
+fn test_coverage_lcov_output_creates_parent_directories() {
+    let project = build_partial_coverage_project("coverage-lcov-nested-output").build();
+
+    let coverage_path = "build/reports/lcov/output.info";
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("lcov")
+        .with_coverage_file(coverage_path)
+        .run()
+        .success()
+        .assert_contains("LCOV file saved in build/reports/lcov/output.info");
+
+    assert!(
+        project.path().join(coverage_path).exists(),
+        "lcov coverage file should be created with missing parent dirs"
+    );
+}
