@@ -77,4 +77,5 @@ fun main() {
     println(
         format2("Successfully minted and transferred {} tokens to {}", supply, deployer.address),
     );
+    println1("Total supply is {}", minter.getTotalSupply());
 }

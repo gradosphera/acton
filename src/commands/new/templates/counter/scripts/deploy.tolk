@@ -17,4 +17,5 @@ fun main() {
     }
 
     println1("Deployed counter to {}", counter.address);
+    println1("Counter value is {}", counter.currentCounter());
 }

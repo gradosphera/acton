@@ -47,6 +47,32 @@ const ASSERTION_FAILED_EXIT_CODE: i32 = 567;
 const CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT: i32 = 678;
 const CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE: i32 = 679;
 
+fn resolve_script_networks(
+    broadcast: bool,
+    net: Option<&str>,
+    fork_net: Option<&str>,
+) -> anyhow::Result<(Option<Network>, Option<Network>)> {
+    let net = net.map(Network::from_str).transpose()?;
+    let fork_net = fork_net.map(Network::from_str).transpose()?;
+
+    if !broadcast {
+        return Ok((net, fork_net));
+    }
+
+    if let (Some(net), Some(fork_net)) = (&net, &fork_net)
+        && net != fork_net
+    {
+        anyhow::bail!(
+            "`--broadcast` cannot use different `--net` ({net}) and `--fork-net` ({fork_net}); use one network or omit `--fork-net`"
+        );
+    }
+
+    let net = net.or_else(|| fork_net.clone()).or(Some(Network::Testnet));
+    let fork_net = fork_net.or_else(|| net.clone());
+
+    Ok((net, fork_net))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn script_cmd(
     path: &String,
@@ -93,10 +119,8 @@ pub fn script_cmd(
 
     let stack = parse_stack_args(args)?;
 
-    let network = match &net {
-        Some(net) => Some(Network::from_str(net)?),
-        None => None,
-    };
+    let (network, fork_net) =
+        resolve_script_networks(broadcast, net.as_deref(), fork_net.as_deref())?;
     let debug_listener = if debug {
         Some(reserve_dap_listener(debug_port)?)
     } else {
@@ -135,7 +159,7 @@ fn run_script_file(
     debug: bool,
     backtrace: Option<BacktraceMode>,
     debug_listener: Option<TcpListener>,
-    fork_net: Option<String>,
+    fork_net: Option<Network>,
     api_key: Option<String>,
     fork_block_number: Option<u64>,
     broadcast: bool,
@@ -200,7 +224,7 @@ fn execute_script(
     backtrace: Option<BacktraceMode>,
     debug_listener: Option<TcpListener>,
     verbosity: ExecutorVerbosity,
-    fork_net: Option<String>,
+    fork_net: Option<Network>,
     api_key: Option<String>,
     fork_block_number: Option<u64>,
     broadcast: bool,
@@ -231,7 +255,6 @@ fn execute_script(
     };
 
     let config_b64: Option<&str> = None;
-    let fork_net = fork_net.map(|n| Network::from_str(&n)).transpose()?;
 
     let mut emulator = Emulator::new(verbosity, config_b64)?;
     let resolver = match &fork_net {
