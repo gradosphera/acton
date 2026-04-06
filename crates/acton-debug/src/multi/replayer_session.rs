@@ -119,6 +119,7 @@ impl ReplayerDebugSession {
         ) || function_name.contains("runGetMethod")
     }
 
+    #[must_use]
     pub fn new(transport: DapTransport, replayer: TolkReplayer, root_name: Arc<str>) -> Self {
         Self {
             transport,
@@ -386,11 +387,10 @@ impl ReplayerDebugSession {
         let Some(top_frame) = call_stack.last() else {
             return false;
         };
-        let file_id = top_frame
-            .definition_loc
-            .as_ref()
-            .map(|loc| loc.file_id())
-            .unwrap_or_else(|| ctx.replayer.current_file_id());
+        let file_id = top_frame.definition_loc.as_ref().map_or_else(
+            || ctx.replayer.current_file_id(),
+            tolkc::source_map::SrcRange::file_id,
+        );
         let Some(path) = ctx.replayer.file_full_path(file_id) else {
             return true;
         };
@@ -466,7 +466,7 @@ impl ReplayerDebugSession {
         });
         let top_name =
             Self::format_frame_name(context_label, top_frame, replayer.current_file_name());
-        let top_is_builtin = top_frame.map(|f| f.is_builtin).unwrap_or(false);
+        let top_is_builtin = top_frame.is_some_and(|f| f.is_builtin);
         let stopped_on_exception = replayer.last_exception().is_some();
 
         let mut frames = Vec::new();

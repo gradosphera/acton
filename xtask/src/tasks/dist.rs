@@ -98,9 +98,10 @@ fn create_archive(
     profile: &str,
     output_dir: Option<&Path>,
 ) -> Result<ArchiveOutput> {
-    let output_dir = output_dir
-        .map(|path| resolve_path(workspace_root, path))
-        .unwrap_or_else(|| workspace_root.to_path_buf());
+    let output_dir = output_dir.map_or_else(
+        || workspace_root.to_path_buf(),
+        |path| resolve_path(workspace_root, path),
+    );
     ensure_output_dir_exists(&output_dir)?;
 
     let binary_path = workspace_root

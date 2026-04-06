@@ -1360,7 +1360,7 @@ fn render_help_command(command: Option<String>) -> anyhow::Result<()> {
             let mut message = format!("no such command: `{command}`");
             if let Some((suggestion, _)) = cli
                 .get_subcommands()
-                .map(|subcommand| subcommand.get_name())
+                .map(clap::Command::get_name)
                 .filter(|name| *name != "help")
                 .map(|name| (name, strsim::jaro_winkler(command, name)))
                 .filter(|(_, score)| *score >= 0.80)

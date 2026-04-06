@@ -508,6 +508,7 @@ impl MessageIterState {
             .is_none_or(|cursor| cursor.pending.is_empty())
     }
 
+    #[must_use]
     pub fn peek_next(&self, id: u64) -> Option<(PendingMessageStep, HashBytes)> {
         let cursor = self.cursors.get(&id)?;
         let pending = cursor.pending.front()?.clone();

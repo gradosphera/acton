@@ -32,9 +32,9 @@ pub enum ReportFormat {
     /// Human-readable console output
     #[default]
     Console,
-    /// TeamCity service messages
+    /// `TeamCity` service messages
     TeamCity,
-    /// JUnit XML report
+    /// `JUnit` XML report
     JUnit,
     /// Compact dot-progress output
     Dot,
@@ -78,6 +78,7 @@ pub enum MutationLevel {
 }
 
 impl MutationLevel {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             MutationLevel::Critical => "critical",
@@ -109,6 +110,7 @@ pub enum MutationDiffMode {
 }
 
 impl MutationDiffMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             MutationDiffMode::Worktree => "worktree",

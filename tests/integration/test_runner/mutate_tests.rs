@@ -127,7 +127,7 @@ fn git(project_root: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(project_root)
         .output()
-        .unwrap_or_else(|err| panic!("failed to run git {:?}: {err}", args))
+        .unwrap_or_else(|err| panic!("failed to run git {args:?}: {err}"))
 }
 
 fn git_ok(project_root: &Path, args: &[&str], context: &str) {
@@ -235,15 +235,12 @@ fn spawn_mutation_process(project: &Project, args: &[&str]) -> Child {
 fn wait_for_event_count(progress_path: &Path, minimum_lines: usize) {
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
-        let line_count = fs::read_to_string(progress_path)
-            .ok()
-            .map(|content| {
-                content
-                    .lines()
-                    .filter(|line| !line.trim().is_empty())
-                    .count()
-            })
-            .unwrap_or(0);
+        let line_count = fs::read_to_string(progress_path).ok().map_or(0, |content| {
+            content
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .count()
+        });
         if line_count >= minimum_lines {
             return;
         }

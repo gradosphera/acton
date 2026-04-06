@@ -75,11 +75,11 @@ struct DapState {
     resolved_breakpoints: HashMap<(usize, usize), Vec<i64>>,
 
     next_req_id: i64,
-    /// Maps frame ref_id (returned in StackTrace) → depth_from_top (0 = innermost).
-    /// Rebuilt on every StackTrace request.
+    /// Maps frame `ref_id` (returned in `StackTrace`) → `depth_from_top` (0 = innermost).
+    /// Rebuilt on every `StackTrace` request.
     frame_to_depth: HashMap<i64, usize>,
-    /// Maps variable req_id → RenderedValue for structured drill-down.
-    /// Rebuilt on every StackTrace request (old values are stale after stepping).
+    /// Maps variable `req_id` → `RenderedValue` for structured drill-down.
+    /// Rebuilt on every `StackTrace` request (old values are stale after stepping).
     vars_debug_values: HashMap<i64, RenderedValue>,
 }
 
@@ -140,7 +140,7 @@ impl DapState {
         id
     }
 
-    /// Store a RenderedValue and return its req_id for DAP drill-down.
+    /// Store a `RenderedValue` and return its `req_id` for DAP drill-down.
     fn store_debug_value(&mut self, dv: RenderedValue) -> i64 {
         let id = self.alloc_req_id();
         self.vars_debug_values.insert(id, dv);
@@ -183,7 +183,7 @@ fn build_source(replayer: &TolkReplayer, file_id: usize) -> Source {
     let short_name = replayer.file_display_name(file_id);
     Source {
         name: Some(short_name.to_string()),
-        path: full_path.map(|s| s.to_string()),
+        path: full_path.map(ToString::to_string),
         source_reference: None,
         presentation_hint: None,
         origin: None,
@@ -554,9 +554,8 @@ fn handle_stack_trace(state: &mut DapState, req: Request) -> Response {
         let top_source = build_source(r, file_id);
         let top_name = call_stack
             .last()
-            .map(format_frame_name)
-            .unwrap_or_else(|| r.current_file_name().to_string());
-        let top_is_builtin = call_stack.last().map(|f| f.is_builtin).unwrap_or(false);
+            .map_or_else(|| r.current_file_name().to_string(), format_frame_name);
+        let top_is_builtin = call_stack.last().is_some_and(|f| f.is_builtin);
         let stopped_on_exception = r.last_exception().is_some();
 
         struct ParentData {

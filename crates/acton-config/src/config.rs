@@ -110,14 +110,14 @@ pub enum ContractDependency {
     },
 }
 
-/// TonCenter API endpoints for a custom network
+/// `TonCenter` API endpoints for a custom network
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields)]
 pub struct CustomNetworkApiConfig {
-    /// The URL for the TonCenter API v2. For localnet this defaults to
+    /// The URL for the `TonCenter` API v2. For localnet this defaults to
     /// `http://localhost:<litenode.port>/api/v2` with `5411` as the fallback port
     pub v2: Option<String>,
-    /// The URL for the TonCenter API v3. For localnet this defaults to
+    /// The URL for the `TonCenter` API v3. For localnet this defaults to
     /// `http://localhost:<litenode.port>/api/v3` with `5411` as the fallback port
     pub v3: Option<String>,
 }
@@ -129,7 +129,7 @@ pub struct CustomNetworkConfig {
     /// Base URL used to build transaction links for this network. Acton appends
     /// `/tx/<hash>` automatically and derives links from `api.v2` when omitted
     pub explorer: Option<String>,
-    /// TonCenter API endpoints for this network
+    /// `TonCenter` API endpoints for this network
     pub api: Option<CustomNetworkApiConfig>,
 }
 
@@ -284,9 +284,9 @@ pub struct TestSettings {
     pub exclude: Option<Vec<String>>,
     /// Glob patterns to include in testing
     pub include: Option<Vec<String>>,
-    /// Directory for JUnit XML reports
+    /// Directory for `JUnit` XML reports
     pub junit_path: Option<String>,
-    /// Merge all test suites into a single JUnit file
+    /// Merge all test suites into a single `JUnit` file
     pub junit_merge: Option<bool>,
     /// Network to fork for testing
     #[schemars(with = "Option<Network>")]
@@ -469,7 +469,7 @@ pub struct LitenodeSettings {
     /// Wallet names from `[wallets]` that are automatically funded and deployed on
     /// `acton litenode start`
     pub accounts: Option<Vec<String>>,
-    /// Maximum number of API requests per second served by LiteNode `/api` endpoints
+    /// Maximum number of API requests per second served by `LiteNode` `/api` endpoints
     pub rate_limit: Option<u32>,
 }
 

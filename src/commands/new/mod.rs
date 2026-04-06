@@ -449,21 +449,18 @@ fn update_package_json_name(normalized_name: &str) -> anyhow::Result<bool> {
         return Ok(has_workspaces);
     }
 
-    match &mut package_json {
-        JsonValue::Object(object) => {
-            object.insert(
-                "name".to_owned(),
-                JsonValue::String(normalized_name.to_owned()),
-            );
-        }
-        _ => {
-            let mut object = JsonMap::new();
-            object.insert(
-                "name".to_owned(),
-                JsonValue::String(normalized_name.to_owned()),
-            );
-            package_json = JsonValue::Object(object);
-        }
+    if let JsonValue::Object(object) = &mut package_json {
+        object.insert(
+            "name".to_owned(),
+            JsonValue::String(normalized_name.to_owned()),
+        );
+    } else {
+        let mut object = JsonMap::new();
+        object.insert(
+            "name".to_owned(),
+            JsonValue::String(normalized_name.to_owned()),
+        );
+        package_json = JsonValue::Object(object);
     }
 
     let formatted =

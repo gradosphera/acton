@@ -1023,14 +1023,13 @@ fn collect_doctor_api_checks() -> DoctorApiChecks {
 
     for (index, target) in targets.into_iter().enumerate() {
         if let Some(group_name) = target.sequence_group.clone() {
-            let group_index = match grouped_indexes.get(&group_name) {
-                Some(index) => *index,
-                None => {
-                    let next_index = groups.len();
-                    grouped_indexes.insert(group_name, next_index);
-                    groups.push(Vec::new());
-                    next_index
-                }
+            let group_index = if let Some(index) = grouped_indexes.get(&group_name) {
+                *index
+            } else {
+                let next_index = groups.len();
+                grouped_indexes.insert(group_name, next_index);
+                groups.push(Vec::new());
+                next_index
             };
             groups[group_index].push((index, target));
         } else {

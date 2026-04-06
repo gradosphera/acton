@@ -387,7 +387,7 @@ fn print_script_result<'a>(ctx: &'a Context<'a>, result: ScriptResult) {
                 let _ = stderr().flush();
             }
 
-            std::process::exit(if exit_code == 0 { 0 } else { 1 });
+            std::process::exit(i32::from(exit_code != 0));
         }
         GetMethodResult::Error(error) => {
             println!("{} {}", "Execution error:".red(), error.error.red());

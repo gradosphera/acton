@@ -284,7 +284,7 @@ fn generate_unsigned_integer(run_idx: usize, bits: Option<usize>, rng: &mut StdR
 }
 
 fn generate_signed_integer(run_idx: usize, bits: Option<usize>, rng: &mut StdRng) -> BigInt {
-    let magnitude_bits = bits.map(|value| value.saturating_sub(1)).unwrap_or(127);
+    let magnitude_bits = bits.map_or(127, |value| value.saturating_sub(1));
     let max = if magnitude_bits == 0 {
         BigInt::ZERO
     } else {

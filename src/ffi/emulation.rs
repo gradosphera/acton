@@ -507,12 +507,11 @@ fn save_message_iter_results(ctx: &mut Context, cursor_id: u64, emulations: &[Se
         return;
     }
 
-    let trace_index = match ctx.message_iters.trace_index(cursor_id) {
-        Some(trace_index) => trace_index,
-        None => {
-            save_send_results(ctx, emulations);
-            return;
-        }
+    let trace_index = if let Some(trace_index) = ctx.message_iters.trace_index(cursor_id) {
+        trace_index
+    } else {
+        save_send_results(ctx, emulations);
+        return;
     };
 
     let saved_trace_index = match trace_index {
@@ -1357,10 +1356,10 @@ fn run_get_method_impl(
         .build_cache
         .result_for_code(&Some(code))
         .map(|(_, result)| result);
-    let source_map = compilation_result
-        .as_ref()
-        .map(|result| result.source_map.clone())
-        .unwrap_or_else(|| Arc::new(TolkSourceMap::without_debug_info()));
+    let source_map = compilation_result.as_ref().map_or_else(
+        || Arc::new(TolkSourceMap::without_debug_info()),
+        |result| result.source_map.clone(),
+    );
 
     let config_b64 = world_state.get_config_b64();
     let args_b64 = serialize_tuple(&args)

@@ -255,8 +255,7 @@ impl FileBuildCache {
         let cache_file = self.cache_file_path(&key, with_debug_info);
         let cache_parent = cache_file
             .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| self.cache_dir.clone());
+            .map_or_else(|| self.cache_dir.clone(), Path::to_path_buf);
 
         let _lock = self.acquire_write_lock()?;
         fs::create_dir_all(&cache_parent)?;

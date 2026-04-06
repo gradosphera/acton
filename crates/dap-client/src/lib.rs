@@ -177,7 +177,7 @@ impl DapClient {
         let mut pending_events = Vec::new();
         loop {
             if start.elapsed() > timeout {
-                for event in pending_events.into_iter() {
+                for event in pending_events {
                     self.event_sender.send(event).unwrap_or(());
                 }
                 return Err(anyhow!("Timeout waiting for response seq={seq}"));
@@ -188,7 +188,7 @@ impl DapClient {
                 .recv_timeout(Duration::from_millis(100))
                 && response_seq == seq
             {
-                for event in pending_events.into_iter() {
+                for event in pending_events {
                     self.event_sender.send(event).unwrap_or(());
                 }
                 return Ok(response);
@@ -196,7 +196,7 @@ impl DapClient {
 
             if let Ok(event) = self.event_receiver.recv_timeout(Duration::from_millis(100)) {
                 if matches!(event, Event::Terminated(_)) {
-                    for event in pending_events.into_iter() {
+                    for event in pending_events {
                         self.event_sender.send(event).unwrap_or(());
                     }
                     anyhow::bail!(

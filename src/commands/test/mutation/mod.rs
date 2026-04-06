@@ -254,7 +254,7 @@ fn collect_mutations<'a>(
 
 fn mutation_worker_count(config: &TestConfig, total_mutations: usize) -> usize {
     let available = thread::available_parallelism()
-        .map(|parallelism| parallelism.get())
+        .map(std::num::NonZero::get)
         .unwrap_or(1);
     let configured = config.mutation_workers.unwrap_or(available);
 
@@ -319,11 +319,11 @@ fn run_single_mutation(
         if code_b64.is_empty() {
             let record = MutationRecord {
                 id: mutation.id,
-                rule_name: mutation.rule.name.to_string(),
-                rule_description: mutation.rule.description.to_owned(),
+                rule_name: mutation.rule.name.clone(),
+                rule_description: mutation.rule.description.clone(),
                 rule_level: mutation.rule.level.label().to_owned(),
-                rule_group: mutation.rule.group.to_owned(),
-                rule_explanation: mutation.rule.explanation.to_owned(),
+                rule_group: mutation.rule.group.clone(),
+                rule_explanation: mutation.rule.explanation.clone(),
                 line: pos.row + 1,
                 column: pos.column + 1,
                 source_path: source.relative_path.to_string_lossy().to_string(),
@@ -371,11 +371,11 @@ fn run_single_mutation(
 
         let record = MutationRecord {
             id: mutation.id,
-            rule_name: mutation.rule.name.to_string(),
-            rule_description: mutation.rule.description.to_owned(),
+            rule_name: mutation.rule.name.clone(),
+            rule_description: mutation.rule.description.clone(),
             rule_level: mutation.rule.level.label().to_owned(),
-            rule_group: mutation.rule.group.to_owned(),
-            rule_explanation: mutation.rule.explanation.to_owned(),
+            rule_group: mutation.rule.group.clone(),
+            rule_explanation: mutation.rule.explanation.clone(),
             line: pos.row + 1,
             column: pos.column + 1,
             source_path: source.relative_path.to_string_lossy().to_string(),
@@ -846,7 +846,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
     };
     let filtered_rules: Vec<MutationRule> = mutation_rules
         .into_iter()
-        .filter(|rule| !all_disable_rules.contains(&rule.name.to_string()))
+        .filter(|rule| !all_disable_rules.contains(&rule.name.clone()))
         .filter(|rule| {
             selected_mutation_levels.is_empty()
                 || selected_mutation_levels

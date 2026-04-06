@@ -795,11 +795,11 @@ mod tests {
                 "cannot apply external message to current state : External message was not accepted: cannot run message on account: inbound external message rejected by account 3029B3EAEDA86A5381D86100F2A8B761C38DE45642EDB6E4BB1CCA2E6DD7FFED before smart-contract execution",
             ),
             Some(
-                r#"wallet/contract rejected the external message before contract execution; likely causes:
+                r"wallet/contract rejected the external message before contract execution; likely causes:
 - not enough balance
 - wallet/contract is not deployed
 - seqno is stale
-- message expired"#,
+- message expired",
             ),
         );
     }

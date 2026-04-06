@@ -366,13 +366,7 @@ pub fn verify_cmd(
 
         let body = truncate_for_display(&error_text, 4_000);
         anyhow::bail!(
-            "Backend compilation failed: HTTP {} ({}) at {}{}{}\nResponse body:\n{}",
-            status,
-            http_version,
-            source_url,
-            header_suffix,
-            retry_hint,
-            body
+            "Backend compilation failed: HTTP {status} ({http_version}) at {source_url}{header_suffix}{retry_hint}\nResponse body:\n{body}"
         );
     }
 

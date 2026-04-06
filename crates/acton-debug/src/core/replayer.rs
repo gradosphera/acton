@@ -98,7 +98,7 @@ struct LexicalScope {
 }
 
 /// Per-noinline-function execution state. Each noinline call creates its own
-/// IR slot namespace, so ir_stack / last_seen must be tracked independently.
+/// IR slot namespace, so `ir_stack` / `last_seen` must be tracked independently.
 /// Pushed onto `exec_stack` when entering a noinline function.
 #[derive(Debug, Clone)]
 struct NoinlineExecState {
@@ -219,6 +219,7 @@ pub struct VmLogRuntimeEventSource {
 }
 
 impl VmLogRuntimeEventSource {
+    #[must_use]
     pub fn new(vm_lines: &[Result<VmLine<'_>, String>]) -> Self {
         Self {
             vm_lines: convert_vm_lines(vm_lines),
@@ -299,6 +300,7 @@ enum PendingLiveInstruction {
 }
 
 impl LiveVmRuntimeEventSource {
+    #[must_use]
     pub const fn new(executor: DebugExecutorHandle) -> Self {
         Self {
             executor,
@@ -406,8 +408,8 @@ impl RuntimeEventSource for LiveVmRuntimeEventSource {
 /// Tick — atomic unit of work for the replayer.
 ///
 /// The tick stream is lazily built from runtime events and debug marks.
-/// Stored as Replayer::pending_ticks (the "current position" of the replayer).
-/// Returned by step_verbose() for logging/monitoring.
+/// Stored as `Replayer::pending_ticks` (the "current position" of the replayer).
+/// Returned by `step_verbose()` for logging/monitoring.
 #[derive(Debug, Clone)]
 pub enum Tick {
     Loc {
@@ -599,7 +601,7 @@ impl TolkReplayer {
     }
 
     /// Set breakpoints for a file. Each requested line is resolved to the nearest
-    /// line >= it that has a debug mark (LOC, inlined ENTER_FUN, or LEAVE_FUN),
+    /// line >= it that has a debug mark (LOC, inlined `ENTER_FUN`, or `LEAVE_FUN`),
     /// so breakpoints on optimized-away lines shift to the next stoppable line.
     pub fn set_breakpoints(&mut self, file_id: usize, lines: &[usize]) {
         self.breakpoints.retain(|&(fid, _)| fid != file_id);
@@ -608,6 +610,7 @@ impl TolkReplayer {
         }
     }
 
+    #[must_use]
     pub fn resolve_breakpoint_lines(&self, file_id: usize, lines: &[usize]) -> Vec<usize> {
         let valid_lines = self.source_map.stoppable_lines_for_file(file_id);
         lines
@@ -630,14 +633,17 @@ impl TolkReplayer {
         self.exception_break_mode = mode;
     }
 
+    #[must_use]
     pub const fn last_exception(&self) -> Option<&ExceptionInfo> {
         self.last_exception.as_ref()
     }
 
+    #[must_use]
     pub fn runtime_backend_kind(&self) -> RuntimeBackendKind {
         self.runtime_source.backend_kind()
     }
 
+    #[must_use]
     pub fn is_finished(&self) -> bool {
         if self.last_exception.is_some() {
             return false;
@@ -645,40 +651,49 @@ impl TolkReplayer {
         self.runtime_source.is_exhausted() && self.pending_ticks.is_empty()
     }
 
+    #[must_use]
     pub fn current_file_id(&self) -> usize {
         self.current_loc.file_id()
     }
 
+    #[must_use]
     pub fn current_file_name(&self) -> &str {
         self.file_display_name(self.current_loc.file_id())
     }
 
+    #[must_use]
     pub fn current_line(&self) -> usize {
         self.current_loc.start_line()
     }
 
+    #[must_use]
     pub fn current_column(&self) -> usize {
         self.current_loc.start_col()
     }
 
+    #[must_use]
     pub fn current_vm_position(&self) -> Option<(&str, i32)> {
         self.current_vm_position
             .as_ref()
             .map(|position| (position.cell_hash.as_str(), position.offset))
     }
 
+    #[must_use]
     pub fn current_end_line(&self) -> usize {
         self.current_loc.end_line()
     }
 
+    #[must_use]
     pub fn current_end_column(&self) -> usize {
         self.current_loc.end_col()
     }
 
+    #[must_use]
     pub fn function_name_by_idx(&self, f_idx: usize) -> String {
         self.source_map.get_function_name_by_idx(f_idx)
     }
 
+    #[must_use]
     pub fn call_stack(&self) -> Vec<CallFrameInfo> {
         self.call_stack
             .iter()
@@ -698,6 +713,7 @@ impl TolkReplayer {
 
     /// Locals for a specific call frame. `depth` is 0 for the top (innermost) frame,
     /// 1 for its caller, etc.
+    #[must_use]
     pub fn locals_for_frame(&self, depth: usize) -> Vec<LocalVarRendered> {
         let idx = self.call_stack.len().checked_sub(1 + depth);
         match idx {
@@ -714,8 +730,8 @@ impl TolkReplayer {
         }
     }
 
-    /// Map a call_stack frame index to the corresponding exec_stack index.
-    /// call_stack also contains inlined/built-in functions, whereas exec_stack only noinline contexts.
+    /// Map a `call_stack` frame index to the corresponding `exec_stack` index.
+    /// `call_stack` also contains inlined/built-in functions, whereas `exec_stack` only noinline contexts.
     fn exec_idx_for_frame(&self, frame_idx: usize) -> usize {
         let mut idx = 0;
         for j in 1..=frame_idx {
@@ -726,7 +742,8 @@ impl TolkReplayer {
         idx // 0 (root, before entering "main" or get method) always exists
     }
 
-    /// Full path for a file_id (as stored in source map JSON).
+    /// Full path for a `file_id` (as stored in source map JSON).
+    #[must_use]
     pub fn file_full_path(&self, file_id: usize) -> Option<&str> {
         self.source_map.resolve_file_full_path(file_id)
     }
@@ -742,7 +759,7 @@ impl TolkReplayer {
         }
     }
 
-    /// Like step(), but calls `on_tick` after each tick is applied,
+    /// Like `step()`, but calls `on_tick` after each tick is applied,
     /// giving the callback access to the replayer's up-to-date state.
     pub fn step_with_callback(
         &mut self,
@@ -776,6 +793,7 @@ impl TolkReplayer {
     }
 
     /// Formatted TVM stack (user-visible values, skipping system elements).
+    #[must_use]
     pub fn tvm_stack_rendered(&self) -> Vec<String> {
         let exec = self
             .exec_stack
@@ -784,7 +802,7 @@ impl TolkReplayer {
         let skip = exec.system_stack_depth.min(self.tvm_stack_values.len());
         self.tvm_stack_values[skip..]
             .iter()
-            .map(|val| val.to_string())
+            .map(ToString::to_string)
             .collect()
     }
 
@@ -841,8 +859,8 @@ impl TolkReplayer {
         None
     }
 
-    /// Convert a debug mark into one or more ticks appended to pending_ticks.
-    /// ENTER_FUN and LEAVE_FUN are split: their range becomes a Tick::Loc,
+    /// Convert a debug mark into one or more ticks appended to `pending_ticks`.
+    /// `ENTER_FUN` and `LEAVE_FUN` are split: their range becomes a `Tick::Loc`,
     /// and the frame push/pop becomes a separate non-stoppable tick.
     fn expand_mark_to_ticks(&mut self, mark_id: usize) {
         let mark = self.source_map.get_debug_mark(mark_id);
@@ -1180,6 +1198,7 @@ impl TolkReplayer {
     }
 
     /// Format leave-function return using the function's return type for rendering.
+    #[must_use]
     pub fn format_leave_return(&self, f_idx: usize, ir_return: &[usize]) -> RenderedValue {
         let exec = self
             .exec_stack
@@ -1190,8 +1209,7 @@ impl TolkReplayer {
             .map(|&ir_idx| {
                 exec.last_seen_values
                     .get(&ir_idx)
-                    .map(SlotValue::Live)
-                    .unwrap_or(SlotValue::OptimizedOut)
+                    .map_or(SlotValue::OptimizedOut, SlotValue::Live)
             })
             .collect();
 
@@ -1206,7 +1224,7 @@ impl TolkReplayer {
         }
     }
 
-    /// Snapshot current ir_stack→TVM value mappings so that variables whose
+    /// Snapshot current `ir_stack→TVM` value mappings so that variables whose
     /// slots disappear from stack can still be shown as "last seen".
     fn update_last_seen(&mut self) {
         let exec = self
@@ -1293,14 +1311,14 @@ impl TolkReplayer {
         result
     }
 
-    /// If there is a pending exception that wasn't followed by TvmExceptionHandler,
+    /// If there is a pending exception that wasn't followed by `TvmExceptionHandler`,
     /// the exception was caught (try/catch). Clear the pending state.
     fn clear_caught_exception(&mut self) {
         self.last_exception = None;
     }
 
     /// TVM sometimes jumps to a location outside the current function
-    /// without passing through MARK_LEAVE_FUN: exceptions caught by TRY,
+    /// without passing through `MARK_LEAVE_FUN`: exceptions caught by TRY,
     /// IFRET/IFNOTRET (Fift optimizes IFJMP:<{empty}> → IFRET), etc.
     fn unwind_after_exception_ifret(&mut self, range: &SrcRange) {
         self.after_exception_ifret = false;
@@ -1350,7 +1368,7 @@ impl TolkReplayer {
     }
 
     /// Whether the debugger should stop at the current location.
-    /// `at_fun_return` is true when we are at MARK_LEAVE_FUN (Tick::AtFunReturn).
+    /// `at_fun_return` is true when we are at `MARK_LEAVE_FUN` (`Tick::AtFunReturn`).
     fn should_stop(&self, step_mode: StepMode, at_fun_return: bool) -> bool {
         let new_line = self.current_loc.start_line();
         let file_id = self.current_loc.file_id();
@@ -1385,16 +1403,19 @@ impl TolkReplayer {
     }
 
     /// Short display name (just the filename component).
+    #[must_use]
     pub fn file_display_name(&self, file_id: usize) -> &str {
         self.source_map.resolve_file_name(file_id)
     }
 
-    /// Resolve a path (from DAP: file:///... or /abs/path) to file_id.
+    /// Resolve a path (from DAP: file:///... or /abs/path) to `file_id`.
+    #[must_use]
     pub fn file_id_by_path(&self, path: &str) -> Option<usize> {
         self.source_map.path_to_file_id(path)
     }
 
+    #[must_use]
     pub fn type_name(&self, ty_idx: usize) -> Option<String> {
-        self.source_map.resolve_ty(ty_idx).map(|ty| ty.to_string())
+        self.source_map.resolve_ty(ty_idx).map(ToString::to_string)
     }
 }

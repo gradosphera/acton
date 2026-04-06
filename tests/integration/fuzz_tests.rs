@@ -77,7 +77,7 @@ fn extract_seed(stdout: &str) -> u64 {
             let (_, tail) = line.rsplit_once("seed ")?;
             let digits = tail
                 .chars()
-                .take_while(|ch| ch.is_ascii_digit())
+                .take_while(char::is_ascii_digit)
                 .collect::<String>();
             digits.parse::<u64>().ok()
         })
@@ -90,12 +90,12 @@ fn fuzz_runs_parameterized_test_multiple_times() {
         "fuzz-parameterized",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: 4 })
             get fun `test-fuzz-int`(value: int) {
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
         "runs_parameterized_test_multiple_times",
     );
@@ -107,13 +107,13 @@ fn fuzz_supports_int1_without_out_of_range_seed() {
         "fuzz-int1",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: 4 })
             get fun `test-fuzz-int1`(value: int1) {
                 val raw = value as int;
                 expect(raw == 0 || raw == -1).toBeTrue();
             }
-        "#,
+        ",
         ),
         "supports_int1_without_out_of_range_seed",
     );
@@ -125,12 +125,12 @@ fn fuzz_reports_failing_input() {
         "fuzz-failure",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: true })
             get fun `test-fuzz-bool`(flag: bool) {
                 expect(flag).toBeFalse();
             }
-        "#,
+        ",
         ),
         "reports_failing_input",
     );
@@ -143,12 +143,12 @@ fn fuzz_true_uses_acton_toml_defaults() {
         "fuzz-config-default-runs",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: true })
             get fun `test-fuzz-config-runs`(value: int) {
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
     )
     .with_test_config(TestConfig {
@@ -171,12 +171,12 @@ fn fuzz_object_runs_path_uses_runs_override() {
         "fuzz-object-runs",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: { runs: 3 } })
             get fun `test-fuzz-object-runs`(value: int) {
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
         "object_runs_path_uses_runs_override",
     );
@@ -188,11 +188,11 @@ fn parameterized_test_requires_explicit_fuzz_annotation() {
         "fuzz-required",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             get fun `test-missing-fuzz`(value: int) {
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
         "parameterized_test_requires_explicit_fuzz_annotation",
     );
@@ -204,12 +204,12 @@ fn fuzz_false_does_not_enable_fuzzing() {
         "fuzz-false-does-not-enable",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: false })
             get fun `test-fuzz-false-does-not-enable`(value: int) {
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
         "false_does_not_enable_fuzzing",
     );
@@ -221,12 +221,12 @@ fn fuzz_annotation_requires_parameters() {
         "fuzz-no-params",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: true })
             get fun `test-no-params`() {
                 expect(1).toEqual(1);
             }
-        "#,
+        ",
         ),
         "annotation_requires_parameters",
     );
@@ -238,13 +238,13 @@ fn fuzz_assume_retries_rejected_inputs() {
         "fuzz-assume-retry",
         &with_imports(
             FUZZ_IMPORTS,
-            r#"
+            r"
             @test({ fuzz: 2 })
             get fun `test-fuzz-assume`(flag: bool) {
                 fuzz.assume(flag);
                 expect(flag).toBeTrue();
             }
-        "#,
+        ",
         ),
         "assume_retries_rejected_inputs",
     );
@@ -256,13 +256,13 @@ fn fuzz_assume_budget_exhaustion_reports_error() {
         "fuzz-assume-exhaustion",
         &with_imports(
             FUZZ_IMPORTS,
-            r#"
+            r"
             @test({ fuzz: 1 })
             get fun `test-fuzz-assume-exhaustion`(value: int) {
                 fuzz.assume(false);
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
         "assume_budget_exhaustion_reports_error",
     );
@@ -275,13 +275,13 @@ fn fuzz_assume_budget_uses_acton_toml_max_test_rejects() {
         "fuzz-assume-config-exhaustion",
         &with_imports(
             FUZZ_IMPORTS,
-            r#"
+            r"
             @test({ fuzz: true })
             get fun `test-fuzz-assume-config-exhaustion`(value: int) {
                 fuzz.assume(false);
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
     )
     .with_test_config(TestConfig {
@@ -305,13 +305,13 @@ fn fuzz_max_test_rejects_without_runs_uses_config_runs() {
         "fuzz-max-test-rejects-without-runs",
         &with_imports(
             FUZZ_IMPORTS,
-            r#"
+            r"
             @test({ fuzz: { max_test_rejects: 3 } })
             get fun `test-fuzz-max-test-rejects-without-runs`(value: int) {
                 fuzz.assume(false);
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
     )
     .with_test_config(TestConfig {
@@ -335,13 +335,13 @@ fn fuzz_assume_budget_can_be_overridden_per_test() {
         "fuzz-assume-annotation-exhaustion",
         &with_imports(
             FUZZ_IMPORTS,
-            r#"
+            r"
             @test({ fuzz: { runs: 2, max_test_rejects: 3 } })
             get fun `test-fuzz-assume-annotation-exhaustion`(value: int) {
                 fuzz.assume(false);
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
     )
     .with_test_config(TestConfig {
@@ -366,7 +366,7 @@ fn fuzz_same_seed_produces_same_values() {
         "fuzz-same-seed",
         &with_imports(
             FUZZ_IMPORTS,
-            r#"
+            r"
             @test({ fuzz: { runs: 1, max_test_rejects: 32 } })
             get fun `test-fuzz-seed-a`(value: int8) {
                 fuzz.assume(value != 0);
@@ -386,7 +386,7 @@ fn fuzz_same_seed_produces_same_values() {
                 fuzz.assume(value != -128);
                 expect(false).toBeTrue();
             }
-        "#,
+        ",
         ),
     )
     .build()
@@ -422,12 +422,12 @@ fn fuzz_bits_parameter_is_not_supported() {
         "fuzz-bits-unsupported",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: true })
             get fun `test-fuzz-bits`(value: bits12) {
                 expect(1).toEqual(1);
             }
-        "#,
+        ",
         ),
         "bits_parameter_is_not_supported",
     );
@@ -440,7 +440,7 @@ fn fuzz_bound_helper_wraps_values_into_range() {
         "fuzz-bound-helper",
         &with_imports(
             FUZZ_IMPORTS,
-            r#"
+            r"
             get fun `test-bound-helper`() {
                 expect(fuzz.bound(2, 1, 3)).toEqual(2);
                 expect(fuzz.bound(0, 1, 3)).toEqual(3);
@@ -450,7 +450,7 @@ fn fuzz_bound_helper_wraps_values_into_range() {
                 val boundedUint = fuzz.bound(0 as uint32, 1 as uint32, 3 as uint32);
                 expect(boundedUint as int).toEqual(3);
             }
-        "#,
+        ",
         ),
     )
     .build()
@@ -468,12 +468,12 @@ fn fuzz_supported_scalar_types_report_inputs() {
         "fuzz-supported-scalars",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: 1 })
             get fun `test-fuzz-supported-scalars`(amount: coins, count: uint32, label: string, flag: bool) {
                 expect(false).toBeTrue();
             }
-        "#,
+        ",
         ),
         "supported_scalar_types_report_inputs",
     );
@@ -485,7 +485,7 @@ fn fuzz_supported_address_and_nullable_types_report_inputs() {
         "fuzz-supported-addresses-nullables",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: 1 })
             get fun `test-fuzz-supported-addresses-nullables`(
                 maybeText: string?,
@@ -496,7 +496,7 @@ fn fuzz_supported_address_and_nullable_types_report_inputs() {
             ) {
                 expect(false).toBeTrue();
             }
-        "#,
+        ",
         ),
         "supported_address_and_nullable_types_report_inputs",
     );
@@ -509,7 +509,7 @@ fn fuzz_cli_seed_overrides_acton_toml_seed() {
         "fuzz-cli-seed-overrides-config",
         &with_imports(
             FUZZ_IMPORTS,
-            r#"
+            r"
             @test({ fuzz: { runs: 1, max_test_rejects: 32 } })
             get fun `test-fuzz-cli-seed-overrides-config`(value: int8) {
                 fuzz.assume(value != 0);
@@ -519,7 +519,7 @@ fn fuzz_cli_seed_overrides_acton_toml_seed() {
                 fuzz.assume(value != -128);
                 expect(false).toBeTrue();
             }
-        "#,
+        ",
         ),
     )
     .with_test_config(TestConfig {
@@ -544,7 +544,7 @@ fn fuzz_annotation_seed_overrides_cli_seed() {
         "fuzz-annotation-seed-overrides-cli",
         &with_imports(
             FUZZ_IMPORTS,
-            r#"
+            r"
             @test({ fuzz: { runs: 1, max_test_rejects: 32, seed: 9 } })
             get fun `test-fuzz-annotation-seed-overrides-cli`(value: int8) {
                 fuzz.assume(value != 0);
@@ -554,7 +554,7 @@ fn fuzz_annotation_seed_overrides_cli_seed() {
                 fuzz.assume(value != -128);
                 expect(false).toBeTrue();
             }
-        "#,
+        ",
         ),
     )
     .build()
@@ -575,12 +575,12 @@ fn fuzz_annotation_seed_without_runs_uses_config_runs() {
         "fuzz-annotation-seed-with-config-runs",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: { seed: 99 } })
             get fun `test-fuzz-annotation-seed-with-config-runs`(value: int) {
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
     )
     .with_test_config(TestConfig {
@@ -602,12 +602,12 @@ fn fuzz_zero_runs_in_annotation_is_rejected() {
         "fuzz-zero-runs-annotation",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: 0 })
             get fun `test-fuzz-zero-runs-annotation`(value: int) {
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
         "zero_runs_in_annotation_is_rejected",
     );
@@ -620,12 +620,12 @@ fn fuzz_zero_max_test_rejects_in_config_is_rejected() {
         "fuzz-zero-max-test-rejects-config",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: true })
             get fun `test-fuzz-zero-max-test-rejects-config`(value: int) {
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
     )
     .with_test_config(TestConfig {
@@ -647,12 +647,12 @@ fn fuzz_run_seed_changes_between_runs_when_unset() {
         "fuzz-random-run-seed",
         &with_imports(
             EXPECT_IMPORT,
-            r#"
+            r"
             @test({ fuzz: 1 })
             get fun `test-fuzz-random-run-seed`(value: int) {
                 expect(value).toEqual(value);
             }
-        "#,
+        ",
         ),
     )
     .build();

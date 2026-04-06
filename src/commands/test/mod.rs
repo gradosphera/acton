@@ -643,7 +643,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
             .acton_config
             .mappings()
             .into_iter()
-            .flat_map(|mappings| mappings.into_iter())
+            .flat_map(IntoIterator::into_iter)
             .filter_map(|(key, path)| (key == "@wrappers").then_some(path))
             .map(PathBuf::from)
             .map(|path| {

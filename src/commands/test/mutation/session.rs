@@ -213,8 +213,7 @@ pub(crate) fn load_or_create_mutation_session(
             } => {
                 if started_contract_id.is_some() {
                     anyhow::bail!(
-                        "Mutation session '{}' contains multiple session_started events",
-                        session_id
+                        "Mutation session '{session_id}' contains multiple session_started events"
                     );
                 }
                 started_contract_id = Some(contract_id);
@@ -234,8 +233,7 @@ pub(crate) fn load_or_create_mutation_session(
             MutationSessionEvent::SessionFinished { .. } => {
                 if finished {
                     anyhow::bail!(
-                        "Mutation session '{}' contains multiple session_finished events",
-                        session_id
+                        "Mutation session '{session_id}' contains multiple session_finished events"
                     );
                 }
                 finished = true;
@@ -244,22 +242,13 @@ pub(crate) fn load_or_create_mutation_session(
     }
 
     let Some(stored_contract_id) = started_contract_id else {
-        anyhow::bail!(
-            "Mutation session '{}' is missing a session_started event",
-            session_id
-        );
+        anyhow::bail!("Mutation session '{session_id}' is missing a session_started event");
     };
     let Some(stored_source_path) = started_source_path else {
-        anyhow::bail!(
-            "Mutation session '{}' is missing source path metadata",
-            session_id
-        );
+        anyhow::bail!("Mutation session '{session_id}' is missing source path metadata");
     };
     let Some(stored_selected_ids) = started_selected_ids else {
-        anyhow::bail!(
-            "Mutation session '{}' is missing selected mutation IDs",
-            session_id
-        );
+        anyhow::bail!("Mutation session '{session_id}' is missing selected mutation IDs");
     };
 
     if stored_contract_id != mutate_contract
@@ -267,8 +256,7 @@ pub(crate) fn load_or_create_mutation_session(
         || stored_selected_ids != selected_ids_sorted
     {
         anyhow::bail!(
-            "Mutation session '{}' does not match the current mutation selection. Re-run with the same contract and mutation filters used to create the session",
-            session_id
+            "Mutation session '{session_id}' does not match the current mutation selection. Re-run with the same contract and mutation filters used to create the session"
         );
     }
 
@@ -278,8 +266,7 @@ pub(crate) fn load_or_create_mutation_session(
         .any(|record| !stored_selected_ids_set.contains(&record.id))
     {
         anyhow::bail!(
-            "Mutation session '{}' contains progress entries for mutation IDs outside the selected set",
-            session_id
+            "Mutation session '{session_id}' contains progress entries for mutation IDs outside the selected set"
         );
     }
 

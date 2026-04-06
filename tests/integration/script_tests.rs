@@ -1529,7 +1529,7 @@ fn test_script_broadcast_defaults_fork_net_to_broadcast_network() {
     let project = ProjectBuilder::new("script-broadcast-defaults-fork-net")
         .file(
             "contracts/types",
-            r#"
+            r"
 enum Errors {
     InvalidMessage = 0xFFFF
 }
@@ -1552,7 +1552,7 @@ struct (0x7e8764ef) IncreaseCounter {
 }
 
 struct (0x3a752f06) ResetCounter {}
-"#,
+",
         )
         .contract(
             "counter",

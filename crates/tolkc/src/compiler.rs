@@ -274,8 +274,7 @@ impl Compiler {
 
             let config_cstr =
                 CString::new(config).expect("Cannot convert JSON to CString, should not happen");
-            let callback_payload =
-                (&mut callback_context as *mut FsCallbackContext).cast::<c_void>();
+            let callback_payload = (&raw mut callback_context).cast::<c_void>();
             tolk_compile(config_cstr.as_ptr(), Some(read_callback), callback_payload)
         };
 

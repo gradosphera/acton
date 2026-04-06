@@ -10,7 +10,7 @@ fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
 ";
 
-const STEP_TRACE_MESSAGES: &str = r#"
+const STEP_TRACE_MESSAGES: &str = r"
 struct (0x3101f001) TriggerForward {
     queryId: uint64
     target: address
@@ -19,7 +19,7 @@ struct (0x3101f001) TriggerForward {
 struct (0x3101f002) Notify {
     queryId: uint64
 }
-"#;
+";
 
 const STEP_TRACE_FORWARDER_CONTRACT: &str = r#"
 import "messages"
@@ -610,7 +610,7 @@ fn save_test_trace_merges_step_execution_batches_into_single_named_trace() {
 
     let failed_messages = merged_trace["failed_messages"]
         .as_array()
-        .map_or_else(Vec::new, |failed_messages| failed_messages.to_vec());
+        .map_or_else(Vec::new, |failed_messages| failed_messages.clone());
     assert!(
         failed_messages.is_empty(),
         "step trace should not fragment failures into extra chains"

@@ -205,7 +205,7 @@ impl fmt::Display for Ty {
     }
 }
 
-/// UnionVariant exists for every `T_i` in a union type `T1 | T2 | ...`.
+/// `UnionVariant` exists for every `T_i` in a union type `T1 | T2 | ...`.
 ///
 /// For binary serialization, a union should have a prefix tree,
 /// which is either defined explicitly with struct prefixes: `struct (0x12345678) CounterIncrement`,
@@ -227,6 +227,7 @@ pub struct UnionVariant {
 }
 
 /// Calculate how many stack slots a type occupies.
+#[must_use]
 pub fn calc_width_on_stack(symbols: &SourceMap, ty: &Ty) -> usize {
     match ty {
         Ty::Void => {
@@ -293,7 +294,7 @@ pub fn calc_width_on_stack(symbols: &SourceMap, ty: &Ty) -> usize {
             stack_width.unwrap_or(1)
         }
         Ty::GenericT { name_t } => {
-            panic!("unexpected genericT={} in calc_width_on_stack", name_t)
+            panic!("unexpected genericT={name_t} in calc_width_on_stack")
         }
 
         _ => {
@@ -309,6 +310,7 @@ pub fn calc_width_on_stack(symbols: &SourceMap, ty: &Ty) -> usize {
 
 /// Replace all generic Ts (typeParams) with instantiation (typeArgs) recursively.
 /// Example: `(int, T, Wrapper<T?>)` and T=coins → `(int, coins, Wrapper<coins?>)`
+#[must_use]
 pub fn instantiate_generics(ty: &Ty, type_params: &[String], type_args: &[Ty]) -> Ty {
     match ty {
         Ty::Nullable {
@@ -386,10 +388,7 @@ pub fn instantiate_generics(ty: &Ty, type_params: &[String], type_args: &[Ty]) -
             type_args
                 .get(idx)
                 .unwrap_or_else(|| {
-                    panic!(
-                        "inconsistent generics: could not find type argument for {}",
-                        name_t
-                    )
+                    panic!("inconsistent generics: could not find type argument for {name_t}")
                 })
                 .clone()
         }

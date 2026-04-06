@@ -43,19 +43,19 @@ fn check_project_wide_skips_workspace_files_without_main() {
     let project = ProjectBuilder::new(&format!("check-{}", function_name!()))
         .contract(
             "alpha",
-            r#"
+            r"
                 fun main() {
                     val x = 1;
                 }
-            "#,
+            ",
         )
         .script_file(
             "helper",
-            r#"
+            r"
                 fun helper() {
                     val y = 1;
                 }
-            "#,
+            ",
         )
         .with_lint_level("unused-variable", "warn")
         .with_lint_level("explicit-return-type", "allow")
