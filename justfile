@@ -74,7 +74,7 @@ check-ci: fmt-check check-docgen check-deps clippy typos check-schema
 check: check-ci check-deny check-schema test
 
 coverage-setup:
-    cargo install cargo-llvm-cov
+    cargo install cargo-llvm-cov --locked
     rustup component add llvm-tools-preview
 
 coverage:

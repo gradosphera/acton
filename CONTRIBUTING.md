@@ -23,43 +23,47 @@ this repository.
 
 ## Prerequisites
 
-To build and test Acton locally, install:
+For the minimal local build/test flow, install:
 
 1. Rust toolchain (`rustup`, `cargo`)
 2. `just` (task runner)
    ```bash
-   cargo install just
+   cargo install just --locked
    ```
 3. `cargo-nextest` (required Rust test runner for non-doc tests)
    ```bash
-   cargo install cargo-nextest
+   cargo install cargo-nextest --locked
    ```
-4. `cargo-shear` (unused dependency linter)
-   ```bash
-   cargo install cargo-shear --locked
-   ```
-5. `typos-cli` (spell checker used by `just typos`)
-   ```bash
-   cargo install typos-cli --locked
-   ```
-6. Bun (required for UI packages)
+4. Bun (required for UI packages)
    ```bash
    curl -fsSL https://bun.sh/install | bash
    ```
-7. GitHub CLI (`gh`) (used by `just sync-artifacts`)
-   - macOS:
-     ```bash
-     brew install gh
-     ```
-   - Linux (Debian/Ubuntu):
-     ```bash
-     sudo apt install gh
-     ```
-8. `cargo-llvm-cov` (optional, for coverage)
-   ```bash
-   cargo install cargo-llvm-cov
-   rustup component add llvm-tools-preview
-   ```
+5. GitHub CLI (`gh`) (used by `just sync-artifacts`)
+
+- macOS:
+  ```bash
+  brew install gh
+  ```
+- Linux (Debian/Ubuntu):
+  ```bash
+  sudo apt install gh
+  ```
+
+Optional CLI tools:
+
+- `cargo-shear` (unused dependency linter for `just check-deps`, also needed by `just check` / `just check-ci`)
+  ```bash
+  cargo install cargo-shear --locked
+  ```
+- `typos-cli` (spell checker for `just typos`, also needed by `just check` / `just check-ci`)
+  ```bash
+  cargo install typos-cli --locked
+  ```
+- `cargo-llvm-cov` (optional, for coverage)
+  ```bash
+  cargo install cargo-llvm-cov --locked
+  rustup component add llvm-tools-preview
+  ```
 
 System dependencies:
 
@@ -357,14 +361,14 @@ just update-test-tree-sitter
 
 Use this as a quick local matrix before pushing:
 
-| Change type                                                                                        | Required local checks                                                                                      |
-|----------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
-| Rust-only code                                                                                     | `just check`                                                                                               |
-| UI code (`crates/acton-*-ui`, root `package.json`)                                                 | `just check` + `just build-ui` + `just check-ui`                                                           |
-| Standard library / docgen inputs (`lib/`, `crates/tolkc/assets/tolk-stdlib`, linter rule metadata) | `just check` + `acton docgen` and commit generated docs                                                    |
-| Docs site content/config (`docs/`)                                                                 | `corepack enable && cd docs && yarn install --immutable --check-cache --check-resolutions && yarn build`   |
-| Tree-sitter grammar (`crates/tree-sitter-*`)                                                       | `just check` + `just test-tree-sitter-all` (and `just update-test-tree-sitter` when Tolk snapshots change) |
-| Release preparation (maintainers)                                                                  | Follow [RELEASING.md](RELEASING.md)                                                                        |
+| Change type                                                                                        | Required local checks                                                                                     |
+|----------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| Rust-only code                                                                                     | `just check`                                                                                              |
+| UI code (`crates/acton-*-ui`, root `package.json`)                                                 | `just check` + `just build-ui` + `just check-ui`                                                          |
+| Standard library / docgen inputs (`lib/`, `crates/tolkc/assets/tolk-stdlib`, linter rule metadata) | `just check` + `acton docgen` and  commit generated docs                                                  |
+| Docs site content/config (`docs/`)                                                                 | `corepack enable && cd docs && yarn install --immutable --check-cache --check-resolutions && yarn build`  |
+| Tree-sitter grammar (`crates/tree-sitter-*`)                                                       | `just check` +`just test-tree-sitter-all` (and `just update-test-tree-sitter` when Tolk snapshots change) |
+| Release preparation (maintainers)                                                                  | Follow [RELEASING.md](RELEASING.md)                                                                       |
 
 ## PR requirements
 
@@ -375,6 +379,7 @@ just check
 ```
 
 This command runs Rust formatting, docgen, dependency, lint, schema, and test checks.
+Install `cargo-shear` and `typos-cli` if you want to run it locally.
 `typos` uses `_typos.toml` excludes for `docs/` and selected generated or imported trees.
 
 If your PR touches UI code (`crates/acton-test-ui`, `crates/acton-litenode-ui`,
