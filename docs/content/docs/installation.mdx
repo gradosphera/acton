@@ -19,8 +19,11 @@ published Docker image.
 
 <Callout type="info" title="Support policy">
     First-class support is currently limited to versioned releases on macOS
-    (ARM64 and x86_64) and Linux GNU (x86_64 and ARM64). `trunk` builds and
-    native Windows usage are beta surfaces today. See
+    (ARM64 and x86_64) and Linux GNU (x86_64 and ARM64). For Linux, the
+    documented baseline is Ubuntu 20.04 or newer. `trunk` builds and
+    WSL installs are beta / best-effort surfaces today. Native Windows is not
+    supported. If you use Windows, install Acton inside WSL with Ubuntu 20.04
+    or newer and follow the Linux steps there. See
     [Support policy](/docs/miscellaneous/support-policy) for the full matrix.
 </Callout>
 
@@ -30,7 +33,7 @@ published Docker image.
 
 ## Installation
 
-<Tabs items={["macOS", "Linux"]}>
+<Tabs items={["macOS", "Linux", "WSL"]}>
     <Tab value="macOS">
 
         ```bash
@@ -45,7 +48,22 @@ published Docker image.
         ```
 
     </Tab>
+    <Tab value="WSL">
+
+        Run this inside your WSL shell with Ubuntu 20.04 or newer, not in
+        PowerShell or `cmd.exe`.
+
+        ```bash
+        curl --proto '=https' --tlsv1.2 -LsSf https://github.com/i582/acton-public/releases/latest/download/acton-installer.sh | sh
+        ```
+
+    </Tab>
 </Tabs>
+
+<Callout type="warning" title="Windows">
+    Native Windows is not supported at the moment. On Windows, the recommended
+    setup is WSL with Ubuntu 20.04.
+</Callout>
 
 To check that Acton was installed successfully, open a new terminal window and run:
 
