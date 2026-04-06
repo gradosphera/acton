@@ -1,5 +1,4 @@
 import "@acton/env"
-import "@acton/fmt"
 import "@acton/io"
 import "@acton/build/build"
 import "@acton/emulation/network"
@@ -74,8 +73,6 @@ fun main() {
         return;
     }
 
-    println(
-        format2("Successfully minted and transferred {} tokens to {}", supply, deployer.address),
-    );
+    println2("Successfully minted and transferred {} tokens to {}", supply, deployer.address);
     println1("Total supply is {}", minter.getTotalSupply());
 }
