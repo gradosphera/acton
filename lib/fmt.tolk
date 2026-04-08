@@ -38,6 +38,7 @@
 /// ```
 
 import "@stdlib/reflection"
+import "@stdlib/strings"
 import "ffi/ffi"
 
 /// Formats a string with 1 argument.
@@ -155,28 +156,6 @@ fun format5<T1, T2, T3, T4, T5>(
     );
 }
 
-/// Stores the decimal string representation of an integer into a builder.
-///
-/// Example:
-/// ```tolk
-/// var b = beginCell();
-/// b.storeIntAsString(42); // stores "42" as ASCII bytes
-/// ```
-fun builder.storeIntAsString(mutate self, x: int): void asm """
-    ZERO SWAP
-
-    UNTIL:<{
-        10 PUSHINT DIVMOD
-        48 ADDCONST
-        s2 XCHG0
-        s2 s3 XCHG
-        INC SWAP
-        DUP ISZERO
-    }> DROP
-
-    REPEAT:<{ 8 STU }>
-""";
-
 /// Converts an integer to its decimal string representation.
 ///
 /// Example:
@@ -185,9 +164,18 @@ fun builder.storeIntAsString(mutate self, x: int): void asm """
 /// val zero = 0.toString(); // "0"
 /// ```
 fun int.toString(self): string {
-    var b = beginCell();
-    b.storeIntAsString(self);
-    return b.toSlice();
+    return self.toDecimalString();
+}
+
+/// Stores the decimal string representation of an integer into a builder as inline bytes.
+///
+/// Example:
+/// ```tolk
+/// var b = beginCell();
+/// b.storeIntAsString(42); // stores "42" as ASCII bytes
+/// ```
+fun builder.storeIntAsString(mutate self, x: int): void {
+    self.storeSlice(x.toDecimalString().beginParse());
 }
 
 fun ffi.format1(fmt: string, type1: string, arg1: tuple): string

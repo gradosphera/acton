@@ -145,6 +145,41 @@ get fun `test-format-message`() {
     }
 }
 
+get fun `test int toString zero`() {
+    expect(0.toString()).toEqual("0");
+}
+
+get fun `test int toString single digit`() {
+    expect(5.toString()).toEqual("5");
+}
+
+get fun `test int toString multi digit`() {
+    expect(42.toString()).toEqual("42");
+    expect(123456789.toString()).toEqual("123456789");
+}
+
+get fun `test int toString negative`() {
+    expect((-1).toString()).toEqual("-1");
+    expect((-42).toString()).toEqual("-42");
+    expect((-123456789).toString()).toEqual("-123456789");
+}
+
+get fun `test int toString large number`() {
+    expect(1000000000.toString()).toEqual("1000000000");
+}
+
+get fun `test storeIntAsString in builder`() {
+    var b = beginCell();
+    b.storeIntAsString(42);
+    expect(b.endCell() as unknown as string).toEqual("42");
+}
+
+get fun `test storeIntAsString negative in builder`() {
+    var b = beginCell();
+    b.storeIntAsString(-99);
+    expect(b.endCell() as unknown as string).toEqual("-99");
+}
+
 get fun `test-format-multiple-arguments-and-modifiers`() {
     expect(format2("{} {:x}", "hex", 255)).toEqual("hex ff");
     expect(format3("{} {} {:ton}", "value", 7, ton("1.5"))).toEqual("value 7 1.5 TON");
