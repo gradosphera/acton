@@ -151,6 +151,27 @@ fn test_acton_rpc_info_help() {
 }
 
 #[test]
+fn test_acton_retrace_help() {
+    snapbox::cmd::Command::acton_ui()
+        .args(["retrace", "--help"])
+        .assert()
+        .success()
+        .stdout_eq(snapbox::file!["snapshots/retrace/stdout.txt"])
+        .stderr_eq(snapbox::str![""]);
+}
+
+#[test]
+fn test_acton_help_retrace() {
+    snapbox::cmd::Command::acton_ui()
+        .arg("help")
+        .arg("retrace")
+        .assert()
+        .success()
+        .stdout_eq(snapbox::file!["snapshots/help_retrace/stdout.txt"])
+        .stderr_eq(snapbox::str![""]);
+}
+
+#[test]
 fn test_acton_help_verify() {
     snapbox::cmd::Command::acton_ui()
         .arg("help")

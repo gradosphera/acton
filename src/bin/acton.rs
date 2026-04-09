@@ -766,9 +766,12 @@ enum Commands {
         contract: Option<String>,
         #[arg(
             long,
-            help = "Expose the retraced execution as a DAP server on the given TCP port; requires --contract"
+            help = "Enable source-level debugging for the retraced transaction; requires --contract",
+            help_heading = "Debugging"
         )]
-        dap_port: Option<u16>,
+        debug: bool,
+        #[arg(long, help = "Debug server port", help_heading = "Debugging")]
+        debug_port: Option<u16>,
     },
     #[command(
         about = "Manage TON libraries",
@@ -1737,8 +1740,11 @@ fn main() {
             verbose,
             logs_dir,
             contract,
-            dap_port,
-        } => retrace_cmd(hash, net, api_key, verbose, logs_dir, contract, dap_port),
+            debug,
+            debug_port,
+        } => retrace_cmd(
+            hash, net, api_key, verbose, logs_dir, contract, debug, debug_port,
+        ),
         Commands::Wrapper {
             contract_id,
             output: wrapper_output,
