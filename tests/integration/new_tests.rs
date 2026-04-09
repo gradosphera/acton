@@ -848,7 +848,7 @@ fn test_new_counter_project_can_be_selected_interactively() {
         .send("\u{1b}[B")
         .expect("failed to navigate to counter template");
     session.send_line("", "failed to select counter template");
-    session.expect("Include the TypeScript app scaffold?");
+    session.expect("Include the TypeScript dApp?");
     session.send_line("", "failed to keep default no-app choice");
     session.expect("Install the default Git hooks?");
     session.send_line("", "failed to keep default no-hooks choice");
@@ -896,7 +896,7 @@ fn test_new_counter_project_prompts_for_app_when_supported() {
         .spawn_pty()
         .set_expect_timeout(Some(Duration::from_secs(20)));
 
-    session.expect("Include the TypeScript app scaffold?");
+    session.expect("Include the TypeScript dApp?");
     session.send_line("y", "failed to confirm TypeScript app scaffold");
     session.expect("Install the default Git hooks?");
     session.send_line("", "failed to keep default no-hooks choice");
@@ -951,7 +951,7 @@ fn test_new_counter_project_interactive_decline_keeps_standard_layout() {
         .spawn_pty()
         .set_expect_timeout(Some(Duration::from_secs(20)));
 
-    session.expect("Include the TypeScript app scaffold?");
+    session.expect("Include the TypeScript dApp?");
     session.send_line("", "failed to keep default no-app choice");
     session.expect("Install the default Git hooks?");
     session.send_line("", "failed to keep default no-hooks choice");
