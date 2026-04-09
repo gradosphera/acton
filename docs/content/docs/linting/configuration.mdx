@@ -70,20 +70,20 @@ The subsection key (`counter` above) must match the contract key under `[contrac
 You can suppress diagnostics for the next line with an inline comment:
 
 ```tolk
-// acton-disable-next-line <rule-name>[, <rule-name>...]
+// check-disable-next-line <rule-name>[, <rule-name>...]
 ```
 
 Examples:
 
 ```tolk
-// acton-disable-next-line unused-variable
+// check-disable-next-line unused-variable
 val x = 1;
 
-// acton-disable-next-line unused-variable, write-only-variable
+// check-disable-next-line unused-variable, write-only-variable
 var tmp = 10;
 tmp = 20;
 
-// acton-disable-next-line all
+// check-disable-next-line all
 val legacy = oldLogic();
 ```
 

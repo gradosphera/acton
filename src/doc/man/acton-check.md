@@ -76,7 +76,7 @@ Print an explanation for a lint rule.
   resolved as contract IDs from `Acton.toml`
 - use an explicit `.tolk` path such as `./contracts/counter.tolk` when a name
   could be mistaken for a contract ID
-- inline suppressions use `// acton-disable-next-line E001,S001`
+- inline suppressions use `// check-disable-next-line E001,S001`
 - `--fix` applies only linter-provided fixes; diagnostics without a safe fix
   remain in the report
 
