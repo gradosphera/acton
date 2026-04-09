@@ -20,6 +20,7 @@ use acton::commands::rpc::{RpcCommand, rpc_cmd};
 use acton::commands::run::run_cmd;
 use acton::commands::script::script_cmd;
 use acton::commands::test::{mutation, test_cmd};
+use acton::commands::tsa::{TsaCommand, tsa_cmd};
 use acton::commands::up::up_cmd;
 use acton::commands::verify::verify_cmd;
 use acton::commands::wallet::{WalletCommand, wallet_cmd};
@@ -151,6 +152,11 @@ enum Commands {
     Rpc {
         #[command(subcommand)]
         command: RpcCommand,
+    },
+    #[command(about = "Run TSA custom checkers against Acton contracts")]
+    Tsa {
+        #[command(subcommand)]
+        command: TsaCommand,
     },
     #[command(
         about = "Execute tests in file or directory",
@@ -1534,6 +1540,7 @@ fn main() {
                 rpc_cmd(command)
             }
         }
+        Commands::Tsa { command } => tsa_cmd(command),
         Commands::New {
             path,
             name,

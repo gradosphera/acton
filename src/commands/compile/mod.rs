@@ -1,7 +1,9 @@
 use crate::commands::common::error_fmt;
 use crate::file_build_cache::FileBuildCache;
+use crate::stdlib;
 use acton_config::color::OwoColorize;
 use acton_config::config;
+use acton_config::config::project_root as configured_project_root;
 use anyhow::anyhow;
 use log::info;
 use serde_json;
@@ -23,6 +25,8 @@ pub fn compile_cmd(
     abi: Option<String>,
     clear_cache: bool,
 ) -> anyhow::Result<()> {
+    stdlib::ensure_latest(configured_project_root())?;
+
     if clear_cache {
         let mut file_cache = FileBuildCache::new(None)?;
         file_cache.clear()?;

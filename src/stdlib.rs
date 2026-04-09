@@ -4,6 +4,9 @@ use include_dir::{Dir, include_dir};
 use std::fs;
 use std::path::Path;
 
+// Keep Acton stdlib modules embedded in the binary so project-local `.acton/`
+// can be refreshed, including local TSA helper updates, without shipping extra
+// runtime files.
 pub static LIB_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/lib");
 
 pub(crate) fn current_stdlib_version() -> String {
