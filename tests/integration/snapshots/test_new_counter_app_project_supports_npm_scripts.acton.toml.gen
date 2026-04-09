@@ -19,7 +19,7 @@ ignore = []
 deploy-emulation = "acton script contracts/scripts/deploy.tolk"
 deploy-testnet = "acton script contracts/scripts/deploy.tolk --net testnet"
 
-[mappings]
+[import-mappings]
 acton = ".acton"
 contracts = "contracts/src"
 gen = "gen"

@@ -99,7 +99,7 @@ When `--contract` is set:
   transaction
 
 If you run the command outside the project directory, use `--manifest-path` or
-`--project-root` so Acton can resolve the contract configuration and mappings.
+`--project-root` so Acton can resolve the contract configuration and import mappings.
 
 ## DAP MODE
 

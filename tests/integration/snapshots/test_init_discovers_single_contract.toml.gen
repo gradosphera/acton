@@ -13,7 +13,7 @@ depends = []
 width = 100
 ignore = []
 
-[mappings]
+[import-mappings]
 acton = ".acton"
 contracts = "contracts"
 gen = "gen"

@@ -159,8 +159,10 @@ pub struct ActonConfig {
     pub wallets: Option<WalletsConfig>,
     #[serde(skip)] // we build libraries manually
     pub libraries: Option<LibrariesConfig>,
-    /// Path mappings for Tolk compiler imports, for example mapping `"core" = "./foo/core"`
-    /// so imports can use `@core/...`
+    /// Import path mappings for Tolk compiler imports, for example mapping
+    /// `"core" = "./foo/core"` so imports can use `@core/...`
+    #[serde(rename = "import-mappings")]
+    #[schemars(rename = "import-mappings")]
     pub mappings: Option<BTreeMap<String, String>>,
     /// Custom network configurations
     pub networks: Option<BTreeMap<String, CustomNetworkConfig>>,
@@ -1518,6 +1520,36 @@ rules-file = "mutation-rules.json"
     }
 
     #[test]
+    fn test_import_mappings_serializes_with_new_section_name() {
+        let config = ActonConfig {
+            package: PackageConfig {
+                name: "test-project".to_string(),
+                description: "Test project".to_string(),
+                version: "0.1.0".to_string(),
+                repository: None,
+                license: None,
+            },
+            contracts: None,
+            test: None,
+            lint: None,
+            fmt: None,
+            build: None,
+            wrappers: None,
+            litenode: None,
+            scripts: None,
+            wallets: None,
+            libraries: None,
+            mappings: Some(BTreeMap::from([("core".to_string(), "./core".to_string())])),
+            networks: None,
+        };
+
+        let toml_content = toml::to_string(&config).unwrap();
+
+        assert!(toml_content.contains("[import-mappings]"));
+        assert!(!toml_content.contains("[mappings]"));
+    }
+
+    #[test]
     fn test_networks_api_config_parsing() {
         let toml_content = r#"
 [package]
@@ -1857,7 +1889,7 @@ name = "test-project"
 description = "Test project"
 version = "0.1.0"
 
-[mappings]
+[import-mappings]
 core = "./core"
 utils = "/usr/local/lib/tolk/utils"
 "#;

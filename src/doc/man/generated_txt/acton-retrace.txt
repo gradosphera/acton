@@ -94,7 +94,7 @@ SOURCE-LEVEL RETRACE
 
        If you run the command outside the project directory, use
        --manifest-path or --project-root so Acton can resolve the contract
-       configuration and mappings.
+       configuration and import mappings.
 
 DAP MODE
        When --dap-port is used together with --contract:

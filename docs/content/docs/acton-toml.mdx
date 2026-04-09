@@ -20,7 +20,7 @@ Acton resolves project root for each CLI invocation using global flags:
   does not change project root resolution.
 
 This matters for all relative paths from config sections (for example
-`[contracts].src`, `[build]`, `[test]`, and `[mappings]`), because they are
+`[contracts].src`, `[build]`, `[test]`, and `[import-mappings]`), because they are
 resolved relative to project root for the current invocation.
 
 ## Root Section
@@ -36,7 +36,7 @@ The top-level of `Acton.toml` contains the following sections:
 - `[lint]` — General linter configuration.
 - `[networks]` — Custom network definitions.
 - `[scripts]` — Custom shell commands or scripts.
-- `[mappings]` — Path mappings for Tolk compiler imports.
+- `[import-mappings]` — Path mappings for Tolk compiler imports.
 
 ---
 
@@ -407,7 +407,7 @@ check = "acton test --filter=.*_check"
 
 ---
 
-## `[mappings]` Section
+## `[import-mappings]` Section
 
 Allows defining path aliases for the Tolk compiler, similar to `@stdlib`. These mappings let you import files using logical names instead of relative paths.
 
@@ -418,7 +418,7 @@ Allows defining path aliases for the Tolk compiler, similar to `@stdlib`. These 
 
 Example:
 ```toml
-[mappings]
+[import-mappings]
 utils = "./libs/utils" # Equivalent to "@utils" and prefered
 "@core" = "./libs/core"
 ```

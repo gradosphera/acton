@@ -32,6 +32,6 @@ accounts = ["local-wallet"]
 [networks.localnet]
 api = { v2 = "http://localhost:3010/api/v2", v3 = "http://localhost:3010/api/v3" }
 
-[mappings]
+[import-mappings]
 acton = ".acton"
 local-acton = "lib"

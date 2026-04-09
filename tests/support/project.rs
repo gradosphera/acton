@@ -865,7 +865,7 @@ version = "0.1.0"
         }
 
         if !mappings.is_empty() {
-            toml_content.push_str("[mappings]\n");
+            toml_content.push_str("[import-mappings]\n");
             for (prefix, target) in mappings {
                 toml_content.push_str(&format!("\"{prefix}\" = \"{target}\"\n"));
             }
