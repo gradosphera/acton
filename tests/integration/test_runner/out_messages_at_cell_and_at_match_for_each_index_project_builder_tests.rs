@@ -216,7 +216,7 @@ fn out_messages_at_cell_and_at_match_for_same_index_fixture_project() {
         r#"
 
 [contracts.cu_fixture_out_messages]
-name = "CuFixtureOutMessages"
+display-name = "CuFixtureOutMessages"
 src = "contracts/cu_fixture_out_messages.tolk"
 depends = []
 "#,

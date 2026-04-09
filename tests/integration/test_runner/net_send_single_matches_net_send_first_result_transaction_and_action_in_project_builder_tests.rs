@@ -171,7 +171,7 @@ fn net_send_single_matches_net_send_first_result_transaction_and_action_in_fixtu
         r#"
 
 [contracts.df_echo]
-name = "DfEcho"
+display-name = "DfEcho"
 src = "contracts/df_echo.tolk"
 depends = []
 "#,

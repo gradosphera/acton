@@ -139,7 +139,7 @@ version = "0.1.0"
 license = "MIT"
 
 [contracts.legacy]
-name = "legacy"
+display-name = "legacy"
 src = "contracts/legacy.fc"
 depends = []
 "#,

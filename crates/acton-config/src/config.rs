@@ -576,7 +576,8 @@ pub struct WalletsFile {
 /// Definition of a contract in the project
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 pub struct ContractConfig {
-    /// Human-readable name of the contract
+    /// Human-readable display name of the contract
+    #[serde(rename = "display-name")]
     pub name: String,
     /// Path to the contract source (`.tolk`) or precompiled (`.boc`) file
     pub src: String,
@@ -1351,12 +1352,12 @@ description = "Test project"
 version = "0.1.0"
 
 [contracts.counter]
-name = "Counter Contract"
+display-name = "Counter Contract"
 src = "counter.tolk"
 depends = []
 
 [contracts.wallet-v5]
-name = "Wallet V5"
+display-name = "Wallet V5"
 src = "wallet-v5.tolk"
 depends = []
 "#;
@@ -1458,7 +1459,7 @@ description = "Test project"
 version = "0.1.0"
 
 [contracts.counter]
-name = "Counter Contract"
+display-name = "Counter Contract"
 src = "counter.tolk"
 depends = []
 
@@ -1474,6 +1475,46 @@ rules-file = "mutation-rules.json"
             .expect("mutation settings should be present");
 
         assert_eq!(mutation.rules_file.as_deref(), Some("mutation-rules.json"));
+    }
+
+    #[test]
+    fn test_contract_config_serializes_display_name_key() {
+        let config = ActonConfig {
+            package: PackageConfig {
+                name: "test-project".to_string(),
+                description: "Test project".to_string(),
+                version: "0.1.0".to_string(),
+                repository: None,
+                license: None,
+            },
+            contracts: Some(ContractsConfig {
+                contracts: BTreeMap::from([(
+                    "counter".to_string(),
+                    ContractConfig {
+                        name: "Counter Contract".to_string(),
+                        src: "counter.tolk".to_string(),
+                        depends: Some(vec![]),
+                        output: None,
+                    },
+                )]),
+            }),
+            test: None,
+            lint: None,
+            fmt: None,
+            build: None,
+            wrappers: None,
+            litenode: None,
+            scripts: None,
+            wallets: None,
+            libraries: None,
+            mappings: None,
+            networks: None,
+        };
+
+        let toml_content = toml::to_string(&config).unwrap();
+
+        assert!(toml_content.contains("display-name = \"Counter Contract\""));
+        assert!(!toml_content.contains("\nname = \"Counter Contract\""));
     }
 
     #[test]

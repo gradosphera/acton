@@ -808,7 +808,7 @@ version = "0.1.0"
 
             write!(
                 toml_content,
-                "[contracts.{}]\nname = \"{}\"\nsrc = \"{}\"\n",
+                "[contracts.{}]\ndisplay-name = \"{}\"\nsrc = \"{}\"\n",
                 contract.name.to_lowercase().replace('-', "_"),
                 contract.name,
                 contract_path,

@@ -88,7 +88,7 @@ Contracts are defined using `[contracts.*]` sections where `*` is the contract k
 
 ```toml
 [contracts.my-contract]
-name = "MyContract"
+display-name = "MyContract"
 src = "contracts/my-contract.tolk"
 output = "build/my-contract.boc"
 depends = []
@@ -96,9 +96,9 @@ depends = []
 
 #### Contract Fields
 
-| Field     | Type   | Required | Description                                                                                                        |
-|-----------|--------|----------|--------------------------------------------------------------------------------------------------------------------|
-| `name`    | string | Yes      | Human-readable contract name displayed during compilation                                                          |
+| Field          | Type   | Required | Description                                                                                                        |
+|----------------|--------|----------|--------------------------------------------------------------------------------------------------------------------|
+| `display-name` | string | Yes      | Human-readable contract name displayed during compilation                                                          |
 | `src`     | string | Yes      | Path to the contract source file. Can be a `.tolk` file for compilation or a `.boc` file for precompiled contracts |
 | `output`  | string | No       | Path where the compiled `.boc` file should be saved. If omitted, the compiled contract is only cached              |
 | `depends` | array  | No       | Array of contract dependencies. Can be simple strings or detailed dependency objects                               |
@@ -184,7 +184,7 @@ You can use precompiled `.boc` files instead of `.tolk` sources:
 
 ```toml
 [contracts.precompiled]
-name = "PrecompiledContract"
+display-name = "PrecompiledContract"
 src = "contracts/precompiled.boc"
 depends = []
 ```

@@ -84,7 +84,7 @@ pub fn build_cmd(
 To add a contract add the following section to Acton.toml:
 
 [contracts.my-contract]
-name = \"MyContract\"
+display-name = \"MyContract\"
 src = \"contracts/my-contract.tolk\"
 depends = []
 

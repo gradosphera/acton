@@ -53,12 +53,12 @@ description = ""
 version = "0.1.0"
 
 [contracts."child.lib"]
-name = "Child Library"
+display-name = "Child Library"
 src = "contracts/child.lib.tolk"
 depends = []
 
 [contracts.parent-contract]
-name = "Parent Contract"
+display-name = "Parent Contract"
 src = "contracts/parent-contract.tolk"
 depends = ["child.lib"]
 "#,
@@ -297,12 +297,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [{ kind = "library_ref", function = "childCode" }]
 "#,
@@ -343,12 +343,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [42]
 "#,
@@ -389,12 +389,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = { name = "child" }
 "#,
@@ -463,11 +463,11 @@ description = ""
 version = "0.1.0"
 
 [contracts.base]
-name = "Base"
+display-name = "Base"
 src = "contracts/base.tolk"
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = ["base"]
 "#,
@@ -520,12 +520,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [{ name = "child", kind = "dynamic_ref" }]
 "#,
@@ -566,12 +566,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [""]
 "#,
@@ -611,12 +611,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [{ name = "", kind = "embed_code", function = "childCode" }]
 "#,
@@ -657,12 +657,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [{ name = "child" }]
 "#,

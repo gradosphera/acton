@@ -48,7 +48,7 @@ command prints guidance and exits without compiling anything.
 
 ```toml
 [contracts.wallet]
-name = "Wallet Contract"
+display-name = "Wallet Contract"
 src = "contracts/wallet.tolk"
 output = "wallet.boc"
 depends = ["child"]

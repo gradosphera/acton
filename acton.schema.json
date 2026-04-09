@@ -168,7 +168,7 @@
       "description": "Definition of a contract in the project",
       "type": "object",
       "required": [
-        "name",
+        "display-name",
         "src"
       ],
       "properties": {
@@ -179,8 +179,8 @@
             "$ref": "#/definitions/ContractDependency"
           }
         },
-        "name": {
-          "description": "Human-readable name of the contract",
+        "display-name": {
+          "description": "Human-readable display name of the contract",
           "type": "string"
         },
         "output": {

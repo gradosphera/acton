@@ -68,9 +68,9 @@ license = "MIT"
 
 This section is a map where each key is a unique contract identifier and the value is a contract configuration object.
 
-| Field     | Type     | Required | Description                                                             |
-|:----------|:---------|:---------|:------------------------------------------------------------------------|
-| `name`    | `string` | **Yes**  | Human-readable name of the contract.                                    |
+| Field          | Type     | Required | Description                                                             |
+|:---------------|:---------|:---------|:------------------------------------------------------------------------|
+| `display-name` | `string` | **Yes**  | Human-readable name of the contract.                                    |
 | `src`     | `string` | **Yes**  | Path to the contract source file (`.tolk`) or a precompiled `.boc`.     |
 | `depends` | `array`  | No       | List of contract dependencies. Can be simple names or detailed objects. |
 | `output`  | `string` | No       | Custom path where the compiled `.boc` should be saved.                  |
@@ -93,7 +93,7 @@ depends = ["AnotherContract"]
 Example:
 ```toml
 [contracts.MainContract]
-name = "Main Contract"
+display-name = "Main Contract"
 src = "contracts/main.tolk"
 depends = [
     "ChildContract",
@@ -351,7 +351,7 @@ You can override lint levels for specific contracts by creating a subsection wit
 Example:
 ```toml
 [contracts.counter]
-name = "My Counter"
+display-name = "My Counter"
 src = "counter.tolk"
 
 [lint.rules]

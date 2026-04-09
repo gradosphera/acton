@@ -26,7 +26,7 @@ version = "0.1.0"
 license = "MIT"
 
 [contracts.counter]
-name = "Counter"
+display-name = "Counter"
 src = "contracts/counter.tolk"
 depends = []
 ```
@@ -49,12 +49,12 @@ Let's imagine we have a Jetton Minter and Jetton Wallet, and we need the Wallet 
 
 ```toml
 [contracts.jetton-minter]
-name = "Minter"
+display-name = "Minter"
 src = "contracts/jetton-minter-contract.tolk"
 depends = ["jetton-wallet"]
 
 [contracts.jetton-wallet]
-name = "Wallet"
+display-name = "Wallet"
 src = "contracts/jetton-wallet-contract.tolk"
 depends = []
 ```
@@ -68,14 +68,14 @@ If you want to reference code through a library reference, specify the dependenc
 
 ```toml
 [contracts.jetton-minter]
-name = "Minter"
+display-name = "Minter"
 src = "contracts/jetton-minter-contract.tolk"
 depends = [
   { name = "jetton-wallet", kind = "library_ref" }
 ]
 
 [contracts.jetton-wallet]
-name = "Wallet"
+display-name = "Wallet"
 src = "contracts/jetton-wallet-contract.tolk"
 depends = []
 ```
