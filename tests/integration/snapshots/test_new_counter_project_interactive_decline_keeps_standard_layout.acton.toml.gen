@@ -17,7 +17,7 @@ ignore = []
 
 [scripts]
 deploy-emulation = "acton script scripts/deploy.tolk"
-deploy-testnet = "acton script scripts/deploy.tolk --broadcast --net testnet"
+deploy-testnet = "acton script scripts/deploy.tolk --net testnet"
 
 [mappings]
 acton = ".acton"

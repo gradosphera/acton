@@ -54,7 +54,7 @@ acton wallet new --name deployer --local --airdrop
 3. Run the deployment script against testnet:
 
 ```bash
-acton script scripts/deploy.tolk --broadcast --net testnet
+acton script scripts/deploy.tolk --net testnet
 ```
 
 The starter script waits for the transaction and then reads the deployed owner

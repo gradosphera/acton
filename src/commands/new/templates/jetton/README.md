@@ -69,7 +69,7 @@ acton wallet new --name deployer --local --airdrop
 4. Broadcast the deployment to testnet:
 
 ```bash
-acton script scripts/deploy.tolk --broadcast --net testnet
+acton script scripts/deploy.tolk --net testnet
 ```
 
 The starter script waits for deploy and mint transactions, then reads total

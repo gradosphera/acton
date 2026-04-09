@@ -297,7 +297,6 @@ fn test_rpc_info_reads_wallet_account_from_litenode() {
     let script_output = project
         .acton()
         .script("scripts/print_deployer_address.tolk")
-        .broadcast()
         .verify_network("localnet")
         .arg("--api-key")
         .arg("local-test-api-key")
@@ -355,7 +354,6 @@ fn test_rpc_info_decodes_storage_from_litenode() {
     let deploy_output = project
         .acton()
         .script("scripts/deploy_counter.tolk")
-        .broadcast()
         .verify_network("localnet")
         .arg("--api-key")
         .arg("local-test-api-key")

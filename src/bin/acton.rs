@@ -546,14 +546,7 @@ enum Commands {
         // Broadcasting
         #[arg(
             long,
-            help = "Send transactions to the blockchain instead of emulating them",
-            help_heading = "Broadcasting"
-        )]
-        broadcast: bool,
-
-        #[arg(
-            long,
-            help = "Network to use for broadcasting",
+            help = "Broadcast to the selected network; if omitted, run in emulation mode",
             help_heading = "Broadcasting"
         )]
         net: Option<String>,
@@ -1758,7 +1751,6 @@ fn main() {
             fork_net,
             api_key,
             fork_block_number,
-            broadcast,
             net,
             explorer,
             show_bodies,
@@ -1772,7 +1764,6 @@ fn main() {
             fork_net,
             api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
             fork_block_number,
-            broadcast,
             net,
             explorer,
             show_bodies,

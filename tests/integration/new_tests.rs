@@ -298,7 +298,6 @@ fn assert_new_project_localnet_deploy_snapshot(
         .acton()
         .script(deploy_script_path)
         .current_dir(&project_dir)
-        .broadcast()
         .verify_network("localnet")
         .run()
         .success()

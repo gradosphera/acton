@@ -1113,7 +1113,6 @@ impl Project {
             verify_address: None,
             verify_wallet: None,
             verify_network: None,
-            script_broadcast: false,
             test_fail_fast: false,
             script_fork_net: None,
             build_info: false,
@@ -1164,7 +1163,6 @@ pub(crate) struct ActonCommand {
     pub(crate) verify_address: Option<String>,
     pub(crate) verify_wallet: Option<String>,
     pub(crate) verify_network: Option<String>,
-    pub(crate) script_broadcast: bool,
     pub(crate) test_fail_fast: bool,
     pub(crate) script_fork_net: Option<String>,
     pub(crate) build_info: bool,
@@ -1745,17 +1743,6 @@ impl ActonCommand {
         self
     }
 
-    /// Enable broadcast mode for script execution (only for script command)
-    ///
-    /// # Examples
-    /// ```
-    /// .script("deploy.tolk").broadcast()     // Send transactions to blockchain
-    /// ```
-    pub(crate) fn broadcast(mut self) -> Self {
-        self.script_broadcast = true;
-        self
-    }
-
     /// Show decoded message bodies in printed transaction trees.
     pub(crate) fn show_bodies(mut self) -> Self {
         self.cmd = self.cmd.arg("--show-bodies");
@@ -1819,10 +1806,6 @@ impl ActonCommand {
 
         if self.build_clear_cache {
             self.cmd = self.cmd.arg("--clear-cache");
-        }
-
-        if self.script_broadcast {
-            self.cmd = self.cmd.arg("--broadcast");
         }
 
         if let Some(graph_path) = self.build_graph {

@@ -237,7 +237,7 @@ fun TxCursor.executeFrom(self): SendResultList {
 /// This method is useful when broadcasting transactions to the real network.
 /// It polls the network until the transaction is applied or the maximum number of attempts is reached.
 ///
-/// In emulation mode (without `--broadcast`), this method returns immediately with `true`.
+/// In emulation mode (without `--net`), this method returns immediately with `true`.
 ///
 /// Returns `true` if transaction is found and `false` otherwise.
 ///
@@ -651,9 +651,9 @@ struct Wallet {
 
 /// Creates a new wallet for use in scripts. Unlike `net.treasury`, the wallet
 /// can refer to a real wallet described in Acton.toml, and therefore can be used
-/// in scripts with `--broadcast` to execute transactions on the real blockchain.
+/// in scripts launched with `--net` to execute transactions on the real blockchain.
 ///
-/// Without `--broadcast`, the wallet refers to an internal wallet, created in the
+/// Without `--net`, the wallet refers to an internal wallet, created in the
 /// same way as in `net.treasury`.
 ///
 /// Note: in tests, use [net.treasury].
@@ -690,7 +690,7 @@ fun net.wallet(name: string): Wallet {
 
 /// Check if the script is running in broadcasting mode.
 ///
-/// Returns `true` if the script was run with `--broadcast` flag, `false` otherwise.
+/// Returns `true` if the script was run with `--net`, `false` otherwise.
 ///
 /// This is useful for writing scripts that behave differently in emulation and broadcasting modes.
 ///
@@ -712,7 +712,7 @@ fun net.isBroadcasting(): bool {
 /// Useful for testing broadcasting logic in emulation mode.
 /// It toggles only the runtime broadcast flag.
 ///
-/// Wallets are loaded once at startup (when the script is launched with CLI `--broadcast`).
+/// Wallets are loaded once at startup (when the script is launched with CLI `--net`).
 /// Calling [net.enableBroadcast] later does not load wallets, so [net.wallet] can still fail
 /// and wallet-backed real sends can remain unavailable.
 ///

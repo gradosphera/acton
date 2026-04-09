@@ -235,7 +235,7 @@ pub fn new_cmd(
     scripts.insert(
         "deploy-testnet".to_owned(),
         format!(
-            "acton script {} --broadcast --net testnet",
+            "acton script {} --net testnet",
             scaffold.layout().deploy_script_path()
         ),
     );
