@@ -70,10 +70,10 @@ This section is a map where each key is a unique contract identifier and the val
 
 | Field          | Type     | Required | Description                                                             |
 |:---------------|:---------|:---------|:------------------------------------------------------------------------|
-| `display-name` | `string` | **Yes**  | Human-readable name of the contract.                                    |
-| `src`     | `string` | **Yes**  | Path to the contract source file (`.tolk`) or a precompiled `.boc`.     |
-| `depends` | `array`  | No       | List of contract dependencies. Can be simple names or detailed objects. |
-| `output`  | `string` | No       | Custom path where the compiled `.boc` should be saved.                  |
+| `display-name` | `string` | No       | Human-readable name of the contract. Defaults to the contract key.      |
+| `src`          | `string` | **Yes**  | Path to the contract source file (`.tolk`) or a precompiled `.boc`.     |
+| `depends`      | `array`  | No       | List of contract dependencies. Can be simple names or detailed objects. |
+| `output`       | `string` | No       | Custom path where the compiled `.boc` should be saved.                  |
 
 ### Contract Dependencies
 

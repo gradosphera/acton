@@ -579,8 +579,8 @@ pub struct WalletsFile {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 pub struct ContractConfig {
     /// Human-readable display name of the contract
-    #[serde(rename = "display-name")]
-    pub name: String,
+    #[serde(rename = "display-name", skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// Path to the contract source (`.tolk`) or precompiled (`.boc`) file
     pub src: String,
     /// Dependencies of this contract
@@ -663,6 +663,19 @@ impl ContractDependency {
 }
 
 impl ContractConfig {
+    #[must_use]
+    pub fn display_name<'a>(&'a self, contract_id: &'a str) -> &'a str {
+        self.name
+            .as_deref()
+            .filter(|name| !name.is_empty())
+            .unwrap_or(contract_id)
+    }
+
+    #[must_use]
+    pub fn display_name_owned(&self, contract_id: &str) -> String {
+        self.display_name(contract_id).to_owned()
+    }
+
     #[must_use]
     pub fn dependency_names(&self) -> Vec<&str> {
         self.depends
@@ -1371,14 +1384,38 @@ depends = []
         assert_eq!(contracts.len(), 2);
 
         let counter = config.get_contract("counter").unwrap();
-        assert_eq!(counter.name, "Counter Contract");
+        assert_eq!(counter.name.as_deref(), Some("Counter Contract"));
+        assert_eq!(counter.display_name("counter"), "Counter Contract");
         assert_eq!(counter.src, "counter.tolk");
         assert_eq!(counter.depends, Some(vec![]));
 
         let wallet = config.get_contract("wallet-v5").unwrap();
-        assert_eq!(wallet.name, "Wallet V5");
+        assert_eq!(wallet.name.as_deref(), Some("Wallet V5"));
+        assert_eq!(wallet.display_name("wallet-v5"), "Wallet V5");
         assert_eq!(wallet.src, "wallet-v5.tolk");
         assert_eq!(wallet.depends, Some(vec![]));
+    }
+
+    #[test]
+    fn test_contract_config_allows_missing_display_name() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[contracts.counter]
+src = "counter.tolk"
+depends = []
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let counter = config.get_contract("counter").unwrap();
+
+        assert_eq!(counter.name, None);
+        assert_eq!(counter.display_name("counter"), "counter");
+        assert_eq!(counter.src, "counter.tolk");
+        assert_eq!(counter.depends, Some(vec![]));
     }
 
     #[test]
@@ -1493,7 +1530,7 @@ rules-file = "mutation-rules.json"
                 contracts: BTreeMap::from([(
                     "counter".to_string(),
                     ContractConfig {
-                        name: "Counter Contract".to_string(),
+                        name: Some("Counter Contract".to_string()),
                         src: "counter.tolk".to_string(),
                         depends: Some(vec![]),
                         output: None,

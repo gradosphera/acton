@@ -215,7 +215,7 @@ pub fn new_cmd(
         contracts.insert(
             contract.id.to_owned(),
             ContractConfig {
-                name: contract.name.to_owned(),
+                name: Some(contract.name.to_owned()),
                 src: contract.src.to_owned(),
                 depends: Some(vec![]),
                 output: None,

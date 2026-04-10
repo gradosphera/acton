@@ -99,7 +99,7 @@ fn build_impl(
 
         if let Some(found_contract) = found_contract {
             debug!("Found contract with info: {found_contract:?}");
-            name = found_contract.name; // use actual name instead of id
+            name = found_contract.display_name_owned(&id);
             path = found_contract.src;
             path = dunce::canonicalize(&path)
                 .map(|p| p.to_string_lossy().to_string())

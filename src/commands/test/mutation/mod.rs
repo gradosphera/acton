@@ -934,7 +934,10 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
     println!("{}", "Mutation Testing".bold());
     println!("{}", "─".repeat(60).dimmed());
     println!("Session:  {}", session.session_id.bright_cyan());
-    println!("Contract: {}", contract.name.bright_white());
+    println!(
+        "Contract: {}",
+        contract.display_name(mutate_contract).bright_white()
+    );
     println!("Source:   {}", contract.src.dimmed());
     if let Some(diff_scope) = &mutation_diff_scope {
         println!("Diff:     {}", diff_scope.label.bright_cyan());

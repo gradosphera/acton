@@ -29,6 +29,43 @@ fn append_build_gen_dir(project_root: &Path, gen_dir: &str) {
 }
 
 #[test]
+fn build_accepts_contract_without_display_name() {
+    let project = ProjectBuilder::new("build-config-edge-optional-display-name")
+        .raw_file(
+            "contracts/no-display.tolk",
+            r"fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+",
+        )
+        .build();
+
+    write_acton_toml(
+        project.path(),
+        r#"[package]
+name = "build-config-edge-optional-display-name"
+description = ""
+version = "0.1.0"
+
+[contracts.no-display]
+src = "contracts/no-display.tolk"
+depends = []
+"#,
+    );
+
+    project
+        .acton()
+        .build()
+        .run()
+        .success()
+        .assert_contains("Compiling no-display");
+
+    assert!(
+        project.path().join("build/no-display.json").exists(),
+        "build artifact should use the contract key when display-name is omitted"
+    );
+}
+
+#[test]
 fn build_supports_quoted_contract_keys_in_dependency_resolution() {
     let project = ProjectBuilder::new("build-config-edge-quoted-keys")
         .raw_file(

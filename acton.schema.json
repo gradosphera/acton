@@ -168,7 +168,6 @@
       "description": "Definition of a contract in the project",
       "type": "object",
       "required": [
-        "display-name",
         "src"
       ],
       "properties": {

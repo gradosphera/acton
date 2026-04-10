@@ -98,10 +98,10 @@ depends = []
 
 | Field          | Type   | Required | Description                                                                                                        |
 |----------------|--------|----------|--------------------------------------------------------------------------------------------------------------------|
-| `display-name` | string | Yes      | Human-readable contract name displayed during compilation                                                          |
-| `src`     | string | Yes      | Path to the contract source file. Can be a `.tolk` file for compilation or a `.boc` file for precompiled contracts |
-| `output`  | string | No       | Path where the compiled `.boc` file should be saved. If omitted, the compiled contract is only cached              |
-| `depends` | array  | No       | Array of contract dependencies. Can be simple strings or detailed dependency objects                               |
+| `display-name` | string | No       | Human-readable contract name displayed during compilation. Defaults to the contract key                            |
+| `src`          | string | Yes      | Path to the contract source file. Can be a `.tolk` file for compilation or a `.boc` file for precompiled contracts |
+| `output`       | string | No       | Path where the compiled `.boc` file should be saved. If omitted, the compiled contract is only cached              |
+| `depends`      | array  | No       | Array of contract dependencies. Can be simple strings or detailed dependency objects                               |
 
 #### Contract Keys
 
