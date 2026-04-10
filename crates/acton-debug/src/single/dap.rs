@@ -733,6 +733,7 @@ fn expand_debug_value(state: &mut DapState, dv: &RenderedValue) -> Vec<Variable>
     match dv {
         RenderedValue::Struct { fields, .. }
         | RenderedValue::Address { fields, .. }
+        | RenderedValue::CellLike { fields, .. }
         | RenderedValue::CellOf { fields, .. } => fields
             .iter()
             .map(|(name, val)| debug_value_to_variable(state, name.clone(), val))

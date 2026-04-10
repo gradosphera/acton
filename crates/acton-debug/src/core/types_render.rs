@@ -24,6 +24,11 @@ pub enum RenderedValue {
         value: String,
         type_field: Option<String>,
     },
+    CellLike {
+        type_name: String,
+        value: String,
+        fields: Vec<(String, RenderedValue)>, // "bits" and "refs" fields
+    },
     CellOf {
         type_name: String,
         value: String,
@@ -79,6 +84,9 @@ impl RenderedValue {
     pub fn dap_parts(&self) -> (String, Option<String>) {
         match self {
             RenderedValue::Leaf { value, type_field } => (value.clone(), type_field.clone()),
+            RenderedValue::CellLike {
+                type_name, value, ..
+            } => (value.clone(), Some(type_name.clone())),
             RenderedValue::CellOf {
                 type_name, value, ..
             } => (value.clone(), Some(type_name.clone())),
@@ -112,6 +120,7 @@ impl RenderedValue {
     fn legacy_dap_value(&self) -> String {
         match self {
             RenderedValue::Leaf { value, .. } => value.clone(),
+            RenderedValue::CellLike { value, .. } => value.clone(),
             RenderedValue::CellOf {
                 type_name, value, ..
             } => format!("{type_name} {value}"),
@@ -146,6 +155,7 @@ impl RenderedValue {
         match self {
             RenderedValue::Struct { fields, .. } => !fields.is_empty(),
             RenderedValue::Address { fields, .. } => !fields.is_empty(),
+            RenderedValue::CellLike { fields, .. } => !fields.is_empty(),
             RenderedValue::CellOf { fields, .. } => !fields.is_empty(),
             RenderedValue::Tensor { items, .. } => !items.is_empty(),
             RenderedValue::ArrayOf { items, .. } => !items.is_empty(),
@@ -192,6 +202,7 @@ impl fmt::Display for RenderedValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             RenderedValue::Leaf { value, .. } => write!(f, "{value}"),
+            RenderedValue::CellLike { value, .. } => write!(f, "{value}"),
             RenderedValue::CellOf {
                 type_name, value, ..
             } => write!(f, "{type_name} {value}"),
@@ -443,6 +454,68 @@ fn decode_cell_like(cell: &CellLike) -> Option<Cell> {
     }
 }
 
+fn parse_range_len(range: &Option<(String, String)>) -> Option<usize> {
+    let (start, end) = range.as_ref()?;
+    Some(end.parse::<usize>().ok()? - start.parse::<usize>().ok()?)
+}
+
+fn render_bit_ref_fields(bits: Option<usize>, refs: Option<usize>) -> Vec<(String, RenderedValue)> {
+    vec![
+        (
+            "bits".to_owned(),
+            RenderedValue::leaf(
+                bits.map_or_else(|| "<unknown>".to_owned(), |bits| bits.to_string()),
+            ),
+        ),
+        (
+            "refs".to_owned(),
+            RenderedValue::leaf(
+                refs.map_or_else(|| "<unknown>".to_owned(), |refs| refs.to_string()),
+            ),
+        ),
+    ]
+}
+
+fn cell_like_bit_ref_counts(cell: &CellLike) -> (Option<usize>, Option<usize>) {
+    let Some(cell) = decode_cell_like(cell) else {
+        return (None, None);
+    };
+    let slice = cell.as_slice_allow_exotic();
+    (
+        Some(slice.size_bits() as usize),
+        Some(slice.size_refs() as usize),
+    )
+}
+
+fn slice_bit_ref_counts(cs: &CellSlice) -> (Option<usize>, Option<usize>) {
+    match (&cs.bits, &cs.refs) {
+        (Some(_), Some(_)) => (parse_range_len(&cs.bits), parse_range_len(&cs.refs)),
+        _ => match Boc::decode_hex(&cs.value).ok() {
+            Some(cell) => {
+                let slice = cell.as_slice_allow_exotic();
+                (
+                    Some(slice.size_bits() as usize),
+                    Some(slice.size_refs() as usize),
+                )
+            }
+            None => (None, None),
+        },
+    }
+}
+
+fn render_openable_cell_like(
+    ty: &Ty,
+    value: impl Into<String>,
+    bits: Option<usize>,
+    refs: Option<usize>,
+) -> RenderedValue {
+    RenderedValue::CellLike {
+        type_name: ty.to_string(),
+        value: value.into(),
+        fields: render_bit_ref_fields(bits, refs),
+    }
+}
+
 fn map_type_name(k: &Ty, v: &Ty) -> String {
     format!("map<{k}, {v}>")
 }
@@ -600,16 +673,15 @@ fn render_map_value_with_abi(
 
 fn render_typed_cell(symbols: &SourceMap, ty: &Ty, inner: &Ty, cell: &CellLike) -> RenderedValue {
     let value = render_cell_like(cell);
-    let Some(cell) = decode_cell_like(cell) else {
-        return typed_leaf_for_ty(ty, format!("{ty} {value}"));
-    };
+    let (bits, refs) = cell_like_bit_ref_counts(cell);
+    let mut fields = render_bit_ref_fields(bits, refs);
 
-    let mut parser = cell.as_slice_allow_exotic();
-    let Some(data) = decode_abi_data(symbols, &mut parser, inner) else {
-        return typed_leaf_for_ty(ty, format!("{ty} {value}"));
-    };
-
-    let fields = vec![("decoded".to_owned(), render_abi_data(data, inner))];
+    if let Some(cell) = decode_cell_like(cell) {
+        let mut parser = cell.as_slice_allow_exotic();
+        if let Some(data) = decode_abi_data(symbols, &mut parser, inner) {
+            fields.push(("decoded".to_owned(), render_abi_data(data, inner)));
+        }
+    }
 
     RenderedValue::CellOf {
         type_name: ty.to_string(),
@@ -991,7 +1063,8 @@ fn debug_format(
 
         Ty::Cell => match r.read_slot() {
             SlotValue::Live(VmStackValue::Cell(cell)) => {
-                typed_leaf_for_ty(ty, render_cell_like(cell))
+                let (bits, refs) = cell_like_bit_ref_counts(cell);
+                render_openable_cell_like(ty, render_cell_like(cell), bits, refs)
             }
             SlotValue::Live(VmStackValue::Null) => typed_leaf_for_ty(ty, "null"),
             _ => typed_leaf_for_ty(ty, "not a TVM cell"),
@@ -1022,13 +1095,20 @@ fn debug_format(
         },
 
         Ty::Builder => match r.read_slot() {
-            SlotValue::Live(VmStackValue::Builder(b)) => typed_leaf_for_ty(ty, render_builder(b)),
+            SlotValue::Live(VmStackValue::Builder(b)) => {
+                let cell = CellLike::Builder(b.clone());
+                let (bits, refs) = cell_like_bit_ref_counts(&cell);
+                render_openable_cell_like(ty, render_builder(b), bits, refs)
+            }
             SlotValue::Live(VmStackValue::Null) => typed_leaf_for_ty(ty, "null"),
             _ => typed_leaf_for_ty(ty, "not a TVM builder"),
         },
 
         Ty::Slice | Ty::Remaining | Ty::BitsN { .. } => match r.read_slot() {
-            SlotValue::Live(VmStackValue::CellSlice(cs)) => typed_leaf_for_ty(ty, render_slice(cs)),
+            SlotValue::Live(VmStackValue::CellSlice(cs)) => {
+                let (bits, refs) = slice_bit_ref_counts(cs);
+                render_openable_cell_like(ty, render_slice(cs), bits, refs)
+            }
             SlotValue::Live(VmStackValue::Null) => typed_leaf_for_ty(ty, "null"),
             _ => typed_leaf_for_ty(ty, "not a TVM slice"),
         },
@@ -1529,9 +1609,81 @@ mod tests {
         };
         assert_eq!(type_name, "Cell<uint32>");
         assert_eq!(value, format!("cell{{{}}}", Boc::encode_hex(&cell)));
-        assert_eq!(fields.len(), 1);
+        assert_eq!(fields.len(), 3);
         assert_eq!(fields[0].0, "decoded");
         assert_eq!(fields[0].1.dap_parts().0, "7");
         assert_eq!(fields[0].1.dap_parts().1.as_deref(), Some("uint32"));
+        assert_eq!(fields[1].0, "bits");
+        assert_eq!(fields[1].1.dap_parts().0, "32");
+        assert_eq!(fields[2].0, "refs");
+        assert_eq!(fields[2].1.dap_parts().0, "0");
+    }
+
+    #[test]
+    fn render_openable_cell_like_shows_bits_and_refs() {
+        let child = CellBuilder::new().build().unwrap();
+        let mut builder = CellBuilder::new();
+        builder.store_uint(7, 16).unwrap();
+        builder.store_reference(child).unwrap();
+        let cell = builder.build().unwrap();
+
+        let rendered = render_openable_cell_like(
+            &Ty::Cell,
+            render_cell_like(&CellLike::Cell(Boc::encode_hex(&cell))),
+            Some(cell.as_slice_allow_exotic().size_bits() as usize),
+            Some(cell.as_slice_allow_exotic().size_refs() as usize),
+        );
+
+        let RenderedValue::CellLike {
+            type_name,
+            value,
+            fields,
+        } = rendered
+        else {
+            panic!("expected CellLike");
+        };
+        assert_eq!(type_name, "cell");
+        assert_eq!(value, format!("cell{{{}}}", Boc::encode_hex(&cell)));
+        assert_eq!(fields[0].0, "bits");
+        assert_eq!(fields[0].1.dap_parts().0, "16");
+        assert_eq!(fields[1].0, "refs");
+        assert_eq!(fields[1].1.dap_parts().0, "1");
+    }
+
+    #[test]
+    fn render_openable_slice_shows_bits_and_refs() {
+        let rendered =
+            render_openable_cell_like(&Ty::Slice, "slice{abcd} + 1 ref", Some(16), Some(1));
+
+        let RenderedValue::CellLike { fields, .. } = rendered else {
+            panic!("expected CellLike");
+        };
+        assert_eq!(fields[0].0, "bits");
+        assert_eq!(fields[0].1.dap_parts().0, "16");
+        assert_eq!(fields[1].0, "refs");
+        assert_eq!(fields[1].1.dap_parts().0, "1");
+    }
+
+    #[test]
+    fn render_openable_builder_shows_bits_and_refs() {
+        let child = CellBuilder::new().build().unwrap();
+        let mut builder = CellBuilder::new();
+        builder.store_uint(7, 16).unwrap();
+        builder.store_reference(child).unwrap();
+        let cell = builder.build().unwrap();
+        let builder_hex = Boc::encode_hex(&cell);
+        let cell_like = CellLike::Builder(builder_hex.clone());
+        let (bits, refs) = cell_like_bit_ref_counts(&cell_like);
+
+        let rendered =
+            render_openable_cell_like(&Ty::Builder, render_builder(&builder_hex), bits, refs);
+
+        let RenderedValue::CellLike { fields, .. } = rendered else {
+            panic!("expected CellLike");
+        };
+        assert_eq!(fields[0].0, "bits");
+        assert_eq!(fields[0].1.dap_parts().0, "16");
+        assert_eq!(fields[1].0, "refs");
+        assert_eq!(fields[1].1.dap_parts().0, "1");
     }
 }
