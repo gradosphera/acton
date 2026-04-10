@@ -176,7 +176,7 @@ pub struct ABIOutgoingMessage {
     pub description: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ABIStorage {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub storage_ty: Option<Ty>,
@@ -210,7 +210,7 @@ pub struct ABIConstant {
     pub description: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ContractABI {
     pub abi_schema_version: String,
 

@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 use std::fmt::{self, Write};
 use std::sync::OnceLock;
-use tolkc::source_map::SourceMap;
+use tolkc::abi::{ABIDeclaration, ABIEnumMember, ABIOpcode, ABIStructField, ContractABI};
+use tolkc::source_map::{Declaration, SourceMap};
 use tolkc::types_kernel::{Ty, calc_width_on_stack, instantiate_generics};
+use ton_abi::abi_serde::Data as ParsedAbiData;
+use ton_abi::compiler_abi_serde;
 use tvmffi::from_stack::FromStack;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
@@ -556,7 +559,135 @@ fn format_map_raw_value(slice: TyCellSlice<'_>) -> Result<String, String> {
     Ok(render_cell_like(&CellLike::Cell(Boc::encode_hex(&cell))))
 }
 
-fn render_map_value(value_slice: TyCellSlice<'_>, value_ty: &Ty) -> RenderedValue {
+fn render_map_value_with_abi(
+    symbols: &SourceMap,
+    value_slice: TyCellSlice<'_>,
+    value_ty: &Ty,
+) -> Option<RenderedValue> {
+    let abi = build_compiler_abi(symbols)?;
+    let mut parser = value_slice;
+    let data = compiler_abi_serde::decode(&mut parser, &abi, value_ty).ok()?;
+    if parser.size_bits() != 0 || parser.size_refs() != 0 {
+        return None;
+    }
+
+    Some(render_abi_data(data, value_ty))
+}
+
+fn render_abi_data(data: ParsedAbiData, ty: &Ty) -> RenderedValue {
+    match data {
+        ParsedAbiData::Object(object) => RenderedValue::Struct {
+            type_name: object.name,
+            fields: object
+                .fields
+                .into_iter()
+                .map(|field| (field.name, render_abi_data(field.value, &field.field_type)))
+                .collect(),
+        },
+        ParsedAbiData::Array(items) => RenderedValue::ArrayOf {
+            type_name: ty.to_string(),
+            items: render_abi_array_items(items, ty),
+        },
+        ParsedAbiData::Map(entries) => render_abi_map(entries, ty),
+        ParsedAbiData::Address(IntAddr::Std(addr)) => {
+            render_std_address(ty.to_string(), addr.to_string(), &addr)
+        }
+        ParsedAbiData::Address(addr) => typed_leaf_for_ty(ty, addr.to_string()),
+        ParsedAbiData::ExtAddress(addr) => typed_leaf_for_ty(ty, addr.to_string()),
+        ParsedAbiData::Cell(cell) | ParsedAbiData::RemainingBitsAndRefs(cell) => typed_leaf_for_ty(
+            ty,
+            render_cell_like(&CellLike::Cell(Boc::encode_hex(&cell))),
+        ),
+        ParsedAbiData::Bits((bytes, bit_len)) => {
+            typed_leaf_for_ty(ty, format_abi_bits(&bytes, bit_len))
+        }
+        ParsedAbiData::Null => typed_leaf_for_ty(ty, "null"),
+        ParsedAbiData::Number(value) => typed_leaf_for_ty(ty, value.to_string()),
+        ParsedAbiData::Bool(value) => typed_leaf_for_ty(ty, value.to_string()),
+        ParsedAbiData::String(value) => typed_leaf_for_ty(ty, format!("\"{value}\"")),
+        ParsedAbiData::Symbol(value) => typed_leaf_for_ty(ty, value),
+    }
+}
+
+fn render_abi_array_items(items: Vec<ParsedAbiData>, ty: &Ty) -> Vec<RenderedValue> {
+    match ty {
+        Ty::ArrayOf { inner } => items
+            .into_iter()
+            .map(|item| render_abi_data(item, inner.as_ref()))
+            .collect(),
+        Ty::Tensor { items: item_types } | Ty::ShapedTuple { items: item_types } => items
+            .into_iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let item_ty = item_types.get(index).cloned().unwrap_or(Ty::Unknown);
+                render_abi_data(item, &item_ty)
+            })
+            .collect(),
+        _ => items
+            .into_iter()
+            .map(|item| render_abi_data(item, &Ty::Unknown))
+            .collect(),
+    }
+}
+
+fn render_abi_map(entries: Vec<(ParsedAbiData, ParsedAbiData)>, ty: &Ty) -> RenderedValue {
+    let type_name = ty.to_string();
+    let (key_ty, value_ty) = match ty {
+        Ty::MapKV { k, v } => (k.as_ref().clone(), v.as_ref().clone()),
+        _ => (Ty::Unknown, Ty::Unknown),
+    };
+
+    RenderedValue::Struct {
+        type_name,
+        fields: entries
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    format_abi_map_key(&key, &key_ty),
+                    render_abi_data(value, &value_ty),
+                )
+            })
+            .collect(),
+    }
+}
+
+fn format_abi_map_key(data: &ParsedAbiData, key_ty: &Ty) -> String {
+    match data {
+        ParsedAbiData::Null => "null".to_owned(),
+        ParsedAbiData::Number(value) => value.to_string(),
+        ParsedAbiData::Bool(value) => value.to_string(),
+        ParsedAbiData::String(value) => format!("\"{value}\""),
+        ParsedAbiData::Symbol(value) => value.clone(),
+        ParsedAbiData::Address(value) => value.to_string(),
+        ParsedAbiData::ExtAddress(value) => value.to_string(),
+        ParsedAbiData::Cell(value) | ParsedAbiData::RemainingBitsAndRefs(value) => {
+            render_cell_like(&CellLike::Cell(Boc::encode_hex(value)))
+        }
+        ParsedAbiData::Bits((bytes, bit_len)) => format_abi_bits(bytes, *bit_len),
+        ParsedAbiData::Object(_) | ParsedAbiData::Array(_) | ParsedAbiData::Map(_) => {
+            typed_leaf_for_ty(key_ty, "<key>").dap_value()
+        }
+    }
+}
+
+fn format_abi_bits(bytes: &[u8], bit_len: usize) -> String {
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(hex, "{byte:02x}").ok();
+    }
+
+    if bit_len.is_multiple_of(8) {
+        format!("0x{hex}")
+    } else {
+        format!("0x{hex} ({bit_len} bits)")
+    }
+}
+
+fn render_map_value(
+    symbols: &SourceMap,
+    value_slice: TyCellSlice<'_>,
+    value_ty: &Ty,
+) -> RenderedValue {
     let scalar_type = parse_map_value_type(value_ty);
     let allow_raw_value_fallback =
         scalar_type.is_none() && !matches!(value_ty, Ty::Nullable { .. } | Ty::MapKV { .. });
@@ -569,6 +700,10 @@ fn render_map_value(value_slice: TyCellSlice<'_>, value_ty: &Ty) -> RenderedValu
         };
     }
 
+    if let Some(value) = render_map_value_with_abi(symbols, value_slice, value_ty) {
+        return value;
+    }
+
     if allow_raw_value_fallback {
         return match format_map_raw_value(value_slice) {
             Ok(value) => typed_leaf_for_ty(value_ty, value),
@@ -579,7 +714,12 @@ fn render_map_value(value_slice: TyCellSlice<'_>, value_ty: &Ty) -> RenderedValu
     typed_leaf_for_ty(value_ty, "<value>")
 }
 
-fn render_map_dict(root: Option<Cell>, key_ty: &Ty, value_ty: &Ty) -> RenderedValue {
+fn render_map_dict(
+    symbols: &SourceMap,
+    root: Option<Cell>,
+    key_ty: &Ty,
+    value_ty: &Ty,
+) -> RenderedValue {
     let type_name = map_type_name(key_ty, value_ty);
 
     let Some(key_type) = parse_map_key_type(key_ty) else {
@@ -596,7 +736,7 @@ fn render_map_dict(root: Option<Cell>, key_ty: &Ty, value_ty: &Ty) -> RenderedVa
             let mut key_slice = key_data.as_data_slice();
             format_map_scalar(&mut key_slice, key_type).unwrap_or_else(|_| "<key>".to_string())
         };
-        let value = render_map_value(value_slice, value_ty);
+        let value = render_map_value(symbols, value_slice, value_ty);
         fields.push((key, value));
     }
 
@@ -909,7 +1049,7 @@ fn debug_format(
             },
             SlotValue::Live(VmStackValue::Cell(cell)) => {
                 if let Some(root) = decode_cell_like(cell) {
-                    render_map_dict(Some(root), k, v)
+                    render_map_dict(symbols, Some(root), k, v)
                 } else {
                     typed_leaf_for_ty(ty, "not a TVM cell")
                 }
@@ -1206,5 +1346,119 @@ pub(crate) fn debug_format_lazy(
             let mut r = StackReader::new(slot_values);
             debug_format(symbols, &mut r, ty, false)
         }
+    }
+}
+
+/// Helper to convert data from `SourceMap` to ABI
+fn build_compiler_abi(symbols: &SourceMap) -> Option<ContractABI> {
+    Some(ContractABI {
+        abi_schema_version: "1.0".to_owned(),
+        declarations: source_map_declarations_to_abi(symbols)?,
+        ..Default::default()
+    })
+}
+
+// TODO: do we really need two types for declarations?
+fn source_map_declarations_to_abi(symbols: &SourceMap) -> Option<Vec<ABIDeclaration>> {
+    symbols
+        .declarations()
+        .iter()
+        .map(source_map_declaration_to_abi)
+        .collect()
+}
+
+fn source_map_declaration_to_abi(decl: &Declaration) -> Option<ABIDeclaration> {
+    Some(match decl {
+        Declaration::Struct(decl) => {
+            let prefix = decl.prefix.as_ref().map(|prefix| ABIOpcode {
+                prefix_str: prefix.prefix_str.clone(),
+                prefix_len: prefix.prefix_len,
+            });
+            ABIDeclaration::Struct {
+                name: decl.name.clone(),
+                type_params: decl.type_params.clone(),
+                prefix,
+                fields: decl
+                    .fields
+                    .iter()
+                    .map(|field| ABIStructField {
+                        name: field.name.clone(),
+                        ty: field.ty.clone(),
+                        default_value: None,
+                        description: String::new(),
+                    })
+                    .collect(),
+                custom_pack_unpack: None,
+            }
+        }
+        Declaration::Alias(decl) => ABIDeclaration::Alias {
+            name: decl.name.clone(),
+            target_ty: decl.target_ty.clone(),
+            type_params: decl.type_params.clone(),
+            custom_pack_unpack: None,
+        },
+        Declaration::Enum(decl) => ABIDeclaration::Enum {
+            name: decl.name.clone(),
+            encoded_as: decl.encoded_as.clone(),
+            members: decl
+                .members
+                .iter()
+                .map(|member| ABIEnumMember {
+                    name: member.name.clone(),
+                    value: member.value.clone(),
+                    description: String::new(),
+                })
+                .collect(),
+            custom_pack_unpack: None,
+        },
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ton_abi::abi_serde::{DataField, DataObject};
+
+    #[test]
+    fn render_abi_data_uses_field_type_for_object_fields() {
+        let rendered = render_abi_data(
+            ParsedAbiData::Object(DataObject {
+                name: "Payload".to_owned(),
+                fields: vec![DataField {
+                    name: "flag".to_owned(),
+                    field_type: Ty::Bool,
+                    value: ParsedAbiData::Bool(true),
+                }],
+            }),
+            &Ty::StructRef {
+                struct_name: "Payload".to_owned(),
+                type_args: None,
+            },
+        );
+
+        let RenderedValue::Struct { fields, .. } = rendered else {
+            panic!("expected struct");
+        };
+        let (_, value) = &fields[0];
+        assert_eq!(value.dap_parts().1.as_deref(), Some("bool"));
+    }
+
+    #[test]
+    fn render_abi_data_uses_container_types_for_tensor_items() {
+        let rendered = render_abi_data(
+            ParsedAbiData::Array(vec![
+                ParsedAbiData::Bool(true),
+                ParsedAbiData::Number(7.into()),
+            ]),
+            &Ty::Tensor {
+                items: vec![Ty::Bool, Ty::UintN { n: 32 }],
+            },
+        );
+
+        let RenderedValue::ArrayOf { items, .. } = rendered else {
+            panic!("expected array");
+        };
+        assert_eq!(items[0].dap_parts().1.as_deref(), Some("bool"));
+        assert_eq!(items[1].dap_parts().1.as_deref(), Some("uint32"));
     }
 }

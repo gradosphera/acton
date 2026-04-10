@@ -331,7 +331,7 @@ pub enum Declaration {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PrefixInfo {
     pub prefix_str: String,
-    pub prefix_len: usize,
+    pub prefix_len: i32,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

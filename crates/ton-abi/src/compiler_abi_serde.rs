@@ -80,6 +80,7 @@ fn decode_type(data: &mut CellSlice<'_>, abi: &ContractABI, ty: &Ty) -> anyhow::
                 name: "Cell".to_owned(),
                 fields: vec![DataField {
                     name: "ref".to_owned(),
+                    field_type: inner.as_ref().clone(),
                     value,
                 }],
             }))
@@ -122,6 +123,7 @@ fn decode_struct(
             .with_context(|| format!("failed to decode field {struct_name}.{}", field.name))?;
         result.fields.push(DataField {
             name: field.name.clone(),
+            field_type: field_ty,
             value,
         });
     }
@@ -163,6 +165,7 @@ fn decode_enum(
         name: enum_name.to_owned(),
         fields: vec![DataField {
             name: "value".to_owned(),
+            field_type: encoded_ty.clone(),
             value,
         }],
     }))
@@ -195,6 +198,7 @@ fn decode_union(
             name: variant.label,
             fields: vec![DataField {
                 name: "value".to_owned(),
+                field_type: variant.variant_ty.clone(),
                 value,
             }],
         }));
@@ -668,10 +672,17 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(
-            format!("{data:?}"),
-            "Object(DataObject { name: \"MyMessage\", fields: [DataField { name: \"queryId\", value: Number(7) }, DataField { name: \"flag\", value: Bool(true) }] })"
-        );
+        let Data::Object(object) = data else {
+            panic!("expected object");
+        };
+        assert_eq!(object.name, "MyMessage");
+        assert_eq!(object.fields.len(), 2);
+        assert_eq!(object.fields[0].name, "queryId");
+        assert!(matches!(object.fields[0].field_type, Ty::UintN { n: 64 }));
+        assert!(matches!(object.fields[0].value, Data::Number(_)));
+        assert_eq!(object.fields[1].name, "flag");
+        assert!(matches!(object.fields[1].field_type, Ty::Bool));
+        assert!(matches!(object.fields[1].value, Data::Bool(true)));
         assert_eq!(slice.size_bits(), 0);
     }
 
@@ -764,10 +775,57 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(
-            format!("{data:?}"),
-            "Object(DataObject { name: \"uint16\", fields: [DataField { name: \"value\", value: Number(99) }] })"
-        );
+        let Data::Object(object) = data else {
+            panic!("expected object");
+        };
+        assert_eq!(object.name, "uint16");
+        assert_eq!(object.fields.len(), 1);
+        assert_eq!(object.fields[0].name, "value");
+        assert!(matches!(object.fields[0].field_type, Ty::UintN { n: 16 }));
+        assert!(matches!(object.fields[0].value, Data::Number(_)));
+    }
+
+    #[test]
+    fn decodes_generic_struct_fields_with_instantiated_types() {
+        let mut abi = empty_abi();
+        abi.declarations = vec![ABIDeclaration::Struct {
+            name: "Boxed".to_owned(),
+            type_params: Some(vec!["T".to_owned()]),
+            prefix: None,
+            fields: vec![ABIStructField {
+                name: "value".to_owned(),
+                ty: Ty::GenericT {
+                    name_t: "T".to_owned(),
+                },
+                default_value: None,
+                description: String::new(),
+            }],
+            custom_pack_unpack: None,
+        }];
+
+        let mut builder = CellBuilder::new();
+        builder.store_uint(7, 32).unwrap();
+        let cell = builder.build().unwrap();
+        let mut slice = cell.as_slice_allow_exotic();
+
+        let data = decode(
+            &mut slice,
+            &abi,
+            &Ty::StructRef {
+                struct_name: "Boxed".to_owned(),
+                type_args: Some(vec![Ty::UintN { n: 32 }]),
+            },
+        )
+        .unwrap();
+
+        let Data::Object(object) = data else {
+            panic!("expected object");
+        };
+        assert_eq!(object.name, "Boxed");
+        assert_eq!(object.fields.len(), 1);
+        assert_eq!(object.fields[0].name, "value");
+        assert!(matches!(object.fields[0].field_type, Ty::UintN { n: 32 }));
+        assert!(matches!(object.fields[0].value, Data::Number(_)));
     }
 
     #[test]
