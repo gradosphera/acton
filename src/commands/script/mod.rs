@@ -27,6 +27,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 use tolkc::TolkSourceMap;
+use tolkc::abi::ContractABI as CompilerContractABI;
 use ton_abi::{ContractAbi, contract_abi};
 use ton_api::Network;
 use ton_emulator::emulator::Emulator;
@@ -179,12 +180,12 @@ fn run_script_file(
                 &code_cell,
                 result.debug_mark_base64.as_deref(),
             )?);
-
             execute_script(
                 &code_cell,
                 &data_cell,
                 stack,
                 Arc::new(abi),
+                result.abi.map(Arc::new),
                 source_map,
                 debug,
                 backtrace,
@@ -216,6 +217,7 @@ fn execute_script(
     data_cell: &Cell,
     stack: Tuple,
     abi: Arc<ContractAbi>,
+    compiler_abi: Option<Arc<CompilerContractABI>>,
     source_map: Arc<TolkSourceMap>,
     debug: bool,
     backtrace: Option<BacktraceMode>,
@@ -329,7 +331,8 @@ fn execute_script(
             .ok_or_else(|| anyhow!("internal error: debug listener was not reserved"))?;
         let transport = start_dap_server_with_listener(listener)?;
         executor.prepare(0, &stack_b64)?;
-        let replayer = TolkReplayer::new_live_vm(source_map.as_ref(), executor.clone().into())?;
+        let mut replayer = TolkReplayer::new_live_vm(source_map.as_ref(), executor.clone().into())?;
+        replayer.set_compiler_abi(compiler_abi);
 
         let mut dbg_session = ReplayerDebugSession::new(transport, replayer, "main".into());
         ctx.debug = DebugCtx::new(&mut dbg_session);

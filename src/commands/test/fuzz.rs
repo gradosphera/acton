@@ -62,6 +62,7 @@ impl TestRunner<'_> {
         code_cell: &Cell,
         dest_address: &str,
         abi: Arc<ContractAbi>,
+        compiler_abi: Option<Arc<CompilerContractABI>>,
         source_map: Arc<TolkSourceMap>,
         fuzz: FuzzConfig,
     ) -> anyhow::Result<TestResult> {
@@ -110,6 +111,7 @@ impl TestRunner<'_> {
                 code_cell,
                 dest_address,
                 abi.clone(),
+                compiler_abi.clone(),
                 source_map.clone(),
                 &generated.stack,
             )?;

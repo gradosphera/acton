@@ -898,6 +898,9 @@ fn send_message_debug(
     let source_map = compilation_result
         .as_ref()
         .map(|result| result.source_map.clone());
+    let compiler_abi = compilation_result
+        .as_ref()
+        .and_then(|result| result.compiler_abi.clone());
 
     let msg_cell = Emulator::patch_message(
         ctx.chain.world_state.get_config(),
@@ -937,6 +940,7 @@ fn send_message_debug(
             name: "Send internal message".to_string(),
             executor: step_executor.clone().into(),
             source_map,
+            compiler_abi,
             stop_on_entry: need_to_stop_on_entry,
         })
         .context("Cannot start nested debug context")?;
@@ -1364,6 +1368,9 @@ fn run_get_method_impl(
         || Arc::new(TolkSourceMap::without_debug_info()),
         |result| result.source_map.clone(),
     );
+    let compiler_abi = compilation_result
+        .as_ref()
+        .and_then(|result| result.compiler_abi.clone());
 
     let config_b64 = world_state.get_config_b64();
     let args_b64 = serialize_tuple(&args)
@@ -1385,6 +1392,7 @@ fn run_get_method_impl(
                 name: "Run get method".to_string(),
                 executor: step_executor.clone().into(),
                 source_map: Some(source_map.clone()),
+                compiler_abi,
                 stop_on_entry: need_to_stop_on_entry,
             })
             .context("Cannot send response")?;

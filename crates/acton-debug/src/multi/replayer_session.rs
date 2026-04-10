@@ -999,6 +999,7 @@ impl ReplayerDebugSession {
         let Ok(mut replayer) = TolkReplayer::new_live_vm(source_map.as_ref(), spec.executor) else {
             return Ok(false);
         };
+        replayer.set_compiler_abi(spec.compiler_abi);
         replayer.set_exception_breakpoints(self.exception_mode);
 
         let outer_frames = self.cached_visible_frames.borrow().clone();

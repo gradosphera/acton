@@ -8,11 +8,14 @@
 use super::debug_executor_handle::DebugExecutorHandle;
 use super::debug_executor_handle::RuntimeDebugSnapshot;
 use super::types_render::{
-    RenderedValue, SlotValue, debug_format_lazy, debug_print_from_stack, render_runtime_vm_value,
+    RenderedValue, SlotValue, debug_format_lazy, debug_print_from_stack,
+    render_runtime_storage_with_compiler_abi, render_runtime_vm_value,
 };
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::Arc;
 use tolkc::TolkSourceMap;
+use tolkc::abi::ContractABI;
 use tolkc::debug_marks_dict::DebugMarksDict;
 use tolkc::source_map::{DebugMark, SourceMap, SrcRange};
 use tolkc::types_kernel::Ty;
@@ -509,6 +512,8 @@ pub struct TolkReplayer {
     // glob_name → (ty_idx, captured TVM values) for globals that have been SET
     global_var_values: HashMap<String, (usize, Vec<VmStackValue>)>,
 
+    compiler_abi: Option<Arc<ContractABI>>,
+
     // raw TVM stack (updated from runtime stack events);
     // global (not per-context) because TvmStackValues tick arrives before PushFrame
     tvm_stack_values: Vec<VmStackValue>,
@@ -597,6 +602,7 @@ impl TolkReplayer {
             current_vm_position: None,
             exec_stack: vec![NoinlineExecState::new()],
             global_var_values: HashMap::new(),
+            compiler_abi: None,
             tvm_stack_values: Vec::new(),
             breakpoints: HashSet::new(),
             exception_break_mode: ExceptionBreakMode::Never,
@@ -608,6 +614,10 @@ impl TolkReplayer {
             breakpoint_skip_line: 0,
             pending_ticks: VecDeque::new(),
         }
+    }
+
+    pub fn set_compiler_abi(&mut self, compiler_abi: Option<Arc<ContractABI>>) {
+        self.compiler_abi = compiler_abi;
     }
 
     /// Set breakpoints for a file. Each requested line is resolved to the nearest
@@ -663,7 +673,11 @@ impl TolkReplayer {
         if let Some(c4) = snapshot.c4.as_ref() {
             values.push(LocalVarRendered {
                 var_name: "c4 (storage)".to_owned(),
-                value: render_runtime_vm_value(c4),
+                value: self
+                    .compiler_abi
+                    .as_deref()
+                    .and_then(|abi| render_runtime_storage_with_compiler_abi(c4, abi))
+                    .unwrap_or_else(|| render_runtime_vm_value(c4)),
             });
         }
         if let Some(c5) = snapshot.c5.as_ref() {

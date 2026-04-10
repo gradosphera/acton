@@ -781,7 +781,15 @@ fn decode_abi_data(
     ty: &Ty,
 ) -> Option<ParsedAbiData> {
     let abi = build_compiler_abi(symbols)?;
-    let data = compiler_abi_serde::decode(parser, &abi, ty).ok()?;
+    decode_abi_data_with_compiler_abi(&abi, parser, ty)
+}
+
+fn decode_abi_data_with_compiler_abi(
+    abi: &ContractABI,
+    parser: &mut TyCellSlice<'_>,
+    ty: &Ty,
+) -> Option<ParsedAbiData> {
+    let data = compiler_abi_serde::decode(parser, abi, ty).ok()?;
     if parser.size_bits() != 0 || parser.size_refs() != 0 {
         // there are remaining data
         return None;
@@ -800,13 +808,25 @@ fn render_map_value_with_abi(
 }
 
 fn render_typed_cell(symbols: &SourceMap, ty: &Ty, inner: &Ty, cell: &CellLike) -> RenderedValue {
+    let abi = build_compiler_abi(symbols);
+    render_typed_cell_with_compiler_abi(abi.as_ref(), ty, inner, cell)
+}
+
+fn render_typed_cell_with_compiler_abi(
+    abi: Option<&ContractABI>,
+    ty: &Ty,
+    inner: &Ty,
+    cell: &CellLike,
+) -> RenderedValue {
     let value = render_cell_like(cell);
     let (bits, refs, hash) = cell_like_meta(cell);
     let mut fields = render_cell_meta_fields(bits, refs, hash);
 
-    if let Some(cell) = decode_cell_like(cell) {
+    if let Some(cell) = decode_cell_like(cell)
+        && let Some(abi) = abi
+    {
         let mut parser = cell.as_slice_allow_exotic();
-        if let Some(data) = decode_abi_data(symbols, &mut parser, inner) {
+        if let Some(data) = decode_abi_data_with_compiler_abi(abi, &mut parser, inner) {
             fields.insert(0, ("decoded".to_owned(), render_abi_data(data, inner)));
         }
     }
@@ -816,6 +836,29 @@ fn render_typed_cell(symbols: &SourceMap, ty: &Ty, inner: &Ty, cell: &CellLike) 
         value,
         fields,
     }
+}
+
+pub(crate) fn render_runtime_storage_with_compiler_abi(
+    value: &VmStackValue,
+    abi: &ContractABI,
+) -> Option<RenderedValue> {
+    let storage_ty = abi
+        .storage
+        .storage_at_deployment_ty
+        .as_ref()
+        .or(abi.storage.storage_ty.as_ref())?;
+    let VmStackValue::Cell(cell) = value else {
+        return None;
+    };
+    let cell_ty = Ty::CellOf {
+        inner: Box::new(storage_ty.clone()),
+    };
+    Some(render_typed_cell_with_compiler_abi(
+        Some(abi),
+        &cell_ty,
+        storage_ty,
+        cell,
+    ))
 }
 
 fn render_abi_data(data: ParsedAbiData, ty: &Ty) -> RenderedValue {
