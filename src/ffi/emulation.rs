@@ -15,7 +15,7 @@ use anyhow::Context as AnyhowContext;
 use base64::Engine;
 use crc::{CRC_16_XMODEM, Crc};
 use log::{debug, info, warn};
-use num_bigint::BigInt;
+use num_bigint::{BigInt, Sign};
 use num_traits::ToPrimitive;
 use rustc_hash::FxHashSet;
 use std::collections::HashMap;
@@ -1713,6 +1713,48 @@ fn get_wallet_by_name_impl(
     Ok(())
 }
 
+extension!(get_wallet_key_pair in (Context) with (addr: StdAddr) using get_wallet_key_pair_impl);
+fn get_wallet_key_pair_impl(
+    ctx: &mut Context,
+    stack: &mut Tuple,
+    addr: StdAddr,
+) -> anyhow::Result<()> {
+    let Some(wallet) = find_open_wallet_by_address(ctx, &addr) else {
+        stack.push(TupleItem::Null);
+        return Ok(());
+    };
+
+    // Match lib/crypto/crypto.tolk: privateKey is the 32-byte Ed25519 seed.
+    let private_key = BigInt::from_bytes_be(Sign::Plus, &wallet.wallet.key_pair.secret_key[..32]);
+    let public_key = BigInt::from_bytes_be(Sign::Plus, &wallet.wallet.key_pair.public_key);
+
+    let mut result = Tuple::empty();
+    result.push(TupleItem::Int(private_key));
+    result.push(TupleItem::Int(public_key));
+    stack.push(TupleItem::Tuple(result));
+
+    Ok(())
+}
+
+extension!(get_wallet_id in (Context) with (addr: StdAddr) using get_wallet_id_impl);
+fn get_wallet_id_impl(ctx: &mut Context, stack: &mut Tuple, addr: StdAddr) -> anyhow::Result<()> {
+    let Some(wallet) = find_open_wallet_by_address(ctx, &addr) else {
+        stack.push(TupleItem::Null);
+        return Ok(());
+    };
+
+    stack.push(TupleItem::Int(BigInt::from(wallet.wallet.wallet_id)));
+
+    Ok(())
+}
+
+fn find_open_wallet_by_address<'a>(ctx: &'a Context, addr: &StdAddr) -> Option<&'a Wallet> {
+    ctx.env
+        .open_wallets
+        .values()
+        .find(|wallet| wallet.address() == *addr)
+}
+
 const WAIT_FOR_TRANSACTION_DEFAULT_SLEEP_MS: u64 = 1000;
 const WAIT_FOR_TRANSACTION_SETTLE_DELAY_MS: u64 = 1000;
 
@@ -2038,6 +2080,8 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         42 => execute_message_iter_from : 1,
         43 => is_message_iter_done : 1,
         44 => close_message_iter : 1,
+        45 => get_wallet_key_pair : 1,
+        46 => get_wallet_id : 1,
     });
 }
 

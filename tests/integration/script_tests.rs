@@ -1400,6 +1400,126 @@ version = "0.1.0"
 }
 
 #[test]
+fn test_script_broadcast_wallet_exposes_key_helpers_for_v5() {
+    let project = ProjectBuilder::new("script-broadcast-wallet-key-helpers-v5")
+        .script_file(
+            "wallet_keys",
+            r#"
+            import "../../lib/emulation/network"
+            import "../../lib/io"
+
+            fun main() {
+                val wallet = net.wallet("deployer");
+                val keyPair = wallet.toKeyPair();
+
+                if (keyPair.privateKey == 0) {
+                    throw 101;
+                }
+                if (keyPair.publicKey == 0) {
+                    throw 102;
+                }
+                if (wallet.privateKey() != keyPair.privateKey) {
+                    throw 103;
+                }
+                if (wallet.publicKey() != keyPair.publicKey) {
+                    throw 104;
+                }
+
+                val payload = beginCell().storeUint(0xA17, 12).endCell();
+                if (!isSignatureValid(payload.hash(), wallet.sign(payload), keyPair.publicKey)) {
+                    throw 105;
+                }
+                if (!isSignatureValid(payload.hash(), wallet.rawSign(payload.hash()), wallet.publicKey())) {
+                    throw 106;
+                }
+                if (wallet.walletId() == 0) {
+                    throw 107;
+                }
+
+                println("wallet key helpers ok");
+            }
+        "#,
+        )
+        .build();
+
+    fs::write(project.path().join("mnemonic.txt"), DEPLOYER_MNEMONIC)
+        .expect("failed to write mnemonic");
+    fs::write(
+        project.path().join("wallets.toml"),
+        r#"[wallets.deployer]
+kind = "v5r1"
+workchain = 0
+keys = { mnemonic-file = "mnemonic.txt" }
+"#,
+    )
+    .expect("failed to write wallets.toml");
+
+    project
+        .acton()
+        .script("scripts/wallet_keys.tolk")
+        .verify_network("testnet")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_script_broadcast_wallet_exposes_key_helpers_for_v5.stdout.txt",
+        );
+}
+
+#[test]
+fn test_script_wallet_key_pair_requires_open_broadcast_wallet() {
+    let project = ProjectBuilder::new("script-wallet-key-pair-requires-open-broadcast-wallet")
+        .script_file(
+            "wallet_keys_error",
+            r#"
+            import "../../lib/emulation/network"
+
+            fun main() {
+                val wallet = net.wallet("deployer");
+                wallet.toKeyPair();
+            }
+        "#,
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .script("scripts/wallet_keys_error.tolk")
+        .run()
+        .failure();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/test_script_wallet_key_pair_requires_open_broadcast_wallet.stdout.txt",
+    );
+}
+
+#[test]
+fn test_script_wallet_id_requires_open_broadcast_wallet() {
+    let project = ProjectBuilder::new("script-wallet-id-requires-open-broadcast-wallet")
+        .script_file(
+            "wallet_id_error",
+            r#"
+            import "../../lib/emulation/network"
+
+            fun main() {
+                val wallet = net.wallet("deployer");
+                wallet.walletId();
+            }
+        "#,
+        )
+        .build();
+
+    let output = project
+        .acton()
+        .script("scripts/wallet_id_error.tolk")
+        .run()
+        .failure();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/test_script_wallet_id_requires_open_broadcast_wallet.stdout.txt",
+    );
+}
+
+#[test]
 fn test_script_broadcast_treasury_recommends_wallet_api() {
     let project = ProjectBuilder::new("script-broadcast-treasury-recommends-wallet")
         .script_file(

@@ -20,6 +20,7 @@
 
 import "@stdlib/gas-payments"
 import "@stdlib/reflection"
+import "../crypto/crypto"
 import "../fmt"
 import "../ffi/ffi"
 import "../testing/assert"
@@ -686,6 +687,56 @@ fun net.wallet(name: string): Wallet {
     }
 
     return Wallet { address: net.treasury(name).address };
+}
+
+/// Returns the key pair for a wallet configured in wallets.toml or global.wallets.toml.
+///
+/// The `privateKey` field is the 32-byte Ed25519 seed used by [crypto.sign]
+/// and [crypto.rawSign]. This is available only for wallets opened by
+/// [net.wallet] when the script was started with `--net`.
+fun Wallet.toKeyPair(self): KeyPair {
+    val keyPair = ffi.getWalletKeyPair(self.address);
+    if (keyPair == null) {
+        Assert.fail("Wallet keys are available only for configured wallets opened with `net.wallet()` in scripts started with `--net`");
+        throw 1;
+    }
+
+    val [privateKey, publicKey] = keyPair;
+    return KeyPair { privateKey, publicKey };
+}
+
+/// Returns the wallet private key as a 32-byte Ed25519 seed.
+fun Wallet.privateKey(self): int {
+    return self.toKeyPair().privateKey;
+}
+
+/// Returns the wallet public key.
+fun Wallet.publicKey(self): int {
+    return self.toKeyPair().publicKey;
+}
+
+/// Returns the wallet id used by the opened wallet contract.
+///
+/// For wallet v5 this is the wallet_id stored in wallet data and used for
+/// signed requests.
+fun Wallet.walletId(self): int {
+    val walletId = ffi.getWalletId(self.address);
+    if (walletId == null) {
+        Assert.fail("Wallet id is available only for configured wallets opened with `net.wallet()` in scripts started with `--net`");
+        throw 1;
+    }
+
+    return walletId;
+}
+
+/// Hashes and signs a cell with the wallet private key.
+fun Wallet.sign(self, data: cell): slice {
+    return crypto.sign(self.privateKey(), data);
+}
+
+/// Signs an already computed 256-bit hash with the wallet private key.
+fun Wallet.rawSign(self, data: int): slice {
+    return crypto.rawSign(self.privateKey(), data);
 }
 
 /// Check if the script is running in broadcasting mode.
@@ -1406,6 +1457,8 @@ fun ffi.getAccountState(addr: cell): cell? asm "17 EXTCALL"
 fun ffi.loadLibrary(hash: string): cell? asm "21 EXTCALL"
 fun ffi.isBroadcasting(): bool asm "23 EXTCALL"
 fun ffi.getWalletByName(name: string): cell? asm "24 EXTCALL"
+fun ffi.getWalletKeyPair(addr: address): [int, int]? asm "45 EXTCALL"
+fun ffi.getWalletId(addr: address): int? asm "46 EXTCALL"
 fun ffi.waitForTransaction(addr: cell, messageBodyHash: cell, quiet: bool, attempts: int, sleepDuration: int): bool asm "25 EXTCALL"
 fun ffi.enableBroadcast(): void asm "26 EXTCALL"
 fun ffi.disableBroadcast(): void asm "27 EXTCALL"
