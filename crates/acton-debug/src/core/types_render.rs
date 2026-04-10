@@ -11,7 +11,11 @@ use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder, CellSlice as TyCellSlice, Load};
 use tycho_types::dict;
-use tycho_types::models::{Base64StdAddrFlags, DisplayBase64StdAddr, IntAddr, StdAddr};
+use tycho_types::models::{
+    Base64StdAddrFlags, ChangeLibraryMode, CurrencyCollection, DisplayBase64StdAddr, IntAddr,
+    LibRef, OutAction, OutActionsRevIter, OwnedRelaxedMessage, RelaxedMsgInfo,
+    ReserveCurrencyFlags, SendMsgFlags, StateInit, StdAddr,
+};
 use vmlogs::parser::{CellLike, CellSlice, VmStackValue};
 
 // ---------------------------------------------------------------------------
@@ -1666,6 +1670,614 @@ pub(crate) fn debug_format_lazy(
     }
 }
 
+pub(crate) fn render_runtime_out_actions(
+    value: &VmStackValue,
+    abi: Option<&ContractABI>,
+) -> Option<RenderedValue> {
+    let VmStackValue::Cell(cell) = value else {
+        return None;
+    };
+    let root = decode_cell_like(cell)?;
+    let actions = decode_out_actions(&root)?;
+
+    let value = render_cell_like(cell);
+    let (bits, refs, hash) = cell_like_meta(cell);
+    let mut fields = render_cell_meta_fields(bits, refs, hash);
+    fields.insert(
+        0,
+        (
+            "decoded".to_owned(),
+            RenderedValue::ArrayOf {
+                type_name: "array<OutAction>".to_owned(),
+                items: actions
+                    .iter()
+                    .map(|action| render_out_action(action, abi))
+                    .collect(),
+            },
+        ),
+    );
+
+    Some(RenderedValue::CellOf {
+        type_name: "Cell<array<OutAction>>".to_owned(),
+        value,
+        fields,
+    })
+}
+
+fn decode_out_actions(root: &Cell) -> Option<Vec<OutAction>> {
+    let slice = root.as_slice().ok()?;
+    let mut actions: Vec<OutAction> = OutActionsRevIter::new(slice)
+        .collect::<Result<_, _>>()
+        .ok()?;
+    actions.reverse();
+    Some(actions)
+}
+
+fn render_out_action(action: &OutAction, abi: Option<&ContractABI>) -> RenderedValue {
+    match action {
+        OutAction::SendMsg { mode, out_msg } => {
+            let mode_text = format_send_msg_flags(*mode);
+            let mut fields = vec![
+                (
+                    "mode".to_owned(),
+                    RenderedValue::typed_leaf(mode_text.clone(), "int"),
+                ),
+                ("out_msg_raw".to_owned(), render_cell_value(out_msg.inner())),
+            ];
+            match out_msg.load() {
+                Ok(message) => {
+                    let body_meta = resolve_send_message_body_meta(&message, abi);
+                    fields.insert(
+                        1,
+                        (
+                            "out_msg".to_owned(),
+                            render_owned_relaxed_message(&message, body_meta.as_ref()),
+                        ),
+                    );
+                    RenderedValue::UnionCase {
+                        type_name: "OutAction".to_owned(),
+                        variant_name: format_send_message_summary(
+                            &message.info,
+                            mode_text,
+                            body_meta.as_ref(),
+                        ),
+                        fields,
+                    }
+                }
+                Err(_) => RenderedValue::UnionCase {
+                    type_name: "OutAction".to_owned(),
+                    variant_name: format!("SendMsg {mode_text}"),
+                    fields,
+                },
+            }
+        }
+        OutAction::SetCode { new_code } => RenderedValue::UnionCase {
+            type_name: "OutAction".to_owned(),
+            variant_name: "SetCode".to_owned(),
+            fields: vec![("new_code".to_owned(), render_cell_value(new_code))],
+        },
+        OutAction::ReserveCurrency { mode, value } => {
+            let mode_text = format_reserve_currency_flags(*mode);
+            RenderedValue::UnionCase {
+                type_name: "OutAction".to_owned(),
+                variant_name: format!(
+                    "ReserveCurrency {} with {mode_text}",
+                    format_currency_collection(value)
+                ),
+                fields: vec![
+                    (
+                        "mode".to_owned(),
+                        RenderedValue::typed_leaf(mode_text, "int"),
+                    ),
+                    (
+                        "value".to_owned(),
+                        RenderedValue::typed_leaf(
+                            format_currency_collection(value),
+                            "coins | (coins, ExtraCurrenciesMap)",
+                        ),
+                    ),
+                ],
+            }
+        }
+        OutAction::ChangeLibrary { mode, lib } => {
+            let mode_text = format_change_library_mode(*mode);
+            RenderedValue::UnionCase {
+                type_name: "OutAction".to_owned(),
+                variant_name: format!("ChangeLibrary {mode_text}"),
+                fields: vec![
+                    (
+                        "mode".to_owned(),
+                        RenderedValue::typed_leaf(mode_text, "int"),
+                    ),
+                    ("lib".to_owned(), render_lib_ref(lib)),
+                ],
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedSendMessageBodyMeta {
+    opcode: Option<u32>,
+    body_type_name: Option<String>,
+    body_decoded: Option<RenderedValue>,
+}
+
+fn render_lib_ref(lib: &LibRef) -> RenderedValue {
+    match lib {
+        LibRef::Hash(hash) => RenderedValue::typed_leaf(
+            format!("0x{}", hash.to_string().to_ascii_lowercase()),
+            "uint256",
+        ),
+        LibRef::Cell(cell) => render_cell_value(cell),
+    }
+}
+
+fn render_owned_relaxed_message(
+    message: &OwnedRelaxedMessage,
+    body_meta: Option<&ResolvedSendMessageBodyMeta>,
+) -> RenderedValue {
+    let body = render_message_body(&message.body, body_meta);
+    let mut fields = vec![("info".to_owned(), render_relaxed_msg_info(&message.info))];
+    if let Some(body_meta) = body_meta
+        && let Some(opcode) = body_meta.opcode
+    {
+        fields.push((
+            "opcode".to_owned(),
+            RenderedValue::typed_leaf(format!("0x{opcode:08x}"), "uint32"),
+        ));
+    }
+    fields.push((
+        "init".to_owned(),
+        match &message.init {
+            Some(init) => render_state_init(init),
+            None => RenderedValue::typed_leaf("null", "StateInit?"),
+        },
+    ));
+    fields.push(("body".to_owned(), body));
+    RenderedValue::Struct {
+        type_name: "OutMessage".to_owned(),
+        fields,
+    }
+}
+
+fn render_message_body(
+    parts: &(tycho_types::cell::CellSliceRange, Cell),
+    body_meta: Option<&ResolvedSendMessageBodyMeta>,
+) -> RenderedValue {
+    let Some(body_meta) = body_meta else {
+        return render_cell_slice_parts(parts);
+    };
+    let Some(body_type_name) = body_meta.body_type_name.as_ref() else {
+        return render_cell_slice_parts(parts);
+    };
+    let Some(body_decoded) = body_meta.body_decoded.as_ref() else {
+        return render_cell_slice_parts(parts);
+    };
+    let Some(cell) = cell_from_slice_parts(parts) else {
+        return render_cell_slice_parts(parts);
+    };
+
+    let cell_like = CellLike::Cell(Boc::encode_hex(&cell));
+    let (bits, refs, hash) = cell_like_meta(&cell_like);
+    let mut fields = render_cell_meta_fields(bits, refs, hash);
+    fields.insert(0, ("decoded".to_owned(), body_decoded.clone()));
+
+    RenderedValue::CellOf {
+        type_name: format!("Cell<{body_type_name}>"),
+        value: render_cell_like(&cell_like),
+        fields,
+    }
+}
+
+fn resolve_send_message_body_meta(
+    message: &OwnedRelaxedMessage,
+    abi: Option<&ContractABI>,
+) -> Option<ResolvedSendMessageBodyMeta> {
+    let body = message.body.0.apply(&message.body.1).ok()?;
+    let prefix_to_skip = match &message.info {
+        RelaxedMsgInfo::Int(info) if info.bounced => 32,
+        _ => 0,
+    };
+
+    let mut opcode_parser = body;
+    if prefix_to_skip > 0 && opcode_parser.skip_first(prefix_to_skip, 0).is_err() {
+        return None;
+    }
+    let opcode = opcode_parser.load_u32().ok();
+
+    let resolved_body = abi.and_then(|abi| match &message.info {
+        RelaxedMsgInfo::Int(_) => try_resolve_message_body(
+            body,
+            abi,
+            abi.outgoing_messages.iter().map(|message| &message.body_ty),
+            prefix_to_skip,
+        ),
+        RelaxedMsgInfo::ExtOut(_) => try_resolve_message_body(
+            body,
+            abi,
+            abi.emitted_events.iter().map(|message| &message.body_ty),
+            prefix_to_skip,
+        ),
+    });
+
+    if opcode.is_none() && resolved_body.is_none() {
+        return None;
+    }
+
+    Some(ResolvedSendMessageBodyMeta {
+        opcode,
+        body_type_name: resolved_body
+            .as_ref()
+            .map(|resolved| resolved.type_name.clone()),
+        body_decoded: resolved_body.map(|resolved| resolved.decoded),
+    })
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedDecodedMessageBody {
+    type_name: String,
+    decoded: RenderedValue,
+}
+
+fn try_resolve_message_body<'a, I>(
+    body: TyCellSlice<'a>,
+    abi: &ContractABI,
+    candidates: I,
+    prefix_to_skip: u16,
+) -> Option<ResolvedDecodedMessageBody>
+where
+    I: IntoIterator<Item = &'a Ty>,
+{
+    for body_ty in candidates {
+        let mut parser = body;
+        if prefix_to_skip > 0 && parser.skip_first(prefix_to_skip, 0).is_err() {
+            continue;
+        }
+
+        let Ok(data) = compiler_abi_serde::decode(&mut parser, abi, body_ty) else {
+            continue;
+        };
+        if parser.size_bits() != 0 || parser.size_refs() != 0 {
+            continue;
+        }
+
+        let Some(type_name) = compiler_body_type_name(body_ty) else {
+            continue;
+        };
+        return Some(ResolvedDecodedMessageBody {
+            type_name,
+            decoded: render_abi_data(data, body_ty),
+        });
+    }
+
+    None
+}
+
+fn compiler_body_type_name(body_ty: &Ty) -> Option<String> {
+    match body_ty {
+        Ty::StructRef { struct_name, .. } => Some(struct_name.clone()),
+        Ty::AliasRef { alias_name, .. } => Some(alias_name.clone()),
+        _ => None,
+    }
+}
+
+fn render_relaxed_msg_info(info: &RelaxedMsgInfo) -> RenderedValue {
+    match info {
+        RelaxedMsgInfo::Int(info) => RenderedValue::Struct {
+            type_name: "message info".to_owned(),
+            fields: vec![
+                (
+                    "ihr_disabled".to_owned(),
+                    RenderedValue::typed_leaf(info.ihr_disabled.to_string(), "bool"),
+                ),
+                (
+                    "bounce".to_owned(),
+                    RenderedValue::typed_leaf(info.bounce.to_string(), "bool"),
+                ),
+                (
+                    "bounced".to_owned(),
+                    RenderedValue::typed_leaf(info.bounced.to_string(), "bool"),
+                ),
+                (
+                    "src".to_owned(),
+                    render_optional_int_addr(info.src.as_ref()),
+                ),
+                ("dst".to_owned(), render_int_addr(&info.dst)),
+                (
+                    "value".to_owned(),
+                    RenderedValue::typed_leaf(
+                        format_currency_collection(&info.value),
+                        "coins | (coins, ExtraCurrenciesMap)",
+                    ),
+                ),
+                (
+                    "fwd_fee".to_owned(),
+                    RenderedValue::typed_leaf(format_tokens(info.fwd_fee.into_inner()), "coins"),
+                ),
+                (
+                    "created_lt".to_owned(),
+                    RenderedValue::typed_leaf(info.created_lt.to_string(), "uint64"),
+                ),
+                (
+                    "created_at".to_owned(),
+                    RenderedValue::typed_leaf(info.created_at.to_string(), "uint32"),
+                ),
+            ],
+        },
+        RelaxedMsgInfo::ExtOut(info) => RenderedValue::Struct {
+            type_name: "message info".to_owned(),
+            fields: vec![
+                (
+                    "src".to_owned(),
+                    render_optional_int_addr(info.src.as_ref()),
+                ),
+                (
+                    "dst".to_owned(),
+                    RenderedValue::typed_leaf(
+                        info.dst
+                            .as_ref()
+                            .map_or_else(|| "null".to_owned(), ToString::to_string),
+                        "address?",
+                    ),
+                ),
+                (
+                    "created_lt".to_owned(),
+                    RenderedValue::typed_leaf(info.created_lt.to_string(), "uint64"),
+                ),
+                (
+                    "created_at".to_owned(),
+                    RenderedValue::typed_leaf(info.created_at.to_string(), "uint32"),
+                ),
+            ],
+        },
+    }
+}
+
+fn render_state_init(state_init: &StateInit) -> RenderedValue {
+    let libraries_count = state_init.libraries.iter().flatten().count();
+    RenderedValue::Struct {
+        type_name: "StateInit".to_owned(),
+        fields: vec![
+            (
+                "fixedPrefixLength".to_owned(),
+                match &state_init.split_depth {
+                    Some(split_depth) => {
+                        RenderedValue::typed_leaf(format!("{split_depth:?}"), "uint5?")
+                    }
+                    None => RenderedValue::typed_leaf("null", "uint5?"),
+                },
+            ),
+            (
+                "special".to_owned(),
+                match &state_init.special {
+                    Some(special) => RenderedValue::typed_leaf(
+                        format!("tick: {}, tock: {}", special.tick, special.tock),
+                        "(bool, bool)?",
+                    ),
+                    None => RenderedValue::typed_leaf("null", "(bool, bool)?"),
+                },
+            ),
+            (
+                "code".to_owned(),
+                match &state_init.code {
+                    Some(code) => render_cell_value(code),
+                    None => RenderedValue::typed_leaf("null", "cell?"),
+                },
+            ),
+            (
+                "data".to_owned(),
+                match &state_init.data {
+                    Some(data) => render_cell_value(data),
+                    None => RenderedValue::typed_leaf("null", "cell?"),
+                },
+            ),
+            (
+                "library".to_owned(),
+                RenderedValue::typed_leaf(
+                    if libraries_count == 0 {
+                        "empty".to_owned()
+                    } else {
+                        format!("{libraries_count} libraries")
+                    },
+                    "cell?",
+                ),
+            ),
+        ],
+    }
+}
+
+fn render_optional_int_addr(addr: Option<&IntAddr>) -> RenderedValue {
+    match addr {
+        Some(addr) => render_int_addr(addr),
+        None => RenderedValue::typed_leaf("null", "address?"),
+    }
+}
+
+fn render_int_addr(addr: &IntAddr) -> RenderedValue {
+    match addr {
+        IntAddr::Std(addr) => render_std_address("address".to_owned(), addr.to_string(), addr),
+        _ => RenderedValue::typed_leaf(addr.to_string(), "address"),
+    }
+}
+
+fn render_cell_slice_parts(parts: &(tycho_types::cell::CellSliceRange, Cell)) -> RenderedValue {
+    let cell = cell_from_slice_parts(parts);
+    cell.as_ref().map_or_else(
+        || RenderedValue::typed_leaf("<invalid body>", "cell"),
+        render_cell_value,
+    )
+}
+
+fn cell_from_slice_parts(parts: &(tycho_types::cell::CellSliceRange, Cell)) -> Option<Cell> {
+    let slice = parts.0.apply(&parts.1).ok()?;
+    let mut builder = CellBuilder::new();
+    builder.store_slice(slice).ok()?;
+    builder.build().ok()
+}
+
+fn render_cell_value(cell: &Cell) -> RenderedValue {
+    render_runtime_vm_value(&VmStackValue::Cell(CellLike::Cell(Boc::encode_hex(cell))))
+}
+
+fn format_relaxed_msg_summary(info: &RelaxedMsgInfo, mode: String) -> String {
+    match info {
+        RelaxedMsgInfo::Int(info) => format!(
+            "to {} with {} and {}",
+            info.dst,
+            format_currency_collection(&info.value),
+            mode
+        ),
+        RelaxedMsgInfo::ExtOut(info) => format!(
+            "to {} with {}",
+            info.dst
+                .as_ref()
+                .map_or_else(|| "null".to_owned(), ToString::to_string),
+            mode
+        ),
+    }
+}
+
+fn format_send_message_summary(
+    info: &RelaxedMsgInfo,
+    mode: String,
+    body_meta: Option<&ResolvedSendMessageBodyMeta>,
+) -> String {
+    let summary = format_relaxed_msg_summary(info, mode);
+    if let Some(body_type_name) = body_meta.and_then(|body_meta| body_meta.body_type_name.as_ref())
+    {
+        format!("{body_type_name} {summary}")
+    } else {
+        summary
+    }
+}
+
+fn format_send_msg_flags(mode: SendMsgFlags) -> String {
+    let mut parts = Vec::new();
+    if mode.contains(SendMsgFlags::PAY_FEE_SEPARATELY) {
+        parts.push("SEND_MODE_PAY_FEES_SEPARATELY");
+    }
+    if mode.contains(SendMsgFlags::IGNORE_ERROR) {
+        parts.push("SEND_MODE_IGNORE_ERRORS");
+    }
+    if mode.contains(SendMsgFlags::BOUNCE_ON_ERROR) {
+        parts.push("SEND_MODE_BOUNCE_ON_ACTION_FAIL");
+    }
+    if mode.contains(SendMsgFlags::DELETE_IF_EMPTY) {
+        parts.push("SEND_MODE_DESTROY");
+    }
+    if mode.contains(SendMsgFlags::WITH_REMAINING_BALANCE) {
+        parts.push("SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE");
+    }
+    if mode.contains(SendMsgFlags::ALL_BALANCE) {
+        parts.push("SEND_MODE_CARRY_ALL_BALANCE");
+    }
+
+    let unknown = mode.bits() & !SendMsgFlags::all().bits();
+    if unknown != 0 {
+        return if parts.is_empty() {
+            format!("0x{unknown:02x}")
+        } else {
+            format!("{} | 0x{unknown:02x}", parts.join(" | "))
+        };
+    }
+
+    if parts.is_empty() {
+        "SEND_MODE_REGULAR".to_owned()
+    } else {
+        parts.join(" | ")
+    }
+}
+
+fn format_reserve_currency_flags(mode: ReserveCurrencyFlags) -> String {
+    let mut parts = Vec::new();
+    if mode.contains(ReserveCurrencyFlags::ALL_BUT) {
+        parts.push("ALL_BUT");
+    }
+    if mode.contains(ReserveCurrencyFlags::IGNORE_ERROR) {
+        parts.push("IGNORE_ERROR");
+    }
+    if mode.contains(ReserveCurrencyFlags::WITH_ORIGINAL_BALANCE) {
+        parts.push("WITH_ORIGINAL_BALANCE");
+    }
+    if mode.contains(ReserveCurrencyFlags::REVERSE) {
+        parts.push("REVERSE");
+    }
+    if mode.contains(ReserveCurrencyFlags::BOUNCE_ON_ERROR) {
+        parts.push("BOUNCE_ON_ERROR");
+    }
+
+    let unknown = mode.bits() & !ReserveCurrencyFlags::all().bits();
+    if unknown != 0 {
+        return if parts.is_empty() {
+            format!("0x{unknown:02x}")
+        } else {
+            format!("{} | 0x{unknown:02x}", parts.join(" | "))
+        };
+    }
+
+    if parts.is_empty() {
+        "0".to_owned()
+    } else {
+        parts.join(" | ")
+    }
+}
+
+fn format_change_library_mode(mode: ChangeLibraryMode) -> String {
+    let mut parts = Vec::new();
+    match mode.bits() & 0b11 {
+        0 => parts.push("REMOVE"),
+        1 => parts.push("ADD_PRIVATE"),
+        2 => parts.push("ADD_PUBLIC"),
+        3 => {
+            parts.push("ADD_PRIVATE");
+            parts.push("ADD_PUBLIC");
+        }
+        _ => {}
+    }
+    if mode.contains(ChangeLibraryMode::BOUNCE_ON_ERROR) {
+        parts.push("BOUNCE_ON_ERROR");
+    }
+
+    let unknown = mode.bits() & !(0b11 | ChangeLibraryMode::BOUNCE_ON_ERROR.bits());
+    if unknown != 0 {
+        return if parts.is_empty() {
+            format!("0x{unknown:02x}")
+        } else {
+            format!("{} | 0x{unknown:02x}", parts.join(" | "))
+        };
+    }
+
+    if parts.is_empty() {
+        "0".to_owned()
+    } else {
+        parts.join(" | ")
+    }
+}
+
+fn format_tokens(tokens: u128) -> String {
+    let whole = tokens / 1_000_000_000;
+    let frac = tokens % 1_000_000_000;
+    format!("{whole}.{frac:09} TON")
+}
+
+fn format_currency_collection(currency: &CurrencyCollection) -> String {
+    let mut result = format_tokens(currency.tokens.into_inner());
+    if !currency.other.is_empty() {
+        let mut other = Vec::new();
+        for entry in currency.other.as_dict().iter().flatten() {
+            let (currency_id, amount) = entry;
+            other.push(format!("{currency_id}: {amount}"));
+        }
+        if !other.is_empty() {
+            result.push_str(" + [");
+            result.push_str(&other.join(", "));
+            result.push(']');
+        }
+    }
+    result
+}
+
 /// Helper to convert data from `SourceMap` to ABI
 fn build_compiler_abi(symbols: &SourceMap) -> Option<ContractABI> {
     Some(ContractABI {
@@ -1734,8 +2346,12 @@ fn source_map_declaration_to_abi(decl: &Declaration) -> Option<ABIDeclaration> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tolkc::abi::{ABIDeclaration, ABIOpcode, ABIOutgoingMessage};
     use tolkc::types_kernel::UnionVariant;
     use ton_abi::abi_serde::{DataField, DataObject};
+    use tycho_types::cell::{CellFamily, HashBytes, Lazy, Store};
+    use tycho_types::models::{RelaxedIntMsgInfo, SendMsgFlags};
+    use tycho_types::models::{ReserveCurrencyFlags, StdAddr};
 
     #[test]
     fn render_abi_data_uses_field_type_for_object_fields() {
@@ -2071,5 +2687,175 @@ mod tests {
         assert_eq!(fields[1].1.dap_parts().0, "1");
         assert_eq!(fields[2].0, "hash");
         assert_eq!(fields[2].1.dap_parts().0, render_cell_hash(&cell));
+    }
+
+    #[test]
+    fn render_runtime_out_actions_decodes_reserve_currency() {
+        let action = OutAction::ReserveCurrency {
+            mode: ReserveCurrencyFlags::WITH_ORIGINAL_BALANCE,
+            value: CurrencyCollection::new(2_500_000_000),
+        };
+        let cell = build_out_actions_cell(&[action]);
+
+        let rendered = render_runtime_out_actions(
+            &VmStackValue::Cell(CellLike::Cell(Boc::encode_hex(&cell))),
+            None,
+        )
+        .expect("expected decoded c5");
+
+        let RenderedValue::CellOf {
+            type_name, fields, ..
+        } = rendered
+        else {
+            panic!("expected CellOf");
+        };
+        assert_eq!(type_name, "Cell<array<OutAction>>");
+        assert_eq!(fields[0].0, "decoded");
+
+        let RenderedValue::ArrayOf {
+            type_name, items, ..
+        } = &fields[0].1
+        else {
+            panic!("expected decoded action array");
+        };
+        assert_eq!(type_name, "array<OutAction>");
+        assert_eq!(items.len(), 1);
+
+        let RenderedValue::UnionCase {
+            type_name,
+            variant_name,
+            fields,
+        } = &items[0]
+        else {
+            panic!("expected out action");
+        };
+        assert_eq!(type_name, "OutAction");
+        assert_eq!(
+            variant_name,
+            "ReserveCurrency 2.500000000 TON with WITH_ORIGINAL_BALANCE"
+        );
+        assert_eq!(fields[0].0, "mode");
+        assert_eq!(fields[0].1.dap_parts().0, "WITH_ORIGINAL_BALANCE");
+        assert_eq!(fields[1].0, "value");
+        assert_eq!(fields[1].1.dap_parts().0, "2.500000000 TON");
+    }
+
+    #[test]
+    fn render_runtime_out_actions_decodes_send_msg() {
+        let abi = ContractABI {
+            declarations: vec![ABIDeclaration::Struct {
+                name: "Transfer".to_owned(),
+                type_params: None,
+                prefix: Some(ABIOpcode {
+                    prefix_str: "0xfeedbeef".to_owned(),
+                    prefix_len: 32,
+                }),
+                fields: vec![],
+                custom_pack_unpack: None,
+            }],
+            outgoing_messages: vec![ABIOutgoingMessage {
+                body_ty: Ty::StructRef {
+                    struct_name: "Transfer".to_owned(),
+                    type_args: None,
+                },
+                description: String::new(),
+            }],
+            ..Default::default()
+        };
+        let mut body_builder = CellBuilder::new();
+        body_builder.store_u32(0xfeed_beef).unwrap();
+        let body = body_builder.build().unwrap();
+        let message = OwnedRelaxedMessage {
+            info: RelaxedMsgInfo::Int(RelaxedIntMsgInfo {
+                dst: IntAddr::Std(StdAddr::new(0, HashBytes([0x11; 32]))),
+                value: CurrencyCollection::new(1_000_000_000),
+                ..Default::default()
+            }),
+            init: None,
+            body: body.into(),
+            layout: None,
+        };
+        let action = OutAction::SendMsg {
+            mode: SendMsgFlags::PAY_FEE_SEPARATELY,
+            out_msg: Lazy::new(&message).unwrap(),
+        };
+        let cell = build_out_actions_cell(&[action]);
+
+        let rendered = render_runtime_out_actions(
+            &VmStackValue::Cell(CellLike::Cell(Boc::encode_hex(&cell))),
+            Some(&abi),
+        )
+        .expect("expected decoded c5");
+
+        let RenderedValue::CellOf { fields, .. } = rendered else {
+            panic!("expected CellOf");
+        };
+        let RenderedValue::ArrayOf { items, .. } = &fields[0].1 else {
+            panic!("expected action array");
+        };
+        let RenderedValue::UnionCase {
+            variant_name,
+            fields,
+            ..
+        } = &items[0]
+        else {
+            panic!("expected out action");
+        };
+        assert!(variant_name.contains("Transfer"));
+        assert_eq!(fields[0].0, "mode");
+        assert_eq!(fields[0].1.dap_parts().0, "SEND_MODE_PAY_FEES_SEPARATELY");
+        assert_eq!(fields[1].0, "out_msg");
+        assert_eq!(fields[2].0, "out_msg_raw");
+
+        let RenderedValue::Struct {
+            type_name,
+            fields: message_fields,
+        } = &fields[1].1
+        else {
+            panic!("expected rendered message");
+        };
+        assert_eq!(type_name, "OutMessage");
+        assert_eq!(message_fields[0].0, "info");
+        assert_eq!(message_fields[1].0, "opcode");
+        assert_eq!(message_fields[1].1.dap_parts().0, "0xfeedbeef");
+        assert_eq!(message_fields[2].0, "init");
+        assert_eq!(message_fields[2].1.dap_parts().0, "null");
+        assert_eq!(
+            message_fields[2].1.dap_parts().1.as_deref(),
+            Some("StateInit?")
+        );
+        assert_eq!(message_fields[3].0, "body");
+        let RenderedValue::CellOf {
+            type_name,
+            fields: body_fields,
+            ..
+        } = &message_fields[3].1
+        else {
+            panic!("expected typed body");
+        };
+        assert_eq!(type_name, "Cell<Transfer>");
+        assert_eq!(body_fields[0].0, "decoded");
+        let RenderedValue::Struct {
+            type_name,
+            fields: decoded_fields,
+        } = &body_fields[0].1
+        else {
+            panic!("expected decoded body");
+        };
+        assert_eq!(type_name, "Transfer");
+        assert!(decoded_fields.is_empty());
+    }
+
+    fn build_out_actions_cell(actions: &[OutAction]) -> Cell {
+        let mut head = Cell::empty_cell();
+        for action in actions {
+            let mut builder = CellBuilder::new();
+            builder.store_reference(head).unwrap();
+            action
+                .store_into(&mut builder, Cell::empty_context())
+                .unwrap();
+            head = builder.build().unwrap();
+        }
+        head
     }
 }

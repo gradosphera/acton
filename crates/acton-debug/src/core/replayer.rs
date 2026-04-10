@@ -9,7 +9,7 @@ use super::debug_executor_handle::DebugExecutorHandle;
 use super::debug_executor_handle::RuntimeDebugSnapshot;
 use super::types_render::{
     RenderedValue, SlotValue, debug_format_lazy, debug_print_from_stack,
-    render_runtime_storage_with_compiler_abi, render_runtime_vm_value,
+    render_runtime_out_actions, render_runtime_storage_with_compiler_abi, render_runtime_vm_value,
 };
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -683,7 +683,8 @@ impl TolkReplayer {
         if let Some(c5) = snapshot.c5.as_ref() {
             values.push(LocalVarRendered {
                 var_name: "c5 (output actions)".to_owned(),
-                value: render_runtime_vm_value(c5),
+                value: render_runtime_out_actions(c5, self.compiler_abi.as_deref())
+                    .unwrap_or_else(|| render_runtime_vm_value(c5)),
             });
         }
         if let Some(c7) = snapshot.c7.as_ref() {
