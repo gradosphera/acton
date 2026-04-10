@@ -24,6 +24,11 @@ pub enum RenderedValue {
         value: String,
         type_field: Option<String>,
     },
+    CellOf {
+        type_name: String,
+        value: String,
+        fields: Vec<(String, RenderedValue)>, // "decoded" field with actual value
+    },
     Struct {
         type_name: String,
         fields: Vec<(String, RenderedValue)>,
@@ -74,6 +79,9 @@ impl RenderedValue {
     pub fn dap_parts(&self) -> (String, Option<String>) {
         match self {
             RenderedValue::Leaf { value, type_field } => (value.clone(), type_field.clone()),
+            RenderedValue::CellOf {
+                type_name, value, ..
+            } => (value.clone(), Some(type_name.clone())),
             RenderedValue::Struct { type_name, .. } => (String::new(), Some(type_name.clone())),
             RenderedValue::Address {
                 type_name, value, ..
@@ -104,6 +112,9 @@ impl RenderedValue {
     fn legacy_dap_value(&self) -> String {
         match self {
             RenderedValue::Leaf { value, .. } => value.clone(),
+            RenderedValue::CellOf {
+                type_name, value, ..
+            } => format!("{type_name} {value}"),
             RenderedValue::Struct { type_name, .. } => type_name.clone(),
             RenderedValue::Address { legacy_value, .. } => legacy_value.clone(),
             RenderedValue::Tensor { items, .. } => format!("{} items", items.len()),
@@ -135,6 +146,7 @@ impl RenderedValue {
         match self {
             RenderedValue::Struct { fields, .. } => !fields.is_empty(),
             RenderedValue::Address { fields, .. } => !fields.is_empty(),
+            RenderedValue::CellOf { fields, .. } => !fields.is_empty(),
             RenderedValue::Tensor { items, .. } => !items.is_empty(),
             RenderedValue::ArrayOf { items, .. } => !items.is_empty(),
             RenderedValue::LastSeen { inner } => inner.has_children(),
@@ -180,6 +192,9 @@ impl fmt::Display for RenderedValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             RenderedValue::Leaf { value, .. } => write!(f, "{value}"),
+            RenderedValue::CellOf {
+                type_name, value, ..
+            } => write!(f, "{type_name} {value}"),
             RenderedValue::Struct { type_name, fields } if fields.is_empty() => {
                 write!(f, "{type_name} {{}}")
             }
@@ -559,19 +574,48 @@ fn format_map_raw_value(slice: TyCellSlice<'_>) -> Result<String, String> {
     Ok(render_cell_like(&CellLike::Cell(Boc::encode_hex(&cell))))
 }
 
+fn decode_abi_data(
+    symbols: &SourceMap,
+    parser: &mut TyCellSlice<'_>,
+    ty: &Ty,
+) -> Option<ParsedAbiData> {
+    let abi = build_compiler_abi(symbols)?;
+    let data = compiler_abi_serde::decode(parser, &abi, ty).ok()?;
+    if parser.size_bits() != 0 || parser.size_refs() != 0 {
+        // there are remaining data
+        return None;
+    }
+    Some(data)
+}
+
 fn render_map_value_with_abi(
     symbols: &SourceMap,
     value_slice: TyCellSlice<'_>,
     value_ty: &Ty,
 ) -> Option<RenderedValue> {
-    let abi = build_compiler_abi(symbols)?;
     let mut parser = value_slice;
-    let data = compiler_abi_serde::decode(&mut parser, &abi, value_ty).ok()?;
-    if parser.size_bits() != 0 || parser.size_refs() != 0 {
-        return None;
-    }
-
+    let data = decode_abi_data(symbols, &mut parser, value_ty)?;
     Some(render_abi_data(data, value_ty))
+}
+
+fn render_typed_cell(symbols: &SourceMap, ty: &Ty, inner: &Ty, cell: &CellLike) -> RenderedValue {
+    let value = render_cell_like(cell);
+    let Some(cell) = decode_cell_like(cell) else {
+        return typed_leaf_for_ty(ty, format!("{ty} {value}"));
+    };
+
+    let mut parser = cell.as_slice_allow_exotic();
+    let Some(data) = decode_abi_data(symbols, &mut parser, inner) else {
+        return typed_leaf_for_ty(ty, format!("{ty} {value}"));
+    };
+
+    let fields = vec![("decoded".to_owned(), render_abi_data(data, inner))];
+
+    RenderedValue::CellOf {
+        type_name: ty.to_string(),
+        value,
+        fields,
+    }
 }
 
 fn render_abi_data(data: ParsedAbiData, ty: &Ty) -> RenderedValue {
@@ -955,7 +999,7 @@ fn debug_format(
 
         Ty::CellOf { inner } => match r.read_slot() {
             SlotValue::Live(VmStackValue::Cell(cell)) => {
-                typed_leaf_for_ty(ty, format!("Cell<{inner}> {}", render_cell_like(cell)))
+                render_typed_cell(symbols, ty, inner, cell)
             }
             SlotValue::Live(VmStackValue::Null) => typed_leaf_for_ty(ty, "null"),
             _ => typed_leaf_for_ty(ty, "not a TVM cell"),
@@ -1460,5 +1504,34 @@ mod tests {
         };
         assert_eq!(items[0].dap_parts().1.as_deref(), Some("bool"));
         assert_eq!(items[1].dap_parts().1.as_deref(), Some("uint32"));
+    }
+
+    #[test]
+    fn render_typed_cell_exposes_decoded_pseudo_field() {
+        let mut builder = CellBuilder::new();
+        builder.store_uint(7, 32).unwrap();
+        let cell = builder.build().unwrap();
+        let cell_like = CellLike::Cell(Boc::encode_hex(&cell));
+        let ty = Ty::CellOf {
+            inner: Box::new(Ty::UintN { n: 32 }),
+        };
+
+        let rendered =
+            render_typed_cell(&SourceMap::default(), &ty, &Ty::UintN { n: 32 }, &cell_like);
+
+        let RenderedValue::CellOf {
+            type_name,
+            value,
+            fields,
+        } = rendered
+        else {
+            panic!("expected CellOf");
+        };
+        assert_eq!(type_name, "Cell<uint32>");
+        assert_eq!(value, format!("cell{{{}}}", Boc::encode_hex(&cell)));
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].0, "decoded");
+        assert_eq!(fields[0].1.dap_parts().0, "7");
+        assert_eq!(fields[0].1.dap_parts().1.as_deref(), Some("uint32"));
     }
 }

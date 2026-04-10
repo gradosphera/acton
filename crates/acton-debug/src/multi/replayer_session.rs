@@ -591,7 +591,9 @@ impl ReplayerDebugSession {
 
     fn expand_debug_value(&mut self, dv: &RenderedValue) -> Vec<Variable> {
         match dv {
-            RenderedValue::Struct { fields, .. } | RenderedValue::Address { fields, .. } => fields
+            RenderedValue::Struct { fields, .. }
+            | RenderedValue::Address { fields, .. }
+            | RenderedValue::CellOf { fields, .. } => fields
                 .iter()
                 .map(|(name, val)| self.debug_value_to_named_variable(name.clone(), val))
                 .collect(),
