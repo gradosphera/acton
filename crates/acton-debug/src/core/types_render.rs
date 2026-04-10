@@ -34,6 +34,11 @@ pub enum RenderedValue {
         value: String,
         fields: Vec<(String, RenderedValue)>, // "decoded" field with actual value
     },
+    UnionCase {
+        type_name: String,
+        variant_name: String,
+        fields: Vec<(String, RenderedValue)>,
+    },
     Struct {
         type_name: String,
         fields: Vec<(String, RenderedValue)>,
@@ -90,6 +95,11 @@ impl RenderedValue {
             RenderedValue::CellOf {
                 type_name, value, ..
             } => (value.clone(), Some(type_name.clone())),
+            RenderedValue::UnionCase {
+                type_name,
+                variant_name,
+                ..
+            } => (variant_name.clone(), Some(type_name.clone())),
             RenderedValue::Struct { type_name, .. } => (String::new(), Some(type_name.clone())),
             RenderedValue::Address {
                 type_name, value, ..
@@ -124,6 +134,7 @@ impl RenderedValue {
             RenderedValue::CellOf {
                 type_name, value, ..
             } => format!("{type_name} {value}"),
+            RenderedValue::UnionCase { variant_name, .. } => variant_name.clone(),
             RenderedValue::Struct { type_name, .. } => type_name.clone(),
             RenderedValue::Address { legacy_value, .. } => legacy_value.clone(),
             RenderedValue::Tensor { items, .. } => format!("{} items", items.len()),
@@ -157,6 +168,7 @@ impl RenderedValue {
             RenderedValue::Address { fields, .. } => !fields.is_empty(),
             RenderedValue::CellLike { fields, .. } => !fields.is_empty(),
             RenderedValue::CellOf { fields, .. } => !fields.is_empty(),
+            RenderedValue::UnionCase { fields, .. } => !fields.is_empty(),
             RenderedValue::Tensor { items, .. } => !items.is_empty(),
             RenderedValue::ArrayOf { items, .. } => !items.is_empty(),
             RenderedValue::LastSeen { inner } => inner.has_children(),
@@ -206,6 +218,14 @@ impl fmt::Display for RenderedValue {
             RenderedValue::CellOf {
                 type_name, value, ..
             } => write!(f, "{type_name} {value}"),
+            RenderedValue::UnionCase {
+                variant_name,
+                fields,
+                ..
+            } => match fields.iter().find(|(name, _)| name == "value") {
+                Some((_, value)) => write!(f, "{variant_name} {value}"),
+                None => write!(f, "{variant_name}"),
+            },
             RenderedValue::Struct { type_name, fields } if fields.is_empty() => {
                 write!(f, "{type_name} {{}}")
             }
@@ -558,6 +578,22 @@ fn render_openable_cell_like(
         type_name: ty.to_string(),
         value: value.into(),
         fields: render_cell_meta_fields(bits, refs, hash),
+    }
+}
+
+fn render_union_case(
+    ty: &Ty,
+    variant_name: impl Into<String>,
+    value: Option<RenderedValue>,
+) -> RenderedValue {
+    let mut fields = Vec::new();
+    if let Some(value) = value {
+        fields.push(("value".to_owned(), value));
+    }
+    RenderedValue::UnionCase {
+        type_name: ty.to_string(),
+        variant_name: variant_name.into(),
+        fields,
     }
 }
 
@@ -1381,7 +1417,8 @@ fn debug_format(
             stack_width: Some(stack_width),
         } => {
             // read tagged union: [smth, smth, ... type_id]
-            let union_slots = r.read_n_slots(*stack_width);
+            let stack_width = *stack_width;
+            let union_slots = r.read_n_slots(stack_width);
             let tag_slot = &union_slots[stack_width - 1];
             match tag_slot {
                 SlotValue::Live(VmStackValue::Integer(type_id))
@@ -1390,16 +1427,18 @@ fn debug_format(
                     if let Some(variant) =
                         variants.iter().find(|v| v.stack_type_id == Some(type_id))
                     {
-                        let mut sub = StackReader::new(
-                            &union_slots[stack_width - 1 - variant.stack_width.unwrap_or(0)
-                                ..stack_width - 1],
-                        );
-                        let inner = debug_format(symbols, &mut sub, &variant.variant_ty, false);
-                        if matches!(&variant.variant_ty, Ty::StructRef { .. }) {
-                            inner
+                        let variant_width = variant.stack_width.unwrap_or(0);
+                        let Some(variant_start) = stack_width.checked_sub(1 + variant_width) else {
+                            return typed_leaf_for_ty(ty, "corrupted stack for union");
+                        };
+                        let value = if variant_width == 0 {
+                            None
                         } else {
-                            typed_leaf_for_ty(ty, format!("#{} {inner}", variant.variant_ty))
-                        }
+                            let mut sub =
+                                StackReader::new(&union_slots[variant_start..stack_width - 1]);
+                            Some(debug_format(symbols, &mut sub, &variant.variant_ty, false))
+                        };
+                        render_union_case(ty, format!("#{}", variant.variant_ty), value)
                     } else {
                         // corrupted stack, type_id on a stack mismatches all variants
                         typed_leaf_for_ty(ty, "union with unknown variant")
@@ -1414,12 +1453,13 @@ fn debug_format(
             }
         }
 
-        Ty::GenericT { name_t } => {
-            RenderedValue::typed_leaf(format!("unexpected genericT={name_t}"), name_t.clone())
+        Ty::Union { .. } => {
+            r.read_n_slots(width);
+            typed_leaf_for_ty(ty, "union with unresolved layout")
         }
 
-        _ => {
-            panic!("unexpected TVM type");
+        Ty::GenericT { name_t } => {
+            RenderedValue::typed_leaf(format!("unexpected genericT={name_t}"), name_t.clone())
         }
     }
 }
@@ -1586,6 +1626,7 @@ fn source_map_declaration_to_abi(decl: &Declaration) -> Option<ABIDeclaration> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tolkc::types_kernel::UnionVariant;
     use ton_abi::abi_serde::{DataField, DataObject};
 
     #[test]
@@ -1664,6 +1705,136 @@ mod tests {
         assert_eq!(fields[1].1.dap_parts().0, "1");
         assert_eq!(fields[2].0, "hash");
         assert_eq!(fields[2].1.dap_parts().0, render_cell_hash(&cell));
+    }
+
+    #[test]
+    fn render_union_case_preserves_inner_children() {
+        let cell = CellBuilder::new().build().unwrap();
+        let union_ty = Ty::Union {
+            variants: vec![
+                UnionVariant {
+                    variant_ty: Ty::Cell,
+                    prefix_str: String::new(),
+                    prefix_len: 0,
+                    is_prefix_implicit: None,
+                    stack_type_id: Some(1),
+                    stack_width: Some(1),
+                },
+                UnionVariant {
+                    variant_ty: Ty::Int,
+                    prefix_str: String::new(),
+                    prefix_len: 0,
+                    is_prefix_implicit: None,
+                    stack_type_id: Some(2),
+                    stack_width: Some(1),
+                },
+            ],
+            stack_width: Some(2),
+        };
+        let stack_values = [
+            VmStackValue::Cell(CellLike::Cell(Boc::encode_hex(&cell))),
+            VmStackValue::Integer("1".to_owned()),
+        ];
+        let slots = [
+            SlotValue::Live(&stack_values[0]),
+            SlotValue::Live(&stack_values[1]),
+        ];
+
+        let rendered = debug_print_from_stack(&SourceMap::default(), &slots, &union_ty);
+
+        let RenderedValue::UnionCase {
+            type_name,
+            variant_name,
+            fields,
+        } = rendered
+        else {
+            panic!("expected UnionCase");
+        };
+        assert_eq!(type_name, "cell, int");
+        assert_eq!(variant_name, "#cell");
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].0, "value");
+        let RenderedValue::CellLike { fields, .. } = &fields[0].1 else {
+            panic!("expected nested CellLike");
+        };
+        assert_eq!(fields[0].0, "bits");
+        assert_eq!(fields[1].0, "refs");
+        assert_eq!(fields[2].0, "hash");
+    }
+
+    #[test]
+    fn render_null_union_variant_has_no_value_field() {
+        let union_ty = Ty::Union {
+            variants: vec![
+                UnionVariant {
+                    variant_ty: Ty::NullLiteral,
+                    prefix_str: String::new(),
+                    prefix_len: 0,
+                    is_prefix_implicit: None,
+                    stack_type_id: Some(0),
+                    stack_width: Some(0),
+                },
+                UnionVariant {
+                    variant_ty: Ty::Bool,
+                    prefix_str: String::new(),
+                    prefix_len: 0,
+                    is_prefix_implicit: None,
+                    stack_type_id: Some(1),
+                    stack_width: Some(1),
+                },
+            ],
+            stack_width: Some(2),
+        };
+        let stack_values = [VmStackValue::Null, VmStackValue::Integer("0".to_owned())];
+        let slots = [
+            SlotValue::Live(&stack_values[0]),
+            SlotValue::Live(&stack_values[1]),
+        ];
+
+        let rendered = debug_print_from_stack(&SourceMap::default(), &slots, &union_ty);
+
+        let RenderedValue::UnionCase {
+            variant_name,
+            fields,
+            ..
+        } = rendered
+        else {
+            panic!("expected UnionCase");
+        };
+        assert_eq!(variant_name, "#null");
+        assert!(fields.is_empty());
+    }
+
+    #[test]
+    fn render_union_without_stack_width_falls_back_without_panic() {
+        let union_ty = Ty::Union {
+            variants: vec![
+                UnionVariant {
+                    variant_ty: Ty::Int,
+                    prefix_str: String::new(),
+                    prefix_len: 0,
+                    is_prefix_implicit: None,
+                    stack_type_id: Some(1),
+                    stack_width: Some(1),
+                },
+                UnionVariant {
+                    variant_ty: Ty::Cell,
+                    prefix_str: String::new(),
+                    prefix_len: 0,
+                    is_prefix_implicit: None,
+                    stack_type_id: Some(2),
+                    stack_width: Some(1),
+                },
+            ],
+            stack_width: None,
+        };
+        let stack_values = [VmStackValue::Integer("7".to_owned())];
+        let slots = [SlotValue::Live(&stack_values[0])];
+
+        let rendered = debug_print_from_stack(&SourceMap::default(), &slots, &union_ty);
+
+        assert_eq!(rendered.dap_parts().0, "union with unresolved layout");
+        assert_eq!(rendered.dap_parts().1.as_deref(), Some("int, cell"));
     }
 
     #[test]

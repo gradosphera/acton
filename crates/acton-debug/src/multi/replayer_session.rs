@@ -594,6 +594,7 @@ impl ReplayerDebugSession {
             RenderedValue::Struct { fields, .. }
             | RenderedValue::Address { fields, .. }
             | RenderedValue::CellLike { fields, .. }
+            | RenderedValue::UnionCase { fields, .. }
             | RenderedValue::CellOf { fields, .. } => fields
                 .iter()
                 .map(|(name, val)| self.debug_value_to_named_variable(name.clone(), val))
