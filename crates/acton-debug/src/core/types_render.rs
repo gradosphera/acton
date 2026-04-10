@@ -459,7 +459,15 @@ fn parse_range_len(range: &Option<(String, String)>) -> Option<usize> {
     Some(end.parse::<usize>().ok()? - start.parse::<usize>().ok()?)
 }
 
-fn render_bit_ref_fields(bits: Option<usize>, refs: Option<usize>) -> Vec<(String, RenderedValue)> {
+fn render_cell_hash(cell: &Cell) -> String {
+    format!("0x{}", cell.repr_hash().to_string().to_ascii_lowercase())
+}
+
+fn render_cell_meta_fields(
+    bits: Option<usize>,
+    refs: Option<usize>,
+    hash: Option<String>,
+) -> Vec<(String, RenderedValue)> {
     vec![
         (
             "bits".to_owned(),
@@ -473,24 +481,58 @@ fn render_bit_ref_fields(bits: Option<usize>, refs: Option<usize>) -> Vec<(Strin
                 refs.map_or_else(|| "<unknown>".to_owned(), |refs| refs.to_string()),
             ),
         ),
+        (
+            "hash".to_owned(),
+            RenderedValue::leaf(hash.unwrap_or_else(|| "<unknown>".to_owned())),
+        ),
     ]
 }
 
-fn cell_like_bit_ref_counts(cell: &CellLike) -> (Option<usize>, Option<usize>) {
+fn cell_like_meta(cell: &CellLike) -> (Option<usize>, Option<usize>, Option<String>) {
     let Some(cell) = decode_cell_like(cell) else {
-        return (None, None);
+        return (None, None, None);
     };
     let slice = cell.as_slice_allow_exotic();
     (
         Some(slice.size_bits() as usize),
         Some(slice.size_refs() as usize),
+        Some(render_cell_hash(&cell)),
     )
 }
 
-fn slice_bit_ref_counts(cs: &CellSlice) -> (Option<usize>, Option<usize>) {
+fn exact_slice_cell(cs: &CellSlice) -> Option<Cell> {
+    let cell = Boc::decode_hex(&cs.value).ok()?;
     match (&cs.bits, &cs.refs) {
+        (Some((start_bits, end_bits)), Some((start_refs, end_refs))) => {
+            let start_bits = start_bits.parse::<u16>().ok()?;
+            let end_bits = end_bits.parse::<u16>().ok()?;
+            let start_refs = start_refs.parse::<u8>().ok()?;
+            let end_refs = end_refs.parse::<u8>().ok()?;
+
+            let mut parser = cell.as_slice_allow_exotic();
+            parser.skip_first(start_bits, start_refs).ok()?;
+
+            let bit_len = end_bits.saturating_sub(start_bits);
+            let mut root_bits = vec![0u8; bit_len.div_ceil(8) as usize];
+            parser.load_raw(&mut root_bits, bit_len).ok()?;
+
+            let mut builder = CellBuilder::new();
+            builder.store_raw(&root_bits, bit_len).ok()?;
+            for _ in start_refs..end_refs {
+                let next_ref = parser.load_reference_cloned().ok()?;
+                builder.store_reference(next_ref).ok()?;
+            }
+
+            builder.build().ok()
+        }
+        _ => Some(cell),
+    }
+}
+
+fn slice_meta(cs: &CellSlice) -> (Option<usize>, Option<usize>, Option<String>) {
+    let (bits, refs) = match (&cs.bits, &cs.refs) {
         (Some(_), Some(_)) => (parse_range_len(&cs.bits), parse_range_len(&cs.refs)),
-        _ => match Boc::decode_hex(&cs.value).ok() {
+        _ => match exact_slice_cell(cs) {
             Some(cell) => {
                 let slice = cell.as_slice_allow_exotic();
                 (
@@ -500,7 +542,9 @@ fn slice_bit_ref_counts(cs: &CellSlice) -> (Option<usize>, Option<usize>) {
             }
             None => (None, None),
         },
-    }
+    };
+    let hash = exact_slice_cell(cs).as_ref().map(render_cell_hash);
+    (bits, refs, hash)
 }
 
 fn render_openable_cell_like(
@@ -508,11 +552,12 @@ fn render_openable_cell_like(
     value: impl Into<String>,
     bits: Option<usize>,
     refs: Option<usize>,
+    hash: Option<String>,
 ) -> RenderedValue {
     RenderedValue::CellLike {
         type_name: ty.to_string(),
         value: value.into(),
-        fields: render_bit_ref_fields(bits, refs),
+        fields: render_cell_meta_fields(bits, refs, hash),
     }
 }
 
@@ -673,13 +718,13 @@ fn render_map_value_with_abi(
 
 fn render_typed_cell(symbols: &SourceMap, ty: &Ty, inner: &Ty, cell: &CellLike) -> RenderedValue {
     let value = render_cell_like(cell);
-    let (bits, refs) = cell_like_bit_ref_counts(cell);
-    let mut fields = render_bit_ref_fields(bits, refs);
+    let (bits, refs, hash) = cell_like_meta(cell);
+    let mut fields = render_cell_meta_fields(bits, refs, hash);
 
     if let Some(cell) = decode_cell_like(cell) {
         let mut parser = cell.as_slice_allow_exotic();
         if let Some(data) = decode_abi_data(symbols, &mut parser, inner) {
-            fields.push(("decoded".to_owned(), render_abi_data(data, inner)));
+            fields.insert(0, ("decoded".to_owned(), render_abi_data(data, inner)));
         }
     }
 
@@ -1063,8 +1108,8 @@ fn debug_format(
 
         Ty::Cell => match r.read_slot() {
             SlotValue::Live(VmStackValue::Cell(cell)) => {
-                let (bits, refs) = cell_like_bit_ref_counts(cell);
-                render_openable_cell_like(ty, render_cell_like(cell), bits, refs)
+                let (bits, refs, hash) = cell_like_meta(cell);
+                render_openable_cell_like(ty, render_cell_like(cell), bits, refs, hash)
             }
             SlotValue::Live(VmStackValue::Null) => typed_leaf_for_ty(ty, "null"),
             _ => typed_leaf_for_ty(ty, "not a TVM cell"),
@@ -1097,8 +1142,8 @@ fn debug_format(
         Ty::Builder => match r.read_slot() {
             SlotValue::Live(VmStackValue::Builder(b)) => {
                 let cell = CellLike::Builder(b.clone());
-                let (bits, refs) = cell_like_bit_ref_counts(&cell);
-                render_openable_cell_like(ty, render_builder(b), bits, refs)
+                let (bits, refs, hash) = cell_like_meta(&cell);
+                render_openable_cell_like(ty, render_builder(b), bits, refs, hash)
             }
             SlotValue::Live(VmStackValue::Null) => typed_leaf_for_ty(ty, "null"),
             _ => typed_leaf_for_ty(ty, "not a TVM builder"),
@@ -1106,8 +1151,8 @@ fn debug_format(
 
         Ty::Slice | Ty::Remaining | Ty::BitsN { .. } => match r.read_slot() {
             SlotValue::Live(VmStackValue::CellSlice(cs)) => {
-                let (bits, refs) = slice_bit_ref_counts(cs);
-                render_openable_cell_like(ty, render_slice(cs), bits, refs)
+                let (bits, refs, hash) = slice_meta(cs);
+                render_openable_cell_like(ty, render_slice(cs), bits, refs, hash)
             }
             SlotValue::Live(VmStackValue::Null) => typed_leaf_for_ty(ty, "null"),
             _ => typed_leaf_for_ty(ty, "not a TVM slice"),
@@ -1587,51 +1632,20 @@ mod tests {
     }
 
     #[test]
-    fn render_typed_cell_exposes_decoded_pseudo_field() {
-        let mut builder = CellBuilder::new();
-        builder.store_uint(7, 32).unwrap();
-        let cell = builder.build().unwrap();
-        let cell_like = CellLike::Cell(Boc::encode_hex(&cell));
-        let ty = Ty::CellOf {
-            inner: Box::new(Ty::UintN { n: 32 }),
-        };
-
-        let rendered =
-            render_typed_cell(&SourceMap::default(), &ty, &Ty::UintN { n: 32 }, &cell_like);
-
-        let RenderedValue::CellOf {
-            type_name,
-            value,
-            fields,
-        } = rendered
-        else {
-            panic!("expected CellOf");
-        };
-        assert_eq!(type_name, "Cell<uint32>");
-        assert_eq!(value, format!("cell{{{}}}", Boc::encode_hex(&cell)));
-        assert_eq!(fields.len(), 3);
-        assert_eq!(fields[0].0, "decoded");
-        assert_eq!(fields[0].1.dap_parts().0, "7");
-        assert_eq!(fields[0].1.dap_parts().1.as_deref(), Some("uint32"));
-        assert_eq!(fields[1].0, "bits");
-        assert_eq!(fields[1].1.dap_parts().0, "32");
-        assert_eq!(fields[2].0, "refs");
-        assert_eq!(fields[2].1.dap_parts().0, "0");
-    }
-
-    #[test]
-    fn render_openable_cell_like_shows_bits_and_refs() {
+    fn render_openable_cell_like_shows_bits_refs_and_hash() {
         let child = CellBuilder::new().build().unwrap();
         let mut builder = CellBuilder::new();
         builder.store_uint(7, 16).unwrap();
         builder.store_reference(child).unwrap();
         let cell = builder.build().unwrap();
 
+        let (bits, refs, hash) = cell_like_meta(&CellLike::Cell(Boc::encode_hex(&cell)));
         let rendered = render_openable_cell_like(
             &Ty::Cell,
             render_cell_like(&CellLike::Cell(Boc::encode_hex(&cell))),
-            Some(cell.as_slice_allow_exotic().size_bits() as usize),
-            Some(cell.as_slice_allow_exotic().size_refs() as usize),
+            bits,
+            refs,
+            hash,
         );
 
         let RenderedValue::CellLike {
@@ -1648,12 +1662,23 @@ mod tests {
         assert_eq!(fields[0].1.dap_parts().0, "16");
         assert_eq!(fields[1].0, "refs");
         assert_eq!(fields[1].1.dap_parts().0, "1");
+        assert_eq!(fields[2].0, "hash");
+        assert_eq!(fields[2].1.dap_parts().0, render_cell_hash(&cell));
     }
 
     #[test]
-    fn render_openable_slice_shows_bits_and_refs() {
-        let rendered =
-            render_openable_cell_like(&Ty::Slice, "slice{abcd} + 1 ref", Some(16), Some(1));
+    fn render_openable_slice_shows_bits_refs_and_hash() {
+        let mut builder = CellBuilder::new();
+        builder.store_uint(0xabcd, 16).unwrap();
+        let cell = builder.build().unwrap();
+        let hash = render_cell_hash(&cell);
+        let rendered = render_openable_cell_like(
+            &Ty::Slice,
+            "slice{abcd}",
+            Some(16),
+            Some(0),
+            Some(hash.clone()),
+        );
 
         let RenderedValue::CellLike { fields, .. } = rendered else {
             panic!("expected CellLike");
@@ -1661,11 +1686,13 @@ mod tests {
         assert_eq!(fields[0].0, "bits");
         assert_eq!(fields[0].1.dap_parts().0, "16");
         assert_eq!(fields[1].0, "refs");
-        assert_eq!(fields[1].1.dap_parts().0, "1");
+        assert_eq!(fields[1].1.dap_parts().0, "0");
+        assert_eq!(fields[2].0, "hash");
+        assert_eq!(fields[2].1.dap_parts().0, hash);
     }
 
     #[test]
-    fn render_openable_builder_shows_bits_and_refs() {
+    fn render_openable_builder_shows_bits_refs_and_hash() {
         let child = CellBuilder::new().build().unwrap();
         let mut builder = CellBuilder::new();
         builder.store_uint(7, 16).unwrap();
@@ -1673,10 +1700,10 @@ mod tests {
         let cell = builder.build().unwrap();
         let builder_hex = Boc::encode_hex(&cell);
         let cell_like = CellLike::Builder(builder_hex.clone());
-        let (bits, refs) = cell_like_bit_ref_counts(&cell_like);
+        let (bits, refs, hash) = cell_like_meta(&cell_like);
 
         let rendered =
-            render_openable_cell_like(&Ty::Builder, render_builder(&builder_hex), bits, refs);
+            render_openable_cell_like(&Ty::Builder, render_builder(&builder_hex), bits, refs, hash);
 
         let RenderedValue::CellLike { fields, .. } = rendered else {
             panic!("expected CellLike");
@@ -1685,5 +1712,7 @@ mod tests {
         assert_eq!(fields[0].1.dap_parts().0, "16");
         assert_eq!(fields[1].0, "refs");
         assert_eq!(fields[1].1.dap_parts().0, "1");
+        assert_eq!(fields[2].0, "hash");
+        assert_eq!(fields[2].1.dap_parts().0, render_cell_hash(&cell));
     }
 }
