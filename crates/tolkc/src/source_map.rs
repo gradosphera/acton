@@ -92,6 +92,11 @@ impl SourceMap {
     }
 
     #[must_use]
+    pub fn declarations(&self) -> &[Declaration] {
+        &self.declarations
+    }
+
+    #[must_use]
     pub fn get_struct(&self, name: &str) -> &AbiStruct {
         self.structs
             .get(name)
