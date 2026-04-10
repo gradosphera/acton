@@ -94,6 +94,7 @@ pub struct ReplayerDebugSession {
     cached_visible_frames: RefCell<Vec<CollectedFrame>>,
     frame_to_depth: HashMap<i64, FrameLocator>,
     vars_debug_values: HashMap<i64, RenderedValue>,
+    runtime_register_scope_requests: HashMap<i64, usize>,
     next_req_id: i64,
 }
 
@@ -133,6 +134,7 @@ impl ReplayerDebugSession {
             cached_visible_frames: RefCell::new(Vec::new()),
             frame_to_depth: HashMap::new(),
             vars_debug_values: HashMap::new(),
+            runtime_register_scope_requests: HashMap::new(),
             next_req_id: 1_000_000,
         }
     }
@@ -559,6 +561,22 @@ impl ReplayerDebugSession {
             return ResponseBody::Variables(VariablesResponse { variables });
         }
 
+        if let Some(&context_idx) = self.runtime_register_scope_requests.get(&req_id) {
+            let variables = self
+                .contexts
+                .get(context_idx)
+                .and_then(|ctx| {
+                    ctx.try_borrow()
+                        .ok()
+                        .map(|ctx| ctx.replayer.runtime_registers())
+                })
+                .unwrap_or_default()
+                .into_iter()
+                .map(|lv| self.debug_value_to_named_variable(lv.var_name, &lv.value))
+                .collect();
+            return ResponseBody::Variables(VariablesResponse { variables });
+        }
+
         if let Some(dv) = self.vars_debug_values.get(&req_id).cloned() {
             let variables = self.expand_debug_value(&dv);
             return ResponseBody::Variables(VariablesResponse { variables });
@@ -652,7 +670,8 @@ impl ReplayerDebugSession {
                 self.send_response(req.success(body))?;
             }
             Command::Scopes(args) => {
-                self.send_response(req.success(self.scopes(&args)))?;
+                let body = self.scopes(&args);
+                self.send_response(req.success(body))?;
             }
             Command::Variables(args) => {
                 let body = self.handle_variables(&args);
@@ -888,6 +907,7 @@ impl ReplayerDebugSession {
     fn stack_trace(&mut self) -> ResponseBody {
         self.frame_to_depth.clear();
         self.vars_debug_values.clear();
+        self.runtime_register_scope_requests.clear();
 
         let collected = self.collect_visible_frames_snapshot();
 
@@ -919,16 +939,39 @@ impl ReplayerDebugSession {
         })
     }
 
-    fn scopes(&self, args: &ScopesArguments) -> ResponseBody {
-        ResponseBody::Scopes(ScopesResponse {
-            scopes: vec![Scope {
-                name: "Locals".to_string(),
-                variables_reference: args.frame_id,
+    fn scopes(&mut self, args: &ScopesArguments) -> ResponseBody {
+        let mut scopes = vec![Scope {
+            name: "Locals".to_string(),
+            variables_reference: args.frame_id,
+            expensive: false,
+            presentation_hint: Some(ScopePresentationhint::Locals),
+            ..Default::default()
+        }];
+
+        let live_context_idx = self.frame_to_depth.get(&args.frame_id).and_then(|locator| {
+            self.contexts
+                .get(locator.context_idx)
+                .and_then(|ctx| ctx.try_borrow().ok())
+                .filter(|ctx| {
+                    ctx.replayer.runtime_backend_kind() == replayer::RuntimeBackendKind::LiveVm
+                })
+                .map(|_| locator.context_idx)
+        });
+
+        if let Some(context_idx) = live_context_idx {
+            let registers_ref = self.alloc_req_id();
+            self.runtime_register_scope_requests
+                .insert(registers_ref, context_idx);
+            scopes.push(Scope {
+                name: "Registers".to_string(),
+                variables_reference: registers_ref,
                 expensive: false,
-                presentation_hint: Some(ScopePresentationhint::Locals),
+                presentation_hint: Some(ScopePresentationhint::Registers),
                 ..Default::default()
-            }],
-        })
+            });
+        }
+
+        ResponseBody::Scopes(ScopesResponse { scopes })
     }
 }
 

@@ -3,7 +3,7 @@
 //! 1. uses tolerant request parsing for custom VS Code messages
 //! 2. attaches to an already prepared `TolkReplayer`
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 
@@ -81,6 +81,7 @@ struct DapState {
     /// Maps variable `req_id` → `RenderedValue` for structured drill-down.
     /// Rebuilt on every `StackTrace` request (old values are stale after stepping).
     vars_debug_values: HashMap<i64, RenderedValue>,
+    runtime_register_scope_requests: HashSet<i64>,
 }
 
 impl DapState {
@@ -97,6 +98,7 @@ impl DapState {
             next_req_id: 1_000_000,
             frame_to_depth: HashMap::new(),
             vars_debug_values: HashMap::new(),
+            runtime_register_scope_requests: HashSet::new(),
         }
     }
 
@@ -629,6 +631,7 @@ fn handle_stack_trace(state: &mut DapState, req: Request) -> Response {
     // Now allocate frame IDs (mutable borrow of state — no conflict with replayer)
     state.frame_to_depth.clear();
     state.vars_debug_values.clear();
+    state.runtime_register_scope_requests.clear();
     let total = 1 + parents.len();
     let mut frames: Vec<StackFrame> = Vec::with_capacity(total);
 
@@ -680,8 +683,8 @@ fn handle_stack_trace(state: &mut DapState, req: Request) -> Response {
     }))
 }
 
-fn handle_scopes(_state: &DapState, args: &requests::ScopesArguments, req: Request) -> Response {
-    let scopes = vec![Scope {
+fn handle_scopes(state: &mut DapState, args: &requests::ScopesArguments, req: Request) -> Response {
+    let mut scopes = vec![Scope {
         name: "Locals".to_string(),
         variables_reference: args.frame_id,
         named_variables: None,
@@ -694,6 +697,29 @@ fn handle_scopes(_state: &DapState, args: &requests::ScopesArguments, req: Reque
         end_column: None,
         presentation_hint: Some(ScopePresentationhint::Locals),
     }];
+
+    if state
+        .replayer
+        .as_ref()
+        .is_some_and(|r| r.runtime_backend_kind() == replayer::RuntimeBackendKind::LiveVm)
+    {
+        let registers_ref = state.alloc_req_id();
+        state.runtime_register_scope_requests.insert(registers_ref);
+        scopes.push(Scope {
+            name: "Registers".to_string(),
+            variables_reference: registers_ref,
+            named_variables: None,
+            indexed_variables: None,
+            expensive: false,
+            source: None,
+            line: None,
+            column: None,
+            end_line: None,
+            end_column: None,
+            presentation_hint: Some(ScopePresentationhint::Registers),
+        });
+    }
+
     req.success(ResponseBody::Scopes(ScopesResponse { scopes }))
 }
 
@@ -712,6 +738,18 @@ fn handle_variables(
             .map(|r| r.locals_for_frame(depth))
             .unwrap_or_default();
         let variables: Vec<Variable> = locals
+            .into_iter()
+            .map(|lv| debug_value_to_variable(state, lv.var_name, &lv.value))
+            .collect();
+        return req.success(ResponseBody::Variables(VariablesResponse { variables }));
+    }
+
+    if state.runtime_register_scope_requests.contains(&req_id) {
+        let variables = state
+            .replayer
+            .as_ref()
+            .map(|r| r.runtime_registers())
+            .unwrap_or_default()
             .into_iter()
             .map(|lv| debug_value_to_variable(state, lv.var_name, &lv.value))
             .collect();

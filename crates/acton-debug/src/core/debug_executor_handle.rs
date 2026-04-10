@@ -1,5 +1,6 @@
 use ton_executor::get::step::StepGetExecutor;
 use ton_executor::message::step::StepExecutor;
+use tvmffi::serde::parse_tuple_item;
 use tvmffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use vmlogs::parser::{CellLike, CellSlice, VmStackValue};
@@ -14,6 +15,14 @@ pub struct DebugCodePosition {
 pub struct DebugExecutorSnapshot {
     pub code_position: Option<DebugCodePosition>,
     pub stack_values: Option<Vec<VmStackValue>>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct RuntimeDebugSnapshot {
+    pub stack_values: Vec<VmStackValue>,
+    pub c4: Option<VmStackValue>,
+    pub c5: Option<VmStackValue>,
+    pub c7: Option<VmStackValue>,
 }
 
 /// Small sum-type wrapper over the live step executors we can debug through the replayer.
@@ -37,6 +46,16 @@ impl DebugExecutorHandle {
         DebugExecutorSnapshot {
             code_position: self.code_position(),
             stack_values: self.stack_values(),
+        }
+    }
+
+    #[must_use]
+    pub fn runtime_snapshot(&self) -> RuntimeDebugSnapshot {
+        RuntimeDebugSnapshot {
+            stack_values: self.stack_values().unwrap_or_default(),
+            c4: self.control_register_value(4),
+            c5: self.control_register_value(5),
+            c7: self.c7_value(),
         }
     }
 
@@ -118,6 +137,14 @@ impl DebugExecutorHandle {
                 .collect(),
         )
     }
+
+    fn c7_value(&self) -> Option<VmStackValue> {
+        parse_base64_tuple_item_to_vm_stack_value(&self.get_c7())
+    }
+
+    fn control_register_value(&self, idx: usize) -> Option<VmStackValue> {
+        parse_base64_tuple_item_to_vm_stack_value(&self.get_control_register(idx))
+    }
 }
 
 impl From<StepGetExecutor> for DebugExecutorHandle {
@@ -153,4 +180,11 @@ fn tuple_item_to_vm_stack_value(item: &TupleItem) -> VmStackValue {
             VmStackValue::Tuple(inner.iter().map(tuple_item_to_vm_stack_value).collect())
         }
     }
+}
+
+fn parse_base64_tuple_item_to_vm_stack_value(boc_base64: &str) -> Option<VmStackValue> {
+    let cell = Boc::decode_base64(boc_base64).ok()?;
+    let mut slice = cell.as_slice_allow_exotic();
+    let item = parse_tuple_item(&mut slice).ok()?;
+    Some(tuple_item_to_vm_stack_value(&item))
 }

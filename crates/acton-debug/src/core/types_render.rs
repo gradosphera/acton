@@ -592,6 +592,34 @@ fn render_openable_cell_like(
     }
 }
 
+pub(crate) fn render_runtime_vm_value(value: &VmStackValue) -> RenderedValue {
+    match value {
+        VmStackValue::Null => RenderedValue::leaf("()"),
+        VmStackValue::NaN => RenderedValue::leaf("NaN"),
+        VmStackValue::Integer(value) => RenderedValue::leaf(value.clone()),
+        VmStackValue::Continuation(value) => RenderedValue::leaf(format!("Cont{{{value}}}")),
+        VmStackValue::String(value) => RenderedValue::leaf(format!("\"{value}\"")),
+        VmStackValue::Unknown => RenderedValue::leaf("???"),
+        VmStackValue::Cell(cell) => {
+            let (bits, refs, hash) = cell_like_meta(cell);
+            render_openable_cell_like(&Ty::Cell, render_cell_like(cell), bits, refs, hash)
+        }
+        VmStackValue::Builder(builder_hex) => {
+            let cell_like = CellLike::Builder(builder_hex.clone());
+            let (bits, refs, hash) = cell_like_meta(&cell_like);
+            render_openable_cell_like(&Ty::Builder, render_builder(builder_hex), bits, refs, hash)
+        }
+        VmStackValue::CellSlice(slice) => {
+            let (bits, refs, hash) = slice_meta(slice);
+            render_openable_cell_like(&Ty::Slice, render_slice(slice), bits, refs, hash)
+        }
+        VmStackValue::Tuple(items) => RenderedValue::ArrayOf {
+            type_name: "tuple".to_owned(),
+            items: items.iter().map(render_runtime_vm_value).collect(),
+        },
+    }
+}
+
 fn render_union_case(
     ty: &Ty,
     variant_name: impl Into<String>,

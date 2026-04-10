@@ -6,7 +6,10 @@
 #![allow(clippy::unwrap_used)]
 
 use super::debug_executor_handle::DebugExecutorHandle;
-use super::types_render::{RenderedValue, SlotValue, debug_format_lazy, debug_print_from_stack};
+use super::debug_executor_handle::RuntimeDebugSnapshot;
+use super::types_render::{
+    RenderedValue, SlotValue, debug_format_lazy, debug_print_from_stack, render_runtime_vm_value,
+};
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet, VecDeque};
 use tolkc::TolkSourceMap;
@@ -81,6 +84,9 @@ pub trait RuntimeEventSource {
     fn next_event(&mut self) -> Option<RuntimeEvent>;
     fn is_exhausted(&self) -> bool;
     fn backend_kind(&self) -> RuntimeBackendKind;
+    fn runtime_debug_snapshot(&self) -> Option<RuntimeDebugSnapshot> {
+        None
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -403,6 +409,10 @@ impl RuntimeEventSource for LiveVmRuntimeEventSource {
     fn backend_kind(&self) -> RuntimeBackendKind {
         RuntimeBackendKind::LiveVm
     }
+
+    fn runtime_debug_snapshot(&self) -> Option<RuntimeDebugSnapshot> {
+        Some(self.executor.runtime_snapshot())
+    }
 }
 
 /// Tick — atomic unit of work for the replayer.
@@ -641,6 +651,34 @@ impl TolkReplayer {
     #[must_use]
     pub fn runtime_backend_kind(&self) -> RuntimeBackendKind {
         self.runtime_source.backend_kind()
+    }
+
+    #[must_use]
+    pub fn runtime_registers(&self) -> Vec<LocalVarRendered> {
+        let Some(snapshot) = self.runtime_source.runtime_debug_snapshot() else {
+            return Vec::new();
+        };
+
+        let mut values = Vec::new();
+        if let Some(c4) = snapshot.c4.as_ref() {
+            values.push(LocalVarRendered {
+                var_name: "c4 (storage)".to_owned(),
+                value: render_runtime_vm_value(c4),
+            });
+        }
+        if let Some(c5) = snapshot.c5.as_ref() {
+            values.push(LocalVarRendered {
+                var_name: "c5 (output actions)".to_owned(),
+                value: render_runtime_vm_value(c5),
+            });
+        }
+        if let Some(c7) = snapshot.c7.as_ref() {
+            values.push(LocalVarRendered {
+                var_name: "c7 (temporary data)".to_owned(),
+                value: render_runtime_vm_value(c7),
+            });
+        }
+        values
     }
 
     #[must_use]
