@@ -550,7 +550,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete release-objs --repo "${GITHUB_REPOSITORY}" -y || true
+          gh release delete release-objs --repo "${GITHUB_REPOSITORY}" --cleanup-tag -y || true
 
           gh api \
             repos/${GITHUB_REPOSITORY}/git/refs/tags/release-objs \
