@@ -195,6 +195,8 @@ fn build_source(replayer: &TolkReplayer, file_id: usize) -> Source {
     }
 }
 
+/// Emit the standard DAP `stopped` event once the replayer has already advanced
+/// to the location that should be shown to the client.
 fn send_stopped(
     server: &mut DapConnection<impl BufRead, impl Write>,
     reason: StoppedEventReason,
@@ -213,6 +215,7 @@ fn send_stopped(
     Ok(())
 }
 
+/// Finish the debuggee from DAP's point of view: first `exited`, then `terminated`.
 fn send_terminated(server: &mut DapConnection<impl BufRead, impl Write>) -> anyhow::Result<()> {
     server.send_event(Event::Exited(events::ExitedEventBody { exit_code: 0 }))?;
     server.send_event(Event::Terminated(Some(
@@ -221,6 +224,8 @@ fn send_terminated(server: &mut DapConnection<impl BufRead, impl Write>) -> anyh
     Ok(())
 }
 
+/// Run one logical debugger action and translate the resulting stop reason
+/// (termination / exception / breakpoint / plain step) into DAP events.
 fn step_and_notify(
     state: &mut DapState,
     step_mode: StepMode,
@@ -518,6 +523,9 @@ fn handle_configuration_done(
         .pending_breakpoints
         .values()
         .any(|breakpoints| !breakpoints.is_empty());
+    // Match VS Code's startup flow: after configuration completes the adapter itself
+    // must advance to the first interesting stop and report it as Entry unless a
+    // stronger reason (breakpoint / exception / termination) wins first.
     let step_mode = if has_breakpoints {
         StepMode::RunUntilBreakpoint
     } else {

@@ -54,6 +54,9 @@ fn run_nested_executor_until_finished(
     mut direct_step: impl FnMut() -> bool,
 ) -> anyhow::Result<()> {
     if child_debug_started {
+        // StepInto / instruction stepping bootstrap the child by stopping on its
+        // first user-visible location. "Continue"-style entry needs one explicit
+        // kick so the nested replayer starts driving the live executor.
         let child_was_bootstrapped = matches!(
             child_step_mode,
             StepMode::StepInto | StepMode::EachAsmInstruction
@@ -889,6 +892,9 @@ fn send_message_debug(
     let dest_account = ctx.chain.world_state.get_account(dst);
     let code = Emulator::get_code_cell(&msg, &dest_account);
 
+    // Nested send-message debugging executes the recipient transaction through a
+    // live step executor. Compilation artifacts are reused only for source/ABI
+    // rendering; execution itself still comes from the prepared emulator state.
     let step_executor = StepExecutor::new().expect("Failed to create executor");
     let compilation_result = ctx
         .build
@@ -933,6 +939,8 @@ fn send_message_debug(
     }
 
     let need_to_stop_on_entry = ctx.debug.need_to_stop_child_thread_on_start();
+    // Push the recipient transaction as a child debug context so a single DAP
+    // session can step across `net.send*` without losing the parent stack.
     let child_debug_started = ctx
         .debug
         .begin_child_context(ChildDebugContextSpec {
@@ -945,6 +953,8 @@ fn send_message_debug(
         })
         .context("Cannot start nested debug context")?;
 
+    // Step Into should stop on the first user-visible line in the child. Otherwise,
+    // let the nested runtime run until its own breakpoint / exception / completion.
     let child_step_mode = if need_to_stop_on_entry {
         match ctx.debug.performing_step() {
             Some(StepMode::EachAsmInstruction) => StepMode::EachAsmInstruction,
@@ -1364,6 +1374,8 @@ fn run_get_method_impl(
         .build_cache
         .result_for_code(&Some(code))
         .map(|(_, result)| result);
+    // Remote/forked contracts may have no local debug info. We still run the live
+    // executor, but the child replayer will then fall back to a synthetic source map.
     let source_map = compilation_result.as_ref().map_or_else(
         || Arc::new(TolkSourceMap::without_debug_info()),
         |result| result.source_map.clone(),
@@ -1385,6 +1397,8 @@ fn run_get_method_impl(
             .context("Cannot prepare get method")?;
 
         let need_to_stop_on_entry = ctx.debug.need_to_stop_child_thread_on_start();
+        // Nested get methods reuse the same DAP session via a child context, exactly
+        // like nested message sends do, so Step Into can cross the runtime boundary.
         let child_debug_started = ctx
             .debug
             .begin_child_context(ChildDebugContextSpec {
@@ -1397,6 +1411,8 @@ fn run_get_method_impl(
             })
             .context("Cannot send response")?;
 
+        // Keep the child aligned with the parent stepping intent: stop on entry when
+        // stepping into the call, otherwise continue until the child stops or ends.
         let child_step_mode = if need_to_stop_on_entry {
             match ctx.debug.performing_step() {
                 Some(StepMode::EachAsmInstruction) => StepMode::EachAsmInstruction,

@@ -1,3 +1,8 @@
+//! DebugExecutorHandle normalizes the live step executors used by runtime debugging.
+//! The replayer only cares about "where execution is now / what is on stack / which
+//! runtime registers are visible", regardless of whether the boundary came from
+//! `send_message` or `run_get_method`.
+
 use ton_executor::get::step::StepGetExecutor;
 use ton_executor::message::step::StepExecutor;
 use tvmffi::serde::parse_tuple_item;
@@ -13,12 +18,14 @@ pub struct DebugCodePosition {
 
 #[derive(Debug, Clone)]
 pub struct DebugExecutorSnapshot {
+    /// Raw code position + stack snapshot used to synthesize replayer events.
     pub code_position: Option<DebugCodePosition>,
     pub stack_values: Option<Vec<VmStackValue>>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeDebugSnapshot {
+    /// Values exposed under the DAP "Registers" scope for live runtimes.
     pub stack_values: Vec<VmStackValue>,
     pub c4: Option<VmStackValue>,
     pub c5: Option<VmStackValue>,
@@ -26,6 +33,7 @@ pub struct RuntimeDebugSnapshot {
 }
 
 /// Small sum-type wrapper over the live step executors we can debug through the replayer.
+/// `Message` drives nested transaction execution, `Get` drives nested get methods.
 #[derive(Clone)]
 pub enum DebugExecutorHandle {
     Get(StepGetExecutor),
@@ -51,6 +59,8 @@ impl DebugExecutorHandle {
 
     #[must_use]
     pub fn runtime_snapshot(&self) -> RuntimeDebugSnapshot {
+        // c4/c5/c7 are the registers the UI can currently explain meaningfully:
+        // storage, outgoing actions and temporary runtime environment.
         RuntimeDebugSnapshot {
             stack_values: self.stack_values().unwrap_or_default(),
             c4: self.control_register_value(4),
@@ -116,6 +126,8 @@ impl DebugExecutorHandle {
 
     #[must_use]
     fn code_position(&self) -> Option<DebugCodePosition> {
+        // Step executors expose code position as `cell_hash:offset`, so parse it
+        // once here and keep the replayer free from executor-specific string APIs.
         let pos = self.code_pos_text();
         let (cell_hash, offset): (&str, &str) = pos.split_once(':')?;
         let offset = offset.parse::<i32>().ok()?;
@@ -127,6 +139,8 @@ impl DebugExecutorHandle {
 
     #[must_use]
     fn stack_values(&self) -> Option<Vec<VmStackValue>> {
+        // Live SBS executors expose stack as a tuple BoC. Convert it to the same
+        // `VmStackValue` shape that VM-log replay uses so rendering stays shared.
         let stack = self.stack_boc_base64();
         let stack_cell = Boc::decode_base64(&stack).ok()?;
         let stack_tuple = Tuple::deserialize(&stack_cell).ok()?;
