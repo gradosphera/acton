@@ -19,7 +19,9 @@ use num_bigint::{BigInt, Sign};
 use num_traits::ToPrimitive;
 use rustc_hash::FxHashSet;
 use std::collections::HashMap;
+use std::ffi::CStr;
 use std::fs;
+use std::os::raw::c_char;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -871,31 +873,81 @@ fn send_wallet_message(
     Ok(())
 }
 
-fn send_message_debug(
+#[derive(Default)]
+struct DebugMissingLibrariesContext {
+    hashes: FxHashSet<String>,
+}
+
+impl DebugMissingLibrariesContext {
+    fn into_set(self) -> FxHashSet<String> {
+        self.hashes
+    }
+}
+
+#[allow(unsafe_code)]
+unsafe extern "C" fn debug_missing_library_callback(
+    ctx: *mut DebugMissingLibrariesContext,
+    hash: *const c_char,
+) {
+    if ctx.is_null() || hash.is_null() {
+        return;
+    }
+
+    // SAFETY: `hash` is provided by the emulator callback contract and points to a valid C string
+    // for the duration of this callback.
+    let hash = unsafe { CStr::from_ptr(hash) }
+        .to_string_lossy()
+        .into_owned();
+
+    // SAFETY: `ctx` points to `MissingLibrariesContext` provided by `send_transaction`
+    // and lives until `run_transaction` returns.
+    if let Some(state) = unsafe { ctx.as_mut() } {
+        state.hashes.insert(hash);
+    }
+}
+
+fn send_transaction_debug(
     ctx: &mut Context,
     msg_cell: &Cell,
     libs: &Dict<HashBytes, LibDescr>,
     src_addr: Option<IntAddr>,
-) -> anyhow::Result<Vec<SendMessageResult>> {
-    let msg: RelaxedMessage = msg_cell
-        .parse()
-        .context("Failed to load message from cell")?;
+) -> anyhow::Result<Option<SendMessageResult>> {
+    let msg_cell = Emulator::patch_message(
+        ctx.chain.world_state.get_config(),
+        msg_cell.clone(),
+        src_addr,
+    )?;
+    let msg: Message<'_> = msg_cell.parse().context("Failed to parse message")?;
 
-    let RelaxedMsgInfo::Int(int_message) = &msg.info else {
-        anyhow::bail!("Emulator only supports internal messages for now");
+    let dst = match &msg.info {
+        MsgInfo::Int(info) => &info.dst,
+        MsgInfo::ExtIn(info) => &info.dst,
+        MsgInfo::ExtOut(_) => {
+            anyhow::bail!("External out messages can't initiate transactions!")
+        }
     };
-
-    let dst = match &int_message.dst {
+    let dst = match dst {
         IntAddr::Std(addr) => addr,
         IntAddr::Var(_) => anyhow::bail!("Var addresses are not supported"),
     };
+
     let dest_account = ctx.chain.world_state.get_account(dst);
     let code = Emulator::get_code_cell(&msg, &dest_account);
+    let config_b64 = ctx.chain.world_state.get_config_b64();
 
     // Nested send-message debugging executes the recipient transaction through a
     // live step executor. Compilation artifacts are reused only for source/ABI
     // rendering; execution itself still comes from the prepared emulator state.
-    let step_executor = StepExecutor::new().expect("Failed to create executor");
+    let mut step_executor =
+        StepExecutor::new(Some(&config_b64)).context("Failed to create executor")?;
+    let mut missing_libraries_ctx = DebugMissingLibrariesContext::default();
+    step_executor
+        .register_missing_library_callback(
+            &mut missing_libraries_ctx,
+            debug_missing_library_callback,
+        )
+        .context("Failed to register missing library callback")?;
+
     let compilation_result = ctx
         .build
         .build_cache
@@ -908,11 +960,6 @@ fn send_message_debug(
         .as_ref()
         .and_then(|result| result.compiler_abi.clone());
 
-    let msg_cell = Emulator::patch_message(
-        ctx.chain.world_state.get_config(),
-        msg_cell.clone(),
-        src_addr,
-    )?;
     let prepare_result = step_executor
         .prepare_transaction(
             &Boc::encode_base64(msg_cell),
@@ -929,13 +976,13 @@ fn send_message_debug(
                 is_tock: None,
             },
         )
-        .expect("Prepare transaction failed");
+        .context("Prepare transaction failed")?;
     assert!(
         prepare_result.success,
         "Failed to prepare Emulator in debug mode"
     );
     if prepare_result.skipped {
-        return Ok(vec![]);
+        return Ok(None);
     }
 
     let need_to_stop_on_entry = ctx.debug.need_to_stop_child_thread_on_start();
@@ -945,7 +992,7 @@ fn send_message_debug(
         .debug
         .begin_child_context(ChildDebugContextSpec {
             thread_id: 2,
-            name: "Send internal message".to_string(),
+            name: "Send message".to_string(),
             executor: step_executor.clone().into(),
             source_map,
             compiler_abi,
@@ -988,10 +1035,18 @@ fn send_message_debug(
         }
     }
 
+    let mut missing_libraries = Some(missing_libraries_ctx.into_set());
     let result = match result {
-        EmulationResult::Success(result) => result,
-        EmulationResult::Error(_) => {
-            return Ok(vec![]);
+        EmulationResult::Success(mut result) => {
+            result
+                .missing_libraries
+                .extend(missing_libraries.take().unwrap_or_default());
+            result
+        }
+        EmulationResult::Error(mut err) => {
+            err.missing_libraries
+                .extend(missing_libraries.take().unwrap_or_default());
+            return Ok(Some(SendMessageResult::Error(err)));
         }
     };
 
@@ -1016,9 +1071,9 @@ fn send_message_debug(
         .map(|it| to_cell(&it))
         .collect::<Vec<_>>();
 
-    let send_result = SendMessageResultSuccess {
+    Ok(Some(SendMessageResult::Success(SendMessageResultSuccess {
         raw_transaction: result.transaction,
-        transaction: transaction.clone(),
+        transaction,
         parent_transaction: None,
         child_transactions: vec![],
         shard_account_before: dest_account,
@@ -1029,50 +1084,56 @@ fn send_message_debug(
         actions: result.actions,
         code,
         externals: vec![],
-        missing_libraries: FxHashSet::default(),
+        missing_libraries: result.missing_libraries,
+    })))
+}
+
+fn send_message_debug(
+    ctx: &mut Context,
+    msg_cell: &Cell,
+    libs: &Dict<HashBytes, LibDescr>,
+    src_addr: Option<IntAddr>,
+) -> anyhow::Result<Vec<SendMessageResult>> {
+    let Some(initial_res) = send_transaction_debug(ctx, msg_cell, libs, src_addr)? else {
+        return Ok(vec![]);
     };
 
-    let mut externals: Vec<Cell> = vec![];
+    let mut results = vec![initial_res.clone()];
+    let SendMessageResult::Success(main_res) = initial_res else {
+        return Ok(results);
+    };
 
-    let mut all_results = std::iter::once(SendMessageResult::Success(send_result))
-        .chain(transaction.iter_out_msgs().flat_map(|msg| {
-            let Ok(msg) = msg else { return vec![] };
+    let mut externals = Vec::new();
+    let mut child_lts = Vec::new();
+    let main_tx = main_res.transaction.clone();
 
-            if let MsgInfo::ExtOut(_) = &msg.info {
-                externals.push(to_cell(&msg));
-                return vec![];
+    for out_msg_cell in main_res.out_messages {
+        let Ok(out_msg) = out_msg_cell.parse::<Message<'_>>() else {
+            continue;
+        };
+
+        match out_msg.info {
+            MsgInfo::ExtOut(_) => {
+                externals.push(out_msg_cell);
             }
-
-            let mut send_results =
-                send_message_debug(ctx, &to_cell(&msg), libs, None).unwrap_or_default();
-            for result in &mut send_results {
-                match result {
-                    SendMessageResult::Success(result) => {
-                        result.parent_transaction = Some(transaction.lt);
-                    }
-                    SendMessageResult::Error(_) => {}
+            MsgInfo::Int(_) => {
+                let mut sub_results = send_message_debug(ctx, &out_msg_cell, libs, None)?;
+                if let Some(SendMessageResult::Success(res)) = sub_results.get_mut(0) {
+                    res.parent_transaction = Some(main_tx.lt);
+                    child_lts.push(res.transaction.lt);
                 }
+                results.extend(sub_results);
             }
-
-            send_results
-        }))
-        .collect::<Vec<_>>();
-
-    let child_txs = all_results
-        .iter()
-        .skip(1)
-        .filter_map(|result| match result {
-            SendMessageResult::Success(result) => Some(result.transaction.lt),
-            SendMessageResult::Error(_) => None,
-        })
-        .collect();
-
-    if let Some(SendMessageResult::Success(result)) = all_results.get_mut(0) {
-        result.child_transactions = child_txs;
-        result.externals = externals;
+            MsgInfo::ExtIn(_) => {}
+        }
     }
 
-    Ok(all_results)
+    if let Some(SendMessageResult::Success(res)) = results.get_mut(0) {
+        res.externals = externals;
+        res.child_transactions = child_lts;
+    }
+
+    Ok(results)
 }
 
 extension!(send_single_message in (Context) with (src: IntAddr, msg: Cell) using send_single_message_impl);
