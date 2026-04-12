@@ -22,6 +22,7 @@ test-integration:
 test-workspace:
     cargo nextest run --workspace {{ NEXTEST_PROFILE_ARGS }} {{ TEST_FEATURE_ARGS }}
     cargo test --workspace --doc
+    cargo run -- test
 
 test-tree-sitter:
     cd crates/tree-sitter-tolk && yarn install --immutable && yarn tree-sitter generate && yarn tree-sitter test
