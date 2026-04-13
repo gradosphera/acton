@@ -193,6 +193,7 @@ fn tuple_item_to_vm_stack_value(item: &TupleItem) -> VmStackValue {
         TupleItem::TypedTuple { inner, .. } => {
             VmStackValue::Tuple(inner.iter().map(tuple_item_to_vm_stack_value).collect())
         }
+        TupleItem::Cont(item) => VmStackValue::Continuation(Boc::encode_base64(item.code.clone())),
     }
 }
 

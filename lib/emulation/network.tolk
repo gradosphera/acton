@@ -219,7 +219,7 @@ fun TxCursor.executeTill<Msg = unknown>(self, params: SearchParams = {}): SendRe
         params.opcode = declaredPrefix;
     }
 
-    val txs = ffi.executeMessageIterTill(self.id, params.toTuple());
+    val txs = ffi.executeMessageIterTill(self.id, params.toFFI().toTuple());
     if (txs == null) {
         Assert.fail("executeTill() did not find a matching transaction before queue exhaustion");
         throw 567;
@@ -286,33 +286,102 @@ fun SendResultList.wait(
 /// Represents a set of parameters to search for a transaction in the transaction list.
 struct SearchParams {
     /// Destination address of the transaction.
-    to: address? = null
+    to: (address -> bool) | address | null = null
     /// Source address of the transaction.
-    from: address? = null
+    from: (address -> bool) | address | null = null
     /// Value of the message in nanotons.
-    value: coins? = null
+    value: (coins -> bool) | coins | null = null
     /// Exit code of the transaction.
-    exitCode: int32? = null
+    exitCode: (int32 -> bool) | int32 | null = null
     /// Whether the transaction is successful (both compute and action phase).
-    success: bool? = null
+    success: (bool -> bool) | bool | null = null
     /// Whether the compute phase of transaction was aborted and transaction was reverted.
-    aborted: bool? = null
+    aborted: (bool -> bool) | bool | null = null
     /// Whether the transaction is a deploy transaction.
     ///
     /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
-    deploy: bool? = null
+    deploy: (bool -> bool) | bool | null = null
     /// Whether the transaction message is bounceable.
-    bounce: bool? = null
+    bounce: (bool -> bool) | bool | null = null
     /// Whether the transaction is a bounced transaction.
-    bounced: bool? = null
+    bounced: (bool -> bool) | bool | null = null
     /// Opcode of the in message.
-    opcode: uint32? = null
+    opcode: (uint32 -> bool) | uint32 | null = null
     /// Action exit code of the transaction.
-    actionExitCode: int32? = null
+    actionExitCode: (int32 -> bool) | int32 | null = null
     /// Whether the compute phase was skipped.
-    computePhaseSkipped: bool? = null
+    computePhaseSkipped: (bool -> bool) | bool | null = null
     /// Body of the in message (compared by hash).
-    body: cell? = null
+    body: (cell -> bool) | cell | null = null
+}
+
+fun cell.__eq(self, other: cell): bool {
+    return self.hash() == other.hash();
+}
+
+fun T.__eq(self, other: T): bool {
+    return self == other;
+}
+
+/// Bind first argument to a 2-arg function, producing a 1-arg function.
+fun createEqFun<T>(arg: T): (T -> bool) {
+    return fun(snd) {
+        return arg.__eq(snd);
+    }
+}
+
+/// Convert a union field to a tagged tuple for FFI:
+///   [0, null] = absent
+///   [1, cont] = user predicate
+///   [2, cont, original_value] = value converted to predicate (original kept for display)
+fun toPredicate<T>(field: (T -> bool) | T | null): tuple {
+    match (field) {
+        (T -> bool) => {
+            return [1, field];
+        }
+        T => {
+            return [2, createEqFun(field), field];
+        }
+        null => {
+            return [0, null];
+        }
+    }
+}
+
+/// Wrapper struct for FFI — all fields are [tag, predicate] tuples.
+struct SearchParamsForFFI {
+    to: tuple
+    from: tuple
+    value: tuple
+    exitCode: tuple
+    success: tuple
+    aborted: tuple
+    deploy: tuple
+    bounce: tuple
+    bounced: tuple
+    opcode: tuple
+    actionExitCode: tuple
+    computePhaseSkipped: tuple
+    body: tuple
+}
+
+/// Convert SearchParams to a tuple of [tag, predicate] pairs for FFI.
+fun SearchParams.toFFI(self): SearchParamsForFFI {
+    return SearchParamsForFFI {
+        to: toPredicate(self.to),
+        from: toPredicate(self.from),
+        value: toPredicate(self.value),
+        exitCode: toPredicate(self.exitCode),
+        success: toPredicate(self.success),
+        aborted: toPredicate(self.aborted),
+        deploy: toPredicate(self.deploy),
+        bounce: toPredicate(self.bounce),
+        bounced: toPredicate(self.bounced),
+        opcode: toPredicate(self.opcode),
+        actionExitCode: toPredicate(self.actionExitCode),
+        computePhaseSkipped: toPredicate(self.computePhaseSkipped),
+        body: toPredicate(self.body),
+    };
 }
 
 struct ExternalOutSearchParams {
@@ -420,7 +489,7 @@ fun SendResultList.findTransaction<Msg = unknown>(self, params: SearchParams = {
     if (declaredPrefix != -1) {
         params.opcode = declaredPrefix;
     }
-    val tx = ffi.findTransactionByParams(self, params.toTuple());
+    val tx = ffi.findTransactionByParams(self, params.toFFI().toTuple());
     if (tx == null) {
         return Maybe<Transaction>.none();
     }

@@ -64,6 +64,9 @@ fn item_to_json(item: &TupleItem) -> anyhow::Result<JsonStackEntry> {
         TupleItem::Slice(c) => Ok(JsonStackEntry::Slice {
             slice: Boc::encode_base64(c),
         }),
+        TupleItem::Cont(cont) => Ok(JsonStackEntry::Slice {
+            slice: Boc::encode_base64(&cont.code),
+        }),
         TupleItem::Builder(c) => Ok(JsonStackEntry::Builder {
             builder: Boc::encode_base64(c),
         }),
@@ -88,6 +91,9 @@ pub fn legacy_item_to_json(item: &TupleItem) -> anyhow::Result<Value> {
                 return Ok(serde_json::json!(["num", format!("-0x{:x}", i.mul(-1))]));
             }
             Ok(serde_json::json!(["num", format!("0x{i:x}")]))
+        }
+        TupleItem::Cont(cont) => {
+            Ok(serde_json::json!(["cont", { "bytes": Boc::encode_base64(&cont.code) }]))
         }
         TupleItem::Cell(c) => Ok(serde_json::json!(["cell", { "bytes": Boc::encode_base64(c) }])),
         TupleItem::Slice(c) => Ok(serde_json::json!(["slice", { "bytes": Boc::encode_base64(c) }])),
@@ -224,6 +230,14 @@ pub fn json_to_legacy_item(value: Value) -> anyhow::Result<TupleItem> {
                 .map(|v| json_to_legacy_item(v.clone()))
                 .collect::<anyhow::Result<Vec<_>>>()?;
             Ok(TupleItem::Tuple(Tuple(items)))
+        }
+        "cont" => {
+            let bytes = val
+                .get("bytes")
+                .and_then(|v| v.as_str())
+                .context("cont must have bytes")?;
+            let c = Boc::decode_base64(bytes)?;
+            Ok(TupleItem::Cont(crate::stack::ContData::from_code(c)))
         }
         "list" => {
             let elements = val

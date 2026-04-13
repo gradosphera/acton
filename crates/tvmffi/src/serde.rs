@@ -1,8 +1,9 @@
-use crate::stack::{Tuple, TupleItem};
+use crate::stack::{ContData, Tuple, TupleItem};
 use anyhow::anyhow;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
-use tycho_types::cell::{Cell, CellBuilder, CellSlice};
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, CellSlice};
+use tycho_types::dict::RawDict;
 
 impl Tuple {
     /// Serialize a tuple to a cell.
@@ -39,6 +40,11 @@ pub fn serialize_tuple_item(builder: &mut CellBuilder, src: &TupleItem) -> anyho
             builder.store_small_uint(0x02, 8)?;
             builder.store_uint(0, 7)?;
             builder.store_bigint(value, 257, true)?;
+        }
+        TupleItem::Cont(cont) => {
+            // vm_stk_cont#06 cont:VmCont = VmStackValue;
+            builder.store_small_uint(0x06, 8)?;
+            serialize_vm_cont(builder, cont)?;
         }
         TupleItem::Nan => {
             builder.store_small_uint(0x02, 8)?;
@@ -99,6 +105,346 @@ pub fn serialize_tuple_item(builder: &mut CellBuilder, src: &TupleItem) -> anyho
     Ok(())
 }
 
+pub fn parse_vm_cell_slice(parser: &mut CellSlice<'_>) -> Result<Cell, anyhow::Error> {
+    let start_bits = parser.load_uint(10)? as u16;
+    let end_bits = parser.load_uint(10)? as u16;
+    let start_refs = parser.load_uint(3)? as u8;
+    let end_refs = parser.load_uint(3)? as u8;
+
+    let cell_ref = parser.load_reference_cloned()?;
+
+    let mut parser = cell_ref.as_slice_allow_exotic();
+    parser.skip_first(start_bits, start_refs)?;
+
+    let root_data_size = end_bits.saturating_sub(start_bits);
+    let mut root_bits = vec![0u8; root_data_size.div_ceil(8) as usize];
+    parser.load_raw(&mut root_bits, root_data_size)?;
+
+    let mut builder = CellBuilder::new();
+    builder.store_raw(&root_bits, root_data_size)?;
+
+    for _ in start_refs..end_refs {
+        let next_ref = parser.load_reference_cloned()?;
+        builder.store_reference(next_ref)?;
+    }
+
+    let final_cell = builder.build()?;
+
+    Ok(final_cell)
+}
+
+/// Parse VmStack from a cell slice.
+///
+/// ```text
+/// vm_stack#_ depth:(## 24) stack:(VmStackList depth) = VmStack;
+/// vm_stk_cons#_ {n:#} rest:^(VmStackList n) tos:VmStackValue = VmStackList (n + 1);
+/// vm_stk_nil#_ = VmStackList 0;
+/// ```
+fn parse_vm_stack(parser: &mut CellSlice<'_>) -> Result<Tuple, anyhow::Error> {
+    let size = parser.load_uint(24)? as usize;
+    if size == 0 {
+        return Ok(Tuple::empty());
+    }
+
+    let mut result: Vec<TupleItem> = Vec::with_capacity(size);
+
+    // First entry: rest reference + tos inline in current parser
+    let next_ref = parser.load_reference_cloned()?;
+    let item = parse_tuple_item(parser)?;
+    result.insert(0, item);
+
+    // Remaining entries from referenced cells
+    let mut cur_cell = next_ref;
+    for _ in 1..size {
+        let mut cs = cur_cell.as_slice_allow_exotic();
+        let nr = cs.load_reference_cloned()?;
+        let item = parse_tuple_item(&mut cs)?;
+        result.insert(0, item);
+        cur_cell = nr;
+    }
+
+    Ok(Tuple(result))
+}
+
+/// Serialize VmStack into a cell builder.
+fn serialize_vm_stack(builder: &mut CellBuilder, stack: &Tuple) -> anyhow::Result<()> {
+    builder.store_uint(stack.len() as u64, 24)?;
+    serialize_tuple_tail(&stack.0, builder)
+}
+
+/// Parsed VmControlData fields.
+struct VmControlData {
+    nargs: Option<u16>,
+    stack: Option<Tuple>,
+    savelist: Option<Cell>,
+}
+
+/// Parse VmControlData, returning the captured stack and save list.
+///
+/// ```text
+/// vm_ctl_data$_ nargs:(Maybe uint13) stack:(Maybe VmStack)
+///               save:VmSaveList cp:(Maybe int16) = VmControlData;
+/// _ cregs:(HashmapE 4 VmStackValue) = VmSaveList;
+/// ```
+fn parse_vm_control_data(parser: &mut CellSlice<'_>) -> Result<VmControlData, anyhow::Error> {
+    // nargs:(Maybe uint13)
+    let nargs = if parser.load_bit()? {
+        Some(parser.load_uint(13)? as u16)
+    } else {
+        None
+    };
+
+    // stack:(Maybe VmStack)
+    let stack = if parser.load_bit()? {
+        Some(parse_vm_stack(parser)?)
+    } else {
+        None
+    };
+
+    // save:VmSaveList = HashmapE 4 VmStackValue
+    let savelist = if parser.load_bit()? {
+        Some(parser.load_reference_cloned()?)
+    } else {
+        None
+    };
+
+    // cp:(Maybe int16)
+    if parser.load_bit()? {
+        parser.load_uint(16)?;
+    }
+
+    Ok(VmControlData {
+        nargs,
+        stack,
+        savelist,
+    })
+}
+
+/// Parse a VmCont from a cell slice.
+///
+/// Supports all TLB-defined continuation variants:
+/// ```text
+/// vmc_std$00          cdata:VmControlData code:VmCellSlice = VmCont;
+/// vmc_envelope$01     cdata:VmControlData next:^VmCont = VmCont;
+/// vmc_quit$1000       exit_code:int32 = VmCont;
+/// vmc_quit_exc$1001   = VmCont;
+/// vmc_repeat$10100    count:uint63 body:^VmCont after:^VmCont = VmCont;
+/// vmc_until$110000    body:^VmCont after:^VmCont = VmCont;
+/// vmc_again$110001    body:^VmCont = VmCont;
+/// vmc_while_cond$110010 cond:^VmCont body:^VmCont after:^VmCont = VmCont;
+/// vmc_while_body$110011 cond:^VmCont body:^VmCont after:^VmCont = VmCont;
+/// vmc_pushint$1111    value:int32 next:^VmCont = VmCont;
+/// ```
+#[allow(clippy::branches_sharing_code)]
+fn parse_vm_cont(parser: &mut CellSlice<'_>) -> Result<ContData, anyhow::Error> {
+    let first_bit = parser.load_bit()?;
+
+    if !first_bit {
+        // Tags starting with 0: vmc_std (00) or vmc_envelope (01)
+        let second_bit = parser.load_bit()?;
+
+        if !second_bit {
+            // vmc_std$00 cdata:VmControlData code:VmCellSlice
+            let cdata = parse_vm_control_data(parser)?;
+            let code = parse_vm_cell_slice(parser)?;
+            Ok(ContData {
+                code,
+                stack: cdata.stack,
+                savelist: cdata.savelist,
+                nargs: cdata.nargs,
+            })
+        } else {
+            // vmc_envelope$01 cdata:VmControlData next:^VmCont
+            let cdata = parse_vm_control_data(parser)?;
+            let next = parser.load_reference_cloned()?;
+            let mut next_parser = next.as_slice_allow_exotic();
+            let inner = parse_vm_cont(&mut next_parser)?;
+
+            let merged_stack = match (cdata.stack, inner.stack) {
+                (Some(outer), Some(inner)) => {
+                    let mut combined = inner;
+                    combined.0.extend(outer.0);
+                    Some(combined)
+                }
+                (s @ Some(_), None) | (None, s @ Some(_)) => s,
+                (None, None) => None,
+            };
+
+            let merged_savelist = match (cdata.savelist, inner.savelist) {
+                (Some(outer), Some(inner_sl)) => {
+                    let mut merged: RawDict<4> = Some(inner_sl).into();
+                    let outer_dict: RawDict<4> = Some(outer).into();
+                    for entry in outer_dict.iter() {
+                        let (key, value): (_, CellSlice<'_>) = entry?;
+                        merged.set_ext(key.as_data_slice(), &value, Cell::empty_context())?;
+                    }
+                    merged.into_root()
+                }
+                (s @ Some(_), None) | (None, s @ Some(_)) => s,
+                (None, None) => None,
+            };
+
+            // vmc_envelope carries its own arity metadata. Prefer the envelope's
+            // nargs (it's the outer invocation), and fall back to the wrapped
+            // continuation's nargs if the envelope didn't set one.
+            let merged_nargs = cdata.nargs.or(inner.nargs);
+
+            Ok(ContData {
+                code: inner.code,
+                stack: merged_stack,
+                savelist: merged_savelist,
+                nargs: merged_nargs,
+            })
+        }
+    } else {
+        // Tags starting with 1
+        let second_bit = parser.load_bit()?;
+
+        if !second_bit {
+            // Tags starting with 10
+            let third_bit = parser.load_bit()?;
+
+            if !third_bit {
+                // Tags starting with 100. Both variants are control-flow terminators
+                // (`vmc_quit` with an exit code, `vmc_quit_exc`) that cannot be re-emitted
+                // as a plain `vmc_std` without losing their semantics. Reject them rather
+                // than silently collapsing to an empty `ContData`.
+                let fourth_bit = parser.load_bit()?;
+                let name = if fourth_bit {
+                    "vmc_quit_exc"
+                } else {
+                    "vmc_quit"
+                };
+                Err(anyhow!(
+                    "Unsupported VmCont variant `{name}`: control-flow continuations \
+                     cannot be round-tripped through FFI"
+                ))
+            } else {
+                // Tags starting with 101
+                let fourth_bit = parser.load_bit()?;
+
+                if !fourth_bit {
+                    // vmc_repeat$10100 count:uint63 body:^VmCont after:^VmCont
+                    //
+                    // We can't round-trip control-flow continuations through `vmc_std`
+                    // without losing the loop semantics (count, after-cont), so refuse
+                    // to parse them rather than silently collapsing to the body.
+                    Err(anyhow!(
+                        "Unsupported VmCont variant `vmc_repeat`: control-flow continuations \
+                         cannot be round-tripped through FFI"
+                    ))
+                } else {
+                    Err(anyhow!("Unsupported VmCont tag starting with 1011"))
+                }
+            }
+        } else {
+            // Tags starting with 11
+            let third_bit = parser.load_bit()?;
+
+            if !third_bit {
+                // Tags starting with 110
+                let fourth_bit = parser.load_bit()?;
+
+                if !fourth_bit {
+                    // Tags starting with 1100. All four variants encode loops that cannot
+                    // be re-emitted as `vmc_std` without losing semantics, so reject them
+                    // up-front rather than collapsing them to their `body` continuation.
+                    let sub_tag = parser.load_uint(2)?;
+                    let name = match sub_tag {
+                        0b00 => "vmc_until",
+                        0b01 => "vmc_again",
+                        0b10 => "vmc_while_cond",
+                        0b11 => "vmc_while_body",
+                        _ => unreachable!(),
+                    };
+                    Err(anyhow!(
+                        "Unsupported VmCont variant `{name}`: control-flow continuations \
+                         cannot be round-tripped through FFI"
+                    ))
+                } else {
+                    // Tags starting with 1101 — undefined
+                    Err(anyhow!("Unsupported VmCont tag starting with 1101"))
+                }
+            } else {
+                // Tags starting with 111
+                let fourth_bit = parser.load_bit()?;
+
+                if fourth_bit {
+                    // vmc_pushint$1111 value:int32 next:^VmCont
+                    let int_to_push = parser.load_bigint(32, true)?; // value
+                    let next = parser.load_reference_cloned()?;
+                    let mut np = next.as_slice_allow_exotic();
+                    let mut cont = parse_vm_cont(&mut np)?;
+                    // `vmc_pushint` pushes `value` BEFORE running `next`. When nested
+                    // (outer pushes A, inner pushes B, ...), the outer push happens first
+                    // temporally, so in the flattened captured stack `value` must end up
+                    // BELOW everything `next` contributed. In this representation index 0
+                    // is the bottom of the stack and the last element is the top, so the
+                    // outer value has to be inserted at index 0 rather than pushed at end —
+                    // otherwise nested `vmc_pushint` continuations end up with their
+                    // captured arguments in reverse order.
+                    let mut stack = cont.stack.unwrap_or_else(Tuple::empty);
+                    stack.0.insert(0, TupleItem::Int(int_to_push));
+                    cont.stack = Some(stack);
+                    Ok(cont)
+                } else {
+                    // Tags starting with 1110 — undefined
+                    Err(anyhow!("Unsupported VmCont tag starting with 1110"))
+                }
+            }
+        }
+    }
+}
+
+/// Serialize a VmCont as vmc_std into a cell builder.
+///
+/// Always serializes as `vmc_std$00` with VmControlData and VmCellSlice.
+pub fn serialize_vm_cont(builder: &mut CellBuilder, cont: &ContData) -> anyhow::Result<()> {
+    // vmc_std$00
+    builder.store_uint(0b00, 2)?;
+
+    // VmControlData:
+    // nargs:(Maybe uint13) — preserve the continuation's arity metadata.
+    // SETCONTARGS-produced continuations carry this and it changes call semantics,
+    // so we must round-trip it rather than dropping it.
+    if let Some(nargs) = cont.nargs {
+        builder.store_bit(true)?;
+        builder.store_uint(nargs as u64, 13)?;
+    } else {
+        builder.store_bit(false)?;
+    }
+
+    // stack:(Maybe VmStack)
+    if let Some(stack) = &cont.stack {
+        builder.store_bit(true)?;
+        serialize_vm_stack(builder, stack)?;
+    } else {
+        builder.store_bit(false)?;
+    }
+
+    // save:VmSaveList = HashmapE 4 VmStackValue
+    if let Some(savelist) = &cont.savelist {
+        builder.store_bit(true)?;
+        builder.store_reference(savelist.clone())?;
+    } else {
+        builder.store_bit(false)?;
+    }
+
+    // cp:(Maybe int16) — always serialize as codepage 0
+    builder.store_bit(true)?;
+    builder.store_uint(0, 16)?;
+
+    // code:VmCellSlice
+    let code = &cont.code;
+    builder.store_uint(0, 10)?; // st_bits
+    builder.store_uint(code.bit_len() as u64, 10)?; // end_bits
+    builder.store_uint(0, 3)?; // st_ref
+    builder.store_uint(code.reference_count() as u64, 3)?; // end_ref
+    builder.store_reference(code.clone())?;
+
+    Ok(())
+}
+
 /// Parse a tuple item from a cell parser
 pub fn parse_tuple_item(parser: &mut CellSlice<'_>) -> Result<TupleItem, anyhow::Error> {
     let kind = parser.load_small_uint(8)?;
@@ -122,33 +468,7 @@ pub fn parse_tuple_item(parser: &mut CellSlice<'_>) -> Result<TupleItem, anyhow:
             let cell = parser.load_reference_cloned()?;
             Ok(TupleItem::Cell(cell))
         }
-        4 => {
-            let start_bits = parser.load_uint(10)? as u16;
-            let end_bits = parser.load_uint(10)? as u16;
-            let start_refs = parser.load_uint(3)? as u8;
-            let end_refs = parser.load_uint(3)? as u8;
-
-            let cell_ref = parser.load_reference_cloned()?;
-
-            let mut parser = cell_ref.as_slice_allow_exotic();
-            parser.skip_first(start_bits, start_refs)?;
-
-            let root_data_size = end_bits.saturating_sub(start_bits);
-            let mut root_bits = vec![0u8; root_data_size.div_ceil(8) as usize];
-            parser.load_raw(&mut root_bits, root_data_size)?;
-
-            let mut builder = CellBuilder::new();
-            builder.store_raw(&root_bits, root_data_size)?;
-
-            for _ in start_refs..end_refs {
-                let next_ref = parser.load_reference_cloned()?;
-                builder.store_reference(next_ref)?;
-            }
-
-            let final_cell = builder.build()?;
-
-            Ok(TupleItem::Slice(final_cell))
-        }
+        4 => Ok(TupleItem::Slice(parse_vm_cell_slice(parser)?)),
         5 => {
             let cell = parser.load_reference_cloned()?;
             Ok(TupleItem::Builder(cell))
@@ -188,8 +508,9 @@ pub fn parse_tuple_item(parser: &mut CellSlice<'_>) -> Result<TupleItem, anyhow:
             Ok(TupleItem::Tuple(Tuple(items)))
         }
         6 => {
-            // TODO: support continuation
-            Ok(TupleItem::Null)
+            // vm_stk_cont#06 cont:VmCont = VmStackValue;
+            let cont = parse_vm_cont(parser)?;
+            Ok(TupleItem::Cont(cont))
         }
         _ => Err(anyhow!("Unsupported stack item kind: {kind}")),
     }
