@@ -31,6 +31,29 @@ impl DapTransport {
             dap_sender,
         }
     }
+
+    /// Build a transport that is not backed by any wire (TCP/stdio) protocol.
+    ///
+    /// Returns the transport plus the two channel endpoints owned by the
+    /// "client" side: a `Sender<Request>` to push DAP requests into the
+    /// replayer session, and a `Receiver<DapMessage>` to observe responses
+    /// and events emitted by it.
+    ///
+    /// Used by `acton mcp` to drive a [`ReplayerDebugSession`](crate::ReplayerDebugSession)
+    /// from an in-process MCP handler without going over a socket.
+    #[must_use]
+    pub fn in_process() -> (DapTransport, Sender<Request>, Receiver<DapMessage>) {
+        let (req_sender, req_receiver) = unbounded::<Request>();
+        let (dap_sender, dap_receiver) = unbounded::<DapMessage>();
+        (
+            DapTransport {
+                req_receiver,
+                dap_sender,
+            },
+            req_sender,
+            dap_receiver,
+        )
+    }
 }
 
 fn port_bind_failure(service: &str, address: &str, flag: &str) -> String {

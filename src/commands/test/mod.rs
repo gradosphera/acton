@@ -130,6 +130,27 @@ impl<'a> TestRunner<'a> {
         } else {
             DapTransport::dummy()
         };
+        Self::with_transport(
+            acton_config,
+            config,
+            transport,
+            cache,
+            reporter_manager,
+            mutation_overrides,
+        )
+    }
+
+    /// Like [`TestRunner::new`], but takes a fully constructed [`DapTransport`]
+    /// so callers can wire the runner to something other than a TCP DAP socket
+    /// (e.g. an in-process MCP handler).
+    pub fn with_transport(
+        acton_config: ActonConfig,
+        config: TestConfig,
+        transport: DapTransport,
+        cache: &'a mut FileBuildCache,
+        reporter_manager: &'a mut ReporterManager,
+        mutation_overrides: BTreeMap<String, Cell>,
+    ) -> anyhow::Result<TestRunner<'a>> {
         let project_root = configured_project_root().to_path_buf();
         let fuzz_seed = config.fuzz_seed.unwrap_or_else(rand::random);
 
@@ -523,6 +544,25 @@ fn evaluate_test_case(
 }
 
 pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()> {
+    test_cmd_impl(path, config, None)
+}
+
+/// Run the test command driving debugging through a caller-supplied
+/// `DapTransport` instead of a TCP listener. Used by `acton mcp` so the
+/// MCP server can speak to `ReplayerDebugSession` in-process.
+pub fn test_cmd_with_transport(
+    path: Option<String>,
+    config: &TestConfig,
+    transport: DapTransport,
+) -> anyhow::Result<()> {
+    test_cmd_impl(path, config, Some(transport))
+}
+
+fn test_cmd_impl(
+    path: Option<String>,
+    config: &TestConfig,
+    transport_override: Option<DapTransport>,
+) -> anyhow::Result<()> {
     let project_root = configured_project_root();
     let mut config = config.clone();
     resolve_test_output_paths_from_project_root(&mut config, project_root);
@@ -575,7 +615,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     };
 
     let acton_config = ActonConfig::load()?;
-    let debug_listener = if config.debug {
+    let debug_listener = if config.debug && transport_override.is_none() {
         Some(reserve_dap_listener(config.debug_port)?)
     } else {
         None
@@ -607,14 +647,25 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     let mut total_skipped = 0;
     let mut total_todo = 0;
 
-    let mut runner = TestRunner::new(
-        acton_config,
-        config.clone(),
-        debug_listener,
-        &mut file_cache,
-        &mut global_reporter,
-        build_overrides_for_mutations(&config)?,
-    )?;
+    let mut runner = if let Some(transport) = transport_override {
+        TestRunner::with_transport(
+            acton_config,
+            config.clone(),
+            transport,
+            &mut file_cache,
+            &mut global_reporter,
+            build_overrides_for_mutations(&config)?,
+        )?
+    } else {
+        TestRunner::new(
+            acton_config,
+            config.clone(),
+            debug_listener,
+            &mut file_cache,
+            &mut global_reporter,
+            build_overrides_for_mutations(&config)?,
+        )?
+    };
 
     for (index, file) in test_files.iter().enumerate() {
         let result = run_tests_for_file(&mut runner, file);

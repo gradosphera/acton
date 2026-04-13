@@ -15,6 +15,7 @@ pub mod internal;
 pub mod library;
 pub mod litenode;
 pub mod ls;
+pub mod mcp;
 pub mod new;
 pub mod retrace;
 pub mod rpc;

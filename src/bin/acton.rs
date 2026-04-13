@@ -880,6 +880,23 @@ enum Commands {
     )]
     Doctor,
     #[command(
+        about = "Run an MCP server that lets an AI agent step-debug a Tolk test",
+        long_about = "Start a stdio Model Context Protocol server that drives the Tolk test debugger. \
+                      The chosen test is built and launched under the source-level replayer; MCP tools \
+                      expose set_breakpoints / step_over / step_into / step_out / continue_exec / \
+                      where_am_i / locals / evaluate, each returning the updated cursor."
+    )]
+    Mcp {
+        #[arg(
+            long,
+            value_name = "NAME",
+            help = "Name of the test to debug. If omitted, the MCP client must call the `select_test` tool before any other debugging tool."
+        )]
+        test: Option<String>,
+        #[arg(value_name = "PATH", help = "Path to a test file or directory (default: project root)")]
+        path: Option<String>,
+    },
+    #[command(
         about = "Generate shell completions for selected shell",
         after_help = detailed_help_pointer("completions")
     )]
@@ -2002,6 +2019,7 @@ fn main() {
         } => func2tolk_cmd(path, output, warnings_as_comments, no_camel_case, version),
         Commands::Hooks { command } => hooks_cmd(command),
         Commands::Doctor => doctor_cmd(),
+        Commands::Mcp { test, path } => commands::mcp::mcp_cmd(test, path),
         Commands::Completions { shell } => {
             clap_complete::generate(shell, &mut Cli::command(), "acton", &mut std::io::stdout());
             Ok(())
