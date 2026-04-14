@@ -12,6 +12,7 @@ import {ExplorerIndexPage} from "./explorer/pages/ExplorerIndexPage"
 import {NftsPage} from "./explorer/pages/NftsPage"
 import {TokensPage} from "./explorer/pages/TokensPage"
 import {TransactionPage} from "./explorer/pages/TransactionPage"
+import {WalletPage} from "./wallet/pages/WalletPage"
 import "@acton/shared-ui/styles/tokens.css"
 import "./index.css"
 import styles from "./App.module.css"
@@ -99,6 +100,17 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
               <button
                 type="button"
                 className={`${styles.navItem} ${
+                  location.pathname.startsWith("/wallet") ? styles.navItemActive : ""
+                }`}
+                onClick={() => {
+                  void navigate("/wallet")
+                }}
+              >
+                Wallet
+              </button>
+              <button
+                type="button"
+                className={`${styles.navItem} ${
                   location.pathname.startsWith("/tokens") ? styles.navItemActive : ""
                 }`}
                 onClick={() => {
@@ -148,6 +160,7 @@ const AppContent: React.FC<AppContentProps> = ({client, theme, setTheme}) => {
         <Routes>
           <Route path="/" element={<Navigate to="/explorer" replace />} />
           <Route path="/explorer" element={<ExplorerIndexPage />} />
+          <Route path="/wallet" element={<WalletPage host={HOST} />} />
           <Route path="/explorer/address/:address" element={<AccountPage client={client} />} />
           <Route path="/tokens" element={<TokensPage client={client} />} />
           <Route path="/nfts" element={<NftsPage client={client} />} />

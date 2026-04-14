@@ -18,7 +18,9 @@
   },
   "dependencies": {
     "@acton/shared-ui": "workspace:*",
+    "@ton/crypto": "^3.3.0",
     "@ton/core": "0.62.0",
+    "@ton/walletkit": "0.0.9",
     "@types/react-router-dom": "^5.3.3",
     "buffer": "^6.0.3",
     "gen-typescript-from-tolk-dev": "^0.2.0",
