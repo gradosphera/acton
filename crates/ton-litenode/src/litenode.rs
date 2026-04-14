@@ -314,6 +314,14 @@ pub(crate) enum Request {
     GetStateSource {
         resp: oneshot::Sender<anyhow::Result<StateSource>>,
     },
+    RegisterCompilerAbis {
+        entries: Vec<(Hash256, Value)>,
+        resp: oneshot::Sender<anyhow::Result<()>>,
+    },
+    GetCompilerAbi {
+        code_hash: Hash256,
+        resp: oneshot::Sender<anyhow::Result<Option<Value>>>,
+    },
     DumpState {
         path: String,
         resp: oneshot::Sender<anyhow::Result<()>>,
@@ -780,6 +788,29 @@ impl LiteNode {
         rx.await?
     }
 
+    pub async fn register_compiler_abis(
+        &self,
+        entries: Vec<(Hash256, Value)>,
+    ) -> anyhow::Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::RegisterCompilerAbis { entries, resp })
+            .await?;
+        rx.await?
+    }
+
+    pub async fn get_compiler_abi(&self, code_hash: Hash256) -> anyhow::Result<Option<Value>> {
+        let (resp, rx) = oneshot::channel();
+        self.tx
+            .send(Request::GetCompilerAbi { code_hash, resp })
+            .await?;
+        rx.await?
+    }
+
     pub async fn dump_state(&self, path: String) -> anyhow::Result<()> {
         let (resp, rx) = oneshot::channel();
         self.tx.send(Request::DumpState { path, resp }).await?;
@@ -1043,6 +1074,17 @@ fn process_loop_request(node: &mut Node, req: Request) {
         }
         Request::GetStateSource { resp } => {
             let _ = resp.send(Ok(node.state_source.clone()));
+        }
+        Request::RegisterCompilerAbis { entries, resp } => {
+            let res = entries
+                .into_iter()
+                .try_for_each(|(code_hash, compiler_abi)| {
+                    node.history.set_compiler_abi(code_hash, compiler_abi)
+                });
+            let _ = resp.send(res);
+        }
+        Request::GetCompilerAbi { code_hash, resp } => {
+            let _ = resp.send(Ok(node.history.get_compiler_abi(&code_hash)));
         }
         Request::DumpState { path, resp } => {
             let res = node.dump_state_to_path(path);

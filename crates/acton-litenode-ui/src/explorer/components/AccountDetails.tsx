@@ -23,9 +23,18 @@ import {
 import type React from "react"
 import {useMemo, useState, useEffect} from "react"
 import {useNavigate} from "react-router-dom"
+import type {ContractABI} from "gen-typescript-from-tolk-dev/src/abi"
 
-import type {FullAccountState, JettonMaster, JettonWallet, NftItem, Transaction} from "../api/types"
+import type {
+  FullAccountState,
+  JettonMaster,
+  JettonWallet,
+  NftItem,
+  Message,
+  Transaction,
+} from "../api/types"
 import {TonClient} from "../api/client"
+import {addressKey, buildMessageNamesByOpcodeHex} from "../api/compilerAbi"
 
 import {AddressLabel} from "./AddressLabel"
 import {ContractCode} from "./ContractCode"
@@ -39,6 +48,7 @@ type Tabs = "history" | "contract" | "tokens" | "nfts" | "holders"
 interface AccountDetailsProps {
   readonly transactions: Transaction[]
   readonly accountState: FullAccountState
+  readonly accountCodeHash?: string
   readonly ownerAddress: string
   readonly jettonWallets: JettonWallet[]
   readonly nftItems: NftItem[]
@@ -55,6 +65,7 @@ const ITEMS_PER_PAGE = 10
 export const AccountDetails: React.FC<AccountDetailsProps> = ({
   transactions,
   accountState,
+  accountCodeHash,
   ownerAddress,
   jettonWallets,
   nftItems,
@@ -67,6 +78,11 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
 }) => {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<Tabs>("history")
+  const [compilerAbi, setCompilerAbi] = useState<ContractABI | null | undefined>()
+  const [compilerAbiError, setCompilerAbiError] = useState<string | undefined>()
+  const [compilerAbiByAddress, setCompilerAbiByAddress] = useState<Map<string, ContractABI | undefined>>(
+    new Map(),
+  )
 
   useEffect(() => {
     if (
@@ -81,6 +97,118 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
     }
   }, [activeTabHash])
 
+  useEffect(() => {
+    let isActive = true
+
+    const loadCompilerAbi = async () => {
+      if (!accountCodeHash) {
+        setCompilerAbi(undefined)
+        setCompilerAbiError(undefined)
+        return
+      }
+
+      setCompilerAbi(undefined)
+      setCompilerAbiError(undefined)
+
+      try {
+        const abi = await client.getCompilerAbi(accountCodeHash)
+        if (!isActive) return
+        setCompilerAbi(abi)
+      } catch (error) {
+        if (!isActive) return
+        setCompilerAbi(undefined)
+        setCompilerAbiError(error instanceof Error ? error.message : "Failed to load compiler ABI")
+      }
+    }
+
+    void loadCompilerAbi()
+    return () => {
+      isActive = false
+    }
+  }, [accountCodeHash, client])
+
+  useEffect(() => {
+    let isActive = true
+
+    const loadRelatedCompilerAbis = async () => {
+      const addresses = new Set<string>()
+      addresses.add(ownerAddress)
+
+      for (const tx of transactions) {
+        if (tx.in_msg.source) addresses.add(tx.in_msg.source)
+        if (tx.in_msg.destination) addresses.add(tx.in_msg.destination)
+        for (const msg of tx.out_msgs) {
+          if (msg.source) addresses.add(msg.source)
+          if (msg.destination) addresses.add(msg.destination)
+        }
+      }
+
+      const requestedAddresses = [...addresses].filter(Boolean)
+      if (requestedAddresses.length === 0) {
+        setCompilerAbiByAddress(new Map())
+        return
+      }
+
+      const next = new Map<string, ContractABI | undefined>()
+      const ownerKey = addressKey(ownerAddress)
+      if (compilerAbi !== undefined) {
+        next.set(ownerKey, compilerAbi ?? undefined)
+      }
+
+      const states = await client.getAccountStates(requestedAddresses, false).catch(() => {})
+      const addressToCodeHash = new Map<string, string>()
+      for (const account of states?.accounts ?? []) {
+        if (account.code_hash) {
+          addressToCodeHash.set(addressKey(account.address), account.code_hash)
+        }
+      }
+
+      const codeHashesToFetch = new Set<string>()
+      for (const [address, codeHash] of addressToCodeHash) {
+        if (
+          address === ownerKey &&
+          accountCodeHash &&
+          compilerAbi !== undefined &&
+          codeHash === accountCodeHash
+        ) {
+          continue
+        }
+        codeHashesToFetch.add(codeHash)
+      }
+
+      const fetchedAbis = await Promise.all(
+        [...codeHashesToFetch].map(async codeHash => {
+          try {
+            return [codeHash, await client.getCompilerAbi(codeHash)] as const
+          } catch {
+            return [codeHash, undefined] as const
+          }
+        }),
+      )
+      const abiByCodeHash = new Map<string, ContractABI | undefined>(fetchedAbis)
+      if (accountCodeHash && compilerAbi !== undefined) {
+        abiByCodeHash.set(accountCodeHash, compilerAbi ?? undefined)
+      }
+
+      for (const address of requestedAddresses) {
+        const key = addressKey(address)
+        const codeHash = addressToCodeHash.get(key)
+        next.set(
+          key,
+          codeHash ? (abiByCodeHash.get(codeHash) ?? undefined) : (next.get(key) ?? undefined),
+        )
+      }
+
+      if (!isActive) return
+      setCompilerAbiByAddress(next)
+    }
+
+    void loadRelatedCompilerAbis()
+    return () => {
+      isActive = false
+    }
+  }, [transactions, ownerAddress, accountCodeHash, compilerAbi, client])
+
   const handleTabClick = (tab: Tabs) => {
     setActiveTab(tab)
     onTabChange?.(tab)
@@ -94,6 +222,16 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
   const paginatedTransactions = transactions.slice(startIndex, startIndex + ITEMS_PER_PAGE)
 
   const browsedAddr = useMemo(() => parseAddress(ownerAddress), [ownerAddress])
+  const messageNamesByAddress = useMemo(() => {
+    const next = new Map<string, {incoming: Map<string, string>; outgoing: Map<string, string>}>()
+    for (const [address, abi] of compilerAbiByAddress) {
+      next.set(address, {
+        incoming: buildMessageNamesByOpcodeHex(abi, "incoming_messages"),
+        outgoing: buildMessageNamesByOpcodeHex(abi, "outgoing_messages"),
+      })
+    }
+    return next
+  }, [compilerAbiByAddress])
 
   return (
     <Card className={styles.tableCard}>
@@ -182,10 +320,15 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
 
                 const displayAddressFallback = isIncoming ? "External" : "Contract"
 
-                const opcode = isIncoming
-                  ? tx.in_msg.opcode
-                  : tx.out_msgs.find(m => m.opcode)?.opcode
-                const displayOpcode = opcode ?? undefined
+                const displayMessage = isIncoming
+                  ? tx.in_msg
+                  : tx.out_msgs.find(m => m.destination) ||
+                    tx.out_msgs.find(m => m.opcode) ||
+                    tx.out_msgs[0]
+                const displayOpcode =
+                  resolveMessageName(displayMessage, messageNamesByAddress) ||
+                  displayMessage?.opcode ||
+                  undefined
 
                 const isAddressHovered =
                   hoveredAddress && address ? isSameAddress(address, hoveredAddress) : false
@@ -327,8 +470,61 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
           )}
         </CardContent>
       ) : (
-        <ContractCode codeBoc={accountState.code} />
+        <ContractCode
+          codeBoc={accountState.code}
+          compilerAbi={compilerAbi}
+          compilerAbiLoading={compilerAbi === undefined}
+          compilerAbiError={compilerAbiError}
+        />
       )}
     </Card>
   )
+}
+
+function resolveMessageName(
+  message: Message | undefined,
+  messageNamesByAddress: Map<
+    string,
+    {incoming: Map<string, string>; outgoing: Map<string, string>}
+  >,
+): string | undefined {
+  if (!message?.opcode) {
+    return undefined
+  }
+
+  const opcode = normalizeOpcode(message.opcode)
+  if (!opcode) {
+    return undefined
+  }
+
+  const destinationNames = message.destination
+    ? messageNamesByAddress.get(addressKey(message.destination))
+    : undefined
+  const sourceNames = message.source
+    ? messageNamesByAddress.get(addressKey(message.source))
+    : undefined
+
+  return destinationNames?.incoming.get(opcode) ?? sourceNames?.outgoing.get(opcode) ?? undefined
+}
+
+function normalizeOpcode(opcode: string): string | undefined {
+  const normalized = opcode.trim()
+  if (!normalized) {
+    return undefined
+  }
+
+  try {
+    const value =
+      normalized.startsWith("0x") || normalized.startsWith("0X")
+        ? Number.parseInt(normalized.slice(2), 16)
+        : Number.parseInt(normalized, 10)
+
+    if (!Number.isInteger(value) || value < 0 || value > 0xff_ff_ff_ff) {
+      return undefined
+    }
+
+    return `0x${value.toString(16).padStart(8, "0")}`
+  } catch {
+    return undefined
+  }
 }

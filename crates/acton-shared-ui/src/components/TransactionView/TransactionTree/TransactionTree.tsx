@@ -13,7 +13,7 @@ import {
 import type {BackendContractInfo} from "@/types"
 import type {ContractData, TransactionInfo} from "@/types/transaction"
 import {fmt} from "@/index"
-import {getTransactionOpcode} from "@/utils/transaction"
+import {getTransactionOpcode, resolveTransactionOpcodeName} from "@/utils/transaction"
 
 import {TransactionDetails} from "../TransactionDetails/TransactionDetails"
 
@@ -322,15 +322,8 @@ export function TransactionTree({
       const value = inMessage?.info.type === "internal" ? inMessage.info.value.coins : undefined
 
       const opcode = getTransactionOpcode(tx.transaction)
-
       const targetContract = thisAddress ? contracts.get(thisAddress.toString()) : undefined
-      let typeAbi = targetContract?.abi?.messages.find(it => it.opcode === opcode)
-      if (typeAbi === undefined) {
-        for (const contract of allContracts) {
-          typeAbi = contract.abi?.messages.find(it => it.opcode === opcode)
-        }
-      }
-      const opcodeName = typeAbi?.name
+      const opcodeName = resolveTransactionOpcodeName(tx, contracts, allContracts)
       const opcodeHex = opcodeName ?? (opcode === undefined ? "empty" : `0x${opcode.toString(16)}`)
 
       const contractLetter = thisAddress ? (targetContract?.letter ?? "?") : "?"

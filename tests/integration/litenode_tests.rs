@@ -8,6 +8,7 @@ use std::fs;
 use std::path::Path;
 use std::thread;
 use std::time::{Duration, Instant};
+use ton_litenode::types::Hash256;
 use tycho_types::boc::Boc;
 
 const CHILD_CONTRACT: &str = r"
@@ -2224,6 +2225,90 @@ fn litenode_supports_v3_run_get_method() {
     assert_eq!(payload["exit_code"].as_i64(), Some(0));
     assert_eq!(payload["stack"][0]["type"].as_str(), Some("num"));
     assert_eq!(payload["stack"][0]["value"].as_str(), Some("17"));
+
+    node.stop();
+}
+
+#[test]
+fn litenode_registers_and_serves_compiler_abi_for_localnet_deploys() {
+    let project = ProjectBuilder::new("litenode-compiler-abi-registry")
+        .contract("getter", V3_GETTER_CONTRACT)
+        .script_file("deploy_getter", V3_DEPLOY_GETTER_SCRIPT)
+        .build();
+
+    fs::write(project.path().join("wallets.toml"), DEPLOYER_WALLET_CONFIG)
+        .expect("Failed to write wallets.toml");
+
+    let node = project
+        .litenode()
+        .before_start(super::super::support::project::ActonCommand::build)
+        .args(["--accounts", "deployer"])
+        .start();
+    append_localnet_network(project.path(), &node.base_url());
+
+    let script_result = project
+        .acton()
+        .script("scripts/deploy_getter.tolk")
+        .verify_network("localnet")
+        .run();
+    let script_stdout = String::from_utf8(script_result.output.get_output().stdout.clone())
+        .expect("Failed to decode deploy script stdout");
+    let script_stderr = String::from_utf8(script_result.output.get_output().stderr.clone())
+        .expect("Failed to decode deploy script stderr");
+    let script_status = script_result.output.get_output().status.code().unwrap_or(1);
+
+    assert_eq!(
+        script_status, 0,
+        "Deploy script failed with status {script_status}\nstdout:\n{script_stdout}\nstderr:\n{script_stderr}"
+    );
+
+    let getter_address = extract_marker_value(&script_stdout, "GETTER_CONTRACT=");
+    wait_until_address_state_active(&node, &getter_address, Duration::from_secs(12));
+
+    let account_states = wait_for_ok_response(
+        &node,
+        &format!("/api/v3/accountStates?address={getter_address}&include_boc=false"),
+        Duration::from_secs(12),
+    );
+    let code_hash_b64 = response_payload(&account_states)["accounts"]
+        .as_array()
+        .and_then(|accounts| accounts.first())
+        .and_then(|account| account["code_hash"].as_str())
+        .expect("accountStates must include code_hash for deployed getter");
+    let code_hash_hex = Hash256::from_base64(code_hash_b64)
+        .expect("accountStates code_hash must be valid base64")
+        .to_hex();
+
+    let compiler_abi_response = wait_for_ok_response(
+        &node,
+        &format!("/admin/compiler-abi?code_hash={code_hash_hex}"),
+        Duration::from_secs(12),
+    );
+    let compiler_abi = response_payload(&compiler_abi_response);
+
+    assert_eq!(compiler_abi["compiler_name"].as_str(), Some("tolk"));
+    assert_eq!(compiler_abi["contract_name"].as_str(), Some("getter"));
+    assert!(
+        compiler_abi["get_methods"]
+            .as_array()
+            .is_some_and(|methods| {
+                methods
+                    .iter()
+                    .any(|method| method["name"].as_str() == Some("addTen"))
+            }),
+        "compiler ABI must include addTen get method:\n{}",
+        serde_json::to_string_pretty(compiler_abi).unwrap_or_default()
+    );
+
+    let missing_response = node.get_json(
+        "/admin/compiler-abi?code_hash=1111111111111111111111111111111111111111111111111111111111111111",
+    );
+    assert_eq!(missing_response["ok"].as_bool(), Some(true));
+    assert!(
+        response_payload(&missing_response).is_null(),
+        "Unknown code hash must return null result:\n{}",
+        serde_json::to_string_pretty(&missing_response).unwrap_or_default()
+    );
 
     node.stop();
 }

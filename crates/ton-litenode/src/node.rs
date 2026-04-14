@@ -97,6 +97,10 @@ impl Node {
                 "CREATE TABLE IF NOT EXISTS accounts (address BLOB PRIMARY KEY, data BLOB)",
                 [],
             )?;
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS compiler_abis (code_hash BLOB PRIMARY KEY, data BLOB)",
+                [],
+            )?;
             Some(conn)
         } else {
             None
@@ -192,6 +196,22 @@ impl Node {
             for msg in msg_iter {
                 let (hash, meta) = msg?;
                 history.msg_by_hash.insert(hash, meta);
+            }
+
+            // Load compiler ABI registry
+            let mut stmt = conn.prepare("SELECT code_hash, data FROM compiler_abis")?;
+            let abi_iter = stmt.query_map([], |row| {
+                let hash_bytes: Vec<u8> = row.get(0)?;
+                let data: Vec<u8> = row.get(1)?;
+                let mut hash = [0u8; 32];
+                hash.copy_from_slice(&hash_bytes);
+                let compiler_abi = serde_json::from_slice::<Value>(&data)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+                Ok((Hash256(hash), compiler_abi))
+            })?;
+            for abi in abi_iter {
+                let (hash, compiler_abi) = abi?;
+                history.compiler_abis.insert(hash, compiler_abi);
             }
         }
 
@@ -1743,6 +1763,7 @@ mod tests {
     use crate::executor::{ExecContext, ExecResult, TvmExecutor};
     use crate::node::StateSource;
     use base64::Engine;
+    use serde_json::json;
     use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
     use ton_executor::DEFAULT_CONFIG;
@@ -1827,6 +1848,61 @@ mod tests {
         assert!(node.conn.is_some(), "sqlite connection must be initialized");
 
         drop(node);
+        let _ = std::fs::remove_dir_all(temp_root);
+    }
+
+    #[test]
+    fn compiler_abi_registry_persists_across_db_reopen() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time must be after unix epoch")
+            .as_nanos();
+        let temp_root = std::env::temp_dir().join(format!(
+            "ton-litenode-compiler-abi-test-{}-{unique}",
+            std::process::id()
+        ));
+        let db_path = temp_root.join("localnet.db");
+
+        let config_bytes = base64::engine::general_purpose::STANDARD
+            .decode(DEFAULT_CONFIG)
+            .expect("must decode default config");
+        let mut node = Node::with_db_path(
+            Box::new(NoopExecutor),
+            config_bytes.clone().into(),
+            StateSource::Local,
+            Some(&db_path),
+        )
+        .expect("must create sqlite-backed test node");
+
+        let code_hash = Hash256([0x42; 32]);
+        let compiler_abi = json!({
+            "compiler_name": "tolk",
+            "contract_name": "Counter",
+            "get_methods": [
+                { "name": "currentCounter" }
+            ]
+        });
+
+        node.history
+            .set_compiler_abi(code_hash, compiler_abi.clone())
+            .expect("must persist compiler ABI");
+        drop(node);
+
+        let reopened = Node::with_db_path(
+            Box::new(NoopExecutor),
+            config_bytes.into(),
+            StateSource::Local,
+            Some(&db_path),
+        )
+        .expect("must reopen sqlite-backed test node");
+
+        assert_eq!(
+            reopened.history.get_compiler_abi(&code_hash),
+            Some(compiler_abi),
+            "compiler ABI registry must survive node restart"
+        );
+
+        drop(reopened);
         let _ = std::fs::remove_dir_all(temp_root);
     }
 

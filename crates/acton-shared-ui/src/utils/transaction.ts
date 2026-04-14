@@ -8,7 +8,8 @@ import {
   type Transaction,
 } from "@ton/core"
 
-import type {BackendTransaction, TransactionInfo} from "@/types"
+import type {BackendContractInfo,BackendTransaction, TransactionInfo} from "@/types"
+import type {ContractData} from "@/types/transaction"
 
 const bigintToAddress = (addr: bigint | undefined): Address | undefined => {
   if (addr === undefined) return undefined
@@ -47,6 +48,33 @@ export function getTransactionOpcode(tx: Transaction): number | undefined {
     opcode = slice.loadUint(32)
   }
   return opcode
+}
+
+export function resolveTransactionOpcodeName(
+  tx: TransactionInfo,
+  contracts: Map<string, ContractData>,
+  allContracts: readonly BackendContractInfo[],
+): string | undefined {
+  const opcode = getTransactionOpcode(tx.transaction)
+  if (opcode === undefined) {
+    return undefined
+  }
+
+  const inMessage = tx.transaction.inMessage
+  const targetContract = tx.address ? contracts.get(tx.address.toString()) : undefined
+  const destinationContract = inMessage?.info.dest
+    ? contracts.get(inMessage.info.dest.toString())
+    : targetContract
+  const sourceContract = inMessage?.info.src ? contracts.get(inMessage.info.src.toString()) : undefined
+
+  return (
+    destinationContract?.incomingMessageNamesByOpcode?.get(opcode) ??
+    sourceContract?.outgoingMessageNamesByOpcode?.get(opcode) ??
+    findOpcodeNameInMessages(opcode, destinationContract?.abi?.messages) ??
+    findOpcodeNameInMessages(opcode, sourceContract?.abi?.messages) ??
+    findOpcodeNameInMessages(opcode, targetContract?.abi?.messages) ??
+    findOpcodeNameInContracts(opcode, allContracts)
+  )
 }
 
 export function processTransactions(transactions: BackendTransaction[]): TransactionInfo[] {
@@ -93,6 +121,26 @@ export function processTransactions(transactions: BackendTransaction[]): Transac
   }
 
   return txInfos
+}
+
+function findOpcodeNameInContracts(
+  opcode: number,
+  allContracts: readonly BackendContractInfo[],
+): string | undefined {
+  for (const contract of allContracts) {
+    const name = findOpcodeNameInMessages(opcode, contract.abi?.messages)
+    if (name) {
+      return name
+    }
+  }
+  return undefined
+}
+
+function findOpcodeNameInMessages(
+  opcode: number,
+  messages: readonly {readonly opcode: number | undefined; readonly name: string}[] | undefined,
+): string | undefined {
+  return messages?.find(message => message.opcode === opcode)?.name
 }
 
 export function computeSendMode(tx: TransactionInfo): number | undefined {

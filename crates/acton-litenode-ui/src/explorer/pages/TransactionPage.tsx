@@ -26,6 +26,7 @@ import {useNavigate, useParams} from "react-router-dom"
 
 import type {TonClient} from "../api/client"
 import type {V3Transaction} from "../api/types"
+import {addressKey, buildMessageNamesByOpcodeNumber} from "../api/compilerAbi"
 import {Breadcrumbs} from "../components/Breadcrumbs"
 import {hashToHex, normalizeAddress} from "../components/utils"
 import {useAddressBook} from "../hooks/useAddressBook"
@@ -151,15 +152,55 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
           }
           const {minSeqno, maxSeqno} = collectSeqnoBounds(processed, transactionsByHex)
 
+          const requestedAddresses = [...addresses].sort()
+          const states =
+            requestedAddresses.length > 0
+              ? await client.getAccountStates(requestedAddresses, false).catch(() => {})
+              : undefined
+          const addressToCodeHash = new Map<string, string>()
+          for (const account of states?.accounts ?? []) {
+            if (account.code_hash) {
+              addressToCodeHash.set(addressKey(account.address), account.code_hash)
+            }
+          }
+
+          const abiByCodeHash = new Map<
+            string,
+            {
+              readonly incoming: ReadonlyMap<number, string>
+              readonly outgoing: ReadonlyMap<number, string>
+            }
+          >()
+          const codeHashes = [...new Set(addressToCodeHash.values())]
+          const fetchedAbis = await Promise.all(
+            codeHashes.map(async codeHash => {
+              try {
+                return [codeHash, await client.getCompilerAbi(codeHash)] as const
+              } catch {
+                return [codeHash, undefined] as const
+              }
+            }),
+          )
+          for (const [codeHash, compilerAbi] of fetchedAbis) {
+            abiByCodeHash.set(codeHash, {
+              incoming: buildMessageNamesByOpcodeNumber(compilerAbi, "incoming_messages"),
+              outgoing: buildMessageNamesByOpcodeNumber(compilerAbi, "outgoing_messages"),
+            })
+          }
+
           let nextLetterCode = 65
           await Promise.all(
-            [...addresses].sort().map(async addr => {
+            requestedAddresses.map(async addr => {
+              const letter = String.fromCodePoint(nextLetterCode++)
               const displayAddr = normalizeAddress(addr)
               const customName = await fetchName(addr)
+              const messageNames = abiByCodeHash.get(addressToCodeHash.get(addressKey(addr)) ?? "")
               contractsMap.set(addr, {
                 displayName: customName || fmt.formatAddress(displayAddr),
                 address: Address.parse(addr),
-                letter: String.fromCodePoint(nextLetterCode++),
+                letter,
+                incomingMessageNamesByOpcode: messageNames?.incoming,
+                outgoingMessageNamesByOpcode: messageNames?.outgoing,
               })
             }),
           )

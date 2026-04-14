@@ -84,6 +84,8 @@ pub fn create_router(node: Arc<LiteNode>, rate_limit_rps: Option<u32>) -> Router
             "/address-name",
             get(get_address_name).post(set_address_name),
         )
+        .route("/compiler-abi", get(get_compiler_abi))
+        .route("/compiler-abis", post(register_compiler_abis))
         .route(
             "/state-source",
             get(get_state_source).post(set_state_source),

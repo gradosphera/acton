@@ -2,6 +2,7 @@ use crate::litenode::{LiteNodeBlockId, LiteNodeTransactionId};
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
@@ -129,7 +130,7 @@ pub struct JettonMasterMeta {
     pub admin_address: Addr,
     pub code_hash: Hash256,
     pub data_hash: Hash256,
-    pub jetton_content: serde_json::Value,
+    pub jetton_content: Value,
     pub jetton_wallet_code_hash: Hash256,
     pub last_transaction_lt: Lt,
     pub mintable: bool,
@@ -154,7 +155,7 @@ pub struct NftItemMeta {
     pub data_hash: Hash256,
     pub collection_address: Option<Addr>,
     pub owner_address: Option<Addr>,
-    pub content: serde_json::Value,
+    pub content: Value,
     pub index: String,
     pub init: bool,
     pub last_transaction_lt: Lt,
@@ -300,6 +301,7 @@ pub struct History {
     pub jetton_masters: HashMap<Addr, JettonMasterMeta>,
     pub jetton_wallets: HashMap<Addr, JettonWalletMeta>,
     pub nft_items: HashMap<Addr, NftItemMeta>,
+    pub compiler_abis: HashMap<Hash256, Value>,
 }
 
 impl Default for History {
@@ -324,6 +326,7 @@ impl History {
             jetton_masters: HashMap::new(),
             jetton_wallets: HashMap::new(),
             nft_items: HashMap::new(),
+            compiler_abis: HashMap::new(),
         }
     }
 
@@ -341,6 +344,7 @@ impl History {
             jetton_masters: HashMap::new(),
             jetton_wallets: HashMap::new(),
             nft_items: HashMap::new(),
+            compiler_abis: HashMap::new(),
         }
     }
 
@@ -359,6 +363,48 @@ impl History {
             );
         }
         address_names
+    }
+
+    pub fn set_compiler_abi(
+        &mut self,
+        code_hash: Hash256,
+        compiler_abi: Value,
+    ) -> anyhow::Result<()> {
+        if let Some(conn) = &self.conn {
+            let data = serde_json::to_vec(&compiler_abi)?;
+            let conn = conn.lock().expect("Failed to lock DB connection");
+            conn.execute(
+                "INSERT OR REPLACE INTO compiler_abis (code_hash, data) VALUES (?1, ?2)",
+                params![code_hash.0.to_vec(), data],
+            )?;
+        }
+        self.compiler_abis.insert(code_hash, compiler_abi);
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn get_compiler_abi(&self, code_hash: &Hash256) -> Option<Value> {
+        self.compiler_abis.get(code_hash).cloned()
+    }
+
+    pub fn replace_compiler_abis(
+        &mut self,
+        compiler_abis: HashMap<Hash256, Value>,
+    ) -> anyhow::Result<()> {
+        if let Some(conn) = &self.conn {
+            let conn = conn.lock().expect("Failed to lock DB connection");
+            conn.execute("DELETE FROM compiler_abis", [])?;
+            for (code_hash, compiler_abi) in &compiler_abis {
+                let data = serde_json::to_vec(compiler_abi)?;
+                conn.execute(
+                    "INSERT OR REPLACE INTO compiler_abis (code_hash, data) VALUES (?1, ?2)",
+                    params![code_hash.0.to_vec(), data],
+                )?;
+            }
+        }
+
+        self.compiler_abis = compiler_abis;
+        Ok(())
     }
 }
 

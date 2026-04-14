@@ -77,4 +77,6 @@ export interface ContractData {
   readonly address: Address
   readonly letter: string
   readonly abi?: Abi
+  readonly incomingMessageNamesByOpcode?: ReadonlyMap<number, string>
+  readonly outgoingMessageNamesByOpcode?: ReadonlyMap<number, string>
 }

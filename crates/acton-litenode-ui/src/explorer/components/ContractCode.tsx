@@ -2,17 +2,26 @@ import {Buffer} from "node:buffer"
 
 import type React from "react"
 import {useMemo, useState} from "react"
+import type {ContractABI} from "gen-typescript-from-tolk-dev/src/abi"
 import {Cell as Cell2, runtime, text} from "ton-assembly"
 
 import styles from "./ContractCode.module.css"
 
 interface ContractCodeProps {
   readonly codeBoc: string
+  readonly compilerAbi?: ContractABI | null
+  readonly compilerAbiLoading?: boolean
+  readonly compilerAbiError?: string
 }
 
-type CodeTab = "decompiled" | "base64" | "hex"
+type CodeTab = "decompiled" | "abi" | "base64" | "hex"
 
-export const ContractCode: React.FC<ContractCodeProps> = ({codeBoc}) => {
+export const ContractCode: React.FC<ContractCodeProps> = ({
+  codeBoc,
+  compilerAbi,
+  compilerAbiLoading = false,
+  compilerAbiError,
+}) => {
   const [activeTab, setActiveTab] = useState<CodeTab>("decompiled")
 
   const codeData = useMemo(() => {
@@ -37,6 +46,11 @@ export const ContractCode: React.FC<ContractCodeProps> = ({codeBoc}) => {
     }
   }, [codeBoc])
 
+  const abiJson = useMemo(() => {
+    if (!compilerAbi) return
+    return JSON.stringify(compilerAbi, undefined, 2)
+  }, [compilerAbi])
+
   if (!codeBoc || !codeData) {
     return (
       <div className={styles.container}>
@@ -57,6 +71,13 @@ export const ContractCode: React.FC<ContractCodeProps> = ({codeBoc}) => {
         </button>
         <button
           type="button"
+          className={`${styles.tab} ${activeTab === "abi" ? styles.tabActive : ""}`}
+          onClick={() => setActiveTab("abi")}
+        >
+          ABI
+        </button>
+        <button
+          type="button"
           className={`${styles.tab} ${activeTab === "base64" ? styles.tabActive : ""}`}
           onClick={() => setActiveTab("base64")}
         >
@@ -72,9 +93,23 @@ export const ContractCode: React.FC<ContractCodeProps> = ({codeBoc}) => {
       </div>
 
       <div className={styles.codeBlock}>
-        <pre className={styles.code}>
-          <code>{codeData[activeTab]}</code>
-        </pre>
+        {activeTab === "abi" ? (
+          compilerAbiError ? (
+            <div className={styles.empty}>Failed to load compiler ABI: {compilerAbiError}</div>
+          ) : compilerAbiLoading ? (
+            <div className={styles.empty}>Loading compiler ABI...</div>
+          ) : compilerAbi === null || !abiJson ? (
+            <div className={styles.empty}>No compiler ABI registered for this contract.</div>
+          ) : (
+            <pre className={styles.code}>
+              <code>{abiJson}</code>
+            </pre>
+          )
+        ) : (
+          <pre className={styles.code}>
+            <code>{codeData[activeTab]}</code>
+          </pre>
+        )}
       </div>
     </div>
   )

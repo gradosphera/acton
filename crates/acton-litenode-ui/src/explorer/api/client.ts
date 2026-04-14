@@ -1,3 +1,5 @@
+import type {ContractABI} from "gen-typescript-from-tolk-dev/src/abi"
+
 import type {
   AccountStatesResponse,
   ApiResponse,
@@ -200,6 +202,12 @@ export class TonClient {
     const url = this.buildUrl(this.addressNameBaseUrl, "/admin/address-name")
     url.searchParams.append("address", address)
     return this.request(url, "Failed to fetch address name")
+  }
+
+  async getCompilerAbi(codeHash: string): Promise<ContractABI | undefined> {
+    const url = this.buildUrl(this.addressNameBaseUrl, "/admin/compiler-abi")
+    url.searchParams.append("code_hash", codeHash)
+    return this.request(url, "Failed to fetch compiler ABI")
   }
 
   async setAddressName(address: string, name: string): Promise<void> {

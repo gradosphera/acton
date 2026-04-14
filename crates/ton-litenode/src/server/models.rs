@@ -179,6 +179,22 @@ pub struct GetAddressNameQuery {
 }
 
 #[derive(Deserialize)]
+pub struct CompilerAbiRegistration {
+    pub code_hash: String,
+    pub compiler_abi: Value,
+}
+
+#[derive(Deserialize)]
+pub struct RegisterCompilerAbisRequest {
+    pub entries: Vec<CompilerAbiRegistration>,
+}
+
+#[derive(Deserialize)]
+pub struct GetCompilerAbiQuery {
+    pub code_hash: String,
+}
+
+#[derive(Deserialize)]
 pub struct GetJettonMastersRequest {
     pub address: Option<String>,
     pub admin_address: Option<String>,

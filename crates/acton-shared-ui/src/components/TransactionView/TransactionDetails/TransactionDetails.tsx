@@ -5,7 +5,7 @@ import {FiChevronDown, FiChevronUp} from "react-icons/fi"
 import type {BackendContractInfo} from "@/types"
 import type {ContractData, ParsedValue, TransactionInfo} from "@/types/transaction"
 import {fmt} from "@/index"
-import {computeSendMode, getTransactionOpcode} from "@/utils/transaction"
+import {computeSendMode, getTransactionOpcode, resolveTransactionOpcodeName} from "@/utils/transaction"
 
 import {ContractChip} from "../ContractChip/ContractChip"
 import {ExitCodeChip} from "../ExitCodeChip/ExitCodeChip"
@@ -214,16 +214,8 @@ export function TransactionDetails({
   const sendMode = computeSendMode(tx)
 
   const opcode = getTransactionOpcode(tx.transaction)
-
-  const thisAddress = tx.address
-  const targetContract = thisAddress ? contracts.get(thisAddress.toString()) : undefined
-  let typeAbi = targetContract?.abi?.messages.find(it => it.opcode === opcode)
-  if (typeAbi === undefined) {
-    for (const contract of allContracts) {
-      typeAbi = contract.abi?.messages.find(it => it.opcode === opcode)
-    }
-  }
-  const opcodeName = typeAbi?.name
+  const targetContract = tx.address ? contracts.get(tx.address.toString()) : undefined
+  const opcodeName = resolveTransactionOpcodeName(tx, contracts, allContracts)
 
   const sentTotal = [...tx.transaction.outMessages.values()].reduce(
     (accumulator: bigint, message) =>

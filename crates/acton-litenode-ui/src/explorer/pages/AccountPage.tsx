@@ -196,6 +196,7 @@ export const AccountPage: React.FC<AccountPageProps> = ({client}) => {
           <AccountDetails
             transactions={transactions}
             accountState={accountState}
+            accountCodeHash={accountStateV3?.code_hash}
             ownerAddress={formattedAddress}
             jettonWallets={jettonWallets}
             nftItems={nftItems}

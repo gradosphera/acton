@@ -6,6 +6,7 @@ use crate::storage::{
 use crate::types::{Addr, BocBytes, Hash256, Lt, Seqno};
 use core::cmp;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
@@ -26,6 +27,8 @@ pub(crate) struct NodeStateSnapshot {
     pub history_jetton_wallets: Vec<(Addr, storage::JettonWalletMeta)>,
     #[serde(default)]
     pub history_nft_items: Vec<(Addr, NftItemMeta)>,
+    #[serde(default)]
+    pub history_compiler_abis: Vec<(Hash256, Value)>,
     pub cas_entries: Vec<(Hash256, BocBytes)>,
     pub pool_external: VecDeque<Hash256>,
     pub pool_internal: VecDeque<Hash256>,
@@ -130,6 +133,14 @@ impl Node {
             .collect::<Vec<_>>();
         history_nft_items.sort_by_key(|(addr, _)| *addr);
 
+        let mut history_compiler_abis = self
+            .history
+            .compiler_abis
+            .iter()
+            .map(|(hash, abi)| (*hash, abi.clone()))
+            .collect::<Vec<_>>();
+        history_compiler_abis.sort_by_key(|(hash, _)| *hash);
+
         let cas_entries = self.export_cas_entries()?;
 
         Ok(NodeStateSnapshot {
@@ -152,6 +163,7 @@ impl Node {
             history_jetton_masters,
             history_jetton_wallets,
             history_nft_items,
+            history_compiler_abis,
             cas_entries,
             pool_external: self.pool.external.clone(),
             pool_internal: self.pool.internal.clone(),
@@ -221,6 +233,8 @@ impl Node {
         self.history.jetton_masters = snapshot.history_jetton_masters.into_iter().collect();
         self.history.jetton_wallets = snapshot.history_jetton_wallets.into_iter().collect();
         self.history.nft_items = snapshot.history_nft_items.into_iter().collect();
+        self.history
+            .replace_compiler_abis(snapshot.history_compiler_abis.into_iter().collect())?;
 
         self.pool.external = snapshot.pool_external;
         self.pool.internal = snapshot.pool_internal;
