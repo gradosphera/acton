@@ -31,11 +31,13 @@ pub(crate) fn evaluate_expression_in_replayer_with_fallback(
     depth: usize,
     expression: &str,
 ) -> Result<RenderedValue> {
+    let current_c4 = replayer.runtime_c4_for_evaluate2();
     evaluate_expression2_with_fallback(
         &replayer.evaluate_locals_for_frame(depth),
         &replayer.locals_for_frame(depth),
         replayer.source_map(),
         replayer.file_id_for_frame(depth),
+        current_c4.as_ref(),
         expression,
     )
 }
@@ -54,13 +56,20 @@ fn evaluate_expression2_with_fallback(
     legacy_locals: &[LocalVarRendered],
     source_map: &SourceMap,
     current_file_id: Option<usize>,
+    current_c4: Option<&VmStackValue>,
     expression: &str,
 ) -> Result<RenderedValue> {
     let Some(current_file_id) = current_file_id else {
         return evaluate_expression(legacy_locals, Some(source_map), expression);
     };
 
-    match evaluate_expression2(typed_locals, source_map, current_file_id, expression) {
+    match evaluate_expression2_with_runtime(
+        typed_locals,
+        source_map,
+        current_file_id,
+        current_c4,
+        expression,
+    ) {
         Ok(value) => Ok(value),
         Err(eval2_err) => {
             evaluate_expression(legacy_locals, Some(source_map), expression).or(Err(eval2_err))
@@ -68,10 +77,21 @@ fn evaluate_expression2_with_fallback(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn evaluate_expression2(
     locals: &[EvaluateLocalVar],
     source_map: &SourceMap,
     current_file_id: usize,
+    expression: &str,
+) -> Result<RenderedValue> {
+    evaluate_expression2_with_runtime(locals, source_map, current_file_id, None, expression)
+}
+
+fn evaluate_expression2_with_runtime(
+    locals: &[EvaluateLocalVar],
+    source_map: &SourceMap,
+    current_file_id: usize,
+    current_c4: Option<&VmStackValue>,
     expression: &str,
 ) -> Result<RenderedValue> {
     let source_file = parse_wrapped_source(expression)?;
@@ -134,15 +154,11 @@ pub(crate) fn evaluate_expression2(
         .serialize()
         .context("Failed to serialize evaluate2 argument stack")?,
     );
-    let empty_data_b64 = Boc::encode_base64(
-        CellBuilder::new()
-            .build()
-            .context("Failed to build empty data cell")?,
-    );
+    let data_b64 = evaluate_contract_data_b64(current_c4)?;
 
     let params = RunGetMethodArgs {
         code: compiled.code_boc64.clone(),
-        data: empty_data_b64,
+        data: data_b64,
         method_id: DEBUG_EVAL2_METHOD_ID,
         debug_enabled: true,
         ..Default::default()
@@ -383,6 +399,28 @@ fn render_evaluate_result(
     let stack_values: Vec<_> = stack.iter().map(tuple_item_to_vm_stack_value).collect();
     let slots: Vec<_> = stack_values.iter().map(SlotValue::Live).collect();
     Ok(debug_print_from_stack(source_map, &slots, return_ty))
+}
+
+fn evaluate_contract_data_b64(current_c4: Option<&VmStackValue>) -> Result<String> {
+    let data = match current_c4 {
+        Some(value) => vm_stack_value_as_data_cell(value)
+            .with_context(|| format!("Failed to materialize current c4 storage from `{value}`"))?,
+        None => CellBuilder::new()
+            .build()
+            .context("Failed to build empty data cell")?,
+    };
+    Ok(Boc::encode_base64(data))
+}
+
+fn vm_stack_value_as_data_cell(value: &VmStackValue) -> Result<Cell> {
+    match value {
+        VmStackValue::Cell(CellLike::Cell(raw))
+        | VmStackValue::Cell(CellLike::Builder(raw))
+        | VmStackValue::Builder(raw) => Boc::decode_hex(raw)
+            .map_err(|err| anyhow!("Failed to decode c4 cell hex `{raw}`: {err}")),
+        VmStackValue::Null => bail!("c4 storage register is null"),
+        other => bail!("c4 storage register is not a cell: `{other}`"),
+    }
 }
 
 fn stack_items_for_local(
@@ -1006,7 +1044,7 @@ impl EvaluateParamIssue {
 
 #[cfg(test)]
 mod tests {
-    use super::evaluate_expression2;
+    use super::{evaluate_expression2, evaluate_expression2_with_runtime};
     use crate::core::replayer::EvaluateLocalVar;
     use crate::types_render::{RenderedValue, render_runtime_vm_value};
     use std::fs;
@@ -1367,6 +1405,64 @@ fun sumPoint(p: Point): int {
 
         assert_eq!(result.to_string(), "16");
         assert_eq!(result.dap_parts().1.as_deref(), Some("int"));
+    }
+
+    #[test]
+    fn evaluate2_uses_runtime_c4_as_contract_data() {
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("eval2_storage.tolk");
+        let source = r#"
+struct Storage {
+    id: uint32
+    counter: uint32
+}
+
+fun Storage.load(): Storage {
+    return Storage.fromCell(contract.getData());
+}
+
+fun currentCounterPlus(x: int): int {
+    val storage = lazy Storage.load();
+    return storage.counter + x;
+}
+"#;
+        fs::write(&file_path, source).expect("write source");
+        let source_map = source_map_for_file(
+            file_path.to_str().expect("utf8 path"),
+            source.chars().count() as u64,
+        );
+
+        let mut storage_builder = CellBuilder::new();
+        storage_builder.store_uint(7, 32).expect("store id");
+        storage_builder.store_uint(40, 32).expect("store counter");
+        let storage_cell = storage_builder.build().expect("build storage");
+        let runtime_c4 = VmStackValue::Cell(CellLike::Cell(Boc::encode_hex(&storage_cell)));
+        let locals = vec![evaluate_local(
+            "x",
+            Ty::Int,
+            RenderedValue::typed_leaf("3", "int"),
+        )];
+
+        let without_c4 = evaluate_expression2(&locals, &source_map, 1, "currentCounterPlus(x)")
+            .expect_err("evaluate2 without c4 should fail");
+        assert!(
+            without_c4
+                .to_string()
+                .contains("evaluate2 execution failed with VM exit code"),
+            "{without_c4:#}"
+        );
+
+        let with_c4 = evaluate_expression2_with_runtime(
+            &locals,
+            &source_map,
+            1,
+            Some(&runtime_c4),
+            "currentCounterPlus(x)",
+        )
+        .expect("evaluate2 with c4 should succeed");
+
+        assert_eq!(with_c4.to_string(), "43");
+        assert_eq!(with_c4.dap_parts().1.as_deref(), Some("int"));
     }
 
     #[test]

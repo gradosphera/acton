@@ -810,6 +810,13 @@ impl TolkReplayer {
     }
 
     #[must_use]
+    pub(crate) fn runtime_c4_for_evaluate2(&self) -> Option<VmStackValue> {
+        self.runtime_source
+            .runtime_debug_snapshot()
+            .and_then(|snapshot| snapshot.c4)
+    }
+
+    #[must_use]
     pub fn file_id_for_frame(&self, depth: usize) -> Option<usize> {
         if depth == 0 {
             return Some(self.current_file_id());
