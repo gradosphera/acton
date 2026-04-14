@@ -69,6 +69,13 @@ pub struct LocalVarRendered {
     pub value: RenderedValue,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct LocalVarRuntime {
+    pub var_name: String,
+    pub ty: Option<Ty>,
+    pub ir_slot_values: Vec<Option<VmStackValue>>,
+}
+
 /// Low-level runtime events consumed by `TolkReplayer`.
 /// Debug-mark expansion stays in the replayer, which keeps source reconstruction
 /// shared between the VM-log and live-VM backends.
@@ -697,6 +704,13 @@ impl TolkReplayer {
     }
 
     #[must_use]
+    pub fn runtime_c7(&self) -> Option<VmStackValue> {
+        self.runtime_source
+            .runtime_debug_snapshot()
+            .and_then(|snapshot| snapshot.c7)
+    }
+
+    #[must_use]
     pub fn is_finished(&self) -> bool {
         if self.last_exception.is_some() {
             return false;
@@ -779,6 +793,19 @@ impl TolkReplayer {
                     &exec.accumulated_ir_live,
                     depth == 0,
                 )
+            }
+            None => Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn runtime_locals_for_frame(&self, depth: usize) -> Vec<LocalVarRuntime> {
+        let idx = self.call_stack.len().checked_sub(1 + depth);
+        match idx {
+            Some(i) => {
+                let exec_idx = self.exec_idx_for_frame(i);
+                let exec = &self.exec_stack[exec_idx];
+                self.collect_runtime_locals_of(&self.call_stack[i], &exec.last_seen_values)
             }
             None => Vec::new(),
         }
@@ -1380,6 +1407,29 @@ impl TolkReplayer {
         }
 
         result
+    }
+
+    fn collect_runtime_locals_of(
+        &self,
+        frame: &CallFrame,
+        last_seen: &HashMap<usize, VmStackValue>,
+    ) -> Vec<LocalVarRuntime> {
+        frame
+            .all_visible_vars()
+            .map(|var| {
+                let ir_slot_values = var
+                    .ir_slots
+                    .iter()
+                    .map(|ir| last_seen.get(ir).cloned())
+                    .collect::<Vec<_>>();
+
+                LocalVarRuntime {
+                    var_name: var.name.clone(),
+                    ty: self.source_map.resolve_ty(var.ty_idx).cloned(),
+                    ir_slot_values,
+                }
+            })
+            .collect()
     }
 
     /// If there is a pending exception that wasn't followed by `TvmExceptionHandler`,

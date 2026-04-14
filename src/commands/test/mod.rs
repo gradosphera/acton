@@ -28,7 +28,8 @@ use acton_config::config::{
 use acton_config::test::{BacktraceMode, CoverageFormat, ReportFormat, TestConfig};
 use acton_debug::replayer::TolkReplayer;
 use acton_debug::{
-    DapTransport, ReplayerDebugSession, reserve_dap_listener, start_dap_server_with_listener,
+    DapTransport, EvaluateRuntimeConfig, ReplayerDebugSession, reserve_dap_listener,
+    start_dap_server_with_listener,
 };
 use anyhow::anyhow;
 use dunce;
@@ -385,6 +386,11 @@ impl<'a> TestRunner<'a> {
                 replayer.set_compiler_abi(compiler_abi);
                 let mut dbg_session =
                     ReplayerDebugSession::new(self.transport.clone(), replayer, test.name.clone());
+                dbg_session.set_root_evaluate_runtime(EvaluateRuntimeConfig {
+                    run_args: params.clone(),
+                    config_b64: Some(DEFAULT_CONFIG.to_owned()),
+                    mappings: self.acton_config.mappings(),
+                });
                 ctx.debug = DebugCtx::new(&mut dbg_session);
 
                 ctx.debug.process_incoming_requests(true)?;

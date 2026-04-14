@@ -13,7 +13,10 @@ use acton_config::config::{ActonConfig, Explorer, project_root};
 use acton_config::test::BacktraceMode;
 use acton_debug::exit_codes;
 use acton_debug::replayer::TolkReplayer;
-use acton_debug::{ReplayerDebugSession, reserve_dap_listener, start_dap_server_with_listener};
+use acton_debug::{
+    EvaluateRuntimeConfig, ReplayerDebugSession, reserve_dap_listener,
+    start_dap_server_with_listener,
+};
 use anyhow::anyhow;
 use log::error;
 use rustc_hash::FxHashMap;
@@ -184,6 +187,7 @@ fn run_script_file(
                 &code_cell,
                 &data_cell,
                 stack,
+                mappings,
                 Arc::new(abi),
                 result.abi.map(Arc::new),
                 source_map,
@@ -216,6 +220,7 @@ fn execute_script(
     code_cell: &Cell,
     data_cell: &Cell,
     stack: Tuple,
+    mappings: &Option<BTreeMap<String, String>>,
     abi: Arc<ContractAbi>,
     compiler_abi: Option<Arc<CompilerContractABI>>,
     source_map: Arc<TolkSourceMap>,
@@ -336,6 +341,11 @@ fn execute_script(
         replayer.set_compiler_abi(compiler_abi);
 
         let mut dbg_session = ReplayerDebugSession::new(transport, replayer, "main".into());
+        dbg_session.set_root_evaluate_runtime(EvaluateRuntimeConfig {
+            run_args: params.clone(),
+            config_b64: Some(DEFAULT_CONFIG.to_owned()),
+            mappings: mappings.clone(),
+        });
         ctx.debug = DebugCtx::new(&mut dbg_session);
         ctx.debug.process_incoming_requests(true)?;
 

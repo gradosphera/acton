@@ -6,11 +6,11 @@ use acton::ffi;
 use acton::file_build_cache::FileBuildCache;
 use acton::formatter::FormatterContext;
 use acton_config::config::{ActonConfig, project_root as configured_project_root};
-use acton_debug::ReplayerDebugSession;
 use acton_debug::replayer::TolkReplayer;
+use acton_debug::{EvaluateRuntimeConfig, ReplayerDebugSession};
 use acton_debug::{start_dap_server, start_dap_server_with_listener};
 use dap::events::Event;
-use dap::responses::ContinueResponse;
+use dap::responses::{ContinueResponse, EvaluateResponse};
 use dap::types::StackFrame;
 use dap_client::DapClient;
 use owo_colors::OwoColorize;
@@ -124,6 +124,14 @@ impl DebuggerClient {
         Ok(variables.variables)
     }
 
+    pub(crate) fn evaluate(
+        &mut self,
+        expression: &str,
+        frame_id: Option<i64>,
+    ) -> anyhow::Result<EvaluateResponse> {
+        self.client.evaluate(expression, frame_id)
+    }
+
     #[allow(dead_code)]
     pub(crate) fn terminate(&mut self) -> anyhow::Result<()> {
         self.client.terminate()
@@ -169,6 +177,7 @@ pub(crate) fn run_script_file(
     stack: Tuple,
 ) -> anyhow::Result<String> {
     let script_path = Path::new(file_path);
+    let mut evaluate_mappings = None;
 
     let (abi, compiler_abi, code_cell, source_map) = {
         let _compile_guard = DEBUG_COMPILER_LOCK
@@ -182,6 +191,7 @@ pub(crate) fn run_script_file(
         let mut compiler = tolkc::Compiler::new(2);
         if let Ok(config) = &config {
             let mappings = config.mappings();
+            evaluate_mappings = mappings.clone();
             compiler = compiler.with_mappings(&mappings);
         }
 
@@ -208,6 +218,7 @@ pub(crate) fn run_script_file(
     let (script_result, io, formatter) = execute_script(
         &code_cell,
         &data_cell,
+        evaluate_mappings,
         abi.into(),
         compiler_abi,
         source_map,
@@ -223,6 +234,7 @@ pub(crate) fn run_script_file(
 fn execute_script<'a>(
     code_cell: &'a TonCell,
     data_cell: &'a TonCell,
+    evaluate_mappings: Option<BTreeMap<String, String>>,
     abi: Arc<ContractAbi>,
     compiler_abi: Option<Arc<CompilerContractABI>>,
     source_map: Arc<TolkSourceMap>,
@@ -331,6 +343,11 @@ fn execute_script<'a>(
     let mut replayer = TolkReplayer::new_live_vm(source_map.as_ref(), executor.clone().into())?;
     replayer.set_compiler_abi(compiler_abi);
     let mut dbg_session = ReplayerDebugSession::new(transport, replayer, "main".into());
+    dbg_session.set_root_evaluate_runtime(EvaluateRuntimeConfig {
+        run_args: params.clone(),
+        config_b64: Some(DEFAULT_CONFIG.to_owned()),
+        mappings: evaluate_mappings,
+    });
     ctx.debug = DebugCtx::new(&mut dbg_session);
 
     ctx.debug.process_incoming_requests(true)?;

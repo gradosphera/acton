@@ -3,7 +3,12 @@
 //! (`send_message`, `run_get_method`) temporarily push child contexts backed by
 //! live executors and later pop back to the parent.
 
-use crate::core::evaluate::{evaluate_condition_expression, evaluate_expression};
+use crate::core::evaluate::{
+    EvaluateRuntimeConfig, FunctionCallParseStatus, classify_function_call_expression,
+    evaluate_condition_expression, evaluate_expression, evaluate_function_call,
+    evaluate_runtime_builtin_call,
+};
+use crate::core::replayer::LocalVarRuntime;
 use crate::multi::dap_transport::{DapMessage, DapTransport};
 use crate::multi::session::ChildDebugContextSpec;
 use crate::replayer::{
@@ -86,6 +91,8 @@ struct ReplayerContext {
     /// Snapshot of the parent-visible frames captured when this child context starts.
     /// Appended after child frames so stack traces preserve the runtime call chain.
     outer_frames: Vec<CollectedFrame>,
+    evaluate_runtime: Option<EvaluateRuntimeConfig>,
+    evaluate_runtime_error: Option<String>,
 }
 
 impl ReplayerContext {
@@ -95,6 +102,8 @@ impl ReplayerContext {
             replayer,
             resolved_breakpoints: HashMap::new(),
             outer_frames: Vec::new(),
+            evaluate_runtime: None,
+            evaluate_runtime_error: None,
         }
     }
 
@@ -102,12 +111,16 @@ impl ReplayerContext {
         label: Arc<str>,
         replayer: TolkReplayer,
         outer_frames: Vec<CollectedFrame>,
+        evaluate_runtime: Option<EvaluateRuntimeConfig>,
+        evaluate_runtime_error: Option<String>,
     ) -> Self {
         Self {
             label,
             replayer,
             resolved_breakpoints: HashMap::new(),
             outer_frames,
+            evaluate_runtime,
+            evaluate_runtime_error,
         }
     }
 }
@@ -255,7 +268,16 @@ impl ReplayerDebugSession {
                     return evaluate_expression(&[], None, expression);
                 };
                 let locals = ctx.replayer.locals_for_frame(locator.depth_from_top);
-                evaluate_expression(&locals, Some(ctx.replayer.source_map()), expression)
+                let runtime_locals = ctx
+                    .replayer
+                    .runtime_locals_for_frame(locator.depth_from_top);
+                self.evaluate_with_optional_function_call(
+                    &ctx,
+                    &locals,
+                    &runtime_locals,
+                    locator.depth_from_top,
+                    expression,
+                )
             }
             None => {
                 let Some(ctx) = self.active_context() else {
@@ -265,9 +287,84 @@ impl ReplayerDebugSession {
                     return evaluate_expression(&[], None, expression);
                 };
                 let locals = ctx.replayer.locals_for_frame(0);
-                evaluate_expression(&locals, Some(ctx.replayer.source_map()), expression)
+                let runtime_locals = ctx.replayer.runtime_locals_for_frame(0);
+                self.evaluate_with_optional_function_call(
+                    &ctx,
+                    &locals,
+                    &runtime_locals,
+                    0,
+                    expression,
+                )
             }
         }
+    }
+
+    fn evaluate_with_optional_function_call(
+        &self,
+        ctx: &ReplayerContext,
+        locals: &[LocalVarRendered],
+        runtime_locals: &[LocalVarRuntime],
+        depth_from_top: usize,
+        expression: &str,
+    ) -> anyhow::Result<RenderedValue> {
+        if let Some(value) =
+            evaluate_runtime_builtin_call(expression, ctx.replayer.runtime_c7().as_ref())?
+        {
+            return Ok(value);
+        }
+
+        match classify_function_call_expression(expression) {
+            FunctionCallParseStatus::NotFunctionCall => {
+                evaluate_expression(locals, Some(ctx.replayer.source_map()), expression)
+            }
+            FunctionCallParseStatus::Supported => {
+                let runtime = ctx.evaluate_runtime.as_ref().ok_or_else(|| {
+                    if let Some(reason) = ctx.evaluate_runtime_error.as_ref() {
+                        anyhow!(
+                            "Function-call evaluate is not available in this debugger context: {reason}"
+                        )
+                    } else {
+                        anyhow!("Function-call evaluate is not available in this debugger context")
+                    }
+                })?;
+                let source_path = self
+                    .evaluate_source_path_for_frame(ctx, depth_from_top)
+                    .ok_or_else(|| {
+                        anyhow!("Cannot resolve source file for function-call evaluate")
+                    })?;
+                evaluate_function_call(
+                    &source_path,
+                    ctx.replayer.source_map(),
+                    runtime,
+                    runtime_locals,
+                    expression,
+                )
+            }
+            FunctionCallParseStatus::Unsupported(reason) => {
+                anyhow::bail!(
+                    "Function-call evaluate is not supported for this expression: {reason}"
+                )
+            }
+        }
+    }
+
+    fn evaluate_source_path_for_frame(
+        &self,
+        ctx: &ReplayerContext,
+        depth_from_top: usize,
+    ) -> Option<PathBuf> {
+        let file_id = if depth_from_top == 0 {
+            ctx.replayer.current_file_id()
+        } else {
+            let call_stack = ctx.replayer.call_stack();
+            let frame_idx = call_stack.len().checked_sub(1 + depth_from_top)?;
+            call_stack[frame_idx].definition_loc.as_ref().map_or(
+                ctx.replayer.current_file_id(),
+                tolkc::source_map::SrcRange::file_id,
+            )
+        };
+
+        ctx.replayer.file_full_path(file_id).map(PathBuf::from)
     }
 
     fn alloc_frame_id(&mut self, locator: FrameLocator) -> i64 {
@@ -1100,6 +1197,14 @@ impl ReplayerDebugSession {
         Ok(())
     }
 
+    pub fn set_root_evaluate_runtime(&mut self, runtime: EvaluateRuntimeConfig) {
+        if let Some(root) = self.contexts.first()
+            && let Ok(mut root) = root.try_borrow_mut()
+        {
+            root.evaluate_runtime = Some(runtime);
+        }
+    }
+
     pub const fn need_to_stop_child_thread_on_start(&self) -> bool {
         matches!(
             self.performing_step,
@@ -1108,29 +1213,41 @@ impl ReplayerDebugSession {
     }
 
     pub fn begin_child_context(&mut self, spec: ChildDebugContextSpec) -> anyhow::Result<bool> {
-        let Some(source_map) = spec.source_map else {
+        let ChildDebugContextSpec {
+            thread_id: _,
+            name,
+            executor,
+            source_map,
+            compiler_abi,
+            evaluate_runtime,
+            evaluate_runtime_error,
+            stop_on_entry,
+        } = spec;
+        let Some(source_map) = source_map else {
             return Ok(false);
         };
-        let Ok(mut replayer) = TolkReplayer::new_live_vm(source_map.as_ref(), spec.executor) else {
+        let Ok(mut replayer) = TolkReplayer::new_live_vm(source_map.as_ref(), executor) else {
             return Ok(false);
         };
-        replayer.set_compiler_abi(spec.compiler_abi);
+        replayer.set_compiler_abi(compiler_abi);
         replayer.set_exception_breakpoints(self.exception_mode);
 
         // Freeze the currently visible parent frames before switching active context.
         // They become the suffix of the child's stack trace until the child completes.
         let outer_frames = self.cached_visible_frames.borrow().clone();
-        let label: Arc<str> = spec.name.into();
+        let label: Arc<str> = name.into();
         self.contexts
             .push(Rc::new(RefCell::new(ReplayerContext::with_outer_frames(
                 label,
                 replayer,
                 outer_frames,
+                evaluate_runtime,
+                evaluate_runtime_error,
             ))));
         let new_idx = self.contexts.len() - 1;
         self.apply_breakpoints_to_context(new_idx);
 
-        if spec.stop_on_entry {
+        if stop_on_entry {
             let step_mode = self.child_stop_on_entry_step_mode();
             match self.advance_active_context(step_mode) {
                 AdvanceOutcome::Terminated => {

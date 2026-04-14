@@ -8,8 +8,8 @@ use crate::paths;
 use crate::retrace;
 use acton_config::color::OwoColorize;
 use acton_config::config::Explorer;
-use acton_debug::ChildDebugContextSpec;
 use acton_debug::replayer::StepMode;
+use acton_debug::{ChildDebugContextSpec, EvaluateRuntimeConfig};
 use anyhow::{Context as AnyhowContext, anyhow};
 use base64::Engine;
 use crc::{CRC_16_XMODEM, Crc};
@@ -768,6 +768,16 @@ fn send_transaction_debug(
     }
 
     let need_to_stop_on_entry = ctx.debug.need_to_stop_child_thread_on_start();
+    let evaluate_runtime_result = build_send_message_evaluate_runtime(
+        ctx,
+        prepared.destination(),
+        &prepared.run_args,
+        &config_b64,
+    );
+    let evaluate_runtime_error = evaluate_runtime_result
+        .as_ref()
+        .err()
+        .map(|err| err.to_string());
     // Push the recipient transaction as a child debug context so a single DAP
     // session can step across `net.send*` without losing the parent stack.
     let child_debug_started = ctx
@@ -778,6 +788,8 @@ fn send_transaction_debug(
             executor: step_executor.clone().into(),
             source_map,
             compiler_abi,
+            evaluate_runtime: evaluate_runtime_result.ok(),
+            evaluate_runtime_error,
             stop_on_entry: need_to_stop_on_entry,
         })
         .context("Cannot start nested debug context")?;
@@ -1420,6 +1432,12 @@ fn run_get_method_impl(
                 executor: step_executor.clone().into(),
                 source_map: Some(source_map.clone()),
                 compiler_abi,
+                evaluate_runtime: Some(EvaluateRuntimeConfig {
+                    run_args: params.clone(),
+                    config_b64: Some(config_b64.to_string()),
+                    mappings: ctx.env.config.mappings(),
+                }),
+                evaluate_runtime_error: None,
                 stop_on_entry: need_to_stop_on_entry,
             })
             .context("Cannot send response")?;
@@ -1584,6 +1602,55 @@ fn get_address_code(account: &ShardAccount) -> Option<Cell> {
     };
 
     state.code
+}
+
+fn shard_account_data_boc(shard_account_b64: &str) -> anyhow::Result<String> {
+    let shard_account_cell = Boc::decode_base64(shard_account_b64)
+        .context("Failed to decode shard account while preparing debugger evaluate")?;
+    let shard_account = shard_account_cell
+        .parse::<ShardAccount>()
+        .context("Failed to parse shard account while preparing debugger evaluate")?;
+    let state = shard_account
+        .account
+        .load()
+        .context("Failed to load shard account while preparing debugger evaluate")?
+        .0
+        .map(|state| state.state);
+
+    let data = match state {
+        Some(AccountState::Active(state)) => state.data.unwrap_or_default(),
+        _ => Cell::default(),
+    };
+
+    Ok(Boc::encode_base64(data))
+}
+
+fn build_send_message_evaluate_runtime(
+    ctx: &Context,
+    dst: &StdAddr,
+    run_args: &ton_executor::message::RunTransactionArgs,
+    config_b64: &str,
+) -> anyhow::Result<EvaluateRuntimeConfig> {
+    Ok(EvaluateRuntimeConfig {
+        run_args: RunGetMethodArgs {
+            code: String::new(),
+            data: shard_account_data_boc(&run_args.shard_account)?,
+            verbosity: ctx.env.default_log_level,
+            libs: run_args.libs.clone().unwrap_or_default(),
+            address: dst.to_string(),
+            unixtime: i64::from(run_args.now),
+            balance: "10".to_string(),
+            rand_seed: "0000000000000000000000000000000000000000000000000000000000000000"
+                .to_string(),
+            gas_limit: "0".to_string(),
+            method_id: 0,
+            debug_enabled: true,
+            extra_currencies: HashMap::new(),
+            prev_blocks_info: None,
+        },
+        config_b64: Some(config_b64.to_owned()),
+        mappings: ctx.env.config.mappings(),
+    })
 }
 
 extension!(crc16 in (Context) with (data: String) using crc16_impl);

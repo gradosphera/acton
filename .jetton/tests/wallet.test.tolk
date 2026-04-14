@@ -6,6 +6,7 @@ import "../contracts/messages"
 import "../contracts/storage"
 
 // Acton library imports
+import "../../lib/io"
 import "../../lib/build/build"
 import "../../lib/emulation/network"
 import "../../lib/testing/expect"

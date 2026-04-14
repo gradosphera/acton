@@ -2430,7 +2430,7 @@ pub(crate) fn render_runtime_in_message(c7: &VmStackValue) -> Option<RenderedVal
         fields: vec![
             (
                 "senderAddress".to_owned(),
-                render_runtime_in_msg_sender_address_field(runtime_in_msg_param(c7, 2)?),
+                render_runtime_address_field(runtime_in_msg_param(c7, 2)?),
             ),
             (
                 "valueCoins".to_owned(),
@@ -2456,6 +2456,24 @@ pub(crate) fn render_runtime_in_message(c7: &VmStackValue) -> Option<RenderedVal
     })
 }
 
+pub(crate) fn render_runtime_contract_address(c7: &VmStackValue) -> Option<RenderedValue> {
+    Some(render_runtime_address_field(
+        runtime_contract_address_param(c7)?,
+    ))
+}
+
+fn runtime_contract_address_param(c7: &VmStackValue) -> Option<&VmStackValue> {
+    let env = match c7 {
+        VmStackValue::Tuple(items) => items.first()?,
+        _ => return None,
+    };
+    let env = match env {
+        VmStackValue::Tuple(items) => items,
+        _ => return None,
+    };
+    env.get(8)
+}
+
 fn runtime_in_msg_param(c7: &VmStackValue, index: usize) -> Option<&VmStackValue> {
     let env = match c7 {
         VmStackValue::Tuple(items) => items.first()?,
@@ -2471,7 +2489,7 @@ fn runtime_in_msg_param(c7: &VmStackValue, index: usize) -> Option<&VmStackValue
     }
 }
 
-fn render_runtime_in_msg_sender_address_field(value: &VmStackValue) -> RenderedValue {
+fn render_runtime_address_field(value: &VmStackValue) -> RenderedValue {
     match value {
         VmStackValue::CellSlice(cs) => match try_parse_address(cs) {
             Some(raw) => match raw.parse::<StdAddr>() {
@@ -2766,6 +2784,29 @@ mod tests {
         assert_eq!(fields[5].0, "createdAt");
         assert_eq!(fields[5].1.dap_parts().0, "1710000000");
         assert_eq!(fields[5].1.dap_parts().1.as_deref(), Some("uint32"));
+    }
+
+    #[test]
+    fn render_runtime_contract_address_reads_from_c7() {
+        let addr = IntAddr::Std(StdAddr::new(0, HashBytes([0x22; 32])));
+        let mut builder = CellBuilder::new();
+        addr.store_into(&mut builder, Cell::empty_context())
+            .unwrap();
+        let addr_cell = builder.build().unwrap();
+
+        let mut env = vec![VmStackValue::Null; 18];
+        env[8] = VmStackValue::CellSlice(CellSlice {
+            value: Boc::encode_hex(&addr_cell),
+            bits: None,
+            refs: None,
+        });
+
+        let rendered =
+            render_runtime_contract_address(&VmStackValue::Tuple(vec![VmStackValue::Tuple(env)]))
+                .expect("expected contract address");
+
+        assert_eq!(rendered.dap_parts().0, addr.to_string());
+        assert_eq!(rendered.dap_parts().1.as_deref(), Some("address"));
     }
 
     #[test]

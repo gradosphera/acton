@@ -17,6 +17,7 @@ pub mod replayer {
 }
 
 pub use core::DebugExecutorHandle;
+pub use core::evaluate::EvaluateRuntimeConfig;
 pub use multi::{ChildDebugContextSpec, ReplayerDebugSession};
 pub use multi::{
     DapMessage, DapTransport, reserve_dap_listener, start_dap_server,

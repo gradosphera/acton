@@ -82,6 +82,13 @@ pub struct PreparedSendTransaction {
     shard_account_before: ShardAccount,
 }
 
+impl PreparedSendTransaction {
+    /// Returns the resolved destination address for this transaction.
+    pub const fn destination(&self) -> &StdAddr {
+        &self.destination
+    }
+}
+
 /// A high-level emulator for TON transactions.
 ///
 /// It manages an underlying [`Executor`] and provides a more convenient API for

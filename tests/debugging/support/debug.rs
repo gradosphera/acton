@@ -405,6 +405,15 @@ impl DebugActionExecutor<'_> {
         Ok(())
         // self.record_state_with_action("continue".to_string())
     }
+
+    pub(crate) fn evaluate(&mut self, expression: &str) -> anyhow::Result<String> {
+        if *self.terminated {
+            anyhow::bail!("debug session already terminated");
+        }
+
+        let response = self.client.evaluate(expression, None)?;
+        Ok(response.result)
+    }
 }
 
 pub(crate) struct DebugResult {

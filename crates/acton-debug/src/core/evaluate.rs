@@ -1,14 +1,33 @@
+use super::replayer::LocalVarRuntime;
 use crate::replayer::LocalVarRendered;
-use crate::types_render::{RenderedValue, render_cell_like_as_type};
-use anyhow::{Result, anyhow, bail};
+use crate::types_render::{
+    RenderedValue, SlotValue, debug_print_from_stack, render_cell_like_as_type,
+    render_runtime_contract_address, render_runtime_vm_value,
+};
+use anyhow::{Context, Result, anyhow, bail};
 use num_bigint::BigInt;
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::ops::Range;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use tolk_syntax::{
-    AstNode, DotAccessField, Expr, FuncBody, FunctionLike, Stmt, TopLevel, Type,
+    AstNode, Call, DotAccessField, Expr, FuncBody, FunctionLike, Stmt, TopLevel, Type,
     parse_tolk_int_literal,
 };
+use tolkc::Compiler;
 use tolkc::source_map::{Declaration, SourceMap};
-use tolkc::types_kernel::Ty;
+use tolkc::types_kernel::{Ty, calc_width_on_stack, instantiate_generics};
+use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
+use tvmffi::serde::serialize_tuple;
+use tvmffi::stack::{Tuple, TupleItem};
+use tycho_types::boc::Boc;
+use tycho_types::cell::{Cell, CellBuilder};
+use vmlogs::parser::{CellLike, CellSlice, VmStackValue};
+
+static EVALUATE_HELPER_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PathSegment {
@@ -20,6 +39,13 @@ enum PathSegment {
 struct ParsedValuePath {
     root: String,
     segments: Vec<PathSegment>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EvaluateRuntimeConfig {
+    pub run_args: RunGetMethodArgs,
+    pub config_b64: Option<String>,
+    pub mappings: Option<BTreeMap<String, String>>,
 }
 
 pub(crate) fn evaluate_expression(
@@ -41,6 +67,186 @@ pub(crate) fn evaluate_condition_expression(
     let expr = wrapped_expression(&source_file)
         .ok_or_else(|| anyhow!("expected a single expression statement"))?;
     evaluate_boolean_expression(locals, None, expr, source_file.source.as_ref())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RuntimeBuiltinCall {
+    ContractGetAddress,
+}
+
+pub(crate) fn evaluate_runtime_builtin_call(
+    expression: &str,
+    c7: Option<&VmStackValue>,
+) -> Result<Option<RenderedValue>> {
+    match parse_runtime_builtin_call_expression(expression)? {
+        Some(RuntimeBuiltinCall::ContractGetAddress) => {
+            let c7 = c7.ok_or_else(|| {
+                anyhow!("`contract.getAddress()` is not available without a live c7 snapshot")
+            })?;
+            let rendered = render_runtime_contract_address(c7).ok_or_else(|| {
+                anyhow!("Failed to extract `contract.getAddress()` from the current c7 snapshot")
+            })?;
+            Ok(Some(rendered))
+        }
+        None => Ok(None),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum FunctionCallParseStatus {
+    NotFunctionCall,
+    Supported,
+    Unsupported(String),
+}
+
+pub(crate) fn classify_function_call_expression(expression: &str) -> FunctionCallParseStatus {
+    let source_file = match parse_wrapped_source(expression) {
+        Ok(source_file) => source_file,
+        Err(err) => {
+            return if expression.contains('(') {
+                FunctionCallParseStatus::Unsupported(err.to_string())
+            } else {
+                FunctionCallParseStatus::NotFunctionCall
+            };
+        }
+    };
+    let Some(expr) = wrapped_expression(&source_file) else {
+        return FunctionCallParseStatus::NotFunctionCall;
+    };
+    classify_parsed_function_call(expr, source_file.source.as_ref())
+}
+
+fn classify_parsed_function_call(expr: Expr<'_>, source: &str) -> FunctionCallParseStatus {
+    match expr {
+        Expr::Call(call) => match parse_call_expression(call, source) {
+            Ok(_) => FunctionCallParseStatus::Supported,
+            Err(err) => FunctionCallParseStatus::Unsupported(err.to_string()),
+        },
+        Expr::Paren(paren) => {
+            let Some(inner) = paren.inner() else {
+                return FunctionCallParseStatus::Unsupported(
+                    "expected expression inside parentheses".to_owned(),
+                );
+            };
+            classify_parsed_function_call(inner, source)
+        }
+        _ => FunctionCallParseStatus::NotFunctionCall,
+    }
+}
+
+fn parse_runtime_builtin_call_expression(expression: &str) -> Result<Option<RuntimeBuiltinCall>> {
+    let source_file = match parse_wrapped_source(expression) {
+        Ok(source_file) => source_file,
+        Err(_) => return Ok(None),
+    };
+    let Some(expr) = wrapped_expression(&source_file) else {
+        return Ok(None);
+    };
+    parse_runtime_builtin_call(expr, source_file.source.as_ref())
+}
+
+fn parse_runtime_builtin_call(expr: Expr<'_>, source: &str) -> Result<Option<RuntimeBuiltinCall>> {
+    match expr {
+        Expr::Call(call) => {
+            if call.arguments().next().is_some() {
+                return Ok(None);
+            }
+            let normalized = call
+                .syntax()
+                .utf8_text(source.as_bytes())
+                .unwrap_or_default()
+                .chars()
+                .filter(|ch| !ch.is_whitespace())
+                .collect::<String>();
+            if normalized == "contract.getAddress()" {
+                return Ok(Some(RuntimeBuiltinCall::ContractGetAddress));
+            }
+            Ok(None)
+        }
+        Expr::Paren(paren) => {
+            let Some(inner) = paren.inner() else {
+                return Ok(None);
+            };
+            parse_runtime_builtin_call(inner, source)
+        }
+        _ => Ok(None),
+    }
+}
+
+pub(crate) fn evaluate_function_call(
+    source_path: &Path,
+    source_map: &SourceMap,
+    runtime: &EvaluateRuntimeConfig,
+    runtime_locals: &[LocalVarRuntime],
+    expression: &str,
+) -> Result<RenderedValue> {
+    let parsed_call = parse_supported_function_call_expression(expression)?;
+
+    let helper_id = EVALUATE_HELPER_COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
+    let helper_names = EvaluateHelperNames::new(helper_id);
+    let (helper_code, stack) = if parsed_call.arguments.is_empty() {
+        (
+            build_inline_expression_helper_code(expression, &helper_names),
+            Tuple::empty(),
+        )
+    } else {
+        let helper_call =
+            plan_runtime_helper_call(source_map, runtime_locals, &parsed_call.arguments)?;
+        (
+            build_runtime_arg_helper_code(
+                &parsed_call.callee_source,
+                &helper_call.parameters,
+                &helper_call.call_arguments,
+                &helper_names,
+            ),
+            helper_call.stack,
+        )
+    };
+    let helper_source = build_evaluate_helper_source(source_path, &helper_code)?;
+    let _cleanup = TempSourceCleanup::new(helper_source.path.clone());
+
+    let compiler = Compiler::new(2)
+        .with_mappings(&runtime.mappings)
+        .with_allow_no_entrypoint(true);
+    let compiled = match compiler.compile(&helper_source.path, true) {
+        tolkc::CompilerResult::Success(result) => result,
+        tolkc::CompilerResult::Error(error) => {
+            bail!(
+                "Debugger evaluate failed to compile `{expression}`:\n{}",
+                error.message.trim()
+            )
+        }
+    };
+    let method_id = compiled
+        .abi
+        .as_ref()
+        .and_then(|abi| {
+            abi.get_methods
+                .iter()
+                .find(|method| method.name == helper_names.entry)
+                .map(|method| method.tvm_method_id)
+        })
+        .ok_or_else(|| anyhow!("Debugger evaluate failed to resolve compiled helper method id"))?;
+
+    let mut params = runtime.run_args.clone();
+    params.code = compiled.code_boc64.clone();
+    params.method_id = method_id;
+    params.debug_enabled = true;
+
+    let stack_b64 = Boc::encode_base64(serialize_tuple(&stack)?);
+    let executor = GetExecutor::new(&params)
+        .with_context(|| format!("Debugger evaluate failed to prepare `{expression}`"))?;
+    let result = executor
+        .run_get_method(&stack_b64, &params, runtime.config_b64.as_deref())
+        .with_context(|| format!("Debugger evaluate failed to execute `{expression}`"))?;
+
+    render_function_call_result(
+        expression,
+        compiled.new_source_map.as_ref(),
+        compiled.abi.as_ref(),
+        method_id,
+        result,
+    )
 }
 
 fn resolve_locals_path(
@@ -127,6 +333,599 @@ fn wrapped_expression(source_file: &tolk_syntax::SourceFile) -> Option<Expr<'_>>
         _ => return None,
     };
     stmt.expr()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedFunctionCall {
+    callee_source: String,
+    arguments: Vec<FunctionCallArgument>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum FunctionCallArgument {
+    RuntimeLocal(ParsedValuePath),
+    Literal { source: String },
+}
+
+fn parse_supported_function_call_expression(input: &str) -> Result<ParsedFunctionCall> {
+    let source_file = parse_wrapped_source(input)?;
+    let expr = wrapped_expression(&source_file)
+        .ok_or_else(|| anyhow!("expected a single expression statement"))?;
+    let source = source_file.source.as_ref();
+    parse_supported_function_call(expr, source)
+}
+
+fn parse_supported_function_call(expr: Expr<'_>, source: &str) -> Result<ParsedFunctionCall> {
+    match expr {
+        Expr::Call(call) => parse_call_expression(call, source),
+        Expr::Paren(paren) => {
+            let inner = paren
+                .inner()
+                .ok_or_else(|| anyhow!("expected expression inside parentheses"))?;
+            parse_supported_function_call(inner, source)
+        }
+        _ => bail!("function calls are not supported"),
+    }
+}
+
+fn parse_call_expression(call: Call<'_>, source: &str) -> Result<ParsedFunctionCall> {
+    let callee_source = call_callee_source(&call, source)?;
+    let arguments = call.arguments().collect::<Vec<_>>();
+
+    match arguments.as_slice() {
+        [] => Ok(ParsedFunctionCall {
+            callee_source,
+            arguments: Vec::new(),
+        }),
+        [_first, ..] => {
+            if call.callee_qualifier().is_some() {
+                bail!("method calls with arguments are not supported yet");
+            }
+
+            let parsed_arguments = arguments
+                .into_iter()
+                .map(|argument| {
+                    let arg_expr = argument
+                        .expr()
+                        .ok_or_else(|| anyhow!("expected function argument"))?;
+                    parse_function_call_argument(arg_expr, source)
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            Ok(ParsedFunctionCall {
+                callee_source,
+                arguments: parsed_arguments,
+            })
+        }
+    }
+}
+
+fn parse_function_call_argument(expr: Expr<'_>, source: &str) -> Result<FunctionCallArgument> {
+    match expr {
+        Expr::Paren(paren) => {
+            let inner = paren
+                .inner()
+                .ok_or_else(|| anyhow!("expected expression inside parentheses"))?;
+            parse_function_call_argument(inner, source)
+        }
+        Expr::NumberLit(number_lit) => Ok(FunctionCallArgument::Literal {
+            source: number_lit.text(source).to_owned(),
+        }),
+        Expr::StringLit(string_lit) => Ok(FunctionCallArgument::Literal {
+            source: string_lit.text(source).to_owned(),
+        }),
+        Expr::BoolLit(bool_lit) => Ok(FunctionCallArgument::Literal {
+            source: bool_lit.value().to_string(),
+        }),
+        Expr::NullLit(_) => Ok(FunctionCallArgument::Literal {
+            source: "null".to_owned(),
+        }),
+        Expr::Unary(unary) if unary.operator_name(source) == "-" => {
+            let argument = unary
+                .argument()
+                .ok_or_else(|| anyhow!("expected expression after `-`"))?;
+            match argument {
+                Expr::NumberLit(number_lit) => Ok(FunctionCallArgument::Literal {
+                    source: format!("-{}", number_lit.text(source)),
+                }),
+                _ => bail!("only numeric literals can be negated in debugger evaluate arguments"),
+            }
+        }
+        _ => {
+            let path = parse_expr_to_path(expr, source)?;
+            if !path.segments.is_empty() {
+                return Ok(FunctionCallArgument::RuntimeLocal(path));
+            }
+            Ok(FunctionCallArgument::RuntimeLocal(path))
+        }
+    }
+}
+
+fn call_callee_source(call: &Call<'_>, source: &str) -> Result<String> {
+    let callee = call
+        .callee()
+        .ok_or_else(|| anyhow!("expected function name"))?;
+    Ok(callee
+        .syntax()
+        .utf8_text(source.as_bytes())
+        .unwrap_or("function")
+        .trim()
+        .to_owned())
+}
+
+#[derive(Debug, Clone)]
+struct HelperRuntimeParameter {
+    name: String,
+    type_name: String,
+    stack_items: Vec<TupleItem>,
+}
+
+#[derive(Debug, Clone)]
+struct PlannedRuntimeHelperCall {
+    parameters: Vec<HelperRuntimeParameter>,
+    call_arguments: Vec<String>,
+    stack: Tuple,
+}
+
+fn plan_runtime_helper_call(
+    source_map: &SourceMap,
+    runtime_locals: &[LocalVarRuntime],
+    arguments: &[FunctionCallArgument],
+) -> Result<PlannedRuntimeHelperCall> {
+    let mut parameters = Vec::<HelperRuntimeParameter>::new();
+    let mut call_arguments = Vec::new();
+
+    for argument in arguments {
+        match argument {
+            FunctionCallArgument::RuntimeLocal(path) => {
+                let local = runtime_locals
+                    .iter()
+                    .rev()
+                    .find(|local| normalize_identifier(&local.var_name) == path.root)
+                    .ok_or_else(|| anyhow!("Variable `{}` is not in scope", path.root))?;
+                let parameter_name = helper_runtime_param_name(parameters.len());
+                let parameter =
+                    build_runtime_parameter_for_path(source_map, local, path, parameter_name)?;
+
+                call_arguments.push(parameter.name.clone());
+                parameters.push(parameter);
+            }
+            FunctionCallArgument::Literal { source } => {
+                call_arguments.push(source.clone());
+            }
+        }
+    }
+
+    let stack = Tuple(
+        parameters
+            .iter()
+            .flat_map(|parameter| parameter.stack_items.iter().cloned())
+            .collect(),
+    );
+
+    Ok(PlannedRuntimeHelperCall {
+        parameters,
+        call_arguments,
+        stack,
+    })
+}
+
+fn build_runtime_parameter_for_path(
+    source_map: &SourceMap,
+    local: &LocalVarRuntime,
+    path: &ParsedValuePath,
+    parameter_name: String,
+) -> Result<HelperRuntimeParameter> {
+    let ty = local.ty.as_ref().ok_or_else(|| {
+        anyhow!(
+            "Variable `{}` has no source-level type available for debugger evaluate",
+            path.root
+        )
+    })?;
+    let (resolved_ty, resolved_slot_values) =
+        resolve_runtime_path_values(source_map, ty, &local.ir_slot_values, &path.segments)
+            .with_context(|| {
+                if path.segments.is_empty() {
+                    format!(
+                        "Variable `{}` is not available on the runtime stack",
+                        path.root
+                    )
+                } else {
+                    format!(
+                        "Path `{}` is not available on the runtime stack",
+                        render_value_path(path)
+                    )
+                }
+            })?;
+    let stack_items = resolved_slot_values
+        .into_iter()
+        .map(convert_vm_value_to_tuple_item)
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(HelperRuntimeParameter {
+        name: parameter_name,
+        type_name: resolved_ty.to_string(),
+        stack_items,
+    })
+}
+
+fn resolve_runtime_path_values(
+    source_map: &SourceMap,
+    root_ty: &Ty,
+    root_slot_values: &[Option<VmStackValue>],
+    segments: &[PathSegment],
+) -> Result<(Ty, Vec<VmStackValue>)> {
+    let mut current_ty = root_ty.clone();
+    let mut current_slot_values = root_slot_values.to_vec();
+
+    for segment in segments {
+        let (next_ty, slot_range) = resolve_runtime_segment(source_map, &current_ty, segment)?;
+        let slice = current_slot_values
+            .get(slot_range.clone())
+            .ok_or_else(|| anyhow!("runtime slot range is out of bounds"))?;
+        current_slot_values = slice.to_vec();
+        current_ty = next_ty;
+    }
+
+    let current_slot_values = current_slot_values
+        .into_iter()
+        .collect::<Option<Vec<_>>>()
+        .ok_or_else(|| anyhow!("required runtime slots were not observed"))?;
+    Ok((current_ty, current_slot_values))
+}
+
+fn resolve_runtime_segment(
+    source_map: &SourceMap,
+    ty: &Ty,
+    segment: &PathSegment,
+) -> Result<(Ty, Range<usize>)> {
+    match ty {
+        Ty::AliasRef {
+            alias_name,
+            type_args,
+        } => {
+            let alias_ref = source_map.get_alias(alias_name);
+            let target_ty = match type_args {
+                Some(type_args) => instantiate_generics(
+                    &alias_ref.target_ty,
+                    alias_ref.type_params.as_deref().unwrap_or(&[]),
+                    type_args,
+                ),
+                None => alias_ref.target_ty.clone(),
+            };
+            resolve_runtime_segment(source_map, &target_ty, segment)
+        }
+        Ty::StructRef {
+            struct_name,
+            type_args,
+        } => match segment {
+            PathSegment::Field(field_name) => {
+                let struct_ref = source_map.get_struct(struct_name);
+                let mut offset = 0;
+                for field in &struct_ref.fields {
+                    let field_ty = match type_args {
+                        Some(type_args) => instantiate_generics(
+                            &field.ty,
+                            struct_ref.type_params.as_deref().unwrap_or(&[]),
+                            type_args,
+                        ),
+                        None => field.ty.clone(),
+                    };
+                    let width = calc_width_on_stack(source_map, &field_ty);
+                    if field.name == *field_name {
+                        return Ok((field_ty, offset..offset + width));
+                    }
+                    offset += width;
+                }
+                bail!("Field `{field_name}` is not available on type `{ty}`")
+            }
+            PathSegment::Index(index) => {
+                bail!("Cannot index field {index} on struct-like type `{ty}`")
+            }
+        },
+        Ty::Tensor { items } | Ty::ShapedTuple { items } => match segment {
+            PathSegment::Index(index) => {
+                let item_ty = items
+                    .get(*index)
+                    .cloned()
+                    .ok_or_else(|| anyhow!("Index {index} is out of bounds for type `{ty}`"))?;
+                let offset = items
+                    .iter()
+                    .take(*index)
+                    .map(|item| calc_width_on_stack(source_map, item))
+                    .sum::<usize>();
+                let width = calc_width_on_stack(source_map, &item_ty);
+                Ok((item_ty, offset..offset + width))
+            }
+            PathSegment::Field(field_name) => {
+                bail!("Cannot access field `{field_name}` on tuple-like type `{ty}`")
+            }
+        },
+        _ => match segment {
+            PathSegment::Field(field_name) => {
+                bail!("Cannot access field `{field_name}` on runtime value of type `{ty}`")
+            }
+            PathSegment::Index(index) => {
+                bail!("Cannot index `{index}` on runtime value of type `{ty}`")
+            }
+        },
+    }
+}
+
+fn render_value_path(path: &ParsedValuePath) -> String {
+    let mut rendered = path.root.clone();
+    for segment in &path.segments {
+        rendered.push('.');
+        match segment {
+            PathSegment::Field(field_name) => rendered.push_str(field_name),
+            PathSegment::Index(index) => rendered.push_str(&index.to_string()),
+        }
+    }
+    rendered
+}
+
+fn helper_runtime_param_name(index: usize) -> String {
+    format!("__acton_debug_eval_arg{index}")
+}
+
+fn convert_vm_value_to_tuple_item(value: VmStackValue) -> Result<TupleItem> {
+    match value {
+        VmStackValue::Null => Ok(TupleItem::Null),
+        VmStackValue::NaN => Ok(TupleItem::Nan),
+        VmStackValue::Integer(value) => {
+            let value = value
+                .parse()
+                .map_err(|_| anyhow!("Invalid integer stack value: {value}"))?;
+            Ok(TupleItem::Int(value))
+        }
+        VmStackValue::Tuple(values) => Ok(TupleItem::Tuple(Tuple(
+            values
+                .into_iter()
+                .map(convert_vm_value_to_tuple_item)
+                .collect::<Result<Vec<_>>>()?,
+        ))),
+        VmStackValue::Cell(cell_like) => Ok(TupleItem::Cell(convert_cell_like_to_cell(cell_like)?)),
+        VmStackValue::Builder(hex) => Ok(TupleItem::Builder(Boc::decode_hex(hex)?)),
+        VmStackValue::CellSlice(slice) => Ok(TupleItem::Slice(Boc::decode_hex(slice.value)?)),
+        VmStackValue::Continuation(_) => {
+            bail!("Continuation values are not supported in debugger evaluate arguments yet")
+        }
+        VmStackValue::String(value) => Ok(TupleItem::Cell(string_to_cell(&value)?)),
+        VmStackValue::Unknown => bail!("Unknown runtime stack values are not supported"),
+    }
+}
+
+fn convert_cell_like_to_cell(cell_like: CellLike) -> Result<Cell> {
+    match cell_like {
+        CellLike::Cell(hex) | CellLike::Builder(hex) => Ok(Boc::decode_hex(hex)?),
+    }
+}
+
+fn string_to_cell(value: &str) -> Result<Cell> {
+    let bytes = value.as_bytes();
+    let total_bits = bytes.len() * 8;
+
+    if total_bits <= 1023 {
+        let mut builder = CellBuilder::new();
+        builder.store_raw(bytes, total_bits as u16)?;
+        return Ok(builder.build()?);
+    }
+
+    let mut chunks = Vec::new();
+    let mut remaining = bytes;
+    while !remaining.is_empty() {
+        let chunk_len = remaining.len().min(127);
+        chunks.push((&remaining[..chunk_len], chunk_len * 8));
+        remaining = &remaining[chunk_len..];
+    }
+
+    let mut next_cell = None;
+    for (chunk, bits) in chunks.into_iter().rev() {
+        let mut builder = CellBuilder::new();
+        builder.store_raw(chunk, bits as u16)?;
+        if let Some(next_cell) = next_cell {
+            builder.store_reference(next_cell)?;
+        }
+        next_cell = Some(builder.build()?);
+    }
+
+    next_cell.ok_or_else(|| anyhow!("No root cell for string"))
+}
+
+#[derive(Debug, Clone)]
+struct EvaluateHelperNames {
+    entry: String,
+    inline: String,
+}
+
+impl EvaluateHelperNames {
+    fn new(id: u64) -> Self {
+        Self {
+            entry: format!("__acton_debug_eval_entry_{id}"),
+            inline: format!("__acton_debug_eval_inline_{id}"),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct TempSourceCleanup {
+    path: PathBuf,
+}
+
+impl TempSourceCleanup {
+    fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl Drop for TempSourceCleanup {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
+#[derive(Debug)]
+struct TempEvaluateSource {
+    path: PathBuf,
+}
+
+fn build_evaluate_helper_source(
+    source_path: &Path,
+    helper_code: &str,
+) -> Result<TempEvaluateSource> {
+    let original_source = fs::read_to_string(source_path)
+        .with_context(|| format!("Cannot read source file {}", source_path.display()))?;
+
+    let temp_path = unique_temp_source_path(source_path);
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp_path)
+        .with_context(|| format!("Cannot create temp evaluate file {}", temp_path.display()))?;
+    file.write_all(original_source.as_bytes())?;
+    file.write_all(helper_code.as_bytes())?;
+
+    Ok(TempEvaluateSource { path: temp_path })
+}
+
+fn build_inline_expression_helper_code(
+    expression: &str,
+    helper_names: &EvaluateHelperNames,
+) -> String {
+    let expression = expression.trim().trim_end_matches(';').trim();
+    format!(
+        "\n\n@inline_ref\nfun {inline_name}() {{\n    return {expression};\n}}\n\nget fun {entry_name}() {{\n    return {inline_name}();\n}}\n",
+        inline_name = helper_names.inline,
+        entry_name = helper_names.entry,
+    )
+}
+
+fn build_runtime_arg_helper_code(
+    callee_source: &str,
+    parameters: &[HelperRuntimeParameter],
+    call_arguments: &[String],
+    helper_names: &EvaluateHelperNames,
+) -> String {
+    let helper_args = parameters
+        .iter()
+        .map(|parameter| format!("{}: {}", parameter.name, parameter.type_name))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let inline_forward_args = parameters
+        .iter()
+        .map(|parameter| parameter.name.clone())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let call_args = call_arguments.join(", ");
+
+    format!(
+        "\n\n@inline_ref\nfun {inline_name}({helper_args}) {{\n    return {callee_source}({call_args});\n}}\n\nget fun {entry_name}({helper_args}) {{\n    return {inline_name}({inline_forward_args});\n}}\n",
+        inline_name = helper_names.inline,
+        entry_name = helper_names.entry,
+        helper_args = helper_args,
+        call_args = call_args,
+        inline_forward_args = inline_forward_args,
+    )
+}
+
+fn unique_temp_source_path(source_path: &Path) -> PathBuf {
+    let parent = source_path.parent().unwrap_or_else(|| Path::new("."));
+    let stem = source_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("acton-debug-eval");
+    let extension = source_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("tolk");
+    let id = EVALUATE_HELPER_COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
+    parent.join(format!(".{stem}.acton-debug-eval-{id}.{extension}"))
+}
+
+fn render_function_call_result(
+    expression: &str,
+    source_map: Option<&SourceMap>,
+    abi: Option<&tolkc::abi::ContractABI>,
+    method_id: i32,
+    result: GetMethodResult,
+) -> Result<RenderedValue> {
+    match result {
+        GetMethodResult::Success(success)
+            if success.vm_exit_code == 0 || success.vm_exit_code == 1 =>
+        {
+            let stack_cell = Boc::decode_base64(success.stack.as_ref())
+                .context("Failed to decode evaluate result stack")?;
+            let stack_tuple = Tuple::deserialize(&stack_cell)
+                .context("Failed to deserialize evaluate result stack")?;
+            Ok(render_stack_tuple(source_map, abi, method_id, &stack_tuple))
+        }
+        GetMethodResult::Success(success) => bail!(
+            "Debugger evaluate failed for `{expression}` with VM exit code {}.\nVM log:\n{}",
+            success.vm_exit_code,
+            success.vm_log,
+        ),
+        GetMethodResult::Error(error) => {
+            bail!(
+                "Debugger evaluate failed for `{expression}`: {}",
+                error.error
+            )
+        }
+    }
+}
+
+fn render_stack_tuple(
+    source_map: Option<&SourceMap>,
+    abi: Option<&tolkc::abi::ContractABI>,
+    method_id: i32,
+    stack_tuple: &Tuple,
+) -> RenderedValue {
+    if let (Some(source_map), Some(abi)) = (source_map, abi)
+        && let Some(method) = abi
+            .get_methods
+            .iter()
+            .find(|method| method.tvm_method_id == method_id)
+    {
+        let vm_values = stack_tuple
+            .iter()
+            .map(tuple_item_to_vm_stack_value)
+            .collect::<Vec<_>>();
+        let slot_values = vm_values.iter().map(SlotValue::Live).collect::<Vec<_>>();
+        return debug_print_from_stack(source_map, &slot_values, &method.return_ty);
+    }
+
+    match stack_tuple.as_slice() {
+        [] => RenderedValue::typed_leaf("()", "tuple"),
+        [value] => render_runtime_vm_value(&tuple_item_to_vm_stack_value(value)),
+        items => RenderedValue::Tensor {
+            type_name: "tuple".to_string(),
+            items: items
+                .iter()
+                .map(|item| render_runtime_vm_value(&tuple_item_to_vm_stack_value(item)))
+                .collect(),
+        },
+    }
+}
+
+fn tuple_item_to_vm_stack_value(item: &TupleItem) -> VmStackValue {
+    match item {
+        TupleItem::Null => VmStackValue::Null,
+        TupleItem::Int(value) => VmStackValue::Integer(value.to_string()),
+        TupleItem::Nan => VmStackValue::NaN,
+        TupleItem::Cell(cell) => VmStackValue::Cell(CellLike::Cell(Boc::encode_hex(cell))),
+        TupleItem::Slice(cell) => VmStackValue::CellSlice(CellSlice {
+            value: Boc::encode_hex(cell),
+            bits: None,
+            refs: None,
+        }),
+        TupleItem::Builder(cell) => VmStackValue::Builder(Boc::encode_hex(cell)),
+        TupleItem::Tuple(items) => {
+            VmStackValue::Tuple(items.iter().map(tuple_item_to_vm_stack_value).collect())
+        }
+        TupleItem::TypedTuple { inner, .. } => {
+            VmStackValue::Tuple(inner.iter().map(tuple_item_to_vm_stack_value).collect())
+        }
+        TupleItem::Cont(cont) => VmStackValue::Continuation(Boc::encode_base64(cont.code.clone())),
+    }
 }
 
 fn parse_expr_to_path(expr: Expr<'_>, source: &str) -> Result<ParsedValuePath> {
