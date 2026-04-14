@@ -22,7 +22,9 @@ use serde_json::json;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::future::Future;
 use std::sync::Arc;
+use ton_indexer::categorize_wallet;
 use toncenter_v3 as v3;
+use tycho_types::cell::HashBytes as CellHashBytes;
 use tycho_types::models::{Base64StdAddrFlags, DisplayBase64StdAddr, StdAddr, StdAddrFormat};
 use tycho_types::prelude::HashBytes;
 use url::form_urlencoded;
@@ -824,6 +826,17 @@ fn collect_trace_addresses(trace: &TraceNode, out: &mut BTreeSet<Addr>) {
 async fn collect_address_info(node: &LiteNode, address: Addr) -> anyhow::Result<AddressInfo> {
     let mut out = AddressInfo::default();
     let address_str = address.to_string();
+
+    if let Ok(state) = node
+        .get_address_information(address_str.clone(), None)
+        .await
+        && let Some(code_hash) = state.code_hash
+    {
+        let wallet_type = categorize_wallet(CellHashBytes(code_hash.0));
+        if let Some(interface_name) = wallet_type.interface_name() {
+            out.interfaces.insert(interface_name.to_string());
+        }
+    }
 
     let wallets = node
         .get_jetton_wallets(

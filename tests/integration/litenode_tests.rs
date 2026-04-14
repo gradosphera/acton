@@ -1971,7 +1971,7 @@ fn litenode_supports_v3_account_states_endpoint() {
     let response = wait_for_ok_response(
         &node,
         &format!(
-            "/api/v3/accountStates?address={minter_address}&address={jetton_wallet_address}&address={missing_address}&include_boc=false"
+            "/api/v3/accountStates?address={owner_address}&address={minter_address}&address={jetton_wallet_address}&address={missing_address}&include_boc=false"
         ),
         Duration::from_secs(12),
     );
@@ -1982,10 +1982,26 @@ fn litenode_supports_v3_account_states_endpoint() {
         .expect("accountStates must return accounts array");
     assert_eq!(
         accounts.len(),
-        3,
+        4,
         "Expected one response row per requested address:\n{}",
         serde_json::to_string_pretty(payload).unwrap_or_default()
     );
+
+    let owner_state = accounts
+        .iter()
+        .find(|account| {
+            account["interfaces"].as_array().is_some_and(|interfaces| {
+                interfaces
+                    .iter()
+                    .any(|value| value.as_str() == Some("wallet_v4r2"))
+            })
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "owner wallet account row with wallet_v4r2 interface missing:\n{}",
+                serde_json::to_string_pretty(payload).unwrap_or_default()
+            )
+        });
 
     let minter_state = accounts
         .iter()
@@ -2072,6 +2088,23 @@ fn litenode_supports_v3_account_states_endpoint() {
     let metadata = payload["metadata"]
         .as_object()
         .expect("accountStates must include metadata");
+
+    let owner_row = address_book
+        .get(
+            owner_state["address"]
+                .as_str()
+                .expect("owner wallet row must expose canonical address"),
+        )
+        .expect("owner wallet address book row missing");
+    assert!(
+        owner_row["interfaces"]
+            .as_array()
+            .is_some_and(|interfaces| interfaces
+                .iter()
+                .any(|value| value.as_str() == Some("wallet_v4r2"))),
+        "owner wallet address book row must expose wallet_v4r2 interface:\n{}",
+        serde_json::to_string_pretty(owner_row).unwrap_or_default()
+    );
 
     let minter_row = address_book
         .get(
