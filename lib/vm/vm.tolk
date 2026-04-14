@@ -159,6 +159,10 @@ fun vm.registerLibrary(cell: cell): void {
 /// ```
 fun vm.convertAddress(addr: string): address {
     val cell = ffi.convertAddress(addr);
+    if (cell == null) {
+        // Exception will be printed from rust.
+        throw 0;
+    }
     return cell.beginParse() as address;
 }
 
@@ -193,7 +197,7 @@ fun vm.parseInt(x: string): int {
 fun ffi.registerLibrary(cell: cell): void
     asm "18 EXTCALL"
 
-fun ffi.convertAddress(addr: string): cell
+fun ffi.convertAddress(addr: string): cell?
     asm "19 EXTCALL"
 
 fun ffi.cellFromHex(cellHex: string): cell
