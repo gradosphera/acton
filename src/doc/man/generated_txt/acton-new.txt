@@ -38,9 +38,9 @@ OPTIONS
            defaults to the target directory name.
 
        --description description
-           Project description written to Acton.toml. If not provided,
-           interactive mode prompts for it and defaults to A TON blockchain
-           project.
+           Project description written to Acton.toml. If not provided, Acton
+           uses A TON blockchain project by default. In interactive mode you
+           can override it after opting into advanced options.
 
        --template template
            Project template to use.
@@ -54,7 +54,8 @@ OPTIONS
            generated LICENSE file when Acton has a built-in template for that
            license.
 
-           If not provided, interactive mode prompts for it.
+           If not provided, Acton uses MIT by default. In interactive mode you
+           can override it after opting into advanced options.
 
        --app
            Include the template’s TypeScript app scaffold when available.
@@ -72,16 +73,17 @@ OPTIONS
            Create and install the default project-local Git hooks.
 
            If git is available and --hooks is not provided, interactive mode
-           prompts for this choice. Non-interactive mode leaves hooks disabled
-           unless --hooks is passed explicitly.
+           offers this choice after you opt into advanced options.
+           Non-interactive mode leaves hooks disabled unless --hooks is passed
+           explicitly.
 
        --agents
            Include an AGENTS.md file with coding-agent guidance from the
            selected template.
 
-           If --agents is not provided, interactive mode prompts for this
-           choice. Non-interactive mode leaves AGENTS.md disabled unless
-           --agents is passed explicitly.
+           If --agents is not provided, interactive mode offers this choice
+           after you opt into advanced options. Non-interactive mode leaves
+           AGENTS.md disabled unless --agents is passed explicitly.
 
    Display Options
        --color when
@@ -151,22 +153,30 @@ TEMPLATES
 
 INTERACTIVE MODE
        When enough information is missing and standard input/output are
-       connected to a terminal, acton new prompts for:
+       connected to a terminal, acton new uses a short default flow:
 
        o  project name
 
-       o  description
-
        o  template
-
-       o  license
 
        o  whether to include the TypeScript app layout when the template
           supports it
 
+       o  whether to configure advanced options
+
+       If you opt into advanced options, Acton can then prompt for:
+
+       o  description
+
+       o  license
+
        o  whether to install the default Git hooks when git is available
 
        o  whether to include AGENTS.md
+
+       If you skip advanced options, Acton keeps the default description A TON
+       blockchain project, the default license MIT, and leaves optional
+       features disabled unless their flags are passed explicitly.
 
        In non-interactive mode, optional features stay disabled unless their
        flags are passed explicitly. For CI or scripts, pass --name,

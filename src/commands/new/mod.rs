@@ -18,6 +18,8 @@ mod template;
 use template::ProjectLayout;
 pub use template::ProjectTemplate;
 
+const DEFAULT_PROJECT_DESCRIPTION: &str = "A TON blockchain project";
+const DEFAULT_PROJECT_LICENSE: &str = "MIT";
 const BASE_GITIGNORE: &str = "
 # Acton main directory
 .acton/
@@ -130,6 +132,7 @@ pub fn new_cmd(
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("my-acton-project");
+    let interactive = stdin().is_terminal() && stdout().is_terminal();
 
     let project_name = if let Some(name) = name {
         name
@@ -137,15 +140,6 @@ pub fn new_cmd(
         Text::new("Project name:")
             .with_placeholder(default_name)
             .with_default(default_name)
-            .prompt()?
-    };
-
-    let description = if let Some(description) = description {
-        description
-    } else {
-        Text::new("Description:")
-            .with_placeholder("A TON blockchain project")
-            .with_default("A TON blockchain project")
             .prompt()?
     };
 
@@ -164,41 +158,25 @@ pub fn new_cmd(
     };
 
     let git_available = is_git_available();
-    let include_app = resolve_include_app(template, app)?;
-    let include_hooks = resolve_include_hooks(hooks, git_available)?;
-    let include_agents = resolve_include_agents(agents)?;
+    let include_app = resolve_include_app(template, app, interactive)?;
+    let configure_advanced = resolve_configure_advanced_options(
+        interactive,
+        git_available,
+        description.is_none(),
+        license.is_none(),
+        hooks,
+        agents,
+    )?;
+    let description = resolve_description(description, configure_advanced)?;
+    let license = resolve_license(license, configure_advanced)?;
+    let include_hooks = resolve_include_hooks(hooks, git_available, configure_advanced)?;
+    let include_agents = resolve_include_agents(agents, configure_advanced)?;
     let scaffold = template::project_scaffold(template, include_app).ok_or_else(|| {
         anyhow!(
             "Template {} does not include a TypeScript app scaffold",
             template.to_string().cyan()
         )
     })?;
-
-    let license_options = vec![
-        "MIT",
-        "Apache-2.0",
-        "GPL-3.0",
-        "BSD-3-Clause",
-        "ISC",
-        "Unlicense",
-        "Other",
-    ];
-
-    let license = if let Some(license) = license {
-        license
-    } else {
-        let license_selection = Select::new("License:", license_options)
-            .with_starting_cursor(0)
-            .prompt()?;
-
-        if license_selection == "Other" {
-            Text::new("Enter license:")
-                .with_placeholder("MIT")
-                .prompt()?
-        } else {
-            license_selection.to_string()
-        }
-    };
 
     let mut config = ActonConfig::default();
     config.package.name = project_name.clone();
@@ -338,7 +316,11 @@ pub fn new_cmd(
     Ok(())
 }
 
-fn resolve_include_app(template: ProjectTemplate, app: bool) -> anyhow::Result<bool> {
+fn resolve_include_app(
+    template: ProjectTemplate,
+    app: bool,
+    interactive: bool,
+) -> anyhow::Result<bool> {
     if app {
         if !template::template_supports_app(template) {
             anyhow::bail!(
@@ -354,7 +336,7 @@ fn resolve_include_app(template: ProjectTemplate, app: bool) -> anyhow::Result<b
         return Ok(false);
     }
 
-    if stdin().is_terminal() && stdout().is_terminal() {
+    if interactive {
         Confirm::new("Include the TypeScript dApp?")
             .with_default(false)
             .prompt()
@@ -364,7 +346,86 @@ fn resolve_include_app(template: ProjectTemplate, app: bool) -> anyhow::Result<b
     }
 }
 
-fn resolve_include_hooks(hooks: bool, git_available: bool) -> anyhow::Result<bool> {
+fn resolve_configure_advanced_options(
+    interactive: bool,
+    git_available: bool,
+    missing_description: bool,
+    missing_license: bool,
+    hooks: bool,
+    agents: bool,
+) -> anyhow::Result<bool> {
+    if !interactive {
+        return Ok(false);
+    }
+
+    let has_optional_advanced_prompts =
+        missing_description || missing_license || (git_available && !hooks) || !agents;
+    if !has_optional_advanced_prompts {
+        return Ok(false);
+    }
+
+    Confirm::new("Do you want to configure advanced options (Git hooks, license, etc.)?")
+        .with_default(false)
+        .prompt()
+        .map_err(Into::into)
+}
+
+fn resolve_description(
+    description: Option<String>,
+    configure_advanced: bool,
+) -> anyhow::Result<String> {
+    if let Some(description) = description {
+        return Ok(description);
+    }
+
+    if !configure_advanced {
+        return Ok(DEFAULT_PROJECT_DESCRIPTION.to_owned());
+    }
+
+    Text::new("Description:")
+        .with_placeholder(DEFAULT_PROJECT_DESCRIPTION)
+        .with_default(DEFAULT_PROJECT_DESCRIPTION)
+        .prompt()
+        .map_err(Into::into)
+}
+
+fn resolve_license(license: Option<String>, configure_advanced: bool) -> anyhow::Result<String> {
+    if let Some(license) = license {
+        return Ok(license);
+    }
+
+    if !configure_advanced {
+        return Ok(DEFAULT_PROJECT_LICENSE.to_owned());
+    }
+
+    let license_options = vec![
+        "MIT",
+        "Apache-2.0",
+        "GPL-3.0",
+        "BSD-3-Clause",
+        "ISC",
+        "Unlicense",
+        "Other",
+    ];
+    let license_selection = Select::new("License:", license_options)
+        .with_starting_cursor(0)
+        .prompt()?;
+
+    if license_selection == "Other" {
+        Text::new("Enter license:")
+            .with_placeholder(DEFAULT_PROJECT_LICENSE)
+            .prompt()
+            .map_err(Into::into)
+    } else {
+        Ok(license_selection.to_string())
+    }
+}
+
+fn resolve_include_hooks(
+    hooks: bool,
+    git_available: bool,
+    configure_advanced: bool,
+) -> anyhow::Result<bool> {
     if hooks {
         if !git_available {
             anyhow::bail!("Git hooks require the `git` command to be available in PATH");
@@ -377,8 +438,8 @@ fn resolve_include_hooks(hooks: bool, git_available: bool) -> anyhow::Result<boo
         return Ok(false);
     }
 
-    if stdin().is_terminal() && stdout().is_terminal() {
-        Confirm::new("Install the default Git hooks?")
+    if configure_advanced {
+        Confirm::new("Set up Git hooks to run checks before each commit?")
             .with_default(false)
             .prompt()
             .map_err(Into::into)
@@ -387,12 +448,12 @@ fn resolve_include_hooks(hooks: bool, git_available: bool) -> anyhow::Result<boo
     }
 }
 
-fn resolve_include_agents(agents: bool) -> anyhow::Result<bool> {
+fn resolve_include_agents(agents: bool, configure_advanced: bool) -> anyhow::Result<bool> {
     if agents {
         return Ok(true);
     }
 
-    if stdin().is_terminal() && stdout().is_terminal() {
+    if configure_advanced {
         Confirm::new("Include AGENTS.md guidance for coding agents?")
             .with_default(false)
             .prompt()

@@ -69,8 +69,9 @@ the target directory name.
 
 </CommandOptionTitle>
 
-Project description written to `Acton.toml`. If not provided, interactive mode
-prompts for it and defaults to `A TON blockchain project`.
+Project description written to `Acton.toml`. If not provided, Acton uses
+`A TON blockchain project` by default. In interactive mode you can override it
+after opting into advanced options.
 
 </CommandOption>
 
@@ -101,7 +102,8 @@ If not provided, interactive mode prompts for the template.
 License identifier to place into `Acton.toml` and use for the generated
 `LICENSE` file when Acton has a built-in template for that license.
 
-If not provided, interactive mode prompts for it.
+If not provided, Acton uses `MIT` by default. In interactive mode you can
+override it after opting into advanced options.
 
 </CommandOption>
 
@@ -134,9 +136,9 @@ layout disabled unless `--app` is passed explicitly.
 
 Create and install the default project-local Git hooks.
 
-If `git` is available and `--hooks` is not provided, interactive mode prompts
-for this choice. Non-interactive mode leaves hooks disabled unless `--hooks`
-is passed explicitly.
+If `git` is available and `--hooks` is not provided, interactive mode offers
+this choice after you opt into advanced options. Non-interactive mode leaves
+hooks disabled unless `--hooks` is passed explicitly.
 
 </CommandOption>
 
@@ -151,9 +153,9 @@ is passed explicitly.
 Include an `AGENTS.md` file with coding-agent guidance from the selected
 template.
 
-If `--agents` is not provided, interactive mode prompts for this choice.
-Non-interactive mode leaves `AGENTS.md` disabled unless `--agents` is passed
-explicitly.
+If `--agents` is not provided, interactive mode offers this choice after you
+opt into advanced options. Non-interactive mode leaves `AGENTS.md` disabled
+unless `--agents` is passed explicitly.
 
 </CommandOption>
 
@@ -259,15 +261,23 @@ Jetton minter and wallet template with:
 ## INTERACTIVE MODE
 
 When enough information is missing and standard input/output are connected to a
-terminal, `acton new` prompts for:
+terminal, `acton new` uses a short default flow:
 
 - project name
-- description
 - template
-- license
 - whether to include the TypeScript app layout when the template supports it
+- whether to configure advanced options
+
+If you opt into advanced options, Acton can then prompt for:
+
+- description
+- license
 - whether to install the default Git hooks when `git` is available
 - whether to include `AGENTS.md`
+
+If you skip advanced options, Acton keeps the default description `A TON
+blockchain project`, the default license `MIT`, and leaves optional features
+disabled unless their flags are passed explicitly.
 
 In non-interactive mode, optional features stay disabled unless their flags are
 passed explicitly. For CI or scripts, pass `--name`, `--description`,

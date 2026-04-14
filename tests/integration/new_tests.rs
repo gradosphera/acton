@@ -704,7 +704,9 @@ fn test_new_empty_project_prompts_for_hooks() {
         .spawn_pty()
         .set_expect_timeout(Some(Duration::from_secs(20)));
 
-    session.expect("Install the default Git hooks?");
+    session.expect("Do you want to configure advanced options (Git hooks, license, etc.)?");
+    session.send_line("y", "failed to open advanced options");
+    session.expect("Set up Git hooks to run checks before each commit?");
     session.send_line("y", "failed to confirm Git hooks");
     session.expect("Include AGENTS.md guidance for coding agents?");
     session.send_line("", "failed to keep default no-agents choice");
@@ -749,19 +751,21 @@ fn test_new_empty_project_full_interactive_flow_without_flags() {
 
     session.expect("Project name:");
     session.send_line("interactive-empty", "failed to enter project name");
+    session.expect("Template:");
+    session.send_line("", "failed to accept default template");
+    session.expect("Do you want to configure advanced options (Git hooks, license, etc.)?");
+    session.send_line("y", "failed to open advanced options");
     session.expect("Description:");
     session.send_line(
         "interactive empty description",
         "failed to enter project description",
     );
-    session.expect("Template:");
-    session.send_line("", "failed to accept default template");
-    session.expect("Install the default Git hooks?");
+    session.expect("License:");
+    session.send_line("", "failed to accept default license");
+    session.expect("Set up Git hooks to run checks before each commit?");
     session.send_line("", "failed to keep default no-hooks choice");
     session.expect("Include AGENTS.md guidance for coding agents?");
     session.send_line("", "failed to keep default no-agents choice");
-    session.expect("License:");
-    session.send_line("", "failed to accept default license");
     session.expect("Created new Acton project");
     session.expect("Project name: interactive-empty");
     session.expect("Description: interactive empty description");
@@ -797,16 +801,10 @@ fn test_new_empty_project_interactive_prompts_accept_default_name_and_descriptio
 
     session.expect("Project name:");
     session.send_line("", "failed to accept default project name");
-    session.expect("Description:");
-    session.send_line("", "failed to accept default description");
     session.expect("Template:");
     session.send_line("", "failed to accept default template");
-    session.expect("Install the default Git hooks?");
-    session.send_line("", "failed to keep default no-hooks choice");
-    session.expect("Include AGENTS.md guidance for coding agents?");
-    session.send_line("", "failed to keep default no-agents choice");
-    session.expect("License:");
-    session.send_line("", "failed to accept default license");
+    session.expect("Do you want to configure advanced options (Git hooks, license, etc.)?");
+    session.send_line("", "failed to keep default no-advanced choice");
     session.expect("Created new Acton project");
     session.expect("Project name: foobar");
     session.expect("Description: A TON blockchain project");
@@ -850,10 +848,8 @@ fn test_new_counter_project_can_be_selected_interactively() {
     session.send_line("", "failed to select counter template");
     session.expect("Include the TypeScript dApp?");
     session.send_line("", "failed to keep default no-app choice");
-    session.expect("Install the default Git hooks?");
-    session.send_line("", "failed to keep default no-hooks choice");
-    session.expect("Include AGENTS.md guidance for coding agents?");
-    session.send_line("", "failed to keep default no-agents choice");
+    session.expect("Do you want to configure advanced options (Git hooks, license, etc.)?");
+    session.send_line("", "failed to keep default no-advanced choice");
     session.expect("Created new Acton project");
     session.expect("Project name: interactive-selected-counter");
     session.expect("Description: interactive selected counter description");
@@ -898,10 +894,8 @@ fn test_new_counter_project_prompts_for_app_when_supported() {
 
     session.expect("Include the TypeScript dApp?");
     session.send_line("y", "failed to confirm TypeScript app scaffold");
-    session.expect("Install the default Git hooks?");
-    session.send_line("", "failed to keep default no-hooks choice");
-    session.expect("Include AGENTS.md guidance for coding agents?");
-    session.send_line("", "failed to keep default no-agents choice");
+    session.expect("Do you want to configure advanced options (Git hooks, license, etc.)?");
+    session.send_line("", "failed to keep default no-advanced choice");
     session.expect("Created new Acton project");
     session.expect("Project name: interactive-counter");
     session.expect("Description: interactive description");
@@ -953,10 +947,8 @@ fn test_new_counter_project_interactive_decline_keeps_standard_layout() {
 
     session.expect("Include the TypeScript dApp?");
     session.send_line("", "failed to keep default no-app choice");
-    session.expect("Install the default Git hooks?");
-    session.send_line("", "failed to keep default no-hooks choice");
-    session.expect("Include AGENTS.md guidance for coding agents?");
-    session.send_line("", "failed to keep default no-agents choice");
+    session.expect("Do you want to configure advanced options (Git hooks, license, etc.)?");
+    session.send_line("", "failed to keep default no-advanced choice");
     session.expect("Created new Acton project");
     session.expect("Project name: interactive-counter");
     session.expect("Description: interactive description");
@@ -1002,7 +994,9 @@ fn test_new_empty_project_prompts_for_agents() {
         .spawn_pty()
         .set_expect_timeout(Some(Duration::from_secs(20)));
 
-    session.expect("Install the default Git hooks?");
+    session.expect("Do you want to configure advanced options (Git hooks, license, etc.)?");
+    session.send_line("y", "failed to open advanced options");
+    session.expect("Set up Git hooks to run checks before each commit?");
     session.send_line("", "failed to keep default no-hooks choice");
     session.expect("Include AGENTS.md guidance for coding agents?");
     session.send_line("y", "failed to confirm AGENTS.md guidance");
@@ -1045,8 +1039,8 @@ fn test_new_empty_project_accepts_other_license_interactively() {
         .spawn_pty()
         .set_expect_timeout(Some(Duration::from_secs(20)));
 
-    session.expect("Include AGENTS.md guidance for coding agents?");
-    session.send_line("", "failed to keep default no-agents choice");
+    session.expect("Do you want to configure advanced options (Git hooks, license, etc.)?");
+    session.send_line("y", "failed to open advanced options");
     session.expect("License:");
     for _ in 0..6 {
         session
@@ -1056,6 +1050,8 @@ fn test_new_empty_project_accepts_other_license_interactively() {
     session.send_line("", "failed to select Other license option");
     session.expect("Enter license:");
     session.send_line("Custom-Proprietary", "failed to enter custom license");
+    session.expect("Include AGENTS.md guidance for coding agents?");
+    session.send_line("", "failed to keep default no-agents choice");
     session.expect("Created new Acton project");
     session.expect("Project name: other-license-project");
     session.expect("Description: other license description");

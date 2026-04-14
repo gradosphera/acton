@@ -81,15 +81,23 @@ Jetton minter and wallet template with:
 ## INTERACTIVE MODE
 
 When enough information is missing and standard input/output are connected to a
-terminal, `acton new` prompts for:
+terminal, `acton new` uses a short default flow:
 
 - project name
-- description
 - template
-- license
 - whether to include the TypeScript app layout when the template supports it
+- whether to configure advanced options
+
+If you opt into advanced options, Acton can then prompt for:
+
+- description
+- license
 - whether to install the default Git hooks when `git` is available
 - whether to include `AGENTS.md`
+
+If you skip advanced options, Acton keeps the default description `A TON
+blockchain project`, the default license `MIT`, and leaves optional features
+disabled unless their flags are passed explicitly.
 
 In non-interactive mode, optional features stay disabled unless their flags are
 passed explicitly. For CI or scripts, pass `--name`, `--description`,

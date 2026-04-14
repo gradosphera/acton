@@ -42,8 +42,9 @@ the target directory name.
 .sp
 \fB\-\-description\fR \fIdescription\fR
 .RS 4
-Project description written to \fBActon.toml\fR\&. If not provided, interactive mode
-prompts for it and defaults to \fBA TON blockchain project\fR\&.
+Project description written to \fBActon.toml\fR\&. If not provided, Acton uses
+\fBA TON blockchain project\fR by default. In interactive mode you can override it
+after opting into advanced options.
 .RE
 .sp
 \fB\-\-template\fR \fItemplate\fR
@@ -60,7 +61,8 @@ If not provided, interactive mode prompts for the template.
 License identifier to place into \fBActon.toml\fR and use for the generated
 \fBLICENSE\fR file when Acton has a built\-in template for that license.
 .sp
-If not provided, interactive mode prompts for it.
+If not provided, Acton uses \fBMIT\fR by default. In interactive mode you can
+override it after opting into advanced options.
 .RE
 .sp
 \fB\-\-app\fR
@@ -79,9 +81,9 @@ layout disabled unless \fB\-\-app\fR is passed explicitly.
 .RS 4
 Create and install the default project\-local Git hooks.
 .sp
-If \fBgit\fR is available and \fB\-\-hooks\fR is not provided, interactive mode prompts
-for this choice. Non\-interactive mode leaves hooks disabled unless \fB\-\-hooks\fR
-is passed explicitly.
+If \fBgit\fR is available and \fB\-\-hooks\fR is not provided, interactive mode offers
+this choice after you opt into advanced options. Non\-interactive mode leaves
+hooks disabled unless \fB\-\-hooks\fR is passed explicitly.
 .RE
 .sp
 \fB\-\-agents\fR
@@ -89,9 +91,9 @@ is passed explicitly.
 Include an \fBAGENTS.md\fR file with coding\-agent guidance from the selected
 template.
 .sp
-If \fB\-\-agents\fR is not provided, interactive mode prompts for this choice.
-Non\-interactive mode leaves \fBAGENTS.md\fR disabled unless \fB\-\-agents\fR is passed
-explicitly.
+If \fB\-\-agents\fR is not provided, interactive mode offers this choice after you
+opt into advanced options. Non\-interactive mode leaves \fBAGENTS.md\fR disabled
+unless \fB\-\-agents\fR is passed explicitly.
 .RE
 .SS "Display Options"
 .sp
@@ -190,14 +192,10 @@ Jetton minter and wallet template with:
 .RE
 .SH "INTERACTIVE MODE"
 When enough information is missing and standard input/output are connected to a
-terminal, \fBacton new\fR prompts for:
+terminal, \fBacton new\fR uses a short default flow:
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'project name
-.RE
-.sp
-.RS 4
-\h'-04'\(bu\h'+03'description
 .RE
 .sp
 .RS 4
@@ -205,11 +203,21 @@ terminal, \fBacton new\fR prompts for:
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'license
+\h'-04'\(bu\h'+03'whether to include the TypeScript app layout when the template supports it
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'whether to include the TypeScript app layout when the template supports it
+\h'-04'\(bu\h'+03'whether to configure advanced options
+.RE
+.sp
+If you opt into advanced options, Acton can then prompt for:
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'description
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'license
 .RE
 .sp
 .RS 4
@@ -219,6 +227,9 @@ terminal, \fBacton new\fR prompts for:
 .RS 4
 \h'-04'\(bu\h'+03'whether to include \fBAGENTS.md\fR
 .RE
+.sp
+If you skip advanced options, Acton keeps the default description \fBA TON blockchain project\fR, the default license \fBMIT\fR, and leaves optional features
+disabled unless their flags are passed explicitly.
 .sp
 In non\-interactive mode, optional features stay disabled unless their flags are
 passed explicitly. For CI or scripts, pass \fB\-\-name\fR, \fB\-\-description\fR,
