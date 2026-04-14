@@ -245,13 +245,102 @@ fn build_generated_source(
         }
         generated.push_str(&render_identifier(&param.name));
         generated.push_str(": ");
-        generated.push_str(&param.ty.render_type());
+        generated.push_str(&render_helper_type(&param.ty));
     }
     generated.push_str(") {\n");
     generated.push_str("    return ");
     generated.push_str(expression);
     generated.push_str(";\n}\n");
     generated
+}
+
+fn render_helper_type(ty: &Ty) -> String {
+    match ty {
+        Ty::Nullable { inner, .. } => {
+            let needs_parentheses = needs_parentheses_in_nullable(inner);
+            let inner = render_helper_type(inner);
+            if needs_parentheses {
+                format!("({inner})?")
+            } else {
+                format!("{inner}?")
+            }
+        }
+        Ty::CellOf { inner } => format!("Cell<{}>", render_helper_type(inner)),
+        Ty::ArrayOf { inner } => format!("array<{}>", render_helper_type(inner)),
+        Ty::LispListOf { inner } => format!("lisp_list<{}>", render_helper_type(inner)),
+        Ty::Tensor { items } => format!(
+            "({})",
+            items
+                .iter()
+                .map(render_helper_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Ty::ShapedTuple { items } => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(render_helper_type)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Ty::MapKV { k, v } => {
+            format!("map<{}, {}>", render_helper_type(k), render_helper_type(v))
+        }
+        Ty::StructRef {
+            struct_name,
+            type_args,
+        } => render_named_helper_type(struct_name, type_args.as_deref()),
+        Ty::AliasRef {
+            alias_name,
+            type_args,
+        } => render_named_helper_type(alias_name, type_args.as_deref()),
+        Ty::Union { variants, .. } => variants
+            .iter()
+            .map(|variant| render_helper_type(&variant.variant_ty))
+            .collect::<Vec<_>>()
+            .join(" | "),
+        _ => ty.render_type(),
+    }
+}
+
+fn needs_parentheses_in_nullable(ty: &Ty) -> bool {
+    match ty {
+        Ty::Union { .. } => true,
+        Ty::AliasRef {
+            alias_name: _,
+            type_args,
+        }
+        | Ty::StructRef {
+            struct_name: _,
+            type_args,
+        } => type_args
+            .as_deref()
+            .is_some_and(|type_args| type_args.iter().any(needs_parentheses_in_nullable)),
+        Ty::CellOf { inner } | Ty::ArrayOf { inner } | Ty::LispListOf { inner } => {
+            needs_parentheses_in_nullable(inner)
+        }
+        Ty::Tensor { items } | Ty::ShapedTuple { items } => {
+            items.iter().any(needs_parentheses_in_nullable)
+        }
+        Ty::MapKV { k, v } => needs_parentheses_in_nullable(k) || needs_parentheses_in_nullable(v),
+        _ => false,
+    }
+}
+
+fn render_named_helper_type(name: &str, type_args: Option<&[Ty]>) -> String {
+    let Some(type_args) = type_args else {
+        return name.to_owned();
+    };
+    format!(
+        "{}<{}>",
+        name,
+        type_args
+            .iter()
+            .map(render_helper_type)
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }
 
 fn helper_return_ty(source_map: &SourceMap) -> Result<Ty> {
@@ -923,7 +1012,7 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
     use tolkc::source_map::SourceMap;
-    use tolkc::types_kernel::Ty;
+    use tolkc::types_kernel::{Ty, UnionVariant};
     use tycho_types::boc::Boc;
     use tycho_types::cell::{Cell, CellBuilder};
     use vmlogs::parser::{CellLike, CellSlice, VmStackValue};
@@ -988,6 +1077,71 @@ mod tests {
             .store_uint(u64::from(value), 8)
             .expect("store uint8");
         builder.build().expect("build cell")
+    }
+
+    fn int_bool_null_union_ty() -> Ty {
+        Ty::Union {
+            variants: vec![
+                UnionVariant {
+                    variant_ty: Ty::Int,
+                    prefix_str: String::new(),
+                    prefix_len: 0,
+                    is_prefix_implicit: None,
+                    stack_type_id: Some(1),
+                    stack_width: Some(1),
+                },
+                UnionVariant {
+                    variant_ty: Ty::Bool,
+                    prefix_str: String::new(),
+                    prefix_len: 0,
+                    is_prefix_implicit: None,
+                    stack_type_id: Some(2),
+                    stack_width: Some(1),
+                },
+                UnionVariant {
+                    variant_ty: Ty::NullLiteral,
+                    prefix_str: String::new(),
+                    prefix_len: 0,
+                    is_prefix_implicit: None,
+                    stack_type_id: Some(0),
+                    stack_width: Some(0),
+                },
+            ],
+            stack_width: Some(2),
+        }
+    }
+
+    fn union_raw_slots_for_variant(
+        union_ty: &Ty,
+        predicate: impl Fn(&Ty) -> bool,
+        variant_values: Vec<VmStackValue>,
+    ) -> Vec<VmStackValue> {
+        let Ty::Union {
+            variants,
+            stack_width: Some(stack_width),
+        } = union_ty
+        else {
+            panic!("expected a union with stack width");
+        };
+        let variant = variants
+            .iter()
+            .find(|variant| predicate(&variant.variant_ty))
+            .expect("expected union to contain the requested variant");
+        let variant_width = variant.stack_width.unwrap_or(0);
+        let variant_type_id = variant
+            .stack_type_id
+            .expect("expected union variant to have stack_type_id");
+
+        assert_eq!(
+            variant_values.len(),
+            variant_width,
+            "requested raw union variant width does not match compiled stack width"
+        );
+
+        let mut slots = vec![VmStackValue::Null; stack_width - 1 - variant_width];
+        slots.extend(variant_values);
+        slots.push(VmStackValue::Integer(variant_type_id.to_string()));
+        slots
     }
 
     #[test]
@@ -1212,6 +1366,134 @@ fun sumPoint(p: Point): int {
             .expect("struct evaluate2 should succeed");
 
         assert_eq!(result.to_string(), "16");
+        assert_eq!(result.dap_parts().1.as_deref(), Some("int"));
+    }
+
+    #[test]
+    fn evaluate2_handles_inline_union_params_and_results_from_raw_slots() {
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("eval2_inline_union.tolk");
+        let source = r#"
+fun echo(value: int | bool | null): int | bool | null {
+    return value;
+}
+"#;
+        let source_map = source_map_for_file(
+            file_path.to_str().expect("utf8 path"),
+            source.chars().count() as u64,
+        );
+        fs::write(&file_path, source).expect("write source");
+        let union_ty = int_bool_null_union_ty();
+        let bool_slots = union_raw_slots_for_variant(
+            &union_ty,
+            |ty| matches!(ty, Ty::Bool),
+            vec![VmStackValue::Integer("-1".to_owned())],
+        );
+        let null_slots =
+            union_raw_slots_for_variant(&union_ty, |ty| matches!(ty, Ty::NullLiteral), vec![]);
+
+        let bool_result = evaluate_expression2(
+            &[evaluate_local_with_raw(
+                "value",
+                union_ty.clone(),
+                RenderedValue::typed_leaf("true", "bool"),
+                bool_slots,
+            )],
+            &source_map,
+            1,
+            "echo(value)",
+        )
+        .expect("inline union bool evaluate2 should succeed");
+
+        let RenderedValue::UnionCase {
+            variant_name,
+            fields,
+            ..
+        } = bool_result
+        else {
+            panic!("expected union case");
+        };
+        assert_eq!(variant_name, "#bool");
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].0, "value");
+        assert_eq!(fields[0].1.dap_parts().0, "true");
+        assert_eq!(fields[0].1.dap_parts().1.as_deref(), Some("bool"));
+
+        let null_result = evaluate_expression2(
+            &[evaluate_local_with_raw(
+                "value",
+                union_ty,
+                RenderedValue::typed_leaf("null", "null"),
+                null_slots,
+            )],
+            &source_map,
+            1,
+            "echo(value)",
+        )
+        .expect("inline union null evaluate2 should succeed");
+
+        let RenderedValue::UnionCase {
+            variant_name,
+            fields,
+            ..
+        } = null_result
+        else {
+            panic!("expected union case");
+        };
+        assert_eq!(variant_name, "#null");
+        assert!(fields.is_empty(), "{fields:?}");
+    }
+
+    #[test]
+    fn evaluate2_handles_named_union_alias_params_from_raw_slots() {
+        let dir = tempdir().expect("tempdir");
+        let file_path = dir.path().join("eval2_alias_union.tolk");
+        let source = r#"
+type IntOrBool = int | bool | null
+
+fun asInt(value: IntOrBool): int {
+    match (value) {
+        int => {
+            return value;
+        }
+        bool => {
+            return 100;
+        }
+        null => {
+            return -1;
+        }
+    }
+}
+"#;
+        let source_map = source_map_for_file(
+            file_path.to_str().expect("utf8 path"),
+            source.chars().count() as u64,
+        );
+        fs::write(&file_path, source).expect("write source");
+        let union_ty = int_bool_null_union_ty();
+        let int_slots = union_raw_slots_for_variant(
+            &union_ty,
+            |ty| matches!(ty, Ty::Int),
+            vec![VmStackValue::Integer("7".to_owned())],
+        );
+
+        let result = evaluate_expression2(
+            &[evaluate_local_with_raw(
+                "value",
+                Ty::AliasRef {
+                    alias_name: "IntOrBool".to_owned(),
+                    type_args: None,
+                },
+                RenderedValue::typed_leaf("7", "int"),
+                int_slots,
+            )],
+            &source_map,
+            1,
+            "asInt(value)",
+        )
+        .expect("named union alias evaluate2 should succeed");
+
+        assert_eq!(result.to_string(), "7");
         assert_eq!(result.dap_parts().1.as_deref(), Some("int"));
     }
 

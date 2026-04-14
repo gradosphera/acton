@@ -1687,7 +1687,9 @@ fn debug_format(
                         let Some(variant_start) = stack_width.checked_sub(1 + variant_width) else {
                             return typed_leaf_for_ty(ty, "corrupted stack for union");
                         };
-                        let value = if variant_width == 0 {
+                        let value = if variant_width == 0
+                            || matches!(variant.variant_ty, Ty::NullLiteral)
+                        {
                             None
                         } else {
                             let mut sub =
