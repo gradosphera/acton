@@ -3,6 +3,7 @@ use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use crate::support::snapshots::normalize_output_preserve_escapes;
 use base64::Engine;
+use reqwest::blocking::Client;
 use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
@@ -302,6 +303,46 @@ fn litenode_starts_and_serves_masterchain_info() {
         "Expected getMasterchainInfo result.last.seqno to be present:\n{}",
         serde_json::to_string_pretty(&response).unwrap_or_default()
     );
+
+    node.stop();
+}
+
+#[test]
+fn litenode_serves_embedded_ui_and_spa_routes() {
+    let project = ProjectBuilder::new("litenode-ui-smoke").build();
+    let node = project.litenode().start();
+    let client = Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .expect("Failed to create HTTP client for LiteNode UI smoke test");
+
+    for path in ["", "/explorer"] {
+        let url = format!("{}{}", node.base_url(), path);
+        let response = client
+            .get(&url)
+            .send()
+            .unwrap_or_else(|error| panic!("Failed GET {url}: {error}"));
+        let status = response.status();
+        let body = response
+            .text()
+            .unwrap_or_else(|error| panic!("Failed to read GET {url} response body: {error}"));
+
+        assert!(
+            status.is_success(),
+            "GET {url} failed with status {status}: {body}"
+        );
+        assert!(
+            body.contains("<title>TON Lite Node UI</title>"),
+            "Expected LiteNode UI HTML from {url}, got:\n{body}"
+        );
+        assert!(
+            body.contains("<div id=\"root\"></div>"),
+            "Expected LiteNode UI root container from {url}, got:\n{body}"
+        );
+    }
+
+    let response = node.get_json("/api/v2/getMasterchainInfo");
+    assert_eq!(response["ok"].as_bool(), Some(true));
 
     node.stop();
 }

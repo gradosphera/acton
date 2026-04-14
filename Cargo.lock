@@ -5207,6 +5207,7 @@ dependencies = [
  "base64",
  "crc",
  "hex",
+ "include_dir",
  "rusqlite",
  "serde",
  "serde_json",

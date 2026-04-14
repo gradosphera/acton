@@ -16,7 +16,7 @@ import "@acton/shared-ui/styles/tokens.css"
 import "./index.css"
 import styles from "./App.module.css"
 
-const HOST = process.env.HOST || "http://localhost:3010"
+const HOST = (import.meta.env.VITE_LITENODE_HOST || "").replace(/\/$/, "")
 
 export const App: React.FC = () => {
   const [theme, setTheme] = useState(() => {

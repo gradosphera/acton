@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react"
 import {defineConfig} from "vite"
 import {nodePolyfills} from "vite-plugin-node-polyfills"
 
+const liteNodeTarget = process.env.VITE_LITENODE_PROXY_TARGET || "http://localhost:3010"
+
 export default defineConfig({
   plugins: [
     react(),
@@ -27,10 +29,17 @@ export default defineConfig({
   server: {
     port: 3006,
     proxy: {
-      "/api/v2": {
-        target: "http://localhost:8081",
+      "/api": {
+        target: liteNodeTarget,
         changeOrigin: true,
-        rewrite: path => path.replace(/^\/api\/v2/, "/api/v2"),
+      },
+      "/admin": {
+        target: liteNodeTarget,
+        changeOrigin: true,
+      },
+      "/emulate": {
+        target: liteNodeTarget,
+        changeOrigin: true,
       },
     },
   },

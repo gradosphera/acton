@@ -112,10 +112,12 @@ CLI flags override config values for the current invocation.
 
 - fork mode allows local development against remote chain state
 - `acton litenode start` runs in the foreground until the process is stopped
-- Acton starts an HTTP server on `localhost:<port>` for LiteNode API and admin
-  endpoints
+- Acton starts an HTTP server on `localhost:<port>` for LiteNode API, admin
+  endpoints, and the bundled LiteNode UI
 - the server keeps running until the process is stopped, for example with
   `Ctrl+C`
+- the LiteNode UI is available on the root path, for example
+  `http://localhost:<port>/`
 - when `--port` and `[litenode].port` are both absent, the current runtime
   fallback is `5411`
 - `--rate-limit` applies to `/api/*` endpoints, not admin endpoints

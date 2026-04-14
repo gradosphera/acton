@@ -20,7 +20,7 @@ pub async fn run_server(node: Arc<LiteNode>, args: ServerArgs) -> anyhow::Result
     let address = format!("localhost:{}", args.port);
     let listener = tokio::net::TcpListener::bind(&address).await?;
     println!(
-        "    {} LiteNode server on http://{address}",
+        "    {} LiteNode server and UI on http://{address}",
         "Starting".green().bold(),
     );
     if let Some(fork_network) = args.fork_network {
