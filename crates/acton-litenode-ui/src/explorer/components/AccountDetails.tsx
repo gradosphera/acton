@@ -291,8 +291,10 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
           <Table>
             <TableHeader>
               <TableRow className={styles.historyHeaderRow}>
-                <TableHead className={styles.tableHeader}>Time</TableHead>
-                <TableHead className={styles.tableHeader}>Action</TableHead>
+                <TableHead className={`${styles.tableHeader} ${styles.timeColumn}`}>Time</TableHead>
+                <TableHead className={`${styles.tableHeader} ${styles.actionColumn}`}>
+                  Action
+                </TableHead>
                 <TableHead className={styles.tableHeader}>Address</TableHead>
                 <TableHead className={`${styles.tableHeader} ${styles.valueContainer}`}>
                   Value
@@ -343,8 +345,10 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
                       void navigate(`/explorer/tx/${txHash}`)
                     }}
                   >
-                    <TableCell className={styles.time}>{formatTimeAgo(tx.utime)}</TableCell>
-                    <TableCell>
+                    <TableCell className={`${styles.time} ${styles.timeColumn}`}>
+                      {formatTimeAgo(tx.utime)}
+                    </TableCell>
+                    <TableCell className={styles.actionColumn}>
                       <div className={styles.action}>
                         {isIncoming ? (
                           <ArrowDownLeft
@@ -353,7 +357,15 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
                         ) : (
                           <ArrowUpRight className={`${styles.actionIcon} ${styles.statusFailed}`} />
                         )}
-                        <span>{isIncoming ? "Received TON" : "Sent TON"}</span>
+                        {displayOpcode ? (
+                          <span className={`${styles.actionText} ${styles.opcode}`}>
+                            {displayOpcode}
+                          </span>
+                        ) : (
+                          <span className={styles.actionText}>
+                            {isIncoming ? "Received TON" : "Sent TON"}
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -370,7 +382,6 @@ export const AccountDetails: React.FC<AccountDetailsProps> = ({
                         >
                           <AddressLabel address={address} fallback={displayAddressFallback} />
                         </button>
-                        {displayOpcode && <span className={styles.opcode}>{displayOpcode}</span>}
                       </div>
                     </TableCell>
                     <TableCell className={styles.valueContainer}>
