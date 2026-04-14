@@ -18,7 +18,10 @@ use dap::types::{
     Source, StackFrame, StackFramePresentationhint, StoppedEventReason, Variable,
 };
 
-use crate::core::evaluate::{evaluate_condition_expression, evaluate_expression};
+use crate::core::evaluate::evaluate_condition_expression;
+use crate::core::evaluate2::{
+    evaluate_expression_in_replayer_with_fallback, evaluate_expression_with_fallback,
+};
 use crate::core::exception_format::{build_exception_details, exception_overview};
 use crate::replayer::{self, StepMode, TolkReplayer};
 use crate::transport::{DapConnection, IncomingRequest};
@@ -210,22 +213,20 @@ impl DapState {
         expression: &str,
     ) -> anyhow::Result<RenderedValue> {
         let Some(replayer) = self.replayer.as_ref() else {
-            return evaluate_expression(&[], None, expression);
+            return evaluate_expression_with_fallback(&[], None, None, expression);
         };
 
-        let locals = match frame_id {
+        match frame_id {
             Some(frame_id) => {
                 let depth = self
                     .frame_to_depth
                     .get(&frame_id)
                     .copied()
                     .ok_or_else(|| anyhow::anyhow!("Unknown frame id {frame_id}"))?;
-                replayer.locals_for_frame(depth)
+                evaluate_expression_in_replayer_with_fallback(replayer, depth, expression)
             }
-            None => replayer.locals_for_frame(0),
-        };
-
-        evaluate_expression(&locals, Some(replayer.source_map()), expression)
+            None => evaluate_expression_in_replayer_with_fallback(replayer, 0, expression),
+        }
     }
 }
 

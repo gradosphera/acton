@@ -3,7 +3,10 @@
 //! (`send_message`, `run_get_method`) temporarily push child contexts backed by
 //! live executors and later pop back to the parent.
 
-use crate::core::evaluate::{evaluate_condition_expression, evaluate_expression};
+use crate::core::evaluate::evaluate_condition_expression;
+use crate::core::evaluate2::{
+    evaluate_expression_in_replayer_with_fallback, evaluate_expression_with_fallback,
+};
 use crate::multi::dap_transport::{DapMessage, DapTransport};
 use crate::multi::session::ChildDebugContextSpec;
 use crate::replayer::{
@@ -249,23 +252,25 @@ impl ReplayerDebugSession {
                     .copied()
                     .ok_or_else(|| anyhow!("Unknown frame id {frame_id}"))?;
                 let Some(ctx) = self.contexts.get(locator.context_idx) else {
-                    return evaluate_expression(&[], None, expression);
+                    return evaluate_expression_with_fallback(&[], None, None, expression);
                 };
                 let Ok(ctx) = ctx.try_borrow() else {
-                    return evaluate_expression(&[], None, expression);
+                    return evaluate_expression_with_fallback(&[], None, None, expression);
                 };
-                let locals = ctx.replayer.locals_for_frame(locator.depth_from_top);
-                evaluate_expression(&locals, Some(ctx.replayer.source_map()), expression)
+                evaluate_expression_in_replayer_with_fallback(
+                    &ctx.replayer,
+                    locator.depth_from_top,
+                    expression,
+                )
             }
             None => {
                 let Some(ctx) = self.active_context() else {
-                    return evaluate_expression(&[], None, expression);
+                    return evaluate_expression_with_fallback(&[], None, None, expression);
                 };
                 let Ok(ctx) = ctx.try_borrow() else {
-                    return evaluate_expression(&[], None, expression);
+                    return evaluate_expression_with_fallback(&[], None, None, expression);
                 };
-                let locals = ctx.replayer.locals_for_frame(0);
-                evaluate_expression(&locals, Some(ctx.replayer.source_map()), expression)
+                evaluate_expression_in_replayer_with_fallback(&ctx.replayer, 0, expression)
             }
         }
     }

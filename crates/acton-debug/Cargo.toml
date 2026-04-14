@@ -14,12 +14,14 @@ license = { workspace = true }
 doctest = false
 
 [dependencies]
+acton-config = { workspace = true }
 anyhow = { workspace = true }
 crossbeam-channel = { workspace = true }
 dap = { workspace = true }
 log = { workspace = true }
 num-bigint = { workspace = true }
 serde_json = { workspace = true }
+tempfile = { workspace = true }
 tolk-syntax = { workspace = true }
 tolkc = { workspace = true }
 ton-abi = { workspace = true }

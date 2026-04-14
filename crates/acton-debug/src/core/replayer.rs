@@ -69,6 +69,14 @@ pub struct LocalVarRendered {
     pub value: RenderedValue,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct EvaluateLocalVar {
+    pub var_name: String,
+    pub ty: Ty,
+    pub value: RenderedValue,
+    pub raw_slots: Option<Vec<VmStackValue>>,
+}
+
 /// Low-level runtime events consumed by `TolkReplayer`.
 /// Debug-mark expansion stays in the replayer, which keeps source reconstruction
 /// shared between the VM-log and live-VM backends.
@@ -784,6 +792,42 @@ impl TolkReplayer {
         }
     }
 
+    #[must_use]
+    pub(crate) fn evaluate_locals_for_frame(&self, depth: usize) -> Vec<EvaluateLocalVar> {
+        let idx = self.call_stack.len().checked_sub(1 + depth);
+        match idx {
+            Some(i) => {
+                let exec_idx = self.exec_idx_for_frame(i);
+                let exec = &self.exec_stack[exec_idx];
+                self.format_evaluate_locals_of(
+                    &self.call_stack[i],
+                    &exec.last_seen_values,
+                    &exec.accumulated_ir_live,
+                )
+            }
+            None => Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn file_id_for_frame(&self, depth: usize) -> Option<usize> {
+        if depth == 0 {
+            return Some(self.current_file_id());
+        }
+
+        let idx = self.call_stack.len().checked_sub(1 + depth)?;
+        self.call_stack
+            .get(idx)
+            .and_then(|frame| self.source_map.get_function_by_idx(frame.f_idx))
+            .map(|function| function.ident_loc.file_id())
+            .or_else(|| {
+                self.call_stack
+                    .get(idx + 1)
+                    .and_then(|child| child.call_site_loc.as_ref())
+                    .map(SrcRange::file_id)
+            })
+    }
+
     /// Map a `call_stack` frame index to the corresponding `exec_stack` index.
     /// `call_stack` also contains inlined/built-in functions, whereas `exec_stack` only noinline contexts.
     fn exec_idx_for_frame(&self, frame_idx: usize) -> usize {
@@ -1376,6 +1420,62 @@ impl TolkReplayer {
             result.push(LocalVarRendered {
                 var_name: "(return value)".to_string(),
                 value: return_val,
+            });
+        }
+
+        result
+    }
+
+    fn format_evaluate_locals_of(
+        &self,
+        frame: &CallFrame,
+        last_seen: &HashMap<usize, VmStackValue>,
+        ir_live: &HashSet<usize>,
+    ) -> Vec<EvaluateLocalVar> {
+        let mut result = Vec::new();
+
+        for var in frame.all_visible_vars() {
+            let slot_values: Vec<SlotValue> = var
+                .ir_slots
+                .iter()
+                .map(|&ir| {
+                    if let Some(val) = last_seen.get(&ir) {
+                        if ir_live.contains(&ir) {
+                            SlotValue::Live(val)
+                        } else {
+                            SlotValue::LastSeen(val)
+                        }
+                    } else {
+                        SlotValue::OptimizedOut
+                    }
+                })
+                .collect();
+
+            let Some(ty) = self.source_map.resolve_ty(var.ty_idx).cloned() else {
+                continue;
+            };
+
+            let value = if var.is_lazy {
+                debug_format_lazy(
+                    &self.source_map,
+                    &slot_values,
+                    &var.ir_slots,
+                    &ty,
+                    last_seen,
+                )
+            } else {
+                debug_print_from_stack(&self.source_map, &slot_values, &ty)
+            };
+
+            result.push(EvaluateLocalVar {
+                var_name: var.name.clone(),
+                ty,
+                value,
+                raw_slots: var
+                    .ir_slots
+                    .iter()
+                    .map(|&ir| last_seen.get(&ir).cloned())
+                    .collect(),
             });
         }
 

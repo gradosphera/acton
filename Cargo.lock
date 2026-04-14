@@ -124,12 +124,14 @@ dependencies = [
 name = "acton-debug"
 version = "0.2.0"
 dependencies = [
+ "acton-config",
  "anyhow",
  "crossbeam-channel",
  "dap",
  "log",
  "num-bigint",
  "serde_json",
+ "tempfile",
  "tolk-syntax",
  "tolkc",
  "ton-abi",

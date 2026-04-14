@@ -173,7 +173,7 @@ impl From<StepExecutor> for DebugExecutorHandle {
     }
 }
 
-fn tuple_item_to_vm_stack_value(item: &TupleItem) -> VmStackValue {
+pub(crate) fn tuple_item_to_vm_stack_value(item: &TupleItem) -> VmStackValue {
     match item {
         TupleItem::Null => VmStackValue::Null,
         TupleItem::Int(v) => VmStackValue::Integer(v.to_string()),
