@@ -1,0 +1,580 @@
+.debugPage {
+  --debug-border: color-mix(in srgb, var(--border-color) 72%, transparent);
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: transparent;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  border-bottom: 1px solid var(--debug-border);
+  background: transparent;
+}
+
+.toolbarPrimary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.titleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.subtitle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.testName {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.filePath {
+  font-family: var(--font-mono), monospace;
+}
+
+.statusChip {
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.status_idle,
+.status_ready {
+  background: color-mix(in srgb, var(--bg-color) 90%, transparent);
+  color: var(--text-secondary);
+}
+
+.status_launching,
+.status_connecting,
+.status_running {
+  background: color-mix(in srgb, var(--color-todo) 14%, transparent);
+  color: var(--color-todo);
+  border-color: color-mix(in srgb, var(--color-todo) 40%, var(--border-color));
+}
+
+.status_paused {
+  background: color-mix(in srgb, var(--link-color) 12%, transparent);
+  color: var(--link-color);
+  border-color: color-mix(in srgb, var(--link-color) 35%, var(--border-color));
+}
+
+.status_terminated,
+.status_error {
+  background: color-mix(in srgb, var(--color-failed) 14%, transparent);
+  color: var(--color-failed);
+  border-color: color-mix(in srgb, var(--color-failed) 35%, var(--border-color));
+}
+
+.dirtyBadge {
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-skipped) 16%, transparent);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  justify-content: flex-end;
+}
+
+.actionButton {
+  border: 1px solid var(--debug-border);
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: var(--border-radius-sm);
+  padding: 0.55rem 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  min-height: 2.35rem;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    transform 150ms ease;
+}
+
+.actionButton:hover:enabled {
+  border-color: color-mix(in srgb, var(--link-color) 42%, var(--debug-border));
+  transform: translateY(-1px);
+}
+
+.actionButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.primaryButton {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--link-color) 90%, white 10%),
+    color-mix(in srgb, var(--link-color) 75%, black 10%)
+  );
+  color: white;
+  border-color: transparent;
+}
+
+.errorBanner {
+  margin: var(--spacing-md) var(--spacing-lg) 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+  background: color-mix(in srgb, var(--color-failed) 10%, transparent);
+  color: var(--color-failed);
+  border: 1px solid color-mix(in srgb, var(--color-failed) 35%, var(--debug-border));
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(320px, 0.95fr);
+  gap: clamp(0.9rem, 1.5vw, 1.25rem);
+  padding: var(--spacing-md) var(--spacing-lg);
+  min-height: 0;
+  flex: 1;
+  align-items: stretch;
+}
+
+.editorPanel,
+.sidebar,
+.logsSection {
+  min-height: 0;
+}
+
+.editorPanel {
+  border: 1px solid var(--debug-border);
+  border-radius: calc(var(--border-radius-md) + 2px);
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+}
+
+.editorSurface {
+  height: clamp(24rem, 68vh, 54rem);
+  min-height: 24rem;
+}
+
+.sidebar {
+  display: grid;
+  grid-template-rows: minmax(15rem, 0.82fr) minmax(20rem, 1.18fr);
+  gap: clamp(0.85rem, 1.3vw, 1.1rem);
+  min-height: 0;
+}
+
+.sidebarSection,
+.logsSection {
+  border: 1px solid var(--debug-border);
+  border-radius: calc(var(--border-radius-md) + 2px);
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarSection {
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+.sectionTitle {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid color-mix(in srgb, var(--debug-border) 80%, transparent);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.emptyState {
+  padding: var(--spacing-md);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.frameList,
+.scopeList,
+.logList {
+  overflow: auto;
+  min-height: 0;
+  scrollbar-gutter: stable both-edges;
+}
+
+.frameList {
+  display: flex;
+  flex-direction: column;
+  padding: 0.35rem 0;
+  flex: 1 1 auto;
+  max-height: 100%;
+  overscroll-behavior: contain;
+}
+
+.frameItem {
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--debug-border) 55%, transparent);
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  padding: 0.78rem var(--spacing-md) 0.82rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.26rem;
+  position: relative;
+  transition:
+    background-color 150ms ease,
+    transform 150ms ease;
+}
+
+.frameItem::before {
+  content: "";
+  position: absolute;
+  left: 0.45rem;
+  top: 0.7rem;
+  bottom: 0.7rem;
+  width: 3px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.frameItem:hover {
+  background: color-mix(in srgb, var(--debug-surface-strong) 88%, transparent);
+  transform: translateX(2px);
+}
+
+.frameItemActive {
+  background: color-mix(in srgb, var(--link-color) 10%, transparent);
+}
+
+.frameItemActive::before {
+  background: linear-gradient(
+    180deg,
+    var(--link-color),
+    color-mix(in srgb, var(--link-color) 58%, white 42%)
+  );
+}
+
+.frameName {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.frameMeta {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-family: var(--font-mono), monospace;
+  overflow-wrap: anywhere;
+}
+
+.scopeList {
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  flex: 1 1 auto;
+  max-height: 100%;
+  overscroll-behavior: contain;
+}
+
+.scopeGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.15rem 0 0;
+}
+
+.scopeName {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.scopeEmpty {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.variableList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.variableNode {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.variableRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(8rem, 1.1fr);
+  gap: 0.5rem 0.75rem;
+  align-items: start;
+  min-height: 1.65rem;
+  padding: 0.22rem 0.4rem 0.22rem 0.2rem;
+  border-radius: 0.45rem;
+}
+
+.variableToggle,
+.variableToggleSpacer {
+  width: 1rem;
+  min-width: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.variableToggle {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+
+.variableToggle:hover {
+  color: var(--text-primary);
+}
+
+.variableSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.32rem 0.45rem;
+  min-width: 0;
+}
+
+.variableName {
+  font-family: var(--font-mono), monospace;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.variableType {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.variableValue {
+  font-family: var(--font-mono), monospace;
+  color: color-mix(in srgb, var(--text-secondary) 90%, var(--text-primary));
+  overflow-wrap: anywhere;
+  text-align: left;
+  min-width: 0;
+}
+
+.variableChildren {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.variableLoading {
+  font-family: var(--font-mono), monospace;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.logsSection {
+  margin: 0 var(--spacing-lg) var(--spacing-lg);
+  min-height: 12rem;
+  overflow: hidden;
+}
+
+.logList {
+  max-height: min(28vh, 18rem);
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.78rem;
+}
+
+.logLine {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+}
+
+.currentLineDecoration {
+  background: color-mix(in srgb, var(--link-color) 14%, transparent);
+}
+
+.currentLineGlyph {
+  background: linear-gradient(
+    180deg,
+    var(--link-color),
+    color-mix(in srgb, var(--link-color) 65%, white 35%)
+  );
+  border-radius: 999px;
+  margin-left: 4px;
+  width: 6px !important;
+}
+
+@media (max-width: 1320px) {
+  .layout {
+    grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.95fr);
+  }
+
+  .toolbarActions {
+    max-width: 34rem;
+  }
+}
+
+@media (max-width: 1080px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+  }
+
+  .sidebarSection {
+    min-height: 18rem;
+    height: clamp(18rem, 34vh, 23rem);
+  }
+
+  .editorSurface {
+    height: min(56vh, 34rem);
+  }
+
+  .logsSection {
+    margin-inline: var(--spacing-lg);
+  }
+}
+
+@media (max-width: 760px) {
+  .toolbar {
+    padding: var(--spacing-md);
+  }
+
+  .toolbarPrimary,
+  .toolbarActions {
+    width: 100%;
+  }
+
+  .toolbarActions {
+    justify-content: flex-start;
+  }
+
+  .actionButton {
+    flex: 1 1 calc(50% - var(--spacing-xs));
+    justify-content: center;
+  }
+
+  .layout {
+    padding-inline: var(--spacing-md);
+  }
+
+  .sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebarSection {
+    height: clamp(16rem, 32vh, 21rem);
+  }
+
+  .editorSurface {
+    height: min(50vh, 30rem);
+    min-height: 20rem;
+  }
+
+  .logsSection {
+    margin: 0 var(--spacing-md) var(--spacing-md);
+  }
+}
+
+@media (max-width: 560px) {
+  .subtitle {
+    flex-direction: column;
+    gap: 0.2rem;
+    align-items: flex-start;
+  }
+
+  .actionButton {
+    flex-basis: 100%;
+  }
+
+  .frameItem {
+    padding-right: 0.85rem;
+  }
+
+  .sidebarSection {
+    height: clamp(14rem, 30vh, 19rem);
+  }
+
+  .scopeList,
+  .logList {
+    padding-inline: 0.85rem;
+  }
+
+  .variableRow {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "toggle summary"
+      ". value";
+    gap: 0.22rem 0.65rem;
+    padding-inline: 0.1rem;
+  }
+
+  .variableToggle,
+  .variableToggleSpacer {
+    grid-area: toggle;
+  }
+
+  .variableSummary {
+    grid-area: summary;
+  }
+
+  .variableValue {
+    grid-area: value;
+    font-size: 0.78rem;
+  }
+
+  .logsSection {
+    min-height: 10rem;
+  }
+}

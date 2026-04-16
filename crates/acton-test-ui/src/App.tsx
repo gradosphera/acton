@@ -6,6 +6,7 @@ import type {TestReport, Trace} from "@acton/shared-ui"
 
 import styles from "./App.module.css"
 import {Coverage} from "./components/Coverage/Coverage"
+import {DebugPage} from "./components/Debug/DebugPage"
 import {Sidebar} from "./components/Sidebar/Sidebar"
 import {TestDetails} from "./components/TestDetails/TestDetails"
 
@@ -23,9 +24,12 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [coverageLcov, setCoverageLcov] = useState<string | undefined>()
   const [coverageLoaded, setCoverageLoaded] = useState(false)
-  const [activeView, setActiveView] = useState<"tests" | "coverage">(() => {
+  const [activeView, setActiveView] = useState<"tests" | "coverage" | "debug">(() => {
     const saved = localStorage.getItem("activeMainView")
-    return saved === "coverage" ? "coverage" : "tests"
+    if (saved === "coverage" || saved === "debug") {
+      return saved
+    }
+    return "tests"
   })
 
   useEffect(() => {
@@ -36,7 +40,7 @@ export const App: React.FC = () => {
   const toggleTheme = useCallback(() => {
     setTheme(prev => (prev === "light" ? "dark" : "light"))
   }, [])
-  const handleActiveViewChange = useCallback((view: "tests" | "coverage") => {
+  const handleActiveViewChange = useCallback((view: "tests" | "coverage" | "debug") => {
     setActiveView(view)
     localStorage.setItem("activeMainView", view)
   }, [])
@@ -237,15 +241,22 @@ export const App: React.FC = () => {
       />
 
       <div className={styles.mainContent}>
-        {coverageLcov !== undefined && (
-          <div className={styles.viewTabs}>
-            <button
-              type="button"
-              className={`${styles.viewTab} ${activeView === "tests" ? styles.viewTabActive : ""}`}
-              onClick={() => handleActiveViewChange("tests")}
-            >
-              Tests
-            </button>
+        <div className={styles.viewTabs}>
+          <button
+            type="button"
+            className={`${styles.viewTab} ${activeView === "tests" ? styles.viewTabActive : ""}`}
+            onClick={() => handleActiveViewChange("tests")}
+          >
+            Tests
+          </button>
+          <button
+            type="button"
+            className={`${styles.viewTab} ${activeView === "debug" ? styles.viewTabActive : ""}`}
+            onClick={() => handleActiveViewChange("debug")}
+          >
+            Debug
+          </button>
+          {coverageLcov !== undefined && (
             <button
               type="button"
               className={`${styles.viewTab} ${activeView === "coverage" ? styles.viewTabActive : ""}`}
@@ -253,12 +264,14 @@ export const App: React.FC = () => {
             >
               Coverage
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className={styles.mainPanel}>
           {activeView === "coverage" && coverageLcov !== undefined ? (
             <Coverage lcov={coverageLcov} projectRoot={projectRoot} />
+          ) : activeView === "debug" && selectedTest ? (
+            <DebugPage test={selectedTest} projectRoot={projectRoot} theme={theme} />
           ) : selectedTest ? (
             <TestDetails test={selectedTest} trace={currentTrace} projectRoot={projectRoot} />
           ) : (

@@ -71,12 +71,16 @@ get fun `test minter admin should be able to mint jettons`() {
         ton("1"),
     );
 
+    // expect(wallet).toEqual(JettonWallet {
+    //     address: deployer.address,
+    // });
+
     expect(mintResult2).toHaveSuccessfulTx({ from: minter.address, to: wallet.address });
 
     expect(mintResult2).toHaveTx({
         from: wallet.address,
         to: minter.address,
-        exitCode: 65535,
+        exitCode: 655351,
     });
 
     expect(wallet.getJettonBalance()).toEqual(initialJettonBalance + additionalJettonBalance);

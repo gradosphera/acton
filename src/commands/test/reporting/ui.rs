@@ -4,16 +4,29 @@ use acton_config::color::OwoColorize;
 use anyhow::Context;
 use axum::{
     Router,
-    extract::{Path as AxumPath, Query, State},
+    extract::{
+        Path as AxumPath, Query, State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
+    },
     http::StatusCode,
     response::{IntoResponse, Json},
-    routing::get,
+    routing::{get, put},
 };
+use futures_util::{SinkExt, StreamExt};
 #[cfg(not(debug_assertions))]
 use include_dir::{Dir, include_dir};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::{
+    io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader},
+    net::TcpStream,
+    process::Command,
+    sync::mpsc::{UnboundedSender, unbounded_channel},
+};
 #[cfg(debug_assertions)]
 use tower_http::services::ServeDir;
 
@@ -188,7 +201,8 @@ fn build_ui_api_router(state: Arc<UiServerState>) -> Router {
         .route("/api/test-logs", get(handle_api_test_logs))
         .route("/api/trace/{name}", get(handle_api_trace))
         .route("/api/contract/{name}", get(handle_api_contract))
-        .route("/api/file", get(handle_api_file))
+        .route("/api/file", get(handle_api_file).put(handle_api_save_file))
+        .route("/api/debug/ws", get(handle_api_debug_ws))
         .route("/api/coverage.lcov", get(handle_api_coverage_lcov))
         .route("/api/config", get(handle_api_config))
         .with_state(state)
@@ -340,6 +354,25 @@ struct FileQuery {
     path: String,
 }
 
+#[derive(Deserialize)]
+struct SaveFileRequest {
+    path: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct DebugSessionQuery {
+    file_path: String,
+    name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+enum ClientDebugSocketMessage {
+    Dap { payload: Value },
+    Stop,
+}
+
 async fn handle_api_file(
     Query(query): Query<FileQuery>,
     State(state): State<Arc<UiServerState>>,
@@ -354,6 +387,45 @@ async fn handle_api_file(
         Ok(content) => content.into_response(),
         Err(_) => (StatusCode::NOT_FOUND, "File not found").into_response(),
     }
+}
+
+async fn handle_api_save_file(
+    State(state): State<Arc<UiServerState>>,
+    Json(payload): Json<SaveFileRequest>,
+) -> impl IntoResponse {
+    let requested_path = PathBuf::from(&payload.path);
+    let Some(file_path) = resolve_path_within_root(&state.project_root_path, &requested_path)
+    else {
+        return (StatusCode::FORBIDDEN, "Access denied").into_response();
+    };
+
+    match tokio::fs::write(file_path, payload.content).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to save file").into_response(),
+    }
+}
+
+async fn handle_api_debug_ws(
+    ws: WebSocketUpgrade,
+    Query(query): Query<DebugSessionQuery>,
+    State(state): State<Arc<UiServerState>>,
+) -> impl IntoResponse {
+    let requested_path = PathBuf::from(&query.file_path);
+    let Some(file_path) = resolve_path_within_root(&state.project_root_path, &requested_path)
+    else {
+        return (StatusCode::FORBIDDEN, "Access denied").into_response();
+    };
+
+    let test_exists = state
+        .reports
+        .iter()
+        .any(|report| report.file_path == file_path && report.name.as_ref() == query.name);
+    if !test_exists {
+        return (StatusCode::NOT_FOUND, "Test not found").into_response();
+    }
+
+    ws.on_upgrade(move |socket| run_debug_socket(socket, state, file_path, query.name))
+        .into_response()
 }
 
 #[derive(Serialize)]
@@ -422,6 +494,319 @@ async fn handle_api_contract(
         },
         Err(_) => (StatusCode::NOT_FOUND, "Contract not found").into_response(),
     }
+}
+
+async fn run_debug_socket(
+    socket: WebSocket,
+    state: Arc<UiServerState>,
+    file_path: PathBuf,
+    test_name: String,
+) {
+    let (mut ws_sender, mut ws_receiver) = socket.split();
+    let (out_tx, mut out_rx) = unbounded_channel::<Message>();
+
+    let writer_task = tokio::spawn(async move {
+        while let Some(message) = out_rx.recv().await {
+            if ws_sender.send(message).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    let session_result = drive_debug_session(
+        &mut ws_receiver,
+        out_tx.clone(),
+        state,
+        file_path,
+        test_name,
+    )
+    .await;
+    if let Err(err) = session_result {
+        let _ = send_socket_json(
+            &out_tx,
+            serde_json::json!({
+                "type": "error",
+                "message": err.to_string(),
+            }),
+        );
+    }
+
+    drop(out_tx);
+    let _ = writer_task.await;
+}
+
+async fn drive_debug_session(
+    ws_receiver: &mut futures_util::stream::SplitStream<WebSocket>,
+    out_tx: UnboundedSender<Message>,
+    state: Arc<UiServerState>,
+    file_path: PathBuf,
+    test_name: String,
+) -> anyhow::Result<()> {
+    send_socket_json(
+        &out_tx,
+        serde_json::json!({
+            "type": "status",
+            "status": "launching",
+        }),
+    )?;
+
+    let debug_port = reserve_ephemeral_port()?;
+    let executable = std::env::current_exe().context("Failed to determine acton executable")?;
+    let filter = format!("^{}$", regex::escape(&test_name));
+
+    let mut child = Command::new(executable);
+    child
+        .current_dir(&state.project_root_path)
+        .arg("test")
+        .arg(&file_path)
+        .arg("--filter")
+        .arg(filter)
+        .arg("--debug")
+        .arg("--debug-port")
+        .arg(debug_port.to_string())
+        .env("ACTON_INTERNAL_SKIP_BUILD", "1")
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    let mut child = child.spawn().with_context(|| {
+        format!(
+            "Failed to start debug process for '{}' in '{}'",
+            test_name,
+            file_path.display()
+        )
+    })?;
+
+    if let Some(stdout) = child.stdout.take() {
+        tokio::spawn(forward_process_output("stdout", stdout, out_tx.clone()));
+    }
+    if let Some(stderr) = child.stderr.take() {
+        tokio::spawn(forward_process_output("stderr", stderr, out_tx.clone()));
+    }
+
+    send_socket_json(
+        &out_tx,
+        serde_json::json!({
+            "type": "status",
+            "status": "connecting",
+        }),
+    )?;
+
+    let stream = connect_to_dap_server(debug_port, &mut child).await?;
+    let (dap_read, mut dap_write) = stream.into_split();
+    let out_tx_for_dap = out_tx.clone();
+    let dap_reader_task = tokio::spawn(async move {
+        let result = forward_dap_messages(dap_read, out_tx_for_dap.clone()).await;
+        if let Err(err) = result {
+            let _ = send_socket_json(
+                &out_tx_for_dap,
+                serde_json::json!({
+                    "type": "error",
+                    "message": format!("DAP bridge failed: {err}"),
+                }),
+            );
+        }
+    });
+
+    send_socket_json(
+        &out_tx,
+        serde_json::json!({
+            "type": "status",
+            "status": "ready",
+        }),
+    )?;
+
+    while let Some(message) = ws_receiver.next().await {
+        match message {
+            Ok(Message::Text(text)) => {
+                let client_message: ClientDebugSocketMessage =
+                    serde_json::from_str(&text).context("Invalid websocket control message")?;
+                match client_message {
+                    ClientDebugSocketMessage::Dap { payload } => {
+                        write_dap_message(&mut dap_write, &payload).await?;
+                    }
+                    ClientDebugSocketMessage::Stop => break,
+                }
+            }
+            Ok(Message::Binary(_)) => {}
+            Ok(Message::Ping(_)) => {}
+            Ok(Message::Pong(_)) => {}
+            Ok(Message::Close(_)) => break,
+            Err(err) => return Err(err).context("Websocket receive failed"),
+        }
+    }
+
+    let _ = dap_write.shutdown().await;
+    let _ = dap_reader_task.await;
+
+    let _ = child.kill().await;
+    let status = child.wait().await.ok().and_then(|status| status.code());
+    let _ = send_socket_json(
+        &out_tx,
+        serde_json::json!({
+            "type": "process-exit",
+            "status": status,
+        }),
+    );
+
+    Ok(())
+}
+
+async fn connect_to_dap_server(
+    port: u16,
+    child: &mut tokio::process::Child,
+) -> anyhow::Result<TcpStream> {
+    let address = format!("127.0.0.1:{port}");
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+
+    loop {
+        match TcpStream::connect(&address).await {
+            Ok(stream) => return Ok(stream),
+            Err(connect_err) => {
+                if let Some(status) = child.try_wait().context("Failed to poll debug process")? {
+                    anyhow::bail!(
+                        "Debug process exited before debugger connection was ready (status: {status}): {connect_err}"
+                    );
+                }
+
+                if tokio::time::Instant::now() >= deadline {
+                    anyhow::bail!("Timed out waiting for debug server on {address}: {connect_err}");
+                }
+
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        }
+    }
+}
+
+async fn forward_process_output<R>(
+    stream: &'static str,
+    reader: R,
+    out_tx: UnboundedSender<Message>,
+) where
+    R: AsyncRead + Unpin,
+{
+    let mut lines = BufReader::new(reader).lines();
+    loop {
+        match lines.next_line().await {
+            Ok(Some(line)) => {
+                if send_socket_json(
+                    &out_tx,
+                    serde_json::json!({
+                        "type": "process-output",
+                        "stream": stream,
+                        "text": line,
+                    }),
+                )
+                .is_err()
+                {
+                    break;
+                }
+            }
+            Ok(None) => break,
+            Err(err) => {
+                let _ = send_socket_json(
+                    &out_tx,
+                    serde_json::json!({
+                        "type": "error",
+                        "message": format!("Failed to read {stream}: {err}"),
+                    }),
+                );
+                break;
+            }
+        }
+    }
+}
+
+async fn forward_dap_messages<R>(reader: R, out_tx: UnboundedSender<Message>) -> anyhow::Result<()>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut reader = BufReader::new(reader);
+    while let Some(payload) = read_dap_message(&mut reader).await? {
+        send_socket_json(
+            &out_tx,
+            serde_json::json!({
+                "type": "dap",
+                "payload": payload,
+            }),
+        )?;
+    }
+
+    Ok(())
+}
+
+async fn read_dap_message<R>(reader: &mut BufReader<R>) -> anyhow::Result<Option<Value>>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut content_length = None;
+    let mut line = String::new();
+
+    loop {
+        line.clear();
+        let read_size = reader.read_line(&mut line).await?;
+        if read_size == 0 {
+            return Ok(None);
+        }
+
+        let trimmed = line.trim_end_matches(['\r', '\n']);
+        if trimmed.is_empty() {
+            if let Some(length) = content_length {
+                let mut content = vec![0; length];
+                reader.read_exact(&mut content).await?;
+                let payload = serde_json::from_slice(&content)
+                    .context("Failed to decode DAP message payload")?;
+                return Ok(Some(payload));
+            }
+            continue;
+        }
+
+        if let Some((key, value)) = trimmed.split_once(':')
+            && key.trim().eq_ignore_ascii_case("content-length")
+        {
+            content_length = Some(
+                value
+                    .trim()
+                    .parse()
+                    .context("Invalid Content-Length header in DAP stream")?,
+            );
+        }
+    }
+}
+
+async fn write_dap_message<W>(writer: &mut W, payload: &Value) -> anyhow::Result<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    let payload = serde_json::to_string(payload).context("Failed to serialize DAP request")?;
+    let header = format!("Content-Length: {}\r\n\r\n", payload.len());
+    writer.write_all(header.as_bytes()).await?;
+    writer.write_all(payload.as_bytes()).await?;
+    writer.flush().await?;
+    Ok(())
+}
+
+fn reserve_ephemeral_port() -> anyhow::Result<u16> {
+    let listener =
+        std::net::TcpListener::bind(("127.0.0.1", 0)).context("Failed to reserve debug port")?;
+    listener
+        .local_addr()
+        .map(|address| address.port())
+        .context("Failed to inspect reserved debug port")
+}
+
+fn send_socket_json(
+    out_tx: &UnboundedSender<Message>,
+    payload: serde_json::Value,
+) -> anyhow::Result<()> {
+    let text = serde_json::to_string(&payload).context("Failed to encode websocket payload")?;
+    out_tx
+        .send(Message::Text(text.into()))
+        .map_err(|_| anyhow::anyhow!("Websocket closed"))?;
+    Ok(())
 }
 
 fn resolve_path_within_root(root: &Path, requested: &Path) -> Option<PathBuf> {
