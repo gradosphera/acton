@@ -1360,6 +1360,26 @@ mod tests {
     }
 
     #[test]
+    fn test_import_preserves_non_tolk_suffix_when_appending_extension() {
+        ResolveTestBuilder::new()
+            .file("other.test.tolk", "fun other_fun() {}")
+            .file(
+                "main.tolk",
+                r#"
+                import "other.test"
+
+                fun main() {
+                    <caret>other_fun();
+                }
+                "#,
+            )
+            .target("main.tolk")
+            .check_definition(expect![[r"
+                other_fun -> Global(other_fun at other.test.tolk:4-13)
+            "]]);
+    }
+
+    #[test]
     fn test_mapped_import() {
         ResolveTestBuilder::new()
             .mapping("@core", "libs")

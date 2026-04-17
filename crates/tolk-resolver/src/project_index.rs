@@ -298,11 +298,13 @@ impl ProjectIndex {
     }
 
     fn append_tolk_extension_if_needed(abs_path: PathBuf) -> PathBuf {
-        if abs_path.ends_with(".tolk") {
-            abs_path
-        } else {
-            abs_path.with_extension("tolk")
+        if abs_path.extension().is_some_and(|ext| ext == "tolk") {
+            return abs_path;
         }
+
+        let mut abs_path = abs_path;
+        abs_path.as_mut_os_string().push(".tolk");
+        abs_path
     }
 }
 
