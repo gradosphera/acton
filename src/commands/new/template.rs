@@ -1,5 +1,6 @@
 use clap::ValueEnum;
 use include_dir::{Dir, include_dir};
+use serde::Serialize;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
@@ -28,6 +29,14 @@ pub(super) enum ProjectLayout {
 }
 
 impl ProjectLayout {
+    #[must_use]
+    pub(super) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::App => "app",
+        }
+    }
+
     #[must_use]
     pub(super) const fn contracts_mapping(self) -> &'static str {
         match self {
@@ -94,6 +103,34 @@ impl ProjectScaffold {
 struct TemplateDefinition {
     default_scaffold: ProjectScaffold,
     app_scaffold: Option<ProjectScaffold>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(super) struct TemplateCatalog {
+    schema_version: u8,
+    templates: Vec<TemplateCatalogEntry>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TemplateCatalogEntry {
+    id: &'static str,
+    description: &'static str,
+    supports_app: bool,
+    scaffolds: Vec<TemplateScaffoldInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TemplateScaffoldInfo {
+    kind: &'static str,
+    includes_typescript_app: bool,
+    contracts: Vec<TemplateContractInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TemplateContractInfo {
+    id: &'static str,
+    name: &'static str,
+    src: &'static str,
 }
 
 const EMPTY_CONTRACTS: [ContractTemplate; 1] = [ContractTemplate {
@@ -249,6 +286,31 @@ pub(super) fn get_available_templates() -> Vec<ProjectTemplate> {
     ]
 }
 
+pub(super) fn template_catalog() -> TemplateCatalog {
+    let templates = get_available_templates()
+        .into_iter()
+        .map(|template| {
+            let definition = template_definition(template);
+            let mut scaffolds = vec![serialize_scaffold(definition.default_scaffold)];
+            if let Some(app_scaffold) = definition.app_scaffold {
+                scaffolds.push(serialize_scaffold(app_scaffold));
+            }
+
+            TemplateCatalogEntry {
+                id: template.as_str(),
+                description: template.description(),
+                supports_app: definition.app_scaffold.is_some(),
+                scaffolds,
+            }
+        })
+        .collect();
+
+    TemplateCatalog {
+        schema_version: 1,
+        templates,
+    }
+}
+
 pub(super) const fn template_supports_app(template: ProjectTemplate) -> bool {
     template_definition(template).app_scaffold.is_some()
 }
@@ -262,6 +324,22 @@ pub(super) const fn project_scaffold(
         definition.app_scaffold
     } else {
         Some(definition.default_scaffold)
+    }
+}
+
+fn serialize_scaffold(scaffold: ProjectScaffold) -> TemplateScaffoldInfo {
+    TemplateScaffoldInfo {
+        kind: scaffold.layout().as_str(),
+        includes_typescript_app: scaffold.layout().includes_typescript_app(),
+        contracts: scaffold
+            .contracts()
+            .iter()
+            .map(|contract| TemplateContractInfo {
+                id: contract.id,
+                name: contract.name,
+                src: contract.src,
+            })
+            .collect(),
     }
 }
 

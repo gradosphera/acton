@@ -100,7 +100,7 @@ impl std::fmt::Display for TemplateSelectItem {
 
 #[allow(clippy::too_many_arguments)]
 pub fn new_cmd(
-    path: &str,
+    path: Option<&str>,
     name: Option<String>,
     description: Option<String>,
     template: Option<ProjectTemplate>,
@@ -108,7 +108,17 @@ pub fn new_cmd(
     app: bool,
     hooks: bool,
     agents: bool,
+    templates: bool,
 ) -> anyhow::Result<()> {
+    if templates {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&template::template_catalog())?
+        );
+        return Ok(());
+    }
+
+    let path = path.ok_or_else(|| anyhow!("Path is required unless --templates is passed"))?;
     let project_path = if path == "." {
         std::env::current_dir()?
     } else {

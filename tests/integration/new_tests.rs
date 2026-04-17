@@ -729,6 +729,141 @@ fn test_new_invalid_template() {
         );
 }
 
+#[test]
+fn test_new_templates_flag_is_hidden_from_help() {
+    let project = ProjectBuilder::new("new-templates-hidden-help")
+        .without_acton_toml()
+        .build();
+
+    project
+        .acton()
+        .arg("new")
+        .arg("--help")
+        .run()
+        .success()
+        .assert_contains("--template")
+        .assert_not_contains("--templates");
+}
+
+#[test]
+fn test_new_templates_returns_machine_readable_json() {
+    let project = ProjectBuilder::new("new-templates-json")
+        .without_acton_toml()
+        .build();
+
+    let output = project
+        .acton()
+        .arg("new")
+        .arg("--templates")
+        .run()
+        .success();
+
+    let json: JsonValue =
+        serde_json::from_str(&output.get_stdout()).expect("new --templates must return valid JSON");
+
+    assert_eq!(
+        json,
+        serde_json::json!({
+            "schema_version": 1,
+            "templates": [
+                {
+                    "id": "empty",
+                    "description": "Minimal project skeleton",
+                    "supports_app": false,
+                    "scaffolds": [
+                        {
+                            "kind": "standard",
+                            "includes_typescript_app": false,
+                            "contracts": [
+                                {
+                                    "id": "Empty",
+                                    "name": "Empty",
+                                    "src": "contracts/Empty.tolk"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "id": "counter",
+                    "description": "Simple counter contract",
+                    "supports_app": true,
+                    "scaffolds": [
+                        {
+                            "kind": "standard",
+                            "includes_typescript_app": false,
+                            "contracts": [
+                                {
+                                    "id": "Counter",
+                                    "name": "Counter",
+                                    "src": "contracts/Counter.tolk"
+                                }
+                            ]
+                        },
+                        {
+                            "kind": "app",
+                            "includes_typescript_app": true,
+                            "contracts": [
+                                {
+                                    "id": "Counter",
+                                    "name": "Counter",
+                                    "src": "contracts/src/Counter.tolk"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "id": "jetton",
+                    "description": "Jetton minter and wallet contracts",
+                    "supports_app": false,
+                    "scaffolds": [
+                        {
+                            "kind": "standard",
+                            "includes_typescript_app": false,
+                            "contracts": [
+                                {
+                                    "id": "JettonMinter",
+                                    "name": "JettonMinter",
+                                    "src": "contracts/JettonMinter.tolk"
+                                },
+                                {
+                                    "id": "JettonWallet",
+                                    "name": "JettonWallet",
+                                    "src": "contracts/JettonWallet.tolk"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "id": "nft",
+                    "description": "NFT collection and item contracts",
+                    "supports_app": false,
+                    "scaffolds": [
+                        {
+                            "kind": "standard",
+                            "includes_typescript_app": false,
+                            "contracts": [
+                                {
+                                    "id": "NftCollection",
+                                    "name": "NftCollection",
+                                    "src": "contracts/NftCollection.tolk"
+                                },
+                                {
+                                    "id": "NftItem",
+                                    "name": "NftItem",
+                                    "src": "contracts/NftItem.tolk"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        })
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn test_new_empty_project_prompts_for_hooks() {

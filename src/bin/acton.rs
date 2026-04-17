@@ -102,8 +102,11 @@ enum Commands {
         after_help = detailed_help_pointer("new")
     )]
     New {
-        #[arg(help = "Directory to create the project in (use '.' for the current directory)")]
-        path: String,
+        #[arg(
+            help = "Directory to create the project in (use '.' for the current directory)",
+            required_unless_present = "templates"
+        )]
+        path: Option<String>,
         #[arg(long, help = "Project name")]
         name: Option<String>,
         #[arg(long, help = "Project description")]
@@ -121,6 +124,22 @@ enum Commands {
         hooks: bool,
         #[arg(long, help = "Include an AGENTS.md file with coding-agent guidance")]
         agents: bool,
+        #[arg(
+            long,
+            hide = true,
+            help = "Print machine-readable template metadata as JSON",
+            conflicts_with_all = [
+                "path",
+                "name",
+                "description",
+                "template",
+                "license",
+                "app",
+                "hooks",
+                "agents"
+            ]
+        )]
+        templates: bool,
     },
     #[command(
         about = "Print this message or the help of a given top-level command",
@@ -1621,8 +1640,9 @@ fn main() {
             app,
             hooks,
             agents,
+            templates,
         } => new_cmd(
-            &path,
+            path.as_deref(),
             name,
             description,
             template,
@@ -1630,6 +1650,7 @@ fn main() {
             app,
             hooks,
             agents,
+            templates,
         ),
         Commands::Test {
             path,

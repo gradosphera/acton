@@ -68,54 +68,6 @@ fn build_counter_template_project(name: &str, test_source: &str) -> Project {
     project
 }
 
-fn build_jetton_template_project(name: &str) -> Project {
-    let project = ProjectBuilder::new(name)
-        .without_acton_toml()
-        .file_from_path(
-            "contracts/JettonMinter",
-            "src/commands/new/templates/jetton/contracts/JettonMinter.tolk",
-        )
-        .file_from_path(
-            "contracts/JettonWallet",
-            "src/commands/new/templates/jetton/contracts/JettonWallet.tolk",
-        )
-        .file_from_path(
-            "contracts/errors",
-            "src/commands/new/templates/jetton/contracts/errors.tolk",
-        )
-        .file_from_path(
-            "contracts/fees-management",
-            "src/commands/new/templates/jetton/contracts/fees-management.tolk",
-        )
-        .file_from_path(
-            "contracts/jetton-utils",
-            "src/commands/new/templates/jetton/contracts/jetton-utils.tolk",
-        )
-        .file_from_path(
-            "contracts/messages",
-            "src/commands/new/templates/jetton/contracts/messages.tolk",
-        )
-        .file_from_path(
-            "contracts/storage",
-            "src/commands/new/templates/jetton/contracts/storage.tolk",
-        )
-        .file_from_path(
-            "wrappers/JettonMinter",
-            "src/commands/new/templates/jetton/wrappers/JettonMinter.tolk",
-        )
-        .file_from_path(
-            "wrappers/JettonWallet",
-            "src/commands/new/templates/jetton/wrappers/JettonWallet.tolk",
-        )
-        .test_file_from_path(
-            "wallet",
-            "src/commands/new/templates/jetton/tests/wallet.test.tolk",
-        )
-        .build();
-    project.acton().init().run().success();
-    project
-}
-
 fn build_coverage_scope_project(name: &str) -> Project {
     ProjectBuilder::new(name)
         .contract("simple", SIMPLE_CONTRACT)
@@ -923,17 +875,6 @@ fn test_counter_template_coverage_text_snapshots() {
             "counter-template-non-branch.txt",
             "integration/snapshots/test_counter_template_coverage_non_branch.txt",
         );
-}
-
-fn assert_branch_counts(report: &str, code_snippet: &str, expected: &str) {
-    let Some(line) = report.lines().find(|line| line.contains(code_snippet)) else {
-        panic!("coverage output did not contain line for `{code_snippet}`:\n{report}");
-    };
-
-    assert!(
-        line.contains(expected),
-        "coverage line for `{code_snippet}` did not contain `{expected}`:\n{line}"
-    );
 }
 
 #[test]
