@@ -2108,6 +2108,16 @@ fn explorer_transaction_link(explorer_base: &str, tx_hash_hex: &str) -> Option<S
 
 extension!(get_config in (Context) using get_config_impl);
 fn get_config_impl(ctx: &mut Context, stack: &mut Tuple) -> anyhow::Result<()> {
+    if ctx.is_broadcasting {
+        let network = ctx.network();
+        let custom_networks = ctx.env.config.custom_networks();
+        let api_key = ctx.env.api_key.clone();
+        let api_client = TonApiClient::new(network, custom_networks, api_key)?;
+        let config = api_client.get_config_all()?;
+        stack.push(TupleItem::Cell(config));
+        return Ok(());
+    }
+
     let config = ctx.chain.world_state.get_config_cell();
     stack.push(TupleItem::Cell(config));
     Ok(())

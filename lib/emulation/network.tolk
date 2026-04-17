@@ -1381,7 +1381,8 @@ fun net.setConfig(config: Config): bool {
 ///
 /// Returns a map of all blockchain configuration parameters indexed from 0-90.
 /// The configuration includes gas prices, storage costs, validator settings, and other
-/// network parameters. Use specialized getter functions like [Config.getGasPrices],
+/// network parameters. In broadcast mode, it is fetched from the selected real network.
+/// Use specialized getter functions like [Config.getGasPrices],
 /// [Config.getStoragePrices], or [Config.getGlobalVersion] to access specific parameters.
 ///
 /// For detailed information about blockchain configuration parameters, see the
