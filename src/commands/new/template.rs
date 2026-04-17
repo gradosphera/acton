@@ -16,6 +16,9 @@ static COUNTER_APP_TEMPLATE_DIR: Dir<'static> =
 static JETTON_TEMPLATE_DIR: Dir<'static> =
     include_dir!("$CARGO_MANIFEST_DIR/src/commands/new/templates/jetton");
 
+static NFT_TEMPLATE_DIR: Dir<'static> =
+    include_dir!("$CARGO_MANIFEST_DIR/src/commands/new/templates/nft");
+
 const AGENTS_FILE_NAME: &str = "AGENTS.md";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,14 +28,6 @@ pub(super) enum ProjectLayout {
 }
 
 impl ProjectLayout {
-    #[must_use]
-    pub(super) const fn deploy_script_path(self) -> &'static str {
-        match self {
-            Self::Standard => "scripts/deploy.tolk",
-            Self::App => "contracts/scripts/deploy.tolk",
-        }
-    }
-
     #[must_use]
     pub(super) const fn contracts_mapping(self) -> &'static str {
         match self {
@@ -75,6 +70,7 @@ pub(super) struct ProjectScaffold {
     dir: &'static Dir<'static>,
     layout: ProjectLayout,
     contracts: &'static [ContractTemplate],
+    deploy_script: &'static str,
 }
 
 impl ProjectScaffold {
@@ -86,6 +82,11 @@ impl ProjectScaffold {
     #[must_use]
     pub(super) const fn contracts(self) -> &'static [ContractTemplate] {
         self.contracts
+    }
+
+    #[must_use]
+    pub(super) const fn deploy_script_path(self) -> &'static str {
+        self.deploy_script
     }
 }
 
@@ -126,28 +127,52 @@ const JETTON_CONTRACTS: [ContractTemplate; 2] = [
     },
 ];
 
+const NFT_CONTRACTS: [ContractTemplate; 2] = [
+    ContractTemplate {
+        id: "NftCollection",
+        name: "NftCollection",
+        src: "contracts/NftCollection.tolk",
+    },
+    ContractTemplate {
+        id: "NftItem",
+        name: "NftItem",
+        src: "contracts/NftItem.tolk",
+    },
+];
+
 const EMPTY_SCAFFOLD: ProjectScaffold = ProjectScaffold {
     dir: &EMPTY_TEMPLATE_DIR,
     layout: ProjectLayout::Standard,
     contracts: &EMPTY_CONTRACTS,
+    deploy_script: "scripts/deploy.tolk",
 };
 
 const COUNTER_SCAFFOLD: ProjectScaffold = ProjectScaffold {
     dir: &COUNTER_TEMPLATE_DIR,
     layout: ProjectLayout::Standard,
     contracts: &COUNTER_CONTRACTS,
+    deploy_script: "scripts/deploy.tolk",
 };
 
 const COUNTER_APP_SCAFFOLD: ProjectScaffold = ProjectScaffold {
     dir: &COUNTER_APP_TEMPLATE_DIR,
     layout: ProjectLayout::App,
     contracts: &COUNTER_APP_CONTRACTS,
+    deploy_script: "contracts/scripts/deploy.tolk",
 };
 
 const JETTON_SCAFFOLD: ProjectScaffold = ProjectScaffold {
     dir: &JETTON_TEMPLATE_DIR,
     layout: ProjectLayout::Standard,
     contracts: &JETTON_CONTRACTS,
+    deploy_script: "scripts/deploy.tolk",
+};
+
+const NFT_SCAFFOLD: ProjectScaffold = ProjectScaffold {
+    dir: &NFT_TEMPLATE_DIR,
+    layout: ProjectLayout::Standard,
+    contracts: &NFT_CONTRACTS,
+    deploy_script: "scripts/deployCollection.tolk",
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -155,6 +180,7 @@ pub enum ProjectTemplate {
     Empty,
     Counter,
     Jetton,
+    Nft,
 }
 
 impl ProjectTemplate {
@@ -164,6 +190,7 @@ impl ProjectTemplate {
             Self::Empty => "empty",
             Self::Counter => "counter",
             Self::Jetton => "jetton",
+            Self::Nft => "nft",
         }
     }
 
@@ -173,6 +200,7 @@ impl ProjectTemplate {
             Self::Empty => "Minimal project skeleton",
             Self::Counter => "Simple counter contract",
             Self::Jetton => "Jetton minter and wallet contracts",
+            Self::Nft => "NFT collection and item contracts",
         }
     }
 }
@@ -198,11 +226,17 @@ const JETTON_TEMPLATE_DEFINITION: TemplateDefinition = TemplateDefinition {
     app_scaffold: None,
 };
 
+const NFT_TEMPLATE_DEFINITION: TemplateDefinition = TemplateDefinition {
+    default_scaffold: NFT_SCAFFOLD,
+    app_scaffold: None,
+};
+
 const fn template_definition(template: ProjectTemplate) -> &'static TemplateDefinition {
     match template {
         ProjectTemplate::Empty => &EMPTY_TEMPLATE_DEFINITION,
         ProjectTemplate::Counter => &COUNTER_TEMPLATE_DEFINITION,
         ProjectTemplate::Jetton => &JETTON_TEMPLATE_DEFINITION,
+        ProjectTemplate::Nft => &NFT_TEMPLATE_DEFINITION,
     }
 }
 
@@ -211,6 +245,7 @@ pub(super) fn get_available_templates() -> Vec<ProjectTemplate> {
         ProjectTemplate::Empty,
         ProjectTemplate::Counter,
         ProjectTemplate::Jetton,
+        ProjectTemplate::Nft,
     ]
 }
 
