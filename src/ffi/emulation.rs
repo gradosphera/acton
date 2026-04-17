@@ -1710,6 +1710,11 @@ fn load_library_by_hash_impl(
         return Ok(());
     };
 
+    if let Some(cell) = ctx.chain.world_state.find_lib_by_hash(&hash) {
+        stack.push(TupleItem::Cell(cell));
+        return Ok(());
+    }
+
     let network = ctx.network();
     let custom_networks = ctx.env.config.custom_networks();
 

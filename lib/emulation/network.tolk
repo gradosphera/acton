@@ -1121,14 +1121,15 @@ fun net.getAccountStorageFee(addr: address, seconds: int): coins? {
     return calculateStorageFee(BASECHAIN, seconds, usedStorage.bits, usedStorage.cells);
 }
 
-/// Load library from the real blockchain by hash.
+/// Load library by hash, first from the current emulated blockchain and then from the configured network.
 ///
 /// Returns null if library is not found.
 fun net.loadLibrary(hash: string): cell? {
     return ffi.loadLibrary(hash);
 }
 
-/// Load library from the real blockchain by hash and register it in current blockchain.
+/// Load library by hash from emulated blockchain or real network and register it
+/// in the current emulated blockchain.
 ///
 /// Returns false if library is not found.
 fun net.fetchAndRegisterLibrary(hash: string): bool {
