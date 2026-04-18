@@ -448,6 +448,82 @@ get fun `test send iter execute n and from`() {
 }
 
 #[test]
+fn send_iter_execute_till_supports_predicate_search_params() {
+    run_send_iter_success(
+        "n-lib-api-send-iter-execute-till-predicate-search-params",
+        r#"
+import "../../lib/io"
+
+get fun `test send iter execute till predicate search params`() {
+    val sender = net.treasury("sender");
+
+    val forwarderInit = ContractState {
+        code: build("forwarder"),
+        data: createEmptyCell(),
+    };
+    val forwarderAddress = AutoDeployAddress { stateInit: forwarderInit }.calculateAddress();
+
+    val receiverInit = ContractState {
+        code: build("receiver"),
+        data: createEmptyCell(),
+    };
+    val receiverAddress = AutoDeployAddress { stateInit: receiverInit }.calculateAddress();
+
+    expect(net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("1"),
+        dest: { stateInit: forwarderInit },
+    }))).toHaveSuccessfulDeploy({ to: forwarderAddress });
+
+    expect(net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("1"),
+        dest: { stateInit: receiverInit },
+    }))).toHaveSuccessfulDeploy({ to: receiverAddress });
+
+    val iter = net.sendIter(sender.address, createMessage({
+        bounce: false,
+        value: ton("0.5"),
+        dest: forwarderAddress,
+        body: TriggerForward {
+            queryId: 77,
+            target: receiverAddress,
+        },
+    }));
+
+    val segment = iter.executeTill({
+        to: fun(addr: address): bool {
+            println("executeTill.to={}", addr);
+            return addr == receiverAddress;
+        },
+        from: fun(addr: address): bool {
+            println("executeTill.from={}", addr);
+            return addr == forwarderAddress;
+        },
+        opcode: fun(op: uint32): bool {
+            println("executeTill.opcode=0x{:x}", op);
+            return op == Notify.getDeclaredPackPrefix2();
+        },
+        success: fun(ok: bool): bool {
+            println("executeTill.success={}", ok);
+            return ok;
+        },
+    });
+
+    expect(segment).toHaveLength(2);
+    expect(segment).toHaveSuccessfulTx<Notify>({
+        from: forwarderAddress,
+        to: receiverAddress,
+    });
+    expect(iter.isDone()).toBeTrue();
+    expect(net.runGetMethod<int>(receiverAddress, "received")).toEqual(1);
+}
+"#,
+        "send_iter_execute_till_supports_predicate_search_params",
+    );
+}
+
+#[test]
 fn send_iter_execute_till_stops_at_matching_transaction_and_preserves_tail() {
     run_send_iter_success(
         "n-lib-api-send-iter-execute-till",

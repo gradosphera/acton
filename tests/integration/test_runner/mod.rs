@@ -8,6 +8,7 @@ mod api_register_code_cell_tests;
 mod api_send_iter_tests;
 mod api_send_single_tests;
 mod api_transaction_matchers_tests;
+mod api_transaction_predicate_matchers_tests;
 mod api_wallet_mode_tests;
 mod assert_consumes_less_than1_returns_computed_function_result_tests;
 mod assert_consumes_less_than2_returns_function_result_when_within_limit_tests;

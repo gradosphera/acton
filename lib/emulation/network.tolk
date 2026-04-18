@@ -219,7 +219,7 @@ fun TxCursor.executeTill<Msg = unknown>(self, params: SearchParams = {}): SendRe
         params.opcode = declaredPrefix;
     }
 
-    val txs = ffi.executeMessageIterTill(self.id, params.toFFI().toTuple());
+    val txs = ffi.executeMessageIterTill(self.id, params.toPredicateFFITuple());
     if (txs == null) {
         Assert.fail("executeTill() did not find a matching transaction before queue exhaustion");
         throw 567;
@@ -313,75 +313,6 @@ struct SearchParams {
     computePhaseSkipped: (bool -> bool) | bool | null = null
     /// Body of the in message (compared by hash).
     body: (cell -> bool) | cell | null = null
-}
-
-fun cell.__eq(self, other: cell): bool {
-    return self.hash() == other.hash();
-}
-
-fun T.__eq(self, other: T): bool {
-    return self == other;
-}
-
-/// Bind first argument to a 2-arg function, producing a 1-arg function.
-fun createEqFun<T>(arg: T): (T -> bool) {
-    return fun(snd) {
-        return arg.__eq(snd);
-    }
-}
-
-/// Convert a union field to a tagged tuple for FFI:
-///   [0, null] = absent
-///   [1, cont] = user predicate
-///   [2, cont, original_value] = value converted to predicate (original kept for display)
-fun toPredicate<T>(field: (T -> bool) | T | null): tuple {
-    match (field) {
-        (T -> bool) => {
-            return [1, field];
-        }
-        T => {
-            return [2, createEqFun(field), field];
-        }
-        null => {
-            return [0, null];
-        }
-    }
-}
-
-/// Wrapper struct for FFI — all fields are [tag, predicate] tuples.
-struct SearchParamsForFFI {
-    to: tuple
-    from: tuple
-    value: tuple
-    exitCode: tuple
-    success: tuple
-    aborted: tuple
-    deploy: tuple
-    bounce: tuple
-    bounced: tuple
-    opcode: tuple
-    actionExitCode: tuple
-    computePhaseSkipped: tuple
-    body: tuple
-}
-
-/// Convert SearchParams to a tuple of [tag, predicate] pairs for FFI.
-fun SearchParams.toFFI(self): SearchParamsForFFI {
-    return SearchParamsForFFI {
-        to: toPredicate(self.to),
-        from: toPredicate(self.from),
-        value: toPredicate(self.value),
-        exitCode: toPredicate(self.exitCode),
-        success: toPredicate(self.success),
-        aborted: toPredicate(self.aborted),
-        deploy: toPredicate(self.deploy),
-        bounce: toPredicate(self.bounce),
-        bounced: toPredicate(self.bounced),
-        opcode: toPredicate(self.opcode),
-        actionExitCode: toPredicate(self.actionExitCode),
-        computePhaseSkipped: toPredicate(self.computePhaseSkipped),
-        body: toPredicate(self.body),
-    };
 }
 
 struct ExternalOutSearchParams {
@@ -489,7 +420,7 @@ fun SendResultList.findTransaction<Msg = unknown>(self, params: SearchParams = {
     if (declaredPrefix != -1) {
         params.opcode = declaredPrefix;
     }
-    val tx = ffi.findTransactionByParams(self, params.toFFI().toTuple());
+    val tx = ffi.findTransactionByParams(self, params);
     if (tx == null) {
         return Maybe<Transaction>.none();
     }
@@ -1414,6 +1345,159 @@ fun net.getConfig(): Config {
 /// ```
 fun crc16(data: string): int asm "13 EXTCALL"
 
+fun cell.__eq(self, other: cell): bool {
+    return self.hash() == other.hash();
+}
+
+fun T.__eq(self, other: T): bool {
+    return self == other;
+}
+
+/// Bind first argument to a 2-arg function, producing a 1-arg function.
+fun __createEqFun<T>(arg: T): (T -> bool) {
+    return fun(snd) {
+        return arg.__eq(snd);
+    }
+}
+
+fun __hasPredicate<T>(field: (T -> bool) | T | null): bool {
+    match (field) {
+        (T -> bool) => {
+            return true;
+        }
+        T => {
+            return false;
+        }
+        null => {
+            return false;
+        }
+    }
+}
+
+fun __unwrapScalar<T>(field: (T -> bool) | T | null): T? {
+    match (field) {
+        (T -> bool) => {
+            return null;
+        }
+        T => {
+            return field;
+        }
+        null => {
+            return null;
+        }
+    }
+}
+
+/// Convert a union field to a tagged tuple for FFI:
+///   [0, null] = absent
+///   [1, cont] = user predicate
+///   [2, cont, original_value] = value converted to predicate (original kept for display)
+fun __toPredicate<T>(field: (T -> bool) | T | null): tuple {
+    match (field) {
+        (T -> bool) => {
+            return [1, field];
+        }
+        T => {
+            return [2, __createEqFun(field), field];
+        }
+        null => {
+            return [0, null];
+        }
+    }
+}
+
+/// Wrapper struct for the fast FFI path — all fields are plain nullable scalars.
+struct ScalarSearchParamsForFFI {
+    to: address? = null
+    from: address? = null
+    value: coins? = null
+    exitCode: int32? = null
+    success: bool? = null
+    aborted: bool? = null
+    deploy: bool? = null
+    bounce: bool? = null
+    bounced: bool? = null
+    opcode: uint32? = null
+    actionExitCode: int32? = null
+    computePhaseSkipped: bool? = null
+    body: cell? = null
+}
+
+/// Wrapper struct for FFI — all fields are [tag, predicate] tuples.
+struct SearchParamsForFFI {
+    to: tuple
+    from: tuple
+    value: tuple
+    exitCode: tuple
+    success: tuple
+    aborted: tuple
+    deploy: tuple
+    bounce: tuple
+    bounced: tuple
+    opcode: tuple
+    actionExitCode: tuple
+    computePhaseSkipped: tuple
+    body: tuple
+}
+
+fun SearchParams.hasPredicates(self): bool {
+    return __hasPredicate(self.to)
+        || __hasPredicate(self.from)
+        || __hasPredicate(self.value)
+        || __hasPredicate(self.exitCode)
+        || __hasPredicate(self.success)
+        || __hasPredicate(self.aborted)
+        || __hasPredicate(self.deploy)
+        || __hasPredicate(self.bounce)
+        || __hasPredicate(self.bounced)
+        || __hasPredicate(self.opcode)
+        || __hasPredicate(self.actionExitCode)
+        || __hasPredicate(self.computePhaseSkipped)
+        || __hasPredicate(self.body);
+}
+
+/// Convert SearchParams to a tuple of plain nullable scalar values for the fast FFI path.
+fun SearchParams.toScalarFFI(self): ScalarSearchParamsForFFI {
+    return ScalarSearchParamsForFFI {
+        to: __unwrapScalar(self.to),
+        from: __unwrapScalar(self.from),
+        value: __unwrapScalar(self.value),
+        exitCode: __unwrapScalar(self.exitCode),
+        success: __unwrapScalar(self.success),
+        aborted: __unwrapScalar(self.aborted),
+        deploy: __unwrapScalar(self.deploy),
+        bounce: __unwrapScalar(self.bounce),
+        bounced: __unwrapScalar(self.bounced),
+        opcode: __unwrapScalar(self.opcode),
+        actionExitCode: __unwrapScalar(self.actionExitCode),
+        computePhaseSkipped: __unwrapScalar(self.computePhaseSkipped),
+        body: __unwrapScalar(self.body),
+    };
+}
+
+/// Convert SearchParams to a tuple of [tag, predicate] pairs for FFI.
+fun SearchParams.toFFI(self): SearchParamsForFFI {
+    return SearchParamsForFFI {
+        to: __toPredicate(self.to),
+        from: __toPredicate(self.from),
+        value: __toPredicate(self.value),
+        exitCode: __toPredicate(self.exitCode),
+        success: __toPredicate(self.success),
+        aborted: __toPredicate(self.aborted),
+        deploy: __toPredicate(self.deploy),
+        bounce: __toPredicate(self.bounce),
+        bounced: __toPredicate(self.bounced),
+        opcode: __toPredicate(self.opcode),
+        actionExitCode: __toPredicate(self.actionExitCode),
+        computePhaseSkipped: __toPredicate(self.computePhaseSkipped),
+        body: __toPredicate(self.body),
+    };
+}
+
+fun SearchParams.toPredicateFFITuple(self): tuple {
+    return self.toFFI().toTuple();
+}
+
 fun tuple.fromTuple(data: tuple): tuple {
     return data;
 }
@@ -1522,7 +1606,14 @@ fun ffi.isDeployed(addr: cell): bool asm "11 EXTCALL"
 fun ffi.getDeployedCode(addr: cell): cell? asm "12 EXTCALL"
 fun ffi.registerAddress(address: cell, name: string): void asm "15 EXTCALL"
 fun ffi.registerCodeCell(cell: cell, name: string): void asm "16 EXTCALL"
-fun ffi.findTransactionByParams(txs: SendResultList, params: tuple): cell? asm "10 EXTCALL"
+fun ffi.findTransactionByScalarParams(txs: SendResultList, params: tuple): cell? asm "10 EXTCALL"
+fun ffi.findTransactionByPredicateParams(txs: SendResultList, params: tuple): cell? asm "48 EXTCALL"
+fun ffi.findTransactionByParams(txs: SendResultList, params: SearchParams): cell? {
+    if (params.hasPredicates()) {
+        return ffi.findTransactionByPredicateParams(txs, params.toPredicateFFITuple());
+    }
+    return ffi.findTransactionByScalarParams(txs, params.toScalarFFI().toTuple());
+}
 fun ffi.failToFindTransactionByParams(location: string, message: string, txs: SendResultList, params: tuple): tuple? asm "103 EXTCALL"
 fun ffi.failToNotFindTransactionByParams(location: string, message: string, txs: SendResultList, params: tuple): tuple? asm "104 EXTCALL"
 fun ffi.getAccountState(addr: cell): cell? asm "17 EXTCALL"

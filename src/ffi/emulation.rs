@@ -39,7 +39,7 @@ use ton_executor::{MissingLibrariesContext, missing_library_callback};
 use tvmffi::serde::serialize_tuple;
 use tvmffi::stack::{ContData, Tuple, TupleItem};
 use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Lazy, Store};
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Lazy, Load, Store};
 use tycho_types::dict::Dict;
 use tycho_types::models::{
     AccountState, AccountStatus, ComputePhase, ComputePhaseSkipReason, HashUpdate, IntAddr,
@@ -1157,6 +1157,178 @@ fn parse_search_params_tuple(params: &Tuple) -> ParsedSearchParams {
     }
 }
 
+#[derive(Debug, Default)]
+struct ScalarSearchParams {
+    to: Option<IntAddr>,
+    from: Option<IntAddr>,
+    value: Option<BigInt>,
+    exit_code: Option<u32>,
+    success: Option<bool>,
+    aborted: Option<bool>,
+    deploy: Option<bool>,
+    bounce: Option<bool>,
+    bounced: Option<bool>,
+    opcode: Option<u32>,
+    action_exit_code: Option<i32>,
+    compute_phase_skipped: Option<bool>,
+    body: Option<Cell>,
+}
+
+fn read_int_like_param(item: &TupleItem) -> Option<&BigInt> {
+    match item {
+        TupleItem::Int(num) => Some(num),
+        TupleItem::Tuple(items) => items.first().and_then(read_int_like_param),
+        TupleItem::TypedTuple { inner, .. } => inner.0.first().and_then(read_int_like_param),
+        _ => None,
+    }
+}
+
+fn read_bool_like_param(item: &TupleItem) -> Option<bool> {
+    match item {
+        TupleItem::Int(num) => Some(num.to_i64() == Some(-1)),
+        _ => None,
+    }
+}
+
+fn read_optional_address_param(item: Option<&TupleItem>) -> Option<Option<IntAddr>> {
+    let Some(item) = item else {
+        return Some(None);
+    };
+
+    match item {
+        TupleItem::Null => Some(None),
+        TupleItem::Tuple(raw_addr) => match raw_addr.first() {
+            Some(TupleItem::Slice(cell)) => {
+                let mut slice = cell.as_slice().ok()?;
+                if let Ok(address) = IntAddr::load_from(&mut slice) {
+                    Some(Some(address))
+                } else {
+                    Some(None)
+                }
+            }
+            _ => Some(None),
+        },
+        TupleItem::Slice(cell) => {
+            let mut slice = cell.as_slice().ok()?;
+            if let Ok(address) = IntAddr::load_from(&mut slice) {
+                Some(Some(address))
+            } else {
+                Some(None)
+            }
+        }
+        _ => Some(None),
+    }
+}
+
+fn parse_scalar_search_params_tuple(params: &Tuple) -> Option<ScalarSearchParams> {
+    let item_from_end = |idx_from_end: usize| {
+        params
+            .0
+            .len()
+            .checked_sub(idx_from_end + 1)
+            .and_then(|idx| params.0.get(idx))
+    };
+    let raw_body = item_from_end(0);
+    let raw_compute_phase_skipped = item_from_end(1);
+    let raw_action_exit_code = item_from_end(2);
+    let raw_opcode = item_from_end(3);
+    let raw_bounced = item_from_end(4);
+    let raw_bounce = item_from_end(5);
+    let raw_deploy = item_from_end(6);
+    let raw_aborted = item_from_end(7);
+    let raw_success = item_from_end(8);
+    let raw_exit_code = item_from_end(9);
+    let raw_msg_value = item_from_end(10);
+    let raw_from = item_from_end(11);
+    let raw_to = item_from_end(12);
+
+    let mut params = ScalarSearchParams {
+        to: read_optional_address_param(raw_to)?,
+        from: read_optional_address_param(raw_from)?,
+        ..Default::default()
+    };
+
+    if let Some(raw_opcode) = raw_opcode {
+        if raw_opcode == &TupleItem::Null {
+            params.opcode = None;
+        } else if let Some(num) = read_int_like_param(raw_opcode) {
+            params.opcode = num.to_u32();
+        }
+    }
+    if let Some(raw_bounced) = raw_bounced {
+        if raw_bounced == &TupleItem::Null {
+            params.bounced = None;
+        } else if let Some(value) = read_bool_like_param(raw_bounced) {
+            params.bounced = Some(value);
+        }
+    }
+    if let Some(raw_bounce) = raw_bounce {
+        if raw_bounce == &TupleItem::Null {
+            params.bounce = None;
+        } else if let Some(value) = read_bool_like_param(raw_bounce) {
+            params.bounce = Some(value);
+        }
+    }
+    if let Some(raw_deploy) = raw_deploy {
+        if raw_deploy == &TupleItem::Null {
+            params.deploy = None;
+        } else if let Some(value) = read_bool_like_param(raw_deploy) {
+            params.deploy = Some(value);
+        }
+    }
+    if let Some(raw_exit_code) = raw_exit_code {
+        if raw_exit_code == &TupleItem::Null {
+            params.exit_code = None;
+        } else if let Some(num) = read_int_like_param(raw_exit_code) {
+            params.exit_code = num.to_u32();
+        }
+    }
+    if let Some(raw_success) = raw_success {
+        if raw_success == &TupleItem::Null {
+            params.success = None;
+        } else if let Some(value) = read_bool_like_param(raw_success) {
+            params.success = Some(value);
+        }
+    }
+    if let Some(raw_aborted) = raw_aborted {
+        if raw_aborted == &TupleItem::Null {
+            params.aborted = None;
+        } else if let Some(value) = read_bool_like_param(raw_aborted) {
+            params.aborted = Some(value);
+        }
+    }
+    if let Some(raw_msg_value) = raw_msg_value {
+        if raw_msg_value == &TupleItem::Null {
+            params.value = None;
+        } else if let TupleItem::Int(num) = raw_msg_value {
+            params.value = Some(num.clone());
+        }
+    }
+    if let Some(raw_action_exit_code) = raw_action_exit_code {
+        if raw_action_exit_code == &TupleItem::Null {
+            params.action_exit_code = None;
+        } else if let Some(num) = read_int_like_param(raw_action_exit_code) {
+            params.action_exit_code = Some(num.to_i32().unwrap_or(0));
+        }
+    }
+    if let Some(raw_compute_phase_skipped) = raw_compute_phase_skipped {
+        if raw_compute_phase_skipped == &TupleItem::Null {
+            params.compute_phase_skipped = None;
+        } else if let Some(value) = read_bool_like_param(raw_compute_phase_skipped) {
+            params.compute_phase_skipped = Some(value);
+        }
+    }
+    if let Some(raw_body) = raw_body {
+        if raw_body == &TupleItem::Null {
+            params.body = None;
+        } else if let TupleItem::Cell(cell) = raw_body {
+            params.body = Some(cell.clone());
+        }
+    }
+
+    Some(params)
+}
+
 /// Check if a transaction matches all predicate search params by calling each predicate via run_continuation.
 #[allow(clippy::collapsible_if)]
 fn transaction_matches_predicates(
@@ -1267,6 +1439,138 @@ fn transaction_matches_predicates(
     Ok(true)
 }
 
+#[allow(clippy::collapsible_if)]
+fn transaction_matches_scalar_params(tx: &Transaction, params: &ScalarSearchParams) -> bool {
+    let requires_internal_in_msg = params.opcode.is_some()
+        || params.bounced.is_some()
+        || params.bounce.is_some()
+        || params.value.is_some()
+        || params.from.is_some()
+        || params.to.is_some();
+    let expected_body_hash = params.body.as_ref().map(|body| body.repr_hash());
+
+    if let Some(expected_deploy) = params.deploy {
+        let is_deploy =
+            tx.orig_status == AccountStatus::NotExists && tx.end_status == AccountStatus::Active;
+        if expected_deploy != is_deploy {
+            return false;
+        }
+    }
+
+    let in_msg = tx.load_in_msg();
+    if let Ok(Some(in_msg)) = &in_msg
+        && let MsgInfo::Int(info) = &in_msg.info
+    {
+        if let Some(expected_opcode) = &params.opcode {
+            let mut slice = in_msg.body;
+            let Ok(opcode) = slice.load_u32() else {
+                return false;
+            };
+            if *expected_opcode != opcode {
+                if params.bounced == Some(true) {
+                    let Ok(bounced_opcode) = slice.load_u32() else {
+                        return false;
+                    };
+                    if *expected_opcode != bounced_opcode {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+
+        if let Some(expected_bounced) = &params.bounced
+            && *expected_bounced != info.bounced
+        {
+            return false;
+        }
+
+        if let Some(expected_bounce) = &params.bounce
+            && *expected_bounce != info.bounce
+        {
+            return false;
+        }
+
+        if let Some(expected_value) = &params.value
+            && *expected_value != BigInt::from(info.value.tokens.into_inner())
+        {
+            return false;
+        }
+
+        if let Some(expected_from_addr) = &params.from
+            && *expected_from_addr != info.src
+        {
+            return false;
+        }
+
+        if let Some(expected_to_addr) = &params.to
+            && *expected_to_addr != info.dst
+        {
+            return false;
+        }
+
+        if let Some(expected_hash) = expected_body_hash.as_ref() {
+            let body_cell = to_cell(&in_msg.body);
+            let actual_hash = body_cell.repr_hash();
+            if expected_hash != &actual_hash {
+                return false;
+            }
+        }
+    } else if requires_internal_in_msg {
+        return false;
+    }
+
+    let Ok(TxInfo::Ordinary(info)) = tx.load_info() else {
+        return false;
+    };
+
+    if let Some(expected_compute_skipped) = params.compute_phase_skipped {
+        let is_skipped = matches!(info.compute_phase, ComputePhase::Skipped(_));
+        if expected_compute_skipped != is_skipped {
+            return false;
+        }
+    }
+
+    if let Some(expected_aborted) = params.aborted
+        && expected_aborted != info.aborted
+    {
+        return false;
+    }
+
+    if let Some(expected_action_exit_code) = params.action_exit_code {
+        if let Some(action_phase) = &info.action_phase {
+            if action_phase.result_code != expected_action_exit_code {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    if let ComputePhase::Executed(compute) = &info.compute_phase
+        && let Some(expected_exit_code) = params.exit_code
+        && compute.exit_code != expected_exit_code as i32
+    {
+        return false;
+    }
+
+    if let Some(expected_success) = params.success {
+        let action_phase_success = info
+            .action_phase
+            .as_ref()
+            .is_some_and(|action| action.success);
+
+        if let ComputePhase::Executed(compute) = &info.compute_phase
+            && (action_phase_success && compute.success) != expected_success
+        {
+            return false;
+        }
+    }
+
+    true
+}
+
 /// Create a GetExecutor suitable for running predicate continuations.
 fn make_predicate_executor(ctx: &mut Context) -> anyhow::Result<GetExecutor> {
     // Predicate continuations reference code defined in the test/script that built them
@@ -1313,8 +1617,53 @@ fn make_predicate_executor(ctx: &mut Context) -> anyhow::Result<GetExecutor> {
     Ok(executor)
 }
 
-extension!(find_transaction_by_params in (Context) with (params: Tuple, txs: Vec<TupleItem>) using find_transaction_by_params_impl);
 fn find_transaction_by_params_impl(
+    _ctx: &mut Context,
+    stack: &mut Tuple,
+    params: Tuple,
+    txs: Vec<TupleItem>,
+) -> anyhow::Result<()> {
+    if txs.is_empty() {
+        stack.push(TupleItem::Null);
+        return Ok(());
+    }
+
+    let params = if let Some(value) = parse_scalar_search_params_tuple(&params) {
+        value
+    } else {
+        stack.push(TupleItem::Null);
+        return Ok(());
+    };
+
+    let parsed_txs = txs
+        .iter()
+        .filter_map(|el| match el {
+            TupleItem::Tuple(tuple) => match tuple.first() {
+                Some(TupleItem::Cell(cell)) => Some(cell),
+                _ => None,
+            },
+            _ => None,
+        })
+        .filter_map(|cell| Some((cell.parse::<Transaction>().ok()?, cell)));
+
+    let mut found = None;
+    for (tx, cell) in parsed_txs {
+        if transaction_matches_scalar_params(&tx, &params) {
+            found = Some((tx, cell));
+            break;
+        }
+    }
+
+    match found {
+        Some((_, cell)) => stack.push(TupleItem::Cell(cell.clone())),
+        None => stack.push(TupleItem::Null),
+    }
+    Ok(())
+}
+
+extension!(find_transaction_by_params in (Context) with (params: Tuple, txs: Vec<TupleItem>) using find_transaction_by_params_impl);
+extension!(find_transaction_by_predicate_params in (Context) with (params: Tuple, txs: Vec<TupleItem>) using find_transaction_by_predicate_params_impl);
+fn find_transaction_by_predicate_params_impl(
     ctx: &mut Context,
     stack: &mut Tuple,
     params: Tuple,
@@ -2392,6 +2741,7 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         45 => get_wallet_key_pair : 1,
         46 => get_wallet_id : 1,
         47 => parse_int : 1,
+        48 => find_transaction_by_predicate_params : 2,
         501 => call_tolk_function : 3,
     });
 }

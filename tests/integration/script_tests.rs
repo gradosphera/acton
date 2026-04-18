@@ -2798,6 +2798,137 @@ fun main() {
         .assert_contains("EXPECT_IN_SCRIPT_OK");
 }
 
+#[test]
+fn test_script_predicate_transaction_matchers_snapshot() {
+    let project = ProjectBuilder::new("script-predicate-matchers-snapshot")
+        .file(
+            "contracts/types",
+            r"
+struct Storage {
+    id: uint32
+    counter: uint32
+}
+
+fun Storage.load(): Storage {
+    return Storage.fromCell(contract.getData());
+}
+
+fun Storage.save(self) {
+    contract.setData(self.toCell());
+}
+
+struct (0x7e8764ef) IncreaseCounter {
+    increaseBy: uint32
+}
+",
+        )
+        .contract(
+            "counter",
+            r#"
+import "types"
+
+contract Counter {
+    storage: Storage
+    incomingMessages: IncreaseCounter
+}
+
+fun onInternalMessage(in: InMessage) {
+    if (in.body.isEmpty()) {
+        return;
+    }
+    val msg = lazy IncreaseCounter.fromSlice(in.body);
+    var storage = lazy Storage.load();
+    storage.counter += msg.increaseBy;
+    storage.save();
+}
+
+fun onBouncedMessage(_in: InMessageBounced) {}
+"#,
+        )
+        .script_file(
+            "predicate_snapshot",
+            r#"
+import "../../lib/build/build"
+import "../../lib/emulation/network"
+import "../../lib/io"
+import "../../lib/testing/expect"
+import "../../lib/testing/transaction_expect"
+import "../contracts/types"
+
+fun main() {
+    val deployer = net.treasury("deployer");
+    val init = ContractState {
+        code: build("counter"),
+        data: Storage { id: 0, counter: 0 }.toCell(),
+    };
+    val counterAddress = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    val deployRes = net.send(deployer.address, createMessage({
+        bounce: false,
+        value: ton("1.0"),
+        dest: { stateInit: init },
+    }));
+    expect(deployRes).toHaveSuccessfulDeploy({ to: counterAddress });
+
+    val expectedBody = IncreaseCounter { increaseBy: 42 }.toCell();
+    val increaseRes = net.send(deployer.address, createMessage({
+        bounce: true,
+        value: ton("0.1"),
+        dest: counterAddress,
+        body: IncreaseCounter { increaseBy: 42 },
+    }));
+
+    val found = increaseRes.findTransaction({
+        from: fun(addr: address): bool {
+            println("script.from={}", addr);
+            return addr == deployer.address;
+        },
+        to: fun(addr: address): bool {
+            println("script.to={}", addr);
+            return addr == counterAddress;
+        },
+        value: fun(value: coins): bool {
+            println("script.value={}", value);
+            return value == ton("0.1");
+        },
+        bounce: fun(flag: bool): bool {
+            println("script.bounce={}", flag);
+            return flag;
+        },
+        opcode: fun(op: uint32): bool {
+            println("script.opcode=0x{:x}", op);
+            return op == IncreaseCounter.getDeclaredPackPrefix2();
+        },
+        body: fun(body: cell): bool {
+            println("script.bodyHash=0x{:x}", body.hash());
+            return body.hash() == expectedBody.hash();
+        },
+    });
+    expect(found).toBeDefined();
+
+    expect(increaseRes).toNotHaveTx({
+        to: fun(addr: address): bool {
+            println("script.negated.to={}", addr);
+            return false;
+        },
+    });
+
+    println("SCRIPT_PREDICATES_OK");
+}
+"#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/predicate_snapshot.tolk")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_script_predicate_transaction_matchers_snapshot.stdout.txt",
+        );
+}
+
 #[allow(clippy::significant_drop_tightening)]
 #[test]
 fn script_broadcast_get_config_uses_remote_network() {
