@@ -5,6 +5,7 @@ use acton_config::config::{
 use anyhow::{Context, anyhow};
 use inquire::Select;
 use std::path::Path;
+use ton_executor::ExecutorVerbosity;
 
 pub mod error_fmt {
     use acton_config::color::OwoColorize;
@@ -240,6 +241,37 @@ pub fn select_contract(
         }
     };
     Ok(contract_key)
+}
+
+#[must_use]
+pub const fn executor_verbosity_for_cli_level(level: u8) -> ExecutorVerbosity {
+    match level {
+        0 => ExecutorVerbosity::Off,
+        1 => ExecutorVerbosity::Full,
+        _ => ExecutorVerbosity::Full,
+    }
+}
+
+#[must_use]
+pub const fn max_executor_verbosity(
+    lhs: ExecutorVerbosity,
+    rhs: ExecutorVerbosity,
+) -> ExecutorVerbosity {
+    if (lhs as i32) >= (rhs as i32) {
+        lhs
+    } else {
+        rhs
+    }
+}
+
+pub fn validate_cli_verbosity(level: u8) -> anyhow::Result<u8> {
+    if level <= 1 {
+        Ok(level)
+    } else {
+        anyhow::bail!(
+            "Verbosity levels above 1 are not supported yet. Use -v or --verbose at most once."
+        );
+    }
 }
 
 pub fn select_wallet(wallet_name: Option<String>, config: &ActonConfig) -> anyhow::Result<String> {

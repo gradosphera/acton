@@ -215,6 +215,14 @@ enum Commands {
             help_heading = "Execution"
         )]
         fuzz_seed: Option<u64>,
+        #[arg(
+            short = 'v',
+            long,
+            action = clap::ArgAction::Count,
+            help = "Increase executor log verbosity (currently supports only level 1)",
+            help_heading = "Execution"
+        )]
+        verbose: u8,
 
         // Debugging
         #[arg(long, help = "Enable debug mode", help_heading = "Debugging")]
@@ -519,6 +527,15 @@ enum Commands {
 
         #[arg(help = "Arguments to pass to the script")]
         args: Vec<String>,
+
+        #[arg(
+            short = 'v',
+            long,
+            action = clap::ArgAction::Count,
+            help = "Increase executor log verbosity (currently supports only level 1)",
+            help_heading = "Script"
+        )]
+        verbose: u8,
 
         // Debugging
         #[arg(long, help = "Enable debug mode", help_heading = "Debugging")]
@@ -1657,6 +1674,7 @@ fn main() {
             filter,
             reporter,
             show_bodies,
+            verbose,
             debug,
             debug_port,
             backtrace,
@@ -1694,11 +1712,15 @@ fn main() {
             fork_block_number,
             ui,
             ui_port,
-        } => match fork_net.as_deref().map(Network::from_str).transpose() {
-            Ok(fork_net) => {
+        } => match (
+            fork_net.as_deref().map(Network::from_str).transpose(),
+            commands::common::validate_cli_verbosity(verbose),
+        ) {
+            (Ok(fork_net), Ok(verbose)) => {
                 let config = create_test_config(
                     filter,
                     show_bodies,
+                    verbose,
                     debug,
                     debug_port,
                     backtrace,
@@ -1751,7 +1773,7 @@ fn main() {
                     test_cmd(path, &config)
                 }
             }
-            Err(err) => Err(err),
+            (Err(err), _) | (_, Err(err)) => Err(err),
         },
         Commands::Run { script, args } => run_cmd(&script, &args),
         Commands::Retrace {
@@ -1786,6 +1808,7 @@ fn main() {
         Commands::Script {
             path,
             args,
+            verbose,
             debug,
             backtrace,
             debug_port,
@@ -1796,20 +1819,24 @@ fn main() {
             net,
             explorer,
             show_bodies,
-        } => script_cmd(
-            &path,
-            args,
-            debug,
-            backtrace,
-            debug_port,
-            clear_cache,
-            fork_net,
-            api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
-            fork_block_number,
-            net,
-            explorer,
-            show_bodies,
-        ),
+        } => match commands::common::validate_cli_verbosity(verbose) {
+            Ok(verbose) => script_cmd(
+                &path,
+                args,
+                verbose,
+                debug,
+                backtrace,
+                debug_port,
+                clear_cache,
+                fork_net,
+                api_key.or_else(|| env::var("TONCENTER_API_KEY").ok()),
+                fork_block_number,
+                net,
+                explorer,
+                show_bodies,
+            ),
+            Err(err) => Err(err),
+        },
         Commands::Build {
             contract_id,
             clear_cache,
@@ -2267,6 +2294,7 @@ fn setup_logging() -> anyhow::Result<()> {
 fn create_test_config(
     filter: Option<String>,
     show_bodies: bool,
+    verbosity: u8,
     debug: bool,
     debug_port: Option<u16>,
     backtrace: Option<BacktraceMode>,
@@ -2365,6 +2393,7 @@ fn create_test_config(
             ui,
             Some(ui_port),
         );
+        config.verbosity = verbosity;
         config.mutation_ids = mutation_ids;
         if mutation_rules_file.is_some() {
             config.mutation_rules_file = mutation_rules_file;
@@ -2376,6 +2405,7 @@ fn create_test_config(
 
     TestConfig {
         show_bodies,
+        verbosity,
         debug,
         debug_port: debug_port.unwrap_or(12345),
         backtrace,

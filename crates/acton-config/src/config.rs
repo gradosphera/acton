@@ -1252,6 +1252,7 @@ impl TestSettings {
             filter: filter_override.or_else(|| self.filter.clone()),
             report_formats: final_report_formats,
             show_bodies: show_bodies_override,
+            verbosity: 0,
             debug: debug_override.unwrap_or_else(|| self.debug.unwrap_or(false)),
             debug_port: debug_port_override.unwrap_or_else(|| self.debug_port.unwrap_or(12345)),
             backtrace: backtrace_override.or_else(|| {

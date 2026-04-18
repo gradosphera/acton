@@ -25,6 +25,15 @@ Path to the script file to execute.
 .RS 4
 Arguments passed through to the script.
 .RE
+.sp
+\fB\-v\fR, \fB\-\-verbose\fR
+.RS 4
+Enable executor debug logs at verbosity level \fB1\fR\&.
+.sp
+Currently only level \fB1\fR is supported. Pass \fB\-v\fR or \fB\-\-verbose\fR at most once.
+Use this for low\-level executor output such as \fBdebug.dumpStack()\fR\&. For richer
+debug output, use \fB\-\-backtrace full\fR or \fB\-\-debug\fR\&.
+.RE
 .SS "Debugging Options"
 .sp
 \fB\-\-debug\fR
@@ -149,6 +158,9 @@ acton script scripts/query.tolk \-\- \-\-net\-like\-value
 \fBacton script\fR always compiles and executes the selected script. With
 \fB\-\-net\fR, it can send real blockchain transactions; without \fB\-\-net\fR, execution
 stays local even when \fB\-\-fork\-net\fR is used.
+.sp
+Executor debug logs are hidden by default. Re\-run with \fB\-v\fR when you need
+level\-1 executor output such as \fBdebug.dumpStack()\fR\&.
 .SH "EXIT STATUS"
 .sp
 .RS 4
@@ -190,7 +202,17 @@ acton script scripts/deploy.tolk
 .RE
 .sp
 .RS 4
-\h'-04' 2.\h'+01'Broadcast to testnet:
+\h'-04' 2.\h'+01'Show executor debug logs from \fBdebug.*\fR helpers:
+.sp
+.RS 4
+.nf
+acton script scripts/deploy.tolk \-v
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 3.\h'+01'Broadcast to testnet:
 .sp
 .RS 4
 .nf
@@ -200,7 +222,7 @@ acton script scripts/deploy.tolk \-\-net testnet
 .RE
 .sp
 .RS 4
-\h'-04' 3.\h'+01'Query mainnet state without broadcasting:
+\h'-04' 4.\h'+01'Query mainnet state without broadcasting:
 .sp
 .RS 4
 .nf
@@ -210,7 +232,7 @@ acton script query.tolk \-\-fork\-net mainnet \-\-api\-key YOUR_API_KEY
 .RE
 .sp
 .RS 4
-\h'-04' 4.\h'+01'Broadcast a deploy flow and print explorer links:
+\h'-04' 5.\h'+01'Broadcast a deploy flow and print explorer links:
 .sp
 .RS 4
 .nf

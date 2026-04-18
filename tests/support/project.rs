@@ -1463,6 +1463,11 @@ impl ActonCommand {
         self
     }
 
+    pub(crate) fn verbose(mut self) -> Self {
+        self.cmd = self.cmd.arg("-v");
+        self
+    }
+
     pub(crate) fn exclude_pattern(mut self, pattern: &str) -> Self {
         self.test_exclude_patterns.push(pattern.to_string());
         self

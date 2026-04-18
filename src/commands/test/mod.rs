@@ -1,5 +1,7 @@
 use crate::commands::build::build_cmd;
-use crate::commands::common::error_fmt;
+use crate::commands::common::{
+    error_fmt, executor_verbosity_for_cli_level, max_executor_verbosity,
+};
 use crate::commands::test::coverage::{
     collect_coverage, generate_lcov_file, generate_lcov_report, generate_text_file,
     print_coverage_summary, total_line_coverage_percentage,
@@ -226,18 +228,21 @@ impl<'a> TestRunner<'a> {
         }
     }
 
-    fn minimal_log_verbosity(&self) -> ExecutorVerbosity {
+    fn effective_log_verbosity(&self) -> ExecutorVerbosity {
+        let mut verbosity = executor_verbosity_for_cli_level(self.config.verbosity);
+
         if self.config.debug || self.config.backtrace == Some(BacktraceMode::Full) {
             // for these modes we need all logs for work
-            return ExecutorVerbosity::FullLocationStackVerbose;
+            verbosity =
+                max_executor_verbosity(verbosity, ExecutorVerbosity::FullLocationStackVerbose);
         }
 
         if self.config.coverage {
             // for coverage, we need at least locations to map to actual source code
-            return ExecutorVerbosity::FullLocationStack;
+            verbosity = max_executor_verbosity(verbosity, ExecutorVerbosity::FullLocationStack);
         }
 
-        ExecutorVerbosity::Full
+        verbosity
     }
 
     fn execute_test(
@@ -284,7 +289,7 @@ impl<'a> TestRunner<'a> {
         source_map: Arc<TolkSourceMap>,
         stack: &Tuple,
     ) -> anyhow::Result<TestResult> {
-        let verbosity = self.minimal_log_verbosity();
+        let verbosity = self.effective_log_verbosity();
 
         let now = std::time::SystemTime::now();
         let duration_since_epoch = now.duration_since(UNIX_EPOCH).expect("Time went backwards");
@@ -438,7 +443,7 @@ impl<'a> TestRunner<'a> {
             };
 
         let mut captured_stdout = captured_stdout;
-        Self::append_debug_output(&mut captured_stdout, &result);
+        Self::append_debug_output(&mut captured_stdout, &result, verbosity);
 
         let executed_get_methods = if self.config.coverage {
             // save results for coverage only in coverage mode since cloning is expensive due to logs
@@ -462,7 +467,15 @@ impl<'a> TestRunner<'a> {
         })
     }
 
-    fn append_debug_output(stdout: &mut String, get_result: &GetMethodResult) {
+    fn append_debug_output(
+        stdout: &mut String,
+        get_result: &GetMethodResult,
+        verbosity: ExecutorVerbosity,
+    ) {
+        if matches!(verbosity, ExecutorVerbosity::Off) {
+            return;
+        }
+
         let GetMethodResult::Success(result) = get_result else {
             return;
         };

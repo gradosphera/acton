@@ -138,11 +138,16 @@ reporter = ["console", "teamcity"]
 
 ### Debug Options
 
-| Configuration | CLI Flag       | Type    | Description                  |
-|---------------|----------------|---------|------------------------------|
-| `debug`       | `--debug`      | Boolean | Enable debug mode            |
-| `debug-port`  | `--debug-port` | Integer | Debug server port            |
-| `backtrace`   | `--backtrace`  | String  | Enable stack traces ("full") |
+| Configuration | CLI Flag          | Type    | Description                                   |
+|---------------|-------------------|---------|-----------------------------------------------|
+| `debug`       | `--debug`         | Boolean | Enable debug mode                             |
+| `debug-port`  | `--debug-port`    | Integer | Debug server port                             |
+| `backtrace`   | `--backtrace`     | String  | Enable stack traces ("full")                  |
+| `-`           | `-v`, `--verbose` | Count   | Enable level-1 executor debug logs (CLI only) |
+
+`--verbose` is currently binary in practice: default level `0`, and level `1`
+when `-v` or `--verbose` is passed once. Higher user-selected levels are not
+supported yet.
 
 **Examples:**
 ```toml
@@ -150,6 +155,10 @@ reporter = ["console", "teamcity"]
 debug = false
 debug-port = 12345
 backtrace = "full"
+```
+
+```bash
+acton test -v --filter "debug.*"
 ```
 
 ### Coverage Options

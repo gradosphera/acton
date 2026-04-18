@@ -234,6 +234,79 @@ fn test_script_simple_execution() {
 }
 
 #[test]
+fn test_script_debug_logs_are_hidden_without_verbose_flag() {
+    let project = ProjectBuilder::new("script-debug-logs-default-off")
+        .script_file(
+            "debug_logs",
+            r#"
+            fun main() {
+                debug.dumpStack();
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/debug_logs.tolk")
+        .run()
+        .success()
+        .assert_not_contains("stack(0 values)")
+        .assert_snapshot_matches(
+            "integration/snapshots/test_script_debug_logs_are_hidden_without_verbose_flag.stdout.txt",
+        );
+}
+
+#[test]
+fn test_script_verbose_flag_is_accepted() {
+    let project = ProjectBuilder::new("script-debug-logs-verbose")
+        .script_file(
+            "debug_logs",
+            r#"
+            fun main() {
+                debug.dumpStack();
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/debug_logs.tolk")
+        .arg("--verbose")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/test_script_verbose_flag_is_accepted.stdout.txt",
+        );
+}
+
+#[test]
+fn test_script_rejects_verbose_level_above_one() {
+    let project = ProjectBuilder::new("script-debug-logs-verbose-level")
+        .script_file(
+            "debug_logs",
+            r#"
+            fun main() {
+                debug.dumpStack();
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/debug_logs.tolk")
+        .arg("-vv")
+        .run()
+        .failure()
+        .assert_stderr_contains("Verbosity levels above 1 are not supported yet")
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_script_rejects_verbose_level_above_one.stderr.txt",
+        );
+}
+
+#[test]
 fn test_script_ensure_latest_uses_project_root_from_nested_directory() {
     let project = ProjectBuilder::new("script-ensure-latest-project-root")
         .script_file(

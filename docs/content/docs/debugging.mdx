@@ -260,6 +260,11 @@ acton test --show-bodies
 acton script scripts/demo.tolk --show-bodies
 ```
 
+Executor debug logs are hidden by default. Re-run with `acton test -v` or
+`acton script <path> -v` when you need level-1 executor output such as
+`debug.dumpStack()`. For richer debug output, use `--backtrace full` or
+`--debug`.
+
 Strengths:
 
 - cheapest feedback loop

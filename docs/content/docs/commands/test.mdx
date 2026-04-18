@@ -109,6 +109,22 @@ Seed for reproducible fuzz runs.
 </CommandOption>
 
 
+<CommandOption>
+<CommandOptionTitle>
+
+`-v`, `--verbose`
+
+</CommandOptionTitle>
+
+Enable executor debug logs at verbosity level `1`.
+
+Currently only level `1` is supported. Pass `-v` or `--verbose` at most once.
+Use this for low-level executor output such as `debug.dumpStack()`. For richer
+debug output, use `--backtrace full` or `--debug`.
+
+</CommandOption>
+
+
 </CommandOptions>
 
 ### Debugging Options
@@ -699,6 +715,8 @@ Acton discovers tests by finding files that end with `.test.tolk`.
   coverage summaries, files, and annotated source
 - `--junit-path` matters when the JUnit reporter is enabled; the default output
   directory is `test-results`
+- executor debug logs are hidden by default; re-run with `-v` when you need
+  level-1 executor output such as `debug.dumpStack()`
 - `--coverage-file` matters only with `--coverage`; without an explicit path,
   Acton writes `lcov.info` for `lcov` and `coverage.txt` for `text`
 - coverage excludes `.test.tolk` files and `@wrappers` sources by default;
@@ -798,73 +816,79 @@ CLI flags override config values for the current invocation.
    acton test --filter "wallet.*"
    ```
 
-3. Generate coverage and JUnit output:
+3. Show executor debug logs from `debug.*` helpers:
+
+   ```bash
+   acton test -v --filter "debug.*"
+   ```
+
+4. Generate coverage and JUnit output:
 
    ```bash
    acton test --coverage --coverage-format lcov --reporter junit --junit-path test-results
    ```
 
-4. Fail the run when line coverage drops below 85%:
+5. Fail the run when line coverage drops below 85%:
 
    ```bash
    acton test --coverage --coverage-minimum-percent 85
    ```
 
-5. Compare gas usage against a baseline:
+6. Compare gas usage against a baseline:
 
    ```bash
    acton test --baseline-snapshot build/gas-baseline.json --fail-on-diff
    ```
 
-6. Run mutation testing for one contract:
+7. Run mutation testing for one contract:
 
    ```bash
    acton test --mutate --mutate-contract Wallet
    ```
 
-7. Run mutation testing only for changed lines in the current worktree:
+8. Run mutation testing only for changed lines in the current worktree:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-diff worktree
    ```
 
-8. Run mutation testing for selected levels on the current branch:
+9. Run mutation testing for selected levels on the current branch:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-diff branch --mutation-levels critical,major
    ```
 
-9. Re-run one specific mutant from a previous report:
+10. Re-run one specific mutant from a previous report:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-id 2
    ```
 
-10. Resume an unfinished mutation session:
+11. Resume an unfinished mutation session:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-session-id wallet-pr-42 --mutation-diff worktree
    ```
 
-11. Fail the run when mutation score drops below 85%:
+12. Fail the run when mutation score drops below 85%:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-minimum-percent 85
    ```
 
-12. Limit mutation testing to four workers:
+13. Limit mutation testing to four workers:
 
    ```bash
    acton test --mutate --mutate-contract Wallet --mutation-workers 4
    ```
 
-13. Debug a forked-state failure with traces and the UI:
+14. Debug a forked-state failure with traces and the UI:
 
    ```bash
    acton test tests/wallet.test.tolk --fork-net testnet --fork-block-number 55000000 --save-test-trace --ui
    ```
 
-14. Enforce a gas baseline in CI:
+15. Enforce a gas baseline in CI:
 
    ```bash
    acton test --baseline-snapshot build/gas-baseline.json --fail-on-diff --reporter console,junit

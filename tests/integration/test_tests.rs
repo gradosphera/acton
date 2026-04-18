@@ -325,10 +325,10 @@ fn test_debug_dump_stack_output() {
     project
         .acton()
         .test()
+        .verbose()
         .run()
         .success()
         .assert_passed(1)
-        .assert_contains("Test output:")
         .assert_snapshot_matches("integration/snapshots/test_debug_dump_stack_output.stdout.txt");
 }
 
@@ -354,6 +354,7 @@ fn test_debug_dump_stack_output_mixed_with_stdout_and_stderr() {
     project
         .acton()
         .test()
+        .verbose()
         .run()
         .success()
         .assert_passed(1)
@@ -382,12 +383,65 @@ fn test_debug_dump_stack_output_multiple_debug_lines() {
     project
         .acton()
         .test()
+        .with_backtrace("full")
         .run()
         .success()
         .assert_passed(1)
         .assert_contains("dbg-line")
         .assert_snapshot_matches(
             "integration/snapshots/test_debug_dump_stack_output_multiple_debug_lines.stdout.txt",
+        );
+}
+
+#[test]
+fn test_debug_dump_stack_output_requires_verbose_flag() {
+    let project = ProjectBuilder::new("test-debug-dump-stack-output-default-off")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r"
+            get fun `test debug dump stack output requires verbose`() {
+                debug.dumpStack();
+            }
+        ",
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_not_contains("stack(0 values)")
+        .assert_snapshot_matches(
+            "integration/snapshots/test_debug_dump_stack_output_requires_verbose_flag.stdout.txt",
+        );
+}
+
+#[test]
+fn test_debug_dump_stack_output_rejects_verbose_level_above_one() {
+    let project = ProjectBuilder::new("test-debug-dump-stack-output-verbose-level")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r"
+            get fun `test debug dump stack output rejects verbose level above one`() {
+                debug.dumpStack();
+            }
+        ",
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .arg("-vv")
+        .run()
+        .failure()
+        .assert_stderr_contains("Verbosity levels above 1 are not supported yet")
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_debug_dump_stack_output_rejects_verbose_level_above_one.stderr.txt",
         );
 }
 

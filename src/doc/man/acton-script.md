@@ -30,6 +30,14 @@ Path to the script file to execute.
 Arguments passed through to the script.
 {{/option}}
 
+{{#option "`-v`, `--verbose`" }}
+Enable executor debug logs at verbosity level `1`.
+
+Currently only level `1` is supported. Pass `-v` or `--verbose` at most once.
+Use this for low-level executor output such as `debug.dumpStack()`. For richer
+debug output, use `--backtrace full` or `--debug`.
+{{/option}}
+
 {{/options}}
 
 ### Debugging Options
@@ -147,6 +155,9 @@ acton script scripts/query.tolk -- --net-like-value
 `--net`, it can send real blockchain transactions; without `--net`, execution
 stays local even when `--fork-net` is used.
 
+Executor debug logs are hidden by default. Re-run with `-v` when you need
+level-1 executor output such as `debug.dumpStack()`.
+
 ## EXIT STATUS
 
 - `0`: The script completed successfully, including successful broadcast flows.
@@ -170,19 +181,25 @@ When a script can affect on-chain state, the usual safe sequence is:
    acton script scripts/deploy.tolk
    ```
 
-2. Broadcast to testnet:
+2. Show executor debug logs from `debug.*` helpers:
+
+   ```bash
+   acton script scripts/deploy.tolk -v
+   ```
+
+3. Broadcast to testnet:
 
    ```bash
    acton script scripts/deploy.tolk --net testnet
    ```
 
-3. Query mainnet state without broadcasting:
+4. Query mainnet state without broadcasting:
 
    ```bash
    acton script query.tolk --fork-net mainnet --api-key YOUR_API_KEY
    ```
 
-4. Broadcast a deploy flow and print explorer links:
+5. Broadcast a deploy flow and print explorer links:
 
    ```bash
    acton script scripts/deploy.tolk --net testnet --explorer tonscan

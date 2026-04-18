@@ -1,4 +1,6 @@
-use crate::commands::common::error_fmt;
+use crate::commands::common::{
+    error_fmt, executor_verbosity_for_cli_level, max_executor_verbosity,
+};
 use crate::context::{
     AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
     EmulationsState, Env, IoContext, KnownAddresses,
@@ -76,6 +78,7 @@ fn resolve_script_networks(
 pub fn script_cmd(
     path: &String,
     args: Vec<String>,
+    verbose: u8,
     debug: bool,
     backtrace: Option<BacktraceMode>,
     debug_port: u16,
@@ -133,6 +136,7 @@ pub fn script_cmd(
         &content,
         &mappings,
         stack,
+        verbose,
         debug,
         backtrace,
         debug_listener,
@@ -156,6 +160,7 @@ fn run_script_file(
     content: &str,
     mappings: &Option<BTreeMap<String, String>>,
     stack: Tuple,
+    verbose: u8,
     debug: bool,
     backtrace: Option<BacktraceMode>,
     debug_listener: Option<TcpListener>,
@@ -170,6 +175,11 @@ fn run_script_file(
 
     let compiler = tolkc::Compiler::new(2).with_mappings(mappings);
     let need_debug_info = debug || backtrace == Some(BacktraceMode::Full);
+    let mut verbosity = executor_verbosity_for_cli_level(verbose);
+
+    if debug || backtrace == Some(BacktraceMode::Full) {
+        verbosity = max_executor_verbosity(verbosity, ExecutorVerbosity::FullLocationStackVerbose);
+    }
 
     match compiler.compile(Path::new(file_path), need_debug_info) {
         tolkc::CompilerResult::Success(result) => {
@@ -190,7 +200,7 @@ fn run_script_file(
                 debug,
                 backtrace,
                 debug_listener,
-                ExecutorVerbosity::FullLocationStackVerbose,
+                verbosity,
                 fork_net,
                 api_key,
                 fork_block_number,

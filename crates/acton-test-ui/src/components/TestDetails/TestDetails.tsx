@@ -79,6 +79,13 @@ const isExternalMessageNotAcceptedError = (error: string): boolean => {
   return mentionsExternal && mentionsRejectedExternal
 }
 
+const MISSING_VM_LOG_HINT = [
+  "No VM logs were collected for this trace.",
+  "Re-run with --verbose flag",
+].join("\n")
+
+const hasNonEmptyLog = (value: string | undefined): boolean => (value ?? "").trim().length > 0
+
 export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoot}) => {
   const [activeTab, setActiveTab] = useState<"info" | "logs" | "transactions">(() => {
     const saved = localStorage.getItem("activeTab")
@@ -519,8 +526,8 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
     const isSingleFailedMessage = failedMessages.length === 1
 
     return failedMessages.map((failedMessage, index) => {
-      const hasVmLog = (failedMessage.vm_log_diff ?? "").trim().length > 0
-      const hasExecutorLog = (failedMessage.executor_logs ?? "").trim().length > 0
+      const hasVmLog = hasNonEmptyLog(failedMessage.vm_log_diff)
+      const hasExecutorLog = hasNonEmptyLog(failedMessage.executor_logs)
       const showExternalNotAcceptedTitle =
         isSingleFailedMessage && isExternalMessageNotAcceptedError(failedMessage.error)
 
@@ -550,21 +557,19 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
               <DataBlock data={failedMessage.executor_logs ?? ""} />
             </div>
           )}
-          {hasVmLog && (
-            <div className={styles.logSection}>
-              <div className={styles.logSectionTitle}>VM Log</div>
-              <DataBlock data={failedMessage.vm_log_diff ?? ""} />
-            </div>
-          )}
+          <div className={styles.logSection}>
+            <div className={styles.logSectionTitle}>VM Log</div>
+            <DataBlock data={hasVmLog ? (failedMessage.vm_log_diff ?? "") : MISSING_VM_LOG_HINT} />
+          </div>
         </div>
       )
     })
   }
 
   const renderTestExecutionLogs = () => {
-    const hasStdout = (executionLogs?.stdout ?? "").trim().length > 0
-    const hasStderr = (executionLogs?.stderr ?? "").trim().length > 0
-    const hasVmLog = (executionLogs?.vm_log_diff ?? "").trim().length > 0
+    const hasStdout = hasNonEmptyLog(executionLogs?.stdout)
+    const hasStderr = hasNonEmptyLog(executionLogs?.stderr)
+    const hasVmLog = hasNonEmptyLog(executionLogs?.vm_log_diff)
 
     const summaryKinds = [
       hasStdout ? "stdout" : undefined,
@@ -826,8 +831,8 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
       const transactionLogs =
         currentTraceList?.transactions
           .map((tx, idx) => {
-            const hasVmLog = tx.vm_log_diff && tx.vm_log_diff.trim().length > 0
-            const hasExecutorLog = tx.executor_logs && tx.executor_logs.trim().length > 0
+            const hasVmLog = hasNonEmptyLog(tx.vm_log_diff)
+            const hasExecutorLog = hasNonEmptyLog(tx.executor_logs)
 
             if (!hasVmLog && !hasExecutorLog) return
 
@@ -842,12 +847,10 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
                     <DataBlock data={tx.executor_logs} />
                   </div>
                 )}
-                {hasVmLog && (
-                  <div className={styles.logSection}>
-                    <div className={styles.logSectionTitle}>VM Log</div>
-                    <DataBlock data={tx.vm_log_diff} />
-                  </div>
-                )}
+                <div className={styles.logSection}>
+                  <div className={styles.logSectionTitle}>VM Log</div>
+                  <DataBlock data={hasVmLog ? tx.vm_log_diff : MISSING_VM_LOG_HINT} />
+                </div>
               </div>
             )
           })
@@ -858,7 +861,14 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
       const logs = [...transactionLogs, ...failedMessageLogs]
 
       if (logs.length === 0) {
-        return <div className={styles.empty}>No trace logs for this test</div>
+        return (
+          <div className={styles.txLogs}>
+            <div className={styles.logSection}>
+              <div className={styles.logSectionTitle}>VM Log</div>
+              <DataBlock data={MISSING_VM_LOG_HINT} />
+            </div>
+          </div>
+        )
       }
 
       return logs
