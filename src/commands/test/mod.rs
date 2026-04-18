@@ -234,7 +234,7 @@ impl<'a> TestRunner<'a> {
 
         if self.config.coverage {
             // for coverage, we need at least locations to map to actual source code
-            return ExecutorVerbosity::FullLocationStackVerbose;
+            return ExecutorVerbosity::FullLocationStack;
         }
 
         ExecutorVerbosity::Full
