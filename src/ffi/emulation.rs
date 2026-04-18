@@ -168,7 +168,7 @@ fn build_impl(
     if let Some(cached_entry) =
         ctx.build
             .file_build_cache
-            .get(&path, ctx.build.need_debug_info, 2, "1.3")
+            .get(&path, ctx.build.need_debug_info, false, 2, "1.3")
     {
         let mappings = ctx.env.config.mappings();
         let elapsed = start_time.elapsed();
@@ -212,11 +212,14 @@ fn build_impl(
                 "Build {path} from source (compilation: {compile_time:?}, total: {total_elapsed:?})"
             );
 
-            if let Err(err) =
-                ctx.build
-                    .file_build_cache
-                    .put(&path, &success, ctx.build.need_debug_info, 2, "1.3")
-            {
+            if let Err(err) = ctx.build.file_build_cache.put(
+                &path,
+                &success,
+                ctx.build.need_debug_info,
+                false,
+                2,
+                "1.3",
+            ) {
                 warn!("Failed to build cached code BoC for {path}: {err}");
             }
 

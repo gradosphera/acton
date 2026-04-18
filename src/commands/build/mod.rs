@@ -158,6 +158,7 @@ See https://ton-blockchain.github.io/acton/docs/build-system/configuration-refer
             &contract_config.src,
             &contract_path,
             &config,
+            output_fift_dir.is_some(),
         ) {
             Ok((code, hash, fift_code)) => (code, hash, fift_code),
             Err(err) => {
@@ -272,6 +273,7 @@ fn process_contract(
     contract_src: &str,
     contract_path: &Path,
     acton_config: &ActonConfig,
+    with_fift: bool,
 ) -> anyhow::Result<(String, String, Option<String>)> {
     let (code_boc64, code_hash, fift_code) = if contract_src.ends_with(".boc") {
         debug!("Loading BoC file: {}", contract_path.display());
@@ -290,14 +292,14 @@ fn process_contract(
             }
         }
     } else {
-        let cached_result = file_cache.get(contract_src, false, 2, "1.3");
+        let cached_result = file_cache.get(contract_src, false, with_fift, 2, "1.3");
 
         if let Some(cached_result) = cached_result {
             debug!("Cache hit, use cached result for '{contract_src}'");
             (
                 cached_result.code_boc64,
                 cached_result.code_hash_hex,
-                Some(cached_result.fift_code),
+                cached_result.fift_code,
             )
         } else {
             debug!("Cache miss, recompile '{}'", contract_path.display());
@@ -312,7 +314,9 @@ fn process_contract(
 
             match compilation_result {
                 tolkc::CompilerResult::Success(result) => {
-                    if let Err(e) = file_cache.put(contract_src, &result, false, 2, "1.3") {
+                    if let Err(e) =
+                        file_cache.put(contract_src, &result, false, with_fift, 2, "1.3")
+                    {
                         eprintln!(
                             "Warning: Failed to cache compilation result for {}: {}",
                             display_name, e
@@ -324,7 +328,7 @@ fn process_contract(
                     (
                         result.code_boc64,
                         result.code_hash_hex,
-                        Some(result.fift_code),
+                        with_fift.then_some(result.fift_code),
                     )
                 }
                 tolkc::CompilerResult::Error(error) => {

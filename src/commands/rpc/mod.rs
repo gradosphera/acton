@@ -242,7 +242,7 @@ fn load_local_contract_candidate(
 
     let cached = file_cache
         .as_mut()
-        .and_then(|cache| cache.get(&contract.src, false, 2, "1.3"));
+        .and_then(|cache| cache.get(&contract.src, false, false, 2, "1.3"));
     let (code_boc64, compiler_abi) = if let Some(cached) = cached {
         (cached.code_boc64, cached.abi.map(Arc::new))
     } else {
@@ -250,7 +250,7 @@ fn load_local_contract_candidate(
         match compiler.compile(&contract_path, false) {
             tolkc::CompilerResult::Success(result) => {
                 if let Some(cache) = file_cache.as_mut() {
-                    let _ = cache.put(&contract.src, &result, false, 2, "1.3");
+                    let _ = cache.put(&contract.src, &result, false, false, 2, "1.3");
                 }
                 (result.code_boc64, result.abi.map(Arc::new))
             }

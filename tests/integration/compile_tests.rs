@@ -399,6 +399,44 @@ fn test_compile_with_fift_output() {
 }
 
 #[test]
+fn test_compile_with_fift_output_recompiles_when_plain_cache_entry_lacks_fift() {
+    let project = ProjectBuilder::new("compile-fift-cache-miss-after-plain")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_not_contains("from cache");
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_fift_output("output.fif")
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_not_contains("from cache");
+
+    let fift_file = project.path().join("output.fif");
+    assert!(
+        fift_file.exists(),
+        "Fift file should be created after recompilation with --fift"
+    );
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_fift_output("output.fif")
+        .run()
+        .success()
+        .assert_contains("Compilation successful (from cache)");
+}
+
+#[test]
 fn test_compile_with_fift_output_to_nonexistent_directory() {
     let project = ProjectBuilder::new("compile-fift-out")
         .contract("simple", SIMPLE_CONTRACT)
