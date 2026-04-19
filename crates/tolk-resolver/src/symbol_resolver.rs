@@ -97,8 +97,6 @@ pub struct Scope {
     pub symbols: HashMap<Arc<str>, LocalDefId>,
     /// Index of the parent scope in the `SymbolResolver`'s scope list.
     pub parent: Option<usize>,
-    /// Indicates whether this scope is for a lambda.
-    pub is_lambda: bool,
 }
 
 /// A visitor that tracks lexical scopes and resolves name usages.
@@ -136,7 +134,6 @@ impl<'a> SymbolResolver<'a> {
         let global_scope = Scope {
             symbols: HashMap::new(),
             parent: None,
-            is_lambda: false,
         };
         Self {
             scopes: vec![global_scope],
@@ -154,18 +151,9 @@ impl<'a> SymbolResolver<'a> {
     }
 
     fn enter_scope(&mut self) {
-        self.enter_scope_ext(false);
-    }
-
-    fn enter_lambda_scope(&mut self) {
-        self.enter_scope_ext(true);
-    }
-
-    fn enter_scope_ext(&mut self, is_lambda: bool) {
         let new_scope = Scope {
             symbols: HashMap::new(),
             parent: Some(self.current_scope),
-            is_lambda,
         };
         self.scopes.push(new_scope);
         self.current_scope = self.scopes.len() - 1;
@@ -213,10 +201,6 @@ impl<'a> SymbolResolver<'a> {
                     resolved: Resolved::Local(*symbol_id),
                 });
                 return Some(());
-            }
-            if scope.is_lambda {
-                // don't look up in scopes out of lambda
-                break;
             }
             current = scope.parent;
         }
@@ -652,7 +636,7 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
     }
 
     fn walk_lambda(&mut self, node: &ast::Lambda<'tree>) -> Self::Result {
-        self.enter_lambda_scope();
+        self.enter_scope();
 
         for param in node.parameters() {
             self.walk_lambda_parameter(&param);

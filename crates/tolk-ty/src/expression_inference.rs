@@ -2397,7 +2397,9 @@ impl<'t> TypeInferenceWalker<'_, '_> {
             .and_then(|h| self.return_type_or_none(h));
 
         let mut params_types = Vec::new();
-        let mut body_start = FlowContext::new();
+        // Closures capture outer locals by value at the moment the lambda is created, so the
+        // lambda body should see the current outer flow facts as its starting point.
+        let mut body_start = flow.clone();
 
         for (i, param) in v.parameters().enumerate() {
             let param_ty = if let Some(ty_node) = param.typ() {
