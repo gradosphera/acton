@@ -34,7 +34,11 @@ _contract-name_
 
 Contract name to verify.
 
-If omitted, Acton prompts when the project contains multiple contracts.
+<CommandOptionMeta label="If omitted">
+
+Acton prompts when the project contains multiple contracts.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -48,7 +52,11 @@ If omitted, Acton prompts when the project contains multiple contracts.
 
 Deployed contract address to verify.
 
-If omitted, Acton prompts for it.
+<CommandOptionMeta label="If omitted">
+
+Acton prompts for it.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -62,8 +70,12 @@ If omitted, Acton prompts for it.
 
 Wallet to use for the verification transaction.
 
-If omitted, Acton auto-selects the only configured wallet or prompts when
+<CommandOptionMeta label="If omitted">
+
+Acton auto-selects the only configured wallet or prompts when
 multiple wallets are available.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -77,7 +89,11 @@ multiple wallets are available.
 
 Tolk compiler version to request on the verifier side.
 
-Currently defaults to `1.2.0`.
+<CommandOptionMeta label="Current default">
+
+`1.2.0`.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -103,7 +119,11 @@ Run verification without submitting the final blockchain transaction.
 
 TonCenter API key for blockchain queries.
 
-Also read from `TONCENTER_API_KEY`.
+<CommandOptionMeta label="Environment">
+
+`TONCENTER_API_KEY`.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -124,7 +144,11 @@ Also read from `TONCENTER_API_KEY`.
 
 Network to verify against.
 
-Defaults to `testnet`.
+<CommandOptionMeta label="Default">
+
+`testnet`.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -145,7 +169,11 @@ Defaults to `testnet`.
 
 Control when to use colored output.
 
-Possible values: `auto`, `always`, `never`
+<CommandOptionMeta label="Possible values">
+
+`auto`, `always`, `never`
+
+</CommandOptionMeta>
 
 </CommandOption>
 

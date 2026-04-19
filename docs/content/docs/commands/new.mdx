@@ -85,7 +85,11 @@ after opting into advanced options.
 
 Project template to use.
 
-Possible values: `empty`, `counter`, `jetton`, `nft`
+<CommandOptionMeta label="Possible values">
+
+`empty`, `counter`, `jetton`, `nft`
+
+</CommandOptionMeta>
 
 If not provided, interactive mode prompts for the template.
 
@@ -176,7 +180,11 @@ unless `--agents` is passed explicitly.
 
 Control when to use colored output.
 
-Possible values: `auto`, `always`, `never`
+<CommandOptionMeta label="Possible values">
+
+`auto`, `always`, `never`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -195,7 +203,11 @@ Possible values: `auto`, `always`, `never`
 
 </CommandOptionTitle>
 
+<CommandOptionMeta label="Pass-through">
+
 Accepted as a global Acton option for CLI consistency.
+
+</CommandOptionMeta>
 
 `acton new` creates a project and does not require an existing `Acton.toml`.
 The command does not resolve a project manifest before running, and this option
@@ -211,7 +223,11 @@ remains mutually exclusive with `--project-root`.
 
 </CommandOptionTitle>
 
+<CommandOptionMeta label="Pass-through">
+
 Accepted as a global Acton option for CLI consistency.
+
+</CommandOptionMeta>
 
 `acton new` creates a project and does not require an existing project root.
 The command does not resolve a project root before running, and this option

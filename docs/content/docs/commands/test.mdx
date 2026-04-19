@@ -33,7 +33,11 @@ _path_
 
 Test file or directory to run.
 
-If omitted, Acton discovers tests from the resolved project root.
+<CommandOptionMeta label="If omitted">
+
+Acton discovers tests from the resolved project root.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -59,7 +63,11 @@ Filter tests by regular expression.
 
 Exclude test files or directories matching a glob pattern.
 
+<CommandOptionMeta label="Repeatable">
+
 May be passed multiple times.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -73,7 +81,11 @@ May be passed multiple times.
 
 Include only test files or directories matching a glob pattern.
 
+<CommandOptionMeta label="Repeatable">
+
 May be passed multiple times.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -207,7 +219,11 @@ print backtraces by itself.
 
 Coverage output format.
 
-Possible values: `lcov`, `text`
+<CommandOptionMeta label="Possible values">
+
+`lcov`, `text`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -233,9 +249,17 @@ Output file for the coverage report.
 
 Fail when the final coverage score is below this percentage.
 
-Valid range: `0` to `100`.
+<CommandOptionMeta label="Valid range">
 
-Ignored with `--ui`.
+`0` to `100`.
+
+</CommandOptionMeta>
+
+<CommandOptionMeta label="Ignored with">
+
+`--ui`.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -325,7 +349,11 @@ Requires `--baseline-snapshot`.
 
 Report format list.
 
-Possible values: `console`, `teamcity`, `junit`, `dot`
+<CommandOptionMeta label="Possible values">
+
+`console`, `teamcity`, `junit`, `dot`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -634,7 +662,11 @@ original run. May be passed multiple times or as a comma-separated list.
 
 Fail if mutation score is below this percentage.
 
-Valid range: `0..=100`.
+<CommandOptionMeta label="Valid range">
+
+`0..=100`.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -648,7 +680,11 @@ Valid range: `0..=100`.
 
 Disable a specific mutation rule.
 
+<CommandOptionMeta label="Repeatable">
+
 May be passed multiple times.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -669,7 +705,11 @@ May be passed multiple times.
 
 Control when to use colored output.
 
-Possible values: `auto`, `always`, `never`
+<CommandOptionMeta label="Possible values">
+
+`auto`, `always`, `never`
+
+</CommandOptionMeta>
 
 </CommandOption>
 

@@ -83,7 +83,11 @@ Write the dependency graph for the requested build set as a DOT file.
 
 Directory for generated JSON build artifacts.
 
-Defaults to `[build].out-dir` when configured, otherwise `build/`.
+<CommandOptionMeta label="Default">
+
+`[build].out-dir` when configured, otherwise `build/`.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -98,7 +102,11 @@ Defaults to `[build].out-dir` when configured, otherwise `build/`.
 Directory for generated dependency helper files such as
 `gen/<dependency>.code.tolk`.
 
-Defaults to `[build].gen-dir` when configured, otherwise `gen/`.
+<CommandOptionMeta label="Default">
+
+`[build].gen-dir` when configured, otherwise `gen/`.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -112,8 +120,12 @@ Defaults to `[build].gen-dir` when configured, otherwise `gen/`.
 
 Directory for compiled Fift output for `.tolk` contracts.
 
-Defaults to `[build].output-fift` when configured. If neither the flag nor the
+<CommandOptionMeta label="Default">
+
+`[build].output-fift` when configured. If neither the flag nor the
 config value is set, Acton does not write `.fif` files.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -146,7 +158,11 @@ Print compiled code and hash information for each successfully built contract.
 
 Control when to use colored output.
 
-Possible values: `auto`, `always`, `never`
+<CommandOptionMeta label="Possible values">
+
+`auto`, `always`, `never`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
