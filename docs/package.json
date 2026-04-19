@@ -6,8 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "deploy": "rm -rf out .next && next build && bun x gh-pages -d out --dotfiles"
+    "lint": "eslint"
   },
   "dependencies": {
     "@orama/orama": "^3.1.18",

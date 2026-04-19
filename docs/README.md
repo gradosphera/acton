@@ -35,7 +35,8 @@ Open `http://localhost:3000` for the landing page and
 - `bun run build`: produce the static production build.
 - `bun run start`: serve the production build locally.
 - `bun run lint`: run ESLint for the docs app.
-- `bun run deploy`: build the static export and publish `out/` to GitHub Pages.
+
+Production deployment is handled by CI via `.github/workflows/deploy-docs.yml`.
 
 ## Editing content
 
