@@ -213,6 +213,45 @@ fn collect_method_chain_doc<'a>(
                 })
             }
         }
+        Expr::Instantiation(instantiation) => {
+            let expr = instantiation.expr()?;
+            let mut chain = collect_method_chain_doc(ctx, &expr, true)?;
+            let types_doc = print_instantiation_types(ctx, instantiation)?;
+
+            if chain.has_dot_link {
+                if let Some(last) = chain.links.last_mut() {
+                    last.doc = wrap_doc_with_node_comments(
+                        ctx,
+                        instantiation.syntax(),
+                        last.doc.clone().append(types_doc),
+                        include_expr_comments,
+                    );
+                    let instantiation_has_leading_comments = include_expr_comments
+                        && has_leading_comments_on_node(ctx, instantiation.syntax());
+                    last.has_leading_comments |= instantiation_has_leading_comments;
+                    let instantiation_has_inline_line_comments = include_expr_comments
+                        && has_inline_line_comments_on_node(ctx, instantiation.syntax());
+                    last.has_inline_line_comments |= instantiation_has_inline_line_comments;
+                } else {
+                    chain.base = chain.base.append(types_doc);
+                }
+                Some(chain)
+            } else {
+                let expr_doc = print_expression(ctx, &expr)?;
+                let instantiation_doc = wrap_doc_with_node_comments(
+                    ctx,
+                    instantiation.syntax(),
+                    RcDoc::concat([expr_doc, types_doc]),
+                    include_expr_comments,
+                );
+                Some(MethodChainDoc {
+                    base: instantiation_doc,
+                    links: vec![],
+                    has_dot_link: false,
+                    base_is_object_lit: matches!(expr, Expr::ObjectLit(_)),
+                })
+            }
+        }
         _ => Some(MethodChainDoc {
             base: print_expression(ctx, expr)?,
             links: vec![],
@@ -530,7 +569,10 @@ pub fn print_argument_list<'a>(ctx: &Context<'_>, args: &[CallArgument]) -> Opti
     // TODO: better way?
     if args.len() == 1
         && let Some(single) = args.first()
-        && matches!(single.expr(), Some(Expr::ObjectLit(_) | Expr::StringLit(_)))
+        && matches!(
+            single.expr(),
+            Some(Expr::ObjectLit(_) | Expr::StringLit(_) | Expr::Lambda(_))
+        )
     {
         return Some(RcDoc::group(RcDoc::concat([
             RcDoc::text("("),
@@ -539,13 +581,43 @@ pub fn print_argument_list<'a>(ctx: &Context<'_>, args: &[CallArgument]) -> Opti
         ])));
     }
 
+    let list_options = if args.len() > 1 && args.iter().any(call_argument_contains_lambda) {
+        common::ListOptions {
+            multiline_threshold: 0,
+            ..Default::default()
+        }
+    } else {
+        common::ListOptions::default()
+    };
+
     common::print_list(
         ctx,
         args,
         print_call_argument,
         |arg| arg.0,
         |_| vec![],
-        common::ListOptions::default(),
+        list_options,
+    )
+}
+
+fn call_argument_contains_lambda(arg: &CallArgument) -> bool {
+    matches!(arg.expr(), Some(Expr::Lambda(_)))
+}
+
+fn print_instantiation_types<'a>(
+    ctx: &Context<'_>,
+    instantiation: &Instantiation,
+) -> Option<RcDoc<'a>> {
+    let ts = instantiation.instantiation_ts()?;
+    let types: Vec<_> = ts.types().collect();
+
+    common::print_list(
+        ctx,
+        &types,
+        types::print_type,
+        Type::syntax,
+        |_| vec![],
+        common::ListOptions::triangle_bracket_list(),
     )
 }
 
@@ -567,17 +639,7 @@ pub fn print_generic_instantiation<'a>(
 ) -> Option<RcDoc<'a>> {
     let expr = instantiation.expr()?;
     let expr_doc = print_expression(ctx, &expr)?;
-    let ts = instantiation.instantiation_ts()?;
-    let types: Vec<_> = ts.types().collect();
-
-    let types_doc = common::print_list(
-        ctx,
-        &types,
-        types::print_type,
-        Type::syntax,
-        |_| vec![],
-        common::ListOptions::triangle_bracket_list(),
-    )?;
+    let types_doc = print_instantiation_types(ctx, instantiation)?;
 
     Some(RcDoc::concat([expr_doc, types_doc]))
 }

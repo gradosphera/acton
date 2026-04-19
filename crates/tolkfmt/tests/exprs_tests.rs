@@ -916,6 +916,121 @@ fn test_function_call_breaking_long() {
 }
 
 #[test]
+fn test_single_lambda_call_argument_stays_after_open_paren() {
+    check_with_width(
+        "fun test() { nums.map<int>(fun(x: int): int { return x * x; }); }",
+        expect![[r"
+                fun test() {
+                    nums.map<int>(fun(x: int): int {
+                        return x * x;
+                    });
+                }"]],
+        100,
+    );
+}
+
+#[test]
+fn test_lambda_call_argument_forces_multiline_argument_list() {
+    check_with_width(
+        "fun test() { foo(a, fun(x: int): bool { return x > 0; }); }",
+        expect![[r"
+                fun test() {
+                    foo(
+                        a,
+                        fun(x: int): bool {
+                            return x > 0;
+                        },
+                    );
+                }"]],
+        100,
+    );
+}
+
+#[test]
+fn test_lambda_call_argument_in_method_chain_with_generics() {
+    check_with_width(
+        "fun test() { val squared = nums.filter(fun(x: int): bool { return x % 2 == 0; }).map<int>(fun(x: int): int { return x * x; }); }",
+        expect![[r"
+                fun test() {
+                    val squared = nums
+                        .filter(fun(x: int): bool {
+                            return x % 2 == 0;
+                        })
+                        .map<int>(fun(x: int): int {
+                            return x * x;
+                        });
+                }"]],
+        80,
+    );
+}
+
+#[test]
+fn test_chain_continues_after_generic_lambda_call() {
+    check_with_width(
+        "fun test() { val size = nums.map<int>(fun(x: int): int { return x * x; }).size(); }",
+        expect![[r"
+                fun test() {
+                    val size = nums
+                        .map<int>(fun(x: int): int {
+                            return x * x;
+                        })
+                        .size();
+                }"]],
+        60,
+    );
+}
+
+#[test]
+fn test_method_chain_with_multiple_arguments_and_lambda_breaks_cleanly() {
+    check_with_width(
+        "fun test() { val sum = nums.fold(0, fun(acc: int, x: int): int { return acc + x; }); }",
+        expect![[r"
+                fun test() {
+                    val sum = nums.fold(
+                        0,
+                        fun(acc: int, x: int): int {
+                            return acc + x;
+                        },
+                    );
+                }"]],
+        80,
+    );
+}
+
+#[test]
+fn test_multiple_lambda_arguments_force_multiline_layout() {
+    check_with_width(
+        "fun test() { foo(fun(x: int): int { return x; }, fun(y: int): int { return y + 1; }); }",
+        expect![[r"
+                fun test() {
+                    foo(
+                        fun(x: int): int {
+                            return x;
+                        },
+                        fun(y: int): int {
+                            return y + 1;
+                        },
+                    );
+                }"]],
+        100,
+    );
+}
+
+#[test]
+fn test_object_literal_field_lambda_keeps_existing_layout() {
+    check_with_width(
+        "fun test() { expect(res).toHaveSuccessfulTx({ exitCode: fun(code: int32): bool { return code != 0; }, success: true }); }",
+        expect![[r"
+                fun test() {
+                    expect(res).toHaveSuccessfulTx({ exitCode: fun(code: int32): bool {
+                            return code != 0;
+                        }, success: true });
+                }"]],
+        100,
+    );
+}
+
+#[test]
 fn test_empty_match_expression() {
     check(
         "fun test() { match (1) {}; }",

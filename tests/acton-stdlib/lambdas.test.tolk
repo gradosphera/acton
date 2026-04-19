@@ -247,16 +247,12 @@ get fun `test map and filter`() {
 
     // filter even, then square them
     val squared = nums
-        .filter(
-            fun(x: int): bool {
-                return x % 2 == 0;
-            },
-        )
-        .map<int>(
-        fun(x: int): int {
+        .filter(fun(x: int): bool {
+            return x % 2 == 0;
+        })
+        .map<int>(fun(x: int): int {
             return x * x;
-        },
-    );
+        });
     // [2,4,6,8,10] -> [4,16,36,64,100]
     expect(squared.size()).toEqual(5);
     expect(squared.get(0)).toEqual(4);
@@ -266,15 +262,13 @@ get fun `test map and filter`() {
     expect(squared.get(4)).toEqual(100);
 
     // chain: map then filter — triple all, keep only > 20
-    val big = nums.map<int>(
-        fun(x: int): int {
+    val big = nums
+        .map<int>(fun(x: int): int {
             return x * 3;
-        },
-    ).filter(
-        fun(x: int): bool {
+        })
+        .filter(fun(x: int): bool {
             return x > 20;
-        },
-    );
+        });
     // [3,6,9,12,15,18,21,24,27,30] -> [21,24,27,30]
     expect(big.size()).toEqual(4);
     expect(big.get(0)).toEqual(21);
@@ -284,16 +278,12 @@ get fun `test map and filter`() {
     val threshold = 5;
     val multiplier = 7;
     val scaled = nums
-        .filter(
-            fun(x: int): bool {
-                return x > threshold;
-            },
-        )
-        .map<int>(
-        fun(x: int): int {
+        .filter(fun(x: int): bool {
+            return x > threshold;
+        })
+        .map<int>(fun(x: int): int {
             return x * multiplier;
-        },
-    );
+        });
     // [6,7,8,9,10] * 7 = [42,49,56,63,70]
     expect(scaled.size()).toEqual(5);
     expect(scaled.get(0)).toEqual(42);
