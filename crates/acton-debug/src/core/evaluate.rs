@@ -9,6 +9,7 @@ use tolk_syntax::{
 };
 use tolkc::source_map::{Declaration, SourceMap};
 use tolkc::types_kernel::Ty;
+use vmlogs::parser::CellLike;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PathSegment {
@@ -65,7 +66,7 @@ fn resolve_value_path(root: &RenderedValue, segments: &[PathSegment]) -> Result<
 }
 
 fn resolve_segment(value: &RenderedValue, segment: &PathSegment) -> Result<RenderedValue> {
-    let value = unwrap_last_seen(value);
+    let value = unwrap_visible_value(value);
     match segment {
         PathSegment::Field(name) => match value {
             RenderedValue::Struct { fields, .. }
@@ -90,11 +91,16 @@ fn resolve_segment(value: &RenderedValue, segment: &PathSegment) -> Result<Rende
     }
 }
 
-fn unwrap_last_seen(mut value: &RenderedValue) -> &RenderedValue {
-    while let RenderedValue::LastSeen { inner } = value {
-        value = inner;
+fn unwrap_visible_value(mut value: &RenderedValue) -> &RenderedValue {
+    loop {
+        match value {
+            RenderedValue::LastSeen { inner }
+            | RenderedValue::LazyNotYetLoaded { preview: inner } => {
+                value = inner;
+            }
+            _ => return value,
+        }
     }
-    value
 }
 
 fn normalize_identifier(identifier: &str) -> &str {
@@ -281,7 +287,7 @@ fn evaluate_boolean_expression(
 }
 
 fn rendered_value_as_bool(value: &RenderedValue) -> Result<bool> {
-    match unwrap_last_seen(value) {
+    match unwrap_visible_value(value) {
         RenderedValue::Leaf { value, .. } if value == "true" => Ok(true),
         RenderedValue::Leaf { value, .. } if value == "false" => Ok(false),
         other => bail!("logical operators require boolean operands, got `{other}`"),
@@ -574,8 +580,35 @@ fn parse_rendered_number(value: &RenderedValue) -> Option<BigInt> {
     text.parse::<BigInt>().ok()
 }
 
+fn rendered_raw_field_text(value: &RenderedValue) -> Option<String> {
+    let fields = match value {
+        RenderedValue::CellLike { fields, .. } | RenderedValue::CellOf { fields, .. } => fields,
+        _ => return None,
+    };
+    fields
+        .iter()
+        .find(|(name, _)| name == "raw")
+        .map(|(_, raw_value)| raw_value.to_string())
+}
+
 fn rendered_value_text(value: &RenderedValue) -> String {
-    unwrap_last_seen(value).to_string()
+    let value = unwrap_visible_value(value);
+    if let Some(raw_value) = rendered_raw_field_text(value) {
+        return raw_value;
+    }
+
+    match value {
+        RenderedValue::CellLike {
+            type_name,
+            raw: Some(CellLike::Cell(hex)),
+            ..
+        } if type_name != "slice" => format!("cell{{{hex}}}"),
+        RenderedValue::CellOf {
+            raw: Some(CellLike::Cell(hex)),
+            ..
+        } => format!("cell{{{hex}}}"),
+        other => other.to_string(),
+    }
 }
 
 fn render_number_literal(raw: &str) -> Result<RenderedValue> {
@@ -611,7 +644,7 @@ fn render_bool(value: bool) -> RenderedValue {
 mod tests {
     use super::{
         ParsedValuePath, PathSegment, evaluate_condition_expression, evaluate_expression,
-        parse_expr_to_path, parse_wrapped_source, wrapped_expression,
+        parse_expr_to_path, parse_wrapped_source, rendered_value_text, wrapped_expression,
     };
     use crate::replayer::LocalVarRendered;
     use crate::types_render::{RenderedValue, render_runtime_vm_value};
@@ -893,6 +926,100 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_numeric_comparisons_for_last_seen_values() {
+        let locals = vec![
+            LocalVarRendered {
+                var_name: "msg".to_owned(),
+                value: RenderedValue::Struct {
+                    type_name: "Msg".to_owned(),
+                    fields: vec![(
+                        "itemIndex".to_owned(),
+                        RenderedValue::LastSeen {
+                            inner: Box::new(RenderedValue::typed_leaf("7", "uint32")),
+                        },
+                    )],
+                },
+            },
+            LocalVarRendered {
+                var_name: "storage".to_owned(),
+                value: RenderedValue::LastSeen {
+                    inner: Box::new(RenderedValue::Struct {
+                        type_name: "Storage".to_owned(),
+                        fields: vec![(
+                            "nextItemIndex".to_owned(),
+                            RenderedValue::typed_leaf("8", "uint32"),
+                        )],
+                    }),
+                },
+            },
+        ];
+
+        assert_eq!(
+            evaluate_expression(&locals, None, "msg.itemIndex <= storage.nextItemIndex")
+                .expect("last seen numeric comparison should resolve")
+                .to_string(),
+            "true"
+        );
+    }
+
+    #[test]
+    fn evaluates_numeric_comparisons_for_lazy_preview_values() {
+        let locals = vec![
+            LocalVarRendered {
+                var_name: "msg".to_owned(),
+                value: RenderedValue::Struct {
+                    type_name: "Msg".to_owned(),
+                    fields: vec![(
+                        "itemIndex".to_owned(),
+                        RenderedValue::LazyNotYetLoaded {
+                            preview: Box::new(RenderedValue::typed_leaf("7", "uint32")),
+                        },
+                    )],
+                },
+            },
+            LocalVarRendered {
+                var_name: "storage".to_owned(),
+                value: RenderedValue::LazyNotYetLoaded {
+                    preview: Box::new(RenderedValue::Struct {
+                        type_name: "Storage".to_owned(),
+                        fields: vec![(
+                            "nextItemIndex".to_owned(),
+                            RenderedValue::typed_leaf("8", "uint32"),
+                        )],
+                    }),
+                },
+            },
+        ];
+
+        assert_eq!(
+            evaluate_expression(&locals, None, "msg.itemIndex <= storage.nextItemIndex")
+                .expect("lazy preview numeric comparison should resolve")
+                .to_string(),
+            "true"
+        );
+    }
+
+    #[test]
+    fn resolves_field_access_through_lazy_preview_struct() {
+        let locals = vec![LocalVarRendered {
+            var_name: "storage".to_owned(),
+            value: RenderedValue::LazyNotYetLoaded {
+                preview: Box::new(RenderedValue::Struct {
+                    type_name: "Storage".to_owned(),
+                    fields: vec![(
+                        "nextItemIndex".to_owned(),
+                        RenderedValue::typed_leaf("8", "uint32"),
+                    )],
+                }),
+            },
+        }];
+
+        let value = evaluate_expression(&locals, None, "storage.nextItemIndex")
+            .expect("field access through lazy preview should resolve");
+        assert_eq!(value.to_string(), "8");
+    }
+
+    #[test]
     fn rejects_non_numeric_ordering_operands() {
         let locals = vec![LocalVarRendered {
             var_name: "name".to_owned(),
@@ -1028,5 +1155,37 @@ mod tests {
         assert_eq!(decoded_fields[0].0, "value");
         assert_eq!(decoded_fields[0].1.dap_parts().0, "42");
         assert_eq!(decoded_fields[0].1.dap_parts().1.as_deref(), Some("uint32"));
+    }
+
+    #[test]
+    fn rendered_value_text_uses_raw_values_for_compact_cell_like_values() {
+        let cell = foo_value_cell();
+        let rendered =
+            render_runtime_vm_value(&VmStackValue::Cell(CellLike::Cell(Boc::encode_hex(&cell))));
+
+        assert_ne!(
+            rendered.to_string(),
+            format!("cell{{{}}}", Boc::encode_hex(&cell))
+        );
+        assert_eq!(
+            rendered_value_text(&rendered),
+            format!("cell{{{}}}", Boc::encode_hex(&cell))
+        );
+
+        let slice = RenderedValue::CellLike {
+            type_name: "slice".to_owned(),
+            value: "16 bits, 0 refs, hash: 0xdeadbeef...".to_owned(),
+            fields: vec![("raw".to_owned(), RenderedValue::leaf("slice{abcd}"))],
+            raw: None,
+        };
+        assert_eq!(rendered_value_text(&slice), "slice{abcd}");
+
+        let builder = RenderedValue::CellLike {
+            type_name: "builder".to_owned(),
+            value: "16 bits, 1 refs, hash: 0xdeadbeef...".to_owned(),
+            fields: vec![("raw".to_owned(), RenderedValue::leaf("builder{7} + 1 refs"))],
+            raw: Some(CellLike::Builder("b5ee".to_owned())),
+        };
+        assert_eq!(rendered_value_text(&builder), "builder{7} + 1 refs");
     }
 }

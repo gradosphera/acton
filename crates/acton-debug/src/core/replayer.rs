@@ -50,6 +50,7 @@ pub enum ExceptionBreakMode {
 #[derive(Debug, Clone)]
 pub struct ExceptionInfo {
     pub errno: String,
+    pub symbolic_name: Option<String>,
     pub is_uncaught: bool,
 }
 
@@ -720,6 +721,14 @@ impl TolkReplayer {
         self.last_exception.as_ref()
     }
 
+    fn resolve_exception_symbolic_name(&self, errno: &str) -> Option<String> {
+        let code = errno.parse::<i32>().ok()?;
+        self.compiler_abi
+            .as_deref()
+            .and_then(|abi| abi.thrown_errors.iter().find(|err| err.err_code == code))
+            .and_then(|err| (!err.name.is_empty()).then(|| err.name.clone()))
+    }
+
     #[must_use]
     pub fn runtime_backend_kind(&self) -> RuntimeBackendKind {
         self.runtime_source.backend_kind()
@@ -1215,6 +1224,7 @@ impl TolkReplayer {
                 self.after_exception_ifret = true;
                 if self.exception_break_mode != ExceptionBreakMode::Never {
                     self.last_exception = Some(ExceptionInfo {
+                        symbolic_name: self.resolve_exception_symbolic_name(&errno),
                         errno,
                         is_uncaught: false,
                     });

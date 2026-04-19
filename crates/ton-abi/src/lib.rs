@@ -1,5 +1,6 @@
 pub mod abi_serde;
 pub mod compiler_abi_serde;
+pub mod snake_string;
 
 use num_bigint::BigInt;
 use path_absolutize::Absolutize;
