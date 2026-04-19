@@ -103,7 +103,8 @@ fun parseInt(x: string): int {
 /// Convert a string representation of address to an internal [address] value.
 ///
 /// Accepted forms include raw addresses (`0:...`) and user-friendly TON addresses
-/// (base64/base64url with flags).
+/// (base64/base64url with flags). Inputs copied from CLI output like
+/// `<address> (<name>)` are also accepted; the symbolic suffix is ignored.
 /// The returned value is normalized as an internal address; rendered formatting may
 /// differ from input flags, while representing the same account.
 /// Invalid input fails with an error like `Failed to convert address from <input>`.

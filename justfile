@@ -49,6 +49,9 @@ test: test-workspace
 test-update:
     SNAPSHOTS=overwrite just test
 
+docgen:
+    cargo run -- docgen
+
 fmt:
     cargo fmt --all
 

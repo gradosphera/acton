@@ -2063,31 +2063,46 @@ fn register_lib_impl(ctx: &mut Context, _stack: &mut Tuple, lib: Cell) -> anyhow
     Ok(())
 }
 
-extension!(convert_address in (Context) with (address: String) using convert_address_impl);
-fn convert_address_impl(_: &mut Context, stack: &mut Tuple, address: String) -> anyhow::Result<()> {
-    let (addr, _) = StdAddr::from_str_ext(&address, StdAddrFormat::any())?;
+/// Normalize CLI-rendered addresses like "<address> (deployer)" to plain address.
+fn normalize_address_input(input: &str) -> &str {
+    let trimmed = input.trim();
+    if let Some((address, suffix)) = trimmed.rsplit_once(" (")
+        && suffix.ends_with(')')
+    {
+        // Keep only the address part and ignore the human-readable symbolic label.
+        address.trim_end()
+    } else {
+        trimmed
+    }
+}
+
+extension!(parse_address in (Context) with (address: String) using parse_address_impl);
+fn parse_address_impl(_: &mut Context, stack: &mut Tuple, address: String) -> anyhow::Result<()> {
+    let (addr, _) = StdAddr::from_str_ext(normalize_address_input(&address), StdAddrFormat::any())
+        .with_context(|| format!("Cannot parse address: {address}"))?;
     stack.push(TupleItem::Cell(to_cell(&addr)));
     Ok(())
 }
 
-extension!(cell_from_hex in (Context) with (cell_hex: String) using cell_from_hex_impl);
-fn cell_from_hex_impl(_: &mut Context, stack: &mut Tuple, cell_hex: String) -> anyhow::Result<()> {
-    let cell = Boc::decode_hex(&cell_hex)
+extension!(parse_cell_from_hex in (Context) with (cell_hex: String) using parse_cell_from_hex_impl);
+fn parse_cell_from_hex_impl(
+    _: &mut Context,
+    stack: &mut Tuple,
+    cell_hex: String,
+) -> anyhow::Result<()> {
+    let cell = Boc::decode_hex(cell_hex.trim())
         .with_context(|| format!("Failed to decode cell hex {cell_hex}"))?;
     stack.push(TupleItem::Cell(cell));
     Ok(())
 }
 
 extension!(parse_int in (Context) with (x: String) using parse_int_impl);
-fn parse_int_impl(ctx: &mut Context, stack: &mut Tuple, x: String) -> anyhow::Result<()> {
-    match x.trim().parse::<BigInt>() {
-        Ok(value) => stack.push(TupleItem::Int(value)),
-        Err(e) => {
-            ctx.asserts
-                .fail(format!("Failed to parse integer from '{x}': {e}"));
-            stack.push(TupleItem::Null);
-        }
-    }
+fn parse_int_impl(_: &mut Context, stack: &mut Tuple, x: String) -> anyhow::Result<()> {
+    let value = x
+        .trim()
+        .parse::<BigInt>()
+        .with_context(|| format!("Failed to parse integer from '{x}'"))?;
+    stack.push(TupleItem::Int(value));
     Ok(())
 }
 
@@ -2737,8 +2752,8 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         16 => register_code : 2,
         17 => account_state : 1,
         18 => register_lib : 1,
-        19 => convert_address : 1,
-        20 => cell_from_hex : 1,
+        19 => parse_address : 1,
+        20 => parse_cell_from_hex : 1,
         21 => load_library_by_hash : 1,
         23 => is_broadcasting : 0,
         24 => get_wallet_by_name : 1,

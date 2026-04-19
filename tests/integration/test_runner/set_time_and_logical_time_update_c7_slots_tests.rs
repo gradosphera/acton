@@ -193,6 +193,69 @@ get fun `test aj stdlib vm convert address valid`() {
 }
 
 #[test]
+fn convert_address_trims_surrounding_whitespace() {
+    run_success_case(
+        "aj-stdlib-vm-convert-address-trims-whitespace",
+        r#"
+get fun `test aj stdlib vm convert address trims whitespace`() {
+    val raw = "  0:0000000000000000000000000000000000000000000000000000000000000000  ";
+    val friendly = "  EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c  ";
+
+    val fromRaw = parseAddress(raw);
+    val fromFriendly = parseAddress(friendly);
+
+    val renderedRaw = format("{}", fromRaw);
+    val renderedFriendly = format("{}", fromFriendly);
+
+    expect(renderedRaw).toEqual(renderedFriendly);
+    expect(renderedRaw).toEqual("kQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHTW");
+}
+"#,
+        "integration/snapshots/test-runner/set_time_and_logical_time_update_c7_slots/convert_address_trims_surrounding_whitespace.stdout.txt",
+    );
+}
+
+#[test]
+fn convert_address_ignores_symbolic_name_suffix() {
+    run_success_case(
+        "aj-stdlib-vm-convert-address-symbolic-suffix",
+        r#"
+get fun `test aj stdlib vm convert address symbolic suffix`() {
+    val raw = "0:0000000000000000000000000000000000000000000000000000000000000000 (deployer)";
+    val friendly = "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c (deployer)";
+
+    val fromRaw = parseAddress(raw);
+    val fromFriendly = parseAddress(friendly);
+
+    val renderedRaw = format("{}", fromRaw);
+    val renderedFriendly = format("{}", fromFriendly);
+
+    expect(renderedRaw).toEqual(renderedFriendly);
+    expect(renderedRaw).toEqual("kQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHTW");
+}
+"#,
+        "integration/snapshots/test-runner/set_time_and_logical_time_update_c7_slots/convert_address_ignores_symbolic_name_suffix.stdout.txt",
+    );
+}
+
+#[test]
+fn convert_address_accepts_formatted_named_address() {
+    run_success_case(
+        "aj-stdlib-vm-convert-address-formatted-named-address",
+        r#"
+get fun `test aj stdlib vm convert address formatted named address`() {
+    val deployer = testing.treasury("deployer");
+    val rendered = format("{}", deployer.address);
+    val parsed = parseAddress(rendered);
+
+    expect(parsed).toEqual(deployer.address);
+}
+"#,
+        "integration/snapshots/test-runner/set_time_and_logical_time_update_c7_slots/convert_address_accepts_formatted_named_address.stdout.txt",
+    );
+}
+
+#[test]
 fn convert_address_reports_invalid_input() {
     run_failure_case(
         "aj-stdlib-vm-convert-address-invalid",
@@ -203,6 +266,34 @@ get fun `test aj stdlib vm convert address invalid`() {
 "#,
         "invalid address format",
         "integration/snapshots/test-runner/set_time_and_logical_time_update_c7_slots/convert_address_reports_invalid_input.stdout.txt",
+    );
+}
+
+#[test]
+fn convert_address_reports_invalid_raw_input() {
+    run_failure_case(
+        "aj-stdlib-vm-convert-address-invalid-raw",
+        r#"
+get fun `test aj stdlib vm convert address invalid raw`() {
+    val _ = parseAddress("0:xyz");
+}
+"#,
+        "invalid address format",
+        "integration/snapshots/test-runner/set_time_and_logical_time_update_c7_slots/convert_address_reports_invalid_raw_input.stdout.txt",
+    );
+}
+
+#[test]
+fn convert_address_reports_invalid_user_friendly_input() {
+    run_failure_case(
+        "aj-stdlib-vm-convert-address-invalid-user-friendly",
+        r#"
+get fun `test aj stdlib vm convert address invalid user friendly`() {
+    val _ = parseAddress("EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9d");
+}
+"#,
+        "invalid address format",
+        "integration/snapshots/test-runner/set_time_and_logical_time_update_c7_slots/convert_address_reports_invalid_user_friendly_input.stdout.txt",
     );
 }
 
@@ -232,6 +323,20 @@ get fun `test aj stdlib vm cell from hex valid`() {
 }
 "#,
         "integration/snapshots/test-runner/set_time_and_logical_time_update_c7_slots/cell_from_hex_decodes_valid_boc_hex.stdout.txt",
+    );
+}
+
+#[test]
+fn cell_from_hex_trims_surrounding_whitespace() {
+    run_success_case(
+        "aj-stdlib-vm-cell-from-hex-trims-whitespace",
+        r#"
+get fun `test aj stdlib vm cell from hex trims whitespace`() {
+    val decoded = parseCellFromHex("  b5ee9c72010101010002000000  ");
+    expect(decoded).toEqual(createEmptyCell());
+}
+"#,
+        "integration/snapshots/test-runner/set_time_and_logical_time_update_c7_slots/cell_from_hex_trims_surrounding_whitespace.stdout.txt",
     );
 }
 
