@@ -78,6 +78,16 @@ Jetton minter and wallet template with:
 - CI workflow
 - optional `AGENTS.md`
 
+### nft
+
+NFT collection and item template with:
+
+- collection and item contracts
+- wrappers and tests
+- deployment scripts
+- CI workflow
+- optional `AGENTS.md`
+
 ## INTERACTIVE MODE
 
 When enough information is missing and standard input/output are connected to a
@@ -118,7 +128,10 @@ Depending on the selected template and options, Acton may also generate:
 - contract sources
 - tests
 - wrappers
+- wrappers that usually include helper shapes such as `fromStorage(...)`,
+  `deploy(...)`, `send{Name}(...)`, `sendAny(...)`, and typed get-method calls
 - deployment scripts
+- `[scripts]` aliases such as `deploy-emulation` and `deploy-testnet` in `Acton.toml`
 - frontend files for `--app`
 - `.githooks/pre-commit` for `--hooks`
 - `AGENTS.md` for `--agents`
@@ -139,6 +152,18 @@ Before running frontend commands, install the app dependencies:
 ```bash
 npm ci
 ```
+
+The generated app scaffold is a real frontend workspace, not just static demo
+files. After `npm ci`, use the usual frontend lifecycle commands from the
+generated `package.json` alongside normal Acton contract commands.
+
+Typical commands in that generated app workspace:
+
+- `npm run dev` to start the Vite development server
+- `npm run build` to build both contracts and the frontend bundle
+- `npm run preview` to preview the production bundle locally
+- `npm run typecheck` for TypeScript checking
+- `npm test` to run the bundled `acton test` command
 
 ## SIDE EFFECTS
 

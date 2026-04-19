@@ -16,6 +16,41 @@ bodies, request faucet funds, and remove stored wallet entries.
 .sp
 Wallets created by this workflow are intended for development and testing. The
 default network context is testnet.
+.SH "COMMON LIFECYCLE"
+The wallet workflow is not limited to \fBwallet new\fR\&.
+.sp
+Typical follow\-up commands are:
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBacton wallet import\fR to reuse an existing mnemonic
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBacton wallet list \-\-balance\fR to inspect configured wallets and balances
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBacton wallet airdrop \-\-net localnet\fR to fund a wallet from a local LiteNode
+faucet
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBacton wallet sign\fR to sign an external message body without writing a whole
+script
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBacton wallet export\-mnemonic\fR for interactive export
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBacton wallet remove \-y\fR to remove a wallet non\-interactively
+.RE
+.sp
+Acton\[cq]s testnet TonCenter client reads \fBTONCENTER_API_KEY\fR for balance\-backed
+flows such as \fBwallet list \-\-balance\fR and the interactive post\-airdrop balance
+confirmation after \fBwallet new\fR\&. \fBwallet list \-\-balance\fR also accepts
+\fB\-\-api\-key\fR\&.
 .SH "SUBCOMMANDS"
 .SS "acton wallet new"
 Generate a new wallet.
@@ -293,7 +328,9 @@ to appear on testnet and lets you skip that wait by pressing \fBEnter\fR, unless
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'\fBwallet list \-\-balance\fR resolves balances through TonCenter and also respects
-the \fBTONCENTER_API_KEY\fR environment variable
+the \fBTONCENTER_API_KEY\fR environment variable; the same environment fallback
+is used when \fBwallet new\fR waits for testnet funds after an interactive
+auto\-airdrop
 .RE
 .sp
 .RS 4

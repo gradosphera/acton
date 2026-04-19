@@ -19,6 +19,26 @@ bodies, request faucet funds, and remove stored wallet entries.
 Wallets created by this workflow are intended for development and testing. The
 default network context is testnet.
 
+## COMMON LIFECYCLE
+
+The wallet workflow is not limited to `wallet new`.
+
+Typical follow-up commands are:
+
+- `acton wallet import` to reuse an existing mnemonic
+- `acton wallet list --balance` to inspect configured wallets and balances
+- `acton wallet airdrop --net localnet` to fund a wallet from a local LiteNode
+  faucet
+- `acton wallet sign` to sign an external message body without writing a whole
+  script
+- `acton wallet export-mnemonic` for interactive export
+- `acton wallet remove -y` to remove a wallet non-interactively
+
+Acton's testnet TonCenter client reads `TONCENTER_API_KEY` for balance-backed
+flows such as `wallet list --balance` and the interactive post-airdrop balance
+confirmation after `wallet new`. `wallet list --balance` also accepts
+`--api-key`.
+
 ## SUBCOMMANDS
 
 ### acton wallet new
@@ -295,7 +315,9 @@ to appear on testnet and lets you skip that wait by pressing `Enter`, unless
 ## LISTING, SIGNING, AND EXPORT
 
 - `wallet list --balance` resolves balances through TonCenter and also respects
-  the `TONCENTER_API_KEY` environment variable
+  the `TONCENTER_API_KEY` environment variable; the same environment fallback
+  is used when `wallet new` waits for testnet funds after an interactive
+  auto-airdrop
 - `wallet sign` auto-detects hex and base64 input, preferring hex when a payload
   could be interpreted as both
 - surrounding stdin whitespace is trimmed before decoding the message body
