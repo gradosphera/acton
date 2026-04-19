@@ -685,7 +685,7 @@ impl ReplayerDebugSession {
     }
 
     fn debug_value_to_named_variable(&mut self, name: String, dv: &RenderedValue) -> Variable {
-        let (value, type_field) = dv.dap_parts_for_client();
+        let (value, type_field) = dv.dap_parts_for_client(Some(&name));
         let (value, var_ref) = if dv.has_children() {
             (value, self.store_debug_value(dv.clone()))
         } else {
@@ -722,7 +722,7 @@ impl ReplayerDebugSession {
     }
 
     fn evaluate_response_from_value(&mut self, value: RenderedValue) -> EvaluateResponse {
-        let (result, type_field) = value.dap_parts_for_client();
+        let (result, type_field) = value.dap_parts_for_client(None);
         let variables_reference = if value.has_children() {
             self.store_debug_value(value)
         } else {

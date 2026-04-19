@@ -407,7 +407,7 @@ fn format_frame_name(f: &replayer::CallFrameInfo) -> String {
 }
 
 fn debug_value_to_variable(state: &mut DapState, name: String, dv: &RenderedValue) -> Variable {
-    let (value, type_field) = dv.dap_parts_for_client();
+    let (value, type_field) = dv.dap_parts_for_client(Some(&name));
     let (value, var_ref) = if dv.has_children() {
         (value, state.store_debug_value(dv.clone()))
     } else {
@@ -427,7 +427,7 @@ fn debug_value_to_variable(state: &mut DapState, name: String, dv: &RenderedValu
 }
 
 fn evaluate_response_from_value(state: &mut DapState, value: RenderedValue) -> EvaluateResponse {
-    let (result, type_field) = value.dap_parts_for_client();
+    let (result, type_field) = value.dap_parts_for_client(None);
     let variables_reference = if value.has_children() {
         state.store_debug_value(value)
     } else {

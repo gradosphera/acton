@@ -153,8 +153,16 @@ impl RenderedValue {
         }
     }
 
-    fn legacy_dap_value(&self) -> String {
+    fn legacy_dap_value(&self, name: Option<&str>) -> String {
         match self {
+            RenderedValue::Leaf {
+                value,
+                type_field: Some(type_field),
+            } if type_field == "coins"
+                && name.is_some_and(|name| identifier_has_word(name, "ton")) =>
+            {
+                format_coins_for_debug(value).unwrap_or_else(|| value.clone())
+            }
             RenderedValue::Leaf { value, .. } => value.clone(),
             RenderedValue::CellLike { value, .. } => value.clone(),
             RenderedValue::CellOf {
@@ -167,11 +175,11 @@ impl RenderedValue {
             RenderedValue::Tensor { items, .. } => format!("{} items", items.len()),
             RenderedValue::ArrayOf { items, .. } => format!("{} items", items.len()),
             RenderedValue::LastSeen { inner } => {
-                format!("{} (last seen)", inner.legacy_dap_value())
+                format!("{} (last seen)", inner.legacy_dap_value(name))
             }
             RenderedValue::OptimizedOut => "<optimized out>".to_string(),
             RenderedValue::LazyNotYetLoaded { preview } => {
-                format!("{} (not loaded)", preview.legacy_dap_value())
+                format!("{} (not loaded)", preview.legacy_dap_value(name))
             }
             RenderedValue::LazyCantParseSlice => "<not loaded>".to_string(),
             RenderedValue::LazyUnresolved { type_name } => {
@@ -180,11 +188,49 @@ impl RenderedValue {
         }
     }
 
-    pub fn dap_parts_for_client(&self) -> (String, Option<String>) {
+    pub fn dap_parts_for_client(&self, name: Option<&str>) -> (String, Option<String>) {
         if dap_legacy_value_enabled() {
-            (self.legacy_dap_value(), None)
+            // TODO: remove legacy path
+            (self.legacy_dap_value(name), None)
+        } else if let Some(name) = name {
+            self.dap_parts_for_name(name)
         } else {
             self.dap_parts()
+        }
+    }
+
+    fn dap_parts_for_name(&self, name: &str) -> (String, Option<String>) {
+        match self {
+            RenderedValue::Leaf {
+                value,
+                type_field: Some(type_field),
+            } if type_field == "coins" => {
+                let value = if identifier_has_word(name, "ton") {
+                    format_coins_for_debug(value).unwrap_or_else(|| value.clone())
+                } else {
+                    value.clone()
+                };
+                (value, Some(type_field.clone()))
+            }
+            RenderedValue::LastSeen { inner } => {
+                let (value, type_field) = inner.dap_parts_for_name(name);
+                let value = if value.is_empty() {
+                    "(last seen)".to_string()
+                } else {
+                    format!("{value} (last seen)")
+                };
+                (value, type_field)
+            }
+            RenderedValue::LazyNotYetLoaded { preview } => {
+                let (value, type_field) = preview.dap_parts_for_name(name);
+                let value = if value.is_empty() {
+                    "<not loaded>".to_string()
+                } else {
+                    format!("{value} (not loaded)")
+                };
+                (value, type_field)
+            }
+            _ => self.dap_parts(),
         }
     }
 
@@ -227,6 +273,68 @@ fn dap_legacy_value_enabled() -> bool {
             .ok()
             .is_some_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
     })
+}
+
+fn format_coins_for_debug(tokens: &str) -> Option<String> {
+    let tokens: u128 = tokens.parse().ok()?;
+    let whole = tokens / 1_000_000_000;
+    let frac = tokens % 1_000_000_000;
+    if frac == 0 {
+        return Some(format!("{whole} TON"));
+    }
+
+    let frac = format!("{frac:09}");
+    let frac = frac.trim_end_matches('0');
+    Some(format!("{whole}.{frac} TON"))
+}
+
+fn identifier_has_word(name: &str, needle: &str) -> bool {
+    let mut start = None;
+    let mut prev = None;
+    let mut chars = name.char_indices().peekable();
+
+    while let Some((idx, ch)) = chars.next() {
+        if !ch.is_ascii_alphanumeric() {
+            if let Some(start_idx) = start.take()
+                && name[start_idx..idx].eq_ignore_ascii_case(needle)
+            {
+                return true;
+            }
+            prev = None;
+            continue;
+        }
+
+        let next = chars.peek().map(|(_, next)| *next);
+        if let Some(prev_ch) = prev
+            && let Some(start_idx) = start
+            && identifier_word_boundary(prev_ch, ch, next)
+        {
+            if name[start_idx..idx].eq_ignore_ascii_case(needle) {
+                return true;
+            }
+            start = Some(idx);
+        } else if start.is_none() {
+            start = Some(idx);
+        }
+
+        prev = Some(ch);
+    }
+
+    start.is_some_and(|start_idx| name[start_idx..].eq_ignore_ascii_case(needle))
+}
+
+fn identifier_word_boundary(prev: char, current: char, next: Option<char>) -> bool {
+    if prev.is_ascii_digit() != current.is_ascii_digit() {
+        return true;
+    }
+
+    if prev.is_ascii_lowercase() && current.is_ascii_uppercase() {
+        return true;
+    }
+
+    prev.is_ascii_uppercase()
+        && current.is_ascii_uppercase()
+        && next.is_some_and(|next| next.is_ascii_lowercase())
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -2231,7 +2339,7 @@ fn render_relaxed_msg_info(info: &RelaxedMsgInfo) -> RenderedValue {
                 ),
                 (
                     "fwd_fee".to_owned(),
-                    RenderedValue::typed_leaf(format_tokens(info.fwd_fee.into_inner()), "coins"),
+                    RenderedValue::typed_leaf(info.fwd_fee.into_inner().to_string(), "coins"),
                 ),
                 (
                     "created_lt".to_owned(),
@@ -2578,10 +2686,7 @@ fn render_runtime_in_msg_sender_address_field(value: &VmStackValue) -> RenderedV
 
 fn render_runtime_coins_field(value: &VmStackValue) -> RenderedValue {
     match value {
-        VmStackValue::Integer(value) => match value.parse::<u128>() {
-            Ok(tokens) => RenderedValue::typed_leaf(format_tokens(tokens), "coins"),
-            Err(_) => RenderedValue::typed_leaf(value.clone(), "coins"),
-        },
+        VmStackValue::Integer(value) => RenderedValue::typed_leaf(value.clone(), "coins"),
         _ => RenderedValue::typed_leaf(render_runtime_vm_value(value).dap_value(), "coins"),
     }
 }
@@ -2842,7 +2947,7 @@ mod tests {
         assert_eq!(fields[0].1.dap_parts().0, addr.to_string());
         assert_eq!(fields[0].1.dap_parts().1.as_deref(), Some("address"));
         assert_eq!(fields[1].0, "valueCoins");
-        assert_eq!(fields[1].1.dap_parts().0, "1.000000000 TON");
+        assert_eq!(fields[1].1.dap_parts().0, "1000000000");
         assert_eq!(fields[1].1.dap_parts().1.as_deref(), Some("coins"));
         assert_eq!(fields[2].0, "valueExtra");
         assert_eq!(
@@ -2850,7 +2955,7 @@ mod tests {
             Some("map<int32, varuint32>")
         );
         assert_eq!(fields[3].0, "originalForwardFee");
-        assert_eq!(fields[3].1.dap_parts().0, "0.123456789 TON");
+        assert_eq!(fields[3].1.dap_parts().0, "123456789");
         assert_eq!(fields[3].1.dap_parts().1.as_deref(), Some("coins"));
         assert_eq!(fields[4].0, "createdLt");
         assert_eq!(fields[4].1.dap_parts().0, "42");
@@ -2858,6 +2963,76 @@ mod tests {
         assert_eq!(fields[5].0, "createdAt");
         assert_eq!(fields[5].1.dap_parts().0, "1710000000");
         assert_eq!(fields[5].1.dap_parts().1.as_deref(), Some("uint32"));
+    }
+
+    #[test]
+    fn named_dap_parts_format_coins_only_for_ton_word() {
+        let rendered = RenderedValue::typed_leaf("1022000000", "coins");
+
+        assert_eq!(
+            rendered.dap_parts_for_client(Some("tonAmount")).0,
+            "1.022 TON"
+        );
+        assert_eq!(
+            rendered.dap_parts_for_client(Some("forward_ton_amount")).0,
+            "1.022 TON"
+        );
+        assert_eq!(
+            rendered.dap_parts_for_client(Some("jettonAmount")).0,
+            "1022000000"
+        );
+        assert_eq!(
+            rendered.dap_parts_for_client(Some("amount")).0,
+            "1022000000"
+        );
+    }
+
+    #[test]
+    fn named_dap_parts_preserve_last_seen_suffix_for_formatted_coins() {
+        let rendered = RenderedValue::LastSeen {
+            inner: Box::new(RenderedValue::typed_leaf("1022000000", "coins")),
+        };
+
+        assert_eq!(
+            rendered.dap_parts_for_client(Some("forwardTonAmount")).0,
+            "1.022 TON (last seen)"
+        );
+        assert_eq!(
+            rendered.dap_parts_for_client(Some("jettonAmount")).0,
+            "1022000000 (last seen)"
+        );
+    }
+
+    #[test]
+    fn legacy_named_dap_value_formats_coins_only_for_ton_word() {
+        let rendered = RenderedValue::typed_leaf("1022000000", "coins");
+
+        assert_eq!(rendered.legacy_dap_value(Some("tonAmount")), "1.022 TON");
+        assert_eq!(
+            rendered.legacy_dap_value(Some("forward_ton_amount")),
+            "1.022 TON"
+        );
+        assert_eq!(
+            rendered.legacy_dap_value(Some("jettonAmount")),
+            "1022000000"
+        );
+        assert_eq!(rendered.legacy_dap_value(None), "1022000000");
+    }
+
+    #[test]
+    fn legacy_named_dap_value_preserves_last_seen_suffix_for_formatted_coins() {
+        let rendered = RenderedValue::LastSeen {
+            inner: Box::new(RenderedValue::typed_leaf("1022000000", "coins")),
+        };
+
+        assert_eq!(
+            rendered.legacy_dap_value(Some("forwardTonAmount")),
+            "1.022 TON (last seen)"
+        );
+        assert_eq!(
+            rendered.legacy_dap_value(Some("jettonAmount")),
+            "1022000000 (last seen)"
+        );
     }
 
     #[test]
