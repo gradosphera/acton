@@ -2,6 +2,7 @@ import "@acton/build"
 import "@acton/emulation/network"
 import "@acton/emulation/testing"
 import "@acton/testing/expect"
+import "@contracts/errors"
 import "@contracts/messages"
 import "@contracts/types"
 import "@wrappers/NftCollectionContract"
@@ -47,14 +48,14 @@ fun shouldNotAllowAnyOtherOpcodeNotFromOwner(opcode: int): void {
         { value: ton("0.05") },
     );
 
-    val exitCode = opcode == 0x042 ? 0xFFFF : 401;
+    val exitCode = opcode == 0x042 ? Errors.InvalidMessage as int : Errors.NotFromAdmin as int;
 
     expect(result).toHaveTx({
         from: randomTreasury.address,
         to: nftCollection.address,
         opcode,
         success: false,
-        // exitCode: 401,       // this changed against FunC: on invalid opcode, we always return 0xFFFF
+        // exitCode: Errors.NotFromAdmin as int, // this changed against FunC: on invalid opcode, we always return Errors.InvalidMessage
         exitCode,
     });
 }
@@ -175,7 +176,7 @@ get fun `test nft: should not deploy nft with invalid item index`() {
     expect(nftDeployResult).toHaveFailedTx<DeployNft>({
         from: deployer.address,
         to: nftCollection.address,
-        exitCode: 402,
+        exitCode: Errors.InvalidItemIndex as int,
     });
 }
 

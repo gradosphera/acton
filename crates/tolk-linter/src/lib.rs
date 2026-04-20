@@ -7,7 +7,7 @@ use crate::ast::{
     duplicated_condition, enum_cast_missing_safety_comment, explicit_return_type,
     identical_conditional_branches, incoming_messages_duplicate_opcode, missing_contract_header,
     negated_is_type_can_use_not_is, no_bounce_handler, no_global_variables,
-    several_not_null_assertions,
+    several_not_null_assertions, throw_requires_errors_enum,
 };
 use crate::rules::ast::{
     asm_function_missing_safety_comment, field_init_can_be_folded, import_path_can_use_mappings,
@@ -28,9 +28,9 @@ use tolk_resolver::file_index::{FileId, SymbolId};
 use tolk_resolver::resolve_index::FileResolveIndex;
 use tolk_resolver::{AstNodeSpanExt, NameUse, Resolved};
 use tolk_syntax::{
-    AsCast, Call, Expr, ExprStmt, Func, FunctionLike, GetMethod, GlobalVar, HasAnnotations,
+    AsCast, Assert, Call, Expr, ExprStmt, Func, FunctionLike, GetMethod, GlobalVar, HasAnnotations,
     HasGenericParams, HasName, Ident, If, IfAlt, InstanceArg, Method, NotNull, SourceFile, Ternary,
-    TopLevel, TypeIdent, Unary, Walker, walk_ast,
+    Throw, TopLevel, TypeIdent, Unary, Walker, walk_ast,
 };
 use tolk_ty::InferenceResult;
 use tolk_ty::TypeDb;
@@ -665,6 +665,34 @@ impl<'file> Walker<'file> for CheckerWalker<'_, '_> {
         }
         for arg in node.arguments() {
             self.walk_call_argument(&arg);
+        }
+        self.default_result();
+    }
+
+    fn walk_throw(&mut self, node: &Throw<'file>) -> Self::Result {
+        if let Some(expr) = node.expr() {
+            run_rule!(
+                self.checker,
+                Rule::ThrowRequiresErrorsEnum,
+                throw_requires_errors_enum::check_throw_expr(self.checker, self.file_id, &expr,)
+            );
+            self.visit_expr(&expr);
+        }
+        self.default_result();
+    }
+
+    fn walk_assert(&mut self, node: &Assert<'file>) -> Self::Result {
+        if let Some(condition) = node.condition() {
+            self.visit_expr(&condition);
+        }
+
+        if let Some(expr) = node.expr() {
+            run_rule!(
+                self.checker,
+                Rule::ThrowRequiresErrorsEnum,
+                throw_requires_errors_enum::check_throw_expr(self.checker, self.file_id, &expr,)
+            );
+            self.visit_expr(&expr);
         }
         self.default_result();
     }

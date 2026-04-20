@@ -34,6 +34,7 @@
     "e031-missing-contract-header",
     "e032-unused-expression",
     "e033-dict-type-use",
+    "e034-throw-requires-errors-enum",
     "s001-name-case-checker",
     "s002-explicit-return-type"
   ]

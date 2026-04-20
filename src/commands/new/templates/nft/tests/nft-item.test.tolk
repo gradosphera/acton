@@ -2,6 +2,7 @@ import "@stdlib/tvm-dicts"
 import "@acton/emulation/network"
 import "@acton/emulation/testing"
 import "@acton/testing/expect"
+import "@contracts/errors"
 import "@contracts/messages"
 import "@tests/nft-collection.test"
 import "@wrappers/NftCollectionContract"
@@ -106,7 +107,7 @@ get fun `test nft: should not transfer ownership not from owner`() {
     expect(result).toHaveFailedTx<AskToChangeOwnership>({
         from: notOwner.address,
         to: nftItem.address,
-        exitCode: 401,
+        exitCode: Errors.NotFromOwner as int,
     });
 
     // Owner should NOT have changed
@@ -210,7 +211,7 @@ get fun `test nft: should fail when receiver in different workchain`() {
     expect(result).toHaveFailedTx<AskToChangeOwnership>({
         from: nftOwner.address,
         to: nftItem.address,
-        exitCode: 333,
+        exitCode: Errors.InvalidWorkchain as int,
     });
 }
 
@@ -233,7 +234,7 @@ get fun `test nft: should fail when op not on list`() {
     expect(result).toHaveTx({
         from: randomTreasury.address,
         to: nftItem.address,
-        exitCode: 0xFFFF,
+        exitCode: Errors.InvalidMessage as int,
     });
 }
 
@@ -259,7 +260,7 @@ get fun `test nft: should fail when response address in different workchain`() {
     expect(result).toHaveFailedTx<AskToChangeOwnership>({
         from: nftOwner.address,
         to: nftItem.address,
-        exitCode: 333,
+        exitCode: Errors.InvalidWorkchain as int,
     });
 }
 

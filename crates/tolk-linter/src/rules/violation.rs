@@ -9,8 +9,8 @@ use crate::ast::{
     missing_contract_header, mutable_parameter_can_be_immutable, mutable_variable_can_be_immutable,
     name_case_checker, negated_is_type_can_use_not_is, no_bounce_handler, no_global_variables,
     pure_function_call_unused, reserve_mode_literal, send_mode_literal,
-    several_not_null_assertions, unused_expression, unused_import, unused_variable,
-    used_ignored_identifier, write_only_variable,
+    several_not_null_assertions, throw_requires_errors_enum, unused_expression, unused_import,
+    unused_variable, used_ignored_identifier, write_only_variable,
 };
 use crate::dfa::{divide_before_multiply, random_requires_initialization, unauthorized_access};
 use serde::Serialize;
@@ -95,6 +95,7 @@ pub fn code_to_rule(linter: Linter, code: &str) -> Option<(RuleGroup, Rule)> {
         (Tolk, "E031") => missing_contract_header::MissingContractHeader,
         (Tolk, "E032") => unused_expression::UnusedExpression,
         (Tolk, "E033") => dict_type_use::DictTypeUse,
+        (Tolk, "E034") => throw_requires_errors_enum::ThrowRequiresErrorsEnum,
         (Tolk, "C001") => compiler_error::CompilerError,
         (Tolk, "S001") => name_case_checker::NameCaseChecker,
         (Tolk, "S002") => explicit_return_type::ExplicitReturnType,

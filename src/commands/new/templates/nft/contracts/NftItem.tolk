@@ -18,7 +18,7 @@ fun onInternalMessage(in: InMessage) {
     if (loadingStorage.isNotInitialized()) {
         assert (
             in.senderAddress == loadingStorage.collectionAddress
-        ) throw ERROR_NOT_FROM_COLLECTION;
+        ) throw Errors.NotFromCollection;
 
         // using a message from collection, convert "uninitialized" to "initialized" state
         val initParams = NftItemInitAtDeployment.fromSlice(in.body);
@@ -38,9 +38,9 @@ fun onInternalMessage(in: InMessage) {
 
     match (msg) {
         AskToChangeOwnership => {
-            assert (in.senderAddress == storage.ownerAddress) throw ERROR_NOT_FROM_OWNER;
+            assert (in.senderAddress == storage.ownerAddress) throw Errors.NotFromOwner;
 
-            assert (msg.newOwnerAddress.getWorkchain() == BASECHAIN) throw ERROR_INVALID_WORKCHAIN;
+            assert (msg.newOwnerAddress.getWorkchain() == BASECHAIN) throw Errors.InvalidWorkchain;
 
             val fwdFee = in.originalForwardFee;
             var restAmount = contract.getOriginalBalance() - MIN_TONS_FOR_STORAGE;
@@ -50,13 +50,13 @@ fun onInternalMessage(in: InMessage) {
             if (msg.sendExcessesTo != null) {
                 assert (
                     msg.sendExcessesTo.getWorkchain() == BASECHAIN
-                ) throw ERROR_INVALID_WORKCHAIN;
+                ) throw Errors.InvalidWorkchain;
                 restAmount -= fwdFee;
             }
 
             assert (
                 restAmount >= 0
-            ) throw ERROR_TOO_SMALL_REST_AMOUNT;                        // base nft spends fixed amount of gas, will not check for response
+            ) throw Errors.TooSmallRestAmount;                        // base nft spends fixed amount of gas, will not check for response
 
             if (msg.forwardTonAmount) {
                 val ownershipMsg = createMessage({
@@ -108,7 +108,7 @@ fun onInternalMessage(in: InMessage) {
 
         else => {
             // ignore empty messages, "wrong opcode" for others
-            assert (in.body.isEmpty()) throw 0xFFFF;
+            assert (in.body.isEmpty()) throw Errors.InvalidMessage;
         }
     }
 }
