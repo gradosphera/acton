@@ -1120,7 +1120,7 @@ fn call_predicate(executor: &GetExecutor, cont: &ContData, arg: TupleItem) -> an
     }
 }
 
-/// Parse SearchParams tuple into ParsedSearchParams.
+/// Parse `SearchParams` tuple into `ParsedSearchParams`.
 /// Each field is a sub-tuple [tag, value] where tag: 0=null, 1=user predicate, 2=value-as-predicate.
 fn parse_search_params_tuple(params: &Tuple) -> ParsedSearchParams {
     let extract_field = |idx_from_end: usize| -> Option<SearchField> {
@@ -1338,7 +1338,7 @@ fn parse_scalar_search_params_tuple(params: &Tuple) -> Option<ScalarSearchParams
     Some(params)
 }
 
-/// Check if a transaction matches all predicate search params by calling each predicate via run_continuation.
+/// Check if a transaction matches all predicate search params by calling each predicate via `run_continuation`.
 #[allow(clippy::collapsible_if)]
 fn transaction_matches_predicates(
     tx: &Transaction,
@@ -1379,7 +1379,7 @@ fn transaction_matches_predicates(
             let Ok(opcode) = slice.load_u32() else {
                 return Ok(false);
             };
-            if !call_predicate(executor, &field.predicate, int_item(opcode as i64))? {
+            if !call_predicate(executor, &field.predicate, int_item(i64::from(opcode)))? {
                 // For bounced messages, the real opcode follows the 0xFFFFFFFF prefix.
                 // Only retry against the second word if the caller actually asked to
                 // match bounced transactions (bounced predicate exists and accepts true);
@@ -1392,8 +1392,11 @@ fn transaction_matches_predicates(
                     let Ok(bounced_opcode) = slice.load_u32() else {
                         return Ok(false);
                     };
-                    if !call_predicate(executor, &field.predicate, int_item(bounced_opcode as i64))?
-                    {
+                    if !call_predicate(
+                        executor,
+                        &field.predicate,
+                        int_item(i64::from(bounced_opcode)),
+                    )? {
                         return Ok(false);
                     }
                 } else {
@@ -1427,7 +1430,7 @@ fn transaction_matches_predicates(
             if !call_predicate(
                 executor,
                 &field.predicate,
-                int_item(action_phase.result_code as i64),
+                int_item(i64::from(action_phase.result_code)),
             )? {
                 return Ok(false);
             }
@@ -1441,7 +1444,7 @@ fn transaction_matches_predicates(
             if !call_predicate(
                 executor,
                 &field.predicate,
-                int_item(compute.exit_code as i64),
+                int_item(i64::from(compute.exit_code)),
             )? {
                 return Ok(false);
             }
@@ -1601,7 +1604,7 @@ fn transaction_matches_scalar_params(tx: &Transaction, params: &ScalarSearchPara
     true
 }
 
-/// Create a GetExecutor suitable for running predicate continuations.
+/// Create a `GetExecutor` suitable for running predicate continuations.
 fn make_predicate_executor(ctx: &mut Context) -> anyhow::Result<GetExecutor> {
     // Predicate continuations reference code defined in the test/script that built them
     // (e.g. `T.__eq` instantiations). Both `acton test` and `acton script` populate
@@ -2608,12 +2611,12 @@ fn call_tolk_function_impl(
 ) -> anyhow::Result<()> {
     let cont = match function {
         TupleItem::Cont(cont) => cont,
-        _ => anyhow::bail!("Expected Cont, got {:?}", function),
+        _ => anyhow::bail!("Expected Cont, got {function:?}"),
     };
 
     let args_stack = match args {
         TupleItem::Tuple(args_stack) => args_stack,
-        _ => anyhow::bail!("Expected Tuple, got {:?}", args),
+        _ => anyhow::bail!("Expected Tuple, got {args:?}"),
     };
 
     // Serialize the VmCont (with savelist, captured stack, code)

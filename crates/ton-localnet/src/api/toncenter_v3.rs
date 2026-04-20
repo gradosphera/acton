@@ -134,6 +134,7 @@ pub struct AccountStateContext {
     pub user_friendly: String,
 }
 
+#[must_use]
 pub fn map_account_states(
     states: &[LocalnetAccountState],
     context_by_address: &HashMap<Addr, AccountStateContext>,
@@ -153,8 +154,7 @@ pub fn map_account_states(
             state.address.to_string(),
             serde_json::json!({
                 "user_friendly": context
-                    .map(|ctx| ctx.user_friendly.clone())
-                    .unwrap_or(default_user_friendly),
+                    .map_or(default_user_friendly, |ctx| ctx.user_friendly.clone()),
                 "domain": Value::Null,
                 "interfaces": interfaces,
             }),

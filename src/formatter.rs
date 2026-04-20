@@ -2941,7 +2941,7 @@ impl FormatterContext<'_> {
         push_param!(bool "compute_phase_skipped", assert_failure.params.compute_phase_skipped);
         match &assert_failure.params.body {
             Some(DisplayParam::Value(body)) => {
-                params.push(format!("  body={}", Boc::encode_hex(body)))
+                params.push(format!("  body={}", Boc::encode_hex(body)));
             }
             Some(DisplayParam::Function) => params.push(format!("  body={}", "<function>".cyan())),
             None => {}
@@ -3248,8 +3248,7 @@ impl FormatterContext<'_> {
                 };
                 writeln!(
                     result,
-                    "Cannot find transaction from {} to {}",
-                    from_str, to_str
+                    "Cannot find transaction from {from_str} to {to_str}"
                 )
                 .ok();
                 writeln!(result, "with:").ok();
@@ -3293,7 +3292,7 @@ impl FormatterContext<'_> {
                     } else {
                         self.format_address(&tx_failure.txs, &to_addr)
                     };
-                    format!(" from {} to {}", from_s, to_s)
+                    format!(" from {from_s} to {to_s}")
                 };
                 writeln!(result, "Unexpected transaction{from_to}").ok();
                 if !params.is_empty() {

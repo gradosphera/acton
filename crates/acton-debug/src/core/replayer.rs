@@ -624,15 +624,15 @@ impl TolkReplayer {
     /// It's for `@inline` functions with multiple returns: Tolk compiler does not inline them at AST->IR stage.
     /// Instead, it defers inlining to Fift with PROCINLINE. Fift does bytecode-level inlining.
     /// PROCINLINE embeds bytecode into the caller, merging debug marks. Debug marks are stored
-    /// in a Dict<mark_id> which iterates by ascending mark_id. Since PROCINLINE
-    /// functions are compiled before their callers, they get lower mark_ids, causing
+    /// in a Dict<`mark_id`> which iterates by ascending `mark_id`. Since PROCINLINE
+    /// functions are compiled before their callers, they get lower `mark_ids`, causing
     /// the replayer to enter the callee before the caller.
     ///
-    /// This fixup detects such situations (multiple non-inlined ENTER_FUN at the same
-    /// offset) and reorders marks so the caller's group (highest mark_ids) comes first.
+    /// This fixup detects such situations (multiple non-inlined `ENTER_FUN` at the same
+    /// offset) and reorders marks so the caller's group (highest `mark_ids`) comes first.
     ///
     /// Better solution (in the future):
-    /// 1) either assign higher MARK_ID inside fift-inlined functions
+    /// 1) either assign higher `MARK_ID` inside fift-inlined functions
     /// 2) or do bytecode-inlining inside Tolk compiler, not by Fift
     ///
     /// Both solutions will eliminate the need of this hack.

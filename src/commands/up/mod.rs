@@ -79,8 +79,7 @@ pub fn up_cmd(
             }
 
             return Err(anyhow::anyhow!(
-                "Requested {} was not found in GitHub releases. Run `acton up --list` to inspect available versions.",
-                requested_release
+                "Requested {requested_release} was not found in GitHub releases. Run `acton up --list` to inspect available versions."
             ));
         }
         return Err(e);

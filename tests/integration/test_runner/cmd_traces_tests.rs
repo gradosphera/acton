@@ -610,7 +610,7 @@ import "../../lib/emulation/testing"
 
     let failed_messages = merged_trace["failed_messages"]
         .as_array()
-        .map_or_else(Vec::new, |failed_messages| failed_messages.clone());
+        .map_or_else(Vec::new, Clone::clone);
     assert!(
         failed_messages.is_empty(),
         "step trace should not fragment failures into extra chains"

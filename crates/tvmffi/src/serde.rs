@@ -133,7 +133,7 @@ pub fn parse_vm_cell_slice(parser: &mut CellSlice<'_>) -> Result<Cell, anyhow::E
     Ok(final_cell)
 }
 
-/// Parse VmStack from a cell slice.
+/// Parse `VmStack` from a cell slice.
 ///
 /// ```text
 /// vm_stack#_ depth:(## 24) stack:(VmStackList depth) = VmStack;
@@ -166,20 +166,20 @@ fn parse_vm_stack(parser: &mut CellSlice<'_>) -> Result<Tuple, anyhow::Error> {
     Ok(Tuple(result))
 }
 
-/// Serialize VmStack into a cell builder.
+/// Serialize `VmStack` into a cell builder.
 fn serialize_vm_stack(builder: &mut CellBuilder, stack: &Tuple) -> anyhow::Result<()> {
     builder.store_uint(stack.len() as u64, 24)?;
     serialize_tuple_tail(&stack.0, builder)
 }
 
-/// Parsed VmControlData fields.
+/// Parsed `VmControlData` fields.
 struct VmControlData {
     nargs: Option<u16>,
     stack: Option<Tuple>,
     savelist: Option<Cell>,
 }
 
-/// Parse VmControlData, returning the captured stack and save list.
+/// Parse `VmControlData`, returning the captured stack and save list.
 ///
 /// ```text
 /// vm_ctl_data$_ nargs:(Maybe uint13) stack:(Maybe VmStack)
@@ -220,7 +220,7 @@ fn parse_vm_control_data(parser: &mut CellSlice<'_>) -> Result<VmControlData, an
     })
 }
 
-/// Parse a VmCont from a cell slice.
+/// Parse a `VmCont` from a cell slice.
 ///
 /// Supports all TLB-defined continuation variants:
 /// ```text
@@ -396,9 +396,9 @@ fn parse_vm_cont(parser: &mut CellSlice<'_>) -> Result<ContData, anyhow::Error> 
     }
 }
 
-/// Serialize a VmCont as vmc_std into a cell builder.
+/// Serialize a `VmCont` as `vmc_std` into a cell builder.
 ///
-/// Always serializes as `vmc_std$00` with VmControlData and VmCellSlice.
+/// Always serializes as `vmc_std$00` with `VmControlData` and `VmCellSlice`.
 pub fn serialize_vm_cont(builder: &mut CellBuilder, cont: &ContData) -> anyhow::Result<()> {
     // vmc_std$00
     builder.store_uint(0b00, 2)?;
@@ -409,7 +409,7 @@ pub fn serialize_vm_cont(builder: &mut CellBuilder, cont: &ContData) -> anyhow::
     // so we must round-trip it rather than dropping it.
     if let Some(nargs) = cont.nargs {
         builder.store_bit(true)?;
-        builder.store_uint(nargs as u64, 13)?;
+        builder.store_uint(u64::from(nargs), 13)?;
     } else {
         builder.store_bit(false)?;
     }
@@ -437,9 +437,9 @@ pub fn serialize_vm_cont(builder: &mut CellBuilder, cont: &ContData) -> anyhow::
     // code:VmCellSlice
     let code = &cont.code;
     builder.store_uint(0, 10)?; // st_bits
-    builder.store_uint(code.bit_len() as u64, 10)?; // end_bits
+    builder.store_uint(u64::from(code.bit_len()), 10)?; // end_bits
     builder.store_uint(0, 3)?; // st_ref
-    builder.store_uint(code.reference_count() as u64, 3)?; // end_ref
+    builder.store_uint(u64::from(code.reference_count()), 3)?; // end_ref
     builder.store_reference(code.clone())?;
 
     Ok(())

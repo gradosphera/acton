@@ -1,4 +1,4 @@
-//! DebugExecutorHandle normalizes the live step executors used by runtime debugging.
+//! `DebugExecutorHandle` normalizes the live step executors used by runtime debugging.
 //! The replayer only cares about "where execution is now / what is on stack / which
 //! runtime registers are visible", regardless of whether the boundary came from
 //! `send_message` or `run_get_method`.

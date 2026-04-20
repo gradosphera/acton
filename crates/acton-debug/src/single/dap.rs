@@ -328,7 +328,7 @@ fn step_and_notify(
     match advance_to_next_stop(state, step_mode) {
         AdvanceStop::Terminated => send_terminated(server)?,
         AdvanceStop::Exception { description, text } => {
-            send_stopped_exception(server, &description, &text)?
+            send_stopped_exception(server, &description, &text)?;
         }
         AdvanceStop::Breakpoint(stop) => {
             send_stopped(
@@ -673,7 +673,7 @@ fn handle_configuration_done(
     match advance_to_next_stop(state, step_mode) {
         AdvanceStop::Terminated => send_terminated(server)?,
         AdvanceStop::Exception { description, text } => {
-            send_stopped_exception(server, &description, &text)?
+            send_stopped_exception(server, &description, &text)?;
         }
         AdvanceStop::Breakpoint(stop) => {
             send_stopped(
@@ -893,7 +893,7 @@ fn handle_variables(
         let variables = state
             .replayer
             .as_ref()
-            .map(|r| r.runtime_registers())
+            .map(TolkReplayer::runtime_registers)
             .unwrap_or_default()
             .into_iter()
             .map(|lv| debug_value_to_variable(state, lv.var_name, &lv.value))

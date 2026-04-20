@@ -180,7 +180,7 @@ fn test_todo_annotation_dotted_without_description() {
         .assert_contains("TODO");
 }
 
-/// Test @test.gas_limit(100) annotation
+/// Test @`test.gas_limit(100)` annotation
 #[test]
 fn test_gas_limit_annotation() {
     ProjectBuilder::new("gas-limit")
@@ -215,7 +215,7 @@ fn test_gas_limit_annotation() {
         .assert_contains("Gas limit exceeded");
 }
 
-/// Test @test.fail_with(42) annotation
+/// Test `@test.fail_with(42)` annotation
 #[test]
 fn test_fail_with_annotation() {
     ProjectBuilder::new("fail-with")
@@ -244,7 +244,7 @@ fn test_fail_with_annotation() {
         .assert_not_contains("Expected exit_code");
 }
 
-/// Test @test.fail_with(42) annotation with wrong exit code
+/// Test `@test.fail_with(42)` annotation with wrong exit code
 #[test]
 fn test_fail_with_annotation_wrong_code() {
     ProjectBuilder::new("fail-with-wrong")

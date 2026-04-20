@@ -222,8 +222,7 @@ impl ReleaseClient for GitHubClient {
         let requested = requested_release_label(version, trunk);
         if all_release_errors_are_network_related(&errors) {
             bail!(
-                "Failed to look up {} on GitHub. Check your network connection and try again.",
-                requested
+                "Failed to look up {requested} on GitHub. Check your network connection and try again."
             );
         }
         bail!(

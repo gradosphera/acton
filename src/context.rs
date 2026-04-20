@@ -90,7 +90,7 @@ pub struct TransactionNotFoundParams {
     pub body: Option<DisplayParam<Cell>>,
 }
 
-/// A search field parsed from SearchParams.
+/// A search field parsed from `SearchParams`.
 /// Tag 0 = absent, tag 1 = user-provided predicate, tag 2 = plain value converted to predicate.
 #[derive(Debug, Clone)]
 pub struct SearchField {
@@ -99,7 +99,7 @@ pub struct SearchField {
     pub predicate: ContData,
 }
 
-/// Parsed search params from SearchParams union fields.
+/// Parsed search params from `SearchParams` union fields.
 /// Each field is either a predicate (with tag for display) or absent (None).
 #[derive(Debug, Clone, Default)]
 pub struct ParsedSearchParams {
@@ -688,7 +688,7 @@ pub struct Env<'a> {
     pub fork_net: Option<Network>,
     pub api_key: Option<String>,
     pub running_id: Arc<str>,
-    /// The compiled code of the currently running test contract (for c3 in run_continuation).
+    /// The compiled code of the currently running test contract (for c3 in `run_continuation`).
     pub test_code: Option<Cell>,
 }
 

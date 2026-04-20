@@ -651,9 +651,7 @@ fn render_cell_summary(bits: Option<usize>, refs: Option<usize>, hash: Option<&s
         || "<unknown> refs".to_owned(),
         |refs| format!("{refs} refs"),
     );
-    let hash = hash
-        .map(render_cell_hash_prefix)
-        .unwrap_or_else(|| "<unknown hash>".to_owned());
+    let hash = hash.map_or_else(|| "<unknown hash>".to_owned(), render_cell_hash_prefix);
     format!("{bits}, {refs}, hash: {hash}")
 }
 

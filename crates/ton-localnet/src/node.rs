@@ -1842,7 +1842,7 @@ mod tests {
 
         assert!(db_path.exists(), "db file must be created");
         assert!(
-            db_path.parent().is_some_and(|parent| parent.exists()),
+            db_path.parent().is_some_and(std::path::Path::exists),
             "db parent directories must be created"
         );
         assert!(node.conn.is_some(), "sqlite connection must be initialized");

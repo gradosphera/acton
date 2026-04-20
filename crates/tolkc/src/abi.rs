@@ -323,6 +323,7 @@ impl Ty {
         }
     }
 
+    #[must_use]
     pub fn render_type(&self) -> String {
         self.to_string()
     }

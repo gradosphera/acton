@@ -203,15 +203,11 @@ fn print_forced_install_release(
     } else {
         "Installing".green().bold()
     };
-    let current_display = current_version
-        .map(ToString::to_string)
-        .unwrap_or_else(|| current_version_str.to_owned());
+    let current_display =
+        current_version.map_or_else(|| current_version_str.to_owned(), ToString::to_string);
     let subject = if stable { "stable version" } else { "version" };
 
-    println!(
-        "  {} {subject} {} (current: {})",
-        action, target_version, current_display
-    );
+    println!("  {action} {subject} {target_version} (current: {current_display})");
 }
 
 fn check_homebrew(exe: &Path, yes: bool) -> Result<()> {
@@ -299,10 +295,7 @@ fn verify_sha256(tarball_path: &Path, checksum_path: &Path, archive_name: &str) 
 
     if actual != expected {
         bail!(
-            "Downloaded archive {} failed SHA256 verification. Expected {}, got {}.",
-            archive_name,
-            expected,
-            actual
+            "Downloaded archive {archive_name} failed SHA256 verification. Expected {expected}, got {actual}."
         );
     }
 
@@ -313,10 +306,7 @@ fn verify_sha256(tarball_path: &Path, checksum_path: &Path, archive_name: &str) 
 
 fn read_expected_sha256(checksum_path: &Path, archive_name: &str) -> Result<String> {
     let contents = fs::read_to_string(checksum_path).with_context(|| {
-        format!(
-            "Failed to read the downloaded checksum file for {}",
-            archive_name
-        )
+        format!("Failed to read the downloaded checksum file for {archive_name}")
     })?;
 
     let line = contents
@@ -324,31 +314,23 @@ fn read_expected_sha256(checksum_path: &Path, archive_name: &str) -> Result<Stri
         .map(str::trim)
         .find(|line| !line.is_empty())
         .ok_or_else(|| {
-            anyhow::anyhow!("The downloaded checksum file for {} is empty", archive_name)
+            anyhow::anyhow!("The downloaded checksum file for {archive_name} is empty")
         })?;
 
     let mut parts = line.split_whitespace();
     let checksum = parts.next().ok_or_else(|| {
-        anyhow::anyhow!(
-            "The downloaded checksum file for {} has an invalid format",
-            archive_name
-        )
+        anyhow::anyhow!("The downloaded checksum file for {archive_name} has an invalid format")
     })?;
 
     if checksum.len() != 64 || !checksum.chars().all(|ch| ch.is_ascii_hexdigit()) {
-        bail!(
-            "The downloaded checksum file for {} contains an invalid SHA256 digest",
-            archive_name
-        );
+        bail!("The downloaded checksum file for {archive_name} contains an invalid SHA256 digest");
     }
 
     if let Some(reported_name) = parts.next() {
         let reported_name = reported_name.trim_start_matches('*');
         if reported_name != archive_name {
             bail!(
-                "The downloaded checksum file references '{}', but the archive is '{}'",
-                reported_name,
-                archive_name
+                "The downloaded checksum file references '{reported_name}', but the archive is '{archive_name}'"
             );
         }
     }

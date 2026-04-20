@@ -221,8 +221,8 @@ impl GetExecutor {
     ///
     /// # Arguments
     ///
-    /// * `continuation_boc` - Base64 encoded BoC of the serialized VmCont.
-    /// * `stack_boc` - Base64 encoded BoC of the initial stack.
+    /// * `continuation_boc` - Base64 encoded `BoC` of the serialized `VmCont`.
+    /// * `stack_boc` - Base64 encoded `BoC` of the initial stack.
     pub fn run_continuation(
         &self,
         continuation_boc: &str,

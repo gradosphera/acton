@@ -1,4 +1,4 @@
-//! ReplayerDebugSession exposes one DAP session over a stack of `TolkReplayer`s.
+//! `ReplayerDebugSession` exposes one DAP session over a stack of `TolkReplayer`s.
 //! The root context debugs the current script/test, while nested runtime operations
 //! (`send_message`, `run_get_method`) temporarily push child contexts backed by
 //! live executors and later pop back to the parent.
@@ -242,32 +242,29 @@ impl ReplayerDebugSession {
         frame_id: Option<i64>,
         expression: &str,
     ) -> anyhow::Result<RenderedValue> {
-        match frame_id {
-            Some(frame_id) => {
-                let locator = self
-                    .frame_to_depth
-                    .get(&frame_id)
-                    .copied()
-                    .ok_or_else(|| anyhow!("Unknown frame id {frame_id}"))?;
-                let Some(ctx) = self.contexts.get(locator.context_idx) else {
-                    return evaluate_expression(&[], None, expression);
-                };
-                let Ok(ctx) = ctx.try_borrow() else {
-                    return evaluate_expression(&[], None, expression);
-                };
-                let locals = ctx.replayer.locals_for_frame(locator.depth_from_top);
-                evaluate_expression(&locals, Some(ctx.replayer.source_map()), expression)
-            }
-            None => {
-                let Some(ctx) = self.active_context() else {
-                    return evaluate_expression(&[], None, expression);
-                };
-                let Ok(ctx) = ctx.try_borrow() else {
-                    return evaluate_expression(&[], None, expression);
-                };
-                let locals = ctx.replayer.locals_for_frame(0);
-                evaluate_expression(&locals, Some(ctx.replayer.source_map()), expression)
-            }
+        if let Some(frame_id) = frame_id {
+            let locator = self
+                .frame_to_depth
+                .get(&frame_id)
+                .copied()
+                .ok_or_else(|| anyhow!("Unknown frame id {frame_id}"))?;
+            let Some(ctx) = self.contexts.get(locator.context_idx) else {
+                return evaluate_expression(&[], None, expression);
+            };
+            let Ok(ctx) = ctx.try_borrow() else {
+                return evaluate_expression(&[], None, expression);
+            };
+            let locals = ctx.replayer.locals_for_frame(locator.depth_from_top);
+            evaluate_expression(&locals, Some(ctx.replayer.source_map()), expression)
+        } else {
+            let Some(ctx) = self.active_context() else {
+                return evaluate_expression(&[], None, expression);
+            };
+            let Ok(ctx) = ctx.try_borrow() else {
+                return evaluate_expression(&[], None, expression);
+            };
+            let locals = ctx.replayer.locals_for_frame(0);
+            evaluate_expression(&locals, Some(ctx.replayer.source_map()), expression)
         }
     }
 

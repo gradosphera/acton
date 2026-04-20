@@ -323,8 +323,7 @@ fn process_contract(
                         file_cache.put(contract_cache_key, &result, false, with_fift, 2, "1.3")
                     {
                         eprintln!(
-                            "Warning: Failed to cache compilation result for {}: {}",
-                            display_name, e
+                            "Warning: Failed to cache compilation result for {display_name}: {e}"
                         );
                     }
 

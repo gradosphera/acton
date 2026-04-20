@@ -123,7 +123,7 @@ fn verify_archive_sha(objs_dir: &Path, manifest_path: &Path, lib_name: &str) {
         expected_sha256,
         actual_sha256,
         manifest_path.display()
-    )
+    );
 }
 
 fn load_lib_sha256_from_manifest(manifest_path: &Path, lib_name: &str) -> String {

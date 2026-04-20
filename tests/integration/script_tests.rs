@@ -242,11 +242,11 @@ fn test_script_debug_logs_are_hidden_without_verbose_flag() {
     let project = ProjectBuilder::new("script-debug-logs-default-off")
         .script_file(
             "debug_logs",
-            r#"
+            r"
             fun main() {
                 debug.dumpStack();
             }
-        "#,
+        ",
         )
         .build();
 
@@ -266,11 +266,11 @@ fn test_script_verbose_flag_is_accepted() {
     let project = ProjectBuilder::new("script-debug-logs-verbose")
         .script_file(
             "debug_logs",
-            r#"
+            r"
             fun main() {
                 debug.dumpStack();
             }
-        "#,
+        ",
         )
         .build();
 
@@ -290,11 +290,11 @@ fn test_script_rejects_verbose_level_above_one() {
     let project = ProjectBuilder::new("script-debug-logs-verbose-level")
         .script_file(
             "debug_logs",
-            r#"
+            r"
             fun main() {
                 debug.dumpStack();
             }
-        "#,
+        ",
         )
         .build();
 

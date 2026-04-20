@@ -301,7 +301,7 @@ pub fn process_txs_and_search_params(
 }
 
 /// Extract tag, predicate, and optional original value from a sub-tuple.
-/// Format: [0, null] = absent, [1, cont] = user predicate, [2, cont, original_value].
+/// Format: [0, null] = absent, [1, cont] = user predicate, [2, cont, `original_value`].
 /// Returns None for tag 0. For tag 2, `original` holds the display value.
 struct SubtupleData<'a> {
     tag: u8,
