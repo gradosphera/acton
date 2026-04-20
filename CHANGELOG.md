@@ -8,6 +8,327 @@ All notable changes to this project will be documented in this file.
 
 - No unreleased entries yet.
 
+## [0.3.0] - 20.04.2026
+
+Acton 0.3.0 focuses on cleaning up and consolidating the surface introduced in
+0.2.0. It renames several CLI and manifest concepts around broadcasting,
+local execution, wrappers, and imports; reorganizes the Acton stdlib; and adds
+a richer localnet explorer, much stronger debugger output, better coverage and
+test-runner performance, Tolk 1.4 support, and a new NFT starter template.
+
+### Breaking Changes and Migration
+
+- `acton script` no longer uses `--broadcast`. Passing `--net <network>` now
+  both selects the live network and enables real broadcasting. Local emulation
+  is still the default when `--net` is omitted.
+
+  ```bash
+  # before
+  acton script scripts/deploy.tolk --broadcast --net testnet
+
+  # after
+  acton script scripts/deploy.tolk --net testnet
+  ```
+
+  If you previously used `--broadcast` in project scripts, README snippets, CI
+  jobs, or shell aliases, remove it everywhere. If you still want local
+  execution against remote state, keep using `--fork-net` without `--net`.
+
+- `acton litenode` was renamed to `acton localnet`, and the manifest section
+  `[litenode]` was renamed to `[localnet]`. The network name stays `localnet`,
+  so `--net localnet` and `[networks.localnet]` do not change.
+
+  ```toml
+  # before
+  [litenode]
+  port = 3010
+  fork-net = "testnet"
+
+  # after
+  [localnet]
+  port = 3010
+  fork-net = "testnet"
+  ```
+
+  Update CLI commands, docs links, helper scripts, and config lookups that
+  still refer to `litenode`.
+
+- `Acton.toml` renamed `[mappings]` to `[import-mappings]`.
+
+  ```toml
+  # before
+  [mappings]
+  wrappers = "tests/wrappers"
+
+  # after
+  [import-mappings]
+  wrappers = "wrappers"
+  ```
+
+  The old section name is not the canonical config surface anymore, so rename
+  it instead of keeping compatibility shims in downstream tooling.
+
+- Contract config field `name` was renamed to `display-name`. The
+  `[contracts.<NAME>]` key is now the canonical contract name used for CLI
+  selection, dependency naming, helper generation, and wrapper generation;
+  `display-name` is an optional UI/log label only.
+
+  ```toml
+  # before
+  [contracts.counter]
+  name = "Counter"
+  src = "contracts/counter.tolk"
+
+  # after
+  [contracts.Counter]
+  display-name = "Counter"
+  src = "contracts/Counter.tolk"
+  ```
+
+  New scaffolds now use PascalCase contract names and filenames for consistency,
+  but the hard migration requirement for existing projects is the
+  `name -> display-name` rename. If you keep older contract keys, helper file
+  names and generated function names continue to follow those keys.
+
+- Default generated Tolk wrapper locations moved from `tests/wrappers/` to
+  `wrappers/` in standard layouts, and from `contracts/tests/wrappers/` to
+  `contracts/wrappers/` in `--app` layouts. The default `@wrappers` mapping was
+  updated accordingly.
+
+  If your tests, scripts, editors, or CI still import or watch the old paths,
+  either move the files or pin the legacy layout explicitly:
+
+  ```toml
+  [wrappers.tolk]
+  output-dir = "tests/wrappers"
+  test-output-dir = "tests"
+
+  [import-mappings]
+  wrappers = "tests/wrappers"
+  ```
+
+- Default generated TypeScript wrapper output moved from `wrappers/` to
+  `wrapper-ts/`.
+
+  If your frontend imports from the old directory, either update the import
+  path or pin the old output directory:
+
+  ```toml
+  [wrappers.typescript]
+  output-dir = "wrappers"
+  ```
+
+- Generated dependency helper files were renamed from
+  `<dependency>_code.tolk` to `<dependency>.code.tolk`.
+
+  ```text
+  # before
+  gen/jetton-wallet_code.tolk
+
+  # after
+  gen/JettonWallet.code.tolk
+  ```
+
+  Update any checked-in generated helpers, import statements, globs, and
+  scripts that reference the old `_code` suffix.
+
+- The test runner now recognizes only dotted `@test.*` annotations. Legacy
+  object-style `@test({...})` forms are ignored.
+
+  ```tolk
+  // before
+  @test({ skip: true })
+  @test({ todo: "later" })
+  @test({ fail_with: 42 })
+  @test({ gas_limit: 1000 })
+  @test({ fuzz: { runs: 64, seed: 42 } })
+
+  // after
+  @test.skip
+  @test.todo("later")
+  @test.fail_with(42)
+  @test.gas_limit(1000)
+  @test.fuzz({ runs: 64, seed: 42 })
+  ```
+
+  Update all existing test sources before relying on skip/todo/fail/fuzz
+  behavior in 0.3.0.
+
+- `acton test` and `acton script` no longer print low-level executor debug
+  logs by default. If you relied on the old always-verbose behavior for CI,
+  snapshots, troubleshooting, or `debug.dumpStack()` output, pass `-v` /
+  `--verbose` explicitly.
+
+  ```bash
+  # before
+  acton test
+  acton script scripts/debug.tolk
+
+  # after, to keep the old debug-log-heavy output
+  acton test -v
+  acton script scripts/debug.tolk --verbose
+  ```
+
+  Verbosity above one level is not supported yet, so use `-v` once instead of
+  `-vv`.
+
+- Lint suppression comments were renamed from
+  `// acton-disable-next-line <rule>` to
+  `// check-disable-next-line <rule>`.
+
+  ```tolk
+  // before
+  // acton-disable-next-line unused-variable
+
+  // after
+  // check-disable-next-line unused-variable
+  ```
+
+- The Acton stdlib import surface was reorganized in
+  [#849](https://github.com/ton-blockchain/acton/pull/849). Several top-level
+  modules were flattened, several testing/emulation APIs moved into
+  better-scoped modules, and a few legacy paths were removed.
+
+  | Before                              | After                                                                                                            | Notes                                                                        |
+  |-------------------------------------|------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+  | `@acton/build/build`                | `@acton/build`                                                                                                   | Flat import path                                                             |
+  | `@acton/crypto/crypto`              | `@acton/crypto`                                                                                                  | Flat import path                                                             |
+  | `@acton/ffi/ffi`                    | `@acton/ffi`                                                                                                     | Flat import path                                                             |
+  | `@acton/promts/prompts`             | `@acton/prompts`                                                                                                 | Fixed typo and flattened path                                                |
+  | `@acton/testing/transaction_expect` | `@acton/emulation/network` plus `@acton/testing/expect`                                                          | Transaction matchers now live with `SendResultList`                          |
+  | `@acton/testing/outlist_expect`     | `@acton/types/out_actions` plus `@acton/testing/expect`                                                          | Out-action matchers now live with out-action types                           |
+  | `@acton/emulation/tracing`          | `acton test --save-test-trace`, `SendResultList.giveName(...)`, and the saved-trace/Test UI workflows            | Trace export moved out of the old stdlib module                              |
+  | `@acton/vm/vm`                      | use the specialized replacements in `@acton/emulation/testing`, `@acton/emulation/network`, and `@acton/types/*` | For example, `vm.registerLibrary(...)` became `testing.registerLibrary(...)` |
+
+  If you maintain custom helper libraries or examples, search for the removed
+  paths directly and rewrite imports rather than relying on transitive aliases.
+
+- Build-owned generated artifacts now live under `build/` instead of `.acton/`.
+  This affects shared compilation cache, saved traces, mutation sessions, and
+  project-local logs:
+
+  | Before                     | After                     |
+  |----------------------------|---------------------------|
+  | `.acton/cache`             | `build/cache`             |
+  | `.acton/traces`            | `build/traces`            |
+  | `.acton/mutation-sessions` | `build/mutation-sessions` |
+  | `.acton/logs`              | `build/logs`              |
+
+  `.acton/` still remains the home of the bundled Acton stdlib and other
+  project-managed support files, so do not delete it. Update CI caches,
+  cleanup scripts, editor integrations, and `.gitignore` rules that still
+  assume build-owned artifacts live under `.acton/`.
+
+- Raw Tolk compiler JSON now follows upstream `snake_case` field names instead
+  of `camelCase`. This is primarily a breaking change for custom integrations
+  that consume compiler ABI or source-map JSON directly. If you only use
+  `acton build`, `acton wrapper`, or the bundled TypeScript generator, migrate
+  your own tooling only where it reads the raw compiler payloads.
+
+### Localnet, CLI, and Project Workflows
+
+- Replaced the old `litenode` surface with `localnet` across the CLI, docs,
+  config schema, manpages, and internal crates, making the terminology match
+  the already-existing `localnet` network name.
+- Added a bundled localnet explorer UI with better account pages, ABI-aware
+  contract display, wallet support in `v3/accountStates`, account type
+  reporting, opcode display, and broader TonCenter v3 compatibility.
+- Added state persistence controls for localnet startup and shutdown via JSON
+  load/dump flows, plus clearer localnet wallet-airdrop guidance across CLI
+  errors.
+- Script and run flows now default explorer links to `tonscan`; pin
+  `--explorer` explicitly if your docs, tooling, or operator workflow relied on
+  a different explorer provider.
+- Added `acton up --force` to reinstall the currently selected version even
+  when it already matches the installed build.
+- Added a new NFT template with collection, item, wrappers, tests, and
+  deployment scripts, and simplified `acton new` with optional advanced setup
+  prompts and a hidden `--templates` catalog mode for IDEs and tooling.
+- New scaffolds now default to PascalCase contract names and filenames, and the
+  generated project scripts and docs were updated to the new wrapper and
+  broadcast conventions.
+- Shell completion, path completion, and command reference generation were
+  improved across `script`, `wrapper`, and top-level command help.
+- Improved `acton script` exit-code failure output with clearer failure phases,
+  descriptions, and actionable follow-up hints around backtraces and wallet or
+  deployment setup issues.
+
+### Testing, Coverage, and Stdlib
+
+- Refactored the Acton stdlib into a clearer module layout, splitting
+  emulation-heavy APIs across `@acton/emulation/network`,
+  `@acton/emulation/testing`, and `@acton/emulation/scripts`, and moving
+  matcher APIs closer to the types they operate on.
+- Added branch coverage to the console coverage table and LCOV output, and
+  significantly reduced coverage memory use on larger test suites.
+- Build caching now excludes Fift output from default cache entries, reducing
+  cache size and warm-load overhead while still generating Fift when explicitly
+  requested.
+- `acton test` now hides executor debug logs by default and exposes `-v` for
+  low-level executor output when needed, reducing noisy output and memory use in
+  normal runs.
+- Added support for loading libraries from the emulated blockchain via
+  `net.loadLibrary(...)`, and `net.getConfig()` now returns the real blockchain
+  config in broadcast mode.
+- Improved matcher ergonomics with support for function-valued matchers and
+  faster search in larger send-result lists.
+- Scripts can now use matcher helpers directly, and matcher evaluation now
+  works correctly with FFI-backed helpers.
+- Added universal `println` and `format` helpers across the scripting and
+  testing surface, wallet helper APIs for exposing wallet key pairs and wallet
+  IDs from open broadcast wallets, prompt-library improvements for
+  non-interactive environments, and stronger `parse*` implementations in
+  `fmt`.
+
+### Debugging, Compiler, and Language Tooling
+
+- Expanded the debugger with evaluate requests, conditional breakpoints,
+  better JetBrains and VS Code behavior, raw-address display, TON-aware coin
+  rendering, richer exception naming, and substantially improved rendering for
+  typed storage, `Cell<T>`, maps, unions, enums, strings, slices, builders,
+  out actions, and inbound messages.
+- Debugging flows now better support custom network config, missing libraries,
+  external inbound messages, and ABI-based decoding during replay.
+- Added support for Tolk 1.4 closures, improved lambda formatting, fixed tuple
+  and tensor parsing edge cases, added support for numeric separators like
+  `1_000_000`, and aligned compiler JSON with upstream Tolk output.
+- Debugger previews now do a better job with non-loaded lazy fields by
+  deserializing slices when possible.
+- Added `acton compile --allow-no-entrypoint` for compiler/debugging workflows
+  that intentionally compile files without a contract entrypoint.
+- Added new `acton check` inspections for dict-type usage and for preferring
+  `throw Errors.ErrorName` over raw `throw CONST_NAME`, plus richer exported
+  rule tags including `Deprecated`.
+- Runtime error reporting now uses compiler ABI metadata to show source-level
+  error names more consistently across tests, scripts, and debugger output.
+
+### Docs, Distribution, and Release Tooling
+
+- Switched project and docs UI tooling from `yarn` toward `bun`, added Bun
+  caching in CI, and added a dedicated VS Code extension build workflow.
+- Added automatic documentation deployment and broader release-hardening checks,
+  including installer validation and release security checks.
+- Expanded documentation around debugging, build caching, localnet, wrapper
+  generation, saved trace bundles, and the reorganized stdlib surface.
+
+### Upgrade Checklist
+
+- Rename `--broadcast` usages to `--net`.
+- Rename `[litenode]` to `[localnet]`.
+- Rename `[mappings]` to `[import-mappings]`.
+- Rename contract `name` to `display-name`.
+- Rewrite legacy `@test({...})` annotations to dotted `@test.*` forms.
+- Add `-v` / `--verbose` anywhere your tests or scripts relied on raw executor
+  logs or `debug.dumpStack()` output by default.
+- Rewrite `acton-disable-next-line` comments to `check-disable-next-line`.
+- Update wrapper paths, generated helper file names, and any `@wrappers`
+  mappings or globs that still point at `tests/wrappers` or `_code.tolk`.
+- Update stdlib imports for the flattened/reorganized 0.3.0 module layout.
+- Update CI caches and cleanup scripts to use `build/cache`, `build/traces`,
+  `build/mutation-sessions`, and `build/logs`.
+- If you consume raw compiler JSON, update your field accessors from
+  `camelCase` to `snake_case`.
+
 ## [0.2.0] - 06.04.2026
 
 Acton 0.2.0 rolls up all user-facing work shipped after 0.1.0 into a much more
