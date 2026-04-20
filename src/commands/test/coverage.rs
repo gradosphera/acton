@@ -396,8 +396,8 @@ fn build_executable_lines_per_file(
 
     for mark_id in 0..source_map.debug_marks_count() {
         let Some(range) = (match source_map.get_debug_mark(mark_id) {
-            DebugMark::Loc { range, .. } => Some(range),
-            DebugMark::EnterFun {
+            DebugMark::Loc { range, .. }
+            | DebugMark::EnterFun {
                 range,
                 is_inlined: true,
                 ..

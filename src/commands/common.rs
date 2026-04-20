@@ -314,7 +314,6 @@ pub fn select_contract(
 pub const fn executor_verbosity_for_cli_level(level: u8) -> ExecutorVerbosity {
     match level {
         0 => ExecutorVerbosity::Off,
-        1 => ExecutorVerbosity::Full,
         _ => ExecutorVerbosity::Full,
     }
 }

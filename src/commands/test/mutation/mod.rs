@@ -388,9 +388,8 @@ fn run_single_mutation(
     let restore_result = fs::write(&dest_path, &source.content);
     match (result, restore_result) {
         (Ok(execution), Ok(())) => Ok(execution),
-        (Err(err), Ok(())) => Err(err),
         (Ok(_), Err(err)) => Err(err.into()),
-        (Err(err), Err(_)) => Err(err),
+        (Err(err), Ok(())) | (Err(err), Err(_)) => Err(err),
     }
 }
 

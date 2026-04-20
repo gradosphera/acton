@@ -394,7 +394,6 @@ where
             loop {
                 let (ind, mode, doc) = cmd;
                 match *doc {
-                    Doc::Nil => {}
                     Doc::Append(ref ldoc, ref rdoc) => {
                         cmd.2 = append_docs2(ldoc, rdoc, |doc| self.bcmds.push((ind, mode, doc)));
                         continue;
@@ -504,7 +503,7 @@ where
                         cmd.2 = self.temp_arena.alloc(f(ind));
                         continue;
                     }
-                    Doc::BreakParent => {}
+                    Doc::Nil | Doc::BreakParent => {}
                     Doc::Fail => return Err(out.fail_doc()),
                 }
 

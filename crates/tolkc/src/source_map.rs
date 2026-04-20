@@ -166,7 +166,9 @@ impl SourceMap {
             .debug_marks
             .iter()
             .filter_map(|mark| match mark {
-                DebugMark::Loc { range, .. } if range.file_id() == file_id => {
+                DebugMark::Loc { range, .. } | DebugMark::LeaveFun { range, .. }
+                    if range.file_id() == file_id =>
+                {
                     Some(range.start_line())
                 }
                 DebugMark::EnterFun {
@@ -174,9 +176,6 @@ impl SourceMap {
                     is_inlined: true,
                     ..
                 } if range.file_id() == file_id => Some(range.start_line()),
-                DebugMark::LeaveFun { range, .. } if range.file_id() == file_id => {
-                    Some(range.start_line())
-                }
                 _ => None,
             })
             .collect();

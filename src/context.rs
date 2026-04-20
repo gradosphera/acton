@@ -150,10 +150,10 @@ impl AssertFailure {
         match self {
             AssertFailure::Bin(arg) => arg.message.clone(),
             AssertFailure::Fail(arg) | AssertFailure::Assume(arg) => arg.message.clone(),
-            AssertFailure::GetMethod(_) => None, // Formatted in FormatterContext
-            AssertFailure::TransactionNotFound(arg) => arg.message.clone(),
-            AssertFailure::TransactionIsFound(arg) => arg.message.clone(),
-            AssertFailure::WalletNotFound(_) => None, // Formatted in FormatterContext
+            AssertFailure::GetMethod(_) | AssertFailure::WalletNotFound(_) => None, // Formatted in FormatterContext
+            AssertFailure::TransactionNotFound(arg) | AssertFailure::TransactionIsFound(arg) => {
+                arg.message.clone()
+            }
         }
     }
 
@@ -163,8 +163,9 @@ impl AssertFailure {
             AssertFailure::Bin(arg) => arg.location.clone(),
             AssertFailure::Fail(arg) | AssertFailure::Assume(arg) => arg.location.clone(),
             AssertFailure::GetMethod(arg) => arg.location.clone(),
-            AssertFailure::TransactionNotFound(arg) => arg.location.clone(),
-            AssertFailure::TransactionIsFound(arg) => arg.location.clone(),
+            AssertFailure::TransactionNotFound(arg) | AssertFailure::TransactionIsFound(arg) => {
+                arg.location.clone()
+            }
             AssertFailure::WalletNotFound(arg) => arg.location.clone(),
         }
     }

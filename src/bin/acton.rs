@@ -1533,8 +1533,9 @@ fn resolve_manifest_path(
     let source = match resolved_project_root.source {
         ResolutionSource::ProjectRootFlag => ResolutionSource::ProjectRootFlag,
         ResolutionSource::AutoDetected => ResolutionSource::AutoDetected,
-        ResolutionSource::FallbackCwd => ResolutionSource::FallbackCwd,
-        ResolutionSource::ManifestPathFlag => ResolutionSource::FallbackCwd,
+        ResolutionSource::FallbackCwd | ResolutionSource::ManifestPathFlag => {
+            ResolutionSource::FallbackCwd
+        }
     };
 
     Ok(ResolvedManifestPath {

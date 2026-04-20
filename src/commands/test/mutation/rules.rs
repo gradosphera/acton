@@ -698,8 +698,7 @@ enum MutationRulesFile {
 impl MutationRulesFile {
     fn into_rules(self) -> Vec<CustomMutationRule> {
         match self {
-            Self::Bare(rules) => rules,
-            Self::Wrapped { rules } => rules,
+            Self::Bare(rules) | Self::Wrapped { rules } => rules,
         }
     }
 }

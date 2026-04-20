@@ -879,9 +879,8 @@ fn zero_hash_base64() -> String {
 const fn map_address_information_status(status: &AccountStatus) -> &'static str {
     match status {
         AccountStatus::Active => "active",
-        AccountStatus::Uninit => "uninitialized",
+        AccountStatus::Uninit | AccountStatus::Nonexist => "uninitialized",
         AccountStatus::Frozen => "frozen",
-        AccountStatus::Nonexist => "uninitialized",
     }
 }
 

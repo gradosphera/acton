@@ -316,12 +316,11 @@ fn compiler_data_to_json(data: &CompilerAbiData, network: &Network) -> serde_jso
             "bits": value.data_bit_len,
             "hex": hex::encode(&value.data),
         }),
-        CompilerAbiData::Cell(value) => serde_json::json!({
-            "boc64": Boc::encode_base64(value.clone()),
-        }),
-        CompilerAbiData::RemainingBitsAndRefs(value) => serde_json::json!({
-            "boc64": Boc::encode_base64(value.clone()),
-        }),
+        CompilerAbiData::Cell(value) | CompilerAbiData::RemainingBitsAndRefs(value) => {
+            serde_json::json!({
+                "boc64": Boc::encode_base64(value.clone()),
+            })
+        }
         CompilerAbiData::Bits((bytes, bit_len)) => serde_json::json!({
             "bits": bit_len,
             "hex": hex::encode(bytes),
@@ -409,8 +408,7 @@ fn print_kv(label: &str, value: impl AsRef<str>) {
 fn format_account_status(status: &str) -> String {
     match status {
         "active" => status.green().to_string(),
-        "frozen" => status.yellow().to_string(),
-        "uninit" | "uninitialized" => status.yellow().to_string(),
+        "frozen" | "uninit" | "uninitialized" => status.yellow().to_string(),
         "nonexist" | "inactive" | "empty" => status.dimmed().to_string(),
         _ => status.to_string(),
     }

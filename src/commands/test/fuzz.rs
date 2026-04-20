@@ -478,7 +478,7 @@ fn map_ton_abi_type(ty: &TypeInfo) -> FuzzParameterKind {
             signed: false,
             bits: Some(*width),
         },
-        BaseTypeInfo::Coins => FuzzParameterKind::Int {
+        BaseTypeInfo::Coins | BaseTypeInfo::VarUInt16 => FuzzParameterKind::Int {
             signed: false,
             bits: Some(120),
         },
@@ -492,10 +492,6 @@ fn map_ton_abi_type(ty: &TypeInfo) -> FuzzParameterKind {
         BaseTypeInfo::VarInt32 => FuzzParameterKind::Int {
             signed: true,
             bits: Some(248),
-        },
-        BaseTypeInfo::VarUInt16 => FuzzParameterKind::Int {
-            signed: false,
-            bits: Some(120),
         },
         BaseTypeInfo::VarUInt32 => FuzzParameterKind::Int {
             signed: false,

@@ -472,7 +472,6 @@ See https://ton-blockchain.github.io/acton/docs/setup-wallets/ for more informat
                         })
                         .collect(),
                     parent_lt: match tuple.get(3) {
-                        Some(TupleItem::Null) => None,
                         Some(TupleItem::Int(int)) => int.to_i64(),
                         _ => None,
                     },
@@ -2130,11 +2129,7 @@ See https://ton-blockchain.github.io/acton/docs/setup-wallets/ for more informat
                 if colorize { s.dimmed().to_string() } else { s }
             }
             TupleItem::Nan => "NaN".to_owned(),
-            TupleItem::Cell(cell) => {
-                let s = Boc::encode_hex(cell);
-                if colorize { s.dimmed().to_string() } else { s }
-            }
-            TupleItem::Builder(cell) => {
+            TupleItem::Cell(cell) | TupleItem::Builder(cell) => {
                 let s = Boc::encode_hex(cell);
                 if colorize { s.dimmed().to_string() } else { s }
             }
@@ -3092,9 +3087,8 @@ impl FormatterContext<'_> {
         let account = accounts.get(addr);
         let state = account?.account.load().ok()?.0?.state;
         match state {
-            AccountState::Uninit => None,
             AccountState::Active(state) => state.code,
-            AccountState::Frozen(_) => None,
+            AccountState::Uninit | AccountState::Frozen(_) => None,
         }
     }
 

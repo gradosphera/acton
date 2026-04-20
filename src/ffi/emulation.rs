@@ -1203,7 +1203,6 @@ fn read_optional_address_param(item: Option<&TupleItem>) -> Option<Option<IntAdd
     };
 
     match item {
-        TupleItem::Null => Some(None),
         TupleItem::Tuple(raw_addr) => match raw_addr.first() {
             Some(TupleItem::Slice(cell)) => {
                 let mut slice = cell.as_slice().ok()?;

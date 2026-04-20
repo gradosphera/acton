@@ -27,11 +27,9 @@ fn diagnostic_to_json(diag: &Diagnostic, file_db: &FileDb) -> serde_json::Value 
     let source = file_info.source().source.as_ref();
 
     let severity = match diag.severity {
-        Severity::Info => "info",
         Severity::Warning => "warning",
-        Severity::Error => "error",
-        Severity::Fatal => "error",
-        Severity::Help => "info",
+        Severity::Error | Severity::Fatal => "error",
+        Severity::Info | Severity::Help => "info",
     };
 
     let mut annotations_json = Vec::new();

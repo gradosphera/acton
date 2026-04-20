@@ -265,26 +265,19 @@ impl LocalnetHandle {
         };
 
         match child.try_wait() {
-            Ok(Some(_)) => return,
             Ok(None) => {}
-            Err(_) => return,
+            Ok(Some(_)) | Err(_) => return,
         }
 
         send_interrupt(child);
         let deadline = Instant::now() + STOP_TIMEOUT;
-        loop {
-            match child.try_wait() {
-                Ok(Some(_)) => break,
-                Ok(None) => {
-                    if Instant::now() >= deadline {
-                        let _ = child.kill();
-                        let _ = child.wait();
-                        break;
-                    }
-                    thread::sleep(Duration::from_millis(50));
-                }
-                Err(_) => break,
+        while matches!(child.try_wait(), Ok(None)) {
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                break;
             }
+            thread::sleep(Duration::from_millis(50));
         }
     }
 

@@ -105,11 +105,14 @@ impl RenderedValue {
             RenderedValue::Leaf { value, type_field } => (value.clone(), type_field.clone()),
             RenderedValue::CellLike {
                 type_name, value, ..
-            } => (value.clone(), Some(type_name.clone())),
-            RenderedValue::CellOf {
+            }
+            | RenderedValue::CellOf {
                 type_name, value, ..
-            } => (value.clone(), Some(type_name.clone())),
-            RenderedValue::EnumValue {
+            }
+            | RenderedValue::EnumValue {
+                type_name, value, ..
+            }
+            | RenderedValue::Address {
                 type_name, value, ..
             } => (value.clone(), Some(type_name.clone())),
             RenderedValue::UnionCase {
@@ -118,13 +121,8 @@ impl RenderedValue {
                 ..
             } => (variant_name.clone(), Some(type_name.clone())),
             RenderedValue::Struct { type_name, .. } => (String::new(), Some(type_name.clone())),
-            RenderedValue::Address {
-                type_name, value, ..
-            } => (value.clone(), Some(type_name.clone())),
-            RenderedValue::Tensor { type_name, items } => {
-                (format!("{} items", items.len()), Some(type_name.clone()))
-            }
-            RenderedValue::ArrayOf { type_name, items } => {
+            RenderedValue::Tensor { type_name, items }
+            | RenderedValue::ArrayOf { type_name, items } => {
                 (format!("{} items", items.len()), Some(type_name.clone()))
             }
             RenderedValue::LastSeen { inner } => {
@@ -163,17 +161,18 @@ impl RenderedValue {
             {
                 format_coins_for_debug(value).unwrap_or_else(|| value.clone())
             }
-            RenderedValue::Leaf { value, .. } => value.clone(),
-            RenderedValue::CellLike { value, .. } => value.clone(),
+            RenderedValue::Leaf { value, .. }
+            | RenderedValue::CellLike { value, .. }
+            | RenderedValue::EnumValue { value, .. } => value.clone(),
             RenderedValue::CellOf {
                 type_name, value, ..
             } => format!("{type_name} {value}"),
-            RenderedValue::EnumValue { value, .. } => value.clone(),
             RenderedValue::UnionCase { variant_name, .. } => variant_name.clone(),
             RenderedValue::Struct { type_name, .. } => type_name.clone(),
             RenderedValue::Address { legacy_value, .. } => legacy_value.clone(),
-            RenderedValue::Tensor { items, .. } => format!("{} items", items.len()),
-            RenderedValue::ArrayOf { items, .. } => format!("{} items", items.len()),
+            RenderedValue::Tensor { items, .. } | RenderedValue::ArrayOf { items, .. } => {
+                format!("{} items", items.len())
+            }
             RenderedValue::LastSeen { inner } => {
                 format!("{} (last seen)", inner.legacy_dap_value(name))
             }
@@ -240,14 +239,15 @@ impl RenderedValue {
 
     pub fn has_children(&self) -> bool {
         match self {
-            RenderedValue::Struct { fields, .. } => !fields.is_empty(),
-            RenderedValue::Address { fields, .. } => !fields.is_empty(),
-            RenderedValue::CellLike { fields, .. } => !fields.is_empty(),
-            RenderedValue::CellOf { fields, .. } => !fields.is_empty(),
-            RenderedValue::EnumValue { fields, .. } => !fields.is_empty(),
-            RenderedValue::UnionCase { fields, .. } => !fields.is_empty(),
-            RenderedValue::Tensor { items, .. } => !items.is_empty(),
-            RenderedValue::ArrayOf { items, .. } => !items.is_empty(),
+            RenderedValue::Struct { fields, .. }
+            | RenderedValue::Address { fields, .. }
+            | RenderedValue::CellLike { fields, .. }
+            | RenderedValue::CellOf { fields, .. }
+            | RenderedValue::EnumValue { fields, .. }
+            | RenderedValue::UnionCase { fields, .. } => !fields.is_empty(),
+            RenderedValue::Tensor { items, .. } | RenderedValue::ArrayOf { items, .. } => {
+                !items.is_empty()
+            }
             RenderedValue::LastSeen { inner } => inner.has_children(),
             _ => false,
         }
@@ -361,12 +361,13 @@ impl MapScalarType {
 impl fmt::Display for RenderedValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RenderedValue::Leaf { value, .. } => write!(f, "{value}"),
-            RenderedValue::CellLike { value, .. } => write!(f, "{value}"),
+            RenderedValue::Leaf { value, .. }
+            | RenderedValue::CellLike { value, .. }
+            | RenderedValue::EnumValue { value, .. }
+            | RenderedValue::Address { value, .. } => write!(f, "{value}"),
             RenderedValue::CellOf {
                 type_name, value, ..
             } => write!(f, "{type_name} {value}"),
-            RenderedValue::EnumValue { value, .. } => write!(f, "{value}"),
             RenderedValue::UnionCase {
                 variant_name,
                 fields,
@@ -378,7 +379,6 @@ impl fmt::Display for RenderedValue {
             RenderedValue::Struct { type_name, fields } if fields.is_empty() => {
                 write!(f, "{type_name} {{}}")
             }
-            RenderedValue::Address { value, .. } => write!(f, "{value}"),
             RenderedValue::Struct { type_name, fields } => {
                 write!(f, "{type_name} {{ ")?;
                 for (i, (name, val)) in fields.iter().enumerate() {
@@ -887,12 +887,11 @@ fn parse_map_key_type(ty: &Ty) -> Option<MapScalarType> {
 
 fn parse_map_value_type(ty: &Ty) -> Option<MapScalarType> {
     match ty {
-        Ty::Nullable { .. } | Ty::MapKV { .. } => None,
         Ty::Cell | Ty::CellOf { .. } => Some(MapScalarType::Cell),
         Ty::String => Some(MapScalarType::String),
         Ty::Bool => Some(MapScalarType::Bool),
         Ty::Address | Ty::AddressAny => Some(MapScalarType::Address),
-        Ty::Coins => Some(MapScalarType::VarInt {
+        Ty::Coins | Ty::VaruintN { n: 16 } => Some(MapScalarType::VarInt {
             len_bits: 4,
             signed: false,
         }),
@@ -919,10 +918,6 @@ fn parse_map_value_type(ty: &Ty) -> Option<MapScalarType> {
         Ty::VarintN { n: 32 } => Some(MapScalarType::VarInt {
             len_bits: 5,
             signed: true,
-        }),
-        Ty::VaruintN { n: 16 } => Some(MapScalarType::VarInt {
-            len_bits: 4,
-            signed: false,
         }),
         Ty::VaruintN { n: 32 } => Some(MapScalarType::VarInt {
             len_bits: 5,

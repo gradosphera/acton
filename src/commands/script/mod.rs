@@ -624,8 +624,7 @@ fn convert_vm_value_to_tuple_item(value: VmStackValue) -> anyhow::Result<TupleIt
 
 fn convert_cell_like(cell_like: CellLike) -> anyhow::Result<Cell> {
     match cell_like {
-        CellLike::Cell(hex) => Ok(Boc::decode_hex(hex)?),
-        CellLike::Builder(hex) => Ok(Boc::decode_hex(hex)?),
+        CellLike::Cell(hex) | CellLike::Builder(hex) => Ok(Boc::decode_hex(hex)?),
     }
 }
 

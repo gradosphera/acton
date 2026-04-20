@@ -446,7 +446,6 @@ pub fn parse_search_params(params: &Tuple) -> Option<TransactionNotFoundParams> 
 fn read_optional_address_value(item: &TupleItem) -> Option<IntAddr> {
     match item {
         TupleItem::Slice(cell) | TupleItem::Cell(cell) => cell.parse::<IntAddr>().ok(),
-        TupleItem::Cont(_) => None,
         _ => None,
     }
 }

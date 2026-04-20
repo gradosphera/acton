@@ -852,8 +852,6 @@ pub fn resolve_file(db: &FileDb, index: &ProjectIndex, file: FileId) -> Option<F
     for decl in file_info.source().top_levels() {
         resolver.decl = Some(decl);
         match decl {
-            ast::TopLevel::TolkRequiredVersion(_) => {}
-            ast::TopLevel::Import(_) => {}
             ast::TopLevel::Contract(decl) => resolver.walk_contract(&decl),
             ast::TopLevel::GlobalVar(decl) => resolver.walk_global_var(&decl),
             ast::TopLevel::Constant(decl) => resolver.walk_constant(&decl),
@@ -863,8 +861,10 @@ pub fn resolve_file(db: &FileDb, index: &ProjectIndex, file: FileId) -> Option<F
             ast::TopLevel::Func(func) => resolver.walk_func(&func),
             ast::TopLevel::Method(method) => resolver.walk_method(&method),
             ast::TopLevel::GetMethod(method) => resolver.walk_get_method(&method),
-            ast::TopLevel::EmptyStmt(_) => {}
-            ast::TopLevel::Unmapped(_) => {}
+            ast::TopLevel::TolkRequiredVersion(_)
+            | ast::TopLevel::Import(_)
+            | ast::TopLevel::EmptyStmt(_)
+            | ast::TopLevel::Unmapped(_) => {}
         }
     }
 

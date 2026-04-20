@@ -400,10 +400,7 @@ fn collect_structs_from_type(
             }
             Ok(())
         }
-        Ty::Nullable { inner, .. } => {
-            collect_structs_from_type(abi, inner, visited_aliases, seen_structs, resolved)
-        }
-        Ty::CellOf { inner } | Ty::LispListOf { inner } => {
+        Ty::Nullable { inner, .. } | Ty::CellOf { inner } | Ty::LispListOf { inner } => {
             collect_structs_from_type(abi, inner, visited_aliases, seen_structs, resolved)
         }
         _ => anyhow::bail!(
@@ -520,8 +517,8 @@ fn default_value_impl(
         Ty::String => "\"\"".to_owned(),
         Ty::Void => "()".to_owned(),
         Ty::Address => "address(\"EQD__________________________________________0vo\")".to_owned(),
-        Ty::AddressAny => "createAddressNone()".to_owned(),
-        Ty::AddressOpt | Ty::NullLiteral | Ty::Nullable { .. } => "null".to_owned(),
+        Ty::AddressAny | Ty::AddressExt => "createAddressNone()".to_owned(),
+        Ty::AddressOpt | Ty::NullLiteral | Ty::Nullable { .. } | Ty::Unknown => "null".to_owned(),
         Ty::BitsN { n } => format!("\"\" as bits{n}"),
         Ty::ArrayOf { .. } | Ty::LispListOf { .. } | Ty::MapKV { .. } => "[]".to_owned(),
         Ty::Tensor { items } => format!(
@@ -555,8 +552,6 @@ fn default_value_impl(
             default_value_impl(abi, inner, bindings, visited_defs)
         ),
         Ty::Union { variants, .. } => default_union_value(abi, variants, bindings, visited_defs),
-        Ty::AddressExt => "createAddressNone()".to_owned(),
-        Ty::Unknown => "null".to_owned(),
     }
 }
 

@@ -153,7 +153,6 @@ fn extract_library_hash_from_instruction(instruction: &Instruction) -> Option<Ha
 
             None
         }
-        Instruction::Plain(_) => None,
-        Instruction::Ref(_) => None,
+        Instruction::Plain(_) | Instruction::Ref(_) => None,
     }
 }

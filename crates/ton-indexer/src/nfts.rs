@@ -55,7 +55,6 @@ pub fn get_nft_item_data(address: String, code: Cell, data: Cell) -> Option<NftI
 
 fn parse_optional_address(item: &TupleItem) -> Option<String> {
     match item {
-        TupleItem::Null => None,
         TupleItem::Slice(cell) | TupleItem::Cell(cell) => {
             let mut slice = cell.as_slice_allow_exotic();
             IntAddr::load_from(&mut slice)

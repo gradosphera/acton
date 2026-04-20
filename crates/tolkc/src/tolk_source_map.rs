@@ -107,15 +107,16 @@ impl TolkSourceMap {
     }
 
     fn source_location_for_mark(&self, mark_id: usize) -> Option<SourceLocation> {
-        let range = match self.source_map.get_debug_mark(mark_id) {
-            crate::source_map::DebugMark::Loc { range, .. }
-            | crate::source_map::DebugMark::LeaveFun { range, .. } => range,
-            crate::source_map::DebugMark::EnterFun {
-                is_inlined: true,
-                range,
-                ..
-            } => range,
-            _ => return None,
+        let (crate::source_map::DebugMark::EnterFun {
+            is_inlined: true,
+            range,
+            ..
+        }
+        | crate::source_map::DebugMark::Loc { range, .. }
+        | crate::source_map::DebugMark::LeaveFun { range, .. }) =
+            self.source_map.get_debug_mark(mark_id)
+        else {
+            return None;
         };
 
         let file_id = range.file_id();
