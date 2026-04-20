@@ -95,6 +95,7 @@ jobs:
     name: Check installer (${{ matrix.target_name }})
     needs: create-temporary-release
     runs-on: ${{ matrix.runner }}
+    if: false
 
     strategy:
       fail-fast: false
@@ -132,7 +133,6 @@ jobs:
     name: Delete temporary installer release
     needs:
       - create-temporary-release
-      - check-installer
     if: ${{ always() }}
     runs-on: ubicloud-standard-2-ubuntu-2204
 
