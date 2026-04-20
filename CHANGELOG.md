@@ -302,6 +302,116 @@ test-runner performance, Tolk 1.4 support, and a new NFT starter template.
 - Runtime error reporting now uses compiler ABI metadata to show source-level
   error names more consistently across tests, scripts, and debugger output.
 
+### JetBrains Plugin
+
+The separate TON plugin for JetBrains IDEs also moved materially during the
+same `0.2.0 -> 0.3.0` window.
+
+#### Compatibility and Scope
+
+- Compatibility changed in a user-visible way: the plugin dropped Blueprint
+  support and now targets JetBrains `2025.2+` IDE builds, with RustRover used
+  as the base development platform.
+
+- The Acton project wizard in the plugin now tracks the CLI more closely,
+  including broader template/options coverage and loading templates from Acton
+  itself to reduce drift between IDE-created and CLI-created projects.
+
+#### Acton.toml and Editor Support
+
+- The plugin was updated to understand the newer Acton surface: the latest
+  `Acton.toml` schema, profiling-related config, the newer script broadcasting
+  model based on `--net`, the updated `tonscan` default, dotted `@test.*`
+  annotations, and newer Acton stdlib helper functions.
+
+- `Acton.toml` editing became much stronger: schema coverage was refreshed,
+  completion and reference resolution improved, script entries gained language
+  injection, and the IDE now provides more useful gutters for `[fmt]`,
+  `[lint]`, `[test]`, and contract build actions directly from source files or
+  manifest entries.
+
+- Tolk language support in the plugin also moved forward with the Tolk 1.4
+  wave: dotted annotations, `void` type parameters, early lambda completion,
+  highlighting for captured lambda variables, and parser fixes such as tensor
+  types with trailing commas.
+
+#### Run, Debug, and Test UX
+
+- IDE run/debug flows expanded substantially. The plugin now supports DAP-based
+  debugging for `acton script`, `acton test`, and `acton retrace`.
+
+- Debug ergonomics improved too: the IDE can show debug values on variable or
+  field hover, offers one-click rerun with `--backtrace full`, and surfaces
+  clearer failed-test inspections with actual vs expected values.
+
+- Test feedback became more robust: the plugin adds rerun-failed-tests support
+  and keeps failed-test and failed-`expect` underlines stable after source
+  edits instead of dropping the failure context too aggressively.
+
+- Acton command execution inside the IDE now uses terminal-like console / PTY
+  integration, which makes prompt-driven commands and interactive flows work
+  much better from run configurations.
+
+#### Coverage and Profiling
+
+- Coverage became more IDE-native: the plugin now imports LCOV branch-hit data
+  into the JetBrains coverage model and improves coverage report generation.
+
+- Initial CPU profiling support also landed for `acton test` in IDEs where the
+  JetBrains profiler APIs are available.
+
+### VS Code Extension
+
+The official TON extension for VS Code also moved noticeably during the same
+`0.2.0 -> 0.3.0` window.
+
+#### Acton and Project Awareness
+
+- The extension was updated to understand the newer Acton surface: the latest
+  `Acton.toml` changes, the switch to `--net`-based broadcasting, the `tonscan`
+  default, and newer Acton stdlib helper names such as `scripts.wallet()`.
+
+- It also now derives the displayed Tolk version from Acton itself when working
+  inside an Acton project, which reduces confusion when the workspace toolchain
+  differs from a separately installed global Tolk.
+
+#### Run, Debug, and Retrace
+
+- VS Code gained proper Acton debugging support for tests and scripts, instead
+  of only basic run flows.
+
+- A new retrace workflow was also added: the extension can now start source
+  debugging for a real on-chain transaction by asking for the hash, network,
+  and contract from `Acton.toml`, then launching `acton retrace --debug`.
+
+- `Acton.toml` code lenses became more capable too, with direct actions for
+  `[fmt]`, `[check]`, and `[test]`, including a dedicated test-UI run path from
+  the manifest.
+
+#### Test and Diagnostic UX
+
+- Test failure reporting in the VS Code test explorer became much more useful:
+  failures now preserve source locations better and can surface structured
+  `expected` / `actual` output when Acton provides it through TeamCity-style
+  test events.
+
+- Acton linter integration was substantially hardened. The extension now does a
+  better job canceling stale checks, avoiding diagnostics for dirty buffers,
+  mapping related annotations, surfacing tags such as `Deprecated` /
+  `Unnecessary`, and exposing Acton quick-fixes more reliably as VS Code code
+  actions.
+
+- The extension also removed one overlapping built-in call-argument inspection
+  so that `acton check` is the primary source of truth for those diagnostics,
+  which should reduce duplicate or contradictory warnings.
+
+#### Tolk Language Support
+
+- Tolk support in the language server kept pace with the same language wave:
+  `void` type parameters from Tolk 1.4 are understood, completion hides
+  internal `__*` symbols, and contracts stop surfacing `.acton` symbols or
+  `.acton` import suggestions where they are just noise.
+
 ### Docs, Distribution, and Release Tooling
 
 - Switched project and docs UI tooling from `yarn` toward `bun`, added Bun
