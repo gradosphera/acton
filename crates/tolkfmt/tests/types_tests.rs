@@ -1,6 +1,6 @@
 mod common;
 
-use crate::common::{check, check_with_width, check_with_width_without_trees};
+use crate::common::{check, check_with_width};
 use expect_test::expect;
 
 #[test]
@@ -69,7 +69,7 @@ fn test_single_tensor_type() {
 
 #[test]
 fn test_tensor_type_breaking() {
-    check_with_width_without_trees(
+    check_with_width(
         "const x: (FirstType, SecondType, ThirdType) = 0;",
         expect![[r"
                 const x: (
@@ -105,7 +105,7 @@ fn test_single_tuple_type() {
 
 #[test]
 fn test_tuple_type_breaking() {
-    check_with_width_without_trees(
+    check_with_width(
         "const x: [FirstType, SecondType, ThirdType] = 0;",
         expect![[r"
                 const x: [
