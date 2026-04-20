@@ -612,7 +612,7 @@ pub(super) enum MutationLevel {
 }
 
 impl MutationLevel {
-    pub(crate) const fn label(&self) -> &'static str {
+    pub(crate) const fn label(self) -> &'static str {
         match self {
             MutationLevel::Critical => "critical",
             MutationLevel::Major => "major",

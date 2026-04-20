@@ -1171,7 +1171,7 @@ fn remove_wallet_from_config_file(config_path: &Path, name: &str) -> anyhow::Res
     Ok(true)
 }
 
-fn wallet_version_to_string(v: &WalletVersion) -> String {
+fn wallet_version_to_string(v: WalletVersion) -> String {
     match v {
         WalletVersion::V1R1 => "v1r1",
         WalletVersion::V1R2 => "v1r2",
@@ -1451,7 +1451,10 @@ fn get_or_prompt_version(version: Option<WalletVersionArg>) -> anyhow::Result<Wa
             WalletVersion::HLV1R1,
         ];
 
-        let versions_str: Vec<String> = versions.iter().map(wallet_version_to_string).collect();
+        let versions_str: Vec<String> = versions
+            .iter()
+            .map(|version| wallet_version_to_string(*version))
+            .collect();
         let selected_str = Select::new("Wallet type:", versions_str)
             .with_starting_cursor(0)
             .prompt()?;
@@ -1494,7 +1497,7 @@ fn save_wallet_to_config(
         .as_table_mut()
         .with_context(|| format!("wallets.{name} is not a table"))?;
 
-    wallet["kind"] = value(wallet_version_to_string(&version));
+    wallet["kind"] = value(wallet_version_to_string(version));
     wallet["workchain"] = value(0i64);
 
     let mut keys = toml_edit::InlineTable::new();
@@ -1594,7 +1597,7 @@ fn new_wallet(
             "success": true,
             "name": name,
             "address": wallet_address,
-            "kind": wallet_version_to_string(&version),
+            "kind": wallet_version_to_string(version),
             "is_global": is_global,
             "airdrop_requested": auto_airdrop,
         });
@@ -1816,7 +1819,7 @@ fn import_wallet(
                 "success": true,
                 "name": name,
                 "address": wallet_address,
-                "kind": wallet_version_to_string(&version),
+                "kind": wallet_version_to_string(version),
                 "is_global": is_global,
             }))?
         );

@@ -36,7 +36,7 @@ fn diagnostic_to_json(diag: &Diagnostic, file_db: &FileDb) -> serde_json::Value 
 
     let mut annotations_json = Vec::new();
     for annotation in &diag.annotations {
-        if let Some(range) = create_range_json(source, &annotation.span) {
+        if let Some(range) = create_range_json(source, annotation.span) {
             let mut annotation_json = serde_json::json!({
                 "range": range,
                 "message": annotation.message,
@@ -58,7 +58,7 @@ fn diagnostic_to_json(diag: &Diagnostic, file_db: &FileDb) -> serde_json::Value 
             let edit_source = file_db
                 .get_by_id(edit_file_id)
                 .map_or_else(|| source.into(), |info| info.source().source.clone());
-            if let Some(range) = create_range_json(edit_source.as_ref(), &edit.span) {
+            if let Some(range) = create_range_json(edit_source.as_ref(), edit.span) {
                 edits_json.push(serde_json::json!({
                     "range": range,
                     "newText": &edit.replacement,
@@ -102,7 +102,7 @@ fn annotation_tags(annotation: &tolk_linter::diagnostic::Annotation) -> Vec<&'st
         .collect()
 }
 
-fn create_range_json(source: &str, span: &Span) -> Option<serde_json::Value> {
+fn create_range_json(source: &str, span: Span) -> Option<serde_json::Value> {
     if let (Some((start_line, start_col)), Some((end_line, end_col))) = (
         pos::byte_to_line_col(source, span.start as usize),
         pos::byte_to_line_col(source, span.end as usize),

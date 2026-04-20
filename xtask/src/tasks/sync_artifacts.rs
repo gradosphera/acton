@@ -43,7 +43,7 @@ pub(crate) fn run() -> Result<()> {
         manifest_contents,
     )?;
     println!("Synchronized `{TON_OBJS_ARTIFACTS_MANIFEST_PATH}`");
-    refresh_local_artifacts_from_release(&github, objs_dir)?;
+    refresh_local_artifacts_from_release(github, objs_dir)?;
 
     Ok(())
 }
@@ -65,7 +65,7 @@ fn release_archive_name(rust_target: &str) -> String {
     format!("ton-objs-{rust_target}.tar.gz")
 }
 
-fn refresh_local_artifacts_from_release(github: &Github, objs_dir: &Path) -> Result<()> {
+fn refresh_local_artifacts_from_release(github: Github, objs_dir: &Path) -> Result<()> {
     let rust_target = current_release_target()?;
     let archive_name = release_archive_name(&rust_target);
 
@@ -86,7 +86,7 @@ fn refresh_local_artifacts_from_release(github: &Github, objs_dir: &Path) -> Res
 }
 
 fn refresh_local_objs_from_release(
-    github: &Github,
+    github: Github,
     archive_name: &str,
     objs_dir: &Path,
 ) -> Result<()> {
@@ -118,7 +118,7 @@ fn refresh_local_objs_from_release(
 }
 
 fn download_local_stdlib_archive_from_release(
-    github: &Github,
+    github: Github,
     tolk_stdlib_dir: &Path,
     fift_stdlib_dir: &Path,
 ) -> Result<()> {
