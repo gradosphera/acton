@@ -71,6 +71,7 @@ tree-sitter-tolk = { path = "crates/tree-sitter-tolk" }
 tree-sitter-tasm = { path = "crates/tree-sitter-tasm" }
 tree-sitter-fift = { path = "crates/tree-sitter-fift" }
 tree-sitter-tlb = { path = "crates/tree-sitter-tlb" }
+toncenter-keys = { path = "crates/toncenter-keys" }
 tree-sitter-toml-ng = "0.7.0"
 handlebars = { version = "6.4.0", features = ["dir_source"] }
 pulldown-cmark = { version = "0.13.1", default-features = false, features = ["html"] }
@@ -307,6 +308,7 @@ dap-client = { workspace = true }
 function_name = { workspace = true }
 owo-colors = { workspace = true } # overall coloring
 dap = { workspace = true }
+toncenter-keys = { workspace = true }
 
 [build-dependencies]
 chrono = { workspace = true }

@@ -16,7 +16,6 @@ use std::fs;
 use std::io::{IsTerminal, Read, Write, stdin, stdout};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 use toml_edit::{DocumentMut, Item, Table, value};
@@ -24,7 +23,7 @@ use ton::ton_core::cell::TonCell;
 use ton::ton_core::traits::tlb::TLB;
 use ton::ton_core::types::TonAddress;
 use ton::ton_wallet::{Mnemonic, TonWallet, WalletVersion};
-use ton_api::{CustomNetworkUrls, Network, TonApiClient};
+use ton_api::{Network, TonApiClient};
 
 #[derive(clap::ValueEnum, Debug, Copy, Clone, PartialEq, Eq)]
 #[clap(rename_all = "lowercase")]
@@ -103,7 +102,6 @@ const LOCALNET_WALLET_AIRDROP_AMOUNT_TON: f64 = 100.0;
 const AIRDROP_BALANCE_WAIT_ATTEMPTS: usize = 10;
 const AIRDROP_BALANCE_WAIT_INTERVAL: Duration = Duration::from_secs(2);
 const TEST_WALLET_KEYRING_SUPPORTED_ENV: &str = "ACTON_TEST_WALLET_KEYRING_SUPPORTED"; // integration tests only
-const TEST_TONCENTER_V3_URL_ENV: &str = "ACTON_TEST_TONCENTER_V3_URL"; // integration tests only
 
 impl SignMessageFormat {
     const fn as_str(self) -> &'static str {
@@ -198,8 +196,6 @@ pub enum WalletCommand {
     List {
         #[arg(short, long, help = "Show wallet balance")]
         balance: bool,
-        #[arg(long, help = "TonCenter API key for blockchain queries")]
-        api_key: Option<String>,
         #[arg(long, help = "Output result as JSON")]
         json: bool,
     },
@@ -286,11 +282,7 @@ pub fn wallet_cmd(command: WalletCommand) -> anyhow::Result<()> {
             secure,
             json,
         } => import_wallet(name, mnemonics, version, global, local, secure, json),
-        WalletCommand::List {
-            balance,
-            api_key,
-            json,
-        } => list_wallets(balance, api_key, json),
+        WalletCommand::List { balance, json } => list_wallets(balance, json),
         WalletCommand::ExportMnemonic { name } => export_mnemonic(name),
         WalletCommand::Sign { name, body, json } => sign_wallet_external_body(name, body, json),
         WalletCommand::Remove { name, yes, json } => remove_wallet(name, yes, json),
@@ -632,32 +624,9 @@ where
     unreachable!("retry loop must return on success or final failure")
 }
 
-fn create_testnet_ton_api_client(api_key: Option<String>) -> anyhow::Result<TonApiClient> {
+fn create_testnet_ton_api_client() -> anyhow::Result<TonApiClient> {
     let config = ActonConfig::load().unwrap_or_default();
-    let mut custom_networks = config.custom_networks();
-    let api_key = api_key.or_else(|| env::var("TONCENTER_API_KEY").ok());
-    let toncenter_v3_override = env::var(TEST_TONCENTER_V3_URL_ENV).ok();
-
-    if let Some(url) = toncenter_v3_override {
-        // test only code
-        let network_name = "__wallet_list_testnet_override".to_string();
-        let normalized = Arc::<str>::from(url.trim_end_matches('/').to_owned());
-        custom_networks.insert(
-            network_name.clone(),
-            CustomNetworkUrls {
-                v2_url: Arc::clone(&normalized),
-                v3_url: Some(normalized),
-                explorer_url: None,
-            },
-        );
-        TonApiClient::new(
-            Network::Custom(Arc::from(network_name)),
-            custom_networks,
-            api_key,
-        )
-    } else {
-        TonApiClient::new(Network::Testnet, custom_networks, api_key)
-    }
+    TonApiClient::new(Network::Testnet, config.custom_networks())
 }
 
 fn http_retry_backoff(attempt: usize) -> Duration {
@@ -978,7 +947,7 @@ fn remove_wallet_with_merged_precedence(name: &str, config: &ActonConfig) -> any
     anyhow::bail!(error_fmt::wallet_not_found(config, name));
 }
 
-fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::Result<()> {
+fn list_wallets(balance: bool, json: bool) -> anyhow::Result<()> {
     let config = ActonConfig::load()?;
 
     let mut wallets_info = Vec::new();
@@ -1017,7 +986,7 @@ fn list_wallets(balance: bool, api_key: Option<String>, json: bool) -> anyhow::R
     }
 
     let client = if balance {
-        Some(create_testnet_ton_api_client(api_key)?)
+        Some(create_testnet_ton_api_client()?)
     } else {
         None
     };
@@ -1312,7 +1281,7 @@ fn maybe_wait_for_testnet_airdrop_balance(address: &str, no_wait_airdrop: bool) 
         return;
     }
 
-    let client = match create_testnet_ton_api_client(None) {
+    let client = match create_testnet_ton_api_client() {
         Ok(client) => client,
         Err(err) => {
             println!(

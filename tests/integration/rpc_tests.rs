@@ -89,8 +89,7 @@ fn test_rpc_info_prints_remote_account_without_local_abi_match() {
         .arg(RAW_INFO_ADDRESS)
         .arg("--net")
         .arg("custom:mock")
-        .arg("--api-key")
-        .arg("test-api-key")
+        .env("MOCK_API_KEY", "custom-mock-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run();
 
@@ -114,8 +113,8 @@ fn test_rpc_info_prints_remote_account_without_local_abi_match() {
     );
     assert_eq!(
         header_value(&captured[0].headers, "X-API-Key"),
-        Some("test-api-key"),
-        "rpc info should forward the provided API key",
+        Some("custom-mock-api-key"),
+        "rpc info should send TonCenter API keys for custom networks from MOCK_API_KEY",
     );
 }
 
@@ -169,8 +168,6 @@ fn test_rpc_info_decodes_storage_when_local_code_hash_matches() {
         .arg(MATCHED_INFO_ADDRESS)
         .arg("--net")
         .arg("custom:mock")
-        .arg("--api-key")
-        .arg("test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run()
         .success()
@@ -232,8 +229,6 @@ fn test_rpc_info_skips_broken_contract_candidates_and_matches_later_contract() {
         .arg(MATCHED_INFO_ADDRESS)
         .arg("--net")
         .arg("custom:mock")
-        .arg("--api-key")
-        .arg("test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run()
         .success()
@@ -300,8 +295,6 @@ fn test_rpc_info_reads_wallet_account_from_localnet() {
         .acton()
         .script("scripts/print_deployer_address.tolk")
         .verify_network("localnet")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run();
     let script_stdout = stdout(&script_output);
@@ -317,8 +310,6 @@ fn test_rpc_info_reads_wallet_account_from_localnet() {
         .arg(&deployer_address)
         .arg("--net")
         .arg("localnet")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run()
         .success();
@@ -357,8 +348,6 @@ fn test_rpc_info_decodes_storage_from_localnet() {
         .acton()
         .script("scripts/deploy_counter.tolk")
         .verify_network("localnet")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run();
     let deploy_stdout = stdout(&deploy_output);
@@ -375,8 +364,6 @@ fn test_rpc_info_decodes_storage_from_localnet() {
         .arg(&counter_address)
         .arg("--net")
         .arg("localnet")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run()
         .success();

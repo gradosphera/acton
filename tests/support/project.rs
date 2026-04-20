@@ -8,6 +8,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
+use toncenter_keys::{
+    TONCENTER_MAINNET_API_KEY_ENV, TONCENTER_TESTNET_API_KEY_ENV, custom_env_var_name,
+};
 
 pub(crate) struct ProjectBuilder {
     name: String,
@@ -1363,7 +1366,7 @@ impl ActonCommand {
         self
     }
 
-    /// Specify API key for `TonCenter` requests
+    /// Specify TonCenter API key env value for test requests
     ///
     /// # Examples
     /// ```
@@ -1374,7 +1377,7 @@ impl ActonCommand {
         self
     }
 
-    /// Specify network for library fetching (testnet or mainnet)
+    /// Specify network for remote fetching (mainnet, testnet, or custom:<name>)
     ///
     /// # Examples
     /// ```
@@ -1858,7 +1861,19 @@ impl ActonCommand {
         }
 
         if let Some(api_key) = self.disasm_api_key {
-            self.cmd = self.cmd.arg("--api-key").arg(api_key);
+            self.cmd = self
+                .cmd
+                .env(TONCENTER_MAINNET_API_KEY_ENV, &api_key)
+                .env(TONCENTER_TESTNET_API_KEY_ENV, &api_key);
+
+            if let Some(custom_network_name) = self
+                .disasm_net
+                .as_deref()
+                .and_then(|net| net.strip_prefix("custom:"))
+                .and_then(custom_env_var_name)
+            {
+                self.cmd = self.cmd.env(&custom_network_name, &api_key);
+            }
         }
 
         if let Some(net) = self.disasm_net {
