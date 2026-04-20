@@ -384,12 +384,10 @@ fn prompt_wallet_impl(ctx: &mut Context, stack: &mut Tuple, message: String) -> 
         return Ok(());
     }
 
-    let result = if let Ok(name) = Select::new(&message, wallet_names)
+    let Ok(result) = Select::new(&message, wallet_names)
         .with_starting_cursor(0)
         .prompt()
-    {
-        name
-    } else {
+    else {
         stack.push(TupleItem::Null);
         return Ok(());
     };

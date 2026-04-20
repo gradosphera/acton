@@ -272,9 +272,8 @@ fn collect_file_dependency_paths_from_imports_recursive(
         None => return,
     };
 
-    let file = match fs::File::open(&file_path) {
-        Ok(file) => file,
-        Err(_) => return,
+    let Ok(file) = fs::File::open(&file_path) else {
+        return;
     };
     processed.insert(file_path);
 

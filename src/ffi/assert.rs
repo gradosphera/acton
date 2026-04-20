@@ -205,9 +205,8 @@ fn fail_to_find_transaction_by_params_impl(
     //     body: cell? = null,
     // }
 
-    let (params, parsed_txs) = match process_txs_and_search_params(&txs, &params) {
-        Some(value) => value,
-        None => return Ok(()),
+    let Some((params, parsed_txs)) = process_txs_and_search_params(&txs, &params) else {
+        return Ok(());
     };
 
     *ctx.asserts.assert_failure = Some(AssertFailure::TransactionNotFound(
@@ -243,9 +242,8 @@ fn fail_to_not_find_transaction_by_params_impl(
     //     body: cell? = null,
     // }
 
-    let (params, parsed_txs) = match process_txs_and_search_params(&txs, &params) {
-        Some(value) => value,
-        None => return Ok(()),
+    let Some((params, parsed_txs)) = process_txs_and_search_params(&txs, &params) else {
+        return Ok(());
     };
 
     *ctx.asserts.assert_failure = Some(AssertFailure::TransactionIsFound(

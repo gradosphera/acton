@@ -312,9 +312,8 @@ fn run_single_mutation(
 
         let main_contract_relative_path = &sources[0].relative_path;
         let main_contract_dest_path = workspace_path.join(main_contract_relative_path);
-        let code_b64 = match compile_file(&main_contract_dest_path.to_string_lossy())? {
-            Some(code_b64) => code_b64,
-            None => return Ok(MutationExecution::Interrupted),
+        let Some(code_b64) = compile_file(&main_contract_dest_path.to_string_lossy())? else {
+            return Ok(MutationExecution::Interrupted);
         };
         if code_b64.is_empty() {
             let record = MutationRecord {

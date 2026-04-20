@@ -205,9 +205,8 @@ pub fn is_keyring_supported() -> bool {
     // Try to perform a dummy operation to check if the keyring backend is functional.
     // Real native backends will succeed (or return NoEntry for get),
     // while the default no-op mock will fail on set_password.
-    let entry = match Entry::new("ton.acton.check", "healthcheck") {
-        Ok(e) => e,
-        Err(_) => return false,
+    let Ok(entry) = Entry::new("ton.acton.check", "healthcheck") else {
+        return false;
     };
 
     match entry.set_password("test") {

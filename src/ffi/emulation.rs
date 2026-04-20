@@ -538,9 +538,7 @@ fn save_message_iter_results(ctx: &mut Context, cursor_id: u64, emulations: &[Se
         return;
     }
 
-    let trace_index = if let Some(trace_index) = ctx.message_iters.trace_index(cursor_id) {
-        trace_index
-    } else {
+    let Some(trace_index) = ctx.message_iters.trace_index(cursor_id) else {
         save_send_results(ctx, emulations);
         return;
     };
@@ -2270,9 +2268,7 @@ fn wait_for_transaction_impl(
 
     let custom_networks = ctx.env.config.custom_networks();
     let api_key = ctx.env.api_key.clone();
-    let api_client = if let Ok(client) = TonApiClient::new(network, custom_networks, api_key) {
-        client
-    } else {
+    let Ok(api_client) = TonApiClient::new(network, custom_networks, api_key) else {
         stack.push_bool(false);
         return Ok(());
     };
@@ -2284,10 +2280,7 @@ fn wait_for_transaction_impl(
             println!("Awaiting transaction... [Attempt {attempt}/{attempts}]");
         }
 
-        let txs = if let Ok(txs) = api_client.get_transactions(&address_str, Some(100), None, None)
-        {
-            txs
-        } else {
+        let Ok(txs) = api_client.get_transactions(&address_str, Some(100), None, None) else {
             std::thread::sleep(Duration::from_millis(sleep_duration_ms));
             continue;
         };
@@ -2609,14 +2602,12 @@ fn call_tolk_function_impl(
     args: TupleItem,
     function: TupleItem,
 ) -> anyhow::Result<()> {
-    let cont = match function {
-        TupleItem::Cont(cont) => cont,
-        _ => anyhow::bail!("Expected Cont, got {function:?}"),
+    let TupleItem::Cont(cont) = function else {
+        anyhow::bail!("Expected Cont, got {function:?}");
     };
 
-    let args_stack = match args {
-        TupleItem::Tuple(args_stack) => args_stack,
-        _ => anyhow::bail!("Expected Tuple, got {args:?}"),
+    let TupleItem::Tuple(args_stack) = args else {
+        anyhow::bail!("Expected Tuple, got {args:?}");
     };
 
     // Serialize the VmCont (with savelist, captured stack, code)

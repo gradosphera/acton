@@ -142,16 +142,13 @@ impl<'a, 'b> RandomSummaryComputer<'a, 'b> {
             };
         }
 
-        let symbol =
-            if let Some(symbol) = self.checker.type_db.project_index.resolve_symbol(symbol_id) {
-                symbol
-            } else {
-                return analysis::InitializationSummary {
-                    is_guaranteed: false,
-                    has_any_initialization: false,
-                    sample_site: None,
-                };
+        let Some(symbol) = self.checker.type_db.project_index.resolve_symbol(symbol_id) else {
+            return analysis::InitializationSummary {
+                is_guaranteed: false,
+                has_any_initialization: false,
+                sample_site: None,
             };
+        };
 
         if !symbol.is_func() {
             return analysis::InitializationSummary {

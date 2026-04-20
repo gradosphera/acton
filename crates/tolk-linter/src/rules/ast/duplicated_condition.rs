@@ -201,10 +201,7 @@ mod tests {
             |if_stmt, _| {
                 assert!(!is_else_if(&if_stmt));
 
-                let nested_if = if let Some(tolk_syntax::IfAlt::If(next_if)) = if_stmt.alternative()
-                {
-                    next_if
-                } else {
+                let Some(tolk_syntax::IfAlt::If(nested_if)) = if_stmt.alternative() else {
                     panic!("expected else-if branch");
                 };
                 assert!(is_else_if(&nested_if));

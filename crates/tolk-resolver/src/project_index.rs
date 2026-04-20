@@ -291,11 +291,8 @@ impl ProjectIndex {
             return Ok(file_db.canonicalize(&abs_path)?);
         }
 
-        let dir = match file.parent() {
-            Some(dir) => dir,
-            None => {
-                anyhow::bail!("No parent directory found");
-            }
+        let Some(dir) = file.parent() else {
+            anyhow::bail!("No parent directory found");
         };
         let abs_path = dir.join(import.as_ref());
         let abs_path = Self::append_tolk_extension_if_needed(abs_path);

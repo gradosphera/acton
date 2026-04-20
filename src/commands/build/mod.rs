@@ -73,9 +73,7 @@ pub fn build_cmd(
         fs::create_dir_all(&out_dir)?;
     }
 
-    let contracts = if let Some(contracts) = config.contracts() {
-        contracts
-    } else {
+    let Some(contracts) = config.contracts() else {
         println!(
                     "No contracts section found in Acton.toml. Add at least one contract.
 To add a contract add the following section to Acton.toml:

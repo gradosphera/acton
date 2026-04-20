@@ -333,6 +333,8 @@ unused_qualifications = "warn"
 nursery = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
 
+manual_let_else = "warn"
+
 use_self = "allow"
 redundant_pub_crate = "allow"
 struct_excessive_bools = "allow"

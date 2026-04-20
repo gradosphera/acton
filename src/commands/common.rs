@@ -225,9 +225,8 @@ script-name = \"command invocation\""
 
     #[must_use]
     pub fn available_scripts(config: &ActonConfig) -> Option<String> {
-        let scripts = match &config.scripts {
-            Some(scripts) => scripts,
-            None => return None,
+        let Some(scripts) = &config.scripts else {
+            return None;
         };
 
         if scripts.is_empty() {

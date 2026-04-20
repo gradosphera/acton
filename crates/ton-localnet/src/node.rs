@@ -1188,9 +1188,7 @@ impl Node {
         lt: Option<Lt>,
         hash: Option<Hash256>,
     ) -> Vec<TransactionInfo> {
-        let index = if let Some(map) = self.indexes.tx_by_account.get(addr) {
-            map
-        } else {
+        let Some(index) = self.indexes.tx_by_account.get(addr) else {
             return Vec::new();
         };
 

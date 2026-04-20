@@ -120,17 +120,14 @@ fn parse_wrapped_source(input: &str) -> Result<tolk_syntax::SourceFile> {
 }
 
 fn wrapped_expression(source_file: &tolk_syntax::SourceFile) -> Option<Expr<'_>> {
-    let func = match source_file.top_levels().next()? {
-        TopLevel::Func(func) => func,
-        _ => return None,
+    let TopLevel::Func(func) = source_file.top_levels().next()? else {
+        return None;
     };
-    let body = match func.body()? {
-        FuncBody::Block(block) => block,
-        _ => return None,
+    let FuncBody::Block(body) = func.body()? else {
+        return None;
     };
-    let stmt = match body.stmts().next()? {
-        Stmt::ExprStmt(stmt) => stmt,
-        _ => return None,
+    let Stmt::ExprStmt(stmt) = body.stmts().next()? else {
+        return None;
     };
     stmt.expr()
 }
@@ -581,9 +578,9 @@ fn parse_rendered_number(value: &RenderedValue) -> Option<BigInt> {
 }
 
 fn rendered_raw_field_text(value: &RenderedValue) -> Option<String> {
-    let fields = match value {
-        RenderedValue::CellLike { fields, .. } | RenderedValue::CellOf { fields, .. } => fields,
-        _ => return None,
+    let (RenderedValue::CellLike { fields, .. } | RenderedValue::CellOf { fields, .. }) = value
+    else {
+        return None;
     };
     fields
         .iter()

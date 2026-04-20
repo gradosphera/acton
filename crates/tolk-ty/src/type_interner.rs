@@ -1145,9 +1145,8 @@ impl TypeInterner {
             return self.ty_unknown;
         }
 
-        let lhs_union = match self.collect_union_variants_for_subtract(ty, 0) {
-            Some(variants) => variants,
-            None => return self.ty_never,
+        let Some(lhs_union) = self.collect_union_variants_for_subtract(ty, 0) else {
+            return self.ty_never;
         };
 
         let mut rest_variants = Vec::new();

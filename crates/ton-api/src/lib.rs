@@ -177,7 +177,7 @@ impl TonApiClient {
             if elapsed < TONCENTER_MIN_REQUEST_INTERVAL {
                 let wait_for = TONCENTER_MIN_REQUEST_INTERVAL - elapsed;
                 log::debug!("throttle for {wait_for:?}");
-                std::thread::sleep(TONCENTER_MIN_REQUEST_INTERVAL - elapsed);
+                std::thread::sleep(wait_for);
             }
         }
 
@@ -319,12 +319,9 @@ impl TonApiClient {
     pub fn get_wallet_seqno(&self, address: &str) -> anyhow::Result<(u32, bool)> {
         let result = self.run_get_method(address, "seqno", &[]);
 
-        let result = match result {
-            Ok(result) => result,
-            Err(_) => {
-                // likely uninit wallet
-                return Ok((0, true));
-            }
+        let Ok(result) = result else {
+            // likely uninit wallet
+            return Ok((0, true));
         };
 
         if result.exit_code == -13 {

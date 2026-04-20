@@ -76,14 +76,12 @@ pub fn get_jetton_wallet_data(address: String, code: Cell, data: Cell) -> Option
 
 #[must_use]
 pub fn parse_jetton_content(content_cell: Cell) -> Value {
-    let mut parser = match content_cell.as_slice() {
-        Ok(p) => p,
-        Err(_) => return json!({}),
+    let Ok(mut parser) = content_cell.as_slice() else {
+        return json!({});
     };
 
-    let prefix = match parser.load_uint(8) {
-        Ok(p) => p,
-        Err(_) => return json!({}),
+    let Ok(prefix) = parser.load_uint(8) else {
+        return json!({});
     };
 
     if prefix == 0x01 {

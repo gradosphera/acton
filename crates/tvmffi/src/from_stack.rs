@@ -87,14 +87,11 @@ impl FromStack for Vec<String> {
 }
 
 fn decode_big_array_items(tuple: Tuple) -> Result<Vec<TupleItem>, ArgError> {
-    let (top_level, size) = match tuple.0.as_slice() {
-        // [topLevel: array<array<T>>, size: int]
-        [TupleItem::Tuple(top_level), TupleItem::Int(size)] => (top_level, size),
-        _ => {
-            return Err(ArgError::TypeMismatch {
-                expected: "Tuple(BigArray<T>)",
-            });
-        }
+    // [topLevel: array<array<T>>, size: int]
+    let [TupleItem::Tuple(top_level), TupleItem::Int(size)] = tuple.0.as_slice() else {
+        return Err(ArgError::TypeMismatch {
+            expected: "Tuple(BigArray<T>)",
+        });
     };
 
     let Some(size) = size.to_usize() else {
@@ -245,13 +242,10 @@ impl FromStack for IntAddr {
 /// Convert a `TupleItem` to a 32-byte hash.
 impl FromStack for HashBytes {
     fn from_item(item: TupleItem) -> Result<Self, ArgError> {
-        let cell = match item {
-            TupleItem::Cell(cell) | TupleItem::Slice(cell) => cell,
-            _ => {
-                return Err(ArgError::TypeMismatch {
-                    expected: "Slice(HashBytes)",
-                });
-            }
+        let (TupleItem::Cell(cell) | TupleItem::Slice(cell)) = item else {
+            return Err(ArgError::TypeMismatch {
+                expected: "Slice(HashBytes)",
+            });
         };
 
         let mut slice = cell.as_slice().map_err(|_| ArgError::CellParse)?;

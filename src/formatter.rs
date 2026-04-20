@@ -497,10 +497,9 @@ See https://ton-blockchain.github.io/acton/docs/setup-wallets/ for more informat
     }
 
     fn flatten_big_array_items(items: &[TupleItem]) -> Option<Vec<TupleItem>> {
-        let (top_level, size) = match items {
-            // [topLevel: array<array<T>>, size: int]
-            [TupleItem::Tuple(top_level), TupleItem::Int(size)] => (top_level, size),
-            _ => return None,
+        // [topLevel: array<array<T>>, size: int]
+        let [TupleItem::Tuple(top_level), TupleItem::Int(size)] = items else {
+            return None;
         };
 
         let size = size.to_usize()?;
