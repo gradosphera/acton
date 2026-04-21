@@ -258,6 +258,39 @@ fn test_type_alias_union_type() {
                     | address"]],
         20,
     );
+    check_with_width(
+        "type ComplexUnion = int | VeryLongTypeName<FirstType, SecondType, ThirdType> | bool;",
+        expect![[r"
+                type ComplexUnion =
+                    | int
+                    | VeryLongTypeName<
+                        FirstType,
+                        SecondType,
+                        ThirdType,
+                    >
+                    | bool"]],
+        40,
+    );
+    check(
+        "type AllowedMessageToNftCollection = RequestRoyaltyParams | DeployNft | BatchDeployNfts | ChangeCollectionAdmin;",
+        expect![[r"
+                type AllowedMessageToNftCollection =
+                    | RequestRoyaltyParams
+                    | DeployNft
+                    | BatchDeployNfts
+                    | ChangeCollectionAdmin"]],
+    );
+}
+
+#[test]
+fn test_type_alias_union_type_with_existing_newline() {
+    check(
+        "type Foo = int\n| slice;",
+        expect![[r"
+                type Foo =
+                    | int
+                    | slice"]],
+    );
 }
 
 #[test]
