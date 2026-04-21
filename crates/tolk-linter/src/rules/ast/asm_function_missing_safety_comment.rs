@@ -16,13 +16,15 @@ use tolk_syntax::{FuncBody, FunctionLike, HasName, TopLevel};
 ///
 /// ### Example
 /// ```tolk
-/// fun lowLevelLoad(x: slice): int asm "32 LDI";
+/// fun lowLevelLoad(x: slice): int
+///     asm "32 LDI"
 /// ```
 ///
 /// Use instead:
 /// ```tolk
 /// // SAFETY: `x` always contains at least 32 bits.
-/// fun lowLevelLoad(x: slice): int asm "32 LDI";
+/// fun lowLevelLoad(x: slice): int
+///     asm "32 LDI"
 /// ```
 #[derive(ViolationMetadata)]
 #[violation_metadata(stable_since = "v0.0.1")]

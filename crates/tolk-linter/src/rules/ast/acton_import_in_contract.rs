@@ -13,12 +13,12 @@ use tolk_resolver::file_index::{FileId, Span};
 ///
 /// ### Example
 /// ```tolk
-/// import "@acton/tlb/maybe";
+/// import "@acton/tlb/maybe"
 /// ```
 ///
 /// Use instead:
 /// ```tolk
-/// import "@stdlib/gas-payments";
+/// import "@stdlib/gas-payments"
 /// ```
 #[derive(ViolationMetadata)]
 #[violation_metadata(stable_since = "v0.0.1")]

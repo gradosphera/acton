@@ -324,7 +324,10 @@ ext_out_msg_info$11 src:MsgAddressInt dest:MsgAddressExt
 ## `TlbCommonMessageInfo`
 
 ```tolk
-type TlbCommonMessageInfo = TlbInternalMessage | TlbExternalInMessageInfo | TlbExternalOutMessageInfo
+type TlbCommonMessageInfo =
+    | TlbInternalMessage
+    | TlbExternalInMessageInfo
+    | TlbExternalOutMessageInfo
 ```
 
 Tagged union for the TL-B `CommonMsgInfo` constructors.
@@ -352,7 +355,7 @@ Generic message structure with configurable body and info types.
 `TInfo` defaults to [TlbCommonMessageInfo](#tlbcommonmessageinfo), so when [TlbMessage](#tlbmessage) is loaded with default generic
 arguments, `info` is decoded as one of the `CommonMsgInfo` tagged variants above.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/types/message.tolk#L244" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/types/message.tolk#L247" />
 
 ## `TlbMessage<TBody, TInfo>.loadBody`
 
@@ -366,5 +369,5 @@ Decoding branch behavior:
 - `TlbEitherLeft`: body is already in this cell and is returned directly.
 - `TlbEitherRight`: body is loaded from referenced cell.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/types/message.tolk#L256" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/types/message.tolk#L259" />
 

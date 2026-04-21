@@ -9,9 +9,12 @@
 /// Assert.equal(2 + 2, 4, "Math check");
 ///
 /// // Gas usage check for a function
-/// Assert.consumesLessThan(fun() {
-///     someExpensiveOperation();
-/// }, 10000);
+/// Assert.consumesLessThan(
+///     fun() {
+///         someExpensiveOperation();
+///     },
+///     10000,
+/// );
 /// ```
 
 import "@stdlib/gas-payments"
@@ -108,11 +111,14 @@ fun Assert.assume(condition: bool, message: string = "", location: string = ""):
 /// Example:
 /// ```tolk
 /// get fun `test gas consumption`() {
-///     val result = Assert.consumesLessThan(fun() {
-///         // do something that consumes gas
-///         // (capturing outer variables is allowed)
-///         return 42;
-///     }, 100);
+///     val result = Assert.consumesLessThan(
+///         fun() {
+///             // do something that consumes gas
+///             // (capturing outer variables is allowed)
+///             return 42;
+///         },
+///         100,
+///     );
 ///     Assert.equal(result, 42);
 /// }
 /// ```
@@ -150,9 +156,7 @@ fun Assert.equalDecimal<T>(
     message: string = "",
     location: string = "",
 ): void {
-    assert (
-        ffi.assertDecimal(location, message, decimals, right, left)
-    ) throw ASSERTION_FAILED;
+    assert (ffi.assertDecimal(location, message, decimals, right, left)) throw ASSERTION_FAILED;
 }
 
 fun ffi.assertBin<V1, V2>(

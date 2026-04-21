@@ -14,12 +14,12 @@ use tolk_resolver::file_index::{FileId, Span};
 ///
 /// ### Example
 /// ```tolk
-/// import "../libs/math.tolk";
+/// import "../libs/math.tolk"
 /// ```
 ///
 /// Use instead:
 /// ```tolk
-/// import "@libs/math";
+/// import "@libs/math"
 /// ```
 #[derive(ViolationMetadata)]
 #[violation_metadata(stable_since = "v0.0.1")]

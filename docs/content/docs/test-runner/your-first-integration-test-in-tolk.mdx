@@ -89,9 +89,7 @@ struct (0x3a752f06) ResetCounter {}
 First, as in the case with unit tests, let's create a file **counter.test.tolk** and declare a new test there:
 
 ```tolk
-get fun `test should deploy`() {
-
-}
+get fun `test should deploy`() {}
 ```
 
 ## 3. Testing Contract Deployment
@@ -139,9 +137,7 @@ get fun `test should deploy`() {
     val msg = createMessage({
         bounce: false,
         value: ton("1.0"),
-        dest: {
-            stateInit: counter.init,
-        },
+        dest: { stateInit: counter.init },
     });
     net.send(deployer.address, msg);
 }
@@ -193,9 +189,7 @@ get fun `test should deploy`() {
     val msg = createMessage({
         bounce: false,
         value: ton("1.0"),
-        dest: {
-            stateInit: counter.init,
-        },
+        dest: { stateInit: counter.init },
     });
     val res = net.send(deployer.address, msg);
     expect(res).toHaveSuccessfulDeploy({ to: counter.address });
@@ -223,9 +217,7 @@ fun setupTest() {
     val msg = createMessage({
         bounce: false,
         value: ton("1.0"),
-        dest: {
-            stateInit: counter.init,
-        },
+        dest: { stateInit: counter.init },
     });
     val res = net.send(deployer.address, msg);
     expect(res).toHaveSuccessfulDeploy({ to: counter.address });
@@ -240,7 +232,7 @@ Our test now simplifies to one line:
 
 ```tolk
 get fun `test should deploy`() {
-    setupTest()
+    setupTest();
 }
 ```
 

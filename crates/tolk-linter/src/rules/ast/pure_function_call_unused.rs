@@ -17,7 +17,9 @@ use tolk_ty::InferenceResult;
 /// ### Example
 /// ```tolk
 /// @pure
-/// fun add(a: int, b: int): int { return a + b; }
+/// fun add(a: int, b: int): int {
+///     return a + b;
+/// }
 ///
 /// fun main() {
 ///     add(1, 2); // Warning: result of @pure function is not used

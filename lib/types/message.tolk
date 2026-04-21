@@ -235,7 +235,10 @@ struct (0b11) TlbExternalOutMessageInfo {
 /// - `0b0`: [TlbInternalMessage]
 /// - `0b10`: [TlbExternalInMessageInfo]
 /// - `0b11`: [TlbExternalOutMessageInfo]
-type TlbCommonMessageInfo = TlbInternalMessage | TlbExternalInMessageInfo | TlbExternalOutMessageInfo
+type TlbCommonMessageInfo =
+    | TlbInternalMessage
+    | TlbExternalInMessageInfo
+    | TlbExternalOutMessageInfo
 
 /// Generic message structure with configurable body and info types.
 ///

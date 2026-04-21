@@ -18,9 +18,12 @@ Examples:
 Assert.equal(2 + 2, 4, "Math check");
 
 // Gas usage check for a function
-Assert.consumesLessThan(fun() {
-    someExpensiveOperation();
-}, 10000);
+Assert.consumesLessThan(
+    fun() {
+        someExpensiveOperation();
+    },
+    10000,
+);
 ```
 
 ## Definitions
@@ -31,7 +34,7 @@ Assert.consumesLessThan(fun() {
 const ASSERTION_FAILED = 567
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L22" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L25" />
 
 ## `Assert`
 
@@ -55,7 +58,7 @@ Example:
 expect(10).toEqual(10);
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L39" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L42" />
 
 ## `Assert.equal`
 
@@ -72,7 +75,7 @@ be printed in the error message.
 This is a low-level function. Expectation API provides a higher-level interface
 with automatic location tracking.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L49" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L52" />
 
 ## `Assert.notEqual`
 
@@ -94,7 +97,7 @@ be printed in the error message.
 This is a low-level function. Expectation API provides a higher-level interface
 with automatic location tracking.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L67" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L70" />
 
 ## `Assert.fail`
 
@@ -108,7 +111,7 @@ Optional message can be provided to describe the failure.
 Optional location can be provided to specify the location of the failure to
 be printed in the error message.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L87" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L90" />
 
 ## `Assert.assume`
 
@@ -120,7 +123,7 @@ Rejects the current fuzz input when condition is false.
 
 Outside fuzz tests this is reported as a normal test failure.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L95" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L98" />
 
 ## `Assert.consumesLessThan`
 
@@ -137,16 +140,19 @@ The fixed `26` gas measurement overhead is subtracted before the `<= expected` c
 Example:
 ```tolk
 get fun `test gas consumption`() {
-    val result = Assert.consumesLessThan(fun() {
-        // do something that consumes gas
-        // (capturing outer variables is allowed)
-        return 42;
-    }, 100);
+    val result = Assert.consumesLessThan(
+        fun() {
+            // do something that consumes gas
+            // (capturing outer variables is allowed)
+            return 42;
+        },
+        100,
+    );
     Assert.equal(result, 42);
 }
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L119" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L125" />
 
 ## `Assert.equalDecimal`
 
@@ -169,5 +175,5 @@ be printed in the error message.
 This is a low-level function. Expectation API provides a higher-level interface
 with automatic location tracking.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L146" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/testing/assert.tolk#L152" />
 

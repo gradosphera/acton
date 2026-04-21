@@ -22,8 +22,8 @@
 /// ```
 
 import "@stdlib/reflection"
-import "../fmt"
 import "../ffi"
+import "../fmt"
 import "../testing/assert"
 import "../testing/expect"
 import "../tlb/either"
@@ -294,7 +294,7 @@ struct SearchParams {
 fun __acton_impl_createEqFun<T>(arg: T): (T -> bool) {
     return fun(snd) {
         return arg == snd;
-    }
+    };
 }
 
 fun __acton_impl_isPredicate<T>(field: (T -> bool) | T | null): bool {
@@ -326,19 +326,18 @@ fun __acton_impl_toPredicate<T>(field: (T -> bool) | T | null): tuple {
 /// Check if user-provided SearchParams has any lambdas.
 /// If not (most common), fast FFI path will be used.
 fun SearchParams.hasPredicates(self): bool {
-    return __acton_impl_isPredicate(self.to)
-         | __acton_impl_isPredicate(self.from)
-         | __acton_impl_isPredicate(self.value)
-         | __acton_impl_isPredicate(self.exitCode)
-         | __acton_impl_isPredicate(self.success)
-         | __acton_impl_isPredicate(self.aborted)
-         | __acton_impl_isPredicate(self.deploy)
-         | __acton_impl_isPredicate(self.bounce)
-         | __acton_impl_isPredicate(self.bounced)
-         | __acton_impl_isPredicate(self.opcode)
-         | __acton_impl_isPredicate(self.actionExitCode)
-         | __acton_impl_isPredicate(self.computePhaseSkipped)
-         | __acton_impl_isPredicate(self.body);
+    return __acton_impl_isPredicate(self.to) | __acton_impl_isPredicate(self.from) |
+    __acton_impl_isPredicate(self.value) |
+    __acton_impl_isPredicate(self.exitCode) |
+    __acton_impl_isPredicate(self.success) |
+    __acton_impl_isPredicate(self.aborted) |
+    __acton_impl_isPredicate(self.deploy) |
+    __acton_impl_isPredicate(self.bounce) |
+    __acton_impl_isPredicate(self.bounced) |
+    __acton_impl_isPredicate(self.opcode) |
+    __acton_impl_isPredicate(self.actionExitCode) |
+    __acton_impl_isPredicate(self.computePhaseSkipped) |
+    __acton_impl_isPredicate(self.body);
 }
 
 /// Convert SearchParams to a tuple of plain nullable scalar values for the fast FFI path.
@@ -447,16 +446,19 @@ fun SendResultList.findExternalOutMessage<TBody = unknown>(
 
         var externalIdx = 0;
         repeat (externals.size()) {
-            val externalOutCell = externals.get(externalIdx) as Cell<
-                TlbMessage<RemainingBitsAndRefs, TlbExternalOutMessageInfo>,
-            >;
+            val externalOutCell = externals.get(externalIdx) as Cell<TlbMessage<
+                RemainingBitsAndRefs,
+                TlbExternalOutMessageInfo,
+            >>;
             val externalOut = externalOutCell.load();
 
             if (externalOut.matches<TBody>(params)) {
                 return {
                     info: externalOut.info,
                     init: externalOut.init,
-                    body: TlbEitherLeft { value: TBody.__decodeExternalOutBody(externalOut.loadBody()) },
+                    body: TlbEitherLeft {
+                        value: TBody.__decodeExternalOutBody(externalOut.loadBody()),
+                    },
                 };
             }
 
@@ -478,7 +480,10 @@ fun SendResultList.findExternalOutMessage<TBody = unknown>(
 /// expect(result).toBeNotNull();
 /// val tx = result!;
 /// ```
-fun SendResultList.findTransaction<Msg = unknown>(self, params: SearchParams = {}): TlbTransaction? {
+fun SendResultList.findTransaction<Msg = unknown>(
+    self,
+    params: SearchParams = {},
+): TlbTransaction? {
     val declaredPrefix = Msg.__getDeclaredPackPrefix();
     if (declaredPrefix != -1) {
         params.opcode = declaredPrefix;
@@ -544,7 +549,7 @@ struct ExternalInMessage {
 /// Body is always packed into the Either Right (in the reference).
 /// If `StateInit` is present it is also packed in the Either Right (in the reference).
 /// Full TL-B scheme of the message is.
-/// ```
+/// ```text
 /// ext_in_msg_info$10 src:MsgAddressExt dest:MsgAddressInt
 ///   import_fee:Grams = CommonMsgInfo;
 /// message$_ {X:Type} info:CommonMsgInfo
@@ -580,8 +585,8 @@ fun net.createExternalMessage<TBody>(
             },
             init,
             body: TlbEither<TBody, Cell<TBody>>.right(body.__asPayload()),
-        }.toCell()
-    }
+        }.toCell(),
+    };
 }
 
 /// Sends an external-in message to the specified destination address.
@@ -621,7 +626,10 @@ fun net.sendExternal(msg: ExternalInMessage): SendResultList? {
 ///     bounce: false,
 ///     value: ton("0.95"),
 ///     dest: deployer.address,
-///     body: beginCell().storeUint(0xFFFFFFFF, 32).storeSlice(body.toCell().beginParse()).endCell(),
+///     body: beginCell()
+///         .storeUint(0xFFFFFFFF, 32)
+///         .storeSlice(body.toCell().beginParse())
+///         .endCell(),
 /// }).bounced();
 ///
 /// testing.processSingleTraceStep(notDeployer.address, bouncedMsg);
@@ -730,7 +738,7 @@ fun net.disableBroadcast(): void {
 fun net.runGetMethod<Ret>(addr: address, idOrName: int | string, args: array<unknown> = []): Ret {
     val (methodId, methodName) = match (idOrName) {
         int => (idOrName, ""),
-        string => ((ffi.crc16(idOrName) & 0xffff) | 0x10000, idOrName), 
+        string => ((ffi.crc16(idOrName) & 0xffff) | 0x10000, idOrName),
     };
     assert (ffi.isDeployed(addr.toCell())) throw CANNOT_RUN_GET_METHOD_OF_UNDEPLOYED_CONTRACT;
 
@@ -890,7 +898,12 @@ fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = unknown>(
     params.success = true;
     params.deploy = true;
 
-    __acton_impl_findTransactionOrFail(self.value, params, "expect(<actual>).toHaveSuccessfulDeploy(<expected>)", self.location);
+    __acton_impl_findTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveSuccessfulDeploy(<expected>)",
+        self.location,
+    );
 }
 
 /// Expect the transaction list to have a successful transaction.
@@ -923,7 +936,12 @@ fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = unknown>(
         params.exitCode = 0;
     }
 
-    __acton_impl_findTransactionOrFail(self.value, params, "expect(<actual>).toHaveSuccessfulTx(<expected>)", self.location);
+    __acton_impl_findTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveSuccessfulTx(<expected>)",
+        self.location,
+    );
 }
 
 /// Expect the transaction list to have a transaction with specified parameters.
@@ -946,7 +964,12 @@ fun Expectation<SendResultList>.toHaveTx<Msg = unknown>(self, params: SearchPara
         params.opcode = declaredPrefix;
     }
 
-    __acton_impl_findTransactionOrFail(self.value, params, "expect(<actual>).toHaveTx(<expected>)", self.location);
+    __acton_impl_findTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveTx(<expected>)",
+        self.location,
+    );
 }
 
 /// Expect the transaction list to NOT have a transaction with specified parameters.
@@ -964,7 +987,12 @@ fun Expectation<SendResultList>.toNotHaveTx<Msg = unknown>(self, params: SearchP
         params.opcode = declaredPrefix;
     }
 
-    __acton_impl_findNoTransactionOrFail(self.value, params, "expect(<actual>).toNotHaveTx(<expected>)", self.location);
+    __acton_impl_findNoTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toNotHaveTx(<expected>)",
+        self.location,
+    );
 }
 
 /// Expect the transaction list to have a **bounced** transaction.
@@ -986,7 +1014,12 @@ fun Expectation<SendResultList>.toHaveBouncedTx<Msg = unknown>(
     }
     params.bounced = true;
 
-    __acton_impl_findTransactionOrFail(self.value, params, "expect(<actual>).toHaveBouncedTx(<expected>)", self.location);
+    __acton_impl_findTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveBouncedTx(<expected>)",
+        self.location,
+    );
 }
 
 /// Expect the transaction list to have a **failed** transaction.
@@ -1015,13 +1048,18 @@ fun Expectation<SendResultList>.toHaveFailedTx<Msg = unknown>(
         params.opcode = declaredPrefix;
     }
     params.success = false;
-    
+
     val nonZeroExitCode = params.exitCode is int32 && params.exitCode as int32 != 0;
     if (!nonZeroExitCode) {
         self.fail("expect(<actual>).toHaveFailedTx(params) must have non zero exitCode parameter in params");
     }
 
-    __acton_impl_findTransactionOrFail(self.value, params, "expect(<actual>).toHaveFailedTx(<expected>)", self.location);
+    __acton_impl_findTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveFailedTx(<expected>)",
+        self.location,
+    );
 }
 
 /// Expect all transactions in the list to be successful.
@@ -1032,10 +1070,13 @@ fun Expectation<SendResultList>.toHaveFailedTx<Msg = unknown>(
 /// expect(txs).toHaveAllSuccessfulTxs();
 /// ```
 fun Expectation<SendResultList>.toHaveAllSuccessfulTxs(self): void {
-    val params = SearchParams { 
-        success: false 
-    };
-    __acton_impl_findNoTransactionOrFail(self.value, params, "expect(<actual>).toHaveAllSuccessfulTxs(<expected>)", self.location);
+    val params = SearchParams { success: false };
+    __acton_impl_findNoTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveAllSuccessfulTxs(<expected>)",
+        self.location,
+    );
 }
 
 /// Expect the transaction to emit an external message of given type.
@@ -1068,7 +1109,7 @@ fun Expectation<SendResultList>.toEmitExternalMessage<Msg>(self): void {
             reflect.typeNameOf<Msg>(),
             reflect.typeNameOf<Msg>(),
             reflect.serializationPrefixOf<Msg>().0,
-        )
+        ),
     );
 }
 
@@ -1125,7 +1166,12 @@ fun __acton_impl_findTransaction(txs: SendResultList, params: SearchParams): cel
         );
 }
 
-fun __acton_impl_findTransactionOrFail(txs: SendResultList, params: SearchParams, message: string, location: string): void {
+fun __acton_impl_findTransactionOrFail(
+    txs: SendResultList,
+    params: SearchParams,
+    message: string,
+    location: string,
+): void {
     val tx = __acton_impl_findTransaction(txs, params);
     if (tx == null) {
         ffi.failToFindTransactionByParams(location, message, txs, params.toPredicateFFITuple());
@@ -1133,7 +1179,12 @@ fun __acton_impl_findTransactionOrFail(txs: SendResultList, params: SearchParams
     }
 }
 
-fun __acton_impl_findNoTransactionOrFail(txs: SendResultList, params: SearchParams, message: string, location: string): void {
+fun __acton_impl_findNoTransactionOrFail(
+    txs: SendResultList,
+    params: SearchParams,
+    message: string,
+    location: string,
+): void {
     val tx = __acton_impl_findTransaction(txs, params);
     if (tx != null) {
         ffi.failToNotFindTransactionByParams(location, message, txs, params.toPredicateFFITuple());
@@ -1141,21 +1192,79 @@ fun __acton_impl_findNoTransactionOrFail(txs: SendResultList, params: SearchPara
     }
 }
 
-fun ffi.sendMessageFrom(msg: cell, from: cell): SendResultList? asm "9 EXTCALL"
-fun ffi.runGetMethod(addr: cell, code: cell, methodId: int, methodName: string, returnType: string, args: tuple): tuple? asm "8 EXTCALL"
-fun ffi.isDeployed(addr: cell): bool asm "11 EXTCALL"
-fun ffi.getDeployedCode(addr: cell): cell? asm "12 EXTCALL"
-fun ffi.registerAddress(address: cell, name: string): void asm "15 EXTCALL"
-fun ffi.registerCodeCell(cell: cell, name: string): void asm "16 EXTCALL"
-fun ffi.findTransactionByScalarParams(firstTxLt: int, lastTxLt: int, params: tuple): cell? asm "10 EXTCALL"
-fun ffi.findTransactionByPredicateParams(firstTxLt: int, lastTxLt: int, params: tuple): cell? asm "48 EXTCALL"
-fun ffi.failToFindTransactionByParams(location: string, message: string, txs: SendResultList, params: tuple): tuple? asm "103 EXTCALL"
-fun ffi.failToNotFindTransactionByParams(location: string, message: string, txs: SendResultList, params: tuple): tuple? asm "104 EXTCALL"
-fun ffi.loadLibrary(hash: string): cell? asm "21 EXTCALL"
-fun ffi.isBroadcasting(): bool asm "23 EXTCALL"
-fun ffi.waitForTransaction(addr: cell, messageBodyHash: cell, quiet: bool, attempts: int, sleepDuration: int): bool asm "25 EXTCALL"
-fun ffi.enableBroadcast(): void asm "26 EXTCALL"
-fun ffi.disableBroadcast(): void asm "27 EXTCALL"
-fun ffi.getConfig(): dict asm "31 EXTCALL"
-fun ffi.saveTraceName(txs: SendResultList, name: string): void asm "35 EXTCALL";
-fun ffi.crc16(data: string): int asm "13 EXTCALL"
+fun ffi.sendMessageFrom(msg: cell, from: cell): SendResultList?
+    asm "9 EXTCALL"
+
+fun ffi.runGetMethod(
+    addr: cell,
+    code: cell,
+    methodId: int,
+    methodName: string,
+    returnType: string,
+    args: tuple,
+): tuple?
+    asm "8 EXTCALL"
+
+fun ffi.isDeployed(addr: cell): bool
+    asm "11 EXTCALL"
+
+fun ffi.getDeployedCode(addr: cell): cell?
+    asm "12 EXTCALL"
+
+fun ffi.registerAddress(address: cell, name: string): void
+    asm "15 EXTCALL"
+
+fun ffi.registerCodeCell(cell: cell, name: string): void
+    asm "16 EXTCALL"
+
+fun ffi.findTransactionByScalarParams(firstTxLt: int, lastTxLt: int, params: tuple): cell?
+    asm "10 EXTCALL"
+
+fun ffi.findTransactionByPredicateParams(firstTxLt: int, lastTxLt: int, params: tuple): cell?
+    asm "48 EXTCALL"
+
+fun ffi.failToFindTransactionByParams(
+    location: string,
+    message: string,
+    txs: SendResultList,
+    params: tuple,
+): tuple?
+    asm "103 EXTCALL"
+
+fun ffi.failToNotFindTransactionByParams(
+    location: string,
+    message: string,
+    txs: SendResultList,
+    params: tuple,
+): tuple?
+    asm "104 EXTCALL"
+
+fun ffi.loadLibrary(hash: string): cell?
+    asm "21 EXTCALL"
+
+fun ffi.isBroadcasting(): bool
+    asm "23 EXTCALL"
+
+fun ffi.waitForTransaction(
+    addr: cell,
+    messageBodyHash: cell,
+    quiet: bool,
+    attempts: int,
+    sleepDuration: int,
+): bool
+    asm "25 EXTCALL"
+
+fun ffi.enableBroadcast(): void
+    asm "26 EXTCALL"
+
+fun ffi.disableBroadcast(): void
+    asm "27 EXTCALL"
+
+fun ffi.getConfig(): dict
+    asm "31 EXTCALL"
+
+fun ffi.saveTraceName(txs: SendResultList, name: string): void
+    asm "35 EXTCALL"
+
+fun ffi.crc16(data: string): int
+    asm "13 EXTCALL"

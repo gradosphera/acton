@@ -22,7 +22,10 @@ can lead to subtle and hard-to-debug behavior.
 
 ### Example
 ```tolk
-enum Op { Add = 0, Sub = 1 }
+enum Op {
+    Add = 0
+    Sub = 1
+}
 
 fun parse(v: int): Op {
     return v as Op;
@@ -31,11 +34,14 @@ fun parse(v: int): Op {
 
 Use instead:
 ```tolk
-enum Op { Add = 0, Sub = 1 }
+enum Op {
+    Add = 0
+    Sub = 1
+}
 
 fun parse(v: int): Op {
     if (v != 0 && v != 1) {
-        throw 7
+        throw 7;
     }
     // SAFETY: input is validated and guaranteed to be either 0 or 1.
     return v as Op;
@@ -48,8 +54,8 @@ fun parse(v: int): Op {
         0 => Op.Add,
         1 => Op.Sub,
         else => throw 7,
-    }
+    };
 }
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/crates/tolk-linter/src/rules/ast/enum_cast_missing_safety_comment.rs#L50" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/crates/tolk-linter/src/rules/ast/enum_cast_missing_safety_comment.rs#L56" />

@@ -114,7 +114,7 @@ struct (0xc4) GlobalVersion {
 /// ```tolk
 /// val newVersion = GlobalVersion {
 ///     version: 5,
-///     capabilities: 0xFF
+///     capabilities: 0xFF,
 /// };
 /// config.setGlobalVersion(newVersion);
 /// if (!testing.setConfig(config)) {
@@ -215,7 +215,7 @@ fun StoragePricesDict.getInitial(self): StoragePrices {
 ///     bitPrice: 1,
 ///     cellPrice: 1000,
 ///     masterchainBitPrice: 1,
-///     masterchainCellPrice: 1000
+///     masterchainCellPrice: 1000,
 /// };
 /// storagePrices.setInitial(newInitialPrices);
 /// config.setStoragePrices(storagePrices);
@@ -240,13 +240,16 @@ fun StoragePricesDict.setInitial(mutate self, prices: StoragePrices): void {
 /// Example:
 /// ```tolk
 /// var pricesDict = StoragePricesDict [];
-/// pricesDict.set(1_000_000, StoragePrices {
-///     initialUnixTime: 1_000_000,
-///     bitPrice: 1,
-///     cellPrice: 1000,
-///     masterchainBitPrice: 1,
-///     masterchainCellPrice: 1000
-/// });
+/// pricesDict.set(
+///     1_000_000,
+///     StoragePrices {
+///         initialUnixTime: 1_000_000,
+///         bitPrice: 1,
+///         cellPrice: 1000,
+///         masterchainBitPrice: 1,
+///         masterchainCellPrice: 1000,
+///     },
+/// );
 /// config.setStoragePrices(pricesDict);
 /// if (!testing.setConfig(config)) {
 ///     Assert.fail("Failed to apply config");
@@ -270,8 +273,12 @@ fun BlockchainConfigMap.setStoragePrices(mutate self, prices: StoragePricesDict)
 /// ```tolk
 /// val storagePrices = config.getStoragePrices();
 /// val prices = storagePrices.get(1_000_000);
-/// println("Bit price: {}, Cell price: {}, Masterchain bit price: {}",
-///     prices.bitPrice, prices.cellPrice, prices.masterchainBitPrice);
+/// println(
+///     "Bit price: {}, Cell price: {}, Masterchain bit price: {}",
+///     prices.bitPrice,
+///     prices.cellPrice,
+///     prices.masterchainBitPrice,
+/// );
 /// ```
 fun BlockchainConfigMap.getStoragePrices(self): StoragePricesDict {
     val rawDict = self.get(STORAGE_PRICES_INDEX).loadValue();
@@ -401,14 +408,18 @@ const BASECHAIN_MSG_FORWARD_PRICES_INDEX = 25
 ///     cellPrice: 100,
 ///     ihrPriceFactor: 3,
 ///     firstFrac: 21845,
-///     nextFrac: 21845
+///     nextFrac: 21845,
 /// };
 /// config.setMsgForwardPrices(msgPrices, MASTERCHAIN);
 /// if (!testing.setConfig(config)) {
 ///     Assert.fail("Failed to apply config");
 /// }
 /// ```
-fun BlockchainConfigMap.setMsgForwardPrices(mutate self, prices: MsgForwardPrices, chainType: int): void {
+fun BlockchainConfigMap.setMsgForwardPrices(
+    mutate self,
+    prices: MsgForwardPrices,
+    chainType: int,
+): void {
     val index = chainType == MASTERCHAIN
         ? MASTERCHAIN_MSG_FORWARD_PRICES_INDEX
         : BASECHAIN_MSG_FORWARD_PRICES_INDEX;
@@ -428,8 +439,12 @@ fun BlockchainConfigMap.setMsgForwardPrices(mutate self, prices: MsgForwardPrice
 /// Example:
 /// ```tolk
 /// val msgPrices = config.getMsgForwardPrices(BASECHAIN);
-/// println("Lump price: {}, Bit price: {}, Cell price: {}",
-///     msgPrices.lumpPrice, msgPrices.bitPrice, msgPrices.cellPrice);
+/// println(
+///     "Lump price: {}, Bit price: {}, Cell price: {}",
+///     msgPrices.lumpPrice,
+///     msgPrices.bitPrice,
+///     msgPrices.cellPrice,
+/// );
 /// ```
 fun BlockchainConfigMap.getMsgForwardPrices(self, chainType: int): MsgForwardPrices {
     val index = chainType == MASTERCHAIN
@@ -489,9 +504,7 @@ fun PrecompiledContractsConfig.addContractGas(
 /// ```tolk
 /// var contractsList = map<uint256, PrecompiledSmartContract> [];
 /// contractsList.set(0x123456, PrecompiledSmartContract { gasUsage: 1000 });
-/// val precompiledConfig = PrecompiledContractsConfig {
-///     list: contractsList
-/// };
+/// val precompiledConfig = PrecompiledContractsConfig { list: contractsList };
 /// config.setPrecompiledContractsConfig(precompiledConfig);
 /// if (!testing.setConfig(config)) {
 ///     Assert.fail("Failed to apply config");

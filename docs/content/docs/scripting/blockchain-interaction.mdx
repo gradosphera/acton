@@ -54,10 +54,10 @@ fun main() {
 Here's a complete example of deploying a counter contract to the blockchain:
 
 ```tolk title="deploy.tolk"
+import "@acton/build"
 import "@acton/io"
 import "@acton/emulation/network"
 import "@acton/emulation/scripts"
-import "@acton/build"
 
 import "@contracts/types"
 import "@wrappers/Counter"
@@ -105,10 +105,8 @@ fun Counter.fromStorage(storage: Storage): Counter {
 fun Counter.deploy(self, deployer: address, value: coins) {
     val msg = createMessage({
         bounce: false,
-        value: value,
-        dest: {
-            stateInit: self.init,
-        },
+        value,
+        dest: { stateInit: self.init },
     });
     return net.send(deployer, msg);
 }

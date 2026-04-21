@@ -29,7 +29,7 @@ The following script shows the simplest Hello World written in Tolk:
 import "@acton/io"
 
 fun main() {
-    println("Hello World")
+    println("Hello World");
 }
 ```
 
@@ -51,8 +51,8 @@ fun main(libraryCode: cell, duration: int) {
     val (libraryRefs, libraryBits, _) = libraryCode.calculateSizeStrict(2048);
     val gasConsumedForCalculation = getGasConsumedAtTheMoment() - gasConsumedBeforeCalculation;
 
-    val toReserve = calculateGasFeeWithoutFlatPrice(MASTERCHAIN, gasConsumedForCalculation)
-                    + calculateStorageFee(MASTERCHAIN, duration, libraryBits, libraryRefs);
+    val toReserve = calculateGasFeeWithoutFlatPrice(MASTERCHAIN, gasConsumedForCalculation) +
+    calculateStorageFee(MASTERCHAIN, duration, libraryBits, libraryRefs);
     println("Storage fee: {:ton}", toReserve);
 }
 ```

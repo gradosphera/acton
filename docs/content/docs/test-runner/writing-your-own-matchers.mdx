@@ -17,8 +17,8 @@ out-action helpers that often cover the common cases.
 Imagine you have some validation logic that you want to extract into a function. By extracting it into a function, you'll get code like this:
 
 ```tolk
-import "@acton/testing/expect"
 import "@acton/testing/assert"
+import "@acton/testing/expect"
 
 fun checkIfValueIsEqualWithFlags(left: int, right: int, param1: bool, param2: bool) {
     // some complex logic
@@ -38,8 +38,8 @@ This approach works, but it breaks the fluent API pattern of `expect()` and make
 This code can be written much more readably and consistently by creating a custom matcher:
 
 ```tolk
-import "@acton/testing/expect"
 import "@acton/testing/assert"
+import "@acton/testing/expect"
 
 fun Expectation<int>.toEqualWithFlags(self, right: int, param1: bool, param2: bool) {
     // some complex logic
@@ -82,15 +82,15 @@ While you can define generic matchers for `Expectation<T>`, it's often more usef
 Let's create a matcher that checks if an integer is even.
 
 ```tolk
-import "@acton/testing/expect"
-import "@acton/testing/assert"
 import "@acton/fmt"
+import "@acton/testing/assert"
+import "@acton/testing/expect"
 
 fun Expectation<int>.toBeEven(self) {
     if (self.value % 2 != 0) {
         Assert.fail(
             format("Expected {} to be even", self.value),
-            self.location
+            self.location,
         );
     }
 }
@@ -107,9 +107,9 @@ In this example, `toBeEven` is defined on `Expectation<int>`, so it will only be
 You can create matchers for any type, including complex ones like `address`. Let's create a matcher to check if an address has a specific workchain.
 
 ```tolk
-import "@acton/testing/expect"
-import "@acton/testing/assert"
 import "@acton/fmt"
+import "@acton/testing/assert"
+import "@acton/testing/expect"
 
 fun Expectation<address>.toHaveWorkchain(self, expectedWorkchain: int) {
     val actualWorkchain = self.value.getWorkchain();
@@ -118,9 +118,9 @@ fun Expectation<address>.toHaveWorkchain(self, expectedWorkchain: int) {
             format(
                 "Expected address to have workchain {}, but got {}",
                 expectedWorkchain,
-                actualWorkchain
+                actualWorkchain,
             ),
-            self.location
+            self.location,
         );
     }
 }
@@ -136,10 +136,10 @@ get fun `test address workchain`() {
 Here is how you can write a matcher for a `string` to check if it has desired length.
 
 ```tolk
-import "@acton/testing/expect"
-import "@acton/testing/assert"
-import "@acton/fmt"
 import "@stdlib/strings"
+import "@acton/fmt"
+import "@acton/testing/assert"
+import "@acton/testing/expect"
 
 fun Expectation<string>.toHaveLength(self, expectedLen: int) {
     if (self.value.calculateLength() != expectedLen) {
@@ -147,9 +147,9 @@ fun Expectation<string>.toHaveLength(self, expectedLen: int) {
             format(
                 "Expected string '{}' to have length '{}'",
                 self.value,
-                expectedLen
+                expectedLen,
             ),
-            self.location
+            self.location,
         );
     }
 }
@@ -176,9 +176,9 @@ struct User {
 Now, let's create a matcher to verify that a user is active.
 
 ```tolk
-import "@acton/testing/expect"
-import "@acton/testing/assert"
 import "@acton/fmt"
+import "@acton/testing/assert"
+import "@acton/testing/expect"
 
 // Assume User struct is defined here or imported
 
@@ -186,14 +186,22 @@ fun Expectation<User>.toBeActive(self) {
     if (!self.value.isActive) {
         Assert.fail(
             format("Expected user {} to be active", self.value.name),
-            self.location
+            self.location,
         );
     }
 }
 
 get fun `test user status`() {
-    val activeUser = User { id: 1, name: "Alice", isActive: true };
-    val inactiveUser = User { id: 2, name: "Bob", isActive: false };
+    val activeUser = User {
+        id: 1,
+        name: "Alice",
+        isActive: true,
+    };
+    val inactiveUser = User {
+        id: 2,
+        name: "Bob",
+        isActive: false,
+    };
 
     expect(activeUser).toBeActive();
     // expect(inactiveUser).toBeActive(); // This would fail
@@ -211,7 +219,7 @@ fun Expectation<int>.toBePositive(self) {
     if (self.value <= 0) {
         Assert.fail(
             format("Expected {} to be a positive number", self.value),
-            self.location // Pass the location for better error reporting
+            self.location, // Pass the location for better error reporting
         );
     }
 }
@@ -236,7 +244,7 @@ Assert.fail("Value is not even");
 ```tolk
 Assert.fail(
     format("Expected {} to be even, but it was odd.", self.value),
-    self.location
+    self.location,
 );
 ```
 

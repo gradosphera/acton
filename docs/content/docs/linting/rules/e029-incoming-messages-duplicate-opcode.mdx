@@ -21,17 +21,19 @@ If two incoming message variants share the same opcode, message decoding is ambi
 ### Example
 ```tolk
 struct (0x1000) MsgA {}
+
 struct (0x1000) MsgB {}
 
 contract Wallet {
-    incomingMessages: MsgA | MsgB,
+    incomingMessages: MsgA | MsgB
 }
 ```
 
 Use instead:
 ```tolk
 struct (0x1000) MsgA {}
+
 struct (0x1001) MsgB {}
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/crates/tolk-linter/src/rules/ast/incoming_messages_duplicate_opcode.rs#L36" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/crates/tolk-linter/src/rules/ast/incoming_messages_duplicate_opcode.rs#L38" />

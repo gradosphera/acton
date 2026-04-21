@@ -149,10 +149,10 @@ The generated wrapper provides a struct representing your contract and methods t
 The wrapper provides a static `fromStorage` method to create the initial state and a `deploy` method to put it on the chain.
 
 ```tolk title="tests/Counter.test.tolk"
-import "@wrappers/Counter"
+import "@acton/emulation/testing"
 // Don't forget to import types for the storage struct!
 import "@contracts/types"
-import "@acton/emulation/testing"
+import "@wrappers/Counter"
 
 get fun `test example`() {
     // 1. Create contract instance from storage data
@@ -184,10 +184,7 @@ You can use it like this:
 contract.sendIncrease(deployer.address, 10);
 
 // With custom value and bounce flag
-contract.sendIncrease(deployer.address, 10, {
-    value: ton("0.5"),
-    bounce: true
-});
+contract.sendIncrease(deployer.address, 10, { value: ton("0.5"), bounce: true });
 ```
 
 ### Calling Get Methods

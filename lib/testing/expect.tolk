@@ -53,11 +53,7 @@ struct Expectation<T> {
 /// expect(10).toEqual(10);
 /// ```
 fun Expectation<T>.create(value: T, valueType: string, location: string): Expectation<T> {
-    return Expectation<T> {
-        value,
-        valueType,
-        location,
-    };
+    return Expectation<T> { value, valueType, location };
 }
 
 /// Fails this expectation at its location.
@@ -179,8 +175,14 @@ fun Expectation<T>.toBeGreaterOrEqual<U>(self, expected: U): void {
 ///
 /// Example:
 /// ```tolk
-/// expect(10).toBeApproxEqAbs(15, 10); // ok, difference is 5, which is less than maximum allowed difference of 10
-/// expect(10).toBeApproxEqAbs(20, 5); // error, difference is 10, which is greater than maximum allowed difference of 5
+/// expect(10).toBeApproxEqAbs(
+///     15,
+///     10,
+/// ); // ok, difference is 5, which is less than maximum allowed difference of 10
+/// expect(10).toBeApproxEqAbs(
+///     20,
+///     5,
+/// ); // error, difference is 10, which is greater than maximum allowed difference of 5
 /// ```
 fun Expectation<int>.toBeApproxEqAbs(self, expected: int, maxDelta: int): void {
     val realDelta = abs(self.value - expected);
@@ -192,7 +194,7 @@ fun Expectation<int>.toBeApproxEqAbs(self, expected: int, maxDelta: int): void {
                 expected,
                 maxDelta,
                 realDelta,
-            )
+            ),
         );
     }
 }
@@ -222,7 +224,7 @@ fun Expectation<int>.toBeApproxEqRel(self, expected: int, maxDelta: int): void {
                     self.value,
                     expected,
                     maxDelta,
-                )
+                ),
             );
         }
         return;
@@ -237,7 +239,7 @@ fun Expectation<int>.toBeApproxEqRel(self, expected: int, maxDelta: int): void {
                 expected,
                 maxDelta,
                 percent,
-            )
+            ),
         );
     }
 }
@@ -504,7 +506,7 @@ fun Expectation<map<K, V>>.toContainKey(self, key: K): void {
             format(
                 "expect(<actual>).toContainKey(<expected>): Key '{}' not found in the map",
                 key,
-            )
+            ),
         );
     }
 }
@@ -525,7 +527,7 @@ fun Expectation<map<K, V>>.toNotContainKey(self, key: K): void {
             format(
                 "expect(<actual>).toNotContainKey(<expected>): Key '{}' is found in the map",
                 key,
-            )
+            ),
         );
     }
 }
@@ -553,7 +555,7 @@ fun Expectation<map<K, V>>.toContainValue(self, value: V): void {
         format(
             "expect(<actual>).toContainValue(<expected>): Value '{}' not found in the map",
             value,
-        )
+        ),
     );
 }
 
@@ -575,7 +577,7 @@ fun Expectation<map<K, V>>.toNotContainValue(self, value: V): void {
                 format(
                     "expect(<actual>).toNotContainValue(<expected>): Value '{}' is found in the map",
                     value,
-                )
+                ),
             );
         }
         r = self.value.iterateNext(r);

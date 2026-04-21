@@ -15,7 +15,7 @@ use tolk_resolver::resolve_index::Resolved;
 ///
 /// ### Example
 /// ```tolk
-/// import "other.tolk";
+/// import "other.tolk"
 ///
 /// fun main() {
 ///     println("hello");

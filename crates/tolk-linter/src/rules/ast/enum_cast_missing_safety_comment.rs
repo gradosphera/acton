@@ -18,7 +18,10 @@ use tolk_ty::{InferenceResult, TyData};
 ///
 /// ### Example
 /// ```tolk
-/// enum Op { Add = 0, Sub = 1 }
+/// enum Op {
+///     Add = 0
+///     Sub = 1
+/// }
 ///
 /// fun parse(v: int): Op {
 ///     return v as Op;
@@ -27,11 +30,14 @@ use tolk_ty::{InferenceResult, TyData};
 ///
 /// Use instead:
 /// ```tolk
-/// enum Op { Add = 0, Sub = 1 }
+/// enum Op {
+///     Add = 0
+///     Sub = 1
+/// }
 ///
 /// fun parse(v: int): Op {
 ///     if (v != 0 && v != 1) {
-///         throw 7
+///         throw 7;
 ///     }
 ///     // SAFETY: input is validated and guaranteed to be either 0 or 1.
 ///     return v as Op;
@@ -44,7 +50,7 @@ use tolk_ty::{InferenceResult, TyData};
 ///         0 => Op.Add,
 ///         1 => Op.Sub,
 ///         else => throw 7,
-///     }
+///     };
 /// }
 /// ```
 #[derive(ViolationMetadata)]

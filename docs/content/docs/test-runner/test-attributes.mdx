@@ -171,7 +171,13 @@ get fun `test custom fuzz runs`(flag: bool) {
     expect(flag).toEqual(flag);
 }
 
-@test.fuzz({ runs: 64, max_test_rejects: 1024, seed: 42 })
+@test.fuzz(
+    {
+        runs: 64,
+        max_test_rejects: 1024,
+        seed: 42,
+    },
+)
 get fun `test custom fuzz budget`(value: int) {
     fuzz.assume(value != 0);
     expect(value != 0).toBeTrue();

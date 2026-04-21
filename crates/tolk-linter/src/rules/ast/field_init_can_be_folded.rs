@@ -15,17 +15,21 @@ use tolk_syntax::{AstNode, InstanceArg};
 ///
 /// ### Example
 /// ```tolk
-/// struct Foo { bar: int }
+/// struct Foo {
+///     bar: int
+/// }
 ///
 /// fun main() {
 ///     val bar = 1;
-///     val foo = Foo { bar: bar };
+///     val foo = Foo { bar };
 /// }
 /// ```
 ///
 /// Use instead:
 /// ```tolk
-/// struct Foo { bar: int }
+/// struct Foo {
+///     bar: int
+/// }
 ///
 /// fun main() {
 ///     val bar = 1;

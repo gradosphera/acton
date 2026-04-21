@@ -21,16 +21,18 @@ use tolk_syntax::{
 /// ### Example
 /// ```tolk
 /// struct (0x1000) MsgA {}
+///
 /// struct (0x1000) MsgB {}
 ///
 /// contract Wallet {
-///     incomingMessages: MsgA | MsgB,
+///     incomingMessages: MsgA | MsgB
 /// }
 /// ```
 ///
 /// Use instead:
 /// ```tolk
 /// struct (0x1000) MsgA {}
+///
 /// struct (0x1001) MsgB {}
 /// ```
 #[derive(ViolationMetadata)]

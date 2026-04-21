@@ -160,7 +160,7 @@ Example:
 ```tolk
 val newVersion = GlobalVersion {
     version: 5,
-    capabilities: 0xFF
+    capabilities: 0xFF,
 };
 config.setGlobalVersion(newVersion);
 if (!testing.setConfig(config)) {
@@ -299,7 +299,7 @@ val newInitialPrices = StoragePrices {
     bitPrice: 1,
     cellPrice: 1000,
     masterchainBitPrice: 1,
-    masterchainCellPrice: 1000
+    masterchainCellPrice: 1000,
 };
 storagePrices.setInitial(newInitialPrices);
 config.setStoragePrices(storagePrices);
@@ -329,20 +329,23 @@ Parameters:
 Example:
 ```tolk
 var pricesDict = StoragePricesDict [];
-pricesDict.set(1_000_000, StoragePrices {
-    initialUnixTime: 1_000_000,
-    bitPrice: 1,
-    cellPrice: 1000,
-    masterchainBitPrice: 1,
-    masterchainCellPrice: 1000
-});
+pricesDict.set(
+    1_000_000,
+    StoragePrices {
+        initialUnixTime: 1_000_000,
+        bitPrice: 1,
+        cellPrice: 1000,
+        masterchainBitPrice: 1,
+        masterchainCellPrice: 1000,
+    },
+);
 config.setStoragePrices(pricesDict);
 if (!testing.setConfig(config)) {
     Assert.fail("Failed to apply config");
 }
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L255" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L258" />
 
 ## `BlockchainConfigMap.getStoragePrices`
 
@@ -361,11 +364,15 @@ Example:
 ```tolk
 val storagePrices = config.getStoragePrices();
 val prices = storagePrices.get(1_000_000);
-println("Bit price: {}, Cell price: {}, Masterchain bit price: {}",
-    prices.bitPrice, prices.cellPrice, prices.masterchainBitPrice);
+println(
+    "Bit price: {}, Cell price: {}, Masterchain bit price: {}",
+    prices.bitPrice,
+    prices.cellPrice,
+    prices.masterchainBitPrice,
+);
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L276" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L283" />
 
 ## `GasPricesExtended`
 
@@ -392,7 +399,7 @@ Gas price configuration for extended gas schemes (Param 20/21 variant).
 
 This variant includes a special gas limit for system contracts.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L285" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L292" />
 
 ## `GasPrices`
 
@@ -412,7 +419,7 @@ Gas price configuration with flat pricing prefix.
 This allows for two-tiered pricing where a flat fee and price are applied first,
 followed by the standard pricing structure.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L306" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L313" />
 
 ## `MASTERCHAIN_GAS_PRICES_INDEX`
 
@@ -422,7 +429,7 @@ const MASTERCHAIN_GAS_PRICES_INDEX = 20
 
 Configuration parameter index for masterchain gas prices (Param 20).
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L316" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L323" />
 
 ## `BASECHAIN_GAS_PRICES_INDEX`
 
@@ -432,7 +439,7 @@ const BASECHAIN_GAS_PRICES_INDEX = 21
 
 Configuration parameter index for basechain gas prices (Param 21).
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L319" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L326" />
 
 ## `BlockchainConfigMap.setGasPrices`
 
@@ -452,7 +459,7 @@ Parameters:
 
 This mutates only the local [BlockchainConfigMap](#blockchainconfigmap) value until you call [testing.setConfig](../testing/#testingsetconfig).
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L332" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L339" />
 
 ## `BlockchainConfigMap.getGasPrices`
 
@@ -475,7 +482,7 @@ val gasPrices = config.getGasPrices(BASECHAIN);
 println("Gas limit basechain: {}", gasPrices);
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L353" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L360" />
 
 ## `MsgForwardPrices`
 
@@ -501,7 +508,7 @@ Message forwarding price configuration (Param 24/25).
 This struct defines the costs associated with forwarding messages between accounts and shards
 in the TON Blockchain. Message routing uses these prices to calculate fees for message delivery.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L364" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L371" />
 
 ## `MASTERCHAIN_MSG_FORWARD_PRICES_INDEX`
 
@@ -511,7 +518,7 @@ const MASTERCHAIN_MSG_FORWARD_PRICES_INDEX = 24
 
 Configuration parameter index for masterchain message forwarding prices (Param 24).
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L380" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L387" />
 
 ## `BASECHAIN_MSG_FORWARD_PRICES_INDEX`
 
@@ -521,12 +528,16 @@ const BASECHAIN_MSG_FORWARD_PRICES_INDEX = 25
 
 Configuration parameter index for basechain message forwarding prices (Param 25).
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L383" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L390" />
 
 ## `BlockchainConfigMap.setMsgForwardPrices`
 
 ```tolk
-fun BlockchainConfigMap.setMsgForwardPrices(mutate self, prices: MsgForwardPrices, chainType: int): void
+fun BlockchainConfigMap.setMsgForwardPrices(
+    mutate self,
+    prices: MsgForwardPrices,
+    chainType: int,
+): void
 ```
 
 Sets message forwarding price configuration for the masterchain or basechain (Param 24/25).
@@ -548,7 +559,7 @@ val msgPrices = MsgForwardPrices {
     cellPrice: 100,
     ihrPriceFactor: 3,
     firstFrac: 21845,
-    nextFrac: 21845
+    nextFrac: 21845,
 };
 config.setMsgForwardPrices(msgPrices, MASTERCHAIN);
 if (!testing.setConfig(config)) {
@@ -556,7 +567,7 @@ if (!testing.setConfig(config)) {
 }
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L411" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L418" />
 
 ## `BlockchainConfigMap.getMsgForwardPrices`
 
@@ -576,11 +587,15 @@ Returns: [MsgForwardPrices](#msgforwardprices) configuration containing message 
 Example:
 ```tolk
 val msgPrices = config.getMsgForwardPrices(BASECHAIN);
-println("Lump price: {}, Bit price: {}, Cell price: {}",
-    msgPrices.lumpPrice, msgPrices.bitPrice, msgPrices.cellPrice);
+println(
+    "Lump price: {}, Bit price: {}, Cell price: {}",
+    msgPrices.lumpPrice,
+    msgPrices.bitPrice,
+    msgPrices.cellPrice,
+);
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L434" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L449" />
 
 ## `PRECOMPILED_CONTRACTS_CONFIG_INDEX`
 
@@ -594,7 +609,7 @@ Precompiled contracts are built-in smart contracts optimized for specific comput
 They consume a fixed amount of gas regardless of input size, making them more efficient
 than general-purpose contracts for their specific functions.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L447" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L462" />
 
 ## `PrecompiledSmartContract`
 
@@ -609,7 +624,7 @@ Precompiled smart contract configuration.
 
 Specifies the gas usage for a precompiled contract.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L452" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L467" />
 
 ## `PrecompiledContractsConfig`
 
@@ -625,7 +640,7 @@ Configuration for all precompiled contracts (Param 45).
 Contains a dictionary mapping contract addresses to their gas usage specifications.
 Precompiled contracts are optimized implementations of common operations provided by the system.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L461" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L476" />
 
 ## `PrecompiledContractsConfig.addContractGas`
 
@@ -642,7 +657,7 @@ Adds a precompiled contract gas entry if `hash` is not already present.
 Returns `true` when a new entry is inserted.
 Returns `false` for duplicate `hash` values, and keeps the original `gasUsage` unchanged.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L470" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L485" />
 
 ## `BlockchainConfigMap.setPrecompiledContractsConfig`
 
@@ -667,16 +682,14 @@ Example:
 ```tolk
 var contractsList = map<uint256, PrecompiledSmartContract> [];
 contractsList.set(0x123456, PrecompiledSmartContract { gasUsage: 1000 });
-val precompiledConfig = PrecompiledContractsConfig {
-    list: contractsList
-};
+val precompiledConfig = PrecompiledContractsConfig { list: contractsList };
 config.setPrecompiledContractsConfig(precompiledConfig);
 if (!testing.setConfig(config)) {
     Assert.fail("Failed to apply config");
 }
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L500" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L513" />
 
 ## `BlockchainConfigMap.getPrecompiledContractsConfig`
 
@@ -700,5 +713,5 @@ val precompiledConfig = config.getPrecompiledContractsConfig();
 val contractsList = precompiledConfig.list;
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L522" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/config.tolk#L535" />
 

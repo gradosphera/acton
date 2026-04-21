@@ -9,6 +9,7 @@ use walkdir::WalkDir;
 
 mod command_manual_docs;
 mod command_manuals;
+mod code_blocks;
 mod linter;
 mod stdlib;
 
@@ -111,6 +112,7 @@ fn generate_docs(output_paths: &DocgenOutputPaths) -> Result<()> {
         &output_paths.tolk_stdlib_out_dir,
     )?;
     linter::generate_linter_docs(&output_paths.linter_out_dir)?;
+    code_blocks::report_tolk_code_block_issues(output_paths)?;
     Ok(())
 }
 

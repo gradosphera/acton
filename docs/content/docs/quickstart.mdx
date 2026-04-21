@@ -86,10 +86,10 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
             val res = counter.sendIncreaseCounter(deployer.address, 123);
             expect(res).toHaveSuccessfulTx<IncreaseCounter>({
                 from: deployer.address,
-                to: counter.address
+                to: counter.address,
             });
 
-            expect(counter.currentCounter()).toEqual(123)
+            expect(counter.currentCounter()).toEqual(123);
         }
         ```
 
@@ -168,13 +168,13 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
         The template includes a deployment script `scripts/deploy.tolk`:
 
         ```tolk title="scripts/deploy.tolk"
+        import "@acton/build"
         import "@acton/io"
         import "@acton/emulation/network"
         import "@acton/emulation/scripts"
-        import "@acton/build"
 
-        import "@wrappers/Counter"
         import "@contracts/types"
+        import "@wrappers/Counter"
 
         fun main() {
             val deployer = scripts.wallet("deployer");

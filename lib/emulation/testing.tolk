@@ -10,12 +10,12 @@
 ///
 
 import "_impl_emul"
-import "../ffi"
 import "config"
 import "network"
+import "../ffi"
 import "../testing/assert"
-import "../types/transaction"
 import "../types/out_actions"
+import "../types/transaction"
 
 /// Root module for public API to be used in tests along with `net.xxx` methods.
 struct testing
@@ -94,9 +94,7 @@ fun TxCursor.executeAllRemaining(self): SendResultList {
 /// This API is emulation-only and is intended for programmable partial execution workflows
 /// such as large cascades and interleaving multiple message chains.
 fun testing.createTraceIterationCursor(from: address, message: OutMessage): TxCursor {
-    return {
-        id: ffi.startMessageIter(message.messageCell, from.toCell()),
-    };
+    return { id: ffi.startMessageIter(message.messageCell, from.toCell()) };
 }
 
 /// Send a single message from a specified address.
@@ -114,7 +112,10 @@ fun testing.createTraceIterationCursor(from: address, message: OutMessage): TxCu
 ///     bounce: false,
 ///     value: ton("0.95"),
 ///     dest: deployer.address,
-///     body: beginCell().storeUint(0xFFFFFFFF, 32).storeSlice(body.toCell().beginParse()).endCell(),
+///     body: beginCell()
+///         .storeUint(0xFFFFFFFF, 32)
+///         .storeSlice(body.toCell().beginParse())
+///         .endCell(),
 /// }).bounced();
 ///
 /// testing.processSingleTraceStep(notDeployer.address, bouncedMsg);
@@ -204,7 +205,7 @@ fun __acton_impl_treasuryCode(): cell asm """
 /// }
 /// ```
 fun testing.getAccountState(addr: address): TlbAccountInfo? {
-    return __acton_impl_getAccountState(addr)
+    return __acton_impl_getAccountState(addr);
 }
 
 /// Returns storage fee for address for specified amount of seconds.
@@ -414,7 +415,7 @@ fun testing.loadSnapshot(pathToJsonFile: string): bool {
 ///     bitPrice: 1,
 ///     cellPrice: 1000,
 ///     masterchainBitPrice: 1,
-///     masterchainCellPrice: 1000
+///     masterchainCellPrice: 1000,
 /// });
 /// config.setStoragePrices(pricesDict);
 /// val success = testing.setConfig(config);
@@ -448,8 +449,8 @@ fun testing.setConfig(config: BlockchainConfigMap): bool {
         val basechainFwd = config.getMsgForwardPrices(BASECHAIN);
         unpacked.set(basechainFwd.toCell().beginParse(), 5);
 
-        params.set(root, 9);        // 9: root index in c7
-        params.set(unpacked, 14);   // 14: unpacked index in c7
+        params.set(root, 9);      // 9: root index in c7
+        params.set(unpacked, 14); // 14: unpacked index in c7
         c7.set(params, 0);
         testing.setC7OutsideContract(c7);
     }
@@ -516,19 +517,47 @@ fun testing.outActions(): OutActionList {
     return __acton_impl_parseOutActions(__acton_impl_getC5());
 }
 
+fun ffi.sendSingleMessage(msg: cell, from: cell): tuple?
+    asm "30 EXTCALL"
 
-fun ffi.sendSingleMessage(msg: cell, from: cell): tuple? asm "30 EXTCALL"
-fun ffi.startMessageIter(msg: cell, from: cell): int asm "39 EXTCALL"
-fun ffi.executeMessageIterN(cursorId: int, n: int): SendResultList asm "40 EXTCALL"
-fun ffi.executeMessageIterTill(cursorId: int, params: tuple): SendResultList? asm "41 EXTCALL"
-fun ffi.executeMessageIterFrom(cursorId: int): SendResultList asm "42 EXTCALL"
-fun ffi.isMessageIterDone(cursorId: int): bool asm "43 EXTCALL"
-fun ffi.closeMessageIter(cursorId: int): void asm "44 EXTCALL"
-fun ffi.setNow(now: int): void asm "28 EXTCALL"
-fun ffi.getNow(): int asm "29 EXTCALL"
-fun ffi.setConfig(config: dict): bool asm "32 EXTCALL"
-fun ffi.setShardAccount(addr: address, account: cell?): void asm "34 EXTCALL"
-fun ffi.registerLibrary(cell: cell): void asm "18 EXTCALL"
-fun ffi.saveWorldStateSnapshot(path: string): bool asm "37 EXTCALL"
-fun ffi.loadWorldStateSnapshot(path: string): bool asm "38 EXTCALL"
-fun ffi.runTickTock(onAccount: address, isTock: bool): SendResultList asm "36 EXTCALL"
+fun ffi.startMessageIter(msg: cell, from: cell): int
+    asm "39 EXTCALL"
+
+fun ffi.executeMessageIterN(cursorId: int, n: int): SendResultList
+    asm "40 EXTCALL"
+
+fun ffi.executeMessageIterTill(cursorId: int, params: tuple): SendResultList?
+    asm "41 EXTCALL"
+
+fun ffi.executeMessageIterFrom(cursorId: int): SendResultList
+    asm "42 EXTCALL"
+
+fun ffi.isMessageIterDone(cursorId: int): bool
+    asm "43 EXTCALL"
+
+fun ffi.closeMessageIter(cursorId: int): void
+    asm "44 EXTCALL"
+
+fun ffi.setNow(now: int): void
+    asm "28 EXTCALL"
+
+fun ffi.getNow(): int
+    asm "29 EXTCALL"
+
+fun ffi.setConfig(config: dict): bool
+    asm "32 EXTCALL"
+
+fun ffi.setShardAccount(addr: address, account: cell?): void
+    asm "34 EXTCALL"
+
+fun ffi.registerLibrary(cell: cell): void
+    asm "18 EXTCALL"
+
+fun ffi.saveWorldStateSnapshot(path: string): bool
+    asm "37 EXTCALL"
+
+fun ffi.loadWorldStateSnapshot(path: string): bool
+    asm "38 EXTCALL"
+
+fun ffi.runTickTock(onAccount: address, isTock: bool): SendResultList
+    asm "36 EXTCALL"

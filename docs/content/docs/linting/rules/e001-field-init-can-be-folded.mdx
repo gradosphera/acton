@@ -20,17 +20,9 @@ It's redundant and can be simplified using the shorthand syntax.
 
 ### Example
 ```tolk
-struct Foo { bar: int }
-
-fun main() {
-    val bar = 1;
-    val foo = Foo { bar: bar };
+struct Foo {
+    bar: int
 }
-```
-
-Use instead:
-```tolk
-struct Foo { bar: int }
 
 fun main() {
     val bar = 1;
@@ -38,4 +30,16 @@ fun main() {
 }
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/crates/tolk-linter/src/rules/ast/field_init_can_be_folded.rs#L35" />
+Use instead:
+```tolk
+struct Foo {
+    bar: int
+}
+
+fun main() {
+    val bar = 1;
+    val foo = Foo { bar };
+}
+```
+
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/crates/tolk-linter/src/rules/ast/field_init_can_be_folded.rs#L39" />
