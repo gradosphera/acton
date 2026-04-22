@@ -547,7 +547,6 @@
 }
 
 .errorMessageBlock {
-  border-left: 4px solid var(--border-color);
   background-color: var(--bg-secondary-color);
   color: var(--text-primary);
 }
@@ -586,7 +585,7 @@
 .errorHeader {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
 }
 
 .errorRoute {
