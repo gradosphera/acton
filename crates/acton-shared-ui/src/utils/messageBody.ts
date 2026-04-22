@@ -1,16 +1,19 @@
-import {Address, Builder, Cell, Dictionary, loadShardAccount, Slice} from "@ton/core"
-import type {
-  BackendContractInfo,
-  ParsedContractStorage,
-  ParsedTransactionBody,
-  ParsedValue,
-  TransactionInfo,
-} from "@acton/shared-ui"
+import {Address, Builder, Cell, Dictionary, Slice, loadShardAccount} from "@ton/core"
+import type {Message, MessageRelaxed} from "@ton/core"
 import type {ContractABI} from "gen-typescript-from-tolk-dev/src/abi"
 import type {Ty} from "gen-typescript-from-tolk-dev/src/abi-types"
 import {DynamicCtx} from "gen-typescript-from-tolk-dev/src/dynamic-ctx"
 import {unpackFromSliceDynamic} from "gen-typescript-from-tolk-dev/src/dynamic-serialization"
 import {renderTy} from "gen-typescript-from-tolk-dev/src/types-kernel"
+
+import type {BackendContractInfo} from "@/types"
+import type {
+  ContractData,
+  ParsedContractStorage,
+  ParsedTransactionBody,
+  ParsedValue,
+  TransactionInfo,
+} from "@/types/transaction"
 
 interface MessageCandidate {
   readonly body_ty: Ty
@@ -21,7 +24,19 @@ interface DeclarationCandidate {
   readonly priority: number
 }
 
-const getCompilerAbi = (contract: BackendContractInfo | undefined): ContractABI | undefined => {
+interface ParsableMessage {
+  readonly info: Message["info"] | MessageRelaxed["info"]
+  readonly body: Cell
+}
+
+const getContractCompilerAbi = (contract: ContractData | undefined): ContractABI | undefined => {
+  const compilerAbi = contract?.compilerAbi
+  return compilerAbi ? (compilerAbi as ContractABI) : undefined
+}
+
+const getBackendCompilerAbi = (
+  contract: BackendContractInfo | undefined,
+): ContractABI | undefined => {
   const compilerAbi = contract?.compiler_abi
   return compilerAbi ? (compilerAbi as ContractABI) : undefined
 }
@@ -116,7 +131,7 @@ const getDeclarationCandidates = (
   return candidates.sort((left, right) => left.priority - right.priority)
 }
 
-const getCandidateMessages = (
+const getIncomingCandidates = (
   compilerAbi: ContractABI,
   isInternal: boolean,
   opcode: number | undefined,
@@ -143,6 +158,26 @@ const getCandidateMessages = (
   return [...deduped.values()]
 }
 
+const getOutgoingCandidates = (
+  compilerAbi: ContractABI,
+  opcode: number | undefined,
+): readonly MessageCandidate[] => {
+  const deduped = new Map<string, MessageCandidate>()
+
+  for (const candidate of compilerAbi.outgoing_messages) {
+    deduped.set(getBodyTypeKey(candidate.body_ty), candidate)
+  }
+
+  for (const candidate of getDeclarationCandidates(compilerAbi, opcode)) {
+    const key = getBodyTypeKey(candidate.body_ty)
+    if (!deduped.has(key)) {
+      deduped.set(key, {body_ty: candidate.body_ty})
+    }
+  }
+
+  return [...deduped.values()]
+}
+
 const isCellWrapperObject = (value: Record<string, unknown>): value is {ref: unknown} => {
   const keys = Object.keys(value)
   return (
@@ -156,10 +191,10 @@ const HEX_PREVIEW_TAIL_LENGTH = 8
 
 const formatHexPreview = (hex: string): string => {
   if (hex.length <= HEX_PREVIEW_HEAD_LENGTH + HEX_PREVIEW_TAIL_LENGTH) {
-    return `0x${hex}`
+    return hex
   }
 
-  return `0x${hex.slice(0, HEX_PREVIEW_HEAD_LENGTH)}…${hex.slice(-HEX_PREVIEW_TAIL_LENGTH)}`
+  return `${hex.slice(0, HEX_PREVIEW_HEAD_LENGTH)}…${hex.slice(-HEX_PREVIEW_TAIL_LENGTH)}`
 }
 
 const formatSerializedCellPreview = (
@@ -243,37 +278,60 @@ const toParsedValue = (value: unknown): ParsedValue => {
   return {kind: "scalar", value: Object.prototype.toString.call(value)}
 }
 
-const tryDecodeWithAbi = (
-  tx: TransactionInfo,
-  compilerAbi: ContractABI,
-): ParsedTransactionBody | undefined => {
-  const inMessage = tx.transaction.inMessage
-  if (!inMessage) {
-    return undefined
-  }
-
-  const baseSlice = inMessage.body.asSlice()
-  const isInternal = inMessage.info.type === "internal"
-  const opcodeSlice = baseSlice.clone()
-  if (inMessage.info.type === "internal" && inMessage.info.bounced) {
+const getOpcodeAfterBouncePrefix = (message: ParsableMessage): number | undefined => {
+  const opcodeSlice = message.body.asSlice()
+  if (message.info.type === "internal" && message.info.bounced) {
     if (opcodeSlice.remainingBits < 32) {
       return undefined
     }
     opcodeSlice.loadUint(32)
   }
 
-  const opcode =
-    isInternal && opcodeSlice.remainingBits >= 32 ? Number(opcodeSlice.preloadUint(32)) : undefined
-  const candidates = getCandidateMessages(compilerAbi, isInternal, opcode)
+  if (opcodeSlice.remainingBits < 32) {
+    return undefined
+  }
+
+  return Number(opcodeSlice.preloadUint(32))
+}
+
+const createBodyParser = (message: ParsableMessage): Slice | undefined => {
+  const parser = message.body.asSlice()
+  if (message.info.type === "internal" && message.info.bounced) {
+    if (parser.remainingBits < 32) {
+      return undefined
+    }
+    parser.loadUint(32)
+  }
+
+  return parser
+}
+
+export const getMessageOpcode = (message: ParsableMessage): number | undefined => {
+  const slice = message.body.asSlice()
+  if (slice.remainingBits < 32) {
+    return undefined
+  }
+
+  let opcode = slice.loadUint(32)
+  if (message.info.type === "internal" && message.info.bounced && slice.remainingBits >= 32) {
+    opcode = slice.loadUint(32)
+  }
+
+  return opcode
+}
+
+const tryDecodeMessageWithCandidates = (
+  message: ParsableMessage,
+  compilerAbi: ContractABI,
+  candidates: readonly MessageCandidate[],
+): ParsedTransactionBody | undefined => {
   if (candidates.length === 0) {
     return undefined
   }
 
-  if (inMessage.info.type === "internal" && inMessage.info.bounced) {
-    if (baseSlice.remainingBits < 32) {
-      return undefined
-    }
-    baseSlice.loadUint(32)
+  const baseSlice = createBodyParser(message)
+  if (!baseSlice) {
+    return undefined
   }
 
   const ctx = new DynamicCtx(compilerAbi)
@@ -296,6 +354,24 @@ const tryDecodeWithAbi = (
   }
 
   return undefined
+}
+
+const tryDecodeIncomingMessageWithAbi = (
+  message: ParsableMessage,
+  compilerAbi: ContractABI,
+): ParsedTransactionBody | undefined => {
+  const opcode = getOpcodeAfterBouncePrefix(message)
+  const candidates = getIncomingCandidates(compilerAbi, message.info.type === "internal", opcode)
+  return tryDecodeMessageWithCandidates(message, compilerAbi, candidates)
+}
+
+const tryDecodeOutgoingMessageWithAbi = (
+  message: ParsableMessage,
+  compilerAbi: ContractABI,
+): ParsedTransactionBody | undefined => {
+  const opcode = getOpcodeAfterBouncePrefix(message)
+  const candidates = getOutgoingCandidates(compilerAbi, opcode)
+  return tryDecodeMessageWithCandidates(message, compilerAbi, candidates)
 }
 
 const getStorageCandidates = (compilerAbi: ContractABI): readonly Ty[] => {
@@ -356,12 +432,125 @@ const tryDecodeStorageWithAbi = (
   return undefined
 }
 
+const findOpcodeNameInMessages = (
+  opcode: number,
+  messages: readonly {readonly opcode: number | undefined; readonly name: string}[] | undefined,
+): string | undefined => {
+  return messages?.find(message => message.opcode === opcode)?.name
+}
+
+export const resolveMessageOpcodeName = (
+  message: ParsableMessage,
+  contracts: Map<string, ContractData>,
+  sourceAddress?: string,
+): string | undefined => {
+  const opcode = getMessageOpcode(message)
+  if (opcode === undefined) {
+    return undefined
+  }
+
+  const destinationContract =
+    message.info.type === "internal" ? contracts.get(message.info.dest.toString()) : undefined
+  const sourceContract = sourceAddress ? contracts.get(sourceAddress) : undefined
+
+  return (
+    destinationContract?.incomingMessageNamesByOpcode?.get(opcode) ??
+    sourceContract?.outgoingMessageNamesByOpcode?.get(opcode) ??
+    findOpcodeNameInMessages(opcode, destinationContract?.abi?.messages) ??
+    findOpcodeNameInMessages(opcode, sourceContract?.abi?.messages) ??
+    [...contracts.values()]
+      .map(contract => findOpcodeNameInMessages(opcode, contract.abi?.messages))
+      .find(name => name !== undefined)
+  )
+}
+
+export const decodeMessageBody = (
+  message: ParsableMessage,
+  contracts: Map<string, ContractData>,
+  sourceAddress?: string,
+): ParsedTransactionBody | undefined => {
+  const sourceContract = sourceAddress ? contracts.get(sourceAddress) : undefined
+  const destinationContract =
+    message.info.type === "internal" ? contracts.get(message.info.dest.toString()) : undefined
+  const allContracts = [...contracts.values()]
+
+  if (message.info.type === "internal") {
+    for (const contract of [destinationContract, ...allContracts]) {
+      const compilerAbi = getContractCompilerAbi(contract)
+      if (!compilerAbi) {
+        continue
+      }
+
+      const parsedBody = tryDecodeIncomingMessageWithAbi(message, compilerAbi)
+      if (parsedBody) {
+        return parsedBody
+      }
+    }
+
+    for (const contract of [sourceContract, ...allContracts]) {
+      const compilerAbi = getContractCompilerAbi(contract)
+      if (!compilerAbi) {
+        continue
+      }
+
+      const parsedBody = tryDecodeOutgoingMessageWithAbi(message, compilerAbi)
+      if (parsedBody) {
+        return parsedBody
+      }
+    }
+
+    return undefined
+  }
+
+  if (message.info.type === "external-out") {
+    for (const contract of [sourceContract, ...allContracts]) {
+      const compilerAbi = getContractCompilerAbi(contract)
+      if (!compilerAbi) {
+        continue
+      }
+
+      const parsedBody = tryDecodeOutgoingMessageWithAbi(message, compilerAbi)
+      if (parsedBody) {
+        return parsedBody
+      }
+    }
+
+    return undefined
+  }
+
+  for (const contract of allContracts) {
+    const compilerAbi = getContractCompilerAbi(contract)
+    if (!compilerAbi) {
+      continue
+    }
+
+    const parsedBody = tryDecodeIncomingMessageWithAbi(message, compilerAbi)
+    if (parsedBody) {
+      return parsedBody
+    }
+  }
+
+  return undefined
+}
+
+const tryDecodeTransactionBodyWithAbi = (
+  tx: TransactionInfo,
+  compilerAbi: ContractABI,
+): ParsedTransactionBody | undefined => {
+  const inMessage = tx.transaction.inMessage
+  if (!inMessage) {
+    return undefined
+  }
+
+  return tryDecodeIncomingMessageWithAbi(inMessage, compilerAbi)
+}
+
 export const applyParsedBodies = (
   transactions: TransactionInfo[],
   backendContracts: Record<string, BackendContractInfo>,
 ): TransactionInfo[] => {
   const fallbackAbis = Object.values(backendContracts)
-    .map(contract => getCompilerAbi(contract))
+    .map(contract => getBackendCompilerAbi(contract))
     .filter((compilerAbi): compilerAbi is ContractABI => compilerAbi !== undefined)
 
   for (const tx of transactions) {
@@ -370,10 +559,11 @@ export const applyParsedBodies = (
     tx.parsedStorageAfter = undefined
 
     const targetAbi = tx.contractName
-      ? getCompilerAbi(backendContracts[tx.contractName])
+      ? getBackendCompilerAbi(backendContracts[tx.contractName])
       : undefined
+
     if (targetAbi) {
-      tx.parsedBody = tryDecodeWithAbi(tx, targetAbi)
+      tx.parsedBody = tryDecodeTransactionBodyWithAbi(tx, targetAbi)
       tx.parsedStorageBefore = tryDecodeStorageWithAbi(tx.shardAccountBefore, targetAbi)
       tx.parsedStorageAfter = tryDecodeStorageWithAbi(tx.shardAccountAfter, targetAbi)
       if (tx.parsedBody) {
@@ -386,7 +576,7 @@ export const applyParsedBodies = (
         continue
       }
 
-      tx.parsedBody = tryDecodeWithAbi(tx, fallbackAbi)
+      tx.parsedBody = tryDecodeTransactionBodyWithAbi(tx, fallbackAbi)
       if (tx.parsedBody) {
         break
       }

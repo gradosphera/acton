@@ -1,7 +1,6 @@
 .container {
   width: 100%;
   position: relative;
-  padding-bottom: var(--spacing-sm);
 }
 
 .scrollWrapper {
@@ -134,7 +133,7 @@
 .detailsContainer {
   padding: var(--spacing-mds) var(--spacing-md);
   border-radius: var(--border-radius-sm);
-  margin-top: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
   background-color: var(--bg-color);
   border: 1px solid var(--border-color);
 }
@@ -179,6 +178,23 @@
   color: var(--text-primary);
   flex: 1;
   word-break: break-all;
+}
+
+.modeDetailValue {
+  word-break: normal;
+}
+
+.messageDataSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-xs);
+}
+
+.messageDataTitle {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
 }
 
 .detailFailure {

@@ -17,6 +17,7 @@ import {
   type TransactionInfo,
 } from "@acton/shared-ui"
 import {
+  applyParsedBodies,
   fmt,
   getTransactionOpcode,
   processTransactions,
@@ -33,7 +34,6 @@ import {
 } from "@acton/shared-ui"
 
 import {useContracts} from "../../hooks/useContracts"
-import {applyParsedBodies} from "../../utils/transactionBodies"
 
 import styles from "./TestDetails.module.css"
 

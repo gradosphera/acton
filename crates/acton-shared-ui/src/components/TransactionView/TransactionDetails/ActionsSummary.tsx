@@ -4,12 +4,15 @@ import React, {useState} from "react"
 import type {BackendExecutorAction, BackendExecutorActionFailureReason} from "@/types"
 import type {ContractData} from "@/types/transaction"
 import {fmt, DataBlock} from "@/index"
-import {parseSendMode} from "@/components/TransactionView/SendModeViewer/parser"
+import {decodeMessageBody, getMessageOpcode, resolveMessageOpcodeName} from "@/utils/messageBody"
 import {parseReserveMode} from "@/utils/transaction"
 
+import {ParsedBodySection} from "../ParsedBodySection/ParsedBodySection"
 import {ContractChip} from "../ContractChip/ContractChip"
 import {ExitCodeChip} from "../ExitCodeChip/ExitCodeChip"
+import {OpcodeChip} from "../OpcodeChip/OpcodeChip"
 import {ReserveModeViewer} from "../ReserveModeViewer/ReserveModeViewer"
+import {SendModeViewer} from "../SendModeViewer/SendModeViewer"
 
 import styles from "./ActionsSummary.module.css"
 
@@ -89,10 +92,6 @@ const formatBoolean = (v: boolean): React.JSX.Element => (
 
 const formatModeNames = (names: readonly string[]): string =>
   names.length > 0 ? names.join(" + ") : "—"
-
-const formatSendModeNames = (mode: number): string => {
-  return formatModeNames(parseSendMode(mode).map(flag => flag.name))
-}
 
 const getReserveModeNames = (mode: number): readonly string[] => {
   return parseReserveMode(mode).map(flag => flag.name)
@@ -186,6 +185,10 @@ const renderActionDetails = (
     case "sendMsg": {
       const message = action.outMsg
       const info = message.info
+      const messageBodyHash = message.body.hash().toString("hex")
+      const parsedBody = decodeMessageBody(message, contracts, contractAddress)
+      const opcode = getMessageOpcode(message)
+      const opcodeName = resolveMessageOpcodeName(message, contracts, contractAddress)
 
       return (
         <div className={styles.actionDetails}>
@@ -195,7 +198,9 @@ const renderActionDetails = (
           <div className={styles.detailsContent}>
             <div className={styles.detailRow}>
               <span className={styles.detailLabel}>Mode:</span>
-              <span className={styles.detailValue}>{formatSendModeNames(action.mode)}</span>
+              <div className={`${styles.detailValue} ${styles.modeDetailValue}`}>
+                <SendModeViewer mode={action.mode} />
+              </div>
             </div>
             <div className={styles.detailRow}>
               <span className={styles.detailLabel}>Type:</span>
@@ -263,14 +268,34 @@ const renderActionDetails = (
                     )}
                   </div>
                 </div>
+                <div className={styles.detailRow}>
+                  <span className={styles.detailLabel}>Body:</span>
+                  <div className={styles.detailValue}>
+                    <DataBlock data={message.body.toBoc().toString("hex")} />
+                  </div>
+                </div>
               </>
             )}
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Body:</span>
-              <div className={styles.detailValue}>
-                <DataBlock data={message.body.toBoc().toString("hex")} />
+            {info.type === "internal" && (
+              <div className={styles.messageDataSection}>
+                <div className={styles.messageDataTitle}>Message Data</div>
+                <div className={styles.detailRow}>
+                  <span className={styles.detailLabel}>Opcode:</span>
+                  <div className={styles.detailValue}>
+                    <OpcodeChip opcode={opcode} abiName={opcodeName} showOpcode={true} />
+                  </div>
+                </div>
+                {parsedBody && (
+                  <ParsedBodySection
+                    key={messageBodyHash}
+                    parsedBody={parsedBody}
+                    contracts={contracts}
+                    onContractClick={onContractClick}
+                    defaultExpanded={true}
+                  />
+                )}
               </div>
-            </div>
+            )}
             {execution.failureReasonText && (
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>Failure:</span>
