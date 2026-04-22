@@ -3,6 +3,7 @@
   border-radius: var(--border-radius-md);
   overflow: hidden;
   line-height: 1.6;
+  --transaction-tree-failed-node-fill: color-mix(in srgb, var(--color-failed) 58%, var(--bg-color));
 }
 
 .treeContainer {

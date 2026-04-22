@@ -78,9 +78,40 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
+  border-radius: var(--border-radius-full);
+  background-color: var(--bg-secondary-color);
+  color: var(--text-secondary);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.actionIconSendMsg {
+  color: var(--color-todo-text);
+  background-color: color-mix(in srgb, var(--color-todo-bg) 92%, var(--bg-color));
+}
+
+.actionIconSetCode {
+  color: var(--color-skipped-text);
+  background-color: color-mix(in srgb, var(--color-skipped-bg) 92%, var(--bg-color));
+}
+
+.actionIconReserve {
+  color: var(--color-passed-text);
+  background-color: color-mix(in srgb, var(--color-passed-bg) 92%, var(--bg-color));
+}
+
+.actionIconChangeLibrary {
+  color: color-mix(in srgb, var(--text-primary) 72%, var(--link-color));
+  background-color: color-mix(in srgb, var(--bg-secondary-color) 72%, var(--color-todo-bg));
+}
+
+.actionIconUnknown {
+  color: var(--text-secondary);
+  background-color: color-mix(in srgb, var(--bg-secondary-color) 86%, var(--bg-color));
 }
 
 .actionTitleText {

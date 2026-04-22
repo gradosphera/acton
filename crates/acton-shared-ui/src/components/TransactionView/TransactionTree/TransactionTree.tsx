@@ -508,7 +508,7 @@ export function TransactionTree({
               ? "var(--text-primary)"
               : nodeDatum.attributes?.success === "✓"
                 ? "var(--bg-color)"
-                : "var(--color-failed)"
+                : "var(--transaction-tree-failed-node-fill)"
           }
           stroke={"var(--text-primary)"}
           strokeWidth={1.5}
