@@ -872,8 +872,6 @@ enum Commands {
             conflicts_with_all = ["list", "check"]
         )]
         force: bool,
-        #[arg(short, long, help = "Skip confirmation prompts")]
-        yes: bool,
         #[arg(long, help = "List available versions", conflicts_with = "check")]
         list: bool,
         #[arg(long, hide = true, help = "Check for updates and return info as JSON")]
@@ -1970,11 +1968,10 @@ fn main() {
             trunk,
             stable,
             force,
-            yes,
             list,
             check,
         } => {
-            let result = up_cmd(version, trunk, stable, force, yes, list, check);
+            let result = up_cmd(version, trunk, stable, force, list, check);
             if check {
                 report_error_as_json(result);
                 return;
