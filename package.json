@@ -19,6 +19,9 @@
     "lint": "bun --filter '*' lint",
     "lint:fix": "bun --filter '*' lint:fix"
   },
+  "overrides": {
+    "uuid": "14.0.0"
+  },
   "prettier": {
     "arrowParens": "avoid",
     "bracketSpacing": false,
