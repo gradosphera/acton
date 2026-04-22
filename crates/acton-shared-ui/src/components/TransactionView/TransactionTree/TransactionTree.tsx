@@ -13,7 +13,13 @@ import {
 import type {BackendContractInfo} from "@/types"
 import type {ContractData, TransactionInfo} from "@/types/transaction"
 import {fmt} from "@/index"
-import {getTransactionOpcode, resolveTransactionOpcodeName} from "@/utils/transaction"
+import {
+  getTransactionActionPhase,
+  getTransactionComputePhase,
+  getTransactionOpcode,
+  getTransactionTriggerLabel,
+  resolveTransactionOpcodeName,
+} from "@/utils/transaction"
 
 import {TransactionDetails} from "../TransactionDetails/TransactionDetails"
 
@@ -235,13 +241,13 @@ export function TransactionTree({
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
     triggerRectReference.current = rect
 
-    const description = tx.transaction.description
-    const computePhase = description.type === "generic" ? description.computePhase : undefined
+    const computePhase = getTransactionComputePhase(tx.transaction)
+    const triggerLabel = getTransactionTriggerLabel(tx.transaction)
 
     const tooltipData: EdgeTransactionTooltipData = {
       fromAddress: tx.transaction.inMessage?.info.src
         ? formatAddress(tx.transaction.inMessage.info.src as Address, new Map())
-        : "unknown",
+        : (triggerLabel ?? "unknown"),
       computePhase: {
         success: computePhase?.type === "vm" ? computePhase.success : true,
         exitCode: computePhase?.type === "vm" ? computePhase.exitCode : undefined,
@@ -306,9 +312,8 @@ export function TransactionTree({
       const thisAddress = tx.address
       const addressName = formatAddress(thisAddress, contracts)
 
-      const description = tx.transaction.description
-      const computePhase = description.type === "generic" ? description.computePhase : undefined
-      const actionPhase = description.type === "generic" ? description.actionPhase : undefined
+      const computePhase = getTransactionComputePhase(tx.transaction)
+      const actionPhase = getTransactionActionPhase(tx.transaction)
 
       const inMessage = tx.transaction.inMessage
       const withInitCode = inMessage?.init?.code !== undefined
@@ -439,7 +444,7 @@ export function TransactionTree({
               xmlns="http://www.w3.org/2000/svg"
               className={styles.iconSvg}
             >
-              <title>Internal Out</title>
+              <title>External Out</title>
               <path
                 d="M0.400044 0.549983C0.648572 0.218612 1.11867 0.151455 1.45004 0.399983L3.45004 1.89998C3.6389 2.04162 3.75004 2.26392 3.75004 2.49998C3.75004 2.73605 3.6389 2.95834 3.45004 3.09998L1.45004 4.59998C1.11867 4.84851 0.648572 4.78135 0.400044 4.44998C0.151516 4.11861 0.218673 3.64851 0.550044 3.39998L1.75004 2.49998L0.550044 1.59998C0.218673 1.35145 0.151516 0.881354 0.400044 0.549983Z"
                 fill="var(--text-muted)"

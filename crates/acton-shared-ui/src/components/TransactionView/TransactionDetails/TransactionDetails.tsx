@@ -7,7 +7,10 @@ import type {ContractData, TransactionInfo} from "@/types/transaction"
 import {fmt} from "@/index"
 import {
   computeSendMode,
+  getTransactionActionPhase,
+  getTransactionComputePhase,
   getTransactionOpcode,
+  getTransactionTriggerLabel,
   resolveTransactionOpcodeName,
 } from "@/utils/transaction"
 
@@ -36,7 +39,7 @@ export function TransactionDetails({
   const [showActions, setShowActions] = useState(false)
 
   const description = tx.transaction.description
-  if (description.type !== "generic") {
+  if (description.type !== "generic" && description.type !== "tick-tock") {
     return (
       <div className={styles.transactionDetailsContainer}>
         <div className={styles.detailRow}>
@@ -48,12 +51,40 @@ export function TransactionDetails({
     )
   }
 
-  const computePhase = description.computePhase
-  const actionPhase = description.actionPhase
+  const isTickTock = description.type === "tick-tock"
+  const tickTockDescription = description.type === "tick-tock" ? description : undefined
+  const computePhase = getTransactionComputePhase(tx.transaction)
+  const actionPhase = getTransactionActionPhase(tx.transaction)
+  const triggerLabel = getTransactionTriggerLabel(tx.transaction)
+
+  if (!computePhase) {
+    return (
+      <div className={styles.transactionDetailsContainer}>
+        <div className={styles.detailRow}>
+          <div className={styles.detailValue}>
+            Transaction compute phase unavailable (Type: {description.type})
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const formatBoolean = (v: boolean): React.JSX.Element => (
     <span className={v ? styles.booleanTrue : styles.booleanFalse}>{v ? "Yes" : "No"}</span>
   )
+  const formatStatusChange = (value: "unchanged" | "frozen" | "deleted"): string => {
+    switch (value) {
+      case "unchanged": {
+        return "Unchanged"
+      }
+      case "frozen": {
+        return "Frozen"
+      }
+      case "deleted": {
+        return "Deleted"
+      }
+    }
+  }
 
   const inMessage = tx.transaction.inMessage ?? undefined
   const hasMessageBody =
@@ -73,27 +104,68 @@ export function TransactionDetails({
       accumulator + (message.info.type === "internal" ? message.info.value.coins : 0n),
     0n,
   )
+  const tickTockStorageFeesDue = tickTockDescription?.storagePhase.storageFeesDue
 
   return (
     <div className={styles.transactionDetailsContainer}>
       <div className={styles.detailRow}>
-        <div className={styles.detailLabel}>Message Route</div>
+        <div className={styles.detailLabel}>{isTickTock ? "Trigger" : "Message Route"}</div>
         <div className={styles.detailValue}>
-          <ContractChip
-            address={tx.transaction.inMessage?.info.src?.toString()}
-            contracts={contracts}
-            onContractClick={onContractClick}
-          />
-          {" → "}
-          <ContractChip
-            address={tx.transaction.inMessage?.info.dest?.toString()}
-            contracts={contracts}
-            onContractClick={onContractClick}
-          />
+          {isTickTock ? (
+            <span className={styles.triggerRoute}>
+              <span className={styles.triggerKind}>{triggerLabel ?? "Tick-Tock"}</span>
+              <span aria-hidden="true">→</span>
+              <ContractChip
+                address={tx.address?.toString()}
+                contracts={contracts}
+                onContractClick={onContractClick}
+              />
+            </span>
+          ) : (
+            <>
+              <ContractChip
+                address={tx.transaction.inMessage?.info.src?.toString()}
+                contracts={contracts}
+                onContractClick={onContractClick}
+              />
+              {" → "}
+              <ContractChip
+                address={tx.transaction.inMessage?.info.dest?.toString()}
+                contracts={contracts}
+                onContractClick={onContractClick}
+              />
+            </>
+          )}
         </div>
       </div>
 
-      {inMessage && inMessage.info.type === "internal" && (
+      {isTickTock && (
+        <div className={styles.labeledSectionRow}>
+          <div className={styles.labeledSectionTitle}>Tick-Tock</div>
+          <div className={styles.labeledSectionContent}>
+            <div className={styles.multiColumnRow}>
+              <div className={styles.multiColumnItem}>
+                <div className={styles.multiColumnItemTitle}>Kind</div>
+                <div className={styles.multiColumnItemValue}>{triggerLabel ?? "Tick-Tock"}</div>
+              </div>
+              <div className={styles.multiColumnItem}>
+                <div className={styles.multiColumnItemTitle}>Aborted</div>
+                <div className={styles.multiColumnItemValue}>
+                  {formatBoolean(tickTockDescription?.aborted ?? false)}
+                </div>
+              </div>
+              <div className={styles.multiColumnItem}>
+                <div className={styles.multiColumnItemTitle}>Destroyed</div>
+                <div className={styles.multiColumnItemValue}>
+                  {formatBoolean(tickTockDescription?.destroyed ?? false)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isTickTock && inMessage && inMessage.info.type === "internal" && (
         <div className={styles.labeledSectionRow}>
           <div className={styles.labeledSectionTitle}>In Message</div>
 
@@ -140,27 +212,29 @@ export function TransactionDetails({
         </div>
       )}
 
-      <div className={styles.labeledSectionRow}>
-        <div className={styles.labeledSectionTitle}>Message Data</div>
-        <div className={styles.labeledSectionContent}>
-          <div className={styles.multiColumnRow}>
-            <div className={styles.multiColumnItem}>
-              <div className={styles.multiColumnItemTitle}>Opcode</div>
-              <div className={styles.multiColumnItemValue}>
-                <OpcodeChip opcode={opcode} abiName={opcodeName} showOpcode={true} />
+      {!isTickTock && (
+        <div className={styles.labeledSectionRow}>
+          <div className={styles.labeledSectionTitle}>Message Data</div>
+          <div className={styles.labeledSectionContent}>
+            <div className={styles.multiColumnRow}>
+              <div className={styles.multiColumnItem}>
+                <div className={styles.multiColumnItemTitle}>Opcode</div>
+                <div className={styles.multiColumnItemValue}>
+                  <OpcodeChip opcode={opcode} abiName={opcodeName} showOpcode={true} />
+                </div>
               </div>
             </div>
+            {tx.parsedBody && hasMessageBody && (
+              <ParsedBodySection
+                key={tx.lt}
+                parsedBody={tx.parsedBody}
+                contracts={contracts}
+                onContractClick={onContractClick}
+              />
+            )}
           </div>
-          {tx.parsedBody && hasMessageBody && (
-            <ParsedBodySection
-              key={tx.lt}
-              parsedBody={tx.parsedBody}
-              contracts={contracts}
-              onContractClick={onContractClick}
-            />
-          )}
         </div>
-      </div>
+      )}
 
       <div className={styles.labeledSectionRow}>
         <div className={styles.labeledSectionTitle}>Fees & Sent</div>
@@ -195,6 +269,36 @@ export function TransactionDetails({
           </div>
         </div>
       </div>
+
+      {tickTockDescription && (
+        <div className={styles.labeledSectionRow}>
+          <div className={styles.labeledSectionTitle}>Storage Phase</div>
+          <div className={styles.labeledSectionContent}>
+            <div className={styles.multiColumnRow}>
+              <div className={styles.multiColumnItem}>
+                <div className={styles.multiColumnItemTitle}>Storage Fee</div>
+                <div className={styles.multiColumnItemValue}>
+                  {fmt.formatCurrency(tickTockDescription.storagePhase.storageFeesCollected)}
+                </div>
+              </div>
+              <div className={styles.multiColumnItem}>
+                <div className={styles.multiColumnItemTitle}>Storage Due</div>
+                <div className={styles.multiColumnItemValue}>
+                  {typeof tickTockStorageFeesDue === "bigint"
+                    ? fmt.formatCurrency(tickTockStorageFeesDue)
+                    : "—"}
+                </div>
+              </div>
+              <div className={styles.multiColumnItem}>
+                <div className={styles.multiColumnItemTitle}>Status Change</div>
+                <div className={styles.multiColumnItemValue}>
+                  {formatStatusChange(tickTockDescription.storagePhase.statusChange)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className={styles.labeledSectionRow}>
         <div className={styles.labeledSectionTitle}>Compute Phase</div>

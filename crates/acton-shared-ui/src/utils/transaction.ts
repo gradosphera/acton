@@ -143,6 +143,30 @@ function findOpcodeNameInMessages(
   return messages?.find(message => message.opcode === opcode)?.name
 }
 
+export function getTransactionComputePhase(tx: Transaction) {
+  const description = tx.description
+  if (description.type === "generic" || description.type === "tick-tock") {
+    return description.computePhase
+  }
+  return
+}
+
+export function getTransactionActionPhase(tx: Transaction) {
+  const description = tx.description
+  if (description.type === "generic" || description.type === "tick-tock") {
+    return description.actionPhase
+  }
+  return
+}
+
+export function getTransactionTriggerLabel(tx: Transaction): string | undefined {
+  const description = tx.description
+  if (description.type === "tick-tock") {
+    return description.isTock ? "Tock" : "Tick"
+  }
+  return undefined
+}
+
 export function computeSendMode(tx: TransactionInfo): number | undefined {
   const sender = tx.transaction.inMessage?.info.src
   if (!sender) return undefined

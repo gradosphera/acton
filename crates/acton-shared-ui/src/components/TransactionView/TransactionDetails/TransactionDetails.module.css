@@ -40,6 +40,27 @@
   box-sizing: border-box;
 }
 
+.triggerRoute {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.triggerKind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 8px;
+  border-radius: var(--border-radius-full);
+  background-color: color-mix(in srgb, var(--bg-secondary-color) 80%, var(--color-todo-bg));
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
 .timestampValue {
   font-size: 0.8125rem;
 }

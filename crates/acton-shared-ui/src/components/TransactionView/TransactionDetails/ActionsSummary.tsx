@@ -92,6 +92,28 @@ const formatReserveModeNames = (mode: number): string => {
   return formatModeNames(getReserveModeNames(mode))
 }
 
+const renderExternalDestination = (
+  destination: string | undefined,
+  contracts: Map<string, ContractData>,
+  onContractClick?: (address: string) => void,
+): React.JSX.Element | string => {
+  if (!destination) {
+    return "External"
+  }
+
+  if (contracts.has(destination)) {
+    return (
+      <ContractChip
+        address={destination}
+        contracts={contracts}
+        onContractClick={onContractClick}
+      />
+    )
+  }
+
+  return <span className={styles.externalDestination}>{destination}</span>
+}
+
 const isActionFailed = (action: BackendExecutorAction): boolean => {
   return action.failure_code !== undefined || action.failure_reason !== undefined
 }
@@ -250,14 +272,10 @@ const renderActionDetails = (
                 <div className={styles.detailRow}>
                   <span className={styles.detailLabel}>To:</span>
                   <div className={styles.detailValue}>
-                    {info.dest ? (
-                      <ContractChip
-                        address={info.dest.toString()}
-                        contracts={contracts}
-                        onContractClick={onContractClick}
-                      />
-                    ) : (
-                      "External"
+                    {renderExternalDestination(
+                      info.dest?.toString(),
+                      contracts,
+                      onContractClick,
                     )}
                   </div>
                 </div>

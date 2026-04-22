@@ -211,6 +211,15 @@
   word-break: break-all;
 }
 
+.externalDestination {
+  display: inline-block;
+  max-width: 100%;
+  color: var(--text-primary);
+  font-family: var(--font-mono), monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .modeDetailValue {
   word-break: normal;
 }
