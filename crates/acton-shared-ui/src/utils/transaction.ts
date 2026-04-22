@@ -167,6 +167,14 @@ export function getTransactionTriggerLabel(tx: Transaction): string | undefined 
   return undefined
 }
 
+export function getTransactionSourceLabel(tx: Transaction): string | undefined {
+  const inMessage = tx.inMessage
+  if (inMessage?.info.type === "external-in") {
+    return "External In"
+  }
+  return getTransactionTriggerLabel(tx)
+}
+
 export function computeSendMode(tx: TransactionInfo): number | undefined {
   const sender = tx.transaction.inMessage?.info.src
   if (!sender) return undefined

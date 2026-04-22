@@ -10,6 +10,7 @@ import {
   getTransactionActionPhase,
   getTransactionComputePhase,
   getTransactionOpcode,
+  getTransactionSourceLabel,
   getTransactionTriggerLabel,
   resolveTransactionOpcodeName,
 } from "@/utils/transaction"
@@ -87,6 +88,7 @@ export function TransactionDetails({
   }
 
   const inMessage = tx.transaction.inMessage ?? undefined
+  const sourceLabel = getTransactionSourceLabel(tx.transaction)
   const hasMessageBody =
     inMessage != undefined &&
     (() => {
@@ -122,19 +124,23 @@ export function TransactionDetails({
               />
             </span>
           ) : (
-            <>
-              <ContractChip
-                address={tx.transaction.inMessage?.info.src?.toString()}
-                contracts={contracts}
-                onContractClick={onContractClick}
-              />
+            <span className={styles.triggerRoute}>
+              {sourceLabel ? (
+                <span className={styles.messageEndpointBadge}>{sourceLabel}</span>
+              ) : (
+                <ContractChip
+                  address={tx.transaction.inMessage?.info.src?.toString()}
+                  contracts={contracts}
+                  onContractClick={onContractClick}
+                />
+              )}
               {" → "}
               <ContractChip
                 address={tx.transaction.inMessage?.info.dest?.toString()}
                 contracts={contracts}
                 onContractClick={onContractClick}
               />
-            </>
+            </span>
           )}
         </div>
       </div>
