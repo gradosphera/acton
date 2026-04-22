@@ -1,6 +1,6 @@
 import * as React from "react"
 
-import type {ContractData, ParsedValue} from "@/types/transaction"
+import type {ContractData, ParsedValue, ParsedValueMapEntry} from "@/types/transaction"
 
 import {ContractChip} from "../ContractChip/ContractChip"
 
@@ -30,6 +30,41 @@ function ParsedValueRow({
         <ParsedValueView value={value} contracts={contracts} onContractClick={onContractClick} />
       </div>
     </>
+  )
+}
+
+function ParsedMapEntry({
+  entry,
+  contracts,
+  onContractClick,
+}: {
+  readonly entry: ParsedValueMapEntry
+  readonly contracts: Map<string, ContractData>
+  readonly onContractClick?: (address: string) => void
+}): React.JSX.Element {
+  return (
+    <div className={styles.parsedMapEntry}>
+      <div className={styles.parsedMapSection}>
+        <div className={styles.parsedMapSectionLabel}>Key</div>
+        <div className={styles.parsedMapSectionValue}>
+          <ParsedValueView
+            value={entry.key}
+            contracts={contracts}
+            onContractClick={onContractClick}
+          />
+        </div>
+      </div>
+      <div className={styles.parsedMapSection}>
+        <div className={styles.parsedMapSectionLabel}>Value</div>
+        <div className={styles.parsedMapSectionValue}>
+          <ParsedValueView
+            value={entry.value}
+            contracts={contracts}
+            onContractClick={onContractClick}
+          />
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -132,22 +167,14 @@ export function ParsedValueView({
           {value.entries.length === 0 ? (
             <span className={styles.parsedEmpty}>{"{}"}</span>
           ) : (
-            <div className={styles.parsedNested}>
+            <div className={`${styles.parsedNested} ${styles.parsedNestedMap}`}>
               {value.entries.map((entry, index) => (
-                <div key={`map-entry-${index}`} className={styles.parsedMapEntry}>
-                  <ParsedValueRow
-                    label="key"
-                    value={entry.key}
-                    contracts={contracts}
-                    onContractClick={onContractClick}
-                  />
-                  <ParsedValueRow
-                    label="value"
-                    value={entry.value}
-                    contracts={contracts}
-                    onContractClick={onContractClick}
-                  />
-                </div>
+                <ParsedMapEntry
+                  key={`map-entry-${index}`}
+                  entry={entry}
+                  contracts={contracts}
+                  onContractClick={onContractClick}
+                />
               ))}
             </div>
           )}

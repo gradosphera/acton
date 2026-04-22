@@ -144,6 +144,11 @@
   word-break: normal;
   overflow-wrap: normal;
   margin-top: 10px;
+  max-height: min(56vh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding-right: var(--spacing-xs);
 }
 
 .tooltipSubValue {
