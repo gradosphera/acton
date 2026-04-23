@@ -45,9 +45,9 @@ jobs:
           path: |
             ~/.bun/install/cache
             ${{ github.workspace }}/docs/.next/cache
-          key: ${{ runner.os }}-${{ runner.arch }}-bun-docs-${{ hashFiles('docs/bun.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-bun-docs-${{ hashFiles('docs/bun.lock') }}-${{ hashFiles('docs/**.[jt]s', 'docs/**.[jt]sx') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-bun-docs-
+            ${{ runner.os }}-${{ runner.arch }}-bun-docs-${{ hashFiles('docs/bun.lock') }}-
 
       - name: Install docs dependencies
         working-directory: docs
