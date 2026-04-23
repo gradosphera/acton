@@ -3498,11 +3498,21 @@ fn synthesize_tx_cell_from_v3(
 /// Without this the synthesized tx's `repr_hash` can disagree with the on-chain hash on any
 /// transaction whose messages happened to be laid out differently than our fixed guess.
 fn build_message_cell_from_v3(m: &V3MessageSummary) -> anyhow::Result<Cell> {
-    let body_cell = match m.message_content.as_ref().and_then(|c| c.body.as_deref()) {
+    let body_cell = match m
+        .message_content
+        .as_ref()
+        .and_then(|c| c.body.as_deref())
+        .filter(|b| !b.is_empty())
+    {
         Some(b) => Boc::decode_base64(b).context("Failed to decode message body BoC")?,
         None => CellBuilder::new().build().context("empty body cell")?,
     };
-    let init_cell = match m.init_state.as_ref().and_then(|i| i.body.as_deref()) {
+    let init_cell = match m
+        .init_state
+        .as_ref()
+        .and_then(|i| i.body.as_deref())
+        .filter(|b| !b.is_empty())
+    {
         Some(b) => Some(Boc::decode_base64(b).context("Failed to decode message init BoC")?),
         None => None,
     };
