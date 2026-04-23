@@ -2,8 +2,8 @@
 ///
 /// It provides capabilities to send messages to contracts, calling their getters,
 /// and performing other network-level operations.
-/// 
-/// Note: while writing tests, also use `testing.xxx` methods. 
+///
+/// Note: while writing tests, also use `testing.xxx` methods.
 /// While writing scripts, also use `scripts.xxx` methods.
 ///
 /// Examples:
@@ -265,6 +265,39 @@ fun SendResultList.waitForFirstTransaction(
         return null;
     }
     return list.at(0);
+}
+
+/// Wait for the full message chain originating from the first message to settle on-chain.
+///
+/// Unlike [SendResultList.waitForFirstTransaction], this method follows all descendant
+/// transactions (children, grandchildren, ...) using toncenter's traces API and returns
+/// them as a fresh [SendResultList].
+///
+/// In emulation mode (without `--net`), the trace is already fully processed locally, so
+/// the method returns `self` as-is (or `null` if the list is empty).
+///
+/// Returns `null` if the chain cannot be fetched within the given attempt budget.
+fun SendResultList.waitForTrace(
+    self,
+    quiet: bool = false,
+    attempts: int = 20,
+    sleepDuration: int = 1000,
+): SendResultList? {
+    if (self.size() == 0) {
+        return null;
+    }
+    if (!ffi.isBroadcasting()) {
+        // in emulation mode the trace is already applied locally
+        return self;
+    }
+
+    val res = self.at(0);
+    return ffi.waitForTrace(
+        res.tx as cell,
+        quiet,
+        attempts,
+        sleepDuration,
+    );
 }
 
 /// Represents a set of parameters to search for a transaction in the transaction list.
@@ -737,7 +770,7 @@ fun net.disableBroadcast(): void {
 fun net.runGetMethod<Ret>(addr: address, idOrName: int | string, args: array<unknown> = []): Ret {
     val (methodId, methodName) = match (idOrName) {
         int => (idOrName, ""),
-        string => ((ffi.crc16(idOrName) & 0xffff) | 0x10000, idOrName), 
+        string => ((ffi.crc16(idOrName) & 0xffff) | 0x10000, idOrName),
     };
     assert (ffi.isDeployed(addr.toCell())) throw CANNOT_RUN_GET_METHOD_OF_UNDEPLOYED_CONTRACT;
 
@@ -1022,7 +1055,7 @@ fun Expectation<SendResultList>.toHaveFailedTx<Msg = unknown>(
         params.opcode = declaredPrefix;
     }
     params.success = false;
-    
+
     val nonZeroExitCode = params.exitCode is int32 && params.exitCode as int32 != 0;
     if (!nonZeroExitCode) {
         self.fail("expect(<actual>).toHaveFailedTx(params) must have non zero exitCode parameter in params");
@@ -1039,8 +1072,8 @@ fun Expectation<SendResultList>.toHaveFailedTx<Msg = unknown>(
 /// expect(txs).toHaveAllSuccessfulTxs();
 /// ```
 fun Expectation<SendResultList>.toHaveAllSuccessfulTxs(self): void {
-    val params = SearchParams { 
-        success: false 
+    val params = SearchParams {
+        success: false
     };
     __acton_impl_findNoTransactionOrFail(self.value, params, "expect(<actual>).toHaveAllSuccessfulTxs(<expected>)", self.location);
 }
@@ -1161,6 +1194,7 @@ fun ffi.failToNotFindTransactionByParams(location: string, message: string, txs:
 fun ffi.loadLibrary(hash: string): cell? asm "21 EXTCALL"
 fun ffi.isBroadcasting(): bool asm "23 EXTCALL"
 fun ffi.waitForTransaction(pseudoTxCell: cell, quiet: bool, attempts: int, sleepDuration: int): SendResultList? asm "25 EXTCALL"
+fun ffi.waitForTrace(pseudoTxCell: cell, quiet: bool, attempts: int, sleepDuration: int): SendResultList? asm "49 EXTCALL"
 fun ffi.enableBroadcast(): void asm "26 EXTCALL"
 fun ffi.disableBroadcast(): void asm "27 EXTCALL"
 fun ffi.getConfig(): dict asm "31 EXTCALL"
