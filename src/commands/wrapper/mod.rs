@@ -356,7 +356,11 @@ fn resolve_test_path(
 }
 
 fn wrapper_file_name(contract_name: &str, generate_typescript: bool) -> String {
-    let extension = if generate_typescript { "ts" } else { "tolk" };
+    let extension = if generate_typescript {
+        "gen.ts"
+    } else {
+        "gen.tolk"
+    };
     format!("{contract_name}.{extension}")
 }
 
@@ -492,6 +496,16 @@ fn generate_wrapper(model: &WrapperModel) -> String {
 
     code.push('\n');
 
+    if let (Some(storage), Some(storage_path)) = (&model.storage, &model.storage_path) {
+        let display_path = storage_path
+            .strip_prefix(proot)
+            .unwrap_or(storage_path)
+            .display();
+        code.push_str(&format!(
+            "/// Storage `{}` is defined in `{display_path}`\n",
+            storage.name
+        ));
+    }
     code.push_str(&format!("struct {contract} {{\n"));
     code.push_str("    address: address\n");
     code.push_str("    stateInit: ContractState? = null\n");
