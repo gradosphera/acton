@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::Subcommand;
 use fs2::FileExt;
 use inquire::Confirm;
+use serde::Deserialize;
 use std::fs::{self, OpenOptions};
 use std::io::{IsTerminal, stdin, stdout};
 use std::path::{Path, PathBuf};
@@ -18,8 +19,16 @@ use crate::toolchain::{
 };
 
 const DEFAULT_TOOLCHAIN_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
+const TOOLCHAIN_PROBE_ARG: &str = "--toolchain-probe";
 #[cfg(debug_assertions)]
 const TEST_TOOLCHAIN_LOCK_TIMEOUT_MS_ENV: &str = "ACTON_TEST_TOOLCHAIN_LOCK_TIMEOUT_MS";
+
+#[derive(Deserialize)]
+struct ToolchainProbeOutput {
+    schema: u32,
+    acton: String,
+    tolk: String,
+}
 
 #[derive(Subcommand, Clone)]
 pub enum ToolchainCommand {
@@ -340,12 +349,15 @@ fn toolchain_lock_timeout() -> Duration {
 }
 
 fn probe_installed_toolchain(binary: &Path, report: &ToolchainResolveReport) -> Result<()> {
-    let output = Command::new(binary).arg("-V").output().with_context(|| {
-        format!(
-            "Failed to execute installed toolchain at {}",
-            binary.display()
-        )
-    })?;
+    let output = Command::new(binary)
+        .arg(TOOLCHAIN_PROBE_ARG)
+        .output()
+        .with_context(|| {
+            format!(
+                "Failed to execute installed toolchain at {}",
+                binary.display()
+            )
+        })?;
 
     if !output.status.success() {
         anyhow::bail!(
@@ -358,7 +370,7 @@ fn probe_installed_toolchain(binary: &Path, report: &ToolchainResolveReport) -> 
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let (acton, tolk) = parse_version_probe_output(&stdout).with_context(|| {
+    let (acton, tolk) = parse_toolchain_probe_output(&stdout).with_context(|| {
         format!(
             "Installed toolchain at {} did not report Acton and Tolk versions",
             binary.display()
@@ -388,15 +400,25 @@ fn probe_installed_toolchain(binary: &Path, report: &ToolchainResolveReport) -> 
     Ok(())
 }
 
-fn parse_version_probe_output(stdout: &str) -> Result<(String, String)> {
-    let text = stdout.trim();
-    let Some(rest) = text.strip_prefix("acton ") else {
-        anyhow::bail!("missing `acton` prefix");
-    };
-    let Some((acton, tolk)) = rest.split_once(" with Tolk ") else {
+fn parse_toolchain_probe_output(stdout: &str) -> Result<(String, String)> {
+    let probe: ToolchainProbeOutput =
+        serde_json::from_str(stdout.trim()).context("failed to parse toolchain probe JSON")?;
+
+    if probe.schema != 1 {
+        anyhow::bail!("unsupported toolchain probe schema {}", probe.schema);
+    }
+
+    let acton = probe.acton.trim();
+    if acton.is_empty() {
+        anyhow::bail!("missing Acton version");
+    }
+
+    let tolk = probe.tolk.trim();
+    if tolk.is_empty() {
         anyhow::bail!("missing bundled Tolk version");
-    };
-    Ok((acton.trim().to_owned(), tolk.trim().to_owned()))
+    }
+
+    Ok((acton.to_owned(), tolk.to_owned()))
 }
 
 fn current_exe_is(path: &Path) -> Result<bool> {
@@ -479,8 +501,11 @@ mod tests {
     }
 
     #[test]
-    fn parses_version_probe_output() {
-        let (acton, tolk) = parse_version_probe_output("acton 0.3.0 with Tolk 1.3.0\n").unwrap();
+    fn parses_toolchain_probe_output() {
+        let (acton, tolk) = parse_toolchain_probe_output(
+            r#"{"schema":1,"acton":"0.3.0","tolk":"1.3.0","target_triple":"test-target"}"#,
+        )
+        .unwrap();
 
         assert_eq!(acton, "0.3.0");
         assert_eq!(tolk, "1.3.0");

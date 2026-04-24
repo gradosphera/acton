@@ -92,8 +92,15 @@ struct Cli {
     )]
     project_root: Option<PathBuf>,
 
+    #[arg(
+        long = "toolchain-probe",
+        hide = true,
+        help = "Print machine-readable toolchain metadata as JSON"
+    )]
+    toolchain_probe: bool,
+
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -1763,6 +1770,7 @@ fn main() {
         color,
         manifest_path,
         project_root,
+        toolchain_probe,
         command,
     } = {
         let matches = cli_command(root_help_has_explicit_help_flag(&parsed_toolchain.args))
@@ -1770,6 +1778,16 @@ fn main() {
         Cli::from_arg_matches(&matches).unwrap_or_else(|err| err.exit())
     };
     init_color_mode(color);
+
+    if toolchain_probe {
+        print_toolchain_probe();
+        return;
+    }
+
+    let Some(command) = command else {
+        eprint!("{}", root_help(false));
+        process::exit(1);
+    };
 
     if parsed_toolchain.selector.is_some() && !toolchain_resolution_is_allowed(&command) {
         eprintln!(
@@ -2352,6 +2370,19 @@ fn report_error_as_json<T>(result: anyhow::Result<T>) {
             })
         );
     }
+}
+
+fn print_toolchain_probe() {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": 1,
+            "acton": acton::build_info::SHORT_VERSION,
+            "tolk": acton::build_info::TOLK_VERSION,
+            "target_triple": acton::build_info::TARGET_TRIPLE,
+        }))
+        .expect("toolchain probe JSON serialization should not fail")
+    );
 }
 
 fn read_source_map(source_map: Option<String>) -> anyhow::Result<Option<Box<TolkSourceMap>>> {

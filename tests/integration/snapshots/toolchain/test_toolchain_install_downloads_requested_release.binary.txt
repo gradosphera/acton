@@ -1,6 +1,12 @@
 #!/bin/sh
+if [ "$1" = "--toolchain-probe" ]; then
+  cat <<'JSON'
+{"schema":1,"acton":"0.4.0","tolk":"1.4.0","target_triple":"test-target"}
+JSON
+  exit 0
+fi
 if [ "$1" = "-V" ] || [ "$1" = "--version" ]; then
-  echo 'acton 0.4.0 with Tolk 1.4.0'
+  echo 'acton 0.4.0 (test-git 2026-04-24) with Tolk 1.4.0'
   exit 0
 fi
 echo 'toolchain-acton-0.4.0'

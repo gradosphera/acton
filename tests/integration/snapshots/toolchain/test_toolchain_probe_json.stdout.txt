@@ -1,0 +1,6 @@
+{
+  "acton": "[ACTON_VERSION]",
+  "schema": 1,
+  "target_triple": "[TARGET_TRIPLE]",
+  "tolk": "[TOLK_VERSION]"
+}

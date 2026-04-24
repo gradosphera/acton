@@ -27,6 +27,7 @@ Commands:
 
   ls                                   Run LSP server for the TON languages and technologies
   up                                   Manage Acton versions
+  toolchain        <COMMAND>           Manage project Acton toolchains
   help             [COMMAND]           Print this message or the help of a given top-level command
   hooks            <COMMAND>           Manage git hooks for the current project
   doctor                               Inspect resolved project environment

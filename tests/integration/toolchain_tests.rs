@@ -30,6 +30,21 @@ fn test_toolchain_help_snapshot() {
 }
 
 #[test]
+fn test_toolchain_probe_json_snapshot() {
+    let project = ProjectBuilder::new("toolchain-probe-json").build();
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("--toolchain-probe")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_probe_json.stdout.txt",
+        );
+}
+
+#[test]
 fn test_toolchain_list_empty_home_snapshot() {
     let project = ProjectBuilder::new("toolchain-list-empty").build();
     let home = isolated_home(&project);
@@ -1638,8 +1653,14 @@ fn release_bundle(binary_contents: &str) -> Result<ReleaseBundle> {
 fn version_probe_fake_acton(acton: &str, tolk: &str, stdout_line: &str) -> String {
     format!(
         r#"#!/bin/sh
+if [ "$1" = "--toolchain-probe" ]; then
+  cat <<'JSON'
+{{"schema":1,"acton":"{acton}","tolk":"{tolk}","target_triple":"test-target"}}
+JSON
+  exit 0
+fi
 if [ "$1" = "-V" ] || [ "$1" = "--version" ]; then
-  echo 'acton {acton} with Tolk {tolk}'
+  echo 'acton {acton} (test-git 2026-04-24) with Tolk {tolk}'
   exit 0
 fi
 echo '{stdout_line}'
@@ -1650,8 +1671,14 @@ echo '{stdout_line}'
 fn recording_fake_acton(acton: &str, tolk: &str, stdout_line: &str) -> String {
     format!(
         r#"#!/bin/sh
+if [ "$1" = "--toolchain-probe" ]; then
+  cat <<'JSON'
+{{"schema":1,"acton":"{acton}","tolk":"{tolk}","target_triple":"test-target"}}
+JSON
+  exit 0
+fi
 if [ "$1" = "-V" ] || [ "$1" = "--version" ]; then
-  echo 'acton {acton} with Tolk {tolk}'
+  echo 'acton {acton} (test-git 2026-04-24) with Tolk {tolk}'
   exit 0
 fi
 {{

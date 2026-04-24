@@ -1,4 +1,7 @@
 Error: Installed toolchain at [ROOT]/.home/.acton/toolchains/[TOOLCHAIN_TMP]/acton did not report Acton and Tolk versions
 
 Caused by:
-  missing `acton` prefix
+  failed to parse toolchain probe JSON
+
+Caused by:
+  expected ident at line 1 column 2
