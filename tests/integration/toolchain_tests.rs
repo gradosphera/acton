@@ -225,6 +225,84 @@ fn test_toolchain_list_not_modified_refreshes_cache_metadata_snapshot() -> Resul
 }
 
 #[test]
+fn test_toolchain_list_not_modified_without_cache_warns_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-list-not-modified-no-cache").build();
+    let home = isolated_home(&project);
+    let mock = GitHubMockServer::spawn_with(|_| {
+        vec![ExpectedHttpRequest::empty(
+            304,
+            "/repos/i582/acton-public/contents/toolchain-index.json",
+        )]
+    });
+
+    toolchain_command(&project, &home)
+        .arg("list")
+        .env(TEST_TOOLCHAIN_GITHUB_API_BASE_ENV, mock.base_url())
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_list_not_modified_without_cache_warns.stdout.txt",
+        )
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_list_not_modified_without_cache_warns.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_list_fresh_remote_index_saves_http_cache_headers_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-list-cache-headers").build();
+    let home = isolated_home(&project);
+    let remote_index = remote_toolchain_index_json("0.6.2", "1.6.2");
+    let mock = GitHubMockServer::spawn_with(|_| {
+        vec![
+            ExpectedHttpRequest::json(
+                "/repos/i582/acton-public/contents/toolchain-index.json",
+                github_contents_response(&remote_index),
+            )
+            .with_response_header("ETag", "\"toolchain-index-etag\"")
+            .with_response_header("Last-Modified", "Fri, 24 Apr 2026 00:00:00 GMT"),
+        ]
+    });
+
+    toolchain_command(&project, &home)
+        .arg("list")
+        .env(TEST_TOOLCHAIN_GITHUB_API_BASE_ENV, mock.base_url())
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            ".home/.acton/toolchains/index-meta.json",
+            "integration/snapshots/toolchain/test_toolchain_list_fresh_remote_index_saves_http_cache_headers.index-meta.json",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_list_warns_about_malformed_cached_metadata_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-list-malformed-cache-meta").build();
+    let home = isolated_home(&project);
+    write_toolchain_index_json(&home, &remote_toolchain_index_json("0.6.0", "1.6.0"))?;
+    fs::write(home.join(".acton/toolchains/index-meta.json"), "{")?;
+    let mock = failing_toolchain_index_server();
+
+    toolchain_command(&project, &home)
+        .arg("list")
+        .env(TEST_TOOLCHAIN_GITHUB_API_BASE_ENV, mock.base_url())
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_list_warns_about_malformed_cached_metadata.stdout.txt",
+        )
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_list_warns_about_malformed_cached_metadata.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
 fn test_toolchain_list_invalid_fresh_index_keeps_cached_index_snapshot() -> Result<()> {
     let project = ProjectBuilder::new("toolchain-list-invalid-refresh").build();
     let home = isolated_home(&project);
@@ -297,6 +375,103 @@ fn test_toolchain_remove_missing_version_snapshot() {
         .assert_snapshot_matches(
             "integration/snapshots/toolchain/test_toolchain_remove_missing_version.stdout.txt",
         );
+}
+
+#[test]
+fn test_toolchain_remove_installed_noninteractive_requires_confirmation_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-remove-noninteractive").build();
+    let home = isolated_home(&project);
+    write_installed_toolchain(
+        &home,
+        "0.4.0",
+        "1.4.0",
+        false,
+        None,
+        &version_probe_fake_acton("0.4.0", "1.4.0", "remove target"),
+    )?;
+
+    toolchain_command(&project, &home)
+        .arg("remove")
+        .arg("0.4.0")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_remove_installed_noninteractive_requires_confirmation.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn test_toolchain_remove_interactive_decline_snapshot() -> Result<()> {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("toolchain-remove-interactive-decline").build();
+    let home = isolated_home(&project);
+    write_installed_toolchain(
+        &home,
+        "0.4.0",
+        "1.4.0",
+        false,
+        None,
+        &version_probe_fake_acton("0.4.0", "1.4.0", "remove target"),
+    )?;
+
+    let mut session = toolchain_command(&project, &home)
+        .arg("remove")
+        .arg("0.4.0")
+        .spawn_pty();
+
+    session.expect("Remove Acton 0.4.0 from");
+    session.send_line("n", "failed to decline toolchain removal");
+    session.expect("Cancelled.");
+    session.expect(Eof);
+    write_toolchain_exists_snapshot(&project, &home, "0.4.0")?;
+
+    assert_project_file_snapshot_matches(
+        &project,
+        "toolchain-exists.txt",
+        "integration/snapshots/toolchain/test_toolchain_remove_interactive_decline.exists.txt",
+    );
+
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn test_toolchain_remove_interactive_accepts_snapshot() -> Result<()> {
+    use expectrl::Eof;
+
+    let project = ProjectBuilder::new("toolchain-remove-interactive-accept").build();
+    let home = isolated_home(&project);
+    write_installed_toolchain(
+        &home,
+        "0.4.0",
+        "1.4.0",
+        false,
+        None,
+        &version_probe_fake_acton("0.4.0", "1.4.0", "remove target"),
+    )?;
+
+    let mut session = toolchain_command(&project, &home)
+        .arg("remove")
+        .arg("0.4.0")
+        .spawn_pty();
+
+    session.expect("Remove Acton 0.4.0 from");
+    session.send_line("y", "failed to confirm toolchain removal");
+    session.expect("Removed Acton 0.4.0 from");
+    session.expect(Eof);
+    write_toolchain_exists_snapshot(&project, &home, "0.4.0")?;
+
+    assert_project_file_snapshot_matches(
+        &project,
+        "toolchain-exists.txt",
+        "integration/snapshots/toolchain/test_toolchain_remove_interactive_accepts.exists.txt",
+    );
+
+    Ok(())
 }
 
 #[test]
@@ -460,6 +635,117 @@ fn test_toolchain_resolve_invalid_tolk_snapshot() -> Result<()> {
         );
 
     Ok(())
+}
+
+#[test]
+fn test_toolchain_resolve_rejects_trunk_acton_snapshot() -> Result<()> {
+    let project = project_with_toolchain("toolchain-resolve-trunk-acton", "acton = \"trunk\"");
+    let home = isolated_home(&project);
+    write_toolchain_index(&home)?;
+
+    toolchain_command(&project, &home)
+        .arg("resolve")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_resolve_rejects_trunk_acton.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_resolve_normalizes_v_prefixed_acton_snapshot() -> Result<()> {
+    let project =
+        project_with_toolchain("toolchain-resolve-v-prefixed-acton", "acton = \"v0.4.0\"");
+    let home = isolated_home(&project);
+    write_toolchain_index(&home)?;
+
+    toolchain_command(&project, &home)
+        .arg("resolve")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_resolve_normalizes_v_prefixed_acton.stdout.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_resolve_yanked_acton_from_index_snapshot() -> Result<()> {
+    let project = project_with_toolchain("toolchain-resolve-yanked-index", "acton = \"0.4.0\"");
+    let home = isolated_home(&project);
+    write_toolchain_index_json(
+        &home,
+        &toolchain_index_json(vec![release_entry("0.4.0", "1.4.0", true, true)]),
+    )?;
+
+    toolchain_command(&project, &home)
+        .arg("resolve")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_resolve_yanked_acton_from_index.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_resolve_tolk_only_all_compatible_releases_yanked_snapshot() -> Result<()> {
+    let project = project_with_toolchain("toolchain-resolve-all-yanked", "tolk = \"1.4.0\"");
+    let home = isolated_home(&project);
+    write_toolchain_index_json(
+        &home,
+        &toolchain_index_json(vec![
+            release_entry("0.4.0", "1.4.0", true, true),
+            release_entry("0.4.1", "1.4.0", true, true),
+        ]),
+    )?;
+
+    toolchain_command(&project, &home)
+        .arg("resolve")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_resolve_tolk_only_all_compatible_releases_yanked.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_project_command_invalid_cli_selector_snapshot() {
+    let project = ProjectBuilder::new("toolchain-invalid-cli-selector").build();
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("+0.4")
+        .arg("test")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_project_command_invalid_cli_selector.stderr.txt",
+        );
+}
+
+#[test]
+fn test_project_command_cli_selector_disallows_toolchain_command_snapshot() {
+    let project = ProjectBuilder::new("toolchain-cli-selector-toolchain-command").build();
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("+0.4.0")
+        .arg("toolchain")
+        .arg("list")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_project_command_cli_selector_disallows_toolchain_command.stderr.txt",
+        );
 }
 
 #[test]
@@ -731,6 +1017,238 @@ fn test_toolchain_install_fails_when_probe_reports_wrong_acton_snapshot() -> Res
 }
 
 #[test]
+fn test_toolchain_install_fails_when_probe_reports_wrong_tolk_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-install-probe-wrong-tolk").build();
+    let home = isolated_home(&project);
+    write_toolchain_index(&home)?;
+
+    let fake_acton = version_probe_fake_acton("0.4.0", "1.4.1", "wrong tolk");
+    let bundle = release_bundle(&fake_acton)?;
+    let mock = mock_release_server("0.4.0", &bundle);
+
+    toolchain_command(&project, &home)
+        .arg("install")
+        .arg("0.4.0")
+        .env(TEST_TOOLCHAIN_GITHUB_API_BASE_ENV, mock.base_url())
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_install_fails_when_probe_reports_wrong_tolk.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_install_fails_when_probe_output_is_unparseable_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-install-probe-unparseable").build();
+    let home = isolated_home(&project);
+    write_toolchain_index(&home)?;
+
+    let fake_acton = "#!/bin/sh\necho 'not a version line'\n";
+    let bundle = release_bundle(fake_acton)?;
+    let mock = mock_release_server("0.4.0", &bundle);
+
+    toolchain_command(&project, &home)
+        .arg("install")
+        .arg("0.4.0")
+        .env(TEST_TOOLCHAIN_GITHUB_API_BASE_ENV, mock.base_url())
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_install_fails_when_probe_output_is_unparseable.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_install_fails_when_probe_exits_nonzero_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-install-probe-nonzero").build();
+    let home = isolated_home(&project);
+    write_toolchain_index(&home)?;
+
+    let fake_acton = "#!/bin/sh\nexit 42\n";
+    let bundle = release_bundle(fake_acton)?;
+    let mock = mock_release_server("0.4.0", &bundle);
+
+    toolchain_command(&project, &home)
+        .arg("install")
+        .arg("0.4.0")
+        .env(TEST_TOOLCHAIN_GITHUB_API_BASE_ENV, mock.base_url())
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_install_fails_when_probe_exits_nonzero.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_install_existing_directory_without_binary_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-install-dir-without-binary").build();
+    let home = isolated_home(&project);
+    write_toolchain_index(&home)?;
+    fs::create_dir_all(home.join(".acton/toolchains/0.4.0"))?;
+
+    toolchain_command(&project, &home)
+        .arg("install")
+        .arg("0.4.0")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_install_existing_directory_without_binary.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_install_fails_when_release_missing_target_asset_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-install-missing-target-asset").build();
+    let home = isolated_home(&project);
+    write_toolchain_index(&home)?;
+    let mock = GitHubMockServer::spawn_with(|base_url| {
+        let release = release_response(
+            "v0.4.0",
+            &mock_assets(base_url, "0.4.0", "acton-wrong-target.tar.gz", 1, 1),
+        );
+        vec![ExpectedHttpRequest::json(
+            "/repos/ton-blockchain/acton/releases/tags/v0.4.0",
+            release,
+        )]
+    });
+
+    toolchain_command(&project, &home)
+        .arg("install")
+        .arg("0.4.0")
+        .env(TEST_TOOLCHAIN_GITHUB_API_BASE_ENV, mock.base_url())
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_install_fails_when_release_missing_target_asset.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_install_fails_when_release_missing_checksum_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-install-missing-checksum").build();
+    let home = isolated_home(&project);
+    write_toolchain_index(&home)?;
+    let archive_name = supported_archive_name();
+    let mock = GitHubMockServer::spawn_with(|base_url| {
+        let release = release_response(
+            "v0.4.0",
+            &[release_asset_json(base_url, "0.4.0", &archive_name, 1)],
+        );
+        vec![ExpectedHttpRequest::json(
+            "/repos/ton-blockchain/acton/releases/tags/v0.4.0",
+            release,
+        )]
+    });
+
+    toolchain_command(&project, &home)
+        .arg("install")
+        .arg("0.4.0")
+        .env(TEST_TOOLCHAIN_GITHUB_API_BASE_ENV, mock.base_url())
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_install_fails_when_release_missing_checksum.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_install_fails_when_checksum_mismatches_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-install-checksum-mismatch").build();
+    let home = isolated_home(&project);
+    write_toolchain_index(&home)?;
+    let archive_name = supported_archive_name();
+    let archive_bytes = archive_bytes(&version_probe_fake_acton(
+        "0.4.0",
+        "1.4.0",
+        "checksum mismatch",
+    ))?;
+    let checksum_bytes = format!("{:064x}  {archive_name}\n", 0).into_bytes();
+    let bundle = ReleaseBundle {
+        archive_bytes,
+        checksum_bytes,
+    };
+    let mock = mock_release_server("0.4.0", &bundle);
+
+    toolchain_command(&project, &home)
+        .arg("install")
+        .arg("0.4.0")
+        .env(TEST_TOOLCHAIN_GITHUB_API_BASE_ENV, mock.base_url())
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_install_fails_when_checksum_mismatches.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_install_fails_when_archive_is_corrupted_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-install-corrupt-archive").build();
+    let home = isolated_home(&project);
+    write_toolchain_index(&home)?;
+    let archive_name = supported_archive_name();
+    let archive_bytes = b"not-a-tar-gz".to_vec();
+    let checksum = format!("{:x}", Sha256::digest(&archive_bytes));
+    let bundle = ReleaseBundle {
+        archive_bytes,
+        checksum_bytes: format!("{checksum}  {archive_name}\n").into_bytes(),
+    };
+    let mock = mock_release_server("0.4.0", &bundle);
+
+    toolchain_command(&project, &home)
+        .arg("install")
+        .arg("0.4.0")
+        .env(TEST_TOOLCHAIN_GITHUB_API_BASE_ENV, mock.base_url())
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_install_fails_when_archive_is_corrupted.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
+fn test_toolchain_install_fails_when_archive_has_no_acton_binary_snapshot() -> Result<()> {
+    let project = ProjectBuilder::new("toolchain-install-archive-no-binary").build();
+    let home = isolated_home(&project);
+    write_toolchain_index(&home)?;
+    let archive_name = supported_archive_name();
+    let archive_bytes = archive_bytes_with_single_file("README.txt", "hello")?;
+    let checksum = format!("{:x}", Sha256::digest(&archive_bytes));
+    let bundle = ReleaseBundle {
+        archive_bytes,
+        checksum_bytes: format!("{checksum}  {archive_name}\n").into_bytes(),
+    };
+    let mock = mock_release_server("0.4.0", &bundle);
+
+    toolchain_command(&project, &home)
+        .arg("install")
+        .arg("0.4.0")
+        .env(TEST_TOOLCHAIN_GITHUB_API_BASE_ENV, mock.base_url())
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/toolchain/test_toolchain_install_fails_when_archive_has_no_acton_binary.stderr.txt",
+        );
+
+    Ok(())
+}
+
+#[test]
 fn test_toolchain_install_lock_timeout_snapshot() -> Result<()> {
     let project = ProjectBuilder::new("toolchain-install-lock-timeout").build();
     let home = isolated_home(&project);
@@ -821,6 +1339,32 @@ fn assert_pty_transcript_snapshot_matches(
 
     let expected = snapbox::Data::read_from(&snapshot_full_path, None);
     crate::common::assertion().eq(normalized, expected);
+}
+
+fn assert_project_file_snapshot_matches(project: &Project, file_path: &str, snapshot_path: &str) {
+    let file_content = fs::read_to_string(project.path().join(file_path))
+        .unwrap_or_else(|err| panic!("failed to read project file `{file_path}`: {err}"));
+    let normalized = crate::support::snapshots::normalize_output(&file_content, project.path());
+
+    let mut snapshot_full_path = std::env::current_dir().expect("failed to get current dir");
+    snapshot_full_path.push("tests");
+    snapshot_full_path.push(snapshot_path);
+
+    let expected = snapbox::Data::read_from(&snapshot_full_path, None);
+    crate::common::assertion().eq(normalized, expected);
+}
+
+fn write_toolchain_exists_snapshot(project: &Project, home: &Path, version: &str) -> Result<()> {
+    let exists = home
+        .join(".acton/toolchains")
+        .join(version)
+        .exists()
+        .to_string();
+    fs::write(
+        project.path().join("toolchain-exists.txt"),
+        format!("{exists}\n"),
+    )?;
+    Ok(())
 }
 
 fn project_with_toolchain(name: &str, toolchain: &str) -> Project {
@@ -1169,18 +1713,22 @@ fn failing_toolchain_index_server() -> GitHubMockServer {
 }
 
 fn archive_bytes(binary_contents: &str) -> Result<Vec<u8>> {
+    archive_bytes_with_single_file("acton", binary_contents)
+}
+
+fn archive_bytes_with_single_file(path: &str, contents: &str) -> Result<Vec<u8>> {
     let encoder = GzBuilder::new()
         .mtime(0)
         .write(Vec::new(), Compression::default());
     let mut tar = tar::Builder::new(encoder);
 
     let mut header = tar::Header::new_gnu();
-    header.set_path("acton")?;
-    header.set_size(binary_contents.len() as u64);
+    header.set_path(path)?;
+    header.set_size(contents.len() as u64);
     header.set_mode(0o755);
     header.set_mtime(0);
     header.set_cksum();
-    tar.append(&header, binary_contents.as_bytes())?;
+    tar.append(&header, contents.as_bytes())?;
 
     let encoder = tar.into_inner()?;
     Ok(encoder.finish()?)
@@ -1190,6 +1738,7 @@ struct ExpectedHttpRequest {
     status: u16,
     path: String,
     required_headers: Vec<(String, String)>,
+    response_headers: Vec<(String, String)>,
     content_type: &'static str,
     body: Vec<u8>,
 }
@@ -1200,6 +1749,7 @@ impl ExpectedHttpRequest {
             status,
             path: path.to_owned(),
             required_headers: Vec::new(),
+            response_headers: Vec::new(),
             content_type: "text/plain",
             body: Vec::new(),
         }
@@ -1210,6 +1760,7 @@ impl ExpectedHttpRequest {
             status: 200,
             path: path.to_owned(),
             required_headers: Vec::new(),
+            response_headers: Vec::new(),
             content_type: "application/json",
             body: body.into().into_bytes(),
         }
@@ -1220,6 +1771,7 @@ impl ExpectedHttpRequest {
             status: 200,
             path: path.to_owned(),
             required_headers: Vec::new(),
+            response_headers: Vec::new(),
             content_type: "application/octet-stream",
             body,
         }
@@ -1228,6 +1780,12 @@ impl ExpectedHttpRequest {
     fn with_header(mut self, name: &str, value: &str) -> Self {
         self.required_headers
             .push((name.to_ascii_lowercase(), value.to_owned()));
+        self
+    }
+
+    fn with_response_header(mut self, name: &str, value: &str) -> Self {
+        self.response_headers
+            .push((name.to_owned(), value.to_owned()));
         self
     }
 }
@@ -1298,6 +1856,7 @@ impl GitHubMockServer {
                     &mut stream,
                     expected.status,
                     expected.content_type,
+                    &expected.response_headers,
                     &expected.body,
                 );
             }
@@ -1391,6 +1950,7 @@ fn write_http_response(
     stream: &mut std::net::TcpStream,
     status: u16,
     content_type: &str,
+    response_headers: &[(String, String)],
     body: &[u8],
 ) {
     let status_text = match status {
@@ -1399,10 +1959,14 @@ fn write_http_response(
         500 => "Internal Server Error",
         _ => "OK",
     };
-    let response_head = format!(
-        "HTTP/1.1 {status} {status_text}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+    let mut response_head = format!(
+        "HTTP/1.1 {status} {status_text}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n",
         body.len()
     );
+    for (name, value) in response_headers {
+        response_head.push_str(&format!("{name}: {value}\r\n"));
+    }
+    response_head.push_str("\r\n");
 
     stream
         .write_all(response_head.as_bytes())

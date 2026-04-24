@@ -1,0 +1,10 @@
+{
+  "source": "project-acton",
+  "acton": "0.4.0",
+  "tolk": "1.4.0",
+  "current": false,
+  "installed": false,
+  "install_required": true,
+  "path": null,
+  "yanked": false
+}

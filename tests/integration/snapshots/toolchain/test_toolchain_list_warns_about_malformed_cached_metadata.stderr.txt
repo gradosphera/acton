@@ -1,0 +1,2 @@
+Warning: failed to read cached toolchain index metadata: failed to parse toolchain index metadata JSON
+Warning: failed to refresh toolchain index, using cached index: GitHub contents API returned 500 Internal Server Error for i582/acton-public; GitHub contents API returned 500 Internal Server Error for ton-blockchain/acton
