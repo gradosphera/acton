@@ -1,3 +1,5 @@
+/// This module provides additional methods for builtin `array` type.
+
 /// Calls [f] for every element in the array.
 ///
 /// ```tolk
