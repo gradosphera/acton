@@ -25,6 +25,9 @@ fail-on-diff = false
 
 [test.mutation]
 
+[lint]
+exclude = ["lib/**"]
+
 [localnet]
 port = 3010
 accounts = ["local-wallet"]
