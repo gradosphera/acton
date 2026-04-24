@@ -9,4 +9,5 @@ pub mod formatter;
 pub mod paths;
 pub mod retrace;
 pub mod stdlib;
+pub mod toolchain;
 pub mod wallets;

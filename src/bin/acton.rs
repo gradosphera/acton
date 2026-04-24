@@ -20,11 +20,16 @@ use acton::commands::rpc::{RpcCommand, rpc_cmd};
 use acton::commands::run::run_cmd;
 use acton::commands::script::script_cmd;
 use acton::commands::test::{mutation, test_cmd};
+use acton::commands::toolchain::{ToolchainCommand, toolchain_cmd};
 use acton::commands::up::up_cmd;
 use acton::commands::verify::verify_cmd;
 use acton::commands::wallet::{WalletCommand, wallet_cmd};
 use acton::commands::wrapper::wrapper_cmd;
 use acton::paths;
+use acton::toolchain::{
+    CliToolchainSelector, ToolchainEnvironment, ensure_selector_allowed_for_args,
+    load_project_toolchain_config, resolve_toolchain, strip_leading_toolchain_selector,
+};
 use acton_config::color::OwoColorize;
 use acton_config::color::{ColorMode, init_color_mode};
 use acton_config::config::{
@@ -35,6 +40,7 @@ use acton_config::config::{
 use acton_config::test::{
     BacktraceMode, CoverageFormat, MutationDiffMode, MutationLevel, ReportFormat, TestConfig,
 };
+use anyhow::Context;
 use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::builder::{StyledStr, Styles};
 use clap::{ColorChoice, CommandFactory, FromArgMatches};
@@ -46,6 +52,7 @@ use clap_complete::engine::{
 use commands::common::error_fmt;
 use dotenvy::dotenv;
 use human_panic::{Metadata, setup_panic};
+use std::ffi::OsString;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -878,6 +885,14 @@ enum Commands {
         check: bool,
     },
     #[command(
+        about = "Manage project Acton toolchains",
+        after_help = detailed_help_pointer("toolchain")
+    )]
+    Toolchain {
+        #[command(subcommand)]
+        command: ToolchainCommand,
+    },
+    #[command(
         name = "func2tolk",
         about = "Convert FunC files to Tolk via @ton/convert-func-to-tolk",
         after_help = detailed_help_pointer("func2tolk")
@@ -1250,6 +1265,7 @@ fn root_help(show_global_options: bool) -> StyledStr {
     let support_commands = vec![
         ("ls", ""),
         ("up", ""),
+        ("toolchain", "<COMMAND>"),
         ("help", "[COMMAND]"),
         ("hooks", "<COMMAND>"),
         ("doctor", ""),
@@ -1401,8 +1417,8 @@ fn completion_command() -> clap::Command {
     cli_command(true)
 }
 
-fn root_help_has_explicit_help_flag() -> bool {
-    env::args_os()
+fn root_help_has_explicit_help_flag(args: &[OsString]) -> bool {
+    args.iter()
         .skip(1)
         .any(|arg| arg == "-h" || arg == "--help")
 }
@@ -1565,6 +1581,128 @@ fn configure_project_roots(
     Ok(())
 }
 
+const fn toolchain_resolution_is_allowed(command: &Commands) -> bool {
+    matches!(
+        command,
+        Commands::Test { .. }
+            | Commands::Build { .. }
+            | Commands::Compile { .. }
+            | Commands::Wrapper { .. }
+            | Commands::Script { .. }
+            | Commands::Run { .. }
+            | Commands::Check { .. }
+            | Commands::Fmt { .. }
+            | Commands::Verify { .. }
+    )
+}
+
+fn apply_project_toolchain(
+    selector: Option<&CliToolchainSelector>,
+    args: &[OsString],
+) -> anyhow::Result<()> {
+    if reexec_guard_satisfied()? {
+        return Ok(());
+    }
+
+    let config = load_project_toolchain_config()?;
+    let environment = ToolchainEnvironment::runtime()?;
+    let report = resolve_toolchain(config.as_ref(), selector, &environment)?;
+
+    if report.current {
+        return Ok(());
+    }
+
+    if report.install_required {
+        anyhow::bail!(
+            "Project requires acton {} (Tolk {}), but it is not installed.\nRun `acton toolchain install` from the project root or `acton toolchain install {}`.",
+            report.acton,
+            report.tolk,
+            report.acton
+        );
+    }
+
+    let path = report
+        .path
+        .as_deref()
+        .with_context(|| format!("Resolved Acton {} has no executable path", report.acton))?;
+
+    reexec_toolchain(path, &report, args)
+}
+
+fn reexec_guard_satisfied() -> anyhow::Result<bool> {
+    let Some(requested_acton) = env::var("ACTON_TOOLCHAIN_REQUESTED_ACTON").ok() else {
+        return Ok(false);
+    };
+
+    let depth = env::var("ACTON_TOOLCHAIN_REEXEC_DEPTH")
+        .ok()
+        .and_then(|value| value.parse::<u8>().ok())
+        .unwrap_or(0);
+    if depth > 3 {
+        anyhow::bail!("Acton toolchain re-exec depth exceeded");
+    }
+
+    if requested_acton != acton::build_info::PACKAGE_VERSION {
+        anyhow::bail!(
+            "Acton toolchain re-exec expected acton {}, but child is {}",
+            requested_acton,
+            acton::build_info::PACKAGE_VERSION
+        );
+    }
+
+    if let Ok(requested_tolk) = env::var("ACTON_TOOLCHAIN_REQUESTED_TOLK")
+        && requested_tolk != acton::build_info::TOLK_VERSION
+    {
+        anyhow::bail!(
+            "Acton toolchain re-exec expected Tolk {}, but child ships Tolk {}",
+            requested_tolk,
+            acton::build_info::TOLK_VERSION
+        );
+    }
+
+    Ok(true)
+}
+
+fn reexec_toolchain(
+    path: &str,
+    report: &acton::toolchain::ToolchainResolveReport,
+    args: &[OsString],
+) -> anyhow::Result<()> {
+    let depth = env::var("ACTON_TOOLCHAIN_REEXEC_DEPTH")
+        .ok()
+        .and_then(|value| value.parse::<u8>().ok())
+        .unwrap_or(0)
+        + 1;
+    if depth > 3 {
+        anyhow::bail!("Acton toolchain re-exec depth exceeded");
+    }
+
+    let mut command = process::Command::new(path);
+    command.args(args.iter().skip(1));
+    command.env("ACTON_TOOLCHAIN_REQUESTED_ACTON", &report.acton);
+    command.env("ACTON_TOOLCHAIN_REQUESTED_TOLK", &report.tolk);
+    command.env(
+        "ACTON_TOOLCHAIN_PARENT_ACTON",
+        acton::build_info::PACKAGE_VERSION,
+    );
+    command.env("ACTON_TOOLCHAIN_REEXEC_DEPTH", depth.to_string());
+    command.env("ACTON_TOOLCHAIN_SOURCE", report.source);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        Err(command.exec()).context("failed to re-exec selected Acton toolchain")
+    }
+
+    #[cfg(not(unix))]
+    {
+        let status = command
+            .status()
+            .context("failed to spawn selected Acton toolchain")?;
+        process::exit(status.code().unwrap_or(1));
+    }
+}
+
 fn main() {
     CompleteEnv::with_factory(completion_command).complete();
 
@@ -1581,16 +1719,36 @@ fn main() {
     }).ok();
 
     dotenv().ok();
+    let raw_args = env::args_os().collect::<Vec<_>>();
+    let parsed_toolchain = strip_leading_toolchain_selector(raw_args).unwrap_or_else(|err| {
+        eprintln!("Error: {err}");
+        process::exit(1);
+    });
+    ensure_selector_allowed_for_args(parsed_toolchain.selector.as_ref(), &parsed_toolchain.args)
+        .unwrap_or_else(|err| {
+            eprintln!("Error: {err}");
+            process::exit(1);
+        });
+
     let Cli {
         color,
         manifest_path,
         project_root,
         command,
     } = {
-        let matches = cli_command(root_help_has_explicit_help_flag()).get_matches();
+        let matches = cli_command(root_help_has_explicit_help_flag(&parsed_toolchain.args))
+            .get_matches_from(&parsed_toolchain.args);
         Cli::from_arg_matches(&matches).unwrap_or_else(|err| err.exit())
     };
     init_color_mode(color);
+
+    if parsed_toolchain.selector.is_some() && !toolchain_resolution_is_allowed(&command) {
+        eprintln!(
+            "{} `acton +<version>` can only be used with project commands that run through a selected toolchain.",
+            "Error:".red()
+        );
+        process::exit(1);
+    }
 
     if !matches!(
         command,
@@ -1614,6 +1772,14 @@ fn main() {
             "{} failed to initialize debug logging ({err}). Continuing without file logging.\nHint: set ACTON_LOG_DIR to a writable directory.",
             "Warning:".yellow()
         );
+    }
+
+    if toolchain_resolution_is_allowed(&command)
+        && let Err(err) =
+            apply_project_toolchain(parsed_toolchain.selector.as_ref(), &parsed_toolchain.args)
+    {
+        eprintln!("{} {}", "Error:".red(), err);
+        process::exit(1);
     }
 
     let result = match command {
@@ -1978,6 +2144,7 @@ fn main() {
             }
             result
         }
+        Commands::Toolchain { command } => toolchain_cmd(command),
         Commands::Fmt { paths, check } => fmt_cmd(paths, check),
         Commands::Doc { command } => match command {
             DocCommand::Tvm {

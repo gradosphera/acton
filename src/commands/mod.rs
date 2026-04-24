@@ -21,6 +21,7 @@ pub mod rpc;
 pub mod run;
 pub mod script;
 pub mod test;
+pub mod toolchain;
 pub mod up;
 pub mod verify;
 pub mod wallet;
