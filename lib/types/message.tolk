@@ -23,6 +23,7 @@
 
 import "../tlb/either"
 import "../tlb/maybe"
+import "../impl"
 
 /// Represents a generic relaxed message. Unlike [TlbMessageRelaxed], this message does not
 /// load the body of the message. Instead body is represented as a slice and can be parsed
@@ -65,7 +66,7 @@ struct TlbMessageRelaxedGeneric {
 /// }
 /// ```
 fun TlbMessageRelaxedGeneric.loadOpcode(self, skipBounce: bool = false): int? {
-    return __acton_impl_loadOpcode(self.body, skipBounce);
+    return impl.loadOpcode(self.body, skipBounce);
 }
 
 /// Represents a generic external message. Unlike [TlbExtMessageRelaxed], this message does not
@@ -84,7 +85,7 @@ struct TlbExtMessageRelaxedGeneric {
 /// - if [skipBounce] is true, the `0xFFFFFFFF` prefix is skipped;
 /// - returns `null` for malformed or too-short body data.
 fun TlbExtMessageRelaxedGeneric.loadOpcode(self, skipBounce: bool = false): int? {
-    return __acton_impl_loadOpcode(self.body, skipBounce);
+    return impl.loadOpcode(self.body, skipBounce);
 }
 
 /// Represents a generic message. Unlike [TlbMessageRelaxedGeneric], this message loads
@@ -260,7 +261,7 @@ fun TlbMessage<TBody, TInfo>.loadBody(self): TBody {
     };
 }
 
-fun __acton_impl_loadOpcode(body: slice, skipBounce: bool): int? {
+fun impl.loadOpcode(body: slice, skipBounce: bool): int? {
     var slice = body;
     if (slice.loadBool()) {
         // actual body in the ref

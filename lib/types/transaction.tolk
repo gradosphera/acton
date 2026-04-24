@@ -22,6 +22,7 @@
 /// ```
 
 import "message"
+import "../impl"
 import "../testing/assert"
 import "../tlb/maybe"
 
@@ -382,7 +383,7 @@ type TlbTransactionDescr =
 
 type TlbVarUint7 = int
 
-fun __acton_impl_varUintSize(value: int, maxBytes: int): int {
+fun impl.varUintSize(value: int, maxBytes: int): int {
     if (value < 0) {
         Assert.fail("VarUInteger value must be non-negative");
     }
@@ -405,7 +406,7 @@ fun __acton_impl_varUintSize(value: int, maxBytes: int): int {
 }
 
 fun TlbVarUint7.packToBuilder(self, mutate b: builder): void {
-    val size = __acton_impl_varUintSize(self, 7);
+    val size = impl.varUintSize(self, 7);
     b.storeUint(size, 3);
     if (size > 0) {
         b.storeUint(self, size * 8);
@@ -420,7 +421,7 @@ fun TlbVarUint7.unpackFromSlice(mutate s: slice): TlbVarUint7 {
 type TlbVarUint3 = int
 
 fun TlbVarUint3.packToBuilder(self, mutate b: builder): void {
-    val size = __acton_impl_varUintSize(self, 3);
+    val size = impl.varUintSize(self, 3);
     b.storeUint(size, 2);
     if (size > 0) {
         b.storeUint(self, size * 8);

@@ -111,10 +111,7 @@ fn collect_docs(
 
         let content = fs::read_to_string(path)?;
         let relative_path = path.strip_prefix(source_dir)?;
-        if relative_path
-            .file_name()
-            .is_some_and(|name| name.to_string_lossy().starts_with('_'))
-        {
+        if should_skip_stdlib_doc(relative_path) {
             continue;
         }
         let file_stem = relative_path
@@ -142,6 +139,13 @@ fn collect_docs(
     }
 
     Ok(docs)
+}
+
+fn should_skip_stdlib_doc(relative_path: &Path) -> bool {
+    relative_path.file_name().is_some_and(|name| {
+        let name = name.to_string_lossy();
+        name.starts_with('_') || name == "impl.tolk"
+    })
 }
 
 fn build_symbol_map(docs: &[FileDoc]) -> HashMap<String, Vec<LinkTarget>> {

@@ -24,6 +24,7 @@
 import "@stdlib/reflection"
 import "../fmt"
 import "../ffi"
+import "../impl"
 import "../testing/assert"
 import "../testing/expect"
 import "../tlb/either"
@@ -158,7 +159,7 @@ struct SendResult {
 
 /// Returns all out actions produced by this transaction as a list.
 fun SendResult.allOutActions(self): OutActionList {
-    return __acton_impl_parseOutActions(self.outActions);
+    return impl.parseOutActions(self.outActions);
 }
 
 /// Represents a list of send results obtained from [net.send] method.
@@ -315,17 +316,17 @@ struct SearchParams {
 }
 
 /// Bind first argument to a 2-arg function, producing a 1-arg function.
-fun __acton_impl_createEqFun<T>(arg: T): (T -> bool) {
+fun impl.createEqFun<T>(arg: T): (T -> bool) {
     return fun(snd) {
         return arg == snd;
     }
 }
 
-fun __acton_impl_isPredicate<T>(field: (T -> bool) | T | null): bool {
+fun impl.isPredicate<T>(field: (T -> bool) | T | null): bool {
     return field is (T -> bool);
 }
 
-fun __acton_impl_unwrapScalar<T>(field: (T -> bool) | T | null): T? {
+fun impl.unwrapScalar<T>(field: (T -> bool) | T | null): T? {
     return (field is T) ? field : null;
 }
 
@@ -333,13 +334,13 @@ fun __acton_impl_unwrapScalar<T>(field: (T -> bool) | T | null): T? {
 ///   [0, null] = absent
 ///   [1, cont] = user predicate
 ///   [2, cont, original_value] = value converted to predicate (original kept for display)
-fun __acton_impl_toPredicate<T>(field: (T -> bool) | T | null): tuple {
+fun impl.toPredicate<T>(field: (T -> bool) | T | null): tuple {
     match (field) {
         (T -> bool) => {
             return [1, field];
         }
         T => {
-            return [2, __acton_impl_createEqFun(field), field];
+            return [2, impl.createEqFun(field), field];
         }
         null => {
             return [0, null];
@@ -350,56 +351,56 @@ fun __acton_impl_toPredicate<T>(field: (T -> bool) | T | null): tuple {
 /// Check if user-provided SearchParams has any lambdas.
 /// If not (most common), fast FFI path will be used.
 fun SearchParams.hasPredicates(self): bool {
-    return __acton_impl_isPredicate(self.to)
-         | __acton_impl_isPredicate(self.from)
-         | __acton_impl_isPredicate(self.value)
-         | __acton_impl_isPredicate(self.exitCode)
-         | __acton_impl_isPredicate(self.success)
-         | __acton_impl_isPredicate(self.aborted)
-         | __acton_impl_isPredicate(self.deploy)
-         | __acton_impl_isPredicate(self.bounce)
-         | __acton_impl_isPredicate(self.bounced)
-         | __acton_impl_isPredicate(self.opcode)
-         | __acton_impl_isPredicate(self.actionExitCode)
-         | __acton_impl_isPredicate(self.computePhaseSkipped)
-         | __acton_impl_isPredicate(self.body);
+    return impl.isPredicate(self.to)
+         | impl.isPredicate(self.from)
+         | impl.isPredicate(self.value)
+         | impl.isPredicate(self.exitCode)
+         | impl.isPredicate(self.success)
+         | impl.isPredicate(self.aborted)
+         | impl.isPredicate(self.deploy)
+         | impl.isPredicate(self.bounce)
+         | impl.isPredicate(self.bounced)
+         | impl.isPredicate(self.opcode)
+         | impl.isPredicate(self.actionExitCode)
+         | impl.isPredicate(self.computePhaseSkipped)
+         | impl.isPredicate(self.body);
 }
 
 /// Convert SearchParams to a tuple of plain nullable scalar values for the fast FFI path.
 fun SearchParams.toScalarFFITuple(self): tuple {
     return [
-        __acton_impl_unwrapScalar(self.to),
-        __acton_impl_unwrapScalar(self.from),
-        __acton_impl_unwrapScalar(self.value),
-        __acton_impl_unwrapScalar(self.exitCode),
-        __acton_impl_unwrapScalar(self.success),
-        __acton_impl_unwrapScalar(self.aborted),
-        __acton_impl_unwrapScalar(self.deploy),
-        __acton_impl_unwrapScalar(self.bounce),
-        __acton_impl_unwrapScalar(self.bounced),
-        __acton_impl_unwrapScalar(self.opcode),
-        __acton_impl_unwrapScalar(self.actionExitCode),
-        __acton_impl_unwrapScalar(self.computePhaseSkipped),
-        __acton_impl_unwrapScalar(self.body),
+        impl.unwrapScalar(self.to),
+        impl.unwrapScalar(self.from),
+        impl.unwrapScalar(self.value),
+        impl.unwrapScalar(self.exitCode),
+        impl.unwrapScalar(self.success),
+        impl.unwrapScalar(self.aborted),
+        impl.unwrapScalar(self.deploy),
+        impl.unwrapScalar(self.bounce),
+        impl.unwrapScalar(self.bounced),
+        impl.unwrapScalar(self.opcode),
+        impl.unwrapScalar(self.actionExitCode),
+        impl.unwrapScalar(self.computePhaseSkipped),
+        impl.unwrapScalar(self.body),
     ];
 }
 
 /// Convert SearchParams to a tuple of [tag, predicate] pairs for FFI.
 fun SearchParams.toPredicateFFITuple(self): tuple {
     return [
-        __acton_impl_toPredicate(self.to),
-        __acton_impl_toPredicate(self.from),
-        __acton_impl_toPredicate(self.value),
-        __acton_impl_toPredicate(self.exitCode),
-        __acton_impl_toPredicate(self.success),
-        __acton_impl_toPredicate(self.aborted),
-        __acton_impl_toPredicate(self.deploy),
-        __acton_impl_toPredicate(self.bounce),
-        __acton_impl_toPredicate(self.bounced),
-        __acton_impl_toPredicate(self.opcode),
-        __acton_impl_toPredicate(self.actionExitCode),
-        __acton_impl_toPredicate(self.computePhaseSkipped),
-        __acton_impl_toPredicate(self.body),
+        impl.toPredicate(self.to),
+        impl.toPredicate(self.from),
+        impl.toPredicate(self.value),
+        impl.toPredicate(self.exitCode),
+        impl.toPredicate(self.success),
+        impl.toPredicate(self.aborted),
+        impl.toPredicate(self.deploy),
+        impl.toPredicate(self.bounce),
+        impl.toPredicate(self.bounced),
+        impl.toPredicate(self.opcode),
+        impl.toPredicate(self.actionExitCode),
+        impl.toPredicate(self.computePhaseSkipped),
+        impl.toPredicate(self.body),
     ];
 }
 
@@ -508,7 +509,7 @@ fun SendResultList.findTransaction<Msg = unknown>(self, params: SearchParams = {
         params.opcode = declaredPrefix;
     }
 
-    val tx = __acton_impl_findTransaction(self, params);
+    val tx = impl.findTransaction(self, params);
     if (tx == null) {
         return null;
     }
@@ -914,7 +915,7 @@ fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = unknown>(
     params.success = true;
     params.deploy = true;
 
-    __acton_impl_findTransactionOrFail(self.value, params, "expect(<actual>).toHaveSuccessfulDeploy(<expected>)", self.location);
+    impl.findTransactionOrFail(self.value, params, "expect(<actual>).toHaveSuccessfulDeploy(<expected>)", self.location);
 }
 
 /// Expect the transaction list to have a successful transaction.
@@ -947,7 +948,7 @@ fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = unknown>(
         params.exitCode = 0;
     }
 
-    __acton_impl_findTransactionOrFail(self.value, params, "expect(<actual>).toHaveSuccessfulTx(<expected>)", self.location);
+    impl.findTransactionOrFail(self.value, params, "expect(<actual>).toHaveSuccessfulTx(<expected>)", self.location);
 }
 
 /// Expect the transaction list to have a transaction with specified parameters.
@@ -970,7 +971,7 @@ fun Expectation<SendResultList>.toHaveTx<Msg = unknown>(self, params: SearchPara
         params.opcode = declaredPrefix;
     }
 
-    __acton_impl_findTransactionOrFail(self.value, params, "expect(<actual>).toHaveTx(<expected>)", self.location);
+    impl.findTransactionOrFail(self.value, params, "expect(<actual>).toHaveTx(<expected>)", self.location);
 }
 
 /// Expect the transaction list to NOT have a transaction with specified parameters.
@@ -988,7 +989,7 @@ fun Expectation<SendResultList>.toNotHaveTx<Msg = unknown>(self, params: SearchP
         params.opcode = declaredPrefix;
     }
 
-    __acton_impl_findNoTransactionOrFail(self.value, params, "expect(<actual>).toNotHaveTx(<expected>)", self.location);
+    impl.findNoTransactionOrFail(self.value, params, "expect(<actual>).toNotHaveTx(<expected>)", self.location);
 }
 
 /// Expect the transaction list to have a **bounced** transaction.
@@ -1010,7 +1011,7 @@ fun Expectation<SendResultList>.toHaveBouncedTx<Msg = unknown>(
     }
     params.bounced = true;
 
-    __acton_impl_findTransactionOrFail(self.value, params, "expect(<actual>).toHaveBouncedTx(<expected>)", self.location);
+    impl.findTransactionOrFail(self.value, params, "expect(<actual>).toHaveBouncedTx(<expected>)", self.location);
 }
 
 /// Expect the transaction list to have a **failed** transaction.
@@ -1045,7 +1046,7 @@ fun Expectation<SendResultList>.toHaveFailedTx<Msg = unknown>(
         self.fail("expect(<actual>).toHaveFailedTx(params) must have non zero exitCode parameter in params");
     }
 
-    __acton_impl_findTransactionOrFail(self.value, params, "expect(<actual>).toHaveFailedTx(<expected>)", self.location);
+    impl.findTransactionOrFail(self.value, params, "expect(<actual>).toHaveFailedTx(<expected>)", self.location);
 }
 
 /// Expect all transactions in the list to be successful.
@@ -1059,7 +1060,7 @@ fun Expectation<SendResultList>.toHaveAllSuccessfulTxs(self): void {
     val params = SearchParams {
         success: false
     };
-    __acton_impl_findNoTransactionOrFail(self.value, params, "expect(<actual>).toHaveAllSuccessfulTxs(<expected>)", self.location);
+    impl.findNoTransactionOrFail(self.value, params, "expect(<actual>).toHaveAllSuccessfulTxs(<expected>)", self.location);
 }
 
 /// Expect the transaction to emit an external message of given type.
@@ -1129,7 +1130,7 @@ fun unknown.__getDeclaredPackPrefixLen(): int {
     return 0;
 }
 
-fun __acton_impl_findTransaction(txs: SendResultList, params: SearchParams): cell? {
+fun impl.findTransaction(txs: SendResultList, params: SearchParams): cell? {
     if (txs.size() == 0) {
         return null;
     }
@@ -1147,16 +1148,16 @@ fun __acton_impl_findTransaction(txs: SendResultList, params: SearchParams): cel
         );
 }
 
-fun __acton_impl_findTransactionOrFail(txs: SendResultList, params: SearchParams, message: string, location: string): void {
-    val tx = __acton_impl_findTransaction(txs, params);
+fun impl.findTransactionOrFail(txs: SendResultList, params: SearchParams, message: string, location: string): void {
+    val tx = impl.findTransaction(txs, params);
     if (tx == null) {
         ffi.failToFindTransactionByParams(location, message, txs, params.toPredicateFFITuple());
         throw ASSERTION_FAILED;
     }
 }
 
-fun __acton_impl_findNoTransactionOrFail(txs: SendResultList, params: SearchParams, message: string, location: string): void {
-    val tx = __acton_impl_findTransaction(txs, params);
+fun impl.findNoTransactionOrFail(txs: SendResultList, params: SearchParams, message: string, location: string): void {
+    val tx = impl.findTransaction(txs, params);
     if (tx != null) {
         ffi.failToNotFindTransactionByParams(location, message, txs, params.toPredicateFFITuple());
         throw ASSERTION_FAILED;
