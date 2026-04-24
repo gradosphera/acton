@@ -1439,13 +1439,19 @@ impl TolkReplayer {
             });
         }
 
-        // TODO: unify with `in.data`? Currently `in` uses only runtime data from c7, while `in.data` takes value from the stack
         if is_top_frame
             && frame.f_name == "onInternalMessage"
             && let Some(snapshot) = self.runtime_source.runtime_debug_snapshot()
             && let Some(c7) = snapshot.c7.as_ref()
-            && let Some(value) = render_runtime_in_message(c7)
+            && let Some(mut value) = render_runtime_in_message(c7)
         {
+            // `in.body` comes from the stack; other `in` fields come from c7.
+            if let RenderedValue::Struct { fields, .. } = &mut value
+                && let Some(idx) = result.iter().position(|local| local.var_name == "in.body")
+            {
+                let body = result.remove(idx).value;
+                fields.push(("body".to_owned(), body));
+            }
             result.insert(
                 0,
                 LocalVarRendered {
