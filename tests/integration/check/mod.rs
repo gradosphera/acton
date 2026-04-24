@@ -40,6 +40,7 @@ mod reserve_mode_literal_tests;
 mod script_roots_tests;
 mod send_mode_literal_tests;
 mod several_not_null_assertions_tests;
+mod throw_requires_documented_error_value_tests;
 mod throw_requires_errors_enum_tests;
 mod type_inference_regressions_tests;
 mod unauthorized_access_tests;

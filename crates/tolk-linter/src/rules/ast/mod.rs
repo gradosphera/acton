@@ -28,6 +28,7 @@ pub mod reserve_mode_literal;
 pub mod safety_comment_helpers;
 pub mod send_mode_literal;
 pub mod several_not_null_assertions;
+pub mod throw_requires_documented_error_value;
 pub mod throw_requires_errors_enum;
 pub mod unused_expression;
 pub mod unused_import;

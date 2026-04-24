@@ -7,7 +7,7 @@ use crate::ast::{
     duplicated_condition, enum_cast_missing_safety_comment, explicit_return_type,
     identical_conditional_branches, incoming_messages_duplicate_opcode, missing_contract_header,
     negated_is_type_can_use_not_is, no_bounce_handler, no_global_variables,
-    several_not_null_assertions, throw_requires_errors_enum,
+    several_not_null_assertions, throw_requires_documented_error_value, throw_requires_errors_enum,
 };
 use crate::rules::ast::{
     asm_function_missing_safety_comment, field_init_can_be_folded, import_path_can_use_mappings,
@@ -204,6 +204,7 @@ impl<'a> Checker<'a> {
         let mut settings = HashMap::new();
 
         settings.insert(Rule::UnauthorizedAccess, LintLevel::Allow); // disabled by default for now
+        settings.insert(Rule::ThrowRequiresDocumentedErrorValue, LintLevel::Allow);
 
         let Some(lint) = config.lint.as_ref().and_then(|lint| lint.rules.as_ref()) else {
             return settings;
@@ -681,6 +682,15 @@ impl<'file> Walker<'file> for CheckerWalker<'_, '_> {
                 Rule::ThrowRequiresErrorsEnum,
                 throw_requires_errors_enum::check_throw_expr(self.checker, self.file_id, &expr,)
             );
+            run_rule!(
+                self.checker,
+                Rule::ThrowRequiresDocumentedErrorValue,
+                throw_requires_documented_error_value::check_throw_expr(
+                    self.checker,
+                    self.file_id,
+                    &expr,
+                )
+            );
             self.visit_expr(&expr);
         }
         self.default_result();
@@ -696,6 +706,15 @@ impl<'file> Walker<'file> for CheckerWalker<'_, '_> {
                 self.checker,
                 Rule::ThrowRequiresErrorsEnum,
                 throw_requires_errors_enum::check_throw_expr(self.checker, self.file_id, &expr,)
+            );
+            run_rule!(
+                self.checker,
+                Rule::ThrowRequiresDocumentedErrorValue,
+                throw_requires_documented_error_value::check_throw_expr(
+                    self.checker,
+                    self.file_id,
+                    &expr,
+                )
             );
             self.visit_expr(&expr);
         }
