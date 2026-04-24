@@ -108,7 +108,7 @@ fun onInternalMessage(in: InMessage) {
 
         else => {
             // ignore empty messages, "wrong opcode" for others
-            assert (in.body.isEmpty()) throw Errors.InvalidMessage;
+            assert (in.body.isEmpty()) throw 0xFFFF;
         }
     }
 }

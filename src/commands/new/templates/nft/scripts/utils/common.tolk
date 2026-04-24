@@ -5,17 +5,13 @@ import "@acton/io"
 import "@acton/prompts"
 import "@acton/emulation/network"
 import "@acton/emulation/scripts"
-import "@acton/testing/assert"
 import "@contracts/messages"
 import "@contracts/types"
-import "@wrappers/NftCollectionContract"
-import "@wrappers/NftItemContract"
+import "@wrappers/NftCollection.gen"
+import "@wrappers/NftItem.gen"
 
 const ONCHAIN_CONTENT_PREFIX = 0x00
 const SNAKE_PREFIX = 0x00
-
-// Matches the `counter < 250` guard in NftCollection.tolk BatchDeployNfts handler.
-const NFT_MAX_BATCH_SIZE = 249
 
 const NFT_DEFAULT_COLLECTION_NAME = "SomeNFT"
 const NFT_DEFAULT_COLLECTION_DESCRIPTION = "Some NFT collection"
@@ -50,8 +46,8 @@ fun promptNftWallet(message: string): ActonWallet {
     return scripts.wallet(promptWallet(message));
 }
 
-fun promptNftAddress(message: string, default: address): address {
-    val s = prompt(message, "", format("{}", default));
+fun promptNftAddress(message: string, default: address? = null): address {
+    val s = default == null ? prompt(message, "") : prompt(message, "", format("{}", default));
     return parseAddress(s);
 }
 
@@ -63,14 +59,14 @@ fun promptNftCollectionInfo(): NftCollectionInfo {
     };
 }
 
-fun promptNftCollectionContract(message: string): NftCollectionContract {
+fun promptNftCollection(message: string): NftCollection {
     val s = prompt(message, "EQ... / kQ...", "");
-    return NftCollectionContract.fromAddress(parseAddress(s));
+    return NftCollection.fromAddress(parseAddress(s));
 }
 
-fun promptNftItemContract(message: string): NftItemContract {
+fun promptNftItem(message: string): NftItem {
     val s = prompt(message, "EQ... / kQ...", "");
-    return NftItemContract.fromAddress(parseAddress(s));
+    return NftItem.fromAddress(parseAddress(s));
 }
 
 fun promptInt(message: string, default: string): int {
@@ -94,11 +90,8 @@ fun makeNftCollectionStorage(admin: address, info: NftCollectionInfo): NftCollec
     };
 }
 
-fun deployNftCollectionContract(
-    deployer: ActonWallet,
-    info: NftCollectionInfo,
-): NftCollectionContract {
-    val collection = NftCollectionContract.fromStorage(
+fun deployNftCollection(deployer: ActonWallet, info: NftCollectionInfo): NftCollection {
+    val collection = NftCollection.fromStorage(
         makeNftCollectionStorage(deployer.address, info),
     );
     val res = collection.deploy(deployer.address, { value: ton("0.05"), bounce: false });
@@ -106,12 +99,12 @@ fun deployNftCollectionContract(
     return collection;
 }
 
-fun deployNftItemContract(
-    collection: NftCollectionContract,
+fun deployNftItem(
+    collection: NftCollection,
     deployer: ActonWallet,
     owner: address,
     itemContent: string,
-): NftItemContract {
+): NftItem {
     val itemIndex = collection.getCollectionData().nextItemIndex;
     val res = collection.sendDeployNft(
         deployer.address,
@@ -122,60 +115,50 @@ fun deployNftItemContract(
         { value: ton("0.05"), bounce: true },
     );
     res.waitForFirstTransaction();
-    return NftItemContract.fromAddress(collection.getNftAddressByIndex(itemIndex));
+    return NftItem.fromAddress(collection.getNftAddressByIndex(itemIndex));
 }
 
 fun deployNftBatch(
-    collection: NftCollectionContract,
+    collection: NftCollection,
     deployer: ActonWallet,
     owner: address,
     count: int,
 ): SendResultList {
-    if (count <= 0) {
-        Assert.fail(format("Batch size must be positive, got {}", count));
-    }
-    if (count > NFT_MAX_BATCH_SIZE) {
-        Assert.fail(
-            format(
-                "Batch size {} exceeds NftCollection limit of {}; the on-chain transaction would fail and burn fees.",
-                count,
-                NFT_MAX_BATCH_SIZE,
-            ),
-        );
-    }
-
     var deployList: map<uint64, BatchDeployDictItem> = [];
     var i = 0;
     val nextItemIndex = collection.getCollectionData().nextItemIndex;
-    val perItemAmount = ton("0.03");
 
     while (i < count) {
         val index = (nextItemIndex + i);
+        val content = StringBuilder
+            .create()
+            .append(NFT_DEFAULT_BATCH_CONTENT_PREFIX)
+            .append(index.toDecimalString())
+            .append(".json")
+            .build();
+
         deployList.set(
             index,
             BatchDeployDictItem {
-                attachTonAmount: perItemAmount,
+                attachTonAmount: ton("0.03"),
                 initParams: NftItemInitAtDeployment {
                     ownerAddress: owner,
-                    content: NFT_DEFAULT_BATCH_CONTENT_PREFIX
-                        .concat(index.toDecimalString())
-                        .concat(".json"),
+                    content,
                 }.toCell(),
             },
         );
         i += 1;
     }
 
-    val messageValue = perItemAmount * count + ton("0.1");
     return collection.sendBatchDeployNfts(
         deployer.address,
         0,
         deployList,
-        { value: messageValue, bounce: true },
+        { value: ton("0.15"), bounce: true },
     );
 }
 
-fun printNftCollectionInfo(collection: NftCollectionContract, label: string) {
+fun printNftCollectionInfo(collection: NftCollection, label: string) {
     val data = collection.getCollectionData();
     val royalty = collection.royaltyParams();
     println("{} COLLECTION_ADDRESS={}", label, collection.address);
@@ -192,7 +175,7 @@ fun printNftCollectionInfo(collection: NftCollectionContract, label: string) {
     );
 }
 
-fun printNftItemInfo(item: NftItemContract, label: string) {
+fun printNftItemInfo(item: NftItem, label: string) {
     val data = item.getNftData();
     println("{} ITEM_ADDRESS={}", label, item.address);
     println("{} INITIALIZED={}", label, data.isInitialized);

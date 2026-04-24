@@ -1,15 +1,11 @@
 import "@acton/emulation/network"
-import "@acton/emulation/testing"
-import "@wrappers/NftCollectionContract"
+import "@wrappers/NftCollection.gen"
 import "utils/common"
 
 fun main() {
     val deployer = promptNftWallet("Select NFT Deployer");
-    val collection = promptNftCollectionContract("Enter NFT Collection address");
-    val newAdmin = promptNftAddress(
-        "Enter new admin address",
-        testing.treasury("nft-new-admin").address,
-    );
+    val collection = promptNftCollection("Enter NFT Collection address");
+    val newAdmin = promptNftAddress("Enter new admin address");
 
     val res = collection.sendChangeCollectionAdmin(
         deployer.address,

@@ -2,11 +2,12 @@ import "@acton/build"
 import "@acton/emulation/network"
 import "@acton/emulation/testing"
 import "@acton/testing/expect"
+import "@acton/types/array"
 import "@contracts/errors"
 import "@contracts/messages"
 import "@contracts/types"
-import "@wrappers/NftCollectionContract"
-import "@wrappers/NftItemContract"
+import "@wrappers/NftCollection.gen"
+import "@wrappers/NftItem.gen"
 
 struct Royalty {
     numerator: int
@@ -37,7 +38,7 @@ get fun `test nft: report royalty params`() {
     });
 }
 
-fun shouldNotAllowAnyOtherOpcodeNotFromOwner(opcode: int): void {
+fun shouldNotAllowAnyOtherOpcodeNotFromOwner(opcode: int) {
     val randomTreasury = testing.treasury("random-treasury");
 
     val (nftCollection, _, _) = setupTest();
@@ -48,26 +49,23 @@ fun shouldNotAllowAnyOtherOpcodeNotFromOwner(opcode: int): void {
         { value: ton("0.05") },
     );
 
-    val exitCode = opcode == 0x042 ? Errors.InvalidMessage as int : Errors.NotFromAdmin as int;
+    val exitCode = opcode == 0x042 ? 0xFFFF : 401;
 
     expect(result).toHaveTx({
         from: randomTreasury.address,
         to: nftCollection.address,
         opcode,
         success: false,
-        // exitCode: Errors.NotFromAdmin as int, // this changed against FunC: on invalid opcode, we always return Errors.InvalidMessage
+        // exitCode: 401,       // this changed against FunC: on invalid opcode, we always return 0xFFFF
         exitCode,
     });
 }
 
 get fun `test nft: should not allow any other opcode not from owner`() {
-    shouldNotAllowAnyOtherOpcodeNotFromOwner(1);
-    shouldNotAllowAnyOtherOpcodeNotFromOwner(2);
-    shouldNotAllowAnyOtherOpcodeNotFromOwner(3);
-    shouldNotAllowAnyOtherOpcodeNotFromOwner(0x42);
+    [1, 2, 3, 0x42].each(shouldNotAllowAnyOtherOpcodeNotFromOwner);
 }
 
-fun nftFixture(nftCollection: NftCollectionContract, nftOwnerAddress: address): NftItemContract {
+fun nftFixture(nftCollection: NftCollection, nftOwnerAddress: address): NftItem {
     val deployer = testing.treasury("deployer");
     val nextItemIndex = nftCollection.getCollectionData().nextItemIndex;
     val nftDeployResult = nftCollection.sendDeployNft(
@@ -88,12 +86,12 @@ fun nftFixture(nftCollection: NftCollectionContract, nftOwnerAddress: address): 
 
     expect(nftDeployResult).toHaveSuccessfulDeploy({ from: nftCollection.address, to: nftAddress });
 
-    return NftItemContract.fromAddress(nftAddress);
+    return NftItem.fromAddress(nftAddress);
 }
 
 /// Initializes the test environment, creating a fresh instance of the contract.
 /// Returns the contract wrapper and two treasury accounts (`deployer` and `not_deployer`).
-fun setupTest(): (NftCollectionContract, Treasury, RoyaltyParams) {
+fun setupTest(): (NftCollection, Treasury, RoyaltyParams) {
     val deployer = testing.treasury("deployer");
 
     val royaltyParams = RoyaltyParams {
@@ -103,7 +101,7 @@ fun setupTest(): (NftCollectionContract, Treasury, RoyaltyParams) {
     };
 
     // Initialize and deploy the contract with default values
-    val nftCollection = NftCollectionContract.fromStorage({
+    val nftCollection = NftCollection.fromStorage({
         adminAddress: deployer.address,
         nextItemIndex: 0,
         content: CollectionContent {
@@ -129,7 +127,7 @@ get fun `test nft: should deploy nft`() {
 
     val nftDeployResult = nftCollection.sendDeployNft(
         deployer.address,
-        0, // queryId
+        0,
         nextItemIndex,
         ton("0.02"),
         { ownerAddress: nftOwnerAddress, content },
@@ -146,10 +144,9 @@ get fun `test nft: should deploy nft`() {
     expect(nftDeployResult).toHaveSuccessfulDeploy({
         from: nftCollection.address,
         to: nftAddress,
-        // TODO initCode: nftItemCode,
     });
 
-    val nftItem = NftItemContract.fromAddress(nftAddress);
+    val nftItem = NftItem.fromAddress(nftAddress);
     val data = nftItem.getNftData();
 
     expect(data.isInitialized).toBeTrue();
@@ -166,7 +163,7 @@ get fun `test nft: should not deploy nft with invalid item index`() {
     // Trying to deploy with invalid index (nextItemIndex + 1 instead of nextItemIndex)
     val nftDeployResult = nftCollection.sendDeployNft(
         deployer.address,
-        0,                 // queryId
+        0,
         nextItemIndex + 1, // invalid index!
         ton("0.02"),
         { ownerAddress: deployer.address, content: "" },
@@ -176,7 +173,7 @@ get fun `test nft: should not deploy nft with invalid item index`() {
     expect(nftDeployResult).toHaveFailedTx<DeployNft>({
         from: deployer.address,
         to: nftCollection.address,
-        exitCode: Errors.InvalidItemIndex as int,
+        exitCode: Errors.InvalidItemIndex as int32,
     });
 }
 
@@ -186,7 +183,7 @@ get fun `test nft: should increment item index if last`() {
 
     val nftDeployResult = nftCollection.sendDeployNft(
         deployer.address,
-        0, // queryId
+        0,
         nextItemIndex,
         ton("0.02"),
         { ownerAddress: deployer.address, content: "" },
@@ -265,7 +262,7 @@ get fun `test nft: should deploy some nfts via batch deploy`() {
 
     val nftDeployResult = nftCollection.sendBatchDeployNfts(
         deployer.address,
-        0, // queryId
+        0,
         deployList,
         { value: ton("0.5"), bounce: true },
     );
@@ -286,7 +283,7 @@ get fun `test nft: should deploy some nfts via batch deploy`() {
             to: nftAddress,
         });
 
-        val nftItem = NftItemContract.fromAddress(nftAddress);
+        val nftItem = NftItem.fromAddress(nftAddress);
         val data = nftItem.getNftData();
 
         expect(data.isInitialized).toBeTrue();
@@ -306,7 +303,7 @@ get fun `test nft: should change owner`() {
 
     val result = nftCollection.sendChangeCollectionAdmin(
         deployer.address,
-        0, // queryId
+        0,
         newOwner.address,
         { value: ton("0.05"), bounce: true },
     );

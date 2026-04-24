@@ -1,4 +1,6 @@
+import "@stdlib/strings"
 import "errors"
+import "fees-management"
 import "messages"
 import "types"
 
@@ -70,14 +72,13 @@ fun onInternalMessage(in: InMessage) {
             var r = msg.deployList.findFirst();
             while (r.isFound) {
                 counter += 1;
-                assert (
-                    counter < 250
-                ) throw Errors.BatchLimitExceeded;                      // due to limits of action list size
+                assert (counter < BATCH_SIZE_LIMIT) throw Errors.BatchLimitExceeded;
 
                 val itemIndex = r.getKey();
                 assert (
                     itemIndex <= storage.nextItemIndex
-                ) throw (Errors.NotFromAdmin as int) + counter;
+                ) throw (Errors.NotFromAdmin as int) +
+                counter;                                                                                  // This cast is used to replicate error codes from FunC version
 
                 val dictItem = r.loadValue();
                 deployNftItem(
@@ -104,7 +105,7 @@ fun onInternalMessage(in: InMessage) {
 
         else => {
             // ignore empty messages, "wrong opcode" for others
-            assert (in.body.isEmpty()) throw Errors.InvalidMessage;
+            assert (in.body.isEmpty()) throw 0xFFFF;
         }
     }
 }
@@ -147,7 +148,8 @@ get fun get_nft_content(
     // common content = "https://site.org/my-collection/"
     // individual nft = "my-picture-123.png"  (probably, a long string, snake-encoded)
     // result         = concatenation
-    return OffchainMetadataReply {
-        string: content.commonContent.concat(individualNftContent),
-    }.toCell();
+    var b = StringBuilder.create();
+    b.append(content.commonContent);
+    b.append(individualNftContent);
+    return OffchainMetadataReply { string: b.build() }.toCell();
 }

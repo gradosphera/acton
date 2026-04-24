@@ -20,6 +20,9 @@ static JETTON_TEMPLATE_DIR: Dir<'static> =
 static NFT_TEMPLATE_DIR: Dir<'static> =
     include_dir!("$CARGO_MANIFEST_DIR/src/commands/new/templates/nft");
 
+static NFT_APP_TEMPLATE_DIR: Dir<'static> =
+    include_dir!("$CARGO_MANIFEST_DIR/src/commands/new/templates/nft-app");
+
 const AGENTS_FILE_NAME: &str = "AGENTS.md";
 const NPM_PACKAGE_NAME_PLACEHOLDER: &str = "__ACTON_NPM_PACKAGE_NAME__";
 
@@ -178,6 +181,19 @@ const NFT_CONTRACTS: [ContractTemplate; 2] = [
     },
 ];
 
+const NFT_APP_CONTRACTS: [ContractTemplate; 2] = [
+    ContractTemplate {
+        id: "NftCollection",
+        name: "NftCollection",
+        src: "contracts/src/NftCollection.tolk",
+    },
+    ContractTemplate {
+        id: "NftItem",
+        name: "NftItem",
+        src: "contracts/src/NftItem.tolk",
+    },
+];
+
 const EMPTY_SCAFFOLD: ProjectScaffold = ProjectScaffold {
     dir: &EMPTY_TEMPLATE_DIR,
     layout: ProjectLayout::Standard,
@@ -211,6 +227,13 @@ const NFT_SCAFFOLD: ProjectScaffold = ProjectScaffold {
     layout: ProjectLayout::Standard,
     contracts: &NFT_CONTRACTS,
     deploy_script: "scripts/deployCollection.tolk",
+};
+
+const NFT_APP_SCAFFOLD: ProjectScaffold = ProjectScaffold {
+    dir: &NFT_APP_TEMPLATE_DIR,
+    layout: ProjectLayout::App,
+    contracts: &NFT_APP_CONTRACTS,
+    deploy_script: "contracts/scripts/deployCollection.tolk",
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -266,7 +289,7 @@ const JETTON_TEMPLATE_DEFINITION: TemplateDefinition = TemplateDefinition {
 
 const NFT_TEMPLATE_DEFINITION: TemplateDefinition = TemplateDefinition {
     default_scaffold: NFT_SCAFFOLD,
-    app_scaffold: None,
+    app_scaffold: Some(NFT_APP_SCAFFOLD),
 };
 
 const fn template_definition(template: ProjectTemplate) -> &'static TemplateDefinition {
