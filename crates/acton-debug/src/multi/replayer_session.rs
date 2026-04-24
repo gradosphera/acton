@@ -71,10 +71,13 @@ enum AdvanceOutcome {
     Stopped(StopReason),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct FrameLocator {
     context_idx: usize,
     depth_from_top: usize,
+    /// Parent contexts are still borrowed while a child VM message is stopped;
+    /// frozen locals keep those outer stack frames inspectable in DAP.
+    snapshot_locals: Option<Vec<LocalVarRendered>>,
 }
 
 struct ReplayerContext {
@@ -246,8 +249,21 @@ impl ReplayerDebugSession {
             let locator = self
                 .frame_to_depth
                 .get(&frame_id)
-                .copied()
+                .cloned()
                 .ok_or_else(|| anyhow!("Unknown frame id {frame_id}"))?;
+            if let Some(locals) = locator.snapshot_locals {
+                let source_map_context = self
+                    .contexts
+                    .get(locator.context_idx)
+                    .and_then(|ctx| ctx.try_borrow().ok());
+                return evaluate_expression(
+                    &locals,
+                    source_map_context
+                        .as_ref()
+                        .map(|ctx| ctx.replayer.source_map()),
+                    expression,
+                );
+            }
             let Some(ctx) = self.contexts.get(locator.context_idx) else {
                 return evaluate_expression(&[], None, expression);
             };
@@ -381,6 +397,7 @@ impl ReplayerDebugSession {
                 label.as_ref(),
                 &outer_frames,
                 replayer,
+                true,
             );
         });
         ctx.replayer.is_finished()
@@ -543,8 +560,21 @@ impl ReplayerDebugSession {
         context_label: &str,
         outer_frames: &[CollectedFrame],
         replayer: &TolkReplayer,
+        capture_locals: bool,
     ) -> Vec<CollectedFrame> {
         let call_stack = replayer.call_stack();
+        // Only runtime boundary helpers can open a child VM context while the
+        // parent replayer is still borrowed, so snapshot locals only there.
+        let capture_locals = capture_locals
+            && call_stack.iter().any(|frame| {
+                let file_id = frame.definition_loc.as_ref().map_or_else(
+                    || replayer.current_file_id(),
+                    tolkc::source_map::SrcRange::file_id,
+                );
+                replayer.file_full_path(file_id).is_some_and(|path| {
+                    Self::is_transparent_step_into_function(path, frame.f_name.as_str())
+                })
+            });
         let file_id = replayer.current_file_id();
         let line = replayer.current_line();
         let column = replayer.current_column();
@@ -565,6 +595,7 @@ impl ReplayerDebugSession {
         frames.push(CollectedFrame {
             context_idx: ctx_index,
             depth_from_top: 0,
+            snapshot_locals: capture_locals.then(|| replayer.locals_for_frame(0)),
             name: top_name,
             source: top_source,
             line: line as i64,
@@ -592,6 +623,7 @@ impl ReplayerDebugSession {
             frames.push(CollectedFrame {
                 context_idx: ctx_index,
                 depth_from_top: depth,
+                snapshot_locals: capture_locals.then(|| replayer.locals_for_frame(depth)),
                 name: Self::format_frame_name(context_label, Some(frame), frame.f_name.as_str()),
                 source,
                 line,
@@ -616,6 +648,7 @@ impl ReplayerDebugSession {
             ctx.label.as_ref(),
             &ctx.outer_frames,
             &ctx.replayer,
+            false,
         )
     }
 
@@ -634,16 +667,20 @@ impl ReplayerDebugSession {
     fn handle_variables(&mut self, args: &VariablesArguments) -> ResponseBody {
         let req_id = args.variables_reference;
 
-        if let Some(locator) = self.frame_to_depth.get(&req_id).copied() {
-            let locals = self
-                .contexts
-                .get(locator.context_idx)
-                .and_then(|ctx| {
-                    ctx.try_borrow()
-                        .ok()
-                        .map(|ctx| ctx.replayer.locals_for_frame(locator.depth_from_top))
-                })
-                .unwrap_or_default();
+        if let Some(locator) = self.frame_to_depth.get(&req_id).cloned() {
+            let locals = if let Some(snapshot_locals) = locator.snapshot_locals {
+                // Parent frames shown under a child VM stop cannot be read live.
+                snapshot_locals
+            } else {
+                self.contexts
+                    .get(locator.context_idx)
+                    .and_then(|ctx| {
+                        ctx.try_borrow()
+                            .ok()
+                            .map(|ctx| ctx.replayer.locals_for_frame(locator.depth_from_top))
+                    })
+                    .unwrap_or_default()
+            };
             let variables = locals
                 .into_iter()
                 .map(|lv| self.debug_value_to_variable(lv))
@@ -1027,6 +1064,7 @@ impl ReplayerDebugSession {
             let id = self.alloc_frame_id(FrameLocator {
                 context_idx: frame.context_idx,
                 depth_from_top: frame.depth_from_top,
+                snapshot_locals: frame.snapshot_locals,
             });
 
             stack_frames.push(StackFrame {
@@ -1201,6 +1239,7 @@ impl ReplayerDebugSession {
 struct CollectedFrame {
     context_idx: usize,
     depth_from_top: usize,
+    snapshot_locals: Option<Vec<LocalVarRendered>>,
     name: String,
     source: Option<Source>,
     line: i64,
