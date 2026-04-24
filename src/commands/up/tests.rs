@@ -492,6 +492,79 @@ fn test_find_asset_for_target_triple_distinguishes_gnu_and_musl() -> Result<()> 
 }
 
 #[test]
+fn test_release_asset_name_rejects_windows_target() {
+    let err = workflow::release_asset_name_for_target_triple("x86_64-pc-windows-msvc")
+        .expect_err("Windows releases are intentionally unsupported");
+
+    assert_error_snapshot(
+        "test_release_asset_name_rejects_windows_target",
+        err.to_string(),
+    );
+}
+
+#[test]
+fn test_update_refuses_oversized_archive_asset() -> Result<()> {
+    let (_dir, bin_path) = setup_env()?;
+    let current_version = "0.1.0";
+
+    let mut client = MockReleaseClient::new();
+    let mut assets = MockReleaseClient::create_release_assets("0.2.0");
+    assets[0].size = workflow::MAX_RELEASE_ARCHIVE_BYTES + 1;
+    client.set_latest("0.2.0", assets);
+
+    let err = workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        false,
+        None,
+        false,
+        true,
+        false,
+    )
+    .expect_err("oversized archive asset must fail before download");
+
+    assert_error_snapshot(
+        "test_update_refuses_oversized_archive_asset",
+        err.to_string(),
+    );
+    assert_eq!(fs::read_to_string(&bin_path)?, "old_binary");
+
+    Ok(())
+}
+
+#[test]
+fn test_update_refuses_oversized_checksum_asset() -> Result<()> {
+    let (_dir, bin_path) = setup_env()?;
+    let current_version = "0.1.0";
+
+    let mut client = MockReleaseClient::new();
+    let mut assets = MockReleaseClient::create_release_assets("0.2.0");
+    assets[1].size = workflow::MAX_RELEASE_CHECKSUM_BYTES + 1;
+    client.set_latest("0.2.0", assets);
+
+    let err = workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        false,
+        None,
+        false,
+        true,
+        false,
+    )
+    .expect_err("oversized checksum asset must fail before download");
+
+    assert_error_snapshot(
+        "test_update_refuses_oversized_checksum_asset",
+        err.to_string(),
+    );
+    assert_eq!(fs::read_to_string(&bin_path)?, "old_binary");
+
+    Ok(())
+}
+
+#[test]
 fn test_update_fails_without_checksum_asset() -> Result<()> {
     let (_dir, bin_path) = setup_env()?;
     let current_version = "0.1.0";
@@ -715,6 +788,98 @@ fn test_update_fails_when_archive_has_no_acton_binary() -> Result<()> {
 
     assert_error_snapshot(
         "test_update_fails_when_archive_has_no_acton_binary",
+        err.to_string(),
+    );
+    assert_eq!(fs::read_to_string(&bin_path)?, "old_binary");
+
+    Ok(())
+}
+
+#[test]
+fn test_update_fails_when_archive_acton_entry_is_symlink() -> Result<()> {
+    let (_dir, bin_path) = setup_env()?;
+    let current_version = "0.1.0";
+
+    let mut client = MockReleaseClient::new();
+    let archive_name = MockReleaseClient::current_archive_name()?;
+    let archive_bytes = MockReleaseClient::build_archive_with_acton_symlink()?;
+    let checksum = format!("{:x}", Sha256::digest(&archive_bytes));
+    client.set_latest(
+        "0.2.0",
+        vec![
+            MockReleaseClient::create_named_asset_with_raw_bytes(
+                "0.2.0",
+                &archive_name,
+                archive_bytes,
+            ),
+            MockReleaseClient::create_named_asset_with_raw_bytes(
+                "0.2.0",
+                &format!("{archive_name}.sha256"),
+                format!("{checksum}  {archive_name}\n").into_bytes(),
+            ),
+        ],
+    );
+
+    let err = workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        false,
+        None,
+        false,
+        true,
+        false,
+    )
+    .expect_err("archive symlink must not be extracted as Acton binary");
+
+    assert_error_snapshot(
+        "test_update_fails_when_archive_acton_entry_is_symlink",
+        err.to_string(),
+    );
+    assert_eq!(fs::read_to_string(&bin_path)?, "old_binary");
+
+    Ok(())
+}
+
+#[test]
+fn test_update_fails_when_archive_acton_entry_is_too_large() -> Result<()> {
+    let (_dir, bin_path) = setup_env()?;
+    let current_version = "0.1.0";
+
+    let mut client = MockReleaseClient::new();
+    let archive_name = MockReleaseClient::current_archive_name()?;
+    let archive_bytes = MockReleaseClient::build_archive_with_oversized_acton_header()?;
+    let checksum = format!("{:x}", Sha256::digest(&archive_bytes));
+    client.set_latest(
+        "0.2.0",
+        vec![
+            MockReleaseClient::create_named_asset_with_raw_bytes(
+                "0.2.0",
+                &archive_name,
+                archive_bytes,
+            ),
+            MockReleaseClient::create_named_asset_with_raw_bytes(
+                "0.2.0",
+                &format!("{archive_name}.sha256"),
+                format!("{checksum}  {archive_name}\n").into_bytes(),
+            ),
+        ],
+    );
+
+    let err = workflow::run_update(
+        &client,
+        &bin_path,
+        current_version,
+        false,
+        None,
+        false,
+        true,
+        false,
+    )
+    .expect_err("oversized Acton entry must fail before extraction");
+
+    assert_error_snapshot(
+        "test_update_fails_when_archive_acton_entry_is_too_large",
         err.to_string(),
     );
     assert_eq!(fs::read_to_string(&bin_path)?, "old_binary");
@@ -964,6 +1129,42 @@ impl MockReleaseClient {
         tar.append(&header, contents.as_bytes())?;
 
         let encoder = tar.into_inner()?;
+        Ok(encoder.finish()?)
+    }
+
+    fn build_archive_with_acton_symlink() -> Result<Vec<u8>> {
+        let encoder = GzBuilder::new()
+            .mtime(0)
+            .write(Vec::new(), Compression::default());
+        let mut tar = tar::Builder::new(encoder);
+
+        let mut header = tar::Header::new_gnu();
+        header.set_entry_type(tar::EntryType::Symlink);
+        header.set_path("acton")?;
+        header.set_link_name("/tmp/acton")?;
+        header.set_size(0);
+        header.set_mode(0o777);
+        header.set_mtime(0);
+        header.set_cksum();
+        tar.append(&header, std::io::empty())?;
+
+        let encoder = tar.into_inner()?;
+        Ok(encoder.finish()?)
+    }
+
+    fn build_archive_with_oversized_acton_header() -> Result<Vec<u8>> {
+        let mut header = tar::Header::new_gnu();
+        header.set_path("acton")?;
+        header.set_size(workflow::MAX_EXTRACTED_ACTON_BYTES + 1);
+        header.set_mode(0o755);
+        header.set_mtime(0);
+        header.set_cksum();
+
+        let mut encoder = GzBuilder::new()
+            .mtime(0)
+            .write(Vec::new(), Compression::default());
+        encoder.write_all(header.as_bytes())?;
+        encoder.write_all(&[0; 1024])?;
         Ok(encoder.finish()?)
     }
 }

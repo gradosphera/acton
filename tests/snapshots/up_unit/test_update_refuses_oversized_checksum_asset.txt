@@ -1,0 +1,1 @@
+Refusing to download release checksum [ACTON_ARCHIVE_SHA256] because release metadata reports 16385 bytes, above the 16384 byte limit.

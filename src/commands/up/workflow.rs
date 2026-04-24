@@ -11,6 +11,11 @@ use tempfile::TempDir;
 
 use super::client::{Asset, Release, ReleaseClient};
 
+pub(crate) const MAX_RELEASE_ARCHIVE_BYTES: u64 = 256 * 1024 * 1024;
+pub(crate) const MAX_RELEASE_CHECKSUM_BYTES: u64 = 16 * 1024;
+pub(crate) const MAX_EXTRACTED_ACTON_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_RELEASE_ARCHIVE_ENTRIES: usize = 128;
+
 #[derive(serde::Serialize)]
 pub(super) struct UpdateInfo {
     pub success: bool,
@@ -220,6 +225,12 @@ pub(crate) fn download_verified_release_archive<C: ReleaseClient>(
 ) -> Result<VerifiedReleaseArchive> {
     let asset = find_asset(release)?;
     let checksum_asset = find_checksum_asset(release, &asset.name)?;
+    ensure_asset_size(asset, MAX_RELEASE_ARCHIVE_BYTES, "release archive")?;
+    ensure_asset_size(
+        checksum_asset,
+        MAX_RELEASE_CHECKSUM_BYTES,
+        "release checksum",
+    )?;
     let tarball_path = client.download_asset(asset)?;
     let checksum_path = client.download_asset(checksum_asset)?;
 
@@ -257,8 +268,25 @@ pub(crate) fn release_asset_name_for_target_triple(target_triple: &str) -> Resul
     if target_triple.trim().is_empty() {
         bail!("Target triple is empty");
     }
+    if target_triple.contains("windows") {
+        bail!("Acton release archives are not supported on Windows");
+    }
 
     Ok(format!("acton-{target_triple}.tar.gz"))
+}
+
+fn ensure_asset_size(asset: &Asset, max_size: u64, label: &str) -> Result<()> {
+    if asset.size > max_size {
+        bail!(
+            "Refusing to download {} {} because release metadata reports {} bytes, above the {} byte limit.",
+            label,
+            asset.name,
+            asset.size,
+            max_size
+        );
+    }
+
+    Ok(())
 }
 
 fn find_checksum_asset<'a>(release: &'a Release, archive_name: &str) -> Result<&'a Asset> {
@@ -353,25 +381,62 @@ pub(crate) fn extract_acton_binary(tarball_path: &Path) -> Result<ExtractedActon
     let tar = GzDecoder::new(tar_gz);
     let mut archive = Archive::new(tar);
 
-    let mut temp_bin_path = None;
-
     let temp_dir = tempfile::tempdir()
         .context("Failed to prepare a temporary directory for extracting the new Acton binary")?;
-    archive.unpack(&temp_dir).context(
-        "Failed to extract the downloaded release archive. The archive may be corrupted.",
-    )?;
+    let new_bin_path = temp_dir.path().join("acton");
+    let mut found = false;
+    let mut entries_seen = 0usize;
 
-    for entry in walkdir::WalkDir::new(&temp_dir) {
-        let entry = entry.context("Failed while scanning the extracted release archive")?;
-        if entry.file_type().is_file() && entry.file_name() == "acton" {
-            temp_bin_path = Some(entry.path().to_owned());
-            break;
+    let entries = archive
+        .entries()
+        .context("Failed to read the downloaded release archive. The archive may be corrupted.")?;
+    for entry in entries {
+        entries_seen += 1;
+        if entries_seen > MAX_RELEASE_ARCHIVE_ENTRIES {
+            bail!(
+                "The downloaded release archive contains more than {MAX_RELEASE_ARCHIVE_ENTRIES} entries"
+            );
         }
+
+        let mut entry = entry.context(
+            "Failed to read an entry from the downloaded release archive. The archive may be corrupted.",
+        )?;
+        if !entry.header().entry_type().is_file() {
+            continue;
+        }
+
+        let is_acton_binary = {
+            let entry_path = entry
+                .path()
+                .context("Failed to read a file path from the downloaded release archive")?;
+            entry_path.file_name().and_then(|name| name.to_str()) == Some("acton")
+        };
+        if !is_acton_binary {
+            continue;
+        }
+
+        let size = entry
+            .header()
+            .size()
+            .context("Failed to read the Acton binary size from the release archive")?;
+        if size > MAX_EXTRACTED_ACTON_BYTES {
+            bail!(
+                "The Acton binary in the downloaded release archive is {} bytes, above the {} byte limit.",
+                size,
+                MAX_EXTRACTED_ACTON_BYTES
+            );
+        }
+
+        entry.unpack(&new_bin_path).context(
+            "Failed to extract the Acton binary from the downloaded release archive. The archive may be corrupted.",
+        )?;
+        found = true;
+        break;
     }
 
-    let new_bin_path = temp_bin_path.ok_or_else(|| {
-        anyhow::anyhow!("The downloaded release archive does not contain an `acton` binary")
-    })?;
+    if !found {
+        bail!("The downloaded release archive does not contain an `acton` binary");
+    }
 
     Ok(ExtractedActonBinary {
         path: new_bin_path,

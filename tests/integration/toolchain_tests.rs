@@ -794,7 +794,7 @@ fn test_project_command_installed_exact_without_index_reexecs_snapshot() -> Resu
         None,
         &recording_fake_acton("0.4.0", "1.4.0", "installed exact reexec complete"),
     )?;
-    let mock = failing_toolchain_index_server();
+    let mock = forbidden_github_server();
     let home = home.to_string_lossy().into_owned();
 
     project
@@ -1744,7 +1744,7 @@ fn supported_archive_name() -> String {
 }
 
 fn acton_binary_name() -> &'static str {
-    if cfg!(windows) { "acton.exe" } else { "acton" }
+    "acton"
 }
 
 fn set_executable_permissions(path: &Path) -> Result<()> {
@@ -1910,6 +1910,10 @@ fn failing_toolchain_index_server() -> GitHubMockServer {
     })
 }
 
+fn forbidden_github_server() -> GitHubMockServer {
+    GitHubMockServer::spawn_forbidden(Duration::from_millis(500))
+}
+
 fn archive_bytes(binary_contents: &str) -> Result<Vec<u8>> {
     archive_bytes_with_single_file("acton", binary_contents)
 }
@@ -2057,6 +2061,41 @@ impl GitHubMockServer {
                     &expected.response_headers,
                     &expected.body,
                 );
+            }
+        });
+
+        Self {
+            base_url,
+            handle: Some(handle),
+        }
+    }
+
+    fn spawn_forbidden(timeout: Duration) -> Self {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("failed to bind GitHub mock");
+        listener
+            .set_nonblocking(true)
+            .expect("failed to set GitHub mock non-blocking");
+        let addr = listener
+            .local_addr()
+            .expect("failed to inspect GitHub mock address");
+        let base_url = format!("http://{addr}");
+
+        let handle = thread::spawn(move || {
+            let wait_until = Instant::now() + timeout;
+            loop {
+                match listener.accept() {
+                    Ok((stream, _)) => {
+                        let request = read_http_request(&stream);
+                        panic!("unexpected GitHub mock request: {}", request.path);
+                    }
+                    Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                        if Instant::now() > wait_until {
+                            break;
+                        }
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => panic!("GitHub mock accept failed: {err}"),
+                }
             }
         });
 

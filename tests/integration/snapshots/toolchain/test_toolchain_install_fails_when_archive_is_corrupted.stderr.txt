@@ -1,7 +1,4 @@
-Error: Failed to extract the downloaded release archive. The archive may be corrupted.
-
-Caused by:
-  failed to iterate over archive
+Error: Failed to read an entry from the downloaded release archive. The archive may be corrupted.
 
 Caused by:
   invalid gzip header

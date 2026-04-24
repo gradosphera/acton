@@ -327,6 +327,17 @@ impl ReleaseClient for GitHubClient {
             );
         }
 
+        if let Some(content_length) = resp.content_length()
+            && content_length > asset.size
+        {
+            bail!(
+                "GitHub reported {} bytes for {}, but release metadata says {} bytes.",
+                content_length,
+                asset.name,
+                asset.size
+            );
+        }
+
         let mut file = tempfile::NamedTempFile::new()
             .with_context(|| format!("Failed to create a temporary file for {}", asset.name))?;
         let mut buf = [0; 8192];
@@ -345,6 +356,13 @@ impl ReleaseClient for GitHubClient {
             file.write_all(&buf[..n])
                 .with_context(|| format!("Failed to write {} to a temporary file", asset.name))?;
             downloaded += n as u64;
+            if downloaded > asset.size {
+                bail!(
+                    "Downloaded more data for {} than release metadata allows ({} bytes).",
+                    asset.name,
+                    asset.size
+                );
+            }
             pb.set_position(downloaded);
         }
         pb.finish_and_clear();

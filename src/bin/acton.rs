@@ -1625,7 +1625,7 @@ fn apply_project_toolchain(
         return Ok(());
     }
 
-    let environment = ToolchainEnvironment::runtime()?;
+    let environment = ToolchainEnvironment::runtime_for_resolution(config.as_ref(), selector)?;
     let mut report = resolve_toolchain(config.as_ref(), selector, &environment)?;
 
     if report.current {

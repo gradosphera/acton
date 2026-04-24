@@ -2,6 +2,7 @@ use acton_config::config::{ActonConfig, ToolchainConfig, manifest_path};
 use anyhow::{Context, Result, bail};
 use base64::Engine;
 use chrono::{DateTime, Duration as ChronoDuration, SecondsFormat, Utc};
+use fs2::FileExt;
 use reqwest::blocking::Client;
 use reqwest::header::{
     AUTHORIZATION, ETAG, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED, USER_AGENT,
@@ -11,12 +12,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::env;
 use std::ffi::{OsStr, OsString};
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 const TOOLCHAIN_INDEX_REPOSITORIES: [&str; 2] = ["i582/acton-public", "ton-blockchain/acton"];
 const TOOLCHAIN_INDEX_FILE: &str = "toolchain-index.json";
 const TOOLCHAIN_INDEX_CACHE_TTL_HOURS: i64 = 24;
+const TOOLCHAIN_INDEX_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 #[cfg(debug_assertions)]
 const TEST_TOOLCHAIN_GITHUB_API_BASE_ENV: &str = "ACTON_TEST_TOOLCHAIN_GITHUB_API_BASE";
 
@@ -204,12 +208,7 @@ pub fn resolve_toolchain(
     selector: Option<&CliToolchainSelector>,
     environment: &ToolchainEnvironment,
 ) -> Result<ToolchainResolveReport> {
-    let request = match selector {
-        Some(selector) => ToolchainRequest::CliActon {
-            acton: selector.acton.clone(),
-        },
-        None => project_request(config)?,
-    };
+    let request = toolchain_request(config, selector)?;
 
     match request {
         ToolchainRequest::None => Ok(report_for_current("current", environment, false, None)),
@@ -225,6 +224,18 @@ pub fn resolve_toolchain(
             resolve_acton_request(source, &acton, tolk.as_deref(), environment)
         }
         ToolchainRequest::ProjectTolk { tolk } => resolve_tolk_request(&tolk, environment),
+    }
+}
+
+fn toolchain_request(
+    config: Option<&ToolchainConfig>,
+    selector: Option<&CliToolchainSelector>,
+) -> Result<ToolchainRequest> {
+    match selector {
+        Some(selector) => Ok(ToolchainRequest::CliActon {
+            acton: selector.acton.clone(),
+        }),
+        None => project_request(config),
     }
 }
 
@@ -254,9 +265,48 @@ impl ToolchainEnvironment {
             installed: scan_installed_toolchains(),
         })
     }
+
+    pub fn runtime_for_resolution(
+        config: Option<&ToolchainConfig>,
+        selector: Option<&CliToolchainSelector>,
+    ) -> Result<Self> {
+        let request = toolchain_request(config, selector)?;
+        let current_acton = crate::build_info::PACKAGE_VERSION.to_owned();
+        let current_tolk = crate::build_info::TOLK_VERSION.to_owned();
+        let current_exe = env::current_exe().context("failed to resolve current executable")?;
+        let installed = scan_installed_toolchains();
+        let cached_index = ToolchainIndex::load_cached_best_effort();
+
+        let environment = Self {
+            current_acton,
+            current_tolk,
+            current_exe,
+            index: cached_index,
+            index_warning: None,
+            installed,
+        };
+
+        if !request_needs_remote_index(&request, &environment) {
+            return Ok(environment);
+        }
+
+        let index = ToolchainIndex::load_best_effort()?;
+        Ok(Self {
+            index: index.index,
+            index_warning: index.warning,
+            ..environment
+        })
+    }
 }
 
 impl ToolchainIndex {
+    fn load_cached_best_effort() -> Option<Self> {
+        read_cached_toolchain_index()
+            .ok()
+            .flatten()
+            .map(|cached| cached.index)
+    }
+
     fn load_best_effort() -> Result<ToolchainIndexLoad> {
         let cached = match read_cached_toolchain_index() {
             Ok(cached) => cached,
@@ -428,6 +478,26 @@ impl ToolchainIndex {
         releases.sort_by(|(left, _), (right, _)| left.cmp(right));
         releases.into_iter().map(|(_, acton)| acton).collect()
     }
+
+    fn yanked_acton_versions_for_tolk(&self, tolk: &str) -> Vec<(&str, Option<&str>)> {
+        let mut releases = self
+            .releases
+            .iter()
+            .filter(|release| release.tolk == tolk && release.stable && release.yanked)
+            .filter_map(|release| {
+                parse_exact_semver("toolchain index acton version", &release.acton)
+                    .ok()
+                    .map(|version| {
+                        (
+                            version,
+                            (release.acton.as_str(), release.yank_reason.as_deref()),
+                        )
+                    })
+            })
+            .collect::<Vec<_>>();
+        releases.sort_by(|(left, _), (right, _)| left.cmp(right));
+        releases.into_iter().map(|(_, release)| release).collect()
+    }
 }
 
 fn read_cached_toolchain_index() -> Result<Option<CachedToolchainIndex>> {
@@ -472,17 +542,27 @@ fn write_toolchain_index_cache(
 ) -> Result<()> {
     let store_dir = toolchain_store_dir()?;
     fs::create_dir_all(&store_dir)?;
+    let lock_path = store_dir.join(".index.lock");
+    let lock = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)
+        .with_context(|| format!("failed to open {}", lock_path.display()))?;
+    lock.lock_exclusive()
+        .with_context(|| format!("failed to lock {}", lock_path.display()))?;
 
     let index_path = store_dir.join("index.json");
     let meta_path = store_dir.join("index-meta.json");
 
-    fs::write(&index_path, index.to_pretty_json()?)
-        .with_context(|| format!("failed to write {}", index_path.display()))?;
+    write_file_atomically(&store_dir, &index_path, index.to_pretty_json()?.as_bytes())?;
 
     let mut meta_json = serde_json::to_string_pretty(meta)?;
     meta_json.push('\n');
-    fs::write(&meta_path, meta_json)
-        .with_context(|| format!("failed to write {}", meta_path.display()))?;
+    write_file_atomically(&store_dir, &meta_path, meta_json.as_bytes())?;
+
+    let _ = lock.unlock();
 
     Ok(())
 }
@@ -490,7 +570,24 @@ fn write_toolchain_index_cache(
 fn toolchain_index_cache_is_fresh(meta: &ToolchainIndexCacheMeta) -> bool {
     parse_toolchain_index_generated_at(&meta.fetched_at)
         .map(|fetched_at| Utc::now().signed_duration_since(fetched_at))
-        .is_ok_and(|age| age <= ChronoDuration::hours(TOOLCHAIN_INDEX_CACHE_TTL_HOURS))
+        .is_ok_and(|age| {
+            age >= ChronoDuration::zero()
+                && age <= ChronoDuration::hours(TOOLCHAIN_INDEX_CACHE_TTL_HOURS)
+        })
+}
+
+fn write_file_atomically(dir: &Path, path: &Path, contents: &[u8]) -> Result<()> {
+    let mut temp = tempfile::NamedTempFile::new_in(dir)
+        .with_context(|| format!("failed to create a temporary file for {}", path.display()))?;
+    temp.write_all(contents)
+        .with_context(|| format!("failed to write temporary file for {}", path.display()))?;
+    temp.as_file_mut()
+        .sync_all()
+        .with_context(|| format!("failed to sync temporary file for {}", path.display()))?;
+    temp.into_temp_path()
+        .persist(path)
+        .with_context(|| format!("failed to replace {}", path.display()))?;
+    Ok(())
 }
 
 fn parse_toolchain_index_generated_at(value: &str) -> Result<DateTime<Utc>> {
@@ -502,7 +599,10 @@ fn parse_toolchain_index_generated_at(value: &str) -> Result<DateTime<Utc>> {
 fn fetch_remote_toolchain_index(
     cached_meta: Option<&ToolchainIndexCacheMeta>,
 ) -> Result<RemoteToolchainIndex> {
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(TOOLCHAIN_INDEX_FETCH_TIMEOUT)
+        .build()
+        .context("failed to build toolchain index HTTP client")?;
     let token = env::var("GITHUB_TOKEN").ok();
     let mut errors = Vec::new();
 
@@ -723,13 +823,14 @@ fn resolve_acton_request(
         bail_yanked_metadata(acton, metadata.yank_reason.as_deref())?;
     }
 
-    let bundled_tolk = release
-        .map(|release| release.tolk.as_str())
-        .or_else(|| installed_metadata.map(|metadata| metadata.tolk.as_str()))
-        .or_else(|| {
-            (acton == environment.current_acton).then_some(environment.current_tolk.as_str())
-        })
-        .with_context(|| unknown_acton_message(acton, environment.index.as_ref()))?;
+    let bundled_tolk = if acton == environment.current_acton {
+        Some(environment.current_tolk.as_str())
+    } else {
+        installed_metadata
+            .map(|metadata| metadata.tolk.as_str())
+            .or_else(|| release.map(|release| release.tolk.as_str()))
+    }
+    .with_context(|| unknown_acton_message(acton, environment.index.as_ref()))?;
 
     if let Some(requested_tolk) = requested_tolk
         && bundled_tolk != requested_tolk
@@ -759,9 +860,8 @@ fn resolve_tolk_request(
     requested_tolk: &str,
     environment: &ToolchainEnvironment,
 ) -> Result<ToolchainResolveReport> {
-    if environment.current_tolk == requested_tolk
-        && !current_release_is_yanked(environment.index.as_ref(), environment)
-    {
+    if environment.current_tolk == requested_tolk {
+        bail_if_current_release_is_yanked(environment)?;
         return Ok(report_for_current("project-tolk", environment, false, None));
     }
 
@@ -771,9 +871,9 @@ fn resolve_tolk_request(
         )
     })?;
 
-    let release = index
-        .newest_supported_for_tolk(requested_tolk)?
-        .with_context(|| unknown_tolk_message(requested_tolk, Some(index)))?;
+    let Some(release) = index.newest_supported_for_tolk(requested_tolk)? else {
+        bail!("{}", unavailable_tolk_message(requested_tolk, index));
+    };
 
     Ok(report_for_acton(
         "project-tolk",
@@ -783,6 +883,36 @@ fn resolve_tolk_request(
         environment.installed.get(&release.acton),
         environment,
     ))
+}
+
+fn request_needs_remote_index(
+    request: &ToolchainRequest,
+    environment: &ToolchainEnvironment,
+) -> bool {
+    match request {
+        ToolchainRequest::None => false,
+        ToolchainRequest::CliActon { acton } | ToolchainRequest::ProjectActon { acton, .. } => {
+            if environment
+                .index
+                .as_ref()
+                .is_some_and(|index| index.release_for_acton(acton).is_some())
+            {
+                return false;
+            }
+
+            if acton == &environment.current_acton {
+                return false;
+            }
+
+            environment
+                .installed
+                .get(acton)
+                .is_none_or(|installed| installed.release.is_none())
+        }
+        ToolchainRequest::ProjectTolk { tolk } => {
+            environment.current_tolk != *tolk && environment.index.is_none()
+        }
+    }
 }
 
 fn report_for_current(
@@ -836,13 +966,26 @@ fn report_for_acton(
     }
 }
 
-fn current_release_is_yanked(
-    index: Option<&ToolchainIndex>,
-    environment: &ToolchainEnvironment,
-) -> bool {
-    index
+fn bail_if_current_release_is_yanked(environment: &ToolchainEnvironment) -> Result<()> {
+    if let Some(release) = environment
+        .index
+        .as_ref()
         .and_then(|index| index.release_for_acton(&environment.current_acton))
-        .is_some_and(|release| release.yanked)
+        && release.yanked
+    {
+        bail_yanked_release(release)?;
+    }
+
+    if let Some(metadata) = environment
+        .installed
+        .get(&environment.current_acton)
+        .and_then(|installed| installed.release.as_ref())
+        && metadata.yanked
+    {
+        bail_yanked_metadata(&environment.current_acton, metadata.yank_reason.as_deref())?;
+    }
+
+    Ok(())
 }
 
 fn bail_yanked_release(release: &ToolchainIndexRelease) -> Result<()> {
@@ -915,6 +1058,30 @@ fn unknown_tolk_message(tolk: &str, index: Option<&ToolchainIndex>) -> String {
             message.push_str(&format!("\nKnown Tolk versions: {}", known.join(", ")));
         }
     }
+    message
+}
+
+fn unavailable_tolk_message(tolk: &str, index: &ToolchainIndex) -> String {
+    let yanked = index.yanked_acton_versions_for_tolk(tolk);
+    if yanked.is_empty() {
+        return unknown_tolk_message(tolk, Some(index));
+    }
+
+    let mut message = format!("Tolk {tolk} is only available through yanked Acton releases.");
+    message.push_str(&format!("\nYanked Acton releases for Tolk {tolk}:"));
+    for (acton, reason) in yanked {
+        match reason {
+            Some(reason) if !reason.trim().is_empty() => {
+                message.push_str(&format!("\n  {acton}: {reason}"));
+            }
+            _ => {
+                message.push_str(&format!("\n  {acton}: yanked"));
+            }
+        }
+    }
+    message.push_str(&format!(
+        "\nUse a different Tolk version or wait for a non-yanked Acton release that ships Tolk {tolk}."
+    ));
     message
 }
 
@@ -1081,16 +1248,12 @@ fn optional_toolchain_store_dir() -> Option<PathBuf> {
 }
 
 fn home_dir() -> Option<PathBuf> {
-    #[cfg(windows)]
-    let home = env::var_os("USERPROFILE");
-    #[cfg(not(windows))]
-    let home = env::var_os("HOME");
-
-    home.map(PathBuf::from)
+    let home = env::var_os("HOME")?;
+    (!home.as_os_str().is_empty()).then(|| PathBuf::from(home))
 }
 
 const fn acton_binary_name() -> &'static str {
-    if cfg!(windows) { "acton.exe" } else { "acton" }
+    "acton"
 }
 
 #[cfg(test)]
@@ -1118,6 +1281,17 @@ mod tests {
             current_tolk: "1.3.0".to_owned(),
             current_exe: PathBuf::from("/bin/acton"),
             index: Some(index),
+            index_warning: None,
+            installed: BTreeMap::new(),
+        }
+    }
+
+    fn environment_without_index() -> ToolchainEnvironment {
+        ToolchainEnvironment {
+            current_acton: "0.3.1".to_owned(),
+            current_tolk: "1.3.0".to_owned(),
+            current_exe: PathBuf::from("/bin/acton"),
+            index: None,
             index_warning: None,
             installed: BTreeMap::new(),
         }
@@ -1192,6 +1366,58 @@ mod tests {
     }
 
     #[test]
+    fn current_acton_resolution_uses_current_tolk_before_stale_index() {
+        let mut env = environment(sample_index());
+        env.index = Some(ToolchainIndex {
+            schema: 1,
+            generated_at: "2026-04-24T00:00:00Z".to_owned(),
+            releases: vec![release("0.3.1", "9.9.9", false)],
+        });
+        let config = ToolchainConfig {
+            acton: Some("0.3.1".to_owned()),
+            tolk: Some("1.3.0".to_owned()),
+        };
+
+        let report = resolve_toolchain(Some(&config), None, &env).unwrap();
+
+        assert_eq!(report.tolk, "1.3.0");
+        assert!(report.current);
+    }
+
+    #[test]
+    fn installed_acton_resolution_uses_local_metadata_before_stale_index() {
+        let mut env = environment(sample_index());
+        env.index = Some(ToolchainIndex {
+            schema: 1,
+            generated_at: "2026-04-24T00:00:00Z".to_owned(),
+            releases: vec![release("0.4.0", "9.9.9", false)],
+        });
+        env.installed.insert(
+            "0.4.0".to_owned(),
+            InstalledToolchain {
+                binary_path: PathBuf::from("/toolchains/0.4.0/acton"),
+                release: Some(ToolchainReleaseMetadata {
+                    schema: 1,
+                    acton: "0.4.0".to_owned(),
+                    tolk: "1.4.0".to_owned(),
+                    target_triple: "test-target".to_owned(),
+                    yanked: false,
+                    yank_reason: None,
+                }),
+            },
+        );
+        let config = ToolchainConfig {
+            acton: Some("0.4.0".to_owned()),
+            tolk: Some("1.4.0".to_owned()),
+        };
+
+        let report = resolve_toolchain(Some(&config), None, &env).unwrap();
+
+        assert_eq!(report.tolk, "1.4.0");
+        assert!(report.installed);
+    }
+
+    #[test]
     fn cli_selector_overrides_project_toolchain() {
         let env = environment(sample_index());
         let config = ToolchainConfig {
@@ -1225,6 +1451,100 @@ mod tests {
     }
 
     #[test]
+    fn project_tolk_request_rejects_current_binary_with_local_yanked_metadata() {
+        let mut env = environment_without_index();
+        env.installed.insert(
+            "0.3.1".to_owned(),
+            InstalledToolchain {
+                binary_path: PathBuf::from("/toolchains/0.3.1/acton"),
+                release: Some(ToolchainReleaseMetadata {
+                    schema: 1,
+                    acton: "0.3.1".to_owned(),
+                    tolk: "1.3.0".to_owned(),
+                    target_triple: "test-target".to_owned(),
+                    yanked: true,
+                    yank_reason: Some("broken local metadata".to_owned()),
+                }),
+            },
+        );
+        let config = ToolchainConfig {
+            acton: None,
+            tolk: Some("1.3.0".to_owned()),
+        };
+
+        let err = resolve_toolchain(Some(&config), None, &env)
+            .expect_err("current yanked metadata must fail");
+
+        assert_eq!(
+            err.to_string(),
+            "Acton 0.3.1 is yanked: broken local metadata"
+        );
+    }
+
+    #[test]
+    fn matching_current_tolk_does_not_need_remote_index() {
+        let env = environment_without_index();
+        let request = ToolchainRequest::ProjectTolk {
+            tolk: "1.3.0".to_owned(),
+        };
+
+        assert!(!request_needs_remote_index(&request, &env));
+    }
+
+    #[test]
+    fn installed_explicit_acton_with_metadata_does_not_need_remote_index() {
+        let mut env = environment_without_index();
+        env.installed.insert(
+            "0.4.0".to_owned(),
+            InstalledToolchain {
+                binary_path: PathBuf::from("/toolchains/0.4.0/acton"),
+                release: Some(ToolchainReleaseMetadata {
+                    schema: 1,
+                    acton: "0.4.0".to_owned(),
+                    tolk: "1.4.0".to_owned(),
+                    target_triple: "test-target".to_owned(),
+                    yanked: false,
+                    yank_reason: None,
+                }),
+            },
+        );
+        let request = ToolchainRequest::ProjectActon {
+            acton: "0.4.0".to_owned(),
+            tolk: None,
+        };
+
+        assert!(!request_needs_remote_index(&request, &env));
+    }
+
+    #[test]
+    fn installed_explicit_acton_without_metadata_needs_remote_index() {
+        let mut env = environment_without_index();
+        env.installed.insert(
+            "0.4.0".to_owned(),
+            InstalledToolchain {
+                binary_path: PathBuf::from("/toolchains/0.4.0/acton"),
+                release: None,
+            },
+        );
+        let request = ToolchainRequest::ProjectActon {
+            acton: "0.4.0".to_owned(),
+            tolk: None,
+        };
+
+        assert!(request_needs_remote_index(&request, &env));
+    }
+
+    #[test]
+    fn non_current_tolk_without_cache_needs_remote_index() {
+        let env = environment_without_index();
+        let request = ToolchainRequest::ProjectTolk {
+            tolk: "1.4.0".to_owned(),
+        };
+
+        assert!(request_needs_remote_index(&request, &env));
+    }
+
+    #[test]
     fn project_tolk_request_selects_newest_non_yanked_release() {
         let mut env = environment(sample_index());
         env.current_tolk = "1.2.0".to_owned();
@@ -1238,6 +1558,46 @@ mod tests {
         assert_eq!(report.acton, "0.3.3");
         assert!(!report.installed);
         assert!(report.install_required);
+    }
+
+    #[test]
+    fn project_tolk_request_reports_only_yanked_releases() {
+        let mut env = environment(sample_index());
+        env.current_tolk = "1.2.0".to_owned();
+        env.index = Some(ToolchainIndex {
+            schema: 1,
+            generated_at: "2026-04-24T00:00:00Z".to_owned(),
+            releases: vec![
+                release("0.4.0", "1.4.0", true),
+                release("0.4.1", "1.4.0", true),
+            ],
+        });
+        let config = ToolchainConfig {
+            acton: None,
+            tolk: Some("1.4.0".to_owned()),
+        };
+
+        let err = resolve_toolchain(Some(&config), None, &env)
+            .expect_err("all-yanked Tolk request must fail");
+
+        assert_eq!(
+            err.to_string(),
+            "Tolk 1.4.0 is only available through yanked Acton releases.\nYanked Acton releases for Tolk 1.4.0:\n  0.4.0: broken release\n  0.4.1: broken release\nUse a different Tolk version or wait for a non-yanked Acton release that ships Tolk 1.4.0."
+        );
+    }
+
+    #[test]
+    fn future_dated_toolchain_index_cache_is_stale() {
+        let meta = ToolchainIndexCacheMeta {
+            schema: 1,
+            fetched_at: (Utc::now() + ChronoDuration::hours(1)).to_rfc3339(),
+            source_repo: "ton-blockchain/acton-public".to_owned(),
+            source_ref: "test".to_owned(),
+            etag: None,
+            last_modified: None,
+        };
+
+        assert!(!toolchain_index_cache_is_fresh(&meta));
     }
 
     #[test]

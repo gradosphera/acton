@@ -76,6 +76,9 @@ check-docgen:
 check-schema:
     cargo run -p xtask -- schema --check
 
+check-toolchain-index:
+    cargo run -p xtask -- toolchain-index check
+
 check-deny:
     cargo deny check
 
@@ -88,7 +91,7 @@ check-security:
     cd crates/tree-sitter-tolk && yarn npm audit --all --recursive --severity=moderate
     cd crates/ton-ls/editors/code && yarn npm audit --all --recursive --severity=moderate
 
-check-ci: fmt-check check-docgen check-deps clippy typos check-schema
+check-ci: fmt-check check-docgen check-deps clippy typos check-schema check-toolchain-index
 
 check: check-ci check-deny test
 

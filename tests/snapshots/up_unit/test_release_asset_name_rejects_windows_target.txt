@@ -1,0 +1,1 @@
+Acton release archives are not supported on Windows

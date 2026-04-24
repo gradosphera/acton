@@ -464,7 +464,7 @@ fn set_executable_permissions(path: &Path) -> Result<()> {
 }
 
 const fn acton_binary_name() -> &'static str {
-    if cfg!(windows) { "acton.exe" } else { "acton" }
+    "acton"
 }
 
 #[cfg(test)]

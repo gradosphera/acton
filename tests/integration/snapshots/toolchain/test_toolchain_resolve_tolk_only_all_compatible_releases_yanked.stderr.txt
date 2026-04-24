@@ -1,2 +1,5 @@
-Error: No supported Acton release ships Tolk 1.4.0.
-Known Tolk versions: 1.4.0
+Error: Tolk 1.4.0 is only available through yanked Acton releases.
+Yanked Acton releases for Tolk 1.4.0:
+  0.4.0: broken release
+  0.4.1: broken release
+Use a different Tolk version or wait for a non-yanked Acton release that ships Tolk 1.4.0.
