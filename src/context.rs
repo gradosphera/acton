@@ -26,6 +26,21 @@ use tycho_types::cell::{Cell, CellBuilder, CellFamily, HashBytes, Store};
 use tycho_types::dict::Dict;
 use tycho_types::models::{IntAddr, LibDescr, StdAddr, Transaction};
 
+#[derive(Debug)]
+pub struct DebugStopRequested;
+
+impl std::fmt::Display for DebugStopRequested {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Debug session stopped")
+    }
+}
+
+impl std::error::Error for DebugStopRequested {}
+
+pub fn is_debug_stop_requested(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<DebugStopRequested>().is_some()
+}
+
 #[derive(Debug, Clone)]
 pub struct AssertBinFailure {
     pub operator: String,
@@ -838,7 +853,7 @@ impl<'a> DebugCtx<'a> {
         }
     }
 
-    pub fn process_incoming_requests(&mut self, terminate_at_end: bool) -> anyhow::Result<()> {
+    pub fn process_incoming_requests(&mut self, terminate_at_end: bool) -> anyhow::Result<bool> {
         self.session().process_incoming_requests(terminate_at_end)
     }
 

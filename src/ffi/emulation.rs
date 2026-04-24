@@ -1,7 +1,7 @@
 use crate::commands::common::error_fmt;
 use crate::context::{
-    AssertFailure, Context, GetMethodAssertFailure, KnownAddress, MessageIterState,
-    ParsedSearchParams, PendingMessageStep, SearchField, Wallet, to_cell,
+    AssertFailure, Context, DebugStopRequested, GetMethodAssertFailure, KnownAddress,
+    MessageIterState, ParsedSearchParams, PendingMessageStep, SearchField, Wallet, to_cell,
 };
 use crate::external_send::{SendBocContext, format_send_boc_error};
 use crate::paths;
@@ -89,9 +89,13 @@ fn run_nested_executor_until_finished(
         }
 
         if !ctx.debug.active_context_is_terminated() {
-            ctx.debug
+            let stopped = ctx
+                .debug
                 .process_incoming_requests(false)
                 .context("Cannot process nested debug requests")?;
+            if stopped {
+                return Err(DebugStopRequested.into());
+            }
         }
 
         anyhow::ensure!(

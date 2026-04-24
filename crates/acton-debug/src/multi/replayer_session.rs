@@ -130,6 +130,7 @@ pub struct ReplayerDebugSession {
     vars_debug_values: HashMap<i64, RenderedValue>,
     runtime_register_scope_requests: HashMap<i64, usize>,
     next_req_id: i64,
+    stop_requested: bool,
 }
 
 impl ReplayerDebugSession {
@@ -174,6 +175,7 @@ impl ReplayerDebugSession {
             vars_debug_values: HashMap::new(),
             runtime_register_scope_requests: HashMap::new(),
             next_req_id: 1_000_000,
+            stop_requested: false,
         }
     }
 
@@ -373,20 +375,12 @@ impl ReplayerDebugSession {
         })
     }
 
-    fn step_active_context(&self, mode: StepMode, respect_stop_conditions: bool) -> bool {
+    fn step_active_context(&self, mode: StepMode) -> bool {
         let Some(ctx) = self.active_context() else {
             return true;
         };
         let visible_frames_cache = &self.cached_visible_frames;
         let mut ctx = ctx.borrow_mut();
-
-        if !respect_stop_conditions {
-            // Disconnect/Terminate should let the live executor finish naturally
-            // instead of re-stopping on user breakpoints or exception filters.
-            ctx.replayer.clear_all_breakpoints();
-            ctx.replayer
-                .set_exception_breakpoints(replayer::ExceptionBreakMode::Never);
-        }
 
         let context_idx = self.contexts.len().saturating_sub(1);
         let label = Arc::clone(&ctx.label);
@@ -407,7 +401,7 @@ impl ReplayerDebugSession {
         self.performing_step = Some(mode);
 
         loop {
-            let is_end = self.step_active_context(mode, true);
+            let is_end = self.step_active_context(mode);
             if is_end {
                 return AdvanceOutcome::Terminated;
             }
@@ -883,14 +877,12 @@ impl ReplayerDebugSession {
             }
             Command::Disconnect(_) => {
                 self.send_response(req.success(ResponseBody::Disconnect))?;
-                self.performing_step = Some(StepMode::RunUntilBreakpoint);
-                self.step_active_context(StepMode::RunUntilBreakpoint, false);
+                self.stop_requested = true;
                 return Ok(true);
             }
             Command::Terminate(_) => {
                 self.send_response(req.success(ResponseBody::Terminate))?;
-                self.performing_step = Some(StepMode::RunUntilBreakpoint);
-                self.step_active_context(StepMode::RunUntilBreakpoint, false);
+                self.stop_requested = true;
                 return Ok(true);
             }
             Command::Evaluate(args) => {
@@ -1127,13 +1119,13 @@ impl ReplayerDebugSession {
 }
 
 impl ReplayerDebugSession {
-    pub fn process_incoming_requests(&mut self, terminate_at_end: bool) -> anyhow::Result<()> {
+    pub fn process_incoming_requests(&mut self, terminate_at_end: bool) -> anyhow::Result<bool> {
         for req in &self.transport.req_receiver.clone() {
             if self.handle_request(req.clone(), terminate_at_end)? {
                 break;
             }
         }
-        Ok(())
+        Ok(self.stop_requested)
     }
 
     pub const fn need_to_stop_child_thread_on_start(&self) -> bool {

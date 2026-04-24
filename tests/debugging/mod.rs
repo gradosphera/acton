@@ -1,6 +1,6 @@
 use acton::context::{
-    AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx, EmulationsState,
-    Env, IoContext, KnownAddresses,
+    AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx, DebugStopRequested,
+    EmulationsState, Env, IoContext, KnownAddresses, is_debug_stop_requested,
 };
 use acton::ffi;
 use acton::file_build_cache::FileBuildCache;
@@ -205,7 +205,7 @@ pub(crate) fn run_script_file(
     };
 
     let data_cell = TonCell::empty().clone();
-    let (script_result, io, formatter) = execute_script(
+    let execution = execute_script(
         &code_cell,
         &data_cell,
         abi.into(),
@@ -215,7 +215,12 @@ pub(crate) fn run_script_file(
         debug_listener,
         ExecutorVerbosity::FullLocationStackVerbose,
         stack,
-    )?;
+    );
+    let (script_result, io, formatter) = match execution {
+        Ok(result) => result,
+        Err(err) if is_debug_stop_requested(&err) => return Ok(String::new()),
+        Err(err) => return Err(err),
+    };
     get_script_result(script_result, io, formatter)
 }
 
@@ -332,7 +337,9 @@ fn execute_script<'a>(
     let mut dbg_session = ReplayerDebugSession::new(transport, replayer, "main".into());
     ctx.debug = DebugCtx::new(&mut dbg_session);
 
-    ctx.debug.process_incoming_requests(true)?;
+    if ctx.debug.process_incoming_requests(true)? {
+        return Err(DebugStopRequested.into());
+    }
 
     let result = executor.finish(&params.code)?;
     let Context { io, .. } = ctx;
