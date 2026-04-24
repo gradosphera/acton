@@ -11,16 +11,19 @@ use std::path::PathBuf;
 
 const GITHUB_RELEASE_REPOSITORIES: [&str; 2] = ["ton-blockchain/acton", "i582/acton-public"];
 #[cfg(debug_assertions)]
-const TEST_GITHUB_API_BASE_ENV: &str = "ACTON_TEST_UP_GITHUB_API_BASE"; // non-release test hook only
+const TEST_GITHUB_API_BASE_ENVS: [&str; 2] = [
+    "ACTON_TEST_TOOLCHAIN_GITHUB_API_BASE", // non-release test hook only
+    "ACTON_TEST_UP_GITHUB_API_BASE",        // legacy non-release test hook
+];
 
 #[derive(Deserialize, Debug, Clone)]
-pub(super) struct Release {
+pub(crate) struct Release {
     pub tag_name: String,
     pub assets: Vec<Asset>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub(super) struct Asset {
+pub(crate) struct Asset {
     pub name: String,
     pub url: String,
     pub browser_download_url: String,
@@ -34,13 +37,13 @@ pub(super) struct Asset {
     pub raw_bytes: Option<Vec<u8>>,
 }
 
-pub(super) trait ReleaseClient {
+pub(crate) trait ReleaseClient {
     fn get_release(&self, version: Option<&str>, trunk: bool) -> Result<Release>;
     fn list_releases(&self) -> Result<Vec<String>>;
     fn download_asset(&self, asset: &Asset) -> Result<PathBuf>;
 }
 
-pub(super) struct GitHubClient {
+pub(crate) struct GitHubClient {
     client: Client,
     token: Option<String>,
 }
@@ -52,7 +55,7 @@ enum RepoFetchResult<T> {
 }
 
 impl GitHubClient {
-    pub(super) fn new(token: Option<String>) -> Self {
+    pub(crate) fn new(token: Option<String>) -> Self {
         Self {
             client: Client::new(),
             token,
@@ -196,7 +199,9 @@ impl GitHubClient {
 
 #[cfg(debug_assertions)]
 fn test_github_api_base_override() -> Option<String> {
-    env::var(TEST_GITHUB_API_BASE_ENV).ok()
+    TEST_GITHUB_API_BASE_ENVS
+        .iter()
+        .find_map(|name| env::var(name).ok())
 }
 
 #[cfg(not(debug_assertions))]

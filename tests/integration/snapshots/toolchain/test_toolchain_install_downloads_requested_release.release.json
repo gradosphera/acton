@@ -1,0 +1,7 @@
+{
+  "acton": "0.4.0",
+  "schema": 1,
+  "target_triple": "[TARGET_TRIPLE]",
+  "tolk": "1.4.0",
+  "yanked": false
+}

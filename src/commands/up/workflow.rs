@@ -5,8 +5,9 @@ use semver::Version;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tar::Archive;
+use tempfile::TempDir;
 
 use super::client::{Asset, Release, ReleaseClient};
 
@@ -16,6 +17,15 @@ pub(super) struct UpdateInfo {
     pub current_version: String,
     pub latest_version: String,
     pub update_available: bool,
+}
+
+pub(crate) struct VerifiedReleaseArchive {
+    pub(crate) path: PathBuf,
+}
+
+pub(crate) struct ExtractedActonBinary {
+    pub(crate) path: PathBuf,
+    _temp_dir: TempDir,
 }
 
 pub(super) fn check_update<C: ReleaseClient>(
@@ -173,16 +183,9 @@ pub(super) fn run_update<C: ReleaseClient>(
         return Ok(());
     }
 
-    let asset = find_asset(&release)?;
-    let checksum_asset = find_checksum_asset(&release, &asset.name)?;
-    let tarball_path = client.download_asset(asset)?;
-    let checksum_path = client.download_asset(checksum_asset)?;
+    let archive = download_verified_release_archive(client, &release)?;
 
-    let verify_result = verify_sha256(&tarball_path, &checksum_path, &asset.name);
-    let _ = fs::remove_file(&checksum_path);
-    verify_result?;
-
-    install_binary(&tarball_path, current_exe, current_version_str)?;
+    install_binary(&archive.path, current_exe, current_version_str)?;
 
     println!("     {} to {}", "Updated".green().bold(), release.tag_name);
 
@@ -211,7 +214,26 @@ fn find_asset(release: &Release) -> Result<&Asset> {
     find_asset_for_target_triple(release, env!("TARGET_TRIPLE"))
 }
 
-pub(super) fn find_asset_for_target_triple<'a>(
+pub(crate) fn download_verified_release_archive<C: ReleaseClient>(
+    client: &C,
+    release: &Release,
+) -> Result<VerifiedReleaseArchive> {
+    let asset = find_asset(release)?;
+    let checksum_asset = find_checksum_asset(release, &asset.name)?;
+    let tarball_path = client.download_asset(asset)?;
+    let checksum_path = client.download_asset(checksum_asset)?;
+
+    let verify_result = verify_sha256(&tarball_path, &checksum_path, &asset.name);
+    let _ = fs::remove_file(&checksum_path);
+    if let Err(err) = verify_result {
+        let _ = fs::remove_file(&tarball_path);
+        return Err(err);
+    }
+
+    Ok(VerifiedReleaseArchive { path: tarball_path })
+}
+
+pub(crate) fn find_asset_for_target_triple<'a>(
     release: &'a Release,
     target_triple: &str,
 ) -> Result<&'a Asset> {
@@ -231,7 +253,7 @@ pub(super) fn find_asset_for_target_triple<'a>(
         })
 }
 
-pub(super) fn release_asset_name_for_target_triple(target_triple: &str) -> Result<String> {
+pub(crate) fn release_asset_name_for_target_triple(target_triple: &str) -> Result<String> {
     if target_triple.trim().is_empty() {
         bail!("Target triple is empty");
     }
@@ -321,7 +343,7 @@ fn compute_sha256(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-fn install_binary(tarball_path: &Path, current_exe: &Path, current_version: &str) -> Result<()> {
+pub(crate) fn extract_acton_binary(tarball_path: &Path) -> Result<ExtractedActonBinary> {
     let tar_gz = File::open(tarball_path).with_context(|| {
         format!(
             "Failed to open the downloaded release archive {}",
@@ -351,6 +373,15 @@ fn install_binary(tarball_path: &Path, current_exe: &Path, current_version: &str
         anyhow::anyhow!("The downloaded release archive does not contain an `acton` binary")
     })?;
 
+    Ok(ExtractedActonBinary {
+        path: new_bin_path,
+        _temp_dir: temp_dir,
+    })
+}
+
+fn install_binary(tarball_path: &Path, current_exe: &Path, current_version: &str) -> Result<()> {
+    let extracted = extract_acton_binary(tarball_path)?;
+
     let bin_dir = current_exe.parent().ok_or_else(|| {
         anyhow::anyhow!("Could not determine the directory of the current Acton binary")
     })?;
@@ -370,7 +401,7 @@ fn install_binary(tarball_path: &Path, current_exe: &Path, current_version: &str
     let temp_file = tempfile::NamedTempFile::new_in(bin_dir)
         .context("Failed to create a temporary file for the new Acton binary")?;
 
-    fs::copy(&new_bin_path, temp_file.path())
+    fs::copy(&extracted.path, temp_file.path())
         .context("Failed to copy the new Acton binary into the temporary file")?;
 
     // 3. Set permissions on the temporary file

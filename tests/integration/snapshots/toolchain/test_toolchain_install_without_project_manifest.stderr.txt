@@ -1,0 +1,2 @@
+Error: `acton toolchain install` requires a project [toolchain] section or an explicit Acton version.
+Run `acton toolchain install 0.3.0` or add [toolchain] to Acton.toml.

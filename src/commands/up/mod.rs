@@ -1,5 +1,5 @@
-mod client;
-mod workflow;
+pub(crate) mod client;
+pub(crate) mod workflow;
 
 #[cfg(test)]
 mod tests;

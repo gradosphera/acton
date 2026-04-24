@@ -230,6 +230,10 @@ impl ToolchainIndex {
         self.releases.iter().find(|release| release.acton == acton)
     }
 
+    pub fn releases(&self) -> &[ToolchainIndexRelease] {
+        &self.releases
+    }
+
     fn newest_supported_for_tolk(&self, tolk: &str) -> Result<Option<&ToolchainIndexRelease>> {
         let mut matches = self
             .releases
@@ -461,6 +465,10 @@ fn parse_cli_selector(raw_selector: &str) -> Result<String> {
     parse_exact_semver("toolchain selector", version).map(|version| version.to_string())
 }
 
+pub fn normalize_explicit_acton_version(raw_version: &str) -> Result<String> {
+    parse_project_acton_version(raw_version)
+}
+
 fn parse_project_acton_version(raw_version: &str) -> Result<String> {
     let raw_version = raw_version.trim();
     if raw_version == "trunk" {
@@ -530,11 +538,11 @@ fn help_or_version_command_name(arg: &OsStr) -> &'static str {
 }
 
 fn toolchain_index_cache_path() -> Option<PathBuf> {
-    Some(toolchain_store_dir()?.join("index.json"))
+    Some(optional_toolchain_store_dir()?.join("index.json"))
 }
 
 fn scan_installed_toolchains() -> BTreeMap<String, PathBuf> {
-    let Some(store_dir) = toolchain_store_dir() else {
+    let Some(store_dir) = optional_toolchain_store_dir() else {
         return BTreeMap::new();
     };
 
@@ -556,7 +564,20 @@ fn scan_installed_toolchains() -> BTreeMap<String, PathBuf> {
         .collect()
 }
 
-fn toolchain_store_dir() -> Option<PathBuf> {
+pub fn toolchain_store_dir() -> Result<PathBuf> {
+    optional_toolchain_store_dir()
+        .context("Could not determine HOME directory for Acton toolchain store")
+}
+
+pub fn installed_toolchain_dir(acton_version: &str) -> Result<PathBuf> {
+    Ok(toolchain_store_dir()?.join(acton_version))
+}
+
+pub fn installed_toolchain_binary_path(acton_version: &str) -> Result<PathBuf> {
+    Ok(installed_toolchain_dir(acton_version)?.join(acton_binary_name()))
+}
+
+fn optional_toolchain_store_dir() -> Option<PathBuf> {
     home_dir().map(|home| home.join(".acton").join("toolchains"))
 }
 

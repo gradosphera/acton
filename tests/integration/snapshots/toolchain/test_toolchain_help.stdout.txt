@@ -1,0 +1,18 @@
+Manage project Acton toolchains
+
+Usage: acton toolchain [OPTIONS] <COMMAND>
+
+Commands:
+  install  Install the Acton toolchain selected for this project
+  remove   Remove an installed side-by-side Acton toolchain
+  list     List installed and known Acton project toolchains
+  which    Print the executable selected for the current project
+  resolve  Resolve the Acton toolchain selected for the current project
+
+Options:
+      --color <WHEN>          Control when to use colored output [default: auto] [possible values: auto, always, never]
+      --manifest-path <PATH>  Path to Acton.toml
+      --project-root <PATH>   Path to project root
+  -h, --help                  Print help
+
+Run 'acton help toolchain' for more detailed information.
