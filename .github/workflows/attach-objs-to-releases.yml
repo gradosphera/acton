@@ -25,6 +25,7 @@ jobs:
       - name: Download TON objects release archives
         env:
           GH_TOKEN: ${{ github.token }}
+        # language=Bash
         run: |
           gh release download release-objs \
             --repo "${GITHUB_REPOSITORY}" \

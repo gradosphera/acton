@@ -21,7 +21,7 @@ env:
 
 jobs:
   build-linux:
-    name: Build Acton (${{ matrix.arch }}-${{ matrix.vendor }}-${{ matrix.sys }}${{ matrix.abi && format('-{0}', matrix.abi) || '' }})
+    name: Build Acton (${{ matrix.arch }}-${{ matrix.vendor }}-${{ matrix.sys }}${{ matrix.abi }})
     strategy: &runner_linux_strategy
       matrix:
         include:
@@ -62,6 +62,7 @@ jobs:
       - name: Download TON objects archive
         env:
           GH_TOKEN: ${{ github.token }}
+        # language=Bash
         run: |
           ARCHIVE_NAME="ton-objs-${TARGET_NAME}.tar.gz"
           mkdir -p objs
@@ -72,6 +73,7 @@ jobs:
           tar -C objs -xzf "${RUNNER_TEMP}/${ARCHIVE_NAME}"
 
       - name: Install LLVM and Clang
+        # language=Bash
         run: |
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
@@ -96,6 +98,7 @@ jobs:
           ACTON_RELEASE_CHANNEL: trunk
           CC: clang-16
           CXX: clang++-16
+        # language=Bash
         run: |
           just build-ui
           cargo build --release --locked --target "${TARGET_NAME}" --bin acton
@@ -136,6 +139,7 @@ jobs:
 
       - name: Check Acton target binary
         shell: bash
+        # language=Bash
         run: |
           python3 "${GITHUB_WORKSPACE}/.github/scripts/check-rust-target-binary.py" \
             --binary "${GITHUB_WORKSPACE}/target/${TARGET_NAME}/release/acton" \
@@ -176,6 +180,7 @@ jobs:
       - name: Download TON objects archive
         env:
           GH_TOKEN: ${{ github.token }}
+        # language=Bash
         run: |
           ARCHIVE_NAME="ton-objs-${TARGET_NAME}.tar.gz"
           mkdir -p objs
@@ -278,6 +283,7 @@ jobs:
       - name: Download TON objects archive
         env:
           GH_TOKEN: ${{ github.token }}
+        # language=Bash
         run: |
           ARCHIVE_NAME="ton-objs-${TARGET_NAME}.tar.gz"
           mkdir -p objs
@@ -343,6 +349,7 @@ jobs:
 
       - name: Check Acton target binary
         shell: bash
+        # language=Bash
         run: |
           python3 "${GITHUB_WORKSPACE}/.github/scripts/check-rust-target-binary.py" \
             --binary "${GITHUB_WORKSPACE}/target/${TARGET_NAME}/release/acton" \
@@ -402,16 +409,16 @@ jobs:
       - name: Delete previous trunk
         env:
           GH_TOKEN: ${{ github.token }}
+        # language=Bash
         run: |
           gh release delete trunk --repo "${GITHUB_REPOSITORY}" --cleanup-tag -y || true
 
-          gh api \
-            repos/${GITHUB_REPOSITORY}/git/refs/tags/trunk \
-            -X DELETE || true
+          gh api repos/${GITHUB_REPOSITORY}/git/refs/tags/trunk -X DELETE || true
 
       - name: Create trunk release
         env:
           GH_TOKEN: ${{ github.token }}
+        # language=Bash
         run: |
           release_notes=$(cat <<EOF
           Automated trunk build of Acton.
@@ -432,17 +439,17 @@ jobs:
         if: env.ENABLE_MIRRORING_RELEASE == 'true'
         env:
           GH_TOKEN: ${{ secrets.ACTON_PUBLIC }}
+        # language=Bash
         run: |
           gh release delete trunk --repo "${PUBLIC_ACTON_REPOSITORY}" --cleanup-tag -y || true
 
-          gh api \
-            repos/${PUBLIC_ACTON_REPOSITORY}/git/refs/tags/trunk \
-            -X DELETE || true
+          gh api repos/${PUBLIC_ACTON_REPOSITORY}/git/refs/tags/trunk -X DELETE || true
 
       - name: Create trunk release (mirror)
         if: env.ENABLE_MIRRORING_RELEASE == 'true'
         env:
           GH_TOKEN: ${{ secrets.ACTON_PUBLIC }}
+        # language=Bash
         run: |
           release_notes=$(cat <<EOF
           Automated trunk build of Acton.
