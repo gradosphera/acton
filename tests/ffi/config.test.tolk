@@ -82,7 +82,9 @@ get fun `test current config`() {
     val gas = 100;
     val before = calculateForwardFeeLocal(BASECHAIN, gas, gas);
 
-    val priceBefore = ((testing.getC7OutsideContract().get(0) as tuple).get(9) as BlockchainConfigMap)
+    val priceBefore = ((testing
+        .getC7OutsideContract()
+        .get(0) as tuple).get(9) as BlockchainConfigMap)
         .getMsgForwardPrices(BASECHAIN)
         .lumpPrice;
     var config = testing.getConfig();
@@ -95,7 +97,9 @@ get fun `test current config`() {
     val result = testing.setConfig(config);
     expect(result).toBeTrue();
 
-    val priceAfter = ((testing.getC7OutsideContract().get(0) as tuple).get(9) as BlockchainConfigMap)
+    val priceAfter = ((testing
+        .getC7OutsideContract()
+        .get(0) as tuple).get(9) as BlockchainConfigMap)
         .getMsgForwardPrices(BASECHAIN)
         .lumpPrice;
     expect(priceBefore).toNotEqual(priceAfter);

@@ -86,7 +86,11 @@ check-security:
     cd crates/tree-sitter-tolk && yarn npm audit --all --recursive --severity=moderate
     cd crates/ton-ls/editors/code && yarn npm audit --all --recursive --severity=moderate
 
-check-ci: fmt-check check-docgen check-deps clippy typos check-schema
+check-tolk:
+    cargo run -- fmt --check
+    cargo run -- check
+
+check-ci: fmt-check check-docgen check-deps clippy typos check-schema check-tolk
 
 check: check-ci check-deny test
 
