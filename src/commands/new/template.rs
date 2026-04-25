@@ -72,6 +72,26 @@ impl ProjectLayout {
     pub(super) const fn includes_typescript_app(self) -> bool {
         matches!(self, Self::App)
     }
+
+    pub(super) fn remap_path(self, path: &str) -> String {
+        match self {
+            Self::Standard => path.to_owned(),
+            Self::App => {
+                const REMAPPINGS: &[(&str, &str)] = &[
+                    ("contracts/", "contracts/src/"),
+                    ("scripts/", "contracts/scripts/"),
+                    ("tests/", "contracts/tests/"),
+                    ("wrappers/", "contracts/wrappers/"),
+                ];
+                for &(from, to) in REMAPPINGS {
+                    if let Some(rest) = path.strip_prefix(from) {
+                        return format!("{to}{rest}");
+                    }
+                }
+                path.to_owned()
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -84,7 +104,8 @@ pub(super) struct ContractTemplate {
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct ProjectScaffold {
-    dir: &'static Dir<'static>,
+    base_dir: &'static Dir<'static>,
+    app_overlay_dir: Option<&'static Dir<'static>>,
     layout: ProjectLayout,
     contracts: &'static [ContractTemplate],
     deploy_script: &'static str,
@@ -102,8 +123,13 @@ impl ProjectScaffold {
     }
 
     #[must_use]
-    pub(super) const fn deploy_script_path(self) -> &'static str {
-        self.deploy_script
+    pub(super) fn deploy_script_path(&self) -> String {
+        self.layout.remap_path(self.deploy_script)
+    }
+
+    #[must_use]
+    pub(super) fn contract_src(&self, contract: &ContractTemplate) -> String {
+        self.layout.remap_path(contract.src)
     }
 }
 
@@ -138,7 +164,7 @@ struct TemplateScaffoldInfo {
 struct TemplateContractInfo {
     id: &'static str,
     name: &'static str,
-    src: &'static str,
+    src: String,
 }
 
 const EMPTY_CONTRACTS: [ContractTemplate; 1] = [ContractTemplate {
@@ -155,13 +181,6 @@ const COUNTER_CONTRACTS: [ContractTemplate; 1] = [ContractTemplate {
     depends: &[],
 }];
 
-const COUNTER_APP_CONTRACTS: [ContractTemplate; 1] = [ContractTemplate {
-    id: "Counter",
-    name: "Counter",
-    src: "contracts/src/Counter.tolk",
-    depends: &[],
-}];
-
 const JETTON_CONTRACTS: [ContractTemplate; 2] = [
     ContractTemplate {
         id: "JettonMinter",
@@ -173,21 +192,6 @@ const JETTON_CONTRACTS: [ContractTemplate; 2] = [
         id: "JettonWallet",
         name: "JettonWallet",
         src: "contracts/JettonWallet.tolk",
-        depends: &[],
-    },
-];
-
-const JETTON_APP_CONTRACTS: [ContractTemplate; 2] = [
-    ContractTemplate {
-        id: "JettonMinter",
-        name: "JettonMinter",
-        src: "contracts/src/JettonMinter.tolk",
-        depends: &["JettonWallet"],
-    },
-    ContractTemplate {
-        id: "JettonWallet",
-        name: "JettonWallet",
-        src: "contracts/src/JettonWallet.tolk",
         depends: &[],
     },
 ];
@@ -207,68 +211,60 @@ const NFT_CONTRACTS: [ContractTemplate; 2] = [
     },
 ];
 
-const NFT_APP_CONTRACTS: [ContractTemplate; 2] = [
-    ContractTemplate {
-        id: "NftCollection",
-        name: "NftCollection",
-        src: "contracts/src/NftCollection.tolk",
-        depends: &[],
-    },
-    ContractTemplate {
-        id: "NftItem",
-        name: "NftItem",
-        src: "contracts/src/NftItem.tolk",
-        depends: &[],
-    },
-];
-
 const EMPTY_SCAFFOLD: ProjectScaffold = ProjectScaffold {
-    dir: &EMPTY_TEMPLATE_DIR,
+    base_dir: &EMPTY_TEMPLATE_DIR,
+    app_overlay_dir: None,
     layout: ProjectLayout::Standard,
     contracts: &EMPTY_CONTRACTS,
     deploy_script: "scripts/deploy.tolk",
 };
 
 const COUNTER_SCAFFOLD: ProjectScaffold = ProjectScaffold {
-    dir: &COUNTER_TEMPLATE_DIR,
+    base_dir: &COUNTER_TEMPLATE_DIR,
+    app_overlay_dir: None,
     layout: ProjectLayout::Standard,
     contracts: &COUNTER_CONTRACTS,
     deploy_script: "scripts/deploy.tolk",
 };
 
 const COUNTER_APP_SCAFFOLD: ProjectScaffold = ProjectScaffold {
-    dir: &COUNTER_APP_TEMPLATE_DIR,
+    base_dir: &COUNTER_TEMPLATE_DIR,
+    app_overlay_dir: Some(&COUNTER_APP_TEMPLATE_DIR),
     layout: ProjectLayout::App,
-    contracts: &COUNTER_APP_CONTRACTS,
-    deploy_script: "contracts/scripts/deploy.tolk",
+    contracts: &COUNTER_CONTRACTS,
+    deploy_script: "scripts/deploy.tolk",
 };
 
 const JETTON_SCAFFOLD: ProjectScaffold = ProjectScaffold {
-    dir: &JETTON_TEMPLATE_DIR,
+    base_dir: &JETTON_TEMPLATE_DIR,
+    app_overlay_dir: None,
     layout: ProjectLayout::Standard,
     contracts: &JETTON_CONTRACTS,
     deploy_script: "scripts/deploy.tolk",
 };
 
 const JETTON_APP_SCAFFOLD: ProjectScaffold = ProjectScaffold {
-    dir: &JETTON_APP_TEMPLATE_DIR,
+    base_dir: &JETTON_TEMPLATE_DIR,
+    app_overlay_dir: Some(&JETTON_APP_TEMPLATE_DIR),
     layout: ProjectLayout::App,
-    contracts: &JETTON_APP_CONTRACTS,
-    deploy_script: "contracts/scripts/deploy.tolk",
+    contracts: &JETTON_CONTRACTS,
+    deploy_script: "scripts/deploy.tolk",
 };
 
 const NFT_SCAFFOLD: ProjectScaffold = ProjectScaffold {
-    dir: &NFT_TEMPLATE_DIR,
+    base_dir: &NFT_TEMPLATE_DIR,
+    app_overlay_dir: None,
     layout: ProjectLayout::Standard,
     contracts: &NFT_CONTRACTS,
     deploy_script: "scripts/deployCollection.tolk",
 };
 
 const NFT_APP_SCAFFOLD: ProjectScaffold = ProjectScaffold {
-    dir: &NFT_APP_TEMPLATE_DIR,
+    base_dir: &NFT_TEMPLATE_DIR,
+    app_overlay_dir: Some(&NFT_APP_TEMPLATE_DIR),
     layout: ProjectLayout::App,
-    contracts: &NFT_APP_CONTRACTS,
-    deploy_script: "contracts/scripts/deployCollection.tolk",
+    contracts: &NFT_CONTRACTS,
+    deploy_script: "scripts/deployCollection.tolk",
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -396,7 +392,7 @@ fn serialize_scaffold(scaffold: ProjectScaffold) -> TemplateScaffoldInfo {
             .map(|contract| TemplateContractInfo {
                 id: contract.id,
                 name: contract.name,
-                src: contract.src,
+                src: scaffold.contract_src(contract),
             })
             .collect(),
     }
@@ -408,8 +404,56 @@ pub(super) fn create_project_from_scaffold(
     include_agents: bool,
     npm_package_name: Option<&str>,
 ) -> anyhow::Result<()> {
-    extract_template_dir(scaffold.dir, target_dir, include_agents, npm_package_name)?;
+    if let Some(overlay_dir) = scaffold.app_overlay_dir {
+        extract_base_for_app_layout(scaffold.base_dir, target_dir)?;
+        extract_template_dir(overlay_dir, target_dir, include_agents, npm_package_name)?;
+    } else {
+        extract_template_dir(
+            scaffold.base_dir,
+            target_dir,
+            include_agents,
+            npm_package_name,
+        )?;
+    }
     Ok(())
+}
+
+fn extract_base_for_app_layout(dir: &Dir<'static>, base_path: &Path) -> std::io::Result<()> {
+    for entry in dir.entries() {
+        if let Some(subdir) = entry.as_dir() {
+            extract_base_for_app_layout(subdir, base_path)?;
+            continue;
+        }
+
+        if let Some(file) = entry.as_file() {
+            let Some(remapped) = remap_for_app_layout(entry.path()) else {
+                continue;
+            };
+            let target = base_path.join(remapped);
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(target, file.contents())?;
+        }
+    }
+    Ok(())
+}
+
+const APP_LAYOUT_REMAPPINGS: &[(&str, &str)] = &[
+    ("contracts/", "contracts/src/"),
+    ("scripts/", "contracts/scripts/"),
+    ("tests/", "contracts/tests/"),
+    ("wrappers/", "contracts/wrappers/"),
+];
+
+fn remap_for_app_layout(path: &Path) -> Option<std::path::PathBuf> {
+    let path_str = path.to_str()?;
+    for &(from, to) in APP_LAYOUT_REMAPPINGS {
+        if let Some(rest) = path_str.strip_prefix(from) {
+            return Some(std::path::PathBuf::from(format!("{to}{rest}")));
+        }
+    }
+    None
 }
 
 fn extract_template_dir(

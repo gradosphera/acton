@@ -9,7 +9,7 @@ import "@acton/testing/assert"
 import "@contracts/messages"
 import "@contracts/storage"
 
-/// Storage `WalletStorage` is defined in `contracts/storage.tolk`
+/// Storage `WalletStorage` is defined in `@contracts/storage`
 struct JettonWallet {
     address: address
     stateInit: ContractState? = null

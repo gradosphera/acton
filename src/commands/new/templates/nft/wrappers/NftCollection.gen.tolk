@@ -9,7 +9,7 @@ import "@acton/testing/assert"
 import "@contracts/messages"
 import "@contracts/types"
 
-/// Storage `NftCollectionStorage` is defined in `contracts/types.tolk`
+/// Storage `NftCollectionStorage` is defined in `@contracts/types`
 struct NftCollection {
     address: address
     stateInit: ContractState? = null

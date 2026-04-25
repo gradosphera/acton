@@ -216,7 +216,7 @@ pub fn new_cmd(
             contract.id.to_owned(),
             ContractConfig {
                 name: Some(contract.name.to_owned()),
-                src: contract.src.to_owned(),
+                src: scaffold.contract_src(contract),
                 depends: Some(
                     contract
                         .depends
