@@ -866,6 +866,20 @@ fn test_annotation_with_arguments() {
 }
 
 #[test]
+fn test_annotation_with_single_string_argument_does_not_wrap() {
+    check_with_width(
+        "@deprecated(
+                \"use another long function name instead\"
+            )
+            fun foo() {}",
+        expect![[r#"
+                @deprecated("use another long function name instead")
+                fun foo() {}"#]],
+        20,
+    );
+}
+
+#[test]
 fn test_dotted_annotation_name() {
     check(
         "@abi.minimalMsgValue(1)\nstruct Message {}",

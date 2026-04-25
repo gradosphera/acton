@@ -861,13 +861,21 @@ pub fn print_annotation<'a>(ctx: &Context<'_>, a: &Annotation) -> Option<RcDoc<'
 
 pub fn print_annotation_arguments<'a>(ctx: &Context<'_>, a: &AnnotationArgs) -> Option<RcDoc<'a>> {
     let arguments: Vec<_> = a.args().collect();
+    let never_break_if_items_lt = if matches!(arguments.as_slice(), [Expr::StringLit(_)]) {
+        2
+    } else {
+        0
+    };
     common::print_list(
         ctx,
         &arguments,
         exprs::print_expression,
         Expr::syntax,
         |_| vec![],
-        common::ListOptions::default(),
+        common::ListOptions {
+            never_break_if_items_lt,
+            ..Default::default()
+        },
     )
 }
 
