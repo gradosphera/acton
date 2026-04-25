@@ -215,15 +215,28 @@ code, pre {
 
 .landing-video-shell {
   position: relative;
+  isolation: isolate;
   overflow: hidden;
   border-radius: 2rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   background: radial-gradient(circle at top left, rgba(123, 97, 255, 0.28), transparent 34%),
     radial-gradient(circle at bottom right, rgba(68, 178, 255, 0.16), transparent 32%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
   box-shadow:
-    0 30px 70px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    0 18px 36px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(123, 97, 255, 0.06);
+}
+
+.landing-video-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  opacity: 0.55;
 }
 
 .landing-video-shell::after {
@@ -233,12 +246,12 @@ code, pre {
   border-radius: inherit;
   background: linear-gradient(
     135deg,
-    rgba(255, 255, 255, 0.08) 0%,
-    transparent 35%,
-    transparent 65%,
-    rgba(255, 255, 255, 0.05) 100%
+    rgba(255, 255, 255, 0.05) 0%,
+    transparent 34%,
+    transparent 66%,
+    rgba(123, 97, 255, 0.05) 100%
   );
-  opacity: 0.7;
+  opacity: 0.4;
   pointer-events: none;
 }
 
@@ -268,25 +281,27 @@ code, pre {
   justify-content: space-between;
   gap: 3rem;
   border-radius: 1.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.03);
   background: radial-gradient(circle at bottom left, rgba(123, 97, 255, 0.16), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.02) 100%);
   padding: 2rem;
   box-shadow:
-    0 20px 45px rgba(0, 0, 0, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 14px 28px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
 .supporting-feature-card::before {
   content: "";
   position: absolute;
   left: -8%;
+  top: auto;
   bottom: -24%;
   width: 68%;
-  height: 68%;
+  height: 82%;
   border-radius: 9999px;
-  background: radial-gradient(circle, rgba(123, 97, 255, 0.24), transparent 68%);
-  opacity: 0.9;
+  background: radial-gradient(circle, rgba(123, 97, 255, 0.12), transparent 68%);
+  opacity: 0.8;
   pointer-events: none;
 }
 
@@ -295,7 +310,11 @@ code, pre {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 -1px 0 rgba(123, 97, 255, 0.08);
   pointer-events: none;
 }
 

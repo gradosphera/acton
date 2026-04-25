@@ -91,42 +91,42 @@ const BELOW_FEATURES: FeatureBelow[] = [
   {
     title: 'Mutation testing',
     description: 'Stress the suite by flipping operators, values, and branches to reveal weak checks and untested invariants.',
-    docLink: '/docs/test-runner/mutation-testing/',
+    docLink: '/docs/testing/mutation-testing/overview',
   },
   {
     title: 'Coverage reports',
     description: 'Track line and branch coverage, inspect colorful reports in Test UI, and export LCOV for external tooling.',
-    docLink: '/docs/test-runner/code-coverage/',
+    docLink: '/docs/testing/code-coverage',
   },
   {
     title: 'Fork testing',
     description: 'Run tests against real mainnet state by automatically pulling deployed accounts into the local emulator.',
-    docLink: '/docs/test-runner/fork-testing/',
+    docLink: '/docs/testing/fork-testing',
   },
   {
     title: 'Fuzz testing',
     description: 'Re-run parameterized tests with generated inputs, assumptions, bounds, and reproducible seeds until the first failure.',
-    docLink: '/docs/test-runner/fuzz-testing/',
+    docLink: '/docs/testing/fuzz-testing',
   },
   {
     title: 'Gas profiling',
     description: 'Snapshot transaction-chain gas usage, compare against baselines, and catch fee regressions before they ship.',
-    docLink: '/docs/test-runner/gas-profiling-with-snapshots/',
+    docLink: '/docs/testing/gas-profiling-with-snapshots',
   },
   {
     title: 'Scripting',
     description: 'Use Tolk for local experiments, deployment flows, and real blockchain interaction with familiar testing primitives.',
-    docLink: '/docs/scripting/',
+    docLink: '/docs/scripting/overview',
   },
   {
     title: 'CI integration',
     description: 'Wire Acton into GitHub Actions or GitLab CI for builds, tests, checks, coverage, and secret-backed jobs.',
-    docLink: '/docs/ci-setup/',
+    docLink: '/docs/ci-setup',
   },
   {
     title: 'Masterchain libraries',
     description: 'Publish reusable code to the Masterchain, track storage runway, top it up, and refer to it in tests and scripts.',
-    docLink: '/docs/advanced/libraries/',
+    docLink: '/docs/libraries',
   },
 ];
 
@@ -186,7 +186,7 @@ export default function Home() {
           <div className="container mx-auto max-w-7xl px-6 py-32 md:py-65">
             <div className="text-center space-y-16 mb-48">
               <div className="space-y-0.5">
-                <h1 className="text-6xl md:text-9xl font-bold tracking-tight">
+                <h1 className="text-7xl md:text-9xl font-bold tracking-tight">
                   <span className="bg-gradient-to-b from-white via-white to-white/40 bg-clip-text text-transparent">
                     Acton
                   </span>
@@ -382,21 +382,21 @@ export default function Home() {
 
             <InstallationCodeBlock/>
 
-            <div className="flex flex-wrap gap-6 justify-center pt-12">
-              <Link href="/docs/welcome">
-                <Button size="lg"
-                        className="glass-button h-12 px-20 rounded-2xl text-base bg-white/10 text-white border border-white/10">
-                  Get Started
-                </Button>
-              </Link>
-              <Link href="https://github.com/ton-blockchain/acton" target="_blank">
-                <Button size="lg" variant="outline"
-                        className="glass-button-outline h-12 px-20 rounded-2xl text-base border-white/10 hover:bg-white/5">
-                  <Github className="w-4 h-4 mr-2"/>
-                  GitHub
-                </Button>
-              </Link>
-            </div>
+              <div className="flex flex-wrap gap-6 justify-center pt-12">
+                <Link href="/docs/welcome">
+                  <Button size="lg"
+                          className="glass-button cursor-pointer h-12 px-20 rounded-2xl text-base bg-white/10 text-white border border-white/10">
+                    Get Started
+                  </Button>
+                </Link>
+                <Link href="https://github.com/ton-blockchain/acton" target="_blank">
+                  <Button size="lg" variant="outline"
+                          className="glass-button-outline cursor-pointer h-12 px-20 rounded-2xl text-base border-white/10 hover:bg-white/5">
+                    <Github className="w-4 h-4 mr-2"/>
+                    GitHub
+                  </Button>
+                </Link>
+              </div>
           </div>
         </main>
 
