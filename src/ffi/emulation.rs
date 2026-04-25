@@ -1493,37 +1493,22 @@ fn transaction_matches_predicates(
     if let Ok(Some(in_msg)) = &in_msg
         && let MsgInfo::Int(info) = &in_msg.info
     {
+        check!(predicates.bounced, bool_item(info.bounced));
         if let Some(ref field) = predicates.opcode {
             let mut slice = in_msg.body;
-            let Ok(opcode) = slice.load_u32() else {
+            let Ok(mut opcode) = slice.load_u32() else {
                 return Ok(false);
             };
-            if !call_predicate(executor, &field.predicate, int_item(i64::from(opcode)))? {
-                // For bounced messages, the real opcode follows the 0xFFFFFFFF prefix.
-                // Only retry against the second word if the caller actually asked to
-                // match bounced transactions (bounced predicate exists and accepts true);
-                // otherwise we'd produce false positives on any tx with a 0xFFFFFFFF prefix.
-                let caller_wants_bounced = match &predicates.bounced {
-                    Some(bf) => call_predicate(executor, &bf.predicate, bool_item(true))?,
-                    None => false,
-                };
-                if info.bounced && caller_wants_bounced {
-                    let Ok(bounced_opcode) = slice.load_u32() else {
-                        return Ok(false);
-                    };
-                    if !call_predicate(
-                        executor,
-                        &field.predicate,
-                        int_item(i64::from(bounced_opcode)),
-                    )? {
-                        return Ok(false);
-                    }
-                } else {
+            if info.bounced && predicates.bounced.is_some() {
+                let Ok(bounced_opcode) = slice.load_u32() else {
                     return Ok(false);
-                }
+                };
+                opcode = bounced_opcode;
+            }
+            if !call_predicate(executor, &field.predicate, int_item(i64::from(opcode)))? {
+                return Ok(false);
             }
         }
-        check!(predicates.bounced, bool_item(info.bounced));
         check!(predicates.bounce, bool_item(info.bounce));
         check!(
             predicates.value,
@@ -1608,20 +1593,17 @@ fn transaction_matches_scalar_params(tx: &Transaction, params: &ScalarSearchPara
     {
         if let Some(expected_opcode) = &params.opcode {
             let mut slice = in_msg.body;
-            let Ok(opcode) = slice.load_u32() else {
+            let Ok(mut opcode) = slice.load_u32() else {
                 return false;
             };
-            if *expected_opcode != opcode {
-                if params.bounced == Some(true) {
-                    let Ok(bounced_opcode) = slice.load_u32() else {
-                        return false;
-                    };
-                    if *expected_opcode != bounced_opcode {
-                        return false;
-                    }
-                } else {
+            if info.bounced && params.bounced == Some(true) {
+                let Ok(bounced_opcode) = slice.load_u32() else {
                     return false;
-                }
+                };
+                opcode = bounced_opcode;
+            }
+            if *expected_opcode != opcode {
+                return false;
             }
         }
 
