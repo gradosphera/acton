@@ -5,7 +5,7 @@ mod integration;
 #[cfg(test)]
 mod support;
 
-use acton_config::schema::ACTON_SCHEMA_JSON;
+use acton_config::schema::{ACTON_SCHEMA_JSON, MUTATION_RULES_SCHEMA_JSON};
 use common::ActonCommandExt;
 use std::{fs, process::Command};
 
@@ -271,5 +271,28 @@ fn test_acton_meta_get_schema_prints_embedded_schema() {
     );
 
     assert_eq!(String::from_utf8_lossy(&output.stdout), ACTON_SCHEMA_JSON);
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+}
+
+#[test]
+fn test_acton_meta_get_schema_prints_mutation_rules_schema() {
+    let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
+    let output = Command::new(common::acton_exe())
+        .args(["meta", "get-schema", "mutation-rules"])
+        .current_dir(temp_dir.path())
+        .output()
+        .unwrap_or_else(|err| panic!("failed to run acton meta get-schema mutation-rules: {err}"));
+
+    assert!(
+        output.status.success(),
+        "acton meta get-schema mutation-rules failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        MUTATION_RULES_SCHEMA_JSON
+    );
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
 }

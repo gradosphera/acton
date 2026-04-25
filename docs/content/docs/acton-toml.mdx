@@ -320,6 +320,8 @@ The `[test.mutation]` subsection configures default filters for
   applied.
 - `rules-file` adds custom query-based rules from JSON. If a custom rule uses
   the same ID as a built-in rule, it overrides the built-in one.
+  Run `acton meta get-schema mutation-rules` to print the JSON schema for that
+  file format.
 
 All filters compose, and the reported mutation score reflects only the mutants
 that remain after filtering. Compile errors are excluded from the score, and

@@ -14,7 +14,7 @@ use acton::commands::init::init_cmd;
 use acton::commands::internal::internal_register_contract;
 use acton::commands::library::{fetch_cmd, info_cmd, publish_cmd};
 use acton::commands::ls::ls_cmd;
-use acton::commands::meta::print_schema_cmd;
+use acton::commands::meta::{BuiltinSchema, print_schema_cmd};
 use acton::commands::new::{ProjectTemplate, new_cmd};
 use acton::commands::retrace::retrace_cmd;
 use acton::commands::rpc::{RpcCommand, rpc_cmd};
@@ -1098,8 +1098,11 @@ pub enum DocCommand {
 
 #[derive(Subcommand, Clone)]
 pub enum MetaCommand {
-    #[command(about = "Print the built-in Acton.toml JSON schema")]
-    GetSchema,
+    #[command(about = "Print a built-in JSON schema")]
+    GetSchema {
+        #[arg(value_enum, default_value = "acton-toml", help = "Schema to print")]
+        schema: BuiltinSchema,
+    },
 }
 
 #[inline]
@@ -2030,7 +2033,7 @@ fn main() {
             Ok(())
         }
         Commands::Meta { command } => match command {
-            MetaCommand::GetSchema => print_schema_cmd(),
+            MetaCommand::GetSchema { schema } => print_schema_cmd(schema),
         },
         Commands::Docgen { output, check } => docgen_cmd(output, check),
         Commands::Ls {

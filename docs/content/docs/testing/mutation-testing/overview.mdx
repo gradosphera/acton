@@ -172,6 +172,12 @@ Then run:
 acton test --mutate --mutate-contract Wallet --mutation-rules-file mutation-rules.json
 ```
 
+Print the JSON schema for editor integration or validation with:
+
+```bash
+acton meta get-schema mutation-rules
+```
+
 Currently, JSON rules support only the serializable `query` matcher and `remove`
 or `replace` edits.
 
