@@ -472,12 +472,9 @@ fn generate_wrapper(model: &WrapperModel) -> String {
 
     let mut code = String::new();
 
-    code.push_str("import \"@stdlib/gas-payments\"\n");
     code.push_str(&import_stdlib("build"));
     code.push_str(&import_stdlib("emulation/network"));
     code.push_str(&import_stdlib("testing/assert"));
-    code.push_str(&import_stdlib("testing/expect"));
-    code.push_str(&import_stdlib("types/message"));
 
     if let Some(storage_path) = &model.storage_path {
         let storage_import = get_import_path(proot, root, storage_path, mappings);
