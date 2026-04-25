@@ -51,13 +51,13 @@ Arguments passed through to the script.
 <CommandOption>
 <CommandOptionTitle>
 
-`-v`, `--verbose`
+`--verbose`
 
 </CommandOptionTitle>
 
 Enable executor debug logs at verbosity level `1`.
 
-Currently only level `1` is supported. Pass `-v` or `--verbose` at most once.
+Currently only level `1` is supported. Pass `--verbose` at most once.
 Use this for low-level executor output such as `debug.dumpStack()`. For richer
 debug output, use `--backtrace full` or `--debug`.
 
@@ -312,7 +312,7 @@ acton script scripts/query.tolk -- --net-like-value
 `--net`, it can send real blockchain transactions; without `--net`, execution
 stays local even when `--fork-net` is used.
 
-Executor debug logs are hidden by default. Re-run with `-v` when you need
+Executor debug logs are hidden by default. Re-run with `--verbose` when you need
 level-1 executor output such as `debug.dumpStack()`.
 
 ## Exit Status
@@ -341,7 +341,7 @@ When a script can affect on-chain state, the usual safe sequence is:
 2. Show executor debug logs from `debug.*` helpers:
 
    ```bash
-   acton script scripts/deploy.tolk -v
+   acton script scripts/deploy.tolk --verbose
    ```
 
 3. Broadcast to testnet:

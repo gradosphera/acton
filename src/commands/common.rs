@@ -335,7 +335,7 @@ pub fn validate_cli_verbosity(level: u8) -> anyhow::Result<u8> {
         Ok(level)
     } else {
         anyhow::bail!(
-            "Verbosity levels above 1 are not supported yet. Use -v or --verbose at most once."
+            "Verbosity levels above 1 are not supported yet. Use --verbose at most once."
         );
     }
 }

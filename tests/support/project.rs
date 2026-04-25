@@ -1474,7 +1474,7 @@ impl ActonCommand {
     }
 
     pub(crate) fn verbose(mut self) -> Self {
-        self.cmd = self.cmd.arg("-v");
+        self.cmd = self.cmd.arg("--verbose");
         self
     }
 

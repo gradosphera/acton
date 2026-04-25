@@ -22,13 +22,12 @@ OPTIONS
        args…
            Arguments passed through to the script.
 
-       -v, --verbose
+       --verbose
            Enable executor debug logs at verbosity level 1.
 
-           Currently only level 1 is supported. Pass -v or --verbose at most
-           once. Use this for low-level executor output such as
-           debug.dumpStack(). For richer debug output, use --backtrace full or
-           --debug.
+           Currently only level 1 is supported. Pass --verbose at most once.
+           Use this for low-level executor output such as debug.dumpStack().
+           For richer debug output, use --backtrace full or --debug.
 
    Debugging Options
        --debug
@@ -119,8 +118,8 @@ SIDE EFFECTS
        --net, it can send real blockchain transactions; without --net,
        execution stays local even when --fork-net is used.
 
-       Executor debug logs are hidden by default. Re-run with -v when you need
-       level-1 executor output such as debug.dumpStack().
+       Executor debug logs are hidden by default. Re-run with --verbose when
+       you need level-1 executor output such as debug.dumpStack().
 
 EXIT STATUS
        o  0: The script completed successfully, including successful broadcast
@@ -147,7 +146,7 @@ EXAMPLES
 
        2. Show executor debug logs from debug.* helpers:
 
-              acton script scripts/deploy.tolk -v
+              acton script scripts/deploy.tolk --verbose
 
        3. Broadcast to testnet:
 

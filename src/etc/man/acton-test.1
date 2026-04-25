@@ -53,11 +53,11 @@ Stop after the first failing test.
 Seed for reproducible fuzz runs.
 .RE
 .sp
-\fB\-v\fR, \fB\-\-verbose\fR
+\fB\-\-verbose\fR
 .RS 4
 Enable executor debug logs at verbosity level \fB1\fR\&.
 .sp
-Currently only level \fB1\fR is supported. Pass \fB\-v\fR or \fB\-\-verbose\fR at most once.
+Currently only level \fB1\fR is supported. Pass \fB\-\-verbose\fR at most once.
 Use this for low\-level executor output such as \fBdebug.dumpStack()\fR\&. For richer
 debug output, use \fB\-\-backtrace full\fR or \fB\-\-debug\fR\&.
 .RE
@@ -377,12 +377,12 @@ directory is \fBtest\-results\fR
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'executor debug logs are hidden by default; re\-run with \fB\-v\fR when you need
+\h'-04'\(bu\h'+03'executor debug logs are hidden by default; re\-run with \fB\-\-verbose\fR when you need
 level\-1 executor output such as \fBdebug.dumpStack()\fR
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fB\-v\fR is only low\-level executor logging; \fB\-\-coverage\fR also collects
+\h'-04'\(bu\h'+03'\fB\-\-verbose\fR is only low\-level executor logging; \fB\-\-coverage\fR also collects
 source\-location data, while \fB\-\-backtrace full\fR and \fB\-\-debug\fR collect richer
 location and stack data
 .RE
@@ -607,7 +607,7 @@ acton test \-\-filter "wallet.*"
 .sp
 .RS 4
 .nf
-acton test \-v \-\-filter "debug.*"
+acton test \-\-verbose \-\-filter "debug.*"
 .fi
 .RE
 .RE

@@ -37,7 +37,7 @@ Network to retrace from.
 Without this flag, Acton tries mainnet first and then falls back to testnet.
 {{/option}}
 
-{{#option "`-v`, `--verbose`" }}
+{{#option "`--verbose`" }}
 Show full cell hex in outgoing actions instead of only hashes.
 {{/option}}
 

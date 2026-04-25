@@ -532,7 +532,8 @@ fn test_script_rejects_verbose_level_above_one() {
     project
         .acton()
         .script("scripts/debug_logs.tolk")
-        .arg("-vv")
+        .arg("--verbose")
+        .arg("--verbose")
         .run()
         .failure()
         .assert_stderr_contains("Verbosity levels above 1 are not supported yet")

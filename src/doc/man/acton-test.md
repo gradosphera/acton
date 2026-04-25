@@ -58,10 +58,10 @@ Stop after the first failing test.
 Seed for reproducible fuzz runs.
 {{/option}}
 
-{{#option "`-v`, `--verbose`" }}
+{{#option "`--verbose`" }}
 Enable executor debug logs at verbosity level `1`.
 
-Currently only level `1` is supported. Pass `-v` or `--verbose` at most once.
+Currently only level `1` is supported. Pass `--verbose` at most once.
 Use this for low-level executor output such as `debug.dumpStack()`. For richer
 debug output, use `--backtrace full` or `--debug`.
 {{/option}}
@@ -349,9 +349,9 @@ Acton discovers tests by finding files that end with `.test.tolk`.
   coverage summaries, files, and annotated source
 - `--junit-path` matters when the JUnit reporter is enabled; the default output
   directory is `test-results`
-- executor debug logs are hidden by default; re-run with `-v` when you need
+- executor debug logs are hidden by default; re-run with `--verbose` when you need
   level-1 executor output such as `debug.dumpStack()`
-- `-v` is only low-level executor logging; `--coverage` also collects
+- `--verbose` is only low-level executor logging; `--coverage` also collects
   source-location data, while `--backtrace full` and `--debug` collect richer
   location and stack data
 - `--coverage-file` matters only with `--coverage`; without an explicit path,
@@ -471,7 +471,7 @@ CLI flags override config values for the current invocation.
 3. Show executor debug logs from `debug.*` helpers:
 
    ```bash
-   acton test -v --filter "debug.*"
+   acton test --verbose --filter "debug.*"
    ```
 
 4. Generate coverage and JUnit output:

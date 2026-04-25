@@ -26,11 +26,11 @@ Path to the script file to execute.
 Arguments passed through to the script.
 .RE
 .sp
-\fB\-v\fR, \fB\-\-verbose\fR
+\fB\-\-verbose\fR
 .RS 4
 Enable executor debug logs at verbosity level \fB1\fR\&.
 .sp
-Currently only level \fB1\fR is supported. Pass \fB\-v\fR or \fB\-\-verbose\fR at most once.
+Currently only level \fB1\fR is supported. Pass \fB\-\-verbose\fR at most once.
 Use this for low\-level executor output such as \fBdebug.dumpStack()\fR\&. For richer
 debug output, use \fB\-\-backtrace full\fR or \fB\-\-debug\fR\&.
 .RE
@@ -154,7 +154,7 @@ acton script scripts/query.tolk \-\- \-\-net\-like\-value
 \fB\-\-net\fR, it can send real blockchain transactions; without \fB\-\-net\fR, execution
 stays local even when \fB\-\-fork\-net\fR is used.
 .sp
-Executor debug logs are hidden by default. Re\-run with \fB\-v\fR when you need
+Executor debug logs are hidden by default. Re\-run with \fB\-\-verbose\fR when you need
 level\-1 executor output such as \fBdebug.dumpStack()\fR\&.
 .SH "EXIT STATUS"
 .sp
@@ -201,7 +201,7 @@ acton script scripts/deploy.tolk
 .sp
 .RS 4
 .nf
-acton script scripts/deploy.tolk \-v
+acton script scripts/deploy.tolk \-\-verbose
 .fi
 .RE
 .RE

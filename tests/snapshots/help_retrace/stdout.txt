@@ -29,7 +29,7 @@ OPTIONS
            Without this flag, Acton tries mainnet first and then falls back to
            testnet.
 
-       -v, --verbose
+       --verbose
            Show full cell hex in outgoing actions instead of only hashes.
 
        --logs-dir dir
@@ -238,4 +238,3 @@ SEE ALSO
 
        o  Retrace command guide
           <https://ton-blockchain.github.io/acton/docs/commands/retrace>
-

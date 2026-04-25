@@ -227,7 +227,6 @@ enum Commands {
         )]
         fuzz_seed: Option<u64>,
         #[arg(
-            short = 'v',
             long,
             action = clap::ArgAction::Count,
             help = "Increase executor log verbosity (currently supports only level 1)",
@@ -534,7 +533,6 @@ enum Commands {
         args: Vec<String>,
 
         #[arg(
-            short = 'v',
             long,
             action = clap::ArgAction::Count,
             help = "Increase executor log verbosity (currently supports only level 1)",
@@ -784,11 +782,7 @@ enum Commands {
         hash: String,
         #[arg(long, help = "Network to use")]
         net: Option<String>,
-        #[arg(
-            short,
-            long,
-            help = "Show full cell hex instead of hashes in out actions"
-        )]
+        #[arg(long, help = "Show full cell hex instead of hashes in out actions")]
         verbose: bool,
         #[arg(long, help = "Directory to save VM and executor logs")]
         logs_dir: Option<String>,
@@ -1423,16 +1417,14 @@ fn root_help(show_global_options: bool) -> StyledStr {
 }
 
 fn base_cli_command() -> clap::Command {
-    Cli::command()
-        .disable_version_flag(true)
-        .arg(
-            clap::Arg::new("version")
-                .short('v')
-                .short_alias('V')
-                .long("version")
-                .action(clap::ArgAction::Version)
-                .help("Print version"),
-        )
+    Cli::command().disable_version_flag(true).arg(
+        clap::Arg::new("version")
+            .short('v')
+            .short_alias('V')
+            .long("version")
+            .action(clap::ArgAction::Version)
+            .help("Print version"),
+    )
 }
 
 fn cli_command(show_global_options: bool) -> clap::Command {

@@ -243,7 +243,7 @@ that led into the failing execution.
 Acton automatically prepares the required debug metadata when you use
 `--backtrace full`.
 
-This is stronger than `-v`: full backtraces require location and stack data,
+This is stronger than `--verbose`: full backtraces require location and stack data,
 not just low-level executor logs. Coverage also raises internal verbosity for
 source mapping, but it does not print a backtrace unless you ask for one.
 
@@ -273,14 +273,14 @@ acton test --show-bodies
 acton script scripts/demo.tolk --show-bodies
 ```
 
-Executor debug logs are hidden by default. Re-run with `acton test -v` or
-`acton script <path> -v` when you need level-1 executor output such as
+Executor debug logs are hidden by default. Re-run with `acton test --verbose` or
+`acton script <path> --verbose` when you need level-1 executor output such as
 `debug.dumpStack()`. For richer debug output, use `--backtrace full` or
 `--debug`.
 
 These flags also change how much execution metadata Acton collects:
 
-- `-v` enables only level-1 executor logs.
+- `--verbose` enables only level-1 executor logs.
 - `--coverage` raises internal verbosity to source-location mode so coverage can map VM execution back to files and lines, but it does not print backtraces or enable stepping by itself.
 - `--backtrace full` raises verbosity further to collect full source locations and call stacks for failures.
 - `--debug` uses the same rich location and stack data, then opens the live debug adapter on top.
