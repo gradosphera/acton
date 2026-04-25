@@ -1487,9 +1487,7 @@ fn transaction_matches_predicates(
         || predicates.from.is_some()
         || predicates.to.is_some();
 
-    let is_deploy =
-        tx.orig_status == AccountStatus::NotExists && tx.end_status == AccountStatus::Active;
-    check!(predicates.deploy, bool_item(is_deploy));
+    check!(predicates.deploy, bool_item(transaction_is_deploy(tx)));
 
     let in_msg = tx.load_in_msg();
     if let Ok(Some(in_msg)) = &in_msg
@@ -1599,9 +1597,7 @@ fn transaction_matches_scalar_params(tx: &Transaction, params: &ScalarSearchPara
     let expected_body_hash = params.body.as_ref().map(|body| body.repr_hash());
 
     if let Some(expected_deploy) = params.deploy {
-        let is_deploy =
-            tx.orig_status == AccountStatus::NotExists && tx.end_status == AccountStatus::Active;
-        if expected_deploy != is_deploy {
+        if expected_deploy != transaction_is_deploy(tx) {
             return false;
         }
     }
@@ -1723,6 +1719,13 @@ fn transaction_matches_scalar_params(tx: &Transaction, params: &ScalarSearchPara
     }
 
     true
+}
+
+fn transaction_is_deploy(tx: &Transaction) -> bool {
+    matches!(
+        tx.orig_status,
+        AccountStatus::NotExists | AccountStatus::Uninit
+    ) && tx.end_status == AccountStatus::Active
 }
 
 /// Create a `GetExecutor` suitable for running predicate continuations.
