@@ -494,12 +494,11 @@ fn generate_wrapper(model: &WrapperModel) -> String {
     code.push('\n');
 
     if let (Some(storage), Some(storage_path)) = (&model.storage, &model.storage_path) {
-        let display_path = storage_path
-            .strip_prefix(proot)
-            .unwrap_or(storage_path)
-            .display();
+        let import_path = get_import_path(proot, root, storage_path, mappings);
+        let display = import_path.display().to_string();
+        let display = display.trim_start_matches("./").trim_end_matches(".tolk");
         code.push_str(&format!(
-            "/// Storage `{}` is defined in `{display_path}`\n",
+            "/// Storage `{}` is defined in `{display}`\n",
             storage.name
         ));
     }

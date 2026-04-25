@@ -9,7 +9,7 @@ import "@acton/testing/assert"
 import "@contracts/messages"
 import "@contracts/storage"
 
-/// Storage `MinterStorage` is defined in `contracts/storage.tolk`
+/// Storage `MinterStorage` is defined in `@contracts/storage`
 struct JettonMinter {
     address: address
     stateInit: ContractState? = null

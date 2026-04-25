@@ -8,7 +8,7 @@ import "@acton/emulation/network"
 import "@acton/testing/assert"
 import "@contracts/types"
 
-/// Storage `Storage` is defined in `contracts/types.tolk`
+/// Storage `Storage` is defined in `@contracts/types`
 struct Counter {
     address: address
     stateInit: ContractState? = null
