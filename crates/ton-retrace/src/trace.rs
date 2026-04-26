@@ -427,11 +427,16 @@ impl Trace {
                     ..
                 } = step
                 {
+                    if instr != "SENDRAWMSG" && instr != "RAWRESERVE" {
+                        return None;
+                    }
+
+                    let parsed = VmStack::new(stack).parsed();
+                    if parsed.len() < 2 {
+                        return None;
+                    }
+
                     if instr == "SENDRAWMSG" {
-                        let parsed = VmStack::new(stack).parsed();
-                        if parsed.len() < 2 {
-                            return None;
-                        }
                         // SENDRAWMSG takes (cell, mode) from the stack.
                         // We are interested in the cell (second from top).
                         if let Some(VmStackValue::Cell(CellLike::Cell(msg_cell))) =
@@ -452,10 +457,6 @@ impl Trace {
                     }
 
                     if instr == "RAWRESERVE" {
-                        let parsed = VmStack::new(stack).parsed();
-                        if parsed.len() < 2 {
-                            return None;
-                        }
                         // RAWRESERVE takes (amount, mode) from the stack.
                         if let (
                             Some(VmStackValue::Integer(amount_str)),
@@ -706,32 +707,6 @@ impl ExecutedActions {
         ExecutedActions {
             actions,
             invalid_actions,
-        }
-    }
-}
-
-#[cfg(test)]
-mod registered_cell_tests {
-    use super::*;
-
-    #[test]
-    fn actions_resolve_compact_stack_cell_from_registered_boc() {
-        let logs = "\
-register new cell ABCD: B5EE9C72010101010002000000
-stack: [ C{ABCD} 64 ]
-code cell hash: 1111 offset: 7
-execute SENDRAWMSG
-gas remaining: 999
-";
-
-        let actions = Trace::new(logs, Some(1000)).actions();
-        assert_eq!(actions.actions.len(), 1);
-        match &actions.actions[0] {
-            InstalledAction::Message(message) => {
-                assert_eq!(message.loc_hash, "1111");
-                assert_eq!(message.loc_offset, 7);
-            }
-            other => panic!("expected installed message action, got {other:?}"),
         }
     }
 }

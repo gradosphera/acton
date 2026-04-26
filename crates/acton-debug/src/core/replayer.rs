@@ -200,22 +200,11 @@ impl CallFrame {
 }
 
 enum OwnedVmLine {
-    Stack {
-        raw_stack: Arc<str>,
-    },
-    Loc {
-        cell_hash: Arc<str>,
-        offset: Arc<str>,
-    },
-    Execute {
-        instr_name: Arc<str>,
-    },
-    Exception {
-        errno: Arc<str>,
-    },
-    ExceptionHandler {
-        errno: Arc<str>,
-    },
+    Stack { raw_stack: Arc<str> },
+    Loc { cell_hash: String, offset: i32 },
+    Execute { instr_name: String },
+    Exception { errno: String },
+    ExceptionHandler { errno: String },
 }
 
 fn convert_vm_log_lines(vm_logs: impl AsRef<str>) -> Vec<OwnedVmLine> {
@@ -230,17 +219,17 @@ fn convert_vm_line(line: VmLine<'_>) -> Option<OwnedVmLine> {
             raw_stack: Arc::from(stack.raw()),
         }),
         VmLine::VmLoc { hash, offset } => Some(OwnedVmLine::Loc {
-            cell_hash: Arc::from(hash),
-            offset: Arc::from(offset),
+            cell_hash: hash.to_owned(),
+            offset: offset.parse().unwrap_or(0),
         }),
         VmLine::VmExecute { instr } => Some(OwnedVmLine::Execute {
-            instr_name: Arc::from(instr),
+            instr_name: instr.to_owned(),
         }),
         VmLine::VmException { errno, .. } => Some(OwnedVmLine::Exception {
-            errno: Arc::from(errno),
+            errno: errno.to_owned(),
         }),
         VmLine::VmExceptionHandler { errno } => Some(OwnedVmLine::ExceptionHandler {
-            errno: Arc::from(errno),
+            errno: errno.to_owned(),
         }),
         // we don't need other lines from TVM execution logs (about gas limits, c5, etc.)
         _ => None,
@@ -325,28 +314,28 @@ impl RuntimeEventSource for VmLogRuntimeEventSource {
                 }
                 OwnedVmLine::Loc { cell_hash, offset } => {
                     return Some(RuntimeEvent::Position {
-                        cell_hash: cell_hash.to_string(),
-                        offset: offset.parse().unwrap_or(0),
+                        cell_hash: cell_hash.clone(),
+                        offset: *offset,
                     });
                 }
                 OwnedVmLine::Execute { instr_name } => {
-                    if instr_name.as_ref() == "implicit JMPREF" {
+                    if instr_name == "implicit JMPREF" {
                         return Some(RuntimeEvent::ImplicitJmpRef);
                     }
                     self.pending_events
                         .push_back(RuntimeEvent::AfterInstruction {
-                            instr_name: instr_name.to_string(),
+                            instr_name: instr_name.clone(),
                         });
                     return Some(RuntimeEvent::BeforeInstruction);
                 }
                 OwnedVmLine::Exception { errno } => {
                     return Some(RuntimeEvent::Exception {
-                        errno: errno.to_string(),
+                        errno: errno.clone(),
                     });
                 }
                 OwnedVmLine::ExceptionHandler { errno } => {
                     return Some(RuntimeEvent::ExceptionHandler {
-                        errno: errno.to_string(),
+                        errno: errno.clone(),
                     });
                 }
             }
