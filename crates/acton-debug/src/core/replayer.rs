@@ -91,25 +91,27 @@ pub enum RuntimeStack {
     #[default]
     Empty,
     Raw {
-        raw: Arc<str>,
-        parsed: Arc<OnceLock<Vec<VmStackValue>>>,
+        text: Arc<str>,
+        parsed_cache: Arc<OnceLock<Vec<VmStackValue>>>,
     },
     Values(Vec<VmStackValue>),
 }
 
 impl RuntimeStack {
-    fn raw(raw: Arc<str>) -> Self {
+    fn from_raw_log(text: Arc<str>) -> Self {
         Self::Raw {
-            raw,
-            parsed: Arc::new(OnceLock::new()),
+            text,
+            parsed_cache: Arc::new(OnceLock::new()),
         }
     }
 
     #[must_use]
-    pub fn values(&self) -> &[VmStackValue] {
+    pub fn parsed_values(&self) -> &[VmStackValue] {
         match self {
             Self::Empty => &[],
-            Self::Raw { raw, parsed } => parsed.get_or_init(|| VmStack::new(raw).parsed()),
+            Self::Raw { text, parsed_cache } => {
+                parsed_cache.get_or_init(|| VmStack::new(text).parsed())
+            }
             Self::Values(values) => values,
         }
     }
@@ -217,8 +219,8 @@ enum OwnedVmLine {
     ExceptionHandler { errno: String },
 }
 
-fn convert_vm_log_lines(vm_logs: impl AsRef<str>) -> Vec<OwnedVmLine> {
-    tvm_logs::parser::parse_lines_iter(vm_logs.as_ref())
+fn convert_vm_log_lines(vm_logs: &str) -> Vec<OwnedVmLine> {
+    tvm_logs::parser::parse_lines(vm_logs)
         .filter_map(|line| match line {
             Ok(VmLine::VmStack { stack }) => Some(OwnedVmLine::Stack {
                 raw_stack: Arc::from(stack.raw()),
@@ -259,7 +261,7 @@ pub struct VmLogRuntimeEventSource {
 
 impl VmLogRuntimeEventSource {
     #[must_use]
-    pub fn from_vm_logs(vm_logs: impl AsRef<str>) -> Self {
+    pub fn from_vm_logs(vm_logs: &str) -> Self {
         let vm_lines = convert_vm_log_lines(vm_logs);
         Self {
             vm_lines,
@@ -283,7 +285,7 @@ impl RuntimeEventSource for VmLogRuntimeEventSource {
             match &self.vm_lines[idx] {
                 OwnedVmLine::Stack { raw_stack } => {
                     return Some(RuntimeEvent::Stack {
-                        stack: RuntimeStack::raw(Arc::clone(raw_stack)),
+                        stack: RuntimeStack::from_raw_log(Arc::clone(raw_stack)),
                     });
                 }
                 OwnedVmLine::Loc { cell_hash, offset } => {
@@ -546,7 +548,7 @@ pub struct TolkReplayer {
 
     compiler_abi: Option<Arc<ContractABI>>,
 
-    // raw TVM stack (updated from runtime stack events);
+    // TVM stack from runtime events.
     // global (not per-context) because TvmStackValues tick arrives before PushFrame
     tvm_stack_values: RuntimeStack,
 
@@ -583,7 +585,7 @@ pub struct TolkReplayer {
 }
 
 impl TolkReplayer {
-    pub fn new(source_map: &TolkSourceMap, vm_logs: impl AsRef<str>) -> anyhow::Result<Self> {
+    pub fn new(source_map: &TolkSourceMap, vm_logs: &str) -> anyhow::Result<Self> {
         let marks_dict = source_map
             .marks_dict
             .as_deref()
@@ -595,10 +597,7 @@ impl TolkReplayer {
         ))
     }
 
-    pub fn new_for_coverage(
-        source_map: &TolkSourceMap,
-        vm_logs: impl AsRef<str>,
-    ) -> anyhow::Result<Self> {
+    pub fn new_for_coverage(source_map: &TolkSourceMap, vm_logs: &str) -> anyhow::Result<Self> {
         let mut replayer = Self::new(source_map, vm_logs)?;
         replayer.coverage_mode = true;
         Ok(replayer)
@@ -959,14 +958,14 @@ impl TolkReplayer {
 
     /// Formatted TVM stack (user-visible values, skipping system elements).
     #[must_use]
-    pub fn tvm_stack_rendered(&mut self) -> Vec<String> {
+    pub fn tvm_stack_rendered(&self) -> Vec<String> {
         let exec = self
             .exec_stack
             .last()
             .expect("replayer invariant: exec_stack must contain the root execution state");
         let skip = exec.system_stack_depth;
         self.tvm_stack_values
-            .values()
+            .parsed_values()
             .get(skip..)
             .unwrap_or_default()
             .iter()
@@ -1177,7 +1176,7 @@ impl TolkReplayer {
                         (0, HashMap::new())
                     } else {
                         self.update_last_seen();
-                        let stack_values = self.tvm_stack_values.values();
+                        let stack_values = self.tvm_stack_values.parsed_values();
                         let system_depth = stack_values.len().saturating_sub(ir_import.len());
                         let mut last_seen = HashMap::new();
                         for (i, &ir_idx) in ir_import.iter().enumerate() {
@@ -1231,7 +1230,7 @@ impl TolkReplayer {
                 let stack_values_len = if self.coverage_mode {
                     0
                 } else {
-                    self.tvm_stack_values.values().len()
+                    self.tvm_stack_values.parsed_values().len()
                 };
                 let exec = self.exec_stack.last_mut().expect(
                     "replayer invariant: exec_stack must contain the active execution state",
@@ -1448,7 +1447,7 @@ impl TolkReplayer {
         let ir_stack = exec.ir_stack.clone();
 
         let last_seen = {
-            let values = self.tvm_stack_values.values();
+            let values = self.tvm_stack_values.parsed_values();
             let skip = system_stack_depth.min(values.len());
             ir_stack
                 .iter()

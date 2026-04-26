@@ -87,8 +87,9 @@ pub async fn retrace(
             // handling exception code 9: failed to load library cell
             // default exception handler, terminating vm with exit code 9
 
-            let lines = parse_lines(&result.emulated_tx.vm_logs);
-            let lines: Vec<_> = lines.into_iter().filter_map(Result::ok).collect();
+            let lines: Vec<_> = parse_lines(&result.emulated_tx.vm_logs)
+                .filter_map(Result::ok)
+                .collect();
 
             if lines.len() < 6 {
                 return Ok(result);

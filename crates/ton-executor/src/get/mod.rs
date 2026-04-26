@@ -149,9 +149,13 @@ impl GetExecutor {
             }));
         }
 
+        let stack = native_required_utf8(result.stack, result.stack_len, "stack", |value| {
+            Arc::from(value)
+        })?;
+
         Ok(GetMethodResult::Success(GetMethodResultSuccess {
             success: true,
-            stack: native_required_arc_str(result.stack, result.stack_len, "stack")?,
+            stack,
             gas_used: result.gas_used.to_string(),
             vm_exit_code: result.vm_exit_code,
             vm_log: native_log_arc_str(result.vm_log, result.vm_log_len),
@@ -364,22 +368,12 @@ impl Drop for NativeGetMethodResultGuard {
     }
 }
 
-fn native_required_string(ptr: *const c_char, len: usize, field: &str) -> anyhow::Result<String> {
-    if ptr.is_null() {
-        anyhow::bail!("native get-method result field `{field}` is null");
-    }
-    // SAFETY: native result fields are valid for `len` bytes while the result guard is alive.
-    let bytes = unsafe { slice::from_raw_parts(ptr.cast::<u8>(), len) };
-    str::from_utf8(bytes)
-        .map(|value| value.to_owned())
-        .with_context(|| format!("native get-method result field `{field}` is not UTF-8"))
-}
-
-fn native_required_arc_str(
+fn native_required_utf8<T>(
     ptr: *const c_char,
     len: usize,
     field: &str,
-) -> anyhow::Result<Arc<str>> {
+    convert: impl FnOnce(&str) -> T,
+) -> anyhow::Result<T> {
     if ptr.is_null() {
         anyhow::bail!("native get-method result field `{field}` is null");
     }
@@ -387,7 +381,7 @@ fn native_required_arc_str(
     let bytes = unsafe { slice::from_raw_parts(ptr.cast::<u8>(), len) };
     let value = str::from_utf8(bytes)
         .with_context(|| format!("native get-method result field `{field}` is not UTF-8"))?;
-    Ok(Arc::from(value))
+    Ok(convert(value))
 }
 
 fn native_optional_string(
@@ -398,7 +392,7 @@ fn native_optional_string(
     if ptr.is_null() {
         return Ok(None);
     }
-    Ok(Some(native_required_string(ptr, len, field)?))
+    native_required_utf8(ptr, len, field, |value| value.to_owned()).map(Some)
 }
 
 fn native_lossy_string(ptr: *const c_char, len: usize) -> String {

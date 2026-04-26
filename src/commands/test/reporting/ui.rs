@@ -308,7 +308,7 @@ struct TestExecutionLogsResponse<'a> {
     vm_log: Option<&'a str>,
 }
 
-fn non_empty_text_ref(text: &str) -> Option<&str> {
+fn non_empty_log_text(text: &str) -> Option<&str> {
     (!text.trim().is_empty()).then_some(text)
 }
 
@@ -331,9 +331,9 @@ async fn handle_api_test_logs(
             .as_ref()
             .map_or_else(TestExecutionLogsResponse::default, |execution| {
                 TestExecutionLogsResponse {
-                    stdout: non_empty_text_ref(&execution.stdout),
-                    stderr: non_empty_text_ref(&execution.stderr),
-                    vm_log: execution.vm_log.as_deref().and_then(non_empty_text_ref),
+                    stdout: non_empty_log_text(&execution.stdout),
+                    stderr: non_empty_log_text(&execution.stderr),
+                    vm_log: execution.vm_log.as_deref().and_then(non_empty_log_text),
                 }
             });
 

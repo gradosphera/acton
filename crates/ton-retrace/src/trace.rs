@@ -253,7 +253,7 @@ pub struct Trace {
     /// Sequential list of all execution steps.
     pub steps: Vec<TraceStep>,
     /// Full BoC hex payloads registered by compact VM stack logs, keyed by cell hash.
-    pub registered_cells: HashMap<String, String>,
+    pub registered_cell_bocs: HashMap<String, String>,
 }
 
 impl Display for Trace {
@@ -297,8 +297,7 @@ impl Trace {
     /// ```
     #[must_use]
     pub fn new(vm_logs: &str, start_gas: Option<usize>) -> Self {
-        let lines = tvm_logs::parser::parse_lines(vm_logs);
-        Self::from_lines(lines, start_gas)
+        Self::from_lines(tvm_logs::parser::parse_lines(vm_logs), start_gas)
     }
 
     /// Creates a new [`Trace`] from pre-parsed [`VmLine`]s.
@@ -308,10 +307,13 @@ impl Trace {
     ///
     /// # Arguments
     ///
-    /// * `lines` — A vector of results, each containing a parsed [`VmLine`] or an error string.
+    /// * `lines` — Parsed VM lines or parsing errors.
     /// * `start_gas` — Optional initial gas limit.
     #[must_use]
-    pub fn from_lines(lines: Vec<Result<VmLine<'_>, String>>, start_gas: Option<usize>) -> Trace {
+    pub fn from_lines<'a>(
+        lines: impl IntoIterator<Item = Result<VmLine<'a>, String>>,
+        start_gas: Option<usize>,
+    ) -> Trace {
         let start_gas = start_gas.unwrap_or(1_000_000);
         let mut gas_remaining = start_gas;
 
@@ -320,7 +322,7 @@ impl Trace {
         let mut current_offset: Option<String> = None;
         let mut current_instr: Option<String> = None;
         let mut current_stack: Option<String> = None;
-        let mut registered_cells = HashMap::new();
+        let mut registered_cell_bocs = HashMap::new();
 
         for line_result in lines {
             let Ok(line) = line_result else { continue };
@@ -334,7 +336,7 @@ impl Trace {
                     current_instr = Some(instr.to_owned());
                 }
                 VmLine::VmCellBoc { hash, boc } => {
-                    registered_cells.insert(hash.to_ascii_uppercase(), boc.to_owned());
+                    registered_cell_bocs.insert(hash.to_owned(), boc.to_owned());
                 }
                 VmLine::VmStack { stack } => {
                     current_stack = Some(stack.raw().to_owned());
@@ -398,7 +400,7 @@ impl Trace {
         Trace {
             start_gas,
             steps,
-            registered_cells,
+            registered_cell_bocs,
         }
     }
 
@@ -442,8 +444,8 @@ impl Trace {
                         if let Some(VmStackValue::Cell(CellLike::Cell(msg_cell))) =
                             parsed.get(parsed.len() - 2)
                             && let Ok(cell) = Boc::decode_hex(
-                                self.registered_cells
-                                    .get(&msg_cell.to_ascii_uppercase())
+                                self.registered_cell_bocs
+                                    .get(msg_cell.as_str())
                                     .map_or(msg_cell.as_str(), String::as_str),
                             )
                         {
@@ -820,6 +822,33 @@ execute FOO
         } else {
             panic!("Expected Exception step at index 0");
         }
+    }
+
+    #[test]
+    fn test_actions_resolve_registered_cell_boc() {
+        let boc = "B5EE9C72010101010002000000";
+        let logs = format!(
+            r"
+register new cell 0F: {boc}
+stack: [ C{{0F}} 0 ]
+code cell hash: 734EFDF436945A5CB58154AAFB58A8258087B27EE31E98876254E4385F47B51D offset: 0
+execute SENDRAWMSG
+gas remaining: 999
+        "
+        );
+
+        let trace = Trace::new(&logs, None);
+        let actions = trace.actions();
+        assert_eq!(actions.actions.len(), 1);
+        let InstalledAction::Message(action) = &actions.actions[0] else {
+            panic!("Expected installed message action");
+        };
+        let expected_hash = Boc::decode_hex(boc)
+            .expect("test boc should decode")
+            .repr_hash()
+            .to_string()
+            .to_ascii_uppercase();
+        assert_eq!(action.msg_hash, expected_hash);
     }
 
     #[test]

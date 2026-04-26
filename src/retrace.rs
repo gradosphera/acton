@@ -87,7 +87,7 @@ pub fn find_execution_trace(vm_logs: &str, source_map: &TolkSourceMap) -> Option
 }
 
 fn exception_description(vm_logs: &str) -> String {
-    tvm_logs::parser::parse_lines_iter(vm_logs)
+    tvm_logs::parser::parse_lines(vm_logs)
         .filter_map(Result::ok)
         .filter_map(|line| match line {
             VmLine::VmException { message, .. } => Some(message.to_string()),

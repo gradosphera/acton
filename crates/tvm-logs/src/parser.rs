@@ -1,19 +1,4 @@
 use std::fmt;
-use thiserror::Error;
-use winnow::ascii::{digit1, space0, space1};
-use winnow::combinator::{alt, delimited, not, opt, peek};
-use winnow::error::{ContextError, ErrMode};
-use winnow::prelude::*;
-use winnow::token::take_while;
-
-type I<'a> = &'a str;
-
-#[derive(Debug, Error)]
-pub enum ParseErr {
-    #[error("{0}")]
-    Msg(String),
-}
-type PResult<T> = Result<T, ErrMode<ContextError>>;
 
 #[derive(Debug, Clone)]
 pub struct VmStack<'a> {
@@ -174,46 +159,6 @@ impl fmt::Display for CellSlice {
             _ => write!(f, "CS{{{}}}", self.value),
         }
     }
-}
-
-fn ws0(i: &mut I) -> PResult<()> {
-    space0.parse_next(i).map(|_| ())
-}
-
-fn ws1(i: &mut I) -> PResult<()> {
-    space1.parse_next(i).map(|_| ())
-}
-
-#[allow(unsafe_code)]
-fn number<'a>(i: &mut I<'a>) -> PResult<&'a str> {
-    let start = i.as_ptr() as usize;
-    opt('-').parse_next(i)?;
-    digit1.parse_next(i)?;
-    let end = i.as_ptr() as usize;
-    let len = end - start;
-    // SAFETY: We know this is valid UTF-8 since we only consumed ASCII characters
-    unsafe {
-        let slice = std::slice::from_raw_parts(start as *const u8, len);
-        Ok(std::str::from_utf8_unchecked(slice))
-    }
-}
-
-fn hex<'a>(i: &mut I<'a>) -> PResult<&'a str> {
-    take_while(1.., |c: char| c.is_ascii_hexdigit()).parse_next(i)
-}
-
-fn until_eol<'a>(i: &mut I<'a>) -> PResult<&'a str> {
-    take_while(0.., |c: char| c != '\n' && c != '\r').parse_next(i)
-}
-
-fn cell(i: &mut I<'_>) -> PResult<CellLike> {
-    delimited("C{", hex, "}")
-        .map(|h: &str| CellLike::Cell(h.to_string()))
-        .parse_next(i)
-}
-
-fn stack_parse_error<T>() -> PResult<T> {
-    Err(ErrMode::Backtrack(ContextError::new()))
 }
 
 struct StackParser<'a> {
@@ -493,140 +438,25 @@ impl<'a> StackParser<'a> {
     }
 }
 
-pub fn vm_stack_value<'a>(i: &mut I<'a>) -> PResult<VmStackValue> {
+pub fn vm_stack_value<'a>(i: &mut &'a str) -> Result<VmStackValue, &'static str> {
     let input = *i;
     let mut parser = StackParser::new(input);
     let Ok(value) = parser.parse_value() else {
-        return stack_parse_error();
+        return Err("expected stack value");
     };
     *i = &input[parser.pos..];
     Ok(value)
 }
 
-fn vm_stack<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
-    // "stack: " <capture everything until end of line as raw string>
-    let _ = "stack: ".parse_next(i)?;
-    let raw_stack = until_eol.parse_next(i)?;
-    Ok(VmLine::VmStack {
-        stack: VmStack::new(raw_stack.trim()),
-    })
-}
-
-fn vm_loc<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
-    // "code cell hash:" space* hex space+ "offset:" space* number
-    let _ = "code cell hash:".parse_next(i)?;
-    ws0(i)?;
-    let h = hex.parse_next(i)?;
-    ws1(i)?;
-    let _ = "offset:".parse_next(i)?;
-    ws0(i)?;
-    let off = number.parse_next(i)?;
-    Ok(VmLine::VmLoc {
-        hash: h,
-        offset: off,
-    })
-}
-
-fn vm_execute<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
-    let _ = "execute ".parse_next(i)?;
-    let t = until_eol.parse_next(i)?;
-    Ok(VmLine::VmExecute { instr: t.trim() })
-}
-
-fn vm_cell_boc<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
-    let _ = "register new cell ".parse_next(i)?;
-    let hash = hex.parse_next(i)?;
-    let _ = ":".parse_next(i)?;
-    ws0(i)?;
-    let boc = until_eol.parse_next(i)?;
-    Ok(VmLine::VmCellBoc {
-        hash,
-        boc: boc.trim(),
-    })
-}
-
-fn vm_limit_changed<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
-    let _ = "changing gas limit to ".parse_next(i)?;
-    let n = number.parse_next(i)?;
-    Ok(VmLine::VmLimitChanged { limit: n })
-}
-
-fn vm_gas_remaining<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
-    let _ = "gas remaining: ".parse_next(i)?;
-    let n = number.parse_next(i)?;
-    Ok(VmLine::VmGasRemaining { gas: n })
-}
-
-fn vm_exception<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
-    let _ = "handling exception code ".parse_next(i)?;
-    let errno = number.parse_next(i)?;
-    let _ = ": ".parse_next(i)?;
-    let msg = until_eol.parse_next(i)?;
-    Ok(VmLine::VmException {
-        errno,
-        message: msg.trim(),
-    })
-}
-
-fn vm_exception_handler<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
-    let _ = "default exception handler, terminating vm with exit code ".parse_next(i)?;
-    let errno = number.parse_next(i)?;
-    Ok(VmLine::VmExceptionHandler { errno })
-}
-
-fn vm_final_c5<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
-    let _ = "final c5: ".parse_next(i)?;
-    let c = cell.parse_next(i)?;
-    Ok(VmLine::VmFinalC5 { value: c })
-}
-
-fn vm_unknown<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
-    // not(peek(alt(...)))
-    not(peek(alt((
-        "stack: ",
-        "code cell hash:",
-        "execute ",
-        "register new cell ",
-        "changing gas limit to ",
-        "gas remaining: ",
-        "handling exception code ",
-        "default exception handler, terminating vm with exit code ",
-        "final c5:",
-    ))))
-    .parse_next(i)?;
-    let t = until_eol.parse_next(i)?;
-    Ok(VmLine::VmUnknown { text: t.trim() })
-}
-
-pub fn vm_line<'a>(i: &mut I<'a>) -> PResult<VmLine<'a>> {
-    alt((
-        vm_loc,
-        vm_stack,
-        vm_execute,
-        vm_cell_boc,
-        vm_limit_changed,
-        vm_gas_remaining,
-        vm_exception,
-        vm_exception_handler,
-        vm_final_c5,
-        vm_unknown,
-    ))
-    .parse_next(i)
-}
-
 #[must_use]
-pub fn parse_lines(input: &str) -> Vec<Result<VmLine<'_>, String>> {
-    parse_lines_iter(input).collect()
-}
-
-pub fn parse_lines_iter(input: &str) -> impl Iterator<Item = Result<VmLine<'_>, String>> + use<'_> {
+pub fn parse_lines(input: &str) -> impl Iterator<Item = Result<VmLine<'_>, String>> + use<'_> {
     input.split_inclusive('\n').map(|line| {
         let s = line.trim_end_matches(['\r', '\n', ' '].as_ref());
-        parse_line_fast(s).map_err(|err| format!("{err} @ {line:?}"))
+        parse_line(s).map_err(|err| format!("{err} @ {line:?}"))
     })
 }
 
-fn parse_line_fast<'a>(line: &'a str) -> Result<VmLine<'a>, &'static str> {
+fn parse_line<'a>(line: &'a str) -> Result<VmLine<'a>, &'static str> {
     if let Some(raw_stack) = line.strip_prefix("stack: ") {
         return Ok(VmLine::VmStack {
             stack: VmStack::new(raw_stack.trim()),
@@ -772,8 +602,9 @@ mod tests {
 
     #[test]
     fn parses_registered_cell_boc_line() {
-        let parsed =
-            parse_lines("register new cell 0F: B5EE9C72010101010002000000\nstack: [ C{0F} ]\n");
+        let parsed: Vec<_> =
+            parse_lines("register new cell 0F: B5EE9C72010101010002000000\nstack: [ C{0F} ]\n")
+                .collect();
 
         match &parsed[0] {
             Ok(VmLine::VmCellBoc { hash, boc }) => {
