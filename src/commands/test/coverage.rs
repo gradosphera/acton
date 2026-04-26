@@ -193,7 +193,7 @@ fn collect_executed_lines_per_files(
         let Ok(mut replayer) = TolkReplayer::new_for_coverage(source_map, logs) else {
             continue;
         };
-        let mut last_stack = RuntimeStack::Empty;
+        let mut last_stack = RuntimeStack::default();
         let mut last_recorded_loc: Option<(String, i64)> = None;
         let mut last_coverage_loc: Option<(String, i64)> = None;
 

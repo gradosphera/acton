@@ -113,7 +113,7 @@ impl GetExecutor {
 
         let inner = self.inner.lock();
 
-        // SAFETY: `tvm_emulator_set_gas_limit` and `run_get_method_struct` are safe functions
+        // SAFETY: native pointers come from live CStrings and the locked executor handle.
         let result_ptr = unsafe {
             // We set a very high gas limit by default for get-methods,
             // as they are typically executed off-chain and for some reason,
@@ -128,14 +128,11 @@ impl GetExecutor {
             )
         };
 
-        if result_ptr.is_null() {
-            anyhow::bail!("run_get_method_struct returned null pointer");
-        }
-
+        let result_ptr =
+            NonNull::new(result_ptr).context("run_get_method_struct returned null pointer")?;
         let result_guard = NativeGetMethodResultGuard(result_ptr);
         // SAFETY: `result_ptr` was checked for null and is owned by `result_guard`.
-        let result = unsafe { result_guard.0.as_ref() }
-            .context("run_get_method_struct returned invalid result pointer")?;
+        let result = unsafe { result_guard.0.as_ref() };
 
         if result.fail != 0 {
             let message = native_lossy_string(result.error, result.error_len);
@@ -342,7 +339,7 @@ unsafe extern "C" {
 
 #[repr(C)]
 struct NativeGetMethodResult {
-    owner: *mut c_void,
+    _owner: *mut c_void,
     error: *const c_char,
     error_len: usize,
     stack: *const c_char,
@@ -357,13 +354,13 @@ struct NativeGetMethodResult {
     fail: u8,
 }
 
-struct NativeGetMethodResultGuard(*mut NativeGetMethodResult);
+struct NativeGetMethodResultGuard(NonNull<NativeGetMethodResult>);
 
 impl Drop for NativeGetMethodResultGuard {
     fn drop(&mut self) {
         // SAFETY: the pointer came from the native get-method API and this guard owns it.
         unsafe {
-            tvm_emulator_get_method_result_destroy(self.0);
+            tvm_emulator_get_method_result_destroy(self.0.as_ptr());
         }
     }
 }

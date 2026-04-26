@@ -262,9 +262,8 @@ pub struct VmLogRuntimeEventSource {
 impl VmLogRuntimeEventSource {
     #[must_use]
     pub fn from_vm_logs(vm_logs: &str) -> Self {
-        let vm_lines = convert_vm_log_lines(vm_logs);
         Self {
-            vm_lines,
+            vm_lines: convert_vm_log_lines(vm_logs),
             cur_vm_line_idx: 0,
             pending_events: VecDeque::new(),
         }
@@ -1439,29 +1438,16 @@ impl TolkReplayer {
     /// Snapshot current `ir_stack→TVM` value mappings so that variables whose
     /// slots disappear from stack can still be shown as "last seen".
     fn update_last_seen(&mut self) {
-        let exec = self
-            .exec_stack
-            .last()
-            .expect("replayer invariant: exec_stack must contain the active execution state");
-        let system_stack_depth = exec.system_stack_depth;
-        let ir_stack = exec.ir_stack.clone();
-
-        let last_seen = {
-            let values = self.tvm_stack_values.parsed_values();
-            let skip = system_stack_depth.min(values.len());
-            ir_stack
-                .iter()
-                .enumerate()
-                .filter_map(|(i, &ir_idx)| values.get(skip + i).map(|val| (ir_idx, val.clone())))
-                .collect::<Vec<_>>()
-        };
-
+        let values = self.tvm_stack_values.parsed_values();
         let exec = self
             .exec_stack
             .last_mut()
             .expect("replayer invariant: exec_stack must contain the active execution state");
-        for (ir_idx, value) in last_seen {
-            exec.last_seen_values.insert(ir_idx, value);
+        let skip = exec.system_stack_depth.min(values.len());
+        for (i, &ir_idx) in exec.ir_stack.iter().enumerate() {
+            if let Some(value) = values.get(skip + i) {
+                exec.last_seen_values.insert(ir_idx, value.clone());
+            }
         }
     }
 

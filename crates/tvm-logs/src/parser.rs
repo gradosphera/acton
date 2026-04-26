@@ -72,7 +72,7 @@ pub enum VmLine<'a> {
     VmStack { stack: VmStack<'a> },
     VmLoc { hash: &'a str, offset: &'a str },
     VmExecute { instr: &'a str },
-    VmCellBoc { hash: &'a str, boc: &'a str },
+    VmRegisteredCell { hash: &'a str, boc: &'a str },
     VmLimitChanged { limit: &'a str },
     VmGasRemaining { gas: &'a str },
     VmException { errno: &'a str, message: &'a str },
@@ -438,7 +438,7 @@ impl<'a> StackParser<'a> {
     }
 }
 
-pub fn vm_stack_value<'a>(i: &mut &'a str) -> Result<VmStackValue, &'static str> {
+pub fn vm_stack_value(i: &mut &str) -> Result<VmStackValue, &'static str> {
     let input = *i;
     let mut parser = StackParser::new(input);
     let Ok(value) = parser.parse_value() else {
@@ -448,8 +448,7 @@ pub fn vm_stack_value<'a>(i: &mut &'a str) -> Result<VmStackValue, &'static str>
     Ok(value)
 }
 
-#[must_use]
-pub fn parse_lines(input: &str) -> impl Iterator<Item = Result<VmLine<'_>, String>> + use<'_> {
+pub fn parse_lines(input: &str) -> impl Iterator<Item = Result<VmLine<'_>, String>> + '_ {
     input.split_inclusive('\n').map(|line| {
         let s = line.trim_end_matches(['\r', '\n', ' '].as_ref());
         parse_line(s).map_err(|err| format!("{err} @ {line:?}"))
@@ -471,7 +470,7 @@ fn parse_line<'a>(line: &'a str) -> Result<VmLine<'a>, &'static str> {
         });
     }
     if let Some(rest) = line.strip_prefix("register new cell ") {
-        return parse_cell_boc_line(rest);
+        return parse_registered_cell_line(rest);
     }
     if let Some(limit) = line.strip_prefix("changing gas limit to ") {
         return parse_number_line(limit).map(|limit| VmLine::VmLimitChanged { limit });
@@ -510,14 +509,14 @@ fn parse_loc_line(rest: &str) -> Result<VmLine<'_>, &'static str> {
     Ok(VmLine::VmLoc { hash, offset })
 }
 
-fn parse_cell_boc_line(rest: &str) -> Result<VmLine<'_>, &'static str> {
+fn parse_registered_cell_line(rest: &str) -> Result<VmLine<'_>, &'static str> {
     let Some((hash, boc)) = rest.split_once(':') else {
         return Err("expected registered cell separator");
     };
     if !is_hex(hash) {
         return Err("expected registered cell hash");
     }
-    Ok(VmLine::VmCellBoc {
+    Ok(VmLine::VmRegisteredCell {
         hash,
         boc: boc.trim(),
     })
@@ -601,13 +600,13 @@ mod tests {
     }
 
     #[test]
-    fn parses_registered_cell_boc_line() {
+    fn parses_registered_cell_line() {
         let parsed: Vec<_> =
             parse_lines("register new cell 0F: B5EE9C72010101010002000000\nstack: [ C{0F} ]\n")
                 .collect();
 
         match &parsed[0] {
-            Ok(VmLine::VmCellBoc { hash, boc }) => {
+            Ok(VmLine::VmRegisteredCell { hash, boc }) => {
                 assert_eq!(*hash, "0F");
                 assert_eq!(*boc, "B5EE9C72010101010002000000");
             }

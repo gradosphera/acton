@@ -335,7 +335,7 @@ impl Trace {
                 VmLine::VmExecute { instr } => {
                     current_instr = Some(instr.to_owned());
                 }
-                VmLine::VmCellBoc { hash, boc } => {
+                VmLine::VmRegisteredCell { hash, boc } => {
                     registered_cell_bocs.insert(hash.to_owned(), boc.to_owned());
                 }
                 VmLine::VmStack { stack } => {
@@ -713,6 +713,38 @@ impl ExecutedActions {
     }
 }
 
+#[cfg(test)]
+mod local_tests {
+    use super::*;
+
+    #[test]
+    fn actions_resolve_registered_cell_boc() {
+        let boc = "B5EE9C72010101010002000000";
+        let logs = format!(
+            r"
+register new cell 0F: {boc}
+stack: [ C{{0F}} 0 ]
+code cell hash: 734EFDF436945A5CB58154AAFB58A8258087B27EE31E98876254E4385F47B51D offset: 0
+execute SENDRAWMSG
+gas remaining: 999
+        "
+        );
+
+        let trace = Trace::new(&logs, None);
+        let actions = trace.actions();
+        assert_eq!(actions.actions.len(), 1);
+        let InstalledAction::Message(action) = &actions.actions[0] else {
+            panic!("Expected installed message action");
+        };
+        let expected_hash = Boc::decode_hex(boc)
+            .expect("test boc should decode")
+            .repr_hash()
+            .to_string()
+            .to_ascii_uppercase();
+        assert_eq!(action.msg_hash, expected_hash);
+    }
+}
+
 #[cfg(all(test, feature = "only_ci"))]
 mod tests {
     use super::*;
@@ -822,33 +854,6 @@ execute FOO
         } else {
             panic!("Expected Exception step at index 0");
         }
-    }
-
-    #[test]
-    fn test_actions_resolve_registered_cell_boc() {
-        let boc = "B5EE9C72010101010002000000";
-        let logs = format!(
-            r"
-register new cell 0F: {boc}
-stack: [ C{{0F}} 0 ]
-code cell hash: 734EFDF436945A5CB58154AAFB58A8258087B27EE31E98876254E4385F47B51D offset: 0
-execute SENDRAWMSG
-gas remaining: 999
-        "
-        );
-
-        let trace = Trace::new(&logs, None);
-        let actions = trace.actions();
-        assert_eq!(actions.actions.len(), 1);
-        let InstalledAction::Message(action) = &actions.actions[0] else {
-            panic!("Expected installed message action");
-        };
-        let expected_hash = Boc::decode_hex(boc)
-            .expect("test boc should decode")
-            .repr_hash()
-            .to_string()
-            .to_ascii_uppercase();
-        assert_eq!(action.msg_hash, expected_hash);
     }
 
     #[test]
