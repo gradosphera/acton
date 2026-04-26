@@ -209,31 +209,27 @@ enum OwnedVmLine {
 
 fn convert_vm_log_lines(vm_logs: impl AsRef<str>) -> Vec<OwnedVmLine> {
     tvm_logs::parser::parse_lines_iter(vm_logs.as_ref())
-        .filter_map(|line| line.ok().and_then(convert_vm_line))
+        .filter_map(|line| match line.ok()? {
+            VmLine::VmStack { stack } => Some(OwnedVmLine::Stack {
+                raw_stack: Arc::from(stack.raw()),
+            }),
+            VmLine::VmLoc { hash, offset } => Some(OwnedVmLine::Loc {
+                cell_hash: hash.to_owned(),
+                offset: offset.parse().unwrap_or(0),
+            }),
+            VmLine::VmExecute { instr } => Some(OwnedVmLine::Execute {
+                instr_name: instr.to_owned(),
+            }),
+            VmLine::VmException { errno, .. } => Some(OwnedVmLine::Exception {
+                errno: errno.to_owned(),
+            }),
+            VmLine::VmExceptionHandler { errno } => Some(OwnedVmLine::ExceptionHandler {
+                errno: errno.to_owned(),
+            }),
+            // we don't need other lines from TVM execution logs (about gas limits, c5, etc.)
+            _ => None,
+        })
         .collect()
-}
-
-fn convert_vm_line(line: VmLine<'_>) -> Option<OwnedVmLine> {
-    match line {
-        VmLine::VmStack { stack } => Some(OwnedVmLine::Stack {
-            raw_stack: Arc::from(stack.raw()),
-        }),
-        VmLine::VmLoc { hash, offset } => Some(OwnedVmLine::Loc {
-            cell_hash: hash.to_owned(),
-            offset: offset.parse().unwrap_or(0),
-        }),
-        VmLine::VmExecute { instr } => Some(OwnedVmLine::Execute {
-            instr_name: instr.to_owned(),
-        }),
-        VmLine::VmException { errno, .. } => Some(OwnedVmLine::Exception {
-            errno: errno.to_owned(),
-        }),
-        VmLine::VmExceptionHandler { errno } => Some(OwnedVmLine::ExceptionHandler {
-            errno: errno.to_owned(),
-        }),
-        // we don't need other lines from TVM execution logs (about gas limits, c5, etc.)
-        _ => None,
-    }
 }
 
 // (cell_hash, offset) -> sorted vec of mark_id into source_map.debug_marks
