@@ -10,8 +10,8 @@
 artifact_set_revision = 1
 
 [target.aarch64-apple-darwin.sha256]
-libemulator = "ddb2c3f22e6540815388bc69f5c134878102299ad096c6419d6b7bd2be9e1283"
-libtolk = "a8e73ef623bc4b7dcc887869bc97717a7b6517bd5b05671ceff7e2285a4780cd"
+libemulator = "689430cc7933ed12fbe3eccb9fe88f4f40d2eb17465ad0fbd4c8b1323e0a55bb"
+libtolk = "ae983455b6b4933eed8ea2baf6367608720cfdaefb8431ca6aabdb4e556b1f75"
 
 [target.aarch64-unknown-linux-gnu.sha256]
 libemulator = "c40dde63ab01414aa3456c3d481f6db5dde7cee34b8723fa0d48a0404ebb4792"

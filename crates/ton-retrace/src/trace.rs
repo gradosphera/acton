@@ -40,6 +40,7 @@
 
 use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use tvm_logs::executor_parser::{ExecutorLine, parse_executor_lines};
 use tvm_logs::parser::{CellLike, VmLine, VmStack, VmStackValue};
@@ -251,6 +252,8 @@ pub struct Trace {
     pub start_gas: usize,
     /// Sequential list of all execution steps.
     pub steps: Vec<TraceStep>,
+    /// Full BoC hex payloads registered by compact VM stack logs, keyed by cell hash.
+    pub registered_cells: HashMap<String, String>,
 }
 
 impl Display for Trace {
@@ -317,6 +320,7 @@ impl Trace {
         let mut current_offset: Option<String> = None;
         let mut current_instr: Option<String> = None;
         let mut current_stack: Option<String> = None;
+        let mut registered_cells = HashMap::new();
 
         for line_result in lines {
             let Ok(line) = line_result else { continue };
@@ -328,6 +332,9 @@ impl Trace {
                 }
                 VmLine::VmExecute { instr } => {
                     current_instr = Some(instr.to_owned());
+                }
+                VmLine::VmCellBoc { hash, boc } => {
+                    registered_cells.insert(hash.to_ascii_uppercase(), boc.to_owned());
                 }
                 VmLine::VmStack { stack } => {
                     current_stack = Some(stack.raw().to_owned());
@@ -388,7 +395,11 @@ impl Trace {
             }
         }
 
-        Trace { start_gas, steps }
+        Trace {
+            start_gas,
+            steps,
+            registered_cells,
+        }
     }
 
     /// Extracts all [`InstalledAction`]s from the execution trace.
@@ -425,7 +436,11 @@ impl Trace {
                         // We are interested in the cell (second from top).
                         if let Some(VmStackValue::Cell(CellLike::Cell(msg_cell))) =
                             parsed.get(parsed.len() - 2)
-                            && let Ok(cell) = Boc::decode_hex(msg_cell)
+                            && let Ok(cell) = Boc::decode_hex(
+                                self.registered_cells
+                                    .get(&msg_cell.to_ascii_uppercase())
+                                    .map_or(msg_cell.as_str(), String::as_str),
+                            )
                         {
                             return Some(InstalledAction::Message(InstalledSendMessageAction {
                                 msg_hash: cell.repr_hash().to_string().to_ascii_uppercase(),
@@ -691,6 +706,32 @@ impl ExecutedActions {
         ExecutedActions {
             actions,
             invalid_actions,
+        }
+    }
+}
+
+#[cfg(test)]
+mod registered_cell_tests {
+    use super::*;
+
+    #[test]
+    fn actions_resolve_compact_stack_cell_from_registered_boc() {
+        let logs = "\
+register new cell ABCD: B5EE9C72010101010002000000
+stack: [ C{ABCD} 64 ]
+code cell hash: 1111 offset: 7
+execute SENDRAWMSG
+gas remaining: 999
+";
+
+        let actions = Trace::new(logs, Some(1000)).actions();
+        assert_eq!(actions.actions.len(), 1);
+        match &actions.actions[0] {
+            InstalledAction::Message(message) => {
+                assert_eq!(message.loc_hash, "1111");
+                assert_eq!(message.loc_offset, 7);
+            }
+            other => panic!("expected installed message action, got {other:?}"),
         }
     }
 }

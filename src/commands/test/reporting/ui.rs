@@ -299,13 +299,17 @@ struct TestLogsQuery {
 }
 
 #[derive(Default, Serialize)]
-struct TestExecutionLogsResponse {
+struct TestExecutionLogsResponse<'a> {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    stdout: Option<String>,
+    stdout: Option<&'a str>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    stderr: Option<String>,
+    stderr: Option<&'a str>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    vm_log_diff: Option<String>,
+    vm_log: Option<&'a str>,
+}
+
+fn non_empty_text_ref(text: &str) -> Option<&str> {
+    (!text.trim().is_empty()).then_some(text)
 }
 
 async fn handle_api_test_logs(
@@ -327,9 +331,9 @@ async fn handle_api_test_logs(
             .as_ref()
             .map_or_else(TestExecutionLogsResponse::default, |execution| {
                 TestExecutionLogsResponse {
-                    stdout: non_empty_text(&execution.stdout),
-                    stderr: non_empty_text(&execution.stderr),
-                    vm_log_diff: execution.vm_log_diff.clone(),
+                    stdout: non_empty_text_ref(&execution.stdout),
+                    stderr: non_empty_text_ref(&execution.stderr),
+                    vm_log: execution.vm_log.as_deref().and_then(non_empty_text_ref),
                 }
             });
 
