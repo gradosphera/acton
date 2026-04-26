@@ -222,12 +222,7 @@ impl TestReporter for ConsoleReporter {
                     "]".dimmed()
                 );
             } else {
-                println!(
-                    "  {} {} {}",
-                    "○".dimmed(),
-                    test_label,
-                    "skipped".dimmed()
-                );
+                println!("  {} {} {}", "○".dimmed(), test_label, "skipped".dimmed());
             }
         }
 
