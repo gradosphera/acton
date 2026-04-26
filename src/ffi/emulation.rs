@@ -444,12 +444,10 @@ fn build_send_result_tuple(
         None => TupleItem::Null,
     };
     let out_messages = Tuple(
-        parsed_tx
-            .iter_out_msgs()
-            .filter_map(Result::ok)
-            .map(|msg| to_cell(&msg))
+        collect_out_message_cells(parsed_tx)
+            .into_iter()
             .map(TupleItem::Cell)
-            .collect::<Vec<_>>(),
+            .collect(),
     );
     let gas_used = match parsed_tx.load_info() {
         Ok(TxInfo::Ordinary(info)) => match info.compute_phase {
@@ -482,17 +480,36 @@ fn build_send_result_tuple(
     ]))
 }
 
+fn collect_out_message_cells(parsed_tx: &Transaction) -> Vec<Cell> {
+    parsed_tx
+        .out_msgs
+        .raw_values()
+        .filter_map(Result::ok)
+        .filter_map(|mut raw| raw.load_reference_cloned().ok())
+        .collect()
+}
+
+fn collect_external_out_message_cells(parsed_tx: &Transaction) -> Vec<Cell> {
+    parsed_tx
+        .iter_out_msgs()
+        .zip(parsed_tx.out_msgs.raw_values())
+        .filter_map(|(msg, raw)| {
+            let msg = msg.ok()?;
+            if !matches!(msg.info, MsgInfo::ExtOut(_)) {
+                return None;
+            }
+            raw.ok()?.load_reference_cloned().ok()
+        })
+        .collect()
+}
+
 /// Build `SendResult` from an already-parsed transaction (e.g. fetched from toncenter).
 ///
 /// Fields that cannot be reconstructed from a single on-chain transaction
 /// (`childTxs`, `parentLt`, `outActions`) are left empty/null. Externals are
 /// derived by filtering the transaction's own outgoing messages.
 fn tx_cell_to_send_result_tuple(tx_cell: Cell, parsed_tx: &Transaction) -> TupleItem {
-    let externals: Vec<Cell> = parsed_tx
-        .iter_out_msgs()
-        .filter_map(Result::ok)
-        .filter_map(|msg| matches!(msg.info, MsgInfo::ExtOut(_)).then(|| to_cell(&msg)))
-        .collect();
+    let externals = collect_external_out_message_cells(parsed_tx);
 
     build_send_result_tuple(tx_cell, parsed_tx, &[], None, Cell::default(), &externals)
 }
@@ -776,17 +793,30 @@ where
         if let SendMessageResult::Success(step) = &mut result {
             step.parent_transaction = pending.parent_lt;
             let tx_lt = step.transaction.lt;
-            let out_messages = step.out_messages.clone();
             let mut externals = Vec::new();
 
-            for out_msg_cell in out_messages {
-                let Ok(out_msg) = out_msg_cell.parse::<Message<'_>>() else {
+            let out_msgs = step
+                .transaction
+                .iter_out_msgs()
+                .zip(step.transaction.out_msgs.raw_values());
+            for (out_msg, raw_out_msg) in out_msgs {
+                let Ok(out_msg) = out_msg else {
+                    continue;
+                };
+                let Ok(mut raw_out_msg) = raw_out_msg else {
                     continue;
                 };
 
                 match out_msg.info {
-                    MsgInfo::ExtOut(_) => externals.push(out_msg_cell),
+                    MsgInfo::ExtOut(_) => {
+                        if let Ok(out_msg_cell) = raw_out_msg.load_reference_cloned() {
+                            externals.push(out_msg_cell);
+                        }
+                    }
                     MsgInfo::Int(_) => {
+                        let Ok(out_msg_cell) = raw_out_msg.load_reference_cloned() else {
+                            continue;
+                        };
                         let _ = message_iters.push_child_message(cursor_id, out_msg_cell, tx_lt);
                     }
                     MsgInfo::ExtIn(_) => {}
@@ -2997,7 +3027,6 @@ mod tests {
             child_transactions: vec![],
             shard_account_before: empty_shard_account.clone(),
             shard_account: empty_shard_account,
-            out_messages: vec![],
             vm_log: Arc::default(),
             executor_logs: Arc::default(),
             actions: None,
