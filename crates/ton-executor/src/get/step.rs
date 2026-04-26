@@ -38,7 +38,7 @@
 //! ```
 
 use crate::get::{GetMethodResult, GetMethodResultSuccess, RunGetMethodArgs};
-use crate::{BaseExecutor, ExtMethodCallback, MissingLibraryCallback, get};
+use crate::{BaseExecutor, ExtMethodBytesCallback, ExtMethodCallback, MissingLibraryCallback, get};
 use anyhow::Context;
 use std::collections::HashSet;
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
@@ -230,6 +230,33 @@ impl StepGetExecutor {
         Ok(())
     }
 
+    pub fn register_ext_method_bytes<Ctx>(
+        &mut self,
+        id: i32,
+        ctx: &mut Ctx,
+        stack_items_count: u8,
+        callback: ExtMethodBytesCallback<Ctx>,
+    ) -> anyhow::Result<()> {
+        if !self.ext_methods.insert(id) {
+            anyhow::bail!("Extension method with id {id} already registered");
+        }
+
+        // SAFETY: `tvm_emulator_register_extmethod_bytes` is a safe C API function.
+        unsafe {
+            get::tvm_emulator_register_extmethod_bytes(
+                self.inner.as_ptr(),
+                id,
+                std::ptr::from_mut::<Ctx>(ctx).cast::<c_void>(),
+                c_int::from(stack_items_count),
+                std::mem::transmute::<ExtMethodBytesCallback<Ctx>, ExtMethodBytesCallback<c_void>>(
+                    callback,
+                ),
+            );
+        };
+
+        Ok(())
+    }
+
     /// Registers callback that is called when TVM fails to resolve a library by hash.
     pub fn register_missing_library_callback<Ctx>(
         &mut self,
@@ -261,6 +288,16 @@ impl BaseExecutor for StepGetExecutor {
         callback: ExtMethodCallback<Ctx>,
     ) -> anyhow::Result<()> {
         self.register_ext_method(id, ctx, stack_items_count, callback)
+    }
+
+    fn register_ext_method_bytes<Ctx>(
+        &mut self,
+        id: i32,
+        ctx: &mut Ctx,
+        stack_items_count: u8,
+        callback: ExtMethodBytesCallback<Ctx>,
+    ) -> anyhow::Result<()> {
+        self.register_ext_method_bytes(id, ctx, stack_items_count, callback)
     }
 }
 

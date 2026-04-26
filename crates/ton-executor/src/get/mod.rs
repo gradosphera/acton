@@ -51,7 +51,7 @@ pub mod types;
 use core::ffi::{c_char, c_int, c_void};
 pub use types::*;
 
-use crate::{BaseExecutor, ExtMethodCallback, MissingLibraryCallback};
+use crate::{BaseExecutor, ExtMethodBytesCallback, ExtMethodCallback, MissingLibraryCallback};
 use anyhow::Context;
 use parking_lot::ReentrantMutex;
 use std::collections::HashSet;
@@ -217,6 +217,33 @@ impl GetExecutor {
         Ok(())
     }
 
+    pub fn register_ext_method_bytes<Ctx>(
+        &mut self,
+        id: i32,
+        ctx: &mut Ctx,
+        stack_items_count: u8,
+        callback: ExtMethodBytesCallback<Ctx>,
+    ) -> anyhow::Result<()> {
+        if !self.ext_methods.insert(id) {
+            anyhow::bail!("Extension method with id {id} already registered");
+        }
+
+        // SAFETY: `tvm_emulator_register_extmethod_bytes` is a safe C API function.
+        unsafe {
+            tvm_emulator_register_extmethod_bytes(
+                self.inner.lock().0.as_ptr(),
+                id,
+                std::ptr::from_mut::<Ctx>(ctx).cast::<c_void>(),
+                c_int::from(stack_items_count),
+                std::mem::transmute::<ExtMethodBytesCallback<Ctx>, ExtMethodBytesCallback<c_void>>(
+                    callback,
+                ),
+            );
+        };
+
+        Ok(())
+    }
+
     /// Runs a serialized TVM continuation directly.
     ///
     /// # Arguments
@@ -285,6 +312,16 @@ impl BaseExecutor for GetExecutor {
     ) -> anyhow::Result<()> {
         self.register_ext_method(id, ctx, stack_items_count, callback)
     }
+
+    fn register_ext_method_bytes<Ctx>(
+        &mut self,
+        id: i32,
+        ctx: &mut Ctx,
+        stack_items_count: u8,
+        callback: ExtMethodBytesCallback<Ctx>,
+    ) -> anyhow::Result<()> {
+        self.register_ext_method_bytes(id, ctx, stack_items_count, callback)
+    }
 }
 
 unsafe extern "C" {
@@ -303,6 +340,14 @@ unsafe extern "C" {
         ctx: *mut c_void,
         stack_items_count: c_int,
         callback: ExtMethodCallback<c_void>,
+    ) -> *const c_char;
+
+    pub(crate) fn tvm_emulator_register_extmethod_bytes(
+        tvm_emulator: *mut c_void,
+        id: c_int,
+        ctx: *mut c_void,
+        stack_items_count: c_int,
+        callback: ExtMethodBytesCallback<c_void>,
     ) -> *const c_char;
 
     pub(crate) fn tvm_emulator_register_missing_library_callback(

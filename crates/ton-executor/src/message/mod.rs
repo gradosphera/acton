@@ -68,7 +68,7 @@ pub use types::*;
 
 use crate::common::ExecutorVerbosity;
 use crate::config::DEFAULT_CONFIG;
-use crate::{BaseExecutor, ExtMethodCallback, MissingLibraryCallback};
+use crate::{BaseExecutor, ExtMethodBytesCallback, ExtMethodCallback, MissingLibraryCallback};
 use anyhow::Context;
 use parking_lot::ReentrantMutex;
 use std::ffi::{CStr, CString, c_void};
@@ -250,6 +250,33 @@ impl Executor {
         Ok(())
     }
 
+    pub fn register_ext_method_bytes<Ctx>(
+        &mut self,
+        id: i32,
+        ctx: &mut Ctx,
+        stack_items_count: u8,
+        callback: ExtMethodBytesCallback<Ctx>,
+    ) -> anyhow::Result<()> {
+        if !self.ext_methods.insert(id) {
+            anyhow::bail!("Extension method with id {id} already registered");
+        }
+
+        // SAFETY: `transaction_emulator_register_extmethod_bytes` is a safe C API function.
+        unsafe {
+            transaction_emulator_register_extmethod_bytes(
+                self.inner.lock().0.as_ptr(),
+                id,
+                std::ptr::from_mut::<Ctx>(ctx).cast::<c_void>(),
+                c_int::from(stack_items_count),
+                std::mem::transmute::<ExtMethodBytesCallback<Ctx>, ExtMethodBytesCallback<c_void>>(
+                    callback,
+                ),
+            );
+        };
+
+        Ok(())
+    }
+
     pub fn set_config(&self, config_b64: &str) -> anyhow::Result<bool> {
         let config_cstr = CString::new(config_b64).context("config contains null bytes")?;
 
@@ -302,6 +329,16 @@ impl BaseExecutor for Executor {
     ) -> anyhow::Result<()> {
         self.register_ext_method(id, ctx, stack_items_count, callback)
     }
+
+    fn register_ext_method_bytes<Ctx>(
+        &mut self,
+        id: i32,
+        ctx: &mut Ctx,
+        stack_items_count: u8,
+        callback: ExtMethodBytesCallback<Ctx>,
+    ) -> anyhow::Result<()> {
+        self.register_ext_method_bytes(id, ctx, stack_items_count, callback)
+    }
 }
 
 unsafe extern "C" {
@@ -326,6 +363,14 @@ unsafe extern "C" {
         ctx: *mut c_void,
         stack_items_count: c_int,
         callback: ExtMethodCallback<c_void>,
+    ) -> *const c_char;
+
+    pub(crate) fn transaction_emulator_register_extmethod_bytes(
+        transaction_emulator: *mut c_void,
+        id: c_int,
+        ctx: *mut c_void,
+        stack_items_count: c_int,
+        callback: ExtMethodBytesCallback<c_void>,
     ) -> *const c_char;
 
     pub(crate) fn transaction_emulator_register_missing_library_callback(

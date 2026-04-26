@@ -47,6 +47,25 @@ impl Serialize for ExecutorVerbosity {
 pub type ExtMethodCallback<Ctx = c_void> =
     unsafe extern "C" fn(ctx: *mut Ctx, stack: *const c_char) -> *const c_char;
 
+/// Free callback for byte buffers returned by custom extension methods.
+pub type ExtMethodBytesFreeCallback = unsafe extern "C" fn(owner: *mut c_void);
+
+/// Callback type for native custom extension methods using raw stack bytes.
+///
+/// The callback receives the selected TVM stack segment as a native byte payload and
+/// writes the returned stack payload into the out parameters. `out_owner` and
+/// `out_free_owner` describe how the native emulator should release the returned
+/// buffer after it has consumed it.
+pub type ExtMethodBytesCallback<Ctx = c_void> = unsafe extern "C" fn(
+    ctx: *mut Ctx,
+    stack_data: *const u8,
+    stack_len: usize,
+    out_data: *mut *const u8,
+    out_len: *mut usize,
+    out_owner: *mut *mut c_void,
+    out_free_owner: *mut Option<ExtMethodBytesFreeCallback>,
+) -> bool;
+
 /// Callback type for missing global library notifications.
 ///
 /// # Arguments
@@ -123,5 +142,14 @@ pub trait BaseExecutor {
         ctx: &mut Ctx,
         stack_items_count: u8,
         cb: ExtMethodCallback<Ctx>,
+    ) -> anyhow::Result<()>;
+
+    /// Registers a custom extension method that exchanges stack data as native bytes.
+    fn register_ext_method_bytes<Ctx>(
+        &mut self,
+        id: i32,
+        ctx: &mut Ctx,
+        stack_items_count: u8,
+        cb: ExtMethodBytesCallback<Ctx>,
     ) -> anyhow::Result<()>;
 }

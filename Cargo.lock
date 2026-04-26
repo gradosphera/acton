@@ -5220,6 +5220,7 @@ version = "0.3.1"
 dependencies = [
  "acton-config",
  "anyhow",
+ "num-bigint",
  "num-traits",
  "rustc-hash 2.1.1",
  "serde",
