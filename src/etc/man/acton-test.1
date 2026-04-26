@@ -458,6 +458,48 @@ transaction chain
 \h'-04'\(bu\h'+03'fuzz tests show the seed in console output; if \fB[test.fuzz].seed\fR is omitted,
 Acton picks a new seed for each \fBacton test\fR run
 .RE
+.SH "DOT REPORTER"
+Use \fBdot\fR when you want compact progress output but still need full failure
+diagnostics at the end of the run:
+.sp
+.RS 4
+.nf
+acton test \-\-reporter dot
+.fi
+.RE
+.sp
+The progress line uses one character per test:
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\[u00B7]\fR passed
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBx\fR failed
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\[u25CB]\fR skipped
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\[u25A1]\fR todo
+.RE
+.sp
+When a test fails, the dot reporter prints the same important diagnostics as the
+console reporter after the progress line: assertion diffs, transaction trees,
+get\-method errors, fuzz seed and input values, stdout/stderr, and source
+locations. With \fB\-\-backtrace full\fR, runtime failures also include backtrace
+frames:
+.sp
+.RS 4
+.nf
+acton test \-\-reporter dot \-\-backtrace full
+.fi
+.RE
+.sp
+If coverage is enabled, dot failure details are printed before the coverage
+summary so the failing test remains visible near the progress output.
 .SH "CONFIGURATION"
 Defaults can be configured in \fBActon.toml\fR:
 .sp

@@ -382,6 +382,35 @@ Acton discovers tests by finding files that end with `.test.tolk`.
 - fuzz tests show the seed in console output; if `[test.fuzz].seed` is omitted,
   Acton picks a new seed for each `acton test` run
 
+## Dot Reporter
+
+Use `dot` when you want compact progress output but still need full failure
+diagnostics at the end of the run:
+
+```bash
+acton test --reporter dot
+```
+
+The progress line uses one character per test:
+
+- `·` passed
+- `x` failed
+- `○` skipped
+- `□` todo
+
+When a test fails, the dot reporter prints the same important diagnostics as the
+console reporter after the progress line: assertion diffs, transaction trees,
+get-method errors, fuzz seed and input values, stdout/stderr, and source
+locations. With `--backtrace full`, runtime failures also include backtrace
+frames:
+
+```bash
+acton test --reporter dot --backtrace full
+```
+
+If coverage is enabled, dot failure details are printed before the coverage
+summary so the failing test remains visible near the progress output.
+
 ## Configuration
 
 Defaults can be configured in `Acton.toml`:

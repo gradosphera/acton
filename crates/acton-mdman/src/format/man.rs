@@ -443,6 +443,9 @@ fn escape(s: &str) -> Result<String, Error> {
         .replace('“', "\\[lq]") // \u{201C} left double quote
         .replace('”', "\\[rq]") // \u{201D} right double quote
         .replace('…', "\\[u2026]") // \u{2026} ellipsis
+        .replace('·', "\\[u00B7]") // \u{00B7} middle dot
+        .replace('○', "\\[u25CB]") // \u{25CB} white circle
+        .replace('□', "\\[u25A1]") // \u{25A1} white square
         .replace('│', "|") // \u{2502} box drawing light vertical (could use \[br])
         .replace('├', "|") // \u{251C} box drawings light vertical and right
         .replace('└', "`") // \u{2514} box drawings light up and right
@@ -478,5 +481,19 @@ mod tests {
 
         assert!(rendered.contains(".SH \"EXIT STATUS\""));
         assert!(!rendered.contains(".SH \"Exit Status\""));
+    }
+
+    #[test]
+    fn escapes_dot_reporter_status_symbols_in_man_output() {
+        let formatter = ManFormatter::new(None);
+        let rendered = formatter
+            .render(
+                "# acton-test(1)\n\n## Dot Reporter\n\n- `·` passed\n- `○` skipped\n- `□` todo\n",
+            )
+            .expect("man output should render");
+
+        assert!(rendered.contains("\\[u00B7]"));
+        assert!(rendered.contains("\\[u25CB]"));
+        assert!(rendered.contains("\\[u25A1]"));
     }
 }

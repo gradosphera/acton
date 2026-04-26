@@ -55,6 +55,9 @@ Any configuration option can be overridden via command line flags:
 # Use specific reporter
 acton test --reporter console
 
+# Compact progress reporter
+acton test --reporter dot
+
 # Use multiple reporters
 acton test --reporter console,junit
 
@@ -114,7 +117,7 @@ fail-fast = true
 - `console` — Detailed console output with code context (default)
 - `teamcity` — TeamCity CI integration (minimal output, best combined with console)
 - `junit` — JUnit XML reports for external tools
-- `dot` — Minimal dot-style output for quick feedback
+- `dot` — Compact dot-style progress with detailed failure diagnostics at the end
 
 <Callout type="info" title="TeamCity Integration">
 When using TeamCity CI, combine `teamcity` with `console` reporter to see detailed test output alongside CI integration data.
@@ -131,6 +134,9 @@ reporter = ["console", "junit"]
 
 # Single reporter
 reporter = ["teamcity"]
+
+# Compact progress reporter
+reporter = ["dot"]
 
 # For TeamCity CI, combine with console for detailed output
 reporter = ["console", "teamcity"]
