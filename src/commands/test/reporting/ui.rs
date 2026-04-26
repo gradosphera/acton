@@ -301,15 +301,11 @@ struct TestLogsQuery {
 #[derive(Default, Serialize)]
 struct TestExecutionLogsResponse<'a> {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    stdout: Option<&'a str>,
+    stdout: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    stderr: Option<&'a str>,
+    stderr: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     vm_log: Option<&'a str>,
-}
-
-fn non_empty_log_text(text: &str) -> Option<&str> {
-    (!text.trim().is_empty()).then_some(text)
 }
 
 async fn handle_api_test_logs(
@@ -331,9 +327,12 @@ async fn handle_api_test_logs(
             .as_ref()
             .map_or_else(TestExecutionLogsResponse::default, |execution| {
                 TestExecutionLogsResponse {
-                    stdout: non_empty_log_text(&execution.stdout),
-                    stderr: non_empty_log_text(&execution.stderr),
-                    vm_log: execution.vm_log.as_deref().and_then(non_empty_log_text),
+                    stdout: non_empty_text(&execution.stdout),
+                    stderr: non_empty_text(&execution.stderr),
+                    vm_log: execution
+                        .vm_log
+                        .as_deref()
+                        .and_then(|text| (!text.trim().is_empty()).then_some(text)),
                 }
             });
 
