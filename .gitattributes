@@ -1,6 +1,11 @@
 * text=auto eol=lf
 
+# Generated schema
 acton.schema.json linguist-generated=true text=auto eol=lf
+mutation-rules.schema.json linguist-generated=true text=auto eol=lf
+
+# Docs
+docs linguist-documentation
 
 # Generated CLI command docs from `acton docgen`
 docs/content/docs/commands/*.mdx linguist-generated text=auto eol=lf
