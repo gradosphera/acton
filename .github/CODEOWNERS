@@ -1,0 +1,8 @@
+* @i582
+
+# CI and automation.
+/.github/ @danil42russia
+/xtask/ @danil42russia
+
+# Acton standard library.
+/lib/ @i582 @B4ckSl4sh
