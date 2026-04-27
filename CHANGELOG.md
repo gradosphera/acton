@@ -8,6 +8,59 @@ All notable changes to this project will be documented in this file.
 
 - No unreleased entries yet.
 
+## [0.3.2] - 27.04.2026
+
+Acton 0.3.2 expands project scaffolding, wrapper generation, and stdlib test
+APIs while tightening formatter, linter, debugger, localnet, and reporting
+behavior. It also refreshes the documentation site and fixes several wrapper,
+template, logging, and UI issues found after 0.3.1.
+
+### Added
+
+- Added `acton create-app` for scaffolding TypeScript apps, along with app
+  templates and generated TypeScript wrappers for Counter, Jetton, and NFT
+  projects.
+- Added `acton meta get-schema` and a JSON schema for custom mutation rules.
+- Added `SendResultList.waitForTrace()` and localnet v3 trace lookup support,
+  including `msg_hash`-based trace discovery.
+- Added stdlib support for interactive `promptInt` and `promptAddress`, array
+  `.map()`, `.filter()`, and `.each()`, `BASECHAIN`, external-in transaction
+  body/message decoding, and state-init search parameters.
+- Added a linter inspection for documenting enum values used in `throw ...`
+  paths. The inspection is available but allowed by default.
+
+### Changed
+
+- Generated wrappers now use `.gen` filenames, avoid unused imports, include
+  explicit return types, and stop suppressing linter and formatter checks by
+  default.
+- Counter, Jetton, and NFT templates were refined with unified contract
+  sources, prettier README/tests/scripts, app flows, owner checks, and
+  consistency checks for generated wrappers.
+- The dot reporter now prints richer failure/runtime details, supports more
+  cases with colors, and benefits from faster message processing.
+- Coverage and VM log handling now scale better for very large VM logs.
+- `tolk-fmt` now handles file header comments, single string annotations,
+  simple literal function calls, and type instantiation formatting more
+  predictably.
+- Debugger stepping and rendering were improved for child VMs, stop requests,
+  parent-frame locals, invalid-message stops, and union type display.
+- Documentation gained a refreshed landing page, video previews, linter error
+  previews, link validation, PR previews, and updated install URLs.
+- Internal crate names were normalized to the current kebab-case naming style.
+
+### Fixed
+
+- Fixed wrapper generation around unused imports and shard address calculation.
+- Fixed NFT and Jetton template issues, including TonCenter key handling in app
+  templates.
+- Fixed `net.isDeployed` and related matcher logic for prefunded and
+  deterministic deploy paths.
+- Fixed empty-data handling in `TlbMessageRelaxedGeneric.loadOpcode` and
+  improved bounced opcode matching for the new prefix format.
+- Fixed logging setup and addressed a UI security audit finding.
+- Fixed docs cache and missing documentation pages in CI.
+
 ## [0.3.1] - 23.04.2026
 
 Acton 0.3.1 is a focused follow-up to 0.3.0. It improves the test runner and
