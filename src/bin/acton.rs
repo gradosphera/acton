@@ -2,7 +2,7 @@ use acton::commands;
 use acton::commands::build::build_cmd;
 use acton::commands::check::check_cmd;
 use acton::commands::compile::compile_cmd;
-use acton::commands::create_app::create_app_cmd;
+use acton::commands::create_app::DEFAULT_APP_DIR;
 use acton::commands::disasm::disasm_cmd;
 use acton::commands::doc::doc_tvm_cmd;
 use acton::commands::docgen::docgen_cmd;
@@ -93,11 +93,20 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     #[command(
-        about = "Initialize a new project in the current directory",
-        long_about = "Initialize a new project in the current directory. This is useful for adding Acton support to an existing project.",
+        about = "Initialize Acton support in the current directory",
+        long_about = "Initialize Acton support in the current directory. This is useful for adding Acton support to an existing project. With --create-app, Acton skips project initialization and only scaffolds a TypeScript app.",
         after_help = detailed_help_pointer("init")
     )]
-    Init,
+    Init {
+        #[arg(
+            long,
+            value_name = "PATH",
+            num_args = 0..=1,
+            default_missing_value = DEFAULT_APP_DIR,
+            help = "Create a TypeScript app scaffold in PATH (default: app)"
+        )]
+        create_app: Option<PathBuf>,
+    },
     #[command(
         about = "Create a new project in a specified directory",
         long_about = "Create a new project in a specified directory. This will create a new directory with a basic project template.",
@@ -142,15 +151,6 @@ enum Commands {
             ]
         )]
         templates: bool,
-    },
-    #[command(
-        about = "Create a TypeScript app scaffold",
-        long_about = "Create a TypeScript app scaffold in the specified directory. Defaults to ./app.",
-        after_help = detailed_help_pointer("create-app")
-    )]
-    CreateApp {
-        #[arg(help = "Directory to create the app in (default: app)")]
-        path: Option<PathBuf>,
     },
     #[command(
         about = "Print this message or the help of a given top-level command",
@@ -1243,7 +1243,7 @@ fn root_help(show_global_options: bool) -> StyledStr {
         .fg_color(Some(Color::Ansi(AnsiColor::BrightWhite)))
         .bold();
 
-    let core_commands = vec![("new", "[PATH]"), ("create-app", "[PATH]"), ("init", "")];
+    let core_commands = vec![("new", "[PATH]"), ("init", "")];
     let build_and_test_commands = vec![
         ("test", "[PATH]"),
         ("build", "[CONTRACT_NAME]"),
@@ -1628,9 +1628,8 @@ fn main() {
 
     if !matches!(
         command,
-        Commands::Init
+        Commands::Init { .. }
             | Commands::New { .. }
-            | Commands::CreateApp { .. }
             | Commands::Help { .. }
             | Commands::Rpc { .. }
             | Commands::Meta { .. }
@@ -1653,8 +1652,7 @@ fn main() {
     }
 
     let result = match command {
-        Commands::Init => init_cmd(),
-        Commands::CreateApp { path } => create_app_cmd(path.as_deref()),
+        Commands::Init { create_app } => init_cmd(create_app.as_deref()),
         Commands::Help { command } => render_help_command(command),
         Commands::Wallet { command } => wallet_cmd(command),
         Commands::Rpc { command } => {

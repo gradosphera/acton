@@ -1,4 +1,5 @@
 use crate::commands::common::{symlink_global_libraries, symlink_global_wallets};
+use crate::commands::create_app::create_app_cmd;
 use crate::stdlib;
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, ContractConfig, ContractsConfig};
@@ -26,7 +27,11 @@ const GITIGNORE_GROUPS: &[(&str, &[&str])] = &[
     ),
 ];
 
-pub fn init_cmd() -> anyhow::Result<()> {
+pub fn init_cmd(create_app_path: Option<&Path>) -> anyhow::Result<()> {
+    if create_app_path.is_some() {
+        return create_app_cmd(create_app_path);
+    }
+
     let acton_toml_exists = Path::new("Acton.toml").exists();
 
     if acton_toml_exists {

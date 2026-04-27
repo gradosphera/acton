@@ -12,9 +12,10 @@ acton-init --- Initialize Acton support in the current directory
 
 Initialize Acton support in the current working directory.
 
-This command is intended for existing repositories or ad-hoc directories where
-you want to add `Acton.toml`, standard Acton ignore rules, the bundled
-standard library, and symlinks to global wallet and library overlays.
+By default, this command is intended for existing repositories or ad-hoc
+directories where you want to add `Acton.toml`, standard Acton ignore rules,
+the bundled standard library, and symlinks to global wallet and library
+overlays.
 
 If `Acton.toml` already exists, `acton init` patches in default mappings when
 they are missing instead of creating a fresh scaffold. That patch path rewrites
@@ -23,6 +24,11 @@ the parsed manifest, so TOML comments and unknown keys are not preserved.
 If `Acton.toml` does not exist, the command scans `.tolk` files in the current
 directory tree and auto-registers files that define `onInternalMessage` as
 contract entry files.
+
+With `--create-app`, `acton init` switches to app-only mode. In that mode,
+Acton does not create or patch `Acton.toml`, `.gitignore`, `.acton/`,
+or overlay symlinks. It only creates a Vite-based TypeScript app scaffold in
+`./app` by default, or in the provided path.
 
 ## Idempotency
 
@@ -35,6 +41,23 @@ contract entry files.
 - it refreshes `.acton/tolk-stdlib`
 - it re-attempts global wallet and library symlinks on each run
 
+The `--create-app` mode is not idempotent: it fails if the target app
+directory already exists.
+
+## Init Options
+
+{{#options}}
+
+{{#option "`--create-app` [_path_]" }}
+Create a Vite-based TypeScript app scaffold instead of performing project
+initialization.
+
+If `_path_` is omitted, Acton uses `app`. The target directory must not already
+exist.
+{{/option}}
+
+{{/options}}
+
 ## Display Options
 
 {{> options-display }}
@@ -45,12 +68,15 @@ contract entry files.
 
 ## Generated And Patched Files
 
-`acton init` can create or update:
+The default `acton init` flow can create or update:
 
 - `Acton.toml`
 - `.gitignore`
 - `.acton/`
 - local symlinks for `global.wallets.toml` and `global.libraries.toml`
+
+With `--create-app`, `acton init` only creates `app/` or the provided app
+directory.
 
 When `Acton.toml` is created from scratch, it starts from Acton's default
 project config and may include:
@@ -101,10 +127,14 @@ symlink creation is restricted.
 
 ## Side Effects
 
-`acton init` writes or patches local project files and may create local
-symlinks to global overlay files. It does not modify Git config. When it
-patches an existing `Acton.toml`, it rewrites the parsed manifest and may drop
-TOML comments or unknown keys; `.gitignore` patching remains append-only.
+The default `acton init` flow writes or patches local project files and may
+create local symlinks to global overlay files. It does not modify Git config.
+When it patches an existing `Acton.toml`, it rewrites the parsed manifest and
+may drop TOML comments or unknown keys; `.gitignore` patching remains
+append-only.
+
+With `--create-app`, `acton init` writes only inside the new app directory and
+does not touch Acton project files.
 
 ## Exit Status
 
@@ -127,7 +157,19 @@ TOML comments or unknown keys; `.gitignore` patching remains append-only.
    acton init
    ```
 
-3. Re-run safely after adding more contracts:
+3. Create only the default app scaffold:
+
+   ```bash
+   acton init --create-app
+   ```
+
+4. Create only the app scaffold in `frontend/`:
+
+   ```bash
+   acton init --create-app frontend
+   ```
+
+5. Re-run safely after adding more contracts:
 
    ```bash
    acton init

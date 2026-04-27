@@ -7,20 +7,30 @@ use std::path::Path;
 static EMPTY_UI_TEMPLATE_DIR: Dir<'static> =
     include_dir!("$CARGO_MANIFEST_DIR/src/commands/create_app/template");
 
-const APP_DIR: &str = "app";
+pub const DEFAULT_APP_DIR: &str = "app";
 
 pub fn create_app_cmd(path: Option<&Path>) -> anyhow::Result<()> {
-    let target_dir = path.unwrap_or_else(|| Path::new(APP_DIR));
+    let target_dir = resolve_target_dir(path);
+    validate_app_target_dir(target_dir)?;
+    extract_template_dir(&EMPTY_UI_TEMPLATE_DIR, target_dir)
+        .context("Failed to create app scaffold")?;
+    print_app_created_message(target_dir);
+
+    Ok(())
+}
+
+fn validate_app_target_dir(target_dir: &Path) -> anyhow::Result<()> {
     if target_dir.exists() {
         anyhow::bail!(
-            "Directory {} already exists. Delete it before running `acton create-app`.",
+            "Directory {} already exists. Delete it before running `acton init --create-app`.",
             target_dir.display().to_string().yellow()
         );
     }
 
-    extract_template_dir(&EMPTY_UI_TEMPLATE_DIR, target_dir)
-        .context("Failed to create app scaffold")?;
+    Ok(())
+}
 
+fn print_app_created_message(target_dir: &Path) {
     println!("{}", "✓ Created TypeScript app scaffold".green().bold());
     println!(
         "  {} {}",
@@ -35,8 +45,10 @@ pub fn create_app_cmd(path: Option<&Path>) -> anyhow::Result<()> {
     println!("  npm ci");
     println!("  {}", "# Start the TypeScript app".dimmed());
     println!("  npm run dev");
+}
 
-    Ok(())
+fn resolve_target_dir(path: Option<&Path>) -> &Path {
+    path.unwrap_or_else(|| Path::new(DEFAULT_APP_DIR))
 }
 
 fn extract_template_dir(dir: &Dir<'static>, target_dir: &Path) -> std::io::Result<()> {
