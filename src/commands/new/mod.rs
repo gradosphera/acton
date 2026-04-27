@@ -333,9 +333,9 @@ pub fn new_cmd(
     println!("  {} test", "acton".bold());
     if scaffold.layout().includes_typescript_app() {
         println!("  {}", "# Install app dependencies".dimmed());
-        println!("  npm ci");
+        println!("  {} ci", "npm".bold());
         println!("  {}", "# Start the TypeScript app".dimmed());
-        println!("  npm run dev");
+        println!("  {} run dev", "npm".bold());
     }
 
     Ok(())

@@ -42,9 +42,9 @@ fn print_app_created_message(target_dir: &Path) {
     println!();
     println!("  {}", "# Install app dependencies".dimmed());
     println!("  {} {}", "cd".bold(), target_dir.display());
-    println!("  npm ci");
+    println!("  {} ci", "npm".bold());
     println!("  {}", "# Start the TypeScript app".dimmed());
-    println!("  npm run dev");
+    println!("  {} run dev", "npm".bold());
 }
 
 fn resolve_target_dir(path: Option<&Path>) -> &Path {
