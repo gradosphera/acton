@@ -9,9 +9,9 @@ use clap::{Args, ValueEnum};
 use schemars::JsonSchema;
 use schemars::r#gen::SchemaSettings;
 
-const ACTON_TOML_OUTPUT_PATH: &str = "acton.schema.json";
-const LINT_REPORT_OUTPUT_PATH: &str = "lint-report.schema.json";
-const MUTATION_RULES_OUTPUT_PATH: &str = "mutation-rules.schema.json";
+const ACTON_TOML_OUTPUT_PATH: &str = "crates/acton-config/schemas/acton.schema.json";
+const LINT_REPORT_OUTPUT_PATH: &str = "crates/acton-config/schemas/lint-report.schema.json";
+const MUTATION_RULES_OUTPUT_PATH: &str = "crates/acton-config/schemas/mutation-rules.schema.json";
 
 #[derive(Args)]
 pub(crate) struct SchemaArgs {
