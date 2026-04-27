@@ -350,6 +350,7 @@ pub fn parse_search_params(params: &Tuple) -> Option<TransactionNotFoundParams> 
         action_exit_code: None,
         compute_phase_skipped: None,
         body: None,
+        state_init: None,
     };
 
     // Helper: parse a sub-tuple field as DisplayParam.
@@ -426,19 +427,20 @@ pub fn parse_search_params(params: &Tuple) -> Option<TransactionNotFoundParams> 
         };
     }
 
-    parse_field!(addr to, 12);
-    parse_field!(addr from, 11);
-    parse_field!(bigint value, 10);
-    parse_field!(u32 exit_code, 9);
-    parse_field!(bool success, 8);
-    parse_field!(bool aborted, 7);
-    parse_field!(bool deploy, 6);
-    parse_field!(bool bounce, 5);
-    parse_field!(bool bounced, 4);
-    parse_field!(u32 opcode, 3);
-    parse_field!(i32 action_exit_code, 2);
-    parse_field!(bool compute_phase_skipped, 1);
-    parse_field!(cell body, 0);
+    parse_field!(addr to, 13);
+    parse_field!(addr from, 12);
+    parse_field!(bigint value, 11);
+    parse_field!(u32 exit_code, 10);
+    parse_field!(bool success, 9);
+    parse_field!(bool aborted, 8);
+    parse_field!(bool deploy, 7);
+    parse_field!(bool bounce, 6);
+    parse_field!(bool bounced, 5);
+    parse_field!(u32 opcode, 4);
+    parse_field!(i32 action_exit_code, 3);
+    parse_field!(bool compute_phase_skipped, 2);
+    parse_field!(cell body, 1);
+    parse_field!(cell state_init, 0);
 
     Some(result)
 }

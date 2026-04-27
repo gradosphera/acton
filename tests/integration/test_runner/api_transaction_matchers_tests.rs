@@ -242,6 +242,82 @@ fn to_have_and_not_have_tx_by_body() {
 }
 
 #[test]
+fn to_have_and_not_have_tx_by_state_init() {
+    let test_code = format!(
+        r#"
+            {TEST_IMPORTS}
+
+            get fun `test state init filter`() {{
+                val init = StateInit {{
+                    fixedPrefixLength: null,
+                    special: null,
+                    code: build("simple"),
+                    data: createEmptyCell(),
+                    library: null,
+                }};
+                val initCell = init.toCell();
+                val target = AutoDeployAddress {{ stateInit: initCell }}.calculateAddress();
+                val sender = testing.treasury("sender");
+
+                val expectedStateInit = (init as StateInit?).toCell();
+                val absentStateInit = (null as StateInit?).toCell();
+                val differentStateInit = (StateInit {{
+                    fixedPrefixLength: null,
+                    special: null,
+                    code: build("simple"),
+                    data: beginCell().storeUint(1, 1).endCell(),
+                    library: null,
+                }} as StateInit?).toCell();
+
+                val txs = net.send(sender.address, createMessage({{
+                    bounce: false,
+                    value: ton("1"),
+                    dest: {{ stateInit: initCell }},
+                    body: beginCell().storeUint(0xABCDEF02, 32).endCell(),
+                }}));
+
+                expect(txs).toHaveTx({{
+                    from: sender.address,
+                    to: target,
+                    state_init: expectedStateInit,
+                }});
+                expect(txs).toNotHaveTx({{
+                    from: sender.address,
+                    to: target,
+                    state_init: absentStateInit,
+                }});
+                expect(txs).toNotHaveTx({{
+                    from: sender.address,
+                    to: target,
+                    state_init: differentStateInit,
+                }});
+                expect(txs).toHaveTx({{
+                    from: sender.address,
+                    to: target,
+                    state_init: fun(rawStateInit) {{
+                        val actual = (rawStateInit as Cell<StateInit?>).load();
+                        return actual != null && actual!.toCell().hash() == init.toCell().hash();
+                    }},
+                }});
+            }}
+        "#,
+    );
+
+    ProjectBuilder::new("p-lib-api-state-init")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("search_params", &test_code)
+        .build()
+        .acton()
+        .test()
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/api_transaction_matchers/lib_api_to_have_and_not_have_tx_by_state_init.stdout.txt",
+        );
+}
+
+#[test]
 fn to_have_and_not_have_tx_by_opcode() {
     let test_code = format!(
         r#"

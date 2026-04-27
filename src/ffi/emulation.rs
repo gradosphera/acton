@@ -47,8 +47,8 @@ use tycho_types::models::{
     ComputePhaseSkipReason, CurrencyCollection, ExtInMsgInfo, ExtOutMsgInfo,
     ExtraCurrencyCollection, HashUpdate, IntAddr, IntMsgInfo, LibDescr, Message, MsgInfo,
     OptionalAccount, OrdinaryTxInfo, RelaxedMessage, RelaxedMsgInfo, ShardAccount,
-    SkippedComputePhase, StdAddr, StdAddrFormat, StoragePhase, StorageUsedShort, Transaction,
-    TxInfo,
+    SkippedComputePhase, StateInit, StdAddr, StdAddrFormat, StoragePhase, StorageUsedShort,
+    Transaction, TxInfo,
 };
 use tycho_types::num::{Tokens, Uint15};
 
@@ -1302,19 +1302,20 @@ fn parse_search_params_tuple(params: &Tuple) -> ParsedSearchParams {
     };
 
     ParsedSearchParams {
-        body: extract_field(0),
-        compute_phase_skipped: extract_field(1),
-        action_exit_code: extract_field(2),
-        opcode: extract_field(3),
-        bounced: extract_field(4),
-        bounce: extract_field(5),
-        deploy: extract_field(6),
-        aborted: extract_field(7),
-        success: extract_field(8),
-        exit_code: extract_field(9),
-        value: extract_field(10),
-        from: extract_field(11),
-        to: extract_field(12),
+        state_init: extract_field(0),
+        body: extract_field(1),
+        compute_phase_skipped: extract_field(2),
+        action_exit_code: extract_field(3),
+        opcode: extract_field(4),
+        bounced: extract_field(5),
+        bounce: extract_field(6),
+        deploy: extract_field(7),
+        aborted: extract_field(8),
+        success: extract_field(9),
+        exit_code: extract_field(10),
+        value: extract_field(11),
+        from: extract_field(12),
+        to: extract_field(13),
     }
 }
 
@@ -1333,6 +1334,7 @@ struct ScalarSearchParams {
     action_exit_code: Option<i32>,
     compute_phase_skipped: Option<bool>,
     body: Option<Cell>,
+    state_init: Option<Option<StateInit>>,
 }
 
 fn read_int_like_param(item: &TupleItem) -> Option<&BigInt> {
@@ -1388,19 +1390,20 @@ fn parse_scalar_search_params_tuple(params: &Tuple) -> Option<ScalarSearchParams
             .checked_sub(idx_from_end + 1)
             .and_then(|idx| params.0.get(idx))
     };
-    let raw_body = item_from_end(0);
-    let raw_compute_phase_skipped = item_from_end(1);
-    let raw_action_exit_code = item_from_end(2);
-    let raw_opcode = item_from_end(3);
-    let raw_bounced = item_from_end(4);
-    let raw_bounce = item_from_end(5);
-    let raw_deploy = item_from_end(6);
-    let raw_aborted = item_from_end(7);
-    let raw_success = item_from_end(8);
-    let raw_exit_code = item_from_end(9);
-    let raw_msg_value = item_from_end(10);
-    let raw_from = item_from_end(11);
-    let raw_to = item_from_end(12);
+    let raw_state_init = item_from_end(0);
+    let raw_body = item_from_end(1);
+    let raw_compute_phase_skipped = item_from_end(2);
+    let raw_action_exit_code = item_from_end(3);
+    let raw_opcode = item_from_end(4);
+    let raw_bounced = item_from_end(5);
+    let raw_bounce = item_from_end(6);
+    let raw_deploy = item_from_end(7);
+    let raw_aborted = item_from_end(8);
+    let raw_success = item_from_end(9);
+    let raw_exit_code = item_from_end(10);
+    let raw_msg_value = item_from_end(11);
+    let raw_from = item_from_end(12);
+    let raw_to = item_from_end(13);
 
     let mut params = ScalarSearchParams {
         to: read_optional_address_param(raw_to)?,
@@ -1485,6 +1488,13 @@ fn parse_scalar_search_params_tuple(params: &Tuple) -> Option<ScalarSearchParams
             params.body = Some(cell.clone());
         }
     }
+    if let Some(raw_state_init) = raw_state_init {
+        if raw_state_init == &TupleItem::Null {
+            params.state_init = None;
+        } else if let TupleItem::Cell(cell) = raw_state_init {
+            params.state_init = Some(cell.parse::<Option<StateInit>>().ok()?);
+        }
+    }
 
     Some(params)
 }
@@ -1516,38 +1526,50 @@ fn transaction_matches_predicates(
         || predicates.value.is_some()
         || predicates.from.is_some()
         || predicates.to.is_some();
+    let requires_in_msg = requires_internal_in_msg || predicates.state_init.is_some();
 
     check!(predicates.deploy, bool_item(transaction_is_deploy(tx)));
 
     let in_msg = tx.load_in_msg();
-    if let Ok(Some(in_msg)) = &in_msg
-        && let MsgInfo::Int(info) = &in_msg.info
-    {
-        check!(predicates.bounced, bool_item(info.bounced));
-        if let Some(ref field) = predicates.opcode {
-            let mut slice = in_msg.body;
-            let Ok(mut opcode) = slice.load_u32() else {
+    if let Ok(Some(in_msg)) = &in_msg {
+        if let Some(ref field) = predicates.state_init {
+            let Ok(state_init_cell) = CellBuilder::build_from(&in_msg.init) else {
                 return Ok(false);
             };
-            if info.bounced && predicates.bounced.is_some() {
-                let Ok(bounced_opcode) = slice.load_u32() else {
-                    return Ok(false);
-                };
-                opcode = bounced_opcode;
-            }
-            if !call_predicate(executor, &field.predicate, int_item(i64::from(opcode)))? {
+            if !call_predicate(executor, &field.predicate, TupleItem::Cell(state_init_cell))? {
                 return Ok(false);
             }
         }
-        check!(predicates.bounce, bool_item(info.bounce));
-        check!(
-            predicates.value,
-            TupleItem::Int(BigInt::from(info.value.tokens.into_inner()))
-        );
-        check!(predicates.from, TupleItem::Slice(to_cell(&info.src)));
-        check!(predicates.to, TupleItem::Slice(to_cell(&info.dst)));
-        check!(predicates.body, TupleItem::Cell(to_cell(&in_msg.body)));
-    } else if requires_internal_in_msg {
+
+        if let MsgInfo::Int(info) = &in_msg.info {
+            check!(predicates.bounced, bool_item(info.bounced));
+            if let Some(ref field) = predicates.opcode {
+                let mut slice = in_msg.body;
+                let Ok(mut opcode) = slice.load_u32() else {
+                    return Ok(false);
+                };
+                if info.bounced && predicates.bounced.is_some() {
+                    let Ok(bounced_opcode) = slice.load_u32() else {
+                        return Ok(false);
+                    };
+                    opcode = bounced_opcode;
+                }
+                if !call_predicate(executor, &field.predicate, int_item(i64::from(opcode)))? {
+                    return Ok(false);
+                }
+            }
+            check!(predicates.bounce, bool_item(info.bounce));
+            check!(
+                predicates.value,
+                TupleItem::Int(BigInt::from(info.value.tokens.into_inner()))
+            );
+            check!(predicates.from, TupleItem::Slice(to_cell(&info.src)));
+            check!(predicates.to, TupleItem::Slice(to_cell(&info.dst)));
+            check!(predicates.body, TupleItem::Cell(to_cell(&in_msg.body)));
+        } else if requires_internal_in_msg {
+            return Ok(false);
+        }
+    } else if requires_in_msg {
         return Ok(false);
     }
 
@@ -1609,6 +1631,7 @@ fn transaction_matches_scalar_params(tx: &Transaction, params: &ScalarSearchPara
         || params.value.is_some()
         || params.from.is_some()
         || params.to.is_some();
+    let requires_in_msg = requires_internal_in_msg || params.state_init.is_some();
     let expected_body_hash = params.body.as_ref().map(|body| body.repr_hash());
 
     if let Some(expected_deploy) = params.deploy {
@@ -1618,63 +1641,71 @@ fn transaction_matches_scalar_params(tx: &Transaction, params: &ScalarSearchPara
     }
 
     let in_msg = tx.load_in_msg();
-    if let Ok(Some(in_msg)) = &in_msg
-        && let MsgInfo::Int(info) = &in_msg.info
-    {
-        if let Some(expected_opcode) = &params.opcode {
-            let mut slice = in_msg.body;
-            let Ok(mut opcode) = slice.load_u32() else {
-                return false;
-            };
-            if info.bounced && params.bounced == Some(true) {
-                let Ok(bounced_opcode) = slice.load_u32() else {
+    if let Ok(Some(in_msg)) = &in_msg {
+        if let Some(expected_state_init) = &params.state_init
+            && expected_state_init != &in_msg.init
+        {
+            return false;
+        }
+
+        if let MsgInfo::Int(info) = &in_msg.info {
+            if let Some(expected_opcode) = &params.opcode {
+                let mut slice = in_msg.body;
+                let Ok(mut opcode) = slice.load_u32() else {
                     return false;
                 };
-                opcode = bounced_opcode;
+                if info.bounced && params.bounced == Some(true) {
+                    let Ok(bounced_opcode) = slice.load_u32() else {
+                        return false;
+                    };
+                    opcode = bounced_opcode;
+                }
+                if *expected_opcode != opcode {
+                    return false;
+                }
             }
-            if *expected_opcode != opcode {
+
+            if let Some(expected_bounced) = &params.bounced
+                && *expected_bounced != info.bounced
+            {
                 return false;
             }
-        }
 
-        if let Some(expected_bounced) = &params.bounced
-            && *expected_bounced != info.bounced
-        {
-            return false;
-        }
-
-        if let Some(expected_bounce) = &params.bounce
-            && *expected_bounce != info.bounce
-        {
-            return false;
-        }
-
-        if let Some(expected_value) = &params.value
-            && *expected_value != BigInt::from(info.value.tokens.into_inner())
-        {
-            return false;
-        }
-
-        if let Some(expected_from_addr) = &params.from
-            && *expected_from_addr != info.src
-        {
-            return false;
-        }
-
-        if let Some(expected_to_addr) = &params.to
-            && *expected_to_addr != info.dst
-        {
-            return false;
-        }
-
-        if let Some(expected_hash) = expected_body_hash.as_ref() {
-            let body_cell = to_cell(&in_msg.body);
-            let actual_hash = body_cell.repr_hash();
-            if expected_hash != &actual_hash {
+            if let Some(expected_bounce) = &params.bounce
+                && *expected_bounce != info.bounce
+            {
                 return false;
             }
+
+            if let Some(expected_value) = &params.value
+                && *expected_value != BigInt::from(info.value.tokens.into_inner())
+            {
+                return false;
+            }
+
+            if let Some(expected_from_addr) = &params.from
+                && *expected_from_addr != info.src
+            {
+                return false;
+            }
+
+            if let Some(expected_to_addr) = &params.to
+                && *expected_to_addr != info.dst
+            {
+                return false;
+            }
+
+            if let Some(expected_hash) = expected_body_hash.as_ref() {
+                let body_cell = to_cell(&in_msg.body);
+                let actual_hash = body_cell.repr_hash();
+                if expected_hash != &actual_hash {
+                    return false;
+                }
+            }
+        } else if requires_internal_in_msg {
+            return false;
         }
-    } else if requires_internal_in_msg {
+    } else if requires_in_msg {
         return false;
     }
 

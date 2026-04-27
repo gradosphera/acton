@@ -313,6 +313,23 @@ struct SearchParams {
     computePhaseSkipped: (bool -> bool) | bool | null = null
     /// Body of the in message (compared by hash).
     body: (cell -> bool) | cell | null = null
+    /// StateInit of the in message, encoded as Cell<StateInit?>.
+    ///
+    /// Exact match example:
+    /// ```
+    /// val expected = (init as StateInit?).toCell();
+    /// expect(txs).toHaveTx({ state_init: expected });
+    /// ```
+    /// Predicate example:
+    /// ```
+    /// expect(txs).toHaveTx({
+    ///     state_init: fun(rawStateInit) {
+    ///         val actual = (rawStateInit as Cell<StateInit?>).load();
+    ///         // ...
+    ///     },
+    /// });
+    /// ```
+    state_init: (cell -> bool) | cell | null = null
 }
 
 /// Bind first argument to a 2-arg function, producing a 1-arg function.
@@ -361,7 +378,8 @@ fun SearchParams.hasPredicates(self): bool {
     impl.isPredicate(self.opcode) |
     impl.isPredicate(self.actionExitCode) |
     impl.isPredicate(self.computePhaseSkipped) |
-    impl.isPredicate(self.body);
+    impl.isPredicate(self.body) |
+    impl.isPredicate(self.state_init);
 }
 
 /// Convert SearchParams to a tuple of plain nullable scalar values for the fast FFI path.
@@ -380,6 +398,7 @@ fun SearchParams.toScalarFFITuple(self): tuple {
         impl.unwrapScalar(self.actionExitCode),
         impl.unwrapScalar(self.computePhaseSkipped),
         impl.unwrapScalar(self.body),
+        impl.unwrapScalar(self.state_init),
     ];
 }
 
@@ -399,6 +418,7 @@ fun SearchParams.toPredicateFFITuple(self): tuple {
         impl.toPredicate(self.actionExitCode),
         impl.toPredicate(self.computePhaseSkipped),
         impl.toPredicate(self.body),
+        impl.toPredicate(self.state_init),
     ];
 }
 

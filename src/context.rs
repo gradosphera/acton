@@ -111,6 +111,7 @@ pub struct TransactionNotFoundParams {
     pub action_exit_code: Option<DisplayParam<i32>>,
     pub compute_phase_skipped: Option<DisplayParam<bool>>,
     pub body: Option<DisplayParam<Cell>>,
+    pub state_init: Option<DisplayParam<Cell>>,
 }
 
 /// A search field parsed from `SearchParams`.
@@ -139,6 +140,7 @@ pub struct ParsedSearchParams {
     pub action_exit_code: Option<SearchField>,
     pub compute_phase_skipped: Option<SearchField>,
     pub body: Option<SearchField>,
+    pub state_init: Option<SearchField>,
 }
 
 #[derive(Debug, Clone)]

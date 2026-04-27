@@ -2942,6 +2942,15 @@ impl FormatterContext<'_> {
             Some(DisplayParam::Function) => params.push(format!("  body={}", "<function>".cyan())),
             None => {}
         }
+        match &assert_failure.params.state_init {
+            Some(DisplayParam::Value(state_init)) => {
+                params.push(format!("  state_init={}", Boc::encode_hex(state_init)));
+            }
+            Some(DisplayParam::Function) => {
+                params.push(format!("  state_init={}", "<function>".cyan()));
+            }
+            None => {}
+        }
         params
     }
 
