@@ -3,6 +3,7 @@
 # Generated schema
 acton.schema.json linguist-generated=true text=auto eol=lf
 mutation-rules.schema.json linguist-generated=true text=auto eol=lf
+lint-report.schema.json linguist-generated=true text=auto eol=lf
 
 # Docs
 docs linguist-documentation
