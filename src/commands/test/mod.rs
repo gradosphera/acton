@@ -1213,10 +1213,9 @@ fn run_file_tests(
         let exit_code = outcome.actual_exit_code;
         let expected_exit_code = outcome.expected_exit_code;
         let gas_used = outcome.gas_used;
-        let vm_log_diff = match &get_result {
+        let vm_log = match &get_result {
             GetMethodResult::Success(result) => {
-                let logs = tvm_logs::convert_to_diff_logs(&result.vm_log);
-                (!logs.trim().is_empty()).then_some(logs)
+                (!result.vm_log.is_empty()).then(|| Arc::clone(&result.vm_log))
             }
             GetMethodResult::Error(_) => None,
         };
@@ -1239,7 +1238,7 @@ fn run_file_tests(
             gas_used,
             stdout: captured_stdout,
             stderr: captured_stderr,
-            vm_log_diff,
+            vm_log,
             assert_failure: assert_failure.clone(),
             expected_exit_code,
             fuzz: fuzz.clone(),

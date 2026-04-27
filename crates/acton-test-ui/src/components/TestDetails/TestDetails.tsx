@@ -583,7 +583,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
   const renderTestExecutionLogs = () => {
     const hasStdout = hasNonEmptyLog(executionLogs?.stdout)
     const hasStderr = hasNonEmptyLog(executionLogs?.stderr)
-    const hasVmLog = hasNonEmptyLog(executionLogs?.vm_log_diff)
+    const hasVmLog = hasNonEmptyLog(executionLogs?.vm_log)
 
     const summaryKinds = [
       hasStdout ? "stdout" : undefined,
@@ -621,7 +621,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
             )}
             {hasVmLog && (
               <div className={styles.logSection}>
-                <DataBlock data={executionLogs?.vm_log_diff ?? ""} />
+                <DataBlock data={executionLogs?.vm_log ?? ""} />
               </div>
             )}
           </div>

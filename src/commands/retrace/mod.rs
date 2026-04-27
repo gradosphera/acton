@@ -86,8 +86,7 @@ pub fn retrace_cmd(
 
                     if let Some(port) = debug_port {
                         let vm_logs = &result.emulated_tx.vm_logs;
-                        let vm_lines = tvm_logs::parser::parse_lines(vm_logs);
-                        let replayer = TolkReplayer::new(&artifacts.source_map, &vm_lines)
+                        let replayer = TolkReplayer::new(&artifacts.source_map, vm_logs)
                             .with_context(|| {
                                 format!(
                                     "Cannot build replayer for contract {}",

@@ -299,13 +299,13 @@ struct TestLogsQuery {
 }
 
 #[derive(Default, Serialize)]
-struct TestExecutionLogsResponse {
+struct TestExecutionLogsResponse<'a> {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     stdout: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     stderr: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    vm_log_diff: Option<String>,
+    vm_log: Option<&'a str>,
 }
 
 async fn handle_api_test_logs(
@@ -329,7 +329,10 @@ async fn handle_api_test_logs(
                 TestExecutionLogsResponse {
                     stdout: non_empty_text(&execution.stdout),
                     stderr: non_empty_text(&execution.stderr),
-                    vm_log_diff: execution.vm_log_diff.clone(),
+                    vm_log: execution
+                        .vm_log
+                        .as_deref()
+                        .and_then(|text| (!text.trim().is_empty()).then_some(text)),
                 }
             });
 

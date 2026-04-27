@@ -28,9 +28,8 @@ pub struct TolkExceptionInfo {
 
 #[must_use]
 pub fn find_exception_info(vm_logs: &str, source_map: &TolkSourceMap) -> Option<TolkExceptionInfo> {
-    let vm_lines = tvm_logs::parser::parse_lines(vm_logs);
-    let description = exception_description(&vm_lines);
-    let mut replayer = TolkReplayer::new(source_map, &vm_lines).ok()?;
+    let description = exception_description(vm_logs);
+    let mut replayer = TolkReplayer::new(source_map, vm_logs).ok()?;
     replayer.set_exception_breakpoints(ExceptionBreakMode::Uncaught);
 
     let source_map = &source_map.source_map;
@@ -65,8 +64,7 @@ pub fn find_exception_info(vm_logs: &str, source_map: &TolkSourceMap) -> Option<
 
 #[must_use]
 pub fn find_execution_trace(vm_logs: &str, source_map: &TolkSourceMap) -> Option<TolkTraceInfo> {
-    let vm_lines = tvm_logs::parser::parse_lines(vm_logs);
-    let mut replayer = TolkReplayer::new(source_map, &vm_lines).ok()?;
+    let mut replayer = TolkReplayer::new(source_map, vm_logs).ok()?;
 
     while !replayer.is_finished() {
         replayer.step(StepMode::StepInto);
@@ -88,14 +86,14 @@ pub fn find_execution_trace(vm_logs: &str, source_map: &TolkSourceMap) -> Option
     })
 }
 
-fn exception_description(vm_lines: &[Result<VmLine<'_>, String>]) -> String {
-    vm_lines
-        .iter()
-        .rfind(|line| matches!(line, Ok(VmLine::VmException { .. })))
-        .and_then(|line| match line {
-            Ok(VmLine::VmException { message, .. }) => Some((*message).to_string()),
+fn exception_description(vm_logs: &str) -> String {
+    tvm_logs::parser::parse_lines(vm_logs)
+        .filter_map(Result::ok)
+        .filter_map(|line| match line {
+            VmLine::VmException { message, .. } => Some(message.to_string()),
             _ => None,
         })
+        .last()
         .unwrap_or_default()
 }
 

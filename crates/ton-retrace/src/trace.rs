@@ -40,6 +40,7 @@
 
 use num_bigint::BigInt;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use tvm_logs::executor_parser::{ExecutorLine, parse_executor_lines};
 use tvm_logs::parser::{CellLike, VmLine, VmStack, VmStackValue};
@@ -251,6 +252,8 @@ pub struct Trace {
     pub start_gas: usize,
     /// Sequential list of all execution steps.
     pub steps: Vec<TraceStep>,
+    /// Full BoC hex payloads registered by compact VM stack logs, keyed by cell hash.
+    pub registered_cell_bocs: HashMap<String, String>,
 }
 
 impl Display for Trace {
@@ -294,8 +297,7 @@ impl Trace {
     /// ```
     #[must_use]
     pub fn new(vm_logs: &str, start_gas: Option<usize>) -> Self {
-        let lines = tvm_logs::parser::parse_lines(vm_logs);
-        Self::from_lines(lines, start_gas)
+        Self::from_lines(tvm_logs::parser::parse_lines(vm_logs), start_gas)
     }
 
     /// Creates a new [`Trace`] from pre-parsed [`VmLine`]s.
@@ -305,10 +307,13 @@ impl Trace {
     ///
     /// # Arguments
     ///
-    /// * `lines` — A vector of results, each containing a parsed [`VmLine`] or an error string.
+    /// * `lines` — Parsed VM lines or parsing errors.
     /// * `start_gas` — Optional initial gas limit.
     #[must_use]
-    pub fn from_lines(lines: Vec<Result<VmLine<'_>, String>>, start_gas: Option<usize>) -> Trace {
+    pub fn from_lines<'a>(
+        lines: impl IntoIterator<Item = Result<VmLine<'a>, String>>,
+        start_gas: Option<usize>,
+    ) -> Trace {
         let start_gas = start_gas.unwrap_or(1_000_000);
         let mut gas_remaining = start_gas;
 
@@ -317,6 +322,7 @@ impl Trace {
         let mut current_offset: Option<String> = None;
         let mut current_instr: Option<String> = None;
         let mut current_stack: Option<String> = None;
+        let mut registered_cell_bocs = HashMap::new();
 
         for line_result in lines {
             let Ok(line) = line_result else { continue };
@@ -328,6 +334,9 @@ impl Trace {
                 }
                 VmLine::VmExecute { instr } => {
                     current_instr = Some(instr.to_owned());
+                }
+                VmLine::VmRegisteredCell { hash, boc } => {
+                    registered_cell_bocs.insert(hash.to_owned(), boc.to_owned());
                 }
                 VmLine::VmStack { stack } => {
                     current_stack = Some(stack.raw().to_owned());
@@ -388,7 +397,11 @@ impl Trace {
             }
         }
 
-        Trace { start_gas, steps }
+        Trace {
+            start_gas,
+            steps,
+            registered_cell_bocs,
+        }
     }
 
     /// Extracts all [`InstalledAction`]s from the execution trace.
@@ -416,16 +429,25 @@ impl Trace {
                     ..
                 } = step
                 {
+                    if instr != "SENDRAWMSG" && instr != "RAWRESERVE" {
+                        return None;
+                    }
+
+                    let parsed = VmStack::new(stack).parsed();
+                    if parsed.len() < 2 {
+                        return None;
+                    }
+
                     if instr == "SENDRAWMSG" {
-                        let parsed = VmStack::new(stack).parsed();
-                        if parsed.len() < 2 {
-                            return None;
-                        }
                         // SENDRAWMSG takes (cell, mode) from the stack.
                         // We are interested in the cell (second from top).
                         if let Some(VmStackValue::Cell(CellLike::Cell(msg_cell))) =
                             parsed.get(parsed.len() - 2)
-                            && let Ok(cell) = Boc::decode_hex(msg_cell)
+                            && let Ok(cell) = Boc::decode_hex(
+                                self.registered_cell_bocs
+                                    .get(msg_cell.as_str())
+                                    .map_or(msg_cell.as_str(), String::as_str),
+                            )
                         {
                             return Some(InstalledAction::Message(InstalledSendMessageAction {
                                 msg_hash: cell.repr_hash().to_string().to_ascii_uppercase(),
@@ -437,10 +459,6 @@ impl Trace {
                     }
 
                     if instr == "RAWRESERVE" {
-                        let parsed = VmStack::new(stack).parsed();
-                        if parsed.len() < 2 {
-                            return None;
-                        }
                         // RAWRESERVE takes (amount, mode) from the stack.
                         if let (
                             Some(VmStackValue::Integer(amount_str)),
@@ -692,6 +710,38 @@ impl ExecutedActions {
             actions,
             invalid_actions,
         }
+    }
+}
+
+#[cfg(test)]
+mod local_tests {
+    use super::*;
+
+    #[test]
+    fn actions_resolve_registered_cell_boc() {
+        let boc = "B5EE9C72010101010002000000";
+        let logs = format!(
+            r"
+register new cell 0F: {boc}
+stack: [ C{{0F}} 0 ]
+code cell hash: 734EFDF436945A5CB58154AAFB58A8258087B27EE31E98876254E4385F47B51D offset: 0
+execute SENDRAWMSG
+gas remaining: 999
+        "
+        );
+
+        let trace = Trace::new(&logs, None);
+        let actions = trace.actions();
+        assert_eq!(actions.actions.len(), 1);
+        let InstalledAction::Message(action) = &actions.actions[0] else {
+            panic!("Expected installed message action");
+        };
+        let expected_hash = Boc::decode_hex(boc)
+            .expect("test boc should decode")
+            .repr_hash()
+            .to_string()
+            .to_ascii_uppercase();
+        assert_eq!(action.msg_hash, expected_hash);
     }
 }
 

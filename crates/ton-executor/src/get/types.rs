@@ -96,16 +96,3 @@ impl Default for RunGetMethodArgs {
         }
     }
 }
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-pub(crate) enum GetInternalResult {
-    Success {
-        output: GetMethodResult,
-    },
-    Fail {
-        #[allow(dead_code)] // used only for decoding
-        fail: bool,
-        message: String,
-    },
-}

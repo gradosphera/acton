@@ -1,6 +1,6 @@
 use crate::context::{BuildCache, EmulationsState};
 use acton_config::color::OwoColorize;
-use acton_debug::replayer::{StepMode, Tick, TolkReplayer};
+use acton_debug::replayer::{RuntimeStack, StepMode, Tick, TolkReplayer};
 use comfy_table::{Cell as TableCell, CellAlignment, Color, ContentArrangement, Table};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -190,11 +190,10 @@ fn collect_executed_lines_per_files(
         source_map, logs, ..
     } in data
     {
-        let vm_lines = tvm_logs::parser::parse_lines(logs);
-        let Ok(mut replayer) = TolkReplayer::new(source_map, &vm_lines) else {
+        let Ok(mut replayer) = TolkReplayer::new_for_coverage(source_map, logs) else {
             continue;
         };
-        let mut last_stack_values = Vec::new();
+        let mut last_stack = RuntimeStack::default();
         let mut last_recorded_loc: Option<(String, i64)> = None;
         let mut last_coverage_loc: Option<(String, i64)> = None;
 
@@ -212,14 +211,14 @@ fn collect_executed_lines_per_files(
                         last_coverage_loc = Some(loc);
                     }
                 }
-                Tick::TvmStackValues { values } => {
-                    last_stack_values = values.clone();
+                Tick::TvmStackValues { stack } => {
+                    last_stack = stack.clone();
                 }
                 Tick::TvmAfterExecute { instr_name } => {
                     process_branch_instruction(
                         &mut branch_sites_per_file,
                         replayer,
-                        &last_stack_values,
+                        &last_stack,
                         &last_coverage_loc,
                         instr_name,
                         wrapper_roots,
@@ -301,7 +300,7 @@ fn coverage_location_for_range(
 fn process_branch_instruction(
     branch_sites_per_file: &mut HashMap<String, BTreeMap<BranchSiteId, BranchSiteCoverage>>,
     replayer: &TolkReplayer,
-    stack_values: &[VmStackValue],
+    stack: &RuntimeStack,
     last_coverage_loc: &Option<(String, i64)>,
     instr_name: &str,
     wrapper_roots: &[PathBuf],
@@ -325,7 +324,7 @@ fn process_branch_instruction(
         return;
     };
 
-    let Some(condition_is_true) = stack_condition_is_true(instr_name, stack_values) else {
+    let Some(condition_is_true) = stack_condition_is_true(instr_name, stack.parsed_values()) else {
         return;
     };
 

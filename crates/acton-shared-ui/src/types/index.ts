@@ -30,7 +30,7 @@ export interface TestReport {
 export interface TestExecutionLogs {
   readonly stdout?: string
   readonly stderr?: string
-  readonly vm_log_diff?: string
+  readonly vm_log?: string
 }
 
 export interface BackendTransaction {
