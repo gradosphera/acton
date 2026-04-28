@@ -432,10 +432,10 @@ fn print_retrace_result(
     if let Some(opcode) = result.in_msg.opcode {
         println!("\n{}", "Message Data:".bold());
         println!("  {:<15} 0x{:08x}", "Opcode:".dimmed(), opcode);
-        println!();
     }
 
     if logs_dir.is_none() {
+        println!();
         println!("Help: Use --logs-dir <DIR> to save full VM and executor logs to files.");
     }
 }
