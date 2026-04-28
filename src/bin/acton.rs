@@ -638,11 +638,11 @@ enum Commands {
         info: bool,
     },
     #[command(
-        about = "Run a script defined in Acton.toml",
+        about = "Run a command script defined in Acton.toml",
         after_help = detailed_help_pointer("run")
     )]
     Run {
-        #[arg(help = "Name of the script to run", add = ArgValueCompleter::new(complete_scripts))]
+        #[arg(help = "Name of the command script to run", add = ArgValueCompleter::new(complete_scripts))]
         script: String,
         #[arg(
             help = "Arguments to pass to the script",
@@ -810,7 +810,7 @@ enum Commands {
         debug_port: Option<u16>,
     },
     #[command(
-        about = "Manage TON libraries",
+        about = "Manage onchain TON libraries",
         after_help = detailed_help_pointer("library")
     )]
     Library {
