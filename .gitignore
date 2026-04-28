@@ -22,6 +22,7 @@ docs/out
 **/node_modules
 **/target
 **/.eslintcache
+crates/ton-ls/editors/zed/grammars/*/
 
 # OS files
 .DS_Store
