@@ -1,4 +1,4 @@
-Inspect remote account and contract state
+Inspect remote accounts and contracts
 
 Usage: acton[EXE] rpc [OPTIONS] <COMMAND>
 

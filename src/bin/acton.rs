@@ -93,7 +93,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     #[command(
-        about = "Initialize Acton support in the current directory",
+        about = "Add Acton support to current directory",
         long_about = "Initialize Acton support in the current directory. This is useful for adding Acton support to an existing project. With --create-app, Acton skips project initialization and only scaffolds a TypeScript app. With --stdlib-only, Acton only refreshes the bundled standard library.",
         after_help = detailed_help_pointer("init")
     )]
@@ -114,7 +114,7 @@ enum Commands {
         stdlib_only: bool,
     },
     #[command(
-        about = "Create a new project in a specified directory",
+        about = "Create a new project from a template",
         long_about = "Create a new project in a specified directory. This will create a new directory with a basic project template.",
         after_help = detailed_help_pointer("new")
     )]
@@ -159,7 +159,7 @@ enum Commands {
         templates: bool,
     },
     #[command(
-        about = "Print this message or the help of a given top-level command",
+        about = "Show top-level or command-specific help",
         after_help = detailed_help_pointer("help")
     )]
     Help {
@@ -167,7 +167,7 @@ enum Commands {
         command: Option<String>,
     },
     #[command(
-        about = "Manage wallets",
+        about = "Manage project and global wallets",
         after_help = detailed_help_pointer("wallet")
     )]
     Wallet {
@@ -175,7 +175,7 @@ enum Commands {
         command: WalletCommand,
     },
     #[command(
-        about = "Manage git hooks for the current project",
+        about = "Install and manage project Git hooks",
         after_help = detailed_help_pointer("hooks")
     )]
     Hooks {
@@ -183,7 +183,7 @@ enum Commands {
         command: HooksCommand,
     },
     #[command(
-        about = "Inspect remote account and contract state",
+        about = "Inspect remote accounts and contracts",
         after_help = detailed_help_pointer("rpc")
     )]
     Rpc {
@@ -191,7 +191,7 @@ enum Commands {
         command: RpcCommand,
     },
     #[command(
-        about = "Execute tests in file or directory",
+        about = "Run tests from a file or directory",
         after_help = detailed_help_pointer("test")
     )]
     Test {
@@ -474,7 +474,7 @@ enum Commands {
         ui_port: u16,
     },
     #[command(
-        about = "Generate wrappers and optionally a stub test file for a contract",
+        about = "Generate contract wrappers and test stubs",
         after_help = detailed_help_pointer("wrapper")
     )]
     Wrapper {
@@ -528,7 +528,7 @@ enum Commands {
         ts: bool,
     },
     #[command(
-        about = "Execute a Tolk script file",
+        about = "Run a standalone Tolk script file",
         after_help = detailed_help_pointer("script")
     )]
     Script {
@@ -606,7 +606,7 @@ enum Commands {
         show_bodies: bool,
     },
     #[command(
-        about = "Build the specified contract or all contracts",
+        about = "Build one contract or every contract",
         after_help = detailed_help_pointer("build")
     )]
     Build {
@@ -638,7 +638,7 @@ enum Commands {
         info: bool,
     },
     #[command(
-        about = "Run a command script defined in Acton.toml",
+        about = "Run a named script from Acton.toml",
         after_help = detailed_help_pointer("run")
     )]
     Run {
@@ -652,7 +652,7 @@ enum Commands {
         args: Vec<String>,
     },
     #[command(
-        about = "Compile a Tolk file",
+        about = "Compile one Tolk source into TVM code",
         after_help = detailed_help_pointer("compile")
     )]
     Compile {
@@ -679,7 +679,7 @@ enum Commands {
         clear_cache: bool,
     },
     #[command(
-        about = "Disassemble TVM bitcode to human-readable TASM",
+        about = "Disassemble TVM code into TASM",
         after_help = detailed_help_pointer("disasm")
     )]
     Disasm {
@@ -717,7 +717,7 @@ enum Commands {
         follow_libraries: bool,
     },
     #[command(
-        about = "Verify contract source code on verifier.ton.org",
+        about = "Verify contract source on TON Verifier",
         after_help = detailed_help_pointer("verify")
     )]
     Verify {
@@ -739,7 +739,7 @@ enum Commands {
         dry_run: bool,
     },
     #[command(
-        about = "Check Tolk files in the project for errors",
+        about = "Check project Tolk sources for errors",
         after_help = detailed_help_pointer("check")
     )]
     Check {
@@ -782,7 +782,7 @@ enum Commands {
         args: Vec<String>,
     },
     #[command(
-        about = "Retrace a transaction by its hash",
+        about = "Replay a transaction trace by hash",
         after_help = detailed_help_pointer("retrace")
     )]
     Retrace {
@@ -810,7 +810,7 @@ enum Commands {
         debug_port: Option<u16>,
     },
     #[command(
-        about = "Manage onchain TON libraries",
+        about = "Publish and manage on-chain libraries",
         after_help = detailed_help_pointer("library")
     )]
     Library {
@@ -826,7 +826,7 @@ enum Commands {
         command: LocalnetCommand,
     },
     #[command(
-        about = "Format Tolk source files",
+        about = "Format project Tolk source files",
         after_help = detailed_help_pointer("fmt")
     )]
     Fmt {
@@ -836,7 +836,7 @@ enum Commands {
         check: bool,
     },
     #[command(
-        about = "Lookup reference documentation",
+        about = "Look up TVM reference documentation",
         after_help = detailed_help_pointer("doc")
     )]
     Doc {
@@ -858,7 +858,7 @@ enum Commands {
         no_log: bool,
     },
     #[command(
-        about = "Manage Acton versions",
+        about = "Install or update Acton CLI releases",
         after_help = detailed_help_pointer("up")
     )]
     Up {
@@ -892,7 +892,7 @@ enum Commands {
     },
     #[command(
         name = "func2tolk",
-        about = "Convert FunC files to Tolk via @ton/convert-func-to-tolk",
+        about = "Convert FunC sources into Tolk code",
         after_help = detailed_help_pointer("func2tolk")
     )]
     Func2Tolk {
@@ -915,12 +915,12 @@ enum Commands {
         version: String,
     },
     #[command(
-        about = "Inspect resolved project environment",
+        about = "Inspect the resolved project setup",
         after_help = detailed_help_pointer("doctor")
     )]
     Doctor,
     #[command(
-        about = "Generate shell completions for selected shell",
+        about = "Generate shell completion scripts",
         after_help = detailed_help_pointer("completions")
     )]
     Completions {
