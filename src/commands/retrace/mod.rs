@@ -164,6 +164,8 @@ fn print_retrace_result(
             "Success".green(),
             "(exit code: 0)".to_string().dimmed()
         )
+    } else if matches!(tx.compute_info, ComputeInfo::Skipped) {
+        "Compute phase skipped".bright_red().to_string()
     } else if !compute_success {
         let exit_code = match &tx.compute_info {
             ComputeInfo::Success { exit_code, .. } => *exit_code,
