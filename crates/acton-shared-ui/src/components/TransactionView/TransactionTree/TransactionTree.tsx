@@ -1,6 +1,6 @@
 /* eslint-disable unicorn/prefer-spread */
 
-import {Cell, loadShardAccount, type Address} from "@ton/core"
+import type {Address} from "@ton/core"
 import type React from "react"
 import {useEffect, useMemo, useRef, useState} from "react"
 import {
@@ -13,20 +13,21 @@ import {
 import type {BackendContractInfo} from "@/types"
 import type {ContractData, TransactionInfo} from "@/types/transaction"
 import {fmt} from "@/index"
-import {getTransactionOpcode} from "@/utils/transaction"
+import {
+  getTransactionActionPhase,
+  getTransactionComputePhase,
+  getTransactionOpcode,
+  getTransactionSourceLabel,
+  resolveTransactionOpcodeName,
+} from "@/utils/transaction"
 
 import {TransactionDetails} from "../TransactionDetails/TransactionDetails"
 
 import {SmartTooltip} from "./SmartTooltip"
+import {StorageDiffView} from "./StorageDiffView"
 import styles from "./TransactionTree.module.css"
+import {buildStorageDiff, type StorageDiffNode} from "./storageDiff"
 import {useTooltip} from "./useTooltip"
-
-type AccountStateType = "none" | "uninit" | "active" | "frozen"
-
-interface ParsedAccountSnapshot {
-  readonly state: AccountStateType
-  readonly balance: bigint | undefined
-}
 
 interface EdgeTransactionTooltipData {
   readonly fromAddress: string
@@ -49,12 +50,10 @@ interface NodeTransactionTooltipData {
     readonly address: string
   }
   readonly account: {
-    readonly stateBefore: AccountStateType | undefined
-    readonly stateAfter: AccountStateType | undefined
-    readonly balance: bigint | undefined
     readonly isCreated: boolean
     readonly isDestroyed: boolean
   }
+  readonly storageDiff: StorageDiffNode | undefined
 }
 
 interface TransactionTreeProps {
@@ -119,13 +118,13 @@ function EdgeTransactionTooltipContent({
 
 function NodeTransactionTooltipContent({
   data,
+  contracts,
+  onContractClick,
 }: {
   data: NodeTransactionTooltipData
+  contracts: Map<string, ContractData>
+  onContractClick?: (address: string) => void
 }): React.JSX.Element {
-  const stateBefore = formatAccountState(data.account.stateBefore)
-  const stateAfter = formatAccountState(data.account.stateAfter)
-  const hasStateChanged = stateBefore !== stateAfter
-
   return (
     <div className={styles.tooltipContent}>
       <div className={styles.tooltipField}>
@@ -134,17 +133,32 @@ function NodeTransactionTooltipContent({
       </div>
 
       <div className={styles.tooltipField}>
-        <div className={styles.tooltipFieldLabel}>Account</div>
-        <div className={styles.tooltipFieldValue}>
-          <div>Balance: {formatCurrencyOrUnknown(data.account.balance)}</div>
-          {hasStateChanged && (
-            <div>
-              State: {stateBefore} {"->"} {stateAfter}
+        <div className={styles.tooltipFieldLabel}>Storage</div>
+        <div className={`${styles.tooltipFieldValue} ${styles.tooltipFieldValueStructured}`}>
+          {(data.account.isCreated || data.account.isDestroyed) && (
+            <div className={styles.storageMeta}>
+              {data.account.isCreated && (
+                <span className={`${styles.storageMetaBadge} ${styles.storageMetaBadgeCreated}`}>
+                  Account created
+                </span>
+              )}
+              {data.account.isDestroyed && (
+                <span className={`${styles.storageMetaBadge} ${styles.storageMetaBadgeDestroyed}`}>
+                  Account destroyed
+                </span>
+              )}
             </div>
           )}
-          {data.account.isCreated && <div className={styles.tooltipSubValue}>Account created</div>}
-          {data.account.isDestroyed && (
-            <div className={styles.tooltipSubValue}>Account destroyed</div>
+          {data.storageDiff ? (
+            <div className={styles.storageDiffScroll}>
+              <StorageDiffView
+                diff={data.storageDiff}
+                contracts={contracts}
+                onContractClick={onContractClick}
+              />
+            </div>
+          ) : (
+            <span className={styles.storageUnavailable}>Storage data unavailable</span>
           )}
         </div>
       </div>
@@ -210,24 +224,6 @@ export function TransactionTree({
     return map
   }, [transactions])
 
-  const accountSnapshotMap = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        before: ParsedAccountSnapshot | undefined
-        after: ParsedAccountSnapshot | undefined
-      }
-    >()
-
-    for (const tx of transactions) {
-      map.set(tx.lt, {
-        before: parseShardAccountSnapshot(tx.shardAccountBefore),
-        after: parseShardAccountSnapshot(tx.shardAccountAfter),
-      })
-    }
-    return map
-  }, [transactions])
-
   const handleNodeClick = (lt: string): void => {
     const transaction = transactionMap.get(lt)
     if (!transaction) return
@@ -245,13 +241,15 @@ export function TransactionTree({
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
     triggerRectReference.current = rect
 
-    const description = tx.transaction.description
-    const computePhase = description.type === "generic" ? description.computePhase : undefined
+    const computePhase = getTransactionComputePhase(tx.transaction)
+    const sourceLabel = getTransactionSourceLabel(tx.transaction)
 
     const tooltipData: EdgeTransactionTooltipData = {
-      fromAddress: tx.transaction.inMessage?.info.src
-        ? formatAddress(tx.transaction.inMessage.info.src as Address, new Map())
-        : "unknown",
+      fromAddress:
+        sourceLabel ??
+        (tx.transaction.inMessage?.info.src
+          ? formatAddress(tx.transaction.inMessage.info.src as Address, new Map())
+          : "unknown"),
       computePhase: {
         success: computePhase?.type === "vm" ? computePhase.success : true,
         exitCode: computePhase?.type === "vm" ? computePhase.exitCode : undefined,
@@ -281,13 +279,6 @@ export function TransactionTree({
     triggerRectReference.current = rect
 
     const contractAddress = tx.address ? formatAddress(tx.address, new Map()) : "unknown"
-
-    const accountSnapshot = accountSnapshotMap.get(tx.lt)
-    const stateBefore = accountSnapshot?.before?.state
-    const stateAfter = accountSnapshot?.after?.state
-    const balanceBefore = accountSnapshot?.before?.balance
-    const balanceAfter = accountSnapshot?.after?.balance
-    const balance = balanceAfter ?? balanceBefore
     const isCreated =
       tx.transaction.oldStatus === "non-existing" && tx.transaction.endStatus === "active"
     const isDestroyed =
@@ -299,29 +290,32 @@ export function TransactionTree({
         address: contractAddress,
       },
       account: {
-        stateBefore,
-        stateAfter,
-        balance,
         isCreated,
         isDestroyed,
       },
+      storageDiff: buildStorageDiff(tx.parsedStorageBefore, tx.parsedStorageAfter),
     }
 
     showTooltip({
       x: rect.left,
       y: rect.top,
-      content: <NodeTransactionTooltipContent data={tooltipData} />,
+      content: (
+        <NodeTransactionTooltipContent
+          data={tooltipData}
+          contracts={contracts}
+          onContractClick={onContractClick}
+        />
+      ),
     })
   }
 
-  const treeData: RawNodeDatum = useMemo(() => {
+  const treeData: RawNodeDatum = useMemo<RawNodeDatum>(() => {
     const convertTransactionToNode = (tx: TransactionInfo): RawNodeDatum => {
       const thisAddress = tx.address
       const addressName = formatAddress(thisAddress, contracts)
 
-      const description = tx.transaction.description
-      const computePhase = description.type === "generic" ? description.computePhase : undefined
-      const actionPhase = description.type === "generic" ? description.actionPhase : undefined
+      const computePhase = getTransactionComputePhase(tx.transaction)
+      const actionPhase = getTransactionActionPhase(tx.transaction)
 
       const inMessage = tx.transaction.inMessage
       const withInitCode = inMessage?.init?.code !== undefined
@@ -335,15 +329,8 @@ export function TransactionTree({
       const value = inMessage?.info.type === "internal" ? inMessage.info.value.coins : undefined
 
       const opcode = getTransactionOpcode(tx.transaction)
-
       const targetContract = thisAddress ? contracts.get(thisAddress.toString()) : undefined
-      let typeAbi = targetContract?.abi?.messages.find(it => it.opcode === opcode)
-      if (typeAbi === undefined) {
-        for (const contract of allContracts) {
-          typeAbi = contract.abi?.messages.find(it => it.opcode === opcode)
-        }
-      }
-      const opcodeName = typeAbi?.name
+      const opcodeName = resolveTransactionOpcodeName(tx, contracts, allContracts)
       const opcodeHex = opcodeName ?? (opcode === undefined ? "empty" : `0x${opcode.toString(16)}`)
 
       const contractLetter = thisAddress ? (targetContract?.letter ?? "?") : "?"
@@ -371,7 +358,7 @@ export function TransactionTree({
       return {
         name: addressName,
         attributes: {
-          from: inMessage?.info.src?.toString() ?? "unknown",
+          from: getTransactionSourceLabel(tx.transaction) ?? inMessage?.info.src?.toString() ?? "unknown",
           to: inMessage?.info.dest?.toString() ?? "unknown",
           lt,
           success: isSuccess ? "✓" : "✗",
@@ -389,29 +376,70 @@ export function TransactionTree({
     }
 
     if (rootTransactions.length > 0) {
+      const sharedInternalSource = getSharedInternalSource(rootTransactions)
+
+      if (
+        rootTransactions.length === 1 &&
+        rootTransactions[0]?.transaction.inMessage?.info.type === "external-in"
+      ) {
+        return {
+          name: "",
+          attributes: {
+            isRoot: "hidden",
+            contractLetter: "",
+          },
+          children: [convertTransactionToNode(rootTransactions[0])],
+        } satisfies RawNodeDatum
+      }
+
+      if (sharedInternalSource) {
+        const sourceContract = contracts.get(sharedInternalSource.toString())
+
+        return {
+          name: formatAddress(sharedInternalSource, contracts),
+          attributes: {
+            isRoot: "source",
+            contractLetter: sourceContract?.letter ?? "BL",
+          },
+          children: rootTransactions.map(it => convertTransactionToNode(it)),
+        } satisfies RawNodeDatum
+      }
+
       return {
         name: "",
         attributes: {
           isRoot: "true",
+          contractLetter: "",
         },
         children: rootTransactions.map(it => convertTransactionToNode(it)),
-      }
+      } satisfies RawNodeDatum
     }
 
     return {
       name: "No transactions",
       attributes: {
         isRoot: "false",
+        contractLetter: "",
       },
       children: [],
-    }
+    } satisfies RawNodeDatum
   }, [rootTransactions, contracts, selectedTransaction, allContracts])
 
   const renderCustomNodeElement = ({nodeDatum}: CustomNodeElementProps): React.JSX.Element => {
-    if (nodeDatum.attributes?.isRoot === "true") {
+    if (nodeDatum.attributes?.isRoot === "hidden") {
+      return <g />
+    }
+
+    if (nodeDatum.attributes?.isRoot === "source") {
       return (
-        <g>
-          <circle r={15} fill={"var(--bg-color)"} stroke="var(--text-primary)" strokeWidth={1.5} />
+        <g className={styles.rootNode}>
+          <circle
+            r={15}
+            fill={"var(--bg-color)"}
+            stroke="var(--text-primary)"
+            strokeWidth={1.5}
+            className={styles.rootCircle}
+          />
           <text
             fill="var(--text-primary)"
             strokeWidth="0"
@@ -420,6 +448,33 @@ export function TransactionTree({
             fontSize="14"
             fontWeight="bold"
             textAnchor="middle"
+            className={styles.nodeText}
+          >
+            {(nodeDatum.attributes?.contractLetter as string) || "BL"}
+          </text>
+        </g>
+      )
+    }
+
+    if (nodeDatum.attributes?.isRoot === "true") {
+      return (
+        <g className={styles.rootNode}>
+          <circle
+            r={15}
+            fill={"var(--bg-color)"}
+            stroke="var(--text-primary)"
+            strokeWidth={1.5}
+            className={styles.rootCircle}
+          />
+          <text
+            fill="var(--text-primary)"
+            strokeWidth="0"
+            x="0"
+            y="5"
+            fontSize="14"
+            fontWeight="bold"
+            textAnchor="middle"
+            className={styles.nodeText}
           >
             BL
           </text>
@@ -459,7 +514,7 @@ export function TransactionTree({
               xmlns="http://www.w3.org/2000/svg"
               className={styles.iconSvg}
             >
-              <title>Internal Out</title>
+              <title>External Out</title>
               <path
                 d="M0.400044 0.549983C0.648572 0.218612 1.11867 0.151455 1.45004 0.399983L3.45004 1.89998C3.6389 2.04162 3.75004 2.26392 3.75004 2.49998C3.75004 2.73605 3.6389 2.95834 3.45004 3.09998L1.45004 4.59998C1.11867 4.84851 0.648572 4.78135 0.400044 4.44998C0.151516 4.11861 0.218673 3.64851 0.550044 3.39998L1.75004 2.49998L0.550044 1.59998C0.218673 1.35145 0.151516 0.881354 0.400044 0.549983Z"
                 fill="var(--text-muted)"
@@ -481,7 +536,7 @@ export function TransactionTree({
                 <p className={styles.edgeTextTitle}>{externalOutDestination}</p>
                 <p className={styles.edgeTextContent}>Lt: {createdLt}</p>
               </div>
-              <div className={styles.bottonText}>
+              <div className={styles.bottomText}>
                 <p className={styles.edgeTextContent}>Type: external-out</p>
               </div>
             </div>
@@ -528,7 +583,7 @@ export function TransactionTree({
               ? "var(--text-primary)"
               : nodeDatum.attributes?.success === "✓"
                 ? "var(--bg-color)"
-                : "var(--color-failed)"
+                : "var(--transaction-tree-failed-node-fill)"
           }
           stroke={"var(--text-primary)"}
           strokeWidth={1.5}
@@ -580,7 +635,7 @@ export function TransactionTree({
                 <p className={styles.edgeTextContent}>{nodeDatum.attributes.value as string}</p>
               )}
             </div>
-            <div className={styles.bottonText}>
+            <div className={styles.bottomText}>
               <p className={styles.edgeTextContent}>{opcode}</p>
               {nodeDatum.attributes?.exitCode && nodeDatum.attributes.exitCode !== "0" && (
                 <p className={styles.edgeTextContent}>
@@ -704,49 +759,23 @@ function formatAddress(address: Address | undefined, contracts: Map<string, Cont
   return `${displayAddress.slice(0, 5)}...${displayAddress.slice(-5)}`
 }
 
-function parseShardAccountSnapshot(shardAccountBase64: string): ParsedAccountSnapshot | undefined {
-  try {
-    const shard = loadShardAccount(Cell.fromBase64(shardAccountBase64).beginParse())
-    const account = shard.account
-    if (!account) {
-      return {
-        state: "none",
-        balance: undefined,
-      }
-    }
-
-    return {
-      state: account.storage.state.type,
-      balance: account.storage.balance.coins,
-    }
-  } catch {
+function getSharedInternalSource(rootTransactions: readonly TransactionInfo[]): Address | undefined {
+  if (rootTransactions.length === 0) {
     return undefined
   }
-}
 
-function formatAccountState(state: AccountStateType | undefined): string {
-  switch (state) {
-    case "none": {
-      return "none"
-    }
-    case "uninit": {
-      return "uninit"
-    }
-    case "active": {
-      return "active"
-    }
-    case "frozen": {
-      return "frozen"
-    }
-    default: {
-      return "unknown"
-    }
+  const firstInMessage = rootTransactions[0]?.transaction.inMessage
+  if (firstInMessage?.info.type !== "internal") {
+    return undefined
   }
-}
 
-function formatCurrencyOrUnknown(value: bigint | undefined): string {
-  if (value === undefined) {
-    return "unknown"
-  }
-  return fmt.formatCurrency(value)
+  const source = firstInMessage.info.src
+  const sourceAddress = source.toString()
+
+  const allShareSameInternalSource = rootTransactions.every(tx => {
+    const inMessage = tx.transaction.inMessage
+    return inMessage?.info.type === "internal" && inMessage.info.src.toString() === sourceAddress
+  })
+
+  return allShareSameInternalSource ? source : undefined
 }

@@ -5,10 +5,10 @@ const EXPECT_IMPORTS: &str = r#"
 import "../../lib/testing/expect"
 "#;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 fn run_expect_tuple_membership_success(project_name: &str, test_body: &str, snapshot_path: &str) {
     let source = format!("{EXPECT_IMPORTS}\n{test_body}\n");
@@ -51,15 +51,15 @@ fn run_expect_tuple_membership_failure(
 fn expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug() {
     run_expect_tuple_membership_success(
         "ca-stdlib-expect-tuple-to-contain-existing-value-bug",
-        r#"
-get fun `test-ca-stdlib-to-contain-existing-value-bug`() {
+        r"
+get fun `test ca stdlib to contain existing value bug`() {
     var values = [];
     values.push(1);
     values.push(2);
 
     expect(values).toContain(2);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug/expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug.stdout.txt",
     );
 }
@@ -68,15 +68,15 @@ get fun `test-ca-stdlib-to-contain-existing-value-bug`() {
 fn expect_tuple_to_contain_missing_value_runtime_diagnostic_is_unreachable_bug() {
     run_expect_tuple_membership_failure(
         "ca-stdlib-expect-tuple-to-contain-missing-value-diagnostic-bug",
-        r#"
-get fun `test-ca-stdlib-to-contain-missing-value-diagnostic-bug`() {
+        r"
+get fun `test ca stdlib to contain missing value diagnostic bug`() {
     var values = [];
     values.push(10);
     values.push(20);
 
     expect(values).toContain(30);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug/expect_tuple_to_contain_missing_value_runtime_diagnostic_is_unreachable_bug.stdout.txt",
         &["Array doesn't contain the value"],
     );
@@ -86,15 +86,15 @@ get fun `test-ca-stdlib-to-contain-missing-value-diagnostic-bug`() {
 fn expect_tuple_to_not_contain_present_value_runtime_diagnostic_is_unreachable_bug() {
     run_expect_tuple_membership_failure(
         "ca-stdlib-expect-tuple-to-not-contain-present-value-diagnostic-bug",
-        r#"
-get fun `test-ca-stdlib-to-not-contain-present-value-diagnostic-bug`() {
+        r"
+get fun `test ca stdlib to not contain present value diagnostic bug`() {
     var values = [];
     values.push(7);
     values.push(8);
 
     expect(values).toNotContain(8);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug/expect_tuple_to_not_contain_present_value_runtime_diagnostic_is_unreachable_bug.stdout.txt",
         &["Array contains the value, but it should not"],
     );
@@ -104,15 +104,15 @@ get fun `test-ca-stdlib-to-not-contain-present-value-diagnostic-bug`() {
 fn expect_tuple_to_not_contain_missing_value_passes() {
     run_expect_tuple_membership_success(
         "ca-stdlib-expect-tuple-to-not-contain-missing-value",
-        r#"
-get fun `test-ca-stdlib-to-not-contain-missing-value`() {
+        r"
+get fun `test ca stdlib to not contain missing value`() {
     var values = [];
     values.push(7);
     values.push(8);
 
     expect(values).toNotContain(9);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug/expect_tuple_to_not_contain_missing_value_passes.stdout.txt",
     );
 }
@@ -121,13 +121,13 @@ get fun `test-ca-stdlib-to-not-contain-missing-value`() {
 fn expect_tuple_to_contain_missing_value_in_empty_tuple_reports_runtime_diagnostic() {
     run_expect_tuple_membership_failure(
         "ca-stdlib-expect-tuple-to-contain-empty-tuple-missing-value",
-        r#"
-get fun `test-ca-stdlib-to-contain-empty-tuple-missing-value`() {
+        r"
+get fun `test ca stdlib to contain empty tuple missing value`() {
     var values = [];
 
     expect(values).toContain(1);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_tuple_to_contain_existing_value_reports_compile_diagnostic_bug/expect_tuple_to_contain_missing_value_in_empty_tuple_reports_runtime_diagnostic.stdout.txt",
         &["Array doesn't contain the value"],
     );

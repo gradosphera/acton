@@ -9,12 +9,15 @@ import {VscCode} from "react-icons/vsc"
 
 import {
   type TestReport,
+  type TestExecutionLogs,
   TestStatus,
   type Trace,
   ContractData,
+  type FailedMessage,
   type TransactionInfo,
 } from "@acton/shared-ui"
 import {
+  applyParsedBodies,
   fmt,
   getTransactionOpcode,
   processTransactions,
@@ -66,6 +69,35 @@ const formatTraceName = (name: string | undefined, index: number): string => {
   return `Trace #${index + 1}`
 }
 
+const isExternalMessageNotAcceptedError = (error: string): boolean => {
+  const normalized = error.toLowerCase()
+  const mentionsExternal = normalized.includes("external")
+  const mentionsRejectedExternal =
+    normalized.includes("not accepted") ||
+    normalized.includes("cannot apply external") ||
+    normalized.includes("did not accept")
+  return mentionsExternal && mentionsRejectedExternal
+}
+
+const MISSING_VM_LOG_HINT = [
+  "No VM logs were collected for this trace.",
+  "Re-run with --verbose flag",
+].join("\n")
+
+const hasNonEmptyLog = (value: string | undefined): boolean => (value ?? "").trim().length > 0
+
+const getStatusDescription = (test: TestReport): string | undefined => {
+  if (test.status === TestStatus.Todo) {
+    return test.details ?? "TODO"
+  }
+
+  if (test.status === TestStatus.Skipped) {
+    return test.details
+  }
+
+  return undefined
+}
+
 export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoot}) => {
   const [activeTab, setActiveTab] = useState<"info" | "logs" | "transactions">(() => {
     const saved = localStorage.getItem("activeTab")
@@ -79,12 +111,32 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
   const [selectedIdeName, setSelectedIdeName] = useState<string | null>(() => {
     return localStorage.getItem("selectedIde")
   })
+  const [executionLogs, setExecutionLogs] = useState<TestExecutionLogs | undefined>()
+  const [isLoadingExecutionLogs, setIsLoadingExecutionLogs] = useState(false)
   const [isHeaderIDESelectorOpen, setIsHeaderIDESelectorOpen] = useState(false)
   const [isGridIDESelectorOpen, setIsGridIDESelectorOpen] = useState(false)
   const headerDropdownRef = useRef<HTMLDivElement | null>(null)
   const gridDropdownRef = useRef<HTMLDivElement | null>(null)
 
-  const contractNames = useMemo(() => trace?.contracts ?? [], [trace])
+  const contractNames = useMemo(() => {
+    const names = new Set<string>(trace?.contracts ?? [])
+
+    for (const traceItem of trace?.traces ?? []) {
+      for (const transaction of traceItem.transactions) {
+        if (transaction.dest_contract_info) {
+          names.add(transaction.dest_contract_info)
+        }
+      }
+    }
+
+    for (const transaction of test.failed_transactions ?? []) {
+      if (transaction.dest_contract_info) {
+        names.add(transaction.dest_contract_info)
+      }
+    }
+
+    return [...names]
+  }, [trace, test.failed_transactions])
   const {contracts: backendContracts} = useContracts(contractNames)
 
   const ides: IDEConfig[] = useMemo(
@@ -202,6 +254,42 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    const controller = new AbortController()
+    const params = new URLSearchParams({
+      file_path: test.file_path,
+      name: test.name,
+      row: test.row.toString(),
+      column: test.column.toString(),
+    })
+
+    setIsLoadingExecutionLogs(true)
+    setExecutionLogs(undefined)
+
+    void fetch(`/api/test-logs?${params.toString()}`, {signal: controller.signal})
+      .then(async res => {
+        if (!res.ok) {
+          throw new Error(`Failed to fetch test logs: ${res.status}`)
+        }
+        return (await res.json()) as TestExecutionLogs
+      })
+      .then(data => {
+        setExecutionLogs(data)
+        setIsLoadingExecutionLogs(false)
+      })
+      .catch(error => {
+        if (error instanceof Error && error.name === "AbortError") {
+          return
+        }
+
+        console.error("Failed to fetch test logs", error)
+        setExecutionLogs({})
+        setIsLoadingExecutionLogs(false)
+      })
+
+    return () => controller.abort()
+  }, [test.file_path, test.name, test.row, test.column])
+
   const getRelativePath = (path: string) => {
     if (projectRoot && path.startsWith(projectRoot)) {
       const rel = path.slice(projectRoot.length)
@@ -238,11 +326,18 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
     })
   }, [trace])
 
+  const parsedTraceTransactionsWithBodies = useMemo((): TransactionInfo[][] => {
+    return parsedTraceTransactions.map(transactions =>
+      applyParsedBodies(transactions, backendContracts),
+    )
+  }, [backendContracts, parsedTraceTransactions])
+
   const parsedTransactions = useMemo(() => {
-    return parsedTraceTransactions[selectedTraceIndex] ?? []
-  }, [parsedTraceTransactions, selectedTraceIndex])
+    return parsedTraceTransactionsWithBodies[selectedTraceIndex] ?? []
+  }, [parsedTraceTransactionsWithBodies, selectedTraceIndex])
 
   const allContracts = useMemo(() => Object.values(backendContracts), [backendContracts])
+  const statusDescription = getStatusDescription(test)
 
   const traceFeeSummaries = useMemo((): TraceFeeSummary[] => {
     const getFirstTraceTransaction = (transactions: readonly TransactionInfo[]) => {
@@ -285,7 +380,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
       return opcodeName ?? `0x${opcode.toString(16)}`
     }
 
-    return parsedTraceTransactions.map((transactions, traceIndex) => {
+    return parsedTraceTransactionsWithBodies.map((transactions, traceIndex) => {
       const traceName = formatTraceName(trace?.traces[traceIndex]?.name, traceIndex)
       let totalGasUsed = 0n
       let totalGasFees = 0n
@@ -325,17 +420,17 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
         totalFees,
       }
     })
-  }, [allContracts, backendContracts, parsedTraceTransactions, trace])
+  }, [allContracts, backendContracts, parsedTraceTransactionsWithBodies, trace])
 
   const failedTransactions = useMemo(() => {
     if (!test.failed_transactions) return []
     try {
-      return processTransactions(test.failed_transactions)
+      return applyParsedBodies(processTransactions(test.failed_transactions), backendContracts)
     } catch (error) {
       console.error("Failed to process failed transactions", error)
       return []
     }
-  }, [test.failed_transactions])
+  }, [backendContracts, test.failed_transactions])
 
   const contracts = useMemo(() => {
     const map = new Map<string, ContractData>()
@@ -350,6 +445,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
         address: address,
         letter: String.fromCodePoint(65 + (map.size % 26)),
         abi: backendContract?.abi,
+        compilerAbi: backendContract?.compiler_abi,
       } as ContractData)
     }
 
@@ -440,6 +536,100 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
     }
   }
 
+  const renderFailedMessages = (failedMessages: readonly FailedMessage[]) => {
+    const isSingleFailedMessage = failedMessages.length === 1
+
+    return failedMessages.map((failedMessage, index) => {
+      const hasVmLog = hasNonEmptyLog(failedMessage.vm_log_diff)
+      const hasExecutorLog = hasNonEmptyLog(failedMessage.executor_logs)
+      const showExternalNotAcceptedTitle =
+        isSingleFailedMessage && isExternalMessageNotAcceptedError(failedMessage.error)
+
+      return (
+        <div key={`failed-message-${index}`} className={styles.txLogs}>
+          {showExternalNotAcceptedTitle && (
+            <div className={styles.errorTitle}>External message was not accepted</div>
+          )}
+          {!isSingleFailedMessage && (
+            <div className={styles.txHeader}>
+              <span>Failed Message #{index + 1}</span>
+            </div>
+          )}
+          <div className={styles.logSection}>
+            <div className={styles.logSectionTitle}>Error</div>
+            <DataBlock data={failedMessage.error} />
+          </div>
+          {failedMessage.vm_exit_code !== undefined && (
+            <div className={styles.logSection}>
+              <div className={styles.logSectionTitle}>VM Exit Code</div>
+              <DataBlock data={failedMessage.vm_exit_code.toString()} />
+            </div>
+          )}
+          {hasExecutorLog && (
+            <div className={styles.logSection}>
+              <div className={styles.logSectionTitle}>Executor Log</div>
+              <DataBlock data={failedMessage.executor_logs ?? ""} />
+            </div>
+          )}
+          <div className={styles.logSection}>
+            <div className={styles.logSectionTitle}>VM Log</div>
+            <DataBlock data={hasVmLog ? (failedMessage.vm_log_diff ?? "") : MISSING_VM_LOG_HINT} />
+          </div>
+        </div>
+      )
+    })
+  }
+
+  const renderTestExecutionLogs = () => {
+    const hasStdout = hasNonEmptyLog(executionLogs?.stdout)
+    const hasStderr = hasNonEmptyLog(executionLogs?.stderr)
+    const hasVmLog = hasNonEmptyLog(executionLogs?.vm_log)
+
+    const summaryKinds = [
+      hasStdout ? "stdout" : undefined,
+      hasStderr ? "stderr" : undefined,
+    ].filter(Boolean)
+    const hasAnyLogs = hasStdout || hasStderr || hasVmLog
+
+    if (!hasAnyLogs && !isLoadingExecutionLogs) {
+      return
+    }
+
+    return (
+      <details className={styles.infoLogsSection}>
+        <summary className={styles.infoLogsSummary}>
+          <span className={styles.infoLogsTitle}>Test Logs</span>
+          {(isLoadingExecutionLogs || summaryKinds.length > 0) && (
+            <span className={styles.infoLogsMeta}>
+              {isLoadingExecutionLogs ? "loading..." : summaryKinds.join(" · ")}
+            </span>
+          )}
+        </summary>
+        {!isLoadingExecutionLogs && (
+          <div className={styles.infoLogsContent}>
+            {hasStdout && (
+              <div className={styles.logSection}>
+                <div className={styles.logSectionTitle}>Stdout</div>
+                <DataBlock data={executionLogs?.stdout ?? ""} />
+              </div>
+            )}
+            {hasStderr && (
+              <div className={styles.logSection}>
+                <div className={styles.logSectionTitle}>Stderr</div>
+                <DataBlock data={executionLogs?.stderr ?? ""} />
+              </div>
+            )}
+            {hasVmLog && (
+              <div className={styles.logSection}>
+                <DataBlock data={executionLogs?.vm_log ?? ""} />
+              </div>
+            )}
+          </div>
+        )}
+      </details>
+    )
+  }
+
   const renderTabContent = () => {
     if (activeTab === "info") {
       return (
@@ -447,8 +637,11 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
           <div className={styles.infoGrid}>
             <div className={styles.infoItem}>
               <div className={styles.infoLabel}>Status</div>
-              <div className={`${styles.infoValue} ${styles[test.status.toLowerCase()]}`}>
-                {test.status}
+              <div className={styles.infoValueGroup}>
+                <div className={`${styles.infoValue} ${styles[test.status.toLowerCase()]}`}>
+                  {test.status}
+                </div>
+                {statusDescription && <div className={styles.statusDescription}>{statusDescription}</div>}
               </div>
             </div>
             <div className={styles.infoItem}>
@@ -644,8 +837,58 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
               </div>
             </div>
           )}
+
+          {renderTestExecutionLogs()}
         </div>
       )
+    }
+
+    if (activeTab === "logs") {
+      const currentTraceList = trace?.traces[selectedTraceIndex]
+      const transactionLogs =
+        currentTraceList?.transactions
+          .map((tx, idx) => {
+            const hasVmLog = hasNonEmptyLog(tx.vm_log_diff)
+            const hasExecutorLog = hasNonEmptyLog(tx.executor_logs)
+
+            if (!hasVmLog && !hasExecutorLog) return
+
+            return (
+              <div key={tx.lt} className={styles.txLogs}>
+                <div className={styles.txHeader}>
+                  <span>Transaction #{idx + 1}</span>
+                </div>
+                {hasExecutorLog && (
+                  <div className={styles.logSection}>
+                    <div className={styles.logSectionTitle}>Executor Log</div>
+                    <DataBlock data={tx.executor_logs} />
+                  </div>
+                )}
+                <div className={styles.logSection}>
+                  <div className={styles.logSectionTitle}>VM Log</div>
+                  <DataBlock data={hasVmLog ? tx.vm_log_diff : MISSING_VM_LOG_HINT} />
+                </div>
+              </div>
+            )
+          })
+          .filter(Boolean) ?? []
+      const failedMessageLogs = currentTraceList
+        ? renderFailedMessages(currentTraceList.failed_messages ?? [])
+        : []
+      const logs = [...transactionLogs, ...failedMessageLogs]
+
+      if (logs.length === 0) {
+        return (
+          <div className={styles.txLogs}>
+            <div className={styles.logSection}>
+              <div className={styles.logSectionTitle}>VM Log</div>
+              <DataBlock data={MISSING_VM_LOG_HINT} />
+            </div>
+          </div>
+        )
+      }
+
+      return logs
     }
 
     if (!trace) return <div className={styles.empty}>No trace data available</div>
@@ -653,54 +896,26 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
     if (!currentTraceList) return <div className={styles.empty}>Trace not found</div>
 
     if (activeTab === "transactions") {
+      const failedMessages = currentTraceList.failed_messages ?? []
       if (parsedTransactions.length === 0) {
-        return <div className={styles.empty}>No transaction data available for this trace</div>
+        if (failedMessages.length === 0) {
+          return <div className={styles.empty}>No transaction data available for this trace</div>
+        }
+        return <div>{renderFailedMessages(failedMessages)}</div>
       }
       return (
-        <div className={styles.treeWrapper}>
-          <TransactionTree
-            transactions={parsedTransactions}
-            contracts={contracts}
-            allContracts={allContracts}
-          />
-        </div>
+        <>
+          <div className={styles.treeWrapper}>
+            <TransactionTree
+              transactions={parsedTransactions}
+              contracts={contracts}
+              allContracts={allContracts}
+            />
+          </div>
+          {failedMessages.length > 0 && <div>{renderFailedMessages(failedMessages)}</div>}
+        </>
       )
     }
-
-    const logs = currentTraceList.transactions
-      .map((tx, idx) => {
-        const hasVmLog = tx.vm_log_diff && tx.vm_log_diff.trim().length > 0
-        const hasExecutorLog = tx.executor_logs && tx.executor_logs.trim().length > 0
-
-        if (!hasVmLog && !hasExecutorLog) return
-
-        return (
-          <div key={tx.lt} className={styles.txLogs}>
-            <div className={styles.txHeader}>
-              <span>Transaction #{idx + 1}</span>
-            </div>
-            {hasExecutorLog && (
-              <div className={styles.logSection}>
-                <div className={styles.logSectionTitle}>Executor Log</div>
-                <DataBlock data={tx.executor_logs} />
-              </div>
-            )}
-            {hasVmLog && (
-              <div className={styles.logSection}>
-                <div className={styles.logSectionTitle}>VM Log</div>
-                <DataBlock data={tx.vm_log_diff} />
-              </div>
-            )}
-          </div>
-        )
-      })
-      .filter(Boolean)
-
-    if (logs.length === 0) {
-      return <div className={styles.empty}>No logs for this trace</div>
-    }
-
-    return logs
   }
 
   return (

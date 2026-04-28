@@ -1,6 +1,6 @@
    Compiling contracts
-   Compiling Minter
+   Compiling JettonWallet
     Finished in [TIME]
-   Compiling Wallet
+   Compiling JettonMinter
     Finished in [TIME]
     Finished in [TIME]

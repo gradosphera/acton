@@ -11,17 +11,17 @@ repository = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
-tvmffi = { workspace = true }
+tvm-ffi = { workspace = true }
 ton-executor = { workspace = true }
 tycho-types = { workspace = true }
-serde = { workspace = true }
 anyhow = { workspace = true }
-num-bigint = { workspace = true }
 num-traits = { workspace = true }
-reqwest = { workspace = true }
 ton-networks = { workspace = true }
+ton-api = { workspace = true }
 acton-config = { workspace = true }
 rustc-hash = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

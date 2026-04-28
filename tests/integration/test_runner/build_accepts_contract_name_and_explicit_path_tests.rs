@@ -1,10 +1,10 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 
-const SIMPLE_CONTRACT: &str = r#"
+const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn build_accepts_contract_name_and_explicit_path() {
@@ -13,10 +13,10 @@ fn build_accepts_contract_name_and_explicit_path() {
         .test_file(
             "build_paths",
             r#"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/testing/expect"
 
-            get fun `test-build-by-name-and-path`() {
+            get fun `test build by name and path`() {
                 val byName = build("simple");
                 val byPath = build("simple", "contracts/simple.tolk");
 
@@ -42,9 +42,9 @@ fn build_reports_missing_contract_when_path_is_omitted() {
         .test_file(
             "build_missing",
             r#"
-            import "../../lib/build/build"
+            import "../../lib/build"
 
-            get fun `test-build-contract-not-found`() {
+            get fun `test build contract not found`() {
                 val _ = build("missing");
             }
         "#,

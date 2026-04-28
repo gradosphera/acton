@@ -1,0 +1,184 @@
+ACTON-CHECK(1)
+
+NAME
+       acton-check — Lint Tolk contracts and files
+
+SYNOPSIS
+       acton check [options] [target]
+
+DESCRIPTION
+       Run the Tolk linter on the whole project, a specific contract name from
+       Acton.toml, or a single .tolk file.
+
+       By default, Acton checks contracts from Acton.toml together with
+       workspace test files and standalone script roots that define main(). The
+       command also supports machine-readable output formats and rule
+       explanations.
+
+OPTIONS
+   Check Options
+       target
+           Contract name from Acton.toml or path to a .tolk file.
+
+       --fix
+           Apply available fixes automatically.
+
+           Works only in plain output mode.
+
+       --output-format format
+           Output format for diagnostics.
+
+           Possible values: plain, json, sarif, github, gitlab
+
+       --output-file path
+           Write output to a file instead of standard output.
+
+       --enable-only code[,code…]_
+           Enable only selected lint rules, for example E001,S001.
+
+       --explain code
+           Print an explanation for a lint rule.
+
+   Display Options
+       --color when
+           Control when to use colored output.
+
+           Possible values: auto, always, never
+
+   Project Options
+       --manifest-path path
+           Path to the Acton.toml file to use for this invocation.
+
+           Use this when running the command outside the project directory or
+           when the manifest lives at a non-default location.
+
+       --project-root path
+           Path to the project root to use for configuration discovery and
+           relative defaults.
+
+           This conflicts with --manifest-path.
+
+BEHAVIOR
+       o  --list-lint-rules is a hidden machine-readable helper that prints
+          JSON entries with rule name and markdown description
+
+       o  for a human-readable catalog with rule codes, lifecycle status, and
+          quick-fix availability, use the web rules index
+
+       o  --fix applies edits only in plain output mode
+
+       o  --fix rewrites files only for fixes marked as automatically
+          applicable
+
+       o  when a diagnostic offers multiple fixes, --fix applies only the first
+          one
+
+       o  non-plain output formats report diagnostics without rewriting source
+          files
+
+       o  github emits GitHub Actions workflow annotations
+
+       o  output format resolution is: CLI flag, then [lint].output-format,
+          then default plain
+
+       o  --output-file is not valid with plain format
+
+       o  project-wide mode includes workspace *.test.tolk files and standalone
+          script roots that define main()
+
+       o  project-wide discovery skips built-in directories such as .git,
+          .github, .idea, .acton, node_modules, target, tolk-stdlib, .codex,
+          and .claude
+
+       o  contracts with non-.tolk sources such as precompiled .boc entries are
+          not lint roots
+
+       o  single-file mode relaxes E014 (acton-import-in-contract)
+
+       o  targets ending with .tolk are treated as file paths; other targets
+          are resolved as contract names from Acton.toml
+
+       o  use an explicit .tolk path such as ./contracts/Counter.tolk when a
+          name could be mistaken for a contract name
+
+       o  inline suppressions use rule names, for example //
+          check-disable-next-line unused-variable, write-only-variable
+
+       o  suppressions apply only to the immediately following line and match
+          diagnostic names, including compiler-error and parse-error;
+          diagnostic codes such as C001 are not matched
+
+       o  --fix applies only linter-provided fixes; diagnostics without a safe
+          fix remain in the report
+
+       o  --enable-only is applied after config is loaded: selected rules keep
+          their configured severity, selected rules that were allow are
+          re-enabled at the default severity, and every unselected rule is
+          forced to allow
+
+       o  --enable-only selectors must resolve to exactly one rule; in
+          practice, use full rule codes such as E003 for stability
+
+       o  excluded files still participate in import/type resolution, but lint
+          diagnostics for excluded non-root files are filtered out
+
+       o  explicit targets still run even if they match [lint].exclude
+
+       o  in project-wide runs, excluded contract roots are skipped entirely,
+          so their compiler errors and lint diagnostics are not reported
+
+       o  compiler errors are still shown for roots that are actually checked,
+          including explicit targets
+
+       o  --fix can still exit with status 1 when unfixed diagnostics or
+          warning threshold violations remain after rewriting
+
+EXIT STATUS
+       o  0: No lint errors were reported, warning thresholds were respected,
+          and any requested autofixes completed successfully.
+
+       o  1: Lint errors were found, warning limits were exceeded, autofix
+          failed, or configuration/target resolution failed.
+
+EXAMPLES
+       1. Check the whole project:
+
+              acton check
+
+       2. Check a specific contract by name:
+
+              acton check Counter
+
+       3. Check one file:
+
+              acton check ./contracts/Counter.tolk
+
+       4. Emit SARIF to a file:
+
+              acton check --output-format sarif --output-file build/reports/lint.sarif
+
+       5. Run only selected rules:
+
+              acton check --enable-only E001,S001
+
+       6. List rule metadata as JSON:
+
+              acton check --list-lint-rules
+
+       7. Emit GitHub Actions annotations in CI:
+
+              acton check --output-format github
+
+       8. Apply local autofixes where available:
+
+              acton check --fix
+
+SEE ALSO
+       o  acton help fmt
+
+       o  Linting guide
+          <https://ton-blockchain.github.io/acton/docs/linting/overview>
+
+       o  Linter rules
+          <https://ton-blockchain.github.io/acton/docs/rules/overview>
+

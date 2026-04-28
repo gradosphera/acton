@@ -1,5 +1,6 @@
 Mutation Testing
 ────────────────────────────────────────────────────────────
+Session:  [MUTATION_SESSION_ID]
 Contract: simple
 Source:   contracts/simple.tolk
 Files:    1
@@ -18,7 +19,7 @@ Survived Mutants
 ────────────────────────────────────────────────────────────
 
   ✗ Mutation #1
-  Rule:  Replace > with >= [flip_gt_ge]
+  Rule:  Replace > with >= [replace_greater_than_with_greater_or_equal]
   Level: major
   Group: comparison
   at contracts/simple[LINE]

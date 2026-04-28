@@ -13,8 +13,9 @@ use tolk_resolver::file_index::{FileId, Span};
 /// Relative imports are harder to maintain in larger projects and become fragile when files move.
 ///
 /// ### Example
-/// ```tolk
+/// ```tolk twoslash
 /// import "../libs/math.tolk";
+/// //      ^^^^^^^^^^^^^^^^^ E018: import path can use mappings
 /// ```
 ///
 /// Use instead:
@@ -47,7 +48,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
         return None;
     }
 
-    let project_root = std::env::current_dir().ok()?;
+    let project_root = checker.project_root()?.to_path_buf();
 
     for resolved_import in imports {
         let import = resolved_import.import();
@@ -57,7 +58,7 @@ pub fn check_file(checker: &mut Checker, file_id: FileId) -> Option<()> {
             continue;
         }
 
-        if !import.path.starts_with("..") && !import.path.starts_with(".") {
+        if !import.path.starts_with("..") && !import.path.starts_with('.') {
             // don't process path like "types"
             continue;
         }
@@ -123,8 +124,7 @@ fn suggest_mapped_import(
 
         if best_match
             .as_ref()
-            .map(|(best_score, _)| score > *best_score)
-            .unwrap_or(true)
+            .is_none_or(|(best_score, _)| score > *best_score)
         {
             best_match = Some((score, import_path));
         }

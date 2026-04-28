@@ -1,6 +1,7 @@
-/// Module for string formatting.
+/// Module for string parsing and formatting.
 ///
-/// This module provides functions (`format1` to `format5`) for creating formatted strings.
+/// This module provides a universal `format` function for creating formatted strings.
+/// It accepts up to 5 typed arguments.
 ///
 /// Supported placeholders:
 /// - `{}`: default formatting
@@ -19,106 +20,136 @@
 /// Examples:
 /// ```tolk
 /// // Simple string substitution
-/// val greeting = format1("Hello, {}!", "Tolk");
+/// val greeting = format("Hello, {}!", "Tolk");
 ///
 /// // Formatting numbers
-/// val hex = format1("Value in hex: 0x{:x}", 255); // "Value in hex: 0xff"
+/// val hex = format("Value in hex: 0x{:x}", 255); // "Value in hex: 0xff"
 ///
 /// // Formatting TON amounts
-/// val balance = format1("Balance: {:ton}", 500000000); // "Balance: 0.5 TON"
+/// val balance = format("Balance: {:ton}", 500_000_000); // "Balance: 0.5 TON"
 ///
 /// // Escaping braces
-/// val escaped = format1("Use {{}} to print braces", 0); // "Use {} to print braces"
+/// val escaped = format("Use {{}} to print braces", 0); // "Use {} to print braces"
 ///
 /// // Missing argument keeps placeholder as-is
-/// val partial = format1("{} {}", "left"); // "left {}"
+/// val partial = format("{} {}", "left"); // "left {}"
 ///
 /// // Multiple arguments
-/// val info = format3("User {} has {} items worth {:ton}", "Alice", 5, 1000000000);
+/// val info = format("User {} has {} items worth {:ton}", "Alice", 5, 1_000_000_000);
+/// 
+/// // Parse an integer from a string
+/// val num = parseInt("42");
 /// ```
 
 import "@stdlib/reflection"
-import "ffi/ffi"
+import "ffi"
 
-/// Formats a string with 1 argument.
+/// Formats a string with up to 5 arguments.
 ///
 /// Uses the module-level format rules, including escaping (`{{`/`}}`), mismatch behavior,
 /// and runtime parser errors for invalid format strings.
 ///
 /// Example:
 /// ```tolk
-/// val msg = format1("Hello {}", "world");
-/// println(msg);  // prints "Hello world"
+/// val a = format("Hello {}", "world");
+/// val b = format("{} + {} = {}", 2, 3, 5);
+/// val c = format("hello");
 /// ```
 ///
 /// Non-int fallback examples:
 /// ```tolk
-/// format1("{:x}", "abc");   // "abc"
-/// format1("{:ton}", true);  // "true"
+/// format("{:x}", "abc");   // "abc"
+/// format("{:ton}", true);  // "true"
 /// ```
-fun format1<T1>(fmt: string, arg1: T1): string {
-    return ffi.format1(fmt, reflect.typeNameOfObject(arg1), arg1.toTuple());
+fun format<T1 = void, T2 = void, T3 = void, T4 = void, T5 = void>(
+    fmt: string,
+    arg1: T1,
+    arg2: T2,
+    arg3: T3,
+    arg4: T4,
+    arg5: T5,
+): string {
+    return ffi.format(
+        fmt,
+        reflect.typeNameOfObject(arg1),
+        arg1.toTuple(),
+        reflect.typeNameOfObject(arg2),
+        arg2.toTuple(),
+        reflect.typeNameOfObject(arg3),
+        arg3.toTuple(),
+        reflect.typeNameOfObject(arg4),
+        arg4.toTuple(),
+        reflect.typeNameOfObject(arg5),
+        arg5.toTuple(),
+    );
 }
 
-/// Formats a string with 2 arguments.
+/// Parse a decimal string into an int value.
 ///
-/// Uses the same placeholder rules and edge-case behavior as [format1].
+/// Leading and trailing whitespace is ignored before parsing.
+/// After trimming, accepts optional leading `-` sign followed by decimal digits.
+/// Invalid input (non-numeric characters, empty string, whitespace-only string)
+/// fails with an error.
 ///
 /// Example:
 /// ```tolk
-/// val msg = format2("{}: {}", "name", "John");
-/// println(msg);  // prints "name: John"
+/// val n = parseInt("12345");
+/// val negative = parseInt("-42");
+/// val withWhitespace = parseInt(" 42 ");
 /// ```
-fun format2<T1, T2>(fmt: string, arg1: T1, arg2: T2): string {
-    return ffi.format2(fmt, reflect.typeNameOfObject(arg1), arg1.toTuple(), reflect.typeNameOfObject(arg2), arg2.toTuple());
+fun parseInt(x: string): int {
+    val n = ffi.parseInt(x);
+    assert (n != null) throw 5; // 5 = "integer out of range"
+    return n;
 }
 
-/// Formats a string with 3 arguments.
+/// Convert a string representation of address to an internal [address] value.
 ///
-/// Uses the same placeholder rules and edge-case behavior as [format1].
+/// Accepted forms include raw addresses (`0:...`) and user-friendly TON addresses
+/// (base64/base64url with flags). Inputs copied from CLI output like
+/// `<address> (<name>)` are also accepted; the symbolic suffix is ignored.
+/// The returned value is normalized as an internal address; rendered formatting may
+/// differ from input flags, while representing the same account.
+/// Invalid input fails with an error like `Failed to convert address from <input>`.
 ///
 /// Example:
 /// ```tolk
-/// val msg = format3("{} + {} = {}", 2, 3, 5);
-/// println(msg);  // prints "2 + 3 = 5"
+/// val address = parseAddress("kQCPFJYFqhowz0BRAfqNPdLOC1_Rlupki_0BezWU6rHk5lbt");
 /// ```
-fun format3<T1, T2, T3>(fmt: string, arg1: T1, arg2: T2, arg3: T3): string {
-    return ffi.format3(fmt, reflect.typeNameOfObject(arg1), arg1.toTuple(), reflect.typeNameOfObject(arg2), arg2.toTuple(), reflect.typeNameOfObject(arg3), arg3.toTuple());
+fun parseAddress(addr: string): address {
+    val cell = ffi.convertAddress(addr);
+    return cell.beginParse() as address;
 }
 
-/// Formats a string with 4 arguments.
+/// Decode a root cell from hex-encoded BOC bytes.
 ///
-/// Uses the same placeholder rules and edge-case behavior as [format1].
-///
-/// Example:
-/// ```tolk
-/// val msg = format4("{} {} {} {}", "a", "b", "c", "d");
-/// println(msg);  // prints "a b c d"
-/// ```
-fun format4<T1, T2, T3, T4>(fmt: string, arg1: T1, arg2: T2, arg3: T3, arg4: T4): string {
-    return ffi.format4(fmt, reflect.typeNameOfObject(arg1), arg1.toTuple(), reflect.typeNameOfObject(arg2), arg2.toTuple(), reflect.typeNameOfObject(arg3), arg3.toTuple(), reflect.typeNameOfObject(arg4), arg4.toTuple());
+/// `cellHex` must be a valid BOC serialized as hex.
+/// Invalid or malformed input (including non-BOC payloads) fails with an error like
+/// `Failed to decode cell hex <input>`.
+fun parseCellFromHex(cellHex: string): cell {
+    return ffi.cellFromHex(cellHex);
 }
 
-/// Formats a string with 5 arguments.
-///
-/// Uses the same placeholder rules and edge-case behavior as [format1].
-///
-/// Example:
-/// ```tolk
-/// val msg = format5("{} {} {} {} {}", 1, 2, 3, 4, 5);
-/// println(msg);  // prints "1 2 3 4 5"
-/// ```
-fun format5<T1, T2, T3, T4, T5>(fmt: string, arg1: T1, arg2: T2, arg3: T3, arg4: T4, arg5: T5): string {
-    return ffi.format5(fmt, reflect.typeNameOfObject(arg1), arg1.toTuple(), reflect.typeNameOfObject(arg2), arg2.toTuple(), reflect.typeNameOfObject(arg3), arg3.toTuple(), reflect.typeNameOfObject(arg4), arg4.toTuple(), reflect.typeNameOfObject(arg5), arg5.toTuple());
-}
-
-fun ffi.format1(fmt: string, type1: string, arg1: tuple): string
+fun ffi.format(
+    fmt: string,
+    type1: string,
+    arg1: tuple,
+    type2: string,
+    arg2: tuple,
+    type3: string,
+    arg3: tuple,
+    type4: string,
+    arg4: tuple,
+    type5: string,
+    arg5: tuple,
+): string
     asm "200 EXTCALL"
-fun ffi.format2(fmt: string, type1: string, arg1: tuple, type2: string, arg2: tuple): string
-    asm "201 EXTCALL"
-fun ffi.format3(fmt: string, type1: string, arg1: tuple, type2: string, arg2: tuple, type3: string, arg3: tuple): string
-    asm "202 EXTCALL"
-fun ffi.format4(fmt: string, type1: string, arg1: tuple, type2: string, arg2: tuple, type3: string, arg3: tuple, type4: string, arg4: tuple): string
-    asm "203 EXTCALL"
-fun ffi.format5(fmt: string, type1: string, arg1: tuple, type2: string, arg2: tuple, type3: string, arg3: tuple, type4: string, arg4: tuple, type5: string, arg5: tuple): string
-    asm "204 EXTCALL"
+
+fun ffi.convertAddress(addr: string): cell
+    asm "19 EXTCALL"
+
+fun ffi.cellFromHex(cellHex: string): cell
+    asm "20 EXTCALL"
+
+fun ffi.parseInt(x: string): int?
+    asm "47 EXTCALL"

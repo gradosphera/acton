@@ -1,41 +1,44 @@
-/// Module for blockchain emulation.
+/// Module for sending messages to a real or emulated blockchain.
 ///
-/// This is the central module for interacting with the emulated blockchain environment.
-/// It provides capabilities to send messages, manage time, inspect account states, and perform other network-level operations.
+/// It provides capabilities to send messages to contracts, calling their getters,
+/// and performing other network-level operations.
+///
+/// Note: while writing tests, also use `testing.xxx` methods.
+/// While writing scripts, also use `scripts.xxx` methods.
 ///
 /// Examples:
 /// ```tolk
 /// // Setup
-/// val deployer = net.wallet("deployer");
+/// val deployer = scripts.wallet("deployer");
 /// val contract = build("MyContract");
 ///
 /// // Interact
 /// val msg = createMessage({ ... });
-/// val results = net.send(deployer.address, msg);
+/// val txs = net.send(deployer.address, msg);
 ///
 /// // Check state
-/// val balance = net.balance(contract.address);
+/// val balance = scripts.fetchAccountBalance(contract.address);
 /// val seqno = net.runGetMethod<int>(contract.address, "seqno");
 /// ```
 
-import "@stdlib/gas-payments"
 import "@stdlib/reflection"
-import "../ffi/ffi"
+import "../ffi"
 import "../fmt"
+import "../impl"
 import "../testing/assert"
+import "../testing/expect"
 import "../tlb/either"
 import "../tlb/maybe"
+import "../types/big_array"
 import "../types/message"
 import "../types/out_actions"
 import "../types/transaction"
-import "../vm/vm"
-import "config"
 
-const CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT = 678
-const CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE = 679
-
-/// Abstraction representing a blockchain and methods of interacting with it.
+/// Root module for sending messages to a real or emulated blockchain.
 struct net
+
+const CANNOT_RUN_GET_METHOD_OF_UNDEPLOYED_CONTRACT = 678
+const CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE = 679
 
 /// Represents a set of parameters for creating a message.
 struct SendParams {
@@ -43,18 +46,6 @@ struct SendParams {
     value: coins = ton("0.1")
     /// Whether to bounce the message if the contract does not exist or fails (default: false)
     bounce: bool = false
-}
-
-/// Information about external outgoing message.
-struct ExtOutMsgInfo {
-    /// Internal source address.
-    src: address
-    /// Optional external destination address.
-    dst: address
-    /// Logical time when the message was created.
-    createdLt: int64
-    /// Unix timestamp when the message was created.
-    createdAt: uint32
 }
 
 /// Represents a list of child transactions IDs (LT) for single send result.
@@ -70,8 +61,8 @@ type ExtOutList = array<cell>
 ///
 /// If the message is not of the requested type, loading fails with exit code 63.
 /// Use [ExtOutList.atOrNull] to handle this case without throwing.
-fun ExtOutList.at<Msg>(self, index: int): ExtMessageRelaxed<Msg> {
-    val cell = self.get(index) as cell as Cell<ExtMessageRelaxed<Msg>>;
+fun ExtOutList.at<Msg>(self, index: int): TlbExtMessageRelaxed<Msg> {
+    val cell = self.get(index) as cell as Cell<TlbExtMessageRelaxed<Msg>>;
     return cell.load();
 }
 
@@ -81,12 +72,12 @@ fun ExtOutList.at<Msg>(self, index: int): ExtMessageRelaxed<Msg> {
 /// If message is not of the requested type, `index < 0`, or `index >= self.size()`,
 /// this method returns `null` instead of throwing.
 /// Use [ExtOutList.at] if you do not want to handle the `null` case.
-fun ExtOutList.atOrNull<Msg>(self, index: int): ExtMessageRelaxed<Msg>? {
+fun ExtOutList.atOrNull<Msg>(self, index: int): TlbExtMessageRelaxed<Msg>? {
     if (index < 0 || index >= self.size()) {
         return null;
     }
 
-    val cell = self.get(index) as cell as Cell<ExtMessageRelaxed<Msg>>;
+    val cell = self.get(index) as cell as Cell<TlbExtMessageRelaxed<Msg>>;
     try {
         return cell.load();
     } catch (e) {
@@ -112,14 +103,14 @@ fun OutMessages.atCell(self, index: int): cell {
 /// To get raw cell, use [OutMessages.atCell] method.
 ///
 /// If actual message body has a different type, loading will fail.
-fun OutMessages.at<Msg>(self, index: int): MessageRelaxed<Msg> {
-    val cell = self.get(index) as cell as Cell<MessageRelaxed<Msg>>;
+fun OutMessages.at<Msg>(self, index: int): TlbMessageRelaxed<Msg> {
+    val cell = self.get(index) as cell as Cell<TlbMessageRelaxed<Msg>>;
     try {
         return cell.load();
     } catch (e) {
         if (e == 63) {
             // prefix mismatch
-            val cellGeneric = self.get(index) as cell as Cell<MessageRelaxedGeneric>;
+            val cellGeneric = self.get(index) as cell as Cell<TlbMessageRelaxedGeneric>;
             val msg = cellGeneric.load();
 
             val opcode = msg.loadOpcode();
@@ -129,13 +120,15 @@ fun OutMessages.at<Msg>(self, index: int): MessageRelaxed<Msg> {
 
             val opcodeTypeName = ffi.typeNameByOpcode(opcode);
 
-            Assert.fail(format4(
-                "Out message is not a `{}` (opcode: 0x{:x}), but `{}` (opcode: 0x{:x})",
-                reflect.typeNameOf<Msg>(),
-                reflect.serializationPrefixOf<Msg>(),
-                opcodeTypeName == null ? "" : opcodeTypeName,
-                opcode
-            ));
+            Assert.fail(
+                format(
+                    "Out message is not a `{}` (opcode: 0x{:x}), but `{}` (opcode: 0x{:x})",
+                    reflect.typeNameOf<Msg>(),
+                    reflect.serializationPrefixOf<Msg>().0,
+                    opcodeTypeName == null ? "" : opcodeTypeName,
+                    opcode,
+                ),
+            );
         }
 
         throw e;
@@ -145,7 +138,9 @@ fun OutMessages.at<Msg>(self, index: int): MessageRelaxed<Msg> {
 /// Represents a single send result obtained from [net.send] method.
 struct SendResult {
     /// Raw cell with encoded transaction.
-    tx: Cell<Transaction>
+    tx: Cell<TlbTransaction>
+    /// Logical time of the transaction.
+    lt: int
     /// List of child transactions IDs.
     /// This transactions are directly produced by this transaction.
     childTxs: ChildTxsIds
@@ -153,7 +148,7 @@ struct SendResult {
     parentLt: int?
     /// Raw cell with encoded out actions.
     /// Use [SendResult.allOutActions] to load all actions.
-    outActions: Cell<OutList>
+    outActions: Cell<TlbOutList>
     /// All out messages produced by this transaction.
     outMessages: OutMessages
     /// Amount of gas used by this transaction.
@@ -164,7 +159,7 @@ struct SendResult {
 
 /// Returns all out actions produced by this transaction as a list.
 fun SendResult.allOutActions(self): OutActionList {
-    return vm.parseOutActions(self.outActions);
+    return impl.parseOutActions(self.outActions);
 }
 
 /// Represents a list of send results obtained from [net.send] method.
@@ -172,96 +167,262 @@ fun SendResult.allOutActions(self): OutActionList {
 /// This list represent all transactions produced by a [net.send] call.
 ///
 /// To get a single send result, use [SendResultList.at] method.
-type SendResultList = array<tuple>
+type SendResultList = BigArray<SendResult>
 
 /// Returns the send result at the given index.
 fun SendResultList.at(self, index: int): SendResult {
-    val tuple = self.get(index) as tuple;
-    return SendResult.fromTuple(tuple);
+    return self.get(index);
 }
 
-/// Wait for the transaction to be applied on the blockchain.
+/// Give a custom name for a trace chain produced by [net.send].
+///
+/// The custom name is used in the Test UI and gas/fee profiling reports instead of "trace N".
+///
+/// Example:
+/// ```tolk
+/// val txs = net.send(deployer.address, msg);
+/// txs.giveName("deploy-counter");
+/// expect(txs).toHaveAllSuccessfulTxs();
+/// ```
+fun SendResultList.giveName(self, nameForUI: string): void {
+    ffi.saveTraceName(self, nameForUI);
+}
+
+/// Wait for the first (root) message of the send result to be applied on the blockchain.
 ///
 /// This method is useful when broadcasting transactions to the real network.
 /// It polls the network until the transaction is applied or the maximum number of attempts is reached.
 ///
-/// In emulation mode (without `--broadcast`), this method returns immediately with `true`.
+/// The lookup follows the TON docs message-lookup reference
+/// (https://docs.ton.org/ecosystem/ton-connect/message-lookup): the external-in message
+/// actually delivered to the network is identified by its TEP-467 normalized hash
+/// (returned by `sendBocReturnHash` at send time), and the destination account's recent
+/// transactions are scanned until one with a matching `inMessage` shows up.
 ///
-/// Returns `true` if transaction is found and `false` otherwise.
+/// Returns the matched [SendResult] rebuilt from the on-chain transaction if found, or `null`
+/// otherwise. Fields that cannot be reconstructed from a single on-chain transaction
+/// (`childTxs`, `parentLt`, `outActions`) are left empty/null; `outMessages`, `externals`,
+/// and `gasUsed` are derived from the transaction itself.
+///
+/// In emulation mode (without `--net`), this method returns the first [SendResult] immediately
+/// (or `null` if the list is empty), because the trace is already fully processed locally.
 ///
 /// Example:
 /// ```tolk
 /// val result = net.send(wallet.address, message);
-/// val success = result.wait();
-/// if (success) {
-///     println("Transaction applied successfully");
+/// val applied = result.waitForFirstTransaction();
+/// if (applied != null) {
+///     println("Transaction applied successfully at lt {}", applied.lt);
 /// }
 /// ```
 ///
 /// Example with custom parameters:
 /// ```tolk
 /// val result = net.send(wallet.address, message);
-/// val success = result.wait(true, 30, 3000); // quiet mode, 30 attempts, 3 seconds delay
+/// result.waitForFirstTransaction(true, 30, 3000); // quiet mode, 30 attempts, 3 seconds delay
 /// ```
-fun SendResultList.wait(
+fun SendResultList.waitForFirstTransaction(
     self,
     quiet: bool = false,
     attempts: int = 20,
-    sleepDuration: int = 2000,
-): bool {
-    if (!net.isBroadcasting()) {
-        // in emulation mode we don't need to wait for anything
-        return true
-    }
-
+    sleepDuration: int = 1000,
+): SendResult? {
     if (self.size() == 0) {
-        // unexpected
-        return false
+        return null;
     }
 
     val res = self.at(0);
-    val tx = res.tx.load();
-    val inMsgCell = tx.messages.load().inMsg.unwrap();
-    val inMsg = inMsgCell.load();
-    var body = inMsg.body;
-    body.skipBits(1); // skip Either bit
-    val bodyHash = body.hash();
-    val bodyHashSlice = beginCell().storeUint(bodyHash, 256).toSlice();
-    return net.waitForTransaction(inMsg.info.dest, bodyHashSlice, quiet, attempts, sleepDuration)
+    if (!ffi.isBroadcasting()) {
+        // in emulation mode the trace is already applied locally
+        return res;
+    }
+
+    // FFI returns a single-element list (or null) rather than `SendResult?` directly
+    // because Tolk packs a struct across multiple stack slots when returned from an asm
+    // function, whereas BigArray items are kept on a single slot.
+    val list = ffi.waitForTransaction(
+        res.tx as cell,
+        quiet,
+        attempts,
+        sleepDuration,
+    );
+    if (list == null || list.size() == 0) {
+        return null;
+    }
+    return list.at(0);
+}
+
+/// Wait for the full message chain originating from the first message to settle on-chain.
+///
+/// Unlike [SendResultList.waitForFirstTransaction], this method follows all descendant
+/// transactions (children, grandchildren, ...) using toncenter's traces API and returns
+/// them as a fresh [SendResultList].
+///
+/// In emulation mode (without `--net`), the trace is already fully processed locally, so
+/// the method returns `self` as-is (or `null` if the list is empty).
+///
+/// Returns `null` if the chain cannot be fetched within the given attempt budget.
+fun SendResultList.waitForTrace(
+    self,
+    quiet: bool = false,
+    attempts: int = 20,
+    sleepDuration: int = 1000,
+): SendResultList? {
+    if (self.size() == 0) {
+        return null;
+    }
+    if (!ffi.isBroadcasting()) {
+        // in emulation mode the trace is already applied locally
+        return self;
+    }
+
+    val res = self.at(0);
+    return ffi.waitForTrace(
+        res.tx as cell,
+        quiet,
+        attempts,
+        sleepDuration,
+    );
 }
 
 /// Represents a set of parameters to search for a transaction in the transaction list.
 struct SearchParams {
     /// Destination address of the transaction.
-    to: address? = null
+    to: (address -> bool) | address | null = null
     /// Source address of the transaction.
-    from: address? = null
+    from: (address -> bool) | address | null = null
     /// Value of the message in nanotons.
-    value: coins? = null,
+    value: (coins -> bool) | coins | null = null
     /// Exit code of the transaction.
-    exitCode: int32? = null
-    /// Whether the transaction is succesfull (both compute and action phase).
-    success: bool? = null,
+    exitCode: (int32 -> bool) | int32 | null = null
+    /// Whether the transaction is successful (both compute and action phase).
+    success: (bool -> bool) | bool | null = null
     /// Whether the compute phase of transaction was aborted and transaction was reverted.
-    aborted: bool? = null,
-    /// Whether the transaction is a deploy transaction.
-    ///
-    /// Deploy transaction is a transaction that changes the `from` account status from "NonExisting" to "Active".
-    deploy: bool? = null
+    aborted: (bool -> bool) | bool | null = null
+    /// Whether it's a deploy transaction (that changes the account status from "NonExisting" to "Active").
+    deploy: (bool -> bool) | bool | null = null
     /// Whether the transaction message is bounceable.
-    bounce: bool? = null
+    bounce: (bool -> bool) | bool | null = null
     /// Whether the transaction is a bounced transaction.
-    bounced: bool? = null
+    bounced: (bool -> bool) | bool | null = null
     /// Opcode of the in message.
-    opcode: uint32? = null
+    opcode: (uint32 -> bool) | uint32 | null = null
     /// Action exit code of the transaction.
-    actionExitCode: int32? = null
+    actionExitCode: (int32 -> bool) | int32 | null = null
     /// Whether the compute phase was skipped.
-    computePhaseSkipped: bool? = null
+    computePhaseSkipped: (bool -> bool) | bool | null = null
     /// Body of the in message (compared by hash).
-    body: cell? = null
+    body: (cell -> bool) | cell | null = null
+    /// StateInit of the in message, encoded as Cell<StateInit?>.
+    ///
+    /// Exact match example:
+    /// ```
+    /// val expected = (init as StateInit?).toCell();
+    /// expect(txs).toHaveTx({ state_init: expected });
+    /// ```
+    /// Predicate example:
+    /// ```
+    /// expect(txs).toHaveTx({
+    ///     state_init: fun(rawStateInit: Cell<StateInit?>): bool {
+    ///         val actual = rawStateInit.load();
+    ///         // ...
+    ///     },
+    /// });
+    /// ```
+    state_init: (Cell<StateInit?> -> bool) | Cell<StateInit?> | null = null
 }
 
+/// Bind first argument to a 2-arg function, producing a 1-arg function.
+fun impl.createEqFun<T>(arg: T): (T -> bool) {
+    return fun(snd) {
+        return arg == snd;
+    };
+}
+
+fun impl.isPredicate<T>(field: (T -> bool) | T | null): bool {
+    return field is (T -> bool);
+}
+
+fun impl.unwrapScalar<T>(field: (T -> bool) | T | null): T? {
+    return (field is T) ? field : null;
+}
+
+/// Convert a union field to a tagged tuple for FFI:
+///   [0, null] = absent
+///   [1, cont] = user predicate
+///   [2, cont, original_value] = value converted to predicate (original kept for display)
+fun impl.toPredicate<T>(field: (T -> bool) | T | null): tuple {
+    match (field) {
+        (T -> bool) => {
+            return [1, field];
+        }
+        T => {
+            return [2, impl.createEqFun(field), field];
+        }
+        null => {
+            return [0, null];
+        }
+    }
+}
+
+/// Check if user-provided SearchParams has any lambdas.
+/// If not (most common), fast FFI path will be used.
+fun SearchParams.hasPredicates(self): bool {
+    return impl.isPredicate(self.to) | impl.isPredicate(self.from) | impl.isPredicate(self.value) |
+    impl.isPredicate(self.exitCode) |
+    impl.isPredicate(self.success) |
+    impl.isPredicate(self.aborted) |
+    impl.isPredicate(self.deploy) |
+    impl.isPredicate(self.bounce) |
+    impl.isPredicate(self.bounced) |
+    impl.isPredicate(self.opcode) |
+    impl.isPredicate(self.actionExitCode) |
+    impl.isPredicate(self.computePhaseSkipped) |
+    impl.isPredicate(self.body) |
+    impl.isPredicate(self.state_init);
+}
+
+/// Convert SearchParams to a tuple of plain nullable scalar values for the fast FFI path.
+fun SearchParams.toScalarFFITuple(self): tuple {
+    return [
+        impl.unwrapScalar(self.to),
+        impl.unwrapScalar(self.from),
+        impl.unwrapScalar(self.value),
+        impl.unwrapScalar(self.exitCode),
+        impl.unwrapScalar(self.success),
+        impl.unwrapScalar(self.aborted),
+        impl.unwrapScalar(self.deploy),
+        impl.unwrapScalar(self.bounce),
+        impl.unwrapScalar(self.bounced),
+        impl.unwrapScalar(self.opcode),
+        impl.unwrapScalar(self.actionExitCode),
+        impl.unwrapScalar(self.computePhaseSkipped),
+        impl.unwrapScalar(self.body),
+        impl.unwrapScalar(self.state_init),
+    ];
+}
+
+/// Convert SearchParams to a tuple of [tag, predicate] pairs for FFI.
+fun SearchParams.toPredicateFFITuple(self): tuple {
+    return [
+        impl.toPredicate(self.to),
+        impl.toPredicate(self.from),
+        impl.toPredicate(self.value),
+        impl.toPredicate(self.exitCode),
+        impl.toPredicate(self.success),
+        impl.toPredicate(self.aborted),
+        impl.toPredicate(self.deploy),
+        impl.toPredicate(self.bounce),
+        impl.toPredicate(self.bounced),
+        impl.toPredicate(self.opcode),
+        impl.toPredicate(self.actionExitCode),
+        impl.toPredicate(self.computePhaseSkipped),
+        impl.toPredicate(self.body),
+        impl.toPredicate(self.state_init),
+    ];
+}
+
+/// Represents a set of parameters to search for an external-out message.
 struct ExternalOutSearchParams {
     /// Source address of the external-out message.
     from: address? = null
@@ -269,9 +430,9 @@ struct ExternalOutSearchParams {
     to: any_address? = null
 }
 
-fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>(
+fun TlbMessage<RemainingBitsAndRefs, TlbExternalOutMessageInfo>.matches<TBody>(
     self,
-    params: ExternalOutSearchParams = {}
+    params: ExternalOutSearchParams,
 ): bool {
     if (params.from != null && self.info.src != params.from) {
         return false;
@@ -281,10 +442,10 @@ fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>
         return false;
     }
 
-    val declaredPrefix = TBody.externalOutPrefix();
+    val declaredPrefix = TBody.__getDeclaredPackPrefix();
     if (declaredPrefix != -1) {
         val body = self.loadBody();
-        val declaredPrefixLen = TBody.externalOutPrefixLen();
+        val declaredPrefixLen = TBody.__getDeclaredPackPrefixLen();
         if (body.remainingBitsCount() < declaredPrefixLen) {
             return false;
         }
@@ -302,10 +463,10 @@ fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>
 ///
 /// Example:
 /// ```tolk
-/// val tx = net.send(deployer.address, message);
-/// val result = tx.findExternalOutMessage({ from: counter.address });
-/// expect(result).toBeDefined();
-/// val tx = result.unwrap();
+/// val txs = net.send(deployer.address, message);
+/// val result = txs.findExternalOutMessage({ from: counter.address });
+/// expect(result).toBeNotNull();
+/// val tx = result!;
 /// ```
 ///
 /// You can specify an optional type argument, specifying the message type to search for;
@@ -318,30 +479,30 @@ fun Message<RemainingBitsAndRefs, ExternalOutMessageInfo>.matches<TBody = never>
 /// //                        ^^^^^^^^^^^^^^ search for message with IncrementEvent opcode
 /// ```
 ///
-/// If the message is not found, returns None.
-fun SendResultList.findExternalOutMessage<TBody = never>(
+/// If the message is not found, returns `null`.
+fun SendResultList.findExternalOutMessage<TBody = unknown>(
     self,
-    params: ExternalOutSearchParams = {}
-): Maybe<Message<TBody, ExternalOutMessageInfo>> {
+    params: ExternalOutSearchParams = {},
+): TlbMessage<TBody, TlbExternalOutMessageInfo>? {
     var transactionIdx = 0;
-    while (transactionIdx < self.size()) {
+    repeat (self.size()) {
         val externals = self.at(transactionIdx).externals;
 
         var externalIdx = 0;
-        while (externalIdx < externals.size()) {
-            val externalOutCell = externals.get(externalIdx) as cell as Cell<Message<RemainingBitsAndRefs, ExternalOutMessageInfo>>;
+        repeat (externals.size()) {
+            val externalOutCell = externals.get(externalIdx) as Cell<
+                TlbMessage<RemainingBitsAndRefs, TlbExternalOutMessageInfo>,
+            >;
             val externalOut = externalOutCell.load();
 
             if (externalOut.matches<TBody>(params)) {
-                return Maybe<Message<TBody, ExternalOutMessageInfo>>.some(
-                    Message {
-                        info: externalOut.info,
-                        init: externalOut.init,
-                        body: EitherLeft{
-                            value: TBody.decodeExternalOutBody(externalOut.loadBody()),
-                        },
+                return {
+                    info: externalOut.info,
+                    init: externalOut.init,
+                    body: TlbEitherLeft {
+                        value: TBody.__decodeExternalOutBody(externalOut.loadBody()),
                     },
-                );
+                };
             }
 
             externalIdx += 1;
@@ -350,41 +511,44 @@ fun SendResultList.findExternalOutMessage<TBody = never>(
         transactionIdx += 1;
     }
 
-    return Maybe<Message<TBody, ExternalOutMessageInfo>>.none();
+    return null;
 }
 
 /// Find a transaction in the send result list by specified parameters.
 ///
 /// Example:
 /// ```tolk
-/// val tx = net.send(deployer.address, message);
-/// val result = tx.findTransaction({ to: counter.address });
-/// expect(result).toBeDefined();
-/// val tx = result.unwrap();
+/// val txs = net.send(deployer.address, message);
+/// val result = txs.findTransaction({ to: counter.address });
+/// expect(result).toBeNotNull();
+/// val tx = result!;
 /// ```
-fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams = {}): Maybe<Transaction> {
-    val declaredPrefix = Msg.getDeclaredPackPrefix2();
+fun SendResultList.findTransaction<Msg = unknown>(
+    self,
+    params: SearchParams = {},
+): TlbTransaction? {
+    val declaredPrefix = Msg.__getDeclaredPackPrefix();
     if (declaredPrefix != -1) {
         params.opcode = declaredPrefix;
     }
-    val tx = ffi.findTransactionByParams(self, params.toTuple());
+
+    val tx = impl.findTransaction(self, params);
     if (tx == null) {
-        return Maybe<Transaction>.none();
+        return null;
     }
-    val txCell = tx as Cell<Transaction>;
-    return Maybe<Transaction>.some(txCell.load());
+    return (tx as Cell<TlbTransaction>).load();
 }
 
 /// Send a message from a specified address.
 ///
-/// In broadcast mode, sending to the real network is attempted only when `from`
+/// In broadcast mode (with `--net`), sending to the real network is attempted only when `from`
 /// matches one of the wallets opened at script startup.
 /// If `from` is not an opened wallet address, this method falls back to normal
 /// emulator execution, even when [net.isBroadcasting] is `true`.
 ///
 /// Example:
 /// ```tolk
-/// get fun `test-send-message`() {
+/// get fun `test send message`() {
 ///     // ...
 ///     val message = createMessage({
 ///         bounce: false,
@@ -395,43 +559,36 @@ fun SendResultList.findTransaction<Msg = never>(self, params: SearchParams = {})
 /// }
 /// ```
 ///
-/// Returns a list of send results representing all transactions produced by this send call.
+/// In local emulation mode, returns a list of send results representing the
+/// full recursively processed transaction chain produced by this send call.
 ///
-/// See [net.sendSingle] if you need to send a single message without out message processing.
+/// Unlike [testing.processSingleTraceStep], the emulation path keeps draining
+/// out messages until the whole trace queue is exhausted. Use it for normal
+/// end-to-end emulation where children, grandchildren, and other follow-up
+/// transactions should all be executed.
+///
+/// When `from` resolves to a real opened wallet and the call is routed to a
+/// broadcast network instead of the local emulator, Acton sends the message to
+/// that network and returns a single pseudo transaction placeholder rather than
+/// recursively executing descendants locally.
+///
+/// See [testing.processSingleTraceStep] if you need to send a single message without out message processing.
 fun net.send(from: address, message: OutMessage): SendResultList {
     val rawRes = ffi.sendMessageFrom(message.messageCell, from.toCell());
     if (rawRes == null) {
-        Assert.fail("ffi.sendMessageFrom unexpectedly returned null")
+        // just throw to show original error message from Rust
+        throw 100;
     }
     return rawRes;
 }
 
-/// Send a single message from a specified address.
-///
-/// In contrast to [net.send], this method doesn't process out messages, but returns
-/// a single send result with this out messages.
-///
-/// This method is useful for bounce testing where you want to simulate a bounced message.
-///
-/// Example:
-/// ```tolk
-/// val bounced_msg = createMessage({
-///     bounce: false,
-///     value: ton("0.95"),
-///     dest: deployer_jetton_wallet.address,
-///     body: beginCell().storeUint(0xFFFFFFFF, 32).storeSlice(body.toCell().beginParse()).endCell(),
-/// }).bounced();
-///
-/// net.sendSingle(not_deployer_jetton_wallet.address, bounced_msg);
-/// ```
-///
-/// See [net.send] if you need to send a message and process out messages.
-fun net.sendSingle(from: address, message: OutMessage): SendResult {
-    val res = ffi.sendSingleMessage(message.messageCell, from.toCell())!;
-    return SendResult.fromTuple(res)
+/// The response from `net.createExternalMessage`.
+/// It's an already composed message cell, ready to be sent by `net.sendExternal`.
+struct ExternalInMessage {
+    messageCell: cell
 }
 
-/// Creates an External-in message.
+/// Creates an external-in message.
 /// Body is always packed into the Either Right (in the reference).
 /// If `StateInit` is present it is also packed in the Either Right (in the reference).
 /// Full TL-B scheme of the message is.
@@ -441,11 +598,16 @@ fun net.sendSingle(from: address, message: OutMessage): SendResult {
 /// message$_ {X:Type} info:CommonMsgInfo
 ///   init:(Maybe (Either StateInit ^StateInit))
 ///   body:(Either X ^X) = Message X;
-///```
-fun createExternalMessage<TBody>(dest: address, body: TBody, stateInit: StateInit? = null, src: any_address? = null) {
-    val init = stateInit != null
-        ? Maybe<Either<StateInit, Cell<StateInit>>>.some(Either<StateInit, Cell<StateInit>>.right(stateInit.toCell()))
-        : Maybe<Either<StateInit, Cell<StateInit>>>.none();
+/// ```
+fun net.createExternalMessage<TBody>(
+    dest: address,
+    body: TBody,
+    stateInit: StateInit? = null,
+    src: any_address? = null,
+): ExternalInMessage {
+    val init: TlbMaybe<TlbEither<StateInit, Cell<StateInit>>> = stateInit != null
+        ? TlbMaybe.just(TlbEither.right(stateInit.toCell()))
+        : TlbMaybe.none();
 
     // A little hack because Tolk does not support arbitrary function calls as default parameters
     if (src == null) {
@@ -456,25 +618,35 @@ fun createExternalMessage<TBody>(dest: address, body: TBody, stateInit: StateIni
         Assert.fail("Internal source address is not supported for External-in messages");
     }
 
-    return OutMessage {
-        messageCell: Message<TBody, ExternalInMessageInfo> {
-            info: ExternalInMessageInfo {
+    return {
+        messageCell: TlbMessage<TBody, TlbExternalInMessageInfo> {
+            info: TlbExternalInMessageInfo {
                 src,
                 dest,
                 // It is better to fairly calculate the import fee right here or in acton
                 importFee: ton("0.1"),
             },
             init,
-            body: Either<TBody, Cell<TBody>>.right(body.toCell())
-        }.toCell()
+            body: TlbEither<TBody, Cell<TBody>>.right(body.__asPayload()),
+        }.toCell(),
     };
 }
 
-/// Sends external incoming message to the spefied destination address.
-/// Read more about External incomming messages: https://docs.ton.org/foundations/messages/external-in#incoming-external-messages
-fun net.sendExternal(msg: OutMessage): SendResultList {
+/// Sends an external-in message to the specified destination address.
+/// Read more about external incoming messages: https://docs.ton.org/foundations/messages/external-in#incoming-external-messages
+///
+/// This helper recursively processes the resulting trace in local emulation
+/// just like [net.send], but it starts from an already composed external-in
+/// message instead of an internal message sent from a wallet-like address.
+///
+/// Returns `null` if the external message was not accepted or the destination
+/// account does not exist.
+fun net.sendExternal(msg: ExternalInMessage): SendResultList? {
     // from and mode fields do not affect anything in case of an ExtIn message
-    return ffi.sendMessageFrom(msg.messageCell, address("-1:0000000000000000000000000000000000000000000000000000000000000000").toCell())!;
+    return ffi.sendMessageFrom(
+        msg.messageCell,
+        address("-1:0000000000000000000000000000000000000000000000000000000000000000").toCell(),
+    );
 }
 
 /// Transform the out message to a bounced message. Essentially, it sets the `bounced` flag to true.
@@ -489,111 +661,26 @@ fun net.sendExternal(msg: OutMessage): SendResultList {
 /// val bouncedMsg = msg.bounced();
 /// ```
 ///
-/// This is useful for testing single messages with [net.sendSingle] method.
+/// This is useful for testing single messages with [testing.processSingleTraceStep].
 ///
 /// Example:
 /// ```tolk
-/// val bounced_msg = createMessage({
+/// val bouncedMsg = createMessage({
 ///     bounce: false,
 ///     value: ton("0.95"),
-///     dest: deployer_jetton_wallet.address,
+///     dest: deployer.address,
 ///     body: beginCell().storeUint(0xFFFFFFFF, 32).storeSlice(body.toCell().beginParse()).endCell(),
 /// }).bounced();
 ///
-/// net.sendSingle(not_deployer_jetton_wallet.address, bounced_msg);
+/// testing.processSingleTraceStep(notDeployer.address, bouncedMsg);
 /// ```
 fun OutMessage.bounced(self): OutMessage {
-    var msg = (self.messageCell as Cell<MessageRelaxedGeneric>).load();
+    var msg = (self.messageCell as Cell<TlbMessageRelaxedGeneric>).load();
     msg.info.bounced = true;
     return { messageCell: msg.toCell() };
 }
 
-/// Treasury is a special contract that is used to deploy other contracts.
-///
-/// To create a treasury, use the [net.treasury] method.
-struct Treasury {
-    address: address
-}
-
-/// Create a treasury with a specified name.
-///
-/// Calling this method with same name will return the same treasury.
-///
-/// Example:
-/// ```tolk
-/// get fun `test-mint`() {
-///     val treasury = net.treasury("treasury");
-///     // ...
-/// }
-/// ```
-fun net.treasury(name: string): Treasury {
-    val stateInit: ContractState = {
-        code: __treasuryCode(),
-        data: beginCell().storeSlice(name.beginParse()).endCell(),
-    };
-
-    val deployer = address("0:0000000000000000000000000000000000000000000000000000000000000000");
-    val address = AutoDeployAddress { stateInit }.calculateAddress();
-    net.registerAddress(address, name);
-
-    val msg = createMessage({
-        bounce: false,
-        value: ton("10000"),
-        dest: { workchain: 0, stateInit },
-    });
-    // Deploy treasury
-    net.send(deployer, msg);
-    return Treasury { address };
-}
-
-struct Wallet {
-    address: address
-}
-
-/// Creates a new wallet for use in scripts. Unlike `net.treasury`, the wallet
-/// can refer to a real wallet described in Acton.toml, and therefore can be used
-/// in scripts with `--broadcast` to execute transactions on the real blockchain.
-///
-/// Without `--broadcast`, the wallet refers to an internal wallet, created in the
-/// same way as in `net.treasury`.
-///
-/// Note: in tests, use `net.treasury`.
-///
-/// Example:
-/// ```tolk
-/// /// Script that deploys a counter contract using a wallet to real blockchain.
-/// fun main() {
-///    val deployer = net.wallet("deployer");
-///    val counter = Counter.fromStorage(Storage {
-///        id: 8,
-///        counter: 0,
-///    });
-///
-///    val result = counter.deploy(deployer.address, ton("0.05"));
-///    result.wait();
-///
-///    println1("Deployed counter to {}", counter.address);
-/// }
-/// ```
-fun net.wallet(name: string): Wallet {
-    if (ffi.isBroadcasting()) {
-        val addressCell = ffi.getWalletByName(name);
-        if (addressCell == null) {
-            Assert.failWalletNotFound(name);
-            throw 1;
-        }
-        val address = addressCell.beginParse().loadAddress();
-        return Wallet { address }
-    }
-
-    return Wallet {
-        address: net.treasury(name).address,
-    }
-}
-
-/// Check if the script is running in broadcasting mode.
-///
-/// Returns `true` if the script was run with `--broadcast` flag, `false` otherwise.
+/// Returns `true` if the script is running in broadcasting mode (with `--net`), `false` otherwise.
 ///
 /// This is useful for writing scripts that behave differently in emulation and broadcasting modes.
 ///
@@ -606,7 +693,7 @@ fun net.wallet(name: string): Wallet {
 /// }
 /// ```
 fun net.isBroadcasting(): bool {
-    return ffi.isBroadcasting()
+    return ffi.isBroadcasting();
 }
 
 /// Enable broadcasting mode.
@@ -615,8 +702,8 @@ fun net.isBroadcasting(): bool {
 /// Useful for testing broadcasting logic in emulation mode.
 /// It toggles only the runtime broadcast flag.
 ///
-/// Wallets are loaded once at startup (when the script is launched with CLI `--broadcast`).
-/// Calling [net.enableBroadcast] later does not load wallets, so [net.wallet] can still fail
+/// Wallets are loaded once at startup (when the script is launched with CLI `--net`).
+/// Calling [net.enableBroadcast] later does not load wallets, so [scripts.wallet] can still fail
 /// and wallet-backed real sends can remain unavailable.
 ///
 /// Example:
@@ -648,7 +735,7 @@ fun net.disableBroadcast(): void {
     ffi.disableBroadcast();
 }
 
-/// Run a get method of a contract by its name.
+/// Run a get method of a contract by its name or id.
 ///
 /// Imagine you have the following get method in the contract:
 /// ```tolk
@@ -668,121 +755,64 @@ fun net.disableBroadcast(): void {
 /// get fun get_wallet_address(ownerAddress: address): address { ... }
 /// ```
 /// ```tolk
-/// val address = net.runGetMethod<address>(wallet.address, "get_wallet_address", deployer.address);
+/// val address = net.runGetMethod<address>(wallet.address, "get_wallet_address", [address("...")]);
 /// ```
 ///
-/// If the get method accepts several arguments, you can pass them as a third argument in tuple.
+/// If the get method accepts several arguments, you can pass them as a third argument as an array.
 /// ```tolk
 /// get fun do_smth(owner: address, id: int): address { ... }
 /// ```
 /// ```tolk
-/// val address = net.runGetMethod<address>(wallet.address, "do_smth", [deployer.address, 10] as tuple);
+/// val address = net.runGetMethod<address>(wallet.address, "do_smth", [deployer.address, 10]);
 /// ```
 ///
-/// ## With struct return type
+/// ## Specify the method's return type as a type parameter
 ///
-/// If get method returns a struct, specify the type of the struct as a first type argument:
+/// Specify the return type as a generic parameter:
 /// ```tolk
 /// get fun get_jetton_data(): JettonDataReply { ... }
 /// ```
 /// ```tolk
 /// val data = net.runGetMethod<JettonDataReply>(wallet.address, "get_jetton_data");
 /// ```
-///
-/// ## With tensor return type
-///
-/// If get method returns a tensor, specify tuple as a first type argument:
-/// ```tolk
-/// get fun get_all_data(): (int, slice) { ... }
-/// ```
-/// ```tolk
-/// val data: tuple = net.runGetMethod(wallet.address, "get_all_data");
-/// val first = data.get(0) as int;
-/// val second = data.get(1) as int;
-/// ```
-///
-/// If you need to run a get method by its ID, use [net.runGetMethodById] instead.
-fun net.runGetMethod<Ret, Args = tuple>(addr: address, name: string, args: Args? = null): Ret {
-    val methodId = (crc16(name) & 0xffff) | 0x10000;
-    return impl.runGetMethodById(addr, methodId, name, args)
-}
+fun net.runGetMethod<Ret>(addr: address, idOrName: int | string, args: array<unknown> = []): Ret {
+    val (methodId, methodName) = match (idOrName) {
+        int => (idOrName, ""),
+        string => ((ffi.crc16(idOrName) & 0xffff) | 0x10000, idOrName),
+    };
+    assert (ffi.isDeployed(addr.toCell())) throw CANNOT_RUN_GET_METHOD_OF_UNDEPLOYED_CONTRACT;
 
-/// Run a get method of a contract by its ID.
-///
-/// If you need to run a get method by its name, use [net.runGetMethod] instead.
-///
-/// Example:
-/// ```tolk
-/// val data = net.runGetMethodById<JettonDataReply>(wallet.address, 0x17b02);
-/// ```
-///
-/// See [net.runGetMethod] for more information.
-fun net.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, args: Args? = null): Ret {
-    return impl.runGetMethodById(addr, id, "", args)
-}
+    val code = ffi.getDeployedCode(addr.toCell());
+    assert (code != null) throw CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE;
 
-/// Check if a contract with a specified address is deployed.
-///
-/// Returns `true` if the contract is deployed, `false` otherwise.
-///
-/// Example:
-/// ```tolk
-/// fun JettonWallet.getJettonBalance(self): coins {
-///     if (!net.isDeployed(self.address)) {
-///         return 0 // return 0 if contract is not deployed
-///     }
-///
-///     // and if deployed, actually run get method
-///     val result: JettonWalletDataReply = net.runGetMethod(self.address, "get_wallet_data");
-///     return result.jettonBalance
-/// }
-/// ```
-fun net.isDeployed(addr: address): bool {
-    return ffi.isDeployed(addr.toCell());
-}
-
-/// Get the code of a deployed contract by its address.
-///
-/// If the contract is not deployed, returns null.
-fun net.getDeployedCode(addr: address): cell? {
-    return ffi.getDeployedCode(addr.toCell());
-}
-
-/// Wait for a transaction with the specified message hash.
-///
-/// This method polls the network until the transaction is applied or the
-/// maximum number of attempts is reached.
-///
-/// Returns true if transaction is found and false otherwise.
-///
-/// Example:
-/// ```tolk
-/// val txs = net.send(wallet.address, message);
-/// val tx = txs.at(0).tx.load();
-/// val inMsg = tx.messages.load().inMsg.unwrap().load();
-///
-/// var body = inMsg.body;
-/// body.skipBits(1); // skip Either tag bit
-/// val bodyHashSlice = beginCell().storeUint(body.hash(), 256).toSlice();
-///
-/// val ok = net.waitForTransaction(inMsg.info.dest, bodyHashSlice, true, 20, 2000);
-/// ```
-///
-/// See [SendResultList.wait] for high-level API.
-fun net.waitForTransaction(
-    addr: address,
-    messageBodyHash: slice,
-    quiet: bool = false,
-    attempts: int = 20,
-    sleepDuration: int = 2000,
-): bool {
-    return ffi.waitForTransaction(
+    val res = ffi.runGetMethod(
         addr.toCell(),
-        messageBodyHash.toCell(),
-        quiet,
-        attempts,
-        sleepDuration
+        code,
+        methodId,
+        methodName,
+        reflect.typeNameOf<Ret>(),
+        args,
     );
+    if (res == null) {
+        // actual error will be processed by test framework, just halt execution
+        throw 0;
+    }
+    try {
+        return Ret.fromTuple(res);
+    } catch (e) {
+        if (e == 7) {
+            Assert.fail(
+                format(
+                    "Get method '{}' returned '{}' that cannot be deserialized to '{}'. Make sure you passed all parameters to the get method.",
+                    methodName,
+                    res,
+                    reflect.typeNameOf<Ret>(),
+                ),
+            );
+        }
+
+        throw e;
+    }
 }
 
 /// Generate a random address.
@@ -792,10 +822,10 @@ fun net.waitForTransaction(
 ///
 /// Example:
 /// ```tolk
-/// val address = net.randomAddress("random_user");
-/// val masterchain_address = net.randomAddress("random_user", -1);
+/// val address = randomAddress("random_user");
+/// val masterchainAddress = randomAddress("random_user", -1);
 /// ```
-fun net.randomAddress(name: string? = null, wc: int = 0): address {
+fun randomAddress(name: string? = null, wc: int = BASECHAIN): address {
     var builder = beginCell();
     builder.storeUint(0b10, 2);
     builder.storeUint(0b0, 1);
@@ -809,17 +839,15 @@ fun net.randomAddress(name: string? = null, wc: int = 0): address {
             .hash();
         builder.storeUint(deterministicHash, 256);
     } else {
-        var i = 0;
-        while (i < 32) {
+        repeat (32) {
             val num = random.range(256);
             builder.storeUint(num, 8);
-            i += 1;
         }
     }
 
     val address = address.fromValidBuilder(builder);
     if (name != null) {
-        net.registerAddress(address, name);
+        ffi.registerAddress(address.toCell(), name);
     }
     return address;
 }
@@ -836,7 +864,7 @@ fun net.randomAddress(name: string? = null, wc: int = 0): address {
 /// ```tolk
 /// net.registerAddress(address, "my_address");
 /// ```
-fun net.registerAddress(addr: address, name: string) {
+fun net.registerAddress(addr: address, name: string): void {
     ffi.registerAddress(addr.toCell(), name);
 }
 
@@ -849,402 +877,439 @@ fun net.registerAddress(addr: address, name: string) {
 /// ```tolk
 /// net.registerCodeCell(code, "my_code");
 /// ```
-fun net.registerCodeCell(code: cell, name: string) {
+fun net.registerCodeCell(code: cell, name: string): void {
     ffi.registerCodeCell(code, name);
 }
 
-/// Returns current account state for address or null if no information available or
-/// contract is not deployed.
+/// Load library by hash, first from the current emulated blockchain and then from the configured network.
 ///
-/// The account state includes balance, storage information, and other account data,
-/// see [AccountInfo] type for more information.
-///
-/// Example:
-/// ```tolk
-/// val state = net.getAccountState(contract.address);
-/// if (state != null) {
-///     println1("Balance: {:ton}", state.storage.balance.grams);
-/// } else {
-///     println("Account not found");
-/// }
-/// ```
-fun net.getAccountState(addr: address): AccountInfo? {
-    val cell = ffi.getAccountState(addr.toCell());
-    if (cell == null) {
-        return null;
-    }
-    val typedCell = cell as Cell<AccountInfo>;
-    return typedCell.load()
-}
-
-/// Returns storage fee for address for specified amount of seconds.
-///
-/// Returns `null` if the contract with given address is not deployed.
-///
-/// Example:
-/// ```tolk
-/// val storage_fee = net.getAccountStorageFee(contract.address, 86400); // 1 day
-/// if (storage_fee != null) {
-///     println1("Daily storage fee: {:ton}", storage_fee);
-/// }
-/// ```
-fun net.getAccountStorageFee(addr: address, seconds: int) {
-    val state = net.getAccountState(addr);
-    if (state == null) {
-        return null;
-    }
-    val usedStorage = state.storageStat.used;
-    return calculateStorageFee(BASECHAIN, seconds, usedStorage.bits, usedStorage.cells);
-}
-
-/// Load library from the real blockchain by hash.
+/// In forked tests this means locally registered libraries win over the remote
+/// fork network for the same hash.
 ///
 /// Returns null if library is not found.
 fun net.loadLibrary(hash: string): cell? {
-    return ffi.loadLibrary(hash)
+    return ffi.loadLibrary(hash);
 }
-
-/// Load library from the real blockchain by hash and register it in current blockchain.
-///
-/// Returns false if library is not found.
-fun net.fetchAndRegisterLibrary(hash: string): bool {
-    val cell = net.loadLibrary(hash);
-    if (cell == null) {
-        return false
-    }
-    vm.registerLibrary(cell);
-    return true
-}
-
-/// Set the current Unix timestamp for time forwarding emulation.
-///
-/// This is useful for testing time-dependent contracts.
-///
-/// Example:
-/// ```tolk
-/// val future_time = net.now() + 1000; // 1000 seconds from now
-/// net.setNow(future_time);
-/// ```
-fun net.setNow(now: uint32) {
-    ffi.setNow(now);
-}
-
-/// Get the current Unix timestamp used in emulation.
-///
-/// Returns the current time in the emulated blockchain.
-///
-/// Example:
-/// ```tolk
-/// val current_time = net.now();
-/// println1("Current emulation time: {}", current_time);
-/// ```
-fun net.now(): uint32 {
-    return ffi.getNow();
-}
-
-/// Topup an address with a specified amount of TON.
-///
-/// Example:
-/// ```tolk
-/// net.topUp(address, ton("10"));
-/// ```
-fun net.topUp(to: address, amount: coins) {
-    val treasury = net.treasury("treasury");
-    val topupMsg = createMessage({
-        bounce: BounceMode.NoBounce,
-        value: amount,
-        dest: to,
-    });
-    net.send(treasury.address, topupMsg);
-}
-
-/// Get the balance of an address.
-///
-/// Returns 0 if the address is not deployed.
-///
-/// Example:
-/// ```tolk
-/// val balance = net.balance(address);
-/// println1("{:ton}", balance);
-/// ```
-fun net.balance(of: address): coins {
-    val state = net.getAccountState(of);
-    if (state == null) {
-        return 0;
-    }
-    return state.storage.balance.grams
-}
-
-/// Returns the account state for an address in emulation.
-///
-/// The returned value is either `AccountInfo` for an existing account
-/// or `AccountNone` if the account does not exist.
-///
-/// Example:
-/// ```tolk
-/// val acc = net.getAccount(addr);
-/// if (acc is AccountInfo) {
-///     println("Account exists");
-/// }
-/// ```
-fun net.getAccount(addr: address): Account {
-    val shard = net.getShardAccount(addr);
-    return shard!.account.load();
-}
-
-
-/// Sets the account state for an address in emulation.
-///
-/// If the account already exists, preserves `lastTransHash` and `lastTransLt`
-/// from the existing shard account. Otherwise, initializes them to zero.
-///
-/// Example:
-/// ```tolk
-/// val acc = net.getAccount(addr);
-/// net.setAccount(addr, acc);
-/// ```
-fun net.setAccount(addr: address, acc: Account) {
-    val shardAcc = net.getShardAccount(addr);
-    var lastTransHash = 0;
-    var lastTransLt = 0;
-    if (shardAcc != null) {
-        lastTransHash = shardAcc.lastTransHash;
-        lastTransLt = shardAcc.lastTransLt;
-    }
-    val newShardAcc = ShardAccount {
-        account: acc.toCell(),
-        lastTransHash,
-        lastTransLt,
-    };
-    net.setShardAccount(addr, newShardAcc);
-}
-
-/// Returns the shard account state for an address in emulation.
-///
-/// The returned shard account can represent an uninitialized account.
-///
-/// Example:
-/// ```tolk
-/// val shard = net.getShardAccount(addr);
-/// if (shard != null) {
-///     println1("Last LT: {}", shard.lastTransLt);
-/// }
-/// ```
-fun net.getShardAccount(addr: address): ShardAccount? {
-    val rawRes = ffi.getShardAccount(addr);
-    if (rawRes == null) {
-        return null;
-    }
-    return ShardAccount.fromCell(rawRes);
-}
-
-/// Sets the shard account state for an address in emulation.
-///
-/// Pass `null` to reset the account to an empty state.
-///
-/// Example:
-/// ```tolk
-/// val shard = net.getShardAccount(addr);
-/// if (shard != null) {
-///     net.setShardAccount(addr, shard);
-/// }
-/// ```
-fun net.setShardAccount(addr: address, account: ShardAccount?): void {
-    if (account == null) {
-        ffi.setShardAccount(addr, null);
-        return;
-    }
-    ffi.setShardAccount(addr, account.toCell());
-}
-
-/// Sets the blockchain configuration.
-///
-/// This function updates the entire blockchain configuration with a new configuration dict.
-/// The configuration is validated before being applied. If validation fails, the function
-/// returns false and the configuration is not updated.
-///
-/// For detailed information about blockchain configuration parameters, see the
-/// [TON Blockchain Configuration Reference](https://docs.ton.org/foundations/config).
-///
-/// Parameters:
-/// - `config`: The new [Config] map containing configuration parameters (indices 0-90)
-///
-/// Returns: `true` if the configuration was successfully updated, `false` if validation failed.
-///
-/// Example:
-/// ```tolk
-/// var config = net.getConfig();
-/// val storagePrices = config.getStoragePrices();
-/// var pricesDict = storagePrices;
-/// pricesDict.setInitial(StoragePrices {
-///     initialUnixTime: 0,
-///     bitPrice: 1,
-///     cellPrice: 1000,
-///     masterchainBitPrice: 1,
-///     masterchainCellPrice: 1000
-/// });
-/// config.setStoragePrices(pricesDict);
-/// val success = net.setConfig(config);
-/// if (success) {
-///     println("Configuration updated successfully");
-/// }
-/// ```
-fun net.setConfig(config: Config): bool {
-    val root = config.toLowLevelDict();
-    val result = ffi.setConfig(root);
-
-    if (result) {
-        vm.setConfigRootDict(root);
-
-        var unpacked = vm.getConfigUnpacked();
-
-        val storagePrices = config.getStoragePrices().getInitial();
-        unpacked.set(storagePrices.toCell().beginParse(), 0);
-
-        val masterchainGasPrices = config.getGasPrices(MASTERCHAIN);
-        unpacked.set(masterchainGasPrices.toCell().beginParse(), 2);
-
-        val basechainGasPrices = config.getGasPrices(BASECHAIN);
-        unpacked.set(basechainGasPrices.toCell().beginParse(), 3);
-
-        val masterchainFwd = config.getMsgForwardPrices(MASTERCHAIN);
-        unpacked.set(masterchainFwd.toCell().beginParse(), 4);
-
-        val basechainFwd = config.getMsgForwardPrices(BASECHAIN);
-        unpacked.set(basechainFwd.toCell().beginParse(), 5);
-
-        vm.setConfigUnpacked(unpacked);
-    }
-
-    return result;
-}
-
-/// Retrieves the current blockchain configuration.
-///
-/// Returns a map of all blockchain configuration parameters indexed from 0-90.
-/// The configuration includes gas prices, storage costs, validator settings, and other
-/// network parameters. Use specialized getter functions like [Config.getGasPrices],
-/// [Config.getStoragePrices], or [Config.getGlobalVersion] to access specific parameters.
-///
-/// For detailed information about blockchain configuration parameters, see the
-/// [TON Blockchain Configuration Reference](https://docs.ton.org/foundations/config).
-///
-/// Returns: A [Config] map containing all current blockchain configuration parameters.
-///
-/// Example:
-/// ```tolk
-/// val config = net.getConfig();
-///
-/// // Access specific configuration
-/// val gasPrice = config.getGasPrices(BASECHAIN);
-/// val storagePrices = config.getStoragePrices();
-/// val globalVersion = config.getGlobalVersion();
-///
-/// println(format1("Network version: {}", globalVersion.version));
-/// ```
-fun net.getConfig(): Config {
-    return createMapFromLowLevelDict(ffi.getConfig());
-}
-
-
-/// Calculate the CRC16 checksum of a slice.
-///
-/// Example:
-/// ```tolk
-/// val crc = crc16("hello");
-/// ```
-fun crc16(data: string): int asm "13 EXTCALL"
 
 fun tuple.fromTuple(data: tuple): tuple {
     return data;
 }
 
-fun T.externalOutPrefix() {
-    return reflect.serializationPrefixOf<T>();
-}
-
-fun never.externalOutPrefix() {
-    return -1;
-}
-
-fun T.externalOutPrefixLen() {
-    return reflect.serializationPrefixLenOf<T>();
-}
-
-fun never.externalOutPrefixLen() {
-    return 0;
-}
-
-fun T.decodeExternalOutBody(body: RemainingBitsAndRefs): T {
+fun T.__decodeExternalOutBody(body: RemainingBitsAndRefs): T {
     return T.fromSlice(body);
 }
 
-fun never.decodeExternalOutBody(_: RemainingBitsAndRefs): never {
-    throw 0;
+fun unknown.__decodeExternalOutBody(_: RemainingBitsAndRefs): unknown {
+    return null;
 }
 
-struct impl
+// This function is used in createExternalMessage to not wrap cells twice
+fun T.__asPayload(self): Cell<T> {
+    return self.toCell();
+}
 
-fun impl.runGetMethodById<Ret, Args = tuple>(addr: address, id: int, name: string, args: Args? = null): Ret {
-    if (!net.isDeployed(addr)) {
-        throw CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT;
+fun Cell<T>.__asPayload(self): Cell<T> {
+    return self;
+}
+
+fun cell.__asPayload(self): Cell<cell> {
+    return self as Cell<cell>;
+}
+
+/// Expect the transaction list to have a successful deploy transaction.
+///
+/// Transaction is considered as "deploy" if previous status was "NonExisting" and end status was "Active".
+/// If generic `Msg` is provided and has declared prefix, matcher also filters by `params.opcode`.
+///
+/// Example:
+/// ```tolk
+/// expect(txs).toHaveSuccessfulDeploy({
+///     to: counter.address,
+/// });
+/// ```
+fun Expectation<SendResultList>.toHaveSuccessfulDeploy<Msg = unknown>(
+    self,
+    params: SearchParams = {},
+): void {
+    val declaredPrefix = Msg.__getDeclaredPackPrefix();
+    if (declaredPrefix != -1) {
+        params.opcode = declaredPrefix;
+    }
+    params.success = true;
+    params.deploy = true;
+
+    impl.findTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveSuccessfulDeploy(<expected>)",
+        self.location,
+    );
+}
+
+/// Expect the transaction list to have a successful transaction.
+///
+/// Matcher sets `params.success = true`.
+/// Runtime "success" means both compute phase and action phase are successful.
+///
+/// By default matcher also requires `params.exitCode = 0` when `exitCode` is not provided.
+/// This default can be overridden with explicit `params.exitCode`.
+///
+/// If generic `Msg` is provided and has declared prefix, matcher also filters by `params.opcode`.
+///
+/// Example:
+/// ```tolk
+/// expect(txs).toHaveSuccessfulTx({
+///     from: deployer.address,
+///     to: counter.address,
+/// });
+/// ```
+fun Expectation<SendResultList>.toHaveSuccessfulTx<Msg = unknown>(
+    self,
+    params: SearchParams = {},
+): void {
+    val declaredPrefix = Msg.__getDeclaredPackPrefix();
+    if (declaredPrefix != -1) {
+        params.opcode = declaredPrefix;
+    }
+    params.success = true;
+    if (params.exitCode == null) {
+        params.exitCode = 0;
     }
 
-    val code = net.getDeployedCode(addr);
-    if (code == null) {
-        throw CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE;
+    impl.findTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveSuccessfulTx(<expected>)",
+        self.location,
+    );
+}
+
+/// Expect the transaction list to have a transaction with specified parameters.
+///
+/// All non-null `SearchParams` fields are applied as filters.
+///
+/// If generic `Msg` is provided and has declared prefix, matcher also filters by `params.opcode`.
+///
+/// Example:
+/// ```tolk
+/// expect(txs).toHaveTx({
+///     from: deployer.address,
+///     to: counter.address,
+///     actionExitCode: 37,
+/// });
+/// ```
+fun Expectation<SendResultList>.toHaveTx<Msg = unknown>(self, params: SearchParams = {}): void {
+    val declaredPrefix = Msg.__getDeclaredPackPrefix();
+    if (declaredPrefix != -1) {
+        params.opcode = declaredPrefix;
     }
 
-    val argsToSend = args == null ? [] : args.toTuple();
-    val res = ffi.runGetMethod(addr.toCell(), code, id, name, reflect.typeNameOf<Ret>(), argsToSend);
-    if (res == null) {
-        // actual error will be processed by test framework, just halt execution
-        throw 0
+    impl.findTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveTx(<expected>)",
+        self.location,
+    );
+}
+
+/// Expect the transaction list to NOT have a transaction with specified parameters.
+///
+/// Example:
+/// ```tolk
+/// expect(txs).toNotHaveTx({
+///     from: deployer.address,
+///     to: counter.address,
+/// });
+/// ```
+fun Expectation<SendResultList>.toNotHaveTx<Msg = unknown>(self, params: SearchParams = {}): void {
+    val declaredPrefix = Msg.__getDeclaredPackPrefix();
+    if (declaredPrefix != -1) {
+        params.opcode = declaredPrefix;
     }
-    try {
-        return Ret.fromTuple(res);
-    } catch (e) {
-        if (e == 7) {
-            Assert.fail(format3("Get method '{}' returned '{}' that cannot be deserialized to '{}'. Make sure you passed all parameters to the get method.", name, res, reflect.typeNameOf<Ret>()))
+
+    impl.findNoTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toNotHaveTx(<expected>)",
+        self.location,
+    );
+}
+
+/// Expect the transaction list to have a **bounced** transaction.
+///
+/// Example:
+/// ```tolk
+/// expect(txs).toHaveBouncedTx({
+///     from: deployer.address,
+///     to: counter.address,
+/// });
+/// ```
+fun Expectation<SendResultList>.toHaveBouncedTx<Msg = unknown>(
+    self,
+    params: SearchParams = {},
+): void {
+    val declaredPrefix = Msg.__getDeclaredPackPrefix();
+    if (declaredPrefix != -1) {
+        params.opcode = declaredPrefix;
+    }
+    params.bounced = true;
+
+    impl.findTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveBouncedTx(<expected>)",
+        self.location,
+    );
+}
+
+/// Expect the transaction list to have a **failed** transaction.
+///
+/// This matcher sets `params.success = false`.
+/// `params.exitCode` is required and must be non-zero.
+/// If `exitCode` is null or `0`, matcher fails immediately before transaction search.
+///
+/// Any additional non-null `SearchParams` fields further narrow the search.
+/// If generic `Msg` is provided and has declared prefix, matcher also filters by `params.opcode`.
+///
+/// Example:
+/// ```tolk
+/// expect(txs).toHaveFailedTx({
+///     from: deployer.address,
+///     to: counter.address,
+///     exitCode: 123,
+/// });
+/// ```
+fun Expectation<SendResultList>.toHaveFailedTx<Msg = unknown>(
+    self,
+    params: SearchParams = {},
+): void {
+    val declaredPrefix = Msg.__getDeclaredPackPrefix();
+    if (declaredPrefix != -1) {
+        params.opcode = declaredPrefix;
+    }
+    params.success = false;
+
+    val nonZeroExitCode = params.exitCode is int32 && params.exitCode as int32 != 0;
+    if (!nonZeroExitCode) {
+        self.fail("expect(<actual>).toHaveFailedTx(params) must have non zero exitCode parameter in params");
+    }
+
+    impl.findTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveFailedTx(<expected>)",
+        self.location,
+    );
+}
+
+/// Expect all transactions in the list to be successful.
+///
+/// Example:
+/// ```tolk
+/// val txs = net.send(wallet.address, msg);
+/// expect(txs).toHaveAllSuccessfulTxs();
+/// ```
+fun Expectation<SendResultList>.toHaveAllSuccessfulTxs(self): void {
+    val params = SearchParams { success: false };
+    impl.findNoTransactionOrFail(
+        self.value,
+        params,
+        "expect(<actual>).toHaveAllSuccessfulTxs(<expected>)",
+        self.location,
+    );
+}
+
+/// Expect the transaction to emit an external message of given type.
+///
+/// Example:
+/// ```tolk
+/// expect(txs).toEmitExternalMessage<IncreaseCounter>();
+/// ```
+fun Expectation<SendResultList>.toEmitExternalMessage<Msg>(self): void {
+    var i = 0;
+    repeat (self.value.size()) {
+        val result = self.value.at(i);
+
+        var j = 0;
+        repeat (result.externals.size()) {
+            val external = result.externals.atOrNull<Msg>(j);
+            if (external != null) {
+                // message found
+                return;
+            }
+            j += 1;
         }
 
-        throw e
+        i += 1;
     }
+
+    self.fail(
+        format(
+            "expect(<actual>).toEmitExternalMessage<{}>(): Cannot find external message {} (opcode: 0x{:x})",
+            reflect.typeNameOf<Msg>(),
+            reflect.typeNameOf<Msg>(),
+            reflect.serializationPrefixOf<Msg>().0,
+        ),
+    );
 }
 
-fun T.getDeclaredPackPrefix2() {
-    return reflect.serializationPrefixOf<T>();
+/// Expect the transaction to consume less than the expected amount of gas.
+///
+/// Example:
+/// ```tolk
+/// val txs = net.send(deployer.address, message);
+/// expect(txs.at(0)).toConsumeLessThan(1000);
+/// ```
+fun Expectation<SendResult>.toConsumeLessThan(self, amount: int): void {
+    ffi.assertComparison(
+        "<",
+        self.value.gasUsed,
+        amount,
+        "expect(<actual>).toConsumeLessThan(<expected>)",
+        self.location,
+    );
 }
 
-fun never.getDeclaredPackPrefix2() {
+fun T.__getDeclaredPackPrefix(): int {
+    return reflect.serializationPrefixOf<T>().0;
+}
+
+fun unknown.__getDeclaredPackPrefix(): int {
     return -1;
 }
 
-fun __treasuryCode(): cell asm """
-    "te6cckEBBAEARQABFP8A9KQT9LzyyAsBAgEgAwIAWvLT/+1E0NP/0RK68qL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmWwAE0jD+omUe" base64>B B>boc PUSHREF
-"""
+fun T.__getDeclaredPackPrefixLen(): int {
+    return reflect.serializationPrefixOf<T>().1;
+}
 
-fun ffi.sendMessageFrom(msg: cell, from: cell): SendResultList? asm "9 EXTCALL"
-fun ffi.sendSingleMessage(msg: cell, from: cell): tuple? asm "30 EXTCALL"
-fun ffi.runGetMethod(addr: cell, code: cell, id: int, name: string, returnType: string, args: tuple): tuple? asm "8 EXTCALL"
-fun ffi.isDeployed(addr: cell): bool asm "11 EXTCALL"
-fun ffi.getDeployedCode(addr: cell): cell? asm "12 EXTCALL"
-fun ffi.registerAddress(address: cell, name: string): void asm "15 EXTCALL"
-fun ffi.registerCodeCell(cell: cell, name: string): void asm "16 EXTCALL"
-fun ffi.findTransactionByParams(txs: tuple, params: tuple): cell? asm "10 EXTCALL"
-fun ffi.failToFindTransactionByParams(location: string, message: string, txs: tuple, params: tuple): tuple? asm "103 EXTCALL"
-fun ffi.failToNotFindTransactionByParams(location: string, message: string, txs: tuple, params: tuple): tuple? asm "104 EXTCALL"
-fun ffi.getAccountState(addr: cell): cell? asm "17 EXTCALL"
-fun ffi.loadLibrary(hash: string): cell? asm "21 EXTCALL"
-fun ffi.isBroadcasting(): bool asm "23 EXTCALL"
-fun ffi.getWalletByName(name: string): cell? asm "24 EXTCALL"
-fun ffi.waitForTransaction(addr: cell, messageBodyHash: cell, quiet: bool, attempts: int, sleepDuration: int): bool asm "25 EXTCALL"
-fun ffi.enableBroadcast(): void asm "26 EXTCALL"
-fun ffi.disableBroadcast(): void asm "27 EXTCALL"
-fun ffi.setNow(now: int): void asm "28 EXTCALL"
-fun ffi.getNow(): int asm "29 EXTCALL"
-fun ffi.getConfig(): dict asm "31 EXTCALL"
-fun ffi.setConfig(config: dict): bool asm "32 EXTCALL"
-fun ffi.getShardAccount(addr: address): cell? asm "33 EXTCALL";
-fun ffi.setShardAccount(addr: address, account: cell?): void asm "34 EXTCALL";
-fun ffi.saveTraceName(txs: tuple, name: string): void asm "35 EXTCALL";
+fun unknown.__getDeclaredPackPrefixLen(): int {
+    return 0;
+}
+
+fun impl.findTransaction(txs: SendResultList, params: SearchParams): cell? {
+    if (txs.size() == 0) {
+        return null;
+    }
+
+    return params.hasPredicates()
+        ? ffi.findTransactionByPredicateParams(
+            txs.first().lt,
+            txs.last().lt,
+            params.toPredicateFFITuple(),
+        )
+        : ffi.findTransactionByScalarParams(
+            txs.first().lt,
+            txs.last().lt,
+            params.toScalarFFITuple(),
+        );
+}
+
+fun impl.findTransactionOrFail(
+    txs: SendResultList,
+    params: SearchParams,
+    message: string,
+    location: string,
+): void {
+    val tx = impl.findTransaction(txs, params);
+    if (tx == null) {
+        ffi.failToFindTransactionByParams(location, message, txs, params.toPredicateFFITuple());
+        throw ASSERTION_FAILED;
+    }
+}
+
+fun impl.findNoTransactionOrFail(
+    txs: SendResultList,
+    params: SearchParams,
+    message: string,
+    location: string,
+): void {
+    val tx = impl.findTransaction(txs, params);
+    if (tx != null) {
+        ffi.failToNotFindTransactionByParams(location, message, txs, params.toPredicateFFITuple());
+        throw ASSERTION_FAILED;
+    }
+}
+
+fun ffi.sendMessageFrom(msg: cell, from: cell): SendResultList?
+    asm "9 EXTCALL"
+
+fun ffi.runGetMethod(
+    addr: cell,
+    code: cell,
+    methodId: int,
+    methodName: string,
+    returnType: string,
+    args: tuple,
+): tuple?
+    asm "8 EXTCALL"
+
+fun ffi.isDeployed(addr: cell): bool
+    asm "11 EXTCALL"
+
+fun ffi.getDeployedCode(addr: cell): cell?
+    asm "12 EXTCALL"
+
+fun ffi.registerAddress(address: cell, name: string): void
+    asm "15 EXTCALL"
+
+fun ffi.registerCodeCell(cell: cell, name: string): void
+    asm "16 EXTCALL"
+
+fun ffi.findTransactionByScalarParams(firstTxLt: int, lastTxLt: int, params: tuple): cell?
+    asm "10 EXTCALL"
+
+fun ffi.findTransactionByPredicateParams(firstTxLt: int, lastTxLt: int, params: tuple): cell?
+    asm "48 EXTCALL"
+
+fun ffi.failToFindTransactionByParams(
+    location: string,
+    message: string,
+    txs: SendResultList,
+    params: tuple,
+): tuple?
+    asm "103 EXTCALL"
+
+fun ffi.failToNotFindTransactionByParams(
+    location: string,
+    message: string,
+    txs: SendResultList,
+    params: tuple,
+): tuple?
+    asm "104 EXTCALL"
+
+fun ffi.loadLibrary(hash: string): cell?
+    asm "21 EXTCALL"
+
+fun ffi.isBroadcasting(): bool
+    asm "23 EXTCALL"
+
+fun ffi.waitForTransaction(
+    pseudoTxCell: cell,
+    quiet: bool,
+    attempts: int,
+    sleepDuration: int,
+): SendResultList?
+    asm "25 EXTCALL"
+
+fun ffi.waitForTrace(
+    pseudoTxCell: cell,
+    quiet: bool,
+    attempts: int,
+    sleepDuration: int,
+): SendResultList?
+    asm "49 EXTCALL"
+
+fun ffi.enableBroadcast(): void
+    asm "26 EXTCALL"
+
+fun ffi.disableBroadcast(): void
+    asm "27 EXTCALL"
+
+fun ffi.getConfig(): dict
+    asm "31 EXTCALL"
+
+fun ffi.saveTraceName(txs: SendResultList, name: string): void
+    asm "35 EXTCALL"
+
+fun ffi.crc16(data: string): int
+    asm "13 EXTCALL"

@@ -1,10 +1,12 @@
-use crate::cfg::{ControlFlowGraph, EdgeKind, FlowNodeKind, NodeId};
+use crate::cfg::{ControlFlowGraph, EdgeKind, FlowNodeKind, MultiplicationOperationFact, NodeId};
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use tolk_resolver::file_index::AstNodeSpanExt;
+use tolk_resolver::file_index::SymbolId;
 use tolk_resolver::resolve_index::{FileResolveIndex, LocalDefId, LocalDefKind, Resolved};
 use tolk_syntax::ast::Node;
+use tolk_syntax::ast::NodeTraversalExt;
 use tolk_syntax::{
     Assert, Assign, AstNode, AstNodeBytesKind, Bin, Call, DotAccess, DotAccessField, Expr,
     FuncBody, FunctionLike, HasName, IfAlt, InstanceArg, Match, MatchArmBody, MatchPattern, Paren,
@@ -714,6 +716,68 @@ impl<'idx> CfgBuilder<'idx> {
         if collector.contains_storage_write_sink(expr) {
             self.cfg.node_mut(node_id).taint.has_storage_write_sink = true;
         }
+
+        if collector.contains_random_initialize_call(expr) {
+            self.cfg.node_mut(node_id).taint.has_random_initialize_call = true;
+        }
+
+        if collector.contains_random_value_sink(expr) {
+            self.cfg.node_mut(node_id).taint.has_random_value_sink = true;
+        }
+
+        let mut division_spans = Vec::new();
+        collector.collect_division_spans(expr, &mut division_spans);
+        if !division_spans.is_empty() {
+            let node = self.cfg.node_mut(node_id);
+            node.taint.has_division_operation = true;
+            node.taint.division_spans.extend(division_spans);
+            node.taint
+                .division_spans
+                .sort_by_key(|span| (span.start, span.end));
+            node.taint.division_spans.dedup();
+        }
+
+        let mut direct_assignment_division_spans = Vec::new();
+        collector
+            .collect_direct_assignment_division_spans(expr, &mut direct_assignment_division_spans);
+        if !direct_assignment_division_spans.is_empty() {
+            let node = self.cfg.node_mut(node_id);
+            node.taint
+                .direct_assignment_division_spans
+                .extend(direct_assignment_division_spans);
+            node.taint
+                .direct_assignment_division_spans
+                .sort_by_key(|span| (span.start, span.end));
+            node.taint.direct_assignment_division_spans.dedup();
+        }
+
+        let mut multiplication_operations = Vec::new();
+        collector.collect_multiplication_operations(expr, &mut multiplication_operations);
+        if !multiplication_operations.is_empty() {
+            let has_divide_before_multiply = multiplication_operations
+                .iter()
+                .any(|op| !op.division_operand_spans.is_empty());
+
+            let node = self.cfg.node_mut(node_id);
+            node.taint.has_multiplication_operation = true;
+            node.taint.has_divide_before_multiply = has_divide_before_multiply;
+            node.taint
+                .multiplication_operations
+                .extend(multiplication_operations);
+            node.taint
+                .multiplication_operations
+                .sort_by_key(|op| (op.operator_span.start, op.operator_span.end));
+        }
+
+        let mut called_globals = FxHashSet::default();
+        collector.collect_called_globals(expr, &mut called_globals);
+        if !called_globals.is_empty() {
+            self.cfg
+                .node_mut(node_id)
+                .taint
+                .called_global_symbols
+                .extend(called_globals);
+        }
     }
 }
 
@@ -731,6 +795,7 @@ enum AccessMode {
 #[derive(Debug)]
 struct UseDefCollector<'idx> {
     uses_by_start: FxHashMap<u32, LocalDefId>,
+    global_uses_by_start: FxHashMap<u32, SymbolId>,
     defs_by_start: FxHashMap<u32, LocalDefId>,
     names_by_start: FxHashMap<u32, Arc<str>>,
     source: Option<&'idx str>,
@@ -740,11 +805,18 @@ struct UseDefCollector<'idx> {
 impl<'idx> UseDefCollector<'idx> {
     fn new(resolve_index: &'idx FileResolveIndex, source: Option<&'idx str>) -> Self {
         let mut uses_by_start = FxHashMap::default();
+        let mut global_uses_by_start = FxHashMap::default();
         let mut names_by_start = FxHashMap::default();
         for usage in &resolve_index.uses {
             names_by_start.insert(usage.span.start, usage.name.clone());
-            if let Resolved::Local(local_id) = usage.resolved {
-                uses_by_start.insert(usage.span.start, local_id);
+            match usage.resolved {
+                Resolved::Local(local_id) => {
+                    uses_by_start.insert(usage.span.start, local_id);
+                }
+                Resolved::Global(symbol_id) => {
+                    global_uses_by_start.insert(usage.span.start, symbol_id);
+                }
+                Resolved::Unresolved => {}
             }
         }
 
@@ -758,6 +830,7 @@ impl<'idx> UseDefCollector<'idx> {
 
         Self {
             uses_by_start,
+            global_uses_by_start,
             defs_by_start,
             names_by_start,
             source,
@@ -771,6 +844,11 @@ impl<'idx> UseDefCollector<'idx> {
             .get(&start)
             .copied()
             .or_else(|| self.defs_by_start.get(&start).copied())
+    }
+
+    fn global_of_ident(&self, ident: Node<'_>) -> Option<SymbolId> {
+        let start = ident.start_byte() as u32;
+        self.global_uses_by_start.get(&start).copied()
     }
 
     fn name_of_ident(&self, ident: Node<'_>) -> Option<&str> {
@@ -787,6 +865,464 @@ impl<'idx> UseDefCollector<'idx> {
     fn call_name(&self, call: Call<'_>) -> Option<&str> {
         let ident = call.callee_identifier()?;
         self.name_of_ident(ident)
+    }
+
+    fn call_global_symbol(&self, call: Call<'_>) -> Option<SymbolId> {
+        let ident = call.callee_identifier()?;
+        self.global_of_ident(ident)
+    }
+
+    fn call_qualifier<'tree>(&self, call: Call<'tree>) -> Option<Expr<'tree>> {
+        let callee = call.callee()?;
+        match callee {
+            Expr::DotAccess(dot_access) => dot_access.obj(),
+            Expr::Instantiation(inst) => match inst.expr()? {
+                Expr::DotAccess(dot_access) => dot_access.obj(),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn expr_is_random_namespace(&self, expr: Expr<'_>) -> bool {
+        match expr {
+            Expr::Ident(ident) => self
+                .name_of_ident(ident.syntax())
+                .is_some_and(|name| name == "random"),
+            Expr::Paren(paren) => paren
+                .inner()
+                .is_some_and(|inner| self.expr_is_random_namespace(inner)),
+            Expr::NotNull(not_null) => not_null
+                .inner()
+                .is_some_and(|inner| self.expr_is_random_namespace(inner)),
+            Expr::AsCast(as_cast) => as_cast
+                .expr()
+                .is_some_and(|inner| self.expr_is_random_namespace(inner)),
+            Expr::Lazy(lazy) => lazy
+                .expr()
+                .is_some_and(|inner| self.expr_is_random_namespace(inner)),
+            _ => false,
+        }
+    }
+
+    fn is_random_method_call(&self, call: Call<'_>, method_names: &[&str]) -> bool {
+        let Some(name) = self.call_name(call) else {
+            return false;
+        };
+        if !method_names.contains(&name) {
+            return false;
+        }
+
+        self.call_qualifier(call)
+            .is_some_and(|qualifier| self.expr_is_random_namespace(qualifier))
+    }
+
+    fn contains_random_method_call(&self, expr: Expr<'_>, method_names: &[&str]) -> bool {
+        match expr {
+            Expr::Call(call) => {
+                if self.is_random_method_call(call, method_names) {
+                    return true;
+                }
+
+                if let Some(callee) = call.callee()
+                    && self.contains_random_method_call(callee, method_names)
+                {
+                    return true;
+                }
+
+                for argument in call.arguments() {
+                    if let Some(arg_expr) = argument.expr()
+                        && self.contains_random_method_call(arg_expr, method_names)
+                    {
+                        return true;
+                    }
+                }
+
+                false
+            }
+            Expr::DotAccess(dot_access) => dot_access
+                .obj()
+                .is_some_and(|obj| self.contains_random_method_call(obj, method_names)),
+            Expr::Assign(assign) => {
+                assign
+                    .left()
+                    .is_some_and(|left| self.contains_random_method_call(left, method_names))
+                    || assign
+                        .right()
+                        .is_some_and(|right| self.contains_random_method_call(right, method_names))
+            }
+            Expr::SetAssign(assign) => {
+                assign
+                    .left()
+                    .is_some_and(|left| self.contains_random_method_call(left, method_names))
+                    || assign
+                        .right()
+                        .is_some_and(|right| self.contains_random_method_call(right, method_names))
+            }
+            Expr::Instantiation(inst) => inst
+                .expr()
+                .is_some_and(|inner| self.contains_random_method_call(inner, method_names)),
+            Expr::Paren(paren) => paren
+                .inner()
+                .is_some_and(|inner| self.contains_random_method_call(inner, method_names)),
+            Expr::Ternary(ternary) => {
+                ternary.condition().is_some_and(|condition| {
+                    self.contains_random_method_call(condition, method_names)
+                }) || ternary.consequence().is_some_and(|consequence| {
+                    self.contains_random_method_call(consequence, method_names)
+                }) || ternary.alternative().is_some_and(|alternative| {
+                    self.contains_random_method_call(alternative, method_names)
+                })
+            }
+            Expr::Bin(bin) => {
+                bin.left()
+                    .is_some_and(|left| self.contains_random_method_call(left, method_names))
+                    || bin
+                        .right()
+                        .is_some_and(|right| self.contains_random_method_call(right, method_names))
+            }
+            Expr::Unary(unary) => unary
+                .argument()
+                .is_some_and(|argument| self.contains_random_method_call(argument, method_names)),
+            Expr::Lazy(lazy) => lazy
+                .expr()
+                .is_some_and(|inner| self.contains_random_method_call(inner, method_names)),
+            Expr::AsCast(as_cast) => as_cast
+                .expr()
+                .is_some_and(|inner| self.contains_random_method_call(inner, method_names)),
+            Expr::IsType(is_type) => is_type
+                .expr()
+                .is_some_and(|inner| self.contains_random_method_call(inner, method_names)),
+            Expr::NotNull(not_null) => not_null
+                .inner()
+                .is_some_and(|inner| self.contains_random_method_call(inner, method_names)),
+            Expr::ObjectLit(object_lit) => object_lit.arguments().any(|arg| {
+                arg.value()
+                    .is_some_and(|value| self.contains_random_method_call(value, method_names))
+            }),
+            Expr::Tensor(tensor) => tensor
+                .elements()
+                .any(|element| self.contains_random_method_call(element, method_names)),
+            Expr::Tuple(tuple) => tuple
+                .elements()
+                .any(|element| self.contains_random_method_call(element, method_names)),
+            Expr::Match(match_expr) => {
+                if let Some(subject) = match_expr.expr()
+                    && self.contains_random_method_call(subject, method_names)
+                {
+                    return true;
+                }
+                match_expr.arms().any(|arm| {
+                    if let MatchPattern::Expr(pattern_expr) = arm.pattern()
+                        && self.contains_random_method_call(pattern_expr, method_names)
+                    {
+                        return true;
+                    }
+
+                    arm.body().is_some_and(|body| match body {
+                        MatchArmBody::Block(_) => false,
+                        MatchArmBody::Return(ret) => ret.expr().is_some_and(|expr| {
+                            self.contains_random_method_call(expr, method_names)
+                        }),
+                        MatchArmBody::Throw(throw_stmt) => throw_stmt.expr().is_some_and(|expr| {
+                            self.contains_random_method_call(expr, method_names)
+                        }),
+                        MatchArmBody::Expr(expr) => {
+                            self.contains_random_method_call(expr, method_names)
+                        }
+                    })
+                })
+            }
+            Expr::VarDeclLhs(_)
+            | Expr::Lambda(_)
+            | Expr::NumberLit(_)
+            | Expr::StringLit(_)
+            | Expr::BoolLit(_)
+            | Expr::NullLit(_)
+            | Expr::Underscore(_)
+            | Expr::Ident(_)
+            | Expr::Unmapped(_) => false,
+        }
+    }
+
+    fn contains_random_initialize_call(&self, expr: Expr<'_>) -> bool {
+        self.contains_random_method_call(expr, &["initialize", "initializeBy"])
+    }
+
+    fn contains_random_value_sink(&self, expr: Expr<'_>) -> bool {
+        self.contains_random_method_call(expr, &["uint256", "range"])
+    }
+
+    fn collect_multiplication_operations(
+        &self,
+        expr: Expr<'_>,
+        out: &mut Vec<MultiplicationOperationFact>,
+    ) {
+        let Some(source) = self.source else {
+            return;
+        };
+
+        for node in expr.syntax().traverse() {
+            if node.kind() != "binary_operator" {
+                continue;
+            }
+
+            let mul = Bin(node);
+            if mul.operator_name(source) != "*" {
+                continue;
+            }
+
+            let operator_span = mul.operator().map_or_else(
+                || tolk_resolver::Span::from_syntax(&node),
+                |op| tolk_resolver::Span::from_syntax(&op),
+            );
+
+            let mut read_locals = FxHashSet::default();
+            let mut writes = FxHashSet::default();
+            self.collect_expr(
+                Expr::Bin(mul),
+                AccessMode::Read,
+                &mut read_locals,
+                &mut writes,
+            );
+
+            let mut division_operand_spans = Vec::new();
+            if let Some(left) = mul.left() {
+                self.collect_division_spans(left, &mut division_operand_spans);
+            }
+            if let Some(right) = mul.right() {
+                self.collect_division_spans(right, &mut division_operand_spans);
+            }
+            division_operand_spans.sort_by_key(|span| (span.start, span.end));
+            division_operand_spans.dedup();
+
+            out.push(MultiplicationOperationFact {
+                operator_span,
+                read_locals,
+                division_operand_spans,
+            });
+        }
+    }
+
+    fn collect_division_spans(&self, expr: Expr<'_>, out: &mut Vec<tolk_resolver::Span>) {
+        let Some(source) = self.source else {
+            return;
+        };
+
+        for node in expr.syntax().traverse() {
+            if node.kind() != "binary_operator" {
+                continue;
+            }
+            let bin = Bin(node);
+            if bin.operator_name(source) != "/" {
+                continue;
+            }
+            out.push(tolk_resolver::Span::from_syntax(&node));
+        }
+    }
+
+    fn collect_direct_assignment_division_spans(
+        &self,
+        expr: Expr<'_>,
+        out: &mut Vec<tolk_resolver::Span>,
+    ) {
+        let Some(rhs) = (match expr {
+            Expr::Assign(assign) => assign.right(),
+            _ => None,
+        }) else {
+            return;
+        };
+
+        let rhs = self.strip_taint_wrappers(rhs);
+        let Expr::Bin(bin) = rhs else {
+            return;
+        };
+        if !self.is_arithmetic_binary_operator(bin) {
+            return;
+        }
+
+        self.collect_division_spans(rhs, out);
+    }
+
+    fn strip_taint_wrappers<'tree>(&self, mut expr: Expr<'tree>) -> Expr<'tree> {
+        loop {
+            expr = match expr {
+                Expr::Paren(paren) => match paren.inner() {
+                    Some(inner) => inner,
+                    None => return expr,
+                },
+                Expr::NotNull(not_null) => match not_null.inner() {
+                    Some(inner) => inner,
+                    None => return expr,
+                },
+                Expr::AsCast(as_cast) => match as_cast.expr() {
+                    Some(inner) => inner,
+                    None => return expr,
+                },
+                _ => return expr,
+            };
+        }
+    }
+
+    fn is_arithmetic_binary_operator(&self, bin: Bin<'_>) -> bool {
+        let Some(source) = self.source else {
+            return false;
+        };
+
+        matches!(bin.operator_name(source), "+" | "-" | "*" | "/" | "%")
+    }
+
+    fn collect_called_globals(&self, expr: Expr<'_>, out: &mut FxHashSet<SymbolId>) {
+        self.collect_called_globals_inner(expr, out);
+    }
+
+    fn collect_called_globals_inner(&self, expr: Expr<'_>, out: &mut FxHashSet<SymbolId>) {
+        match expr {
+            Expr::Call(call) => {
+                if let Some(symbol_id) = self.call_global_symbol(call) {
+                    out.insert(symbol_id);
+                }
+
+                if let Some(callee) = call.callee() {
+                    self.collect_called_globals_inner(callee, out);
+                }
+                for argument in call.arguments() {
+                    if let Some(arg_expr) = argument.expr() {
+                        self.collect_called_globals_inner(arg_expr, out);
+                    }
+                }
+            }
+            Expr::DotAccess(dot_access) => {
+                if let Some(obj) = dot_access.obj() {
+                    self.collect_called_globals_inner(obj, out);
+                }
+            }
+            Expr::Assign(assign) => {
+                if let Some(left) = assign.left() {
+                    self.collect_called_globals_inner(left, out);
+                }
+                if let Some(right) = assign.right() {
+                    self.collect_called_globals_inner(right, out);
+                }
+            }
+            Expr::SetAssign(assign) => {
+                if let Some(left) = assign.left() {
+                    self.collect_called_globals_inner(left, out);
+                }
+                if let Some(right) = assign.right() {
+                    self.collect_called_globals_inner(right, out);
+                }
+            }
+            Expr::Instantiation(instantiation) => {
+                if let Some(inner) = instantiation.expr() {
+                    self.collect_called_globals_inner(inner, out);
+                }
+            }
+            Expr::Paren(paren) => {
+                if let Some(inner) = paren.inner() {
+                    self.collect_called_globals_inner(inner, out);
+                }
+            }
+            Expr::Ternary(ternary) => {
+                if let Some(condition) = ternary.condition() {
+                    self.collect_called_globals_inner(condition, out);
+                }
+                if let Some(consequence) = ternary.consequence() {
+                    self.collect_called_globals_inner(consequence, out);
+                }
+                if let Some(alternative) = ternary.alternative() {
+                    self.collect_called_globals_inner(alternative, out);
+                }
+            }
+            Expr::Bin(bin) => {
+                if let Some(left) = bin.left() {
+                    self.collect_called_globals_inner(left, out);
+                }
+                if let Some(right) = bin.right() {
+                    self.collect_called_globals_inner(right, out);
+                }
+            }
+            Expr::Unary(unary) => {
+                if let Some(argument) = unary.argument() {
+                    self.collect_called_globals_inner(argument, out);
+                }
+            }
+            Expr::Lazy(lazy) => {
+                if let Some(inner) = lazy.expr() {
+                    self.collect_called_globals_inner(inner, out);
+                }
+            }
+            Expr::AsCast(as_cast) => {
+                if let Some(inner) = as_cast.expr() {
+                    self.collect_called_globals_inner(inner, out);
+                }
+            }
+            Expr::IsType(is_type) => {
+                if let Some(inner) = is_type.expr() {
+                    self.collect_called_globals_inner(inner, out);
+                }
+            }
+            Expr::NotNull(not_null) => {
+                if let Some(inner) = not_null.inner() {
+                    self.collect_called_globals_inner(inner, out);
+                }
+            }
+            Expr::ObjectLit(object_lit) => {
+                for argument in object_lit.arguments() {
+                    if let Some(value) = argument.value() {
+                        self.collect_called_globals_inner(value, out);
+                    }
+                }
+            }
+            Expr::Tensor(tensor) => {
+                for element in tensor.elements() {
+                    self.collect_called_globals_inner(element, out);
+                }
+            }
+            Expr::Tuple(tuple) => {
+                for element in tuple.elements() {
+                    self.collect_called_globals_inner(element, out);
+                }
+            }
+            Expr::Match(match_expr) => {
+                if let Some(subject) = match_expr.expr() {
+                    self.collect_called_globals_inner(subject, out);
+                }
+                for arm in match_expr.arms() {
+                    if let MatchPattern::Expr(pattern_expr) = arm.pattern() {
+                        self.collect_called_globals_inner(pattern_expr, out);
+                    }
+
+                    if let Some(body) = arm.body() {
+                        match body {
+                            MatchArmBody::Block(_) => {}
+                            MatchArmBody::Return(ret) => {
+                                if let Some(expr) = ret.expr() {
+                                    self.collect_called_globals_inner(expr, out);
+                                }
+                            }
+                            MatchArmBody::Throw(throw_stmt) => {
+                                if let Some(expr) = throw_stmt.expr() {
+                                    self.collect_called_globals_inner(expr, out);
+                                }
+                            }
+                            MatchArmBody::Expr(expr) => {
+                                self.collect_called_globals_inner(expr, out);
+                            }
+                        }
+                    }
+                }
+            }
+            Expr::VarDeclLhs(_)
+            | Expr::Lambda(_)
+            | Expr::NumberLit(_)
+            | Expr::StringLit(_)
+            | Expr::BoolLit(_)
+            | Expr::NullLit(_)
+            | Expr::Underscore(_)
+            | Expr::Ident(_)
+            | Expr::Unmapped(_) => {}
+        }
     }
 
     fn expr_base_local(&self, expr: Expr<'_>) -> Option<LocalDefId> {
@@ -1743,15 +2279,15 @@ impl<'idx> UseDefCollector<'idx> {
                 }
             }
             Expr::Match(match_expr) => self.collect_match(match_expr, reads, writes),
-            Expr::Lambda(_) => {
-                // Lambda body is not executed eagerly and should not influence enclosing CFG node.
-            }
-            Expr::NumberLit(_)
+            Expr::Lambda(_)
+            | Expr::NumberLit(_)
             | Expr::StringLit(_)
             | Expr::BoolLit(_)
             | Expr::NullLit(_)
             | Expr::Underscore(_)
-            | Expr::Unmapped(_) => {}
+            | Expr::Unmapped(_) => {
+                // Lambda body is not executed eagerly and should not influence enclosing CFG node.
+            }
         }
     }
 
@@ -1850,11 +2386,10 @@ impl<'idx> UseDefCollector<'idx> {
 
         for arm in match_expr.arms() {
             match arm.pattern() {
-                MatchPattern::Type(_) => {}
                 MatchPattern::Expr(expr) => {
-                    self.collect_expr(expr, AccessMode::Read, reads, writes)
+                    self.collect_expr(expr, AccessMode::Read, reads, writes);
                 }
-                MatchPattern::Else => {}
+                MatchPattern::Type(_) | MatchPattern::Else => {}
             }
 
             if let Some(body) = arm.body() {
@@ -1913,7 +2448,7 @@ impl<'idx> UseDefCollector<'idx> {
                 if let Some(alt) = if_stmt.alternative() {
                     match alt {
                         IfAlt::If(else_if) => {
-                            self.collect_stmt_inline(Stmt::If(else_if), reads, writes)
+                            self.collect_stmt_inline(Stmt::If(else_if), reads, writes);
                         }
                         IfAlt::Block(else_block) => {
                             for nested in else_block.stmts() {

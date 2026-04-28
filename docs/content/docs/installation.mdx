@@ -13,8 +13,19 @@ import {SiApple, SiLinux} from "react-icons/si";
 
 ## Overview
 
-Acton ships as a single, dependency-free executable. You can install it via script,
-Homebrew, or download single binary from releases.
+Acton ships as a single, dependency-free executable. You can install it via the
+public installer, by downloading a release asset directly, or by using the
+published Docker image.
+
+<Callout type="info" title="Support policy">
+    First-class support is currently limited to versioned releases on macOS
+    (ARM64 and x86_64) and Linux GNU (x86_64 and ARM64). For Linux, the
+    documented baseline is Ubuntu 20.04 or newer. `trunk` builds and
+    WSL installs are beta / best-effort surfaces today. Native Windows is not
+    supported. If you use Windows, install Acton inside WSL with Ubuntu 20.04
+    or newer and follow the Linux steps there. See [platform tiers](#platform-tiers)
+    for the full matrix.
+</Callout>
 
 <Callout>
     After installation, verify with `acton --version`
@@ -22,22 +33,37 @@ Homebrew, or download single binary from releases.
 
 ## Installation
 
-<Tabs items={["macOS", "Linux"]}>
+<Tabs items={["macOS", "Linux", "WSL"]}>
     <Tab value="macOS">
 
         ```bash
-        curl -fsSL https://raw.githubusercontent.com/i582/acton/main/install.sh | bash
+        curl --proto '=https' --tlsv1.2 -LsSf https://github.com/i582/acton-public/releases/latest/download/acton-installer.sh | sh
         ```
 
     </Tab>
     <Tab value="Linux">
 
         ```bash
-        curl -fsSL https://raw.githubusercontent.com/i582/acton/main/install.sh | bash
+        curl --proto '=https' --tlsv1.2 -LsSf https://github.com/i582/acton-public/releases/latest/download/acton-installer.sh | sh
+        ```
+
+    </Tab>
+    <Tab value="WSL">
+
+        Run this inside your WSL shell with Ubuntu 20.04 or newer, not in
+        PowerShell or `cmd.exe`.
+
+        ```bash
+        curl --proto '=https' --tlsv1.2 -LsSf https://github.com/i582/acton-public/releases/latest/download/acton-installer.sh | sh
         ```
 
     </Tab>
 </Tabs>
+
+<Callout type="warning" title="Windows">
+    Native Windows is not supported at the moment. On Windows, the recommended
+    setup is WSL with Ubuntu 20.04.
+</Callout>
 
 To check that Acton was installed successfully, open a new terminal window and run:
 
@@ -96,13 +122,13 @@ You should see the version number of Acton.
 
 ## Direct Downloads
 
-To download Acton binaries directly, visit the [releases page on GitHub](https://github.com/i582/acton/releases) or use the links below.
+To download Acton binaries directly, visit the [releases page on GitHub](https://github.com/i582/acton-public/releases) or use the latest release links below.
 
 <Cards cols={2}>
     <Card
         icon={<SiApple/>}
         title="macOS ARM64"
-        href="https://github.com/i582/acton/releases/latest/download/acton-darwin-aarch64.tar.gz"
+        href="https://github.com/i582/acton-public/releases/latest/download/acton-aarch64-apple-darwin.tar.gz"
     >
         Apple Silicon (M1/M2/M3/etc.)
     </Card>
@@ -110,7 +136,7 @@ To download Acton binaries directly, visit the [releases page on GitHub](https:/
     <Card
         icon={<SiApple/>}
         title="macOS x64"
-        href="https://github.com/i582/acton/releases/latest/download/acton-darwin-x64.tar.gz"
+        href="https://github.com/i582/acton-public/releases/latest/download/acton-x86_64-apple-darwin.tar.gz"
     >
         Intel Macs
     </Card>
@@ -118,11 +144,47 @@ To download Acton binaries directly, visit the [releases page on GitHub](https:/
     <Card
         icon={<SiLinux/>}
         title="Linux x64"
-        href="https://github.com/i582/acton/releases/latest/download/acton-linux-x64.tar.gz"
+        href="https://github.com/i582/acton-public/releases/latest/download/acton-x86_64-unknown-linux-gnu.tar.gz"
     >
         Standard Linux x64 binary
     </Card>
+    <Card
+        icon={<SiLinux/>}
+        title="Linux ARM64"
+        href="https://github.com/i582/acton-public/releases/latest/download/acton-aarch64-unknown-linux-gnu.tar.gz"
+    >
+        Linux ARM64 binary
+    </Card>
 </Cards>
+
+## Docker image
+
+Acton is also published as a Docker image at `ghcr.io/ton-blockchain/acton`.
+This is useful for CI pipelines, ephemeral environments, or local workflows
+where you do not want to install the binary on the host machine.
+
+To verify that the image is available and print the Acton version:
+
+```bash
+docker run --rm ghcr.io/ton-blockchain/acton:<version> --version
+```
+
+To run Acton against the current project from a container:
+
+```bash
+docker run --rm \
+  -v "$PWD":/workspace \
+  -w /workspace \
+  ghcr.io/ton-blockchain/acton:<version> \
+  build
+```
+
+Because the image uses `acton` as its entrypoint, replace `build` with any
+other Acton subcommand such as `test`, `check`, or `fmt --check`.
+
+## CI/CD
+
+See the [CI integration guide](/docs/ci-setup) for GitHub Actions and GitLab CI examples.
 
 ## Updating
 
@@ -138,7 +200,7 @@ acton up
 
 ### List available versions
 
-To see all available versions, including canary releases:
+To see all available versions, including the trunk release:
 
 ```bash
 acton up --list
@@ -152,18 +214,44 @@ To install a specific version:
 acton up 0.1.5
 ```
 
-### Switch to canary
+### Switch to trunk
 
-If you want to try the latest features before they are officially released, you can install the canary version:
+If you want to try the latest features **before they are officially released**, you can install the trunk version:
 
 ```bash
-acton up --canary
+acton up --trunk
 ```
 
 ## Uninstall
 
-To completely uninstall Acton and remove all associated data (including downloaded compilers and global wallets), remove the `.acton` directory in your home folder:
+To uninstall Acton binaries/cache, remove the `.acton` directory in your home folder:
 
 ```bash
 rm -rf ~/.acton
 ```
+
+If you also want to remove global wallets and libraries, remove the global config directory too:
+
+```bash
+rm -rf ~/.config/acton
+```
+
+## Support policy
+
+Acton is currently released as a public beta.
+
+### Platform tiers
+
+| Platform / environment                         | Tier        |
+| ---------------------------------------------- | ----------- |
+| macOS ARM64 (`aarch64-apple-darwin`)           | First-class |
+| macOS x86\_64 (`x86_64-apple-darwin`)          | First-class |
+| Linux x86\_64 GNU (`x86_64-unknown-linux-gnu`) | First-class |
+| Linux ARM64 GNU (`aarch64-unknown-linux-gnu`)  | First-class |
+| Native Windows                                 | Unsupported |
+| Windows via WSL                                | Beta        |
+| Other source-built targets                     | Beta        |
+
+<Callout type="warn">
+  Other source-built targets are outside the official binary matrix; validation is limited and regressions may occur.
+</Callout>

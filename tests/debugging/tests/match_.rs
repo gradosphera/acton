@@ -44,10 +44,10 @@ fn test_match_over_numbers_with_second_matching() -> anyhow::Result<()> {
     let code = r"
 fun main(foo: int) {
     match (foo) {
-        100 => {
+        10_0 => {
             return 10
         }
-        200 => {
+        2_00 => {
             return 20
         }
     }
@@ -270,24 +270,15 @@ fun main() {
 }
 ";
 
-    let session = DebugBuilder::new("debug-callback").code(code).build();
+    let session = DebugBuilder::new("debug-callback")
+        .code(code)
+        .expect_execution_error("VM exit code 65535")
+        .build();
 
     let mut client = session.start();
 
     let result = client.execute(|executor| {
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
+        executor.step_over_times(13)?;
         Ok(())
     })?;
 

@@ -4,6 +4,7 @@ use crate::support::project::ProjectBuilder;
 const DM_CONFIG_IMPORTS: &str = r#"
 import "../../lib/emulation/config"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 "#;
 
@@ -25,9 +26,9 @@ fn run_config_success_case(project_name: &str, test_body: &str, snapshot_path: &
 fn config_set_param_raw_get_param_raw_roundtrip_preserves_cell_shape() {
     run_config_success_case(
         "dm-stdlib-config-raw-roundtrip",
-        r#"
-get fun `test-dm-stdlib-config-raw-roundtrip`() {
-    var config = net.getConfig();
+        r"
+get fun `test dm stdlib config raw roundtrip`() {
+    var config = testing.getConfig();
 
     val payload = beginCell()
         .storeUint(0xD00DCAFE, 32)
@@ -45,7 +46,7 @@ get fun `test-dm-stdlib-config-raw-roundtrip`() {
     var nested = parsed.loadRef().beginParse();
     expect(nested.loadInt(8)).toEqual(-77);
 }
-"#,
+",
         "integration/snapshots/test-runner/config_set_param_raw_get_param_raw_roundtrip_preserves_cell_shape/config_set_param_raw_get_param_raw_roundtrip_preserves_cell_shape.stdout.txt",
     );
 }
@@ -54,9 +55,9 @@ get fun `test-dm-stdlib-config-raw-roundtrip`() {
 fn config_set_param_raw_overwrite_keeps_neighbor_slot_unchanged() {
     run_config_success_case(
         "dm-stdlib-config-neighbor-isolation",
-        r#"
-get fun `test-dm-stdlib-config-neighbor-isolation`() {
-    var config = net.getConfig();
+        r"
+get fun `test dm stdlib config neighbor isolation`() {
+    var config = testing.getConfig();
 
     val leftOriginal = beginCell().storeUint(0x11, 8).storeUint(0xAA, 8).endCell();
     val rightOriginal = beginCell().storeUint(0x22, 8).storeUint(0xBB, 8).endCell();
@@ -80,7 +81,7 @@ get fun `test-dm-stdlib-config-neighbor-isolation`() {
     expect(rightSlice.loadUint(8)).toEqual(0x22);
     expect(rightSlice.loadUint(8)).toEqual(0xBB);
 }
-"#,
+",
         "integration/snapshots/test-runner/config_set_param_raw_get_param_raw_roundtrip_preserves_cell_shape/config_set_param_raw_overwrite_keeps_neighbor_slot_unchanged.stdout.txt",
     );
 }

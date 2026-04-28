@@ -7,10 +7,10 @@ fn prompt_uses_typed_stdin_when_present_bug() {
         .test_file(
             "prompt_stdin_value",
             r#"
-            import "../../lib/promts/prompts"
+            import "../../lib/prompts"
             import "../../lib/testing/expect"
 
-            get fun `test-ao-prompt-typed-stdin`() {
+            get fun `test ao prompt typed stdin`() {
                 val name = prompt("Enter your name:", "Guest");
                 expect(name).toEqual("");
             }
@@ -18,7 +18,7 @@ fn prompt_uses_typed_stdin_when_present_bug() {
         )
         .build();
 
-    let mut command = project.acton().test().filter("ao-prompt-typed-stdin");
+    let mut command = project.acton().test().filter("ao prompt typed stdin");
     command.cmd = command.cmd.stdin("Alice\n");
 
     command

@@ -1,11 +1,16 @@
-use crate::common::{acton_exe, assert_ui};
+use crate::common::{acton_exe, acton_path_env, assert_ui};
 use crate::support::assertions::TestOutput;
+use crate::support::tempdir::create_tmp_dir;
 use acton_config::color::ColorMode;
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
+use toncenter_keys::{
+    TONCENTER_MAINNET_API_KEY_ENV, TONCENTER_TESTNET_API_KEY_ENV, custom_env_var_name,
+};
 
 pub(crate) struct ProjectBuilder {
     name: String,
@@ -19,8 +24,12 @@ pub(crate) struct ProjectBuilder {
     lint_levels: BTreeMap<String, String>,
     lint_excludes: Vec<String>,
     lint_max_warnings: Option<usize>,
-    lint_sarif_path: Option<String>,
+    lint_output_format: Option<String>,
     test_config: Option<TestConfig>,
+    wrappers_tolk_output_dir: Option<String>,
+    wrappers_tolk_generate_test: Option<bool>,
+    wrappers_tolk_test_output_dir: Option<String>,
+    wrappers_typescript_output_dir: Option<String>,
     license: Option<String>,
     create_acton_toml: bool,
 }
@@ -58,15 +67,274 @@ pub(crate) struct TestConfig {
     pub coverage: Option<bool>,
     pub coverage_format: Option<String>,
     pub coverage_file: Option<String>,
+    pub coverage_minimum_percent: Option<f64>,
+    pub coverage_include_wrappers: Option<bool>,
+    pub coverage_include_tests: Option<bool>,
     pub junit_path: Option<String>,
     pub junit_merge: Option<bool>,
+    pub fuzz_runs: Option<usize>,
+    pub fuzz_max_test_rejects: Option<usize>,
+    pub fuzz_seed: Option<u64>,
+    pub fail_on_diff: Option<bool>,
     pub fail_fast: Option<bool>,
+}
+
+#[allow(dead_code)]
+#[cfg(unix)]
+fn is_json_like_snapshot_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| matches!(ext, "json" | "sarif"))
+}
+
+#[allow(dead_code)]
+#[cfg(unix)]
+fn preserves_json_field_order(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| matches!(name, "package.json" | "package-lock.json"))
+}
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub(crate) struct ProcessCommandBuilder {
+    cmd: std::process::Command,
+    stdin: Option<snapbox::Data>,
+}
+
+#[allow(dead_code)]
+impl ProcessCommandBuilder {
+    pub(crate) fn new(program: impl AsRef<OsStr>) -> Self {
+        Self {
+            cmd: std::process::Command::new(program),
+            stdin: None,
+        }
+    }
+
+    fn arg(mut self, arg: impl AsRef<OsStr>) -> Self {
+        self.cmd.arg(arg);
+        self
+    }
+
+    pub(crate) fn env(mut self, key: impl AsRef<OsStr>, value: impl AsRef<OsStr>) -> Self {
+        self.cmd.env(key, value);
+        self
+    }
+
+    fn env_remove(mut self, key: impl AsRef<OsStr>) -> Self {
+        self.cmd.env_remove(key);
+        self
+    }
+
+    fn current_dir(mut self, dir: impl AsRef<Path>) -> Self {
+        self.cmd.current_dir(dir);
+        self
+    }
+
+    fn has_arg_exact_or_prefixed(&self, exact: &str, prefix: &str) -> bool {
+        self.cmd.get_args().any(|arg| {
+            let arg = arg.to_string_lossy();
+            arg == exact || arg.starts_with(prefix)
+        })
+    }
+
+    pub(crate) fn stdin(mut self, stream: impl snapbox::IntoData) -> Self {
+        self.stdin = Some(stream.into_data());
+        self
+    }
+
+    fn into_std(self) -> std::process::Command {
+        self.cmd
+    }
+
+    fn into_snapbox(self, config: snapbox::Assert) -> snapbox::cmd::Command {
+        let mut cmd = snapbox::cmd::Command::from_std(self.cmd).with_assert(config);
+        if let Some(stdin) = self.stdin {
+            cmd = cmd.stdin(stdin);
+        }
+        cmd
+    }
+}
+
+#[cfg(unix)]
+#[allow(dead_code)]
+pub(crate) struct PtySession {
+    inner: expectrl::Session,
+    project_path: PathBuf,
+}
+
+#[cfg(unix)]
+#[allow(dead_code)]
+pub(crate) trait NeedleLabel {
+    fn needle_label(&self) -> String;
+}
+
+#[cfg(unix)]
+impl<Re: AsRef<str>> NeedleLabel for expectrl::Regex<Re> {
+    fn needle_label(&self) -> String {
+        format!("regex `{}`", self.0.as_ref())
+    }
+}
+
+#[cfg(unix)]
+impl NeedleLabel for expectrl::Eof {
+    fn needle_label(&self) -> String {
+        "EOF".to_owned()
+    }
+}
+
+#[cfg(unix)]
+impl NeedleLabel for expectrl::NBytes {
+    fn needle_label(&self) -> String {
+        format!("{} bytes", self.0)
+    }
+}
+
+#[cfg(unix)]
+impl NeedleLabel for &str {
+    fn needle_label(&self) -> String {
+        format!("string `{self}`")
+    }
+}
+
+#[cfg(unix)]
+impl NeedleLabel for String {
+    fn needle_label(&self) -> String {
+        format!("string `{self}`")
+    }
+}
+
+#[cfg(unix)]
+impl NeedleLabel for &[u8] {
+    fn needle_label(&self) -> String {
+        format!("byte pattern ({} bytes)", self.len())
+    }
+}
+
+#[cfg(unix)]
+#[allow(dead_code)]
+impl PtySession {
+    fn new(inner: expectrl::Session, project_path: PathBuf) -> Self {
+        Self {
+            inner,
+            project_path,
+        }
+    }
+
+    /// Set expect timeout and return the session for chaining.
+    pub(crate) fn set_expect_timeout(
+        mut self,
+        expect_timeout: Option<std::time::Duration>,
+    ) -> Self {
+        self.inner.set_expect_timeout(expect_timeout);
+        self
+    }
+
+    /// Expect a pattern and panic with a generic message on failure.
+    pub(crate) fn expect<N>(&mut self, needle: N) -> &mut Self
+    where
+        N: expectrl::Needle + NeedleLabel,
+    {
+        let message = format!("Expected PTY output to match {}", needle.needle_label());
+        self.inner.expect(needle).expect(&message);
+        self
+    }
+
+    /// Assert that a pattern does not appear before timeout or EOF.
+    pub(crate) fn expect_no_match<N>(&mut self, needle: N) -> &mut Self
+    where
+        N: expectrl::Needle + NeedleLabel,
+    {
+        let label = needle.needle_label();
+        match self.inner.expect(needle) {
+            Err(expectrl::Error::ExpectTimeout | expectrl::Error::Eof) => self,
+            Ok(_) => panic!("Expected PTY output to not match {label}"),
+            Err(err) => panic!("Expected PTY output to not match {label}, got error: {err}"),
+        }
+    }
+
+    /// Expect a pattern and panic with a custom message on failure.
+    #[allow(dead_code)]
+    #[allow(non_snake_case)]
+    pub(crate) fn expect_or_err<N>(&mut self, needle: N, message: &str) -> &mut Self
+    where
+        N: expectrl::Needle,
+    {
+        self.inner.expect(needle).expect(message);
+        self
+    }
+
+    /// Send a line and panic with a custom message on failure.
+    pub(crate) fn send_line(&mut self, line: impl AsRef<str>, message: &str) -> &mut Self {
+        self.inner.send_line(line).expect(message);
+        self
+    }
+
+    pub(crate) fn assert_file_snapshot_matches(
+        &mut self,
+        file_path: &str,
+        snapshot_path: &str,
+    ) -> &mut Self {
+        let full_file_path = self.project_path.join(file_path);
+        assert!(
+            full_file_path.exists(),
+            "File '{}' doesn't exist",
+            full_file_path.display()
+        );
+
+        let file_content = fs::read_to_string(&full_file_path).unwrap_or_else(|e| {
+            panic!("Failed to read file '{}': {}", full_file_path.display(), e)
+        });
+
+        let normalized = if is_json_like_snapshot_file(&full_file_path)
+            && !preserves_json_field_order(&full_file_path)
+        {
+            crate::support::snapshots::normalize_output_preserve_escapes(
+                &file_content,
+                &self.project_path,
+            )
+        } else {
+            crate::support::snapshots::normalize_output(&file_content, &self.project_path)
+        };
+
+        let assertion = if is_json_like_snapshot_file(&full_file_path)
+            && !preserves_json_field_order(&full_file_path)
+        {
+            crate::common::assertion().normalize_paths(false)
+        } else {
+            crate::common::assertion()
+        };
+
+        let mut snapshot_full_path = std::env::current_dir().expect("Failed to get current dir");
+        snapshot_full_path.push("tests");
+        snapshot_full_path.push(snapshot_path);
+
+        let expected = snapbox::Data::read_from(&snapshot_full_path, None);
+        assertion.eq(normalized, expected);
+        self
+    }
+}
+
+#[cfg(unix)]
+impl std::ops::Deref for PtySession {
+    type Target = expectrl::Session;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+#[cfg(unix)]
+impl std::ops::DerefMut for PtySession {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
 
 #[allow(dead_code)]
 impl ProjectBuilder {
     pub(crate) fn new(name: &str) -> Self {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let temp_dir = create_tmp_dir();
         Self {
             name: name.to_string(),
             temp_dir,
@@ -79,8 +347,12 @@ impl ProjectBuilder {
             lint_levels: BTreeMap::new(),
             lint_excludes: Vec::new(),
             lint_max_warnings: None,
-            lint_sarif_path: None,
+            lint_output_format: None,
             test_config: None,
+            wrappers_tolk_output_dir: None,
+            wrappers_tolk_generate_test: None,
+            wrappers_tolk_test_output_dir: None,
+            wrappers_typescript_output_dir: None,
             license: Some("MIT".to_string()),
             create_acton_toml: true,
         }
@@ -144,9 +416,9 @@ impl ProjectBuilder {
         self
     }
 
-    /// Configure path for SARIF report output from `acton check`.
-    pub(crate) fn with_lint_sarif_path(mut self, path: &str) -> Self {
-        self.lint_sarif_path = Some(path.to_string());
+    /// Configure format report output from `acton check`.
+    pub(crate) fn with_lint_output_format(mut self, format: &str) -> Self {
+        self.lint_output_format = Some(format.to_string());
         self
     }
 
@@ -289,7 +561,7 @@ impl ProjectBuilder {
     /// ```
     pub(crate) fn test_file_from_path(mut self, name: &str, path: &str) -> Self {
         let code = fs::read_to_string(path)
-            .unwrap_or_else(|e| panic!("Failed to read test file from {}: {}", path, e));
+            .unwrap_or_else(|e| panic!("Failed to read test file from {path}: {e}"));
         self.tests.push((name.to_string(), code));
         self
     }
@@ -302,7 +574,7 @@ impl ProjectBuilder {
     /// ```
     pub(crate) fn contract_from_path(mut self, name: &str, path: &str) -> Self {
         let code = fs::read_to_string(path)
-            .unwrap_or_else(|e| panic!("Failed to read contract file from {}: {}", path, e));
+            .unwrap_or_else(|e| panic!("Failed to read contract file from {path}: {e}"));
         self.contracts.push(ContractDef {
             name: name.to_string(),
             code: ContractSource::Tolk(code),
@@ -321,7 +593,7 @@ impl ProjectBuilder {
     /// ```
     pub(crate) fn file_from_path(mut self, dest_path: &str, src_path: &str) -> Self {
         let code = fs::read_to_string(src_path)
-            .unwrap_or_else(|e| panic!("Failed to read file from {}: {}", src_path, e));
+            .unwrap_or_else(|e| panic!("Failed to read file from {src_path}: {e}"));
         self.files.push((dest_path.to_string(), code));
         self
     }
@@ -365,13 +637,33 @@ impl ProjectBuilder {
     /// # Examples
     /// ```
     /// .with_test_config(TestConfig {
-    ///     filter: Some("test-unit-.*".to_string()),
+    ///     filter: Some("test unit .*".to_string()),
     ///     coverage: Some(true),
     ///     backtrace: Some("full".to_string()),
     /// })
     /// ```
     pub(crate) fn with_test_config(mut self, config: TestConfig) -> Self {
         self.test_config = Some(config);
+        self
+    }
+
+    pub(crate) fn with_wrappers_typescript_output_dir(mut self, path: &str) -> Self {
+        self.wrappers_typescript_output_dir = Some(path.to_string());
+        self
+    }
+
+    pub(crate) fn with_wrappers_tolk_output_dir(mut self, path: &str) -> Self {
+        self.wrappers_tolk_output_dir = Some(path.to_string());
+        self
+    }
+
+    pub(crate) fn with_wrappers_tolk_generate_test(mut self, enabled: bool) -> Self {
+        self.wrappers_tolk_generate_test = Some(enabled);
+        self
+    }
+
+    pub(crate) fn with_wrappers_tolk_test_output_dir(mut self, path: &str) -> Self {
+        self.wrappers_tolk_test_output_dir = Some(path.to_string());
         self
     }
 
@@ -439,8 +731,12 @@ impl ProjectBuilder {
                 &self.lint_levels,
                 &self.lint_excludes,
                 self.lint_max_warnings,
-                self.lint_sarif_path.clone(),
+                self.lint_output_format,
                 &self.test_config,
+                self.wrappers_tolk_output_dir.as_deref(),
+                self.wrappers_tolk_generate_test,
+                self.wrappers_tolk_test_output_dir.as_deref(),
+                self.wrappers_typescript_output_dir.as_deref(),
                 &self.license,
             );
         }
@@ -476,8 +772,12 @@ impl ProjectBuilder {
         lint_levels: &BTreeMap<String, String>,
         lint_excludes: &[String],
         lint_max_warnings: Option<usize>,
-        lint_sarif_path: Option<String>,
+        lint_output_format: Option<String>,
         test_config: &Option<TestConfig>,
+        wrappers_tolk_output_dir: Option<&str>,
+        wrappers_tolk_generate_test: Option<bool>,
+        wrappers_tolk_test_output_dir: Option<&str>,
+        wrappers_typescript_output_dir: Option<&str>,
         license: &Option<String>,
     ) {
         use std::fmt::Write as _;
@@ -511,7 +811,7 @@ version = "0.1.0"
 
             write!(
                 toml_content,
-                "[contracts.{}]\nname = \"{}\"\nsrc = \"{}\"\n",
+                "[contracts.{}]\ndisplay-name = \"{}\"\nsrc = \"{}\"\n",
                 contract.name.to_lowercase().replace('-', "_"),
                 contract.name,
                 contract_path,
@@ -568,10 +868,33 @@ version = "0.1.0"
         }
 
         if !mappings.is_empty() {
-            toml_content.push_str("[mappings]\n");
+            toml_content.push_str("[import-mappings]\n");
             for (prefix, target) in mappings {
                 toml_content.push_str(&format!("\"{prefix}\" = \"{target}\"\n"));
             }
+            toml_content.push('\n');
+        }
+
+        if wrappers_tolk_output_dir.is_some()
+            || wrappers_tolk_generate_test.is_some()
+            || wrappers_tolk_test_output_dir.is_some()
+        {
+            toml_content.push_str("[wrappers.tolk]\n");
+            if let Some(path) = wrappers_tolk_output_dir {
+                toml_content.push_str(&format!("output-dir = \"{path}\"\n"));
+            }
+            if let Some(enabled) = wrappers_tolk_generate_test {
+                toml_content.push_str(&format!("generate-test = {enabled}\n"));
+            }
+            if let Some(path) = wrappers_tolk_test_output_dir {
+                toml_content.push_str(&format!("test-output-dir = \"{path}\"\n"));
+            }
+            toml_content.push('\n');
+        }
+
+        if let Some(path) = wrappers_typescript_output_dir {
+            toml_content.push_str("[wrappers.typescript]\n");
+            toml_content.push_str(&format!("output-dir = \"{path}\"\n"));
             toml_content.push('\n');
         }
 
@@ -583,7 +906,8 @@ version = "0.1.0"
             toml_content.push('\n');
         }
 
-        if !lint_excludes.is_empty() || lint_max_warnings.is_some() || lint_sarif_path.is_some() {
+        if !lint_excludes.is_empty() || lint_max_warnings.is_some() || lint_output_format.is_some()
+        {
             toml_content.push_str("[lint]\n");
             if !lint_excludes.is_empty() {
                 toml_content.push_str("exclude = [");
@@ -599,12 +923,12 @@ version = "0.1.0"
             if let Some(max_warnings) = lint_max_warnings {
                 toml_content.push_str(&format!("max-warnings = {max_warnings}\n"));
             }
-            toml_content.push('\n');
-        }
 
-        if let Some(path) = lint_sarif_path {
-            toml_content.push_str("[lint.output.sarif]\n");
-            toml_content.push_str(&format!("path = \"{path}\"\n\n"));
+            if let Some(output_format) = lint_output_format {
+                toml_content.push_str(&format!("output-format = \"{output_format}\"\n"));
+            }
+
+            toml_content.push('\n');
         }
 
         if !lint_levels.is_empty() {
@@ -668,18 +992,6 @@ version = "0.1.0"
                 toml_content.push_str(&format!("backtrace = \"{backtrace}\"\n"));
             }
 
-            if let Some(coverage) = config.coverage {
-                toml_content.push_str(&format!("coverage = {coverage}\n"));
-            }
-
-            if let Some(coverage_format) = &config.coverage_format {
-                toml_content.push_str(&format!("coverage-format = \"{coverage_format}\"\n"));
-            }
-
-            if let Some(coverage_file) = &config.coverage_file {
-                toml_content.push_str(&format!("coverage-file = \"{coverage_file}\"\n"));
-            }
-
             if let Some(junit_path) = &config.junit_path {
                 toml_content.push_str(&format!("junit-path = \"{junit_path}\"\n"));
             }
@@ -690,6 +1002,65 @@ version = "0.1.0"
 
             if let Some(fail_fast) = config.fail_fast {
                 toml_content.push_str(&format!("fail-fast = {fail_fast}\n"));
+            }
+
+            if let Some(fail_on_diff) = config.fail_on_diff {
+                toml_content.push_str(&format!("fail-on-diff = {fail_on_diff}\n"));
+            }
+
+            if config.fuzz_runs.is_some()
+                || config.fuzz_max_test_rejects.is_some()
+                || config.fuzz_seed.is_some()
+            {
+                toml_content.push_str("\n[test.fuzz]\n");
+
+                if let Some(fuzz_runs) = config.fuzz_runs {
+                    toml_content.push_str(&format!("runs = {fuzz_runs}\n"));
+                }
+
+                if let Some(fuzz_max_test_rejects) = config.fuzz_max_test_rejects {
+                    toml_content.push_str(&format!("max-test-rejects = {fuzz_max_test_rejects}\n"));
+                }
+
+                if let Some(fuzz_seed) = config.fuzz_seed {
+                    toml_content.push_str(&format!("seed = {fuzz_seed}\n"));
+                }
+            }
+
+            if config.coverage.is_some()
+                || config.coverage_format.is_some()
+                || config.coverage_file.is_some()
+                || config.coverage_minimum_percent.is_some()
+                || config.coverage_include_wrappers.is_some()
+                || config.coverage_include_tests.is_some()
+            {
+                toml_content.push_str("\n[test.coverage]\n");
+
+                if let Some(coverage) = config.coverage {
+                    toml_content.push_str(&format!("enabled = {coverage}\n"));
+                }
+
+                if let Some(coverage_format) = &config.coverage_format {
+                    toml_content.push_str(&format!("format = \"{coverage_format}\"\n"));
+                }
+
+                if let Some(coverage_file) = &config.coverage_file {
+                    toml_content.push_str(&format!("output-file = \"{coverage_file}\"\n"));
+                }
+
+                if let Some(coverage_minimum_percent) = config.coverage_minimum_percent {
+                    toml_content
+                        .push_str(&format!("minimum-percent = {coverage_minimum_percent}\n"));
+                }
+
+                if let Some(coverage_include_wrappers) = config.coverage_include_wrappers {
+                    toml_content
+                        .push_str(&format!("include-wrappers = {coverage_include_wrappers}\n"));
+                }
+
+                if let Some(coverage_include_tests) = config.coverage_include_tests {
+                    toml_content.push_str(&format!("include-tests = {coverage_include_tests}\n"));
+                }
             }
 
             toml_content.push('\n');
@@ -708,7 +1079,9 @@ pub(crate) struct Project {
 impl Project {
     #[allow(dead_code)]
     pub(crate) fn acton(&self) -> ActonCommand {
-        let cmd = snapbox::cmd::Command::new(acton_exe()).with_assert(assert_ui());
+        let cmd = ProcessCommandBuilder::new(acton_exe())
+            .env("PATH", acton_path_env())
+            .env("ACTON_LOG_DIR", self.path.join(".acton-test-logs"));
         ActonCommand {
             cmd,
             project: Arc::new(ProjectRef {
@@ -720,6 +1093,7 @@ impl Project {
             build_clear_cache: false,
             build_graph: None,
             build_out_dir: None,
+            build_gen_dir: None,
             build_output_fift: None,
             disasm_string: None,
             disasm_output: None,
@@ -727,11 +1101,14 @@ impl Project {
             disasm_api_key: None,
             disasm_net: None,
             disasm_follow_libraries: false,
+            disasm_show_hashes: false,
+            disasm_show_offsets: false,
             compile_json: false,
             compile_base64_only: false,
             compile_boc: None,
             compile_fift: None,
             compile_source_map: None,
+            compile_allow_no_entrypoint: false,
             test_reporters: Vec::new(),
             junit_merge: false,
             test_exclude_patterns: Vec::new(),
@@ -740,12 +1117,12 @@ impl Project {
             verify_address: None,
             verify_wallet: None,
             verify_network: None,
-            script_broadcast: false,
             test_fail_fast: false,
             script_fork_net: None,
             build_info: false,
             force_no_color_env: true,
             color_mode: None,
+            wallet_secure_default_false: false,
         }
     }
 
@@ -759,7 +1136,7 @@ pub(crate) struct ProjectRef {
 }
 
 pub(crate) struct ActonCommand {
-    pub(crate) cmd: snapbox::cmd::Command,
+    pub(crate) cmd: ProcessCommandBuilder,
     pub(crate) project: Arc<ProjectRef>,
     pub(crate) test_path: Option<String>,
     pub(crate) filter: Option<String>,
@@ -767,6 +1144,7 @@ pub(crate) struct ActonCommand {
     pub(crate) build_clear_cache: bool,
     pub(crate) build_graph: Option<Option<String>>,
     pub(crate) build_out_dir: Option<String>,
+    pub(crate) build_gen_dir: Option<String>,
     pub(crate) build_output_fift: Option<String>,
     pub(crate) disasm_string: Option<String>,
     pub(crate) disasm_output: Option<String>,
@@ -774,11 +1152,14 @@ pub(crate) struct ActonCommand {
     pub(crate) disasm_api_key: Option<String>,
     pub(crate) disasm_net: Option<String>,
     pub(crate) disasm_follow_libraries: bool,
+    pub(crate) disasm_show_hashes: bool,
+    pub(crate) disasm_show_offsets: bool,
     pub(crate) compile_json: bool,
     pub(crate) compile_base64_only: bool,
     pub(crate) compile_boc: Option<String>,
     pub(crate) compile_fift: Option<String>,
     pub(crate) compile_source_map: Option<String>,
+    pub(crate) compile_allow_no_entrypoint: bool,
     pub(crate) test_reporters: Vec<String>,
     pub(crate) junit_merge: bool,
     pub(crate) test_exclude_patterns: Vec<String>,
@@ -787,12 +1168,12 @@ pub(crate) struct ActonCommand {
     pub(crate) verify_address: Option<String>,
     pub(crate) verify_wallet: Option<String>,
     pub(crate) verify_network: Option<String>,
-    pub(crate) script_broadcast: bool,
     pub(crate) test_fail_fast: bool,
     pub(crate) script_fork_net: Option<String>,
     pub(crate) build_info: bool,
     pub(crate) force_no_color_env: bool,
     pub(crate) color_mode: Option<ColorMode>,
+    pub(crate) wallet_secure_default_false: bool,
 }
 
 #[allow(dead_code)]
@@ -815,22 +1196,22 @@ impl ActonCommand {
     }
 
     /// Start wrapper command
-    pub(crate) fn wrapper(mut self, contract_id: &str) -> Self {
+    pub(crate) fn wrapper(mut self, contract_name: &str) -> Self {
         self.cmd = self
             .cmd
             .arg("wrapper")
-            .arg(contract_id)
+            .arg(contract_name)
             .current_dir(&self.project.path);
-        self
-    }
-
-    pub(crate) fn storage_struct(mut self, name: &str) -> Self {
-        self.cmd = self.cmd.arg("--storage-struct").arg(name);
         self
     }
 
     pub(crate) fn generate_test_stub(mut self) -> Self {
         self.cmd = self.cmd.arg("--test");
+        self
+    }
+
+    pub(crate) fn generate_typescript_wrapper(mut self) -> Self {
+        self.cmd = self.cmd.arg("--ts");
         self
     }
 
@@ -840,9 +1221,19 @@ impl ActonCommand {
         self
     }
 
+    pub(crate) fn wrapper_output_dir(mut self, path: &str) -> Self {
+        self.cmd = self.cmd.arg("--output-dir").arg(path);
+        self
+    }
+
     /// Specify output test file
     pub(crate) fn test_output(mut self, path: &str) -> Self {
         self.cmd = self.cmd.arg("--test-output").arg(path);
+        self
+    }
+
+    pub(crate) fn test_output_dir(mut self, path: &str) -> Self {
+        self.cmd = self.cmd.arg("--test-output-dir").arg(path);
         self
     }
 
@@ -975,7 +1366,7 @@ impl ActonCommand {
         self
     }
 
-    /// Specify API key for `TonCenter` requests
+    /// Specify TonCenter API key env value for test requests
     ///
     /// # Examples
     /// ```
@@ -986,7 +1377,7 @@ impl ActonCommand {
         self
     }
 
-    /// Specify network for library fetching (testnet or mainnet)
+    /// Specify network for remote fetching (mainnet, testnet, or custom:<name>)
     ///
     /// # Examples
     /// ```
@@ -1005,6 +1396,16 @@ impl ActonCommand {
     /// ```
     pub(crate) fn follow_libraries(mut self) -> Self {
         self.disasm_follow_libraries = true;
+        self
+    }
+
+    pub(crate) fn show_hashes(mut self) -> Self {
+        self.disasm_show_hashes = true;
+        self
+    }
+
+    pub(crate) fn show_offsets(mut self) -> Self {
+        self.disasm_show_offsets = true;
         self
     }
 
@@ -1042,6 +1443,11 @@ impl ActonCommand {
         self
     }
 
+    pub(crate) fn allow_no_entrypoint(mut self) -> Self {
+        self.compile_allow_no_entrypoint = true;
+        self
+    }
+
     /// Specify path to test file or directory
     ///
     /// # Examples
@@ -1059,11 +1465,16 @@ impl ActonCommand {
     ///
     /// # Examples
     /// ```
-    /// .test().filter("test-basic")        // Run tests matching "test-basic"
+    /// .test().filter("test basic")        // Run tests matching "test basic"
     /// .test().filter("counter.*")         // Run tests starting with "counter"
     /// ```
     pub(crate) fn filter(mut self, pattern: &str) -> Self {
         self.filter = Some(pattern.to_string());
+        self
+    }
+
+    pub(crate) fn verbose(mut self) -> Self {
+        self.cmd = self.cmd.arg("--verbose");
         self
     }
 
@@ -1103,6 +1514,27 @@ impl ActonCommand {
     /// Enable coverage with custom output file
     pub(crate) fn with_coverage_file(mut self, file: &str) -> Self {
         self.cmd = self.cmd.arg("--coverage-file").arg(file);
+        self
+    }
+
+    /// Require a minimum final coverage score percentage.
+    pub(crate) fn with_coverage_minimum_percent(mut self, percent: f64) -> Self {
+        self.cmd = self
+            .cmd
+            .arg("--coverage-minimum-percent")
+            .arg(percent.to_string());
+        self
+    }
+
+    /// Include files under the `@wrappers` mapping in coverage reports.
+    pub(crate) fn with_coverage_include_wrappers(mut self) -> Self {
+        self.cmd = self.cmd.arg("--coverage-include-wrappers");
+        self
+    }
+
+    /// Include `.test.tolk` files in coverage reports.
+    pub(crate) fn with_coverage_include_tests(mut self) -> Self {
+        self.cmd = self.cmd.arg("--coverage-include-tests");
         self
     }
 
@@ -1202,9 +1634,8 @@ impl ActonCommand {
             .cmd
             .arg("wallet")
             .arg("new")
-            .arg("--secure")
-            .arg("false")
             .current_dir(&self.project.path);
+        self.wallet_secure_default_false = true;
         self
     }
 
@@ -1213,9 +1644,8 @@ impl ActonCommand {
             .cmd
             .arg("wallet")
             .arg("import")
-            .arg("--secure")
-            .arg("false")
             .current_dir(&self.project.path);
+        self.wallet_secure_default_false = true;
         self
     }
 
@@ -1228,11 +1658,20 @@ impl ActonCommand {
         self
     }
 
-    pub(crate) fn wallet_get(mut self) -> Self {
+    pub(crate) fn wallet_export_mnemonic(mut self) -> Self {
         self.cmd = self
             .cmd
             .arg("wallet")
-            .arg("get")
+            .arg("export-mnemonic")
+            .current_dir(&self.project.path);
+        self
+    }
+
+    pub(crate) fn wallet_sign(mut self) -> Self {
+        self.cmd = self
+            .cmd
+            .arg("wallet")
+            .arg("sign")
             .current_dir(&self.project.path);
         self
     }
@@ -1242,6 +1681,15 @@ impl ActonCommand {
             .cmd
             .arg("wallet")
             .arg("remove")
+            .current_dir(&self.project.path);
+        self
+    }
+
+    pub(crate) fn wallet_airdrop(mut self) -> Self {
+        self.cmd = self
+            .cmd
+            .arg("wallet")
+            .arg("airdrop")
             .current_dir(&self.project.path);
         self
     }
@@ -1268,12 +1716,12 @@ impl ActonCommand {
         self
     }
 
-    /// Generate dependency graph SVG (only for build command)
+    /// Generate dependency graph DOT (only for build command)
     ///
     /// # Examples
     /// ```
-    /// .build().with_graph(None)           // Generate deps.svg (default)
-    /// .build().with_graph(Some("my.svg")) // Generate my.svg
+    /// .build().with_graph(None)           // Generate deps.dot (default)
+    /// .build().with_graph(Some("my.dot")) // Generate my.dot
     /// ```
     pub(crate) fn with_graph(mut self, path: Option<&str>) -> Self {
         self.build_graph = Some(path.map(ToString::to_string));
@@ -1292,6 +1740,12 @@ impl ActonCommand {
         self
     }
 
+    /// Set output directory for generated dependency files (only for build command)
+    pub(crate) fn with_gen_dir(mut self, path: &str) -> Self {
+        self.build_gen_dir = Some(path.to_string());
+        self
+    }
+
     /// Set output directory for compiled Fift files (only for build command)
     pub(crate) fn with_output_fift(mut self, path: &str) -> Self {
         self.build_output_fift = Some(path.to_string());
@@ -1304,19 +1758,13 @@ impl ActonCommand {
         self
     }
 
-    /// Enable broadcast mode for script execution (only for script command)
-    ///
-    /// # Examples
-    /// ```
-    /// .script("deploy.tolk").broadcast()     // Send transactions to blockchain
-    /// ```
-    pub(crate) fn broadcast(mut self) -> Self {
-        self.script_broadcast = true;
+    /// Show decoded message bodies in printed transaction trees.
+    pub(crate) fn show_bodies(mut self) -> Self {
+        self.cmd = self.cmd.arg("--show-bodies");
         self
     }
 
-    /// Run the command and return output
-    pub(crate) fn run(mut self) -> TestOutput {
+    fn into_prepared_command(mut self) -> ProcessCommandBuilder {
         if let Some(path) = self.test_path {
             self.cmd = self.cmd.arg(path);
         }
@@ -1375,10 +1823,6 @@ impl ActonCommand {
             self.cmd = self.cmd.arg("--clear-cache");
         }
 
-        if self.script_broadcast {
-            self.cmd = self.cmd.arg("--broadcast");
-        }
-
         if let Some(graph_path) = self.build_graph {
             self.cmd = self.cmd.arg("--graph");
             if let Some(path) = graph_path {
@@ -1390,6 +1834,10 @@ impl ActonCommand {
 
         if let Some(out_dir) = self.build_out_dir {
             self.cmd = self.cmd.arg("--out-dir").arg(out_dir);
+        }
+
+        if let Some(gen_dir) = self.build_gen_dir {
+            self.cmd = self.cmd.arg("--gen-dir").arg(gen_dir);
         }
 
         if let Some(output_fift_dir) = self.build_output_fift {
@@ -1413,7 +1861,19 @@ impl ActonCommand {
         }
 
         if let Some(api_key) = self.disasm_api_key {
-            self.cmd = self.cmd.arg("--api-key").arg(api_key);
+            self.cmd = self
+                .cmd
+                .env(TONCENTER_MAINNET_API_KEY_ENV, &api_key)
+                .env(TONCENTER_TESTNET_API_KEY_ENV, &api_key);
+
+            if let Some(custom_network_name) = self
+                .disasm_net
+                .as_deref()
+                .and_then(|net| net.strip_prefix("custom:"))
+                .and_then(custom_env_var_name)
+            {
+                self.cmd = self.cmd.env(&custom_network_name, &api_key);
+            }
         }
 
         if let Some(net) = self.disasm_net {
@@ -1422,6 +1882,14 @@ impl ActonCommand {
 
         if self.disasm_follow_libraries {
             self.cmd = self.cmd.arg("--follow-libraries");
+        }
+
+        if self.disasm_show_hashes {
+            self.cmd = self.cmd.arg("--show-hashes");
+        }
+
+        if self.disasm_show_offsets {
+            self.cmd = self.cmd.arg("--show-offsets");
         }
 
         if self.compile_json {
@@ -1444,17 +1912,48 @@ impl ActonCommand {
             self.cmd = self.cmd.arg("--source-map").arg(source_map_path);
         }
 
+        if self.compile_allow_no_entrypoint {
+            self.cmd = self.cmd.arg("--allow-no-entrypoint");
+        }
+
         if let Some(mode) = self.color_mode {
             self.cmd = self.cmd.arg("--color").arg(mode.to_string());
+        }
+
+        // Keep tests deterministic by defaulting wallet new/import to plaintext mnemonic
+        // storage, but avoid duplicate --secure flags when tests set it explicitly.
+        if self.wallet_secure_default_false
+            && !self.cmd.has_arg_exact_or_prefixed("--secure", "--secure=")
+        {
+            self.cmd = self.cmd.arg("--secure").arg("false");
         }
 
         if self.force_no_color_env {
             self.cmd = self.cmd.env("NO_COLOR", "1");
         }
-        let output = self.cmd.assert();
+
+        self.cmd
+    }
+
+    /// Run the command and return output
+    pub(crate) fn run(self) -> TestOutput {
+        let project_path = self.project.path.clone();
+        let output = self
+            .into_prepared_command()
+            .into_snapbox(assert_ui())
+            .assert();
         TestOutput {
             output,
-            project_path: self.project.path.clone(),
+            project_path,
         }
+    }
+
+    /// Spawn command in a pseudo-terminal for interactive tests.
+    #[cfg(unix)]
+    pub(crate) fn spawn_pty(self) -> PtySession {
+        let project_path = self.project.path.clone();
+        let session = expectrl::Session::spawn(self.into_prepared_command().into_std())
+            .expect("Failed to spawn command in PTY");
+        PtySession::new(session, project_path)
     }
 }

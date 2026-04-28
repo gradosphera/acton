@@ -2,15 +2,12 @@ use super::{TestExecutionContext, TestReport, TestReporter, TestStatus, TestSuit
 use crate::commands::test::TestDescriptor;
 use crate::context::AssertFailure;
 use crate::formatter::FormatterContext;
-use crate::{exit_codes, retrace};
+use crate::retrace;
 use acton_config::color::OwoColorize;
+use acton_debug::exit_codes;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use ton_executor::get::{GetMethodResult, GetMethodResultSuccess};
-use ton_source_map::SourceLocation;
-
-const CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT: i32 = 678;
-const CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE: i32 = 679;
 
 #[derive(Debug, Clone)]
 pub(crate) struct ConsoleConfig {
@@ -41,6 +38,21 @@ impl ConsoleReporter {
             .trim_start_matches("test-")
             .trim_start_matches("test_")
             .to_string()
+    }
+
+    fn format_fuzz_suffix(&self, test: &TestReport) -> String {
+        let Some(exec) = &test.execution else {
+            return String::new();
+        };
+        let Some(fuzz) = &exec.fuzz else {
+            return String::new();
+        };
+
+        let label = if fuzz.total_runs == 1 { "run" } else { "runs" };
+        format!(
+            " {}",
+            format!("({} {label}, seed {})", fuzz.total_runs, fuzz.seed).dimmed()
+        )
     }
 }
 
@@ -158,24 +170,37 @@ impl TestReporter for ConsoleReporter {
         } else {
             (test.duration.as_micros().to_string(), "μs")
         };
+        let fuzz_suffix = self.format_fuzz_suffix(test);
 
         if test.status == TestStatus::Passed {
             println!(
-                "  {} {} {}{}",
+                "  {} {} {}{}{}",
                 "✓".green(),
                 beautified_name,
                 time_value.green(),
-                time_unit.green().dimmed()
+                time_unit.green().dimmed(),
+                fuzz_suffix
             );
         }
 
         if test.status == TestStatus::Skipped {
-            println!(
-                "  {} {} {}",
-                "○".dimmed(),
-                beautified_name,
-                "skipped".dimmed()
-            );
+            if let Some(description) = test.details.as_deref() {
+                println!(
+                    "  {} {} {}{}{}",
+                    "○".dimmed(),
+                    beautified_name,
+                    "[".dimmed(),
+                    description.dimmed(),
+                    "]".dimmed()
+                );
+            } else {
+                println!(
+                    "  {} {} {}",
+                    "○".dimmed(),
+                    beautified_name,
+                    "skipped".dimmed()
+                );
+            }
         }
 
         if test.status == TestStatus::Todo {
@@ -192,18 +217,50 @@ impl TestReporter for ConsoleReporter {
 
         if test.status == TestStatus::Failed {
             println!(
-                "  {} {} {}{}",
+                "  {} {} {}{}{}",
                 "✗".red(),
                 beautified_name,
                 time_value.red(),
-                time_unit.red().dimmed()
+                time_unit.red().dimmed(),
+                fuzz_suffix
             );
 
             let Some(exec) = &test.execution else {
-                anyhow::bail!("Test execution context is missing for failed test")
+                if let Some(message) = &test.message {
+                    println!("    {} {}", "└─".dimmed(), message.bright_red());
+                } else {
+                    println!("    {} {}", "└─".dimmed(), "Test failed".bright_red());
+                }
+                return Ok(());
             };
+
+            if let Some(fuzz) = &exec.fuzz
+                && let Some(case) = &fuzz.failed_case
+            {
+                println!(
+                    "    {} Fuzz case {}/{}",
+                    "├─".dimmed(),
+                    case.run.to_string().yellow(),
+                    fuzz.total_runs.to_string().yellow()
+                );
+                if !case.inputs.is_empty() {
+                    let inputs = case
+                        .inputs
+                        .iter()
+                        .map(|(name, value)| format!("{name}={value}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    println!("    {} Inputs: {}", "├─".dimmed(), inputs);
+                }
+            }
+
             let Some(failure_context) = &exec.failure else {
-                anyhow::bail!("Failure execution context is missing for failed test")
+                if let Some(message) = &test.message {
+                    println!("    {} {}", "└─".dimmed(), message.bright_red());
+                } else {
+                    println!("    {} {}", "└─".dimmed(), "Test failed".bright_red());
+                }
+                return Ok(());
             };
 
             let formatter = FormatterContext {
@@ -213,12 +270,12 @@ impl TestReporter for ConsoleReporter {
                 emulations: Cow::Borrowed(&failure_context.emulations),
                 known_addresses: Cow::Borrowed(&failure_context.known_addresses),
                 known_code_cells: Cow::Borrowed(&failure_context.known_code_cells),
+                show_bodies: test.show_bodies,
                 has_wallets_config: false,
                 available_wallets: vec![],
                 backtrace: test.backtrace,
                 fork_net: None,
                 network: None,
-                api_key: None,
             };
 
             match &failure_context.get_result {
@@ -286,11 +343,52 @@ fn process_test_fail(
     }
 
     if exec.expected_exit_code == 0 {
-        process_nonzero_exit_code(test, result, result.vm_exit_code);
+        process_nonzero_exit_code(test, result, result.vm_exit_code, &fmt);
     }
 }
 
 fn process_assert_failure(failure: &AssertFailure, test: &TestReport, fmt: &FormatterContext<'_>) {
+    if let AssertFailure::GetMethod(failure) = &failure {
+        let formatted = fmt.format_get_method_assert_failure(failure);
+        let mut lines = formatted.lines();
+        let Some(header) = lines.next() else {
+            println!("    {}", "└─".dimmed());
+            return;
+        };
+
+        println!("    {} {}", "└─".dimmed(), header);
+
+        let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+        for line in lines {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            if line.starts_with("  ")
+                && let Some((_, nested)) = groups.last_mut()
+            {
+                nested.push(line.trim_start().to_string());
+            } else if line.starts_with("  ") {
+                groups.push((line.trim_start().to_string(), Vec::new()));
+            } else {
+                groups.push((line.to_string(), Vec::new()));
+            }
+        }
+
+        for (idx, (line, nested)) in groups.iter().enumerate() {
+            let is_last = idx + 1 == groups.len();
+            let branch = if is_last { "└─" } else { "├─" };
+            println!("      {} {}", branch.dimmed(), line);
+
+            let nested_branch = if is_last { " " } else { "│" };
+            for nested_line in nested {
+                println!("      {}     {}", nested_branch.dimmed(), nested_line);
+            }
+        }
+
+        return;
+    }
+
     if let Some(message) = &failure.message() {
         if message.is_empty() {
             println!("    {}", "└─".dimmed());
@@ -340,14 +438,27 @@ fn process_assert_failure(failure: &AssertFailure, test: &TestReport, fmt: &Form
         println!("        Expected: {}", right.green());
     }
 
+    if let AssertFailure::Decimal(failure) = &failure {
+        println!("        Actual:   {}", failure.left.red());
+        println!("        Expected: {}", failure.right.green());
+    }
+
     if let AssertFailure::TransactionNotFound(failure) = &failure {
         let params = fmt.format_search_transaction_parameters(failure, test.abi.clone());
         let tx_tree = fmt.format(&failure.txs);
 
+        let from_addr = failure.params.from.as_ref().and_then(|dp| match dp {
+            crate::context::DisplayParam::Value(a) => Some(a.clone()),
+            _ => None,
+        });
+        let to_addr = failure.params.to.as_ref().and_then(|dp| match dp {
+            crate::context::DisplayParam::Value(a) => Some(a.clone()),
+            _ => None,
+        });
         let diff_output = format!(
             "{tx_tree}\nCannot find transaction from {} to {}\nwith:\n{}",
-            fmt.format_address(&failure.txs, &failure.params.from),
-            fmt.format_address(&failure.txs, &failure.params.to),
+            fmt.format_address(&failure.txs, &from_addr),
+            fmt.format_address(&failure.txs, &to_addr),
             params.join("\n"),
         );
 
@@ -360,13 +471,21 @@ fn process_assert_failure(failure: &AssertFailure, test: &TestReport, fmt: &Form
         let params = fmt.format_search_transaction_parameters(failure, test.abi.clone());
         let tx_tree = fmt.format(&failure.txs);
 
+        let from_addr2 = failure.params.from.as_ref().and_then(|dp| match dp {
+            crate::context::DisplayParam::Value(a) => Some(a.clone()),
+            _ => None,
+        });
+        let to_addr2 = failure.params.to.as_ref().and_then(|dp| match dp {
+            crate::context::DisplayParam::Value(a) => Some(a.clone()),
+            _ => None,
+        });
         let from_to = if failure.params.from.is_none() && failure.params.to.is_none() {
             ""
         } else {
             &format!(
                 " from {} to {}",
-                fmt.format_address(&failure.txs, &failure.params.from),
-                fmt.format_address(&failure.txs, &failure.params.to),
+                fmt.format_address(&failure.txs, &from_addr2),
+                fmt.format_address(&failure.txs, &to_addr2),
             )
         };
 
@@ -386,7 +505,12 @@ fn process_assert_failure(failure: &AssertFailure, test: &TestReport, fmt: &Form
     }
 }
 
-fn process_nonzero_exit_code(test: &TestReport, result: &GetMethodResultSuccess, exit_code: i32) {
+fn process_nonzero_exit_code(
+    test: &TestReport,
+    result: &GetMethodResultSuccess,
+    exit_code: i32,
+    fmt: &FormatterContext<'_>,
+) {
     println!(
         "    {} exit_code={}",
         "└─".dimmed(),
@@ -394,57 +518,72 @@ fn process_nonzero_exit_code(test: &TestReport, result: &GetMethodResultSuccess,
     );
 
     let exit_code_info = retrace::find_exception_info(&result.vm_log, &test.source_map);
+    let get_method_info = fmt.find_failed_get_method_exception(test);
+
+    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+
+    if let Some(info) = &get_method_info {
+        let mut nested = vec![format!(
+            "at {}",
+            FormatterContext::format_location(&info.loc).dimmed()
+        )];
+        nested.extend(FormatterContext::format_backtrace(&info.backtrace));
+        groups.push(("Get method:".to_string(), nested));
+    }
 
     if let Some(info) = &exit_code_info {
-        if let Some(loc) = &info.loc {
-            println!(
-                "      {} at {}",
-                "├─".dimmed(),
-                format!(
-                    "{}:{}:{}",
-                    SourceLocation::normalize_path(&loc.file),
-                    loc.line + 1,
-                    loc.column + 2
-                )
-                .dimmed(),
-            );
-
-            let backtrace_lines = FormatterContext::format_backtrace(&info.backtrace);
-            for line in backtrace_lines {
-                println!("      {}     {}", "│".dimmed(), line);
+        if get_method_info.is_some() {
+            let mut nested = FormatterContext::format_backtrace(&info.backtrace);
+            if nested.is_empty() {
+                nested.push(format!(
+                    "at {}",
+                    FormatterContext::format_location(&info.loc).dimmed()
+                ));
             }
-        } else if test.backtrace.is_none() {
-            println!(
-                "      {} Re-run with {} to get more information",
-                "├─".dimmed(),
+            groups.push(("Called from:".to_string(), nested));
+        } else {
+            groups.push((
+                format!(
+                    "at {}",
+                    FormatterContext::format_location(&info.loc).dimmed()
+                ),
+                FormatterContext::format_backtrace(&info.backtrace),
+            ));
+        }
+    } else if test.backtrace.is_none() {
+        groups.push((
+            format!(
+                "Re-run with {} to get more information",
                 "--backtrace full".yellow()
-            );
-        }
-
-        if !info.description.is_empty() {
-            println!("      {} {}", "├─".dimmed(), info.description.dimmed());
-        }
+            ),
+            Vec::new(),
+        ));
     }
 
     if let Some(info) = exit_codes::find(exit_code) {
-        if exit_code_info.is_none() {
-            // Don't show duplicate info
-            println!("      {} {}", "├─".dimmed(), info.description.dimmed());
-        }
-        println!("      {} Phase: {}", "└─".dimmed(), info.phase.dimmed());
+        groups.push((info.description.dimmed().to_string(), Vec::new()));
+        groups.push((format!("Phase: {}", info.phase.dimmed()), Vec::new()));
+    } else if let Some(info) = &exit_code_info {
+        let description = if info.description.is_empty() {
+            format!("uncaught exception {}", info.errno)
+        } else {
+            info.description.clone()
+        };
+        groups.push((description.dimmed().to_string(), Vec::new()));
     }
 
-    // Special throw exit codes
-    if exit_code == CANNOT_RUN_GET_METHOD_OD_UNDEPLOYED_CONTRACT {
-        println!(
-            "      {} Cannot run method of not deployed contract, make sure you're deployed contract first or passed {}",
-            "└─".dimmed(),
-            "--fork-net".yellow(),
-        );
-    } else if exit_code == CANNOT_RUN_GET_METHOD_OF_CONTRACT_WITHOUT_CODE {
-        println!(
-            "      {} Cannot run method of contract without code",
-            "└─".dimmed()
-        );
+    if let Some(message) = FormatterContext::special_get_method_exit_code_message(exit_code) {
+        groups.push((message, Vec::new()));
+    }
+
+    for (idx, (line, nested)) in groups.iter().enumerate() {
+        let is_last = idx + 1 == groups.len();
+        let branch = if is_last { "└─" } else { "├─" };
+        println!("      {} {}", branch.dimmed(), line);
+
+        let nested_branch = if is_last { " " } else { "│" };
+        for nested_line in nested {
+            println!("      {}     {}", nested_branch.dimmed(), nested_line);
+        }
     }
 }

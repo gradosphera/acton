@@ -1,5 +1,5 @@
 use crate::ast::node::{AstChildren, RawNode};
-use crate::ast::traits::{HasName, HasTreeSitterKind};
+use crate::ast::traits::HasName;
 use crate::ast::types::{InstantiationTList, Type};
 use crate::ast::{AstNode, Block};
 use crate::ast::{InvalidNodeKindError, TryFromNode};
@@ -30,17 +30,101 @@ impl<'tree> StringLit<'tree> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ParsedTolkIntLiteral {
+    radix: u32,     // 2 / 10 / 16
+    digits: String, // "12345", "123_45", "0xFFFF", "0b01", "0b_0_1_"
+}
+
+impl ParsedTolkIntLiteral {
+    #[must_use]
+    pub const fn radix(&self) -> u32 {
+        self.radix
+    }
+
+    #[must_use]
+    pub fn digits(&self) -> &str {
+        &self.digits
+    }
+
+    #[must_use]
+    pub const fn digit_len(&self) -> usize {
+        self.digits.len()
+    }
+
+    #[must_use]
+    pub fn parse_i32(&self) -> Option<i32> {
+        i32::from_str_radix(&self.digits, self.radix).ok()
+    }
+
+    #[must_use]
+    pub fn parse_u32(&self) -> Option<u32> {
+        u32::from_str_radix(&self.digits, self.radix).ok()
+    }
+
+    #[must_use]
+    pub fn parse_u64(&self) -> Option<u64> {
+        u64::from_str_radix(&self.digits, self.radix).ok()
+    }
+}
+
+const fn matches_int_literal_digit(base: u32, c: char) -> bool {
+    match base {
+        16 => c.is_ascii_hexdigit(),
+        2 => matches!(c, '0' | '1'),
+        _ => c.is_ascii_digit(),
+    }
+}
+
+fn normalize_int_literal_digits(raw: &str, base: u32) -> Option<String> {
+    let digits: String = raw.chars().filter(|&c| c != '_').collect();
+    if digits.is_empty() || !digits.chars().all(|c| matches_int_literal_digit(base, c)) {
+        return None;
+    }
+    Some(digits)
+}
+
+#[must_use]
+pub fn parse_tolk_int_literal(raw: &str) -> Option<ParsedTolkIntLiteral> {
+    let (radix, digits) = if let Some(rest) = raw.strip_prefix("0x") {
+        (16, normalize_int_literal_digits(rest, 16)?)
+    } else if let Some(rest) = raw.strip_prefix("0b") {
+        (2, normalize_int_literal_digits(rest, 2)?)
+    } else {
+        (10, normalize_int_literal_digits(raw, 10)?)
+    };
+
+    Some(ParsedTolkIntLiteral { radix, digits })
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct NumberLit<'tree>(pub Node<'tree>);
 
 impl_ast_node!(NumberLit, "number_literal");
+
+impl<'tree> NumberLit<'tree> {
+    #[must_use]
+    pub fn parse_i32(&self, source: &'tree str) -> Option<i32> {
+        parse_tolk_int_literal(self.text(source))?.parse_i32()
+    }
+
+    #[must_use]
+    pub fn parse_u32(&self, source: &'tree str) -> Option<u32> {
+        parse_tolk_int_literal(self.text(source))?.parse_u32()
+    }
+
+    #[must_use]
+    pub fn parse_u64(&self, source: &'tree str) -> Option<u64> {
+        parse_tolk_int_literal(self.text(source))?.parse_u64()
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct BoolLit<'tree>(pub Node<'tree>);
 
 impl_ast_node!(BoolLit, "boolean_literal");
 
-impl<'tree> BoolLit<'tree> {
+impl BoolLit<'_> {
     #[must_use]
     pub fn value(&self) -> bool {
         let width = self.0.end_byte() - self.0.start_byte();
@@ -674,6 +758,8 @@ impl<'tree> LambdaParameter<'tree> {
 }
 
 impl<'tree> HasName<'tree> for LambdaParameter<'tree> {
+    type Name = Ident<'tree>;
+
     fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
@@ -714,6 +800,7 @@ impl<'tree> VarDeclLhs<'tree> {
         self.kind_node().map_or(VarKind::Var, VarKind::from)
     }
 
+    #[must_use]
     pub fn kind_node(&self) -> Option<Node<'tree>> {
         self.0.field("kind")
     }
@@ -783,6 +870,7 @@ pub struct TupleVars<'tree>(pub Node<'tree>);
 impl_ast_node!(TupleVars, "tuple_vars_declaration");
 
 impl<'tree> TupleVars<'tree> {
+    #[must_use]
     pub fn vars(&self) -> AstChildren<'tree, VarDeclPattern<'tree>> {
         AstChildren::new(self.0)
     }
@@ -794,6 +882,7 @@ pub struct TensorVars<'tree>(pub Node<'tree>);
 impl_ast_node!(TensorVars, "tensor_vars_declaration");
 
 impl<'tree> TensorVars<'tree> {
+    #[must_use]
     pub fn vars(&self) -> AstChildren<'tree, VarDeclPattern<'tree>> {
         AstChildren::new(self.0)
     }
@@ -817,6 +906,8 @@ impl<'tree> VarDecl<'tree> {
 }
 
 impl<'tree> HasName<'tree> for VarDecl<'tree> {
+    type Name = Ident<'tree>;
+
     fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
     }
@@ -838,6 +929,7 @@ pub struct ArgumentList<'tree>(pub Node<'tree>);
 impl_ast_node!(ArgumentList, "argument_list");
 
 impl<'tree> ArgumentList<'tree> {
+    #[must_use]
     pub fn arguments(&self) -> AstChildren<'tree, CallArgument<'tree>> {
         AstChildren::new(self.0)
     }
@@ -866,6 +958,7 @@ pub struct MatchBody<'tree>(pub Node<'tree>);
 impl_ast_node!(MatchBody, "match_body");
 
 impl<'tree> MatchBody<'tree> {
+    #[must_use]
     pub fn arms(&self) -> AstChildren<'tree, MatchArm<'tree>> {
         AstChildren::new(self.0)
     }
@@ -950,6 +1043,7 @@ pub struct ObjectLiteralBody<'tree>(pub Node<'tree>);
 impl_ast_node!(ObjectLiteralBody, "object_literal_body");
 
 impl<'tree> ObjectLiteralBody<'tree> {
+    #[must_use]
     pub fn arguments(&self) -> AstChildren<'tree, InstanceArg<'tree>> {
         AstChildren::new(self.0)
     }
@@ -965,10 +1059,70 @@ impl<'tree> InstanceArg<'tree> {
     pub fn value(&self) -> Option<Expr<'tree>> {
         self.0.field("value")
     }
+
+    #[must_use]
+    pub fn has_value_separator(&self) -> bool {
+        let mut cursor = self.0.walk();
+        self.0
+            .children(&mut cursor)
+            .any(|child| child.kind() == ":")
+    }
 }
 
 impl<'tree> HasName<'tree> for InstanceArg<'tree> {
+    type Name = Ident<'tree>;
+
     fn name(&self) -> Option<Ident<'tree>> {
         self.0.field("name")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_tolk_int_literal;
+
+    #[test]
+    fn parse_decimal_literal_with_separators() {
+        let literal = parse_tolk_int_literal("1_000_000").expect("literal must parse");
+
+        assert_eq!(literal.radix(), 10);
+        assert_eq!(literal.digits(), "1000000");
+        assert_eq!(literal.digit_len(), 7);
+        assert_eq!(literal.parse_u64(), Some(1_000_000));
+    }
+
+    #[test]
+    fn parse_hex_and_binary_literals_with_separators() {
+        let hex = parse_tolk_int_literal("0xFF_FF_").expect("hex literal must parse");
+        assert_eq!(hex.radix(), 16);
+        assert_eq!(hex.digits(), "FFFF");
+        assert_eq!(hex.digit_len(), 4);
+        assert_eq!(hex.parse_u64(), Some(0xFFFF));
+
+        let binary = parse_tolk_int_literal("0b_0____1").expect("binary literal must parse");
+        assert_eq!(binary.radix(), 2);
+        assert_eq!(binary.digits(), "01");
+        assert_eq!(binary.digit_len(), 2);
+        assert_eq!(binary.parse_u32(), Some(1));
+    }
+
+    #[test]
+    fn parse_int_literal_detects_zero_across_bases() {
+        for raw in ["0", "0_0", "0x0_0", "0b_0___0"] {
+            let literal = parse_tolk_int_literal(raw).expect("zero literal must parse");
+            assert_eq!(
+                literal.parse_i32(),
+                Some(0),
+                "{raw} should be treated as zero"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_int_literal_rejects_missing_digits_after_prefix() {
+        assert!(parse_tolk_int_literal("0x").is_none());
+        assert!(parse_tolk_int_literal("0x_").is_none());
+        assert!(parse_tolk_int_literal("0b").is_none());
+        assert!(parse_tolk_int_literal("0b_").is_none());
     }
 }

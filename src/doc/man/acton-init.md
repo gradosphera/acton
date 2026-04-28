@@ -1,0 +1,182 @@
+# acton-init(1)
+
+## Name
+
+acton-init --- Initialize Acton support in the current directory
+
+## Synopsis
+
+`acton init` [_options_]
+
+## Description
+
+Initialize Acton support in the current working directory.
+
+By default, this command is intended for existing repositories or ad-hoc
+directories where you want to add `Acton.toml`, standard Acton ignore rules,
+the bundled standard library, and symlinks to global wallet and library
+overlays.
+
+If `Acton.toml` already exists, `acton init` patches in default mappings when
+they are missing instead of creating a fresh scaffold. That patch path rewrites
+the parsed manifest, so TOML comments and unknown keys are not preserved.
+
+If `Acton.toml` does not exist, the command scans `.tolk` files in the current
+directory tree and auto-registers files that define `onInternalMessage` as
+contract entry files.
+
+With `--create-app`, `acton init` switches to app-only mode. In that mode,
+Acton does not create or patch `Acton.toml`, `.gitignore`, `.acton/`,
+or overlay symlinks. It only creates a Vite-based TypeScript app scaffold in
+`./app` by default, or in the provided path.
+
+## Idempotency
+
+`acton init` is safe to run repeatedly.
+
+- it does not delete and recreate an existing `Acton.toml`, but it may rewrite
+  the file when backfilling default mappings
+- it backfills default `import-mappings` only when they are missing
+- it appends missing `.gitignore` patterns without deleting existing ones
+- it refreshes `.acton/tolk-stdlib`
+- it re-attempts global wallet and library symlinks on each run
+
+The `--create-app` mode is not idempotent: it fails if the target app
+directory already exists.
+
+## Init Options
+
+{{#options}}
+
+{{#option "`--create-app` [_path_]" }}
+Create a Vite-based TypeScript app scaffold instead of performing project
+initialization.
+
+If `_path_` is omitted, Acton uses `app`. The target directory must not already
+exist.
+{{/option}}
+
+{{/options}}
+
+## Display Options
+
+{{> options-display }}
+
+## Project Options
+
+{{> options-project-pass-through }}
+
+## Generated And Patched Files
+
+The default `acton init` flow can create or update:
+
+- `Acton.toml`
+- `.gitignore`
+- `.acton/`
+- local symlinks for `global.wallets.toml` and `global.libraries.toml`
+
+With `--create-app`, `acton init` only creates `app/` or the provided app
+directory.
+
+When `Acton.toml` is created from scratch, it starts from Acton's default
+project config and may include:
+
+- `[package]` metadata
+- `[fmt]` defaults
+- discovered `[contracts]`
+- default `[import-mappings]`
+
+When `Acton.toml` already exists, `acton init` only backfills missing default
+`[import-mappings]` entries. This patch path reloads the file into Acton's typed
+config and writes it back out, so comments and unknown keys are dropped.
+
+When patching `.gitignore`, Acton adds groups for:
+
+- Acton artifacts such as `.acton/`, `gen/`, `build/`, and `lcov.info`
+- local and global wallet/library overlay files
+- `.env` and mnemonic files
+
+## Contract Discovery
+
+When generating a new `Acton.toml`, contract discovery:
+
+- walks the current directory recursively
+- skips hidden directories and entries such as `node_modules`, `target`, `.git`,
+  and `.acton`
+- considers `.tolk` files only
+- treats files with an `onInternalMessage` function as contract entry files
+- derives the contract key from the file stem with `-` normalized to `_`
+- derives the default display name from the file stem by splitting on `_` and
+  `-`, then capitalizing each word
+
+## Standard Library
+
+`acton init` ensures that the bundled Tolk standard library is installed into
+`.acton/tolk-stdlib`.
+
+If global wallet or library overlay files already exist, `acton init` also
+tries to create local symlinks for them. Existing local files and non-dangling
+symlinks are left in place; Acton only creates the link when the local path
+does not already resolve. If the local path is a dangling symlink, Acton still
+attempts link creation because the path looks missing, but that attempt
+currently warns instead of repairing the dangling link.
+
+If symlinks for global wallets or libraries cannot be created, Acton prints a
+warning and still completes initialization. This is relevant on systems where
+symlink creation is restricted.
+
+## Side Effects
+
+The default `acton init` flow writes or patches local project files and may
+create local symlinks to global overlay files. It does not modify Git config.
+When it patches an existing `Acton.toml`, it rewrites the parsed manifest and
+may drop TOML comments or unknown keys; `.gitignore` patching remains
+append-only.
+
+With `--create-app`, `acton init` writes only inside the new app directory and
+does not touch Acton project files.
+
+## Exit Status
+
+- `0`: Initialization completed successfully, including no-op repeat runs.
+- `1`: Manifest parsing, stdlib installation, writing or patching project
+  files, or another hard filesystem operation failed. Contract discovery skips
+  unreadable/unparseable `.tolk` files, and overlay symlink failures only warn.
+
+## Examples
+
+1. Initialize Acton support in an existing repository:
+
+   ```bash
+   acton init
+   ```
+
+2. Regenerate default mappings in an existing `Acton.toml`:
+
+   ```bash
+   acton init
+   ```
+
+3. Create only the default app scaffold:
+
+   ```bash
+   acton init --create-app
+   ```
+
+4. Create only the app scaffold in `frontend/`:
+
+   ```bash
+   acton init --create-app frontend
+   ```
+
+5. Re-run safely after adding more contracts:
+
+   ```bash
+   acton init
+   ```
+
+## See Also
+
+- `acton help new`
+- `acton help doctor`
+- [Project initialization guide](https://ton-blockchain.github.io/acton/docs/tutorial/project-init)

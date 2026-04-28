@@ -10,21 +10,23 @@
 ///
 /// Examples:
 /// ```tolk
-/// // Set custom gas prices
-/// var config = net.blockchainConfig();
-/// val gasPrice = GasPricesSimple {
-///     gasPrice: 1000,
-///     gasLimit: 1000000,
-///     gasCredit: 10000,
-///     blockGasLimit: 10000000,
-///     freezeDueLimit: 1000000000,
-///     deleteDueLimit: 5000000000
+/// // Set custom gas prices while running tests
+/// var config = testing.getConfig();
+/// val gasPrices = GasPrices {
+///     flatGasLimit: 0,
+///     flatGasPrice: 0,
+///     other: GasPricesExtended {
+///         gasPrice: 1000,
+///         gasLimit: 1_000_000,
+///         // ...
+///     },
 /// };
-/// config.setGasPrices(simplePrices, MASTERCHAIN);
+/// config.setGasPrices(gasPrices, MASTERCHAIN);
+/// testing.setConfig(config); // apply to emulated environment
 ///
 /// // Access storage prices
 /// val storagePrices = config.getStoragePrices();
-/// println1("Bit price: {}", storagePrices);
+/// println("Bit price: {}", storagePrices);
 /// ```
 
 import "../testing/assert"
@@ -36,16 +38,19 @@ import "../testing/assert"
 /// Configuration parameters are defined in the [`block.tlb`](https://github.com/ton-blockchain/ton/blob/master/crypto/block/block.tlb)
 /// TL-B schema.
 ///
-/// `Config.set*` methods mutate only this in-memory map.
-/// To apply updates to the emulator globally, call [net.setConfig] with the mutated config.
-type Config = map<uint32, cell>
+/// `BlockchainConfigMap.set*` methods mutate only this in-memory map.
+/// To apply updates to the emulator globally, call [testing.setConfig] with the
+/// mutated config. That apply step updates both the emulator world state and
+/// the current VM context's C7-visible config mirrors, so follow-up reads in
+/// the same test run see the committed values.
+type BlockchainConfigMap = map<uint32, cell>
 
 /// Sets a raw configuration parameter at the given index.
 ///
 /// This is a low-level function that directly stores a cell at the specified parameter index.
 /// For type-safe parameter access, prefer using specialized setter functions such as
-/// [Config.setGasPrices], [Config.setStoragePrices], or [Config.setGlobalVersion].
-/// This mutates only the local [Config] value until you call [net.setConfig].
+/// [BlockchainConfigMap.setGasPrices], [BlockchainConfigMap.setStoragePrices], or [BlockchainConfigMap.setGlobalVersion].
+/// This mutates only the local [BlockchainConfigMap] value until you call [testing.setConfig].
 ///
 /// Parameters:
 /// - `index`: The configuration parameter index (typically 0-90)
@@ -55,7 +60,7 @@ type Config = map<uint32, cell>
 /// ```tolk
 /// config.setParamRaw(20, gasCell);
 /// ```
-fun Config.setParamRaw(mutate self, index: uint32, data: cell) {
+fun BlockchainConfigMap.setParamRaw(mutate self, index: uint32, data: cell): void {
     self.set(index, data);
 }
 
@@ -63,7 +68,7 @@ fun Config.setParamRaw(mutate self, index: uint32, data: cell) {
 ///
 /// This is a low-level function that returns a cell containing the serialized configuration data.
 /// For type-safe parameter access, prefer using specialized getter functions such as
-/// [Config.getGasPrices], [Config.getStoragePrices], or [Config.getGlobalVersion].
+/// [BlockchainConfigMap.getGasPrices], [BlockchainConfigMap.getStoragePrices], or [BlockchainConfigMap.getGlobalVersion].
 ///
 /// Parameters:
 /// - `index`: The configuration parameter index (typically 0-90)
@@ -74,7 +79,7 @@ fun Config.setParamRaw(mutate self, index: uint32, data: cell) {
 /// ```tolk
 /// val paramCell = config.getParamRaw(20);
 /// ```
-fun Config.getParamRaw(self, index: uint32) {
+fun BlockchainConfigMap.getParamRaw(self, index: uint32): cell {
     return self.get(index).loadValue();
 }
 
@@ -100,7 +105,7 @@ struct (0xc4) GlobalVersion {
 /// This function updates the network version and validator capabilities configuration.
 /// When validators vote to update the network, they update this parameter, allowing
 /// the TON Blockchain to upgrade without downtime.
-/// This mutates only the local [Config] value until you call [net.setConfig].
+/// This mutates only the local [BlockchainConfigMap] value until you call [testing.setConfig].
 ///
 /// Parameters:
 /// - `version`: The new global network version struct containing version and capabilities
@@ -112,11 +117,11 @@ struct (0xc4) GlobalVersion {
 ///     capabilities: 0xFF
 /// };
 /// config.setGlobalVersion(newVersion);
-/// if (!net.setConfig(config)) {
+/// if (!testing.setConfig(config)) {
 ///     Assert.fail("Failed to apply config");
 /// }
 /// ```
-fun Config.setGlobalVersion(mutate self, version: GlobalVersion) {
+fun BlockchainConfigMap.setGlobalVersion(mutate self, version: GlobalVersion): void {
     self.set(GLOBAL_VERSION_INDEX, version.toCell());
 }
 
@@ -130,9 +135,9 @@ fun Config.setGlobalVersion(mutate self, version: GlobalVersion) {
 /// Example:
 /// ```tolk
 /// val version = config.getGlobalVersion();
-/// println(format2("Network version: {}, capabilities: {}", version.version, version.capabilities));
+/// println("Network version: {}, capabilities: {}", version.version, version.capabilities);
 /// ```
-fun Config.getGlobalVersion(self) {
+fun BlockchainConfigMap.getGlobalVersion(self): GlobalVersion {
     return GlobalVersion.fromCell(self.get(GLOBAL_VERSION_INDEX).loadValue());
 }
 
@@ -183,9 +188,9 @@ const INITIAL_UNIXTIME_STORAGE_INDEX = 0
 /// ```tolk
 /// val storagePrices = config.getStoragePrices();
 /// val initialPrices = storagePrices.getInitial();
-/// println1("Initial bit price: {}", initialPrices.bitPrice);
+/// println("Initial bit price: {}", initialPrices.bitPrice);
 /// ```
-fun StoragePricesDict.getInitial(self) {
+fun StoragePricesDict.getInitial(self): StoragePrices {
     val entry = self.get(INITIAL_UNIXTIME_STORAGE_INDEX);
     if (!entry.isFound) {
         Assert.fail("No value found for INITIAL_UNIXTIME_STORAGE_INDEX");
@@ -214,11 +219,11 @@ fun StoragePricesDict.getInitial(self) {
 /// };
 /// storagePrices.setInitial(newInitialPrices);
 /// config.setStoragePrices(storagePrices);
-/// if (!net.setConfig(config)) {
+/// if (!testing.setConfig(config)) {
 ///     Assert.fail("Failed to apply config");
 /// }
 /// ```
-fun StoragePricesDict.setInitial(mutate self, prices: StoragePrices) {
+fun StoragePricesDict.setInitial(mutate self, prices: StoragePrices): void {
     self.set(INITIAL_UNIXTIME_STORAGE_INDEX, prices);
 }
 
@@ -227,27 +232,27 @@ fun StoragePricesDict.setInitial(mutate self, prices: StoragePrices) {
 /// Storage prices are organized as a dictionary mapping timestamps to price structures,
 /// allowing for price adjustments over time. This function updates the entire storage
 /// price dictionary.
-/// This mutates only the local [Config] value until you call [net.setConfig].
+/// This mutates only the local [BlockchainConfigMap] value until you call [testing.setConfig].
 ///
 /// Parameters:
 /// - `prices`: A dictionary mapping Unix timestamps to [StoragePrices] configurations
 ///
 /// Example:
 /// ```tolk
-/// var pricesDict = StoragePricesDict.fromMap(createEmptyMap<uint32, StoragePrices>());
-/// pricesDict.set(1000000, StoragePrices {
-///     initialUnixTime: 1000000,
+/// var pricesDict = StoragePricesDict [];
+/// pricesDict.set(1_000_000, StoragePrices {
+///     initialUnixTime: 1_000_000,
 ///     bitPrice: 1,
 ///     cellPrice: 1000,
 ///     masterchainBitPrice: 1,
 ///     masterchainCellPrice: 1000
 /// });
 /// config.setStoragePrices(pricesDict);
-/// if (!net.setConfig(config)) {
+/// if (!testing.setConfig(config)) {
 ///     Assert.fail("Failed to apply config");
 /// }
 /// ```
-fun Config.setStoragePrices(mutate self, prices: StoragePricesDict) {
+fun BlockchainConfigMap.setStoragePrices(mutate self, prices: StoragePricesDict): void {
     val pricesDict = prices.toCell();
     val pricesRef = pricesDict.beginParse().loadRef();
 
@@ -264,11 +269,11 @@ fun Config.setStoragePrices(mutate self, prices: StoragePricesDict) {
 /// Example:
 /// ```tolk
 /// val storagePrices = config.getStoragePrices();
-/// val prices = storagePrices.get(1000000);
-/// println(format3("Bit price: {}, Cell price: {}, Masterchain bit price: {}",
-///     prices.bitPrice, prices.cellPrice, prices.masterchainBitPrice));
+/// val prices = storagePrices.get(1_000_000);
+/// println("Bit price: {}, Cell price: {}, Masterchain bit price: {}",
+///     prices.bitPrice, prices.cellPrice, prices.masterchainBitPrice);
 /// ```
-fun Config.getStoragePrices(self) {
+fun BlockchainConfigMap.getStoragePrices(self): StoragePricesDict {
     val rawDict = self.get(STORAGE_PRICES_INDEX).loadValue();
 
     return StoragePricesDict.fromCell(beginCell().storeBool(true).storeRef(rawDict).endCell());
@@ -301,7 +306,7 @@ struct (0xde) GasPricesExtended {
 struct (0xd1) GasPrices {
     /// Initial gas amount provided at flat price before standard pricing applies.
     flatGasLimit: uint64
-    /// Flat price applied to the initial [GasPricesPrefix.flatGasLimit] amount of gas.
+    /// Flat price applied to the initial [GasPrices.flatGasLimit] amount of gas.
     flatGasPrice: uint64
     /// Additional gas pricing configuration applied after the flat pricing.
     other: GasPricesExtended
@@ -323,9 +328,11 @@ const BASECHAIN_GAS_PRICES_INDEX = 21
 /// - `prices`: Gas price configuration struct
 /// - `chainType`: Chain type constant - either `BASECHAIN` for basechain prices (Param 21) or `MASTERCHAIN` for masterchain prices (Param 20)
 ///
-/// This mutates only the local [Config] value until you call [net.setConfig].
-fun Config.setGasPrices(mutate self, prices: GasPrices, chainType: int) {
-    val index = chainType == MASTERCHAIN ? MASTERCHAIN_GAS_PRICES_INDEX : BASECHAIN_GAS_PRICES_INDEX;
+/// This mutates only the local [BlockchainConfigMap] value until you call [testing.setConfig].
+fun BlockchainConfigMap.setGasPrices(mutate self, prices: GasPrices, chainType: int): void {
+    val index = chainType == MASTERCHAIN
+        ? MASTERCHAIN_GAS_PRICES_INDEX
+        : BASECHAIN_GAS_PRICES_INDEX;
     self.set(index, prices.toCell());
 }
 
@@ -341,10 +348,12 @@ fun Config.setGasPrices(mutate self, prices: GasPrices, chainType: int) {
 /// Example:
 /// ```tolk
 /// val gasPrices = config.getGasPrices(BASECHAIN);
-/// println1("Gas limit basechain: {}", gasPrices);
+/// println("Gas limit basechain: {}", gasPrices);
 /// ```
-fun Config.getGasPrices(self, chainType: int) {
-    val index = chainType == MASTERCHAIN ? MASTERCHAIN_GAS_PRICES_INDEX : BASECHAIN_GAS_PRICES_INDEX;
+fun BlockchainConfigMap.getGasPrices(self, chainType: int): GasPrices {
+    val index = chainType == MASTERCHAIN
+        ? MASTERCHAIN_GAS_PRICES_INDEX
+        : BASECHAIN_GAS_PRICES_INDEX;
     return GasPrices.fromCell(self.get(index).loadValue());
 }
 
@@ -382,7 +391,7 @@ const BASECHAIN_MSG_FORWARD_PRICES_INDEX = 25
 /// - `prices`: Message forwarding price configuration
 /// - `chainType`: If equal to `MASTERCHAIN`, uses Param 24; any other value (including `BASECHAIN`) uses Param 25
 ///
-/// This mutates only the local [Config] value until you call [net.setConfig].
+/// This mutates only the local [BlockchainConfigMap] value until you call [testing.setConfig].
 ///
 /// Example:
 /// ```tolk
@@ -395,11 +404,15 @@ const BASECHAIN_MSG_FORWARD_PRICES_INDEX = 25
 ///     nextFrac: 21845
 /// };
 /// config.setMsgForwardPrices(msgPrices, MASTERCHAIN);
-/// if (!net.setConfig(config)) {
+/// if (!testing.setConfig(config)) {
 ///     Assert.fail("Failed to apply config");
 /// }
 /// ```
-fun Config.setMsgForwardPrices(mutate self, prices: MsgForwardPrices, chainType: int) {
+fun BlockchainConfigMap.setMsgForwardPrices(
+    mutate self,
+    prices: MsgForwardPrices,
+    chainType: int,
+): void {
     val index = chainType == MASTERCHAIN
         ? MASTERCHAIN_MSG_FORWARD_PRICES_INDEX
         : BASECHAIN_MSG_FORWARD_PRICES_INDEX;
@@ -419,10 +432,10 @@ fun Config.setMsgForwardPrices(mutate self, prices: MsgForwardPrices, chainType:
 /// Example:
 /// ```tolk
 /// val msgPrices = config.getMsgForwardPrices(BASECHAIN);
-/// println(format3("Lump price: {}, Bit price: {}, Cell price: {}",
-///     msgPrices.lumpPrice, msgPrices.bitPrice, msgPrices.cellPrice));
+/// println("Lump price: {}, Bit price: {}, Cell price: {}",
+///     msgPrices.lumpPrice, msgPrices.bitPrice, msgPrices.cellPrice);
 /// ```
-fun Config.getMsgForwardPrices(self, chainType: int) {
+fun BlockchainConfigMap.getMsgForwardPrices(self, chainType: int): MsgForwardPrices {
     val index = chainType == MASTERCHAIN
         ? MASTERCHAIN_MSG_FORWARD_PRICES_INDEX
         : BASECHAIN_MSG_FORWARD_PRICES_INDEX;
@@ -458,10 +471,12 @@ struct (0xc0) PrecompiledContractsConfig {
 ///
 /// Returns `true` when a new entry is inserted.
 /// Returns `false` for duplicate `hash` values, and keeps the original `gasUsage` unchanged.
-fun PrecompiledContractsConfig.addContractGas(mutate self, hash: uint256, gasForComputePhase: uint64) {
-    return self.list.addIfNotExists(hash, {
-        gasUsage: gasForComputePhase,
-    });
+fun PrecompiledContractsConfig.addContractGas(
+    mutate self,
+    hash: uint256,
+    gasForComputePhase: uint64,
+): bool {
+    return self.list.addIfNotExists(hash, { gasUsage: gasForComputePhase });
 }
 
 /// Sets the precompiled contracts configuration (Param 45).
@@ -469,24 +484,27 @@ fun PrecompiledContractsConfig.addContractGas(mutate self, hash: uint256, gasFor
 /// Updates the list of precompiled smart contracts and their associated gas costs.
 /// Precompiled contracts are system-provided optimizations for common cryptographic
 /// and utility operations.
-/// This mutates only the local [Config] value until you call [net.setConfig].
+/// This mutates only the local [BlockchainConfigMap] value until you call [testing.setConfig].
 ///
 /// Parameters:
 /// - `precompiledConfig`: Configuration containing the dictionary of precompiled contracts
 ///
 /// Example:
 /// ```tolk
-/// var contractsList = createEmptyMap<uint256, PrecompiledSmartContract>();
+/// var contractsList = map<uint256, PrecompiledSmartContract> [];
 /// contractsList.set(0x123456, PrecompiledSmartContract { gasUsage: 1000 });
 /// val precompiledConfig = PrecompiledContractsConfig {
 ///     list: contractsList
 /// };
 /// config.setPrecompiledContractsConfig(precompiledConfig);
-/// if (!net.setConfig(config)) {
+/// if (!testing.setConfig(config)) {
 ///     Assert.fail("Failed to apply config");
 /// }
 /// ```
-fun Config.setPrecompiledContractsConfig(mutate self, precompiledConfig: PrecompiledContractsConfig) {
+fun BlockchainConfigMap.setPrecompiledContractsConfig(
+    mutate self,
+    precompiledConfig: PrecompiledContractsConfig,
+): void {
     self.set(PRECOMPILED_CONTRACTS_CONFIG_INDEX, precompiledConfig.toCell());
 }
 
@@ -495,8 +513,8 @@ fun Config.setPrecompiledContractsConfig(mutate self, precompiledConfig: Precomp
 /// Returns the configuration of all precompiled contracts available in the network,
 /// including their fixed gas costs.
 /// In the default emulator config this dictionary starts with one built-in entry.
-/// If you explicitly write an empty dictionary via [Config.setPrecompiledContractsConfig]
-/// and apply it with [net.setConfig], subsequent reads return an empty dictionary.
+/// If you explicitly write an empty dictionary via [BlockchainConfigMap.setPrecompiledContractsConfig]
+/// and apply it with [testing.setConfig], subsequent reads return an empty dictionary.
 ///
 /// Returns: [PrecompiledContractsConfig] containing the precompiled contracts dictionary.
 ///
@@ -505,7 +523,8 @@ fun Config.setPrecompiledContractsConfig(mutate self, precompiledConfig: Precomp
 /// val precompiledConfig = config.getPrecompiledContractsConfig();
 /// val contractsList = precompiledConfig.list;
 /// ```
-fun Config.getPrecompiledContractsConfig(self) {
-    return PrecompiledContractsConfig.fromCell(self.get(PRECOMPILED_CONTRACTS_CONFIG_INDEX)
-        .loadValue());
+fun BlockchainConfigMap.getPrecompiledContractsConfig(self): PrecompiledContractsConfig {
+    return PrecompiledContractsConfig.fromCell(
+        self.get(PRECOMPILED_CONTRACTS_CONFIG_INDEX).loadValue(),
+    );
 }

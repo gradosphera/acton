@@ -1,0 +1,784 @@
+'\" t
+.TH "ACTON\-TEST" "1"
+.nh
+.ad l
+.ss \n[.ss] 0
+.SH "NAME"
+acton\-test \[em] Discover and run Tolk smart contract tests
+.SH "SYNOPSIS"
+\fBacton test\fR [\fIoptions\fR] [\fIpath\fR]
+.SH "DESCRIPTION"
+Discover and execute tests from \fB\&.test.tolk\fR files.
+.sp
+The test runner supports filtering, multiple reporters, coverage collection,
+gas snapshots, mutation testing, trace export, remote\-state fork mode, and a
+browser UI for exploring results.
+.SH "OPTIONS"
+.SS "Discovery Options"
+.sp
+\fIpath\fR
+.RS 4
+Test file or directory to run.
+.sp
+If omitted, Acton discovers tests from the resolved project root.
+.RE
+.sp
+\fB\-f\fR, \fB\-\-filter\fR \fIpattern\fR
+.RS 4
+Filter tests by regular expression.
+.RE
+.sp
+\fB\-\-exclude\fR \fIglob\fR
+.RS 4
+Exclude test files or directories matching a glob pattern.
+.sp
+May be passed multiple times.
+.RE
+.sp
+\fB\-\-include\fR \fIglob\fR
+.RS 4
+Include only test files or directories matching a glob pattern.
+.sp
+May be passed multiple times.
+.RE
+.SS "Execution Options"
+.sp
+\fB\-\-fail\-fast\fR
+.RS 4
+Stop after the first failing test.
+.RE
+.sp
+\fB\-\-fuzz\-seed\fR \fIseed\fR
+.RS 4
+Seed for reproducible fuzz runs.
+.RE
+.sp
+\fB\-\-verbose\fR
+.RS 4
+Enable executor debug logs at verbosity level \fB1\fR\&.
+.sp
+Currently only level \fB1\fR is supported. Pass \fB\-\-verbose\fR at most once.
+Use this for low\-level executor output such as \fBdebug.dumpStack()\fR\&. For richer
+debug output, use \fB\-\-backtrace full\fR or \fB\-\-debug\fR\&.
+.RE
+.SS "Debugging Options"
+.sp
+\fB\-\-debug\fR
+.RS 4
+Enable debug mode.
+.sp
+This also raises executor verbosity to collect full source locations and stack
+context for live stepping.
+.RE
+.sp
+\fB\-\-debug\-port\fR \fIport\fR
+.RS 4
+Debug server port.
+.RE
+.sp
+\fB\-\-backtrace\fR \fIlevel\fR
+.RS 4
+Enable execution backtraces.
+.sp
+Currently supported value: \fBfull\fR\&.
+Full backtraces also raise executor verbosity to collect source locations and
+call stacks without opening the debugger.
+.RE
+.SS "Coverage Options"
+.sp
+\fB\-\-coverage\fR
+.RS 4
+Generate a coverage profile.
+.sp
+Coverage also raises internal executor verbosity enough to map executed
+locations back to source files and lines, but it does not enable stepping or
+print backtraces by itself.
+.RE
+.sp
+\fB\-\-coverage\-format\fR \fIformat\fR
+.RS 4
+Coverage output format.
+.sp
+Possible values: \fBlcov\fR, \fBtext\fR
+.RE
+.sp
+\fB\-\-coverage\-file\fR \fIpath\fR
+.RS 4
+Output file for the coverage report.
+.RE
+.sp
+\fB\-\-coverage\-minimum\-percent\fR \fIpercent\fR
+.RS 4
+Fail when the final coverage score is below this percentage.
+.sp
+Valid range: \fB0\fR to \fB100\fR\&.
+.sp
+Ignored with \fB\-\-ui\fR\&.
+.RE
+.sp
+\fB\-\-coverage\-include\-wrappers\fR
+.RS 4
+Include files from the \fB@wrappers\fR mapping in coverage reports.
+.RE
+.sp
+\fB\-\-coverage\-include\-tests\fR
+.RS 4
+Include \fB\&.test.tolk\fR files in coverage reports.
+.RE
+.SS "Profiling Options"
+.sp
+\fB\-\-snapshot\fR \fIpath\fR
+.RS 4
+Write gas usage statistics to a JSON snapshot file.
+.RE
+.sp
+\fB\-\-baseline\-snapshot\fR \fIpath\fR
+.RS 4
+Compare gas usage with a baseline snapshot.
+.RE
+.sp
+\fB\-\-fail\-on\-diff\fR
+.RS 4
+Exit non\-zero when the current run differs from the baseline snapshot.
+.sp
+Requires \fB\-\-baseline\-snapshot\fR\&.
+.RE
+.SS "Reporting Options"
+.sp
+\fB\-\-reporter\fR \fIformat\fR[,\fIformat\fR\[u2026]]_
+.RS 4
+Report format list.
+.sp
+Possible values: \fBconsole\fR, \fBteamcity\fR, \fBjunit\fR, \fBdot\fR
+.RE
+.sp
+\fB\-\-show\-bodies\fR
+.RS 4
+Show decoded message bodies in printed transaction trees when ABI is known.
+.RE
+.sp
+\fB\-\-junit\-path\fR \fIpath\fR
+.RS 4
+Output directory for JUnit XML reports.
+.RE
+.sp
+\fB\-\-junit\-merge\fR
+.RS 4
+Merge all test suites into a single JUnit XML file.
+.RE
+.sp
+\fB\-\-ui\fR
+.RS 4
+Open test results in a browser UI.
+.RE
+.sp
+\fB\-\-ui\-port\fR \fIport\fR
+.RS 4
+Port for the browser UI server.
+.RE
+.SS "Cache Options"
+.sp
+\fB\-\-clear\-cache\fR
+.RS 4
+Clear the compilation cache before running tests.
+.RE
+.SS "Remote Options"
+.sp
+\fB\-\-fork\-net\fR \fInetwork\fR
+.RS 4
+Fork remote blockchain state for account resolution.
+.RE
+.sp
+\fB\-\-fork\-block\-number\fR \fIseqno\fR
+.RS 4
+Historical block sequence number to fork from.
+.RE
+.SS "Tracing Options"
+.sp
+\fB\-\-save\-test\-trace\fR [\fIdir\fR]
+.RS 4
+Save transaction traces to a directory.
+.sp
+If passed without a value, Acton uses \fBbuild/traces\fR\&.
+Acton writes one \fB<test\-name>_trace.json\fR file per executed test and stores
+shared contract metadata under \fBcontracts/<contract\-name>.json\fR\&.
+These filenames are derived only from the test name and contract name, so
+duplicate names overwrite earlier artifacts in the same output directory.
+Relative paths are resolved from the project root.
+.RE
+.SH "TONCENTER API KEYS"
+When tests fork from the built\-in \fBmainnet\fR/\fBtestnet\fR backends, authenticated
+requests read \fBTONCENTER_MAINNET_API_KEY\fR or \fBTONCENTER_TESTNET_API_KEY\fR\&.
+.sp
+When tests fork from \fBcustom:<name>\fR, Acton reads \fB<NORMALIZED_NAME>_API_KEY\fR\&.
+Custom network names are uppercased and non\-alphanumeric characters are
+replaced with \fB_\fR, so \fBcustom:mock\-remote\fR becomes \fBMOCK_REMOTE_API_KEY\fR\&.
+.sp
+Acton loads \fB\&.env\fR automatically, so the simplest setup during project work is
+usually to keep these keys there and use shell environment variables only for
+one\-off overrides or CI.
+.SS "Mutation Testing Options"
+.sp
+\fB\-\-mutate\fR
+.RS 4
+Run tests in mutation testing mode.
+.RE
+.sp
+\fB\-\-mutate\-contract\fR \fIcontract\-name\fR
+.RS 4
+Contract name to mutate during mutation testing.
+.RE
+.sp
+\fB\-\-mutation\-diff\fR \fImode\fR
+.RS 4
+Limit mutation testing to changed lines in the selected diff scope.
+.sp
+Accepted values: \fBworktree\fR, \fBref\fR, \fBbranch\fR\&.
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBworktree\fR compares the current worktree with \fBHEAD\fR and includes untracked
+files
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBref\fR compares against the explicit ref passed with \fB\-\-mutation\-diff\-ref\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBbranch\fR compares against the merge\-base with the current branch upstream, or
+against \fB\-\-mutation\-diff\-ref\fR when provided
+.RE
+.RE
+.sp
+\fB\-\-mutation\-diff\-ref\fR \fIref\fR
+.RS 4
+Base ref used by diff\-based mutation testing modes.
+.sp
+Required with \fB\-\-mutation\-diff ref\fR\&. Optional with \fB\-\-mutation\-diff branch\fR\&.
+Use it with \fBbranch\fR when the current branch has no upstream or when you want a
+different comparison base such as \fBorigin/main\fR\&.
+.RE
+.sp
+\fB\-\-mutation\-levels\fR \fIlevel[,level\[u2026]]\fR
+.RS 4
+Run only selected mutation levels.
+.sp
+Accepted values: \fBcritical\fR, \fBmajor\fR, \fBminor\fR\&.
+Useful for faster local runs such as \fBcritical,major\fR\&.
+.RE
+.sp
+\fB\-\-mutation\-rules\-file\fR \fIpath\fR
+.RS 4
+Load custom query\-based mutation rules from a JSON file.
+.sp
+Custom rules are merged with built\-in rules. If a custom rule uses the same
+rule ID, it overrides the built\-in one. Relative paths are resolved from the
+project root.
+.RE
+.sp
+\fB\-\-mutation\-session\-id\fR \fIid\fR
+.RS 4
+Use a specific mutation session ID for progress logging and resume.
+.sp
+Acton writes append\-only JSON Lines progress to
+\fBbuild/mutation\-sessions/<ID>.jsonl\fR\&. Re\-run with the same session ID and the
+same mutation filters to continue an unfinished session.
+If you stop the run with \fBCtrl+C\fR, Acton prints a resume command that includes
+the same session ID.
+.RE
+.sp
+\fB\-\-mutation\-workers\fR \fIcount\fR
+.RS 4
+Override the number of mutation workers.
+.sp
+By default, Acton uses the host\[cq]s available parallelism. Each worker keeps its
+own isolated mutation workspace and reuses it across multiple mutants.
+.RE
+.sp
+\fB\-\-mutation\-id\fR \fIid\fR
+.RS 4
+Run only specific mutation IDs from a previous mutation report.
+.sp
+Pass the mutation number shown in the report, and use the same mutation filters
+such as \fB\-\-mutation\-diff\fR, \fB\-\-mutation\-levels\fR, and \fB\-\-mutation\-disable\-rules\fR as the
+original run. May be passed multiple times or as a comma\-separated list.
+.RE
+.sp
+\fB\-\-mutation\-minimum\-percent\fR \fIpercent\fR
+.RS 4
+Fail if mutation score is below this percentage.
+.sp
+Valid range: \fB0..=100\fR\&.
+.RE
+.sp
+\fB\-\-mutation\-disable\-rules\fR \fIrule\fR
+.RS 4
+Disable a specific mutation rule.
+.sp
+May be passed multiple times.
+.RE
+.SS "Display Options"
+.sp
+\fB\-\-color\fR \fIwhen\fR
+.RS 4
+Control when to use colored output.
+.sp
+Possible values: \fBauto\fR, \fBalways\fR, \fBnever\fR
+.RE
+.SS "Project Options"
+.sp
+\fB\-\-manifest\-path\fR \fIpath\fR
+.RS 4
+Path to the \fBActon.toml\fR file to use for this invocation.
+.sp
+Use this when running the command outside the project directory or when the
+manifest lives at a non\-default location.
+.RE
+.sp
+\fB\-\-project\-root\fR \fIpath\fR
+.RS 4
+Path to the project root to use for configuration discovery and relative
+defaults.
+.sp
+This conflicts with \fB\-\-manifest\-path\fR\&.
+.RE
+.SH "DISCOVERY"
+Acton discovers tests by finding files that end with \fB\&.test.tolk\fR\&.
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'If \fB_path_\fR is omitted, discovery starts at the resolved project root
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'If \fB_path_\fR is a directory, search is recursive
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'Relative \fB_path_\fR values are resolved from the current working directory
+.RE
+.SH "REPORTING AND ARTIFACTS"
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-reporter\fR on the CLI overrides \fB[test].reporter\fR for the current run
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-ui\fR adds the browser UI in addition to text reporters
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-coverage \-\-ui\fR adds a \fBCoverage\fR tab to the browser UI for browsing
+coverage summaries, files, and annotated source
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-junit\-path\fR matters when the JUnit reporter is enabled; the default output
+directory is \fBtest\-results\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'executor debug logs are hidden by default; re\-run with \fB\-\-verbose\fR when you need
+level\-1 executor output such as \fBdebug.dumpStack()\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-verbose\fR is only low\-level executor logging; \fB\-\-coverage\fR also collects
+source\-location data, while \fB\-\-backtrace full\fR and \fB\-\-debug\fR collect richer
+location and stack data
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-coverage\-file\fR matters only with \fB\-\-coverage\fR; without an explicit path,
+Acton writes \fBlcov.info\fR for \fBlcov\fR and \fBcoverage.txt\fR for \fBtext\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'coverage summaries show line and branch columns plus a blended \fBScore\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'LCOV export includes \fBBRDA\fR, \fBBRF\fR, and \fBBRH\fR records when branch sites were
+observed for a file
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-coverage\-minimum\-percent\fR checks the final blended \fBScore\fR shown in the
+summary, not just \fB% Lines\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'coverage excludes \fB\&.test.tolk\fR files and \fB@wrappers\fR sources by default;
+use \fB\-\-coverage\-include\-tests\fR or \fB\-\-coverage\-include\-wrappers\fR to opt in
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-save\-test\-trace\fR without a value writes traces to \fBbuild/traces\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'each executed test produces its own \fB<test\-name>_trace.json\fR artifact
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'exported bundles also include \fBcontracts/<contract\-name>.json\fR files with
+code, source maps, and ABI metadata reused across tests in the same bundle
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'trace chains default to names like \fBTrace 1\fR; use \fBtxs.giveName("...")\fR when
+you want stable human\-readable names in exported artifacts and the Test UI
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'when you split execution with \fBtesting.createTraceIterationCursor()\fR,
+exported traces still merge batches that belong to the same logical root
+transaction chain
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-ui\fR also enables the default trace bundle directory when
+\fB\-\-save\-test\-trace\fR is otherwise absent
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'gas snapshot files are written only to the explicit paths passed to
+\fB\-\-snapshot\fR or \fB\-\-baseline\-snapshot\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB[test.fuzz]\fR applies only to parameterized tests that explicitly opt in with
+\fB@test.fuzz\fR, \fB@test.fuzz(<runs>)\fR, or \fB@test.fuzz({ ... })\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-fuzz\-seed\fR overrides \fB[test.fuzz].seed\fR for the current run
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'fuzz tests show the seed in console output; if \fB[test.fuzz].seed\fR is omitted,
+Acton picks a new seed for each \fBacton test\fR run
+.RE
+.SH "DOT REPORTER"
+Use \fBdot\fR when you want compact progress output but still need full failure
+diagnostics at the end of the run:
+.sp
+.RS 4
+.nf
+acton test \-\-reporter dot
+.fi
+.RE
+.sp
+The progress line uses one character per test:
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\[u00B7]\fR passed
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBx\fR failed
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\[u25CB]\fR skipped
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\[u25A1]\fR todo
+.RE
+.sp
+When a test fails, the dot reporter prints the same important diagnostics as the
+console reporter after the progress line: assertion diffs, transaction trees,
+get\-method errors, fuzz seed and input values, stdout/stderr, and source
+locations. With \fB\-\-backtrace full\fR, runtime failures also include backtrace
+frames:
+.sp
+.RS 4
+.nf
+acton test \-\-reporter dot \-\-backtrace full
+.fi
+.RE
+.sp
+If coverage is enabled, dot failure details are printed before the coverage
+summary so the failing test remains visible near the progress output.
+.SH "CONFIGURATION"
+Defaults can be configured in \fBActon.toml\fR:
+.sp
+.RS 4
+.nf
+[test]
+reporter = ["console"]
+filter = ".*jetton.*"
+junit\-path = "reports"
+junit\-merge = false
+
+[test.fuzz]
+runs = 512
+max\-test\-rejects = 4096
+seed = 42
+
+[test.coverage]
+enabled = true
+# valid range: 0..=100
+minimum\-percent = 85
+include\-tests = true
+include\-wrappers = true
+
+[test.mutation]
+diff = "branch"
+diff\-ref = "origin/main"
+mutation\-levels = ["critical", "major"]
+minimum\-percent = 85
+disable\-rules = ["replace_plus_with_minus"]
+.fi
+.RE
+.sp
+CLI flags override config values for the current invocation.
+.SH "NOTES"
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'If both \fB\-\-snapshot\fR and \fB\-\-baseline\-snapshot\fR are provided, Acton runs in
+comparison mode and does not overwrite the snapshot file
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-fail\-on\-diff\fR requires \fB\-\-baseline\-snapshot\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'The UI and trace export features are useful for debugging failing tests and
+inspecting transaction trees
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'You can combine \fB\-\-coverage\fR and \fB\-\-ui\fR to inspect the current run\[cq]s coverage
+directly in the browser UI
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-coverage\-minimum\-percent\fR and \fB[test.coverage].minimum\-percent\fR are ignored
+when \fB\-\-ui\fR is enabled
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-fork\-net\fR keeps execution local while resolving blockchain state remotely
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-diff worktree\fR is intended for uncommitted local changes
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-diff ref\fR requires \fB\-\-mutation\-diff\-ref\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-diff branch\fR uses the upstream branch merge\-base by default
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-rules\-file\fR loads custom query\-based rules from JSON and custom
+rules override built\-in rules with the same ID
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-session\-id\fR writes append\-only JSONL progress to
+\fBbuild/mutation\-sessions/<ID>.jsonl\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-workers\fR defaults to the host\[cq]s available parallelism; each
+worker reuses its own isolated mutation workspace
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'pressing \fBCtrl+C\fR during mutation testing stops the run without finalizing the
+session and prints a resume command for the same session ID
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-id\fR expects mutation numbers from a previous run with the same mutation
+filters and session selection
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'mutation scores in filtered runs only cover the selected mutants
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB\-\-mutation\-minimum\-percent\fR and \fB[test.mutation].minimum\-percent\fR apply to
+that filtered mutation score after compile errors are excluded
+.RE
+.SH "EXIT STATUS"
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB0\fR: All selected tests passed, or a non\-mutating reporting mode completed
+successfully.
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB1\fR: At least one test failed, profiling drift was detected with
+\fB\-\-fail\-on\-diff\fR, line coverage was below the configured minimum in non\-UI
+coverage mode, mutation score was below the configured minimum in mutation
+mode, no tests matched after filtering, or infrastructure such as
+compilation, trace export, UI startup, or remote\-state resolution failed.
+.RE
+.SH "EXAMPLES"
+.sp
+.RS 4
+\h'-04' 1.\h'+01'Run all tests:
+.sp
+.RS 4
+.nf
+acton test
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 2.\h'+01'Filter tests by name:
+.sp
+.RS 4
+.nf
+acton test \-\-filter "wallet.*"
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 3.\h'+01'Show executor debug logs from \fBdebug.*\fR helpers:
+.sp
+.RS 4
+.nf
+acton test \-\-verbose \-\-filter "debug.*"
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 4.\h'+01'Generate coverage and JUnit output:
+.sp
+.RS 4
+.nf
+acton test \-\-coverage \-\-coverage\-format lcov \-\-reporter junit \-\-junit\-path test\-results
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 5.\h'+01'Fail the run when line coverage drops below 85%:
+.sp
+.RS 4
+.nf
+acton test \-\-coverage \-\-coverage\-minimum\-percent 85
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 6.\h'+01'Compare gas usage against a baseline:
+.sp
+.RS 4
+.nf
+acton test \-\-baseline\-snapshot build/gas\-baseline.json \-\-fail\-on\-diff
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 7.\h'+01'Run mutation testing for one contract:
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract Wallet
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 8.\h'+01'Run mutation testing only for changed lines in the current worktree:
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract Wallet \-\-mutation\-diff worktree
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 9.\h'+01'Run mutation testing for selected levels on the current branch:
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract Wallet \-\-mutation\-diff branch \-\-mutation\-levels critical,major
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 10.\h'+01'Re\-run one specific mutant from a previous report:
+.RE
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract Wallet \-\-mutation\-id 2
+.fi
+.RE
+.sp
+.RS 4
+\h'-04' 11.\h'+01'Resume an unfinished mutation session:
+.RE
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract Wallet \-\-mutation\-session\-id wallet\-pr\-42 \-\-mutation\-diff worktree
+.fi
+.RE
+.sp
+.RS 4
+\h'-04' 12.\h'+01'Fail the run when mutation score drops below 85%:
+.RE
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract Wallet \-\-mutation\-minimum\-percent 85
+.fi
+.RE
+.sp
+.RS 4
+\h'-04' 13.\h'+01'Limit mutation testing to four workers:
+.RE
+.sp
+.RS 4
+.nf
+acton test \-\-mutate \-\-mutate\-contract Wallet \-\-mutation\-workers 4
+.fi
+.RE
+.sp
+.RS 4
+\h'-04' 14.\h'+01'Debug a forked\-state failure with traces and the UI:
+.RE
+.sp
+.RS 4
+.nf
+acton test tests/wallet.test.tolk \-\-fork\-net testnet \-\-fork\-block\-number 55000000 \-\-save\-test\-trace \-\-ui
+.fi
+.RE
+.sp
+.RS 4
+\h'-04' 15.\h'+01'Enforce a gas baseline in CI:
+.RE
+.sp
+.RS 4
+.nf
+acton test \-\-baseline\-snapshot build/gas\-baseline.json \-\-fail\-on\-diff \-\-reporter console,junit
+.fi
+.RE
+.SH "SEE ALSO"
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBacton help wrapper\fR
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fITest runner guide\fR <https://ton\-blockchain.github.io/acton/docs/testing/overview>
+.RE

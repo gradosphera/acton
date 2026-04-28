@@ -1,99 +1,133 @@
-<img width="150px" src="docs/public/logo.png">
-
 # Acton
 
-Blazingly fast ~~shit~~ toolkit for TON application development written in
-Rust.
+<img align="right" src="docs/public/logo.png" height="150px" alt="Acton logo" />
 
-## Building
+Acton is an all-in-one TON smart contract development toolkit written in Rust.
+It combines project scaffolding, build, testing, scripting, wallet and network
+operations, verification, linting, formatting, debugging, and low-level VM
+tooling in one CLI.
 
-Clone TON monorepo fork:
+Documentation: https://ton-blockchain.github.io/acton/docs/welcome
 
-```
-git clone https://github.com/i582/ton/tree/pmakhnev/acton
-```
+<br clear="right" />
 
-Build and copy artifacts to `./objs`:
+## Why Acton
 
-```
-sh assembly/native/build-macos-static.sh -a && mkdir ../acton/objs && cp ./artifacts/libemulator.a ./artifacts/libtolk.a ../acton/objs
-```
+- Single CLI for the full contract lifecycle: create, build, test, debug,
+  deploy, verify.
+- Native speed (Rust-based toolchain and test runtime).
+- Tolk-first workflow with built-in wrappers, testing utilities, and scripts.
+- Fast test runner with fork mode, gas snapshots, coverage, mutation and fuzzing testing and nice UI.
+- Browser test UI for failed tests, traces, logs, and coverage inspection.
+- Local development node with faucet, forking, snapshots, and persistence.
 
-Run Rust compilation:
+## Install
 
-```
-cargo build
-```
-
-In release mode:
-
-```
-cargo build --release
-```
-
-## Run
-
-```
-target/debug/acton test foo.test.tolk
-# or target/release/acton test foo.test.tolk
-```
-
-## Documentation
-
-See [Documentation](https://i582.github.io/acton/docs/welcome/).
-
-## Development
-
-### Prerequisites
-
-To run tests and contribute to Acton, you'll need to install the following
-dependencies:
-
-1. **just**: Command runner used for all development tasks.
-   ```bash
-   cargo install just
-   ```
-2. **cargo-nextest**: Modern test runner (highly recommended for faster and
-   better test output).
-   ```bash
-   cargo install cargo-nextest
-   ```
-3. **bun**: Required for building the Acton Test UI.
-   ```bash
-   curl -fsSL https://bun.sh/install | bash
-   ```
-4. **cargo-llvm-cov**: For test coverage reports (optional).
-   ```bash
-   cargo install cargo-llvm-cov
-   rustup component add llvm-tools-preview
-   ```
-5. **System Dependencies**:
-    - **macOS**: `brew install libsodium libmicrohttpd pkg-config graphviz`
-    - **Linux**:
-      `sudo apt install libsodium-dev libmicrohttpd-dev pkg-config graphviz`
-
-### Running Tests
-
-Run all tests (automatically uses `nextest` if available):
+The recommended way to get Acton today is to run the latest public installer:
 
 ```bash
-just test
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/i582/acton-public/releases/latest/download/acton-installer.sh | sh
 ```
 
-Update test snapshots:
+If you prefer a manual download, use the latest public release:
+
+| Platform | Architecture | Download                                                                                                                                       |
+|----------|--------------|------------------------------------------------------------------------------------------------------------------------------------------------|
+| macOS    | ARM64        | [acton-aarch64-apple-darwin.tar.gz](https://github.com/i582/acton-public/releases/latest/download/acton-aarch64-apple-darwin.tar.gz)           |
+| macOS    | x86_64       | [acton-x86_64-apple-darwin.tar.gz](https://github.com/i582/acton-public/releases/latest/download/acton-x86_64-apple-darwin.tar.gz)             |
+| Linux    | x86_64       | [acton-x86_64-unknown-linux-gnu.tar.gz](https://github.com/i582/acton-public/releases/latest/download/acton-x86_64-unknown-linux-gnu.tar.gz)   |
+| Linux    | ARM64        | [acton-aarch64-unknown-linux-gnu.tar.gz](https://github.com/i582/acton-public/releases/latest/download/acton-aarch64-unknown-linux-gnu.tar.gz) |
+
+After extracting the archive, make sure `acton` is on your `PATH` and verify
+the installation:
 
 ```bash
-just test-update
+acton --version
 ```
 
-Run specific test suites:
+If you prefer a containerized workflow, use the published Docker image:
 
 ```bash
-# Integration tests
-cargo test --test integration_test
-
-# Debugger tests (must run sequentially)
-cargo test --test debug_test -- --test-threads 1
+docker run --rm ghcr.io/ton-blockchain/acton:<version> --version
 ```
 
-See also: [justfile](justfile) for all available commands.
+To run Acton against the current project from Docker:
+
+```bash
+docker run --rm \
+  -v "$PWD":/workspace \
+  -w /workspace \
+  ghcr.io/ton-blockchain/acton:<version> \
+  build
+```
+
+For more installation details, see the
+[installation guide](https://ton-blockchain.github.io/acton/docs/installation).
+
+## Support policy
+
+Acton is currently distributed as a public beta. The stable release channel is
+the latest numbered GitHub release, and the first-class platform matrix is
+macOS (ARM64, x86_64) plus Linux GNU (x86_64, ARM64). For Linux, the
+documented baseline is Ubuntu 20.04 or newer. Native Windows is not supported
+today. If you use Windows, run Acton inside WSL with Ubuntu 20.04 or newer and
+follow the Linux installation path there. `trunk` builds installed via
+`acton up --trunk`, WSL installs, and other source-built targets are beta /
+best-effort surfaces for now. The full policy is documented at
+[Support policy](https://ton-blockchain.github.io/acton/docs/miscellaneous/support-policy).
+
+## From zero to testnet
+
+```bash
+# Create a new project from the built-in counter template
+acton new first_counter --template counter
+cd first_counter
+
+# Build and test locally
+acton build
+acton test
+
+# Create and fund a local testnet wallet
+acton wallet new --name deployer --local --airdrop --version v5r1
+
+# Deploy to TON testnet
+acton script scripts/deploy.tolk --net testnet
+```
+
+For a step-by-step walkthrough, see the
+[quickstart guide](https://ton-blockchain.github.io/acton/docs/quickstart).
+
+Already have a repository instead of starting from a template? The existing
+project path is:
+
+```bash
+cd your-repo
+acton init
+acton build
+acton test
+```
+
+For more details, see the [Project initialization](https://ton-blockchain.github.io/acton/docs/tutorial/project-init) article.
+
+## Building from source
+
+Source builds are intended for contributors and local development. See
+[Building from source](CONTRIBUTING.md#building-from-source) in CONTRIBUTING.md.
+
+## Contributing
+
+Contributor setup, test workflows, UI build steps, and docs workflows are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Acton is licensed under either of
+
+- Apache License, Version 2.0, ([LICENSE-APACHE](./LICENSE-APACHE) or https://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](./LICENSE-MIT) or https://opensource.org/licenses/MIT)
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for
+inclusion in Acton by you, as defined in the Apache-2.0 license, shall be dually licensed
+as above, without any additional terms or conditions.

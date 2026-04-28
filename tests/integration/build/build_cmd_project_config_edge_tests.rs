@@ -14,9 +14,60 @@ fn append_build_output_fift(project_root: &Path, output_fift: &str) {
     fs::write(acton_toml_path, acton_toml).expect("write Acton.toml with [build] section");
 }
 
+fn append_build_out_dir(project_root: &Path, out_dir: &str) {
+    let acton_toml_path = project_root.join("Acton.toml");
+    let mut acton_toml = fs::read_to_string(&acton_toml_path).expect("read Acton.toml");
+    acton_toml.push_str(&format!("\n[build]\nout-dir = \"{out_dir}\"\n"));
+    fs::write(acton_toml_path, acton_toml).expect("write Acton.toml with [build] section");
+}
+
+fn append_build_gen_dir(project_root: &Path, gen_dir: &str) {
+    let acton_toml_path = project_root.join("Acton.toml");
+    let mut acton_toml = fs::read_to_string(&acton_toml_path).expect("read Acton.toml");
+    acton_toml.push_str(&format!("\n[build]\ngen-dir = \"{gen_dir}\"\n"));
+    fs::write(acton_toml_path, acton_toml).expect("write Acton.toml with [build] section");
+}
+
 #[test]
-fn build_supports_quoted_contract_keys_in_dependency_resolution() {
-    let project = ProjectBuilder::new("build-config-edge-quoted-keys")
+fn build_accepts_contract_without_display_name() {
+    let project = ProjectBuilder::new("build-config-edge-optional-display-name")
+        .raw_file(
+            "contracts/no-display.tolk",
+            r"fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+",
+        )
+        .build();
+
+    write_acton_toml(
+        project.path(),
+        r#"[package]
+name = "build-config-edge-optional-display-name"
+description = ""
+version = "0.1.0"
+
+[contracts.no-display]
+src = "contracts/no-display.tolk"
+depends = []
+"#,
+    );
+
+    project
+        .acton()
+        .build()
+        .run()
+        .success()
+        .assert_contains("Compiling no-display");
+
+    assert!(
+        project.path().join("build/no-display.json").exists(),
+        "build artifact should use the contract key when display-name is omitted"
+    );
+}
+
+#[test]
+fn build_supports_quoted_contract_names_in_dependency_resolution() {
+    let project = ProjectBuilder::new("build-config-edge-quoted-names")
         .raw_file(
             "contracts/child.lib.tolk",
             r"fun onInternalMessage(_: InMessage) {}
@@ -34,17 +85,17 @@ fun onBouncedMessage(_: InMessageBounced) {}
     write_acton_toml(
         project.path(),
         r#"[package]
-name = "build-config-edge-quoted-keys"
+name = "build-config-edge-quoted-names"
 description = ""
 version = "0.1.0"
 
 [contracts."child.lib"]
-name = "Child Library"
+display-name = "Child Library"
 src = "contracts/child.lib.tolk"
 depends = []
 
 [contracts.parent-contract]
-name = "Parent Contract"
+display-name = "Parent Contract"
 src = "contracts/parent-contract.tolk"
 depends = ["child.lib"]
 "#,
@@ -60,14 +111,14 @@ depends = ["child.lib"]
 
     assert!(
         project.path().join("build/child.lib.json").exists(),
-        "build artifact should use quoted contract key for child contract"
+        "build artifact should use quoted contract name for child contract"
     );
     assert!(
         project.path().join("build/parent-contract.json").exists(),
-        "build artifact should use hyphenated contract key for parent contract"
+        "build artifact should use hyphenated contract name for parent contract"
     );
 
-    let generated_dep = fs::read_to_string(project.path().join("gen/child.lib_code.tolk"))
+    let generated_dep = fs::read_to_string(project.path().join("gen/child.lib.code.tolk"))
         .expect("read generated dependency file");
     assert!(
         generated_dep.contains("fun childLibCompiledCode(): cell"),
@@ -98,6 +149,136 @@ fun onBouncedMessage(_: InMessageBounced) {}
     assert!(
         !project.path().join("build/fift/simple.fif").exists(),
         "empty [build].output-fift should disable fift output emission"
+    );
+}
+
+#[test]
+fn build_ignores_empty_out_dir_path_in_project_config() {
+    let project = ProjectBuilder::new("build-config-edge-empty-out-dir")
+        .contract(
+            "simple",
+            r"fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+",
+        )
+        .build();
+
+    append_build_out_dir(project.path(), "");
+
+    project
+        .acton()
+        .build()
+        .run()
+        .success()
+        .assert_contains("Finished");
+
+    assert!(
+        project.path().join("build/simple.json").exists(),
+        "empty [build].out-dir should fall back to default build output directory"
+    );
+}
+
+#[test]
+fn build_cli_out_dir_overrides_empty_out_dir_config_value() {
+    let project = ProjectBuilder::new("build-config-edge-cli-overrides-empty-out-dir")
+        .contract(
+            "simple",
+            r"fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+",
+        )
+        .build();
+
+    append_build_out_dir(project.path(), "");
+
+    project
+        .acton()
+        .build()
+        .with_out_dir("cli-artifacts")
+        .run()
+        .success()
+        .assert_contains("Finished");
+
+    assert!(
+        project.path().join("cli-artifacts/simple.json").exists(),
+        "CLI --out-dir should take precedence over empty config out-dir"
+    );
+}
+
+#[test]
+fn build_ignores_empty_gen_dir_path_in_project_config() {
+    let project = ProjectBuilder::new("build-config-edge-empty-gen-dir")
+        .contract(
+            "child",
+            r"fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+",
+        )
+        .contract_with_deps(
+            "parent",
+            r#"
+            import "../gen/child.code.tolk"
+
+            fun onInternalMessage(in: InMessage) {
+                val code = childCompiledCode();
+            }
+            fun onBouncedMessage(_: InMessageBounced) {}
+        "#,
+            vec!["child"],
+        )
+        .build();
+
+    append_build_gen_dir(project.path(), "");
+
+    project
+        .acton()
+        .build()
+        .run()
+        .success()
+        .assert_contains("Finished");
+
+    assert!(
+        project.path().join("gen/child.code.tolk").exists(),
+        "empty [build].gen-dir should fall back to default generated dependency directory"
+    );
+}
+
+#[test]
+fn build_cli_gen_dir_overrides_empty_gen_dir_config_value() {
+    let project = ProjectBuilder::new("build-config-edge-cli-overrides-empty-gen-dir")
+        .contract(
+            "child",
+            r"fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+",
+        )
+        .contract_with_deps(
+            "parent",
+            r#"
+            import "../cli-gen/child.code.tolk"
+
+            fun onInternalMessage(in: InMessage) {
+                val code = childCompiledCode();
+            }
+            fun onBouncedMessage(_: InMessageBounced) {}
+        "#,
+            vec!["child"],
+        )
+        .build();
+
+    append_build_gen_dir(project.path(), "");
+
+    project
+        .acton()
+        .build()
+        .with_gen_dir("cli-gen")
+        .run()
+        .success()
+        .assert_contains("Finished");
+
+    assert!(
+        project.path().join("cli-gen/child.code.tolk").exists(),
+        "CLI --gen-dir should take precedence over empty config gen-dir"
     );
 }
 
@@ -153,12 +334,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [{ kind = "library_ref", function = "childCode" }]
 "#,
@@ -199,12 +380,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [42]
 "#,
@@ -245,12 +426,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = { name = "child" }
 "#,
@@ -319,11 +500,11 @@ description = ""
 version = "0.1.0"
 
 [contracts.base]
-name = "Base"
+display-name = "Base"
 src = "contracts/base.tolk"
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = ["base"]
 "#,
@@ -346,7 +527,7 @@ depends = ["base"]
         "root contract should build when depending on base"
     );
     assert!(
-        project.path().join("gen/base_code.tolk").exists(),
+        project.path().join("gen/base.code.tolk").exists(),
         "dependency code should still be generated for root -> base dependency"
     );
 }
@@ -376,12 +557,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [{ name = "child", kind = "dynamic_ref" }]
 "#,
@@ -422,12 +603,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [""]
 "#,
@@ -467,12 +648,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [{ name = "", kind = "embed_code", function = "childCode" }]
 "#,
@@ -513,12 +694,12 @@ description = ""
 version = "0.1.0"
 
 [contracts.child]
-name = "Child"
+display-name = "Child"
 src = "contracts/child.tolk"
 depends = []
 
 [contracts.root]
-name = "Root"
+display-name = "Root"
 src = "contracts/root.tolk"
 depends = [{ name = "child" }]
 "#,
@@ -532,7 +713,7 @@ depends = [{ name = "child" }]
         .assert_contains("Compiling Child")
         .assert_contains("Compiling Root");
 
-    let generated_dep = fs::read_to_string(project.path().join("gen/child_code.tolk"))
+    let generated_dep = fs::read_to_string(project.path().join("gen/child.code.tolk"))
         .expect("read generated dependency file");
     assert!(
         generated_dep.contains("fun childCompiledCode(): cell asm"),

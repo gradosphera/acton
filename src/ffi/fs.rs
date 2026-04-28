@@ -1,7 +1,7 @@
 use crate::context::Context;
 use ton_emulator::{extension, register_ext_methods};
 use ton_executor::BaseExecutor;
-use tvmffi::stack::{Tuple, TupleItem};
+use tvm_ffi::stack::{Tuple, TupleItem};
 
 extension!(read_file in (Context) with (path: String) using read_file_impl);
 fn read_file_impl(_ctx: &mut Context, stack: &mut Tuple, path: String) -> anyhow::Result<()> {
@@ -43,9 +43,7 @@ fn write_bytes_impl(
         TupleItem::Slice(cell) | TupleItem::Cell(cell) => Tuple::parse_snake_bytes(&cell),
         _ => None,
     };
-    let success = data
-        .map(|bytes| std::fs::write(&path, bytes).is_ok())
-        .unwrap_or(false);
+    let success = data.is_some_and(|bytes| std::fs::write(&path, bytes).is_ok());
     stack.push_bool(success);
     Ok(())
 }

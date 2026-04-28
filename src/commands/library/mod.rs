@@ -1,33 +1,32 @@
 use crate::commands::common::{error_fmt, select_contract, select_wallet};
 use crate::commands::disasm::disasm_cmd;
+use crate::external_send::{SendBocContext, format_send_boc_error};
 use crate::wallets::open_wallets;
 use acton_config::color::OwoColorize;
-use acton_config::config::{ActonConfig, global_libraries_path};
+use acton_config::config::{ActonConfig, global_libraries_path, project_root};
 use anyhow::{Context, anyhow};
 use chrono::{DateTime, Local};
 use inquire::{Select, Text};
-use num_bigint::BigUint;
 use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
-use tasm::printer::FormatOptions;
+use tasm_core::printer::FormatOptions;
 use tempfile::TempDir;
-use tolkc::CompilerResult;
+use tolk_compiler::CompilerResult;
 use toml_edit::{DocumentMut, Item, Table, value};
+use ton::ton_core::cell::TonCell;
+use ton::ton_core::traits::tlb::TLB;
 use ton_api::{Network, TonApiClient};
-use tonlib_core::TonAddress;
-use tonlib_core::cell::ArcCell;
-use tonlib_core::tlb_types::block::coins::{CurrencyCollection, Grams};
-use tonlib_core::tlb_types::block::message::{CommonMsgInfo, IntMsgInfo, Message};
-use tonlib_core::tlb_types::block::state_init::StateInit;
-use tonlib_core::tlb_types::primitives::either::EitherRef;
-use tonlib_core::tlb_types::primitives::reference::Ref;
-use tonlib_core::tlb_types::tlb::TLB;
 use tycho_types::boc::Boc;
-use tycho_types::cell::{CellImpl, HashBytes};
+use tycho_types::boc::BocRepr;
+use tycho_types::cell::{Cell, CellBuilder, CellImpl, CellSliceParts, HashBytes};
+use tycho_types::models::{
+    Base64StdAddrFlags, CurrencyCollection, DisplayBase64StdAddr, IntAddr, IntMsgInfo, MsgInfo,
+    OwnedMessage, StateInit, StdAddr, StdAddrFormat,
+};
 
 #[allow(clippy::too_many_arguments)]
 pub fn publish_cmd(
@@ -35,7 +34,6 @@ pub fn publish_cmd(
     code_arg: Option<String>,
     duration_arg: Option<String>,
     wallet_name: Option<String>,
-    api_key: Option<String>,
     net: String,
     amount_arg: Option<String>,
     yes: bool,
@@ -59,8 +57,7 @@ pub fn publish_cmd(
         let contract = config
             .get_contract(&contract_key)
             .ok_or_else(|| anyhow!(error_fmt::contract_not_found(&config, &contract_key)))?;
-        let contract_path = dunce::canonicalize(contract.src.clone())
-            .unwrap_or_else(|_| PathBuf::from(contract.src.clone()));
+        let contract_path = contract.absolute_source_path(project_root());
 
         if contract_path.extension() != Some("tolk".as_ref()) {
             anyhow::bail!("Contract source must be a {} file", ".tolk".yellow());
@@ -69,7 +66,8 @@ pub fn publish_cmd(
         contract_id = Some(contract_key.clone());
 
         println!("  {} Compiling contract", "→".blue().bold());
-        let compiler = tolkc::Compiler::new(2).with_mappings(&config.mappings);
+        let mappings = config.mappings();
+        let compiler = tolk_compiler::Compiler::new(2).with_mappings(&mappings);
         let compilation_result = compiler.compile(Path::new(&contract_path), false);
 
         match compilation_result {
@@ -90,7 +88,7 @@ pub fn publish_cmd(
     println!(
         "  {} Library hash: {}",
         "→".blue().bold(),
-        hex::encode(library_hash).dimmed()
+        format!("0x{}", hex::encode(library_hash)).dimmed()
     );
 
     let duration_seconds = if let Some(d) = duration_arg {
@@ -111,25 +109,23 @@ pub fn publish_cmd(
     let librarian_code = compile_librarian_with_duration(duration_seconds)?;
 
     let workchain = -1;
-    let publisher_data = ArcCell::from_boc(&Boc::encode(&library_code_cell))?;
+    let publisher_data = library_code_cell.clone();
     let state_init = StateInit {
         split_depth: None,
-        tick_tock: None,
-        code: Some(Ref::new(librarian_code)),
-        data: Some(Ref::new(publisher_data)),
-        library: None,
+        special: None,
+        code: Some(librarian_code),
+        data: Some(publisher_data),
+        libraries: Default::default(),
     };
-    let state_init_cell = state_init.to_cell()?;
-    let state_init_hash = state_init_cell.cell_hash();
+    let state_init_cell = CellBuilder::build_from(&state_init)?;
+    let state_init_hash = state_init_cell.repr_hash();
 
-    let publisher_address = TonAddress::new(workchain, state_init_hash);
+    let publisher_address = StdAddr::new(workchain, HashBytes(*state_init_hash.as_array()));
 
     println!(
         "  {} Publisher address: {}",
         "→".blue().bold(),
-        publisher_address
-            .to_base64_url_flags(true, net == "testnet")
-            .dimmed()
+        format_std_address(&publisher_address, &network).dimmed()
     );
 
     let wallet_name = select_wallet(wallet_name, &config)?;
@@ -142,11 +138,7 @@ pub fn publish_cmd(
         "  {} Using wallet: {} {}",
         "→".blue().bold(),
         wallet_name.cyan(),
-        wallet
-            .wallet
-            .address
-            .to_base64_url_flags(true, net == "testnet")
-            .dimmed()
+        format_std_address(&wallet.address(), &network).dimmed()
     );
 
     let (bits, cells) = calculate_cell_size(library_code_cell.as_ref(), &mut HashSet::new());
@@ -196,7 +188,7 @@ pub fn publish_cmd(
 
     let config = ActonConfig::load().unwrap_or_default();
     let custom_networks = config.custom_networks();
-    let api_client = TonApiClient::new(network, custom_networks, api_key)?;
+    let api_client = TonApiClient::new(network.clone(), custom_networks)?;
     let (seqno, need_state_init) = wallet.seqno(&api_client)?;
 
     let expired_at_time = std::time::SystemTime::now() + std::time::Duration::from_secs(600);
@@ -208,51 +200,60 @@ pub fn publish_cmd(
         ihr_disabled: true,
         bounce: false,
         bounced: false,
-        src: wallet.wallet.address.to_msg_address(),
-        dest: publisher_address.to_msg_address(),
-        value: CurrencyCollection::new(BigUint::from(amount_to_send_nanoton)),
-        ihr_fee: Grams::new(BigUint::from(0u64)),
-        fwd_fee: Grams::new(BigUint::from(0u64)),
+        src: IntAddr::Std(wallet.address()),
+        dst: IntAddr::Std(publisher_address.clone()),
+        value: CurrencyCollection::new(amount_to_send_nanoton),
+        ihr_fee: Default::default(),
+        fwd_fee: Default::default(),
         created_at: 0,
         created_lt: 0,
     };
 
-    let message = Message {
-        info: CommonMsgInfo::Int(message_info),
-        init: Some(EitherRef::new(state_init)),
-        body: EitherRef::new(ArcCell::default()),
+    let message = OwnedMessage {
+        info: MsgInfo::Int(message_info),
+        init: Some(state_init),
+        body: CellSliceParts::from(CellBuilder::new().build()?),
+        layout: None,
     };
 
-    let message_cell = message.to_cell()?;
-    let external = wallet.wallet.create_external_msg(
-        expire_at,
-        seqno,
-        need_state_init,
-        vec![message_cell.to_arc()],
-    )?;
+    let message_cell_boc = BocRepr::encode(message)?;
+    let message_cell = TonCell::from_boc(message_cell_boc)?;
+    let external =
+        wallet
+            .wallet
+            .create_ext_in_msg(vec![message_cell], seqno, expire_at, need_state_init)?;
 
+    let boc = &external.to_boc_base64()?;
+    let network_name = network.to_string();
+    let context = SendBocContext::wallet(&wallet, &network_name, seqno, need_state_init);
     api_client
-        .send_boc(&external.to_boc_b64(false)?)
+        .send_boc(boc)
+        .map_err(|error| format_send_boc_error(error, context))
         .context("Failed to send publication transaction")?;
 
     println!("  {} Transaction sent successfully", "✓".green().bold());
     println!(
         "  {} Library should be available soon at hash: {}",
         "→".blue().bold(),
-        hex::encode(library_hash).dimmed()
+        format!("0x{}", hex::encode(library_hash)).dimmed()
     );
 
     save_library(
         contract_id.as_deref().unwrap_or("unknown"),
         &hex::encode(library_hash),
         &Boc::encode_base64(&library_code_cell),
-        &publisher_address.to_base64_url_flags(true, net == "testnet"),
+        &format_std_address(&publisher_address, &network),
         duration_seconds,
-        net,
+        if network == Network::Localnet {
+            "localnet".to_string()
+        } else {
+            net
+        },
         bits,
         cells,
         local,
         global,
+        project_root(),
     )?;
 
     println!("  {} Library info saved", "✓".green().bold());
@@ -280,7 +281,6 @@ fn calculate_cell_size(cell: &dyn CellImpl, seen: &mut HashSet<HashBytes>) -> (u
 pub fn fetch_cmd(
     hash: String,
     disasm: bool,
-    api_key: Option<String>,
     output: Option<String>,
     net: String,
     json: bool,
@@ -288,10 +288,10 @@ pub fn fetch_cmd(
     let config = ActonConfig::load().unwrap_or_default();
     let custom_networks = config.custom_networks();
     let network = Network::from_str(&net)?;
-    let client = TonApiClient::new(network, custom_networks, api_key)?;
+    let client = TonApiClient::new(network, custom_networks)?;
 
     if !json {
-        println!("  {} Fetching library: {}", "→".blue().bold(), hash);
+        println!("  {} Fetching library: 0x{hash}", "→".blue().bold());
     }
 
     let hash = HashBytes::from_str(&hash).context("Invalid library hash format")?;
@@ -310,8 +310,10 @@ pub fn fetch_cmd(
             output.clone(), // If output provided, disasm writes to it
             FormatOptions::default(),
             None,
-            None,
             Some(net),
+            false,
+            // Preserve the established fetch contract: `--json --disasm`
+            // prints disassembly text on success and keeps JSON for errors.
             false,
         )?;
     } else {
@@ -344,7 +346,7 @@ pub fn fetch_cmd(
     Ok(())
 }
 
-pub fn info_cmd(name: Option<String>, api_key: Option<String>) -> anyhow::Result<()> {
+pub fn info_cmd(name: Option<String>) -> anyhow::Result<()> {
     let config = ActonConfig::load()?;
     let libraries = config
         .libraries()
@@ -367,10 +369,12 @@ pub fn info_cmd(name: Option<String>, api_key: Option<String>) -> anyhow::Result
 
     let custom_networks = config.custom_networks();
     let network = Network::from_str(&lib.network.to_string())?;
-    let api_client = TonApiClient::new(network, custom_networks, api_key)?;
+    let api_client = TonApiClient::new(network, custom_networks)?;
 
+    let last_topup_timestamp = &lib.last_topup_timestamp;
     let mut balance_u128: Option<u128> = None;
     let mut remaining_seconds: Option<u128> = None;
+    let mut storage_runway_exhausted = false;
 
     if let Ok(balance) = api_client.get_address_balance(&lib.account) {
         balance_u128 = Some(balance.to_string().parse().unwrap_or(0));
@@ -386,7 +390,10 @@ pub fn info_cmd(name: Option<String>, api_key: Option<String>) -> anyhow::Result
         if cost_per_second_x65536 > 0
             && let Some(balance_u128) = balance_u128
         {
-            remaining_seconds = Some((balance_u128 * 65536) / cost_per_second_x65536);
+            let funded_seconds = (balance_u128 * 65536) / cost_per_second_x65536;
+            let elapsed_seconds = elapsed_seconds_since(last_topup_timestamp).unwrap_or(0);
+            storage_runway_exhausted = elapsed_seconds >= funded_seconds;
+            remaining_seconds = Some(funded_seconds.saturating_sub(elapsed_seconds));
         }
     }
 
@@ -400,9 +407,20 @@ pub fn info_cmd(name: Option<String>, api_key: Option<String>) -> anyhow::Result
         format_relative_time(&lib.timestamp),
         w = w
     );
+    println!(
+        "{:<w$} {} ({})",
+        "Last top-up:".dimmed(),
+        last_topup_timestamp,
+        format_relative_time(last_topup_timestamp),
+        w = w
+    );
     println!("{:<w$} {}", "Contract:".dimmed(), lib.name);
     println!("{:<w$} {}", "Network:".dimmed(), lib.network);
-    println!("{:<w$} {}", "Hash:".dimmed(), lib.hash.yellow());
+    println!(
+        "{:<w$} {}",
+        "Hash:".dimmed(),
+        format!("0x{}", lib.hash).yellow()
+    );
     println!("{:<w$} {}", "Account:".dimmed(), lib.account.yellow());
     println!(
         "{:<w$} {} ({}s)",
@@ -426,6 +444,13 @@ pub fn info_cmd(name: Option<String>, api_key: Option<String>) -> anyhow::Result
             format_duration(remaining_seconds as u64),
             remaining_seconds
         );
+
+        if storage_runway_exhausted {
+            println!(
+                "  {} Storage runway is exhausted. Library may still be active, but top up urgently to avoid freeze.",
+                "⚠".yellow().bold()
+            );
+        }
     }
 
     println!("{:<w$} {}", "Code:".dimmed(), lib.code.magenta());
@@ -443,7 +468,6 @@ pub fn topup_cmd(
     name: Option<String>,
     duration_arg: Option<String>,
     wallet_name: Option<String>,
-    api_key: Option<String>,
     amount_arg: Option<String>,
     yes: bool,
 ) -> anyhow::Result<()> {
@@ -478,11 +502,7 @@ pub fn topup_cmd(
         "  {} Using wallet: {} {}",
         "→".blue().bold(),
         wallet_name.cyan(),
-        wallet
-            .wallet
-            .address
-            .to_base64_url_flags(true, lib.network == Network::Testnet)
-            .dimmed()
+        format_std_address(&wallet.address(), &network).dimmed()
     );
 
     let amount_to_send_nanoton = if let Some(amount_str) = amount_arg {
@@ -533,7 +553,8 @@ pub fn topup_cmd(
 
     let config = ActonConfig::load().unwrap_or_default();
     let custom_networks = config.custom_networks();
-    let api_client = TonApiClient::new(network, custom_networks, api_key)?;
+    let network_name = network.to_string();
+    let api_client = TonApiClient::new(network, custom_networks)?;
     let (seqno, need_state_init) = wallet.seqno(&api_client)?;
 
     let expired_at_time = std::time::SystemTime::now() + std::time::Duration::from_secs(600);
@@ -541,43 +562,53 @@ pub fn topup_cmd(
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs() as u32;
 
-    let dest_address = TonAddress::from_str(&lib.account)?;
+    let dest_address = StdAddr::from_str_ext(&lib.account, StdAddrFormat::any())
+        .with_context(|| format!("Invalid account address {}", lib.account))?
+        .0;
     let message_info = IntMsgInfo {
         ihr_disabled: true,
         bounce: true,
         bounced: false,
-        src: wallet.wallet.address.to_msg_address(),
-        dest: dest_address.to_msg_address(),
-        value: CurrencyCollection::new(BigUint::from(amount_to_send_nanoton)),
-        ihr_fee: Grams::new(BigUint::from(0u64)),
-        fwd_fee: Grams::new(BigUint::from(0u64)),
+        src: IntAddr::Std(wallet.address()),
+        dst: IntAddr::Std(dest_address),
+        value: CurrencyCollection::new(amount_to_send_nanoton),
+        ihr_fee: Default::default(),
+        fwd_fee: Default::default(),
         created_at: 0,
         created_lt: 0,
     };
 
-    let message = Message {
-        info: CommonMsgInfo::Int(message_info),
+    let message = OwnedMessage {
+        info: MsgInfo::Int(message_info),
         init: None,
-        body: EitherRef::new(ArcCell::default()),
+        body: Default::default(),
+        layout: None,
     };
 
-    let message_cell = message.to_cell()?;
-    let external = wallet.wallet.create_external_msg(
-        expire_at,
-        seqno,
-        need_state_init,
-        vec![message_cell.to_arc()],
-    )?;
+    let message_cell_boc = BocRepr::encode(message)?;
+    let message_cell = TonCell::from_boc(message_cell_boc)?;
+    let external =
+        wallet
+            .wallet
+            .create_ext_in_msg(vec![message_cell], seqno, expire_at, need_state_init)?;
 
     println!("  {} Sending transaction...", "→".blue().bold());
+    let boc = &external.to_boc_base64()?;
+    let context = SendBocContext::wallet(&wallet, &network_name, seqno, need_state_init);
     api_client
-        .send_boc(&external.to_boc_b64(false)?)
+        .send_boc(boc)
+        .map_err(|error| format_send_boc_error(error, context))
         .context("Failed to send top-up transaction")?;
 
     println!(
         "  {} Top-up transaction sent successfully",
         "✓".green().bold()
     );
+
+    let last_topup_timestamp = Local::now().to_rfc3339();
+    update_library_last_topup_timestamp(project_root(), &lib_name, &last_topup_timestamp)
+        .context("Top-up transaction was sent, but failed to update library metadata")?;
+
     Ok(())
 }
 
@@ -655,6 +686,18 @@ fn format_relative_time(timestamp_str: &str) -> String {
     format!("{} year{} ago", years, if years > 1 { "s" } else { "" })
 }
 
+fn elapsed_seconds_since(timestamp_str: &str) -> Option<u128> {
+    let dt = DateTime::parse_from_rfc3339(timestamp_str).ok()?;
+    let now = Local::now();
+    let duration = now.signed_duration_since(dt);
+
+    if duration.num_seconds() <= 0 {
+        return Some(0);
+    }
+
+    Some(duration.num_seconds() as u128)
+}
+
 #[must_use]
 pub fn format_ton(nanoton: u128) -> String {
     let ton = nanoton / 1_000_000_000;
@@ -710,6 +753,7 @@ fn save_library(
     cells: u64,
     local: bool,
     global: bool,
+    project_root: &Path,
 ) -> anyhow::Result<()> {
     let is_global = if global {
         true
@@ -734,7 +778,7 @@ fn save_library(
         fs::create_dir_all(&global_dir)?;
         global_dir.join("global.libraries.toml")
     } else {
-        PathBuf::from("libraries.toml")
+        project_root.join("libraries.toml")
     };
 
     let mut doc = if config_path.exists() {
@@ -762,13 +806,15 @@ fn save_library(
     }
 
     let mut lib_table = Table::new();
+    let now = Local::now().to_rfc3339();
     lib_table.insert("name", value(contract_name));
     lib_table.insert("hash", value(hash));
     lib_table.insert("code", value(code));
     lib_table.insert("account", value(account));
     lib_table.insert("duration", value(duration as i64));
     lib_table.insert("network", value(network));
-    lib_table.insert("timestamp", value(Local::now().to_rfc3339()));
+    lib_table.insert("timestamp", value(now.clone()));
+    lib_table.insert("last_topup_timestamp", value(now));
     lib_table.insert("bits", value(bits as i64));
     lib_table.insert("cells", value(cells as i64));
 
@@ -786,6 +832,59 @@ fn save_library(
     }
 
     Ok(())
+}
+
+fn update_library_last_topup_timestamp(
+    project_root: &Path,
+    lib_name: &str,
+    timestamp: &str,
+) -> anyhow::Result<()> {
+    let local_path = project_root.join("libraries.toml");
+    if update_library_last_topup_timestamp_in_file(&local_path, lib_name, timestamp)? {
+        return Ok(());
+    }
+
+    if let Some(global_path) = global_libraries_path()
+        && update_library_last_topup_timestamp_in_file(&global_path, lib_name, timestamp)?
+    {
+        return Ok(());
+    }
+
+    anyhow::bail!("Library '{lib_name}' metadata was not found in local/global libraries files")
+}
+
+fn update_library_last_topup_timestamp_in_file(
+    path: &Path,
+    lib_name: &str,
+    timestamp: &str,
+) -> anyhow::Result<bool> {
+    if !path.exists() {
+        return Ok(false);
+    }
+
+    let content =
+        fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
+    let mut doc = content
+        .parse::<DocumentMut>()
+        .with_context(|| format!("Failed to parse {}", path.display()))?;
+
+    let Some(libraries_item) = doc.get_mut("libraries") else {
+        return Ok(false);
+    };
+    let Some(libraries) = libraries_item.as_table_mut() else {
+        return Ok(false);
+    };
+    let Some(lib_item) = libraries.get_mut(lib_name) else {
+        return Ok(false);
+    };
+    let Some(lib_table) = lib_item.as_table_mut() else {
+        return Ok(false);
+    };
+
+    lib_table.insert("last_topup_timestamp", value(timestamp));
+    fs::write(path, doc.to_string())
+        .with_context(|| format!("Failed to write {}", path.display()))?;
+    Ok(true)
 }
 
 fn parse_duration(s: &str) -> anyhow::Result<u64> {
@@ -816,7 +915,7 @@ fn parse_duration(s: &str) -> anyhow::Result<u64> {
     }
 }
 
-fn compile_librarian_with_duration(duration: u64) -> anyhow::Result<ArcCell> {
+fn compile_librarian_with_duration(duration: u64) -> anyhow::Result<Cell> {
     let content = include_str!("librarian/librarian.tolk");
     let content = content.replace(
         "3600 * 24 * 365 * 1 // 1 year, can top-up in any time",
@@ -828,16 +927,387 @@ fn compile_librarian_with_duration(duration: u64) -> anyhow::Result<ArcCell> {
     tmp_file.write_all(content.as_bytes())?;
 
     let acton_config = ActonConfig::load();
-    let mut compiler = tolkc::Compiler::new(2);
+    let mut compiler = tolk_compiler::Compiler::new(2);
     if let Ok(config) = &acton_config {
-        compiler = compiler.with_mappings(&config.mappings);
+        let mappings = config.mappings();
+        compiler = compiler.with_mappings(&mappings);
     }
 
     let compilation_result = compiler.compile(tmp_file_path.as_ref(), true);
     match compilation_result {
-        CompilerResult::Success(result) => Ok(ArcCell::from_boc_b64(&result.code_boc64)?),
+        CompilerResult::Success(result) => Ok(Boc::decode_base64(&result.code_boc64)?),
         CompilerResult::Error(err) => {
             anyhow::bail!("Unable to compile librarian: {}", err.message);
         }
+    }
+}
+
+fn format_std_address(address: &StdAddr, network: &Network) -> String {
+    DisplayBase64StdAddr {
+        addr: address,
+        flags: Base64StdAddrFlags {
+            testnet: network.uses_testnet_address_format(),
+            base64_url: true,
+            bounceable: false,
+        },
+    }
+    .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Duration;
+    use std::path::PathBuf;
+    use std::sync::{LazyLock, Mutex};
+    use tempfile::tempdir;
+
+    static CWD_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    struct CurrentDirGuard {
+        previous_dir: PathBuf,
+    }
+
+    impl CurrentDirGuard {
+        fn new(previous_dir: PathBuf) -> Self {
+            Self { previous_dir }
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.previous_dir)
+                .expect("must restore working directory after test");
+        }
+    }
+
+    #[test]
+    fn parse_ton_to_nanoton_accepts_integer_and_fractional_values() {
+        assert_eq!(
+            parse_ton_to_nanoton("1").expect("must parse integer TON"),
+            1_000_000_000
+        );
+        assert_eq!(
+            parse_ton_to_nanoton("1.5").expect("must parse fractional TON"),
+            1_500_000_000
+        );
+        assert_eq!(
+            parse_ton_to_nanoton("0.000000001").expect("must parse nanoton precision"),
+            1
+        );
+    }
+
+    #[test]
+    fn parse_ton_to_nanoton_truncates_extra_fraction_digits() {
+        assert_eq!(
+            parse_ton_to_nanoton("1.0000000009").expect("must parse and truncate"),
+            1_000_000_000
+        );
+    }
+
+    #[test]
+    fn parse_ton_to_nanoton_rejects_invalid_inputs() {
+        let dots_err = parse_ton_to_nanoton("1.2.3").expect_err("must fail on multiple dots");
+        assert!(
+            dots_err
+                .to_string()
+                .contains("Invalid TON format: multiple dots"),
+            "unexpected error: {dots_err}"
+        );
+
+        let frac_err = parse_ton_to_nanoton("1.a").expect_err("must fail on invalid fraction");
+        assert!(
+            frac_err
+                .to_string()
+                .contains("Invalid fractional part of TON amount"),
+            "unexpected error: {frac_err}"
+        );
+
+        let overflow_err = parse_ton_to_nanoton("340282366920938463463374607432")
+            .expect_err("must fail on multiplication overflow");
+        assert!(
+            overflow_err.to_string().contains("TON amount too large"),
+            "unexpected error: {overflow_err}"
+        );
+    }
+
+    #[test]
+    fn parse_duration_accepts_supported_units() {
+        assert_eq!(parse_duration("100s").expect("must parse seconds"), 100);
+        assert_eq!(parse_duration("2d").expect("must parse days"), 172_800);
+        assert_eq!(parse_duration("1y").expect("must parse years"), 31_536_000);
+        assert_eq!(
+            parse_duration("3600").expect("must parse raw seconds"),
+            3600
+        );
+    }
+
+    #[test]
+    fn parse_duration_rejects_invalid_inputs() {
+        let empty_err = parse_duration("").expect_err("must fail on empty duration");
+        assert!(
+            empty_err.to_string().contains("Duration cannot be empty"),
+            "unexpected error: {empty_err}"
+        );
+
+        let format_err = parse_duration("1h").expect_err("must fail on unsupported unit");
+        assert!(
+            format_err.to_string().contains("Invalid duration format"),
+            "unexpected error: {format_err}"
+        );
+
+        let number_err = parse_duration("abc").expect_err("must fail on non-numeric input");
+        assert!(
+            number_err.to_string().contains("Invalid duration format"),
+            "unexpected error: {number_err}"
+        );
+    }
+
+    #[test]
+    fn format_duration_formats_common_values() {
+        assert_eq!(format_duration(0), "0 second");
+        assert_eq!(format_duration(62), "1 minute 2 seconds");
+        assert_eq!(format_duration(3661), "1 hour 1 minute 1 second");
+        assert_eq!(format_duration(31_536_000 + 86_400), "1 year 1 day");
+    }
+
+    #[test]
+    fn elapsed_seconds_since_handles_invalid_future_and_past_values() {
+        assert_eq!(elapsed_seconds_since("not-a-timestamp"), None);
+
+        let future = (Local::now() + Duration::minutes(5)).to_rfc3339();
+        assert_eq!(elapsed_seconds_since(&future), Some(0));
+
+        let past = (Local::now() - Duration::minutes(2)).to_rfc3339();
+        let elapsed = elapsed_seconds_since(&past).expect("must parse and compute elapsed");
+        assert!(
+            elapsed >= 60,
+            "elapsed must be at least one minute for stable assertion: {elapsed}"
+        );
+    }
+
+    #[test]
+    fn format_relative_time_returns_original_for_invalid_timestamp() {
+        assert_eq!(format_relative_time("bad-ts"), "bad-ts");
+    }
+
+    #[test]
+    fn save_library_writes_required_fields_to_local_file() {
+        let _lock = CWD_LOCK.lock().expect("must lock cwd for this test");
+        let dir = tempdir().expect("must create temp dir");
+        let previous_dir = std::env::current_dir().expect("must get current directory");
+        std::env::set_current_dir(dir.path()).expect("must switch to temp directory");
+        let _dir_guard = CurrentDirGuard::new(previous_dir);
+
+        save_library(
+            "counter",
+            "deadbeef",
+            "te6ccgEBAQEA",
+            "EQD123",
+            3600,
+            "testnet".to_string(),
+            834,
+            5,
+            true,
+            false,
+            dir.path(),
+        )
+        .expect("must save library metadata");
+
+        let content = fs::read_to_string(dir.path().join("libraries.toml"))
+            .expect("must read generated libraries.toml");
+        let doc: DocumentMut = content.parse().expect("must parse generated toml");
+        let libraries = doc["libraries"]
+            .as_table()
+            .expect("must contain [libraries] table");
+        let entry = libraries
+            .get("counter")
+            .and_then(Item::as_table)
+            .expect("must contain [libraries.counter] entry");
+
+        assert_eq!(entry.get("name").and_then(Item::as_str), Some("counter"));
+        assert_eq!(entry.get("hash").and_then(Item::as_str), Some("deadbeef"));
+        assert_eq!(
+            entry.get("code").and_then(Item::as_str),
+            Some("te6ccgEBAQEA")
+        );
+        assert_eq!(entry.get("account").and_then(Item::as_str), Some("EQD123"));
+        assert_eq!(entry.get("duration").and_then(Item::as_integer), Some(3600));
+        assert_eq!(entry.get("network").and_then(Item::as_str), Some("testnet"));
+        assert_eq!(entry.get("bits").and_then(Item::as_integer), Some(834));
+        assert_eq!(entry.get("cells").and_then(Item::as_integer), Some(5));
+
+        let timestamp = entry
+            .get("timestamp")
+            .and_then(Item::as_str)
+            .expect("must contain timestamp");
+        let last_topup = entry
+            .get("last_topup_timestamp")
+            .and_then(Item::as_str)
+            .expect("must contain last_topup_timestamp");
+
+        assert_eq!(
+            timestamp, last_topup,
+            "initial top-up timestamp must match creation timestamp"
+        );
+    }
+
+    #[test]
+    fn save_library_appends_suffix_for_duplicate_names() {
+        let _lock = CWD_LOCK.lock().expect("must lock cwd for this test");
+        let dir = tempdir().expect("must create temp dir");
+        let previous_dir = std::env::current_dir().expect("must get current directory");
+        std::env::set_current_dir(dir.path()).expect("must switch to temp directory");
+        let _dir_guard = CurrentDirGuard::new(previous_dir);
+
+        save_library(
+            "counter",
+            "hash-1",
+            "te6ccgEBAQEA",
+            "EQD1",
+            3600,
+            "testnet".to_string(),
+            100,
+            1,
+            true,
+            false,
+            dir.path(),
+        )
+        .expect("must save first library entry");
+
+        save_library(
+            "counter",
+            "hash-2",
+            "te6ccgEBBgEA",
+            "EQD2",
+            7200,
+            "testnet".to_string(),
+            200,
+            2,
+            true,
+            false,
+            dir.path(),
+        )
+        .expect("must save second library entry with suffix");
+
+        let content = fs::read_to_string(dir.path().join("libraries.toml"))
+            .expect("must read generated libraries.toml");
+        let doc: DocumentMut = content.parse().expect("must parse generated toml");
+        let libraries = doc["libraries"]
+            .as_table()
+            .expect("must contain [libraries] table");
+
+        assert!(libraries.contains_key("counter"), "must keep original key");
+        assert!(
+            libraries.contains_key("counter-1"),
+            "must create suffixed key for duplicate name"
+        );
+    }
+
+    #[test]
+    fn update_library_last_topup_timestamp_in_file_updates_existing_entry() {
+        let dir = tempdir().expect("must create temp dir");
+        let path = dir.path().join("libraries.toml");
+        fs::write(
+            &path,
+            r#"[libraries.my-lib]
+name = "MyLib"
+last_topup_timestamp = "2026-01-01T00:00:00Z"
+"#,
+        )
+        .expect("must write initial toml");
+
+        let updated =
+            update_library_last_topup_timestamp_in_file(&path, "my-lib", "2026-02-01T00:00:00Z")
+                .expect("must update timestamp");
+
+        assert!(updated, "must report successful update");
+        let content = fs::read_to_string(&path).expect("must read updated toml");
+        assert!(
+            content.contains(r#"last_topup_timestamp = "2026-02-01T00:00:00Z""#),
+            "updated content: {content}"
+        );
+    }
+
+    #[test]
+    fn update_library_last_topup_timestamp_in_file_returns_false_for_missing_paths_or_shape() {
+        let dir = tempdir().expect("must create temp dir");
+
+        let missing = update_library_last_topup_timestamp_in_file(
+            &dir.path().join("missing.toml"),
+            "my-lib",
+            "2026-02-01T00:00:00Z",
+        )
+        .expect("must handle missing file");
+        assert!(!missing, "missing file should return false");
+
+        let no_libraries = dir.path().join("no-libraries.toml");
+        fs::write(
+            &no_libraries,
+            r#"[package]
+name = "demo"
+"#,
+        )
+        .expect("must write toml without libraries");
+        let no_libs_result = update_library_last_topup_timestamp_in_file(
+            &no_libraries,
+            "my-lib",
+            "2026-02-01T00:00:00Z",
+        )
+        .expect("must handle missing libraries table");
+        assert!(
+            !no_libs_result,
+            "missing libraries table should return false"
+        );
+
+        let wrong_shape = dir.path().join("wrong-shape.toml");
+        fs::write(
+            &wrong_shape,
+            r#"[libraries]
+my-lib = "not-a-table"
+"#,
+        )
+        .expect("must write wrong-shape toml");
+        let wrong_shape_result = update_library_last_topup_timestamp_in_file(
+            &wrong_shape,
+            "my-lib",
+            "2026-02-01T00:00:00Z",
+        )
+        .expect("must handle wrong item shape");
+        assert!(!wrong_shape_result, "non-table entry should return false");
+
+        let missing_entry = dir.path().join("missing-entry.toml");
+        fs::write(
+            &missing_entry,
+            r#"[libraries.other]
+name = "Other"
+"#,
+        )
+        .expect("must write toml with different entry");
+        let missing_entry_result = update_library_last_topup_timestamp_in_file(
+            &missing_entry,
+            "my-lib",
+            "2026-02-01T00:00:00Z",
+        )
+        .expect("must handle missing library entry");
+        assert!(
+            !missing_entry_result,
+            "missing target entry should return false"
+        );
+    }
+
+    #[test]
+    fn update_library_last_topup_timestamp_in_file_fails_on_invalid_toml() {
+        let dir = tempdir().expect("must create temp dir");
+        let path = dir.path().join("invalid.toml");
+        fs::write(&path, "not = [valid").expect("must write invalid toml");
+
+        let err =
+            update_library_last_topup_timestamp_in_file(&path, "my-lib", "2026-02-01T00:00:00Z")
+                .expect_err("must fail on invalid toml");
+        assert!(
+            err.to_string().contains("Failed to parse"),
+            "unexpected error: {err}"
+        );
     }
 }

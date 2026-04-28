@@ -1,0 +1,54 @@
+{
+  "success": true,
+  "diagnostics": [
+    {
+      "file": "[ROOT]/contracts/main.tolk",
+      "severity": "warning",
+      "name": "unused-variable",
+      "code": "E002",
+      "message": "variable is unused",
+      "annotations": [
+        {
+          "range": {
+            "start": {
+              "line": 2,
+              "character": 20
+            },
+            "end": {
+              "line": 2,
+              "character": 21
+            }
+          },
+          "message": "unused variable `x`",
+          "is_primary": true,
+          "tags": [
+            "unnecessary"
+          ]
+        }
+      ],
+      "fixes": [
+        {
+          "message": "prefix with underscore: `_x`",
+          "edits": [
+            {
+              "range": {
+                "start": {
+                  "line": 2,
+                  "character": 20
+                },
+                "end": {
+                  "line": 2,
+                  "character": 21
+                }
+              },
+              "newText": "_x",
+              "file": "[ROOT]/contracts/main.tolk"
+            }
+          ],
+          "applicability": "auto"
+        }
+      ],
+      "source": "tolk"
+    }
+  ]
+}

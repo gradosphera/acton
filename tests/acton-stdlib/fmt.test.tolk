@@ -35,21 +35,38 @@ struct VeryNested1 {
     nested: DoubleInt = {}
 }
 
-get fun `test-format-struct-with-single-field`() {
-    expect(format1("{}", SingleInt { a: 100 })).toEqual("""SingleInt {
+get fun `test format struct with single field`() {
+    expect(format("{}", SingleInt { a: 100 })).toEqual("""SingleInt {
     a: 100
 }""");
 }
 
-get fun `test-format-struct-with-two-fields`() {
-    expect(format1("{}", DoubleInt { a: 100, b: 200 })).toEqual("""DoubleInt {
+get fun `test format struct with two fields`() {
+    expect(
+        format(
+            "{}",
+            DoubleInt {
+                a: 100,
+                b: 200,
+            },
+        ),
+    ).toEqual("""DoubleInt {
     a: 100,
     b: 200
 }""");
 }
 
-get fun `test-format-struct-with-nested-single-int`() {
-    expect(format1("{}", DoubleIntAndNestedSingleInt { a: 100, b: 200, nested: SingleInt { a: 300 } })).toEqual("""DoubleIntAndNestedSingleInt {
+get fun `test format struct with nested single int`() {
+    expect(
+        format(
+            "{}",
+            DoubleIntAndNestedSingleInt {
+                a: 100,
+                b: 200,
+                nested: SingleInt { a: 300 },
+            },
+        ),
+    ).toEqual("""DoubleIntAndNestedSingleInt {
     a: 100,
     b: 200,
     nested: SingleInt {
@@ -58,8 +75,10 @@ get fun `test-format-struct-with-nested-single-int`() {
 }""");
 }
 
-get fun `test-format-struct-with-nested-double-int`() {
-    expect(format1("{}", DoubleIntAndNestedDoubleInt {})).toEqual("""DoubleIntAndNestedDoubleInt {
+get fun `test format struct with nested double int`() {
+    expect(
+        format("{}", DoubleIntAndNestedDoubleInt {}),
+    ).toEqual("""DoubleIntAndNestedDoubleInt {
     a: 3,
     b: 4,
     nested: DoubleInt {
@@ -69,9 +88,11 @@ get fun `test-format-struct-with-nested-double-int`() {
 }""");
 }
 
-get fun `test-format-struct-with-very-nested-`() {
-    val formatted = format1("{}", VeryNested { });
-    expect(formatted).toEqual("""VeryNested {
+get fun `test format struct with very nested`() {
+    val formatted = format("{}", VeryNested {});
+    expect(
+        formatted,
+    ).toEqual("""VeryNested {
     a: 3,
     nested: VeryNested1 {
         a: 4,
@@ -83,9 +104,9 @@ get fun `test-format-struct-with-very-nested-`() {
 }""");
 }
 
-get fun `test-format-message`() {
-    val src = net.randomAddress("src");
-    val dest = net.randomAddress("counter");
+get fun `test format message`() {
+    val src = randomAddress("src");
+    val dest = randomAddress("counter");
     val msg = createMessage({
         bounce: false,
         value: ton("1.9999"),
@@ -96,20 +117,22 @@ get fun `test-format-message`() {
     val tx = first.tx.load();
 
     val inMsg = tx.messages.load().inMsg;
-    if (inMsg is Value<Cell<MessageRelaxedGeneric>>) {
+    if (inMsg is TlbJust<Cell<TlbMessageRelaxedGeneric>>) {
         var loaded = inMsg.value.load();
         loaded.info.createdLt = 0;
         loaded.info.createdAt = 0;
-        expect(format1("{}", loaded)).toEqual("""MessageRelaxedGeneric {
-    info: IntMsgInfoRelaxed {
+        expect(
+            format("{}", loaded),
+        ).toEqual("""TlbMessageRelaxedGeneric {
+    info: TlbIntMsgInfoRelaxed {
         ihrDisabled: true,
         bounce: false,
         bounced: false,
         src: kQC5PHBsPEHzypAUMCGXCD5pNDAA2DozF5CZxqKiB1_dtgb3,
         dest: kQC0663BO7-gCwST4bHolxt85JLRMaFVZgJfblE7oumFduR9 (counter),
-        value: CurrencyCollection {
+        value: TlbCurrencyCollection {
             grams: 1999900000,
-            other: null
+            other: map<int32, varuint32> {}
         },
         extraFlags: 0,
         fwdFee: 266669,
@@ -120,4 +143,36 @@ get fun `test-format-message`() {
     body: null
 }""");
     }
+}
+
+get fun `test format multiple arguments and modifiers`() {
+    expect(format("{} {:x}", "hex", 255)).toEqual("hex ff");
+    expect(format("{} {} {:ton}", "value", 7, ton("1.5"))).toEqual("value 7 1.5 TON");
+    expect(format("{{{}}} {} {} {}", 1, 2, 3, 4)).toEqual("{1} 2 3 4");
+    expect(
+        format(
+            "{} {} {} {} {}",
+            1,
+            2,
+            3,
+            4,
+            5,
+        ),
+    ).toEqual("1 2 3 4 5");
+}
+
+get fun `test format with optional arguments`() {
+    expect(format("hello")).toEqual("hello");
+    expect(format("value = {}", 42)).toEqual("value = 42");
+    expect(format("pair {} {}", 0, 0)).toEqual("pair 0 0");
+    expect(
+        format(
+            "{} {} {} {} {}",
+            1,
+            2,
+            3,
+            4,
+            5,
+        ),
+    ).toEqual("1 2 3 4 5");
 }

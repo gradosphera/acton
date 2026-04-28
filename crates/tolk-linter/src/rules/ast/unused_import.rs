@@ -14,8 +14,9 @@ use tolk_resolver::resolve_index::Resolved;
 /// Unused imports clutter the code and increase compilation time.
 ///
 /// ### Example
-/// ```tolk
+/// ```tolk twoslash
 /// import "other.tolk";
+/// //      ^^^^^^^^^^ E006: unused import
 ///
 /// fun main() {
 ///     println("hello");
@@ -99,7 +100,7 @@ fn fire_diagnostic(checker: &mut Checker, span: Span, file_id: FileId, source: &
             message: "remove unused import".to_string(),
             edits: vec![Edit {
                 span: removal_span,
-                replacement: "".to_string(),
+                replacement: String::new(),
                 file_id,
             }],
             applicability: Applicability::Auto,
@@ -123,15 +124,14 @@ fn expand_to_whole_line(source: &str, span: Span) -> Option<Span> {
     let start = span.start as usize;
     let end = span.end as usize;
 
-    let line_start = source[..start].rfind('\n').map(|idx| idx + 1).unwrap_or(0);
+    let line_start = source[..start].rfind('\n').map_or(0, |idx| idx + 1);
     if !source[line_start..start].trim().is_empty() {
         return None;
     }
 
     let line_end = source[end..]
         .find('\n')
-        .map(|idx| end + idx + 1)
-        .unwrap_or(source.len());
+        .map_or(source.len(), |idx| end + idx + 1);
     let trailing = source[end..line_end].trim();
     if !is_safe_trailing_after_import(trailing) {
         return None;

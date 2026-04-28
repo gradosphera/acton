@@ -1,10 +1,17 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use std::fs;
+use std::path::{Path, PathBuf};
 
 const SIMPLE_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
+";
+
+const LIBRARY_FILE: &str = r"
+fun helper(value: int): int {
+    return value + 1;
+}
 ";
 
 #[test]
@@ -22,6 +29,69 @@ fn test_compile_simple_contract() {
         .assert_contains("Code in base64")
         .assert_contains("Code in hex")
         .assert_contains("Code hash hex");
+}
+
+#[test]
+fn test_compile_file_without_entrypoint_requires_flag() {
+    let project = ProjectBuilder::new("compile-no-entrypoint")
+        .file("lib/helper", LIBRARY_FILE)
+        .build();
+
+    project
+        .acton()
+        .compile("lib/helper.tolk")
+        .run()
+        .failure()
+        .assert_stderr_contains("has no entrypoint");
+}
+
+#[test]
+fn test_compile_file_without_entrypoint_with_allow_no_entrypoint_flag() {
+    let project = ProjectBuilder::new("compile-no-entrypoint-allowed")
+        .file("lib/helper", LIBRARY_FILE)
+        .build();
+
+    project
+        .acton()
+        .compile("lib/helper.tolk")
+        .allow_no_entrypoint()
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_contains("Code in base64")
+        .assert_contains("Code in hex")
+        .assert_contains("Code hash hex");
+}
+
+#[test]
+fn test_compile_allow_no_entrypoint_uses_separate_cache_namespace() {
+    let project = ProjectBuilder::new("compile-no-entrypoint-cache")
+        .file("lib/helper", LIBRARY_FILE)
+        .build();
+
+    project
+        .acton()
+        .compile("lib/helper.tolk")
+        .allow_no_entrypoint()
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_not_contains("from cache");
+
+    project
+        .acton()
+        .compile("lib/helper.tolk")
+        .allow_no_entrypoint()
+        .run()
+        .success()
+        .assert_contains("Compilation successful (from cache)");
+
+    project
+        .acton()
+        .compile("lib/helper.tolk")
+        .run()
+        .failure()
+        .assert_stderr_contains("has no entrypoint");
 }
 
 #[test]
@@ -398,6 +468,44 @@ fn test_compile_with_fift_output() {
 }
 
 #[test]
+fn test_compile_with_fift_output_recompiles_when_plain_cache_entry_lacks_fift() {
+    let project = ProjectBuilder::new("compile-fift-cache-miss-after-plain")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_not_contains("from cache");
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_fift_output("output.fif")
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_not_contains("from cache");
+
+    let fift_file = project.path().join("output.fif");
+    assert!(
+        fift_file.exists(),
+        "Fift file should be created after recompilation with --fift"
+    );
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_fift_output("output.fif")
+        .run()
+        .success()
+        .assert_contains("Compilation successful (from cache)");
+}
+
+#[test]
 fn test_compile_with_fift_output_to_nonexistent_directory() {
     let project = ProjectBuilder::new("compile-fift-out")
         .contract("simple", SIMPLE_CONTRACT)
@@ -522,16 +630,10 @@ fn test_compile_corrupted_cache_file() {
         .success();
 
     // Manually corrupt the cache file
-    let cache_dir = project.path().join(".acton/cache");
+    let cache_dir = project.path().join("build/cache");
     if cache_dir.exists() {
-        for entry in fs::read_dir(&cache_dir).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if path.extension().unwrap_or_default() == "cache" {
-                fs::write(&path, "corrupted cache data!!!").unwrap();
-                break;
-            }
-        }
+        let cache_file = first_cache_json_file(&cache_dir);
+        fs::write(&cache_file, "corrupted cache data!!!").unwrap();
     }
 
     project
@@ -539,9 +641,86 @@ fn test_compile_corrupted_cache_file() {
         .compile("contracts/simple.tolk")
         .run()
         .success()
-        .assert_snapshot_matches(
-            "integration/snapshots/test_compile_corrupted_cache_file.stdout.txt",
-        );
+        .assert_contains("Compilation successful")
+        .assert_not_contains("from cache");
+}
+
+#[test]
+fn test_compile_ignores_unrelated_corrupted_cache_file_and_keeps_it() {
+    let project = ProjectBuilder::new("compile-unrelated-corrupted-cache")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    let cache_dir = project.path().join("build/cache");
+    fs::create_dir_all(&cache_dir).unwrap();
+    let broken_path = cache_dir.join("broken.json");
+    fs::write(&broken_path, "not-json").unwrap();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .run()
+        .success()
+        .assert_contains("Compilation successful");
+
+    assert!(
+        broken_path.exists(),
+        "Unrelated corrupted cache entry should not be eagerly removed"
+    );
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .run()
+        .success()
+        .assert_contains("Compilation successful (from cache)");
+}
+
+#[test]
+fn test_compile_clear_cache_removes_nested_cache_subdirectories() {
+    let project = ProjectBuilder::new("compile-clear-cache-removes-subdirs")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .run()
+        .success();
+
+    let cache_dir = project.path().join("build/cache");
+    let debug_dir = cache_dir.join("debug");
+    let nested_dir = cache_dir.join("nested");
+    fs::create_dir_all(&debug_dir).unwrap();
+    fs::create_dir_all(&nested_dir).unwrap();
+    fs::write(debug_dir.join("junk.json"), "junk").unwrap();
+    fs::write(nested_dir.join("junk.txt"), "junk").unwrap();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .clear_cache()
+        .run()
+        .success()
+        .assert_contains("Cache cleared");
+
+    assert!(
+        !debug_dir.exists(),
+        "clear-cache should remove nested debug cache directory"
+    );
+    assert!(
+        !nested_dir.exists(),
+        "clear-cache should remove arbitrary nested cache directory"
+    );
+}
+
+fn first_cache_json_file(cache_dir: &Path) -> PathBuf {
+    fs::read_dir(cache_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| path.extension().and_then(|s| s.to_str()) == Some("json"))
+        .unwrap_or_else(|| panic!("No cache json file found in {}", cache_dir.display()))
 }
 
 #[test]

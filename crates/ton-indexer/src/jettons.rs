@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::time::UNIX_EPOCH;
 use ton_executor::ExecutorVerbosity;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
-use tvmffi::serde::serialize_tuple;
-use tvmffi::stack::{Tuple, TupleItem};
+use tvm_ffi::serde::serialize_tuple;
+use tvm_ffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder, Load};
 use tycho_types::dict::Dict;
@@ -30,6 +30,7 @@ pub struct JettonWalletData {
     pub jetton_wallet_code: Cell,
 }
 
+#[must_use]
 pub fn get_jetton_wallet_data(address: String, code: Cell, data: Cell) -> Option<JettonWalletData> {
     let Ok(result) = run_get_method(address, code, data, "get_wallet_data") else {
         return None;
@@ -73,15 +74,14 @@ pub fn get_jetton_wallet_data(address: String, code: Cell, data: Cell) -> Option
     })
 }
 
+#[must_use]
 pub fn parse_jetton_content(content_cell: Cell) -> Value {
-    let mut parser = match content_cell.as_slice() {
-        Ok(p) => p,
-        Err(_) => return json!({}),
+    let Ok(mut parser) = content_cell.as_slice() else {
+        return json!({});
     };
 
-    let prefix = match parser.load_uint(8) {
-        Ok(p) => p,
-        Err(_) => return json!({}),
+    let Ok(prefix) = parser.load_uint(8) else {
+        return json!({});
     };
 
     if prefix == 0x01 {
@@ -138,6 +138,7 @@ pub fn parse_jetton_content(content_cell: Cell) -> Value {
     json!({})
 }
 
+#[must_use]
 pub fn get_jetton_data(address: String, code: Cell, data: Cell) -> Option<JettonData> {
     let Ok(result) = run_get_method(address, code, data, "get_jetton_data") else {
         return None;
@@ -202,7 +203,7 @@ pub fn run_get_method(
         code: Boc::encode_base64(code),
         data: Boc::encode_base64(data),
         verbosity: ExecutorVerbosity::Short,
-        libs: "".to_owned(),
+        libs: String::new(),
         address,
         unixtime: duration_since_epoch.as_secs().try_into()?,
         balance: "10".to_string(),

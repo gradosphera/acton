@@ -2,6 +2,7 @@ use rustc_hash::FxHashSet;
 use std::fmt::Write;
 use std::path::Path;
 use tolk_resolver::Span;
+use tolk_resolver::file_index::SymbolId;
 use tolk_resolver::resolve_index::LocalDefId;
 
 /// Stable identifier of a control-flow node.
@@ -59,6 +60,16 @@ pub enum EdgeKind {
 }
 
 /// Taint-oriented facts attached to a CFG node.
+#[derive(Debug, Clone)]
+pub struct MultiplicationOperationFact {
+    /// Span of `*` operator token.
+    pub operator_span: Span,
+    /// Locals read by this multiplication expression.
+    pub read_locals: FxHashSet<LocalDefId>,
+    /// Spans of division operations used in lhs/rhs operands of this multiplication.
+    pub division_operand_spans: Vec<Span>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct FlowNodeTaintFacts {
     /// Message roots directly referenced via field access in this node expression.
@@ -67,6 +78,24 @@ pub struct FlowNodeTaintFacts {
     pub has_admin_sender_check: bool,
     /// Whether this node performs storage write (`contract.setData`, `*.save()`).
     pub has_storage_write_sink: bool,
+    /// Whether this node calls `random.initialize(...)` or `random.initializeBy(...)`.
+    pub has_random_initialize_call: bool,
+    /// Whether this node calls `random.uint256(...)` or `random.range(...)`.
+    pub has_random_value_sink: bool,
+    /// Whether this node contains division operator (`/`) in expression tree.
+    pub has_division_operation: bool,
+    /// Whether this node contains multiplication operator (`*`) in expression tree.
+    pub has_multiplication_operation: bool,
+    /// Whether this node contains multiplication whose lhs/rhs subtree has division.
+    pub has_divide_before_multiply: bool,
+    /// Multiplication expressions found in this node with per-expression facts.
+    pub multiplication_operations: Vec<MultiplicationOperationFact>,
+    /// Spans of division operations (`/`) found in this node expression.
+    pub division_spans: Vec<Span>,
+    /// Spans of division operations in direct RHS arithmetic assignment expressions.
+    pub direct_assignment_division_spans: Vec<Span>,
+    /// Global call targets referenced in this node.
+    pub called_global_symbols: FxHashSet<SymbolId>,
 }
 
 /// Control-flow node plus dataflow-relevant read/write facts.
@@ -279,7 +308,7 @@ impl ControlFlowGraph {
             if options.include_reads_writes {
                 let reads = format_locals(&node.reads);
                 let writes = format_locals(&node.writes);
-                label.push_str(&format!("\nR:[{}]\nW:[{}]", reads, writes));
+                label.push_str(&format!("\nR:[{reads}]\nW:[{writes}]"));
             }
 
             let shape = match node.kind {

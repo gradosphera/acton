@@ -1,0 +1,203 @@
+ACTON-SCRIPT(1)
+
+NAME
+       acton-script — Execute a standalone Tolk script file
+
+SYNOPSIS
+       acton script [options] path [args…]
+
+DESCRIPTION
+       Execute a standalone Tolk script.
+
+       Scripts are useful for experimentation, deployment flows, blockchain
+       queries, and one-off operational tasks. Unlike tests, scripts use a
+       main() entry point and can send real transactions when --net is
+       provided.
+
+OPTIONS
+   Script Options
+       path
+           Path to the script file to execute.
+
+       args…
+           Arguments parsed against the main() ABI and passed to the script.
+
+       --verbose
+           Enable executor debug logs at verbosity level 1.
+
+           Currently only level 1 is supported. Pass --verbose at most once.
+           Use this for low-level executor output such as debug.dumpStack().
+           For richer debug output, use --backtrace full or --debug.
+
+   Debugging Options
+       --debug
+           Enable debug mode.
+
+       --backtrace level
+           Enable execution backtraces.
+
+           Currently supported value: full.
+
+       --debug-port port
+           Debug server port.
+
+   Cache Options
+       --clear-cache
+           Clear the compilation cache before running.
+
+   Remote Options
+       --fork-net network
+           Fork blockchain state from a remote network for local execution.
+           When --net is set, omitted --fork-net defaults to the selected
+           broadcast network.
+
+       --fork-block-number seqno
+           Historical block sequence number to fork from.
+
+   Broadcasting Options
+       --net network
+           Broadcast to the selected network. If omitted, the script runs in
+           emulation mode. Conflicting --net and --fork-net values are
+           rejected.
+
+       --explorer name
+           Explorer to use for transaction links.
+
+           Possible values: tonscan, toncx, dton, tonviewer
+
+   Output Options
+       --show-bodies
+           Show decoded message bodies in printed transaction trees when ABI is
+           known.
+
+   Display Options
+       --color when
+           Control when to use colored output.
+
+           Possible values: auto, always, never
+
+   Project Options
+       --manifest-path path
+           Path to the Acton.toml file to use for this invocation.
+
+           Use this when running the command outside the project directory or
+           when the manifest lives at a non-default location.
+
+       --project-root path
+           Path to the project root to use for configuration discovery and
+           relative defaults.
+
+           This conflicts with --manifest-path.
+
+SCRIPT MODEL
+       A Tolk script defines a main() function and runs as an isolated
+       execution.
+
+       o  state is not preserved between runs
+
+       o  local execution uses emulator wallets and balances
+
+       o  --fork-net keeps execution local but resolves remote state
+
+       o  --net sends real transactions using configured wallets
+
+       Wallet names referenced by the script are resolved from the merged
+       wallet configuration, with local wallets.toml entries overriding
+       global.wallets.toml on name conflicts.
+
+ARGUMENT FORWARDING
+       Arguments after _path_ are passed through to the script runtime.
+
+       If a forwarded argument could be mistaken for an Acton flag, insert --
+       before the script arguments:
+
+           acton script scripts/query.tolk -- --net-like-value
+
+SCRIPT ARGUMENTS
+       Forwarded arguments are parsed against the ABI for main().
+
+       o  the number of CLI arguments must exactly match the main() parameters
+
+       o  integers use Tolk integer literal syntax such as 42, -1, 0xff, and
+          0b1010
+
+       o  bool accepts true and false
+
+       o  nullable supported types accept null
+
+       o  cell, slice, and bitsN accept plain BoC hex without C{} or CS{}
+          prefixes
+
+       o  arrays accept [item1, item2]
+
+       Unsupported parameter types currently include structs, tuple, map, dict,
+       builder, any_address and other complex types.
+
+SIDE EFFECTS
+       acton script always compiles and executes the selected script. With
+       --net, it can send real blockchain transactions; without --net,
+       execution stays local even when --fork-net is used.
+
+       Executor debug logs are hidden by default. Re-run with --verbose when
+       you need level-1 executor output such as debug.dumpStack().
+
+EXIT STATUS
+       o  0: The script completed successfully, including successful broadcast
+          flows.
+
+       o  1: Script execution failed, broadcast submission failed, or remote
+          network access such as fork-state resolution failed.
+
+SAFE EXECUTION ORDER
+       When a script can affect on-chain state, the usual safe sequence is:
+
+       1. acton build
+
+       2. acton test
+
+       3. acton script <path> without --net
+
+       4. only then acton script <path> --net testnet
+
+EXAMPLES
+       1. Execute locally in the emulator:
+
+              acton script scripts/deploy.tolk
+
+       2. Show executor debug logs from debug.* helpers:
+
+              acton script scripts/deploy.tolk --verbose
+
+       3. Broadcast to testnet:
+
+              acton script scripts/deploy.tolk --net testnet
+
+       4. Query mainnet state without broadcasting:
+
+              TONCENTER_MAINNET_API_KEY=your-key acton script query.tolk --fork-net mainnet
+
+       5. Broadcast a deploy flow and print explorer links:
+
+              acton script scripts/deploy.tolk --net testnet --explorer tonscan
+
+TONCENTER API KEYS
+       Built-in mainnet/testnet requests read TONCENTER_MAINNET_API_KEY or
+       TONCENTER_TESTNET_API_KEY, depending on the selected network.
+
+       For custom:<name>, Acton reads <NORMALIZED_NAME>_API_KEY. Custom network
+       names are uppercased and non-alphanumeric characters are replaced with
+       _, so custom:mock-remote becomes MOCK_REMOTE_API_KEY.
+
+       Acton loads .env automatically, so the simplest setup during project
+       work is usually to keep these keys there and use shell environment
+       variables only for one-off overrides or CI.
+
+SEE ALSO
+       o  acton help run
+
+       o  Scripting guide
+          <https://ton-blockchain.github.io/acton/docs/scripting/overview>
+
+       o  Wallet setup
+          <https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets>
+

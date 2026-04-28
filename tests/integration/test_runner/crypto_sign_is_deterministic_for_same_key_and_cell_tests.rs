@@ -4,7 +4,7 @@ use crate::support::project::ProjectBuilder;
 use std::fs;
 
 const CRYPTO_IMPORTS: &str = r#"
-import "../../lib/crypto/crypto"
+import "../../lib/crypto"
 import "../../lib/testing/expect"
 "#;
 
@@ -25,8 +25,8 @@ fn run_crypto_success_case(project_name: &str, test_body: &str, snapshot_path: &
 fn crypto_sign_is_deterministic_for_same_key_and_cell() {
     run_crypto_success_case(
         "dz-stdlib-sign-deterministic-same-key-cell",
-        r#"
-get fun `test-dz-stdlib-sign-deterministic-same-key-cell`() {
+        r"
+get fun `test dz stdlib sign deterministic same key cell`() {
     val words = crypto.createMnemonic();
     val kp = words.toKeyPair();
     val data = beginCell().storeUint(0xD3, 8).storeUint(0x7A, 8).storeUint(2026, 16).endCell();
@@ -37,7 +37,7 @@ get fun `test-dz-stdlib-sign-deterministic-same-key-cell`() {
     expect(sigA).toEqual(sigB);
     expect(isSignatureValid(data.hash(), sigA, kp.publicKey)).toBeTrue();
 }
-"#,
+",
         "integration/snapshots/test-runner/crypto_sign_is_deterministic_for_same_key_and_cell/crypto_sign_is_deterministic_for_same_key_and_cell.stdout.txt",
     );
 }
@@ -47,9 +47,9 @@ fn crypto_sign_has_512bit_slice_shape_and_matches_raw_sign_in_fixture_project() 
     let fixture = FixtureProject::load("basic");
     let test_path = "tests/dz_crypto_sign_shape.test.tolk";
     let source = format!(
-        r#"
+        r"
 {CRYPTO_IMPORTS}
-get fun `test-dz-stdlib-sign-shape-and-raw-sign-parity`() {{
+get fun `test dz stdlib sign shape and raw sign parity`() {{
     val words = crypto.createMnemonic();
     val kp = words.toKeyPair();
     val payload = beginCell()
@@ -68,7 +68,7 @@ get fun `test-dz-stdlib-sign-shape-and-raw-sign-parity`() {{
     expect(signSig).toEqual(rawSig);
     expect(isSignatureValid(payload.hash(), signSig, kp.publicKey)).toBeTrue();
 }}
-"#
+"
     );
 
     fs::write(fixture.path().join(test_path), source)

@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Acton Docs
 
-## Getting Started
+This directory contains the documentation site for Acton. It is a static
+[Next.js](https://nextjs.org/) application backed by
+[Fumadocs](https://fumadocs.dev/) and MDX content, with a custom landing page,
+docs navigation, local search, Open Graph image generation, and syntax
+highlighting for Acton and TON-related languages.
 
-First, run the development server:
+## What lives here
+
+- `content/docs/`: end-user documentation pages written in MDX.
+- `content/docs/**/meta.json`: sidebar structure and section metadata.
+- `src/app/`: Next.js routes for the landing page, docs pages, search endpoint,
+  and generated OG images.
+- `src/components/`: reusable UI for the landing page and docs experience.
+- `src/lib/`: content loading, source mapping, and docs helpers.
+- `grammars/`: custom Shiki grammars used for highlighted code blocks.
+- `source.config.ts`: Fumadocs and MDX configuration for the docs collection.
+
+## Local development
+
+This workspace uses Bun.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+bun install
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000` for the landing page and
+`http://localhost:3000/docs/welcome` for the documentation entry point.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Available scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `bun run dev`: start the local development server.
+- `bun run build`: produce the static production build.
+- `bun run start`: serve the production build locally.
+- `bun run lint`: run ESLint for the docs app.
+- `bun run lint:links`: validate MDX links with `next-validate-link`.
 
-## Learn More
+Production deployment is handled by CI via `.github/workflows/deploy-docs.yml`.
 
-To learn more about Next.js, take a look at the following resources:
+## Netlify deploy previews
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This repo also includes a root-level `netlify.toml` for Netlify Deploy
+Previews of the docs app. The Netlify build is scoped to `docs/`, publishes
+`docs/out`, and skips non-PR contexts so GitHub Pages remains the production
+host.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+To enable previews:
 
-## Deploy on Vercel
+1. Link the repository to a Netlify site with continuous deployment enabled.
+2. Keep Deploy Previews enabled for pull requests in the Netlify site settings.
+3. Leave the build settings managed by `netlify.toml`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+With this setup, Netlify will post a Deploy Preview for pull requests that
+change files under `docs/`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Editing content
+
+Most docs changes happen under `content/docs/`. When you add or move pages,
+update the nearby `meta.json` so navigation stays correct. For richer content,
+reuse the shared MDX components and docs UI instead of embedding one-off markup
+directly into pages.
+
+Some docs trees are generated and should not be edited by hand. Their
+source-of-truth inputs live outside `docs/`:
+
+- `src/doc/man/*.md` -> command docs, terminal help text, and manpages
+- `lib/` -> `content/docs/standard_library`
+- `crates/tolk-compiler/assets/tolk-stdlib/` -> `content/docs/tolk_standard_library`
+- linter rule metadata -> `content/docs/rules`
+
+After changing those inputs, rerun:
+
+```bash
+cargo run --bin acton -- docgen
+```

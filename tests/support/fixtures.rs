@@ -1,5 +1,5 @@
-use crate::common::{acton_exe, assert_ui};
-use crate::support::project::ActonCommand;
+use crate::common::acton_exe;
+use crate::support::project::{ActonCommand, ProcessCommandBuilder};
 use fs_extra::dir::{CopyOptions, copy};
 use include_dir::{Dir, include_dir};
 use std::collections::HashMap;
@@ -101,7 +101,8 @@ impl FixtureProject {
 
     /// Get `ActonCommand` builder for this project
     pub(crate) fn acton(&self) -> ActonCommand {
-        let cmd = snapbox::cmd::Command::new(acton_exe()).with_assert(assert_ui());
+        let cmd = ProcessCommandBuilder::new(acton_exe())
+            .env("ACTON_LOG_DIR", self.project_path.join(".acton-test-logs"));
         ActonCommand {
             cmd,
             project: Arc::new(crate::support::project::ProjectRef {
@@ -113,6 +114,7 @@ impl FixtureProject {
             build_contract: None,
             build_graph: None,
             build_out_dir: None,
+            build_gen_dir: None,
             build_output_fift: None,
             disasm_string: None,
             disasm_output: None,
@@ -120,11 +122,14 @@ impl FixtureProject {
             disasm_api_key: None,
             disasm_net: None,
             disasm_follow_libraries: false,
+            disasm_show_hashes: false,
+            disasm_show_offsets: false,
             compile_json: false,
             compile_base64_only: false,
             compile_boc: None,
             compile_fift: None,
             compile_source_map: None,
+            compile_allow_no_entrypoint: false,
             test_reporters: vec![],
             junit_merge: false,
             test_exclude_patterns: vec![],
@@ -133,12 +138,12 @@ impl FixtureProject {
             verify_address: None,
             verify_wallet: None,
             verify_network: None,
-            script_broadcast: false,
             test_fail_fast: false,
             script_fork_net: None,
             build_info: false,
             force_no_color_env: true,
             color_mode: None,
+            wallet_secure_default_false: false,
         }
     }
 

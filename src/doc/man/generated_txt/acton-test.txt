@@ -1,0 +1,513 @@
+ACTON-TEST(1)
+
+NAME
+       acton-test — Discover and run Tolk smart contract tests
+
+SYNOPSIS
+       acton test [options] [path]
+
+DESCRIPTION
+       Discover and execute tests from .test.tolk files.
+
+       The test runner supports filtering, multiple reporters, coverage
+       collection, gas snapshots, mutation testing, trace export, remote-state
+       fork mode, and a browser UI for exploring results.
+
+OPTIONS
+   Discovery Options
+       path
+           Test file or directory to run.
+
+           If omitted, Acton discovers tests from the resolved project root.
+
+       -f, --filter pattern
+           Filter tests by regular expression.
+
+       --exclude glob
+           Exclude test files or directories matching a glob pattern.
+
+           May be passed multiple times.
+
+       --include glob
+           Include only test files or directories matching a glob pattern.
+
+           May be passed multiple times.
+
+   Execution Options
+       --fail-fast
+           Stop after the first failing test.
+
+       --fuzz-seed seed
+           Seed for reproducible fuzz runs.
+
+       --verbose
+           Enable executor debug logs at verbosity level 1.
+
+           Currently only level 1 is supported. Pass --verbose at most once.
+           Use this for low-level executor output such as debug.dumpStack().
+           For richer debug output, use --backtrace full or --debug.
+
+   Debugging Options
+       --debug
+           Enable debug mode.
+
+           This also raises executor verbosity to collect full source locations
+           and stack context for live stepping.
+
+       --debug-port port
+           Debug server port.
+
+       --backtrace level
+           Enable execution backtraces.
+
+           Currently supported value: full. Full backtraces also raise executor
+           verbosity to collect source locations and call stacks without
+           opening the debugger.
+
+   Coverage Options
+       --coverage
+           Generate a coverage profile.
+
+           Coverage also raises internal executor verbosity enough to map
+           executed locations back to source files and lines, but it does not
+           enable stepping or print backtraces by itself.
+
+       --coverage-format format
+           Coverage output format.
+
+           Possible values: lcov, text
+
+       --coverage-file path
+           Output file for the coverage report.
+
+       --coverage-minimum-percent percent
+           Fail when the final coverage score is below this percentage.
+
+           Valid range: 0 to 100.
+
+           Ignored with --ui.
+
+       --coverage-include-wrappers
+           Include files from the @wrappers mapping in coverage reports.
+
+       --coverage-include-tests
+           Include .test.tolk files in coverage reports.
+
+   Profiling Options
+       --snapshot path
+           Write gas usage statistics to a JSON snapshot file.
+
+       --baseline-snapshot path
+           Compare gas usage with a baseline snapshot.
+
+       --fail-on-diff
+           Exit non-zero when the current run differs from the baseline
+           snapshot.
+
+           Requires --baseline-snapshot.
+
+   Reporting Options
+       --reporter format[,format…]_
+           Report format list.
+
+           Possible values: console, teamcity, junit, dot
+
+       --show-bodies
+           Show decoded message bodies in printed transaction trees when ABI is
+           known.
+
+       --junit-path path
+           Output directory for JUnit XML reports.
+
+       --junit-merge
+           Merge all test suites into a single JUnit XML file.
+
+       --ui
+           Open test results in a browser UI.
+
+       --ui-port port
+           Port for the browser UI server.
+
+   Cache Options
+       --clear-cache
+           Clear the compilation cache before running tests.
+
+   Remote Options
+       --fork-net network
+           Fork remote blockchain state for account resolution.
+
+       --fork-block-number seqno
+           Historical block sequence number to fork from.
+
+   Tracing Options
+       --save-test-trace [dir]
+           Save transaction traces to a directory.
+
+           If passed without a value, Acton uses build/traces. Acton writes one
+           <test-name>_trace.json file per executed test and stores shared
+           contract metadata under contracts/<contract-name>.json. These
+           filenames are derived only from the test name and contract name, so
+           duplicate names overwrite earlier artifacts in the same output
+           directory. Relative paths are resolved from the project root.
+
+TONCENTER API KEYS
+       When tests fork from the built-in mainnet/testnet backends,
+       authenticated requests read TONCENTER_MAINNET_API_KEY or
+       TONCENTER_TESTNET_API_KEY.
+
+       When tests fork from custom:<name>, Acton reads
+       <NORMALIZED_NAME>_API_KEY. Custom network names are uppercased and
+       non-alphanumeric characters are replaced with _, so custom:mock-remote
+       becomes MOCK_REMOTE_API_KEY.
+
+       Acton loads .env automatically, so the simplest setup during project
+       work is usually to keep these keys there and use shell environment
+       variables only for one-off overrides or CI.
+
+   Mutation Testing Options
+       --mutate
+           Run tests in mutation testing mode.
+
+       --mutate-contract contract-name
+           Contract name to mutate during mutation testing.
+
+       --mutation-diff mode
+           Limit mutation testing to changed lines in the selected diff scope.
+
+           Accepted values: worktree, ref, branch.
+
+           o  worktree compares the current worktree with HEAD and includes
+              untracked files
+
+           o  ref compares against the explicit ref passed with
+              --mutation-diff-ref
+
+           o  branch compares against the merge-base with the current branch
+              upstream, or against --mutation-diff-ref when provided
+
+       --mutation-diff-ref ref
+           Base ref used by diff-based mutation testing modes.
+
+           Required with --mutation-diff ref. Optional with --mutation-diff
+           branch. Use it with branch when the current branch has no upstream
+           or when you want a different comparison base such as origin/main.
+
+       --mutation-levels level[,level…]
+           Run only selected mutation levels.
+
+           Accepted values: critical, major, minor. Useful for faster local
+           runs such as critical,major.
+
+       --mutation-rules-file path
+           Load custom query-based mutation rules from a JSON file.
+
+           Custom rules are merged with built-in rules. If a custom rule uses
+           the same rule ID, it overrides the built-in one. Relative paths are
+           resolved from the project root.
+
+       --mutation-session-id id
+           Use a specific mutation session ID for progress logging and resume.
+
+           Acton writes append-only JSON Lines progress to
+           build/mutation-sessions/<ID>.jsonl. Re-run with the same session ID
+           and the same mutation filters to continue an unfinished session. If
+           you stop the run with Ctrl+C, Acton prints a resume command that
+           includes the same session ID.
+
+       --mutation-workers count
+           Override the number of mutation workers.
+
+           By default, Acton uses the host’s available parallelism. Each
+           worker keeps its own isolated mutation workspace and reuses it
+           across multiple mutants.
+
+       --mutation-id id
+           Run only specific mutation IDs from a previous mutation report.
+
+           Pass the mutation number shown in the report, and use the same
+           mutation filters such as --mutation-diff, --mutation-levels, and
+           --mutation-disable-rules as the original run. May be passed multiple
+           times or as a comma-separated list.
+
+       --mutation-minimum-percent percent
+           Fail if mutation score is below this percentage.
+
+           Valid range: 0..=100.
+
+       --mutation-disable-rules rule
+           Disable a specific mutation rule.
+
+           May be passed multiple times.
+
+   Display Options
+       --color when
+           Control when to use colored output.
+
+           Possible values: auto, always, never
+
+   Project Options
+       --manifest-path path
+           Path to the Acton.toml file to use for this invocation.
+
+           Use this when running the command outside the project directory or
+           when the manifest lives at a non-default location.
+
+       --project-root path
+           Path to the project root to use for configuration discovery and
+           relative defaults.
+
+           This conflicts with --manifest-path.
+
+DISCOVERY
+       Acton discovers tests by finding files that end with .test.tolk.
+
+       o  If _path_ is omitted, discovery starts at the resolved project root
+
+       o  If _path_ is a directory, search is recursive
+
+       o  Relative _path_ values are resolved from the current working
+          directory
+
+REPORTING AND ARTIFACTS
+       o  --reporter on the CLI overrides [test].reporter for the current run
+
+       o  --ui adds the browser UI in addition to text reporters
+
+       o  --coverage --ui adds a Coverage tab to the browser UI for browsing
+          coverage summaries, files, and annotated source
+
+       o  --junit-path matters when the JUnit reporter is enabled; the default
+          output directory is test-results
+
+       o  executor debug logs are hidden by default; re-run with --verbose when
+          you need level-1 executor output such as debug.dumpStack()
+
+       o  --verbose is only low-level executor logging; --coverage also
+          collects source-location data, while --backtrace full and --debug
+          collect richer location and stack data
+
+       o  --coverage-file matters only with --coverage; without an explicit
+          path, Acton writes lcov.info for lcov and coverage.txt for text
+
+       o  coverage summaries show line and branch columns plus a blended Score
+
+       o  LCOV export includes BRDA, BRF, and BRH records when branch sites
+          were observed for a file
+
+       o  --coverage-minimum-percent checks the final blended Score shown in
+          the summary, not just % Lines
+
+       o  coverage excludes .test.tolk files and @wrappers sources by default;
+          use --coverage-include-tests or --coverage-include-wrappers to opt in
+
+       o  --save-test-trace without a value writes traces to build/traces
+
+       o  each executed test produces its own <test-name>_trace.json artifact
+
+       o  exported bundles also include contracts/<contract-name>.json files
+          with code, source maps, and ABI metadata reused across tests in the
+          same bundle
+
+       o  trace chains default to names like Trace 1; use txs.giveName("...")
+          when you want stable human-readable names in exported artifacts and
+          the Test UI
+
+       o  when you split execution with testing.createTraceIterationCursor(),
+          exported traces still merge batches that belong to the same logical
+          root transaction chain
+
+       o  --ui also enables the default trace bundle directory when
+          --save-test-trace is otherwise absent
+
+       o  gas snapshot files are written only to the explicit paths passed to
+          --snapshot or --baseline-snapshot
+
+       o  [test.fuzz] applies only to parameterized tests that explicitly opt
+          in with @test.fuzz, @test.fuzz(<runs>), or @test.fuzz({ ... })
+
+       o  --fuzz-seed overrides [test.fuzz].seed for the current run
+
+       o  fuzz tests show the seed in console output; if [test.fuzz].seed is
+          omitted, Acton picks a new seed for each acton test run
+
+DOT REPORTER
+       Use dot when you want compact progress output but still need full
+       failure diagnostics at the end of the run:
+
+           acton test --reporter dot
+
+       The progress line uses one character per test:
+
+       o  · passed
+
+       o  x failed
+
+       o  ○ skipped
+
+       o  □ todo
+
+       When a test fails, the dot reporter prints the same important
+       diagnostics as the console reporter after the progress line: assertion
+       diffs, transaction trees, get-method errors, fuzz seed and input values,
+       stdout/stderr, and source locations. With --backtrace full, runtime
+       failures also include backtrace frames:
+
+           acton test --reporter dot --backtrace full
+
+       If coverage is enabled, dot failure details are printed before the
+       coverage summary so the failing test remains visible near the progress
+       output.
+
+CONFIGURATION
+       Defaults can be configured in Acton.toml:
+
+           [test]
+           reporter = ["console"]
+           filter = ".*jetton.*"
+           junit-path = "reports"
+           junit-merge = false
+           
+           [test.fuzz]
+           runs = 512
+           max-test-rejects = 4096
+           seed = 42
+           
+           [test.coverage]
+           enabled = true
+           # valid range: 0..=100
+           minimum-percent = 85
+           include-tests = true
+           include-wrappers = true
+           
+           [test.mutation]
+           diff = "branch"
+           diff-ref = "origin/main"
+           mutation-levels = ["critical", "major"]
+           minimum-percent = 85
+           disable-rules = ["replace_plus_with_minus"]
+
+       CLI flags override config values for the current invocation.
+
+NOTES
+       o  If both --snapshot and --baseline-snapshot are provided, Acton runs
+          in comparison mode and does not overwrite the snapshot file
+
+       o  --fail-on-diff requires --baseline-snapshot
+
+       o  The UI and trace export features are useful for debugging failing
+          tests and inspecting transaction trees
+
+       o  You can combine --coverage and --ui to inspect the current run’s
+          coverage directly in the browser UI
+
+       o  --coverage-minimum-percent and [test.coverage].minimum-percent are
+          ignored when --ui is enabled
+
+       o  --fork-net keeps execution local while resolving blockchain state
+          remotely
+
+       o  --mutation-diff worktree is intended for uncommitted local changes
+
+       o  --mutation-diff ref requires --mutation-diff-ref
+
+       o  --mutation-diff branch uses the upstream branch merge-base by default
+
+       o  --mutation-rules-file loads custom query-based rules from JSON and
+          custom rules override built-in rules with the same ID
+
+       o  --mutation-session-id writes append-only JSONL progress to
+          build/mutation-sessions/<ID>.jsonl
+
+       o  --mutation-workers defaults to the host’s available parallelism;
+          each worker reuses its own isolated mutation workspace
+
+       o  pressing Ctrl+C during mutation testing stops the run without
+          finalizing the session and prints a resume command for the same
+          session ID
+
+       o  --mutation-id expects mutation numbers from a previous run with the
+          same mutation filters and session selection
+
+       o  mutation scores in filtered runs only cover the selected mutants
+
+       o  --mutation-minimum-percent and [test.mutation].minimum-percent apply
+          to that filtered mutation score after compile errors are excluded
+
+EXIT STATUS
+       o  0: All selected tests passed, or a non-mutating reporting mode
+          completed successfully.
+
+       o  1: At least one test failed, profiling drift was detected with
+          --fail-on-diff, line coverage was below the configured minimum in
+          non-UI coverage mode, mutation score was below the configured minimum
+          in mutation mode, no tests matched after filtering, or infrastructure
+          such as compilation, trace export, UI startup, or remote-state
+          resolution failed.
+
+EXAMPLES
+       1. Run all tests:
+
+              acton test
+
+       2. Filter tests by name:
+
+              acton test --filter "wallet.*"
+
+       3. Show executor debug logs from debug.* helpers:
+
+              acton test --verbose --filter "debug.*"
+
+       4. Generate coverage and JUnit output:
+
+              acton test --coverage --coverage-format lcov --reporter junit --junit-path test-results
+
+       5. Fail the run when line coverage drops below 85%:
+
+              acton test --coverage --coverage-minimum-percent 85
+
+       6. Compare gas usage against a baseline:
+
+              acton test --baseline-snapshot build/gas-baseline.json --fail-on-diff
+
+       7. Run mutation testing for one contract:
+
+              acton test --mutate --mutate-contract Wallet
+
+       8. Run mutation testing only for changed lines in the current worktree:
+
+              acton test --mutate --mutate-contract Wallet --mutation-diff worktree
+
+       9. Run mutation testing for selected levels on the current branch:
+
+              acton test --mutate --mutate-contract Wallet --mutation-diff branch --mutation-levels critical,major
+
+       10. Re-run one specific mutant from a previous report:
+
+           acton test --mutate --mutate-contract Wallet --mutation-id 2
+
+       11. Resume an unfinished mutation session:
+
+           acton test --mutate --mutate-contract Wallet --mutation-session-id wallet-pr-42 --mutation-diff worktree
+
+       12. Fail the run when mutation score drops below 85%:
+
+           acton test --mutate --mutate-contract Wallet --mutation-minimum-percent 85
+
+       13. Limit mutation testing to four workers:
+
+           acton test --mutate --mutate-contract Wallet --mutation-workers 4
+
+       14. Debug a forked-state failure with traces and the UI:
+
+           acton test tests/wallet.test.tolk --fork-net testnet --fork-block-number 55000000 --save-test-trace --ui
+
+       15. Enforce a gas baseline in CI:
+
+           acton test --baseline-snapshot build/gas-baseline.json --fail-on-diff --reporter console,junit
+
+SEE ALSO
+       o  acton help wrapper
+
+       o  Test runner guide
+          <https://ton-blockchain.github.io/acton/docs/testing/overview>
+

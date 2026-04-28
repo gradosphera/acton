@@ -6,7 +6,9 @@ use std::fs;
 const DB_TRANSACTION_IMPORTS: &str = r#"
 import "@stdlib/reflection"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
+import "../../lib/tlb/maybe"
 import "../../lib/types/message"
 import "../../lib/types/transaction"
 
@@ -41,9 +43,9 @@ fn transaction_load_body_decodes_nested_payload_from_inbound_message() {
     run_transaction_success(
         "db-stdlib-transaction-load-body-nested-inline",
         r#"
-get fun `test-db-stdlib-transaction-load-body-nested-inline`() {
-    val sender = net.treasury("db_sender_inline");
-    val destination = net.randomAddress("db_destination_inline");
+get fun `test db stdlib transaction load body nested inline`() {
+    val sender = testing.treasury("db_sender_inline");
+    val destination = randomAddress("db_destination_inline");
     val payload = DbNestedPayload {
         queryId: 901,
         amount: 77,
@@ -72,15 +74,18 @@ get fun `test-db-stdlib-transaction-load-body-nested-inline`() {
 
     val inMsg = tx.loadInMsg<DbNestedPayload>();
     expect(inMsg.loadBody()).toEqual(payload);
-    expect(inMsg.info.src).toEqual(sender.address as any_address);
-    expect(inMsg.info.dest).toEqual(destination);
+    expect(inMsg.info is TlbInternalMessage).toBeTrue();
+    if (inMsg.info is TlbInternalMessage) {
+        expect(inMsg.info.src).toEqual(sender.address);
+        expect(inMsg.info.dest).toEqual(destination);
+    }
 
     val genericInMsg = tx.messages.load().inMsg.unwrap().load();
-    expect(genericInMsg.loadOpcode()).toEqual(reflect.serializationPrefixOf<DbNestedPayload>());
+    expect(genericInMsg.loadOpcode()).toEqual(reflect.serializationPrefixOf<DbNestedPayload>().0);
 
     var rawBody = genericInMsg.body;
     expect(rawBody.loadBool()).toBeFalse();
-    expect(rawBody.loadUint(32)).toEqual(reflect.serializationPrefixOf<DbNestedPayload>());
+    expect(rawBody.loadUint(32)).toEqual(reflect.serializationPrefixOf<DbNestedPayload>().0);
     expect(rawBody.loadUint(64)).toEqual(payload.queryId);
     expect(rawBody.loadUint(32)).toEqual(payload.amount);
 }
@@ -97,9 +102,9 @@ fn transaction_load_body_decodes_nested_payload_in_fixture_project() {
         "{imports}\n{body}\n",
         imports = DB_TRANSACTION_IMPORTS,
         body = r#"
-get fun `test-db-stdlib-transaction-load-body-nested-fixture`() {
-    val sender = net.treasury("db_sender_fixture");
-    val destination = net.randomAddress("db_destination_fixture");
+get fun `test db stdlib transaction load body nested fixture`() {
+    val sender = testing.treasury("db_sender_fixture");
+    val destination = randomAddress("db_destination_fixture");
     val payload = DbNestedPayload {
         queryId: 902,
         amount: 88,
@@ -128,11 +133,14 @@ get fun `test-db-stdlib-transaction-load-body-nested-fixture`() {
 
     val inMsg = tx.loadInMsg<DbNestedPayload>();
     expect(inMsg.loadBody()).toEqual(payload);
-    expect(inMsg.info.src).toEqual(sender.address as any_address);
-    expect(inMsg.info.dest).toEqual(destination);
+    expect(inMsg.info is TlbInternalMessage).toBeTrue();
+    if (inMsg.info is TlbInternalMessage) {
+        expect(inMsg.info.src).toEqual(sender.address);
+        expect(inMsg.info.dest).toEqual(destination);
+    }
 
     val genericInMsg = tx.messages.load().inMsg.unwrap().load();
-    expect(genericInMsg.loadOpcode()).toEqual(reflect.serializationPrefixOf<DbNestedPayload>());
+    expect(genericInMsg.loadOpcode()).toEqual(reflect.serializationPrefixOf<DbNestedPayload>().0);
 }
 "#
     );

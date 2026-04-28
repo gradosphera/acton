@@ -1,5 +1,6 @@
 use crate::commands::common::error_fmt;
 use crate::file_build_cache::FileBuildCache;
+use crate::paths;
 use acton_config::color::OwoColorize;
 use acton_config::config;
 use anyhow::anyhow;
@@ -8,8 +9,8 @@ use serde_json;
 use std::fs;
 use std::path::Path;
 use std::time::Instant;
-use tolkc::abi::ContractABI;
-use ton_source_map::SourceMap;
+use tolk_compiler::abi::ContractABI;
+use tolk_compiler::{SourceMap as TolkCompilerSourceMap, TolkSourceMap};
 use tycho_types::boc::Boc;
 
 #[allow(clippy::too_many_arguments)]
@@ -21,6 +22,7 @@ pub fn compile_cmd(
     fift: Option<String>,
     source_map: Option<String>,
     abi: Option<String>,
+    allow_no_entrypoint: bool,
     clear_cache: bool,
 ) -> anyhow::Result<()> {
     if clear_cache {
@@ -46,18 +48,32 @@ pub fn compile_cmd(
 
     let mut file_cache = FileBuildCache::new(None)?;
 
-    let acton_config = config::ActonConfig::load().ok();
+    let acton_config = config::ActonConfig::load()
+        .map_err(|e| {
+            eprintln!("  {} Failed to load Acton.toml: {e:#}", "⚠".yellow().bold());
+        })
+        .ok();
 
     let need_debug_info = source_map.is_some();
-    if let Some(cached_entry) = file_cache.get(path, need_debug_info, 2, "1.3") {
+    let need_fift = fift.is_some();
+    let cache_profile = if allow_no_entrypoint {
+        "1.3+allow-no-entrypoint"
+    } else {
+        "1.3"
+    };
+    if let Some(cached_entry) = file_cache.get(path, need_debug_info, need_fift, 2, cache_profile) {
         let elapsed = start_time.elapsed();
-        info!("Compile {path} from file cache (.acton/cache) in {elapsed:?}");
+        info!(
+            "Compile {path} from file cache ({}) in {elapsed:?}",
+            paths::DEFAULT_BUILD_CACHE_DIR
+        );
 
         handle_compilation_result(
             cached_entry.code_boc64,
             cached_entry.code_hash_hex,
             cached_entry.fift_code,
-            cached_entry.source_map,
+            cached_entry.debug_mark_base64,
+            cached_entry.new_source_map,
             cached_entry.abi,
             abi,
             source_map,
@@ -74,22 +90,25 @@ pub fn compile_cmd(
     let compile_start = Instant::now();
     let with_debug_info = source_map.is_some();
 
-    let mut compiler = tolkc::Compiler::new(2);
+    let mut compiler = tolk_compiler::Compiler::new(2);
     if let Some(acton_config) = &acton_config {
-        compiler = compiler.with_mappings(&acton_config.mappings)
+        let mappings = acton_config.mappings();
+        compiler = compiler.with_mappings(&mappings);
     }
+    compiler = compiler.with_allow_no_entrypoint(allow_no_entrypoint);
 
     let compilation_result = compiler.compile(Path::new(path), with_debug_info);
     let compile_time = compile_start.elapsed();
 
     match compilation_result {
-        tolkc::CompilerResult::Success(result) => {
+        tolk_compiler::CompilerResult::Success(result) => {
             let total_elapsed = start_time.elapsed();
             info!(
                 "Compile {path} from source (compilation: {compile_time:?}, total: {total_elapsed:?})"
             );
 
-            if let Err(e) = file_cache.put(path, &result, with_debug_info, 2, "1.3")
+            if let Err(e) =
+                file_cache.put(path, &result, with_debug_info, need_fift, 2, cache_profile)
                 && !json
             {
                 eprintln!("Warning: Failed to cache compilation result: {e}");
@@ -98,8 +117,9 @@ pub fn compile_cmd(
             handle_compilation_result(
                 result.code_boc64,
                 result.code_hash_hex,
-                result.fift_code,
-                result.source_map,
+                need_fift.then_some(result.fift_code),
+                result.debug_mark_base64,
+                result.new_source_map,
                 result.abi,
                 abi,
                 source_map,
@@ -111,7 +131,7 @@ pub fn compile_cmd(
                 Some(total_elapsed),
             )
         }
-        tolkc::CompilerResult::Error(error) => {
+        tolk_compiler::CompilerResult::Error(error) => {
             let total_elapsed = start_time.elapsed();
             info!(
                 "Compile {} failed after {:?}: {}",
@@ -136,8 +156,9 @@ pub fn compile_cmd(
 fn handle_compilation_result(
     code_boc64: String,
     code_hash_hex: String,
-    fift_code: String,
-    source_map: Option<SourceMap>,
+    fift_code: Option<String>,
+    debug_mark_base64: Option<String>,
+    new_source_map: Option<TolkCompilerSourceMap>,
     abi: Option<ContractABI>,
     abi_path: Option<String>,
     source_map_path: Option<String>,
@@ -152,33 +173,21 @@ fn handle_compilation_result(
     let code_hex = Boc::encode_hex(&code);
 
     if let Some(source_map_path) = &source_map_path {
-        if let Some(parent_dir) = Path::new(&source_map_path).parent()
-            && let Err(err) = fs::create_dir_all(parent_dir)
-        {
-            anyhow::bail!(
-                "Failed to create directory for source map file {}: {}",
-                parent_dir.display(),
-                err
-            );
-        }
-
-        if let Some(source_map_data) = &source_map {
-            if let Ok(json_string) = serde_json::to_string_pretty(source_map_data) {
-                fs::write(source_map_path, json_string).map_err(|err| {
-                    anyhow!(
-                        "Failed to save source map {}: {err}",
-                        source_map_path.yellow()
-                    )
-                })?;
-            } else {
-                eprintln!("Warning: Failed to serialize source map");
-            }
-        } else if !json && !base64_only {
-            eprintln!("Warning: No source map data available");
-        }
+        write_source_map(
+            new_source_map.as_ref(),
+            &code,
+            debug_mark_base64.as_deref(),
+            source_map_path,
+        )?;
     }
 
     if let Some(fift_path) = &fift {
+        let Some(fift_code) = fift_code.as_deref() else {
+            anyhow::bail!(
+                "Internal error: requested Fift output is missing from compilation result"
+            );
+        };
+
         if let Some(parent_dir) = Path::new(&fift_path).parent()
             && let Err(err) = fs::create_dir_all(parent_dir)
         {
@@ -189,7 +198,7 @@ fn handle_compilation_result(
             );
         }
 
-        fs::write(fift_path, &fift_code)
+        fs::write(fift_path, fift_code)
             .map_err(|err| anyhow!("Failed to save Fift file {}: {err}", fift_path.yellow()))?;
     }
 
@@ -252,7 +261,46 @@ fn handle_compilation_result(
         }
         println!("Code in base64: {}", code_boc64.dimmed());
         println!("Code in hex: {}", code_hex.dimmed());
-        println!("Code hash hex: {}", code_hash_hex.dimmed());
+        println!("Code hash hex: {}", format!("0x{code_hash_hex}").dimmed());
     }
+    Ok(())
+}
+
+fn write_source_map(
+    new_source_map: Option<&TolkCompilerSourceMap>,
+    code: &tycho_types::cell::Cell,
+    debug_mark_base64: Option<&str>,
+    source_map_path: &str,
+) -> anyhow::Result<()> {
+    if let Some(parent_dir) = Path::new(source_map_path).parent()
+        && let Err(err) = fs::create_dir_all(parent_dir)
+    {
+        anyhow::bail!(
+            "Failed to create directory for source map file {}: {}",
+            parent_dir.display(),
+            err
+        );
+    }
+
+    let source_map = new_source_map.ok_or_else(|| {
+        anyhow!(
+            "No source map data available for {}",
+            source_map_path.yellow()
+        )
+    })?;
+
+    let source_map = TolkSourceMap::from_code_cell(source_map.clone(), code, debug_mark_base64)?;
+    let json_string = serde_json::to_string_pretty(&source_map).map_err(|err| {
+        anyhow!(
+            "Failed to serialize source map {}: {err}",
+            source_map_path.yellow()
+        )
+    })?;
+    fs::write(source_map_path, json_string).map_err(|err| {
+        anyhow!(
+            "Failed to save source map {}: {err}",
+            source_map_path.yellow()
+        )
+    })?;
     Ok(())
 }

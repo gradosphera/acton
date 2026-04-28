@@ -3,7 +3,7 @@ use crate::support::project::ProjectBuilder;
 use acton::formatter::FormatterContext;
 use tycho_types::models::{ReserveCurrencyFlags, SendMsgFlags};
 
-const LINEAR_MESSAGES: &str = r#"
+const LINEAR_MESSAGES: &str = r"
 struct (0xF1000001) FmRoute {
     queryId: uint64
     mid: address
@@ -19,10 +19,14 @@ struct (0xF1000003) FmDelivered {
     queryId: uint64
     hop: uint8
 }
-"#;
+";
 
 const LINEAR_ROOT_CONTRACT: &str = r#"
 import "fm_linear_messages"
+
+contract FmLinearRoot {
+    incomingMessages: FmRoute
+}
 
 fun onInternalMessage(in: InMessage) {
     if (in.body.isEmpty()) {
@@ -47,6 +51,10 @@ fun onBouncedMessage(_: InMessageBounced) {}
 const LINEAR_MID_CONTRACT: &str = r#"
 import "fm_linear_messages"
 
+contract FmLinearMid {
+    incomingMessages: FmRelay
+}
+
 fun onInternalMessage(in: InMessage) {
     if (in.body.isEmpty()) {
         return;
@@ -67,8 +75,39 @@ fun onInternalMessage(in: InMessage) {
 fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
+const LINEAR_ROOT_OPCODE_MISMATCH_CONTRACT: &str = r#"
+import "fm_linear_messages"
+
+contract FmLinearMismatchRoot {
+    incomingMessages: FmRoute
+}
+
+fun onInternalMessage(in: InMessage) {
+    if (in.body.isEmpty()) {
+        return;
+    }
+
+    val msg = lazy FmRoute.fromSlice(in.body);
+    createMessage({
+        bounce: false,
+        value: ton("0.2"),
+        dest: msg.mid,
+        body: FmDelivered {
+            queryId: msg.queryId,
+            hop: 1,
+        },
+    }).send(SEND_MODE_REGULAR);
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
 const LINEAR_SINK_CONTRACT: &str = r#"
 import "fm_linear_messages"
+
+contract FmLinearSink {
+    incomingMessages: FmDelivered
+}
 
 fun onInternalMessage(in: InMessage) {
     if (in.body.isEmpty()) {
@@ -82,15 +121,16 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const LINEAR_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
+import "../../lib/types/big_array"
 import "../contracts/fm_linear_messages"
 
 fun deployFmLinearHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
 
     val rootInit = ContractState {
         code: build("fm_linear_root"),
@@ -154,7 +194,306 @@ fun sendFmLinear(sender: Treasury, rootAddress: address, midAddress: address, si
 }
 "#;
 
-const FANOUT_MESSAGES: &str = r#"
+const KNOWN_ADDRESS_MESSAGES: &str = r"
+struct (0xF1800001) FmKnownAddressBody {
+    queryId: uint64
+    newAdminAddress: address
+}
+";
+
+const WRAPPED_KNOWN_ADDRESS_MESSAGES: &str = r"
+struct FmWrappedKnownAddress {
+    queryId: uint64
+    newAdminAddress: address
+    tonAmount: coins
+}
+
+struct (0xF1800002) FmWrappedKnownAddressBody {
+    internalTransferMsg: Cell<FmWrappedKnownAddress>
+}
+";
+
+const ABI_MEGA_MESSAGES: &str = r#"
+enum FmAbiMegaMode {
+    Alpha = 1,
+    Beta = 2,
+}
+
+struct FmAbiMegaLeaf {
+    amount: coins
+    owner: address?
+    tag: bytes4
+}
+
+type FmAbiMegaLeafAlias = FmAbiMegaLeaf
+
+struct FmAbiMegaInner {
+    nonce: uint32
+    enabled: bool
+    target: address
+    meta: FmAbiMegaLeaf?
+}
+
+@overflow1023_policy("suppress")
+struct FmAbiMegaScalarAddresses {
+    ownerOrNull: address?
+    ownerOrFriend: address?
+    anyInternal: any_address
+    anyExternal: any_address
+    anyNone: any_address
+}
+
+@overflow1023_policy("suppress")
+struct FmAbiMegaScalarValues {
+    tiny: uint8
+    medium: uint32
+    signed: int16
+    varAmount: varuint32
+    varDebt: varint16
+    nibble: bits12
+    bytesTag: bytes4
+    rawCell: cell
+    mode: FmAbiMegaMode
+}
+
+@overflow1023_policy("suppress")
+struct FmAbiMegaScalars {
+    addresses: Cell<FmAbiMegaScalarAddresses>
+    values: Cell<FmAbiMegaScalarValues>
+}
+
+struct FmAbiMegaTuples {
+    pair: (uint8, bool, address)
+    maybePair: (uint8, bool)?
+}
+
+@overflow1023_policy("suppress")
+struct FmAbiMegaObjects {
+    maybeLeaf: FmAbiMegaLeaf?
+    aliasLeaf: FmAbiMegaLeafAlias
+    boxedLeaf: Cell<FmAbiMegaLeaf>
+    nested: Cell<FmAbiMegaInner>
+}
+
+struct FmAbiMegaCollections {
+    items: map<uint16, FmAbiMegaLeaf>
+    boxedItems: map<uint8, Cell<FmAbiMegaLeaf>>
+}
+
+@overflow1023_policy("suppress")
+struct FmAbiMegaRemaining {
+    marker: uint8
+    payload: RemainingBitsAndRefs
+}
+
+@overflow1023_policy("suppress")
+struct FmAbiMegaTail {
+    collections: Cell<FmAbiMegaCollections>
+    trailing: Cell<FmAbiMegaRemaining>
+    choice: FmAbiMegaChoice
+}
+
+struct (0xF1A80002) FmAbiMegaChoicePing {
+    value: uint16
+    extra: FmAbiMegaInner
+}
+
+struct (0xF1A80003) FmAbiMegaChoicePong {
+    ok: bool
+    owner: any_address
+}
+
+type FmAbiMegaChoice = FmAbiMegaChoicePing | FmAbiMegaChoicePong
+type FmAbiMegaIncoming = FmAbiMegaMessage
+
+fun fmAbiMegaExternal(tag: uint32) {
+    return any_address.fromCell(
+        beginCell()
+            .storeUint(0b01, 2)
+            .storeUint(32, 9)
+            .storeUint(tag, 32)
+            .endCell(),
+    );
+}
+
+@overflow1023_policy("suppress")
+struct (0xF1A80001) FmAbiMegaMessage {
+    flag: bool
+    amount: coins
+    owner: address
+    scalars: Cell<FmAbiMegaScalars>
+    tuples: Cell<FmAbiMegaTuples>
+    objects: Cell<FmAbiMegaObjects>
+    tail: Cell<FmAbiMegaTail>
+}
+"#;
+
+const KNOWN_ADDRESS_CONTRACT: &str = r#"
+import "fm_known_address_messages"
+
+contract FmKnownAddressSink {
+    incomingMessages: FmKnownAddressBody
+}
+
+fun onInternalMessage(in: InMessage) {
+    if (in.body.isEmpty()) {
+        return;
+    }
+
+    val _msg = lazy FmKnownAddressBody.fromSlice(in.body);
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
+const ABI_MEGA_CONTRACT: &str = r#"
+import "fm_abi_mega_messages"
+
+contract FmAbiMegaSink {
+    incomingMessages: FmAbiMegaIncoming
+}
+
+fun onInternalMessage(in: InMessage) {
+    if (in.body.isEmpty()) {
+        return;
+    }
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
+const KNOWN_ADDRESS_IMPORTS: &str = r#"
+import "../../lib/build"
+import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
+import "../../lib/io"
+import "../../lib/testing/expect"
+import "../contracts/fm_known_address_messages"
+
+fun deployFmKnownAddressHarness() {
+    val sender = testing.treasury("sender");
+    val notDeployer = testing.treasury("not_deployer");
+
+    val init = ContractState {
+        code: build("fm_known_address_sink"),
+        data: createEmptyCell(),
+    };
+    val sinkAddress = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    expect(net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("1"),
+        dest: {
+            stateInit: init,
+        },
+    }))).toHaveSuccessfulDeploy({ to: sinkAddress });
+
+    return (sender, notDeployer, sinkAddress);
+}
+"#;
+
+const WRAPPED_KNOWN_ADDRESS_CONTRACT: &str = r#"
+import "fm_wrapped_known_address_messages"
+
+contract FmWrappedKnownAddressSink {
+    incomingMessages: FmWrappedKnownAddressBody
+}
+
+fun onInternalMessage(in: InMessage) {
+    if (in.body.isEmpty()) {
+        return;
+    }
+
+    val _msg = lazy FmWrappedKnownAddressBody.fromSlice(in.body);
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
+const WRAPPED_KNOWN_ADDRESS_FORWARDER_CONTRACT: &str = r#"
+import "fm_wrapped_known_address_messages"
+
+contract FmWrappedKnownAddressForwarder {
+    incomingMessages: FmWrappedKnownAddressBody
+}
+
+fun onInternalMessage(in: InMessage) {
+    if (in.body.isEmpty()) {
+        return;
+    }
+
+    createMessage({
+        bounce: false,
+        value: ton("0.01"),
+        dest: in.senderAddress,
+    }).send(SEND_MODE_REGULAR);
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
+const WRAPPED_KNOWN_ADDRESS_IMPORTS: &str = r#"
+import "../../lib/build"
+import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
+import "../../lib/io"
+import "../../lib/testing/expect"
+import "../contracts/fm_wrapped_known_address_messages"
+
+fun deployFmWrappedKnownAddressHarness() {
+    val sender = testing.treasury("sender");
+    val notDeployer = testing.treasury("not_deployer");
+
+    val init = ContractState {
+        code: build("fm_wrapped_known_address_sink"),
+        data: createEmptyCell(),
+    };
+    val sinkAddress = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    expect(net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("1"),
+        dest: {
+            stateInit: init,
+        },
+    }))).toHaveSuccessfulDeploy({ to: sinkAddress });
+
+    return (sender, notDeployer, sinkAddress);
+}
+"#;
+
+const ABI_MEGA_IMPORTS: &str = r#"
+import "../../lib/build"
+import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
+import "../../lib/io"
+import "../../lib/testing/expect"
+import "../../lib/types/transaction"
+import "../contracts/fm_abi_mega_messages"
+
+fun deployFmAbiMegaHarness() {
+    val sender = testing.treasury("sender");
+    val friend = testing.treasury("friend");
+
+    val init = ContractState {
+        code: build("fm_abi_mega_sink"),
+        data: createEmptyCell(),
+    };
+    val sinkAddress = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    expect(net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("1"),
+        dest: {
+            stateInit: init,
+        },
+    }))).toHaveSuccessfulDeploy({ to: sinkAddress });
+
+    return (sender, friend, sinkAddress);
+}
+"#;
+
+const FANOUT_MESSAGES: &str = r"
 struct (0xF2000001) FmFanKick {
     queryId: uint64
     left: address
@@ -168,10 +507,14 @@ struct (0xF2000002) FmLeftNotice {
 struct (0xF2000003) FmRightNotice {
     queryId: uint64
 }
-"#;
+";
 
 const FANOUT_ROOT_CONTRACT: &str = r#"
 import "fm_fanout_messages"
+
+contract FmFanoutRoot {
+    incomingMessages: FmFanKick
+}
 
 fun onInternalMessage(in: InMessage) {
     if (in.body.isEmpty()) {
@@ -205,6 +548,10 @@ fun onBouncedMessage(_: InMessageBounced) {}
 const FANOUT_LEFT_CONTRACT: &str = r#"
 import "fm_fanout_messages"
 
+contract FmFanoutLeft {
+    incomingMessages: FmLeftNotice
+}
+
 fun onInternalMessage(in: InMessage) {
     if (in.body.isEmpty()) {
         return;
@@ -218,6 +565,10 @@ fun onBouncedMessage(_: InMessageBounced) {}
 
 const FANOUT_RIGHT_CONTRACT: &str = r#"
 import "fm_fanout_messages"
+
+contract FmFanoutRight {
+    incomingMessages: FmRightNotice
+}
 
 fun onInternalMessage(in: InMessage) {
     if (in.body.isEmpty()) {
@@ -234,15 +585,15 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const FANOUT_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../contracts/fm_fanout_messages"
 
 fun deployFmFanoutHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
 
     val rootInit = ContractState {
         code: build("fm_fanout_root"),
@@ -306,7 +657,7 @@ fun sendFmFanout(sender: Treasury, rootAddress: address, leftAddress: address, r
 }
 "#;
 
-const EXTERNAL_MESSAGES: &str = r#"
+const EXTERNAL_MESSAGES: &str = r"
 struct (0xF3000001) FmExternalTrigger {
     queryId: uint64
 }
@@ -318,11 +669,15 @@ struct (0xF3000002) FmExternalNoneDest {
 struct (0xF3000003) FmExternalAddressDest {
     queryId: uint64
 }
-"#;
+";
 
 const EXTERNAL_CONTRACT: &str = r#"
 import "@stdlib/gas-payments"
 import "fm_external_messages"
+
+contract FmExternalRoot {
+    incomingExternal: FmExternalTrigger
+}
 
 fun fmExternalAddress(tag: uint32): any_address {
     return beginCell()
@@ -357,11 +712,11 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const EXTERNAL_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../contracts/fm_external_messages"
 
 fun fmExternalAddress(tag: uint32): any_address {
@@ -375,7 +730,7 @@ fun fmExternalAddress(tag: uint32): any_address {
 }
 
 fun deployFmExternalHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
 
     val extInit = ContractState {
         code: build("fm_external_root"),
@@ -397,6 +752,11 @@ fun deployFmExternalHarness() {
 
 const EXTERNAL_THROW_CONTRACT: &str = r#"
 import "@stdlib/gas-payments"
+import "fm_external_messages"
+
+contract FmExternalThrow {
+    incomingExternal: FmExternalTrigger
+}
 
 fun onExternalMessage() {
     acceptExternalMessage();
@@ -408,11 +768,11 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const EXTERNAL_THROW_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../contracts/fm_external_messages"
 
 fun fmExternalAddress(tag: uint32): any_address {
@@ -426,7 +786,7 @@ fun fmExternalAddress(tag: uint32): any_address {
 }
 
 fun deployFmExternalThrowHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
 
     val extInit = ContractState {
         code: build("fm_external_throw"),
@@ -446,7 +806,7 @@ fun deployFmExternalThrowHarness() {
 }
 "#;
 
-const BOUNCE_MESSAGES: &str = r#"
+const BOUNCE_MESSAGES: &str = r"
 struct (0xF4000001) FmBouncePing {
     queryId: uint64
 }
@@ -454,10 +814,14 @@ struct (0xF4000001) FmBouncePing {
 struct (0xF4000002) FmBounceAck {
     queryId: uint64
 }
-"#;
+";
 
 const BOUNCE_CONTRACT: &str = r#"
 import "fm_bounce_messages"
+
+contract FmBounceEcho {
+    incomingMessages: FmBouncePing
+}
 
 fun onInternalMessage(in: InMessage) {
     if (in.body.isEmpty()) {
@@ -480,15 +844,15 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const BOUNCE_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../contracts/fm_bounce_messages"
 
 fun deployFmBounceHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
     val init = ContractState {
         code: build("fm_bounce_echo"),
         data: createEmptyCell(),
@@ -506,13 +870,13 @@ fun deployFmBounceHarness() {
 }
 "#;
 
-const ACTION_CHILD_CONTRACT: &str = r#"
+const ACTION_CHILD_CONTRACT: &str = r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 const ACTION_FAIL_CONTRACT: &str = r#"
-import "../gen/fm_action_child_code.tolk"
+import "../gen/fm_action_child.code.tolk"
 
 fun onInternalMessage(_: InMessage) {
     val addr = AutoDeployAddress {
@@ -536,11 +900,11 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const ACTION_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 
 fun fmActionInit() {
     val init = ContractState {
@@ -552,7 +916,7 @@ fun fmActionInit() {
 }
 "#;
 
-const FLAGS_MESSAGES: &str = r#"
+const FLAGS_MESSAGES: &str = r"
 struct (0xF5000001) FmFlagsOk {
     queryId: uint64
 }
@@ -564,10 +928,16 @@ struct (0xF5000002) FmFlagsThrow {
 struct (0xF5000003) FmFlagsActionFail {
     queryId: uint64
 }
-"#;
+";
 
 const FLAGS_CONTRACT: &str = r#"
 import "fm_flags_messages"
+
+type FmFlagsMessage = FmFlagsOk | FmFlagsThrow | FmFlagsActionFail
+
+contract FmFlags {
+    incomingMessages: FmFlagsMessage
+}
 
 fun onInternalMessage(in: InMessage) {
     if (in.body.isEmpty()) {
@@ -594,15 +964,15 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const FLAGS_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../contracts/fm_flags_messages"
 
 fun deployFmFlagsHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
 
     val init = ContractState {
         code: build("fm_flags"),
@@ -625,14 +995,18 @@ fun unknownFmFlagsAddress() {
 }
 "#;
 
-const DEBUG_MESSAGES: &str = r#"
+const DEBUG_MESSAGES: &str = r"
 struct (0xF6000001) FmDebugPing {
     queryId: uint64
 }
-"#;
+";
 
 const DEBUG_CONTRACT: &str = r#"
 import "fm_debug_messages"
+
+contract FmDebug {
+    incomingMessages: FmDebugPing
+}
 
 fun onInternalMessage(in: InMessage) {
     if (in.body.isEmpty()) {
@@ -648,15 +1022,15 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const DEBUG_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../contracts/fm_debug_messages"
 
 fun deployFmDebugHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
     val init = ContractState {
         code: build("fm_debug"),
         data: createEmptyCell(),
@@ -675,14 +1049,18 @@ fun deployFmDebugHarness() {
 }
 "#;
 
-const DESTROY_MESSAGES: &str = r#"
+const DESTROY_MESSAGES: &str = r"
 struct (0xF7000001) FmDestroyNow {
     queryId: uint64
 }
-"#;
+";
 
 const DESTROY_CONTRACT: &str = r#"
 import "fm_destroy_messages"
+
+contract FmDestroy {
+    incomingMessages: FmDestroyNow
+}
 
 fun onInternalMessage(in: InMessage) {
     if (in.body.isEmpty()) {
@@ -702,15 +1080,15 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const DESTROY_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../contracts/fm_destroy_messages"
 
 fun deployFmDestroyHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
     val init = ContractState {
         code: build("fm_destroy"),
         data: createEmptyCell(),
@@ -730,8 +1108,10 @@ fun deployFmDestroyHarness() {
 
 const LETTER_ROLLOVER_IMPORTS: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
+import "../../lib/types/big_array"
 "#;
 
 fn run_success_case(project: ProjectBuilder, snapshot_path: &str) {
@@ -739,6 +1119,20 @@ fn run_success_case(project: ProjectBuilder, snapshot_path: &str) {
         .build()
         .acton()
         .test()
+        .show_bodies()
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_snapshot_matches(snapshot_path);
+}
+
+fn run_success_case_verbose(project: ProjectBuilder, snapshot_path: &str) {
+    project
+        .build()
+        .acton()
+        .test()
+        .show_bodies()
+        .verbose()
         .run()
         .success()
         .assert_passed(1)
@@ -755,6 +1149,16 @@ fn linear_formatter_project(project_name: &str, test_body: &str) -> ProjectBuild
         .test_file("formatter_linear", &source)
 }
 
+fn linear_mismatch_formatter_project(project_name: &str, test_body: &str) -> ProjectBuilder {
+    let source = format!("{LINEAR_IMPORTS}\n{test_body}\n");
+    ProjectBuilder::new(project_name)
+        .file("contracts/fm_linear_messages", LINEAR_MESSAGES)
+        .contract("fm_linear_root", LINEAR_ROOT_OPCODE_MISMATCH_CONTRACT)
+        .contract("fm_linear_mid", LINEAR_MID_CONTRACT)
+        .contract("fm_linear_sink", LINEAR_SINK_CONTRACT)
+        .test_file("formatter_linear", &source)
+}
+
 fn fanout_formatter_project(project_name: &str, test_body: &str) -> ProjectBuilder {
     let source = format!("{FANOUT_IMPORTS}\n{test_body}\n");
     ProjectBuilder::new(project_name)
@@ -763,6 +1167,56 @@ fn fanout_formatter_project(project_name: &str, test_body: &str) -> ProjectBuild
         .contract("fm_fanout_left", FANOUT_LEFT_CONTRACT)
         .contract("fm_fanout_right", FANOUT_RIGHT_CONTRACT)
         .test_file("formatter_fanout", &source)
+}
+
+fn known_address_formatter_project(project_name: &str, test_body: &str) -> ProjectBuilder {
+    let source = format!("{KNOWN_ADDRESS_IMPORTS}\n{test_body}\n");
+    ProjectBuilder::new(project_name)
+        .file(
+            "contracts/fm_known_address_messages",
+            KNOWN_ADDRESS_MESSAGES,
+        )
+        .contract("fm_known_address_sink", KNOWN_ADDRESS_CONTRACT)
+        .test_file("formatter_known_address", &source)
+}
+
+fn wrapped_known_address_formatter_project(project_name: &str, test_body: &str) -> ProjectBuilder {
+    let source = format!("{WRAPPED_KNOWN_ADDRESS_IMPORTS}\n{test_body}\n");
+    ProjectBuilder::new(project_name)
+        .file(
+            "contracts/fm_wrapped_known_address_messages",
+            WRAPPED_KNOWN_ADDRESS_MESSAGES,
+        )
+        .contract(
+            "fm_wrapped_known_address_sink",
+            WRAPPED_KNOWN_ADDRESS_CONTRACT,
+        )
+        .test_file("formatter_wrapped_known_address", &source)
+}
+
+fn wrapped_known_address_forwarder_formatter_project(
+    project_name: &str,
+    test_body: &str,
+) -> ProjectBuilder {
+    let source = format!("{WRAPPED_KNOWN_ADDRESS_IMPORTS}\n{test_body}\n");
+    ProjectBuilder::new(project_name)
+        .file(
+            "contracts/fm_wrapped_known_address_messages",
+            WRAPPED_KNOWN_ADDRESS_MESSAGES,
+        )
+        .contract(
+            "fm_wrapped_known_address_sink",
+            WRAPPED_KNOWN_ADDRESS_FORWARDER_CONTRACT,
+        )
+        .test_file("formatter_wrapped_known_address", &source)
+}
+
+fn abi_mega_formatter_project(project_name: &str, test_body: &str) -> ProjectBuilder {
+    let source = format!("{ABI_MEGA_IMPORTS}\n{test_body}\n");
+    ProjectBuilder::new(project_name)
+        .file("contracts/fm_abi_mega_messages", ABI_MEGA_MESSAGES)
+        .contract("fm_abi_mega_sink", ABI_MEGA_CONTRACT)
+        .test_file("formatter_abi_mega", &source)
 }
 
 fn external_formatter_project(project_name: &str, test_body: &str) -> ProjectBuilder {
@@ -835,7 +1289,7 @@ fn formatter_linear_chain_println_renders_nested_tree() {
     run_success_case(
         linear_formatter_project(
             "formatter-linear-chain-println",
-            r#"
+            r"
 get fun `test-formatter-linear-chain-println`() {
     val (sender, rootAddress, midAddress, sinkAddress) = deployFmLinearHarness();
     val txs = sendFmLinear(sender, rootAddress, midAddress, sinkAddress, 101);
@@ -843,9 +1297,445 @@ get fun `test-formatter-linear-chain-println`() {
     expect(txs).toHaveLength(3);
     println(txs);
 }
-"#,
+",
         ),
         "integration/snapshots/formatter/formatter_linear_chain_println_nested_tree.stdout.txt",
+    );
+}
+
+#[test]
+fn formatter_hides_bodies_without_show_bodies_flag() {
+    linear_formatter_project(
+        "formatter-hides-bodies-without-show-bodies-flag",
+        r"
+get fun `test formatter hides bodies without show bodies flag`() {
+    val (sender, rootAddress, midAddress, sinkAddress) = deployFmLinearHarness();
+    val txs = sendFmLinear(sender, rootAddress, midAddress, sinkAddress, 707);
+
+    expect(txs).toHaveLength(3);
+    println(txs);
+}
+",
+    )
+    .build()
+    .acton()
+    .test()
+    .run()
+    .success()
+    .assert_passed(1)
+    .assert_snapshot_matches(
+        "integration/snapshots/formatter/formatter_hides_bodies_without_show_bodies_flag.stdout.txt",
+    );
+}
+
+#[test]
+fn formatter_linear_chain_println_renders_exit_code63_for_opcode_mismatch() {
+    run_success_case(
+        linear_mismatch_formatter_project(
+            "formatter-linear-chain-println-exit-code63-opcode-mismatch",
+            r"
+get fun `test-formatter-linear-chain-println-exit-code63-opcode-mismatch`() {
+    val (sender, rootAddress, midAddress, sinkAddress) = deployFmLinearHarness();
+    val txs = sendFmLinear(sender, rootAddress, midAddress, sinkAddress, 102);
+
+    expect(txs).toHaveLength(2);
+    println(txs);
+}
+",
+        ),
+        "integration/snapshots/formatter/formatter_linear_chain_println_exit_code63_opcode_mismatch.stdout.txt",
+    );
+}
+
+#[test]
+fn formatter_decoded_body_renders_known_address_names() {
+    run_success_case(
+        known_address_formatter_project(
+            "formatter-decoded-body-known-addresses",
+            r#"
+get fun `test formatter decoded body known addresses`() {
+    val (sender, notDeployer, sinkAddress) = deployFmKnownAddressHarness();
+    val txs = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("0.05"),
+            dest: sinkAddress,
+            body: FmKnownAddressBody {
+                queryId: 0,
+                newAdminAddress: notDeployer.address,
+            },
+        }),
+    );
+
+    expect(txs).toHaveLength(1);
+    println(txs);
+}
+"#,
+        ),
+        "integration/snapshots/formatter/formatter_decoded_body_known_address_names.stdout.txt",
+    );
+}
+
+#[test]
+fn formatter_decoded_body_uses_contract_type_for_deployed_addresses() {
+    run_success_case(
+        known_address_formatter_project(
+            "formatter-decoded-body-deployed-contract-addresses",
+            r#"
+get fun `test formatter decoded body deployed contract addresses`() {
+    val (sender, _notDeployer, sinkAddress) = deployFmKnownAddressHarness();
+    val txs = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("0.05"),
+            dest: sinkAddress,
+            body: FmKnownAddressBody {
+                queryId: 0,
+                newAdminAddress: sinkAddress,
+            },
+        }),
+    );
+
+    expect(txs).toHaveLength(1);
+    println(txs);
+}
+"#,
+        ),
+        "integration/snapshots/formatter/formatter_decoded_body_deployed_contract_address_names.stdout.txt",
+    );
+}
+
+#[test]
+fn formatter_decoded_body_unwraps_cell_and_keeps_nested_indent_compact() {
+    run_success_case(
+        wrapped_known_address_formatter_project(
+            "formatter-decoded-body-wrapped-known-addresses",
+            r#"
+get fun `test formatter decoded body wrapped known addresses`() {
+    val (sender, notDeployer, sinkAddress) = deployFmWrappedKnownAddressHarness();
+    val txs = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("0.05"),
+            dest: sinkAddress,
+            body: FmWrappedKnownAddressBody {
+                internalTransferMsg: FmWrappedKnownAddress {
+                    queryId: 0,
+                    newAdminAddress: notDeployer.address,
+                    tonAmount: ton("1"),
+                }.toCell(),
+            },
+        }),
+    );
+
+    expect(txs).toHaveLength(1);
+    println(txs);
+}
+"#,
+        ),
+        "integration/snapshots/formatter/formatter_decoded_body_wrapped_known_address_names.stdout.txt",
+    );
+}
+
+#[test]
+fn formatter_multiline_body_uses_tree_gutter_when_children_follow() {
+    run_success_case(
+        wrapped_known_address_forwarder_formatter_project(
+            "formatter-multiline-body-tree-gutter",
+            r#"
+get fun `test formatter multiline body tree gutter`() {
+    val (sender, notDeployer, sinkAddress) = deployFmWrappedKnownAddressHarness();
+    val txs = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("0.05"),
+            dest: sinkAddress,
+            body: FmWrappedKnownAddressBody {
+                internalTransferMsg: FmWrappedKnownAddress {
+                    queryId: 0,
+                    newAdminAddress: notDeployer.address,
+                    tonAmount: ton("1"),
+                }.toCell(),
+            },
+        }),
+    );
+
+    expect(txs).toHaveLength(2);
+    println(txs);
+}
+"#,
+        ),
+        "integration/snapshots/formatter/formatter_multiline_body_tree_gutter.stdout.txt",
+    );
+}
+
+#[test]
+fn formatter_decoded_body_renders_supported_compiler_abi_types() {
+    run_success_case(
+        abi_mega_formatter_project(
+            "formatter-decoded-body-supported-compiler-abi-types",
+            r#"
+get fun `test formatter decoded body supported compiler abi types`() {
+    val (sender, friend, sinkAddress) = deployFmAbiMegaHarness();
+    val nibble = beginCell().storeUint(0xABC, 12).endCell().beginParse() as bits12;
+    val bytesTag = "CAFEBABE".hexToSlice() as bytes4;
+    val rawCell = beginCell()
+        .storeUint(0xCA, 8)
+        .storeRef(beginCell().storeUint(0xFE, 8).endCell())
+        .endCell();
+    val trailingPayload = beginCell()
+        .storeUint(0x55, 8)
+        .storeRef(beginCell().storeUint(0xAA, 8).endCell())
+        .endCell()
+        .beginParse() as RemainingBitsAndRefs;
+    val trailingCell = FmAbiMegaRemaining {
+        marker: 3 as uint8,
+        payload: trailingPayload,
+    }.toCell() as Cell<FmAbiMegaRemaining>;
+
+    var items = createEmptyMap<uint16, FmAbiMegaLeaf>();
+    items.set(1 as uint16, FmAbiMegaLeaf {
+        amount: ton("0.01"),
+        owner: sender.address,
+        tag: "01020304".hexToSlice() as bytes4,
+    });
+    items.set(2 as uint16, FmAbiMegaLeaf {
+        amount: ton("0.02"),
+        owner: null,
+        tag: "0A0B0C0D".hexToSlice() as bytes4,
+    });
+
+    var boxedItems = createEmptyMap<uint8, Cell<FmAbiMegaLeaf>>();
+    boxedItems.set(1 as uint8, FmAbiMegaLeaf {
+        amount: ton("0.2"),
+        owner: sender.address,
+        tag: "A1B2C3D4".hexToSlice() as bytes4,
+    }.toCell() as Cell<FmAbiMegaLeaf>);
+    boxedItems.set(2 as uint8, FmAbiMegaLeaf {
+        amount: ton("0.3"),
+        owner: friend.address,
+        tag: "0BADF00D".hexToSlice() as bytes4,
+    }.toCell() as Cell<FmAbiMegaLeaf>);
+
+    val scalarAddressesCell = FmAbiMegaScalarAddresses {
+        ownerOrNull: null,
+        ownerOrFriend: friend.address,
+        anyInternal: sender.address as any_address,
+        anyExternal: fmAbiMegaExternal(0xBEEF0001),
+        anyNone: createAddressNone(),
+    }.toCell() as Cell<FmAbiMegaScalarAddresses>;
+    val scalarValuesCell = FmAbiMegaScalarValues {
+        tiny: 7 as uint8,
+        medium: 70000 as uint32,
+        signed: (-17) as int16,
+        varAmount: 66000 as varuint32,
+        varDebt: (-1234) as varint16,
+        nibble,
+        bytesTag,
+        rawCell,
+        mode: FmAbiMegaMode.Beta,
+    }.toCell() as Cell<FmAbiMegaScalarValues>;
+    val scalarsCell = FmAbiMegaScalars {
+        addresses: scalarAddressesCell,
+        values: scalarValuesCell,
+    }.toCell() as Cell<FmAbiMegaScalars>;
+    val tuplesCell = FmAbiMegaTuples {
+        pair: (7 as uint8, true, friend.address),
+        maybePair: (9 as uint8, false),
+    }.toCell() as Cell<FmAbiMegaTuples>;
+    val objectsCell = FmAbiMegaObjects {
+        maybeLeaf: FmAbiMegaLeaf {
+            amount: ton("0.05"),
+            owner: friend.address,
+            tag: "11223344".hexToSlice() as bytes4,
+        },
+        aliasLeaf: FmAbiMegaLeaf {
+            amount: ton("0.06"),
+            owner: null,
+            tag: "55667788".hexToSlice() as bytes4,
+        },
+        boxedLeaf: FmAbiMegaLeaf {
+            amount: ton("0.07"),
+            owner: sender.address,
+            tag: "99AABBCC".hexToSlice() as bytes4,
+        }.toCell() as Cell<FmAbiMegaLeaf>,
+        nested: FmAbiMegaInner {
+            nonce: 77 as uint32,
+            enabled: false,
+            target: friend.address,
+            meta: FmAbiMegaLeaf {
+                amount: ton("0.08"),
+                owner: sender.address,
+                tag: "DDEEFF00".hexToSlice() as bytes4,
+            },
+        }.toCell() as Cell<FmAbiMegaInner>,
+    }.toCell() as Cell<FmAbiMegaObjects>;
+    val collectionsCell = FmAbiMegaCollections {
+        items,
+        boxedItems,
+    }.toCell() as Cell<FmAbiMegaCollections>;
+    val choice = FmAbiMegaChoicePing {
+        value: 513 as uint16,
+        extra: FmAbiMegaInner {
+            nonce: 88 as uint32,
+            enabled: true,
+            target: sender.address,
+            meta: null,
+        },
+    };
+    val tailCell = FmAbiMegaTail {
+        collections: collectionsCell,
+        trailing: trailingCell as Cell<FmAbiMegaRemaining>,
+        choice,
+    }.toCell() as Cell<FmAbiMegaTail>;
+    val payload = FmAbiMegaMessage {
+        flag: true,
+        amount: ton("0.777"),
+        owner: sender.address,
+        scalars: scalarsCell,
+        tuples: tuplesCell,
+        objects: objectsCell,
+        tail: tailCell,
+    };
+    val txs = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("0.4"),
+            dest: sinkAddress,
+            body: payload,
+        }),
+    );
+
+    expect(txs).toHaveLength(1);
+
+    val tx = txs.at(0).tx.load();
+    val typedBody = tx.loadBody<FmAbiMegaMessage>();
+    val scalars = typedBody.scalars.load();
+    val scalarAddresses = scalars.addresses.load();
+    val scalarValues = scalars.values.load();
+    val tuples = typedBody.tuples.load();
+    val objects = typedBody.objects.load();
+    val tail = typedBody.tail.load();
+    val collections = tail.collections.load();
+    val trailing = tail.trailing.load();
+
+    expect(typedBody.flag).toBeTrue();
+    expect(typedBody.amount).toEqual(ton("0.777"));
+    expect(typedBody.owner).toEqual(sender.address);
+    expect(scalarAddresses.ownerOrNull).toEqual(null);
+    expect(scalarAddresses.ownerOrFriend).toEqual(friend.address);
+    expect(scalarAddresses.anyInternal).toEqual(sender.address as any_address);
+    expect(scalarAddresses.anyExternal).toEqual(fmAbiMegaExternal(0xBEEF0001));
+    expect(scalarAddresses.anyNone).toEqual(createAddressNone());
+    expect(scalarValues.tiny).toEqual(7);
+    expect(scalarValues.medium).toEqual(70000);
+    expect(scalarValues.signed).toEqual(-17);
+    expect(scalarValues.varAmount).toEqual(66000);
+    expect(scalarValues.varDebt).toEqual(-1234);
+    expect(scalarValues.nibble).toEqual(nibble);
+    expect(scalarValues.bytesTag).toEqual(bytesTag);
+    expect(scalarValues.rawCell.hash()).toEqual(rawCell.hash());
+    expect(scalarValues.mode).toEqual(FmAbiMegaMode.Beta);
+    expect(tuples.pair).toEqual((7 as uint8, true, friend.address));
+    expect(tuples.maybePair != null).toBeTrue();
+    expect(objects.maybeLeaf!.amount).toEqual(ton("0.05"));
+    expect(objects.aliasLeaf.owner).toEqual(null);
+    expect(objects.boxedLeaf.load().amount).toEqual(ton("0.07"));
+    expect(objects.nested.load().meta!.tag).toEqual("DDEEFF00".hexToSlice() as bytes4);
+    expect(collections.items).toHaveLength(2);
+    expect(collections.boxedItems).toHaveLength(2);
+    expect(collections.items.get(1 as uint16).loadValue().amount).toEqual(ton("0.01"));
+    expect(collections.boxedItems.get(2 as uint8).loadValue().load().owner).toEqual(friend.address);
+    expect(trailing.marker).toEqual(3);
+    expect(trailing.payload.remainingBitsCount()).toEqual(8);
+    expect(trailing.payload.remainingRefsCount()).toEqual(1);
+    expect(trailing.payload.preloadUint(8)).toEqual(0x55);
+
+    match (tail.choice) {
+        FmAbiMegaChoicePing => {
+            expect(tail.choice.value).toEqual(513);
+            expect(tail.choice.extra.nonce).toEqual(88);
+            expect(tail.choice.extra.enabled).toBeTrue();
+            expect(tail.choice.extra.target).toEqual(sender.address);
+        }
+        FmAbiMegaChoicePong => {
+            throw 1001;
+        }
+    }
+
+    println(txs);
+}
+"#,
+        ),
+        "integration/snapshots/formatter/formatter_decoded_body_supported_compiler_abi_types.stdout.txt",
+    );
+}
+
+#[test]
+fn formatter_exit_code63_from_cell_mismatch_is_reported_in_test_body() {
+    linear_formatter_project(
+        "formatter-exit-code63-from-cell-mismatch-in-test-body",
+        r#"
+get fun `test-formatter-exit-code63-from-cell-mismatch-in-test-body`() {
+    val mid = randomAddress("fm_mismatch_mid");
+    val sink = randomAddress("fm_mismatch_sink");
+    val wrongCell = FmRoute {
+        queryId: 999,
+        mid,
+        sink,
+    }.toCell();
+
+    FmRelay.fromCell(wrongCell);
+}
+"#,
+    )
+    .build()
+    .acton()
+    .test()
+    .show_bodies()
+    .run()
+    .failure()
+    .assert_failed(1)
+    .assert_contains("exit_code=63")
+    .assert_snapshot_matches(
+        "integration/snapshots/formatter/formatter_exit_code63_from_cell_mismatch_in_test_body.stdout.txt",
+    );
+}
+
+#[test]
+fn formatter_exit_code63_from_cell_mismatch_in_test_body_with_backtrace_full() {
+    linear_formatter_project(
+        "formatter-exit-code63-from-cell-mismatch-in-test-body-with-backtrace-full",
+        r#"
+get fun `test-formatter-exit-code63-from-cell-mismatch-in-test-body-with-backtrace-full`() {
+    val mid = randomAddress("fm_mismatch_mid");
+    val sink = randomAddress("fm_mismatch_sink");
+    val wrongCell = FmRoute {
+        queryId: 1001,
+        mid,
+        sink,
+    }.toCell();
+
+    FmRelay.fromCell(wrongCell);
+}
+"#,
+    )
+    .build()
+    .acton()
+    .test()
+    .show_bodies()
+    .with_backtrace("full")
+    .run()
+    .failure()
+    .assert_failed(1)
+    .assert_contains("exit_code=63")
+    .assert_snapshot_matches(
+        "integration/snapshots/formatter/formatter_exit_code63_from_cell_mismatch_in_test_body_with_backtrace_full.stdout.txt",
     );
 }
 
@@ -854,15 +1744,15 @@ fn formatter_fanout_chain_println_renders_sibling_branches() {
     run_success_case(
         fanout_formatter_project(
             "formatter-fanout-println",
-            r#"
-get fun `test-formatter-fanout-chain-println`() {
+            r"
+get fun `test formatter fanout chain println`() {
     val (sender, rootAddress, leftAddress, rightAddress) = deployFmFanoutHarness();
     val txs = sendFmFanout(sender, rootAddress, leftAddress, rightAddress, 202);
 
     expect(txs).toHaveLength(3);
     println(txs);
 }
-"#,
+",
         ),
         "integration/snapshots/formatter/formatter_fanout_chain_println_sibling_branches.stdout.txt",
     );
@@ -873,11 +1763,11 @@ fn formatter_external_out_println_renders_none_and_external_destinations() {
     run_success_case(
         external_formatter_project(
             "formatter-external-out-println-destinations",
-            r#"
-get fun `test-formatter-external-out-println-destinations`() {
+            r"
+get fun `test formatter external out println destinations`() {
     val extAddress = deployFmExternalHarness();
     val txs = net.sendExternal(
-        createExternalMessage(
+        net.createExternalMessage(
             extAddress,
             FmExternalTrigger { queryId: 303 },
             null,
@@ -885,10 +1775,10 @@ get fun `test-formatter-external-out-println-destinations`() {
         ),
     );
 
-    expect(txs).toHaveLength(1);
+    expect(txs!).toHaveLength(1);
     println(txs);
 }
-"#,
+",
         ),
         "integration/snapshots/formatter/formatter_external_out_println_destinations.stdout.txt",
     );
@@ -898,11 +1788,11 @@ get fun `test-formatter-external-out-println-destinations`() {
 fn formatter_ext_in_exit_code_with_backtrace_full_println_renders_backtrace() {
     external_throw_formatter_project(
         "formatter-ext-in-exit-code-with-backtrace-full",
-        r#"
+        r"
 get fun `test-formatter-ext-in-exit-code-with-backtrace-full`() {
     val extAddress = deployFmExternalThrowHarness();
     val txs = net.sendExternal(
-        createExternalMessage(
+        net.createExternalMessage(
             extAddress,
             FmExternalTrigger { queryId: 404 },
             null,
@@ -910,14 +1800,15 @@ get fun `test-formatter-ext-in-exit-code-with-backtrace-full`() {
         ),
     );
 
-    expect(txs).toHaveLength(1);
+    expect(txs!).toHaveLength(1);
     println(txs);
 }
-"#,
+",
     )
     .build()
     .acton()
     .test()
+    .show_bodies()
     .with_backtrace("full")
     .run()
     .success()
@@ -933,7 +1824,7 @@ fn formatter_println_renders_bounced_and_compute_skipped_transactions() {
         bounce_formatter_project(
             "formatter-println-bounced-compute-skipped",
             r#"
-get fun `test-formatter-println-bounced-and-compute-skipped`() {
+get fun `test formatter println bounced and compute skipped`() {
     val (sender, echoAddress) = deployFmBounceHarness();
 
     val bounced = net.send(
@@ -976,13 +1867,13 @@ fn formatter_multi_root_println_renders_independent_internal_chains() {
     run_success_case(
         linear_formatter_project(
             "formatter-multi-root-println-independent-internal-chains",
-            r#"
-get fun `test-formatter-multi-root-println-independent-internal-chains`() {
+            r"
+get fun `test formatter multi root println independent internal chains`() {
     val (sender, rootAddress, midAddress, sinkAddress) = deployFmLinearHarness();
     val first = sendFmLinear(sender, rootAddress, midAddress, sinkAddress, 505);
     val second = sendFmLinear(sender, rootAddress, midAddress, sinkAddress, 506);
 
-    var merged: SendResultList = [];
+    var merged: SendResultList = SendResultList.createEmpty();
     var i = 0;
     while (i < first.size()) {
         merged.push(first.get(i));
@@ -997,7 +1888,7 @@ get fun `test-formatter-multi-root-println-independent-internal-chains`() {
     expect(merged.size()).toEqual(first.size() + second.size());
     println(merged);
 }
-"#,
+",
         ),
         "integration/snapshots/formatter/formatter_multi_root_println_independent_internal_chains.stdout.txt",
     );
@@ -1009,8 +1900,8 @@ fn formatter_action_phase_failure_println_renders_retrace_and_backtrace_hint() {
         action_formatter_project(
             "formatter-action-failure-println-with-hint",
             r#"
-get fun `test-formatter-action-phase-failure-println-with-hint`() {
-    val sender = net.treasury("sender");
+get fun `test formatter action phase failure println with hint`() {
+    val sender = testing.treasury("sender");
     val (init, actionAddress) = fmActionInit();
     val txs = net.send(
         sender.address,
@@ -1033,13 +1924,42 @@ get fun `test-formatter-action-phase-failure-println-with-hint`() {
 }
 
 #[test]
+fn formatter_action_phase_failure_println_verbose_renders_actions_retrace() {
+    run_success_case_verbose(
+        action_formatter_project(
+            "formatter-action-failure-println-verbose",
+            r#"
+get fun `test formatter action phase failure println verbose`() {
+    val sender = testing.treasury("sender");
+    val (init, actionAddress) = fmActionInit();
+    val txs = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("0.2"),
+            dest: {
+                stateInit: init,
+            },
+        }),
+    );
+
+    expect(txs).toHaveLength(1);
+    println(txs);
+}
+"#,
+        ),
+        "integration/snapshots/formatter/formatter_action_phase_failure_println_verbose.stdout.txt",
+    );
+}
+
+#[test]
 fn formatter_action_phase_failure_println_with_backtrace_full_renders_action_locations() {
     let source = format!(
         "{}\n{}\n",
         ACTION_IMPORTS,
         r#"
-get fun `test-formatter-action-phase-failure-println-with-backtrace-full`() {
-    val sender = net.treasury("sender");
+get fun `test formatter action phase failure println with backtrace full`() {
+    val sender = testing.treasury("sender");
     val (init, actionAddress) = fmActionInit();
     val txs = net.send(
         sender.address,
@@ -1069,6 +1989,7 @@ get fun `test-formatter-action-phase-failure-println-with-backtrace-full`() {
         .build()
         .acton()
         .test()
+        .show_bodies()
         .with_backtrace("full")
         .run()
         .success()
@@ -1084,7 +2005,7 @@ fn formatter_flags_after_gas_println_renders_multiple_flag_variants() {
         flags_formatter_project(
             "formatter-flags-after-gas-variants",
             r#"
-get fun `test-formatter-flags-after-gas-variants`() {
+get fun `test formatter flags after gas variants`() {
     val (sender, flagsAddress) = deployFmFlagsHarness();
 
     val okRes = net.send(
@@ -1140,6 +2061,71 @@ get fun `test-formatter-flags-after-gas-variants`() {
 "#,
         ),
         "integration/snapshots/formatter/formatter_flags_after_gas_println_variants.stdout.txt",
+    );
+}
+
+#[test]
+fn formatter_flags_after_gas_println_verbose_renders_multiple_flag_variants() {
+    run_success_case_verbose(
+        flags_formatter_project(
+            "formatter-flags-after-gas-variants-verbose",
+            r#"
+get fun `test formatter flags after gas variants verbose`() {
+    val (sender, flagsAddress) = deployFmFlagsHarness();
+
+    val okRes = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("0.2"),
+            dest: flagsAddress,
+            body: FmFlagsOk { queryId: 1 },
+        }),
+    );
+
+    val throwRes = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("0.2"),
+            dest: flagsAddress,
+            body: FmFlagsThrow { queryId: 2 },
+        }),
+    );
+
+    val actionFailRes = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("0.2"),
+            dest: flagsAddress,
+            body: FmFlagsActionFail { queryId: 3 },
+        }),
+    );
+
+    val skippedRes = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("0.2"),
+            dest: unknownFmFlagsAddress(),
+            body: FmFlagsOk { queryId: 4 },
+        }),
+    );
+
+    expect(okRes).toHaveLength(1);
+    expect(throwRes).toHaveLength(1);
+    expect(actionFailRes).toHaveLength(1);
+    expect(skippedRes).toHaveLength(1);
+
+    println(okRes);
+    println(throwRes);
+    println(actionFailRes);
+    println(skippedRes);
+}
+"#,
+        ),
+        "integration/snapshots/formatter/formatter_flags_after_gas_println_variants_verbose.stdout.txt",
     );
 }
 
@@ -1203,6 +2189,7 @@ get fun `test-formatter-exit-code-with-backtrace-full`() {
         .build()
         .acton()
         .test()
+        .show_bodies()
         .with_backtrace("full")
         .run()
         .success()
@@ -1213,22 +2200,71 @@ get fun `test-formatter-exit-code-with-backtrace-full`() {
 }
 
 #[test]
+fn formatter_exit_code_println_with_backtrace_full_and_account_created_event() {
+    let source = format!(
+        "{}\n{}\n",
+        FLAGS_IMPORTS,
+        r#"
+get fun `test-formatter-exit-code-with-backtrace-full-and-account-created-event`() {
+    val sender = testing.treasury("sender");
+
+    val init = ContractState {
+        code: build("fm_flags"),
+        data: createEmptyCell(),
+    };
+
+    val throwRes = net.send(
+        sender.address,
+        createMessage({
+            bounce: false,
+            value: ton("0.2"),
+            dest: {
+                stateInit: init,
+            },
+            body: FmFlagsThrow { queryId: 88 },
+        }),
+    );
+
+    expect(throwRes).toHaveLength(1);
+    println(throwRes);
+}
+"#
+    );
+
+    ProjectBuilder::new("formatter-exit-code-with-backtrace-full-and-account-created-event")
+        .file("contracts/fm_flags_messages", FLAGS_MESSAGES)
+        .contract("fm_flags", FLAGS_CONTRACT)
+        .test_file("formatter_flags", &source)
+        .build()
+        .acton()
+        .test()
+        .show_bodies()
+        .with_backtrace("full")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/formatter/formatter_exit_code_with_backtrace_full_and_account_created_event.stdout.txt",
+        );
+}
+
+#[test]
 fn formatter_orphan_chain_println_treats_missing_parent_as_root() {
     run_success_case(
         linear_formatter_project(
             "formatter-orphan-chain-println-missing-parent",
-            r#"
-get fun `test-formatter-orphan-chain-println-missing-parent`() {
+            r"
+get fun `test formatter orphan chain println missing parent`() {
     val (sender, rootAddress, midAddress, sinkAddress) = deployFmLinearHarness();
     val txs = sendFmLinear(sender, rootAddress, midAddress, sinkAddress, 909);
     expect(txs).toHaveLength(3);
 
-    var orphaned: SendResultList = [];
+    var orphaned: SendResultList = SendResultList.createEmpty();
     orphaned.push(txs.get(1));
     orphaned.push(txs.get(2));
     println(orphaned);
 }
-"#,
+",
         ),
         "integration/snapshots/formatter/formatter_orphan_chain_println_missing_parent.stdout.txt",
     );
@@ -1239,7 +2275,7 @@ fn formatter_debug_logs_println_renders_debug_logs_block() {
     debug_formatter_project(
         "formatter-debug-logs-println",
         r#"
-get fun `test-formatter-debug-logs-println`() {
+get fun `test formatter debug logs println`() {
     val (sender, debugAddress) = deployFmDebugHarness();
 
     val txs = net.send(
@@ -1260,6 +2296,7 @@ get fun `test-formatter-debug-logs-println`() {
     .build()
     .acton()
     .test()
+    .show_bodies()
     .with_backtrace("full")
     .run()
     .success()
@@ -1275,7 +2312,7 @@ fn formatter_account_destroyed_println_renders_destroyed_marker() {
         destroy_formatter_project(
             "formatter-account-destroyed-println",
             r#"
-get fun `test-formatter-account-destroyed-println`() {
+get fun `test formatter account destroyed println`() {
     val (sender, destroyAddress) = deployFmDestroyHarness();
 
     val txs = net.send(
@@ -1324,9 +2361,9 @@ fn formatter_contract_letters_rollover_after_z_println_uses_a1_and_b1() {
 
     let body = format!(
         r#"
-get fun `test-formatter-contract-letters-rollover-a1-b1`() {{
-    val sender = net.treasury("sender");
-    var merged: SendResultList = [];
+get fun `test formatter contract letters rollover a1 b1`() {{
+    val sender = testing.treasury("sender");
+    var merged: SendResultList = SendResultList.createEmpty();
 {sends}
     expect(merged).toHaveLength(27);
     println(merged);

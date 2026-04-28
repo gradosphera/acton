@@ -4,6 +4,7 @@ use crate::support::project::ProjectBuilder;
 const DO_CONFIG_IMPORTS: &str = r#"
 import "../../lib/emulation/config"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 "#;
 
@@ -25,9 +26,9 @@ fn run_config_success_case(project_name: &str, test_body: &str, snapshot_path: &
 fn config_global_version_roundtrip_supports_zero_values() {
     run_config_success_case(
         "do-stdlib-config-global-version-zero-roundtrip",
-        r#"
-get fun `test-do-stdlib-config-global-version-zero-roundtrip`() {
-    var config = net.getConfig();
+        r"
+get fun `test do stdlib config global version zero roundtrip`() {
+    var config = testing.getConfig();
 
     val zeroVersion = GlobalVersion {
         version: 0,
@@ -35,13 +36,13 @@ get fun `test-do-stdlib-config-global-version-zero-roundtrip`() {
     };
 
     config.setGlobalVersion(zeroVersion);
-    expect(net.setConfig(config)).toBeTrue();
+    expect(testing.setConfig(config)).toBeTrue();
 
-    val updated = net.getConfig().getGlobalVersion();
+    val updated = testing.getConfig().getGlobalVersion();
     expect(updated.version).toEqual(0);
     expect(updated.capabilities).toEqual(0);
 }
-"#,
+",
         "integration/snapshots/test-runner/config_global_version_roundtrip_supports_zero_values/config_global_version_roundtrip_supports_zero_values.stdout.txt",
     );
 }
@@ -50,9 +51,9 @@ get fun `test-do-stdlib-config-global-version-zero-roundtrip`() {
 fn config_global_version_roundtrip_supports_non_zero_values() {
     run_config_success_case(
         "do-stdlib-config-global-version-non-zero-roundtrip",
-        r#"
-get fun `test-do-stdlib-config-global-version-non-zero-roundtrip`() {
-    var config = net.getConfig();
+        r"
+get fun `test do stdlib config global version non zero roundtrip`() {
+    var config = testing.getConfig();
 
     val nonZero = GlobalVersion {
         version: 2026,
@@ -60,15 +61,15 @@ get fun `test-do-stdlib-config-global-version-non-zero-roundtrip`() {
     };
 
     config.setGlobalVersion(nonZero);
-    expect(net.setConfig(config)).toBeTrue();
+    expect(testing.setConfig(config)).toBeTrue();
 
-    val updated = net.getConfig().getGlobalVersion();
+    val updated = testing.getConfig().getGlobalVersion();
     expect(updated.version).toEqual(nonZero.version);
     expect(updated.capabilities).toEqual(nonZero.capabilities);
     expect(updated.version).toNotEqual(0);
     expect(updated.capabilities).toNotEqual(0);
 }
-"#,
+",
         "integration/snapshots/test-runner/config_global_version_roundtrip_supports_zero_values/config_global_version_roundtrip_supports_non_zero_values.stdout.txt",
     );
 }

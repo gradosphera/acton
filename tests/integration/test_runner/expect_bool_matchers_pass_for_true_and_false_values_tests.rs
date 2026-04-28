@@ -20,16 +20,16 @@ fn run_expect_suite(
 #[test]
 fn expect_bool_matchers_pass_for_true_and_false_values() {
     let source = format!(
-        r#"{EXPECT_IMPORTS}
+        r"{EXPECT_IMPORTS}
 
-get fun `test-by-expect-bool-pass-true`() {{
+get fun `test by expect bool pass true`() {{
     expect(true).toBeTrue();
 }}
 
-get fun `test-by-expect-bool-pass-false`() {{
+get fun `test by expect bool pass false`() {{
     expect(false).toBeFalse();
 }}
-"#
+"
     );
 
     run_expect_suite("by-stdlib-expect-bool-pass", &source)
@@ -43,16 +43,16 @@ get fun `test-by-expect-bool-pass-false`() {{
 #[test]
 fn expect_bool_matcher_mismatch_reports_tuple_diff() {
     let source = format!(
-        r#"{EXPECT_IMPORTS}
+        r"{EXPECT_IMPORTS}
 
-get fun `test-by-expect-bool-fail-to-be-true`() {{
+get fun `test by expect bool fail to be true`() {{
     expect(false).toBeTrue();
 }}
 
-get fun `test-by-expect-bool-fail-to-be-false`() {{
+get fun `test by expect bool fail to be false`() {{
     expect(true).toBeFalse();
 }}
-"#
+"
     );
 
     run_expect_suite("by-stdlib-expect-bool-fail", &source)

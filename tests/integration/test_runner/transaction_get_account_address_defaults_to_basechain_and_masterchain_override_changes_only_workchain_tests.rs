@@ -5,6 +5,7 @@ use std::fs;
 
 const DC_TRANSACTION_IMPORTS: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 import "../../lib/types/transaction"
 
@@ -50,9 +51,9 @@ fn transaction_get_account_address_defaults_to_basechain_and_masterchain_overrid
     run_transaction_success(
         "dc-stdlib-transaction-get-account-address-default-vs-masterchain",
         r#"
-get fun `test-dc-stdlib-transaction-get-account-address-default-vs-masterchain`() {
-    val sender = net.treasury("dc_sender_default");
-    val destination = net.randomAddress("dc_destination_default");
+get fun `test dc stdlib transaction get account address default vs masterchain`() {
+    val sender = testing.treasury("dc_sender_default");
+    val destination = randomAddress("dc_destination_default");
 
     val txs = net.send(
         sender.address,
@@ -104,9 +105,9 @@ fn transaction_get_account_address_masterchain_override_is_stable_in_fixture_pro
     let test_path = "tests/dc_transaction_get_account_address_fixture.test.tolk";
     let source = format!(
         r#"{DC_TRANSACTION_IMPORTS}
-get fun `test-dc-stdlib-transaction-get-account-address-masterchain-stable`() {{
-    val sender = net.treasury("dc_sender_fixture");
-    val destination = net.randomAddress("dc_destination_fixture");
+get fun `test dc stdlib transaction get account address masterchain stable`() {{
+    val sender = testing.treasury("dc_sender_fixture");
+    val destination = randomAddress("dc_destination_fixture");
 
     val txs = net.send(
         sender.address,

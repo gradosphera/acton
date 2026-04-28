@@ -1,14 +1,19 @@
+use crate::ast::bless_call_missing_safety_comment::BlessCallMissingSafetyComment;
 use crate::ast::dangerous_send_mode_missing_safety_comment::DangerousSendModeMissingSafetyComment;
+use crate::ast::enum_cast_missing_safety_comment::EnumCastMissingSafetyComment;
 use crate::ast::{
     acton_import_in_contract, asm_function_missing_safety_comment, compiler_error,
-    deprecated_symbol_use, field_init_can_be_folded, import_path_can_use_mappings,
-    message_entity_naming, method_can_be_static, mutable_parameter_can_be_immutable,
+    create_message_body_to_cell, deprecated_symbol_use, dict_type_use, duplicated_condition,
+    explicit_return_type, field_init_can_be_folded, identical_conditional_branches,
+    import_path_can_use_mappings, incoming_messages_duplicate_opcode, message_entity_naming,
+    method_can_be_static, missing_contract_header, mutable_parameter_can_be_immutable,
     mutable_variable_can_be_immutable, name_case_checker, negated_is_type_can_use_not_is,
-    no_bounce_handler, pure_function_call_unused, reserve_mode_literal, send_mode_literal,
-    several_not_null_assertions, unused_import, unused_variable, used_ignored_identifier,
-    write_only_variable,
+    no_bounce_handler, no_global_variables, pure_function_call_unused, reserve_mode_literal,
+    send_mode_literal, several_not_null_assertions, throw_requires_documented_error_value,
+    throw_requires_errors_enum, unused_expression, unused_import, unused_variable,
+    used_ignored_identifier, write_only_variable,
 };
-use crate::dfa::unauthorized_access;
+use crate::dfa::{divide_before_multiply, random_requires_initialization, unauthorized_access};
 use serde::Serialize;
 use std::fmt::Display;
 
@@ -80,8 +85,23 @@ pub fn code_to_rule(linter: Linter, code: &str) -> Option<(RuleGroup, Rule)> {
         (Tolk, "E020") => reserve_mode_literal::ReserveModeLiteral,
         (Tolk, "E021") => DangerousSendModeMissingSafetyComment,
         (Tolk, "E022") => negated_is_type_can_use_not_is::NegatedIsTypeCanUseNotIs,
+        (Tolk, "E023") => BlessCallMissingSafetyComment,
+        (Tolk, "E024") => random_requires_initialization::RandomRequiresInitialization,
+        (Tolk, "E025") => divide_before_multiply::DivideBeforeMultiply,
+        (Tolk, "E026") => duplicated_condition::DuplicatedCondition,
+        (Tolk, "E027") => identical_conditional_branches::IdenticalConditionalBranches,
+        (Tolk, "E028") => no_global_variables::NoGlobalVariables,
+        (Tolk, "E029") => incoming_messages_duplicate_opcode::IncomingMessagesDuplicateOpcode,
+        (Tolk, "E030") => EnumCastMissingSafetyComment,
+        (Tolk, "E031") => missing_contract_header::MissingContractHeader,
+        (Tolk, "E032") => unused_expression::UnusedExpression,
+        (Tolk, "E033") => dict_type_use::DictTypeUse,
+        (Tolk, "E034") => throw_requires_errors_enum::ThrowRequiresErrorsEnum,
+        (Tolk, "E035") => create_message_body_to_cell::CreateMessageBodyToCell,
+        (Tolk, "E036") => throw_requires_documented_error_value::ThrowRequiresDocumentedErrorValue,
         (Tolk, "C001") => compiler_error::CompilerError,
         (Tolk, "S001") => name_case_checker::NameCaseChecker,
+        (Tolk, "S002") => explicit_return_type::ExplicitReturnType,
         _ => return None,
     })
 }
@@ -91,6 +111,7 @@ pub trait ViolationMetadata {
     fn rule() -> Rule;
 
     /// Returns the code for this violation
+    #[must_use]
     fn code() -> Option<&'static str> {
         Linter::Tolk.code_for_rule(Self::rule())
     }

@@ -15,12 +15,13 @@ fn fetch_and_register_library_returns_false_without_panicking_on_transport_error
             &format!(
                 r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 
-get fun `test-bl-stdlib-fetch-register-library-false`() {{
-    expect(net.fetchAndRegisterLibrary("{MISSING_LIBRARY_HASH}")).toBeFalse();
-    expect(net.fetchAndRegisterLibrary("not-a-hash")).toBeFalse();
-    expect(net.fetchAndRegisterLibrary("")).toBeFalse();
+get fun `test bl stdlib fetch register library false`() {{
+    expect(testing.loadAndRegisterLibrary("{MISSING_LIBRARY_HASH}")).toBeFalse();
+    expect(testing.loadAndRegisterLibrary("not-a-hash")).toBeFalse();
+    expect(testing.loadAndRegisterLibrary("")).toBeFalse();
 
     expect(net.loadLibrary("{MISSING_LIBRARY_HASH}")).toBeNull();
     expect(net.loadLibrary("not-a-hash")).toBeNull();
@@ -38,7 +39,7 @@ get fun `test-bl-stdlib-fetch-register-library-false`() {{
         r#"{base_config}
 
 [networks.bl-unreachable]
-v2-url = "http://127.0.0.1:1/api/v2"
+api = {{ v2 = "http://127.0.0.1:1/api/v2" }}
 "#
     );
     fs::write(&acton_toml_path, patched_config).expect("failed to patch Acton.toml for BL test");
@@ -64,10 +65,11 @@ fn fetch_and_register_library_returns_true_for_known_hash_in_fixture_project() {
         format!(
             r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 
-get fun `test-bl-stdlib-fetch-register-library-true`() {{
-    expect(net.fetchAndRegisterLibrary("{KNOWN_LIBRARY_HASH}")).toBeTrue();
+get fun `test bl stdlib fetch register library true`() {{
+    expect(testing.loadAndRegisterLibrary("{KNOWN_LIBRARY_HASH}")).toBeTrue();
     expect(net.loadLibrary("{KNOWN_LIBRARY_HASH}")).toBeNotNull();
 }}
 "#

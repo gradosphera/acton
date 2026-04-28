@@ -1,7 +1,7 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 
-const DD_MESSAGES: &str = r#"
+const DD_MESSAGES: &str = r"
 struct (0xDD180001) DdTrigger {
     queryId: uint64
     relay: address
@@ -20,7 +20,7 @@ struct (0xDD180004) DdBetaNotice {
     queryId: uint64
     origin: uint8
 }
-"#;
+";
 
 const DD_ROOT_CONTRACT: &str = r#"
 import "dd_messages"
@@ -76,14 +76,16 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const DD_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
+import "../../lib/tlb/maybe"
+import "../../lib/types/message"
 import "../contracts/dd_messages"
 
 fun deployDdHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
 
     val relayInit = ContractState {
         code: build("dd_relay"),
@@ -152,8 +154,8 @@ fn run_project_builder_success(project_name: &str, test_body: &str, snapshot_pat
 fn find_external_out_message_filters_by_type_and_source_across_transactions() {
     run_project_builder_success(
         "dd-stdlib-find-external-out-message-type-and-source",
-        r#"
-get fun `test-dd-find-external-out-message-type-and-source`() {
+        r"
+get fun `test dd find external out message type and source`() {
     val (sender, rootAddress, relayAddress) = deployDdHarness();
     val txs = sendDdTrigger(sender, rootAddress, relayAddress, 451);
 
@@ -176,13 +178,13 @@ get fun `test-dd-find-external-out-message-type-and-source`() {
         to: createAddressNone(),
     });
 
-    expect(alpha).toBeDefined();
-    expect(beta).toBeDefined();
-    expect(alpha.unwrap().loadBody()).toEqual(DdAlphaNotice {
+    expect(alpha).toBeNotNull();
+    expect(beta).toBeNotNull();
+    expect(alpha!.loadBody()).toEqual(DdAlphaNotice {
         queryId: 451,
         origin: 1,
     });
-    expect(beta.unwrap().loadBody()).toEqual(DdBetaNotice {
+    expect(beta!.loadBody()).toEqual(DdBetaNotice {
         queryId: 451,
         origin: 2,
     });
@@ -191,9 +193,9 @@ get fun `test-dd-find-external-out-message-type-and-source`() {
         from: rootAddress,
         to: createAddressNone(),
     });
-    expect(wrongType).toBeNone();
+    expect(wrongType).toBeNull();
 }
-"#,
+",
         "integration/snapshots/test-runner/find_external_out_message_filters_by_type_and_source_across_transactions/find_external_out_message_filters_by_type_and_source_across_transactions.stdout.txt",
     );
 }
@@ -202,8 +204,8 @@ get fun `test-dd-find-external-out-message-type-and-source`() {
 fn find_external_out_message_uses_body_type_per_send_result_list() {
     run_project_builder_success(
         "dd-stdlib-find-external-out-message-per-send",
-        r#"
-get fun `test-dd-find-external-out-message-per-send`() {
+        r"
+get fun `test dd find external out message per send`() {
     val (sender, rootAddress, relayAddress) = deployDdHarness();
     val first = sendDdTrigger(sender, rootAddress, relayAddress, 700);
     val second = sendDdTrigger(sender, rootAddress, relayAddress, 701);
@@ -219,13 +221,13 @@ get fun `test-dd-find-external-out-message-per-send`() {
         from: relayAddress,
         to: createAddressNone(),
     });
-    expect(firstBeta).toBeDefined();
-    expect(secondBeta).toBeDefined();
-    expect(firstBeta.unwrap().loadBody()).toEqual(DdBetaNotice {
+    expect(firstBeta).toBeNotNull();
+    expect(secondBeta).toBeNotNull();
+    expect(firstBeta!.loadBody()).toEqual(DdBetaNotice {
         queryId: 700,
         origin: 2,
     });
-    expect(secondBeta.unwrap().loadBody()).toEqual(DdBetaNotice {
+    expect(secondBeta!.loadBody()).toEqual(DdBetaNotice {
         queryId: 701,
         origin: 2,
     });
@@ -234,9 +236,9 @@ get fun `test-dd-find-external-out-message-per-send`() {
         from: relayAddress,
         to: createAddressNone(),
     });
-    expect(secondWrongOpcode).toBeNone();
+    expect(secondWrongOpcode).toBeNull();
 }
-"#,
+",
         "integration/snapshots/test-runner/find_external_out_message_filters_by_type_and_source_across_transactions/find_external_out_message_uses_body_type_per_send_result_list.stdout.txt",
     );
 }

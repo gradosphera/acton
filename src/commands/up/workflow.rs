@@ -2,8 +2,9 @@ use acton_config::color::OwoColorize;
 use anyhow::{Context, Result, bail};
 use flate2::read::GzDecoder;
 use semver::Version;
-use std::env;
+use sha2::{Digest, Sha256};
 use std::fs::{self, File};
+use std::io::Read;
 use std::path::Path;
 use tar::Archive;
 
@@ -20,17 +21,18 @@ pub(super) struct UpdateInfo {
 pub(super) fn check_update<C: ReleaseClient>(
     client: &C,
     current_version_str: &str,
+    current_is_trunk: bool,
 ) -> Result<UpdateInfo> {
     let release = client.get_release(None, false)?;
     let latest_version = release.tag_name;
-    let is_canary = current_version_str == "canary";
 
-    let update_available = if is_canary {
-        // don't report anything for canary release user
+    let update_available = if current_is_trunk {
+        // don't report anything for trunk release user
         false
     } else {
-        let current_v =
-            Version::parse(current_version_str).context("Cannot parse current version")?;
+        let current_v = Version::parse(current_version_str).with_context(|| {
+            format!("Current Acton version '{current_version_str}' is not valid semver")
+        })?;
         let latest_v_str = latest_version.trim_start_matches('v');
         if let Ok(latest_v) = Version::parse(latest_v_str) {
             latest_v > current_v
@@ -47,25 +49,26 @@ pub(super) fn check_update<C: ReleaseClient>(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn run_update<C: ReleaseClient>(
     client: &C,
     current_exe: &Path,
     current_version_str: &str,
+    current_is_trunk: bool,
     version: Option<String>,
-    canary: bool,
+    trunk: bool,
     stable: bool,
-    yes: bool,
+    force: bool,
 ) -> Result<()> {
-    check_homebrew(current_exe, yes)?;
-
     let current_version = Version::parse(current_version_str);
+    let use_trunk_release = version.is_none() && !stable && (trunk || current_is_trunk);
 
-    let release = client.get_release(version.as_deref(), canary)?;
+    let release = client.get_release(version.as_deref(), use_trunk_release)?;
 
-    let should_install = if version.is_some() || canary {
-        // in case of explicit version we always use it despite be canary or not
-        if canary {
-            println!("  {} canary release", "Installing".green().bold());
+    let should_install = if version.is_some() || use_trunk_release {
+        // An explicit version always wins; otherwise stay on the active trunk channel.
+        if version.is_none() && use_trunk_release {
+            println!("  {} trunk release", "Installing".green().bold());
         } else {
             println!("  {} {}", "Installing".green().bold(), release.tag_name);
         }
@@ -73,12 +76,20 @@ pub(super) fn run_update<C: ReleaseClient>(
     } else if stable {
         let clean_tag = release.tag_name.trim_start_matches('v');
         if let Ok(target_version) = Version::parse(clean_tag) {
-            if current_version_str == "canary" {
-                // when we use canary and user provide `--stable`, update to latest stable version
+            if current_is_trunk {
+                // when we are on a trunk build and user provide `--stable`, update to latest stable version
                 println!(
-                    "   {} stable version {} (current: canary)",
+                    "  {} stable version {} (current: trunk)",
                     "Installing".green().bold(),
                     target_version
+                );
+                true
+            } else if force {
+                print_forced_install_release(
+                    &target_version,
+                    current_version.as_ref().ok(),
+                    current_version_str,
+                    true,
                 );
                 true
             } else if let Ok(current_version) = &current_version
@@ -86,7 +97,7 @@ pub(super) fn run_update<C: ReleaseClient>(
             {
                 // if we on stable release, install new stable version
                 println!(
-                    "   {} stable version {} (current: {})",
+                    "  {} stable version {} (current: {})",
                     "Installing".green().bold(),
                     target_version,
                     current_version
@@ -94,7 +105,7 @@ pub(super) fn run_update<C: ReleaseClient>(
                 true
             } else {
                 println!(
-                    "   {} Acton is already at the latest stable version ({})",
+                    "  {} Acton is already at the latest stable version ({})",
                     "Up to date".green().bold(),
                     current_version?
                 );
@@ -102,42 +113,51 @@ pub(super) fn run_update<C: ReleaseClient>(
             }
         } else {
             println!(
-                "   {} Latest release tag '{}' is not a valid semver. Skipping auto-update.",
+                "    {} Latest release tag '{}' is not a valid semver. Skipping auto-update.",
                 "Skipping".yellow().bold(),
                 release.tag_name
             );
             return Ok(());
         }
-    } else if current_version_str == "canary" {
-        println!("   {} latest canary release", "Installing".green().bold());
-        true
     } else {
-        let current_version = current_version.context("Cannot parse current version")?;
         let clean_tag = release.tag_name.trim_start_matches('v');
         if let Ok(target_version) = Version::parse(clean_tag) {
-            if target_version > current_version {
-                println!(
-                    "   {} version {} (current: {})",
-                    "Updating".green().bold(),
-                    target_version,
-                    current_version
+            if force {
+                print_forced_install_release(
+                    &target_version,
+                    current_version.as_ref().ok(),
+                    current_version_str,
+                    false,
                 );
                 true
-            } else if target_version == current_version {
-                // If versions match, we're up to date
-                println!(
-                    "   {} Acton is up to date (version {})",
-                    "Up to date".green().bold(),
-                    current_version
-                );
-                return Ok(());
             } else {
-                println!(
-                    "   {} Acton is up to date (version {})",
-                    "Up to date".green().bold(),
-                    current_version
-                );
-                return Ok(());
+                let current_version = current_version.with_context(|| {
+                    format!("Current Acton version '{current_version_str}' is not valid semver")
+                })?;
+                if target_version > current_version {
+                    println!(
+                        "    {} version {} (current: {})",
+                        "Updating".green().bold(),
+                        target_version,
+                        current_version
+                    );
+                    true
+                } else if target_version == current_version {
+                    // If versions match, we're up to date
+                    println!(
+                        "  {} Acton is up to date (version {})",
+                        "Up to date".green().bold(),
+                        current_version
+                    );
+                    return Ok(());
+                } else {
+                    println!(
+                        "  {} Acton is up to date (version {})",
+                        "Up to date".green().bold(),
+                        current_version
+                    );
+                    return Ok(());
+                }
             }
         } else {
             println!(
@@ -154,7 +174,13 @@ pub(super) fn run_update<C: ReleaseClient>(
     }
 
     let asset = find_asset(&release)?;
+    let checksum_asset = find_checksum_asset(&release, &asset.name)?;
     let tarball_path = client.download_asset(asset)?;
+    let checksum_path = client.download_asset(checksum_asset)?;
+
+    let verify_result = verify_sha256(&tarball_path, &checksum_path, &asset.name);
+    let _ = fs::remove_file(&checksum_path);
+    verify_result?;
 
     install_binary(&tarball_path, current_exe, current_version_str)?;
 
@@ -163,102 +189,189 @@ pub(super) fn run_update<C: ReleaseClient>(
     Ok(())
 }
 
-fn check_homebrew(exe: &Path, yes: bool) -> Result<()> {
-    let path_str = exe.to_string_lossy();
-    if path_str.contains("Cellar") || path_str.contains("homebrew") {
-        eprintln!(
-            "{}",
-            "Warning: Acton seems to be installed via Homebrew.".yellow()
-        );
-        eprintln!("It is recommended to update using `brew upgrade acton`.");
-
-        if yes {
-            return Ok(());
-        }
-
-        let ans = inquire::Confirm::new("Do you want to proceed with built-in update anyway?")
-            .with_default(false)
-            .prompt();
-
-        match ans {
-            Ok(true) => Ok(()),
-            Ok(false) => bail!("Update cancelled."),
-            Err(_) => bail!("Failed to read input."),
-        }
+fn print_forced_install_release(
+    target_version: &Version,
+    current_version: Option<&Version>,
+    current_version_str: &str,
+    stable: bool,
+) {
+    let action = if current_version.is_some_and(|current| current == target_version) {
+        "Reinstalling".green().bold()
     } else {
-        Ok(())
-    }
+        "Installing".green().bold()
+    };
+    let current_display =
+        current_version.map_or_else(|| current_version_str.to_owned(), ToString::to_string);
+    let subject = if stable { "stable version" } else { "version" };
+
+    println!("  {action} {subject} {target_version} (current: {current_display})");
 }
 
 fn find_asset(release: &Release) -> Result<&Asset> {
-    let os = env::consts::OS;
-    let arch = env::consts::ARCH;
+    find_asset_for_target_triple(release, env!("TARGET_TRIPLE"))
+}
 
-    let target_os = match os {
-        "macos" => "darwin",
-        "linux" => "linux",
-        _ => bail!("Unsupported OS: {os}"),
-    };
-
-    let target_arch = match arch {
-        "x86_64" => "x86_64",
-        "aarch64" => "arm64",
-        _ => bail!("Unsupported architecture: {arch}"),
-    };
+pub(super) fn find_asset_for_target_triple<'a>(
+    release: &'a Release,
+    target_triple: &str,
+) -> Result<&'a Asset> {
+    let expected_name = release_asset_name_for_target_triple(target_triple)?;
 
     release
         .assets
         .iter()
-        .find(|a| {
-            let name = a.name.to_lowercase();
-            name.contains(target_os) && name.contains(target_arch) && name.ends_with(".tar.gz")
+        .find(|asset| asset.name.eq_ignore_ascii_case(&expected_name))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Release {} does not include an archive for target {}. Expected asset: {}",
+                release.tag_name,
+                target_triple,
+                expected_name
+            )
         })
-        .ok_or_else(|| anyhow::anyhow!("No matching asset found for {target_os}/{target_arch}"))
+}
+
+pub(super) fn release_asset_name_for_target_triple(target_triple: &str) -> Result<String> {
+    if target_triple.trim().is_empty() {
+        bail!("Target triple is empty");
+    }
+
+    Ok(format!("acton-{target_triple}.tar.gz"))
+}
+
+fn find_checksum_asset<'a>(release: &'a Release, archive_name: &str) -> Result<&'a Asset> {
+    let checksum_name = format!("{archive_name}.sha256");
+
+    release
+        .assets
+        .iter()
+        .find(|asset| asset.name.eq_ignore_ascii_case(&checksum_name))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Release {} is missing the checksum file {}. The release may be incomplete.",
+                release.tag_name,
+                checksum_name
+            )
+        })
+}
+
+fn verify_sha256(tarball_path: &Path, checksum_path: &Path, archive_name: &str) -> Result<()> {
+    let expected = read_expected_sha256(checksum_path, archive_name)?;
+    let actual = compute_sha256(tarball_path)?;
+
+    if actual != expected {
+        bail!(
+            "Downloaded archive {archive_name} failed SHA256 verification. Expected {expected}, got {actual}."
+        );
+    }
+
+    println!("    {} {archive_name}.sha256", "Verified".green().bold());
+
+    Ok(())
+}
+
+fn read_expected_sha256(checksum_path: &Path, archive_name: &str) -> Result<String> {
+    let contents = fs::read_to_string(checksum_path).with_context(|| {
+        format!("Failed to read the downloaded checksum file for {archive_name}")
+    })?;
+
+    let line = contents
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!("The downloaded checksum file for {archive_name} is empty")
+        })?;
+
+    let mut parts = line.split_whitespace();
+    let checksum = parts.next().ok_or_else(|| {
+        anyhow::anyhow!("The downloaded checksum file for {archive_name} has an invalid format")
+    })?;
+
+    if checksum.len() != 64 || !checksum.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        bail!("The downloaded checksum file for {archive_name} contains an invalid SHA256 digest");
+    }
+
+    if let Some(reported_name) = parts.next() {
+        let reported_name = reported_name.trim_start_matches('*');
+        if reported_name != archive_name {
+            bail!(
+                "The downloaded checksum file references '{reported_name}', but the archive is '{archive_name}'"
+            );
+        }
+    }
+
+    Ok(checksum.to_ascii_lowercase())
+}
+
+fn compute_sha256(path: &Path) -> Result<String> {
+    let mut file =
+        File::open(path).with_context(|| format!("Failed to open file {}", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0_u8; 8192];
+
+    loop {
+        let read = file.read(&mut buf)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buf[..read]);
+    }
+
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 fn install_binary(tarball_path: &Path, current_exe: &Path, current_version: &str) -> Result<()> {
-    let tar_gz = File::open(tarball_path)?;
+    let tar_gz = File::open(tarball_path).with_context(|| {
+        format!(
+            "Failed to open the downloaded release archive {}",
+            tarball_path.display()
+        )
+    })?;
     let tar = GzDecoder::new(tar_gz);
     let mut archive = Archive::new(tar);
 
     let mut temp_bin_path = None;
 
-    let temp_dir = tempfile::tempdir()?;
-    archive.unpack(&temp_dir)?;
+    let temp_dir = tempfile::tempdir()
+        .context("Failed to prepare a temporary directory for extracting the new Acton binary")?;
+    archive.unpack(&temp_dir).context(
+        "Failed to extract the downloaded release archive. The archive may be corrupted.",
+    )?;
 
     for entry in walkdir::WalkDir::new(&temp_dir) {
-        let entry = entry?;
+        let entry = entry.context("Failed while scanning the extracted release archive")?;
         if entry.file_type().is_file() && entry.file_name() == "acton" {
             temp_bin_path = Some(entry.path().to_owned());
             break;
         }
     }
 
-    let new_bin_path = temp_bin_path
-        .ok_or_else(|| anyhow::anyhow!("Could not find 'acton' binary in the archive"))?;
+    let new_bin_path = temp_bin_path.ok_or_else(|| {
+        anyhow::anyhow!("The downloaded release archive does not contain an `acton` binary")
+    })?;
 
-    let bin_dir = current_exe
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine binary directory"))?;
+    let bin_dir = current_exe.parent().ok_or_else(|| {
+        anyhow::anyhow!("Could not determine the directory of the current Acton binary")
+    })?;
 
     let backup_name = format!("acton-{current_version}");
     let backup_path = bin_dir.join(&backup_name);
 
     // 1. Create backup by copying current binary
-    if let Err(e) = fs::copy(current_exe, &backup_path) {
-        eprintln!(
-            "Warning: Failed to create backup at {}: {}",
-            backup_path.display(),
-            e
-        );
-    }
+    fs::copy(current_exe, &backup_path).with_context(|| {
+        format!(
+            "Failed to create a backup of the current Acton binary at {}",
+            backup_path.display()
+        )
+    })?;
 
     // 2. Prepare new binary in a temporary file in the same directory to ensure atomic rename
     let temp_file = tempfile::NamedTempFile::new_in(bin_dir)
-        .context("Failed to create temporary file for new binary")?;
+        .context("Failed to create a temporary file for the new Acton binary")?;
 
     fs::copy(&new_bin_path, temp_file.path())
-        .context("Failed to copy new binary to temporary file")?;
+        .context("Failed to copy the new Acton binary into the temporary file")?;
 
     // 3. Set permissions on the temporary file
     #[cfg(unix)]
@@ -270,9 +383,9 @@ fn install_binary(tarball_path: &Path, current_exe: &Path, current_version: &str
     }
 
     // 4. Atomically replace the current binary
-    temp_file
-        .persist(current_exe)
-        .context("Failed to atomically replace current binary")?;
+    temp_file.persist(current_exe).context(
+        "Failed to replace the current Acton binary. Try re-running with sufficient permissions.",
+    )?;
 
     let _ = fs::remove_file(tarball_path);
 

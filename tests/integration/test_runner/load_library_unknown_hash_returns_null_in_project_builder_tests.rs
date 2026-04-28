@@ -5,6 +5,7 @@ use std::fs;
 
 const NETWORK_IMPORTS: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
 "#;
@@ -18,7 +19,7 @@ fn load_library_unknown_hash_returns_null_in_project_builder() {
         r#"
 {NETWORK_IMPORTS}
 
-get fun `test-bm-load-library-unknown-hash-project-builder`() {{
+get fun `test bm load library unknown hash project builder`() {{
     val unknown = net.loadLibrary("{UNKNOWN_LIBRARY_HASH}");
     val empty = net.loadLibrary("");
     expect(unknown).toBeNull();
@@ -54,7 +55,7 @@ fn load_library_unknown_hash_returns_null_in_fixture_project() {
         r#"
 {NETWORK_IMPORTS}
 
-get fun `test-bm-load-library-unknown-hash-fixture`() {{
+get fun `test bm load library unknown hash fixture`() {{
     val unknown = net.loadLibrary("{UNKNOWN_LIBRARY_HASH}");
     val malformed = net.loadLibrary("not-a-hash");
     expect(unknown).toBeNull();

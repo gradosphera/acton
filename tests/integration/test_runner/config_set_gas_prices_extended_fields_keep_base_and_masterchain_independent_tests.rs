@@ -4,6 +4,7 @@ use crate::support::project::ProjectBuilder;
 const CONFIG_IMPORTS: &str = r#"
 import "../../lib/emulation/config"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 "#;
 
@@ -24,9 +25,9 @@ fn run_config_success_case(project_name: &str, test_body: &str, snapshot_path: &
 fn config_set_gas_prices_extended_fields_keep_base_and_masterchain_independent() {
     run_config_success_case(
         "bd-stdlib-config-gas-prices-extended-dual-chain-independence",
-        r#"
-get fun `test-bd-stdlib-config-gas-prices-extended-dual-chain-independence`() {
-    var config = net.getConfig();
+        r"
+get fun `test bd stdlib config gas prices extended dual chain independence`() {
+    var config = testing.getConfig();
 
     val baseBefore = config.getGasPrices(BASECHAIN);
     val masterBefore = config.getGasPrices(MASTERCHAIN);
@@ -60,9 +61,9 @@ get fun `test-bd-stdlib-config-gas-prices-extended-dual-chain-independence`() {
 
     config.setGasPrices(baseAfterUpdate, BASECHAIN);
     config.setGasPrices(masterAfterUpdate, MASTERCHAIN);
-    expect(net.setConfig(config)).toBeTrue();
+    expect(testing.setConfig(config)).toBeTrue();
 
-    val updated = net.getConfig();
+    val updated = testing.getConfig();
     val actualBase = updated.getGasPrices(BASECHAIN);
     val actualMaster = updated.getGasPrices(MASTERCHAIN);
 
@@ -89,7 +90,7 @@ get fun `test-bd-stdlib-config-gas-prices-extended-dual-chain-independence`() {
     expect(actualBase.other.specialGasLimit).toNotEqual(masterAfterUpdate.other.specialGasLimit);
     expect(actualMaster.other.specialGasLimit).toNotEqual(baseAfterUpdate.other.specialGasLimit);
 }
-"#,
+",
         "integration/snapshots/test-runner/config_set_gas_prices_extended_fields_keep_base_and_masterchain_independent/config_set_gas_prices_extended_fields_keep_base_and_masterchain_independent.stdout.txt",
     );
 }
@@ -98,9 +99,9 @@ get fun `test-bd-stdlib-config-gas-prices-extended-dual-chain-independence`() {
 fn config_set_gas_prices_for_basechain_does_not_change_masterchain_extended_fields() {
     run_config_success_case(
         "bd-stdlib-config-gas-prices-single-chain-independence",
-        r#"
-get fun `test-bd-stdlib-config-gas-prices-single-chain-independence`() {
-    var config = net.getConfig();
+        r"
+get fun `test bd stdlib config gas prices single chain independence`() {
+    var config = testing.getConfig();
 
     val baseBefore = config.getGasPrices(BASECHAIN);
     val masterBefore = config.getGasPrices(MASTERCHAIN);
@@ -120,9 +121,9 @@ get fun `test-bd-stdlib-config-gas-prices-single-chain-independence`() {
     };
 
     config.setGasPrices(baseAfterUpdate, BASECHAIN);
-    expect(net.setConfig(config)).toBeTrue();
+    expect(testing.setConfig(config)).toBeTrue();
 
-    val updated = net.getConfig();
+    val updated = testing.getConfig();
     val actualBase = updated.getGasPrices(BASECHAIN);
     val actualMaster = updated.getGasPrices(MASTERCHAIN);
 
@@ -146,7 +147,7 @@ get fun `test-bd-stdlib-config-gas-prices-single-chain-independence`() {
     expect(actualMaster.other.freezeDueLimit).toEqual(masterBefore.other.freezeDueLimit);
     expect(actualMaster.other.deleteDueLimit).toEqual(masterBefore.other.deleteDueLimit);
 }
-"#,
+",
         "integration/snapshots/test-runner/config_set_gas_prices_extended_fields_keep_base_and_masterchain_independent/config_set_gas_prices_for_basechain_does_not_change_masterchain_extended_fields.stdout.txt",
     );
 }

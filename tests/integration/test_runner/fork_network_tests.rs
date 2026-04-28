@@ -18,7 +18,7 @@ fn fork_net_mainnet_formats_addresses_as_mainnet() {
             r#"
             import "../../lib/io"
 
-            get fun `test-mainnet-format`() {
+            get fun `test mainnet format`() {
                 println(address("EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ"));
             }
         "#,
@@ -48,7 +48,7 @@ fn fork_net_testnet_formats_addresses_as_testnet() {
             r#"
             import "../../lib/io"
 
-            get fun `test-testnet-format`() {
+            get fun `test testnet format`() {
                 println(address("EQBvDB_H7FFBs0nF4ap_DBdcOrwY_rMIpNVVOR6SWYFHByMJ"));
             }
         "#,
@@ -78,7 +78,7 @@ fn rejects_non_numeric_fork_block_number() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-smoke`() {
+            get fun `test smoke`() {
                 expect(1).toEqual(1);
             }
         "#,
@@ -98,7 +98,7 @@ fn rejects_non_numeric_fork_block_number() {
 }
 
 #[test]
-fn accepts_api_key_and_fork_block_without_remote_access() {
+fn accepts_fork_block_without_remote_access() {
     let project = ProjectBuilder::new("i-api-key-no-fork")
         .contract("simple", SIMPLE_CONTRACT)
         .test_file(
@@ -106,7 +106,7 @@ fn accepts_api_key_and_fork_block_without_remote_access() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-local-smoke`() {
+            get fun `test local smoke`() {
                 expect(2 + 2).toEqual(4);
             }
         "#,
@@ -116,8 +116,6 @@ fn accepts_api_key_and_fork_block_without_remote_access() {
     project
         .acton()
         .test()
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .arg("--fork-block-number")
         .arg("42")
         .run()
@@ -137,7 +135,7 @@ fn unknown_fork_network_should_fail_fast() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-smoke`() {
+            get fun `test smoke`() {
                 expect(1).toEqual(1);
             }
         "#,

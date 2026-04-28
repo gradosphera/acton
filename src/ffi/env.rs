@@ -4,7 +4,7 @@ use std::env;
 use std::str::FromStr;
 use ton_emulator::{extension, register_ext_methods};
 use ton_executor::BaseExecutor;
-use tvmffi::stack::{Tuple, TupleItem};
+use tvm_ffi::stack::{Tuple, TupleItem};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, Store};
 use tycho_types::models::{StdAddr, StdAddrFormat};
@@ -57,7 +57,7 @@ extension!(env_slice in (Context) with (name: String) using env_slice_impl);
 fn env_slice_impl(_ctx: &mut Context, stack: &mut Tuple, name: String) -> anyhow::Result<()> {
     match env::var(&name) {
         Ok(val) => {
-            stack.push_string(&val);
+            stack.push_string_slice(&val);
         }
         Err(_) => stack.push(TupleItem::Null),
     }

@@ -1,19 +1,23 @@
 use crate::{BaseTypeInfo, TypeAbi, TypeInfo};
 use num_bigint::BigInt;
-use tycho_types::boc::Boc;
-use tycho_types::cell::{Cell, CellSlice, Load};
-use tycho_types::models::{ExtAddr, IntAddr};
+use tolk_compiler::abi::Ty;
+use tycho_types::cell::{Cell, CellBuilder, CellSlice, Load};
+use tycho_types::models::{AnyAddr, ExtAddr, IntAddr};
 
 #[derive(Debug)]
 pub enum Data {
     Null,
     Number(BigInt),
     Bool(bool),
+    String(String),
+    Symbol(String),
     Address(IntAddr),
     ExtAddress(ExtAddr),
     Cell(Cell),
     RemainingBitsAndRefs(Cell),
     Bits((Vec<u8>, usize)),
+    Array(Vec<Data>),
+    Map(Vec<(Data, Data)>),
     Object(DataObject),
 }
 
@@ -26,6 +30,7 @@ pub struct DataObject {
 #[derive(Debug)]
 pub struct DataField {
     pub name: String,
+    pub field_type: Ty,
     pub value: Data,
 }
 
@@ -57,6 +62,7 @@ pub fn decode(
         let value = decode_field(data, abi, &field.type_info)?;
         object.fields.push(DataField {
             name: field.name.clone(),
+            field_type: Ty::Unknown,
             value,
         });
     }
@@ -96,18 +102,12 @@ fn decode_field(
 
             anyhow::bail!("expected internal address for address type")
         }
-        BaseTypeInfo::AnyAddress => {
-            if let Ok(int_addr) = IntAddr::load_from(data) {
-                return Ok(Data::Address(int_addr));
-            }
-
-            // TODO: load external address
-            // if let Ok(int_addr) = ExtAddr::load_from(data) {
-            //     return Ok(Data::Address(int_addr))
-            // }
-
-            anyhow::bail!("external addresses are not supported yet")
-        }
+        BaseTypeInfo::AnyAddress => Ok(match AnyAddr::load_from(data)? {
+            AnyAddr::None => Data::Null,
+            AnyAddr::Ext(ext_addr) => Data::ExtAddress(ext_addr),
+            AnyAddr::Std(addr) => Data::Address(IntAddr::Std(addr)),
+            AnyAddr::Var(addr) => Data::Address(IntAddr::Var(addr)),
+        }),
         BaseTypeInfo::Bits { width } => {
             let bits = data.load_prefix(*width as u16, 0)?;
             let bytes = (*width).div_ceil(8);
@@ -184,10 +184,9 @@ fn decode_field(
             Ok(value)
         }
         BaseTypeInfo::RemainingBitsAndRefs => {
-            // TODO: this is not correct
-            let cloned = *data;
-            let cell = cloned.cell();
-            let cell = Boc::decode(Boc::encode(cell))?;
+            let mut builder = CellBuilder::new();
+            builder.store_slice(data.load_remaining())?;
+            let cell = builder.build()?;
             let value = Data::RemainingBitsAndRefs(cell);
             Ok(value)
         }
@@ -262,9 +261,19 @@ mod tests {
         };
 
         let result = decode(&mut slice, &abi.types, &abi_type).expect("decode failed");
-        assert_eq!(
-            format!("{result:?}"),
-            "Object(DataObject { name: \"MyStruct\", fields: [DataField { name: \"is_deployed\", value: Bool(true) }, DataField { name: \"data\", value: Bits(([1, 2, 3], 24)) }, DataField { name: \"opt\", value: Number(888) }] })"
-        );
+        let Data::Object(object) = result else {
+            panic!("expected object");
+        };
+        assert_eq!(object.name, "MyStruct");
+        assert_eq!(object.fields.len(), 3);
+        assert_eq!(object.fields[0].name, "is_deployed");
+        assert!(matches!(object.fields[0].field_type, Ty::Unknown));
+        assert!(matches!(object.fields[0].value, Data::Bool(true)));
+        assert_eq!(object.fields[1].name, "data");
+        assert!(matches!(object.fields[1].field_type, Ty::Unknown));
+        assert!(matches!(object.fields[1].value, Data::Bits((_, 24))));
+        assert_eq!(object.fields[2].name, "opt");
+        assert!(matches!(object.fields[2].field_type, Ty::Unknown));
+        assert!(matches!(object.fields[2].value, Data::Number(_)));
     }
 }

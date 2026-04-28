@@ -2,8 +2,9 @@ use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 
 const EXPECT_IMPORTS: &str = r#"
+import "../../lib/impl"
 import "../../lib/testing/expect"
-import "../../lib/ffi/ffi"
+import "../../lib/ffi"
 "#;
 
 fn run_expect_suite(
@@ -21,15 +22,15 @@ fn run_expect_suite(
 #[test]
 fn expect_nan_matchers_accept_nan_and_non_nan_values() {
     let source = format!(
-        r#"{EXPECT_IMPORTS}
+        r"{EXPECT_IMPORTS}
 
-get fun `test-bx-expect-nan-pass`() {{
-    val value = ffi.nan();
+get fun `test bx expect nan pass`() {{
+    val value = impl.nan();
     expect(value).toBeNaN();
     expect(0).toBeNonNaN();
     expect(-1).toBeNonNaN();
 }}
-"#
+"
     );
 
     run_expect_suite("bx-stdlib-expect-nan-pass", &source)
@@ -43,16 +44,16 @@ get fun `test-bx-expect-nan-pass`() {{
 #[test]
 fn expect_nan_matchers_report_mismatch_for_nan_and_non_nan_edges() {
     let source = format!(
-        r#"{EXPECT_IMPORTS}
+        r"{EXPECT_IMPORTS}
 
-get fun `test-bx-expect-nan-fail-regular-int`() {{
+get fun `test bx expect nan fail regular int`() {{
     expect(0).toBeNaN();
 }}
 
-get fun `test-bx-expect-non-nan-fail-nan`() {{
-    expect(ffi.nan()).toBeNonNaN();
+get fun `test bx expect non nan fail nan`() {{
+    expect(impl.nan()).toBeNonNaN();
 }}
-"#
+"
     );
 
     run_expect_suite("bx-stdlib-expect-nan-fail", &source)

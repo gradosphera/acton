@@ -1,0 +1,2 @@
+  Installing standard library [ACTON_VERSION]
+Cannot use treasury with `--net`, don't use `testing.treasury()` in scripts, use `scripts.wallet()` instead

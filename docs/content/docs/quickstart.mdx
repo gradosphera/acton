@@ -10,7 +10,11 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 In this guide, we will explore Acton's capabilities and develop a simple smart contract. We'll write tests, deploy it to the testnet, and verify its source code.
 
 <Callout>
-    We won't dive deep into the specific details of the contract logic here. To learn more about Tolk and smart contract development, check out [Your first smart contract](https://docs.ton.org/contract-dev/first-smart-contract) in the official documentation.
+    We won't dive deep into the specific details of the contract logic here. To learn more about Tolk and smart contract development, check out [Your first smart contract](https://docs.ton.org/first-smart-contract) in the official documentation.
+</Callout>
+
+<Callout type="info" title="Already have a repository?">
+    This quickstart uses `acton new` because it is the fastest way to get a working sample project. If you are adding Acton to an existing repository instead, start with `acton init` and then come back to the build/test/deploy steps below. The existing-project flow is documented in [Project initialization](/docs/tutorial/project-init).
 </Callout>
 
 ## Get started
@@ -25,7 +29,7 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
 
         This will create a new directory `first_counter` with the project structure. You should see output similar to this:
 
-        ```
+        ```acton-cli
         $ acton new first_counter --template counter
         ✓ Created new Acton project
           Project name: first_counter
@@ -44,7 +48,11 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
         cd first_counter
         ```
 
-        The project is already set up with `contracts/counter.tolk` and `contracts/types.tolk`.
+        The project is already set up with `contracts/Counter.tolk` and `contracts/types.tolk`.
+        The generated `Acton.toml` also includes ready-to-run script aliases:
+
+        - `deploy-emulation`
+        - `deploy-testnet`
     </Step>
 
     <Step title="Build contract">
@@ -56,7 +64,7 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
 
         This command compiles the contract and places the build artifacts (including a JSON report) in the `build/` folder.
 
-        ```json title="build/counter.json"
+        ```json title="build/Counter.json"
         {
           "code_boc64": "te6ccgEBBAEAbwABFP8A9KQT9Lzy...",
           "hash": "1F6548A25E04497496242AD7804B653E6DA9A47E474DC17436313FFA04E15F18"
@@ -67,21 +75,21 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
     </Step>
 
     <Step title="Test contract">
-        Acton includes a powerful test runner that allows you to write tests in **Tolk**. The template includes a test file `tests/counter.test.tolk` and generated wrappers in `tests/wrappers/`.
+        Acton includes a powerful test runner that allows you to write tests in **Tolk**. The template includes a test file `tests/counter.test.tolk` and generated wrappers in `wrappers/`.
 
         Let's look at the included test in `tests/counter.test.tolk`:
 
         ```tolk title="tests/counter.test.tolk"
-        get fun `test-increase-counter`() {
-            val (contract, deployer, _) = setupTest();
+        get fun `test increase counter`() {
+            val (counter, deployer, _) = setupTest();
 
-            val res = contract.sendIncreaseCounter(deployer.address, 123);
+            val res = counter.sendIncreaseCounter(deployer.address, 123);
             expect(res).toHaveSuccessfulTx<IncreaseCounter>({
                 from: deployer.address,
-                to: contract.address
+                to: counter.address
             });
 
-            expect(contract.currentCounter()).toEqual(123)
+            expect(counter.currentCounter()).toEqual(123)
         }
         ```
 
@@ -93,7 +101,7 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
 
         Output:
 
-        ```
+        ```acton-cli
         $ acton test
            Compiling contracts
             Finished in 726.375µs
@@ -118,25 +126,40 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
         And **mutation testing** to find gaps in your tests:
 
         ```bash
-        acton test --mutate --mutate-contract counter
+        acton test --mutate --mutate-contract Counter
         ```
     </Step>
 
     <Step title="Setup Wallet">
-        To deploy to the blockchain, you need a wallet. Let's create a new one using the `wallet` command:
+        To deploy to the blockchain, you first need a wallet. Create one with:
 
         ```bash
-        acton wallet new --name deployer --local
+        acton wallet new --name deployer --local --airdrop
         ```
 
-        This will generate a new wallet and save it to `wallets.toml` in your project root.
-        By default, Acton stores mnemonic in your system's secure keyring/keychain (when available).
+        This creates a new wallet and saves its configuration to `wallets.toml` in your project root.
+        By default, Acton stores the mnemonic in your system keyring/keychain when secure storage is available.
 
         <Callout type="warn">
-            If secure keyring is unavailable, or you choose plain text storage (`--secure false`), `wallets.toml` will contain your private mnemonic. **Never commit it to git!** Acton automatically adds it to `.gitignore`.
+            If secure storage is unavailable, or if you disable it with `--secure false`, your mnemonic will be written to `wallets.toml`. **Never commit it to git.** Acton adds it to `.gitignore` automatically.
         </Callout>
 
-        Since this is a testnet wallet, you'll need some testnet TONs. Get them from the **[Testnet Giver Bot](https://t.me/testgiver_ton_bot)** by sending your new wallet address.
+        After creating a wallet, the `--airdrop` flag automatically requests testnet funds from the configured faucet.
+        <Callout type="warn">
+            If you don't use `--airdrop`, or if the faucet request fails, you can still fund the wallet through the **[Testnet Giver Bot](https://t.me/testgiver_ton_bot)** by sending it your wallet address.
+        </Callout>
+
+        For day-to-day work, the broader wallet lifecycle is also worth
+        knowing:
+
+        - `acton wallet import` to reuse an existing mnemonic
+        - `acton wallet list --balance` to inspect configured wallets
+        - `acton wallet sign` to sign an external body without running a script
+        - `acton wallet export-mnemonic` for interactive export
+        - `acton wallet remove -y` to remove a wallet non-interactively
+
+        The full reference is in [Setup wallets](/docs/tutorial/setup-wallets) and
+        [`acton wallet`](/docs/commands/wallet).
     </Step>
 
     <Step title="Deploying contract">
@@ -147,36 +170,46 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
         ```tolk title="scripts/deploy.tolk"
         import "@acton/io"
         import "@acton/emulation/network"
-        import "@acton/build/build"
+        import "@acton/emulation/scripts"
+        import "@acton/build"
 
-        import "@tests/wrappers/Counter"
+        import "@wrappers/Counter"
         import "@contracts/types"
 
         fun main() {
-            val deployer = net.wallet("deployer");
+            val deployer = scripts.wallet("deployer");
 
-            val counter = Counter.fromStorage(Storage { id: 0, counter: 0 });
+            val counter = Counter.fromStorage({
+                id: 0,
+                counter: 0,
+            });
             val res = counter.deploy(deployer.address, { value: ton("0.005") });
-            res.wait();
+            if (!res.wait()) {
+                return;
+            }
 
-            println1("Deployed counter to {}", counter.address);
+            println("Deployed counter to {}", counter.address);
+            println("On-chain counter is {}", counter.currentCounter());
         }
         ```
 
         Let's use it:
 
         ```bash
-        acton script scripts/deploy.tolk --broadcast --net testnet
+        acton script scripts/deploy.tolk --net testnet
         ```
 
-        If successful, you'll see the deployment transaction hash and the contract address.
+        If successful, you'll see the deployment transaction hash, the contract
+        address, and the freshly read on-chain counter value. The getter call
+        works without a separate `--fork-net` because `--net testnet` now uses
+        testnet for reads by default.
     </Step>
 
     <Step title="Verify contract">
         Finally, let's verify our contract source code on the blockchain explorer. This proves that the deployed bytecode matches your source code.
 
         ```bash
-        acton verify --contract counter --net testnet --address <YOUR_CONTRACT_ADDRESS>
+        acton verify Counter --net testnet --address <YOUR_CONTRACT_ADDRESS>
         ```
 
         Replace `<YOUR_CONTRACT_ADDRESS>` with the address from the previous step.
@@ -184,12 +217,19 @@ In this guide, we will explore Acton's capabilities and develop a simple smart c
     </Step>
 </Steps>
 
-## Next Steps
-
 Congratulations! You've successfully built, tested, deployed, and verified a smart contract on the TON blockchain using Acton!
+
+<Callout type="info" title="Troubleshooting">
+    If build/test/wallet resolution does not match your expectations, run
+    `acton doctor` before filing an issue. It prints resolved paths, manifest
+    status, stdlib health, overlay status, native library metadata, and
+    relevant environment variables.
+</Callout>
+
+## Next Steps
 
 Explore more advanced topics:
 
-- **[Testing Guide](/docs/test-runner)** — deep dive into writing comprehensive tests.
-- **[Standard Library](/docs/standard_library)** — learn about the built-in functions available in Acton.
-- **[Commands Reference](/docs/commands)** — detailed documentation for all CLI commands.
+- **[Testing Guide](/docs/testing/overview)** — deep dive into writing comprehensive tests.
+- **[Standard Library](/docs/standard_library/overview)** — learn about the built-in functions available in Acton.
+- **[Commands Reference](/docs/commands/overview)** — detailed documentation for all CLI commands.

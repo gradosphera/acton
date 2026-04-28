@@ -48,22 +48,39 @@
 
 use crate::world_state::WorldState;
 use anyhow::Context;
+use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use std::time::SystemTime;
-use ton_executor::ExecutorVerbosity;
 use ton_executor::message::{
     EmulationResult, Executor, RunTransactionArgs, RunTransactionResultError,
 };
+use ton_executor::{ExecutorVerbosity, MissingLibrariesContext, missing_library_callback};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder, CellFamily, Store};
 use tycho_types::dict::Dict;
 use tycho_types::models::config::BlockchainConfigParams;
 use tycho_types::models::{
     AccountState, BaseMessage, ComputePhase, IntAddr, LibDescr, Message, MsgInfo, RelaxedMessage,
-    RelaxedMsgInfo, ShardAccount, Transaction, TxInfo,
+    RelaxedMsgInfo, ShardAccount, StdAddr, Transaction, TxInfo,
 };
 use tycho_types::num::Tokens;
 use tycho_types::prelude::HashBytes;
+
+/// Prepared input for a single transaction execution.
+///
+/// This captures the shared pre-processing both normal emulation and debug stepping
+/// need before handing control to a concrete executor implementation.
+#[derive(Clone)]
+pub struct PreparedSendTransaction {
+    /// Base64 encoded patched message `BoC`.
+    pub message_b64: String,
+    /// Fully populated executor arguments for this transaction.
+    pub run_args: RunTransactionArgs,
+    /// Resolved destination code cell, if known.
+    pub code: Option<Cell>,
+    destination: StdAddr,
+    shard_account_before: ShardAccount,
+}
 
 /// A high-level emulator for TON transactions.
 ///
@@ -79,7 +96,8 @@ impl Emulator {
     ///
     /// # Arguments
     ///
-    /// * `verbosity` - The level of logging detail for the executor.
+    /// * `verbosity` - The level of logging detail for the executor. Use
+    ///   [`ExecutorVerbosity::Off`] to disable VM logs completely in the native emulator.
     /// * `config_b64` - Optional Base64-encoded global configuration `BoC`.
     pub fn new(verbosity: ExecutorVerbosity, config_b64: Option<&str>) -> anyhow::Result<Emulator> {
         let executor = Executor::new(verbosity, config_b64)?;
@@ -109,78 +127,24 @@ impl Emulator {
         libs: &Dict<HashBytes, LibDescr>,
         from: Option<IntAddr>,
     ) -> anyhow::Result<SendMessageResult> {
-        let msg_cell = Self::patch_message(state.get_config(), message, from)?;
-        let msg_b64 = Boc::encode_base64(&msg_cell);
-        let msg = msg_cell
-            .parse::<Message<'_>>()
-            .context("Failed to parse message")?;
+        let mut missing_libraries_ctx = MissingLibrariesContext::default();
+        self.executor.register_missing_library_callback(
+            &mut missing_libraries_ctx,
+            missing_library_callback,
+        )?;
 
-        let dst = match &msg.info {
-            MsgInfo::Int(addr) => addr.dst.clone(),
-            MsgInfo::ExtIn(addr) => addr.dst.clone(),
-            MsgInfo::ExtOut(_) => {
-                anyhow::bail!("Send transaction only support internal and external-in messages")
-            }
-        };
-        let dst = match dst {
-            IntAddr::Std(dst) => dst,
-            IntAddr::Var(_) => anyhow::bail!("Var addresses are not supported"),
-        };
+        let prepared = Self::prepare_send_transaction(state, message, libs, from)?;
+        let (result, executor_logs) = self
+            .executor
+            .run_transaction(&prepared.message_b64, &prepared.run_args)?;
 
-        let shard_account_before = state.get_account(&dst);
-        let code = Self::get_code_cell(&msg, &shard_account_before);
-
-        let args = RunTransactionArgs {
-            libs: libs.clone().into_root().map(Boc::encode_base64),
-            shard_account: Boc::encode_base64(&to_cell(&shard_account_before)?),
-            now: state.get_now(),
-            lt: state.get_lt(),
-            random_seed: None,
-            ignore_chksig: false,
-            debug_enabled: true,
-            prev_blocks_info: None,
-            is_tick_tock: None,
-            is_tock: None,
-        };
-
-        let (result, executor_logs) = self.executor.run_transaction(&msg_b64, &args)?;
-
-        let result = match result {
-            EmulationResult::Success(result) => result,
-            EmulationResult::Error(err) => return Ok(SendMessageResult::Error(err)),
-        };
-
-        let shard_account_after = Boc::decode_base64(result.shard_account.as_ref())?
-            .parse::<ShardAccount>()
-            .context("Failed to parse shard account")?;
-
-        // Since state was updated, we need to update it in world state too.
-        state.update_account(&dst, &shard_account_after);
-
-        let transaction = Boc::decode_base64(result.transaction.as_ref())?
-            .parse::<Transaction>()
-            .context("Failed to parse transaction")?;
-
-        let out_messages = transaction
-            .iter_out_msgs()
-            .filter_map(Result::ok)
-            .map(|it| to_cell(&it))
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
-        Ok(SendMessageResult::Success(SendMessageResultSuccess {
-            raw_transaction: result.transaction,
-            transaction,
-            parent_transaction: None,
-            child_transactions: vec![],
-            shard_account_before,
-            shard_account: shard_account_after,
-            out_messages,
-            vm_log: result.vm_log,
-            executor_logs,
-            actions: result.actions,
-            code,
-            externals: vec![],
-        }))
+        Self::finalize_send_transaction(
+            state,
+            prepared,
+            result,
+            Some(executor_logs),
+            missing_libraries_ctx.into_set(),
+        )
     }
 
     /// Emulates a message flow, recursively processing all outgoing internal messages.
@@ -201,36 +165,172 @@ impl Emulator {
         libs: &Dict<HashBytes, LibDescr>,
         from: Option<IntAddr>,
     ) -> anyhow::Result<Vec<SendMessageResult>> {
-        let mut results = Vec::new();
+        Self::execute_send_message_flow(message, from, &mut |message, from| {
+            self.send_transaction(state, message, libs, from).map(Some)
+        })
+    }
 
-        // 1. Process the initial message
-        let initial_res = self.send_transaction(state, message, libs, from)?;
+    /// Prepare a single transaction input shared by normal and debug execution paths.
+    pub fn prepare_send_transaction(
+        state: &mut WorldState,
+        message: Cell,
+        libs: &Dict<HashBytes, LibDescr>,
+        from: Option<IntAddr>,
+    ) -> anyhow::Result<PreparedSendTransaction> {
+        let msg_cell = Self::patch_message(state.get_config(), message, from)?;
+        let msg_b64 = Boc::encode_base64(&msg_cell);
+        let msg = msg_cell
+            .parse::<Message<'_>>()
+            .context("Failed to parse message")?;
 
-        results.push(initial_res.clone());
-
-        // If the initial transaction failed, or we didn't get a success, stop here
-        let SendMessageResult::Success(main_res) = initial_res else {
-            return Ok(vec![initial_res]);
+        let dst = match &msg.info {
+            MsgInfo::Int(addr) => addr.dst.clone(),
+            MsgInfo::ExtIn(addr) => addr.dst.clone(),
+            MsgInfo::ExtOut(_) => {
+                anyhow::bail!("Send transaction only support internal and external-in messages")
+            }
+        };
+        let dst = match dst {
+            IntAddr::Std(dst) => dst,
+            IntAddr::Var(_) => anyhow::bail!("Var addresses are not supported"),
         };
 
-        let mut externals = Vec::new();
-        let mut child_lts = Vec::new();
-        let main_tx = main_res.transaction.clone();
+        let shard_account_before = state.get_account(&dst);
+        let code = Self::get_code_cell(&msg, &shard_account_before);
+        let run_args = RunTransactionArgs {
+            libs: libs.clone().into_root().map(Boc::encode_base64),
+            shard_account: Boc::encode_base64(&to_cell(&shard_account_before)?),
+            now: state.get_now(),
+            lt: state.get_lt(),
+            random_seed: None,
+            ignore_chksig: false,
+            debug_enabled: true,
+            prev_blocks_info: None,
+            is_tick_tock: None,
+            is_tock: None,
+        };
 
-        // 2. Recursively process outgoing messages
-        for out_msg_cell in main_res.out_messages {
-            let Ok(out_msg) = out_msg_cell.parse::<Message<'_>>() else {
+        Ok(PreparedSendTransaction {
+            message_b64: msg_b64,
+            run_args,
+            code,
+            destination: dst,
+            shard_account_before,
+        })
+    }
+
+    /// Finalize a single transaction result and apply the resulting state update.
+    pub fn finalize_send_transaction(
+        state: &mut WorldState,
+        prepared: PreparedSendTransaction,
+        result: EmulationResult,
+        executor_logs: Option<Arc<str>>,
+        missing_libraries: FxHashSet<String>,
+    ) -> anyhow::Result<SendMessageResult> {
+        let PreparedSendTransaction {
+            code,
+            destination,
+            shard_account_before,
+            ..
+        } = prepared;
+        let mut missing_libraries = Some(missing_libraries);
+
+        let result = match result {
+            EmulationResult::Success(mut result) => {
+                result.missing_libraries = missing_libraries.take().unwrap_or_default();
+                result
+            }
+            EmulationResult::Error(mut err) => {
+                err.missing_libraries = missing_libraries.take().unwrap_or_default();
+                return Ok(SendMessageResult::Error(RunTransactionResultError {
+                    error: err.error,
+                    vm_log: err.vm_log,
+                    vm_exit_code: err.vm_exit_code,
+                    executor_logs,
+                    missing_libraries: err.missing_libraries,
+                }));
+            }
+        };
+
+        let shard_account_after = Boc::decode_base64(result.shard_account.as_ref())?
+            .parse::<ShardAccount>()
+            .context("Failed to parse shard account")?;
+
+        state.update_account(&destination, &shard_account_after);
+
+        let transaction = Boc::decode_base64(result.transaction.as_ref())?
+            .parse::<Transaction>()
+            .context("Failed to parse transaction")?;
+
+        Ok(SendMessageResult::Success(SendMessageResultSuccess {
+            raw_transaction: result.transaction,
+            transaction,
+            parent_transaction: None,
+            child_transactions: vec![],
+            shard_account_before,
+            shard_account: shard_account_after,
+            vm_log: result.vm_log,
+            executor_logs: executor_logs.unwrap_or_default(),
+            actions: result.actions,
+            code,
+            externals: vec![],
+            missing_libraries: result.missing_libraries,
+        }))
+    }
+
+    /// Run the recursive message-flow traversal using a caller-provided single-tx runner.
+    ///
+    /// The hook is responsible only for executing one message. Recursion over emitted
+    /// internal messages, plus bookkeeping for externals and parent/child links, stays here.
+    pub fn execute_send_message_flow<Run>(
+        message: Cell,
+        from: Option<IntAddr>,
+        run_transaction: &mut Run,
+    ) -> anyhow::Result<Vec<SendMessageResult>>
+    where
+        Run: FnMut(Cell, Option<IntAddr>) -> anyhow::Result<Option<SendMessageResult>>,
+    {
+        let Some(initial_res) = run_transaction(message, from)? else {
+            return Ok(Vec::new());
+        };
+
+        let mut results = vec![initial_res.clone()];
+        let SendMessageResult::Success(main_res) = initial_res else {
+            return Ok(results);
+        };
+
+        let main_tx_lt = main_res.transaction.lt;
+
+        let mut externals = Vec::with_capacity(4);
+        let mut child_lts = Vec::with_capacity(4);
+
+        let out_msgs = main_res
+            .transaction
+            .iter_out_msgs()
+            .zip(main_res.transaction.out_msgs.raw_values());
+
+        for (out_msg, raw_out_msg) in out_msgs {
+            let Ok(out_msg) = out_msg else {
+                continue;
+            };
+            let Ok(mut raw_out_msg) = raw_out_msg else {
                 continue;
             };
 
             match out_msg.info {
                 MsgInfo::ExtOut(_) => {
-                    externals.push(out_msg_cell);
+                    if let Ok(out_msg_cell) = raw_out_msg.load_reference_cloned() {
+                        externals.push(out_msg_cell);
+                    }
                 }
                 MsgInfo::Int(_) => {
-                    let mut sub_results = self.send_message(state, out_msg_cell, libs, None)?;
+                    let Ok(out_msg_cell) = raw_out_msg.load_reference_cloned() else {
+                        continue;
+                    };
+                    let mut sub_results =
+                        Self::execute_send_message_flow(out_msg_cell, None, run_transaction)?;
                     if let Some(SendMessageResult::Success(res)) = sub_results.get_mut(0) {
-                        res.parent_transaction = Some(main_tx.lt);
+                        res.parent_transaction = Some(main_tx_lt);
                         child_lts.push(res.transaction.lt);
                     }
                     results.extend(sub_results);
@@ -239,7 +339,129 @@ impl Emulator {
             }
         }
 
-        // 3. Finalize the main result with gathered information
+        if let Some(SendMessageResult::Success(res)) = results.get_mut(0) {
+            res.externals = externals;
+            res.child_transactions = child_lts;
+        }
+
+        Ok(results)
+    }
+
+    /// Emulates a tick-tock transaction on the given account, then recursively
+    /// processes all outgoing internal messages (reusing [`Self::send_message`]).
+    pub fn run_tick_tock(
+        &self,
+        state: &mut WorldState,
+        addr: &StdAddr,
+        is_tock: bool,
+        libs: &Dict<HashBytes, LibDescr>,
+    ) -> anyhow::Result<Vec<SendMessageResult>> {
+        let mut missing_libraries_ctx = MissingLibrariesContext::default();
+        self.executor.register_missing_library_callback(
+            &mut missing_libraries_ctx,
+            missing_library_callback,
+        )?;
+
+        let shard_account_before = state.get_account(addr);
+        let code = Self::get_address_code_cell(&shard_account_before);
+
+        let args = RunTransactionArgs {
+            libs: libs.clone().into_root().map(Boc::encode_base64),
+            shard_account: Boc::encode_base64(&to_cell(&shard_account_before)?),
+            now: state.get_now(),
+            lt: state.get_lt(),
+            random_seed: None,
+            ignore_chksig: false,
+            debug_enabled: true,
+            prev_blocks_info: None,
+            is_tick_tock: Some(true),
+            is_tock: Some(is_tock),
+        };
+
+        // Tick-tock has no incoming message; the C++ emulator ignores this parameter
+        // when is_tick_tock is set.
+        let (result, executor_logs) = self.executor.run_transaction("", &args)?;
+        let mut missing_libraries = Some(missing_libraries_ctx.into_set());
+
+        let result = match result {
+            EmulationResult::Success(mut result) => {
+                result.missing_libraries = missing_libraries.take().unwrap_or_default();
+                result
+            }
+            EmulationResult::Error(mut err) => {
+                err.missing_libraries = missing_libraries.take().unwrap_or_default();
+                return Ok(vec![SendMessageResult::Error(RunTransactionResultError {
+                    error: err.error,
+                    vm_log: err.vm_log,
+                    vm_exit_code: err.vm_exit_code,
+                    executor_logs: Some(executor_logs),
+                    missing_libraries: err.missing_libraries,
+                })]);
+            }
+        };
+
+        let shard_account_after = Boc::decode_base64(result.shard_account.as_ref())?
+            .parse::<ShardAccount>()
+            .context("Failed to parse shard account")?;
+
+        state.update_account(addr, &shard_account_after);
+
+        let transaction = Boc::decode_base64(result.transaction.as_ref())?
+            .parse::<Transaction>()
+            .context("Failed to parse transaction")?;
+
+        let main_res = SendMessageResultSuccess {
+            raw_transaction: result.transaction,
+            transaction: transaction.clone(),
+            parent_transaction: None,
+            child_transactions: vec![],
+            shard_account_before,
+            shard_account: shard_account_after,
+            vm_log: result.vm_log,
+            executor_logs,
+            actions: result.actions,
+            code,
+            externals: vec![],
+            missing_libraries: result.missing_libraries,
+        };
+
+        let mut results = vec![SendMessageResult::Success(main_res)];
+        let mut externals = Vec::new();
+        let mut child_lts = Vec::new();
+
+        // Recursively process outgoing internal messages via send_message
+        let out_msgs = transaction
+            .iter_out_msgs()
+            .zip(transaction.out_msgs.raw_values());
+        for (out_msg, raw_out_msg) in out_msgs {
+            let Ok(out_msg) = out_msg else {
+                continue;
+            };
+            let Ok(mut raw_out_msg) = raw_out_msg else {
+                continue;
+            };
+
+            match out_msg.info {
+                MsgInfo::ExtOut(_) => {
+                    if let Ok(out_msg_cell) = raw_out_msg.load_reference_cloned() {
+                        externals.push(out_msg_cell);
+                    }
+                }
+                MsgInfo::Int(_) => {
+                    let Ok(out_msg_cell) = raw_out_msg.load_reference_cloned() else {
+                        continue;
+                    };
+                    let mut sub_results = self.send_message(state, out_msg_cell, libs, None)?;
+                    if let Some(SendMessageResult::Success(res)) = sub_results.get_mut(0) {
+                        res.parent_transaction = Some(transaction.lt);
+                        child_lts.push(res.transaction.lt);
+                    }
+                    results.extend(sub_results);
+                }
+                MsgInfo::ExtIn(_) => {}
+            }
+        }
+
         if let Some(SendMessageResult::Success(res)) = results.get_mut(0) {
             res.externals = externals;
             res.child_transactions = child_lts;
@@ -350,8 +572,8 @@ impl Emulator {
         let config_boc = Boc::encode_base64(&config);
 
         match self.executor.set_config(&config_boc) {
-            Ok(res) => match res {
-                true => {
+            Ok(res) => {
+                if res {
                     let mut config_slice = config.as_slice_allow_exotic();
 
                     let config_dict = Dict::<u32, Cell>::load_from_root_ext(
@@ -362,9 +584,10 @@ impl Emulator {
 
                     state.set_config(config_dict);
                     Ok(true)
+                } else {
+                    Ok(false)
                 }
-                false => Ok(false),
-            },
+            }
             Err(e) => Err(e),
         }
     }
@@ -418,8 +641,6 @@ pub struct SendMessageResultSuccess {
     pub shard_account_before: ShardAccount,
     /// State of the account after the transaction.
     pub shard_account: ShardAccount,
-    /// Cells of outgoing messages produced by this transaction.
-    pub out_messages: Vec<Cell>,
     /// VM execution log.
     pub vm_log: Arc<str>,
     /// High-level executor logs.
@@ -430,6 +651,8 @@ pub struct SendMessageResultSuccess {
     pub code: Option<Cell>,
     /// External outgoing messages produced by this transaction.
     pub externals: Vec<Cell>,
+    /// Hashes of missing libraries observed during this transaction emulation.
+    pub missing_libraries: FxHashSet<String>,
 }
 
 impl SendMessageResultSuccess {

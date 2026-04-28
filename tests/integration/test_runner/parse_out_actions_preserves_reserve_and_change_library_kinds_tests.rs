@@ -3,9 +3,10 @@ use crate::support::project::ProjectBuilder;
 
 const CJ_OUT_ACTIONS_IMPORTS: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
+import "../../lib/impl"
 import "../../lib/testing/expect"
 import "../../lib/types/out_actions"
-import "../../lib/vm/vm"
 
 fun changeLib(code: cell, mode: int): void asm "SETLIBCODE"
 "#;
@@ -28,15 +29,15 @@ fn parse_out_actions_preserves_reserve_and_change_library_kinds() {
     run_success(
         "cj-stdlib-parse-out-actions-preserves-kinds",
         r#"
-get fun `test-cj-parse-out-actions-preserves-kinds`() {
+get fun `test cj parse out actions preserves kinds`() {
     reserveToncoinsOnBalance(
         ton("0.05"),
         RESERVE_MODE_ALL_BUT_AMOUNT | RESERVE_MODE_BOUNCE_ON_ACTION_FAIL
     );
     changeLib(beginCell().storeUint(0xAB, 8).endCell(), 2);
 
-    val viaVm = vm.outActions();
-    val viaRaw = vm.parseOutActions(vm.getC5());
+    val viaVm = testing.outActions();
+    val viaRaw = impl.parseOutActions(impl.getC5());
 
     expect(viaVm.size()).toEqual(2);
     expect(viaRaw.size()).toEqual(2);
@@ -56,10 +57,10 @@ fn parse_out_actions_reserve_nanoton_is_misparsed_as_change_library_bug() {
     run_success(
         "cj-stdlib-parse-out-actions-reserve-one-nanoton-kind-bug",
         r#"
-get fun `test-cj-parse-out-actions-reserve-one-nanoton-kind-bug`() {
+get fun `test cj parse out actions reserve one nanoton kind bug`() {
     reserveToncoinsOnBalance(1, RESERVE_MODE_BOUNCE_ON_ACTION_FAIL);
 
-    val parsed = vm.parseOutActions(vm.getC5());
+    val parsed = testing.outActions();
     expect(parsed.size()).toEqual(1);
 
     expect(parsed.at(0).kind()).toEqual("reserve-currency");
@@ -74,10 +75,10 @@ fn parse_out_actions_reserve_zero_nanoton_stays_reserve_currency() {
     run_success(
         "cj-stdlib-parse-out-actions-reserve-zero-nanoton-kind",
         r#"
-get fun `test-cj-parse-out-actions-reserve-zero-nanoton-kind`() {
+get fun `test cj parse out actions reserve zero nanoton kind`() {
     reserveToncoinsOnBalance(0, RESERVE_MODE_BOUNCE_ON_ACTION_FAIL);
 
-    val parsed = vm.parseOutActions(vm.getC5());
+    val parsed = testing.outActions();
     expect(parsed.size()).toEqual(1);
     expect(parsed.at(0).kind()).toEqual("reserve-currency");
 }
@@ -91,10 +92,10 @@ fn parse_out_actions_single_set_code_action_is_decoded() {
     run_success(
         "cj-stdlib-parse-out-actions-single-set-code",
         r#"
-get fun `test-cj-parse-out-actions-single-set-code`() {
+get fun `test cj parse out actions single set code`() {
     contract.setCodePostponed(beginCell().storeUint(0xA1, 8).endCell());
 
-    val parsed = vm.parseOutActions(vm.getC5());
+    val parsed = testing.outActions();
     expect(parsed.size()).toEqual(1);
     expect(parsed.at(0).kind()).toEqual("set-code");
 }
@@ -108,8 +109,8 @@ fn parse_out_actions_single_send_message_action_preserves_mode() {
     run_success(
         "cj-stdlib-parse-out-actions-single-send-message",
         r#"
-get fun `test-cj-parse-out-actions-single-send-message`() {
-    val dest = net.randomAddress("cj_single_send_dest");
+get fun `test cj parse out actions single send message`() {
+    val dest = randomAddress("cj_single_send_dest");
     createMessage({
         bounce: false,
         value: ton("0.2"),
@@ -117,7 +118,7 @@ get fun `test-cj-parse-out-actions-single-send-message`() {
         body: beginCell().storeUint(0xC7000011, 32).endCell().beginParse(),
     }).send(SEND_MODE_PAY_FEES_SEPARATELY);
 
-    val parsed = vm.parseOutActions(vm.getC5());
+    val parsed = testing.outActions();
     expect(parsed.size()).toEqual(1);
     expect(parsed.at(0).kind()).toEqual("send-message");
     val send = parsed.getSendMessageAt(0);
@@ -134,23 +135,23 @@ fn parse_out_actions_reserve_zero_and_one_preserve_kind_and_amount() {
     run_success(
         "cj-stdlib-parse-out-actions-reserve-zero-and-one",
         r#"
-get fun `test-cj-parse-out-actions-reserve-zero-and-one`() {
+get fun `test cj parse out actions reserve zero and one`() {
     reserveToncoinsOnBalance(0, RESERVE_MODE_BOUNCE_ON_ACTION_FAIL);
     reserveToncoinsOnBalance(1, RESERVE_MODE_BOUNCE_ON_ACTION_FAIL);
 
-    val parsed = vm.parseOutActions(vm.getC5());
+    val parsed = testing.outActions();
     expect(parsed.size()).toEqual(2);
     expect(parsed.at(0).kind()).toEqual("reserve-currency");
     expect(parsed.at(1).kind()).toEqual("reserve-currency");
 
     val first = parsed.at(0);
     val second = parsed.at(1);
-    expect(first is OutActionReserveCurrency).toBeTrue();
-    expect(second is OutActionReserveCurrency).toBeTrue();
-    if (first is OutActionReserveCurrency) {
+    expect(first is TlbOutActionReserveCurrency).toBeTrue();
+    expect(second is TlbOutActionReserveCurrency).toBeTrue();
+    if (first is TlbOutActionReserveCurrency) {
         expect(first.currency.grams).toEqual(1);
     }
-    if (second is OutActionReserveCurrency) {
+    if (second is TlbOutActionReserveCurrency) {
         expect(second.currency.grams).toEqual(0);
     }
 }
@@ -164,8 +165,8 @@ fn parse_out_actions_mixed_action_chain_preserves_order_and_types() {
     run_success(
         "cj-stdlib-parse-out-actions-mixed-chain",
         r#"
-get fun `test-cj-parse-out-actions-mixed-chain`() {
-    val dest = net.randomAddress("cj_mixed_chain_dest");
+get fun `test cj parse out actions mixed chain`() {
+    val dest = randomAddress("cj_mixed_chain_dest");
 
     reserveToncoinsOnBalance(1, RESERVE_MODE_BOUNCE_ON_ACTION_FAIL);
     contract.setCodePostponed(beginCell().storeUint(0xB2, 8).endCell());
@@ -177,7 +178,7 @@ get fun `test-cj-parse-out-actions-mixed-chain`() {
     }).send(SEND_MODE_REGULAR);
     changeLib(beginCell().storeUint(0xCD, 8).endCell(), 2);
 
-    val parsed = vm.parseOutActions(vm.getC5());
+    val parsed = testing.outActions();
     expect(parsed.size()).toEqual(4);
     expect(parsed.at(0).kind()).toEqual("change-library");
     expect(parsed.at(1).kind()).toEqual("send-message");
@@ -189,8 +190,8 @@ get fun `test-cj-parse-out-actions-mixed-chain`() {
     expect(send!.mode).toEqual(SEND_MODE_REGULAR);
 
     val reserve = parsed.at(3);
-    expect(reserve is OutActionReserveCurrency).toBeTrue();
-    if (reserve is OutActionReserveCurrency) {
+    expect(reserve is TlbOutActionReserveCurrency).toBeTrue();
+    if (reserve is TlbOutActionReserveCurrency) {
         expect(reserve.currency.grams).toEqual(1);
     }
 }

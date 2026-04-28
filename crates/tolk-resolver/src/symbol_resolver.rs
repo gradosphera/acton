@@ -29,6 +29,7 @@ pub struct GlobalEnv {
 impl GlobalEnv {
     /// Creates a new `GlobalEnv` for the given file, including its own symbols,
     /// directly imported symbols, and symbols from `common.tolk`.
+    #[must_use]
     pub fn new(index: &ProjectIndex, file_id: FileId) -> Self {
         let common_tolk = index
             .files()
@@ -39,8 +40,8 @@ impl GlobalEnv {
         let file = index.get_file_index(file_id);
 
         // Since common.tolk is quite big, preallocate memory for the map to avoid reallocations
-        let capacity = common_tolk.as_ref().map(|f| f.decls.len()).unwrap_or(0)
-            + file.as_ref().map(|f| f.decls.len()).unwrap_or(0)
+        let capacity = common_tolk.as_ref().map_or(0, |f| f.decls.len())
+            + file.as_ref().map_or(0, |f| f.decls.len())
             + 50;
 
         let mut visible: HashMap<Arc<str>, Vec<SymbolId>> = HashMap::with_capacity(capacity);
@@ -96,8 +97,6 @@ pub struct Scope {
     pub symbols: HashMap<Arc<str>, LocalDefId>,
     /// Index of the parent scope in the `SymbolResolver`'s scope list.
     pub parent: Option<usize>,
-    /// If this scope fpr lambda.
-    pub is_lambda: bool,
 }
 
 /// A visitor that tracks lexical scopes and resolves name usages.
@@ -126,6 +125,7 @@ pub struct SymbolError {
 
 impl<'a> SymbolResolver<'a> {
     /// Creates a new `SymbolResolver` for a file.
+    #[must_use]
     pub fn new(
         project_index: &'a ProjectIndex,
         file: Arc<FileInfo>,
@@ -134,7 +134,6 @@ impl<'a> SymbolResolver<'a> {
         let global_scope = Scope {
             symbols: HashMap::new(),
             parent: None,
-            is_lambda: false,
         };
         Self {
             scopes: vec![global_scope],
@@ -152,18 +151,9 @@ impl<'a> SymbolResolver<'a> {
     }
 
     fn enter_scope(&mut self) {
-        self.enter_scope_ext(false);
-    }
-
-    fn enter_lambda_scope(&mut self) {
-        self.enter_scope_ext(true);
-    }
-
-    fn enter_scope_ext(&mut self, is_lambda: bool) {
         let new_scope = Scope {
             symbols: HashMap::new(),
             parent: Some(self.current_scope),
-            is_lambda,
         };
         self.scopes.push(new_scope);
         self.current_scope = self.scopes.len() - 1;
@@ -211,10 +201,6 @@ impl<'a> SymbolResolver<'a> {
                     resolved: Resolved::Local(*symbol_id),
                 });
                 return Some(());
-            }
-            if scope.is_lambda {
-                // don't look up in scopes out of lambda
-                break;
             }
             current = scope.parent;
         }
@@ -272,7 +258,7 @@ impl<'a> SymbolResolver<'a> {
                 resolved: Resolved::Unresolved,
             });
             self.errors.push(SymbolError {
-                message: format!("Undefined symbol: {}", name),
+                message: format!("Undefined symbol: {name}"),
                 node_kind: "identifier".to_string(),
             });
             return None;
@@ -350,9 +336,7 @@ impl<'a> SymbolResolver<'a> {
     }
 
     fn decl_start(&self) -> u32 {
-        self.decl
-            .map(|d| d.syntax().start_byte() as u32)
-            .unwrap_or(0)
+        self.decl.map_or(0, |d| d.syntax().start_byte() as u32)
     }
 
     fn check_redeclaration(&mut self, name: &str, node_kind: &str) {
@@ -360,13 +344,13 @@ impl<'a> SymbolResolver<'a> {
         let name = name.as_ref();
         if self.scopes[self.current_scope].symbols.contains_key(name) {
             self.errors.push(SymbolError {
-                message: format!("Symbol '{}' redeclared in same scope", name),
+                message: format!("Symbol '{name}' redeclared in same scope"),
                 node_kind: node_kind.to_string(),
             });
         }
     }
 
-    fn add_variables_from_pattern<'t>(&mut self, pat: &ast::VarDeclPattern<'t>, kind: VarKind) {
+    fn add_variables_from_pattern(&mut self, pat: &ast::VarDeclPattern<'_>, kind: VarKind) {
         match pat {
             ast::VarDeclPattern::VarDecl(var_decl) => {
                 if let Some(name) = var_decl.name() {
@@ -375,7 +359,12 @@ impl<'a> SymbolResolver<'a> {
                     let is_mutable = matches!(kind, VarKind::Var);
 
                     // don't add `val a redef = 100` as standalone variable
-                    if !var_decl.is_redefinition() {
+                    if var_decl.is_redefinition() {
+                        // val a = 100;
+                        // val a redef = 200;
+                        //     ^ resolve to first declaration
+                        self.resolve_symbol(&name.0, NameUseKind::LocalValue);
+                    } else {
                         self.add_symbol(
                             &name.0,
                             name_str,
@@ -384,16 +373,11 @@ impl<'a> SymbolResolver<'a> {
                                 has_type: var_decl.typ().is_some(),
                             },
                         );
-                    } else {
-                        // val a = 100;
-                        // val a redef = 200;
-                        //     ^ resolve to first declaration
-                        self.resolve_symbol(&name.0, NameUseKind::LocalValue);
                     }
                 }
 
                 if let Some(typ) = var_decl.typ() {
-                    self.visit_type(&typ)
+                    self.visit_type(&typ);
                 }
             }
             ast::VarDeclPattern::TupleVars(tuple) => {
@@ -434,7 +418,7 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
         if let Some(typ) = node.typ() {
             self.visit_type(&typ);
         }
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_constant(&mut self, node: &Constant<'tree>) -> Self::Result {
@@ -447,14 +431,14 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
         if let Some(value) = node.value() {
             self.visit_expr(&value);
         }
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_contract(&mut self, node: &ast::Contract<'tree>) -> Self::Result {
         if let Some(body) = node.body() {
             self.walk_contract_body(&body);
         }
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_contract_field(&mut self, node: &ast::ContractField<'tree>) -> Self::Result {
@@ -464,7 +448,7 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
                 ast::ContractFieldValue::Expr(expr) => self.visit_expr(&expr),
             }
         }
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_type_alias(&mut self, node: &TypeAlias<'tree>) -> Self::Result {
@@ -479,7 +463,7 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
             self.walk_type_alias_underlying_type(&underlying_type);
         }
         self.exit_scope();
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_struct(&mut self, node: &Struct<'tree>) -> Self::Result {
@@ -495,7 +479,7 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
         }
         self.exit_scope();
         self.exit_scope();
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_struct_field(&mut self, node: &StructField<'tree>) -> Self::Result {
@@ -505,7 +489,7 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
         if let Some(default) = node.default() {
             self.visit_expr(&default);
         }
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_enum(&mut self, node: &Enum<'tree>) -> Self::Result {
@@ -518,14 +502,14 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
         if let Some(body) = node.body() {
             self.walk_enum_body(&body);
         }
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_enum_member(&mut self, node: &EnumMember<'tree>) -> Self::Result {
         if let Some(default) = node.default() {
             self.visit_expr(&default);
         }
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_func(&mut self, node: &ast::Func<'tree>) -> Self::Result {
@@ -627,7 +611,7 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
         if let Some(left) = node.left() {
             self.visit_expr(&left);
         }
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_dot_access(&mut self, node: &ast::DotAccess<'tree>) -> Self::Result {
@@ -642,17 +626,17 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
     fn walk_match(&mut self, node: &ast::Match<'tree>) -> Self::Result {
         self.enter_scope();
         if let Some(expr) = node.expr() {
-            self.visit_expr(&expr)
+            self.visit_expr(&expr);
         }
         if let Some(body) = node.body() {
             self.walk_match_body(&body);
         }
         self.exit_scope();
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_lambda(&mut self, node: &ast::Lambda<'tree>) -> Self::Result {
-        self.enter_lambda_scope();
+        self.enter_scope();
 
         for param in node.parameters() {
             self.walk_lambda_parameter(&param);
@@ -661,7 +645,7 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
             self.visit_type(&return_type);
         }
         if let Some(body) = node.body() {
-            self.walk_block(&body)
+            self.walk_block(&body);
         }
 
         self.exit_scope();
@@ -709,7 +693,7 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
         if let Some(args) = node.args() {
             self.walk_annotation_args(&args);
         }
-        self.default_result()
+        self.default_result();
     }
 
     fn walk_type_parameter(&mut self, node: &ast::TypeParameter<'tree>) -> Self::Result {
@@ -718,7 +702,7 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
             self.add_symbol(&name.0, name_str, LocalDefKind::TypeParameter);
         }
         if let Some(default) = node.default() {
-            self.visit_type(&default)
+            self.visit_type(&default);
         }
     }
 
@@ -798,7 +782,7 @@ impl<'tree> Walker<'tree> for SymbolResolver<'_> {
                 ast::MatchArmBody::Return(ref ret) => self.walk_return(ret),
                 ast::MatchArmBody::Throw(ref throw) => self.walk_throw(throw),
                 ast::MatchArmBody::Expr(ref expr) => self.visit_expr(expr),
-            };
+            }
         }
     }
 
@@ -848,7 +832,7 @@ fn parse_numeric_suffix(name: &str, prefix: &str) -> bool {
 
 /// Resolves all symbols in all files present in the `ProjectIndex`.
 pub fn resolve(db: &FileDb, index: &mut ProjectIndex) {
-    let files = index.files().keys().cloned().collect::<Vec<_>>();
+    let files = index.files().keys().copied().collect::<Vec<_>>();
     for file_id in files {
         let Some(file_index) = resolve_file(db, index, file_id) else {
             continue;
@@ -868,8 +852,6 @@ pub fn resolve_file(db: &FileDb, index: &ProjectIndex, file: FileId) -> Option<F
     for decl in file_info.source().top_levels() {
         resolver.decl = Some(decl);
         match decl {
-            ast::TopLevel::TolkRequiredVersion(_) => {}
-            ast::TopLevel::Import(_) => {}
             ast::TopLevel::Contract(decl) => resolver.walk_contract(&decl),
             ast::TopLevel::GlobalVar(decl) => resolver.walk_global_var(&decl),
             ast::TopLevel::Constant(decl) => resolver.walk_constant(&decl),
@@ -879,8 +861,10 @@ pub fn resolve_file(db: &FileDb, index: &ProjectIndex, file: FileId) -> Option<F
             ast::TopLevel::Func(func) => resolver.walk_func(&func),
             ast::TopLevel::Method(method) => resolver.walk_method(&method),
             ast::TopLevel::GetMethod(method) => resolver.walk_get_method(&method),
-            ast::TopLevel::EmptyStmt(_) => {}
-            ast::TopLevel::Unmapped(_) => {}
+            ast::TopLevel::TolkRequiredVersion(_)
+            | ast::TopLevel::Import(_)
+            | ast::TopLevel::EmptyStmt(_)
+            | ast::TopLevel::Unmapped(_) => {}
         }
     }
 

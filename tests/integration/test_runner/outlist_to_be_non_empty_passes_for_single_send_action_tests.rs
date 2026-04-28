@@ -3,10 +3,9 @@ use crate::support::project::ProjectBuilder;
 
 const OUTLIST_IMPORTS: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
-import "../../lib/testing/outlist_expect"
 import "../../lib/types/out_actions"
-import "../../lib/vm/vm"
 
 struct (0x7e8764ef) IncreaseCounter {
     queryId: uint64
@@ -50,8 +49,8 @@ fn outlist_to_be_non_empty_passes_for_single_send_action() {
     run_outlist_success(
         "af-stdlib-outlist-to-be-non-empty",
         r#"
-get fun `test-af-outlist-to-be-non-empty`() {
-    val dest = net.randomAddress("counter");
+get fun `test af outlist to be non empty`() {
+    val dest = randomAddress("counter");
     val msg = createMessage({
         bounce: false,
         value: ton("1"),
@@ -61,7 +60,7 @@ get fun `test-af-outlist-to-be-non-empty`() {
 
     msg.send(SEND_MODE_REGULAR);
 
-    val out_actions = vm.outActions();
+    val out_actions = testing.outActions();
     expect(out_actions).toBeNonEmpty();
     expect(out_actions.size()).toEqual(1);
 }
@@ -74,13 +73,13 @@ get fun `test-af-outlist-to-be-non-empty`() {
 fn outlist_to_be_empty_passes_without_actions() {
     run_outlist_success(
         "af-stdlib-outlist-to-be-empty",
-        r#"
-get fun `test-af-outlist-to-be-empty`() {
+        r"
+get fun `test af outlist to be empty`() {
     val out_actions = [];
     expect(out_actions).toBeEmpty();
     expect(out_actions.size()).toEqual(0);
 }
-"#,
+",
         "integration/snapshots/test-runner/outlist_to_be_non_empty_passes_for_single_send_action/outlist_to_be_empty_passes_without_actions.stdout.txt",
     );
 }
@@ -90,8 +89,8 @@ fn outlist_to_be_send_message_at_extracts_typed_body() {
     run_outlist_success(
         "af-stdlib-outlist-typed-send-message",
         r#"
-get fun `test-af-outlist-send-message-typed-body`() {
-    val dest = net.randomAddress("counter");
+get fun `test af outlist send message typed body`() {
+    val dest = randomAddress("counter");
     val msg = createMessage({
         bounce: false,
         value: ton("1"),
@@ -100,11 +99,11 @@ get fun `test-af-outlist-send-message-typed-body`() {
     });
     msg.send(SEND_MODE_REGULAR | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
 
-    val out_actions = vm.outActions();
+    val out_actions = testing.outActions();
     expect(out_actions).toBeSendMessageAt<IncreaseCounter>(0);
 
     val action = out_actions.at(0);
-    if (action is OutActionSendMessage) {
+    if (action is TlbOutActionSendMessage) {
         val body = action.loadBody<IncreaseCounter>();
         expect(body.queryId).toEqual(7);
         expect(body.increaseBy).toEqual(77);
@@ -120,8 +119,8 @@ fn outlist_to_be_send_message_at_opcode_mismatch_reports_known_type() {
     run_outlist_failure(
         "af-stdlib-outlist-opcode-mismatch-known-type",
         r#"
-get fun `test-af-outlist-opcode-mismatch-known-type`() {
-    val dest = net.randomAddress("counter");
+get fun `test af outlist opcode mismatch known type`() {
+    val dest = randomAddress("counter");
     val msg = createMessage({
         bounce: false,
         value: ton("1"),
@@ -130,7 +129,7 @@ get fun `test-af-outlist-opcode-mismatch-known-type`() {
     });
     msg.send(SEND_MODE_REGULAR);
 
-    val out_actions = vm.outActions();
+    val out_actions = testing.outActions();
     expect(out_actions).toBeSendMessageAt<DecreaseCounter>(0);
 }
 "#,
@@ -143,8 +142,8 @@ fn outlist_to_be_send_message_at_opcode_mismatch_without_known_type_name() {
     run_outlist_success(
         "af-stdlib-outlist-opcode-mismatch-unknown-type",
         r#"
-get fun `test-af-outlist-opcode-mismatch-unknown-type`() {
-    val dest = net.randomAddress("counter");
+get fun `test af outlist opcode mismatch unknown type`() {
+    val dest = randomAddress("counter");
     val msg = createMessage({
         bounce: false,
         value: ton("1"),
@@ -153,7 +152,7 @@ get fun `test-af-outlist-opcode-mismatch-unknown-type`() {
     });
     msg.send(SEND_MODE_REGULAR);
 
-    val out_actions = vm.outActions();
+    val out_actions = testing.outActions();
     expect(out_actions).toBeSendMessageAt<IncreaseCounter>(0);
 }
 "#,
@@ -166,8 +165,8 @@ fn outlist_to_be_send_message_at_bounced_prefix_opcode_mismatch_is_reported() {
     run_outlist_success(
         "af-stdlib-outlist-opcode-mismatch-bounced-prefix",
         r#"
-get fun `test-af-outlist-opcode-mismatch-bounced-prefix`() {
-    val dest = net.randomAddress("counter");
+get fun `test af outlist opcode mismatch bounced prefix`() {
+    val dest = randomAddress("counter");
     val bounced_like_body = beginCell()
         .storeUint(0xFFFFFFFF, 32)
         .storeSlice(IncreaseCounter { queryId: 33, increaseBy: 44 }.toCell().beginParse())
@@ -181,7 +180,7 @@ get fun `test-af-outlist-opcode-mismatch-bounced-prefix`() {
     }).bounced();
     msg.send(SEND_MODE_REGULAR);
 
-    val out_actions = vm.outActions();
+    val out_actions = testing.outActions();
     expect(out_actions).toBeSendMessageAt<IncreaseCounter>(0);
 }
 "#,

@@ -1,7 +1,11 @@
-use acton_config::config::{ActonConfig, global_libraries_path, global_wallets_path};
+use acton_config::config::{
+    ActonConfig, global_libraries_path, global_wallets_path,
+    project_root as configured_project_root,
+};
 use anyhow::{Context, anyhow};
 use inquire::Select;
 use std::path::Path;
+use ton_executor::ExecutorVerbosity;
 
 pub mod error_fmt {
     use acton_config::color::OwoColorize;
@@ -10,12 +14,80 @@ pub mod error_fmt {
 
     #[must_use]
     pub fn contract_not_found(config: &ActonConfig, name: &str) -> String {
+        let display_name_matches = contract_ids_by_display_name(config, name);
+        if !display_name_matches.is_empty() {
+            return contract_not_found_for_display_name(config, name, &display_name_matches);
+        }
+
         let available = available_contracts(config);
         format!(
             "Contract {} not found in Acton.toml\nAvailable contracts:\n{}",
             name.yellow(),
             available
         )
+    }
+
+    fn contract_not_found_for_display_name(
+        config: &ActonConfig,
+        provided_name: &str,
+        matches: &[(String, String)],
+    ) -> String {
+        let available = available_contracts(config);
+        let examples = matches
+            .iter()
+            .map(|(contract_id, display_name)| {
+                let header = format!("[contracts.{contract_id}]");
+                let id_marker = format!(
+                    "{}{} contract ID to pass to Acton",
+                    " ".repeat("[contracts.".len()),
+                    "^".repeat(contract_id.len()),
+                );
+                let display_line = format!("display-name = \"{display_name}\"");
+                let display_marker = format!(
+                    "{}{} display-name shown in logs/UI",
+                    " ".repeat("display-name = \"".len()),
+                    "^".repeat(display_name.len()),
+                );
+                format!("{header}\n{id_marker}\n{display_line}\n{display_marker}")
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        if matches.len() == 1 {
+            let contract_id = matches[0].0.as_str();
+            return format!(
+                "Contract {} not found in Acton.toml\n\nIt looks like you passed the contract display-name instead of the contract ID.\n\nIn Acton.toml this contract is configured as:\n{}\n\nPass {} instead of {}.\n\nAvailable contract IDs:\n{}",
+                provided_name.yellow(),
+                examples,
+                contract_id.green().bold(),
+                provided_name.yellow(),
+                available
+            );
+        }
+
+        format!(
+            "Contract {} not found in Acton.toml\n\nIt looks like you passed a contract display-name instead of a contract ID.\nThis display-name matches multiple contracts.\n\nIn Acton.toml use one of these contract IDs:\n{}\n\nPass one of the IDs above instead of {}.\n\nAvailable contract IDs:\n{}",
+            provided_name.yellow(),
+            examples,
+            provided_name.yellow(),
+            available
+        )
+    }
+
+    fn contract_ids_by_display_name(
+        config: &ActonConfig,
+        display_name: &str,
+    ) -> Vec<(String, String)> {
+        config
+            .contracts()
+            .into_iter()
+            .flat_map(|contracts| contracts.iter())
+            .filter_map(|(contract_id, contract)| {
+                let configured_display_name = contract.display_name(contract_id);
+                (configured_display_name == display_name)
+                    .then(|| (contract_id.clone(), configured_display_name.to_owned()))
+            })
+            .collect()
     }
 
     #[must_use]
@@ -120,6 +192,13 @@ pub mod error_fmt {
     }
 
     #[must_use]
+    pub fn port_bind_failure(server: &str, address: &str, flag: &str) -> String {
+        format!(
+            "Failed to start {server} on {address}\nChoose another port with {flag}\nOr stop the process currently listening on that port"
+        )
+    }
+
+    #[must_use]
     pub fn script_not_found(config: &ActonConfig, name: &str) -> String {
         let Some(available) = available_scripts(config) else {
             return format!(
@@ -129,7 +208,7 @@ To define a new script add the following to Acton.toml:
 
 {}
 
-See https://i582.github.io/acton/docs/commands/run/ for more information",
+See https://ton-blockchain.github.io/acton/docs/commands/run for more information",
                 name.yellow(),
                 "[scripts]
 script-name = \"command invocation\""
@@ -146,9 +225,8 @@ script-name = \"command invocation\""
 
     #[must_use]
     pub fn available_scripts(config: &ActonConfig) -> Option<String> {
-        let scripts = match &config.scripts {
-            Some(scripts) => scripts,
-            None => return None,
+        let Some(scripts) = &config.scripts else {
+            return None;
         };
 
         if scripts.is_empty() {
@@ -167,10 +245,10 @@ script-name = \"command invocation\""
     #[must_use]
     pub fn no_scripts_section() -> String {
         format!(
-            "No {} section found in Acton.toml.\nTo add a script add the following section to Acton.toml:\n\n{}\n{}\n{}\n\nSee https://i582.github.io/acton/docs/commands/run/ for more information",
+            "No {} section found in Acton.toml.\nTo add a script add the following section to Acton.toml:\n\n{}\n{}\n{}\n\nSee https://ton-blockchain.github.io/acton/docs/commands/run for more information",
             "[scripts]".yellow(),
             "[scripts]".green(),
-            "deploy = \"acton script scripts/deploy.tolk --broadcast\"".green(),
+            "deploy = \"acton script scripts/deploy.tolk --net testnet\"".green(),
             "test = \"acton test tests/unit\"".green()
         )
     }
@@ -178,7 +256,7 @@ script-name = \"command invocation\""
     #[must_use]
     pub fn no_wallets_found() -> String {
         format!(
-            "No wallets configured in {} or global.wallets.toml.\nTo add a wallet use {} or add the following to {} manually:\n\n{}\n{}\n{}\n{}\n\nSee https://i582.github.io/acton/docs/setup-wallets/ for more information",
+            "No wallets configured in {} or global.wallets.toml.\nTo add a wallet use {} or add the following to {} manually:\n\n{}\n{}\n{}\n{}\n\nSee https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more information",
             "wallets.toml".yellow(),
             "acton wallet new".yellow(),
             "wallets.toml".green(),
@@ -232,6 +310,36 @@ pub fn select_contract(
     Ok(contract_key)
 }
 
+#[must_use]
+pub const fn executor_verbosity_for_cli_level(level: u8) -> ExecutorVerbosity {
+    match level {
+        0 => ExecutorVerbosity::Off,
+        _ => ExecutorVerbosity::Full,
+    }
+}
+
+#[must_use]
+pub const fn max_executor_verbosity(
+    lhs: ExecutorVerbosity,
+    rhs: ExecutorVerbosity,
+) -> ExecutorVerbosity {
+    if (lhs as i32) >= (rhs as i32) {
+        lhs
+    } else {
+        rhs
+    }
+}
+
+pub fn validate_cli_verbosity(level: u8) -> anyhow::Result<u8> {
+    if level <= 1 {
+        Ok(level)
+    } else {
+        anyhow::bail!(
+            "Verbosity levels above 1 are not supported yet. Use --verbose at most once."
+        );
+    }
+}
+
 pub fn select_wallet(wallet_name: Option<String>, config: &ActonConfig) -> anyhow::Result<String> {
     let wallet_name = if let Some(name) = wallet_name {
         name
@@ -270,9 +378,9 @@ pub fn symlink_global_wallets() -> anyhow::Result<()> {
     if let Some(global_path) = global_wallets_path()
         && global_path.exists()
     {
-        let symlink_path = Path::new("global.wallets.toml");
+        let symlink_path = configured_project_root().join("global.wallets.toml");
         if !symlink_path.exists() {
-            create_symlink(&global_path, symlink_path)?;
+            create_symlink(&global_path, &symlink_path)?;
         }
     }
     Ok(())
@@ -282,9 +390,9 @@ pub fn symlink_global_libraries() -> anyhow::Result<()> {
     if let Some(global_path) = global_libraries_path()
         && global_path.exists()
     {
-        let symlink_path = Path::new("global.libraries.toml");
+        let symlink_path = configured_project_root().join("global.libraries.toml");
         if !symlink_path.exists() {
-            create_symlink(&global_path, symlink_path)?;
+            create_symlink(&global_path, &symlink_path)?;
         }
     }
     Ok(())

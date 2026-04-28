@@ -1,0 +1,23 @@
+  Installing standard library [ACTON_VERSION]
+   Compiling contracts
+   Compiling simple
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+x
+
+✗ test fuzz fails with inputs
+  Fuzz seed: 17
+  Fuzz runs: 2
+  Fuzz case: 1/2
+  Inputs: value=0
+  expect(actual).toEqual(expected)
+  (
+      0,
+      1
+  )
+  at tests/test.test[LINE]
+
+ ✗ 1 failed in 1 file
+
+Some tests failed.

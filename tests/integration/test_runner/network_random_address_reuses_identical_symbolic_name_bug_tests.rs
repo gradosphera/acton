@@ -3,6 +3,7 @@ use crate::support::project::ProjectBuilder;
 
 const NETWORK_IMPORTS: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 "#;
 
@@ -24,9 +25,9 @@ fn network_random_address_reuses_identical_symbolic_name_bug() {
     run_network_success_case(
         "bo-stdlib-network-random-address-reuse",
         r#"
-get fun `test-bo-stdlib-network-random-address-reuse`() {
-    val first = net.randomAddress("bo_reused_symbolic_name");
-    val second = net.randomAddress("bo_reused_symbolic_name");
+get fun `test bo stdlib network random address reuse`() {
+    val first = randomAddress("bo_reused_symbolic_name");
+    val second = randomAddress("bo_reused_symbolic_name");
 
     expect(second).toEqual(first);
 }

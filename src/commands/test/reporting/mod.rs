@@ -1,15 +1,19 @@
 use crate::commands::test::TestDescriptor;
 use crate::commands::test::trace::TransactionInfo;
 use crate::context::{AssertFailure, BuildCache, EmulationsState, KnownAddresses};
+use crate::formatter::FormatterContext;
 use acton_config::test::BacktraceMode;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use tolk_compiler::TolkSourceMap;
+use tolk_compiler::abi::ContractABI as CompilerContractABI;
 use ton_abi::ContractAbi;
 use ton_executor::get::GetMethodResult;
-use ton_source_map::{SourceLocation, SourceMap};
+use ton_source_map::SourceLocation;
 use tycho_types::cell::HashBytes;
 use tycho_types::models::{ShardAccount, StdAddr};
 
@@ -24,9 +28,47 @@ pub struct TestExecutionContext {
     pub gas_used: u64,
     pub stdout: String,
     pub stderr: String,
+    pub vm_log: Option<Arc<str>>,
     pub assert_failure: Option<AssertFailure>,
     pub expected_exit_code: i32,
+    pub fuzz: Option<FuzzExecutionContext>,
     pub failure: Option<TestFailureExecutionContext>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FuzzCaseContext {
+    pub run: usize,
+    pub inputs: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct FuzzExecutionContext {
+    pub total_runs: usize,
+    pub seed: u64,
+    pub failed_case: Option<FuzzCaseContext>,
+}
+
+#[must_use]
+pub(crate) fn format_fuzz_failure_context(fuzz: &FuzzExecutionContext) -> String {
+    let mut lines = vec![
+        format!("Fuzz seed: {}", fuzz.seed),
+        format!("Fuzz runs: {}", fuzz.total_runs),
+    ];
+
+    if let Some(case) = &fuzz.failed_case {
+        lines.push(format!("Fuzz case: {}/{}", case.run, fuzz.total_runs));
+        if !case.inputs.is_empty() {
+            let inputs = case
+                .inputs
+                .iter()
+                .map(|(name, value)| format!("{name}={value}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            lines.push(format!("Inputs: {inputs}"));
+        }
+    }
+
+    lines.join("\n")
 }
 
 #[derive(Debug, Clone)]
@@ -66,7 +108,11 @@ pub struct TestReport {
     #[serde(skip)]
     pub abi: Arc<ContractAbi>,
     #[serde(skip)]
-    pub source_map: Arc<SourceMap>,
+    pub compiler_abi: Option<Arc<CompilerContractABI>>,
+    #[serde(skip)]
+    pub source_map: Arc<TolkSourceMap>,
+    #[serde(skip)]
+    pub show_bodies: bool,
     #[serde(skip)]
     pub backtrace: Option<BacktraceMode>,
     #[serde(skip)]
@@ -162,6 +208,7 @@ impl std::fmt::Debug for ReporterManager {
 }
 
 impl ReporterManager {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             reporters: Vec::new(),
@@ -243,6 +290,25 @@ pub(super) fn extract_suite_name(file_path: &Path) -> Arc<str> {
         .and_then(|n| n.to_str())
         .unwrap_or_else(|| file_path.to_str().unwrap_or(""))
         .into()
+}
+
+pub(super) fn formatter_for_failed_test<'a>(test: &'a TestReport) -> Option<FormatterContext<'a>> {
+    let failure = test.execution.as_ref()?.failure.as_ref()?;
+
+    Some(FormatterContext {
+        contract_abi: test.abi.clone(),
+        accounts: Cow::Borrowed(&failure.accounts),
+        build_cache: Cow::Borrowed(&failure.build_cache),
+        emulations: Cow::Borrowed(&failure.emulations),
+        known_addresses: Cow::Borrowed(&failure.known_addresses),
+        known_code_cells: Cow::Borrowed(&failure.known_code_cells),
+        show_bodies: test.show_bodies,
+        has_wallets_config: false,
+        available_wallets: vec![],
+        backtrace: test.backtrace,
+        fork_net: None,
+        network: None,
+    })
 }
 
 pub(super) fn escape_xml(input: &str) -> String {

@@ -1,14 +1,19 @@
 import "@acton/io"
 import "@acton/emulation/network"
-import "@acton/build/build"
+import "@acton/emulation/scripts"
+
+import "@contracts/types"
+import "@wrappers/Empty.gen"
 
 fun main() {
-    val deployer = net.wallet("deployer");
+    val deployer = scripts.wallet("deployer");
 
-    // When your contract is ready, uncomment these lines
-    // val counter = Contract.fromStorage(Storage { id: 0, counter: 0 });
-    // val res = counter.deploy(deployer.address, { value: ton("0.005") });
-    // res.wait();
-    //
-    // println1("Deployed counter to {}", counter.address);
+    val contract = Empty.fromStorage(Storage { owner: deployer.address });
+    val res = contract.deploy(deployer.address, { value: ton("0.05") });
+    if (res.waitForFirstTransaction() == null) {
+        return;
+    }
+
+    println("Deployed starter contract to {}", contract.address);
+    println("Owner is {}", contract.owner());
 }

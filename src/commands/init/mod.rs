@@ -1,14 +1,37 @@
 use crate::commands::common::{symlink_global_libraries, symlink_global_wallets};
+use crate::commands::create_app::create_app_cmd;
 use crate::stdlib;
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, ContractConfig, ContractsConfig};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::Path;
 use tree_sitter::Node;
 use walkdir::WalkDir;
 
-pub fn init_cmd() -> anyhow::Result<()> {
+const GITIGNORE_GROUPS: &[(&str, &[&str])] = &[
+    (
+        "# Acton related files",
+        &[
+            ".acton/",
+            "gen/",
+            "build/",
+            "lcov.info",
+            "libraries.toml",
+            "global.libraries.toml",
+        ],
+    ),
+    (
+        "# Mnemonic and wallet files",
+        &[".env", "*.mnemonic", "wallets.toml", "global.wallets.toml"],
+    ),
+];
+
+pub fn init_cmd(create_app_path: Option<&Path>) -> anyhow::Result<()> {
+    if create_app_path.is_some() {
+        return create_app_cmd(create_app_path);
+    }
+
     let acton_toml_exists = Path::new("Acton.toml").exists();
 
     if acton_toml_exists {
@@ -16,8 +39,15 @@ pub fn init_cmd() -> anyhow::Result<()> {
             "    {} Acton.toml project configuration",
             "Skipping".green().bold()
         );
+        if patch_default_mappings()? {
+            println!(
+                "     {} Acton.toml with default mappings",
+                "Patched".green().bold()
+            );
+        }
     } else {
         let mut config = ActonConfig::default();
+        config.ensure_default_mappings();
 
         let discovered_contracts = discover_contracts();
         let contract_count = discovered_contracts.len();
@@ -35,7 +65,11 @@ pub fn init_cmd() -> anyhow::Result<()> {
                 if contract_count == 1 { "" } else { "s" }
             );
             for (key, contract) in &discovered_contracts {
-                println!("             {} ({})", contract.name.cyan(), key);
+                println!(
+                    "             {} ({})",
+                    contract.display_name(key).cyan(),
+                    key
+                );
             }
             config.contracts = Some(ContractsConfig {
                 contracts: discovered_contracts,
@@ -78,36 +112,39 @@ pub fn init_cmd() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn patch_default_mappings() -> anyhow::Result<bool> {
+    let content = fs::read_to_string("Acton.toml")?;
+    let mut config: ActonConfig = toml::from_str(&content)?;
+
+    if !config.ensure_default_mappings() {
+        return Ok(false);
+    }
+
+    config.save()?;
+    Ok(true)
+}
+
 fn patch_or_create_gitignore() -> anyhow::Result<()> {
     let content = if fs::exists(".gitignore").unwrap_or(false) {
         fs::read_to_string(".gitignore")?
     } else {
         String::new()
     };
-    let lines = content.lines().map(str::trim).collect::<Vec<_>>();
+    let mut existing_lines = content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect::<HashSet<_>>();
 
     let mut to_add = String::new();
 
-    if !lines.contains(&".acton/") {
-        to_add.push_str("\n# Acton main directory\n.acton/\n");
-    }
-
-    let wallet_patterns = ["*.mnemonic", "wallets.toml", "global.wallets.toml"];
-    let missing_wallets: Vec<_> = wallet_patterns
-        .iter()
-        .filter(|p| !lines.contains(p))
-        .collect();
-
-    if !missing_wallets.is_empty() {
-        to_add.push_str("\n# Mnemonic and wallet files\n");
-        for p in missing_wallets {
-            to_add.push_str(p);
-            to_add.push('\n');
-        }
+    for (heading, patterns) in GITIGNORE_GROUPS {
+        append_missing_group_to_gitignore(&mut existing_lines, &mut to_add, heading, patterns);
     }
 
     if !to_add.is_empty() {
-        let mut new_content = content.clone();
+        let mut new_content = content;
         if !new_content.ends_with('\n') && !new_content.is_empty() {
             new_content.push('\n');
         }
@@ -119,6 +156,36 @@ fn patch_or_create_gitignore() -> anyhow::Result<()> {
         );
     }
     Ok(())
+}
+
+fn append_missing_group_to_gitignore(
+    existing_lines: &mut HashSet<String>,
+    output: &mut String,
+    heading: &str,
+    patterns: &[&str],
+) {
+    let missing_patterns = patterns
+        .iter()
+        .copied()
+        .filter(|pattern| !existing_lines.contains(*pattern))
+        .collect::<Vec<_>>();
+
+    if missing_patterns.is_empty() {
+        return;
+    }
+
+    output.push('\n');
+    if !existing_lines.contains(heading) {
+        output.push_str(heading);
+        output.push('\n');
+        existing_lines.insert(heading.to_string());
+    }
+
+    for pattern in missing_patterns {
+        output.push_str(pattern);
+        output.push('\n');
+        existing_lines.insert(pattern.to_string());
+    }
 }
 
 fn discover_contracts() -> BTreeMap<String, ContractConfig> {
@@ -144,14 +211,12 @@ fn discover_contracts() -> BTreeMap<String, ContractConfig> {
             continue;
         }
 
-        let content = match fs::read_to_string(path) {
-            Ok(content) => content,
-            Err(_) => continue,
+        let Ok(content) = fs::read_to_string(path) else {
+            continue;
         };
 
-        let tree = match tolk_syntax::parse(&content) {
-            Ok(tree) => tree,
-            Err(_) => continue,
+        let Ok(tree) = tolk_syntax::parse(&content) else {
+            continue;
         };
 
         // treat all files with onInternalMessage as a contract entry file
@@ -174,7 +239,7 @@ fn discover_contracts() -> BTreeMap<String, ContractConfig> {
         let contract_name = format_contract_name(file_stem);
 
         let contract_config = ContractConfig {
-            name: contract_name,
+            name: Some(contract_name),
             src: relative_path,
             depends: Some(vec![]),
             output: None,
@@ -203,7 +268,8 @@ fn has_on_internal_message_function(root_node: &Node<'_>, content: &str) -> bool
 
 fn format_contract_name(file_stem: &str) -> String {
     file_stem
-        .split('_')
+        .split(['_', '-'])
+        .filter(|word| !word.is_empty())
         .map(|word| {
             let mut chars = word.chars();
             match chars.next() {

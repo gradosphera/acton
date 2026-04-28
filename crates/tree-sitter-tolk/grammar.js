@@ -120,6 +120,7 @@ const TOLK_GRAMMAR = {
         ),
     struct_field_declaration: $ =>
         seq(
+            optional(field("annotations", $.annotation_list)),
             field("modifiers", optional($.struct_field_modifiers)),
             field("name", $.identifier),
             ":",
@@ -197,14 +198,21 @@ const TOLK_GRAMMAR = {
         ),
 
     annotation_list: $ => repeat1($.annotation),
+    annotation_name: _ => /[a-zA-Z0-9_.]+/,
     annotation: $ =>
         seq(
             "@",
-            optional(field("name", $.identifier)),
+            optional(field("name", $.annotation_name)),
             optional(field("arguments", $.annotation_arguments)),
         ),
 
-    annotation_arguments: $ => seq("(", commaSep($._expression), optional(","), ")"),
+    annotation_arguments: $ =>
+        seq(
+            "(",
+            optional(choice(field("type", $._type_hint), field("values", commaSep1($._expression)))),
+            optional(","),
+            ")",
+        ),
 
     type_parameters: $ => seq("<", commaSep($.type_parameter), optional(","), ">"),
     type_parameter: $ =>
@@ -557,6 +565,7 @@ const TOLK_GRAMMAR = {
                 // prec.dynamic is important
                 "<",
                 field("types", commaSep1($._type_hint)),
+                optional(","),
                 ">",
             ),
         ),
@@ -656,8 +665,11 @@ const TOLK_GRAMMAR = {
         ),
 
     tensor_type: $ =>
-        prec.dynamic(103, choice(seq("(", ")"), seq("(", commaSep2($._type_hint), ")"))),
-    tuple_type: $ => prec(103, seq("[", commaSep($._type_hint), "]")),
+        prec.dynamic(
+            103,
+            choice(seq("(", ")"), seq("(", commaSep2($._type_hint), optional(","), ")")),
+        ),
+    tuple_type: $ => prec(103, seq("[", commaSep1($._type_hint), optional(","), "]")),
     parenthesized_type: $ => prec(103, seq("(", field("inner", $._type_hint), ")")),
 
     fun_callable_type: $ =>
@@ -681,7 +693,8 @@ const TOLK_GRAMMAR = {
     // ----------------------------------------------------------
     // common constructions
 
-    number_literal: $ => token(choice(seq("0x", /[0-9a-fA-F]+/), seq("0b", /[01]+/), /[0-9]+/)),
+    number_literal: $ =>
+        token(choice(seq("0x", /[0-9a-fA-F_]+/), seq("0b", /[01_]+/), /[0-9][0-9_]*/)),
     string_literal: $ =>
         token(
             choice(

@@ -4,6 +4,7 @@ use crate::support::project::ProjectBuilder;
 const CONFIG_IMPORTS: &str = r#"
 import "../../lib/emulation/config"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 "#;
 
@@ -25,8 +26,8 @@ fn run_config_success_case(project_name: &str, test_body: &str, snapshot_path: &
 fn config_storage_prices_roundtrip_preserves_multiple_timestamp_entries() {
     run_config_success_case(
         "dr-stdlib-config-storage-prices-multi-entry-roundtrip",
-        r#"
-get fun `test-dr-stdlib-config-storage-prices-multi-entry-roundtrip`() {
+        r"
+get fun `test dr stdlib config storage prices multi entry roundtrip`() {
     val tsA: uint32 = 1700000000;
     val tsB: uint32 = 1700003600;
 
@@ -53,11 +54,11 @@ get fun `test-dr-stdlib-config-storage-prices-multi-entry-roundtrip`() {
         masterchainCellPrice: 808
     });
 
-    var config = net.getConfig();
+    var config = testing.getConfig();
     config.setStoragePrices(prices);
-    expect(net.setConfig(config)).toBeTrue();
+    expect(testing.setConfig(config)).toBeTrue();
 
-    val roundtrip = net.getConfig().getStoragePrices();
+    val roundtrip = testing.getConfig().getStoragePrices();
     expect(roundtrip).toHaveLength(3);
     expect(roundtrip).toContainKey(0);
     expect(roundtrip).toContainKey(tsA);
@@ -85,7 +86,7 @@ get fun `test-dr-stdlib-config-storage-prices-multi-entry-roundtrip`() {
     expect(entryB.masterchainBitPrice).toEqual(707);
     expect(entryB.masterchainCellPrice).toEqual(808);
 }
-"#,
+",
         "integration/snapshots/test-runner/config_storage_prices_roundtrip_preserves_multiple_timestamp_entries/config_storage_prices_roundtrip_preserves_multiple_timestamp_entries.stdout.txt",
     );
 }
@@ -94,8 +95,8 @@ get fun `test-dr-stdlib-config-storage-prices-multi-entry-roundtrip`() {
 fn config_storage_prices_roundtrip_replaces_old_dictionary_entries_on_second_write() {
     run_config_success_case(
         "dr-stdlib-config-storage-prices-second-write-replacement",
-        r#"
-get fun `test-dr-stdlib-config-storage-prices-second-write-replacement`() {
+        r"
+get fun `test dr stdlib config storage prices second write replacement`() {
     val oldTsA: uint32 = 1800000000;
     val oldTsB: uint32 = 1800003600;
     val newTs: uint32 = 1900000000;
@@ -123,11 +124,11 @@ get fun `test-dr-stdlib-config-storage-prices-second-write-replacement`() {
         masterchainCellPrice: 119
     });
 
-    var config = net.getConfig();
+    var config = testing.getConfig();
     config.setStoragePrices(first);
-    expect(net.setConfig(config)).toBeTrue();
+    expect(testing.setConfig(config)).toBeTrue();
 
-    var second = createEmptyMap<uint32, StoragePrices>();
+    var second = map<uint32, StoragePrices> [];
     second.set(0, StoragePrices {
         initialUnixTime: 0,
         bitPrice: 901,
@@ -143,11 +144,11 @@ get fun `test-dr-stdlib-config-storage-prices-second-write-replacement`() {
         masterchainCellPrice: 1004
     });
 
-    var rewritten = net.getConfig();
+    var rewritten = testing.getConfig();
     rewritten.setStoragePrices(second);
-    expect(net.setConfig(rewritten)).toBeTrue();
+    expect(testing.setConfig(rewritten)).toBeTrue();
 
-    val afterSecondWrite = net.getConfig().getStoragePrices();
+    val afterSecondWrite = testing.getConfig().getStoragePrices();
     expect(afterSecondWrite).toHaveLength(2);
     expect(afterSecondWrite).toContainKey(0);
     expect(afterSecondWrite).toContainKey(newTs);
@@ -168,7 +169,7 @@ get fun `test-dr-stdlib-config-storage-prices-second-write-replacement`() {
     expect(replacement.masterchainBitPrice).toEqual(1003);
     expect(replacement.masterchainCellPrice).toEqual(1004);
 }
-"#,
+",
         "integration/snapshots/test-runner/config_storage_prices_roundtrip_preserves_multiple_timestamp_entries/config_storage_prices_roundtrip_replaces_old_dictionary_entries_on_second_write.stdout.txt",
     );
 }

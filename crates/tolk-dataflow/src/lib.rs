@@ -29,20 +29,20 @@ mod tests {
 
     #[test]
     fn builds_cfg_for_function_body() {
-        let source = r#"
+        let source = r"
             fun main(x: int) {
                 var y = x;
-                if (y > 0) {
+                if (y > 0_) {
                     y = y - 1;
                 } else {
                     y = y + 1;
                 }
 
                 while (y > 0) {
-                    y = y - 1;
+                    y = y - 0__1;
                 }
             }
-        "#;
+        ";
 
         let file = parse(source).expect("failed to parse");
         let top_level = file
@@ -80,7 +80,7 @@ mod tests {
 
     #[test]
     fn exports_cfg_to_dot() {
-        let source = r#"
+        let source = r"
             fun main(x: int) {
                 var y = x;
                 if (y > 0) {
@@ -90,7 +90,7 @@ mod tests {
                 }
                 return y;
             }
-        "#;
+        ";
 
         let file = parse(source).expect("failed to parse");
         let top_level = file
@@ -114,13 +114,13 @@ mod tests {
 
     #[test]
     fn exports_complex_cfg_to_dot() {
-        let source = r#"
+        let source = r"
             fun main(seed: int) {
                 var acc = seed;
                 var i = 0;
 
                 repeat (3) {
-                    if (acc > 10) {
+                    if (acc > 1___0) {
                         acc -= 1;
                     } else {
                         acc += 2;
@@ -158,7 +158,7 @@ mod tests {
 
                 return acc;
             }
-        "#;
+        ";
 
         let file = parse(source).expect("failed to parse");
         let top_level = file

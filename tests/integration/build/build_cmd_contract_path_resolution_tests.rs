@@ -16,7 +16,7 @@ description = ""
 version = "0.1.0"
 
 [contracts.{contract_name}]
-name = "{contract_name}"
+display-name = "{contract_name}"
 src = "{src}"
 depends = []
 "#
@@ -34,10 +34,10 @@ fn build_resolves_relative_contract_src_with_normalized_segments() {
     let project = ProjectBuilder::new("build-contract-src-relative-normalized")
         .raw_file(
             "contracts/nested/relative_target.tolk",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 
@@ -61,10 +61,10 @@ fn build_resolves_absolute_contract_src() {
     let project = ProjectBuilder::new("build-contract-src-absolute")
         .raw_file(
             "contracts/absolute_target.tolk",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 
@@ -90,10 +90,10 @@ fn build_resolves_relative_contract_src_with_parent_traversal_outside_contracts_
         .raw_file("contracts/nested/marker.txt", "marker")
         .raw_file(
             "shared/traversal_target.tolk",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 
@@ -118,10 +118,10 @@ fn build_resolves_relative_contract_src_with_mixed_dot_and_parent_segments() {
         .raw_file("contracts/corner/deep/marker.txt", "marker")
         .raw_file(
             "contracts/corner_target.tolk",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 
@@ -146,10 +146,10 @@ fn build_resolves_relative_contract_src_with_nested_relative_roots_when_intermed
         .raw_file("contracts/root/inner/branch/marker.txt", "marker")
         .raw_file(
             "contracts/root/relative_nested_target.tolk",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 
@@ -169,14 +169,14 @@ fun onBouncedMessage(_: InMessageBounced) {}
 }
 
 #[test]
-fn build_relative_contract_src_with_parent_segments_through_missing_dir_is_not_normalized_bug() {
+fn build_normalizes_relative_contract_src_with_parent_segments_through_missing_dir() {
     let project = ProjectBuilder::new("build-contract-src-relative-missing-parent")
         .raw_file(
             "contracts/relative_missing_parent_target.tolk",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 
@@ -191,23 +191,22 @@ fun onBouncedMessage(_: InMessageBounced) {}
         .acton()
         .build()
         .run()
-        .failure()
-        // BUG: relative `src` paths with parent segments are not normalized before file lookup.
-        .assert_stderr_snapshot_matches(
-            "integration/snapshots/build/build_cmd_contract_path_resolution_tests/build_relative_contract_src_with_parent_segments_through_missing_dir_is_not_normalized_bug.stderr.txt",
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/build/build_cmd_contract_path_resolution_tests/build_normalizes_relative_contract_src_with_parent_segments_through_missing_dir.stdout.txt",
         );
 }
 
 #[test]
-fn build_relative_contract_src_with_nested_relative_roots_through_missing_intermediate_dirs_is_not_normalized_bug()
+fn build_normalizes_relative_contract_src_with_nested_relative_roots_through_missing_intermediate_dirs()
  {
     let project = ProjectBuilder::new("build-contract-src-relative-nested-roots-missing")
         .raw_file(
             "contracts/root/relative_nested_missing_target.tolk",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 
@@ -222,11 +221,9 @@ fun onBouncedMessage(_: InMessageBounced) {}
         .acton()
         .build()
         .run()
-        .failure()
-        // BUG: nested relative roots that include missing intermediates before `..`
-        // are not normalized before file lookup.
-        .assert_stderr_snapshot_matches(
-            "integration/snapshots/build/build_cmd_contract_path_resolution_tests/build_relative_contract_src_with_nested_relative_roots_through_missing_intermediate_dirs_is_not_normalized_bug.stderr.txt",
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/build/build_cmd_contract_path_resolution_tests/build_normalizes_relative_contract_src_with_nested_relative_roots_through_missing_intermediate_dirs.stdout.txt",
         );
 }
 
@@ -236,10 +233,10 @@ fn build_resolves_absolute_contract_src_with_parent_segments_when_intermediate_d
         .raw_file("contracts/absolute_root/nested/marker.txt", "marker")
         .raw_file(
             "contracts/absolute_root/absolute_existing_target.tolk",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 
@@ -264,14 +261,14 @@ fun onBouncedMessage(_: InMessageBounced) {}
 }
 
 #[test]
-fn build_absolute_contract_src_with_parent_segments_is_not_normalized_bug() {
+fn build_normalizes_absolute_contract_src_with_parent_segments() {
     let project = ProjectBuilder::new("build-contract-src-absolute-normalized")
         .raw_file(
             "contracts/absolute_normalized_target.tolk",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 
@@ -291,22 +288,21 @@ fun onBouncedMessage(_: InMessageBounced) {}
         .acton()
         .build()
         .run()
-        .failure()
-        // BUG: absolute `src` paths with parent segments are not normalized before file lookup.
-        .assert_stderr_snapshot_matches(
-            "integration/snapshots/build/build_cmd_contract_path_resolution_tests/build_absolute_contract_src_with_parent_segments_is_not_normalized_bug.stderr.txt",
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/build/build_cmd_contract_path_resolution_tests/build_normalizes_absolute_contract_src_with_parent_segments.stdout.txt",
         );
 }
 
 #[test]
-fn build_absolute_contract_src_with_nested_missing_intermediate_dirs_is_not_canonicalized_bug() {
+fn build_canonicalizes_absolute_contract_src_with_nested_missing_intermediate_dirs() {
     let project = ProjectBuilder::new("build-contract-src-absolute-nested-missing-roots")
         .raw_file(
             "contracts/absolute_nested_missing_target.tolk",
-            r#"
+            r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#,
+",
         )
         .build();
 
@@ -326,11 +322,9 @@ fun onBouncedMessage(_: InMessageBounced) {}
         .acton()
         .build()
         .run()
-        .failure()
-        // BUG: absolute `src` paths with nested missing intermediates before `..`
-        // are not canonicalized before file lookup.
-        .assert_stderr_snapshot_matches(
-            "integration/snapshots/build/build_cmd_contract_path_resolution_tests/build_absolute_contract_src_with_nested_missing_intermediate_dirs_is_not_canonicalized_bug.stderr.txt",
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/build/build_cmd_contract_path_resolution_tests/build_canonicalizes_absolute_contract_src_with_nested_missing_intermediate_dirs.stdout.txt",
         );
 }
 

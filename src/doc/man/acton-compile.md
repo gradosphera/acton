@@ -1,0 +1,174 @@
+# acton-compile(1)
+
+## Name
+
+acton-compile --- Compile a Tolk file into TVM code and related artifacts
+
+## Synopsis
+
+`acton compile` [_options_] _path_
+
+## Description
+
+Compile a single `.tolk` source file with the Tolk compiler and print the
+resulting code information or write artifacts to files.
+
+This command is useful for inspecting compiler output, producing standalone BoC
+files, generating source maps for debugging, and exporting ABI or Fift output
+without running the full project build pipeline.
+
+Unlike `acton build`, this command works on one explicit source file. It does
+not traverse the `[contracts]` graph, does not generate dependency helper
+files, and does not write project build JSON artifacts.
+
+By default the compiler still expects a contract or script entrypoint. Use
+`--allow-no-entrypoint` when compiling library or helper files that
+intentionally define neither `main()` nor `onInternalMessage()`.
+
+`Acton.toml` is optional here. If it loads successfully, Acton uses it for
+project context such as import mappings. Cache placement still follows the
+resolved project root and the usual `build/cache` layout. If the manifest is
+missing or invalid, Acton warns and continues compiling the file without those
+manifest-derived project settings.
+
+`--manifest-path` and `--project-root` choose which project context to use, but
+they do not rebase unrelated CLI paths. The input file and output paths stay
+relative to the current working directory unless you pass absolute paths.
+
+## Options
+
+### Compile Options
+
+{{#options}}
+
+{{#option "_path_" }}
+Path to the Tolk source file to compile.
+{{/option}}
+
+{{#option "`--json`" }}
+Print the compilation result as structured JSON.
+{{/option}}
+
+{{#option "`--base64-only`" }}
+Print only the compiled code as base64.
+{{/option}}
+
+{{#option "`--boc` _path_" }}
+Write the compiled code to a binary BoC file.
+{{/option}}
+
+{{#option "`--fift` _path_" }}
+Write the generated Fift representation to a file.
+{{/option}}
+
+{{#option "`--source-map` _path_" }}
+Write a source map file and enable debug-oriented compilation output.
+{{/option}}
+
+{{#option "`--abi` _path_" }}
+Write the emitted contract ABI to a file.
+{{/option}}
+
+{{#option "`--allow-no-entrypoint`" }}
+Allow compiling files that do not define `main()` or `onInternalMessage()`.
+{{/option}}
+
+{{#option "`--clear-cache`" }}
+Clear the compilation cache before compiling.
+{{/option}}
+
+{{/options}}
+
+### Display Options
+
+{{> options-display }}
+
+### Project Options
+
+{{> options-project-resolved }}
+
+## Output
+
+Without file-output flags, `acton compile` prints compilation information to
+standard output.
+
+`--json` and `--base64-only` change the stdout format when stdout output is
+still enabled. File-output flags such as `--fift`, `--source-map`, and `--abi`
+can be combined with either stdout mode.
+
+`--boc` is special: Acton writes the binary BoC file and returns successfully
+without printing the usual stdout payload. If `--boc` is combined with other
+file-output flags, those other files may still be written first.
+
+Depending on the selected options, Acton can also write:
+
+- a binary BoC file via `--boc`
+- a Fift file via `--fift`
+- a source map via `--source-map`
+- an ABI file via `--abi`
+
+`acton compile` does **not** write:
+
+- `build/<contract>.json` project build artifacts
+- `gen/*.code.tolk` dependency helper files
+- outputs derived from `[build]` defaults in `Acton.toml`
+
+`--source-map` enables debug-oriented compilation output. If the compiler does
+not emit a contract ABI for the input file, `--abi` does not create an ABI
+artifact.
+
+## Cache
+
+Acton uses the same compilation cache as `acton build` and `acton test` to
+speed up repeated runs.
+
+- Use `--clear-cache` to force recompilation.
+- Cache entries are invalidated automatically when source inputs change.
+- Cache entries are mode-specific: `--source-map` and `--fift` may require a
+  different cache entry than a plain compile of the same file.
+- Standalone files that are not registered as project contracts still benefit
+  from file-import-aware cache invalidation.
+
+## Exit Status
+
+- `0`: Compilation completed successfully, including runs that emitted warnings.
+- `1`: Compilation failed, cache setup failed, input validation failed, or an
+  output artifact could not be written.
+
+## Examples
+
+1. Compile a Tolk file and print the result:
+
+   ```bash
+   acton compile contracts/main.tolk
+   ```
+
+2. Save the compiled code to a BoC file:
+
+   ```bash
+   acton compile contracts/main.tolk --boc main.boc
+   ```
+
+3. Emit source map and ABI artifacts:
+
+   ```bash
+   acton compile contracts/main.tolk --source-map main.map.json --abi main.abi.json
+   ```
+
+4. Print machine-readable JSON:
+
+   ```bash
+   acton compile contracts/main.tolk --json
+   ```
+
+5. Generate artifacts for source-correlated disassembly:
+
+   ```bash
+   acton compile contracts/main.tolk --boc build/main.boc --source-map build/main.map.json
+   ```
+
+## See Also
+
+- `acton help build`
+- `acton help disasm`
+- [Build system configuration reference](https://ton-blockchain.github.io/acton/docs/building/reference)

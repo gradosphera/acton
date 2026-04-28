@@ -1,35 +1,55 @@
-CARGO_TEST := `if cargo nextest --version >/dev/null 2>&1; then echo "cargo nextest run"; else echo "cargo test"; fi`
-TEST_SERIAL_ARGS := `if cargo nextest --version >/dev/null 2>&1; then echo "--test-threads 1"; else echo "-- --test-threads 1"; fi`
+NEXTEST_PROFILE_ARGS := if env_var_or_default("CI", "") != "" { "-P ci" } else { "" }
+TEST_FEATURE_ARGS := if env_var_or_default("CI", "") != "" { "--features only_ci" } else { "" }
 
 all: precommit
 
 build:
     cargo build --release
 
+build-dev:
+    cargo build
+
+sync-artifacts:
+    cargo xtask sync-artifacts
+
 test-unit:
-    {{ CARGO_TEST }} --workspace --lib --bins \
-        --exclude retrace
+    cargo nextest run --workspace --lib --bins {{ NEXTEST_PROFILE_ARGS }} {{ TEST_FEATURE_ARGS }}
     cargo test --workspace --doc
 
-test-serial:
-    # we need test by test execution due to Toncenter rate limit
-    {{ CARGO_TEST }} -p retrace {{ TEST_SERIAL_ARGS }}
-
 test-integration:
-    {{ CARGO_TEST }} --test integration_test
-    # we need test by test execution due to single debug port
-    # {{ CARGO_TEST }} --test debug_test {{ TEST_SERIAL_ARGS }}
+    cargo nextest run --test integration_test {{ NEXTEST_PROFILE_ARGS }} {{ TEST_FEATURE_ARGS }}
 
-test-tree-sitter:
-    cd crates/tree-sitter-tolk && yarn && tree-sitter generate && tree-sitter test
+test-workspace:
+    cargo nextest run --workspace {{ NEXTEST_PROFILE_ARGS }} {{ TEST_FEATURE_ARGS }}
+    cargo test --workspace --doc
 
-update-test-tree-sitter:
-    cd crates/tree-sitter-tolk && yarn && tree-sitter generate && tree-sitter test -u
+_tree-sitter-test grammar:
+    cd crates/tree-sitter-{{ grammar }} && yarn install --immutable && yarn tree-sitter generate && yarn tree-sitter test
 
-test: test-unit test-serial test-integration test-tree-sitter
+test-tree-sitter-tolk:
+    just _tree-sitter-test tolk
+
+test-tree-sitter-fift:
+    just _tree-sitter-test fift
+
+test-tree-sitter-tasm:
+    just _tree-sitter-test tasm
+
+test-tree-sitter-tlb:
+    just _tree-sitter-test tlb
+
+test-tree-sitter-all: test-tree-sitter-fift test-tree-sitter-tasm test-tree-sitter-tlb test-tree-sitter-tolk
+
+update-test-tree-sitter-tolk:
+    cd crates/tree-sitter-tolk && yarn install --immutable && yarn tree-sitter generate && yarn tree-sitter test -u
+
+test: test-workspace
 
 test-update:
     SNAPSHOTS=overwrite just test
+
+docgen:
+    cargo run -- docgen
 
 fmt:
     cargo fmt --all
@@ -40,13 +60,43 @@ fmt-check:
 clippy:
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
-check-udeps:
-    cargo +nightly udeps --workspace
+check-deps:
+    cargo shear # --deny-warnings
 
-check: fmt-check clippy test
+typos:
+    typos .
+
+check-docgen:
+    cargo run -- docgen --check # always use latest acton
+
+check-schema:
+    cargo run -p xtask -- schema --schema acton-toml --check
+    cargo run -p xtask -- schema --schema lint-report --check
+    cargo run -p xtask -- schema --schema mutation-rules --check
+
+check-deny:
+    cargo deny check
+
+check-security:
+    cargo deny check
+    bun audit --audit-level=moderate
+    cd crates/tree-sitter-fift && yarn npm audit --all --recursive --severity=moderate
+    cd crates/tree-sitter-tasm && yarn npm audit --all --recursive --severity=moderate
+    cd crates/tree-sitter-tlb && yarn npm audit --all --recursive --severity=moderate
+    cd crates/tree-sitter-tolk && yarn npm audit --all --recursive --severity=moderate
+    cd crates/ton-ls/editors/code && yarn npm audit --all --recursive --severity=moderate
+
+check-tolk:
+    cargo run -- test
+    cargo run -- fmt --check
+    cargo run -- check
+
+check-ci: fmt-check check-docgen check-deps clippy typos check-schema check-tolk
+
+check: check-ci check-deny test
 
 coverage-setup:
-    cargo install cargo-llvm-cov
+    cargo install cargo-llvm-cov --locked
     rustup component add llvm-tools-preview
 
 coverage:
@@ -56,15 +106,18 @@ coverage-html:
     cargo llvm-cov --workspace --all-features --all-targets --html -- --test-threads 1
 
 coverage-fmt-html:
-    cargo llvm-cov -p tolkfmt --all-features --all-targets --html --open
+    cargo llvm-cov -p tolk-fmt --all-features --all-targets --html --open
 
 coverage-clean:
     cargo llvm-cov clean
 
 build-ui:
-    bun install
-    cd crates/acton-test-ui && bun i && bun run build
-    cd crates/acton-litenode-ui && bun i && bun run build
+    bun ci
+    cd crates/acton-test-ui && bun ci && bun run build
+    cd crates/acton-localnet-ui && bun ci && bun run build
+
+check-ui-ci:
+    bun run lint
 
 check-ui:
     bun run lint:fix
@@ -73,7 +126,7 @@ fmt-ui:
     bun run fmt
 
 play-tree-sitter:
-    cd crates/tree-sitter-tolk && yarn && tree-sitter generate && tree-sitter build --wasm && tree-sitter playground
+    cd crates/tree-sitter-tolk && yarn install --immutable && yarn tree-sitter generate && yarn tree-sitter build --wasm && yarn tree-sitter playground
 
 precommit: fmt fmt-ui build build-ui check check-ui
 

@@ -1,1 +1,3 @@
-Deployed counter to kQC7YDlKM5HlPy96D8z613FxKWNd1rNqv9q3O4aZqGuF7tBl (counter)
+Deployed counter to [WALLET_ADDRESS_BASE] (Counter)
+Counter owner is [WALLET_ADDRESS_BASE] (deployer)
+Counter value is 0

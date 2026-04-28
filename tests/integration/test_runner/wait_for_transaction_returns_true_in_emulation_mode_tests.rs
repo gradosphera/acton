@@ -2,16 +2,17 @@ use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 
 const NETWORK_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
+import "../../lib/tlb/maybe"
 "#;
 
-const RECEIVER_CONTRACT: &str = r#"
+const RECEIVER_CONTRACT: &str = r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
-"#;
+";
 
 #[test]
 fn wait_for_transaction_returns_true_in_emulation_mode() {
@@ -20,7 +21,7 @@ fn wait_for_transaction_returns_true_in_emulation_mode() {
 {NETWORK_IMPORTS}
 
 fun deployReceiver() {{
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
 
     val stateInit = ContractState {{
         code: build("receiver"),
@@ -40,7 +41,7 @@ fun deployReceiver() {{
     return (sender, receiverAddress);
 }}
 
-get fun `test-bh-stdlib-wait-for-transaction-positive-known-body-hash`() {{
+get fun `test bh stdlib wait for transaction positive known body hash`() {{
     val (sender, receiverAddress) = deployReceiver();
 
     val payload = beginCell().storeUint(0xBEEF, 16).storeUint(77, 8).endCell();
@@ -59,16 +60,7 @@ get fun `test-bh-stdlib-wait-for-transaction-positive-known-body-hash`() {{
         success: true,
     }});
 
-    val tx = txs.at(0).tx.load();
-    val inMsgCell = tx.messages.load().inMsg.unwrap();
-    val inMsg = inMsgCell.load();
-
-    var body = inMsg.body;
-    body.skipBits(1); // skip Either bit in Message body
-    val bodyHash = body.hash();
-    val bodyHashSlice = beginCell().storeUint(bodyHash, 256).toSlice();
-
-    expect(net.waitForTransaction(inMsg.info.dest, bodyHashSlice, true, 1, 1)).toEqual(true);
+    expect(txs.waitForFirstTransaction(true, 1, 1)).toBeNotNull();
 }}
 "#
     );

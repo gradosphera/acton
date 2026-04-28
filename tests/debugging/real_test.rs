@@ -2,9 +2,9 @@ use crate::debugging::support::assertions::{DebugTestOutput, DebugTestOutputExt}
 use crate::debugging::support::debug::{DebugBuilder, DebugSession};
 use crate::support::project::ProjectBuilder;
 
-const COUNTER: &str = r#"import "counter_messages"
+const COUNTER: &str = r#"import "../counter_messages"
 
-type AllowedMessage = IncreaseCounter | ResetCounter | OneMoreMessage
+type AllowedMessage = IncreaseCounter | ResetCounter
 
 fun handleIncreaseCounter(increaseBy: int) {
     var storage = lazy Storage.load();
@@ -47,12 +47,6 @@ fun onInternalMessage(in: InMessage) {
             storage.save();
         }
 
-        OneMoreMessage => {
-            var storage = lazy Storage.load();
-            storage.counter = 0;
-            storage.save();
-        }
-
         else => {
             assert (in.body.isEmpty()) throw 0xFFFF;
         }
@@ -83,7 +77,7 @@ struct Storage {
     counter: uint32
 }
 
-fun Storage.load() {
+fun Storage.load(): Storage {
     return Storage.fromCell(contract.getData());
 }
 
@@ -105,14 +99,14 @@ struct ResetData {}
 
 const MAIN_CODE: &str = r#"
 import "../lib/io"
-import "../lib/build/build"
+import "../lib/build"
 import "../lib/emulation/network"
+import "../lib/emulation/testing"
 import "../lib/testing/expect"
-import "../lib/testing/transaction_expect"
 import "../lib/types/message"
 import "../lib/types/out_actions"
-import "../lib/vm/vm"
 import "../lib/fmt"
+
 
 import "counter_messages"
 
@@ -121,7 +115,7 @@ struct Counter {
     init: ContractState
 }
 
-fun Counter.fromStorage(storage: Storage) {
+fun Counter.fromStorage(storage: Storage): Counter {
     val init = ContractState {
         code: build("counter"),
         data: storage.toCell(),
@@ -130,7 +124,7 @@ fun Counter.fromStorage(storage: Storage) {
     return Counter { address, init }
 }
 
-fun Counter.sendIncrease(self, from: address, increaseBy: int) {
+fun Counter.sendIncrease(self, from: address, increaseBy: int): SendResultList {
     val msg = createMessage({
         bounce: false,
         value: ton("0.1"),
@@ -140,7 +134,7 @@ fun Counter.sendIncrease(self, from: address, increaseBy: int) {
     return net.send(from, msg);
 }
 
-fun Counter.sendReset(self, from: address) {
+fun Counter.sendReset(self, from: address): SendResultList {
     val msg = createMessage({
         bounce: false,
         value: ton("0.1"),
@@ -154,10 +148,10 @@ fun Counter.getCounter(self): int {
     return net.runGetMethod(self.address, "currentCounter")
 }
 
-fun setupTest() {
+fun setupTest(): (Counter, Treasury) {
     val counter = Counter.fromStorage({ id: 0, counter: 0 });
 
-    val deployer = net.treasury("deployer");
+    val deployer = testing.treasury("deployer");
     val msg = createMessage({
         bounce: false,
         value: ton("1.0"),
@@ -174,17 +168,17 @@ fun setupTest() {
 fun main() {
     val (counter, deployer) = setupTest();
 
-    val counterRes = net.runGetMethod<int, tuple>(counter.address, "currentCounter");
-    println(format1("Counter: {}", counterRes));
+    val counterRes = net.runGetMethod<int>(counter.address, "currentCounter");
+    println("Counter: {}", counterRes);
 
-    val info = net.getAccountState(counter.address)!;
-    println(format1("Balance: {:ton}", info.storage.balance.grams));
+    val info = testing.getAccountState(counter.address)!;
+    println("Balance: {:ton}", info.storage.balance.grams);
 
     val res = counter.sendIncrease(deployer.address, 100);
     println(res);
 }
 
-get fun `test-should-reset-counter`() {
+get fun `test should reset counter`() {
     val (counter, deployer) = setupTest();
 
     val res = counter.sendIncrease(deployer.address, 100);
@@ -207,26 +201,18 @@ fn setup_counter_project() -> DebugSession {
         .build();
 
     DebugBuilder::new("debug-callback")
-        .project(project.path())
+        .project_ref(project)
         .script_file("main.tolk")
         .build()
 }
 
 #[test]
-#[cfg_attr(target_os = "linux", ignore)]
 fn test_real_counter_contract_tests() -> anyhow::Result<()> {
     let session = setup_counter_project();
     let mut client = session.start();
 
     let result = client.execute(|executor| {
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
-        executor.step_over()?;
+        executor.step_over_times(8)?;
         Ok(())
     })?;
 
@@ -239,20 +225,13 @@ fn test_real_counter_contract_tests() -> anyhow::Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_os = "linux", ignore)]
 fn test_real_counter_contract_step_in() -> anyhow::Result<()> {
     let session = setup_counter_project();
     let mut client = session.start();
 
     let result = client.execute(|executor| {
-        executor.step_in()?;
-        executor.step_in()?;
-        executor.step_in()?;
-        executor.step_in()?;
-
-        for _ in 0..50 {
-            executor.step_over()?;
-        }
+        executor.step_in_times(4)?;
+        executor.step_over_times(50)?;
         Ok(())
     })?;
 

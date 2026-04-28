@@ -1,7 +1,7 @@
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 
-const FORWARD_MESSAGES: &str = r#"
+const FORWARD_MESSAGES: &str = r"
 struct (0x1000f001) TriggerForward {
     queryId: uint64
     target: address
@@ -10,7 +10,7 @@ struct (0x1000f001) TriggerForward {
 struct (0x1000f002) Notify {
     queryId: uint64
 }
-"#;
+";
 
 const FORWARDER_CONTRACT: &str = r#"
 import "messages"
@@ -49,7 +49,7 @@ fun onInternalMessage(in: InMessage) {
 fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
-const ECHO_MESSAGES: &str = r#"
+const ECHO_MESSAGES: &str = r"
 struct (0x2000f001) TriggerEcho {
     queryId: uint64
 }
@@ -57,7 +57,7 @@ struct (0x2000f001) TriggerEcho {
 struct (0x2000f002) EchoNotice {
     queryId: uint64
 }
-"#;
+";
 
 const ECHO_CONTRACT: &str = r#"
 import "messages"
@@ -120,14 +120,15 @@ fn send_single_keeps_out_messages_without_executing_children() {
         .test_file(
             "test",
             r#"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
             import "../../lib/testing/expect"
-            import "../../lib/testing/transaction_expect"
+            import "../../lib/types/message"
             import "../contracts/messages"
 
-            get fun `test-send-single-keeps-out-messages`() {
-                val sender = net.treasury("sender");
+            get fun `test send single keeps out messages`() {
+                val sender = testing.treasury("sender");
 
                 val forwarderInit = ContractState {
                     code: build("forwarder"),
@@ -171,7 +172,7 @@ fn send_single_keeps_out_messages_without_executing_children() {
                     },
                 });
 
-                val sendSingleRes = net.sendSingle(sender.address, trigger);
+                val sendSingleRes = testing.processSingleTraceStep(sender.address, trigger);
                 expect(sendSingleRes.outMessages.size()).toEqual(1);
                 expect(sendSingleRes.childTxs.size()).toEqual(0);
 
@@ -202,14 +203,15 @@ fn send_executes_child_transactions_and_matches_notify_expectation() {
         .test_file(
             "test",
             r#"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
             import "../../lib/testing/expect"
-            import "../../lib/testing/transaction_expect"
+            import "../../lib/types/message"
             import "../contracts/messages"
 
-            get fun `test-send-processes-child-transactions`() {
-                val sender = net.treasury("sender");
+            get fun `test send processes child transactions`() {
+                val sender = testing.treasury("sender");
 
                 val forwarderInit = ContractState {
                     code: build("forwarder"),
@@ -286,14 +288,15 @@ fn send_single_bounce_roundtrip_matches_bounced_notify_opcode() {
         .test_file(
             "test",
             r#"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
             import "../../lib/testing/expect"
-            import "../../lib/testing/transaction_expect"
+            import "../../lib/types/message"
             import "../contracts/messages"
 
             get fun `test-send-single-bounce-roundtrip-bounced-opcode`() {
-                val sender = net.treasury("sender");
+                val sender = testing.treasury("sender");
 
                 val echoInit = ContractState {
                     code: build("echo"),
@@ -320,7 +323,7 @@ fn send_single_bounce_roundtrip_matches_bounced_notify_opcode() {
                     },
                 });
 
-                val sendSingleRes = net.sendSingle(sender.address, trigger);
+                val sendSingleRes = testing.processSingleTraceStep(sender.address, trigger);
                 expect(sendSingleRes.outMessages.size()).toEqual(1);
                 expect(sendSingleRes.childTxs.size()).toEqual(0);
 
@@ -371,16 +374,17 @@ fn send_single_bounce_roundtrip_matches_failed_tx_exit_code() {
         .test_file(
             "test",
             r#"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
             import "../../lib/testing/expect"
-            import "../../lib/testing/transaction_expect"
+            import "../../lib/types/message"
             import "../contracts/messages"
 
             const ERR_REJECT_BOUNCE = 777;
 
             get fun `test-send-single-bounce-roundtrip-failed-exit-code`() {
-                val sender = net.treasury("sender");
+                val sender = testing.treasury("sender");
 
                 val echoInit = ContractState {
                     code: build("echo"),
@@ -407,7 +411,7 @@ fn send_single_bounce_roundtrip_matches_failed_tx_exit_code() {
                     },
                 });
 
-                val sendSingleRes = net.sendSingle(sender.address, trigger);
+                val sendSingleRes = testing.processSingleTraceStep(sender.address, trigger);
                 expect(sendSingleRes.outMessages.size()).toEqual(1);
 
                 val noticeBody = sendSingleRes.outMessages.at<EchoNotice>(0).loadBody().toCell();

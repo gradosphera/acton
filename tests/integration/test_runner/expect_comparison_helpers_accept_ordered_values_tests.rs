@@ -23,15 +23,15 @@ fn run_expect_success(project_name: &str, test_body: &str, snapshot_path: &str) 
 fn expect_comparison_helpers_accept_ordered_values() {
     run_expect_success(
         "ad-stdlib-expect-comparison-helpers",
-        r#"
-get fun `test-ad-stdlib-comparison-helpers`() {
+        r"
+get fun `test ad stdlib comparison helpers`() {
     expect(-10).toBeLess(-9);
     expect(15).toBeGreater(14);
     expect(42).toBeLessOrEqual(42);
     expect(42).toBeGreaterOrEqual(42);
     expect(7).toBeGreaterOrEqual(1);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_comparison_helpers_accept_ordered_values/expect_comparison_helpers_accept_ordered_values.stdout.txt",
     );
 }
@@ -40,8 +40,8 @@ get fun `test-ad-stdlib-comparison-helpers`() {
 fn expect_approx_helpers_accept_boundary_deltas() {
     run_expect_success(
         "ad-stdlib-expect-approx-boundary-deltas",
-        r#"
-get fun `test-ad-stdlib-approx-boundary-deltas`() {
+        r"
+get fun `test ad stdlib approx boundary deltas`() {
     expect(1000).toBeApproxEqAbs(1007, 7);
     expect(1000).toBeApproxEqAbs(993, 7);
     expect(-1000).toBeApproxEqAbs(-1007, 7);
@@ -52,7 +52,7 @@ get fun `test-ad-stdlib-approx-boundary-deltas`() {
     expect(-1000).toBeApproxEqRel(-1099, 9);
     expect(0).toBeApproxEqRel(0, 0);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_comparison_helpers_accept_ordered_values/expect_approx_helpers_accept_boundary_deltas.stdout.txt",
     );
 }
@@ -61,17 +61,25 @@ get fun `test-ad-stdlib-approx-boundary-deltas`() {
 fn expect_maybe_helpers_handle_some_and_none() {
     run_expect_success(
         "ad-stdlib-expect-maybe-helpers",
-        r#"
-get fun `test-ad-stdlib-maybe-helpers`() {
-    val noneValue = Maybe<int>.none();
-    val someValue = Maybe<int>.some(21);
+        r"
+fun Expectation<TlbMaybe<T>>.toBeDefined(self): void {
+    assert (self.value !is TlbNone) throw 123;
+}
+
+fun Expectation<TlbMaybe<T>>.toBeNone(self): void {
+    assert (self.value is TlbNone) throw 123;
+}
+
+get fun `test ad stdlib maybe helpers`() {
+    val noneValue = TlbMaybe<int>.none();
+    val someValue = TlbMaybe<int>.just(21);
 
     expect(noneValue).toBeNone();
     expect(someValue).toBeDefined();
     expect(noneValue.unwrapOr(99)).toEqual(99);
     expect(someValue.unwrapOr(99)).toEqual(21);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_comparison_helpers_accept_ordered_values/expect_maybe_helpers_handle_some_and_none.stdout.txt",
     );
 }
@@ -80,8 +88,8 @@ get fun `test-ad-stdlib-maybe-helpers`() {
 fn expect_tuple_have_length_reports_expected_size() {
     run_expect_success(
         "ad-stdlib-expect-tuple-have-length",
-        r#"
-get fun `test-ad-stdlib-tuple-have-length`() {
+        r"
+get fun `test ad stdlib tuple have length`() {
     var values = [];
     values.push(10);
     values.push(20);
@@ -89,7 +97,7 @@ get fun `test-ad-stdlib-tuple-have-length`() {
 
     expect(values).toHaveLength(3);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_comparison_helpers_accept_ordered_values/expect_tuple_have_length_reports_expected_size.stdout.txt",
     );
 }
@@ -98,8 +106,8 @@ get fun `test-ad-stdlib-tuple-have-length`() {
 fn expect_map_helpers_cover_key_value_and_length_checks() {
     run_expect_success(
         "ad-stdlib-expect-map-helpers",
-        r#"
-get fun `test-ad-stdlib-map-helpers`() {
+        r"
+get fun `test ad stdlib map helpers`() {
     var balances = createEmptyMap<int32, int32>();
     balances.set(1, 100);
     balances.set(2, 250);
@@ -111,7 +119,7 @@ get fun `test-ad-stdlib-map-helpers`() {
     expect(balances).toNotContainValue(999);
     expect(balances).toHaveLength(2);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_comparison_helpers_accept_ordered_values/expect_map_helpers_cover_key_value_and_length_checks.stdout.txt",
     );
 }
@@ -120,13 +128,13 @@ get fun `test-ad-stdlib-map-helpers`() {
 fn expect_tuple_contain_should_compile_and_assert_at_runtime_bug() {
     run_expect_success(
         "ad-stdlib-expect-tuple-contain-compile-bug",
-        r#"
-get fun `test-ad-stdlib-tuple-contain-compile-bug`() {
+        r"
+get fun `test ad stdlib tuple contain compile bug`() {
     var values = [];
     values.push(1);
     expect(values).toContain(1);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_comparison_helpers_accept_ordered_values/expect_tuple_contain_should_compile_and_assert_at_runtime_bug.stdout.txt",
     );
 }
@@ -135,12 +143,12 @@ get fun `test-ad-stdlib-tuple-contain-compile-bug`() {
 fn expect_rel_approx_with_negative_actual_fails_with_assertion_message() {
     run_expect_success(
         "ad-stdlib-expect-rel-approx-negative-actual",
-        r#"
-get fun `test-ad-stdlib-rel-approx-negative-actual`() {
+        r"
+get fun `test ad stdlib rel approx negative actual`() {
     expectToEndWithExitCode(567);
     expect(-100).toBeApproxEqRel(100, 10);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_comparison_helpers_accept_ordered_values/expect_rel_approx_with_negative_actual_should_fail_but_passes_bug.stdout.txt",
     );
 }
@@ -149,12 +157,12 @@ get fun `test-ad-stdlib-rel-approx-negative-actual`() {
 fn expect_rel_approx_with_positive_actual_above_boundary_fails_with_assertion_message() {
     run_expect_success(
         "ad-stdlib-expect-rel-approx-positive-above-boundary",
-        r#"
-get fun `test-ad-stdlib-rel-approx-positive-above-boundary`() {
+        r"
+get fun `test ad stdlib rel approx positive above boundary`() {
     expectToEndWithExitCode(567);
     expect(100).toBeApproxEqRel(111, 10);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_comparison_helpers_accept_ordered_values/expect_rel_approx_with_positive_actual_above_boundary_fails_with_assertion_message.stdout.txt",
     );
 }
@@ -163,12 +171,12 @@ get fun `test-ad-stdlib-rel-approx-positive-above-boundary`() {
 fn expect_rel_approx_with_zero_actual_and_non_zero_expected_fails_with_assertion_message() {
     run_expect_success(
         "ad-stdlib-expect-rel-approx-zero-actual",
-        r#"
-get fun `test-ad-stdlib-rel-approx-zero-actual`() {
+        r"
+get fun `test ad stdlib rel approx zero actual`() {
     expectToEndWithExitCode(567);
     expect(0).toBeApproxEqRel(1, 10);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_comparison_helpers_accept_ordered_values/expect_rel_approx_with_zero_actual_and_non_zero_expected_fails_with_assertion_message.stdout.txt",
     );
 }
@@ -177,12 +185,12 @@ get fun `test-ad-stdlib-rel-approx-zero-actual`() {
 fn expect_abs_approx_with_delta_above_boundary_fails_with_assertion_message() {
     run_expect_success(
         "ad-stdlib-expect-abs-approx-above-boundary",
-        r#"
-get fun `test-ad-stdlib-abs-approx-above-boundary`() {
+        r"
+get fun `test ad stdlib abs approx above boundary`() {
     expectToEndWithExitCode(567);
     expect(100).toBeApproxEqAbs(111, 10);
 }
-"#,
+",
         "integration/snapshots/test-runner/expect_comparison_helpers_accept_ordered_values/expect_abs_approx_with_delta_above_boundary_fails_with_assertion_message.stdout.txt",
     );
 }
