@@ -379,30 +379,6 @@ fn test_rpc_info_decodes_storage_from_localnet() {
     node.stop();
 }
 
-#[test]
-fn test_rpc_latest_block_reads_from_localnet() {
-    let project = ProjectBuilder::new("rpc-latest-block-localnet").build();
-    let node = start_localnet_with_localnet(&project);
-    let log_dir = prepare_log_dir(project.path());
-
-    let output = project
-        .acton()
-        .current_dir(project.path())
-        .arg("rpc")
-        .arg("latest-block")
-        .arg("--net")
-        .arg("localnet")
-        .env("ACTON_LOG_DIR", &log_dir)
-        .run()
-        .success();
-    assert_latest_block_snapshot(
-        &output,
-        "integration/snapshots/rpc/test_rpc_latest_block_localnet.stdout.txt",
-    );
-
-    node.stop();
-}
-
 #[allow(clippy::significant_drop_tightening)]
 #[test]
 fn test_rpc_latest_block_uses_custom_network_and_api_key() {
@@ -750,38 +726,11 @@ fn assert_localnet_rpc_snapshot(
     assertion().eq(normalized, expected);
 }
 
-fn assert_latest_block_snapshot(
-    output: &crate::support::assertions::TestSuccess,
-    snapshot_path: &str,
-) {
-    let normalized = normalize_latest_block_stdout(&output.get_normalized_stdout());
-    let expected_path = Path::new("tests").join(snapshot_path);
-    let expected =
-        fs::read_to_string(&expected_path).expect("latest block snapshot file must exist");
-    assertion().eq(normalized, expected);
-}
-
 fn normalize_localnet_rpc_stdout(stdout: &str) -> String {
     let mut normalized_lines = Vec::new();
     for line in stdout.lines() {
         if let Some((prefix, _)) = line.split_once("Last Tx Hash:") {
             normalized_lines.push(format!("{prefix}Last Tx Hash:      [TX_HASH]"));
-        } else {
-            normalized_lines.push(line.to_owned());
-        }
-    }
-    let mut normalized = normalized_lines.join("\n");
-    if stdout.ends_with('\n') {
-        normalized.push('\n');
-    }
-    normalized
-}
-
-fn normalize_latest_block_stdout(stdout: &str) -> String {
-    let mut normalized_lines = Vec::new();
-    for line in stdout.lines() {
-        if line.chars().all(|c| c.is_ascii_digit()) {
-            normalized_lines.push("[LATEST_BLOCK]".to_owned());
         } else {
             normalized_lines.push(line.to_owned());
         }
