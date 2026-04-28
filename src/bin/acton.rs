@@ -1927,6 +1927,7 @@ fn main() {
                         }))
                         .expect("JSON serialization should not fail")
                     );
+                    process::exit(1);
                 }
                 return;
             }
