@@ -379,6 +379,72 @@ fn test_rpc_info_decodes_storage_from_localnet() {
     node.stop();
 }
 
+#[test]
+fn test_rpc_latest_block_reads_from_localnet() {
+    let project = ProjectBuilder::new("rpc-latest-block-localnet").build();
+    let node = start_localnet_with_localnet(&project);
+    let log_dir = prepare_log_dir(project.path());
+
+    let output = project
+        .acton()
+        .current_dir(project.path())
+        .arg("rpc")
+        .arg("latest-block")
+        .arg("--net")
+        .arg("localnet")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run()
+        .success();
+    assert_latest_block_snapshot(
+        &output,
+        "integration/snapshots/rpc/test_rpc_latest_block_localnet.stdout.txt",
+    );
+
+    node.stop();
+}
+
+#[allow(clippy::significant_drop_tightening)]
+#[test]
+fn test_rpc_latest_block_uses_custom_network_and_api_key() {
+    let project = ProjectBuilder::new("rpc-latest-block-custom-network").build();
+    let log_dir = prepare_log_dir(project.path());
+    let (mock_url, mock_handle, captured) =
+        spawn_toncenter_v2_mock(vec![toncenter_v2_masterchain_info_ok_response(123_456)]);
+    write_custom_network_config(project.path(), "mock", &mock_url);
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("rpc")
+        .arg("latest-block")
+        .arg("--net")
+        .arg("custom:mock")
+        .env("MOCK_API_KEY", "custom-mock-api-key")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/rpc/test_rpc_latest_block_custom_network.stdout.txt",
+        );
+
+    mock_handle.join().expect("mock server thread must finish");
+
+    let captured = captured
+        .lock()
+        .expect("captured requests mutex should not be poisoned");
+    assert_eq!(captured.len(), 1, "expected exactly one TonCenter request");
+    assert_eq!(captured[0].method, "GET");
+    assert_eq!(
+        captured[0].path, "/api/v2/getMasterchainInfo",
+        "unexpected request path"
+    );
+    assert_eq!(
+        header_value(&captured[0].headers, "X-API-Key"),
+        Some("custom-mock-api-key"),
+        "rpc latest-block should send TonCenter API keys for custom networks from MOCK_API_KEY",
+    );
+}
+
 #[derive(Debug, Clone)]
 struct ToncenterV2MockResponse {
     status: u16,
@@ -558,6 +624,25 @@ fn toncenter_v2_account_info_ok_response(
     }
 }
 
+fn toncenter_v2_masterchain_info_ok_response(seqno: u64) -> ToncenterV2MockResponse {
+    ToncenterV2MockResponse {
+        status: 200,
+        body: serde_json::json!({
+            "result": {
+                "last": {
+                    "@type": "ton.blockIdExt",
+                    "workchain": -1,
+                    "shard": "-9223372036854775808",
+                    "seqno": seqno,
+                    "root_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                    "file_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                }
+            }
+        })
+        .to_string(),
+    }
+}
+
 fn test_cell_boc64(value: u32) -> String {
     let mut builder = CellBuilder::new();
     builder.store_u32(value).expect("must store u32");
@@ -665,11 +750,38 @@ fn assert_localnet_rpc_snapshot(
     assertion().eq(normalized, expected);
 }
 
+fn assert_latest_block_snapshot(
+    output: &crate::support::assertions::TestSuccess,
+    snapshot_path: &str,
+) {
+    let normalized = normalize_latest_block_stdout(&output.get_normalized_stdout());
+    let expected_path = Path::new("tests").join(snapshot_path);
+    let expected =
+        fs::read_to_string(&expected_path).expect("latest block snapshot file must exist");
+    assertion().eq(normalized, expected);
+}
+
 fn normalize_localnet_rpc_stdout(stdout: &str) -> String {
     let mut normalized_lines = Vec::new();
     for line in stdout.lines() {
         if let Some((prefix, _)) = line.split_once("Last Tx Hash:") {
             normalized_lines.push(format!("{prefix}Last Tx Hash:      [TX_HASH]"));
+        } else {
+            normalized_lines.push(line.to_owned());
+        }
+    }
+    let mut normalized = normalized_lines.join("\n");
+    if stdout.ends_with('\n') {
+        normalized.push('\n');
+    }
+    normalized
+}
+
+fn normalize_latest_block_stdout(stdout: &str) -> String {
+    let mut normalized_lines = Vec::new();
+    for line in stdout.lines() {
+        if line.chars().all(|c| c.is_ascii_digit()) {
+            normalized_lines.push("[LATEST_BLOCK]".to_owned());
         } else {
             normalized_lines.push(line.to_owned());
         }

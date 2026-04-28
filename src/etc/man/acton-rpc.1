@@ -4,13 +4,17 @@
 .ad l
 .ss \n[.ss] 0
 .SH "NAME"
-acton\-rpc \[em] Inspect remote account state and decode contract storage
+acton\-rpc \[em] Inspect remote chain and account state
 .SH "SYNOPSIS"
 \fBacton rpc\fR [\fIoptions\fR] \fIcommand\fR
 .SH "DESCRIPTION"
 Query blockchain account state through a configured network endpoint.
 .sp
 \fBacton rpc\fR is intended for fast inspection workflows when you want to:
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'fetch the latest masterchain block number for a network
+.RE
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'check whether an account is active, frozen, or uninitialized
@@ -77,6 +81,24 @@ hashes
 .sp
 If no local ABI match is found, Acton still prints the raw remote account
 information and reports that decoded storage is unavailable.
+.SS "acton rpc latest-block"
+Print the latest masterchain block number for a network.
+.SS "Synopsis"
+\fBacton rpc latest\-block\fR [\fIoptions\fR]
+.SS "Options"
+.sp
+\fB\-\-net\fR \fInetwork\fR
+.RS 4
+Network to query.
+.sp
+Defaults to \fBtestnet\fR\&.
+.sp
+Supported values include \fBmainnet\fR, \fBtestnet\fR, \fBlocalnet\fR, and
+\fBcustom:<name>\fR\&.
+.RE
+.SS "Output"
+\fBacton rpc latest\-block\fR prints only the latest masterchain block \fBseqno\fR as a
+decimal number.
 .SH "DISPLAY OPTIONS"
 .sp
 \fB\-\-color\fR \fIwhen\fR
@@ -200,6 +222,16 @@ acton rpc info EQC... \-\-net localnet
 .RS 4
 .nf
 acton \-\-manifest\-path ../incident/Acton.toml rpc info EQC... \-\-net custom:staging
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 5.\h'+01'Print the latest mainnet masterchain block number:
+.sp
+.RS 4
+.nf
+acton rpc latest\-block \-\-net mainnet
 .fi
 .RE
 .RE

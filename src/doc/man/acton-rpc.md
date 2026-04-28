@@ -2,7 +2,7 @@
 
 ## Name
 
-acton-rpc --- Inspect remote account state and decode contract storage
+acton-rpc --- Inspect remote chain and account state
 
 ## Synopsis
 
@@ -14,6 +14,7 @@ Query blockchain account state through a configured network endpoint.
 
 `acton rpc` is intended for fast inspection workflows when you want to:
 
+- fetch the latest masterchain block number for a network
 - check whether an account is active, frozen, or uninitialized
 - inspect balance, last transaction metadata, and state hashes
 - match deployed code against a local Acton project by `code_hash`
@@ -67,6 +68,34 @@ Supported values include `mainnet`, `testnet`, `localnet`, and
 
 If no local ABI match is found, Acton still prints the raw remote account
 information and reports that decoded storage is unavailable.
+
+### acton rpc latest-block
+
+Print the latest masterchain block number for a network.
+
+#### Synopsis
+
+`acton rpc latest-block` [_options_]
+
+#### Options
+
+{{#options}}
+
+{{#option "`--net` _network_" }}
+Network to query.
+
+Defaults to `testnet`.
+
+Supported values include `mainnet`, `testnet`, `localnet`, and
+`custom:<name>`.
+{{/option}}
+
+{{/options}}
+
+#### Output
+
+`acton rpc latest-block` prints only the latest masterchain block `seqno` as a
+decimal number.
 
 ## Display Options
 
@@ -142,6 +171,12 @@ project, but not guaranteed for arbitrary third-party deployments.
 
    ```bash
    acton --manifest-path ../incident/Acton.toml rpc info EQC... --net custom:staging
+   ```
+
+5. Print the latest mainnet masterchain block number:
+
+   ```bash
+   acton rpc latest-block --net mainnet
    ```
 
 ## See Also

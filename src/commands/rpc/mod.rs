@@ -31,11 +31,20 @@ pub enum RpcCommand {
         )]
         net: Option<String>,
     },
+    #[command(about = "Print the latest masterchain block number for a network")]
+    LatestBlock {
+        #[arg(
+            long,
+            help = "Network to query (defaults to testnet). Supported values: mainnet, testnet, localnet, custom:<name>"
+        )]
+        net: Option<String>,
+    },
 }
 
 pub fn rpc_cmd(command: RpcCommand) -> anyhow::Result<()> {
     match command {
         RpcCommand::Info { address, net } => rpc_info_cmd(&address, net),
+        RpcCommand::LatestBlock { net } => rpc_latest_block_cmd(net),
     }
 }
 
@@ -44,12 +53,7 @@ fn rpc_info_cmd(address: &str, net: Option<String>) -> anyhow::Result<()> {
         .map_err(|_| anyhow!("Invalid address"))
         .with_context(|| error_fmt::invalid_address(address))?;
 
-    let network = net
-        .as_deref()
-        .map(Network::from_str)
-        .transpose()?
-        .unwrap_or(Network::Testnet);
-
+    let network = resolve_rpc_network(net)?;
     let config = load_rpc_config()?;
     let client = TonApiClient::new(network.clone(), config.custom_networks())?;
 
@@ -143,6 +147,26 @@ fn rpc_info_cmd(address: &str, net: Option<String>) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn rpc_latest_block_cmd(net: Option<String>) -> anyhow::Result<()> {
+    let network = resolve_rpc_network(net)?;
+    let config = load_rpc_config()?;
+    let client = TonApiClient::new(network.clone(), config.custom_networks())?;
+
+    let seqno = client
+        .get_last_block_seqno()
+        .with_context(|| format!("Failed to fetch latest block from {network}"))?;
+    println!("{seqno}");
+
+    Ok(())
+}
+
+fn resolve_rpc_network(net: Option<String>) -> anyhow::Result<Network> {
+    net.as_deref()
+        .map(Network::from_str)
+        .transpose()
+        .map(|network| network.unwrap_or(Network::Testnet))
 }
 
 fn load_rpc_config() -> anyhow::Result<ActonConfig> {
