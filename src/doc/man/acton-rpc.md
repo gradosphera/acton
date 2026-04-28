@@ -15,6 +15,7 @@ Query blockchain account state through a configured network endpoint.
 `acton rpc` is intended for fast inspection workflows when you want to:
 
 - fetch the latest masterchain block number for a network
+- inspect the latest masterchain block object returned by TonCenter
 - check whether an account is active, frozen, or uninitialized
 - inspect balance, last transaction metadata, and state hashes
 - render a TonCenter v3 trace as a decoded transaction tree
@@ -70,13 +71,13 @@ Supported values include `mainnet`, `testnet`, `localnet`, and
 If no local ABI match is found, Acton still prints the raw remote account
 information and reports that decoded storage is unavailable.
 
-### acton rpc latest-block
+### acton rpc block
 
-Print the latest masterchain block number for a network.
+Print the latest masterchain block info returned by TonCenter.
 
 #### Synopsis
 
-`acton rpc latest-block` [_options_]
+`acton rpc block` [_options_]
 
 #### Options
 
@@ -95,7 +96,35 @@ Supported values include `mainnet`, `testnet`, `localnet`, and
 
 #### Output
 
-`acton rpc latest-block` prints only the latest masterchain block `seqno` as a
+`acton rpc block` prints the full TonCenter `getMasterchainInfo` JSON response
+for the selected network.
+
+### acton rpc block-number
+
+Print the latest masterchain block number for a network.
+
+#### Synopsis
+
+`acton rpc block-number` [_options_]
+
+#### Options
+
+{{#options}}
+
+{{#option "`--net` _network_" }}
+Network to query.
+
+Defaults to `testnet`.
+
+Supported values include `mainnet`, `testnet`, `localnet`, and
+`custom:<name>`.
+{{/option}}
+
+{{/options}}
+
+#### Output
+
+`acton rpc block-number` prints only the latest masterchain block `seqno` as a
 decimal number.
 
 ### acton rpc trace
@@ -233,13 +262,19 @@ project, but not guaranteed for arbitrary third-party deployments.
    acton --manifest-path ../incident/Acton.toml rpc info EQC... --net custom:staging
    ```
 
-5. Print the latest mainnet masterchain block number:
+5. Print the latest mainnet masterchain block JSON:
 
    ```bash
-   acton rpc latest-block --net mainnet
+   acton rpc block --net mainnet
    ```
 
-6. Print a transaction trace from localnet:
+6. Print the latest mainnet masterchain block number:
+
+   ```bash
+   acton rpc block-number --net mainnet
+   ```
+
+7. Print a transaction trace from localnet:
 
    ```bash
    acton rpc trace <tx-hash> --net localnet

@@ -13,6 +13,8 @@ DESCRIPTION
 
        o  fetch the latest masterchain block number for a network
 
+       o  inspect the latest masterchain block object returned by TonCenter
+
        o  check whether an account is active, frozen, or uninitialized
 
        o  inspect balance, last transaction metadata, and state hashes
@@ -66,11 +68,11 @@ SUBCOMMANDS
           If no local ABI match is found, Acton still prints the raw remote
           account information and reports that decoded storage is unavailable.
 
-   acton rpc latest-block
-       Print the latest masterchain block number for a network.
+   acton rpc block
+       Print the latest masterchain block info returned by TonCenter.
 
       Synopsis
-          acton rpc latest-block [options]
+          acton rpc block [options]
 
       Options
           --net network
@@ -82,7 +84,26 @@ SUBCOMMANDS
               custom:<name>.
 
       Output
-          acton rpc latest-block prints only the latest masterchain block seqno
+          acton rpc block prints the full TonCenter getMasterchainInfo JSON
+          response for the selected network.
+
+   acton rpc block-number
+       Print the latest masterchain block number for a network.
+
+      Synopsis
+          acton rpc block-number [options]
+
+      Options
+          --net network
+              Network to query.
+
+              Defaults to testnet.
+
+              Supported values include mainnet, testnet, localnet, and
+              custom:<name>.
+
+      Output
+          acton rpc block-number prints only the latest masterchain block seqno
           as a decimal number.
 
    acton rpc trace
@@ -218,11 +239,15 @@ EXAMPLES
 
               acton --manifest-path ../incident/Acton.toml rpc info EQC... --net custom:staging
 
-       5. Print the latest mainnet masterchain block number:
+       5. Print the latest mainnet masterchain block JSON:
 
-              acton rpc latest-block --net mainnet
+              acton rpc block --net mainnet
 
-       6. Print a transaction trace from localnet:
+       6. Print the latest mainnet masterchain block number:
+
+              acton rpc block-number --net mainnet
+
+       7. Print a transaction trace from localnet:
 
               acton rpc trace <tx-hash> --net localnet
 

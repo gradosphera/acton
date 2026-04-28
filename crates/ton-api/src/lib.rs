@@ -375,7 +375,7 @@ impl TonApiClient {
         Ok(())
     }
 
-    pub fn get_last_block_seqno(&self) -> anyhow::Result<u64> {
+    fn get_masterchain_info_response(&self) -> anyhow::Result<Response> {
         let url = format!(
             "{}/getMasterchainInfo",
             self.network.toncenter_v2_url(&self.custom_networks)?
@@ -390,24 +390,35 @@ impl TonApiClient {
             return Err(Self::handle_fail(response));
         }
 
+        Ok(response)
+    }
+
+    pub fn get_masterchain_info(&self) -> anyhow::Result<serde_json::Value> {
+        self.get_masterchain_info_response()?
+            .json()
+            .context("Failed to parse TonCenter response")
+    }
+
+    pub fn get_last_block_seqno(&self) -> anyhow::Result<u64> {
         #[derive(Deserialize)]
         struct TonCenterMasterchainInfoResponse {
-            pub result: TonCenterMasterchainInfoResult,
+            result: TonCenterMasterchainInfoResult,
         }
 
         #[derive(Deserialize)]
         struct TonCenterMasterchainInfoResult {
-            pub last: TonCenterMasterchainInfoLastBlock,
+            last: TonCenterMasterchainInfoLastBlock,
         }
 
         #[derive(Deserialize)]
         struct TonCenterMasterchainInfoLastBlock {
-            pub seqno: u64,
+            seqno: u64,
         }
 
-        let data: TonCenterMasterchainInfoResponse = response
-            .json()
-            .context("Failed to parse TonCenter response")?;
+        let data: TonCenterMasterchainInfoResponse =
+            self.get_masterchain_info_response()?
+                .json()
+                .context("Failed to parse TonCenter response")?;
 
         Ok(data.result.last.seqno)
     }

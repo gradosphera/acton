@@ -17,6 +17,10 @@ Query blockchain account state through a configured network endpoint.
 .RE
 .sp
 .RS 4
+\h'-04'\(bu\h'+03'inspect the latest masterchain block object returned by TonCenter
+.RE
+.sp
+.RS 4
 \h'-04'\(bu\h'+03'check whether an account is active, frozen, or uninitialized
 .RE
 .sp
@@ -85,10 +89,10 @@ hashes
 .sp
 If no local ABI match is found, Acton still prints the raw remote account
 information and reports that decoded storage is unavailable.
-.SS "acton rpc latest-block"
-Print the latest masterchain block number for a network.
+.SS "acton rpc block"
+Print the latest masterchain block info returned by TonCenter.
 .SS "Synopsis"
-\fBacton rpc latest\-block\fR [\fIoptions\fR]
+\fBacton rpc block\fR [\fIoptions\fR]
 .SS "Options"
 .sp
 \fB\-\-net\fR \fInetwork\fR
@@ -101,7 +105,25 @@ Supported values include \fBmainnet\fR, \fBtestnet\fR, \fBlocalnet\fR, and
 \fBcustom:<name>\fR\&.
 .RE
 .SS "Output"
-\fBacton rpc latest\-block\fR prints only the latest masterchain block \fBseqno\fR as a
+\fBacton rpc block\fR prints the full TonCenter \fBgetMasterchainInfo\fR JSON response
+for the selected network.
+.SS "acton rpc block-number"
+Print the latest masterchain block number for a network.
+.SS "Synopsis"
+\fBacton rpc block\-number\fR [\fIoptions\fR]
+.SS "Options"
+.sp
+\fB\-\-net\fR \fInetwork\fR
+.RS 4
+Network to query.
+.sp
+Defaults to \fBtestnet\fR\&.
+.sp
+Supported values include \fBmainnet\fR, \fBtestnet\fR, \fBlocalnet\fR, and
+\fBcustom:<name>\fR\&.
+.RE
+.SS "Output"
+\fBacton rpc block\-number\fR prints only the latest masterchain block \fBseqno\fR as a
 decimal number.
 .SS "acton rpc trace"
 Fetch a TonCenter v3 trace by root transaction hash and render it in a stable
@@ -299,17 +321,27 @@ acton \-\-manifest\-path ../incident/Acton.toml rpc info EQC... \-\-net custom:s
 .RE
 .sp
 .RS 4
-\h'-04' 5.\h'+01'Print the latest mainnet masterchain block number:
+\h'-04' 5.\h'+01'Print the latest mainnet masterchain block JSON:
 .sp
 .RS 4
 .nf
-acton rpc latest\-block \-\-net mainnet
+acton rpc block \-\-net mainnet
 .fi
 .RE
 .RE
 .sp
 .RS 4
-\h'-04' 6.\h'+01'Print a transaction trace from localnet:
+\h'-04' 6.\h'+01'Print the latest mainnet masterchain block number:
+.sp
+.RS 4
+.nf
+acton rpc block\-number \-\-net mainnet
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 7.\h'+01'Print a transaction trace from localnet:
 .sp
 .RS 4
 .nf
