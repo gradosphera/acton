@@ -27,9 +27,15 @@ const GITIGNORE_GROUPS: &[(&str, &[&str])] = &[
     ),
 ];
 
-pub fn init_cmd(create_app_path: Option<&Path>) -> anyhow::Result<()> {
+pub fn init_cmd(create_app_path: Option<&Path>, stdlib_only: bool) -> anyhow::Result<()> {
     if create_app_path.is_some() {
         return create_app_cmd(create_app_path);
+    }
+
+    if stdlib_only {
+        stdlib::update_latest(Path::new("."))?;
+        println!("\n{}", "✓ Updated Acton standard library".green().bold());
+        return Ok(());
     }
 
     let acton_toml_exists = Path::new("Acton.toml").exists();
