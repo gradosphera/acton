@@ -32,7 +32,7 @@ use acton_debug::replayer::TolkReplayer;
 use acton_debug::{
     DapTransport, ReplayerDebugSession, reserve_dap_listener, start_dap_server_with_listener,
 };
-use anyhow::anyhow;
+use anyhow::{Context as _, anyhow};
 use dunce;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use log::{debug, error, warn};
@@ -44,6 +44,7 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::{fs, process};
@@ -238,12 +239,77 @@ impl<'a> TestRunner<'a> {
                 max_executor_verbosity(verbosity, ExecutorVerbosity::FullLocationStackVerbose);
         }
 
-        if self.config.coverage {
-            // for coverage, we need at least locations to map to actual source code
+        if self.config.coverage || self.config.show_callgraph {
+            // for coverage and callgraph replay, we need at least locations to map to actual source code
             verbosity = max_executor_verbosity(verbosity, ExecutorVerbosity::FullLocationStack);
         }
 
         verbosity
+    }
+
+    fn preload_local_contract_debug_info(&mut self) -> anyhow::Result<()> {
+        let Some(contracts) = self.acton_config.contracts().cloned() else {
+            return Ok(());
+        };
+
+        let mappings = self.acton_config.mappings();
+        for (contract_id, contract) in contracts {
+            let contract_path = contract.absolute_source_path(&self.project_root);
+            if contract_path.extension().is_some_and(|ext| ext == "boc") {
+                continue;
+            }
+
+            let contract_key = contract_path.to_string_lossy().to_string();
+            let normal = self
+                .file_build_cache
+                .get(&contract_key, false, false, 2, "1.3");
+            let Some(normal) = normal else {
+                warn!("No build cache for contract {}", contract.src);
+                continue;
+            };
+
+            let compiler = tolk_compiler::Compiler::new(2).with_mappings(&mappings);
+            let debug = match compiler.compile(&contract_path, true) {
+                tolk_compiler::CompilerResult::Success(result) => {
+                    let _ =
+                        self.file_build_cache
+                            .put(&contract_key, &result, true, false, 2, "1.3");
+                    result
+                }
+                tolk_compiler::CompilerResult::Error(err) => {
+                    warn!(
+                        "Cannot compile debug info for {}: {}",
+                        contract.src, err.message
+                    );
+                    continue;
+                }
+            };
+
+            let code_cell = Boc::decode_base64(&normal.code_boc64)
+                .with_context(|| format!("Failed to decode code BoC for {}", contract.src))?;
+            let source_map = Arc::new(TolkSourceMap::from_code_cell(
+                debug.new_source_map.unwrap_or_default(),
+                &code_cell,
+                debug.debug_mark_base64.as_deref(),
+            )?);
+            let content: Arc<str> = fs::read_to_string(&contract_path)
+                .unwrap_or_default()
+                .into();
+            let contract_path_display = contract_path.display().to_string();
+            let abi = contract_abi(content, &contract_path_display, &mappings);
+
+            self.build_cache.memoize(
+                contract.display_name(&contract_id),
+                &contract_path,
+                &normal.code_boc64,
+                HashBytes::from_str(&normal.code_hash_hex)?,
+                source_map,
+                Some(Arc::new(abi)),
+                debug.abi.map(Arc::new),
+            );
+        }
+
+        Ok(())
     }
 
     fn execute_test(
@@ -338,6 +404,7 @@ impl<'a> TestRunner<'a> {
                 project_root: self.project_root.clone(),
                 abi,
                 show_bodies: self.config.show_bodies,
+                show_callgraph: self.config.show_callgraph,
                 default_log_level: verbosity,
                 wallets: self.acton_config.wallets.as_ref(),
                 open_wallets: Default::default(), // in tests, we never use real wallets
@@ -369,7 +436,8 @@ impl<'a> TestRunner<'a> {
                 known_code_cells: &mut self.known_code_cells,
                 need_debug_info: self.config.debug
                     || self.config.backtrace == Some(BacktraceMode::Full)
-                    || self.config.coverage,
+                    || self.config.coverage
+                    || self.config.show_callgraph,
                 backtrace: self.config.backtrace,
             },
             debug: DebugCtx::Disabled,
@@ -630,6 +698,9 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         &mut global_reporter,
         build_overrides_for_mutations(&config)?,
     )?;
+    if config.coverage || config.show_callgraph {
+        runner.preload_local_contract_debug_info()?;
+    }
 
     for (index, file) in test_files.iter().enumerate() {
         let result = run_tests_for_file(&mut runner, file);
@@ -1011,8 +1082,10 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
     );
 
     let config = &runner.config;
-    let need_debug_info =
-        config.debug || config.backtrace == Some(BacktraceMode::Full) || config.coverage;
+    let need_debug_info = config.debug
+        || config.backtrace == Some(BacktraceMode::Full)
+        || config.coverage
+        || config.show_callgraph;
 
     let now = Instant::now();
     let compilation_result = compile_test_file(
@@ -1113,6 +1186,7 @@ fn run_file_tests(
             compiler_abi: compiler_abi.clone(),
             source_map: source_map.clone(),
             show_bodies: runner.config.show_bodies,
+            show_callgraph: runner.config.show_callgraph,
             backtrace: runner.config.backtrace,
             execution: None,
             trace_path: runner
@@ -1259,6 +1333,7 @@ fn run_file_tests(
                 known_addresses: Cow::Borrowed(&runner.known_addresses),
                 known_code_cells: Cow::Borrowed(&runner.known_code_cells),
                 show_bodies: runner.config.show_bodies,
+                show_callgraph: runner.config.show_callgraph,
                 has_wallets_config: false,
                 available_wallets: vec![],
                 backtrace: runner.config.backtrace,

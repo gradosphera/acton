@@ -709,6 +709,7 @@ pub struct Env<'a> {
     pub project_root: PathBuf,
     pub abi: Arc<ContractAbi>,
     pub show_bodies: bool,
+    pub show_callgraph: bool,
     pub default_log_level: ExecutorVerbosity,
     pub wallets: Option<&'a WalletsConfig>,
     pub open_wallets: BTreeMap<String, Wallet>,

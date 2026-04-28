@@ -1764,6 +1764,12 @@ impl ActonCommand {
         self
     }
 
+    /// Show replayed call graphs in printed transaction trees.
+    pub(crate) fn show_callgraph(mut self) -> Self {
+        self.cmd = self.cmd.arg("--show-callgraph");
+        self
+    }
+
     fn into_prepared_command(mut self) -> ProcessCommandBuilder {
         if let Some(path) = self.test_path {
             self.cmd = self.cmd.arg(path);

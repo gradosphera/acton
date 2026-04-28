@@ -203,6 +203,94 @@ get fun `test show bodies prints decoded transaction body`() {
         )
 }
 
+fn callgraph_printing_test_project(project_name: &str) -> ProjectBuilder {
+    ProjectBuilder::new(project_name)
+        .file(
+            "contracts/callgraph_messages",
+            r"
+struct (0xF8000002) CallGraphPing {
+    value: uint32
+}
+",
+        )
+        .contract(
+            "callgraph_sink",
+            r#"
+import "callgraph_messages"
+
+contract CallGraphSink {
+    incomingMessages: CallGraphPing
+}
+
+fun onInternalMessage(in: InMessage) {
+    if (in.body.isEmpty()) {
+        return;
+    }
+
+    val msg = lazy CallGraphPing.fromSlice(in.body);
+    handlePing(msg.value);
+}
+
+fun handlePing(value: uint32) {
+    val normalized = normalizePing(value);
+    acceptPing(normalized);
+}
+
+fun normalizePing(value: uint32): uint32 {
+    return value + 1;
+}
+
+fun acceptPing(value: uint32) {
+    if (value > 0) {
+        return;
+    }
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+"#,
+        )
+        .test_file(
+            "print_callgraph",
+            r#"
+import "../../lib/build"
+import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
+import "../../lib/io"
+import "../../lib/testing/expect"
+import "../contracts/callgraph_messages"
+
+get fun `test show callgraph prints replayed transaction callgraph`() {
+    val sender = testing.treasury("sender");
+    val init = ContractState {
+        code: build("callgraph_sink"),
+        data: createEmptyCell(),
+    };
+    val sinkAddress = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("1"),
+        dest: {
+            stateInit: init,
+        },
+    }));
+
+    val txs = net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("0.1"),
+        dest: sinkAddress,
+        body: CallGraphPing {
+            value: 7,
+        },
+    }));
+
+    expect(txs).toHaveLength(1);
+    println(txs);
+}
+"#,
+        )
+}
+
 #[test]
 fn test_run_specific_test_file() {
     let project = ProjectBuilder::new("multi-file")
@@ -510,6 +598,76 @@ fn test_show_bodies_flag_decodes_transaction_bodies_in_test_output() {
         .assert_passed(1)
         .assert_snapshot_matches(
             "integration/snapshots/flags/test_show_bodies_flag_decodes_transaction_bodies_in_test_output.stdout.txt",
+        );
+}
+
+#[test]
+fn test_show_callgraph_flag_renders_replayed_transaction_callgraph() {
+    callgraph_printing_test_project("test-show-callgraph-flag")
+        .build()
+        .acton()
+        .test()
+        .show_callgraph()
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_show_callgraph_flag_renders_replayed_transaction_callgraph.stdout.txt",
+        );
+}
+
+#[test]
+fn test_show_callgraph_flag_renders_jetton_template_wallet_transfer_callgraph() {
+    let project = ProjectBuilder::new("test-show-callgraph-jetton-template")
+        .without_acton_toml()
+        .build();
+    let project_dir = project.path().join("jetton");
+
+    project
+        .acton()
+        .arg("new")
+        .arg(&project_dir.display().to_string())
+        .arg("--name")
+        .arg("jetton-callgraph")
+        .arg("--description")
+        .arg("Jetton callgraph test")
+        .arg("--template")
+        .arg("jetton")
+        .arg("--license")
+        .arg("MIT")
+        .run()
+        .success();
+
+    let wallet_behavior_test = project_dir.join("tests/wallet-behavior.test.tolk");
+    let wallet_behavior_source =
+        fs::read_to_string(&wallet_behavior_test).expect("failed to read jetton wallet test");
+    fs::write(
+        &wallet_behavior_test,
+        wallet_behavior_source
+            .replace(
+                "import \"@acton/emulation/network\"",
+                "import \"@acton/io\"\nimport \"@acton/emulation/network\"",
+            )
+            .replace(
+                "    expect(res).toHaveSuccessfulTx<AskToTransfer>({",
+                "    println(res);\n    expect(res).toHaveSuccessfulTx<AskToTransfer>({",
+            ),
+    )
+    .expect("failed to patch jetton wallet test");
+
+    project
+        .acton()
+        .current_dir(&project_dir)
+        .arg("test")
+        .arg("--filter")
+        .arg("test wallet: owner can send jettons")
+        .arg("--show-callgraph")
+        .arg("--clear-cache")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_show_callgraph_flag_renders_jetton_template_wallet_transfer_callgraph.stdout.txt",
         );
 }
 

@@ -321,6 +321,12 @@ enum Commands {
         show_bodies: bool,
         #[arg(
             long,
+            help = "Show replayed source call graphs in printed transaction trees",
+            help_heading = "Reporting"
+        )]
+        show_callgraph: bool,
+        #[arg(
+            long,
             default_value = "test-results",
             help = "JUnit XML output directory",
             help_heading = "Reporting"
@@ -1722,6 +1728,7 @@ fn main() {
             filter,
             reporter,
             show_bodies,
+            show_callgraph,
             verbose,
             debug,
             debug_port,
@@ -1767,6 +1774,7 @@ fn main() {
                 let config = create_test_config(
                     filter,
                     show_bodies,
+                    show_callgraph,
                     verbose,
                     debug,
                     debug_port,
@@ -2331,6 +2339,7 @@ fn setup_logging() -> anyhow::Result<()> {
 fn create_test_config(
     filter: Option<String>,
     show_bodies: bool,
+    show_callgraph: bool,
     verbosity: u8,
     debug: bool,
     debug_port: Option<u16>,
@@ -2379,6 +2388,7 @@ fn create_test_config(
             filter,
             report_formats,
             show_bodies,
+            show_callgraph,
             if debug { Some(true) } else { None },
             debug_port,
             backtrace,
@@ -2440,6 +2450,7 @@ fn create_test_config(
 
     TestConfig {
         show_bodies,
+        show_callgraph,
         verbosity,
         debug,
         debug_port: debug_port.unwrap_or(12345),

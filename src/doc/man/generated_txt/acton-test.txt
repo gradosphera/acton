@@ -116,6 +116,9 @@ OPTIONS
            Show decoded message bodies in printed transaction trees when ABI is
            known.
 
+       --show-callgraph
+           Show replayed source call graphs in printed transaction trees.
+
        --junit-path path
            Output directory for JUnit XML reports.
 

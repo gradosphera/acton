@@ -10,7 +10,10 @@ use crate::retrace::{
 };
 use acton_config::color::OwoColorize;
 use acton_config::test::BacktraceMode;
-use acton_debug::exit_codes;
+use acton_debug::{
+    exit_codes,
+    replayer::{CallFrameInfo, StepMode, Tick, TolkReplayer},
+};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use rustc_hash::FxHashMap;
@@ -72,7 +75,167 @@ enum MessageBodyDirection {
 
 enum FormattedExtraInfo {
     Tree(String),
+    StandaloneTree(String),
     Annotation(String),
+}
+
+impl FormattedExtraInfo {
+    fn is_tree(&self) -> bool {
+        matches!(self, Self::Tree(_) | Self::StandaloneTree(_))
+    }
+}
+
+#[derive(Debug, Default)]
+struct CallGraphNode {
+    label: String,
+    params: Vec<(String, String)>,
+    return_value: Option<String>,
+    children: Vec<CallGraphNode>,
+}
+
+impl CallGraphNode {
+    fn insert_path(&mut self, path: &[String]) {
+        let Some((label, rest)) = path.split_first() else {
+            return;
+        };
+
+        let child_idx = self
+            .children
+            .iter()
+            .position(|child| child.label == *label)
+            .unwrap_or_else(|| {
+                self.children.push(Self {
+                    label: label.clone(),
+                    params: Vec::new(),
+                    return_value: None,
+                    children: Vec::new(),
+                });
+                self.children.len() - 1
+            });
+
+        self.children[child_idx].insert_path(rest);
+    }
+
+    fn set_return_value(&mut self, path: &[String], value: String) {
+        let Some((label, rest)) = path.split_first() else {
+            return;
+        };
+
+        let child_idx = self
+            .children
+            .iter()
+            .position(|child| child.label == *label)
+            .unwrap_or_else(|| {
+                self.children.push(Self {
+                    label: label.clone(),
+                    params: Vec::new(),
+                    return_value: None,
+                    children: Vec::new(),
+                });
+                self.children.len() - 1
+            });
+
+        if rest.is_empty() {
+            self.children[child_idx].return_value = Some(value);
+        } else {
+            self.children[child_idx].set_return_value(rest, value);
+        }
+    }
+
+    fn set_param(&mut self, path: &[String], name: String, value: String) {
+        let Some((label, rest)) = path.split_first() else {
+            return;
+        };
+
+        let child_idx = self
+            .children
+            .iter()
+            .position(|child| child.label == *label)
+            .unwrap_or_else(|| {
+                self.children.push(Self {
+                    label: label.clone(),
+                    params: Vec::new(),
+                    return_value: None,
+                    children: Vec::new(),
+                });
+                self.children.len() - 1
+            });
+
+        if rest.is_empty() {
+            let params = &mut self.children[child_idx].params;
+            if let Some((_, current_value)) = params.iter_mut().find(|(param, _)| param == &name) {
+                *current_value = value;
+            } else {
+                params.push((name, value));
+            }
+        } else {
+            self.children[child_idx].set_param(rest, name, value);
+        }
+    }
+
+    fn append_lines(&self, lines: &mut Vec<String>, prefix: &str) {
+        for (idx, child) in self.children.iter().enumerate() {
+            let is_last = idx == self.children.len() - 1;
+            let branch = (if is_last { "└── " } else { "├── " }).dimmed().to_string();
+            let params = if child.params.is_empty() {
+                String::new()
+            } else {
+                let rendered =
+                    truncate_callgraph_params(child.params.iter().map(|(name, value)| {
+                        format!("{name}: {}", truncate_callgraph_display_value(value, 48))
+                    }));
+                format!(" ({rendered})").dimmed().to_string()
+            };
+            let return_value = child
+                .return_value
+                .as_ref()
+                .map(|value| format!(" {} {}", "=>".dimmed(), value.dimmed()))
+                .unwrap_or_default();
+            lines.push(format!(
+                "{prefix}{branch}{}{params}{return_value}",
+                child.label
+            ));
+
+            let child_prefix = if is_last {
+                format!("{prefix}    ")
+            } else {
+                format!("{prefix}{}", "│   ".dimmed())
+            };
+            child.append_lines(lines, &child_prefix);
+        }
+    }
+}
+
+fn truncate_callgraph_params(parts: impl Iterator<Item = String>) -> String {
+    const MAX_PARAMS_LEN: usize = 160;
+    let mut rendered = String::new();
+
+    for part in parts {
+        let separator_len = usize::from(!rendered.is_empty()) * 2;
+        let next_len = rendered.chars().count() + separator_len + part.chars().count();
+        if next_len > MAX_PARAMS_LEN {
+            if !rendered.is_empty() {
+                rendered.push_str(", ");
+            }
+            rendered.push_str("...");
+            break;
+        }
+
+        if !rendered.is_empty() {
+            rendered.push_str(", ");
+        }
+        rendered.push_str(&part);
+    }
+
+    rendered
+}
+
+fn truncate_callgraph_display_value(value: &str, max_len: usize) -> String {
+    if value.chars().count() <= max_len {
+        return value.to_owned();
+    }
+
+    value.chars().take(max_len).chain("...".chars()).collect()
 }
 
 #[derive(Debug, Clone)]
@@ -114,6 +277,7 @@ pub struct FormatterContext<'a> {
     pub known_addresses: Cow<'a, KnownAddresses>,
     pub known_code_cells: Cow<'a, FxHashMap<HashBytes, String>>,
     pub show_bodies: bool,
+    pub show_callgraph: bool,
     pub has_wallets_config: bool,
     pub available_wallets: Vec<String>,
     pub backtrace: Option<BacktraceMode>,
@@ -132,6 +296,7 @@ impl<'a> FormatterContext<'a> {
             known_addresses: Cow::Owned(KnownAddresses::new()),
             known_code_cells: Cow::Owned(FxHashMap::default()),
             show_bodies: false,
+            show_callgraph: false,
             has_wallets_config: false,
             available_wallets: vec![],
             backtrace: None,
@@ -151,6 +316,7 @@ impl<'a> FormatterContext<'a> {
             known_addresses: Cow::Borrowed(ctx.build.known_addresses),
             known_code_cells: Cow::Borrowed(ctx.build.known_code_cells),
             show_bodies: ctx.env.show_bodies,
+            show_callgraph: ctx.env.show_callgraph,
             has_wallets_config: ctx.env.wallets.is_some(),
             available_wallets: ctx.env.open_wallets.keys().cloned().collect(),
             backtrace: ctx.build.backtrace,
@@ -902,6 +1068,143 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
         Some(self.format_decoded_message_body(&body))
     }
 
+    fn format_transaction_callgraph(&self, tx: &Transaction) -> Option<String> {
+        if !self.show_callgraph {
+            return None;
+        }
+
+        let tx_result = self.emulations.find_tx_by_lt(tx.lt)?;
+        let logs = tx_result.vm_log.as_ref();
+        if logs.is_empty() {
+            return None;
+        }
+
+        let (_, build_result) = self.build_cache.result_for_code(&tx_result.code)?;
+        let mut replayer = TolkReplayer::new(&build_result.source_map, logs).ok()?;
+        replayer.set_compiler_abi(build_result.compiler_abi.clone());
+        let mut root = CallGraphNode::default();
+        let mut last_path = Vec::<String>::new();
+        let mut current_scope = Vec::<String>::new();
+
+        while !replayer.is_finished() {
+            replayer.step_with_callback(StepMode::StepInto, |tick, replayer| {
+                let frames = replayer
+                    .call_stack()
+                    .into_iter()
+                    .filter(|frame| !frame.is_builtin)
+                    .collect::<Vec<_>>();
+                if frames.is_empty() {
+                    return;
+                }
+
+                let format_frame = |frame: &CallFrameInfo| {
+                    if frame.is_inlined {
+                        format!("{} {}", frame.f_name, "(inline)".dimmed())
+                    } else {
+                        frame.f_name.clone()
+                    }
+                };
+
+                let mut path = frames.iter().map(format_frame).collect::<Vec<_>>();
+                let scope = frames
+                    .iter()
+                    .take_while(|frame| !frame.is_inlined)
+                    .map(format_frame)
+                    .collect::<Vec<_>>();
+                if !scope.is_empty() {
+                    current_scope = scope;
+                } else if frames.first().is_some_and(|frame| frame.is_inlined)
+                    && !current_scope.is_empty()
+                {
+                    let mut scoped_path = current_scope.clone();
+                    scoped_path.extend(path);
+                    path = scoped_path;
+                }
+
+                match tick {
+                    Tick::Loc { .. } => {
+                        if path.is_empty() || path == last_path {
+                            return;
+                        }
+
+                        root.insert_path(&path);
+                        last_path = path;
+                    }
+                    Tick::AtFunReturn {
+                        f_idx, ir_return, ..
+                    } => {
+                        if let Some(value) =
+                            Self::format_callgraph_return_value(replayer, *f_idx, ir_return)
+                        {
+                            root.set_return_value(&path, value);
+                        }
+                    }
+                    Tick::LocalVar {
+                        var_name,
+                        is_parameter: true,
+                        ..
+                    } => {
+                        if path.is_empty() {
+                            return;
+                        }
+
+                        if let Some(value) = Self::format_callgraph_param_value(replayer, var_name)
+                        {
+                            root.set_param(&path, var_name.clone(), value);
+                        }
+                    }
+                    _ => {}
+                }
+            });
+        }
+
+        if root.children.is_empty() {
+            return None;
+        }
+
+        let mut lines = vec!["Call graph:".to_owned()];
+        root.append_lines(&mut lines, "    ");
+        Some(lines.join("\n"))
+    }
+
+    fn format_callgraph_return_value(
+        replayer: &TolkReplayer,
+        f_idx: usize,
+        ir_return: &[usize],
+    ) -> Option<String> {
+        let value = replayer.format_leave_return(f_idx, ir_return).to_string();
+        if value == "(void)" || value == "return type not found" {
+            return None;
+        }
+
+        Self::truncate_callgraph_value(value)
+    }
+
+    fn format_callgraph_param_value(replayer: &TolkReplayer, var_name: &str) -> Option<String> {
+        replayer
+            .locals_for_frame(0)
+            .into_iter()
+            .find(|local| local.var_name == var_name)
+            .and_then(|local| Self::truncate_callgraph_value(local.value.to_string()))
+    }
+
+    fn truncate_callgraph_value(value: String) -> Option<String> {
+        let value = value.trim().to_owned();
+        if value.is_empty() {
+            return None;
+        }
+
+        const MAX_CALLGRAPH_VALUE_LEN: usize = 80;
+        if value.chars().count() <= MAX_CALLGRAPH_VALUE_LEN {
+            return Some(value);
+        }
+
+        Some(truncate_callgraph_display_value(
+            &value,
+            MAX_CALLGRAPH_VALUE_LEN,
+        ))
+    }
+
     pub(crate) fn transaction_inbound_message_name(&self, tx: &Transaction) -> Option<String> {
         self.resolve_transaction_inbound_message_body(tx)
             .map(|body| body.name)
@@ -1541,6 +1844,9 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
         if let Some(body) = self.format_inbound_message_body(tx) {
             extra_infos.push(FormattedExtraInfo::Annotation(body));
         }
+        if let Some(callgraph) = self.format_transaction_callgraph(tx) {
+            extra_infos.push(FormattedExtraInfo::StandaloneTree(callgraph));
+        }
 
         let padding_len = 80usize.saturating_sub(prefix_len + main_part_visible_len);
 
@@ -1663,14 +1969,15 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
             result += "\n";
         }
 
-        for (idx, info) in extra_infos.iter().enumerate() {
-            match info {
-                FormattedExtraInfo::Tree(info) => {
+        for (idx, extra_info) in extra_infos.iter().enumerate() {
+            match extra_info {
+                FormattedExtraInfo::Tree(info) | FormattedExtraInfo::StandaloneTree(info) => {
+                    let strip_child_prefix = matches!(extra_info, FormattedExtraInfo::Tree(_));
                     let has_next_sibling = has_children
                         || extra_infos
                             .iter()
                             .skip(idx + 1)
-                            .any(|next| matches!(next, FormattedExtraInfo::Tree(_)));
+                            .any(FormattedExtraInfo::is_tree);
                     let branch = if has_next_sibling {
                         "├── ".dimmed().to_string()
                     } else {
@@ -1689,7 +1996,11 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
                         result += "\n";
                         result += child_prefix;
 
-                        let line_without_prefix = line.strip_prefix(child_prefix).unwrap_or(line);
+                        let line_without_prefix = if strip_child_prefix {
+                            line.strip_prefix(child_prefix).unwrap_or(line)
+                        } else {
+                            line
+                        };
                         if has_next_sibling {
                             result += "│   ".dimmed().to_string().as_str();
                             if let Some(rest) = line_without_prefix.strip_prefix("    ") {
@@ -1708,7 +2019,7 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
                         || extra_infos
                             .iter()
                             .skip(idx + 1)
-                            .any(|next| matches!(next, FormattedExtraInfo::Tree(_)));
+                            .any(FormattedExtraInfo::is_tree);
                     for (line_idx, line) in info.lines().enumerate() {
                         if line_idx > 0 {
                             result += "\n";

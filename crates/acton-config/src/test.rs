@@ -130,6 +130,7 @@ impl std::fmt::Display for MutationDiffMode {
 pub struct TestConfig {
     pub report_formats: Vec<ReportFormat>,
     pub show_bodies: bool,
+    pub show_callgraph: bool,
     pub verbosity: u8,
     pub debug: bool,
     pub debug_port: u16,

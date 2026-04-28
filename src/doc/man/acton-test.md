@@ -167,6 +167,10 @@ Possible values: `console`, `teamcity`, `junit`, `dot`
 Show decoded message bodies in printed transaction trees when ABI is known.
 {{/option}}
 
+{{#option "`--show-callgraph`" }}
+Show replayed source call graphs in printed transaction trees.
+{{/option}}
+
 {{#option "`--junit-path` _path_" }}
 Output directory for JUnit XML reports.
 {{/option}}

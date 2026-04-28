@@ -271,6 +271,7 @@ impl TestReporter for ConsoleReporter {
                 known_addresses: Cow::Borrowed(&failure_context.known_addresses),
                 known_code_cells: Cow::Borrowed(&failure_context.known_code_cells),
                 show_bodies: test.show_bodies,
+                show_callgraph: test.show_callgraph,
                 has_wallets_config: false,
                 available_wallets: vec![],
                 backtrace: test.backtrace,

@@ -1,0 +1,41 @@
+   Compiling contracts
+   Compiling JettonWallet
+    Finished in [TIME]
+   Compiling JettonMinter
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+
+ TEST  [ROOT]/jetton
+
+ > tests/admin-and-governance.test.tolk (0 tests)
+ > tests/bounce-handling.test.tolk (0 tests)
+ > tests/gas.test.tolk (0 tests)
+ > tests/protocol-validation.test.tolk (0 tests)
+ > tests/state-init.test.tolk (0 tests)
+ > tests/wallet-behavior.test.tolk (1 test)
+  ✓ wallet: owner can send jettons [TIME]
+    └─ Test output:
+       N/A -> deployer A
+       └── AskToTransfer 0.3 TON -> JettonWallet B                                     gas=6327
+           ├── Call graph:
+           │   └── onInternalMessage (in.body: 712 bits, 1 refs, hash: <unknown hash>, options: CreateMessageOptions<InternalTransferStep> { bou...) => OutMessage { messageCell: cell{56F78D116488EC87DDBB769FFDF486F1989664C1EA080FD15...
+           │       ├── ForwardPayloadRemainder.checkIsCorrectTlbEither (inline) (self: 1 bits, 1 refs, hash: <unknown hash>)
+           │       ├── checkAmountIsEnoughToTransfer (inline) (msgValue: 300000000, forwardTonAmount: 50000000, fwdFee: 765201)
+           │       │   └── calcMinimalTransferAmount (inline) (forwardTonAmount: 50000000, fwdFee: 765201) => 63560773
+           │       │       ├── forwardInitStateOverhead (inline) => 444800
+           │       │       └── calculateJettonWalletMinStorageFee (inline) => 6077571
+           │       ├── WalletStorage.save (inline) (self: WalletStorage (lazy) { jettonBalance: 1500000000...)
+           │       └── calcDeployedJettonWallet (inline) (ownerAddress: 0:4ab53f03b20d09662877958e0be698ef984dfecb8721cb..., minterAddress: 0:5301ef44ced43d6bfa2d181d935a5bea1f9b35478c23ee..., ...) => AutoDeployAddress { workchain: <optimized out>, stateInit: union with unknown va...
+           └── InternalTransferStep 0.293916 TON -> JettonWallet C                     gas=7443
+               ├── Call graph:
+               │   └── onInternalMessage (in.body: 711 bits, 1 refs, hash: <unknown hash>, options: CreateMessageOptions<ReturnExcessesBack> { bounc...) => OutMessage { messageCell: cell{23FF319C4ACEF29380595621470203D0072B21F165F9AA8D9...
+               │       ├── calcAddressOfJettonWallet (inline) (ownerAddress: 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4..., minterAddress: 0:5301ef44ced43d6bfa2d181d935a5bea1f9b35478c23ee..., ...) => 0:6f5dfd896ee2ab064df5ac91a1aea25923c74a7044795787e346115a93b20e60
+               │       │   └── calcDeployedJettonWallet (inline) (ownerAddress: 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4..., minterAddress: 0:5301ef44ced43d6bfa2d181d935a5bea1f9b35478c23ee..., ...) => AutoDeployAddress { workchain: <optimized out>, stateInit: union with unknown va...
+               │       ├── WalletStorage.save (inline) (self: WalletStorage (lazy) { jettonBalance: 5000000000...)
+               │       └── calculateJettonWalletMinStorageFee (inline) => 6077571
+               ├── account created
+               ├── ForwardPayloadRemainder 0.05 TON -> not-deployer D                  gas=309
+               └── ReturnExcessesBack 0.233817629 TON -> deployer A                    gas=309
+
+ ✓ 1 passed in 6 files

@@ -288,6 +288,7 @@ fn execute_script(
             project_root: project_root().to_path_buf(),
             abi,
             show_bodies,
+            show_callgraph: false,
             default_log_level: verbosity,
             wallets: config.wallets.as_ref(),
             open_wallets,

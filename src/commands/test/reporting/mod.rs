@@ -114,6 +114,8 @@ pub struct TestReport {
     #[serde(skip)]
     pub show_bodies: bool,
     #[serde(skip)]
+    pub show_callgraph: bool,
+    #[serde(skip)]
     pub backtrace: Option<BacktraceMode>,
     #[serde(skip)]
     pub execution: Option<TestExecutionContext>,
@@ -303,6 +305,7 @@ pub(super) fn formatter_for_failed_test<'a>(test: &'a TestReport) -> Option<Form
         known_addresses: Cow::Borrowed(&failure.known_addresses),
         known_code_cells: Cow::Borrowed(&failure.known_code_cells),
         show_bodies: test.show_bodies,
+        show_callgraph: test.show_callgraph,
         has_wallets_config: false,
         available_wallets: vec![],
         backtrace: test.backtrace,

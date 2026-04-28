@@ -39,6 +39,7 @@ fn merge_test_config(
         None,
         vec![],
         false,
+        false,
         debug_override,
         debug_port_override,
         None,
