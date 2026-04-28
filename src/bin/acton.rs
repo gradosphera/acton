@@ -693,6 +693,8 @@ enum Commands {
         show_hashes: bool,
         #[arg(long, help = "Show instruction offsets in left column")]
         show_offsets: bool,
+        #[arg(long, help = "Print machine-readable disassembly JSON to stdout")]
+        json: bool,
         #[arg(long, help = "Source map JSON from `acton compile --source-map`")]
         source_map: Option<String>,
         #[arg(
@@ -1907,26 +1909,35 @@ fn main() {
             output,
             show_hashes,
             show_offsets,
+            json,
             source_map,
             address,
             net,
             follow_libraries,
-        } => match read_source_map(source_map) {
-            Ok(source_map) => disasm_cmd(
-                boc_file,
-                string,
-                output,
-                FormatOptions {
-                    show_hashes,
-                    show_offsets,
-                    source_map,
-                },
-                address,
-                net,
-                follow_libraries,
-            ),
-            Err(err) => Err(err),
-        },
+        } => {
+            let result = match read_source_map(source_map) {
+                Ok(source_map) => disasm_cmd(
+                    boc_file,
+                    string,
+                    output,
+                    FormatOptions {
+                        show_hashes,
+                        show_offsets,
+                        source_map,
+                    },
+                    address,
+                    net,
+                    follow_libraries,
+                    json,
+                ),
+                Err(err) => Err(err),
+            };
+            if json {
+                report_error_as_json(result);
+                return;
+            }
+            result
+        }
         Commands::Verify {
             contract_id,
             address,
