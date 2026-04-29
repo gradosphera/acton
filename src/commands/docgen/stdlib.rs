@@ -3,6 +3,7 @@ use anyhow::Result;
 use path_absolutize::Absolutize;
 use regex::Regex;
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tolk_syntax::{
@@ -180,8 +181,8 @@ fn write_doc_page(
 
     let mut mdx_content = String::new();
     mdx_content.push_str("---\n");
-    mdx_content.push_str(&format!("title: \"{}\"\n", doc.title));
-    mdx_content.push_str(&format!("description: \"{}\"\n", doc.description));
+    let _ = writeln!(mdx_content, "title: \"{}\"", doc.title);
+    let _ = writeln!(mdx_content, "description: \"{}\"", doc.description);
     mdx_content.push_str("---\n\n");
     mdx_content.push_str("import { SourceCodeLink } from '@/components/SourceCodeLink';\n\n");
     mdx_content.push_str(GENERATED_NOTICE);
@@ -196,7 +197,7 @@ fn write_doc_page(
     }
 
     for symbol in &doc.symbols {
-        mdx_content.push_str(&format!("## `{}`\n\n", symbol.name));
+        let _ = writeln!(mdx_content, "## `{}`\n", symbol.name);
 
         let source_url = format!(
             "{GITHUB_SOURCE_BASE}/{}#L{}",
@@ -252,7 +253,7 @@ fn write_doc_page(
             }
         }
 
-        mdx_content.push_str(&format!("<SourceCodeLink href=\"{source_url}\" />\n\n"));
+        let _ = writeln!(mdx_content, "<SourceCodeLink href=\"{source_url}\" />\n");
     }
 
     fs::write(output_path, mdx_content)?;

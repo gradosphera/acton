@@ -15,6 +15,7 @@ use crossbeam_channel::{Receiver, Sender, unbounded};
 use path_absolutize::Absolutize;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -127,12 +128,13 @@ fn get_code_context(
         if line_idx >= start_line && line_idx <= end_line {
             match &rule.edit {
                 MutationEdit::Remove => {
-                    output.push_str(&format!(
-                        "  {} {} {}\n",
+                    let _ = writeln!(
+                        output,
+                        "  {} {} {}",
                         format!("{line_num:4}").dimmed(),
                         "│".red(),
                         line.red().strikethrough()
-                    ));
+                    );
                 }
                 MutationEdit::Replace { replacement } => {
                     let start_col = if line_idx == start_line {
@@ -159,12 +161,13 @@ fn get_code_context(
                     line_content.push_str(&matched.red().strikethrough().to_string());
                     line_content.push_str(&suffix.dimmed().to_string());
 
-                    output.push_str(&format!(
-                        "  {} {} {}\n",
+                    let _ = writeln!(
+                        output,
+                        "  {} {} {}",
                         format!("{line_num:4}").dimmed(),
                         "│".dimmed(),
                         line_content
-                    ));
+                    );
 
                     if line_idx == end_line {
                         let padding: String = prefix
@@ -172,23 +175,25 @@ fn get_code_context(
                             .map(|c| if c.is_whitespace() { c } else { ' ' })
                             .collect();
 
-                        output.push_str(&format!(
-                            "  {} {} {}{}\n",
+                        let _ = writeln!(
+                            output,
+                            "  {} {} {}{}",
                             "    ",
                             "│".dimmed(),
                             padding,
                             replacement.green().bold()
-                        ));
+                        );
                     }
                 }
             }
         } else {
-            output.push_str(&format!(
-                "  {} {} {}\n",
+            let _ = writeln!(
+                output,
+                "  {} {} {}",
                 format!("{line_num:4}").dimmed(),
                 "│".dimmed(),
                 line.dimmed()
-            ));
+            );
         }
     }
     output

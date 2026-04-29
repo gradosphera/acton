@@ -5,6 +5,7 @@ use acton_config::config::{ActonConfig, project_root as configured_project_root}
 use anyhow::{Context, anyhow};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -845,7 +846,7 @@ fn truncate_for_display(text: &str, max_chars: usize) -> String {
 
     let mut out = String::with_capacity(max_chars + 64);
     out.extend(text.chars().take(max_chars));
-    out.push_str(&format!("\n... (truncated, total {total} chars)"));
+    let _ = write!(out, "\n... (truncated, total {total} chars)");
     out
 }
 

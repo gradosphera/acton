@@ -1,4 +1,5 @@
 use super::GITHUB_SOURCE_BASE;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 use tolk_linter::{FixAvailability, Linter, RuleGroup};
@@ -124,8 +125,9 @@ fn write_linter_index(out_dir: &Path, rules: &[LinterRuleDoc]) -> anyhow::Result
     mdx_content.push_str("|:-----|:-----|:-------|:----------|:-------------|\n");
 
     for rule in rules {
-        mdx_content.push_str(&format!(
-            "| [{}]({RULES_BASE_PATH}/{}) | [`{}`]({RULES_BASE_PATH}/{}) | {} | {} | {} |\n",
+        let _ = writeln!(
+            mdx_content,
+            "| [{}]({RULES_BASE_PATH}/{}) | [`{}`]({RULES_BASE_PATH}/{}) | {} | {} | {} |",
             rule.code,
             rule.slug,
             rule.rule_name,
@@ -133,7 +135,7 @@ fn write_linter_index(out_dir: &Path, rules: &[LinterRuleDoc]) -> anyhow::Result
             table_cell(&format_rule_group(rule.group)),
             table_cell(fix_availability_label(rule.fix)),
             table_cell(&rule.summary),
-        ));
+        );
     }
 
     fs::write(out_dir.join("overview.mdx"), mdx_content)?;
@@ -160,27 +162,30 @@ fn write_linter_rule_page(out_dir: &Path, rule: &LinterRuleDoc) -> anyhow::Resul
     let mut mdx_content = String::new();
 
     mdx_content.push_str("---\n");
-    mdx_content.push_str(&format!(
-        "title: \"{}\"\n",
+    let _ = writeln!(
+        mdx_content,
+        "title: \"{}\"",
         escape_frontmatter(&format!("{}: {}", rule.code, rule.rule_name))
-    ));
-    mdx_content.push_str(&format!(
-        "description: \"{}\"\n",
-        escape_frontmatter(&rule.summary.clone())
-    ));
+    );
+    let _ = writeln!(
+        mdx_content,
+        "description: \"{}\"",
+        escape_frontmatter(&rule.summary)
+    );
     mdx_content.push_str("---\n\n");
 
     mdx_content.push_str("import { SourceCodeLink } from '@/components/SourceCodeLink';\n\n");
     mdx_content.push_str(GENERATED_NOTICE);
 
     mdx_content.push_str("## Metadata\n\n");
-    mdx_content.push_str(&format!("- `Code`: `{}`\n", rule.code));
-    mdx_content.push_str(&format!("- `Rule`: `{}`\n", rule.rule_name));
-    mdx_content.push_str(&format!("- `Status`: {}\n", format_rule_group(rule.group)));
-    mdx_content.push_str(&format!(
-        "- `Quick fix`: {}\n\n",
+    let _ = writeln!(mdx_content, "- `Code`: `{}`", rule.code);
+    let _ = writeln!(mdx_content, "- `Rule`: `{}`", rule.rule_name);
+    let _ = writeln!(mdx_content, "- `Status`: {}", format_rule_group(rule.group));
+    let _ = writeln!(
+        mdx_content,
+        "- `Quick fix`: {}\n",
         fix_availability_label(rule.fix)
-    ));
+    );
 
     if !rule.explanation.is_empty() {
         mdx_content.push_str(&rule.explanation);
@@ -191,7 +196,7 @@ fn write_linter_rule_page(out_dir: &Path, rule: &LinterRuleDoc) -> anyhow::Resul
         "{GITHUB_SOURCE_BASE}/{}#L{}",
         rule.source_file, rule.source_line
     );
-    mdx_content.push_str(&format!("<SourceCodeLink href=\"{source_url}\" />\n"));
+    let _ = writeln!(mdx_content, "<SourceCodeLink href=\"{source_url}\" />");
 
     fs::write(out_dir.join(format!("{}.mdx", rule.slug)), mdx_content)?;
 

@@ -251,16 +251,19 @@ keys = {{ mnemonic = "{LOCALNET_TEST_MNEMONIC}" }}
 }
 
 fn append_localnet_network(project_dir: &Path, base_url: &str) {
+    use std::fmt::Write as _;
+
     let acton_toml_path = project_dir.join("Acton.toml");
     let mut acton_toml =
         fs::read_to_string(&acton_toml_path).expect("Failed to read generated Acton.toml");
-    acton_toml.push_str(&format!(
+    let _ = write!(
+        acton_toml,
         r#"
 
 [networks.localnet]
 api = {{ v2 = "{base_url}/api/v2", v3 = "{base_url}/api/v3" }}
 "#
-    ));
+    );
     fs::write(&acton_toml_path, acton_toml).expect("Failed to write Acton.toml with localnet");
 }
 

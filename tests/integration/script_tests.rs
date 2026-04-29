@@ -392,6 +392,8 @@ keys = {{ mnemonic-file = "mnemonic.txt" }}
 }
 
 fn append_localnet_network(project_path: &std::path::Path, base_url: &str) {
+    use std::fmt::Write as _;
+
     let (v2_url, v3_url) = if let Some(root_url) = base_url.strip_suffix("/api/v2") {
         (format!("{root_url}/api/v2"), format!("{root_url}/api/v3"))
     } else {
@@ -400,13 +402,14 @@ fn append_localnet_network(project_path: &std::path::Path, base_url: &str) {
     let acton_toml_path = project_path.join("Acton.toml");
     let mut acton_toml =
         fs::read_to_string(&acton_toml_path).expect("failed to read generated Acton.toml");
-    acton_toml.push_str(&format!(
+    let _ = write!(
+        acton_toml,
         r#"
 
 [networks.localnet]
 api = {{ v2 = "{v2_url}", v3 = "{v3_url}" }}
 "#
-    ));
+    );
     fs::write(&acton_toml_path, acton_toml).expect("failed to write Acton.toml with localnet");
 }
 

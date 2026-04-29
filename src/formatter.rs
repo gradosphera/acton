@@ -745,23 +745,26 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
                         contract_letters,
                         show_full_names,
                     );
-                    tx_builder += &format!(
-                        "{} {} {}\n",
+                    let _ = writeln!(
+                        tx_builder,
+                        "{} {} {}",
                         "N/A".dimmed(),
                         "->".dimmed(),
                         src_formatted.trim()
                     );
                 } else if matches!(&in_msg.info, MsgInfo::ExtIn(_)) {
-                    tx_builder += &format!(
-                        "{} {} {}\n",
+                    let _ = writeln!(
+                        tx_builder,
+                        "{} {} {}",
                         "N/A".dimmed(),
                         "->".dimmed(),
                         "external".dimmed()
                     );
                 }
             } else {
-                tx_builder += &format!(
-                    "{} {} {}\n",
+                let _ = writeln!(
+                    tx_builder,
+                    "{} {} {}",
                     "N/A".dimmed(),
                     "->".dimmed(),
                     "system".dimmed()
@@ -2012,9 +2015,9 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
 
         for (idx, (message, balance, location)) in action_parts.iter().enumerate() {
             if idx == executed.actions.len() - 1 {
-                result.push_str(format!("{}    {} ", child_prefix, "└──".dimmed()).as_str());
+                let _ = write!(result, "{}    {} ", child_prefix, "└──".dimmed());
             } else {
-                result.push_str(format!("{}    {} ", child_prefix, "├──".dimmed()).as_str());
+                let _ = write!(result, "{}    {} ", child_prefix, "├──".dimmed());
             }
 
             let message_padding =
@@ -2055,9 +2058,9 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
 
         for (idx, action) in invalid_actions.iter().enumerate() {
             if idx == invalid_actions.len() - 1 {
-                result.push_str(format!("{}    {} ", child_prefix, "└──".dimmed()).as_str());
+                let _ = write!(result, "{}    {} ", child_prefix, "└──".dimmed());
             } else {
-                result.push_str(format!("{}    {} ", child_prefix, "├──".dimmed()).as_str());
+                let _ = write!(result, "{}    {} ", child_prefix, "├──".dimmed());
             }
 
             let reason = if action.during_preprocessing {
@@ -2147,7 +2150,7 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
                 } else {
                     Self::format_addr_hash(addr).dimmed().to_string()
                 };
-                result += &format!(" {} ", letter.bold());
+                let _ = write!(result, " {} ", letter.bold());
                 result
             } else {
                 String::new()
@@ -2921,17 +2924,17 @@ impl FormatterContext<'_> {
                 match (left_val, right_val) {
                     (Some(left_val), Some(right_val)) => {
                         if left_val == right_val {
-                            result.push_str(&format!("    {},\n", self.format(&left_val).dimmed()));
+                            let _ = writeln!(result, "    {},", self.format(&left_val).dimmed());
                         } else {
-                            result.push_str(&format!("    {},\n", self.format(&left_val).red()));
-                            result.push_str(&format!("    {}\n", self.format(&right_val).green()));
+                            let _ = writeln!(result, "    {},", self.format(&left_val).red());
+                            let _ = writeln!(result, "    {}", self.format(&right_val).green());
                         }
                     }
                     (Some(left_val), None) => {
-                        result.push_str(&format!("    {},\n", self.format(&left_val).red()));
+                        let _ = writeln!(result, "    {},", self.format(&left_val).red());
                     }
                     (None, Some(right_val)) => {
-                        result.push_str(&format!("    {}\n", self.format(&right_val).green()));
+                        let _ = writeln!(result, "    {}", self.format(&right_val).green());
                     }
                     (None, None) => {}
                 }

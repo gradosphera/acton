@@ -6,6 +6,7 @@ use acton::wallets;
 use base64::Engine;
 use reqwest::blocking::Client;
 use serde_json::{Value, json};
+use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 use std::thread;
@@ -2559,16 +2560,19 @@ fn localnet_supports_utils_detect_and_pack_endpoints() {
 }
 
 fn append_localnet_network(project_path: &Path, base_url: &str) {
+    use std::fmt::Write as _;
+
     let acton_toml_path = project_path.join("Acton.toml");
     let mut acton_toml =
         fs::read_to_string(&acton_toml_path).expect("Failed to read generated Acton.toml");
-    acton_toml.push_str(&format!(
+    let _ = write!(
+        acton_toml,
         r#"
 
 [networks.localnet]
 api = {{ v2 = "{base_url}/api/v2", v3 = "{base_url}/api/v3" }}
 "#
-    ));
+    );
     fs::write(&acton_toml_path, acton_toml).expect("Failed to write Acton.toml with localnet");
 }
 
@@ -2851,7 +2855,9 @@ fn encode_query_component(value: &str) -> String {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
                 encoded.push(char::from(byte));
             }
-            _ => encoded.push_str(&format!("%{byte:02X}")),
+            _ => {
+                let _ = write!(encoded, "%{byte:02X}");
+            }
         }
     }
     encoded

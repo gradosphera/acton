@@ -49,6 +49,7 @@ use clap_complete::engine::{
 use commands::common::error_fmt;
 use dotenvy::dotenv;
 use human_panic::{Metadata, setup_panic};
+use std::fmt::Write as _;
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -1503,9 +1504,10 @@ fn render_help_command(command: Option<String>) -> anyhow::Result<()> {
                 .filter(|(_, score)| *score >= 0.80)
                 .max_by(|left, right| left.1.total_cmp(&right.1))
             {
-                message.push_str(&format!(
+                let _ = write!(
+                    message,
                     "\n\nhelp: a command with a similar name exists: `{suggestion}`"
-                ));
+                );
             }
             message.push_str("\n\nhelp: view all commands with `acton --help`");
 

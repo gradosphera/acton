@@ -4,6 +4,7 @@ use acton_debug::replayer::{RuntimeStack, StepMode, Tick, TolkReplayer};
 use comfy_table::{Cell as TableCell, CellAlignment, Color, ContentArrangement, Table};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -783,7 +784,7 @@ pub(super) fn generate_lcov_report(coverage: &Coverage) -> String {
         }
 
         // SF: source file
-        lcov_content.push_str(&format!("SF:{}\n", file_coverage.file));
+        let _ = writeln!(lcov_content, "SF:{}", file_coverage.file);
 
         // DA: line data (line number, execution count)
         for &line_number in &file_coverage.executable_lines {
@@ -792,14 +793,14 @@ pub(super) fn generate_lcov_report(coverage: &Coverage) -> String {
                 .get(&line_number)
                 .copied()
                 .unwrap_or(0);
-            lcov_content.push_str(&format!("DA:{},{}\n", line_number + 1, hit_count));
+            let _ = writeln!(lcov_content, "DA:{},{}", line_number + 1, hit_count);
         }
 
         // LF: lines found (total executable lines)
-        lcov_content.push_str(&format!("LF:{}\n", file_coverage.executable_lines_count));
+        let _ = writeln!(lcov_content, "LF:{}", file_coverage.executable_lines_count);
 
         // LH: lines hit (covered lines)
-        lcov_content.push_str(&format!("LH:{}\n", file_coverage.covered_lines_count));
+        let _ = writeln!(lcov_content, "LH:{}", file_coverage.covered_lines_count);
 
         if !file_coverage.branch_sites.is_empty() {
             let mut branch_sites_by_line: BTreeMap<i64, Vec<(&BranchSiteId, &BranchSiteCoverage)>> =
@@ -820,28 +821,32 @@ pub(super) fn generate_lcov_report(coverage: &Coverage) -> String {
                 for (_, site) in sites {
                     let info = &site.hits;
                     if info.has_condition_branch() {
-                        lcov_content.push_str(&format!(
-                            "BRDA:{line},{branch_idx},0,{}\n",
+                        let _ = writeln!(
+                            lcov_content,
+                            "BRDA:{line},{branch_idx},0,{}",
                             info.condition_true
-                        ));
-                        lcov_content.push_str(&format!(
-                            "BRDA:{line},{branch_idx},1,{}\n",
+                        );
+                        let _ = writeln!(
+                            lcov_content,
+                            "BRDA:{line},{branch_idx},1,{}",
                             info.condition_false
-                        ));
+                        );
                         branches_found += 2;
                         branches_hit += u64::from(info.condition_true > 0)
                             + u64::from(info.condition_false > 0);
                         branch_idx += 1;
                     }
                     if info.has_guard_branch() {
-                        lcov_content.push_str(&format!(
-                            "BRDA:{line},{branch_idx},0,{}\n",
+                        let _ = writeln!(
+                            lcov_content,
+                            "BRDA:{line},{branch_idx},0,{}",
                             info.guard_throw
-                        ));
-                        lcov_content.push_str(&format!(
-                            "BRDA:{line},{branch_idx},1,{}\n",
+                        );
+                        let _ = writeln!(
+                            lcov_content,
+                            "BRDA:{line},{branch_idx},1,{}",
                             info.guard_continue
-                        ));
+                        );
                         branches_found += 2;
                         branches_hit +=
                             u64::from(info.guard_throw > 0) + u64::from(info.guard_continue > 0);
@@ -851,8 +856,8 @@ pub(super) fn generate_lcov_report(coverage: &Coverage) -> String {
             }
 
             // BRF: branches found, BRH: branches hit
-            lcov_content.push_str(&format!("BRF:{branches_found}\n"));
-            lcov_content.push_str(&format!("BRH:{branches_hit}\n"));
+            let _ = writeln!(lcov_content, "BRF:{branches_found}");
+            let _ = writeln!(lcov_content, "BRH:{branches_hit}");
         }
 
         lcov_content.push_str("end_of_record\n");
@@ -900,9 +905,10 @@ fn generate_text_report(coverage: &Coverage) -> String {
     let coverage_percentage = total_line_coverage_percentage(coverage);
 
     result.push_str("Coverage Summary:\n");
-    result.push_str(&format!(
-        "Lines: {covered_lines}/{total_lines} ({coverage_percentage:.2}%)\n"
-    ));
+    let _ = writeln!(
+        result,
+        "Lines: {covered_lines}/{total_lines} ({coverage_percentage:.2}%)"
+    );
 
     let mut total_hits = 0u64;
     for file_coverage in &coverage.files {
@@ -911,7 +917,7 @@ fn generate_text_report(coverage: &Coverage) -> String {
         }
     }
 
-    result.push_str(&format!("Total Hits: {total_hits}\n"));
+    let _ = writeln!(result, "Total Hits: {total_hits}");
     result.push('\n');
 
     for file_coverage in &coverage.files {
@@ -919,7 +925,7 @@ fn generate_text_report(coverage: &Coverage) -> String {
             continue;
         }
 
-        result.push_str(&format!("File: {}\n", file_coverage.file));
+        let _ = writeln!(result, "File: {}", file_coverage.file);
 
         if let Ok(source_content) = fs::read_to_string(&file_coverage.file) {
             let lines: Vec<&str> = source_content.lines().collect();
@@ -949,24 +955,27 @@ fn generate_text_report(coverage: &Coverage) -> String {
                     );
 
                     let padding = " ".repeat(code_width.saturating_sub(line.len()));
-                    result.push_str(&format!(
-                        "{line_number_padded} {status}| {line}{padding}|{hits_info}\n"
-                    ));
+                    let _ = writeln!(
+                        result,
+                        "{line_number_padded} {status}| {line}{padding}|{hits_info}"
+                    );
                 } else {
                     let padding = " ".repeat(code_width.saturating_sub(line.len()));
-                    result.push_str(&format!("{line_number_padded}   | {line}{padding}|\n"));
+                    let _ = writeln!(result, "{line_number_padded}   | {line}{padding}|");
                 }
             }
         } else {
             result.push_str("  (Could not read source file)\n");
-            result.push_str(&format!(
-                "  Executable lines: {}\n",
+            let _ = writeln!(
+                result,
+                "  Executable lines: {}",
                 file_coverage.executable_lines_count
-            ));
-            result.push_str(&format!(
-                "  Covered lines: {}\n",
+            );
+            let _ = writeln!(
+                result,
+                "  Covered lines: {}",
                 file_coverage.covered_lines_count
-            ));
+            );
         }
 
         result.push('\n');
