@@ -12,7 +12,7 @@ impl Backend {
         crate::profile!(self, "goto_definition");
         let now = std::time::Instant::now();
         let uri = params.text_document_position_params.text_document.uri;
-        log::info!("Request: goto_definition for {}", uri);
+        log::info!("Request: goto_definition for {uri}");
 
         let position = params.text_document_position_params.position;
         let result = self.definition(&uri, position);

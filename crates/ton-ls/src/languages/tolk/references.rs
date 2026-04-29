@@ -17,7 +17,7 @@ impl Backend {
         crate::profile!(self, "references");
         let now = std::time::Instant::now();
         let uri = params.text_document_position.text_document.uri.clone();
-        log::info!("Request: goto_references for {}", uri);
+        log::info!("Request: goto_references for {uri}");
 
         let position = params.text_document_position.position;
         let result = self.references(&uri, position);

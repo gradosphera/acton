@@ -139,7 +139,7 @@ impl LanguageServer for Backend {
         let text = params.text_document.text;
         let language = detect_language(&uri);
 
-        log::info!("Notification: did_open for {}", uri);
+        log::info!("Notification: did_open for {uri}");
 
         if language.is_self_contained() {
             if let Err(error) = self.registry.did_open(language, &uri, version, &text) {

@@ -14,7 +14,7 @@ impl Backend {
         crate::profile!(self, "code_action");
         let now = Instant::now();
         let uri = params.text_document.uri;
-        log::info!("Request: code_action for {}", uri);
+        log::info!("Request: code_action for {uri}");
 
         let result = self.code_actions(&params.range, &uri);
 

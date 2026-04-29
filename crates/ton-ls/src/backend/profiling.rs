@@ -52,11 +52,7 @@ impl ProfilingContext {
                 let avg_duration = Duration::from_nanos(total_ns / count);
                 let total_duration = Duration::from_nanos(total_ns);
                 log::info!(
-                    "Feature: {:<20} | Count: {:<5} | Avg: {:?} | Total: {:?}",
-                    name,
-                    count,
-                    avg_duration,
-                    total_duration
+                    "Feature: {name:<20} | Count: {count:<5} | Avg: {avg_duration:?} | Total: {total_duration:?}"
                 );
             }
         }

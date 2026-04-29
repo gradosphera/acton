@@ -83,7 +83,7 @@ impl Backend {
         crate::profile!(self, "semantic_tokens");
         let now = std::time::Instant::now();
         let uri = params.text_document.uri;
-        log::info!("Request: semantic_tokens_full for {}", uri);
+        log::info!("Request: semantic_tokens_full for {uri}");
 
         let Some(data) = self.semantic_tokens(&uri) else {
             return Ok(None);

@@ -19,7 +19,7 @@ impl Backend {
         crate::profile!(self, "inlay_hint");
         let now = std::time::Instant::now();
         let uri = params.text_document.uri;
-        log::info!("Request: inlay_hint for {}", uri);
+        log::info!("Request: inlay_hint for {uri}");
 
         let result = (|| {
             let analysis = self.analysis.get(&uri)?;
