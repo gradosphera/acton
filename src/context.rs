@@ -9,7 +9,7 @@ use num_bigint::BigInt;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use tolk_compiler::TolkSourceMap;
 use tolk_compiler::abi::ContractABI as CompilerContractABI;
@@ -786,6 +786,48 @@ impl Context<'_> {
     #[must_use]
     pub fn can_broadcast_to_network(&self) -> bool {
         self.env.execution_mode == ExecutionMode::Script && self.is_broadcasting
+    }
+
+    #[must_use]
+    pub fn resolve_project_read_path(&self, path: &str) -> Option<PathBuf> {
+        let path = self.resolve_project_relative_path(path)?;
+        let project_root = dunce::canonicalize(&self.env.project_root).ok()?;
+        let canonical_path = dunce::canonicalize(path).ok()?;
+        canonical_path
+            .starts_with(project_root)
+            .then_some(canonical_path)
+    }
+
+    #[must_use]
+    pub fn resolve_project_write_path(&self, path: &str) -> Option<PathBuf> {
+        let path = self.resolve_project_relative_path(path)?;
+        let project_root = dunce::canonicalize(&self.env.project_root).ok()?;
+
+        if let Ok(canonical_path) = dunce::canonicalize(&path) {
+            return canonical_path.starts_with(&project_root).then_some(path);
+        }
+
+        let parent = path.parent()?;
+        let canonical_parent = dunce::canonicalize(parent).ok()?;
+        canonical_parent.starts_with(&project_root).then_some(path)
+    }
+
+    fn resolve_project_relative_path(&self, path: &str) -> Option<PathBuf> {
+        let mut relative_path = PathBuf::new();
+        for component in Path::new(path).components() {
+            match component {
+                Component::CurDir => {}
+                Component::Normal(part) => relative_path.push(part),
+                Component::ParentDir => {
+                    if !relative_path.pop() {
+                        return None;
+                    }
+                }
+                Component::Prefix(_) | Component::RootDir => return None,
+            }
+        }
+
+        Some(self.env.project_root.join(relative_path))
     }
 }
 

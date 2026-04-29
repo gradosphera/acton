@@ -3040,12 +3040,17 @@ fn save_world_state_snapshot_impl(
     stack: &mut Tuple,
     path: String,
 ) -> anyhow::Result<()> {
+    let Some(path) = ctx.resolve_project_write_path(&path) else {
+        stack.push_bool(false);
+        return Ok(());
+    };
+
     let success = ctx
         .chain
         .world_state
         .snapshot()
         .and_then(|snapshot| serde_json::to_string_pretty(&snapshot).map_err(Into::into))
-        .is_ok_and(|json| fs::write(&path, json).is_ok());
+        .is_ok_and(|json| fs::write(path, json).is_ok());
     stack.push_bool(success);
     Ok(())
 }
@@ -3056,7 +3061,12 @@ fn load_world_state_snapshot_impl(
     stack: &mut Tuple,
     path: String,
 ) -> anyhow::Result<()> {
-    let success = fs::read_to_string(&path)
+    let Some(path) = ctx.resolve_project_read_path(&path) else {
+        stack.push_bool(false);
+        return Ok(());
+    };
+
+    let success = fs::read_to_string(path)
         .ok()
         .and_then(|content| serde_json::from_str(&content).ok())
         .and_then(|snapshot| ctx.chain.world_state.load_snapshot(snapshot).ok())
