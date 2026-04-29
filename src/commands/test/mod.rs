@@ -75,6 +75,8 @@ pub mod reporting;
 pub mod trace;
 
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
+pub(crate) const INTERNAL_SKIP_BUILD_ENV: &str = "ACTON_INTERNAL_SKIP_BUILD";
+pub(crate) const INTERNAL_REQUIRE_TESTS_ENV: &str = "ACTON_INTERNAL_REQUIRE_TESTS";
 pub(crate) use self::fuzz::FuzzConfig;
 use self::fuzz::{FuzzParameter, attach_test_parameter_metadata, validate_test_configuration};
 
@@ -803,6 +805,11 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         process::exit(1);
     }
 
+    if require_tests() && total_tests == 0 {
+        println!("\nNo tests were selected. Mutation testing requires at least one baseline test.");
+        process::exit(1);
+    }
+
     if total_failed > 0 || coverage_threshold_failed {
         process::exit(1)
     }
@@ -810,11 +817,17 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
 }
 
 fn need_to_build() -> bool {
-    let Ok(value) = std::env::var("ACTON_INTERNAL_SKIP_BUILD") else {
+    let Ok(value) = std::env::var(INTERNAL_SKIP_BUILD_ENV) else {
         return true;
     };
 
     value.trim() != "1"
+}
+
+fn require_tests() -> bool {
+    std::env::var(INTERNAL_REQUIRE_TESTS_ENV)
+        .map(|value| value.trim() == "1")
+        .unwrap_or(false)
 }
 
 fn resolve_test_output_paths_from_project_root(config: &mut TestConfig, project_root: &Path) {
