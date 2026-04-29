@@ -300,7 +300,7 @@ fn send_message_impl(
         Err(_) => true,
     };
 
-    if is_external && ctx.is_broadcasting {
+    if is_external && ctx.can_broadcast_to_network() {
         let parsed_ext_in = msg
             .parse::<Message<'_>>()
             .context("Failed to parse external-in message cell")?;
@@ -320,7 +320,9 @@ fn send_message_impl(
         return Ok(());
     }
 
-    if let Some(wallet) = ctx.env.find_wallet_by_address(src_std) {
+    if ctx.can_broadcast_to_network()
+        && let Some(wallet) = ctx.env.find_wallet_by_address(src_std)
+    {
         let network = ctx.network();
         let custom_networks = ctx.env.config.custom_networks();
         if let Err(err) = register_localnet_compiler_abis(ctx, &custom_networks) {
@@ -2544,6 +2546,11 @@ fn wait_for_transaction_impl(
         return Ok(());
     };
 
+    if !ctx.can_broadcast_to_network() {
+        stack.push(TupleItem::Null);
+        return Ok(());
+    }
+
     let network = ctx.network();
     let custom_networks = ctx.env.config.custom_networks();
     let api_client = match TonApiClient::new(network, custom_networks) {
@@ -2838,7 +2845,7 @@ fn explorer_transaction_link(explorer_base: &str, tx_hash_hex: &str) -> Option<S
 
 extension!(get_config in (Context) using get_config_impl);
 fn get_config_impl(ctx: &mut Context, stack: &mut Tuple) -> anyhow::Result<()> {
-    if ctx.is_broadcasting {
+    if ctx.can_broadcast_to_network() {
         let network = ctx.network();
         let custom_networks = ctx.env.config.custom_networks();
         let api_client = TonApiClient::new(network, custom_networks)?;
@@ -3422,6 +3429,12 @@ fn wait_for_trace_impl(
         stack.push(TupleItem::Null);
         return Ok(());
     };
+
+    if !ctx.can_broadcast_to_network() {
+        stack.push(TupleItem::Null);
+        return Ok(());
+    }
+
     let msg_hash_hex = hex::encode(target_hash.as_slice());
 
     let network = ctx.network();

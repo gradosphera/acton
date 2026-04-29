@@ -3,7 +3,7 @@ use crate::commands::common::{
 };
 use crate::context::{
     AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
-    EmulationsState, Env, IoContext, KnownAddresses,
+    EmulationsState, Env, ExecutionMode, IoContext, KnownAddresses,
 };
 use crate::file_build_cache::FileBuildCache;
 use crate::formatter::FormatterContext;
@@ -298,6 +298,7 @@ fn execute_script(
             // The script's own compiled code contains any user-defined predicate
             // lambdas (e.g. those built by `expect(...).toHaveTx({ ... })`), so
             // we reuse it as the code cell for evaluating predicate continuations.
+            execution_mode: ExecutionMode::Script,
             test_code: Some(code_cell.clone()),
         },
         io: IoContext {

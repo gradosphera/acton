@@ -716,6 +716,7 @@ pub struct Env<'a> {
     pub explorer: Option<Explorer>,
     pub fork_net: Option<Network>,
     pub running_id: Arc<str>,
+    pub execution_mode: ExecutionMode,
     /// The compiled code of the currently running test contract (for c3 in `run_continuation`).
     pub test_code: Option<Cell>,
 }
@@ -731,6 +732,12 @@ pub struct Context<'a> {
     pub debug: DebugCtx<'a>,
     pub is_broadcasting: bool,
     pub network: Option<Network>,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ExecutionMode {
+    Test,
+    Script,
 }
 
 #[derive(Debug, Clone)]
@@ -774,6 +781,11 @@ impl Context<'_> {
             .or(self.network.as_ref())
             .unwrap_or(&Network::Testnet)
             .clone()
+    }
+
+    #[must_use]
+    pub fn can_broadcast_to_network(&self) -> bool {
+        self.env.execution_mode == ExecutionMode::Script && self.is_broadcasting
     }
 }
 

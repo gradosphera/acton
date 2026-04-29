@@ -17,7 +17,8 @@ use crate::commands::test::reporting::{
 };
 use crate::context::{
     AssertFailure, AssertsContext, BuildCache, BuildContext, ChainContext, Context, DebugCtx,
-    DebugStopRequested, EmulationsState, Env, IoContext, KnownAddresses, is_debug_stop_requested,
+    DebugStopRequested, EmulationsState, Env, ExecutionMode, IoContext, KnownAddresses,
+    is_debug_stop_requested,
 };
 use crate::ffi;
 use crate::file_build_cache::FileBuildCache;
@@ -345,6 +346,7 @@ impl<'a> TestRunner<'a> {
                 explorer: None,
                 fork_net: self.config.fork_net.clone(),
                 running_id: test.name.clone(),
+                execution_mode: ExecutionMode::Test,
                 test_code: Some(code_cell.clone()),
             },
             io: IoContext {
