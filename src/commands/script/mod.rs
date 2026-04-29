@@ -131,7 +131,7 @@ pub fn script_cmd(
     run_script_file(
         path,
         &content,
-        &mappings,
+        mappings.as_ref(),
         args,
         verbose,
         debug,
@@ -154,7 +154,7 @@ pub fn script_cmd(
 fn run_script_file(
     file_path: &str,
     content: &str,
-    mappings: &Option<BTreeMap<String, String>>,
+    mappings: Option<&BTreeMap<String, String>>,
     args: Vec<String>,
     verbose: u8,
     debug: bool,
@@ -166,9 +166,10 @@ fn run_script_file(
     explorer: Option<Explorer>,
     show_bodies: bool,
 ) -> anyhow::Result<()> {
-    let abi = contract_abi(content.into(), file_path, mappings);
+    let mappings = mappings.cloned();
+    let abi = contract_abi(content.into(), file_path, mappings.as_ref());
 
-    let compiler = tolk_compiler::Compiler::new(2).with_mappings(mappings);
+    let compiler = tolk_compiler::Compiler::new(2).with_mappings(&mappings);
     let need_debug_info = debug || backtrace == Some(BacktraceMode::Full);
     let mut verbosity = executor_verbosity_for_cli_level(verbose);
 

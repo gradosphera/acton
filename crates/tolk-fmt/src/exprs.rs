@@ -1,7 +1,12 @@
 use crate::comments::has_inline_line_comment_in_subtree;
 use crate::pretty::RcDoc;
 use crate::{Context, comments, common, stmts, types};
-use tolk_syntax::*;
+use tolk_syntax::{
+    ArgumentList, AsCast, Assign, AstNode, Bin, Call, CallArgument, DotAccess, DotAccessField,
+    Expr, HasName, Ident, InstanceArg, Instantiation, IsType, Lambda, Lazy, Match, MatchArm,
+    MatchArmBody, MatchBody, MatchPattern, NotNull, ObjectLit, Paren, SetAssign, Tensor, Ternary,
+    Tuple, Type, Unary, VarDeclLhs, VarDeclPattern,
+};
 use tree_sitter::Node;
 
 #[must_use]
@@ -681,6 +686,7 @@ pub fn print_call_argument<'a>(ctx: &Context<'_>, arg: &CallArgument) -> Option<
     Some(RcDoc::concat(parts))
 }
 
+#[must_use]
 pub fn print_generic_instantiation<'a>(
     ctx: &Context,
     instantiation: &Instantiation,

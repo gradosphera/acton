@@ -1821,7 +1821,7 @@ fn main() {
                 ) {
                     Ok(config) => {
                         if mutate {
-                            mutation::test_mutate_cmd(&path, &config)
+                            mutation::test_mutate_cmd(path.as_deref(), &config)
                         } else {
                             test_cmd(path, &config)
                         }

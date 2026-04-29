@@ -120,7 +120,7 @@ impl TeamCityReporter {
         }
 
         if let Some(ref test_message) = test.message {
-            message = test_message.clone();
+            message.clone_from(test_message);
         }
 
         if let Some(exec) = &test.execution

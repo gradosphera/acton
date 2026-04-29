@@ -220,7 +220,7 @@ fn collect_executed_lines_per_files(
                         &mut branch_sites_per_file,
                         replayer,
                         &last_stack,
-                        &last_coverage_loc,
+                        last_coverage_loc.as_ref(),
                         instr_name,
                         wrapper_roots,
                         include_wrappers,
@@ -302,7 +302,7 @@ fn process_branch_instruction(
     branch_sites_per_file: &mut HashMap<String, BTreeMap<BranchSiteId, BranchSiteCoverage>>,
     replayer: &TolkReplayer,
     stack: &RuntimeStack,
-    last_coverage_loc: &Option<(String, i64)>,
+    last_coverage_loc: Option<&(String, i64)>,
     instr_name: &str,
     wrapper_roots: &[PathBuf],
     include_wrappers: bool,
@@ -476,7 +476,7 @@ fn stack_condition_is_true(instr_name: &str, stack_values: &[VmStackValue]) -> O
 fn branch_coverage_loc(
     replayer: &TolkReplayer,
     wrapper_roots: &[PathBuf],
-    last_coverage_loc: &Option<(String, i64)>,
+    last_coverage_loc: Option<&(String, i64)>,
     instr_name: &str,
     include_wrappers: bool,
     include_tests: bool,
@@ -488,7 +488,7 @@ fn branch_coverage_loc(
     }
 
     if should_fallback_to_last_coverage_loc(instruction_opcode(instr_name)) {
-        last_coverage_loc.clone()
+        last_coverage_loc.cloned()
     } else {
         None
     }

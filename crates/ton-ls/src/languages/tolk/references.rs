@@ -2,7 +2,7 @@ use crate::AnalysisResult;
 use crate::backend::Backend;
 use crate::backend::utils::{FileInfoExt, SpanExt};
 use dashmap::mapref::one::Ref;
-use lsp_types::*;
+use lsp_types::{Location, Position, ReferenceParams, Url};
 use std::sync::Arc;
 use tolk_resolver::resolve_index::LocalDefId;
 use tolk_resolver::{FileInfo, Resolved, SymbolId};

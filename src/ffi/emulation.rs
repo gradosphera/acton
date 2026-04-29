@@ -199,7 +199,7 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
         )?);
         let content: Arc<str> = fs::read_to_string(&path).unwrap_or_default().into();
         let mappings = ctx.env.config.mappings();
-        let contract_abi = contract_abi(content, &path_display, &mappings);
+        let contract_abi = contract_abi(content, &path_display, mappings.as_ref());
 
         ctx.build.build_cache.memoize(
             &display_name,
@@ -248,7 +248,7 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
                 &code_cell,
                 success.debug_mark_base64.as_deref(),
             )?);
-            let contract_abi = contract_abi(content, &path_display, &mappings);
+            let contract_abi = contract_abi(content, &path_display, mappings.as_ref());
 
             ctx.build.build_cache.memoize(
                 &display_name,
@@ -2740,7 +2740,7 @@ fn register_localnet_compiler_abis(
         };
         let mut compiler_abi = compiler_abi.as_ref().clone();
         if compiler_abi.contract_name.is_empty() {
-            compiler_abi.contract_name = result.name.clone();
+            compiler_abi.contract_name.clone_from(&result.name);
         }
         entries_by_hash
             .entry(result.code_hash.to_string())

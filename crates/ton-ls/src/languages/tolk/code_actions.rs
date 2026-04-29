@@ -1,7 +1,10 @@
 use crate::backend::Backend;
 use crate::backend::utils::{SpanExt, ranges_intersect};
 use crate::languages::tolk::diagnostics::convert_single_diagnostic;
-use lsp_types::*;
+use lsp_types::{
+    CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams, CodeActionResponse, Range,
+    TextEdit, Url, WorkspaceEdit,
+};
 use std::collections::HashMap;
 use std::time::Instant;
 use tower_lsp::jsonrpc::Result as LspResult;

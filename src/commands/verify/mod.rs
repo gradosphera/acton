@@ -132,7 +132,7 @@ pub fn verify_cmd(
             "→".blue().bold(),
             VERIFY_BACKENDS_ENV.dimmed()
         );
-        backend_info.backends = overridden_backends.clone();
+        backend_info.backends.clone_from(overridden_backends);
     }
 
     println!(
@@ -155,7 +155,7 @@ pub fn verify_cmd(
     let source_files = ton_abi::get_file_dependencies(
         contract_path.to_string_lossy().as_ref(),
         true,
-        &config.mappings,
+        config.mappings.as_ref(),
     )?;
     println!(
         "  {} Collected {} source file{}",

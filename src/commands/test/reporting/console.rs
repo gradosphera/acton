@@ -487,8 +487,8 @@ fn process_assert_failure(failure: &AssertFailure, test: &TestReport, fmt: &Form
         });
         let diff_output = format!(
             "{tx_tree}\nCannot find transaction from {} to {}\nwith:\n{}",
-            fmt.format_address(&failure.txs, &from_addr),
-            fmt.format_address(&failure.txs, &to_addr),
+            fmt.format_address(&failure.txs, from_addr.as_ref()),
+            fmt.format_address(&failure.txs, to_addr.as_ref()),
             params.join("\n"),
         );
 
@@ -514,8 +514,8 @@ fn process_assert_failure(failure: &AssertFailure, test: &TestReport, fmt: &Form
         } else {
             &format!(
                 " from {} to {}",
-                fmt.format_address(&failure.txs, &from_addr2),
-                fmt.format_address(&failure.txs, &to_addr2),
+                fmt.format_address(&failure.txs, from_addr2.as_ref()),
+                fmt.format_address(&failure.txs, to_addr2.as_ref()),
             )
         };
 

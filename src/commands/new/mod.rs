@@ -209,8 +209,8 @@ pub fn new_cmd(
     }
 
     let mut config = ActonConfig::default();
-    config.package.name = project_name.clone();
-    config.package.description = description.clone();
+    config.package.name.clone_from(&project_name);
+    config.package.description.clone_from(&description);
     config.package.license = Some(license.clone());
 
     std::env::set_current_dir(&project_path)?;

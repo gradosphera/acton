@@ -1,6 +1,6 @@
 use crate::backend::Backend;
 use crate::backend::utils::{FileInfoExt, SpanExt};
-use lsp_types::*;
+use lsp_types::{GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Url};
 use tolk_resolver::{Resolved, Span};
 use tower_lsp::jsonrpc::Result as LspResult;
 

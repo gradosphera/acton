@@ -541,12 +541,12 @@ fn default_value_impl(
         Ty::StructRef {
             struct_name,
             type_args,
-        } => default_struct_value(abi, struct_name, type_args, visited_defs),
+        } => default_struct_value(abi, struct_name, type_args.as_deref(), visited_defs),
         Ty::EnumRef { enum_name } => default_enum_value(abi, enum_name),
         Ty::AliasRef {
             alias_name,
             type_args,
-        } => default_alias_value(abi, alias_name, type_args, visited_defs),
+        } => default_alias_value(abi, alias_name, type_args.as_deref(), visited_defs),
         Ty::CellOf { inner } => format!(
             "{}.toCell()",
             default_value_impl(abi, inner, bindings, visited_defs)
@@ -558,10 +558,10 @@ fn default_value_impl(
 fn default_struct_value(
     abi: &ContractABI,
     struct_name: &str,
-    type_args: &Option<Vec<Ty>>,
+    type_args: Option<&[Ty]>,
     visited_defs: &mut HashSet<String>,
 ) -> String {
-    let qualified_name = render_named_type(struct_name, type_args.as_deref());
+    let qualified_name = render_named_type(struct_name, type_args);
     let visit_key = format!("struct:{qualified_name}");
     if !visited_defs.insert(visit_key.clone()) {
         return "null".to_owned();
@@ -570,7 +570,7 @@ fn default_struct_value(
     let result = find_struct_decl_full(abi, struct_name).map_or_else(
         || "null".to_owned(),
         |(type_params, fields)| {
-            if type_args.as_ref().is_some_and(|args| !args.is_empty())
+            if type_args.is_some_and(|args| !args.is_empty())
                 || type_params.is_some_and(|params| !params.is_empty())
             {
                 return "{}".to_owned();
@@ -602,10 +602,10 @@ fn default_struct_value(
 fn default_alias_value(
     abi: &ContractABI,
     alias_name: &str,
-    type_args: &Option<Vec<Ty>>,
+    type_args: Option<&[Ty]>,
     visited_defs: &mut HashSet<String>,
 ) -> String {
-    let qualified_name = render_named_type(alias_name, type_args.as_deref());
+    let qualified_name = render_named_type(alias_name, type_args);
     let visit_key = format!("alias:{qualified_name}");
     if !visited_defs.insert(visit_key.clone()) {
         return "null".to_owned();
@@ -614,7 +614,7 @@ fn default_alias_value(
     let result = find_alias_decl_full(abi, alias_name).map_or_else(
         || "null".to_owned(),
         |(type_params, target_ty)| {
-            if type_args.as_ref().is_some_and(|args| !args.is_empty())
+            if type_args.is_some_and(|args| !args.is_empty())
                 || type_params.is_some_and(|params| !params.is_empty())
             {
                 return "{}".to_owned();

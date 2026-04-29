@@ -291,7 +291,7 @@ fn run_single_mutation(
     sources: &[MutationSourceSnapshot],
     mutation: &GlobalMutation,
     mutate_contract: &str,
-    path: &Option<String>,
+    path: Option<&str>,
     config: &TestConfig,
     skip_build_for_child_tests: bool,
 ) -> anyhow::Result<MutationExecution> {
@@ -388,7 +388,7 @@ fn mutation_worker_loop(
     result_tx: Sender<MutationExecutionResult>,
     sources: &[MutationSourceSnapshot],
     mutate_contract: &str,
-    path: &Option<String>,
+    path: Option<&str>,
     config: &TestConfig,
     skip_build_for_child_tests: bool,
 ) -> anyhow::Result<()> {
@@ -573,12 +573,13 @@ fn run_command_output_interruptible(
 
 fn append_mutation_test_command_args(
     cmd: &mut process::Command,
-    path: &Option<String>,
+    path: Option<&str>,
     config: &TestConfig,
 ) {
-    let test_path = path
-        .as_deref()
-        .map_or_else(|| configured_project_root(), Path::new);
+    let test_path = match path {
+        Some(path) => Path::new(path),
+        None => configured_project_root(),
+    };
 
     cmd.arg("--project-root")
         .arg(configured_project_root())
@@ -640,7 +641,7 @@ fn shell_quote(value: &str) -> String {
     }
 }
 
-fn mutation_resume_command(path: &Option<String>, config: &TestConfig, session_id: &str) -> String {
+fn mutation_resume_command(path: Option<&str>, config: &TestConfig, session_id: &str) -> String {
     let mut args = vec!["acton".to_owned(), "test".to_owned()];
 
     if let Some(path) = path {
@@ -730,7 +731,7 @@ fn mutation_resume_command(path: &Option<String>, config: &TestConfig, session_i
 }
 
 fn exit_mutation_interrupted(
-    path: &Option<String>,
+    path: Option<&str>,
     config: &TestConfig,
     session_id: Option<&str>,
 ) -> ! {
@@ -778,7 +779,7 @@ fn prepare_project_for_mutation(config: &TestConfig) -> anyhow::Result<()> {
     anyhow::bail!("Failed to prepare project for mutation testing: {details}");
 }
 
-fn run_mutation_baseline_tests(path: &Option<String>, config: &TestConfig) -> anyhow::Result<()> {
+fn run_mutation_baseline_tests(path: Option<&str>, config: &TestConfig) -> anyhow::Result<()> {
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("acton"));
     let mut cmd = process::Command::new(exe);
     append_mutation_test_command_args(&mut cmd, path, config);
@@ -800,7 +801,7 @@ fn run_mutation_baseline_tests(path: &Option<String>, config: &TestConfig) -> an
     );
 }
 
-pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Result<()> {
+pub fn test_mutate_cmd(path: Option<&str>, config: &TestConfig) -> anyhow::Result<()> {
     install_mutation_interrupt_handler()?;
 
     let Some(mutate_contract) = &config.mutate_contract else {
@@ -867,7 +868,7 @@ pub fn test_mutate_cmd(path: &Option<String>, config: &TestConfig) -> anyhow::Re
     });
 
     let mappings = acton_config.mappings();
-    let dependencies = ton_abi::get_file_dependencies(&main_path_str, true, &mappings)?;
+    let dependencies = ton_abi::get_file_dependencies(&main_path_str, true, mappings.as_ref())?;
     for dep_path_str in &dependencies {
         let dep_path = Path::new(dep_path_str)
             .absolutize_from(&project_root)

@@ -16,6 +16,7 @@ pub struct ProfilingContext {
 }
 
 impl ProfilingContext {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }

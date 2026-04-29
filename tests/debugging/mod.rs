@@ -177,7 +177,7 @@ pub(crate) fn run_script_file(
             .lock()
             .expect("debug compiler lock poisoned");
 
-        let abi = contract_abi(content.into(), file_path, &None);
+        let abi = contract_abi(content.into(), file_path, None);
 
         let config = load_project_config(project_root);
 

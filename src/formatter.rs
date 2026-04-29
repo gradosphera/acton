@@ -2452,11 +2452,11 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
         };
 
         let Some((key_type_name, value_type_name)) = Self::parse_map_type(type_name) else {
-            return Some(self.format_map_raw(type_name, &dict_root, colorize));
+            return Some(self.format_map_raw(type_name, dict_root.as_ref(), colorize));
         };
 
         let Some(key_type) = Self::parse_map_key_type(&key_type_name) else {
-            return Some(self.format_map_raw(type_name, &dict_root, colorize));
+            return Some(self.format_map_raw(type_name, dict_root.as_ref(), colorize));
         };
         let value_type = Self::parse_map_value_type(&value_type_name);
         let allow_raw_value_fallback = value_type.is_none()
@@ -2743,7 +2743,7 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
         })
     }
 
-    fn format_map_raw(&self, type_name: &str, root: &Option<Cell>, colorize: bool) -> String {
+    fn format_map_raw(&self, type_name: &str, root: Option<&Cell>, colorize: bool) -> String {
         let Some(cell) = root else {
             return format!("{type_name} {{}}");
         };
@@ -2857,7 +2857,7 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
     }
 
     #[must_use]
-    pub fn format_address(&self, txs: &TupleItem, addr: &Option<IntAddr>) -> String {
+    pub fn format_address(&self, txs: &TupleItem, addr: Option<&IntAddr>) -> String {
         let Some(addr) = addr else {
             return "<any>".cyan().to_string();
         };
@@ -3495,7 +3495,7 @@ impl FormatterContext<'_> {
                 {
                     "<function>".cyan().to_string()
                 } else {
-                    self.format_address(&tx_failure.txs, &from_addr)
+                    self.format_address(&tx_failure.txs, from_addr.as_ref())
                 };
                 let to_str = if tx_failure
                     .params
@@ -3505,7 +3505,7 @@ impl FormatterContext<'_> {
                 {
                     "<function>".cyan().to_string()
                 } else {
-                    self.format_address(&tx_failure.txs, &to_addr)
+                    self.format_address(&tx_failure.txs, to_addr.as_ref())
                 };
                 writeln!(
                     result,
@@ -3541,7 +3541,7 @@ impl FormatterContext<'_> {
                     {
                         "<function>".cyan().to_string()
                     } else {
-                        self.format_address(&tx_failure.txs, &from_addr)
+                        self.format_address(&tx_failure.txs, from_addr.as_ref())
                     };
                     let to_s = if tx_failure
                         .params
@@ -3551,7 +3551,7 @@ impl FormatterContext<'_> {
                     {
                         "<function>".cyan().to_string()
                     } else {
-                        self.format_address(&tx_failure.txs, &to_addr)
+                        self.format_address(&tx_failure.txs, to_addr.as_ref())
                     };
                     format!(" from {from_s} to {to_s}")
                 };

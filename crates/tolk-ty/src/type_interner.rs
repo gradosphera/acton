@@ -1,6 +1,6 @@
 use crate::type_formatter::TypeFormatter;
 use crate::type_substitutor::TypeSubstitutor;
-use crate::types::*;
+use crate::types::{AddressKind, IntTy, TyData};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tolk_resolver::file_index::SymbolId;

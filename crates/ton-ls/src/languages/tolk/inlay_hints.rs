@@ -1,6 +1,6 @@
 use crate::backend::Backend;
 use crate::backend::utils::SpanExt;
-use lsp_types::*;
+use lsp_types::{InlayHint, InlayHintKind, InlayHintLabel, InlayHintParams, Position};
 use std::sync::Arc;
 use tolk_resolver::file_db::FileInfo;
 use tolk_resolver::project_index::ProjectIndex;

@@ -102,7 +102,7 @@ fn build_model(
             );
         }
     };
-    let fallback_abi = ton_abi::contract_abi(content, contract_path_str, &mappings);
+    let fallback_abi = ton_abi::contract_abi(content, contract_path_str, mappings.as_ref());
 
     let file_stem = contract_path
         .file_stem()
@@ -429,7 +429,7 @@ fn generate_typescript_wrapper(model: &WrapperModel) -> anyhow::Result<String> {
 fn serialize_typescript_abi(model: &WrapperModel) -> anyhow::Result<String> {
     let mut abi = model.abi.clone();
     if abi.contract_name.is_empty() {
-        abi.contract_name = model.contract_name.clone();
+        abi.contract_name.clone_from(&model.contract_name);
     }
 
     serde_json::to_string(&TypescriptGeneratorAbi {
@@ -482,7 +482,7 @@ fn generate_wrapper(model: &WrapperModel) -> String {
     code.push_str(&import_stdlib("testing/assert"));
 
     if let Some(storage_path) = &model.storage_path {
-        let storage_import = get_import_path(proot, root, storage_path, mappings);
+        let storage_import = get_import_path(proot, root, storage_path, mappings.as_ref());
         code.push_str(&gen_import_path(storage_import));
     }
 
@@ -492,14 +492,14 @@ fn generate_wrapper(model: &WrapperModel) -> String {
             continue;
         }
 
-        let types_import = get_import_path(proot, root, messages_path, mappings);
+        let types_import = get_import_path(proot, root, messages_path, mappings.as_ref());
         code.push_str(&gen_import_path(types_import));
     }
 
     code.push('\n');
 
     if let (Some(storage), Some(storage_path)) = (&model.storage, &model.storage_path) {
-        let import_path = get_import_path(proot, root, storage_path, mappings);
+        let import_path = get_import_path(proot, root, storage_path, mappings.as_ref());
         let display = import_path.display().to_string();
         let display = display.trim_start_matches("./").trim_end_matches(".tolk");
         let _ = writeln!(
@@ -801,11 +801,11 @@ fn generate_test(model: &WrapperModel) -> String {
     code.push_str(&import_stdlib("testing/expect"));
 
     for messages_path in &model.message_paths {
-        let types_import = get_import_path(proot, root, messages_path, mappings);
+        let types_import = get_import_path(proot, root, messages_path, mappings.as_ref());
         code.push_str(&gen_import_path(types_import));
     }
 
-    let wrapper_import = get_import_path(proot, root, &model.wrapper_path, mappings);
+    let wrapper_import = get_import_path(proot, root, &model.wrapper_path, mappings.as_ref());
     code.push_str(&gen_import_path(wrapper_import));
     code.push('\n');
 
@@ -848,7 +848,7 @@ fn get_import_path(
     project_root: &Path,
     where_: &Path,
     what: &Path,
-    mappings: &Option<BTreeMap<String, String>>,
+    mappings: Option<&BTreeMap<String, String>>,
 ) -> PathBuf {
     if let Some(mapped_import) = resolve_mapped_import(project_root, what, mappings) {
         return mapped_import;
@@ -860,9 +860,9 @@ fn get_import_path(
 fn resolve_mapped_import(
     project_root: &Path,
     what: &Path,
-    mappings: &Option<BTreeMap<String, String>>,
+    mappings: Option<&BTreeMap<String, String>>,
 ) -> Option<PathBuf> {
-    let mappings = mappings.as_ref()?;
+    let mappings = mappings?;
     let what_abs = normalize_abs_path(project_root, what);
 
     let mut best_match = None;

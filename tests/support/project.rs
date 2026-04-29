@@ -732,12 +732,12 @@ impl ProjectBuilder {
                 &self.lint_excludes,
                 self.lint_max_warnings,
                 self.lint_output_format,
-                &self.test_config,
+                self.test_config.as_ref(),
                 self.wrappers_tolk_output_dir.as_deref(),
                 self.wrappers_tolk_generate_test,
                 self.wrappers_tolk_test_output_dir.as_deref(),
                 self.wrappers_typescript_output_dir.as_deref(),
-                &self.license,
+                self.license.as_deref(),
             );
         }
 
@@ -773,12 +773,12 @@ impl ProjectBuilder {
         lint_excludes: &[String],
         lint_max_warnings: Option<usize>,
         lint_output_format: Option<String>,
-        test_config: &Option<TestConfig>,
+        test_config: Option<&TestConfig>,
         wrappers_tolk_output_dir: Option<&str>,
         wrappers_tolk_generate_test: Option<bool>,
         wrappers_tolk_test_output_dir: Option<&str>,
         wrappers_typescript_output_dir: Option<&str>,
-        license: &Option<String>,
+        license: Option<&str>,
     ) {
         use std::fmt::Write as _;
 

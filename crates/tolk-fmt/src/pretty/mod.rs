@@ -202,6 +202,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn space() -> Self {
         Doc::BorrowedText(" ").into()
     }
@@ -217,26 +218,31 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn line() -> Self {
         Self::hardline().flat_alt(Self::space())
     }
 
     #[inline]
+    #[must_use]
     pub fn line_() -> Self {
         Self::hardline().flat_alt(Self::nil())
     }
 
     #[inline]
+    #[must_use]
     pub fn as_string<U: fmt::Display>(data: U) -> Self {
         RcAllocator.as_string(data).into_doc()
     }
 
     #[inline]
+    #[must_use]
     pub fn text<U: Into<Cow<'a, str>>>(data: U) -> Self {
         RcAllocator.text(data).into_doc()
     }
 
     #[inline]
+    #[must_use]
     pub fn append<D>(self, that: D) -> Self
     where
         D: Pretty<'a, RcAllocator, A>,
@@ -247,6 +253,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn concat<I>(docs: I) -> Self
     where
         I: IntoIterator,
@@ -256,6 +263,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn intersperse<I, S>(docs: I, separator: S) -> Self
     where
         I: IntoIterator,
@@ -267,6 +275,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn flat_alt<D>(self, doc: D) -> Self
     where
         D: Pretty<'a, RcAllocator, A>,
@@ -277,11 +286,13 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn group(self) -> Self {
         DocBuilder(&RcAllocator, self.into()).group().into_doc()
     }
 
     #[inline]
+    #[must_use]
     pub fn nest(self, offset: isize) -> Self {
         DocBuilder(&RcAllocator, self.into())
             .nest(offset)
@@ -289,6 +300,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn annotate(self, ann: A) -> Self {
         DocBuilder(&RcAllocator, self.into())
             .annotate(ann)
@@ -296,6 +308,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn union<D>(self, other: D) -> Self
     where
         D: Into<BuildDoc<'a, Self, A>>,
@@ -306,16 +319,19 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn softline() -> Self {
         Self::line().group()
     }
 
     #[inline]
+    #[must_use]
     pub fn softline_() -> Self {
         Self::line_().group()
     }
 
     #[inline]
+    #[must_use]
     pub fn column(f: impl Fn(usize) -> Self + 'static) -> Self {
         DocBuilder(
             &RcAllocator,
@@ -325,6 +341,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn nesting(f: impl Fn(usize) -> Self + 'static) -> Self {
         DocBuilder(
             &RcAllocator,
@@ -361,26 +378,31 @@ where
     D: DocPtr<'a, A>,
 {
     #[inline]
+    #[must_use]
     pub const fn nil() -> Self {
         Doc::Nil
     }
 
     #[inline]
+    #[must_use]
     pub const fn hardline() -> Self {
         Doc::Hardline
     }
 
     #[inline]
+    #[must_use]
     pub const fn space() -> Self {
         Doc::BorrowedText(" ")
     }
 
     #[inline]
+    #[must_use]
     pub const fn fail() -> Self {
         Doc::Fail
     }
 
     #[inline]
+    #[must_use]
     pub const fn break_parent() -> Self {
         Doc::BreakParent
     }
@@ -391,11 +413,13 @@ where
     D: StaticDoc<'a, A>,
 {
     #[inline]
+    #[must_use]
     pub fn line() -> Self {
         Self::hardline().flat_alt(Self::space())
     }
 
     #[inline]
+    #[must_use]
     pub fn line_() -> Self {
         Self::hardline().flat_alt(Self::nil())
     }
@@ -416,6 +440,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub const fn space() -> Self {
         BuildDoc::Doc(Doc::BorrowedText(" "))
     }
@@ -436,11 +461,13 @@ where
     D: StaticDoc<'a, A>,
 {
     #[inline]
+    #[must_use]
     pub fn line() -> Self {
         Self::hardline().flat_alt(Self::space())
     }
 
     #[inline]
+    #[must_use]
     pub fn line_() -> Self {
         Self::hardline().flat_alt(Self::nil())
     }
@@ -1145,6 +1172,7 @@ where
 
     /// Append the given document after this document.
     #[inline]
+    #[must_use]
     pub fn append<E>(self, that: E) -> DocBuilder<'a, D, A>
     where
         E: Pretty<'a, D, A>,
@@ -1190,6 +1218,7 @@ where
     /// assert_eq!(doc.1.pretty(8).to_string(), "let x\nx");
     /// ```
     #[inline]
+    #[must_use]
     pub fn flat_alt<E>(self, that: E) -> DocBuilder<'a, D, A>
     where
         E: Pretty<'a, D, A>,
@@ -1209,6 +1238,7 @@ where
     /// horizontally and combined into a one single line, or they are each laid out on their own
     /// line.
     #[inline]
+    #[must_use]
     pub fn group(self) -> DocBuilder<'a, D, A> {
         match *self.1 {
             Doc::Group(_)
@@ -1225,6 +1255,7 @@ where
 
     /// Increase the indentation level of this document.
     #[inline]
+    #[must_use]
     pub fn nest(self, offset: isize) -> DocBuilder<'a, D, A> {
         if matches!(&*self.1, Doc::Nil) {
             return self;
@@ -1240,6 +1271,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn annotate(self, ann: A) -> DocBuilder<'a, D, A> {
         let DocBuilder(allocator, this) = self;
         DocBuilder(
@@ -1249,6 +1281,7 @@ where
     }
 
     #[inline]
+    #[must_use]
     pub fn union<E>(self, other: E) -> DocBuilder<'a, D, A>
     where
         E: Into<BuildDoc<'a, D::Doc, A>>,
@@ -1280,6 +1313,7 @@ where
     /// assert_eq!(doc.1.pretty(80).to_string(), "lorem ipsum\n      dolor\nnext");
     /// ```
     #[inline]
+    #[must_use]
     pub fn align(self) -> DocBuilder<'a, D, A>
     where
         DocBuilder<'a, D, A>: Clone,
@@ -1310,6 +1344,7 @@ where
     /// );
     /// ```
     #[inline]
+    #[must_use]
     pub fn hang(self, adjust: isize) -> DocBuilder<'a, D, A>
     where
         DocBuilder<'a, D, A>: Clone,
@@ -1338,6 +1373,7 @@ where
     /// );
     /// ```
     #[inline]
+    #[must_use]
     pub fn indent(self, adjust: usize) -> DocBuilder<'a, D, A>
     where
         DocBuilder<'a, D, A>: Clone,
@@ -1374,6 +1410,7 @@ where
     /// assert_eq!(doc.1.pretty(80).to_string(), "prefix | <- column 7");
     /// ```
     #[inline]
+    #[must_use]
     pub fn width(self, f: impl Fn(isize) -> D::Doc + 'a) -> DocBuilder<'a, D, A>
     where
         BuildDoc<'a, D::Doc, A>: Clone,
@@ -1391,6 +1428,7 @@ where
 
     /// Puts `self` between `before` and `after`
     #[inline]
+    #[must_use]
     pub fn enclose<E, F>(self, before: E, after: F) -> DocBuilder<'a, D, A>
     where
         E: Pretty<'a, D, A>,
@@ -1402,24 +1440,30 @@ where
             .append(after)
     }
 
+    #[must_use]
     pub fn single_quotes(self) -> DocBuilder<'a, D, A> {
         self.enclose("'", "'")
     }
 
+    #[must_use]
     pub fn double_quotes(self) -> DocBuilder<'a, D, A> {
         self.enclose("\"", "\"")
     }
+    #[must_use]
     pub fn parens(self) -> DocBuilder<'a, D, A> {
         self.enclose("(", ")")
     }
 
+    #[must_use]
     pub fn angles(self) -> DocBuilder<'a, D, A> {
         self.enclose("<", ">")
     }
+    #[must_use]
     pub fn braces(self) -> DocBuilder<'a, D, A> {
         self.enclose("{", "}")
     }
 
+    #[must_use]
     pub fn brackets(self) -> DocBuilder<'a, D, A> {
         self.enclose("[", "]")
     }

@@ -1054,7 +1054,7 @@ fn run_tests_for_file(runner: &mut TestRunner, filepath: &str) -> anyhow::Result
         content.into(),
         filepath,
         &file,
-        &mappings,
+        mappings.as_ref(),
         Some(&mut runner.abi_parse_cache),
     );
 
@@ -1175,7 +1175,7 @@ fn run_file_tests(
 
         if test.annotations.contains(&TestAnnotation::Todo) {
             test_report.status = TestStatus::Todo;
-            test_report.details = test.status_description.clone();
+            test_report.details.clone_from(&test.status_description);
             runner.reporter_manager.on_test_finished(&test_report)?;
             todo += 1;
             continue;
@@ -1183,7 +1183,7 @@ fn run_file_tests(
 
         if test.annotations.contains(&TestAnnotation::Skip) {
             test_report.status = TestStatus::Skipped;
-            test_report.details = test.status_description.clone();
+            test_report.details.clone_from(&test.status_description);
             runner.reporter_manager.on_test_finished(&test_report)?;
             skipped += 1;
             continue;
@@ -1393,8 +1393,12 @@ fn run_file_tests(
                     *code.repr_hash(),
                     source_map.clone(),
                     Some(
-                        contract_abi(content, file_path.to_string_lossy().as_ref(), &mappings)
-                            .into(),
+                        contract_abi(
+                            content,
+                            file_path.to_string_lossy().as_ref(),
+                            mappings.as_ref(),
+                        )
+                        .into(),
                     ),
                     None,
                 );

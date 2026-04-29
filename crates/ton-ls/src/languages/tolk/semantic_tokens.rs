@@ -3,7 +3,10 @@ use crate::backend::utils::SpanExt;
 use crate::languages::semantic_tokens::{
     SemanticTokensBuilder as CommonSemanticTokensBuilder, semantic_tokens_result_id,
 };
-use lsp_types::*;
+use lsp_types::{
+    SemanticToken, SemanticTokenModifier, SemanticTokenType, SemanticTokens, SemanticTokensParams,
+    SemanticTokensResult, Url,
+};
 use std::sync::Arc;
 use tolk_resolver::resolve_index::{FileResolveIndex, LocalDef, LocalDefKind, NameUse, Resolved};
 use tolk_resolver::{FileInfo, Span, Symbol, SymbolKind};
