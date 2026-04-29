@@ -615,6 +615,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     let mut global_reporter = ReporterManager::new();
     TestRunner::setup_reporters(&mut global_reporter, &config, ui_reporter);
     global_reporter.init()?;
+    let testing_started_at = Instant::now();
     global_reporter.on_testing_started()?;
 
     let mut file_cache = FileBuildCache::new(None)?;
@@ -671,7 +672,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
         failed: total_failed,
         skipped: total_skipped,
         todo: total_todo,
-        duration: Duration::default(),
+        duration: testing_started_at.elapsed(),
     };
     runner.reporter_manager.on_testing_finished(&global_stats)?;
 
@@ -1085,6 +1086,7 @@ fn run_file_tests(
     runner
         .reporter_manager
         .on_suite_started(&file_path, &filtered_tests)?;
+    let suite_started_at = Instant::now();
 
     let dest_address = contract_address(code)?;
 
@@ -1355,7 +1357,7 @@ fn run_file_tests(
         failed,
         skipped,
         todo,
-        duration: Duration::default(), // TODO: track suite duration
+        duration: suite_started_at.elapsed(),
     };
     runner
         .reporter_manager

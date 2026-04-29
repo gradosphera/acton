@@ -310,12 +310,3 @@ pub(super) fn formatter_for_failed_test<'a>(test: &'a TestReport) -> Option<Form
         network: None,
     })
 }
-
-pub(super) fn escape_xml(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&apos;")
-}

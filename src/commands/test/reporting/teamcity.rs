@@ -158,10 +158,10 @@ impl TestReporter for TeamCityReporter {
     ) -> anyhow::Result<()> {
         let suite_name = extract_suite_name(file_path);
         let escaped_name = self.escape_name(&suite_name);
+        let location_hint = self.escape_name(&format!("file://{}", file_path.display()));
 
         println!(
-            "##teamcity[testSuiteStarted name='{escaped_name}' nodeId='suite_{escaped_name}' parentNodeId='0' nodeType='file' locationHint='file://{}']",
-            file_path.display()
+            "##teamcity[testSuiteStarted name='{escaped_name}' nodeId='suite_{escaped_name}' parentNodeId='0' nodeType='file' locationHint='{location_hint}']"
         );
         Ok(())
     }
