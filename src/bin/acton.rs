@@ -1685,12 +1685,10 @@ fn main() {
     if !matches!(
         command,
         Commands::Ls { .. } | Commands::Help { .. } | Commands::Meta { .. } | Commands::Lint { .. }
-    ) && let Err(err) = setup_logging()
+    ) && let Err(_) = setup_logging()
     {
-        eprintln!(
-            "{} failed to initialize debug logging ({err}). Continuing without file logging.\nHint: set ACTON_LOG_DIR to a writable directory.",
-            "Warning:".yellow()
-        );
+        // previously we print error here, but it is too annoying for LLM agents
+        // we need some better way
     }
 
     let result = match command {
