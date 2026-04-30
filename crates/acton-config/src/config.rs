@@ -140,6 +140,8 @@ pub struct CustomNetworkConfig {
 pub struct ActonConfig {
     /// Package metadata for the Acton project
     pub package: PackageConfig,
+    /// Required versions for project-level tooling
+    pub toolchain: Option<ToolchainConfig>,
     /// Definition of contracts in the project
     pub contracts: Option<ContractsConfig>,
     /// Default settings for the test runner
@@ -228,6 +230,14 @@ pub struct PackageConfig {
     pub repository: Option<String>,
     /// The project's license identifier
     pub license: Option<String>,
+}
+
+/// Required versions for project-level tooling
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct ToolchainConfig {
+    /// Acton CLI version required by this project
+    pub acton: Option<String>,
 }
 
 /// Coverage settings for the test runner
@@ -609,6 +619,7 @@ impl Default for ActonConfig {
                 repository: None,
                 license: Some("MIT".to_string()),
             },
+            toolchain: None,
             test: None,
             lint: None,
             contracts: None,
@@ -706,7 +717,7 @@ impl ContractConfig {
 }
 
 impl ActonConfig {
-    pub fn load() -> Result<Self> {
+    pub fn load_manifest() -> Result<Self> {
         let config_path = manifest_path();
         if !config_path.exists() {
             return Err(anyhow!(
@@ -715,7 +726,11 @@ impl ActonConfig {
         }
 
         let content = fs::read_to_string(config_path)?;
-        let mut config: ActonConfig = toml::from_str(&content)?;
+        Ok(toml::from_str(&content)?)
+    }
+
+    pub fn load() -> Result<Self> {
+        let mut config = Self::load_manifest()?;
 
         // Merge wallets from different sources
         // Order of importance (later overrides earlier):
@@ -1618,6 +1633,7 @@ rules-file = "mutation-rules.json"
                 repository: None,
                 license: None,
             },
+            toolchain: None,
             contracts: Some(ContractsConfig {
                 contracts: BTreeMap::from([(
                     "counter".to_string(),
@@ -1658,6 +1674,7 @@ rules-file = "mutation-rules.json"
                 repository: None,
                 license: None,
             },
+            toolchain: None,
             contracts: None,
             test: None,
             lint: None,

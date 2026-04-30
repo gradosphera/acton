@@ -32,7 +32,8 @@ use acton_config::color::{ColorMode, init_color_mode};
 use acton_config::config::{
     ActonConfig, CheckOutputFormat, Explorer, LocalnetSettings, Network, ResolutionSource,
     TestSettings, WalletsFile, global_wallets_path, init_manifest_path_with_source,
-    init_project_root_with_source, project_root as configured_project_root,
+    init_project_root_with_source, manifest_path as configured_manifest_path,
+    project_root as configured_project_root,
 };
 use acton_config::test::{
     BacktraceMode, CoverageFormat, MutationDiffMode, MutationLevel, ReportFormat, TestConfig,
@@ -1667,18 +1668,18 @@ fn main() {
     };
     init_color_mode(color);
 
-    if !matches!(
-        command,
-        Commands::Init { .. }
-            | Commands::New { .. }
-            | Commands::Help { .. }
-            | Commands::Rpc { .. }
-            | Commands::Meta { .. }
-            | Commands::Lint { .. }
-    ) && let Err(err) = configure_project_roots(manifest_path.clone(), project_root.clone())
-    {
-        eprintln!("{} {}", "Error:".red(), err);
-        process::exit(1);
+    if command_configures_project_roots(&command) {
+        if let Err(err) = configure_project_roots(manifest_path.clone(), project_root.clone()) {
+            eprintln!("{} {}", "Error:".red(), err);
+            process::exit(1);
+        }
+
+        if command_checks_toolchain_version(&command)
+            && let Err(err) = validate_project_toolchain_version()
+        {
+            print_error(&err);
+            process::exit(1);
+        }
     }
 
     if !matches!(
@@ -1702,7 +1703,7 @@ fn main() {
         Commands::Rpc { command } => {
             if manifest_path.is_some() || project_root.is_some() {
                 match configure_project_roots(manifest_path, project_root) {
-                    Ok(()) => rpc_cmd(command),
+                    Ok(()) => validate_project_toolchain_version().and_then(|()| rpc_cmd(command)),
                     Err(err) => Err(err),
                 }
             } else {
@@ -2184,6 +2185,55 @@ fn main() {
         print_error(&err);
         process::exit(1)
     }
+}
+
+const fn command_configures_project_roots(command: &Commands) -> bool {
+    !matches!(
+        command,
+        Commands::Init { .. }
+            | Commands::New { .. }
+            | Commands::Help { .. }
+            | Commands::Rpc { .. }
+            | Commands::Meta { .. }
+            | Commands::Lint { .. }
+    )
+}
+
+const fn command_checks_toolchain_version(command: &Commands) -> bool {
+    command_configures_project_roots(command)
+        && !matches!(command, Commands::Up { .. } | Commands::Completions { .. })
+}
+
+fn validate_project_toolchain_version() -> anyhow::Result<()> {
+    if !configured_manifest_path().exists() {
+        return Ok(());
+    }
+
+    let config = ActonConfig::load_manifest()?;
+    let Some(expected) = config
+        .toolchain
+        .as_ref()
+        .and_then(|toolchain| toolchain.acton.as_deref())
+    else {
+        return Ok(());
+    };
+
+    let expected = expected.trim();
+    if expected.is_empty() {
+        anyhow::bail!(
+            "Acton.toml has empty [toolchain].acton.\n\nSet it to the required Acton CLI version, for example:\n\n[toolchain]\nacton = \"{}\"",
+            acton::build_info::SHORT_VERSION
+        );
+    }
+
+    let installed = acton::build_info::SHORT_VERSION;
+    if expected == installed {
+        return Ok(());
+    }
+
+    anyhow::bail!(
+        "Acton CLI version mismatch for this project.\n\nActon.toml expects [toolchain].acton = \"{expected}\"\nInstalled acton version is \"{installed}\".\n\nInstall the expected version:\n  acton up {expected}\n\nOr update [toolchain].acton if this project supports acton {installed}."
+    );
 }
 
 fn print_error(err: &anyhow::Error) {

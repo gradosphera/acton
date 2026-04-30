@@ -84,6 +84,14 @@
         }
       ]
     },
+    "toolchain": {
+      "description": "Required versions for project-level tooling",
+      "allOf": [
+        {
+          "$ref": "#/definitions/ToolchainConfig"
+        }
+      ]
+    },
     "wrappers": {
       "description": "Default settings for wrapper generation",
       "allOf": [
@@ -839,6 +847,16 @@
         },
         "test-output-dir": {
           "description": "Directory where generated Tolk test stubs are written by default",
+          "type": "string"
+        }
+      }
+    },
+    "ToolchainConfig": {
+      "description": "Required versions for project-level tooling",
+      "type": "object",
+      "properties": {
+        "acton": {
+          "description": "Acton CLI version required by this project",
           "type": "string"
         }
       }

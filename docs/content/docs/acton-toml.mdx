@@ -40,6 +40,7 @@ Examples:
 The top-level of `Acton.toml` contains the following sections:
 
 - `[package]` — Project metadata.
+- `[toolchain]` — Required Acton CLI version for this project.
 - `[contracts]` — Definition of smart contracts in the project.
 - `[build]` — Build command output settings.
 - `[wrappers]` — Default output settings for `acton wrapper`.
@@ -74,6 +75,27 @@ version = "0.1.0"
 repository = "https://github.com/user/my-awesome-contract"
 license = "MIT"
 ```
+
+---
+
+## `[toolchain]` Section
+
+Pins project-level tooling versions. Acton checks this section before running
+project commands and exits with an error when the installed CLI version does
+not match the configured version.
+
+| Field   | Type     | Required | Description                                                            |
+|:--------|:---------|:---------|:-----------------------------------------------------------------------|
+| `acton` | `string` | No       | Required Acton CLI version without a leading `v`, for example `0.3.2`. |
+
+Example:
+```toml
+[toolchain]
+acton = "0.3.2"
+```
+
+`acton up` remains available when the configured version does not match, so you
+can install the expected version from the same project directory.
 
 ---
 
