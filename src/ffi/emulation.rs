@@ -316,6 +316,7 @@ fn send_message_impl(
             .map_err(|error| format_send_boc_error(error, SendBocContext::Generic))?;
 
         let pseudo_tx = build_pseudo_broadcast_tx(ctx.chain.world_state.get_now(), msg, norm_hash);
+        ctx.chain.world_state.invalidate_remote_cache();
         stack.push(TupleItem::big_array_from_items(vec![pseudo_tx]));
         return Ok(());
     }
@@ -332,6 +333,8 @@ fn send_message_impl(
         let (wallet_ext_in, norm_hash) =
             send_wallet_message(&msg, wallet, &network, custom_networks)
                 .context("Failed to send message to real network")?;
+
+        ctx.chain.world_state.invalidate_remote_cache();
 
         let pseudo_tx =
             build_pseudo_broadcast_tx(ctx.chain.world_state.get_now(), wallet_ext_in, norm_hash);
@@ -2583,6 +2586,9 @@ fn wait_for_transaction_impl(
                     let link = transaction_link(ctx, &dest_address, &polled);
                     println!("You can view it at {}", link.underline());
                 }
+
+                ctx.chain.world_state.invalidate_remote_cache();
+
                 // Tolk expects a BigArray here (see the Tolk-side unwrap): a bare struct tuple
                 // would be spread across multiple stack slots and cause a stack underflow.
                 stack.push(TupleItem::big_array_from_items(vec![polled.send_result]));
@@ -3475,6 +3481,7 @@ fn wait_for_trace_impl(
                 if !quiet {
                     println!("Trace settled with {} transaction(s)", send_results.len());
                 }
+                ctx.chain.world_state.invalidate_remote_cache();
                 stack.push(TupleItem::big_array_from_items(send_results));
                 return Ok(());
             }
