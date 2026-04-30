@@ -293,6 +293,10 @@ contract and its transitive dependencies.
 the resolved project root. If one contract fails after earlier contracts were
 built successfully, the successful artifacts remain on disk.
 
+Before compiling, `acton build` normally refreshes the bundled standard library
+under `.acton/`. Set `ACTON_DISABLE_AUTO_STDLIB=1` to skip that automatic
+refresh for the current process.
+
 ## Exit Status
 
 - `0`: The command completed without compilation failures.

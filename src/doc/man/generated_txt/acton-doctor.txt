@@ -52,7 +52,8 @@ REPORT SECTIONS
 
        o  resolved logging directory and debug log path
 
-       o  selected environment variables such as HOME, SHELL, and NO_COLOR
+       o  selected environment variables such as HOME, SHELL, NO_COLOR, and
+          ACTON_DISABLE_AUTO_STDLIB
 
 PATH AND OVERLAY CHECKS
        For each reported path, Acton shows whether it exists, whether it

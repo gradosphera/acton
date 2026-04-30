@@ -37,7 +37,8 @@ and Tolk library metadata, logging paths, and relevant environment variables.
 - native emulator/Tolk version metadata, including the TON commit hash and date
   embedded in the linked libraries
 - resolved logging directory and debug log path
-- selected environment variables such as `HOME`, `SHELL`, and `NO_COLOR`
+- selected environment variables such as `HOME`, `SHELL`, `NO_COLOR`, and
+  `ACTON_DISABLE_AUTO_STDLIB`
 
 ## Path And Overlay Checks
 

@@ -28,6 +28,16 @@ acton --project-root ../my-project test
 acton --manifest-path ../my-project/Acton.toml wallet new --local
 ```
 
+## Global Environment Overrides
+
+Acton normally refreshes the bundled standard library in `.acton/` before
+commands that need project support, such as `build`, `test`, `script`, `new`,
+and `init`.
+
+Set `ACTON_DISABLE_AUTO_STDLIB=1` to skip that automatic `.acton/` refresh for
+the current process. Explicit standard-library commands, such as
+`acton init --stdlib-only`, still update `.acton/`.
+
 ## Help And Manuals
 
 Use the CLI help surfaces intentionally:

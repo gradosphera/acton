@@ -144,6 +144,7 @@ struct DoctorEnvironmentVars {
     lang: Option<String>,
     shell: Option<String>,
     no_color: Option<String>,
+    disable_auto_stdlib: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -728,6 +729,7 @@ fn collect_doctor_report() -> Result<DoctorReport> {
                 lang: env::var("LANG").ok(),
                 shell: env::var("SHELL").ok(),
                 no_color: env::var("NO_COLOR").ok(),
+                disable_auto_stdlib: env::var(stdlib::DISABLE_AUTO_STDLIB_ENV).ok(),
             },
         },
     })
@@ -1419,6 +1421,15 @@ fn print_report(report: &DoctorReport) {
             .environment
             .vars
             .no_color
+            .as_deref()
+            .unwrap_or("<unset>"),
+    );
+    print_kv(
+        stdlib::DISABLE_AUTO_STDLIB_ENV,
+        report
+            .environment
+            .vars
+            .disable_auto_stdlib
             .as_deref()
             .unwrap_or("<unset>"),
     );

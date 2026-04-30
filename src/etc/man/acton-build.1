@@ -193,6 +193,10 @@ contract and its transitive dependencies.
 \fBacton build\fR writes artifacts, cache entries, and optional graph output under
 the resolved project root. If one contract fails after earlier contracts were
 built successfully, the successful artifacts remain on disk.
+.sp
+Before compiling, \fBacton build\fR normally refreshes the bundled standard library
+under \fB\&.acton/\fR\&. Set \fBACTON_DISABLE_AUTO_STDLIB=1\fR to skip that automatic
+refresh for the current process.
 .SH "EXIT STATUS"
 .sp
 .RS 4
