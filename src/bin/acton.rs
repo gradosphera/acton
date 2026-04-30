@@ -96,19 +96,19 @@ struct Cli {
 enum Commands {
     #[command(
         about = "Add Acton support to current directory",
-        long_about = "Initialize Acton support in the current directory. This is useful for adding Acton support to an existing project. With --create-app, Acton skips project initialization and only scaffolds a TypeScript app. With --stdlib-only, Acton only refreshes the bundled standard library.",
+        long_about = "Initialize Acton support in the current directory. This is useful for adding Acton support to an existing project. With --create-dapp, Acton skips project initialization and only scaffolds a TypeScript app. With --stdlib-only, Acton only refreshes the bundled standard library.",
         after_help = detailed_help_pointer("init")
     )]
     Init {
         #[arg(
-            long,
+            long = "create-dapp",
             value_name = "PATH",
             num_args = 0..=1,
             default_missing_value = DEFAULT_APP_DIR,
             conflicts_with = "stdlib_only",
             help = "Create a TypeScript app scaffold in PATH (default: app)"
         )]
-        create_app: Option<PathBuf>,
+        create_dapp: Option<PathBuf>,
         #[arg(
             long,
             help = "Update the bundled standard library without touching Acton.toml"
@@ -1688,9 +1688,9 @@ fn main() {
 
     let result = match command {
         Commands::Init {
-            create_app,
+            create_dapp,
             stdlib_only,
-        } => init_cmd(create_app.as_deref(), stdlib_only),
+        } => init_cmd(create_dapp.as_deref(), stdlib_only),
         Commands::Help { command } => render_help_command(command),
         Commands::Wallet { command } => wallet_cmd(command),
         Commands::Rpc { command } => {
