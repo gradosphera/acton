@@ -564,6 +564,7 @@ fn test_new_w5_extension_project_non_interactive() {
     assert!(project_dir.join("scripts/deploy.tolk").exists());
     assert!(project_dir.join("scripts/install-extension.tolk").exists());
     assert!(project_dir.join("scripts/delete-extension.tolk").exists());
+    assert!(project_dir.join("scripts/utils/common.tolk").exists());
     assert!(!project_dir.join("package.json").exists());
     assert!(!project_dir.join("app").exists());
 }
@@ -836,6 +837,11 @@ fn test_new_w5_extension_project_with_app_flag() {
     assert!(
         project_dir
             .join("contracts/scripts/install-extension.tolk")
+            .exists()
+    );
+    assert!(
+        project_dir
+            .join("contracts/scripts/utils/common.tolk")
             .exists()
     );
     assert!(project_dir.join(".prettierrc").exists());
@@ -2224,6 +2230,53 @@ fn test_new_app_templates_npm_quality_checks() {
     }
 }
 
+fn read_new_template_file(template: &str, relative_path: &str) -> String {
+    fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/commands/new/templates")
+            .join(template)
+            .join(relative_path),
+    )
+    .unwrap_or_else(|e| panic!("Failed to read {template}/{relative_path}: {e}"))
+}
+
+fn read_new_template_package_json(template: &str) -> JsonValue {
+    serde_json::from_str(&read_new_template_file(template, "package.json"))
+        .unwrap_or_else(|e| panic!("Failed to parse {template}/package.json: {e}"))
+}
+
+#[test]
+fn test_new_w5_extension_app_template_matches_contract_app_package_sections() {
+    let baseline = read_new_template_package_json("counter-app");
+    let w5_package = read_new_template_package_json("w5-extension-app");
+
+    for section in ["scripts", "dependencies", "devDependencies"] {
+        assert_eq!(
+            w5_package[section], baseline[section],
+            "w5-extension app template package.json `{section}` must match the common contract app template shape"
+        );
+    }
+}
+
+#[test]
+fn test_new_w5_extension_app_template_matches_contract_app_tooling_files() {
+    for relative_path in [
+        ".github/workflows/ci.yml",
+        ".prettierignore",
+        ".prettierrc",
+        "components.json",
+        "eslint.config.js",
+        "tsconfig.json",
+        "vite.config.ts",
+    ] {
+        assert_eq!(
+            read_new_template_file("w5-extension-app", relative_path),
+            read_new_template_file("counter-app", relative_path),
+            "w5-extension app template `{relative_path}` must match the common contract app template tooling file"
+        );
+    }
+}
+
 #[test]
 fn test_new_empty_project_localnet_deploy_snapshot() {
     assert_new_project_localnet_deploy_snapshot(
@@ -2290,7 +2343,7 @@ fn test_new_w5_extension_project_localnet_deploy_snapshot() {
         "new-w5-extension-localnet-deploy",
         "w5-extension",
         false,
-        "deployer-2",
+        "deployer",
         "scripts/deploy.tolk",
         "integration/snapshots/test_new_w5_extension_project_localnet_deploy.stdout.txt",
     );
@@ -2302,7 +2355,7 @@ fn test_new_w5_extension_app_project_localnet_deploy_snapshot() {
         "new-w5-extension-app-localnet-deploy",
         "w5-extension",
         true,
-        "deployer-2",
+        "deployer",
         "contracts/scripts/deploy.tolk",
         "integration/snapshots/test_new_w5_extension_app_project_localnet_deploy.stdout.txt",
     );

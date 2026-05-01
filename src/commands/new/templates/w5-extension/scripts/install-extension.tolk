@@ -6,9 +6,10 @@ import "@acton/emulation/scripts"
 import "@wrappers/SimpleExtension.gen"
 import "@wrappers/WalletV5Contract"
 import "@contracts/walletv5/messages"
+import "utils/common"
 
 fun main() {
-    val deployer = scripts.wallet("deployer-2");
+    val deployer = promptW5Wallet("W5_DEPLOYER", "Select Wallet V5");
 
     val wallet = WalletV5Contract { address: deployer.address };
     val extensionAddress = env<address>("EXT_ADDRESS") ??

@@ -1,14 +1,14 @@
 import "@acton/env"
 import "@acton/io"
 import "@acton/emulation/network"
-import "@acton/emulation/scripts"
 import "@wrappers/SimpleExtension.gen"
+import "utils/common"
 
 const DEFAULT_SUB_AMOUNT = ton("0.27")
 const DEFAULT_PAYMENT_INTERVAL = 3600
 
 fun main() {
-    val deployer = scripts.wallet("deployer-2");
+    val deployer = promptW5Wallet("W5_DEPLOYER", "Select Wallet V5 Deployer");
 
     val extension = SimpleExtension.fromStorage({
         walletAddress: deployer.address,

@@ -50,11 +50,15 @@ npm run dev
 - `acton build` compiles the contracts using `contracts/src/SimpleExtension.tolk`
   and the vendored Wallet V5.
 - `acton wrapper SimpleExtension` regenerates
-  `contracts/wrappers/SimpleExtension.gen.tolk`.
-- `acton wrapper SimpleExtension --ts` regenerates
-  `wrappers-ts/SimpleExtension.gen.ts`.
+  `contracts/wrappers/SimpleExtension.gen.tolk`; `WalletV5Contract.tolk` is
+  intentionally hand-written because Wallet V5 scripts need signed external
+  message helpers.
+- `acton wrapper SimpleExtension --ts` and `acton wrapper WalletV5 --ts`
+  regenerate the TypeScript wrappers under `wrappers-ts/`.
 - `npm run build` runs the contract build and the frontend build.
 - `npm run test` delegates to `acton test`.
+- The scripts select a Wallet V5 with `promptWallet`. Set `W5_DEPLOYER` in
+  non-interactive contexts.
 - The app reads blockchain data through Toncenter. Set
   `TONCENTER_TESTNET_API_KEY` and/or `TONCENTER_MAINNET_API_KEY` in a local
   `.env` copied from `.env.example` if you need higher rate limits. Acton CLI

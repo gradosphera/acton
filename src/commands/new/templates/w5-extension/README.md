@@ -68,6 +68,9 @@ non-interactive contexts. The extension address depends on the deployer
 wallet and storage, so the scripts intentionally avoid any hard-coded
 fallback.
 
+The scripts select a wallet with `promptWallet`. In non-interactive contexts,
+set `W5_DEPLOYER` to the Wallet V5 name to skip the prompt.
+
 ## Customize The Starter
 
 1. Extend `contracts/types.tolk` with your storage, messages, and errors.
@@ -79,12 +82,13 @@ fallback.
 
 ## Deploy To Testnet
 
-The deployment scripts expect a Wallet V5 named `deployer-2`.
+The deployment scripts expect a Wallet V5 selected at runtime, or named through
+`W5_DEPLOYER` in non-interactive contexts.
 
 1. Create a local Wallet V5 and request testnet TON:
 
 ```bash
-acton wallet new --name deployer-2 --local --airdrop --version v5r1
+acton wallet new --name deployer --local --airdrop --version v5r1
 ```
 
 2. Run `acton run deploy-emulation` and confirm the extension address and
@@ -100,8 +104,8 @@ acton script scripts/deploy.tolk --net testnet
    you no longer need it:
 
 ```bash
-EXT_ADDRESS=<deployed-address> acton run install-extension
-EXT_ADDRESS=<deployed-address> acton run delete-extension
+W5_DEPLOYER=deployer EXT_ADDRESS=<deployed-address> acton run install-extension
+W5_DEPLOYER=deployer EXT_ADDRESS=<deployed-address> acton run delete-extension
 ```
 
 If you need higher Toncenter limits for blockchain queries, copy `.env.example`
