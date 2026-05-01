@@ -262,24 +262,26 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
     Ok(())
 }
 
-fn compilation_result_for_code(
-    ctx: &mut Context,
+pub(crate) fn compilation_result_for_code(
+    ctx: &Context,
     code: Option<&Cell>,
-) -> Option<CompilationResult> {
+    need_project_contract_lookup: bool,
+) -> Option<(PathBuf, CompilationResult)> {
     let code = code?;
     // Fast path: wrappers created via `fromStorage()` call `build(...)`, so the
     // matching code hash is already present in the per-run build cache.
-    if let Some((_, result)) = ctx.build.build_cache.result_for_code(&Some(code.clone())) {
+    if let Some(result) = ctx.build.build_cache.result_for_code(&Some(code.clone())) {
         return Some(result);
     }
 
-    if !ctx.build.need_debug_info {
+    if !need_project_contract_lookup {
         return None;
     }
 
-    // Forked or manually addressed contracts can arrive only as a code cell from
-    // account state. In debug/backtrace mode, match that cell against local
-    // project contracts so nested execution can still use their source maps.
+    // Forked, snapshot-loaded, or manually addressed contracts can arrive only
+    // as a code cell from account state. When a caller asks for a slow lookup,
+    // match that cell against local project contracts so debug/backtrace and
+    // formatter paths can still use their source maps or ABI.
     let target_hash = *code.repr_hash();
 
     let contracts = &ctx.env.config.contracts.as_ref()?.contracts;
@@ -287,37 +289,6 @@ fn compilation_result_for_code(
         let path = contract.absolute_source_path(&ctx.env.project_root);
         let path_display = path.display().to_string();
         if path_display.ends_with(".boc") {
-            continue;
-        }
-
-        if let Some(cached_entry) = ctx.build.file_build_cache.get(
-            &path_display,
-            ctx.build.need_debug_info,
-            false,
-            2,
-            "1.3",
-        ) {
-            let Ok(code_hash) = HashBytes::from_str(&cached_entry.code_hash_hex) else {
-                continue;
-            };
-            // Memoize every candidate we inspect. Even non-matching contracts can
-            // be useful later in the same script/debug session.
-            let source_map = Arc::new(cached_entry.source_map.clone().unwrap_or_default());
-            ctx.build.build_cache.memoize(
-                contract.display_name(contract_id),
-                &path,
-                &cached_entry.code_boc64,
-                code_hash,
-                source_map,
-                cached_entry.abi.clone().map(Into::into),
-            );
-            if code_hash == target_hash {
-                return ctx
-                    .build
-                    .build_cache
-                    .result_for_code(&Some(code.clone()))
-                    .map(|(_, result)| result);
-            }
             continue;
         }
 
@@ -334,35 +305,21 @@ fn compilation_result_for_code(
             }
         };
 
-        if let Err(err) = ctx.build.file_build_cache.put(
-            &path_display,
-            &result,
-            ctx.build.need_debug_info,
-            false,
-            2,
-            "1.3",
-        ) {
-            warn!("Failed to cache debug source map candidate {path_display}: {err}");
-        }
-
         let Ok(code_hash) = HashBytes::from_str(&result.code_hash_hex) else {
             continue;
         };
-        let source_map = Arc::new(result.source_map.unwrap_or_default());
-        ctx.build.build_cache.memoize(
-            contract.display_name(contract_id),
-            &path,
-            &result.code_boc64,
-            code_hash,
-            source_map,
-            result.abi.clone().map(Into::into),
-        );
+
         if code_hash == target_hash {
-            return ctx
-                .build
-                .build_cache
-                .result_for_code(&Some(code.clone()))
-                .map(|(_, result)| result);
+            return Some((
+                path,
+                CompilationResult {
+                    name: contract.display_name(contract_id).to_owned(),
+                    code_boc64: result.code_boc64,
+                    code_hash,
+                    source_map: Arc::new(result.source_map.unwrap_or_default()),
+                    abi: result.abi.map(Into::into),
+                },
+            ));
         }
     }
 
@@ -1201,7 +1158,9 @@ fn send_transaction_debug(
         .register_missing_library_callback(&mut missing_libraries_ctx, missing_library_callback)
         .context("Failed to register missing library callback")?;
 
-    let compilation_result = compilation_result_for_code(ctx, prepared.code.as_ref());
+    let compilation_result =
+        compilation_result_for_code(ctx, prepared.code.as_ref(), ctx.build.need_debug_info)
+            .map(|(_, result)| result);
     let source_map = compilation_result
         .as_ref()
         .map(|result| result.source_map.clone());
@@ -2215,7 +2174,9 @@ fn run_get_method_impl(
         prev_blocks_info: None,
     };
 
-    let compilation_result = compilation_result_for_code(ctx, Some(&code));
+    let compilation_result =
+        compilation_result_for_code(ctx, Some(&code), ctx.build.need_debug_info)
+            .map(|(_, result)| result);
     // Remote/forked contracts may have no local debug info. We still run the live
     // executor, but the child replayer will then fall back to a synthetic source map.
     let source_map = compilation_result.as_ref().map_or_else(
