@@ -3,7 +3,7 @@
 ✓ Created new Acton project
   Project name: test-project
   Description: test description
-  Template: w5-plugin
+  Template: w5-extension
   License: MIT
 
 Created Acton.toml with project configuration

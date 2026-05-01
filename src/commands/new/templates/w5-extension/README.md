@@ -1,6 +1,6 @@
-# W5 Plugin Template
+# W5 Extension Template
 
-This project was generated from Acton's `w5-plugin` template. It includes a
+This project was generated from Acton's `w5-extension` template. It includes a
 sample Wallet V5 extension contract (`SimpleExtension`) that collects recurring
 subscription payments from a W5 wallet, the vendored Wallet V5 contract used
 for end-to-end testing, wrappers, focused tests, and ready-to-run scripts that

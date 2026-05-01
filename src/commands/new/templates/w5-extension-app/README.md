@@ -1,6 +1,6 @@
-# W5 Plugin App Template
+# W5 Extension App Template
 
-This project was generated from Acton's `w5-plugin` template with the
+This project was generated from Acton's `w5-extension` template with the
 TypeScript app scaffold enabled. It includes a Wallet V5 extension contract
 (`SimpleExtension`), Tolk tests and wrappers under `contracts/`, generated
 TypeScript wrappers in `wrappers-ts/`, and a Vite-based React app in `app/`
