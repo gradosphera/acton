@@ -6,6 +6,7 @@ use crate::context::{
 use crate::external_send::{SendBocContext, format_send_boc_error};
 use crate::paths;
 use crate::retrace;
+use crate::tonconnect;
 use acton_config::color::OwoColorize;
 use acton_config::config::Explorer;
 use acton_debug::ChildDebugContextSpec;
@@ -286,6 +287,13 @@ fn send_message_impl(
     };
 
     if is_external && ctx.can_broadcast_to_network() {
+        if ctx.env.tonconnect.is_some() {
+            anyhow::bail!(
+                "`net.sendExternal` cannot be used with {}; use `net.send(wallet.address, createMessage(...))` so the connected wallet can sign the internal message",
+                "--tonconnect".yellow()
+            );
+        }
+
         let parsed_ext_in = msg
             .parse::<Message<'_>>()
             .context("Failed to parse external-in message cell")?;
@@ -302,6 +310,21 @@ fn send_message_impl(
 
         let pseudo_tx = build_pseudo_broadcast_tx(ctx.chain.world_state.get_now(), msg, norm_hash);
         ctx.chain.world_state.invalidate_remote_cache();
+        stack.push(TupleItem::big_array_from_items(vec![pseudo_tx]));
+        return Ok(());
+    }
+
+    if ctx.can_broadcast_to_network()
+        && let Some(tonconnect) = ctx.env.find_tonconnect_by_address(src_std)
+    {
+        let network = ctx.network();
+        let (wallet_ext_in, norm_hash) = send_tonconnect_message(&msg, tonconnect, &network)
+            .context("Failed to send message with TON Connect")?;
+
+        ctx.chain.world_state.invalidate_remote_cache();
+
+        let pseudo_tx =
+            build_pseudo_broadcast_tx(ctx.chain.world_state.get_now(), wallet_ext_in, norm_hash);
         stack.push(TupleItem::big_array_from_items(vec![pseudo_tx]));
         return Ok(());
     }
@@ -1008,6 +1031,42 @@ fn send_wallet_message(
     let norm_hash = compute_normalized_ext_in_hash(&parsed_ext_in)?;
     drop(parsed_ext_in);
     Ok((external_in_cell, norm_hash))
+}
+
+fn send_tonconnect_message(
+    message: &Cell,
+    tonconnect: &tonconnect::TonConnectContext,
+    network: &Network,
+) -> anyhow::Result<(Cell, HashBytes)> {
+    let transaction = tonconnect::transaction_from_message(message, network)?;
+    let boc = tonconnect.session.send_transaction(transaction)?;
+    let external_in_cell =
+        Boc::decode_base64(&boc).context("Failed to decode TON Connect external-in BoC")?;
+    let parsed_ext_in = external_in_cell
+        .parse::<Message<'_>>()
+        .context("Failed to parse TON Connect external-in message")?;
+    validate_tonconnect_external_in(&parsed_ext_in, &tonconnect.wallet.address)?;
+    let norm_hash = compute_normalized_ext_in_hash(&parsed_ext_in)?;
+    drop(parsed_ext_in);
+    Ok((external_in_cell, norm_hash))
+}
+
+fn validate_tonconnect_external_in(
+    message: &Message<'_>,
+    wallet_address: &StdAddr,
+) -> anyhow::Result<()> {
+    let MsgInfo::ExtIn(info) = &message.info else {
+        anyhow::bail!("TON Connect wallet returned a non external-in message");
+    };
+    let IntAddr::Std(dst) = &info.dst else {
+        anyhow::bail!(
+            "TON Connect wallet returned an external-in message with variable destination"
+        );
+    };
+    if dst != wallet_address {
+        anyhow::bail!("TON Connect wallet returned a message for a different wallet address");
+    }
+    Ok(())
 }
 
 fn send_transaction_debug(
@@ -2436,14 +2495,18 @@ fn get_wallet_by_name_impl(
     stack: &mut Tuple,
     name: String,
 ) -> anyhow::Result<()> {
-    let Some(wallet) = ctx.env.open_wallets.get(&name) else {
-        stack.push(TupleItem::Null);
+    if let Some(wallet) = ctx.env.open_wallets.get(&name) {
+        let addr = wallet.address();
+        stack.push(TupleItem::Cell(to_cell(&addr)));
         return Ok(());
-    };
+    }
 
-    let addr = wallet.address();
-    stack.push(TupleItem::Cell(to_cell(&addr)));
+    if let Some(tonconnect) = &ctx.env.tonconnect {
+        stack.push(TupleItem::Cell(to_cell(&tonconnect.wallet.address)));
+        return Ok(());
+    }
 
+    stack.push(TupleItem::Null);
     Ok(())
 }
 
@@ -3119,6 +3182,7 @@ mod tests {
     use anyhow::anyhow;
     use rustc_hash::FxHashSet;
     use std::sync::Arc;
+    use tycho_types::models::OwnedMessage;
 
     fn test_hash(byte: u8) -> HashBytes {
         HashBytes([byte; 32])
@@ -3188,6 +3252,20 @@ mod tests {
             executor_logs: None,
             missing_libraries: FxHashSet::default(),
         })
+    }
+
+    fn test_external_in_message(dst: StdAddr) -> Cell {
+        CellBuilder::build_from(OwnedMessage {
+            info: MsgInfo::ExtIn(ExtInMsgInfo {
+                src: None,
+                dst: IntAddr::Std(dst),
+                import_fee: Tokens::ZERO,
+            }),
+            init: None,
+            body: Cell::default().into(),
+            layout: None,
+        })
+        .expect("external-in message must be buildable")
     }
 
     #[test]
@@ -3327,6 +3405,20 @@ mod tests {
         assert_eq!(pending.parent_lt, Some(200));
         assert_eq!(pending.message, second_child);
         assert!(!message_iters.is_done(cursor_id));
+    }
+
+    #[test]
+    fn tonconnect_external_in_validation_rejects_different_wallet() {
+        let expected = StdAddr::new(0, test_hash(10));
+        let other = StdAddr::new(0, test_hash(11));
+        let cell = test_external_in_message(other);
+        let parsed = cell.parse::<Message<'_>>().unwrap();
+
+        let error = validate_tonconnect_external_in(&parsed, &expected)
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("different wallet address"));
     }
 
     /// Verify that `synthesize_tx_cell_from_v3` reconstructs transactions whose cell `BoCs`
