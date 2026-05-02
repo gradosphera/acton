@@ -29,16 +29,6 @@ interface ParsableMessage {
 const BOUNCED_BODY_PREFIX = 0xff_ff_ff_ff
 const RICH_BOUNCE_BODY_PREFIX = 0xff_ff_ff_fe
 
-const getContractAbi = (contract: ContractData | undefined): ContractABI | undefined => {
-  return contract?.abi as ContractABI | undefined
-}
-
-export const getBackendAbi = (
-  contract: BackendContractInfo | undefined,
-): ContractABI | undefined => {
-  return contract?.abi as ContractABI | undefined
-}
-
 const getBodyTypeName = (bodyTy: Ty): string => {
   switch (bodyTy.kind) {
     case "StructRef": {
@@ -587,7 +577,7 @@ export const decodeMessageBody = (
   if (message.info.type === "internal") {
     if (message.info.bounced) {
       for (const contract of [destinationContract, sourceContract, ...allContracts]) {
-        const abi = getContractAbi(contract)
+        const abi = contract?.abi
         if (!abi) {
           continue
         }
@@ -599,7 +589,7 @@ export const decodeMessageBody = (
       }
 
       for (const contract of [sourceContract, destinationContract, ...allContracts]) {
-        const abi = getContractAbi(contract)
+        const abi = contract?.abi
         if (!abi) {
           continue
         }
@@ -614,7 +604,7 @@ export const decodeMessageBody = (
     }
 
     for (const contract of [destinationContract, ...allContracts]) {
-      const abi = getContractAbi(contract)
+      const abi = contract?.abi
       if (!abi) {
         continue
       }
@@ -626,7 +616,7 @@ export const decodeMessageBody = (
     }
 
     for (const contract of [sourceContract, ...allContracts]) {
-      const abi = getContractAbi(contract)
+      const abi = contract?.abi
       if (!abi) {
         continue
       }
@@ -642,7 +632,7 @@ export const decodeMessageBody = (
 
   if (message.info.type === "external-out") {
     for (const contract of [sourceContract, ...allContracts]) {
-      const abi = getContractAbi(contract)
+      const abi = contract?.abi
       if (!abi) {
         continue
       }
@@ -657,7 +647,7 @@ export const decodeMessageBody = (
   }
 
   for (const contract of allContracts) {
-    const abi = getContractAbi(contract)
+    const abi = contract.abi
     if (!abi) {
       continue
     }
@@ -701,10 +691,8 @@ export const decodeStateInitData = (
   }
 
   const targetAbi =
-    getContractAbi(contract) ??
-    (contractName
-      ? getBackendAbi(allContracts.find(item => item.name === contractName))
-      : undefined)
+    contract?.abi ??
+    (contractName ? allContracts.find(item => item.name === contractName)?.abi : undefined)
 
   if (targetAbi) {
     const parsedStorage = tryDecodeStorageCellWithAbi(dataCell, targetAbi)
@@ -721,7 +709,7 @@ export const applyParsedBodies = (
   backendContracts: Record<string, BackendContractInfo>,
 ): TransactionInfo[] => {
   const fallbackAbis = Object.values(backendContracts)
-    .map(contract => getBackendAbi(contract))
+    .map(contract => contract.abi)
     .filter((abi): abi is ContractABI => abi !== undefined)
 
   for (const tx of transactions) {
@@ -729,9 +717,7 @@ export const applyParsedBodies = (
     tx.parsedStorageBefore = undefined
     tx.parsedStorageAfter = undefined
 
-    const targetAbi = tx.contractName
-      ? getBackendAbi(backendContracts[tx.contractName])
-      : undefined
+    const targetAbi = tx.contractName ? backendContracts[tx.contractName]?.abi : undefined
 
     if (targetAbi) {
       tx.parsedBody = tryDecodeTransactionBodyWithAbi(tx, targetAbi)

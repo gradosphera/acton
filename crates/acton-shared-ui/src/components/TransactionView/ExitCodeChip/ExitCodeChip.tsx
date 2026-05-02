@@ -1,4 +1,5 @@
 import type {ContractABI} from "gen-typescript-from-tolk-dev"
+
 import {Tooltip} from "@/index"
 
 import styles from "./ExitCodeViewer.module.css"

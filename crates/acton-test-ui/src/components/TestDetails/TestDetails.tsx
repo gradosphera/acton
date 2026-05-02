@@ -443,10 +443,10 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
       const backendContract = name ? backendContracts[name] : undefined
       map.set(addrStr, {
         displayName: name ?? fmt.formatAddress(addrStr),
-        address: address,
+        address,
         letter: String.fromCodePoint(65 + (map.size % 26)),
         abi: backendContract?.abi,
-      } as ContractData)
+      })
     }
 
     if (trace?.wallets) {

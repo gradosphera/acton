@@ -164,12 +164,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
             }
           }
 
-          const abiByCodeHash = new Map<
-            string,
-            {
-              readonly abi: ContractData["abi"]
-            }
-          >()
+          const abiByCodeHash = new Map<string, ContractData["abi"]>()
           const codeHashes = [...new Set(addressToCodeHash.values())]
           const fetchedAbis = await Promise.all(
             codeHashes.map(async codeHash => {
@@ -181,9 +176,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
             }),
           )
           for (const [codeHash, abi] of fetchedAbis) {
-            abiByCodeHash.set(codeHash, {
-              abi,
-            })
+            abiByCodeHash.set(codeHash, abi)
           }
 
           let nextLetterCode = 65
@@ -192,12 +185,12 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({client}) => {
               const letter = String.fromCodePoint(nextLetterCode++)
               const displayAddr = normalizeAddress(addr)
               const customName = await fetchName(addr)
-              const contractAbi = abiByCodeHash.get(addressToCodeHash.get(addressKey(addr)) ?? "")
+              const abi = abiByCodeHash.get(addressToCodeHash.get(addressKey(addr)) ?? "")
               contractsMap.set(addr, {
                 displayName: customName || fmt.formatAddress(displayAddr),
                 address: Address.parse(addr),
                 letter,
-                abi: contractAbi?.abi,
+                abi,
               })
             }),
           )
