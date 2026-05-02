@@ -553,7 +553,11 @@ enum Commands {
         #[arg(help = "Script file to execute", add = ArgValueCompleter::new(PathCompleter::file()))]
         path: String,
 
-        #[arg(help = "Arguments to pass to the script")]
+        #[arg(
+            help = "Arguments to pass to the script",
+            trailing_var_arg = true,
+            allow_hyphen_values = true
+        )]
         args: Vec<String>,
 
         #[arg(
@@ -695,9 +699,9 @@ enum Commands {
     Compile {
         #[arg(help = "Tolk file to compile", add = ArgValueCompleter::new(PathCompleter::file()))]
         path: String,
-        #[arg(long, help = "Output result as JSON")]
+        #[arg(long, help = "Output result as JSON", conflicts_with = "base64_only")]
         json: bool,
-        #[arg(long, help = "Output only base64 code")]
+        #[arg(long, help = "Output only base64 code", conflicts_with = "json")]
         base64_only: bool,
         #[arg(long, help = "Output code to binary BoC file")]
         boc: Option<String>,

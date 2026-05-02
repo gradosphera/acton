@@ -126,6 +126,18 @@ fn test_acton_lint_with_args_shows_check_replacement() {
 }
 
 #[test]
+fn test_acton_compile_rejects_conflicting_stdout_formats() {
+    snapbox::cmd::Command::acton_ui()
+        .args(["compile", "contracts/main.tolk", "--json", "--base64-only"])
+        .assert()
+        .failure()
+        .stdout_eq(snapbox::str![""])
+        .stderr_eq(snapbox::file![
+            "snapshots/compile_conflicting_stdout_formats/stderr.txt"
+        ]);
+}
+
+#[test]
 fn test_acton_build_help() {
     snapbox::cmd::Command::acton_ui()
         .arg("build")

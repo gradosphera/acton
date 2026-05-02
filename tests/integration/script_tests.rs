@@ -1008,6 +1008,28 @@ fn test_script_with_args() {
 }
 
 #[test]
+fn test_script_accepts_hyphenated_trailing_args() {
+    let project = ProjectBuilder::new("script-hyphenated-args")
+        .script_file(
+            "args",
+            r"
+            fun main() {}
+        ",
+        )
+        .build();
+
+    project
+        .acton()
+        .script("scripts/args.tolk")
+        .arg("--dry-run")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test_script_accepts_hyphenated_trailing_args.stderr.txt",
+        );
+}
+
+#[test]
 fn test_script_with_tolk_number_formats() {
     let project = ProjectBuilder::new("script-number-formats")
         .script_file(
