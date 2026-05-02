@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     title: 'Acton — TON Development Toolkit',
     description: 'Acton is a blazingly fast toolkit, test runner, build system, formatter, and verifier for TON smart contract development.',
     url: 'https://ton-blockchain.github.io/acton',
-    images: '/og/home',
+    images: '/og/home/image.png',
     locale: 'en_US',
     type: 'website',
   },
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Acton — TON Development Toolkit',
     description: 'Acton is a blazingly fast toolkit, test runner, build system, formatter, and verifier for TON smart contract development.',
-    images: '/og/home',
+    images: '/og/home/image.png',
   },
 };
 
