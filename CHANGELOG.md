@@ -8,6 +8,247 @@ All notable changes to this project will be documented in this file.
 
 - No unreleased entries yet.
 
+## [0.4.0] - 04.05.2026
+
+Acton 0.4.0 is a broad follow-up to 0.3.0. It stabilizes the dApp and wrapper
+surface, adds project-level toolchain pinning, expands RPC, retrace, debugger,
+Test UI, and localnet inspection workflows, and tightens testing, coverage,
+linter, formatter, docs, and template behavior.
+
+### Breaking Changes and Migration
+
+- The short `-v` verbosity flag was removed from `acton test`,
+  `acton script`, and `acton retrace`. Use the long `--verbose` flag for
+  executor logs and retrace detail output.
+
+  ```bash
+  # before
+  acton test -v
+  acton script scripts/deploy.tolk -v
+  
+  # after
+  acton test --verbose
+  acton script scripts/deploy.tolk --verbose
+  ```
+
+  Root `acton -v` remains the version shortcut, so downstream wrappers should
+  avoid assuming that `-v` means command-local verbosity.
+
+- `SendResultList.wait()` was renamed to
+  `SendResultList.waitForFirstTransaction()` and now returns `SendResult?`
+  instead of `bool`. This makes the confirmed on-chain root transaction
+  available to scripts instead of only reporting whether it was found.
+
+  ```tolk
+  // before
+  val ok = txs.wait();
+  if (!ok) {
+      return;
+  }
+  
+  // after
+  val applied = txs.waitForFirstTransaction();
+  if (applied == null) {
+      return;
+  }
+  println("applied at lt {}", applied!.lt);
+  ```
+
+- `acton build` now writes Tolk compiler ABI JSON files to `build/abi/` by
+  default. If custom tooling reads ABI artifacts from the main build output
+  directory, update it to read `build/abi/<contract>.json` or pin the old-style
+  location explicitly:
+
+  ```toml
+  [build]
+  output-abi = "build"
+  ```
+
+  The CLI override is `acton build --output-abi <DIR>`.
+
+- The TypeScript wrapper directory spelling was normalized from
+  `wrapper-ts/` to `wrappers-ts/`. Update `Acton.toml`,
+  frontend imports, generated-project checks, and documentation snippets that
+  still reference the singular form.
+
+  ```toml
+  # before
+  [wrappers.typescript]
+  output-dir = "app/src/wrapper-ts"
+  
+  # after
+  [wrappers.typescript]
+  output-dir = "app/src/wrappers-ts"
+  ```
+
+- Acton HTTP clients now ignore `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and
+  system proxy settings by default to avoid macOS sandbox proxy autodetection
+  crashes. Set `ACTON_USE_PROXY=1` or `ACTON_USE_PROXY=true` when your
+  environment requires those proxy settings.
+
+- Several linter diagnostics were reclassified from error-style `E...` codes
+  to style `S...` codes, and the linter docs were regenerated around the new
+  numbering. Update `Acton.toml` lint configuration, CI filters, snapshot
+  expectations, and inline suppressions if they reference numeric rule codes
+  directly.
+
+### CLI, Project, and Network Workflows
+
+- Added project-level toolchain pinning through `[toolchain] acton = "..."`
+  in `Acton.toml`. Project commands check the configured Acton version before
+  running, while `acton up` remains available from the same directory so users
+  can install the expected version.
+- New projects and templates now pin the current Acton version, include clearer
+  `.env.example` guidance, and document proxy and TonCenter API-key behavior
+  more explicitly.
+- Added `acton init --stdlib-only` for refreshing `.acton/` without reading or
+  patching `Acton.toml`.
+- `acton wallet list` no longer requires an `Acton.toml`, which makes wallet
+  inventory commands usable outside an initialized project.
+- `acton script` now supports TON Connect flows, ABI-driven argument parsing,
+  clearer trailing argument forwarding with `--`, better non-interactive
+  wallet errors, and remote-state cache invalidation after broadcasting.
+- Added `acton rpc trace` for rendering TonCenter v3 traces as stable decoded
+  transaction trees, plus `acton rpc block` and `acton rpc block-number` for
+  latest masterchain block inspection.
+- Added Nushell support to `acton completions`, while the completion generator
+  and root help now share the same base command metadata, including version
+  flag aliases.
+- Remote account-state loading now uses `/api/v2/getShardAccountCell` where
+  available, and localnet implements the same endpoint for compatibility with
+  the emulator and tracing stack.
+- `acton compile` now exits with code `1` for missing files and reports
+  conflicting stdout/file output choices more clearly.
+- Acton HTTP calls now send a versioned `acton/<version>` `User-Agent` across
+  update, doctor, wallet, verifier, localnet, and API-client workflows.
+- `acton up` no longer special-cases Homebrew-style installation paths.
+- CLI help, command descriptions, color handling, wallet setup hints, and
+  non-interactive `acton new` errors were tightened across the command surface.
+
+### Wrappers, Templates, and dApps
+
+- Added Vite-based dApp scaffolding through `acton init --create-dapp`,
+  including standalone empty-app support and generated TypeScript wrapper usage
+  in Counter, Jetton, NFT, and wallet-extension flows.
+- Added the Wallet W5 Extension template and aligned it with the Counter,
+  Jetton, NFT, and empty-app template families.
+- Templates now share more app components and styles, use Acton's TON Connect
+  manifest, display full traces in scripts, pin Acton versions, and include
+  stronger README, script, ESLint, wrapper, and byte-for-byte consistency
+  checks.
+- App templates now inject normalized npm package names while preserving
+  `package.json` and `package-lock.json` field order, avoiding unnecessary
+  lockfile churn in generated projects.
+- Counter, Jetton, NFT, empty-app, and wallet-extension templates were refined
+  with owner checks, cleaner tests, better TonCenter key handling, Tolk
+  metadata strings, fewer unnecessary casts, and more consistent generated app
+  wiring.
+- Added `acton wrapper --all` for regenerating wrappers across configured
+  contracts.
+- Generated wrappers now integrate typed `@abi.clientType(...)` declarations,
+  use `.gen` filenames, avoid unused imports, include explicit return types,
+  and no longer suppress formatter and linter checks by default.
+- TypeScript wrapper generation was updated and template commands now expose a
+  clearer wrapper-regeneration path for projects that include generated app
+  code.
+
+### Testing, Coverage, and Stdlib
+
+- Added `@test.skip("description")`. Skip and TODO reasons now appear in
+  console output, Test UI, JUnit, and TeamCity reports.
+- `acton test` now fails when no tests are selected, validates custom networks
+  earlier, reports missing wallets with better setup guidance, and correctly
+  merges CLI flags with `Acton.toml` settings.
+- Fork-mode tests now preserve remote last-transaction LT/hash metadata from
+  TonCenter, and additional fork-mode coverage was added for scripts and
+  test-runner flows.
+- Mutation testing now checks that the baseline test run is green before
+  mutating and gives clearer output when filtering selects no baseline tests.
+- JUnit and TeamCity reports now include richer captured stdout/stderr,
+  location hints, skip/TODO details, and failure context.
+- The dot reporter prints clearer runtime and failure details, avoids gas
+  snapshot noise when tests fail, and benefits from faster message processing.
+- Test runner filesystem helpers and snapshot APIs now reject absolute paths,
+  parent-directory escapes, and symlink escapes outside the project root.
+- Coverage excludes `.test.tolk` files by default, handles very large VM logs
+  better, and keeps the branch-coverage work from 0.3.0 available in the normal
+  reporting flow.
+- Stdlib gained `SendResultList.waitForTrace()`, interactive `promptInt` and
+  `promptAddress`, better non-interactive prompt fallbacks, array `.map()`,
+  `.filter()`, and `.each()`, `BASECHAIN`, state-init search parameters, and
+  external-in transaction body/message decoding.
+- Fixed `Expectation<map<K, V>>.toHaveLength` value ordering and improved
+  `net.isDeployed`, matcher behavior, bounce opcode handling, and empty-data
+  opcode loading.
+
+### Debugging, Tracing, and UI
+
+- Console transaction trees, retrace, Test UI, and localnet explorer views now
+  cover external-in, tick-tock, reserve, send-message, `setCode`, and
+  `changeLibrary` actions with richer ABI-decoded bodies, opcode chips, mode
+  descriptions, source locations, failure context, and fallback rendering.
+- On-demand disassembly is available for `setCode` and embedded
+  `changeLibrary` actions, and `acton disasm --json` can emit machine-readable
+  disassembly with source-map ranges.
+- Localnet v3 trace lookup now supports `msg_hash`-based discovery and
+  `sendBocReturnHash` normalization, which also powers
+  `SendResultList.waitForTrace()`.
+- Storage diffs, parsed maps, state-init views, tree tooltips, trace selectors,
+  and large trace handling were made more readable and less layout-sensitive.
+- Transaction tree formatting now handles contracts created with `fromAddress`
+  more clearly, and script debugging works with those contracts.
+- Debugger stepping and rendering were improved for child VMs, stop requests,
+  parent-frame locals, invalid-message stops, union type display, and
+  Compiler-ABI-based decoding.
+- Retrace output now handles transactions with skipped compute phases and
+  transactions without message bodies more reliably.
+- The UI stack was moved to the Compiler ABI model, gained clearer action code
+  readability, fixed optional coverage loading, restored missing theme
+  behavior, and addressed security audit findings.
+
+### Tolk, Formatting, Linting, and Build
+
+- Acton now relies on compiler ABI metadata for contract ABI, `println`, and
+  `format` handling instead of the deprecated tree-sitter-based `ContractAbi`
+  path.
+- Tree-sitter, resolver, formatter, and wrapper generation now understand
+  annotated struct fields and typed `@abi.clientType(...)` declarations.
+- `tolk-fmt` now preserves user-authored line breaks in function calls,
+  function parameter lists, and union type aliases, and handles file header
+  comments, single-string annotations, struct field annotations, simple literal
+  calls, and type instantiation formatting more predictably.
+- Added and refined `acton check` inspections for explicit `.toCell()` inside
+  `createMessage({ body: ... })`, documented enum values used in `throw ...`
+  paths, dict-type usage, unsafe send/reserve patterns, and related
+  style/error classifications.
+- `acton meta get-schema` now exposes schemas for custom mutation rules and
+  linter JSON reports.
+- Linter JSON, GitLab, and SARIF output include richer fix applicability and
+  rule metadata, and the documentation generator now records source paths for
+  generated linter rule pages.
+- Build output now separates compiler ABI artifacts into `build/abi/`, supports
+  `[build].output-abi` and `--output-abi`, and can skip automatic `.acton/`
+  stdlib installation with `ACTON_DISABLE_AUTO_STDLIB`.
+
+### Documentation, CI, and Internal Polish
+
+- Documentation gained a refreshed landing page, video previews, linter error
+  previews, how-to guides for formatting and linting, updated CI setup docs,
+  all testing articles, 404 handling, `robots.txt`, `llms.txt` pages, and
+  updated install URLs.
+- Docs validation now checks navigation, external links, typos, formatting, and
+  generated command/rule references more aggressively.
+- The docs site received refreshed styling, footer and navigation updates,
+  theme fixes, OG image updates, PR preview support, and fewer hidden or stale
+  pages.
+- Project logging now rotates logs, suppresses unnecessary debug-log warnings
+  when the default log path is unavailable, and reports relevant proxy and
+  stdlib environment variables through `acton doctor`.
+- Internal crate names were normalized, native objects and dependencies were
+  refreshed, stricter clippy rules were enabled, and CI/cache behavior was
+  tightened around docs, generated artifacts, checksums, security updates, and
+  template consistency.
+
 ## [0.3.2] - 27.04.2026
 
 Acton 0.3.2 expands project scaffolding, wrapper generation, disassembly,
@@ -134,7 +375,7 @@ test-runner performance, Tolk 1.4 support, and a new NFT starter template.
   ```bash
   # before
   acton script scripts/deploy.tolk --broadcast --net testnet
-
+  
   # after
   acton script scripts/deploy.tolk --net testnet
   ```
@@ -152,7 +393,7 @@ test-runner performance, Tolk 1.4 support, and a new NFT starter template.
   # before
   acton test --fork-net testnet --api-key YOUR_API_KEY
   acton script scripts/deploy.tolk --net mainnet --api-key YOUR_API_KEY
-
+  
   # after
   TONCENTER_TESTNET_API_KEY=YOUR_API_KEY acton test --fork-net testnet
   TONCENTER_MAINNET_API_KEY=YOUR_API_KEY acton script scripts/deploy.tolk --net mainnet
@@ -172,7 +413,7 @@ test-runner performance, Tolk 1.4 support, and a new NFT starter template.
   [litenode]
   port = 3010
   fork-net = "testnet"
-
+  
   # after
   [localnet]
   port = 3010
@@ -207,7 +448,7 @@ test-runner performance, Tolk 1.4 support, and a new NFT starter template.
   [contracts.counter]
   name = "Counter"
   src = "contracts/counter.tolk"
-
+  
   # after
   [contracts.Counter]
   display-name = "Counter"
@@ -231,7 +472,7 @@ test-runner performance, Tolk 1.4 support, and a new NFT starter template.
   [wrappers.tolk]
   output-dir = "tests/wrappers"
   test-output-dir = "tests"
-
+  
   [import-mappings]
   wrappers = "tests/wrappers"
   ```
@@ -253,7 +494,7 @@ test-runner performance, Tolk 1.4 support, and a new NFT starter template.
   ```text
   # before
   gen/jetton-wallet_code.tolk
-
+  
   # after
   gen/JettonWallet.code.tolk
   ```
@@ -271,7 +512,7 @@ test-runner performance, Tolk 1.4 support, and a new NFT starter template.
   @test({ fail_with: 42 })
   @test({ gas_limit: 1000 })
   @test({ fuzz: { runs: 64, seed: 42 } })
-
+  
   // after
   @test.skip
   @test.todo("later")
@@ -292,7 +533,7 @@ test-runner performance, Tolk 1.4 support, and a new NFT starter template.
   # before
   acton test
   acton script scripts/debug.tolk
-
+  
   # after, to keep the old debug-log-heavy output
   acton test -v
   acton script scripts/debug.tolk --verbose
@@ -308,7 +549,7 @@ test-runner performance, Tolk 1.4 support, and a new NFT starter template.
   ```tolk
   // before
   // acton-disable-next-line unused-variable
-
+  
   // after
   // check-disable-next-line unused-variable
   ```
