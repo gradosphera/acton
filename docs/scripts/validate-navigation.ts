@@ -59,7 +59,10 @@ function isExcludedFromNavigation(pagePath: string): boolean {
 
   for (let index = 0; index < segments.length; index++) {
     const dir = segments.slice(0, index).join("/")
-    const relativePath = segments.slice(index).join("/").replace(/\.mdx$/, "")
+    const relativePath = segments
+      .slice(index)
+      .join("/")
+      .replace(/\.mdx$/, "")
     const firstSegment = relativePath.split("/", 1)[0]
     const meta = readMeta(dir)
 

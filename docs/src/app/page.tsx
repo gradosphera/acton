@@ -472,22 +472,23 @@ export default function Home() {
       <footer className="mx-auto max-w-[1500px] px-3 sm:px-4 md:px-8 lg:px-10">
         <div className="border-x border-t border-white/10 bg-fd-background p-5 sm:p-7 lg:p-8">
           <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-            <div>
-              <Link href="/" className="inline-flex items-center gap-3">
-                <span className="text-xl font-semibold text-white">Acton</span>
+            <div className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-none">
+              <Link
+                href="/"
+                className="text-xl font-semibold leading-none text-white transition-colors hover:text-[#f8f8f4]"
+              >
+                Acton
+              </Link>
+              <span className="text-sm font-medium leading-none text-[#c7c6bf]">by</span>
+              <Link
+                href="https://t.me/toncore"
+                target="_blank"
+                className="text-sm font-medium leading-none text-[#9AE7FF] transition-colors hover:text-[#1AC9FF]"
+              >
+                TON Core
               </Link>
             </div>
             <div className="grid w-full grid-cols-[auto_1fr] items-center gap-4 text-sm text-[#c7c6bf] md:flex md:w-auto md:justify-end">
-              <div>
-                Built by{" "}
-                <Link
-                  href="https://t.me/toncore"
-                  target="_blank"
-                  className="font-medium text-[#9AE7FF] transition-colors hover:text-[#1AC9FF]"
-                >
-                  TON Core
-                </Link>
-              </div>
               <div className="justify-self-end flex items-center gap-1">
                 {HEADER_ICON_LINKS.map(({href, label, icon: Icon}) => (
                   <IconLink key={label} href={href} label={label} icon={Icon} />
