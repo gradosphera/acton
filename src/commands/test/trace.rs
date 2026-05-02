@@ -1,5 +1,7 @@
 use crate::commands::test::{Pos, TestDescriptor};
-use crate::context::{BuildCache, Emulations, FailedSendMessageResult, KnownAddresses, to_cell};
+use crate::context::{Context, Emulations, FailedSendMessageResult, to_cell};
+use crate::ffi::emulation::compilation_result_for_code;
+use crate::retrace::{self, InstalledActions};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -8,6 +10,7 @@ use std::sync::Arc;
 use tolk_compiler::SourceMap;
 use tolk_compiler::abi::ContractABI;
 use ton_retrace::trace::{ExecutedAction, ExecutedActionFailureReason, ExecutedActions};
+use ton_source_map::SourceLocation;
 use tycho_types::boc::Boc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -84,6 +87,8 @@ pub enum ExecutorActionInfo {
         hash: String,
         remaining_balance: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        location: Option<SourceLocation>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         failure_reason: Option<ExecutorActionFailureReasonInfo>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         failure_code: Option<i32>,
@@ -96,6 +101,8 @@ pub enum ExecutorActionInfo {
         changed_remaining_balance: String,
         changed_reserved_balance: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        location: Option<SourceLocation>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         failure_reason: Option<ExecutorActionFailureReasonInfo>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         failure_code: Option<i32>,
@@ -103,7 +110,14 @@ pub enum ExecutorActionInfo {
 }
 
 #[must_use]
-pub(crate) fn parse_executor_actions(logs: &str) -> Vec<ExecutorActionInfo> {
+pub(crate) fn parse_executor_actions(
+    logs: &str,
+    installed_actions: &InstalledActions,
+    source_map: Option<&SourceMap>,
+) -> Vec<ExecutorActionInfo> {
+    let source_location =
+        |loc_hash: &str, loc_offset| retrace::find_source_loc(source_map?, loc_hash, loc_offset);
+
     let executed = ExecutedActions::from(logs);
     executed
         .actions
@@ -115,6 +129,9 @@ pub(crate) fn parse_executor_actions(logs: &str) -> Vec<ExecutorActionInfo> {
                 failure_reason,
                 failure_code,
             } => ExecutorActionInfo::SendMessage {
+                location: installed_actions
+                    .find_message(&hash)
+                    .and_then(|action| source_location(&action.loc_hash, action.loc_offset)),
                 hash,
                 remaining_balance: remaining_balance.to_string(),
                 failure_reason: failure_reason.map(convert_failure_reason),
@@ -136,6 +153,9 @@ pub(crate) fn parse_executor_actions(logs: &str) -> Vec<ExecutorActionInfo> {
                 original_balance: original_balance.to_string(),
                 changed_remaining_balance: changed_remaining_balance.to_string(),
                 changed_reserved_balance: changed_reserved_balance.to_string(),
+                location: installed_actions
+                    .find_reserve(mode, &reserve)
+                    .and_then(|action| source_location(&action.loc_hash, action.loc_offset)),
                 failure_reason: failure_reason.map(convert_failure_reason),
                 failure_code,
             },
@@ -165,11 +185,13 @@ fn convert_failure_reason(reason: ExecutedActionFailureReason) -> ExecutorAction
 
 pub(super) fn dump_test_transactions(
     test: &TestDescriptor,
-    build_cache: &BuildCache,
-    known_addresses: &KnownAddresses,
+    ctx: &Context<'_>,
     txs: &Emulations,
     output_dir: &str,
 ) -> anyhow::Result<()> {
+    let build_cache = &*ctx.build.build_cache;
+    let known_addresses = &*ctx.build.known_addresses;
+    let mut known_contracts = BTreeMap::new();
     let traces = txs
         .messages
         .iter()
@@ -178,20 +200,29 @@ pub(super) fn dump_test_transactions(
             let transactions = trace_transactions
                 .iter()
                 .map(|tx| {
-                    let build = build_cache.result_for_code(&tx.code);
+                    let build = compilation_result_for_code(ctx, tx.code.as_ref(), true)
+                        .map(|(_, result)| result);
+                    let source_map = build.as_ref().map(|info| info.source_map.as_ref());
+                    let installed_actions = retrace::find_installed_actions(&tx.vm_log);
+                    let executor_actions =
+                        parse_executor_actions(&tx.executor_logs, &installed_actions, source_map);
 
-                    let contract_info = build.map(|(_, info)| ContractInfo {
+                    let contract_info = build.map(|info| ContractInfo {
                         name: info.name.clone(),
                         code_boc64: info.code_boc64.clone(),
                         source_map: (*info.source_map).clone(),
                         abi: info.abi,
                     });
+                    let dest_contract_info = contract_info.as_ref().map(|info| info.name.clone());
+                    if let Some(info) = contract_info {
+                        known_contracts.insert(info.name.clone(), info);
+                    }
 
                     TransactionInfo {
                         lt: tx.transaction.lt.to_string(),
                         raw_transaction: tx.raw_transaction.clone(),
                         parent_transaction: tx.parent_transaction.map(|lt| lt.to_string()),
-                        dest_contract_info: contract_info.as_ref().map(|info| info.name.clone()),
+                        dest_contract_info,
                         child_transactions: tx
                             .child_transactions
                             .iter()
@@ -201,7 +232,7 @@ pub(super) fn dump_test_transactions(
                         shard_account: Boc::encode_base64(to_cell(&tx.shard_account)),
                         vm_log_diff: tvm_logs::convert_to_diff_logs(&tx.vm_log),
                         executor_logs: tx.executor_logs.clone(),
-                        executor_actions: parse_executor_actions(&tx.executor_logs),
+                        executor_actions,
                         actions: tx.actions.clone(),
                     }
                 })
@@ -236,7 +267,6 @@ pub(super) fn dump_test_transactions(
         );
     }
 
-    let mut known_contracts = BTreeMap::new();
     for result in build_cache.built.values() {
         let info = ContractInfo {
             abi: result.abi.clone(),
@@ -315,7 +345,7 @@ mod tests {
 [ 4][t 0][2026-02-25 11:22:27.910199][transaction.cpp:2926]\tnot enough grams to transfer with the message : remaining balance is 997209600ng, need 1000000400000 (including forwarding fees)
 [ 4][t 0][2026-02-25 11:22:27.910201][transaction.cpp:2206]\tinvalid action 1 in action list: error code 37";
 
-        let parsed = parse_executor_actions(logs);
+        let parsed = parse_executor_actions(logs, &InstalledActions::empty(), None);
         assert_eq!(parsed.len(), 2);
 
         assert!(matches!(
@@ -323,6 +353,7 @@ mod tests {
             ExecutorActionInfo::SendMessage {
                 failure_code: None,
                 failure_reason: None,
+                location: None,
                 ..
             }
         ));
@@ -334,6 +365,7 @@ mod tests {
                 failure_reason: Some(
                     ExecutorActionFailureReasonInfo::NotEnoughToncoinToSend { .. }
                 ),
+                location: None,
                 ..
             }
         ));
@@ -349,7 +381,7 @@ mod tests {
 [ 4][t 0][2026-02-25 11:24:46.612163][transaction.cpp:3143]\tcannot reserve 1000000000000 nanograms : only 1088500000 available
 [ 4][t 0][2026-02-25 11:24:46.612164][transaction.cpp:2206]\tinvalid action 1 in action list: error code 37";
 
-        let parsed = parse_executor_actions(logs);
+        let parsed = parse_executor_actions(logs, &InstalledActions::empty(), None);
         assert_eq!(parsed.len(), 2);
 
         assert!(matches!(
@@ -357,6 +389,7 @@ mod tests {
             ExecutorActionInfo::ReserveCurrency {
                 failure_code: None,
                 failure_reason: None,
+                location: None,
                 ..
             }
         ));
@@ -366,6 +399,7 @@ mod tests {
             ExecutorActionInfo::ReserveCurrency {
                 failure_code: Some(37),
                 failure_reason: Some(ExecutorActionFailureReasonInfo::CannotReserveToncoin { .. }),
+                location: None,
                 ..
             }
         ));

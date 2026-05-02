@@ -10,6 +10,7 @@ import {VscCode} from "react-icons/vsc"
 import {
   type TestReport,
   type TestExecutionLogs,
+  type SourceLocation,
   TestStatus,
   type Trace,
   ContractData,
@@ -84,6 +85,11 @@ const MISSING_VM_LOG_HINT = [
   "No VM logs were collected for this trace.",
   "Re-run with --verbose flag",
 ].join("\n")
+
+const toIdeSourcePosition = (location: SourceLocation): Pick<TestReport, "row" | "column"> => ({
+  row: Math.max(0, location.line - 1),
+  column: Math.max(0, location.column - 2),
+})
 
 const hasNonEmptyLog = (value: string | undefined): boolean => (value ?? "").trim().length > 0
 
@@ -301,6 +307,26 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
       return `.../${parts.slice(-3).join("/")}`
     }
     return path
+  }
+
+  const renderSourceLocation = (location: SourceLocation) => {
+    const label = `${getRelativePath(location.file)}:${location.line}:${location.column}`
+    const idePosition = toIdeSourcePosition(location)
+
+    return (
+      <a
+        href={selectedIde.getUrl({
+          ...test,
+          file_path: location.file,
+          row: idePosition.row,
+          column: idePosition.column,
+        })}
+        className={styles.sourceLocationLink}
+        title={`Open ${label} in ${selectedIde.name}`}
+      >
+        {label}
+      </a>
+    )
   }
 
   const formatDuration = (duration: {secs: number; nanos: number}) => {
@@ -683,6 +709,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
                     transactions={failedTransactions}
                     contracts={contracts}
                     allContracts={allContracts}
+                    renderSourceLocation={renderSourceLocation}
                   />
                 </div>
               )}
@@ -910,6 +937,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
               transactions={parsedTransactions}
               contracts={contracts}
               allContracts={allContracts}
+              renderSourceLocation={renderSourceLocation}
             />
           </div>
           {failedMessages.length > 0 && <div>{renderFailedMessages(failedMessages)}</div>}
