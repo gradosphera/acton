@@ -1,7 +1,7 @@
-import { source } from '@/lib/source';
-import { DocsLayout } from 'fumadocs-ui/layouts/docs';
-import { baseOptions } from '@/lib/layout.shared';
-import { NotFound as FumadocsNotFound } from '@/components/layouts/not-found';
+import {source} from "@/lib/source"
+import {DocsLayout} from "fumadocs-ui/layouts/docs"
+import {baseOptions} from "@/lib/layout.shared"
+import {NotFound as FumadocsNotFound} from "@/components/layouts/not-found"
 
 export default function NotFound() {
   return (
@@ -9,7 +9,7 @@ export default function NotFound() {
       tree={source.pageTree}
       githubUrl="https://github.com/ton-blockchain/acton"
       sidebar={{
-        className: 'acton-docs-sidebar',
+        className: "acton-docs-sidebar",
       }}
       containerProps={{
         style: {
@@ -22,5 +22,5 @@ export default function NotFound() {
     >
       <FumadocsNotFound getSuggestions={async () => []} />
     </DocsLayout>
-  );
+  )
 }

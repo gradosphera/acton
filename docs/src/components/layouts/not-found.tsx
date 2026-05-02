@@ -1,16 +1,16 @@
-import Link from 'fumadocs-core/link';
-import { type ReactNode, Suspense } from 'react';
-import { cn } from '@/lib/cn';
-import { buttonVariants } from 'fumadocs-ui/components/ui/button';
+import Link from "fumadocs-core/link"
+import {type ReactNode, Suspense} from "react"
+import {cn} from "@/lib/cn"
+import {buttonVariants} from "fumadocs-ui/components/ui/button"
 
 export interface Suggestion {
-  id: string;
-  href: string;
-  title: ReactNode;
+  id: string
+  href: string
+  title: ReactNode
 }
 
 export interface NotFoundProps {
-  getSuggestions: () => Promise<Suggestion[]>;
+  getSuggestions: () => Promise<Suggestion[]>
 }
 
 export function NotFound(props: NotFoundProps) {
@@ -25,21 +25,21 @@ export function NotFound(props: NotFoundProps) {
         </Suspense>
       </div>
     </div>
-  );
+  )
 }
 
-async function Alternative({ getSuggestions }: NotFoundProps) {
-  const suggestions = await getSuggestions();
+async function Alternative({getSuggestions}: NotFoundProps) {
+  const suggestions = await getSuggestions()
 
   if (suggestions.length === 0) {
     return (
       <div>
         <p className="text-sm text-fd-muted-foreground mb-2">No Alternative Found</p>
-        <Link href="/docs/welcome" className={cn(buttonVariants({ variant: 'secondary' }))}>
+        <Link href="/docs/welcome" className={cn(buttonVariants({variant: "secondary"}))}>
           Return to Home
         </Link>
       </div>
-    );
+    )
   }
 
   return (
@@ -47,7 +47,7 @@ async function Alternative({ getSuggestions }: NotFoundProps) {
       <h2 className="text-sm text-fd-muted-foreground mb-2">Maybe you are looking for</h2>
 
       <div className="flex flex-col rounded-lg border bg-fd-card text-fd-card-foreground shadow-md overflow-hidden divide-y divide-fd-border">
-        {suggestions.map((doc) => (
+        {suggestions.map(doc => (
           <Link
             key={doc.id}
             href={doc.href}
@@ -59,5 +59,5 @@ async function Alternative({ getSuggestions }: NotFoundProps) {
         ))}
       </div>
     </div>
-  );
+  )
 }

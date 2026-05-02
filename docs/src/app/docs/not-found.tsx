@@ -1,5 +1,5 @@
-import { NotFound as FumadocsNotFound } from '@/components/layouts/not-found';
+import {NotFound as FumadocsNotFound} from "@/components/layouts/not-found"
 
 export default function NotFound() {
-  return <FumadocsNotFound getSuggestions={async () => []} />;
+  return <FumadocsNotFound getSuggestions={async () => []} />
 }

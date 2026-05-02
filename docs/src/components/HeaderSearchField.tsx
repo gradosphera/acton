@@ -1,10 +1,10 @@
-"use client";
+"use client"
 
-import { Search } from 'lucide-react';
-import { useSearchContext } from 'fumadocs-ui/contexts/search';
+import {Search} from "lucide-react"
+import {useSearchContext} from "fumadocs-ui/contexts/search"
 
 export function HeaderSearchField() {
-  const { hotKey, setOpenSearch } = useSearchContext();
+  const {hotKey, setOpenSearch} = useSearchContext()
 
   return (
     <>
@@ -36,5 +36,5 @@ export function HeaderSearchField() {
         <Search className="h-4 w-4" />
       </button>
     </>
-  );
+  )
 }

@@ -1,41 +1,41 @@
-import { docs } from 'collections/server';
-import { loader } from 'fumadocs-core/source';
-import { icons } from 'lucide-react';
-import { createElement } from 'react';
-import { type InferPageType } from 'fumadocs-core/source';
+import {docs} from "collections/server"
+import {loader} from "fumadocs-core/source"
+import {icons} from "lucide-react"
+import {createElement} from "react"
+import {type InferPageType} from "fumadocs-core/source"
 
 export const source = loader({
-    baseUrl: '/docs',
-    source: docs.toFumadocsSource(),
-    icon(icon) {
-        if (!icon) {
-            return;
-        }
-        if (icon in icons) {
-            return createElement(icons[icon as keyof typeof icons]);
-        }
-    },
-});
+  baseUrl: "/docs",
+  source: docs.toFumadocsSource(),
+  icon(icon) {
+    if (!icon) {
+      return
+    }
+    if (icon in icons) {
+      return createElement(icons[icon as keyof typeof icons])
+    }
+  },
+})
 
 export const llmSource = loader({
-    baseUrl: '/llms.mdx/docs',
-    url: (slugs) => `/llms.mdx/docs/${slugs.join('/')}.md`,
-    source: docs.toFumadocsSource(),
-});
+  baseUrl: "/llms.mdx/docs",
+  url: slugs => `/llms.mdx/docs/${slugs.join("/")}.md`,
+  source: docs.toFumadocsSource(),
+})
 
 export async function getSource() {
-    return source;
+  return source
 }
 
 export async function getLlmSource() {
-    return llmSource;
+  return llmSource
 }
 
 export function getPageImage(page: InferPageType<typeof source>) {
-    const segments = [...page.slugs, 'image.png'];
+  const segments = [...page.slugs, "image.png"]
 
-    return {
-        segments,
-        url: `/og/docs/${segments.join('/')}`,
-    };
+  return {
+    segments,
+    url: `/og/docs/${segments.join("/")}`,
+  }
 }

@@ -1,7 +1,7 @@
-import { createHomeImageResponse } from '../home-image';
+import {createHomeImageResponse} from "../home-image"
 
-export const revalidate = false;
+export const revalidate = false
 
 export async function GET() {
-  return createHomeImageResponse();
+  return createHomeImageResponse()
 }

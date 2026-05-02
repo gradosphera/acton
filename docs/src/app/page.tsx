@@ -1,6 +1,6 @@
-import { Metadata } from 'next';
-import Image from 'next/image';
-import Link from 'next/link';
+import {Metadata} from "next"
+import Image from "next/image"
+import Link from "next/link"
 import {
   ArrowRight,
   BookOpen,
@@ -12,179 +12,198 @@ import {
   Github,
   MonitorPlay,
   Wallet,
-} from 'lucide-react';
-import type { ComponentType, ReactNode, SVGProps } from 'react';
-import { HeaderSearchField } from '@/components/HeaderSearchField';
-import { InlineInstallationCommand } from '@/components/InstallationCodeBlock';
-import { LandingVideo } from '@/components/LandingVideo';
-import logoDark from '@/public/logo-dark.svg';
+} from "lucide-react"
+import type {ComponentType, ReactNode, SVGProps} from "react"
+import {HeaderSearchField} from "@/components/HeaderSearchField"
+import {InlineInstallationCommand} from "@/components/InstallationCodeBlock"
+import {LandingVideo} from "@/components/LandingVideo"
+import logoDark from "@/public/logo-dark.svg"
 
 export const metadata: Metadata = {
-  title: 'Acton — TON Development Toolkit',
-  description: 'Acton is a blazingly fast toolkit, test runner, build system, formatter, and verifier for TON smart contract development.',
-  metadataBase: new URL('https://ton-blockchain.github.io/acton'),
+  title: "Acton — TON Development Toolkit",
+  description:
+    "Acton is a blazingly fast toolkit, test runner, build system, formatter, and verifier for TON smart contract development.",
+  metadataBase: new URL("https://ton-blockchain.github.io/acton"),
   openGraph: {
-    title: 'Acton — TON Development Toolkit',
-    description: 'Acton is a blazingly fast toolkit, test runner, build system, formatter, and verifier for TON smart contract development.',
-    url: 'https://ton-blockchain.github.io/acton',
-    images: '/og/home/image.png',
-    locale: 'en_US',
-    type: 'website',
+    title: "Acton — TON Development Toolkit",
+    description:
+      "Acton is a blazingly fast toolkit, test runner, build system, formatter, and verifier for TON smart contract development.",
+    url: "https://ton-blockchain.github.io/acton",
+    images: "/og/home/image.png",
+    locale: "en_US",
+    type: "website",
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'Acton — TON Development Toolkit',
-    description: 'Acton is a blazingly fast toolkit, test runner, build system, formatter, and verifier for TON smart contract development.',
-    images: '/og/home/image.png',
+    card: "summary_large_image",
+    title: "Acton — TON Development Toolkit",
+    description:
+      "Acton is a blazingly fast toolkit, test runner, build system, formatter, and verifier for TON smart contract development.",
+    images: "/og/home/image.png",
   },
-};
+}
 
 interface FeatureWithVideo {
-  title: string;
-  description: string;
-  description2: string;
-  url: string;
+  title: string
+  description: string
+  description2: string
+  url: string
 }
 
 interface FeatureBelow {
-  title: string;
-  description: string;
-  docLink: string;
+  title: string
+  description: string
+  docLink: string
 }
 
 const VIDEO_FEATURES: FeatureWithVideo[] = [
   {
-    title: 'Native Tolk Tests',
-    description: 'Use Tolk itself for testing. Unit tests, transaction flows, and cross-contract interaction — without switching languages.',
-    description2: '50x faster than TypeScript + JS sandbox.',
-    url: 'https://cdn.tapps.ninja/tolk/final-1.mov',
+    title: "Native Tolk Tests",
+    description:
+      "Use Tolk itself for testing. Unit tests, transaction flows, and cross-contract interaction — without switching languages.",
+    description2: "50x faster than TypeScript + JS sandbox.",
+    url: "https://cdn.tapps.ninja/tolk/final-1.mov",
   },
   {
-    title: 'dApp-ready contracts',
-    description: 'Generate TypeScript wrappers for frontend and end-to-end testing.',
-    description2: 'TON Connect and AppKit as the UI — Tolk and TON Blockchain as the backend.',
-    url: 'https://cdn.tapps.ninja/tolk/final-2.mov',
+    title: "dApp-ready contracts",
+    description: "Generate TypeScript wrappers for frontend and end-to-end testing.",
+    description2: "TON Connect and AppKit as the UI — Tolk and TON Blockchain as the backend.",
+    url: "https://cdn.tapps.ninja/tolk/final-2.mov",
   },
   {
-    title: 'Friendly for AI agents',
-    description: 'Skills and manuals available out of the box. Acton is a modern CLI tool that becomes an agent\'s runtime.',
-    description2: 'Built for humans — perfect for AI.',
-    url: 'https://cdn.tapps.ninja/tolk/final-3.mov',
+    title: "Friendly for AI agents",
+    description:
+      "Skills and manuals available out of the box. Acton is a modern CLI tool that becomes an agent's runtime.",
+    description2: "Built for humans — perfect for AI.",
+    url: "https://cdn.tapps.ninja/tolk/final-3.mov",
   },
   {
-    title: 'Debugger, done right',
-    description: 'Test failed with exit code 9? Stop exactly at the exception, inspect the call stack, local variables, lazy fields, and more.',
-    description2: 'Works for fully-optimized production contracts, in all IDEs.',
-    url: 'https://cdn.tapps.ninja/tolk/final-4.mov',
+    title: "Debugger, done right",
+    description:
+      "Test failed with exit code 9? Stop exactly at the exception, inspect the call stack, local variables, lazy fields, and more.",
+    description2: "Works for fully-optimized production contracts, in all IDEs.",
+    url: "https://cdn.tapps.ninja/tolk/final-4.mov",
   },
   {
-    title: 'Faucet and deployment',
-    description: 'Not only develop, but deploy, verify, and configure your contracts. Acton manages wallets and faucet top-ups on testnet.',
-    description2: 'Arbitrary on-chain scripts — just using Tolk.',
-    url: 'https://cdn.tapps.ninja/tolk/final-5.mov',
+    title: "Faucet and deployment",
+    description:
+      "Not only develop, but deploy, verify, and configure your contracts. Acton manages wallets and faucet top-ups on testnet.",
+    description2: "Arbitrary on-chain scripts — just using Tolk.",
+    url: "https://cdn.tapps.ninja/tolk/final-5.mov",
   },
   {
-    title: 'IDE integration',
-    description: 'Linter and formatter to keep code style consistent. All rules are configurable.',
-    description2: 'VS Code, JetBrains, Cursor, Helix, Zed, (Neo)Vim, and other LSP-based editors.',
-    url: 'https://cdn.tapps.ninja/tolk/final-6.mov',
+    title: "IDE integration",
+    description: "Linter and formatter to keep code style consistent. All rules are configurable.",
+    description2: "VS Code, JetBrains, Cursor, Helix, Zed, (Neo)Vim, and other LSP-based editors.",
+    url: "https://cdn.tapps.ninja/tolk/final-6.mov",
   },
   {
-    title: 'Test UI: visualize traces',
-    description: 'Inspect transaction trees, messages, fees, storage changes — for every test, in a clean dev-oriented UI.',
-    description2: 'Raw binary data decoded based on Tolk ABI.',
-    url: 'https://cdn.tapps.ninja/tolk/final-7.mov',
+    title: "Test UI: visualize traces",
+    description:
+      "Inspect transaction trees, messages, fees, storage changes — for every test, in a clean dev-oriented UI.",
+    description2: "Raw binary data decoded based on Tolk ABI.",
+    url: "https://cdn.tapps.ninja/tolk/final-7.mov",
   },
-];
+]
 
 const BELOW_FEATURES: FeatureBelow[] = [
   {
-    title: 'Mutation testing',
-    description: 'Stress the suite by flipping operators, values, and branches to reveal weak checks and untested invariants.',
-    docLink: '/docs/testing/mutation-testing/overview',
+    title: "Mutation testing",
+    description:
+      "Stress the suite by flipping operators, values, and branches to reveal weak checks and untested invariants.",
+    docLink: "/docs/testing/mutation-testing/overview",
   },
   {
-    title: 'Coverage reports',
-    description: 'Track line and branch coverage, inspect colorful reports in Test UI, and export LCOV for external tooling.',
-    docLink: '/docs/testing/code-coverage',
+    title: "Coverage reports",
+    description:
+      "Track line and branch coverage, inspect colorful reports in Test UI, and export LCOV for external tooling.",
+    docLink: "/docs/testing/code-coverage",
   },
   {
-    title: 'Fork testing',
-    description: 'Run tests against real mainnet state by automatically pulling deployed accounts into the local emulator.',
-    docLink: '/docs/testing/fork-testing',
+    title: "Fork testing",
+    description:
+      "Run tests against real mainnet state by automatically pulling deployed accounts into the local emulator.",
+    docLink: "/docs/testing/fork-testing",
   },
   {
-    title: 'Fuzz testing',
-    description: 'Re-run parameterized tests with generated inputs, assumptions, bounds, and reproducible seeds until the first failure.',
-    docLink: '/docs/testing/fuzz-testing',
+    title: "Fuzz testing",
+    description:
+      "Re-run parameterized tests with generated inputs, assumptions, bounds, and reproducible seeds until the first failure.",
+    docLink: "/docs/testing/fuzz-testing",
   },
   {
-    title: 'Gas profiling',
-    description: 'Snapshot transaction-chain gas usage, compare against baselines, and catch fee regressions before they ship.',
-    docLink: '/docs/testing/gas-profiling-with-snapshots',
+    title: "Gas profiling",
+    description:
+      "Snapshot transaction-chain gas usage, compare against baselines, and catch fee regressions before they ship.",
+    docLink: "/docs/testing/gas-profiling-with-snapshots",
   },
   {
-    title: 'Scripting',
-    description: 'Use Tolk for local experiments, deployment flows, and real blockchain interaction with familiar testing primitives.',
-    docLink: '/docs/scripting/overview',
+    title: "Scripting",
+    description:
+      "Use Tolk for local experiments, deployment flows, and real blockchain interaction with familiar testing primitives.",
+    docLink: "/docs/scripting/overview",
   },
   {
-    title: 'CI integration',
-    description: 'Wire Acton into GitHub Actions or GitLab CI for builds, tests, checks, coverage, and secret-backed jobs.',
-    docLink: '/docs/ci-setup',
+    title: "CI integration",
+    description:
+      "Wire Acton into GitHub Actions or GitLab CI for builds, tests, checks, coverage, and secret-backed jobs.",
+    docLink: "/docs/ci-setup",
   },
   {
-    title: 'Masterchain libraries',
-    description: 'Publish reusable code to the Masterchain, track storage runway, top it up, and refer to it in tests and scripts.',
-    docLink: '/docs/libraries',
+    title: "Masterchain libraries",
+    description:
+      "Publish reusable code to the Masterchain, track storage runway, top it up, and refer to it in tests and scripts.",
+    docLink: "/docs/libraries",
   },
-];
+]
 
 const FEATURE_TITLE_ACCENTS: Record<string, string> = {
-  'Native Tolk Tests': 'Tolk',
-  'dApp-ready contracts': 'dApp-ready',
-  'Friendly for AI agents': 'AI',
-  'Debugger, done right': 'Debugger',
-  'Faucet and deployment': 'Faucet',
-  'IDE integration': 'IDE',
-  'Test UI: visualize traces': 'Test UI',
-};
+  "Native Tolk Tests": "Tolk",
+  "dApp-ready contracts": "dApp-ready",
+  "Friendly for AI agents": "AI",
+  "Debugger, done right": "Debugger",
+  "Faucet and deployment": "Faucet",
+  "IDE integration": "IDE",
+  "Test UI: visualize traces": "Test UI",
+}
 
-const FEATURE_ICONS: Record<string, {
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-}> = {
-  'Native Tolk Tests': {
+const FEATURE_ICONS: Record<
+  string,
+  {
+    icon: ComponentType<SVGProps<SVGSVGElement>>
+  }
+> = {
+  "Native Tolk Tests": {
     icon: FlaskConical,
   },
-  'dApp-ready contracts': {
+  "dApp-ready contracts": {
     icon: CodeXml,
   },
-  'Friendly for AI agents': {
+  "Friendly for AI agents": {
     icon: Bot,
   },
-  'Debugger, done right': {
+  "Debugger, done right": {
     icon: Bug,
   },
-  'Faucet and deployment': {
+  "Faucet and deployment": {
     icon: Wallet,
   },
-  'IDE integration': {
+  "IDE integration": {
     icon: FileCode,
   },
-  'Test UI: visualize traces': {
+  "Test UI: visualize traces": {
     icon: MonitorPlay,
   },
-};
+}
 
 const HEADER_ICON_LINKS: {
-  href: string;
-  label: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  href: string
+  label: string
+  icon: ComponentType<SVGProps<SVGSVGElement>>
 }[] = [
-  { href: '/docs/welcome', label: 'Documentation', icon: BookOpen },
-  { href: 'https://t.me/toncore', label: 'TON Core Telegram', icon: TelegramIcon },
-  { href: 'https://github.com/ton-blockchain/acton', label: 'GitHub', icon: Github },
-];
+  {href: "/docs/welcome", label: "Documentation", icon: BookOpen},
+  {href: "https://t.me/toncore", label: "TON Core Telegram", icon: TelegramIcon},
+  {href: "https://github.com/ton-blockchain/acton", label: "GitHub", icon: Github},
+]
 
 export default function Home() {
   return (
@@ -194,33 +213,34 @@ export default function Home() {
         <section className="mx-auto max-w-[1500px] px-3 pt-8 sm:px-4 sm:pt-14 md:px-8 lg:px-10">
           <div className="home-hero-panel border-x border-t border-white/10">
             <div className="px-4 py-10 sm:px-8 sm:pb-12 sm:pt-14 lg:px-12 lg:pb-14 lg:pt-16">
-                <Link
-                  href="/docs/welcome"
-                  className="mb-8 inline-flex w-fit items-center gap-2 rounded-full border border-[#1AC9FF]/45 bg-[#2D83EC]/10 px-3 py-1.5 text-xs font-medium text-[#9AE7FF] transition-colors hover:bg-[#2D83EC]/15"
-                >
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#1AC9FF]" />
-                  Acton 1.0 and Tolk 1.4 is here
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
+              <Link
+                href="/docs/welcome"
+                className="mb-8 inline-flex w-fit items-center gap-2 rounded-full border border-[#1AC9FF]/45 bg-[#2D83EC]/10 px-3 py-1.5 text-xs font-medium text-[#9AE7FF] transition-colors hover:bg-[#2D83EC]/15"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-[#1AC9FF]" />
+                Acton 1.0 and Tolk 1.4 is here
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
 
-                <h1 className="max-w-5xl text-[2.3rem] font-semibold leading-[1.08] text-[#f8f8f4] sm:text-6xl sm:leading-[1.04] lg:text-[4.9rem] xl:text-[5.8rem]">
-                  Everything You Need to Build Contracts on <span className="text-[#9AE7FF]">TON</span>
-                </h1>
-                <p className="mt-6 max-w-2xl text-lg leading-7 text-[#c7c6bf] sm:mt-8 sm:text-xl sm:leading-8">
-                  <span className="font-semibold text-[#9AE7FF]">Acton</span> is an all-in-one TON smart contract development toolkit with blazingly fast feedback loops for
-                  building, testing, debugging, scripting, deployment, and many more.
+              <h1 className="max-w-5xl text-[2.3rem] font-semibold leading-[1.08] text-[#f8f8f4] sm:text-6xl sm:leading-[1.04] lg:text-[4.9rem] xl:text-[5.8rem]">
+                Everything You Need to Build Contracts on{" "}
+                <span className="text-[#9AE7FF]">TON</span>
+              </h1>
+              <p className="mt-6 max-w-2xl text-lg leading-7 text-[#c7c6bf] sm:mt-8 sm:text-xl sm:leading-8">
+                <span className="font-semibold text-[#9AE7FF]">Acton</span> is an all-in-one TON
+                smart contract development toolkit with blazingly fast feedback loops for building,
+                testing, debugging, scripting, deployment, and many more.
+              </p>
+
+              <div className="mt-8 space-y-4 sm:mt-10">
+                <p className="text-xs font-semibold uppercase text-[#8b8a82]">
+                  Get started in 30 seconds
                 </p>
-
-                <div className="mt-8 space-y-4 sm:mt-10">
-                  <p className="text-xs font-semibold uppercase text-[#8b8a82]">
-                    Get started in 30 seconds
-                  </p>
-                  <div className="w-full max-w-[30rem] min-w-0 sm:w-fit">
-                    <InlineInstallationCommand />
-                  </div>
+                <div className="w-full max-w-[30rem] min-w-0 sm:w-fit">
+                  <InlineInstallationCommand />
                 </div>
+              </div>
             </div>
-
           </div>
         </section>
 
@@ -234,8 +254,8 @@ export default function Home() {
                 2-minute walkthrough
               </h2>
               <p className="mt-5 text-lg leading-7 text-[#c7c6bf] sm:mt-6 sm:text-xl sm:leading-8">
-                Tiny Acton workshop: create a project, launch tests, guide through essential features,
-                airdrop TONs to your wallet, and deploy a contract to TON Blockchain.
+                Tiny Acton workshop: create a project, launch tests, guide through essential
+                features, airdrop TONs to your wallet, and deploy a contract to TON Blockchain.
               </p>
             </div>
 
@@ -258,13 +278,17 @@ export default function Home() {
           <div className="border-x border-b border-white/10 bg-fd-background px-4 py-14 sm:px-8 sm:py-20 lg:px-12">
             <SectionHeader
               eyebrow="Essential features"
-              title={<>A unified toolchain for <span className="text-[#9AE7FF]">TON</span></>}
+              title={
+                <>
+                  A unified toolchain for <span className="text-[#9AE7FF]">TON</span>
+                </>
+              }
               description="Not another small utility. Not another isolated CLI. A full development environment built as one coherent system around Tolk."
             />
 
             <div className="mt-8 space-y-10 sm:mt-14">
               {VIDEO_FEATURES.map((feature, index) => {
-                const reversed = index % 2 === 1;
+                const reversed = index % 2 === 1
 
                 return (
                   <article
@@ -273,11 +297,17 @@ export default function Home() {
                   >
                     <div
                       className={`flex flex-col justify-start p-5 py-10 sm:p-8 lg:min-h-[440px] lg:p-10 ${
-                        reversed ? 'lg:order-2' : ''
+                        reversed ? "lg:order-2" : ""
                       }`}
                     >
-                      <div className={reversed ? 'lg:ml-auto lg:mt-10 lg:max-w-xl lg:text-right' : 'max-w-xl lg:mt-10'}>
-                        <div className={`mb-5 flex ${reversed ? 'lg:justify-end' : ''}`}>
+                      <div
+                        className={
+                          reversed
+                            ? "lg:ml-auto lg:mt-10 lg:max-w-xl lg:text-right"
+                            : "max-w-xl lg:mt-10"
+                        }
+                      >
+                        <div className={`mb-5 flex ${reversed ? "lg:justify-end" : ""}`}>
                           <FeatureIcon title={feature.title} />
                         </div>
                         <h3 className="text-3xl font-semibold leading-tight text-[#f4f4ef] sm:text-[2.75rem]">
@@ -292,7 +322,7 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className={reversed ? 'lg:order-1' : ''}>
+                    <div className={reversed ? "lg:order-1" : ""}>
                       <div className="feature-video-panel min-h-[240px] sm:min-h-[380px] lg:min-h-[440px]">
                         <LandingVideo
                           className="feature-video"
@@ -308,7 +338,7 @@ export default function Home() {
                       </div>
                     </div>
                   </article>
-                );
+                )
               })}
             </div>
           </div>
@@ -318,12 +348,16 @@ export default function Home() {
           <div className="border-x border-b border-white/10 bg-fd-background px-4 py-14 sm:px-8 sm:py-20 lg:px-12">
             <SectionHeader
               eyebrow="Extra depth"
-              title={<><span className="text-[#9AE7FF]">More</span> than the happy path</>}
+              title={
+                <>
+                  <span className="text-[#9AE7FF]">More</span> than the happy path
+                </>
+              }
               description="Several principle features that allow dive deep into contract development. Focused on security, error prevention, and gas optimization."
             />
 
             <div className="mt-8 grid gap-px overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/10 sm:mt-10 sm:rounded-[1.75rem] md:grid-cols-2 xl:grid-cols-4">
-              {BELOW_FEATURES.map((feature) => (
+              {BELOW_FEATURES.map(feature => (
                 <Link
                   key={feature.title}
                   href={feature.docLink}
@@ -333,9 +367,7 @@ export default function Home() {
                     <h3 className="text-2xl font-semibold leading-tight text-[#f4f4ef]">
                       {feature.title}
                     </h3>
-                    <p className="mt-5 text-base leading-7 text-[#c7c6bf]">
-                      {feature.description}
-                    </p>
+                    <p className="mt-5 text-base leading-7 text-[#c7c6bf]">{feature.description}</p>
                     <span className="mt-auto inline-flex items-center gap-2 pt-8 text-sm font-medium text-[#9AE7FF]">
                       Read in docs
                       <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
@@ -358,8 +390,8 @@ export default function Home() {
                   FunC to <span className="text-[#9AE7FF]">Tolk</span> in one click
                 </h2>
                 <p className="mt-5 max-w-xl text-base leading-7 text-[#c7c6bf] sm:mt-6 sm:text-lg sm:leading-8">
-                  Convert your existing FunC project to Tolk with a single command,
-                  and then iteratively refactor it keeping green tests.
+                  Convert your existing FunC project to Tolk with a single command, and then
+                  iteratively refactor it keeping green tests.
                 </p>
               </div>
               <div className="overflow-hidden rounded-xl border border-white/10 bg-fd-background shadow-[0_24px_80px_rgba(0,0,0,0.3)] lg:translate-y-6">
@@ -377,20 +409,20 @@ export default function Home() {
                       <span className="text-[#9AE7FF]">acton</span>
                       <span className="text-sky-200"> func2tolk </span>
                       <span className="text-[#ef8cff]">contracts/</span>
-                      {'\n'}
+                      {"\n"}
                       <span className="text-[#1AC9FF]">✓</span>
                       <span className="text-[#d8d7cf]"> parsed </span>
                       <span className="text-sky-200">14</span>
                       <span className="text-[#d8d7cf]"> FunC files</span>
-                      {'\n'}
+                      {"\n"}
                       <span className="text-[#1AC9FF]">✓</span>
                       <span className="text-[#d8d7cf]"> generated </span>
                       <span className="text-sky-200">Tolk</span>
                       <span className="text-[#d8d7cf]"> contracts</span>
-                      {'\n'}
+                      {"\n"}
                       <span className="text-[#1AC9FF]">✓</span>
                       <span className="text-[#d8d7cf]"> wrappers are still compatible</span>
-                      {'\n'}
+                      {"\n"}
                       <span className="text-[#1AC9FF]">✓</span>
                       <span className="text-[#d8d7cf]"> test snapshots match</span>
                     </code>
@@ -442,23 +474,20 @@ export default function Home() {
               <Link href="/" className="inline-flex items-center gap-3">
                 <span className="text-xl font-semibold text-white">Acton</span>
               </Link>
-              <p className="mt-3 max-w-md text-sm leading-5 text-[#c7c6bf]">
-                TON toolchain for building, testing, debugging, and verifying smart contracts.
-              </p>
             </div>
             <div className="grid w-full grid-cols-[auto_1fr] items-center gap-4 text-sm text-[#c7c6bf] md:flex md:w-auto md:justify-end">
               <div>
-                Built by{' '}
+                Built by{" "}
                 <Link
                   href="https://t.me/toncore"
                   target="_blank"
-                  className="font-medium text-[#9AE7FF] transition-colors hover:text-white"
+                  className="font-medium text-[#9AE7FF] transition-colors hover:text-[#1AC9FF]"
                 >
                   TON Core
                 </Link>
               </div>
               <div className="justify-self-end flex items-center gap-1">
-                {HEADER_ICON_LINKS.map(({ href, label, icon: Icon }) => (
+                {HEADER_ICON_LINKS.map(({href, label, icon: Icon}) => (
                   <IconLink key={label} href={href} label={label} icon={Icon} />
                 ))}
               </div>
@@ -467,7 +496,7 @@ export default function Home() {
         </div>
       </footer>
     </div>
-  );
+  )
 }
 
 function SiteHeader() {
@@ -478,7 +507,7 @@ function SiteHeader() {
           <Link href="/" className="flex items-center gap-3 md:-translate-x-px">
             <Image
               src={logoDark}
-              alt=""
+              alt="Acton logo"
               width={32}
               height={32}
               className="h-8 w-8 rounded-md"
@@ -488,22 +517,37 @@ function SiteHeader() {
           </Link>
           <span className="hidden h-5 w-px bg-white/14 sm:block" />
           <div className="hidden items-center gap-6 sm:flex">
-            <Link href="/docs/welcome" className="text-sm text-[#c9c8c0] transition-colors hover:text-white">Docs</Link>
-            <Link href="/docs/commands/overview" className="text-sm text-[#c9c8c0] transition-colors hover:text-white">Commands</Link>
-            <Link href="/docs/testing/overview" className="text-sm text-[#c9c8c0] transition-colors hover:text-white">Testing</Link>
+            <Link
+              href="/docs/welcome"
+              className="text-sm text-[#c9c8c0] transition-colors hover:text-white"
+            >
+              Docs
+            </Link>
+            <Link
+              href="/docs/commands/overview"
+              className="text-sm text-[#c9c8c0] transition-colors hover:text-white"
+            >
+              Commands
+            </Link>
+            <Link
+              href="/docs/testing/overview"
+              className="text-sm text-[#c9c8c0] transition-colors hover:text-white"
+            >
+              Testing
+            </Link>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
             <HeaderSearchField />
-            {HEADER_ICON_LINKS.map(({ href, label, icon: Icon }) => (
+            {HEADER_ICON_LINKS.map(({href, label, icon: Icon}) => (
               <IconLink key={label} href={href} label={label} icon={Icon} />
             ))}
           </div>
         </div>
       </nav>
     </header>
-  );
+  )
 }
 
 function IconLink({
@@ -511,20 +555,20 @@ function IconLink({
   label,
   icon: Icon,
 }: {
-  href: string;
-  label: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  href: string
+  label: string
+  icon: ComponentType<SVGProps<SVGSVGElement>>
 }) {
   return (
     <Link
       href={href}
-      target={href.startsWith('http') ? '_blank' : undefined}
+      target={href.startsWith("http") ? "_blank" : undefined}
       aria-label={label}
       className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#c9c8c0] transition-colors hover:bg-white/[0.06] hover:text-white"
     >
       <Icon className="h-4 w-4" />
     </Link>
-  );
+  )
 }
 
 function TelegramIcon(props: SVGProps<SVGSVGElement>) {
@@ -535,20 +579,20 @@ function TelegramIcon(props: SVGProps<SVGSVGElement>) {
         fill="currentColor"
       />
     </svg>
-  );
+  )
 }
 
-function FeatureTitle({ title }: { title: string }) {
-  const accent = FEATURE_TITLE_ACCENTS[title];
+function FeatureTitle({title}: {title: string}) {
+  const accent = FEATURE_TITLE_ACCENTS[title]
 
   if (!accent) {
-    return title;
+    return title
   }
 
-  const accentIndex = title.indexOf(accent);
+  const accentIndex = title.indexOf(accent)
 
   if (accentIndex === -1) {
-    return title;
+    return title
   }
 
   return (
@@ -557,23 +601,23 @@ function FeatureTitle({ title }: { title: string }) {
       <span className="text-[#9AE7FF]">{accent}</span>
       {title.slice(accentIndex + accent.length)}
     </>
-  );
+  )
 }
 
-function FeatureIcon({ title }: { title: string }) {
-  const config = FEATURE_ICONS[title];
+function FeatureIcon({title}: {title: string}) {
+  const config = FEATURE_ICONS[title]
 
   if (!config) {
-    return null;
+    return null
   }
 
-  const Icon = config.icon;
+  const Icon = config.icon
 
   return (
     <span className="inline-flex text-[#9AE7FF]">
       <Icon className="h-9 w-9" strokeWidth={1.8} />
     </span>
-  );
+  )
 }
 
 function SectionHeader({
@@ -581,9 +625,9 @@ function SectionHeader({
   title,
   description,
 }: {
-  eyebrow: string;
-  title: ReactNode;
-  description: string;
+  eyebrow: string
+  title: ReactNode
+  description: string
 }) {
   return (
     <div className="max-w-3xl">
@@ -597,5 +641,5 @@ function SectionHeader({
         {description}
       </p>
     </div>
-  );
+  )
 }
