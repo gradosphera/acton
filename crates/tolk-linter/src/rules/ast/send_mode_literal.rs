@@ -20,7 +20,7 @@ use tolk_ty::InferenceResult;
 /// ### Example
 /// ```tolk twoslash
 /// outMsg.send(3);
-/// //          ^ E016: send mode should use SEND_MODE_* constants
+/// //          ^ E012: send mode should use SEND_MODE_* constants
 /// ```
 ///
 /// Use instead:

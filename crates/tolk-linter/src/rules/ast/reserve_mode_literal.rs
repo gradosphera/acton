@@ -20,7 +20,7 @@ use tolk_ty::InferenceResult;
 /// ### Example
 /// ```tolk twoslash
 /// reserveToncoinsOnBalance(ton("0.1"), 3);
-/// //                                   ^ E020: reserve mode should use RESERVE_MODE_* constants
+/// //                                   ^ E015: reserve mode should use RESERVE_MODE_* constants
 /// ```
 ///
 /// Use instead:

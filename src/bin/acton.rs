@@ -812,7 +812,7 @@ enum Commands {
             long = "enable-only",
             value_delimiter = ',',
             value_name = "CODE[,CODE...]",
-            help = "Enable only selected lint rules by code (e.g. E001,S001)"
+            help = "Enable only selected lint rules by code (e.g. S003,S001)"
         )]
         enable_only: Option<Vec<String>>,
         #[arg(long, help = "Explain a rule")]
