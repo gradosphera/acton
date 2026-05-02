@@ -13,15 +13,15 @@
 }
 
 :root {
-  --headless-color: #4b2ce8;
-  --ui-color: #cc8b00;
+  --headless-color: #2d83ec;
+  --ui-color: #2d83ec;
 
   --color-fd-primary: var(--ui-color);
 }
 
 .dark {
-  --headless-color: #a9f;
-  --ui-color: #fff383;
+  --headless-color: #9ae7ff;
+  --ui-color: #9ae7ff;
 }
 
 body {
