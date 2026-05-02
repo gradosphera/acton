@@ -1,4 +1,4 @@
-import {getPageImage, source} from "@/lib/source"
+import {getPageImage, getVisiblePages, source} from "@/lib/source"
 import {notFound} from "next/navigation"
 import {ImageResponse} from "next/og"
 import {generate, getImageResponseOptions} from "@/lib/mono"
@@ -22,7 +22,7 @@ export async function GET(_req: Request, {params}: RouteContext<"/og/docs/[...sl
 }
 
 export function generateStaticParams() {
-  return source.getPages().map(page => ({
+  return getVisiblePages().map(page => ({
     lang: page.locale,
     slug: getPageImage(page).segments,
   }))

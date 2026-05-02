@@ -1,5 +1,5 @@
 import {getLLMText} from "@/lib/get-llm-text"
-import {source} from "@/lib/source"
+import {generateVisibleParams, source} from "@/lib/source"
 import {notFound} from "next/navigation"
 
 export const revalidate = false
@@ -52,7 +52,7 @@ export async function GET(_request: Request, {params}: RouteProps) {
 }
 
 export function generateStaticParams() {
-  return source.generateParams().map(({slug}) => ({
+  return generateVisibleParams().map(({slug}) => ({
     slug: appendMarkdownExtension(slug),
   }))
 }

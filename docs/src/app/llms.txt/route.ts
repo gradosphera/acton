@@ -1,11 +1,10 @@
 import {llms} from "fumadocs-core/source"
-import {getLlmSource} from "@/lib/source"
+import {visibleLlmSource} from "@/lib/source"
 
 export const revalidate = false
 
 export async function GET() {
-  const docs = await getLlmSource()
-  const body = llms(docs).index()
+  const body = llms(visibleLlmSource).index()
 
   return new Response(body, {
     headers: {

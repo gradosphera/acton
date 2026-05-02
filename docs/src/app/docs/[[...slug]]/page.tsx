@@ -1,4 +1,4 @@
-import {getPageImage, source} from "@/lib/source"
+import {generateVisibleParams, getPageImage, source} from "@/lib/source"
 import {
   DocsBody,
   DocsDescription,
@@ -69,7 +69,7 @@ export default async function Page(props: PageProps) {
 }
 
 export async function generateStaticParams() {
-  return source.generateParams()
+  return generateVisibleParams()
 }
 
 export async function generateMetadata(props: PageProps): Promise<Metadata> {

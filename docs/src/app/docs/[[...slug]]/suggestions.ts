@@ -1,5 +1,5 @@
 import type {Suggestion} from "@/components/layouts/not-found"
-import {source} from "@/lib/source"
+import {getVisiblePages} from "@/lib/source"
 
 export async function getSuggestions(pathname: string): Promise<Suggestion[]> {
   const terms = new Set(
@@ -11,8 +11,7 @@ export async function getSuggestions(pathname: string): Promise<Suggestion[]> {
 
   if (terms.size === 0) return []
 
-  return source
-    .getPages()
+  return getVisiblePages()
     .map(page => {
       const haystack = [page.url, page.path, page.data.title, page.data.description]
         .join(" ")
