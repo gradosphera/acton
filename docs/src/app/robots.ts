@@ -1,13 +1,13 @@
-import type { MetadataRoute } from 'next';
+import type {MetadataRoute} from "next"
 
-export const revalidate = false;
+export const revalidate = false
 
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
-      userAgent: '*',
-      allow: '/',
+      userAgent: "*",
+      allow: "/",
     },
-    sitemap: 'https://ton-blockchain.github.io/acton/sitemap.xml',
-  };
+    sitemap: "https://ton-blockchain.github.io/acton/sitemap.xml",
+  }
 }
