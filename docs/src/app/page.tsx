@@ -19,6 +19,8 @@ import {InlineInstallationCommand} from "@/components/InstallationCodeBlock"
 import {LandingVideo} from "@/components/LandingVideo"
 import logoDark from "@/public/logo-dark.svg"
 
+const landingOgImage = "/og/home/image.png"
+
 export const metadata: Metadata = {
   title: "Acton — TON Development Toolkit",
   description:
@@ -29,7 +31,7 @@ export const metadata: Metadata = {
     description:
       "Acton is a blazingly fast toolkit, test runner, build system, formatter, and verifier for TON smart contract development.",
     url: "https://ton-blockchain.github.io/acton",
-    images: "/og/home/image.png",
+    images: landingOgImage,
     locale: "en_US",
     type: "website",
   },
@@ -38,7 +40,7 @@ export const metadata: Metadata = {
     title: "Acton — TON Development Toolkit",
     description:
       "Acton is a blazingly fast toolkit, test runner, build system, formatter, and verifier for TON smart contract development.",
-    images: "/og/home/image.png",
+    images: landingOgImage,
   },
 }
 
