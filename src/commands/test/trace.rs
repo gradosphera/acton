@@ -1,6 +1,7 @@
 use crate::commands::test::{Pos, TestDescriptor};
-use crate::context::{Context, Emulations, FailedSendMessageResult, to_cell};
-use crate::ffi::emulation::compilation_result_for_code;
+use crate::context::{
+    BuildCache, CompilationResult, Emulations, FailedSendMessageResult, KnownAddresses, to_cell,
+};
 use crate::retrace::{self, InstalledActions};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -216,14 +217,22 @@ fn convert_failure_reason(reason: ExecutedActionFailureReason) -> ExecutorAction
     }
 }
 
+fn contract_info(result: &CompilationResult) -> ContractInfo {
+    ContractInfo {
+        abi: result.abi.clone(),
+        name: result.name.clone(),
+        code_boc64: result.code_boc64.clone(),
+        source_map: (*result.source_map).clone(),
+    }
+}
+
 pub(super) fn dump_test_transactions(
     test: &TestDescriptor,
-    ctx: &Context<'_>,
+    build_cache: &BuildCache,
+    known_addresses: &KnownAddresses,
     txs: &Emulations,
     output_dir: &str,
 ) -> anyhow::Result<()> {
-    let build_cache = &*ctx.build.build_cache;
-    let known_addresses = &*ctx.build.known_addresses;
     let mut known_contracts = BTreeMap::new();
     let traces = txs
         .messages
@@ -233,23 +242,13 @@ pub(super) fn dump_test_transactions(
             let transactions = trace_transactions
                 .iter()
                 .map(|tx| {
-                    let build = compilation_result_for_code(ctx, tx.code.as_ref(), true)
-                        .map(|(_, result)| result);
-                    let source_map = build.as_ref().map(|info| info.source_map.as_ref());
+                    let build = build_cache.result_for_code(&tx.code);
+                    let source_map = build.as_ref().map(|(_, info)| info.source_map.as_ref());
                     let installed_actions = retrace::find_installed_actions(&tx.vm_log);
                     let executor_actions =
                         parse_executor_actions(&tx.executor_logs, &installed_actions, source_map);
 
-                    let contract_info = build.map(|info| ContractInfo {
-                        name: info.name.clone(),
-                        code_boc64: info.code_boc64.clone(),
-                        source_map: (*info.source_map).clone(),
-                        abi: info.abi,
-                    });
-                    let dest_contract_info = contract_info.as_ref().map(|info| info.name.clone());
-                    if let Some(info) = contract_info {
-                        known_contracts.insert(info.name.clone(), info);
-                    }
+                    let dest_contract_info = build.as_ref().map(|(_, info)| info.name.clone());
 
                     TransactionInfo {
                         lt: tx.transaction.lt.to_string(),
@@ -301,14 +300,7 @@ pub(super) fn dump_test_transactions(
     }
 
     for result in build_cache.built.values() {
-        let info = ContractInfo {
-            abi: result.abi.clone(),
-            name: result.name.clone(),
-            code_boc64: result.code_boc64.clone(),
-            source_map: (*result.source_map).clone(),
-        };
-
-        known_contracts.insert(result.name.clone(), info);
+        known_contracts.insert(result.name.clone(), contract_info(result));
     }
 
     let test_info = TestTrace {
