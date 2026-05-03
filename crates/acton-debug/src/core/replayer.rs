@@ -46,7 +46,7 @@ pub enum ExceptionBreakMode {
     All,
 }
 
-const IGNORED_UNCAUGHT_EXCEPTION_ERRNO: &str = "65536"; // invalid message
+const IGNORED_UNCAUGHT_EXCEPTION_ERRNO: &str = "65535"; // invalid message
 
 #[derive(Debug, Clone)]
 pub struct ExceptionInfo {
@@ -1294,7 +1294,7 @@ impl TolkReplayer {
                     // last_exception may be None if mode=All (we already stopped, and step() cleared it)
                     exc.is_uncaught = true;
                 }
-                // The executor can report 65536 for "invalid message" for example for Jettons.
+                // The executor can report 65535 for "invalid message" for example for Jettons.
                 // This is unnecessary noise for the user so we just skip it completely
                 // and do not pause on it in the source-level uncaught-exception flow.
                 if errno == IGNORED_UNCAUGHT_EXCEPTION_ERRNO {
