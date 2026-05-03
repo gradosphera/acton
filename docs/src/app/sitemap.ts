@@ -1,5 +1,5 @@
 import type {MetadataRoute} from "next"
-import {source} from "@/lib/source"
+import {getVisiblePages} from "@/lib/source"
 
 export const revalidate = false
 
@@ -8,7 +8,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const url = (path: string): string => new URL(path.replace(/^\//, ""), baseUrl).toString()
 
   const docsPages = await Promise.all(
-    source.getPages().map(async page => {
+    getVisiblePages().map(async page => {
       const {lastModified} = page.data
 
       const sitemapUrl: MetadataRoute.Sitemap[number] = {
