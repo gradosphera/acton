@@ -91,6 +91,12 @@ fn build_import_items<'tree>(
 
 #[must_use]
 pub fn print_source_file<'a>(ctx: &Context<'_>, file: &SourceFile) -> Option<RcDoc<'a>> {
+    if ctx.options.range.is_some() {
+        // Full-file formatting intentionally hoists the version/import sections and sorts imports.
+        // Range formatting is used by editors and must keep unrelated top-level nodes untouched.
+        return print_source_file_preserving_order(ctx, file);
+    }
+
     let mut sections = vec![];
 
     // file header section
@@ -236,6 +242,66 @@ pub fn print_source_file<'a>(ctx: &Context<'_>, file: &SourceFile) -> Option<RcD
     }
 
     Some(common::print_sections(sections))
+}
+
+fn print_source_file_preserving_order<'a>(
+    ctx: &Context<'_>,
+    file: &SourceFile,
+) -> Option<RcDoc<'a>> {
+    let raw_top_levels = file.top_levels().collect::<Vec<_>>();
+    let top_levels = raw_top_levels
+        .iter()
+        .filter(|decl| !matches!(decl, TopLevel::Unmapped(node) if node.0.kind() == "comment"))
+        .copied()
+        .collect::<Vec<_>>();
+
+    let mut docs = vec![];
+
+    let file_header_comments = ctx.comments.get(&file.tree.root_node());
+    let has_file_header_comments =
+        file_header_comments.is_some_and(|comments| !comments.is_empty());
+    comments::print_leading_comments(ctx, &mut docs, file_header_comments);
+    if has_file_header_comments && !top_levels.is_empty() {
+        docs.push(RcDoc::hardline());
+    }
+
+    if top_levels.is_empty() {
+        for top_level in raw_top_levels {
+            docs.push(common::print_original_node_text(ctx, &top_level.syntax()));
+        }
+        docs.push(RcDoc::hardline());
+        return Some(RcDoc::concat(docs));
+    }
+
+    for (i, top_level) in top_levels.iter().enumerate() {
+        let node = top_level.syntax();
+        let comments = ctx.comments.get(&node);
+
+        if !common::should_format_node(ctx, &node) || comments::has_fmt_ignore(ctx, comments) {
+            docs.push(common::print_original_node_text(ctx, &node));
+        } else {
+            comments::print_leading_comments(ctx, &mut docs, comments);
+
+            let Some(doc) = print_decl(ctx, top_level) else {
+                continue;
+            };
+            docs.push(doc);
+
+            comments::print_inline_comments(ctx, &mut docs, comments);
+            docs.push(RcDoc::hardline());
+            comments::print_trailing_comments(ctx, &mut docs, comments);
+        }
+
+        if let Some(next_top_level) = top_levels.get(i + 1) {
+            let next_node = next_top_level.syntax();
+            if common::empty_lines_between(ctx, &node, &next_node) > 1 {
+                docs.push(RcDoc::hardline());
+            }
+        }
+    }
+
+    docs.push(RcDoc::hardline());
+    Some(RcDoc::concat(docs))
 }
 
 #[must_use]

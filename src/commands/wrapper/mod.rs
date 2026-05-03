@@ -60,6 +60,7 @@ fn build_model(
         tolk_fmt::FormatOptions {
             width,
             separate_import_groups,
+            ..Default::default()
         }
     };
     let project_root = project_root().to_path_buf();

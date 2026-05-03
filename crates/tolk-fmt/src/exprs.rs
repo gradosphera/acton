@@ -11,6 +11,11 @@ use tree_sitter::Node;
 
 #[must_use]
 pub fn print_expression<'a>(ctx: &Context<'_>, expr: &Expr) -> Option<RcDoc<'a>> {
+    let node = expr.syntax();
+    if !common::should_format_node(ctx, &node) {
+        return Some(common::print_original_node_text_inline(ctx, &node));
+    }
+
     // TODO: other literals as well
     if let Expr::NumberLit(lit) = expr {
         let kind = lit.0.parent()?.kind();
@@ -23,7 +28,6 @@ pub fn print_expression<'a>(ctx: &Context<'_>, expr: &Expr) -> Option<RcDoc<'a>>
         }
     }
 
-    let node = expr.syntax();
     let comments = ctx.comments.get(&node);
 
     if comments.is_none() {

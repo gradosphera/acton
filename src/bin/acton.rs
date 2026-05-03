@@ -882,6 +882,12 @@ enum Commands {
         paths: Vec<String>,
         #[arg(long, help = "Check if files are formatted without overwriting them")]
         check: bool,
+        #[arg(
+            long,
+            value_name = "startLine:startChar-endLine:endChar",
+            help = "Format only the specified zero-based source range using UTF-8 byte columns"
+        )]
+        range: Option<String>,
     },
     #[command(
         about = "Look up TVM reference documentation",
@@ -2126,7 +2132,11 @@ fn main() {
             }
             result
         }
-        Commands::Fmt { paths, check } => fmt_cmd(paths, check),
+        Commands::Fmt {
+            paths,
+            check,
+            range,
+        } => fmt_cmd(paths, check, range),
         Commands::Doc { command } => match command {
             DocCommand::Tvm {
                 instruction,
