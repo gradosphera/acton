@@ -164,7 +164,19 @@ fun SendResult.allOutActions(self): OutActionList {
 
 /// Represents a list of send results obtained from [net.send] method.
 ///
-/// This list represent all transactions produced by a [net.send] call.
+/// This list represents all transactions produced by a [net.send] call.
+///
+/// You can print the whole list with [println] to inspect the transaction tree produced by
+/// the send call.
+///
+/// Example output:
+/// ```acton-trace
+/// N/A -> sender A
+/// └── AskToTransfer 0.3 TON -> JettonWallet B                                  gas=5158
+///     └── InternalTransferStep 0.19 TON -> JettonWallet C                      gas=6974
+///         ├── TransferNotificationForRecipient 0.05 TON -> receiver D          gas=1234
+///         └── ReturnExcessesBack 0.13 TON -> sender A                          gas=4321
+/// ```
 ///
 /// To get a single send result, use [SendResultList.at] method.
 type SendResultList = BigArray<SendResult>
