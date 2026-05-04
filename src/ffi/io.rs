@@ -2,6 +2,7 @@ use crate::commands::common::error_fmt;
 use crate::context::{BuildCache, Context, to_cell};
 use crate::ffi::emulation::{compilation_result_for_code, normalize_address_input};
 use crate::formatter::FormatterContext;
+use acton_config::color::OwoColorize;
 use acton_debug::render_tuple_item_as_tolk_type;
 use anyhow::{Context as AnyhowContext, anyhow, bail};
 use inquire::validator::{ErrorMessage, Validation};
@@ -18,6 +19,7 @@ use ton_emulator::{extension, register_ext_methods};
 use ton_executor::BaseExecutor;
 use tvm_ffi::from_stack::FromStack;
 use tvm_ffi::stack::{Tuple, TupleItem};
+use tycho_types::cell::{DynCell, LevelMask};
 use tycho_types::models::{StdAddr, StdAddrFormat};
 
 extension!(println in (Context) with (arg6: TupleItem, type6: BigInt, arg5: TupleItem, type5: BigInt, arg4: TupleItem, type4: BigInt, arg3: TupleItem, type3: BigInt, arg2: TupleItem, type2: BigInt, arg1: TupleItem, type1: BigInt) using println_impl);
@@ -132,6 +134,7 @@ enum PlaceholderKind {
     Plain,
     Hex,
     Ton,
+    CellTree,
 }
 
 #[derive(Clone)]
@@ -145,6 +148,7 @@ const fn placeholder_repr(kind: PlaceholderKind) -> &'static str {
         PlaceholderKind::Plain => "{}",
         PlaceholderKind::Hex => "{:x}",
         PlaceholderKind::Ton => "{:ton}",
+        PlaceholderKind::CellTree => "{:cell-tree}",
     }
 }
 
@@ -160,13 +164,14 @@ fn parse_placeholder_kind(
         return match modifier {
             "x" => Ok(PlaceholderKind::Hex),
             "ton" => Ok(PlaceholderKind::Ton),
+            "cell-tree" => Ok(PlaceholderKind::CellTree),
             _ => bail!(
-                "Invalid format string at byte {byte_pos}: unknown format modifier '{modifier}' in {placeholder} (supported: :x, :ton)"
+                "Invalid format string at byte {byte_pos}: unknown format modifier '{modifier}' in {placeholder} (supported: :x, :ton, :cell-tree)"
             ),
         };
     }
     bail!(
-        "Invalid format string at byte {byte_pos}: unsupported placeholder {placeholder} (supported: {{}}, {{:x}}, {{:ton}})"
+        "Invalid format string at byte {byte_pos}: unsupported placeholder {placeholder} (supported: {{}}, {{:x}}, {{:ton}}, {{:cell-tree}})"
     )
 }
 
@@ -265,7 +270,111 @@ fn format_single_arg(
             }
             format_default(ctx, formatter, ty_idx, arg, colorize)
         }
+        PlaceholderKind::CellTree => {
+            if let TupleItem::Tuple(items) = &arg
+                && items.len() == 1
+                && let TupleItem::Cell(cell) | TupleItem::Slice(cell) | TupleItem::Builder(cell) =
+                    &items[0]
+            {
+                return Ok(format_cell_tree(cell.as_ref(), colorize));
+            }
+
+            format_default(ctx, formatter, ty_idx, arg, colorize)
+        }
         PlaceholderKind::Plain => format_default(ctx, formatter, ty_idx, arg, colorize),
+    }
+}
+
+fn format_cell_tree(root: &DynCell, colorize: bool) -> String {
+    let mut out = String::new();
+    let mut stack = vec![(0, root)];
+
+    while let Some((level, cell)) = stack.pop() {
+        write_cell_tree_root(&mut out, cell, level, colorize);
+
+        for index in (0..cell.reference_count()).rev() {
+            if let Some(child) = cell.reference(index) {
+                stack.push((level + 1, child));
+            }
+        }
+    }
+
+    out.trim_end().to_owned()
+}
+
+fn write_cell_tree_root(out: &mut String, cell: &DynCell, level: usize, colorize: bool) {
+    let indent = " ".repeat(level * 2);
+    let data = hex::encode(cell.data());
+    let descriptor = cell.descriptor();
+    let cell_type = format!("{:?}", descriptor.cell_type());
+    let level_mask = format!("{:?}", descriptor.level_mask());
+    let depth = cell.depth(LevelMask::MAX_LEVEL).to_string();
+    let hash = cell.repr_hash().to_string();
+
+    out.push_str(&indent);
+    out.push_str(&color_cell_type(&cell_type, colorize));
+    out.push_str(": ");
+    out.push_str(&color_cell_data(&data, colorize));
+    out.push('\n');
+
+    out.push_str(&indent);
+    out.push_str(&color_cell_label("bits", colorize));
+    out.push_str(": ");
+    out.push_str(&color_cell_value(
+        &format!("{:>4}", cell.bit_len()),
+        colorize,
+    ));
+    out.push_str(&color_cell_label(", refs: ", colorize));
+    out.push_str(&color_cell_value(
+        &descriptor.reference_count().to_string(),
+        colorize,
+    ));
+    out.push_str(&color_cell_label(", l: ", colorize));
+    out.push_str(&color_cell_value(&level_mask, colorize));
+    out.push_str(&color_cell_label(", depth: ", colorize));
+    out.push_str(&color_cell_value(&depth, colorize));
+    out.push_str(&color_cell_label(", hash: ", colorize));
+    out.push_str(&color_cell_hash(&hash, colorize));
+    out.push('\n');
+}
+
+fn color_cell_type(value: &str, colorize: bool) -> String {
+    if colorize {
+        value.magenta().to_string()
+    } else {
+        value.to_owned()
+    }
+}
+
+fn color_cell_data(value: &str, colorize: bool) -> String {
+    if colorize {
+        value.cyan().to_string()
+    } else {
+        value.to_owned()
+    }
+}
+
+fn color_cell_label(value: &str, colorize: bool) -> String {
+    if colorize {
+        value.dimmed().to_string()
+    } else {
+        value.to_owned()
+    }
+}
+
+fn color_cell_value(value: &str, colorize: bool) -> String {
+    if colorize {
+        value.yellow().to_string()
+    } else {
+        value.to_owned()
+    }
+}
+
+fn color_cell_hash(value: &str, colorize: bool) -> String {
+    if colorize {
+        value.dimmed().to_string()
+    } else {
+        value.to_owned()
     }
 }
 

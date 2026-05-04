@@ -52,6 +52,7 @@ import "ffi"
 /// - `{}` - default formatter output
 /// - `{:x}` - formats an int as lowercase hexadecimal without `0x` prefix
 /// - `{:ton}` - formats an int amount in nanotons as `<value> TON`
+/// - `{:cell-tree}` - formats a cell/slice/builder/Cell<T> as a tree of cell references
 ///
 /// Notes:
 /// - Escape literal braces with `{{` and `}}`.
@@ -59,6 +60,7 @@ import "ffi"
 /// - If placeholders outnumber arguments, unmatched placeholders stay in output as text.
 /// - If arguments outnumber placeholders, extra arguments are appended after the formatted text.
 /// - For non-int arguments, `{:x}` and `{:ton}` fall back to the same behavior as `{}`.
+/// - For non-cell/slice/builder/Cell<T> arguments, `{:cell-tree}` falls back to the same behavior as `{}`.
 /// - `{:ton}` uses floating-point conversion, so very large values can be rounded.
 fun println<
     T1,
