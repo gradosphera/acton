@@ -349,7 +349,10 @@ fn copy_path_into_workspace(
     if !canonical.starts_with(project_root) {
         return Ok(());
     }
-    if copied_roots.iter().any(|already| canonical.starts_with(already)) {
+    if copied_roots
+        .iter()
+        .any(|already| canonical.starts_with(already))
+    {
         return Ok(());
     }
     // Drop narrower roots that the new (broader) path supersedes.
@@ -409,12 +412,7 @@ fn copy_test_files_recursive(
                 name_str.as_ref(),
                 "target" | "node_modules" | "build" | ".git" | ".acton" | ".codex" | ".claude"
             ) {
-                copy_test_files_recursive(
-                    &entry.path(),
-                    project_root,
-                    workspace,
-                    copied_roots,
-                )?;
+                copy_test_files_recursive(&entry.path(), project_root, workspace, copied_roots)?;
             }
         } else if file_type.is_file() && name_str.ends_with(".test.tolk") {
             copy_path_into_workspace(project_root, workspace, &entry.path(), copied_roots)?;
