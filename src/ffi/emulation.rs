@@ -3648,6 +3648,12 @@ fn wait_for_trace_impl(
         )));
     }
 
+    if !quiet {
+        println!(
+            "Trace was not found after {attempts} attempt(s); the transaction may not be indexed yet."
+        );
+    }
+
     stack.push(TupleItem::Null);
     Ok(())
 }
