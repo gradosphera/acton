@@ -642,7 +642,7 @@ fn generate_single_dependency_file(
     Ok(true)
 }
 
-fn non_empty_path(path: Option<String>) -> Option<String> {
+pub(crate) fn non_empty_path(path: Option<String>) -> Option<String> {
     path.filter(|value| !value.is_empty())
 }
 
@@ -666,7 +666,7 @@ fn rewrite_compiler_error_paths_for_display(
     }
 }
 
-fn resolve_build_output_dir(
+pub(crate) fn resolve_build_output_dir(
     cli_path: Option<String>,
     config_path: Option<String>,
     default_dir: &str,
@@ -693,7 +693,7 @@ fn resolve_optional_build_output_dir(
         .map(|config_path| resolve_project_config_path(project_root, &config_path))
 }
 
-fn resolve_project_config_path(project_root: &Path, path: &str) -> PathBuf {
+pub(crate) fn resolve_project_config_path(project_root: &Path, path: &str) -> PathBuf {
     let path = Path::new(path);
     if path.is_absolute() {
         path.to_path_buf()
@@ -702,7 +702,7 @@ fn resolve_project_config_path(project_root: &Path, path: &str) -> PathBuf {
     }
 }
 
-fn format_valid_function_name(dependency_key: &str) -> String {
+pub(crate) fn format_valid_function_name(dependency_key: &str) -> String {
     let mut name = dependency_key.replace(['-', '.', ' '], "_");
 
     if !name.chars().next().unwrap_or(' ').is_alphabetic() {
@@ -714,7 +714,7 @@ fn format_valid_function_name(dependency_key: &str) -> String {
     format!("{name}CompiledCode")
 }
 
-fn generate_tolk_dependency_content(
+pub(crate) fn generate_tolk_dependency_content(
     func_name: &str,
     boc_base64: &str,
     dependency_key: &str,

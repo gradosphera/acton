@@ -1,3 +1,7 @@
+use crate::commands::build::{
+    format_valid_function_name, generate_tolk_dependency_content, non_empty_path,
+    resolve_build_output_dir, resolve_project_config_path,
+};
 use crate::commands::common::error_fmt;
 use crate::commands::test::mutation::diff::collect_mutation_diff_scope;
 use crate::commands::test::mutation::rules::{
@@ -265,8 +269,16 @@ fn mutation_worker_count(config: &TestConfig, total_mutations: usize) -> usize {
     configured.max(1).min(total_mutations.max(1))
 }
 
-fn create_mutation_workspace(sources: &[MutationSourceSnapshot]) -> anyhow::Result<TempDir> {
+fn create_mutation_workspace(
+    project_root: &Path,
+    acton_config: &ActonConfig,
+    sources: &[MutationSourceSnapshot],
+    isolate_full_project: bool,
+) -> anyhow::Result<TempDir> {
     let mutation_dir = TempDir::new()?;
+    if isolate_full_project {
+        seed_workspace_from_project(project_root, mutation_dir.path(), acton_config)?;
+    }
 
     for source in sources {
         let dest_path = mutation_dir.path().join(&source.relative_path);
@@ -279,6 +291,179 @@ fn create_mutation_workspace(sources: &[MutationSourceSnapshot]) -> anyhow::Resu
     Ok(mutation_dir)
 }
 
+/// Copies the subset of `project_root` that contract tests actually need into a fresh
+/// workspace: the manifest, wallet files, every directory pointed at by `[import-mappings]`,
+/// and any `contracts.*.src` paths that fall outside those mappings. Heavy/transient
+/// directories that the user may have alongside the project (`target/`, `node_modules/`,
+/// `build/`, etc.) are not whitelisted, so they stay out of the per-worker copy.
+fn seed_workspace_from_project(
+    project_root: &Path,
+    workspace: &Path,
+    acton_config: &ActonConfig,
+) -> anyhow::Result<()> {
+    let mut copied_roots: Vec<PathBuf> = Vec::new();
+
+    let manifest = project_root.join("Acton.toml");
+    if manifest.is_file() {
+        copy_path_into_workspace(project_root, workspace, &manifest, &mut copied_roots)?;
+    }
+    for wallets_file in ["wallets.toml", "global.wallets.toml"] {
+        let path = project_root.join(wallets_file);
+        if path.is_file() {
+            copy_path_into_workspace(project_root, workspace, &path, &mut copied_roots)?;
+        }
+    }
+
+    if let Some(mappings) = acton_config.mappings() {
+        for target in mappings.values() {
+            if target.is_empty() {
+                continue;
+            }
+            let resolved = resolve_project_config_path(project_root, target);
+            if resolved.exists() {
+                copy_path_into_workspace(project_root, workspace, &resolved, &mut copied_roots)?;
+            }
+        }
+    }
+
+    if let Some(contracts) = acton_config.contracts() {
+        for contract in contracts.values() {
+            let src = contract.absolute_source_path(project_root);
+            if src.is_file() {
+                copy_path_into_workspace(project_root, workspace, &src, &mut copied_roots)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn copy_path_into_workspace(
+    project_root: &Path,
+    workspace: &Path,
+    path: &Path,
+    copied_roots: &mut Vec<PathBuf>,
+) -> anyhow::Result<()> {
+    let canonical = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    if !canonical.starts_with(project_root) {
+        // Skip anything outside the project — we don't want to drag absolute paths
+        // (e.g. system stdlib) into the per-worker workspace.
+        return Ok(());
+    }
+    if copied_roots
+        .iter()
+        .any(|already| canonical.starts_with(already) || already.starts_with(&canonical))
+    {
+        return Ok(());
+    }
+
+    let rel = pathdiff::diff_paths(&canonical, project_root)
+        .ok_or_else(|| anyhow!("Cannot compute relative path for {}", canonical.display()))?;
+    let dest = workspace.join(&rel);
+
+    if canonical.is_dir() {
+        copy_dir_recursive(&canonical, &dest)?;
+    } else if canonical.is_file() {
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(&canonical, &dest)?;
+    }
+
+    copied_roots.push(canonical);
+    Ok(())
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else if file_type.is_file() {
+            fs::copy(&from, &to)?;
+        }
+        // symlinks are intentionally skipped — whitelisted paths shouldn't rely on them.
+    }
+    Ok(())
+}
+
+fn contract_has_dependents(acton_config: &ActonConfig, contract_name: &str) -> bool {
+    let Some(contracts) = acton_config.contracts() else {
+        return false;
+    };
+    contracts.values().any(|contract| {
+        contract
+            .depends
+            .as_ref()
+            .is_some_and(|deps| deps.iter().any(|dep| dep.name() == contract_name))
+    })
+}
+
+/// Rewrites every `gen/*.code.tolk` in the workspace whose parent contract embeds
+/// `mutate_contract` via `depends`, using the freshly-compiled mutated `BoC`. Without this
+/// step parents would re-import the pre-mutation `BoC` even though the override kicks in for
+/// direct `build("Child")` calls.
+fn regenerate_dependency_files_for_mutation(
+    workspace: &Path,
+    acton_config: &ActonConfig,
+    mutate_contract: &str,
+    code_b64: &str,
+) -> anyhow::Result<()> {
+    let Some(contracts) = acton_config.contracts() else {
+        return Ok(());
+    };
+
+    let gen_dir = resolve_build_output_dir(
+        None,
+        acton_config
+            .build
+            .as_ref()
+            .and_then(|build| non_empty_path(build.gen_dir.clone())),
+        "gen",
+        workspace,
+    );
+
+    for parent_config in contracts.values() {
+        let Some(depends) = &parent_config.depends else {
+            continue;
+        };
+        for dep in depends {
+            if dep.name() != mutate_contract {
+                continue;
+            }
+
+            let func_name = dep.compiled_code_function().map_or_else(
+                || format_valid_function_name(mutate_contract),
+                ToString::to_string,
+            );
+            let content = generate_tolk_dependency_content(
+                &func_name,
+                code_b64,
+                mutate_contract,
+                dep.kind(),
+                acton_config,
+            );
+
+            let output_path = if let Some(out) = dep.compiled_code_out_path() {
+                resolve_project_config_path(workspace, out)
+            } else {
+                gen_dir.join(format!("{mutate_contract}.code.tolk"))
+            };
+
+            if let Some(parent) = output_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(&output_path, content)?;
+        }
+    }
+
+    Ok(())
+}
+
 type MutationExecutionResult = anyhow::Result<MutationExecution>;
 
 enum MutationExecution {
@@ -286,14 +471,18 @@ enum MutationExecution {
     Interrupted,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_single_mutation(
     workspace_path: &Path,
+    project_root: &Path,
+    acton_config: &ActonConfig,
     sources: &[MutationSourceSnapshot],
     mutation: &GlobalMutation,
     mutate_contract: &str,
     path: Option<&str>,
     config: &TestConfig,
     skip_build_for_child_tests: bool,
+    isolate_full_project: bool,
 ) -> anyhow::Result<MutationExecution> {
     if mutation_interrupted() {
         return Ok(MutationExecution::Interrupted);
@@ -316,7 +505,13 @@ fn run_single_mutation(
 
         let main_contract_relative_path = &sources[0].relative_path;
         let main_contract_dest_path = workspace_path.join(main_contract_relative_path);
-        let Some(code_b64) = compile_file(&main_contract_dest_path.to_string_lossy())? else {
+        // Compile the mutated source file from the workspace, but resolve mappings against
+        // the original project root (which always holds a complete `Acton.toml`). The lean
+        // workspace path mirrors the pre-isolation behavior; the isolated workspace already
+        // has everything copied so this still works there too.
+        let Some(code_b64) =
+            compile_file(project_root, &main_contract_dest_path.to_string_lossy())?
+        else {
             return Ok(MutationExecution::Interrupted);
         };
         if code_b64.is_empty() {
@@ -336,9 +531,26 @@ fn run_single_mutation(
             return Ok(MutationExecution::Completed { record });
         }
 
+        // When other contracts embed `mutate_contract` via `depends`, their `gen/*.code.tolk`
+        // still holds the pre-mutation BoC. Re-emit it from the freshly compiled mutant so
+        // the child test process recompiles parents against the mutated code instead of
+        // silently importing the original snapshot. This only matters in the isolated
+        // workspace; the original project root is left untouched.
+        let test_root = if isolate_full_project {
+            regenerate_dependency_files_for_mutation(
+                workspace_path,
+                acton_config,
+                mutate_contract,
+                &code_b64,
+            )?;
+            workspace_path
+        } else {
+            project_root
+        };
+
         let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("acton"));
         let mut cmd = process::Command::new(exe);
-        append_mutation_test_command_args(&mut cmd, path, config);
+        append_mutation_test_command_args(&mut cmd, path, config, test_root);
         cmd.arg("--mutate-overrides")
             .arg(format!("{mutate_contract}:{code_b64}"));
 
@@ -383,16 +595,25 @@ fn run_single_mutation(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn mutation_worker_loop(
     job_rx: Receiver<GlobalMutation>,
     result_tx: Sender<MutationExecutionResult>,
+    project_root: &Path,
+    acton_config: &ActonConfig,
     sources: &[MutationSourceSnapshot],
     mutate_contract: &str,
     path: Option<&str>,
     config: &TestConfig,
     skip_build_for_child_tests: bool,
+    isolate_full_project: bool,
 ) -> anyhow::Result<()> {
-    let workspace = match create_mutation_workspace(sources) {
+    let workspace = match create_mutation_workspace(
+        project_root,
+        acton_config,
+        sources,
+        isolate_full_project,
+    ) {
         Ok(workspace) => workspace,
         Err(err) => {
             let _ = result_tx.send(Err(err));
@@ -403,12 +624,15 @@ fn mutation_worker_loop(
     while let Ok(mutation) = job_rx.recv() {
         let execution = match run_single_mutation(
             workspace.path(),
+            project_root,
+            acton_config,
             sources,
             &mutation,
             mutate_contract,
             path,
             config,
             skip_build_for_child_tests,
+            isolate_full_project,
         ) {
             Ok(execution) => execution,
             Err(err) => {
@@ -575,14 +799,29 @@ fn append_mutation_test_command_args(
     cmd: &mut process::Command,
     path: Option<&str>,
     config: &TestConfig,
+    project_root: &Path,
 ) {
-    let test_path = match path {
-        Some(path) => Path::new(path),
-        None => configured_project_root(),
+    let original_root = configured_project_root();
+    let test_path: PathBuf = match path {
+        Some(path) => {
+            let p = Path::new(path);
+            if p.is_absolute() {
+                // Translate paths from the original project_root to the workspace copy so the
+                // child process resolves test files against the correct tree.
+                if let Ok(rel) = p.strip_prefix(original_root) {
+                    project_root.join(rel)
+                } else {
+                    p.to_path_buf()
+                }
+            } else {
+                project_root.join(p)
+            }
+        }
+        None => project_root.to_path_buf(),
     };
 
     cmd.arg("--project-root")
-        .arg(configured_project_root())
+        .arg(project_root)
         .arg("--color")
         .arg(if colors_enabled() { "always" } else { "never" })
         .arg("test")
@@ -796,10 +1035,14 @@ fn prepare_project_for_mutation(config: &TestConfig) -> anyhow::Result<()> {
     anyhow::bail!("Failed to prepare project for mutation testing: {details}");
 }
 
-fn run_mutation_baseline_tests(path: Option<&str>, config: &TestConfig) -> anyhow::Result<()> {
+fn run_mutation_baseline_tests(
+    project_root: &Path,
+    path: Option<&str>,
+    config: &TestConfig,
+) -> anyhow::Result<()> {
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("acton"));
     let mut cmd = process::Command::new(exe);
-    append_mutation_test_command_args(&mut cmd, path, config);
+    append_mutation_test_command_args(&mut cmd, path, config, project_root);
     cmd.env(INTERNAL_SKIP_BUILD_ENV, "1");
     cmd.env(INTERNAL_REQUIRE_TESTS_ENV, "1");
 
@@ -849,7 +1092,7 @@ pub fn test_mutate_cmd(path: Option<&str>, config: &TestConfig) -> anyhow::Resul
     if mutation_interrupted() {
         exit_mutation_interrupted(path, config, None);
     }
-    run_mutation_baseline_tests(path, config)?;
+    run_mutation_baseline_tests(&project_root, path, config)?;
     if mutation_interrupted() {
         exit_mutation_interrupted(path, config, None);
     }
@@ -1069,6 +1312,13 @@ pub fn test_mutate_cmd(path: Option<&str>, config: &TestConfig) -> anyhow::Resul
     let skip_build_for_child_tests = std::env::var("ACTON_INTERNAL_SKIP_BUILD")
         .map(|value| value.trim() == "1")
         .unwrap_or(true);
+
+    // Only isolate the project into a per-worker workspace when another contract embeds the
+    // mutated one via `depends`. That's the case where the parent's generated dependency
+    // file would otherwise pin the pre-mutation BoC and silently mask every mutation. For
+    // standalone contracts the original project root is fine and avoids breaking tests that
+    // import paths outside it.
+    let isolate_full_project = contract_has_dependents(&acton_config, mutate_contract);
     let source_snapshots = sources
         .iter()
         .map(|source| MutationSourceSnapshot {
@@ -1098,16 +1348,21 @@ pub fn test_mutate_cmd(path: Option<&str>, config: &TestConfig) -> anyhow::Resul
             let worker_contract = mutate_contract.as_str();
             let worker_path = path;
             let worker_config = config;
+            let worker_root = project_root.as_path();
+            let worker_acton_config = &acton_config;
 
             scope.spawn(move || {
                 let _ = mutation_worker_loop(
                     worker_job_rx,
                     worker_result_tx,
+                    worker_root,
+                    worker_acton_config,
                     worker_sources,
                     worker_contract,
                     worker_path,
                     worker_config,
                     skip_build_for_child_tests,
+                    isolate_full_project,
                 );
             });
         }
@@ -1315,10 +1570,15 @@ pub fn test_mutate_cmd(path: Option<&str>, config: &TestConfig) -> anyhow::Resul
     Ok(())
 }
 
-fn compile_file(path: &str) -> anyhow::Result<Option<String>> {
+fn compile_file(project_root: &Path, path: &str) -> anyhow::Result<Option<String>> {
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("acton"));
     let mut cmd = process::Command::new(exe);
-    let cmd = cmd.arg("compile").arg("--json").arg(path);
+    let cmd = cmd
+        .arg("--project-root")
+        .arg(project_root)
+        .arg("compile")
+        .arg("--json")
+        .arg(path);
 
     let compilation_result = match run_command_output_interruptible(cmd)? {
         InterruptibleOutput::Completed(output) => output,
@@ -1357,7 +1617,12 @@ mod tests {
         };
         let mut cmd = process::Command::new("acton");
 
-        append_mutation_test_command_args(&mut cmd, Some("tests/fork.test.tolk"), &config);
+        append_mutation_test_command_args(
+            &mut cmd,
+            Some("tests/fork.test.tolk"),
+            &config,
+            Path::new("/tmp/mutation-workspace"),
+        );
 
         let args = cmd
             .get_args()
