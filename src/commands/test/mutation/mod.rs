@@ -13,7 +13,7 @@ use crate::commands::test::mutation::session::{
 };
 use crate::commands::test::{INTERNAL_REQUIRE_TESTS_ENV, INTERNAL_SKIP_BUILD_ENV, TestConfig};
 use acton_config::color::{OwoColorize, colors_enabled};
-use acton_config::config::{ActonConfig, project_root as configured_project_root};
+use acton_config::config::{ActonConfig, DependencyKind, project_root as configured_project_root};
 use anyhow::anyhow;
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use path_absolutize::Absolutize;
@@ -344,18 +344,15 @@ fn copy_path_into_workspace(
     path: &Path,
     copied_roots: &mut Vec<PathBuf>,
 ) -> anyhow::Result<()> {
-    let canonical = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let canonical = dunce::canonicalize(path)?;
     if !canonical.starts_with(project_root) {
-        // Skip anything outside the project — we don't want to drag absolute paths
-        // (e.g. system stdlib) into the per-worker workspace.
         return Ok(());
     }
-    if copied_roots
-        .iter()
-        .any(|already| canonical.starts_with(already) || already.starts_with(&canonical))
-    {
+    if copied_roots.iter().any(|already| canonical.starts_with(already)) {
         return Ok(());
     }
+    // Drop narrower roots that the new (broader) path supersedes.
+    copied_roots.retain(|already| !already.starts_with(&canonical));
 
     let rel = pathdiff::diff_paths(&canonical, project_root)
         .ok_or_else(|| anyhow!("Cannot compute relative path for {}", canonical.display()))?;
@@ -403,18 +400,21 @@ fn contract_has_dependents(acton_config: &ActonConfig, contract_name: &str) -> b
     })
 }
 
-/// Rewrites every `gen/*.code.tolk` in the workspace whose parent contract embeds
-/// `mutate_contract` via `depends`, using the freshly-compiled mutated `BoC`. Without this
-/// step parents would re-import the pre-mutation `BoC` even though the override kicks in for
-/// direct `build("Child")` calls.
-fn regenerate_dependency_files_for_mutation(
+struct DependencyTarget {
+    func_name: String,
+    output_path: PathBuf,
+    kind: DependencyKind,
+}
+
+/// Precomputes which dependency files need regeneration when the mutated contract changes.
+/// Called once per worker so the per-mutation loop only generates content and writes files.
+fn precompute_dependency_targets(
     workspace: &Path,
     acton_config: &ActonConfig,
     mutate_contract: &str,
-    code_b64: &str,
-) -> anyhow::Result<()> {
+) -> Vec<DependencyTarget> {
     let Some(contracts) = acton_config.contracts() else {
-        return Ok(());
+        return Vec::new();
     };
 
     let gen_dir = resolve_build_output_dir(
@@ -427,6 +427,7 @@ fn regenerate_dependency_files_for_mutation(
         workspace,
     );
 
+    let mut targets = Vec::new();
     for parent_config in contracts.values() {
         let Some(depends) = &parent_config.depends else {
             continue;
@@ -435,32 +436,46 @@ fn regenerate_dependency_files_for_mutation(
             if dep.name() != mutate_contract {
                 continue;
             }
-
             let func_name = dep.compiled_code_function().map_or_else(
                 || format_valid_function_name(mutate_contract),
                 ToString::to_string,
             );
-            let content = generate_tolk_dependency_content(
-                &func_name,
-                code_b64,
-                mutate_contract,
-                dep.kind(),
-                acton_config,
-            );
-
             let output_path = if let Some(out) = dep.compiled_code_out_path() {
                 resolve_project_config_path(workspace, out)
             } else {
                 gen_dir.join(format!("{mutate_contract}.code.tolk"))
             };
-
-            if let Some(parent) = output_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            fs::write(&output_path, content)?;
+            targets.push(DependencyTarget {
+                func_name,
+                output_path,
+                kind: dep.kind(),
+            });
         }
     }
+    targets
+}
 
+/// Rewrites dependency files in the workspace with the freshly-compiled mutated BoC.
+/// Without this, parent contracts would re-import the pre-mutation BoC.
+fn regenerate_dependency_files_for_mutation(
+    targets: &[DependencyTarget],
+    acton_config: &ActonConfig,
+    mutate_contract: &str,
+    code_b64: &str,
+) -> anyhow::Result<()> {
+    for target in targets {
+        let content = generate_tolk_dependency_content(
+            &target.func_name,
+            code_b64,
+            mutate_contract,
+            target.kind.clone(),
+            acton_config,
+        );
+        if let Some(parent) = target.output_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&target.output_path, content)?;
+    }
     Ok(())
 }
 
@@ -482,7 +497,7 @@ fn run_single_mutation(
     path: Option<&str>,
     config: &TestConfig,
     skip_build_for_child_tests: bool,
-    isolate_full_project: bool,
+    dependency_targets: &[DependencyTarget],
 ) -> anyhow::Result<MutationExecution> {
     if mutation_interrupted() {
         return Ok(MutationExecution::Interrupted);
@@ -536,9 +551,9 @@ fn run_single_mutation(
         // the child test process recompiles parents against the mutated code instead of
         // silently importing the original snapshot. This only matters in the isolated
         // workspace; the original project root is left untouched.
-        let test_root = if isolate_full_project {
+        let test_root = if !dependency_targets.is_empty() {
             regenerate_dependency_files_for_mutation(
-                workspace_path,
+                dependency_targets,
                 acton_config,
                 mutate_contract,
                 &code_b64,
@@ -621,6 +636,12 @@ fn mutation_worker_loop(
         }
     };
 
+    let dependency_targets = if isolate_full_project {
+        precompute_dependency_targets(workspace.path(), acton_config, mutate_contract)
+    } else {
+        Vec::new()
+    };
+
     while let Ok(mutation) = job_rx.recv() {
         let execution = match run_single_mutation(
             workspace.path(),
@@ -632,7 +653,7 @@ fn mutation_worker_loop(
             path,
             config,
             skip_build_for_child_tests,
-            isolate_full_project,
+            &dependency_targets,
         ) {
             Ok(execution) => execution,
             Err(err) => {
