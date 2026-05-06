@@ -293,9 +293,8 @@ fn create_mutation_workspace(
 
 /// Copies the subset of `project_root` that contract tests actually need into a fresh
 /// workspace: the manifest, wallet files, every directory pointed at by `[import-mappings]`,
-/// and any `contracts.*.src` paths that fall outside those mappings. Heavy/transient
-/// directories that the user may have alongside the project (`target/`, `node_modules/`,
-/// `build/`, etc.) are not whitelisted, so they stay out of the per-worker copy.
+/// `contracts.*.src` paths, and `.test.tolk` files. Heavy/transient directories
+/// (`target/`, `node_modules/`, `build/`, etc.) are skipped.
 fn seed_workspace_from_project(
     project_root: &Path,
     workspace: &Path,
@@ -334,6 +333,8 @@ fn seed_workspace_from_project(
             }
         }
     }
+
+    copy_test_files_recursive(project_root, project_root, workspace, &mut copied_roots)?;
 
     Ok(())
 }
@@ -384,6 +385,40 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> anyhow::Result<()> {
             fs::copy(&from, &to)?;
         }
         // symlinks are intentionally skipped — whitelisted paths shouldn't rely on them.
+    }
+    Ok(())
+}
+
+fn copy_test_files_recursive(
+    dir: &Path,
+    project_root: &Path,
+    workspace: &Path,
+    copied_roots: &mut Vec<PathBuf>,
+) -> anyhow::Result<()> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(_) => return Ok(()),
+    };
+    for entry in entries {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if file_type.is_dir() {
+            if !matches!(
+                name_str.as_ref(),
+                "target" | "node_modules" | "build" | ".git" | ".acton" | ".codex" | ".claude"
+            ) {
+                copy_test_files_recursive(
+                    &entry.path(),
+                    project_root,
+                    workspace,
+                    copied_roots,
+                )?;
+            }
+        } else if file_type.is_file() && name_str.ends_with(".test.tolk") {
+            copy_path_into_workspace(project_root, workspace, &entry.path(), copied_roots)?;
+        }
     }
     Ok(())
 }
