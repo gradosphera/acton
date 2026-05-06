@@ -398,9 +398,8 @@ fn copy_test_files_recursive(
     workspace: &Path,
     copied_roots: &mut Vec<PathBuf>,
 ) -> anyhow::Result<()> {
-    let entries = match fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(_) => return Ok(()),
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Ok(());
     };
     for entry in entries {
         let entry = entry?;
@@ -488,8 +487,8 @@ fn precompute_dependency_targets(
     targets
 }
 
-/// Rewrites dependency files in the workspace with the freshly-compiled mutated BoC.
-/// Without this, parent contracts would re-import the pre-mutation BoC.
+/// Rewrites dependency files in the workspace with the freshly-compiled mutated `BoC`.
+/// Without this, parent contracts would re-import the pre-mutation `BoC`.
 fn regenerate_dependency_files_for_mutation(
     targets: &[DependencyTarget],
     acton_config: &ActonConfig,
