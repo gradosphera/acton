@@ -608,7 +608,7 @@ fn process_nonzero_exit_code(
         ));
     }
 
-    if let Some(info) = exit_codes::find(exit_code) {
+    if let Some(info) = exit_codes::find_for_phase(exit_code, exit_codes::ExitCodePhase::Compute) {
         groups.push((info.description.dimmed().to_string(), Vec::new()));
         groups.push((format!("Phase: {}", info.phase.dimmed()), Vec::new()));
     } else if let Some(info) = &exit_code_info {

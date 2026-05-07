@@ -1516,7 +1516,10 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
 
                     extra_infos.push(FormattedExtraInfo::Tree("Action phase failed".to_string()));
 
-                    if let Some(info) = exit_codes::find(action.result_code) {
+                    if let Some(info) = exit_codes::find_for_phase(
+                        action.result_code,
+                        exit_codes::ExitCodePhase::Action,
+                    ) {
                         extra_infos.push(FormattedExtraInfo::Tree(format!(
                             "Description: {}",
                             info.description.to_string().yellow()
@@ -1654,7 +1657,9 @@ See https://ton-blockchain.github.io/acton/docs/tutorial/setup-wallets for more 
             .red()
             .to_string();
 
-        if let Some(info) = exit_codes::find(compute.exit_code) {
+        if let Some(info) =
+            exit_codes::find_for_phase(compute.exit_code, exit_codes::ExitCodePhase::Compute)
+        {
             extra_infos.push(FormattedExtraInfo::Tree(format!(
                 "Compute phase failed: {}",
                 info.description.to_string().yellow()
@@ -2905,7 +2910,7 @@ impl FormatterContext<'_> {
 
     #[must_use]
     pub fn format_exit_code(code: i32) -> String {
-        if let Some(info) = exit_codes::find(code) {
+        if let Some(info) = exit_codes::find_for_phase(code, exit_codes::ExitCodePhase::Compute) {
             return info.name.to_owned();
         }
 
@@ -2914,7 +2919,7 @@ impl FormatterContext<'_> {
 
     #[must_use]
     pub fn format_exit_code_with_number(code: i32) -> String {
-        if let Some(info) = exit_codes::find(code) {
+        if let Some(info) = exit_codes::find_for_phase(code, exit_codes::ExitCodePhase::Compute) {
             return format!("{code} ({}): {}", info.name, info.description);
         }
 
@@ -2997,7 +3002,9 @@ impl FormatterContext<'_> {
             }
         }
 
-        if let Some(info) = exit_codes::find(failure.vm_exit_code) {
+        if let Some(info) =
+            exit_codes::find_for_phase(failure.vm_exit_code, exit_codes::ExitCodePhase::Compute)
+        {
             writeln!(details, "Description: {}", info.description).ok();
             writeln!(details, "Phase: {}", info.phase).ok();
         } else if let Some(info) =
@@ -3351,7 +3358,9 @@ impl FormatterContext<'_> {
             .ok();
         }
 
-        if let Some(info) = exit_codes::find(exit_code) {
+        if let Some(info) =
+            exit_codes::find_for_phase(exit_code, exit_codes::ExitCodePhase::Compute)
+        {
             writeln!(output, "Description: {}", info.description).ok();
             writeln!(output, "Phase: {}", info.phase).ok();
         } else if !Self::is_special_get_method_exit_code(exit_code)
