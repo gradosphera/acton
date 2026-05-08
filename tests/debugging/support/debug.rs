@@ -1,4 +1,5 @@
 use crate::debugging::{DebuggerClient, run_script_file};
+use crate::regex;
 use crate::support::project::Project;
 use crate::support::snapshots::normalize_output;
 use crate::support::tempdir::create_tmp_dir;
@@ -243,9 +244,7 @@ impl DebugClient {
         {
             match client.terminate() {
                 Ok(()) => {}
-                Err(err)
-                    if DebugActionExecutor::is_terminated_error(&err)
-                        || Self::is_closed_transport_error(&err) => {}
+                Err(err) if DebugActionExecutor::is_terminated_error(&err) => {}
                 Err(err) => {
                     if !handle.is_finished() {
                         return Err(err).context("failed to terminate debug session");
@@ -312,6 +311,7 @@ impl DebugActionExecutor<'_> {
     fn is_terminated_error(err: &anyhow::Error) -> bool {
         err.to_string()
             .contains("The debugger terminated, probably because you stepped too many times")
+            || DebugClient::is_closed_transport_error(err)
     }
 
     fn run_step<T>(
@@ -343,7 +343,11 @@ impl DebugActionExecutor<'_> {
             }
             Err(err) => return Err(err),
         };
-        let variables = match self.client.variables(thread_id) {
+        if stack_contains_ignored_snapshot_frame(&positions) {
+            return Ok(());
+        }
+        let frame_id = positions.first().map_or(thread_id, |frame| frame.id);
+        let variables = match self.client.variables(frame_id) {
             Ok(variables) => variables,
             Err(err) if Self::is_terminated_error(&err) => {
                 *self.terminated = true;
@@ -351,9 +355,64 @@ impl DebugActionExecutor<'_> {
             }
             Err(err) => return Err(err),
         };
+        let variables = match self.variables_with_fields(variables) {
+            Ok(variables) => variables,
+            Err(err) if Self::is_terminated_error(&err) => {
+                *self.terminated = true;
+                return Ok(());
+            }
+            Err(err) => return Err(err),
+        };
+        let registers = match self.c4_register_with_fields(frame_id) {
+            Ok(registers) => registers,
+            Err(err) if Self::is_terminated_error(&err) => {
+                *self.terminated = true;
+                return Ok(());
+            }
+            Err(err) => return Err(err),
+        };
 
-        self.trace.add_step(positions, variables, action);
+        self.trace.add_step(positions, variables, registers, action);
         Ok(())
+    }
+
+    fn variables_with_fields(
+        &mut self,
+        variables: Vec<dap::types::Variable>,
+    ) -> anyhow::Result<Vec<TraceVariable>> {
+        variables
+            .into_iter()
+            .map(|variable| {
+                let fields = if variable.variables_reference > 0 {
+                    self.client.variables(variable.variables_reference)?
+                } else {
+                    Vec::new()
+                };
+
+                Ok(TraceVariable { variable, fields })
+            })
+            .collect()
+    }
+
+    fn c4_register_with_fields(&mut self, frame_id: i64) -> anyhow::Result<Option<TraceVariable>> {
+        let Some(registers_scope) = self
+            .client
+            .scopes(frame_id)?
+            .into_iter()
+            .find(|scope| scope.name == "Registers")
+        else {
+            return Ok(None);
+        };
+
+        let registers = self.client.variables(registers_scope.variables_reference)?;
+        let Some(c4) = registers
+            .into_iter()
+            .find(|variable| variable.name.starts_with("c4"))
+        else {
+            return Ok(None);
+        };
+
+        Ok(self.variables_with_fields(vec![c4])?.pop())
     }
 
     pub(crate) fn step_in(&mut self) -> anyhow::Result<()> {
@@ -365,6 +424,21 @@ impl DebugActionExecutor<'_> {
             self.step_in()?;
         }
         Ok(())
+    }
+
+    pub(crate) fn step_in_until_terminated(&mut self, max_steps: usize) -> anyhow::Result<()> {
+        for _ in 0..max_steps {
+            if *self.terminated {
+                return Ok(());
+            }
+            self.step_in()?;
+        }
+
+        if *self.terminated {
+            Ok(())
+        } else {
+            anyhow::bail!("debugger did not terminate after {max_steps} step_in steps")
+        }
     }
 
     pub(crate) fn step_over(&mut self) -> anyhow::Result<()> {
@@ -415,7 +489,8 @@ pub(crate) struct DebugResult {
 impl DebugResult {
     pub(crate) fn assert_trace_snapshot_matches(&self, path: &str) -> &Self {
         let serialized = self.trace.serialize();
-        let normalized = normalize_output(&serialized, &self.project_path);
+        let normalized =
+            normalize_debug_trace_output(normalize_output(&serialized, &self.project_path));
         let assertion = crate::common::assertion();
 
         let mut snapshot_path = std::env::current_dir().expect("Failed to get current dir");
@@ -432,6 +507,40 @@ impl DebugResult {
     }
 }
 
+fn stack_contains_ignored_snapshot_frame(positions: &[StackFrame]) -> bool {
+    positions.iter().any(|frame| {
+        let name = frame
+            .name
+            .strip_suffix(" (inlined)")
+            .unwrap_or(frame.name.as_str());
+        let base_name = name.split_once('<').map_or(name, |(base, _)| base);
+
+        matches!(
+            base_name,
+            "SearchParams.hasPredicates"
+                | "SearchParams.toScalarFFITuple"
+                | "impl.findTransaction"
+                | "println"
+                | "ffi.println"
+        )
+    })
+}
+
+fn normalize_debug_trace_output(content: String) -> String {
+    let content = regex!(r"hash: 0x[0-9a-fA-F]+(?:\.\.\.)?")
+        .replace_all(&content, "hash: [HASH]")
+        .into_owned();
+    let content = regex!(r"hash = 0x[0-9a-fA-F]+(?:\.\.\.)?")
+        .replace_all(&content, "hash = [HASH]")
+        .into_owned();
+    let content = regex!(r"createdAt(?:: [^=]+)? = \d+")
+        .replace_all(&content, "createdAt: uint32 = [TIMESTAMP]")
+        .into_owned();
+    regex!(r"raw = slice\{[0-9a-fA-F_]+\}")
+        .replace_all(&content, "raw = slice{[HEX]}")
+        .into_owned()
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ExecutionTrace {
     pub steps: Vec<ExecutionStep>,
@@ -440,9 +549,16 @@ pub(crate) struct ExecutionTrace {
 #[derive(Debug, Clone)]
 pub(crate) struct ExecutionStep {
     pub step_number: usize,
-    pub variables: Vec<dap::types::Variable>,
+    pub variables: Vec<TraceVariable>,
+    pub registers: Vec<TraceVariable>,
     pub action: String,
     pub code_context: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct TraceVariable {
+    pub variable: dap::types::Variable,
+    pub fields: Vec<dap::types::Variable>,
 }
 
 impl ExecutionTrace {
@@ -453,14 +569,17 @@ impl ExecutionTrace {
     fn add_step(
         &mut self,
         positions: Vec<StackFrame>,
-        variables: Vec<dap::types::Variable>,
+        variables: Vec<TraceVariable>,
+        c4_register: Option<TraceVariable>,
         action: String,
     ) {
         let step_number = self.steps.len() + 1;
         let code_context = self.get_code_context(&positions);
+        let registers = c4_register.into_iter().collect();
         self.steps.push(ExecutionStep {
             step_number,
             variables,
+            registers,
             action,
             code_context,
         });
@@ -481,13 +600,18 @@ impl ExecutionTrace {
             let content = content.lines().collect::<Vec<_>>();
 
             if line_idx < content.len() {
-                let start_line = line_idx.saturating_sub(3);
-                let end_line = (line_idx + 4).min(content.len());
+                let start_line = line_idx.saturating_sub(2);
+                let end_line = (line_idx + 2).min(content.len());
                 let mut context = Vec::new();
 
                 for (i, line) in content.iter().enumerate().take(end_line).skip(start_line) {
                     let line_num = i + 1;
-                    context.push(format!("{line_num:3}| {line}"));
+                    let context_line = if line.is_empty() {
+                        format!("{line_num:3}|")
+                    } else {
+                        format!("{line_num:3}| {line}")
+                    };
+                    context.push(context_line);
                 }
 
                 if line_idx >= start_line && line_idx < end_line {
@@ -546,8 +670,15 @@ impl ExecutionTrace {
 
             if !step.variables.is_empty() {
                 result.push_str("  Variables:\n");
-                for var in &step.variables {
-                    let _ = writeln!(result, "    {} = {}", var.name, render_variable_value(var));
+                for var in sorted_global_variables(&step.variables) {
+                    append_trace_variable(&mut result, var);
+                }
+            }
+
+            if !step.registers.is_empty() {
+                result.push_str("  Registers:\n");
+                for register in &step.registers {
+                    append_trace_variable(&mut result, register);
                 }
             }
 
@@ -556,4 +687,44 @@ impl ExecutionTrace {
 
         result.trim_end().to_string()
     }
+}
+
+fn append_trace_variable(result: &mut String, var: &TraceVariable) {
+    append_dap_variable(result, "    ", &var.variable);
+    for field in &var.fields {
+        append_dap_variable(result, "      ", field);
+    }
+}
+
+fn append_dap_variable(result: &mut String, indent: &str, var: &dap::types::Variable) {
+    let label = match var.type_field.as_deref().filter(|ty| !ty.is_empty()) {
+        Some(type_name) => format!("{}: {type_name}", var.name),
+        None => var.name.clone(),
+    };
+
+    if var.value.is_empty() {
+        let _ = writeln!(result, "{indent}{label}");
+    } else {
+        let _ = writeln!(result, "{indent}{label} = {}", var.value);
+    }
+}
+
+fn sorted_global_variables(variables: &[TraceVariable]) -> Vec<&TraceVariable> {
+    let mut variables = variables.iter().collect::<Vec<_>>();
+    let mut idx = 0;
+    while idx < variables.len() {
+        if !variables[idx].variable.name.starts_with("global ") {
+            idx += 1;
+            continue;
+        }
+
+        let end = variables[idx..]
+            .iter()
+            .position(|var| !var.variable.name.starts_with("global "))
+            .map_or(variables.len(), |offset| idx + offset);
+        variables[idx..end].sort_by(|left, right| left.variable.name.cmp(&right.variable.name));
+        idx = end;
+    }
+
+    variables
 }

@@ -1,36 +1,33 @@
 Step 1 (before):
   Code:
-     10| type Msg = First | Second
-     11| 
+     11|
      12| fun main() {
      13|     val msg = lazy Msg.fromCell(Third {}.toCell());
                                          ^^^^^^^^^^^^^^^^^
      14|     match (msg) {
-     15|         First => {
-     16|             return 10
+  Registers:
+    c4 (storage): cell = empty cell
 
 Step 2 (step_over):
   Code:
-     11| 
      12| fun main() {
      13|     val msg = lazy Msg.fromCell(Third {}.toCell());
      14|     match (msg) {
              ^
      15|         First => {
-     16|             return 10
-     17|         }
   Variables:
-    msg = Msg (lazy, unresolved)
+    msg: Msg = (lazy, unresolved)
+  Registers:
+    c4 (storage): cell = empty cell
 
 Step 3 (step_over):
   Code:
-     19|             return 20
      20|         }
      21|         else => {
      22|             throw 0xFFFF
                      ^^^^^^^^^^^^
      23|         }
-     24|     }
-     25| 
   Variables:
-    msg = Msg (lazy, unresolved)
+    msg: Msg = (lazy, unresolved)
+  Registers:
+    c4 (storage): cell = empty cell

@@ -114,11 +114,16 @@ impl DebuggerClient {
         Ok(positions)
     }
 
+    pub(crate) fn scopes(&mut self, frame_id: i64) -> anyhow::Result<Vec<dap::types::Scope>> {
+        let scopes = self.client.scopes(frame_id)?;
+        Ok(scopes.scopes)
+    }
+
     pub(crate) fn variables(
         &mut self,
-        thread_id: i64,
+        variables_reference: i64,
     ) -> anyhow::Result<Vec<dap::types::Variable>> {
-        let variables = self.client.variables(thread_id)?;
+        let variables = self.client.variables(variables_reference)?;
         Ok(variables.variables)
     }
 
@@ -307,7 +312,7 @@ fn execute_script(
             file_build_cache: &mut file_build_cache,
             known_addresses: &mut known_addresses,
             known_code_cells: &mut known_code_cell,
-            need_debug_info: false,
+            need_debug_info: true,
             backtrace: None,
         },
         debug: DebugCtx::Disabled,

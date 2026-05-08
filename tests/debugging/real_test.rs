@@ -4,6 +4,11 @@ use crate::support::project::ProjectBuilder;
 
 const COUNTER: &str = r#"import "../counter_messages"
 
+contract Counter {
+    storage: Storage
+    incomingMessages: AllowedMessage
+}
+
 type AllowedMessage = IncreaseCounter | ResetCounter
 
 fun handleIncreaseCounter(increaseBy: int) {
@@ -230,8 +235,7 @@ fn test_real_counter_contract_step_in() -> anyhow::Result<()> {
     let mut client = session.start();
 
     let result = client.execute(|executor| {
-        executor.step_in_times(4)?;
-        executor.step_over_times(50)?;
+        executor.step_in_until_terminated(2_000)?;
         Ok(())
     })?;
 

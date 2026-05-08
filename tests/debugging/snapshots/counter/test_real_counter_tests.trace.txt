@@ -1,103 +1,124 @@
 Step 1 (before):
   Code:
-     67| }
-     68| 
+     68|
      69| fun main() {
      70|     val (counter, deployer) = setupTest();
                                        ^^^^^^^^^^^
-     71| 
-     72|     val counterRes = net.runGetMethod<int>(counter.address, "currentCounter");
-     73|     println("Counter: {}", counterRes);
+     71|
+  Registers:
+    c4 (storage): cell = empty cell
 
 Step 2 (step_over):
   Code:
-     69| fun main() {
      70|     val (counter, deployer) = setupTest();
-     71| 
+     71|
      72|     val counterRes = net.runGetMethod<int>(counter.address, "currentCounter");
                                                                      ^^^^^^^^^^^^^^^^
      73|     println("Counter: {}", counterRes);
-     74| 
-     75|     val info = testing.getAccountState(counter.address)!;
   Variables:
-    counter = Counter
-    deployer = Treasury
+    counter: Counter
+      address: address = 0:d3ab4bf6769bc8a0888874041305a2d78c6335737e94e574f3a9589f3dc0e9d6
+      init = <optimized out>
+    deployer: Treasury
+      address: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
+  Registers:
+    c4 (storage): cell = empty cell
 
 Step 3 (step_over):
   Code:
-     70|     val (counter, deployer) = setupTest();
-     71| 
+     71|
      72|     val counterRes = net.runGetMethod<int>(counter.address, "currentCounter");
      73|     println("Counter: {}", counterRes);
                      ^^^^^^^^^^^^^
-     74| 
-     75|     val info = testing.getAccountState(counter.address)!;
-     76|     println("Balance: {:ton}", info.storage.balance.grams);
+     74|
   Variables:
-    counter = Counter
-    deployer = Treasury
-    counterRes = 0
+    counter: Counter
+      address: address = 0:d3ab4bf6769bc8a0888874041305a2d78c6335737e94e574f3a9589f3dc0e9d6
+      init = <optimized out>
+    deployer: Treasury
+      address: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
+    counterRes: int = 0
+  Registers:
+    c4 (storage): cell = empty cell
 
 Step 4 (step_over):
   Code:
-     72|     val counterRes = net.runGetMethod<int>(counter.address, "currentCounter");
      73|     println("Counter: {}", counterRes);
-     74| 
+     74|
      75|     val info = testing.getAccountState(counter.address)!;
                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
      76|     println("Balance: {:ton}", info.storage.balance.grams);
-     77| 
-     78|     val res = counter.sendIncrease(deployer.address, 100);
   Variables:
-    counter = Counter
-    deployer = Treasury
-    counterRes = 0 (last seen)
+    counter: Counter
+      address: address = 0:d3ab4bf6769bc8a0888874041305a2d78c6335737e94e574f3a9589f3dc0e9d6
+      init = <optimized out>
+    deployer: Treasury
+      address: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
+    counterRes: int = 0 (last seen)
+  Registers:
+    c4 (storage): cell = empty cell
 
 Step 5 (step_over):
   Code:
-     73|     println("Counter: {}", counterRes);
-     74| 
+     74|
      75|     val info = testing.getAccountState(counter.address)!;
      76|     println("Balance: {:ton}", info.storage.balance.grams);
                      ^^^^^^^^^^^^^^^^^
-     77| 
-     78|     val res = counter.sendIncrease(deployer.address, 100);
-     79|     println(res);
+     77|
   Variables:
-    counter = Counter
-    deployer = Treasury
-    counterRes = 0 (last seen)
-    info = TlbAccountInfo
+    counter: Counter
+      address: address = 0:d3ab4bf6769bc8a0888874041305a2d78c6335737e94e574f3a9589f3dc0e9d6
+      init = <optimized out>
+    deployer: Treasury
+      address: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
+    counterRes: int = 0 (last seen)
+    info: TlbAccountInfo
+      addr = <optimized out>
+      storageStat = <optimized out>
+      storage: TlbAccountStorage
+  Registers:
+    c4 (storage): cell = empty cell
 
 Step 6 (step_over):
   Code:
-     75|     val info = testing.getAccountState(counter.address)!;
      76|     println("Balance: {:ton}", info.storage.balance.grams);
-     77| 
+     77|
      78|     val res = counter.sendIncrease(deployer.address, 100);
                                ^^^^^^^^^^^^
      79|     println(res);
-     80| }
-     81| 
   Variables:
-    counter = Counter
-    deployer = Treasury
-    counterRes = 0 (last seen)
-    info = TlbAccountInfo
+    counter: Counter
+      address: address = 0:d3ab4bf6769bc8a0888874041305a2d78c6335737e94e574f3a9589f3dc0e9d6
+      init = <optimized out>
+    deployer: Treasury
+      address: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
+    counterRes: int = 0 (last seen)
+    info: TlbAccountInfo
+      addr = <optimized out>
+      storageStat = <optimized out>
+      storage: TlbAccountStorage
+  Registers:
+    c4 (storage): cell = empty cell
 
 Step 7 (step_over):
   Code:
-     76|     println("Balance: {:ton}", info.storage.balance.grams);
-     77| 
+     77|
      78|     val res = counter.sendIncrease(deployer.address, 100);
      79|     println(res);
              ^^^^^^^^^^^^
      80| }
-     81| 
-     82| get fun `test should reset counter`() {
   Variables:
-    counter = Counter
-    deployer = Treasury (last seen)
-    counterRes = 0 (last seen)
-    info = TlbAccountInfo
-    res = BigArray<SendResult>
+    counter: Counter
+      address: address = 0:d3ab4bf6769bc8a0888874041305a2d78c6335737e94e574f3a9589f3dc0e9d6 (last seen)
+      init = <optimized out>
+    deployer: Treasury = (last seen)
+      address: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
+    counterRes: int = 0 (last seen)
+    info: TlbAccountInfo
+      addr = <optimized out>
+      storageStat = <optimized out>
+      storage: TlbAccountStorage
+    res: BigArray<SendResult>
+      arr: [array<array<SendResult>>, int] = 2 items
+  Registers:
+    c4 (storage): cell = empty cell

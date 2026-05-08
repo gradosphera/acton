@@ -48,9 +48,9 @@ impl DebugTestOutputExt for DebugTestOutput {
         let var = step
             .variables
             .iter()
-            .find(|v| v.name == var_name)
+            .find(|v| v.variable.name == var_name)
             .unwrap_or_else(|| panic!("Variable '{var_name}' not found at step {step_index}"));
-        let actual_value = render_variable_value(var);
+        let actual_value = render_variable_value(&var.variable);
 
         assert_eq!(
             actual_value, expected_value,
