@@ -38,6 +38,24 @@ const getBodyTypeName = (symbols: SymTable, bodyTyIdx: number): string => {
   return renderTy(symbols, bodyTyIdx)
 }
 
+const hasAcceptableMessageDecodeRemainder = (
+  initialSlice: Slice,
+  parser: Slice,
+): boolean => {
+  if (parser.remainingRefs !== 0) {
+    return false
+  }
+
+  // Some message schemas leave trailing bits outside the ABI payload
+  // (for example, attached signatures). Accept them as long as decoding
+  // consumed something and did not leave trailing refs behind.
+  return (
+    parser.remainingBits === 0 ||
+    parser.remainingBits < initialSlice.remainingBits ||
+    parser.remainingRefs < initialSlice.remainingRefs
+  )
+}
+
 const getBodyTypeKey = (bodyTyIdx: number): string => {
   return `ty#${bodyTyIdx}`
 }
@@ -421,7 +439,7 @@ const tryDecodeMessageWithCandidates = (
     const parser = baseSlice.clone()
     try {
       const decoded: unknown = unpackFromSliceDynamic(ctx, candidate.body_ty_idx, parser) as unknown
-      if (parser.remainingBits !== 0 || parser.remainingRefs !== 0) {
+      if (!hasAcceptableMessageDecodeRemainder(baseSlice, parser)) {
         continue
       }
 
