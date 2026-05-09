@@ -4,8 +4,6 @@ description: "Deep guide to source-level debugging, backtraces, traces, retrace,
 icon: Bug
 ---
 
-import {Callout} from "fumadocs-ui/components/callout";
-
 Acton has several debugging layers: some are cheap and fast; some are reliant on source maps and debug metadata; some are for local execution only; some are designed for replaying real on-chain history.
 
 Pick the best tool that answers the target debugging question:
@@ -23,7 +21,7 @@ Pick the best tool that answers the target debugging question:
 | How to freeze an expensive local setup?                    | world-state snapshots                                 | Reuse prepared emulator state                  |
 | How to obtain the richest offline test artifact?           | `acton test --save-test-trace`                        | Reusable trace bundle for later inspection     |
 
-<Callout type="tip">
+<Callout type="idea">
   Treat Acton's debugging options as a ladder, not a single tool. Start with terminal traces or Test
   UI, add `--backtrace full` when source locations are needed, switch to `--debug` for stepping, and
   move to retrace or fork workflows only when the bug depends on real chain state.
