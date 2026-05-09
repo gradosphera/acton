@@ -115,6 +115,20 @@ When copying a contract from another project, the plugin suggests registering it
 
 ![](imgs/jetbrains/import-contract.png)
 
+### Contract actions
+
+For contracts declared in Tolk files, the plugin provides actions to build the contract and generate
+Tolk or TypeScript wrappers.
+
+![](imgs/jetbrains/contract-actions.png)
+
+### Disassembly
+
+The plugin can compile a Tolk contract and open the generated assembly, making it easier to inspect
+the code that will run on TVM.
+
+![](imgs/jetbrains/disassembly.png)
+
 ## Code completion
 
 ### Contract names
@@ -169,6 +183,13 @@ For convenient execution, the plugin provides a test run icon in the editor.
 When a test fails, the plugin highlights the specific `expect` call that failed and changes the test icon.
 
 ![](imgs/jetbrains/fail-tests.png)
+
+### Debugging
+
+Set breakpoints in Tolk tests and contracts, start debugging from the IDE, and inspect stack frames,
+local values, and TVM registers.
+
+![](imgs/jetbrains/debug.png)
 
 ### Code coverage
 

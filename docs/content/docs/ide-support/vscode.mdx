@@ -40,6 +40,20 @@ Code lenses allow running builds and tests directly from the `Acton.toml` file.
 
 ![](imgs/vscode/acton-toml-run-script.png)
 
+## Contract actions
+
+For contracts declared in Tolk files, the extension adds code lenses to build the contract and
+generate Tolk or TypeScript wrappers.
+
+![](imgs/vscode/contract-actions.png)
+
+## Disassembly
+
+The extension can open an assembly preview for a Tolk contract, making it easier to inspect the
+compiled code without leaving the editor.
+
+![](imgs/vscode/disassembly.png)
+
 ## Testing
 
 ### Native test runner
@@ -92,3 +106,17 @@ The Wallets View allows managing project wallets, including generation, import v
 Scripts can be executed via code lenses:
 
 ![](imgs/vscode/scripts-run.png)
+
+### Terminal links
+
+TON addresses in Acton terminal output are converted into clickable links that open the configured
+block explorer.
+
+![](imgs/vscode/terminal-links.png)
+
+### Linting
+
+The extension runs `acton check` for Tolk files and reports diagnostics directly in the editor.
+Available fixes can be applied from the Problems panel or the inline quick-fix menu.
+
+![](imgs/vscode/check.png)
