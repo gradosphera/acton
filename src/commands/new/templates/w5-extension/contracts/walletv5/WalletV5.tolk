@@ -5,7 +5,7 @@ import "messages"
 import "storage"
 
 contract WalletV5 {
-    author: "Your Name"
+    author: "__ACTON_AUTHOR__"
     version: "1.0.0"
     description: "Wallet V5. Extensible wallet with plugins support"
     incomingMessages: AllowedMessageToWalletV5

@@ -2787,7 +2787,7 @@ fn test_new_project_uses_acton_user_when_git_user_name_is_missing() {
     let project_dir = project.path().join("foobar");
     let current_year = chrono::Local::now().format("%Y").to_string();
 
-    project
+    let output = project
         .acton()
         .env("PATH", &fake_path)
         .arg("new")
@@ -2802,6 +2802,11 @@ fn test_new_project_uses_acton_user_when_git_user_name_is_missing() {
         .arg("MIT")
         .run()
         .success();
+
+    output.assert_file_snapshot_matches(
+        "foobar/contracts/Empty.tolk",
+        "integration/snapshots/new/test_new_project_uses_acton_user_when_git_user_name_is_missing.empty.tolk.gen",
+    );
 
     let license = fs::read_to_string(project_dir.join("LICENSE")).unwrap();
     assert!(license.contains("MIT License"));

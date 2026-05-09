@@ -7,7 +7,7 @@ Annotated Code:
  1   | import "types"                                                                                 |
  2   |                                                                                                |
  3   | contract Counter {                                                                             |
- 4   |     author: "Your Name"                                                                        |
+ 4   |     author: "Acton User"                                                                       |
  5   |     version: "1.0.0"                                                                           |
  6   |     description: "Simple counter contract with owner-controlled updates"                       |
  7   |     storage: Storage                                                                           |

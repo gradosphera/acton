@@ -1,7 +1,7 @@
 import "types"
 
 contract Empty {
-    author: "__ACTON_AUTHOR__"
+    author: "Acton User"
     version: "1.0.0"
     description: "Minimal starter contract with owner management"
     storage: Storage

@@ -1,7 +1,7 @@
 import "types"
 
 contract Counter {
-    author: "Your Name"
+    author: "__ACTON_AUTHOR__"
     version: "1.0.0"
     description: "Simple counter contract with owner-controlled updates"
     storage: Storage

@@ -5,7 +5,7 @@ import "@contracts/w5-types"
 import "types"
 
 contract SimpleExtension {
-    author: "Your Name"
+    author: "__ACTON_AUTHOR__"
     version: "1.0.0"
     description: "Wallet V5 extension with subscription payments"
     storage: ExtensionStorage
