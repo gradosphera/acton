@@ -77,7 +77,7 @@ today. If you use Windows, run Acton inside WSL with Ubuntu 20.04 or newer and
 follow the Linux installation path there. `trunk` builds installed via
 `acton up --trunk`, WSL installs, and other source-built targets are beta /
 best-effort surfaces for now. The full policy is documented at
-[Support policy](https://ton-blockchain.github.io/acton/docs/miscellaneous/support-policy).
+[Support policy](https://ton-blockchain.github.io/acton/docs/installation#support-policy).
 
 ## From zero to testnet
 
