@@ -16,6 +16,7 @@ import actonTraceGrammarRaw from "./grammars/grammar-acton-trace.json"
 import lastModified from "fumadocs-mdx/plugins/last-modified"
 import {tolkTwoslasher} from "@/lib/tolk-twoslash"
 import {pageSchema} from "fumadocs-core/source/schema"
+import {remarkMdxFiles} from "fumadocs-core/mdx-plugins"
 import {parseCodeBlockAttributes} from "fumadocs-core/mdx-plugins/codeblock-utils"
 import {z} from "zod"
 
@@ -156,5 +157,6 @@ export default defineConfig({
         }),
       ],
     },
+    remarkPlugins: [remarkMdxFiles],
   },
 })
