@@ -4,6 +4,12 @@ description: "Learn how to manage project structure, contracts, and the Acton ma
 icon: FolderTree
 ---
 
+import {
+  AnnotatedFile,
+  AnnotatedFiles,
+  AnnotatedFolder,
+} from "@/components/AnnotatedFiles";
+
 Acton projects are defined by `Acton.toml` manifest. It tells Acton where contracts live, how they depend on each other, where generated files go, and which path aliases (import mappings) the compiler should resolve. See the [`Acton.toml` reference](/docs/acton-toml) for the full field-by-field description.
 
 For coding-agent workflows, the `acton` skill covers CLI commands and `Acton.toml` configuration, and the `tolk` skill covers writing and reviewing Tolk contracts. See the [agent skills](/docs/agent-skills) guide for installation and usage.
@@ -100,38 +106,104 @@ acton new acton-project
 
 Directory overview:
 
-```
-acton-project/
-├── Acton.toml  # Project manifest — edit directly
-├── .env        # Local secrets — not committed
-├── .acton/     # Acton-managed internal state and Tolk libraries
-├── contracts/  # Tolk source files
-├── wrappers/   # Generated Tolk wrappers (.gen.tolk)
-├── tests/      # Test files (.test.tolk)
-├── scripts/    # Deployment and utility Tolk scripts
-├── build/      # Compiled output (.boc, .fif)
-└── gen/        # Generated dependency helpers (.code.tolk)
-```
+<AnnotatedFiles>
+  <AnnotatedFolder name="acton-project" defaultOpen>
+    <AnnotatedFile name="Acton.toml" description="Project manifest — edit directly" />
+    <AnnotatedFile name=".env" description="Local secrets — not committed" />
+    <AnnotatedFolder
+      name=".acton"
+      description="Acton-managed internal state and Tolk libraries"
+    >
+      <AnnotatedFolder name="tolk-stdlib" description="Bundled Tolk standard library" />
+    </AnnotatedFolder>
+    <AnnotatedFolder name="contracts" description="Tolk source files" defaultOpen>
+      <AnnotatedFile name="Contract.tolk" description="Contract entry point" />
+    </AnnotatedFolder>
+    <AnnotatedFolder
+      name="wrappers"
+      description="Generated Tolk wrappers (.gen.tolk)"
+      defaultOpen
+    >
+      <AnnotatedFile name="Contract.gen.tolk" description="Generated contract wrapper" />
+    </AnnotatedFolder>
+    <AnnotatedFolder name="tests" description="Test files (.test.tolk)" defaultOpen>
+      <AnnotatedFile name="contract.test.tolk" description="Contract tests" />
+    </AnnotatedFolder>
+    <AnnotatedFolder
+      name="scripts"
+      description="Deployment and utility Tolk scripts"
+      defaultOpen
+    >
+      <AnnotatedFile name="deploy.tolk" description="Deployment script" />
+    </AnnotatedFolder>
+    <AnnotatedFolder name="build" description="Compiled output (.boc, .fif)">
+      <AnnotatedFile name="Contract.boc" description="Compiled contract BoC" />
+      <AnnotatedFile name="Contract.fif" description="Optional Fift output" />
+    </AnnotatedFolder>
+    <AnnotatedFolder
+      name="gen"
+      description="Generated dependency helpers (.code.tolk)"
+    >
+      <AnnotatedFile name="Contract.code.tolk" description="Compiled dependency helper" />
+    </AnnotatedFolder>
+  </AnnotatedFolder>
+</AnnotatedFiles>
 
 ### dApp project layout
 
 Pass `--app` to `acton new` to add a React + Vite frontend. The dApp layout nests contract files under `contracts/` subdirectories and creates `app/` and `wrappers-ts/`:
 
-```files
-acton-project/
-├── Acton.toml
-├── .env
-├── .acton/
-├── app/             # React + Vite frontend
-├── wrappers-ts/     # Generated TypeScript wrappers
-├── contracts/
-│   ├── src/         # Tolk source files
-│   ├── wrappers/    # Generated Tolk wrappers
-│   ├── tests/       # Test files
-│   └── scripts/     # Deployment and utility Tolk scripts
-├── build/
-└── gen/
-```
+<AnnotatedFiles>
+  <AnnotatedFolder name="acton-project" defaultOpen>
+    <AnnotatedFile name="Acton.toml" description="Project manifest" />
+    <AnnotatedFile name=".env" description="Local secrets — not committed" />
+    <AnnotatedFolder
+      name=".acton"
+      description="Acton-managed internal state and Tolk libraries"
+    >
+      <AnnotatedFolder name="tolk-stdlib" description="Bundled Tolk standard library" />
+    </AnnotatedFolder>
+    <AnnotatedFolder name="app" description="React + Vite frontend" defaultOpen>
+      <AnnotatedFolder name="src" description="Frontend source files" />
+    </AnnotatedFolder>
+    <AnnotatedFolder
+      name="wrappers-ts"
+      description="Generated TypeScript wrappers"
+      defaultOpen
+    >
+      <AnnotatedFile name="Contract.gen.ts" description="Generated TypeScript wrapper" />
+    </AnnotatedFolder>
+    <AnnotatedFolder name="contracts" description="Tolk workspace" defaultOpen>
+      <AnnotatedFolder name="src" description="Tolk source files" defaultOpen>
+        <AnnotatedFile name="Contract.tolk" description="Contract entry point" />
+      </AnnotatedFolder>
+      <AnnotatedFolder
+        name="wrappers"
+        description="Generated Tolk wrappers"
+        defaultOpen
+      >
+        <AnnotatedFile name="Contract.gen.tolk" description="Generated contract wrapper" />
+      </AnnotatedFolder>
+      <AnnotatedFolder name="tests" description="Test files" defaultOpen>
+        <AnnotatedFile name="contract.test.tolk" description="Contract tests" />
+      </AnnotatedFolder>
+      <AnnotatedFolder
+        name="scripts"
+        description="Deployment and utility Tolk scripts"
+        defaultOpen
+      >
+        <AnnotatedFile name="deploy.tolk" description="Deployment script" />
+      </AnnotatedFolder>
+    </AnnotatedFolder>
+    <AnnotatedFolder name="build" description="Compiled output">
+      <AnnotatedFile name="Contract.boc" description="Compiled contract BoC" />
+      <AnnotatedFile name="Contract.fif" description="Optional Fift output" />
+    </AnnotatedFolder>
+    <AnnotatedFolder name="gen" description="Generated dependency helpers">
+      <AnnotatedFile name="Contract.code.tolk" description="Compiled dependency helper" />
+    </AnnotatedFolder>
+  </AnnotatedFolder>
+</AnnotatedFiles>
 
 See the [dApps development guide](/docs/dapps) for more information on features of the generated dApp and usage of TypeScript wrappers.
 
