@@ -148,6 +148,7 @@ class StackReader {
 
 type coins = bigint
 
+type uint8 = bigint
 type uint32 = bigint
 type uint64 = bigint
 type uint256 = bigint
@@ -168,6 +169,107 @@ export const OutActionsCell = {
     },
     toCell(self: OutActionsCell): c.Cell {
         return makeCellFrom<OutActionsCell>(self, OutActionsCell.store);
+    }
+}
+
+/**
+ > struct Empty {
+ > }
+ */
+export interface Empty {
+    readonly $: 'Empty'
+}
+
+export const Empty = {
+    create(): Empty {
+        return {
+            $: 'Empty',
+        }
+    },
+    fromSlice(s: c.Slice): Empty {
+        return {
+            $: 'Empty',
+        }
+    },
+    store(self: Empty, b: c.Builder): void {
+    },
+    toCell(self: Empty): c.Cell {
+        return makeCellFrom<Empty>(self, Empty.store);
+    }
+}
+
+/**
+ > struct (0x0ec3c86d) OutActionWithSendMessageOnly {
+ >     prev: Cell<OutActionWithSendMessageOnlyOrEmpty>
+ >     sendMode: uint8
+ >     outMsg: cell
+ > }
+ */
+export interface OutActionWithSendMessageOnly {
+    readonly $: 'OutActionWithSendMessageOnly'
+    prev: CellRef<OutActionWithSendMessageOnlyOrEmpty>
+    sendMode: uint8
+    outMsg: c.Cell
+}
+
+export const OutActionWithSendMessageOnly = {
+    PREFIX: 0x0ec3c86d,
+
+    create(args: {
+        prev: CellRef<OutActionWithSendMessageOnlyOrEmpty>
+        sendMode: uint8
+        outMsg: c.Cell
+    }): OutActionWithSendMessageOnly {
+        return {
+            $: 'OutActionWithSendMessageOnly',
+            ...args
+        }
+    },
+    fromSlice(s: c.Slice): OutActionWithSendMessageOnly {
+        loadAndCheckPrefix32(s, 0x0ec3c86d, 'OutActionWithSendMessageOnly');
+        return {
+            $: 'OutActionWithSendMessageOnly',
+            prev: loadCellRef<OutActionWithSendMessageOnlyOrEmpty>(s, OutActionWithSendMessageOnlyOrEmpty.fromSlice),
+            sendMode: s.loadUintBig(8),
+            outMsg: s.loadRef(),
+        }
+    },
+    store(self: OutActionWithSendMessageOnly, b: c.Builder): void {
+        b.storeUint(0x0ec3c86d, 32);
+        storeCellRef<OutActionWithSendMessageOnlyOrEmpty>(self.prev, b, OutActionWithSendMessageOnlyOrEmpty.store);
+        b.storeUint(self.sendMode, 8);
+        b.storeRef(self.outMsg);
+    },
+    toCell(self: OutActionWithSendMessageOnly): c.Cell {
+        return makeCellFrom<OutActionWithSendMessageOnly>(self, OutActionWithSendMessageOnly.store);
+    }
+}
+
+/**
+ > type OutActionWithSendMessageOnlyOrEmpty = OutActionWithSendMessageOnly | Empty
+ */
+export type OutActionWithSendMessageOnlyOrEmpty =
+    | OutActionWithSendMessageOnly
+    | Empty
+
+export const OutActionWithSendMessageOnlyOrEmpty = {
+    fromSlice(s: c.Slice): OutActionWithSendMessageOnlyOrEmpty {
+        return s.loadBoolean() ? Empty.fromSlice(s) : OutActionWithSendMessageOnly.fromSlice(s);
+    },
+    store(self: OutActionWithSendMessageOnlyOrEmpty, b: c.Builder): void {
+        switch (self.$) {
+            case 'OutActionWithSendMessageOnly':
+                b.storeUint(0b0, 1);
+                OutActionWithSendMessageOnly.store(self, b);
+                break;
+            case 'Empty':
+                b.storeUint(0b1, 1);
+                Empty.store(self, b);
+                break;
+        }
+    },
+    toCell(self: OutActionWithSendMessageOnlyOrEmpty): c.Cell {
+        return makeCellFrom<OutActionWithSendMessageOnlyOrEmpty>(self, OutActionWithSendMessageOnlyOrEmpty.store);
     }
 }
 
@@ -199,7 +301,7 @@ export const SnakedExtraActions = {
 export interface ExtensionActionRequest {
     readonly $: 'ExtensionActionRequest'
     queryId: uint64
-    outActions: OutActionsCell | null
+    outActions: CellRef<OutActionWithSendMessageOnly> | null
     hasExtraActions: boolean
     extraActions: SnakedExtraActions
 }
@@ -209,7 +311,7 @@ export const ExtensionActionRequest = {
 
     create(args: {
         queryId: uint64
-        outActions: OutActionsCell | null
+        outActions: CellRef<OutActionWithSendMessageOnly> | null
         hasExtraActions: boolean
         extraActions: SnakedExtraActions
     }): ExtensionActionRequest {
@@ -223,7 +325,7 @@ export const ExtensionActionRequest = {
         return {
             $: 'ExtensionActionRequest',
             queryId: s.loadUintBig(64),
-            outActions: s.loadBoolean() ? OutActionsCell.fromSlice(s) : null,
+            outActions: s.loadBoolean() ? loadCellRef<OutActionWithSendMessageOnly>(s, OutActionWithSendMessageOnly.fromSlice) : null,
             hasExtraActions: s.loadBoolean(),
             extraActions: SnakedExtraActions.fromSlice(s),
         }
@@ -231,7 +333,9 @@ export const ExtensionActionRequest = {
     store(self: ExtensionActionRequest, b: c.Builder): void {
         b.storeUint(0x6578746e, 32);
         b.storeUint(self.queryId, 64);
-        storeTolkNullable<OutActionsCell>(self.outActions, b, OutActionsCell.store);
+        storeTolkNullable<CellRef<OutActionWithSendMessageOnly>>(self.outActions, b,
+            (v,b) => storeCellRef<OutActionWithSendMessageOnly>(v, b, OutActionWithSendMessageOnly.store)
+        );
         b.storeBit(self.hasExtraActions);
         SnakedExtraActions.store(self.extraActions, b);
     },
@@ -255,7 +359,7 @@ export interface InternalSignedRequest {
     walletId: uint32
     validUntil: uint32
     seqno: uint32
-    outActions: OutActionsCell | null
+    outActions: CellRef<OutActionWithSendMessageOnly> | null
     hasExtraActions: boolean
     extraActions: SnakedExtraActions
 }
@@ -267,7 +371,7 @@ export const InternalSignedRequest = {
         walletId: uint32
         validUntil: uint32
         seqno: uint32
-        outActions: OutActionsCell | null
+        outActions: CellRef<OutActionWithSendMessageOnly> | null
         hasExtraActions: boolean
         extraActions: SnakedExtraActions
     }): InternalSignedRequest {
@@ -283,7 +387,7 @@ export const InternalSignedRequest = {
             walletId: s.loadUintBig(32),
             validUntil: s.loadUintBig(32),
             seqno: s.loadUintBig(32),
-            outActions: s.loadBoolean() ? OutActionsCell.fromSlice(s) : null,
+            outActions: s.loadBoolean() ? loadCellRef<OutActionWithSendMessageOnly>(s, OutActionWithSendMessageOnly.fromSlice) : null,
             hasExtraActions: s.loadBoolean(),
             extraActions: SnakedExtraActions.fromSlice(s),
         }
@@ -293,7 +397,9 @@ export const InternalSignedRequest = {
         b.storeUint(self.walletId, 32);
         b.storeUint(self.validUntil, 32);
         b.storeUint(self.seqno, 32);
-        storeTolkNullable<OutActionsCell>(self.outActions, b, OutActionsCell.store);
+        storeTolkNullable<CellRef<OutActionWithSendMessageOnly>>(self.outActions, b,
+            (v,b) => storeCellRef<OutActionWithSendMessageOnly>(v, b, OutActionWithSendMessageOnly.store)
+        );
         b.storeBit(self.hasExtraActions);
         SnakedExtraActions.store(self.extraActions, b);
     },
@@ -355,7 +461,7 @@ export interface ExternalSignedRequest {
     walletId: uint32
     validUntil: uint32
     seqno: uint32
-    outActions: OutActionsCell | null
+    outActions: CellRef<OutActionWithSendMessageOnly> | null
     hasExtraActions: boolean
     extraActions: SnakedExtraActions
 }
@@ -367,7 +473,7 @@ export const ExternalSignedRequest = {
         walletId: uint32
         validUntil: uint32
         seqno: uint32
-        outActions: OutActionsCell | null
+        outActions: CellRef<OutActionWithSendMessageOnly> | null
         hasExtraActions: boolean
         extraActions: SnakedExtraActions
     }): ExternalSignedRequest {
@@ -383,7 +489,7 @@ export const ExternalSignedRequest = {
             walletId: s.loadUintBig(32),
             validUntil: s.loadUintBig(32),
             seqno: s.loadUintBig(32),
-            outActions: s.loadBoolean() ? OutActionsCell.fromSlice(s) : null,
+            outActions: s.loadBoolean() ? loadCellRef<OutActionWithSendMessageOnly>(s, OutActionWithSendMessageOnly.fromSlice) : null,
             hasExtraActions: s.loadBoolean(),
             extraActions: SnakedExtraActions.fromSlice(s),
         }
@@ -393,7 +499,9 @@ export const ExternalSignedRequest = {
         b.storeUint(self.walletId, 32);
         b.storeUint(self.validUntil, 32);
         b.storeUint(self.seqno, 32);
-        storeTolkNullable<OutActionsCell>(self.outActions, b, OutActionsCell.store);
+        storeTolkNullable<CellRef<OutActionWithSendMessageOnly>>(self.outActions, b,
+            (v,b) => storeCellRef<OutActionWithSendMessageOnly>(v, b, OutActionWithSendMessageOnly.store)
+        );
         b.storeBit(self.hasExtraActions);
         SnakedExtraActions.store(self.extraActions, b);
     },
@@ -561,7 +669,7 @@ export class WalletV5 implements c.Contract {
 
     static createCellOfExtensionActionRequest(body: {
         queryId: uint64
-        outActions: OutActionsCell | null
+        outActions: CellRef<OutActionWithSendMessageOnly> | null
         hasExtraActions: boolean
         extraActions: SnakedExtraActions
     }) {
@@ -572,7 +680,7 @@ export class WalletV5 implements c.Contract {
         walletId: uint32
         validUntil: uint32
         seqno: uint32
-        outActions: OutActionsCell | null
+        outActions: CellRef<OutActionWithSendMessageOnly> | null
         hasExtraActions: boolean
         extraActions: SnakedExtraActions
     }) {
@@ -589,7 +697,7 @@ export class WalletV5 implements c.Contract {
 
     async sendExtensionActionRequest(provider: ContractProvider, via: Sender, msgValue: coins, body: {
         queryId: uint64
-        outActions: OutActionsCell | null
+        outActions: CellRef<OutActionWithSendMessageOnly> | null
         hasExtraActions: boolean
         extraActions: SnakedExtraActions
     }, extraOptions?: ExtraSendOptions) {
@@ -604,7 +712,7 @@ export class WalletV5 implements c.Contract {
         walletId: uint32
         validUntil: uint32
         seqno: uint32
-        outActions: OutActionsCell | null
+        outActions: CellRef<OutActionWithSendMessageOnly> | null
         hasExtraActions: boolean
         extraActions: SnakedExtraActions
     }, extraOptions?: ExtraSendOptions) {
