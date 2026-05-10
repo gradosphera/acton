@@ -28,6 +28,9 @@ export type ParsedValue =
       readonly kind: "null"
     }
   | {
+      readonly kind: "void"
+    }
+  | {
       readonly kind: "address"
       readonly value: string
     }

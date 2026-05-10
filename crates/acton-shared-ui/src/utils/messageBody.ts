@@ -315,7 +315,7 @@ const toParsedValue = (value: unknown): ParsedValue => {
   }
 
   if (value === undefined) {
-    return {kind: "scalar", value: "undefined"}
+    return {kind: "void"}
   }
 
   if (typeof value === "boolean") {
@@ -366,6 +366,13 @@ const toParsedValue = (value: unknown): ParsedValue => {
     }
 
     const typeName = typeof objectValue.$ === "string" ? objectValue.$ : undefined
+    if (
+      typeName === "void" &&
+      Object.prototype.hasOwnProperty.call(objectValue, "value") &&
+      objectValue.value === undefined
+    ) {
+      return {kind: "void"}
+    }
 
     return {
       kind: "object",
