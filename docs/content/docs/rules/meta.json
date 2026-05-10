@@ -1,5 +1,5 @@
 {
-  "icon": "ListChecks",
+  "icon": "FileCheck",
   "pages": [
     "overview",
     "c001-compiler-error",
