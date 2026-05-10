@@ -116,7 +116,7 @@ If `incomingMessages` is missing, message-sending helpers are not generated. If
 
 ## TypeScript Generation
 
-`acton wrapper --ts` shells out to `npx gen-typescript-from-tolk-dev`.
+`acton wrapper --ts` shells out to `npx @ton/tolk-abi-to-typescript`.
 
 - Node.js, npm, and `npx` must be available in `PATH`
 - existing wrapper files at the target path are overwritten

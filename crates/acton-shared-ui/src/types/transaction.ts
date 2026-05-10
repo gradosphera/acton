@@ -1,5 +1,5 @@
 import type {Address, Cell, OutAction, Transaction} from "@ton/core"
-import type {ContractABI} from "gen-typescript-from-tolk-dev"
+import type {ContractABI} from "@ton/tolk-abi-to-typescript"
 
 import type {BackendExecutorAction} from "./index"
 

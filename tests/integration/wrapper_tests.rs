@@ -20,7 +20,7 @@ fi
 
 package="${1:-}"
 package_name="${package%%@*}"
-if [ "$package_name" != "gen-typescript-from-tolk" ] && [ "$package_name" != "gen-typescript-from-tolk-dev" ]; then
+if [ "$package_name" != "gen-typescript-from-tolk" ] && [ "$package_name" != "@ton/tolk-abi-to-typescript" ]; then
     echo "unexpected package: ${package}" >&2
     exit 1
 fi

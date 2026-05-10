@@ -1,12 +1,12 @@
 import {Address, Builder, Cell, Dictionary, Slice, loadShardAccount} from "@ton/core"
 import type {Message, MessageRelaxed} from "@ton/core"
-import type {ContractABI, SymTable, Ty} from "gen-typescript-from-tolk-dev"
+import type {ContractABI, SymTable, Ty} from "@ton/tolk-abi-to-typescript"
 import {
   DynamicCtx,
   SymTable as CompilerSymTable,
   renderTy,
   unpackFromSliceDynamic,
-} from "gen-typescript-from-tolk-dev"
+} from "@ton/tolk-abi-to-typescript"
 
 import type {BackendContractInfo} from "@/types"
 import type {
