@@ -28,6 +28,10 @@ CI, debugger snapshots, and UI inspection flows.
   `@abi.clientType(...)` after the Tolk compiler update. Direct ABI consumers
   should read the indexed client type from `unique_types` instead of relying on
   the previous field shape.
+- The Acton linter no longer ships the `E023`
+  `incoming-messages-duplicate-opcode` rule because duplicate incoming-message
+  opcodes are now handled by the Tolk compiler. Configurations that explicitly
+  enable, disable, or explain `E023` should remove that rule reference.
 
 ### CLI, Wallets, and Verification
 
@@ -44,6 +48,8 @@ CI, debugger snapshots, and UI inspection flows.
   completion more reliably.
 - Wallet airdrop challenge handling now validates the challenge version before
   using the response.
+- Wallet airdrop challenge requests now use the faucet's JSON `POST` flow with
+  the target address and TON airdrop type, matching the current faucet API.
 - `acton script` now gives a clearer error when `waitForTrace()` cannot find a
   trace, including the timeout path used by scripts that print the result.
 - `acton verify`, `acton up`, and related generated man/help output were
@@ -59,6 +65,13 @@ CI, debugger snapshots, and UI inspection flows.
   Jetton, NFT, and W5 Extension projects: app templates gained `.env.example`
   files, generated project metadata became more consistent, and the empty-app
   and W5 app templates now include project-specific `AGENTS.md` guidance.
+- Generated GitHub Actions workflows in starter templates are now split into
+  contract and dApp checks where appropriate, cover both `main` and `master`,
+  use least-privilege permissions and concurrency cancellation, and pin the
+  refreshed `setup-acton` action.
+- App template `npm run test` scripts now succeed without requiring an Acton
+  project, so generated dApp-only workflows can run independently from contract
+  checks.
 - `acton new --templates` now returns richer machine-readable template
   metadata, and generated help/man output was refreshed around the updated
   template list and app scaffolds.
