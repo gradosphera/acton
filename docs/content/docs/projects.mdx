@@ -49,13 +49,9 @@ acton init
 ```
 
 - When `Acton.toml` does not exist, `acton init` scans the directory tree for `.tolk` files that define `onInternalMessage()` and registers them as contracts in a newly created `Acton.toml`.
-- When `Acton.toml` already exists, `acton init` patches missing default [import mappings](#configure-import-mappings).
+- When `Acton.toml` already exists, `acton init` leaves it untouched.
 
-`acton init` also refreshes Tolk libraries in `.acton/` and updates `.gitignore` with the commonly ignored Acton-related entries. It is safe to rerun `acton init` after moving files around or after removing import mappings in `Acton.toml` by accident.
-
-<Callout type="caution">
-    `acton init` preserves other supported settings in `Acton.toml`, but does **not** preserve TOML comments and unrecognized keys.
-</Callout>
+`acton init` refreshes Tolk libraries in `.acton/` and updates `.gitignore` with the commonly ignored Acton-related entries. It is safe to rerun `acton init` after moving files around or after removing import mappings in `Acton.toml` by accident.
 
 Pass `--stdlib-only` to only refresh the standard library in `.acton/` folder:
 
@@ -84,7 +80,7 @@ It changes the project layout to the [dApp layout](#dapp-layout). The target `ap
 
 Rerun `acton init` when the project needs a light reset:
 
-- `Acton.toml` is missing the default import mappings or is nonexistent — contract files were added before the manifest was created.
+- `Acton.toml` is nonexistent, e.g., contract files were added before the manifest was created.
 - `.acton/` is stale or nonexistent.
 - `.gitignore` is missing the commonly ignored Acton-related entries.
 
@@ -122,16 +118,20 @@ acton-project/
 ├── Acton.toml
 ├── .env
 ├── .acton/
-├── app/             # React + Vite frontend
-├── wrappers-ts/     # Generated TypeScript wrappers
+├── app/             — React + Vite frontend
+├── wrappers-ts/     — Generated TypeScript wrappers
 ├── contracts/
-│   ├── src/         # Tolk source files
-│   ├── wrappers/    # Generated Tolk wrappers
-│   ├── tests/       # Test files
-│   └── scripts/     # Deployment and utility Tolk scripts
+│   ├── src/         — Tolk source files
+│   ├── wrappers/    — Generated Tolk wrappers
+│   ├── tests/       — Test files
+│   └── scripts/     — Deployment and utility Tolk scripts
 ├── build/
 └── gen/
 ```
+
+<Callout type="warn">
+    Node.js, `npm`, and `npx` must be available in the `PATH`.
+</Callout>
 
 See the [dApps development guide](/docs/dapps) for more information on features of the generated dApp and usage of TypeScript wrappers.
 
