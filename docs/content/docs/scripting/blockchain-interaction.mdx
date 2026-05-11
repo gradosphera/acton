@@ -70,16 +70,17 @@ import "@acton/emulation/scripts"
 import "@acton/build"
 
 import "@contracts/types"
-import "@wrappers/Counter"
+import "@wrappers/Counter.gen"
 
 fun main() {
     val deployer = scripts.wallet("deployer");
     val counter = Counter.fromStorage({
         id: 8,
+        owner: deployer.address,
         counter: 0,
     });
 
-    val result = counter.deploy(deployer.address, ton("0.05"));
+    val result = counter.deploy(deployer.address, { value: ton("0.05") });
     if (result.waitForFirstTransaction() == null) {
         return;
     }
@@ -89,51 +90,59 @@ fun main() {
 }
 ```
 
-The `wrappers/Counter.tolk` file provides a convenient wrapper around the counter contract:
+The `wrappers/Counter.gen.tolk` file provides a convenient wrapper around the counter contract:
 
-```tolk collapse={2-3, 10-17, 30-42} title="wrappers/Counter.tolk"
-// todo update snippet to actual wrapper
+```tolk collapse={2-4, 11-18, 45-59} title="wrappers/Counter.gen.tolk"
 import "@acton/build"
 import "@acton/emulation/network"
+import "@acton/testing/assert"
 
 import "@contracts/types"
 
 struct Counter {
     address: address
-    init: ContractState
+    stateInit: ContractState? = null
 }
 
-fun Counter.fromStorage(storage: Storage): Counter {
-    val init = ContractState {
+fun Counter.fromStorage(storage: Storage, toShard: AddressShardingOptions? = null): Counter {
+    val stateInit = ContractState {
         code: build("Counter"),
         data: storage.toCell(),
     };
-    val address = AutoDeployAddress { stateInit: init }.calculateAddress();
-    return Counter { address, init };
+    val address = AutoDeployAddress { stateInit, toShard }.calculateAddress();
+    return Counter { address, stateInit };
 }
 
-fun Counter.deploy(self, deployer: address, value: coins) {
+fun Counter.deploy(self, from: address, config: SendParams = {}): SendResultList {
+    if (self.stateInit == null) {
+        Assert.fail("Cannot deploy a contract created with 'fromAddress' because it lacks state init for deployment");
+    }
     val msg = createMessage({
-        bounce: false,
-        value: value,
+        bounce: config.bounce,
+        value: config.value,
         dest: {
-            stateInit: self.init,
+            stateInit: self.stateInit,
         },
     });
-    return net.send(deployer, msg);
+    return net.send(from, msg);
 }
 
-fun Counter.sendIncrease(self, from: address, increaseBy: int) {
+fun Counter.sendIncreaseCounter(
+    self,
+    from: address,
+    increaseBy: uint32,
+    config: SendParams = {},
+): SendResultList {
     val msg = createMessage({
-        bounce: false,
-        value: ton("0.05"),
+        bounce: config.bounce,
+        value: config.value,
         dest: self.address,
         body: IncreaseCounter { increaseBy },
     });
     return net.send(from, msg);
 }
 
-fun Counter.getCounter(self): int {
+fun Counter.currentCounter(self): int {
     return net.runGetMethod(self.address, "currentCounter");
 }
 ```
@@ -215,15 +224,16 @@ fun main() {
     // Deploy counter
     val counter = Counter.fromStorage({
         id: 8,
+        owner: deployer.address,
         counter: 0,
     });
-    val deployResult = counter.deploy(deployer.address, ton("0.05"));
+    val deployResult = counter.deploy(deployer.address, { value: ton("0.05") });
     deployResult.waitForFirstTransaction(); // Wait for deployment
 
     println("Counter deployed at {}", counter.address);
 
     // Send increase message
-    val increaseResult = counter.sendIncrease(deployer.address, 5);
+    val increaseResult = counter.sendIncreaseCounter(deployer.address, 5, { value: ton("0.05") });
     increaseResult.waitForTrace(); // Wait for the full message chain
 
     println("Counter increased!");
