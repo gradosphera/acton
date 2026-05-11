@@ -205,9 +205,8 @@ symlink creation is restricted.
 .SH "SIDE EFFECTS"
 The default \fBacton init\fR flow writes or patches local project files and may
 create local symlinks to global overlay files. It does not modify Git config.
-When it patches an existing \fBActon.toml\fR, it rewrites the parsed manifest and
-may drop TOML comments or unknown keys; \fB\&.gitignore\fR patching remains
-append\-only.
+If \fBActon.toml\fR already exists, Acton leaves it untouched; \fB\&.gitignore\fR
+patching remains append\-only.
 .sp
 The default flow normally refreshes the bundled standard library under
 \fB\&.acton/\fR\&. Set \fBACTON_DISABLE_AUTO_STDLIB=1\fR to skip that automatic refresh.

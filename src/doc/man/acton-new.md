@@ -130,7 +130,7 @@ passed explicitly. For CI or scripts, pass `--name`, `--description`,
 
 ## Files
 
-The generated project always includes:
+The generated project normally includes:
 
 - `Acton.toml`
 - `.acton/`

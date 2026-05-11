@@ -162,9 +162,8 @@ STANDARD LIBRARY
 SIDE EFFECTS
        The default acton init flow writes or patches local project files and
        may create local symlinks to global overlay files. It does not modify
-       Git config. When it patches an existing Acton.toml, it rewrites the
-       parsed manifest and may drop TOML comments or unknown keys; .gitignore
-       patching remains append-only.
+       Git config. If Acton.toml already exists, Acton leaves it untouched;
+       .gitignore patching remains append-only.
 
        The default flow normally refreshes the bundled standard library under
        .acton/. Set ACTON_DISABLE_AUTO_STDLIB=1 to skip that automatic refresh.
