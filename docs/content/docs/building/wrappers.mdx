@@ -48,9 +48,10 @@ Fine tune wrapper generation with the `contract { ... }` header in the contract 
 Import the wrapper and any types it references, then create and deploy the contract:
 
 ```tolk title="tests/Counter.test.tolk"
-import "@wrappers/Counter"
+import "@wrappers/Counter.gen"
 import "@contracts/types"
 import "@acton/emulation/testing"
+import "@acton/testing/expect"
 
 get fun `test increase`() {
     val deployer = testing.treasury("deployer");
@@ -59,7 +60,7 @@ get fun `test increase`() {
     val deployResult = contract.deploy(deployer.address, { value: ton("0.05") });
     expect(deployResult).toHaveSuccessfulDeploy({ to: contract.address });
 
-    val sendResult = contract.sendIncrease(deployer.address, 5);
+    val sendResult = contract.sendIncreaseCounter(deployer.address, 5);
     expect(sendResult).toHaveTransaction({ success: true });
 
     expect(contract.currentCounter()).toEqual(5);
@@ -73,7 +74,7 @@ See the [testing guides](/docs/testing/overview) for more.
 Replace `testing.treasury()` with `scripts.wallet()`:
 
 ```tolk title="scripts/deploy.tolk"
-import "@wrappers/Counter"
+import "@wrappers/Counter.gen"
 import "@contracts/types"
 // Replaces @acton/emulation/testing:
 import "@acton/emulation/scripts"
@@ -96,7 +97,7 @@ acton script scripts/deploy.tolk
 acton script scripts/deploy.tolk --net testnet
 ```
 
-See the [scripting guides](/docs/testing/overview) for more.
+See the [scripting guides](/docs/scripting/overview) for more.
 
 ### Regenerate after contract changes
 
