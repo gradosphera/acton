@@ -334,7 +334,7 @@ fn load_local_contract_candidate(
     let contract_path_key = contract_path.to_string_lossy().to_string();
     let cached = file_cache
         .as_mut()
-        .and_then(|cache| cache.get(&contract_path_key, false, false, 2, "1.3"));
+        .and_then(|cache| cache.get(&contract_path_key, false, false, 2, "1.4"));
     let (code_boc64, abi, source_map) = if let Some(cached) = cached {
         (
             cached.code_boc64,
@@ -346,7 +346,7 @@ fn load_local_contract_candidate(
         match compiler.compile(&contract_path, false) {
             tolk_compiler::CompilerResult::Success(result) => {
                 if let Some(cache) = file_cache.as_mut() {
-                    let _ = cache.put(&contract_path_key, &result, false, false, 2, "1.3");
+                    let _ = cache.put(&contract_path_key, &result, false, false, 2, "1.4");
                 }
                 (
                     result.code_boc64,

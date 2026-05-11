@@ -57,9 +57,9 @@ pub fn compile_cmd(
     let need_debug_info = source_map.is_some();
     let need_fift = fift.is_some();
     let cache_profile = if allow_no_entrypoint {
-        "1.3+allow-no-entrypoint"
+        "1.4+allow-no-entrypoint"
     } else {
-        "1.3"
+        "1.4"
     };
     if let Some(cached_entry) = file_cache.get(path, need_debug_info, need_fift, 2, cache_profile) {
         let elapsed = start_time.elapsed();

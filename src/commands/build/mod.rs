@@ -402,7 +402,7 @@ fn process_contract(
         debug!("Cache bypass for '{contract_cache_key}' because dependency changed");
         None
     } else {
-        file_cache.get(contract_cache_key, false, with_fift, 2, "1.3")
+        file_cache.get(contract_cache_key, false, with_fift, 2, "1.4")
     };
 
     if let Some(cached_result) = cached_result {
@@ -428,7 +428,7 @@ fn process_contract(
 
     match compilation_result {
         tolk_compiler::CompilerResult::Success(result) => {
-            if let Err(e) = file_cache.put(contract_cache_key, &result, false, with_fift, 2, "1.3")
+            if let Err(e) = file_cache.put(contract_cache_key, &result, false, with_fift, 2, "1.4")
             {
                 eprintln!("Warning: Failed to cache compilation result for {display_name}: {e}");
             }

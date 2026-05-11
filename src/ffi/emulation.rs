@@ -183,7 +183,7 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
     if let Some(cached_entry) =
         ctx.build
             .file_build_cache
-            .get(&path_display, ctx.build.need_debug_info, false, 2, "1.3")
+            .get(&path_display, ctx.build.need_debug_info, false, 2, "1.4")
     {
         let elapsed = start_time.elapsed();
         info!(
@@ -228,7 +228,7 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
                 ctx.build.need_debug_info,
                 false,
                 2,
-                "1.3",
+                "1.4",
             ) {
                 warn!("Failed to build cached code BoC for {path_display}: {err}");
             }

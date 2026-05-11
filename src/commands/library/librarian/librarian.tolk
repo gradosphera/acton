@@ -1,4 +1,4 @@
-tolk 1.3.0
+tolk 1.4.0
 
 import "@stdlib/gas-payments"
 
