@@ -1,17 +1,29 @@
-name: CI
+name: dApp
 
 on:
   push:
     branches:
       - main
+      - master
   pull_request:
     branches:
       - main
+      - master
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   build-and-test:
+    name: Build and Test
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -25,14 +37,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Setup Acton
-        uses: ton-blockchain/setup-acton@82b1fb8d8f60584dd552f4014b3cd2de2e599dfb
-
-      - name: Install Node dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: Test
-        run: npm run test
+      - name: Formatter
+        run: npm run fmt:check
 
       - name: Typecheck
         run: npm run typecheck
@@ -40,11 +49,5 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Linter
-        run: acton check --output-format github
-
-      - name: Acton Formatter
-        run: acton fmt --check
-
-      - name: Prettier
-        run: npm run fmt:check
+      - name: Test
+        run: npm run test
