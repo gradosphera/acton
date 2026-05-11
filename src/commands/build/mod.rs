@@ -28,6 +28,7 @@ pub struct BuildCommandOptions {
     pub output_abi: Option<String>,
     pub output_fift: Option<String>,
     pub show_info: bool,
+    pub quiet_no_contracts: bool,
 }
 
 pub(crate) fn contract_compilation_order(
@@ -47,6 +48,7 @@ pub fn build_cmd(options: BuildCommandOptions) -> anyhow::Result<()> {
         output_abi,
         output_fift,
         show_info,
+        quiet_no_contracts,
     } = options;
 
     let project_root = configured_project_root();
@@ -106,8 +108,9 @@ pub fn build_cmd(options: BuildCommandOptions) -> anyhow::Result<()> {
     }
 
     let Some(contracts) = config.contracts() else {
-        println!(
-                    "No contracts section found in Acton.toml. Add at least one contract.
+        if !quiet_no_contracts {
+            println!(
+                "No contracts section found in Acton.toml. Add at least one contract.
 To add a contract add the following section to Acton.toml:
 
 [contracts.MyContract]
@@ -116,12 +119,15 @@ src = \"contracts/MyContract.tolk\"
 depends = []
 
 See https://ton-blockchain.github.io/acton/docs/building/reference/#contracts-section for more information"
-                );
+            );
+        }
         return Ok(());
     };
 
     if contracts.is_empty() {
-        println!("No contracts to build.");
+        if !quiet_no_contracts {
+            println!("No contracts to build.");
+        }
         return Ok(());
     }
 

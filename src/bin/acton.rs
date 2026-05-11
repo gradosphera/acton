@@ -2024,6 +2024,7 @@ fn main() {
             output_abi,
             output_fift,
             show_info: info,
+            quiet_no_contracts: false,
         }),
         Commands::Compile {
             path,

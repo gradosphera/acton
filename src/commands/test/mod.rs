@@ -542,6 +542,7 @@ pub fn test_cmd(path: Option<String>, config: &TestConfig) -> anyhow::Result<()>
     if need_to_build() {
         build_cmd(BuildCommandOptions {
             clear_cache: config.clear_cache,
+            quiet_no_contracts: true,
             ..BuildCommandOptions::default()
         })?;
     }
