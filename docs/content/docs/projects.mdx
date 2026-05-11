@@ -6,7 +6,7 @@ icon: FolderTree
 
 Acton projects are defined by `Acton.toml` manifest. It tells Acton where contracts live, how they depend on each other, where generated files go, and which path aliases (import mappings) the compiler should resolve. See the [`Acton.toml` reference](/docs/acton-toml) for the full field-by-field description.
 
-For coding-agent workflows, the `acton` skill covers CLI commands and `Acton.toml` configuration, and the `tolk` skill covers writing and reviewing Tolk contracts. See the [agent skills](/docs/agent-skills) guide for installation and usage.
+For coding-agent workflows, the `acton` skill covers CLI commands and `Acton.toml` configuration, and the `tolk` skill covers writing and reviewing Tolk contracts. See the [agent skills](/docs/agent-skills/overview) guide for installation and usage.
 
 ## Create or initialize a project
 
@@ -158,7 +158,7 @@ import "@acton/testing/expect"
 import "@contracts/types"
 
 // A file in the mapped Tolk wrappers folder
-import "@wrappers/Counter"
+import "@wrappers/Counter.gen"
 ```
 
 Projects created with `acton new` include the default mappings already. The [dApp layout](#dapp-project-layout) adjusts them to match the nested directory structure:
