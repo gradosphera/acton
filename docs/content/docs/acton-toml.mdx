@@ -79,13 +79,13 @@ not match the configured version.
 
 | Field   | Type     | Required | Description                                                            |
 |:--------|:---------|:---------|:-----------------------------------------------------------------------|
-| `acton` | `string` | No       | Required Acton CLI version without a leading `v`, for example `0.3.2`. |
+| `acton` | `string` | No       | Required Acton CLI version without a leading `v`, for example `1.0.0`. |
 
 Example:
 
 ```toml
 [toolchain]
-acton = "0.3.2"
+acton = "1.0.0"
 ```
 
 `acton up` remains available when the configured version does not match, so the

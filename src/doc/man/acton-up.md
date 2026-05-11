@@ -111,7 +111,7 @@ When installing a release, Acton:
 3. Install a specific version:
 
    ```bash
-   acton up 0.1.0
+   acton up 1.0.0
    ```
 
 4. List available releases:
