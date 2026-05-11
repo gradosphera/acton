@@ -155,17 +155,17 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const NETWORK_TEST_PRELUDE: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../../lib/types/big_array"
 import "../../lib/types/message"
 import "../../lib/tlb/maybe"
 import "../contracts/messages"
 
 fun deployForwardHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
 
     val forwarderInit = ContractState {
         code: build("forwarder"),
@@ -201,7 +201,7 @@ fun deployForwardHarness() {
 }
 
 fun deployExternalHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
 
     val externalInit = ContractState {
         code: build("external"),
@@ -222,7 +222,7 @@ fun deployExternalHarness() {
 }
 
 fun deployEchoHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
 
     val echoInit = ContractState {
         code: build("echo"),
@@ -282,7 +282,7 @@ fn send_processes_children_and_find_transaction_by_participants_and_opcode() {
     run_network_success(
         "ag-stdlib-send-processes-children",
         r#"
-get fun `test-ag-send-processes-children-and-find-transaction`() {
+get fun `test ag send processes children and find transaction`() {
     val (sender, forwarderAddress, receiverAddress) = deployForwardHarness();
 
     val txs = net.send(
@@ -303,12 +303,12 @@ get fun `test-ag-send-processes-children-and-find-transaction`() {
         from: sender.address,
         to: forwarderAddress,
         success: true,
-    })).toBeDefined();
+    })).toBeNotNull();
     expect(txs.findTransaction<Notify>({
         from: forwarderAddress,
         to: receiverAddress,
         success: true,
-    })).toBeDefined();
+    })).toBeNotNull();
     expect(receiverCount(receiverAddress)).toEqual(1);
 }
 "#,
@@ -321,10 +321,10 @@ fn send_single_keeps_child_list_empty_and_preserves_out_message() {
     run_network_success(
         "ag-stdlib-send-single-keeps-out-message",
         r#"
-get fun `test-ag-send-single-keeps-child-list-empty`() {
+get fun `test ag send single keeps child list empty`() {
     val (sender, forwarderAddress, receiverAddress) = deployForwardHarness();
 
-    val sendSingleRes = net.sendSingle(
+    val sendSingleRes = testing.processSingleTraceStep(
         sender.address,
         createMessage({
             bounce: false,
@@ -355,11 +355,11 @@ fn send_external_runs_handler_and_collects_external_out_message() {
     run_network_success(
         "ag-stdlib-send-external-runs-handler",
         r"
-get fun `test-ag-send-external-runs-handler`() {
+get fun `test ag send external runs handler`() {
     val (_, externalAddress) = deployExternalHarness();
 
     val txs = net.sendExternal(
-        createExternalMessage(externalAddress, TriggerExternal { queryId: 1 }),
+        net.createExternalMessage(externalAddress, TriggerExternal { queryId: 1 }),
     )!;
 
     expect(txs).toHaveLength(1);
@@ -380,14 +380,14 @@ fn send_external_is_repeatable_and_keeps_incrementing_state() {
     run_network_success(
         "ag-stdlib-send-external-repeatable",
         r"
-get fun `test-ag-send-external-repeatable`() {
+get fun `test ag send external repeatable`() {
     val (_, externalAddress) = deployExternalHarness();
 
     val first = net.sendExternal(
-        createExternalMessage(externalAddress, TriggerExternal { queryId: 2 }),
+        net.createExternalMessage(externalAddress, TriggerExternal { queryId: 2 }),
     )!;
     val second = net.sendExternal(
-        createExternalMessage(externalAddress, TriggerExternal { queryId: 3 }),
+        net.createExternalMessage(externalAddress, TriggerExternal { queryId: 3 }),
     )!;
 
     expect(first).toHaveLength(1);
@@ -409,7 +409,7 @@ fn find_transaction_matches_body_hash_and_returns_null_for_mismatch() {
     run_network_success(
         "ag-stdlib-find-transaction-body-hash",
         r#"
-get fun `test-ag-find-transaction-body-hash`() {
+get fun `test ag find transaction body hash`() {
     val (sender, forwarderAddress, receiverAddress) = deployForwardHarness();
 
     val txs = net.send(
@@ -437,12 +437,12 @@ get fun `test-ag-find-transaction-body-hash`() {
     expect(txs.findTransaction<TriggerForward>({
         to: forwarderAddress,
         body: expectedBody,
-    })).toBeDefined();
+    })).toBeNotNull();
     val notFound = txs.findTransaction<TriggerForward>({
         to: forwarderAddress,
         body: wrongBody,
     });
-    expect(notFound is None).toEqual(true);
+    expect(notFound == null).toEqual(true);
 }
 "#,
         "integration/snapshots/test-runner/send_processes_children_and_find_transaction_by_participants_and_opcode/find_transaction_matches_body_hash_and_returns_null_for_mismatch.stdout.txt",
@@ -454,10 +454,10 @@ fn find_transaction_matches_bounced_opcode_after_prefix() {
     run_network_success(
         "ag-stdlib-find-transaction-bounced-opcode",
         r#"
-get fun `test-ag-find-transaction-bounced-opcode`() {
+get fun `test ag find transaction bounced opcode`() {
     val (sender, echoAddress) = deployEchoHarness();
 
-    val initial = net.sendSingle(
+    val initial = testing.processSingleTraceStep(
         sender.address,
         createMessage({
             bounce: false,
@@ -489,13 +489,13 @@ get fun `test-ag-find-transaction-bounced-opcode`() {
         from: sender.address,
         to: echoAddress,
         bounced: true,
-    })).toBeDefined();
+    })).toBeNotNull();
     val notBouncedMatch = bouncedRes.findTransaction<EchoNotice>({
         from: sender.address,
         to: echoAddress,
         bounced: false,
     });
-    expect(notBouncedMatch is None).toEqual(true);
+    expect(notBouncedMatch == null).toEqual(true);
 }
 "#,
         "integration/snapshots/test-runner/send_processes_children_and_find_transaction_by_participants_and_opcode/find_transaction_matches_bounced_opcode_after_prefix.stdout.txt",
@@ -503,11 +503,12 @@ get fun `test-ag-find-transaction-bounced-opcode`() {
 }
 
 #[test]
-fn wait_returns_true_in_emulation_mode_for_non_empty_and_empty_results() {
+fn wait_for_first_transaction_returns_non_null_in_emulation_for_non_empty_and_null_for_empty_results()
+ {
     run_network_success(
         "ag-stdlib-wait-in-emulation-mode",
         r#"
-get fun `test-ag-wait-in-emulation-mode`() {
+get fun `test ag wait in emulation mode`() {
     val (sender, forwarderAddress, receiverAddress) = deployForwardHarness();
 
     val txs = net.send(
@@ -523,11 +524,11 @@ get fun `test-ag-wait-in-emulation-mode`() {
         }),
     );
 
-    expect(txs.wait()).toEqual(true);
-    expect(txs.wait(true, 1, 1)).toEqual(true);
+    expect(txs.waitForFirstTransaction()).toBeNotNull();
+    expect(txs.waitForFirstTransaction(true, 1, 1)).toBeNotNull();
 
     val empty: SendResultList = SendResultList.createEmpty();
-    expect(empty.wait()).toEqual(true);
+    expect(empty.waitForFirstTransaction()).toBeNull();
 }
 "#,
         "integration/snapshots/test-runner/send_processes_children_and_find_transaction_by_participants_and_opcode/wait_returns_true_in_emulation_mode_for_non_empty_and_empty_results.stdout.txt",
@@ -535,14 +536,14 @@ get fun `test-ag-wait-in-emulation-mode`() {
 }
 
 #[test]
-fn wait_returns_false_for_empty_list_in_broadcast_mode() {
+fn wait_for_first_transaction_returns_null_for_empty_list_in_broadcast_mode() {
     run_network_success(
         "ag-stdlib-wait-empty-broadcast-false",
         r"
-get fun `test-ag-wait-empty-list-in-broadcast-mode`() {
+get fun `test ag wait empty list in broadcast mode`() {
     net.enableBroadcast();
     val empty: SendResultList = SendResultList.createEmpty();
-    expect(empty.wait()).toEqual(false);
+    expect(empty.waitForFirstTransaction()).toBeNull();
     net.disableBroadcast();
 }
 ",
@@ -551,11 +552,11 @@ get fun `test-ag-wait-empty-list-in-broadcast-mode`() {
 }
 
 #[test]
-fn wait_rejects_zero_attempts_in_broadcast_mode() {
+fn wait_for_first_transaction_rejects_zero_attempts_in_broadcast_mode() {
     network_project(
         "ag-stdlib-wait-zero-attempts-rejected",
         r#"
-get fun `test-ag-wait-zero-attempts-rejected`() {
+get fun `test ag wait zero attempts rejected`() {
     val (sender, forwarderAddress, receiverAddress) = deployForwardHarness();
 
     val txs = net.send(
@@ -572,7 +573,7 @@ get fun `test-ag-wait-zero-attempts-rejected`() {
     );
 
     net.enableBroadcast();
-    txs.wait(true, 0, 1);
+    txs.waitForFirstTransaction(true, 0, 1);
 }
 "#,
     )

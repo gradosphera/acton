@@ -38,12 +38,12 @@ A typical library workflow is:
 .SS "acton library publish"
 Publish a contract or arbitrary code as a library.
 .SS "Synopsis"
-\fBacton library publish\fR [\fIoptions\fR] [\fIcontract\-id\fR]
+\fBacton library publish\fR [\fIoptions\fR] [\fIcontract\-name\fR]
 .SS "Options"
 .sp
-\fIcontract\-id\fR
+\fIcontract\-name\fR
 .RS 4
-Contract ID to publish.
+Contract name to publish.
 .sp
 Use \fB\-\-code\fR to publish arbitrary code instead of compiling a project contract.
 .RE
@@ -61,6 +61,8 @@ Requested publication duration such as \fB100d\fR or \fB1y\fR\&.
 \fB\-\-wallet\fR \fIwallet\fR
 .RS 4
 Wallet to use for the publication transaction.
+.sp
+Cannot be used with \fB\-\-tonconnect\fR\&.
 .RE
 .sp
 \fB\-\-net\fR \fInetwork\fR
@@ -70,9 +72,19 @@ Network to use.
 Defaults to \fBtestnet\fR\&.
 .RE
 .sp
-\fB\-\-api\-key\fR \fIkey\fR
+\fB\-\-tonconnect\fR
 .RS 4
-TonCenter API key for blockchain interactions.
+Use TON Connect wallet approval for the publication transaction.
+.sp
+Supported only with \fB\-\-net mainnet\fR and \fB\-\-net testnet\fR\&. When enabled, Acton
+opens a local TON Connect page and uses the wallet selected in the browser.
+.RE
+.sp
+\fB\-\-tonconnect\-port\fR \fIport\fR
+.RS 4
+Local TON Connect page port.
+.sp
+Defaults to \fB52258\fR\&.
 .RE
 .sp
 \fB\-\-amount\fR \fIton\fR
@@ -127,11 +139,6 @@ Network to use.
 Defaults to \fBtestnet\fR\&.
 .RE
 .sp
-\fB\-\-api\-key\fR \fIkey\fR
-.RS 4
-TonCenter API key for blockchain interactions.
-.RE
-.sp
 \fB\-\-json\fR
 .RS 4
 Emit JSON output for raw library fetches.
@@ -149,11 +156,6 @@ Show information about a deployed library.
 Library name to inspect.
 .sp
 If omitted, Acton can prompt from the available library metadata.
-.RE
-.sp
-\fB\-\-api\-key\fR \fIkey\fR
-.RS 4
-TonCenter API key for balance checks.
 .RE
 .sp
 The output includes publication time, last top\-up time, current balance, and
@@ -184,11 +186,24 @@ Overrides duration\-based estimation.
 \fB\-\-wallet\fR \fIwallet\fR
 .RS 4
 Wallet to use for the top\-up transaction.
+.sp
+Cannot be used with \fB\-\-tonconnect\fR\&.
 .RE
 .sp
-\fB\-\-api\-key\fR \fIkey\fR
+\fB\-\-tonconnect\fR
 .RS 4
-TonCenter API key for blockchain interactions.
+Use TON Connect wallet approval for the top\-up transaction.
+.sp
+Supported only for libraries stored with \fBnetwork = "mainnet"\fR or
+\fBnetwork = "testnet"\fR\&. When enabled, Acton opens a local TON Connect page and
+uses the wallet selected in the browser.
+.RE
+.sp
+\fB\-\-tonconnect\-port\fR \fIport\fR
+.RS 4
+Local TON Connect page port.
+.sp
+Defaults to \fB52258\fR\&.
 .RE
 .sp
 \fB\-y\fR, \fB\-\-yes\fR
@@ -198,6 +213,17 @@ Skip confirmation prompts.
 .sp
 After a successful top\-up, Acton updates \fBlast_topup_timestamp\fR in the stored
 library metadata.
+.SH "TONCENTER API KEYS"
+Built\-in \fBmainnet\fR/\fBtestnet\fR requests read \fBTONCENTER_MAINNET_API_KEY\fR or
+\fBTONCENTER_TESTNET_API_KEY\fR, depending on the selected network.
+.sp
+For \fBcustom:<name>\fR, Acton reads \fB<NORMALIZED_NAME>_API_KEY\fR\&. Custom network
+names are uppercased and non\-alphanumeric characters are replaced with \fB_\fR, so
+\fBcustom:mock\-remote\fR becomes \fBMOCK_REMOTE_API_KEY\fR\&.
+.sp
+Acton loads \fB\&.env\fR automatically, so the simplest setup during project work is
+usually to keep these keys there and use shell environment variables only for
+one\-off overrides or CI.
 .SH "DISPLAY OPTIONS"
 .sp
 \fB\-\-color\fR \fIwhen\fR
@@ -248,6 +274,12 @@ For \fBpublish\fR and \fBtopup\fR, \fB\-\-duration\fR is used to estimate the re
 amount from the library size and storage duration.
 .sp
 If \fB\-\-amount\fR is passed, it overrides that estimate completely.
+.SH "TON CONNECT"
+\fBpublish\fR and \fBtopup\fR can send their transactions through TON Connect with
+\fB\-\-tonconnect\fR\&. The connected wallet supplies the sender address and approves
+the internal message in the wallet UI. TON Connect is available only for
+mainnet and testnet; use configured Acton wallets for localnet and custom
+networks.
 .SH "METADATA FILES"
 Saved library metadata typically includes:
 .sp
@@ -330,7 +362,7 @@ failed.
 .sp
 .RS 4
 .nf
-acton library publish math \-\-duration 365d \-\-wallet deployer
+acton library publish Math \-\-duration 365d \-\-wallet deployer
 .fi
 .RE
 .RE
@@ -360,13 +392,33 @@ acton library fetch <HASH> \-\-disasm
 .sp
 .RS 4
 .nf
-acton library topup math \-\-duration 1y
+acton library topup Math \-\-duration 1y
 .fi
 .RE
 .RE
 .sp
 .RS 4
-\h'-04' 5.\h'+01'Fetch raw code into a BoC file:
+\h'-04' 5.\h'+01'Publish with TON Connect:
+.sp
+.RS 4
+.nf
+acton library publish Math \-\-net mainnet \-\-tonconnect
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 6.\h'+01'Top up with TON Connect:
+.sp
+.RS 4
+.nf
+acton library topup Math \-\-tonconnect
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 7.\h'+01'Fetch raw code into a BoC file:
 .sp
 .RS 4
 .nf
@@ -377,5 +429,5 @@ acton library fetch <HASH> \-\-output build/math\-lib.boc
 .SH "SEE ALSO"
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fILibraries guide\fR <https://ton\-blockchain.github.io/acton/docs/advanced/libraries>
+\h'-04'\(bu\h'+03'\fILibraries guide\fR <https://ton\-blockchain.github.io/acton/docs/libraries>
 .RE

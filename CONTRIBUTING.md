@@ -14,52 +14,84 @@ this repository.
 - Security reporting policy: [SECURITY.md](SECURITY.md)
 - Maintainer release process: [RELEASING.md](RELEASING.md)
 
+## Workspace map
+
+This repository is a Cargo workspace for the CLI and Rust libraries, plus a few
+non-Cargo surfaces such as docs and UI packages.
+
+- Root `acton` crate (`src/`, root `Cargo.toml`): the CLI entrypoint and most
+  end-user commands.
+- Tolk language/compiler stack: `tolk-compiler`, `tolk-*`, `tree-sitter-*`, and the
+  matching `*-syntax` crates.
+- Native/runtime bridge: `ton-objs`, `ton-executor`, `ton-emulator`, and
+  `tvm-ffi`.
+- Services and tooling: `ton-api`, `ton-localnet`, `ton-indexer`, `ton-retrace`,
+  `ton-ls`, and `acton-debug`.
+- Repo tooling: `xtask` for release/schema/artifact maintenance workflows.
+- Non-Cargo surfaces: `docs/` (Next.js + Fumadocs), the Bun-built UI crates,
+  and template/package-manager assets under `src/commands/new/templates/`.
+
+The `tree-sitter-*` crates own grammar source of truth. The matching
+`*-syntax` crates are typed AST/parser wrappers around those grammars rather
+than independent grammar implementations.
+
 ## Command conventions
 
 - Unless stated otherwise, run commands from the repository root.
 - Prefer `just` targets over ad-hoc commands when both exist.
-- Some targets intentionally modify files (`just check-ui`, `just fmt-ui`,
-  `just test-update`).
+- Some targets intentionally modify files (`just check-ui`, `just fmt-ui`, `just test-update`).
 
 ## Prerequisites
 
-To build and test Acton locally, install:
+For the minimal local build/test flow, install:
 
 1. Rust toolchain (`rustup`, `cargo`)
 2. `just` (task runner)
    ```bash
-   cargo install just
+   cargo install just --version 1.49.0 --locked
    ```
 3. `cargo-nextest` (required Rust test runner for non-doc tests)
    ```bash
-   cargo install cargo-nextest
+   cargo install cargo-nextest --version 0.9.133 --locked
    ```
-4. `cargo-shear` (unused dependency linter)
-   ```bash
-   cargo install cargo-shear --locked
-   ```
-5. `typos-cli` (spell checker used by `just typos`)
-   ```bash
-   cargo install typos-cli --locked
-   ```
-6. Bun (required for UI packages)
+4. Bun (required for UI packages)
    ```bash
    curl -fsSL https://bun.sh/install | bash
    ```
-7. GitHub CLI (`gh`) (used by `just sync-artifacts`)
-   - macOS:
-     ```bash
-     brew install gh
-     ```
-   - Linux (Debian/Ubuntu):
-     ```bash
-     sudo apt install gh
-     ```
-8. `cargo-llvm-cov` (optional, for coverage)
-   ```bash
-   cargo install cargo-llvm-cov
-   rustup component add llvm-tools-preview
-   ```
+5. GitHub CLI (`gh`) (used by `just sync-artifacts`)
+
+- macOS:
+  ```bash
+  brew install gh
+  ```
+- Linux (Debian/Ubuntu):
+  ```bash
+  sudo apt install gh
+  ```
+
+Optional CLI tools:
+
+- `cargo-shear` (unused dependency linter for `just check-deps`, also needed by `just check` / `just check-ci`)
+  ```bash
+  cargo install cargo-shear --version 1.11.2 --locked
+  ```
+- `cargo-deny` (dependency policy checks for `just check`, also used by `just check-security`)
+  ```bash
+  cargo install cargo-deny --version 0.19.4 --locked
+  ```
+- `cargo-audit` (RustSec advisory checks for `just check-audit` / `just check-security`)
+  ```bash
+  cargo install cargo-audit --version 0.22.1 --locked
+  ```
+- `typos-cli` (spell checker for `just typos`, also needed by `just check` / `just check-ci`)
+  ```bash
+  cargo install typos-cli --version 1.45.1 --locked
+  ```
+- `cargo-llvm-cov` (optional, for coverage)
+  ```bash
+  cargo install cargo-llvm-cov --locked
+  rustup component add llvm-tools-preview
+  ```
 
 System dependencies:
 
@@ -91,27 +123,41 @@ For a fresh checkout, the shortest path to a working contributor setup is:
 ```bash
 just sync-artifacts
 just build-ui
-cargo build
+just build-dev
 ./target/debug/acton --help
 ```
 
 What this does:
 
 1. `just sync-artifacts` syncs `crates/ton-objs/artifacts_manifest.toml`
-   from the `trunk-objs` release and, on a fresh checkout, downloads the
-   matching prebuilt `objs/` archive for your current platform.
+   from the `release-objs` release and refreshes the matching prebuilt
+   `objs/` archive plus bundled stdlib assets for your current platform.
 2. `just build-ui` installs UI dependencies and builds the bundled UI assets.
-3. `cargo build` builds the CLI against the synced TON archives.
+3. `just build-dev` builds the debug CLI against the synced TON archives.
 4. `./target/debug/acton --help` confirms that the binary starts.
-
-If `objs/` already exists and the tracked manifest changed, `just
-sync-artifacts` may ask whether local `objs/` should be refreshed. Use
-`just sync-artifacts --force` to refresh without a prompt.
 
 ## Building from source
 
 Acton links static TON artifacts (`libemulator.a`, `libtolk.a`) from the
-`i582/ton` fork branch `pmakhnev/acton`.
+upstream `ton-blockchain/ton` repository branch `pmakhnev/acton`.
+
+### Artifact ownership and verification
+
+For normal contributor setup, treat the published `release-objs` assets as the
+source of truth.
+
+- `just sync-artifacts` / `cargo xtask sync-artifacts` owns
+  `crates/ton-objs/artifacts_manifest.toml`, `objs/`, and the bundled stdlib
+  assets under `crates/tolk-compiler/assets/`.
+- `crates/ton-objs/build.rs` verifies `libemulator.a` and `libtolk.a` against
+  the SHA-256 values recorded in that manifest.
+- Only use the manual rebuild path when you are intentionally updating the
+  native artifact set itself; otherwise prefer re-syncing from `release-objs`.
+
+The verification bypass `TON_OBJS_DISABLE_ARCHIVE_SHA_VERIFY` exists as an
+escape hatch, but it should stay unset for normal contributor builds. When set
+to anything other than `0` / `false`, build-time archive verification is
+disabled.
 
 ### Option 1: sync prebuilt `objs` with xtask
 
@@ -120,27 +166,35 @@ Use the built-in sync task instead of downloading release assets manually:
 ```bash
 just sync-artifacts
 just build-ui
-cargo build
+just build-dev
 ./target/debug/acton --help
 ```
 
 This command:
 
-- downloads the current `artifacts_manifest.toml` from the `trunk-objs` release;
-- updates `crates/ton-objs/artifacts_manifest.toml` when needed;
+- downloads the current `artifacts_manifest.toml` from the `release-objs` release;
+- overwrites `crates/ton-objs/artifacts_manifest.toml` with the released manifest;
 - downloads and unpacks the matching `ton-objs-<target>.tar.gz` archive into
-  `objs/` on a fresh checkout;
-- can also refresh local `objs/` later when the tracked manifest changes.
+  `objs/`;
+- downloads a temporary `ton-stdlib.tar.gz`, replaces
+  `crates/tolk-compiler/assets/tolk-stdlib/` and `crates/tolk-compiler/assets/fift-stdlib/` from its
+  `tolk-stdlib/` directory and `fift-stdlib/Asm.fif` plus
+  `fift-stdlib/Fift.fif`, then removes
+  the temporary archive.
 
-Use `just sync-artifacts --force` if you want to overwrite the local
-manifest and refresh `objs/` without confirmation.
+After syncing, validate with:
+
+```bash
+just build-dev
+./target/debug/acton doctor
+```
 
 ### Option 2: build TON artifacts manually
 
 Clone the TON repository from the Acton repo root:
 
 ```bash
-git clone --branch pmakhnev/acton https://github.com/i582/ton.git ton-repo --recurse-submodules
+git clone --branch pmakhnev/acton https://github.com/ton-blockchain/ton.git ton-repo --recurse-submodules
 ```
 
 Build the static artifacts with the script for your platform.
@@ -167,13 +221,13 @@ Then copy the generated archives into Acton and build the project:
 mkdir -p objs
 cp ton-repo/artifacts/libemulator.a objs/
 cp ton-repo/artifacts/libtolk.a objs/
-# edit crates/ton-objs/artifacts_manifest.toml:
+# only when intentionally updating the native artifact set, edit crates/ton-objs/artifacts_manifest.toml:
 # - increment `artifact_set_revision`
 # - update `sha256.libemulator` / `sha256.libtolk`
 
 just build-ui
 
-cargo build
+just build-dev
 ./target/debug/acton --help
 ```
 
@@ -224,8 +278,9 @@ Notes:
 
 - `just test` uses `cargo nextest run` for Rust test targets and
   `cargo test --workspace --doc` for doctests.
-- `retrace` tests stay inside the shared workspace run, but are serialized via
-  a nextest test group because they hit rate-limited remote APIs.
+- `ton-retrace` tests stay inside the shared workspace run, but the repo's nextest
+  config assigns `package(ton-retrace)` to the `retrace-serial` group, so those
+  tests still run one at a time.
 - CI test behavior is slightly different: the `ci` nextest profile and
   `only_ci` feature are enabled in CI.
   For parity, run:
@@ -259,6 +314,26 @@ Run it until no further changes are produced, then stage updated files.
 `just typos` checks the repository from the root using `_typos.toml`.
 It skips `docs/` and selected generated or imported trees with high false-positive rates.
 
+## Security checks
+
+Run repository-wide dependency and supply-chain audits with:
+
+```bash
+just check-security
+```
+
+`just check-security` stops on the first failure and currently checks:
+
+- Rust dependencies with `cargo deny check`
+- RustSec advisories for `Cargo.lock` with `cargo audit`
+- root/UI workspace dependencies with `bun audit`
+- `docs/`, `crates/tree-sitter-*`, and `crates/ton-ls/editors/code` with
+  `yarn npm audit`
+- `src/commands/new/templates/counter-app` with `npm audit`
+
+Run this check when your PR changes lockfiles, dependency manifests, or package
+versions anywhere in the repository.
+
 ## Coverage
 
 Generate LCOV:
@@ -283,21 +358,20 @@ just build-ui
 
 ## Documentation workflows
 
-Documentation site (Next.js in `docs/`, package manager: Yarn via Corepack):
+Documentation site (Next.js in `docs/`, package manager: Bun):
 
 ```bash
-corepack enable
 cd docs
-yarn install --immutable --check-cache --check-resolutions
-yarn dev
+bun install
+bun run dev
 ```
 
 Build docs:
 
 ```bash
-corepack enable
 cd docs
-yarn build
+bun ci
+bun run build
 ```
 
 Regenerate auto-generated MDX documentation from Acton sources:
@@ -310,30 +384,81 @@ cargo run --bin acton -- docgen
 cargo run --bin acton -- docgen --check
 ```
 
-This updates generated docs under:
+Do not hand-edit generated outputs. Edit the source-of-truth inputs instead,
+then rerun `acton docgen`.
 
+Source-of-truth map:
+
+- `src/doc/man/*.md` -> command reference docs under `docs/content/docs/commands`,
+  terminal help text under `src/doc/man/generated_txt`, and installed manpages
+  under `src/etc/man`
+- `lib/` -> `docs/content/docs/standard_library`
+- `crates/tolk-compiler/assets/tolk-stdlib/` -> `docs/content/docs/tolk_standard_library`
+- linter rule metadata in `crates/tolk-linter/` and related macros ->
+  `docs/content/docs/rules`
+
+This updates generated trees under:
+
+- `docs/content/docs/commands`
 - `docs/content/docs/standard_library`
 - `docs/content/docs/tolk_standard_library`
-- `docs/content/docs/linting/rules`
+- `docs/content/docs/rules`
+- `src/etc/man`
+- `src/doc/man/generated_txt`
+
+`acton docgen --check` renders into a temporary output tree and fails if any
+tracked generated file is stale.
 
 If your PR changes any docgen inputs, running `acton docgen` and committing
 generated documentation changes is required. This includes:
 
 - `lib/`
-- `crates/tolkc/assets/tolk-stdlib/`
+- `crates/tolk-compiler/assets/tolk-stdlib/`
 - linter rule metadata and mappings (for example `crates/tolk-linter/`,
   `crates/tolk-macros/`)
+
+For docs-site-only pages under `docs/content/docs/` that are not generated,
+edit them directly and keep nearby `meta.json` in sync.
 
 After doc updates (manual or generated), validate docs build:
 
 ```bash
-corepack enable
 cd docs
-yarn install --immutable --check-cache --check-resolutions
-yarn build
+bun ci
+bun run build
 ```
 
+## Schema workflow
+
+`crates/acton-config/schemas/acton.schema.json` is generated, not
+hand-maintained.
+
+Useful commands:
+
+```bash
+cargo xtask schema
+cargo xtask schema --check
+just check-schema
+```
+
+When to rerun schema generation:
+
+- any change to `ActonConfig` or related config structs
+- schema-shaping serde/schemars changes
+- docs or editor work that depends on new config fields
+
+Current consumers include:
+
+- repo editor settings such as `.vscode/settings.json`
+- `ton-ls`, which embeds the schema for TOML hover/completion help
+
+A stale schema usually shows up as `just check-schema` failure, missing hover
+docs, or editor completion that does not know about new config fields.
+
 ## Tree-sitter workflows
+
+Grammar source of truth lives in `crates/tree-sitter-*`. The matching
+`crates/*-syntax` crates wrap those grammars with typed AST helpers.
 
 If your PR changes any `crates/tree-sitter-*` grammar/parser artifacts:
 
@@ -344,27 +469,49 @@ just test-tree-sitter-all
 For quick Tolk-only iteration:
 
 ```bash
-just test-tree-sitter
+just test-tree-sitter-tolk
 ```
 
 When grammar snapshots need refresh:
 
 ```bash
-just update-test-tree-sitter
+just update-test-tree-sitter-tolk
 ```
+
+## `xtask` map
+
+`cargo xtask` contains both contributor-facing and maintainer-only workflows.
+
+Common contributor-facing tasks:
+
+- `cargo xtask sync-artifacts`
+- `cargo xtask schema`
+- `cargo xtask schema --check`
+
+Mostly maintainer-facing tasks:
+
+- `cargo xtask release`
+- `cargo xtask retag`
+- `cargo xtask dist ...`
+- `cargo xtask github-cleanup`
+- `cargo xtask ubicloud-cleanup`
+
+`RELEASING.md` documents numbered release flows in detail. The cleanup tasks are
+cache-pruning helpers and should not be used casually.
 
 ## Change-based checklist
 
 Use this as a quick local matrix before pushing:
 
-| Change type                                                                                        | Required local checks                                                                                      |
-|----------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
-| Rust-only code                                                                                     | `just check`                                                                                               |
-| UI code (`crates/acton-*-ui`, root `package.json`)                                                 | `just check` + `just build-ui` + `just check-ui`                                                           |
-| Standard library / docgen inputs (`lib/`, `crates/tolkc/assets/tolk-stdlib`, linter rule metadata) | `just check` + `acton docgen` and commit generated docs                                                    |
-| Docs site content/config (`docs/`)                                                                 | `corepack enable && cd docs && yarn install --immutable --check-cache --check-resolutions && yarn build`   |
-| Tree-sitter grammar (`crates/tree-sitter-*`)                                                       | `just check` + `just test-tree-sitter-all` (and `just update-test-tree-sitter` when Tolk snapshots change) |
-| Release preparation (maintainers)                                                                  | Follow [RELEASING.md](RELEASING.md)                                                                        |
+| Change type                                                                                                               | Required local checks                                                                                     |
+|---------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| Rust-only code                                                                                                            | `just check`                                                                                              |
+| UI code (`crates/acton-*-ui`, root `package.json`)                                                                        | `just check` + `just build-ui` + `just check-ui`                                                          |
+| Dependency or lockfile changes (`Cargo.lock`, `bun.lock`, `docs/`, tree-sitter/code extension/template package manifests) | `just check-security`                                                                                     |
+| Standard library / docgen inputs (`lib/`, `crates/tolk-compiler/assets/tolk-stdlib`, linter rule metadata)                | `just check` + `acton docgen` and  commit generated docs                                                  |
+| Docs site content/config (`docs/`)                                                                                        | `cd docs && bun ci && bun run build`                                                                       |
+| Tree-sitter grammar (`crates/tree-sitter-*`)                                                                              | `just check` +`just test-tree-sitter-all` (and `just update-test-tree-sitter` when Tolk snapshots change) |
+| Release preparation (maintainers)                                                                                         | Follow [RELEASING.md](RELEASING.md)                                                                       |
 
 ## PR requirements
 
@@ -374,10 +521,11 @@ Every pull request must pass all checks from:
 just check
 ```
 
-This command runs Rust formatting, docgen, dependency, lint, schema, and test checks.
+This command runs Rust formatting, docgen, dependency, dependency-policy, lint, schema, and test checks.
+Install `cargo-shear`, `cargo-deny`, and `typos-cli` if you want to run it locally.
 `typos` uses `_typos.toml` excludes for `docs/` and selected generated or imported trees.
 
-If your PR touches UI code (`crates/acton-test-ui`, `crates/acton-litenode-ui`,
+If your PR touches UI code (`crates/acton-test-ui`, `crates/acton-localnet-ui`,
 `crates/acton-shared-ui`, or root UI config in `package.json`), you must also
 run:
 
@@ -414,7 +562,7 @@ Rules:
 
 - Use one of: `feat`, `fix`, `chore`, `refactor` (and `docs`/`test`/`ci` when
   appropriate).
-- Keep scope specific (`check`, `litenode`, `stdlib`, `wallet`, `test-runner`,
+- Keep scope specific (`check`, `localnet`, `stdlib`, `wallet`, `test-runner`,
   `docs`, etc.).
 - Use present tense in the subject (for example: `add`, `fix`, `update`, not
   `added`, `fixed`, `updated`).
@@ -425,9 +573,13 @@ Rules:
 
 ## Useful environment variables
 
-- `TONCENTER_API_KEY`: API key used by commands that query blockchain data.
+- `TONCENTER_MAINNET_API_KEY`: API key for TonCenter mainnet requests.
+- `TONCENTER_TESTNET_API_KEY`: API key for TonCenter testnet requests.
 - `DISABLE_TMP_DIR_CLEANUP_IN_TESTS=1`: preserve temp test directories.
 - `ACTON_LOG_DIR`: custom directory for Acton debug logs.
+
+In generated projects, `.env` is usually the simplest place to set the
+TonCenter keys because Acton loads that file automatically.
 
 ## AI Policy
 

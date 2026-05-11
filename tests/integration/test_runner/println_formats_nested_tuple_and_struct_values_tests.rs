@@ -56,7 +56,7 @@ fn println_formats_nested_tuple_and_struct_values() {
     run_success_case(
         "ar-stdlib-println-nested-tuple-and-struct-values",
         r#"
-get fun `test-ar-stdlib-println-nested-tuple-and-struct-values`() {
+get fun `test ar stdlib println nested tuple and struct values`() {
     val frame = Frame {
         name: "root",
         point: Point { x: 7, y: 9 },
@@ -81,7 +81,7 @@ fn println1_formats_nested_tuple_and_struct_values_via_placeholder_pipeline() {
     run_success_case(
         "ar-stdlib-println1-nested-tuple-and-struct-values",
         r#"
-get fun `test-ar-stdlib-println1-nested-tuple-and-struct-values`() {
+get fun `test ar stdlib println1 nested tuple and struct values`() {
     val frame = Frame {
         name: "root",
         point: Point { x: 7, y: 9 },
@@ -94,9 +94,44 @@ get fun `test-ar-stdlib-println1-nested-tuple-and-struct-values`() {
         ([29, 31], Point { x: 37, y: 41 }),
     );
 
-    println1("nested={}", nested);
+    println("nested={}", nested);
 }
 "#,
         "integration/snapshots/test-runner/println_formats_nested_tuple_and_struct_values/println1_formats_nested_tuple_and_struct_values_via_placeholder_pipeline.stdout.txt",
+    );
+}
+
+#[test]
+fn println_formats_struct_fields_with_abi_client_type() {
+    run_success_case(
+        "ar-stdlib-println-abi-client-type-fields",
+        r#"
+struct (0b0) PrintablePayloadInline {
+    value: RemainingBitsAndRefs
+}
+
+struct (0b1) PrintablePayloadInRef {
+    value: Cell<RemainingBitsAndRefs>
+}
+
+type PrintablePayload = PrintablePayloadInline | PrintablePayloadInRef
+
+struct ClientTypedPayloadHolder {
+    @abi.clientType(PrintablePayload)
+    payload: RemainingBitsAndRefs
+}
+
+get fun `test ar stdlib println abi client type fields`() {
+    val payload = beginCell()
+        .storeUint(0xCAFE, 16)
+        .endCell()
+        .beginParse() as RemainingBitsAndRefs;
+    val holder = ClientTypedPayloadHolder { payload };
+
+    println(holder);
+    println("holder={}", holder);
+}
+"#,
+        "integration/snapshots/test-runner/println_formats_nested_tuple_and_struct_values/println_formats_struct_fields_with_abi_client_type.stdout.txt",
     );
 }

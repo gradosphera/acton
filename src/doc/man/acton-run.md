@@ -1,14 +1,14 @@
 # acton-run(1)
 
-## NAME
+## Name
 
 acton-run --- Run a named script from `Acton.toml`
 
-## SYNOPSIS
+## Synopsis
 
 `acton run` [_options_] _script_ [_args_...]
 
-## DESCRIPTION
+## Description
 
 Run a command from the `[scripts]` section of `Acton.toml`.
 
@@ -16,7 +16,7 @@ This is similar to `npm run`: it lets you define short aliases for common
 commands, multi-step workflows, or shell snippets and then execute them through
 Acton.
 
-## OPTIONS
+## Options
 
 ### Run Options
 
@@ -40,18 +40,18 @@ Arguments appended to the configured script command.
 
 {{> options-project-resolved }}
 
-## CONFIGURATION
+## Configuration
 
 Scripts are defined in `Acton.toml`:
 
 ```toml
 [scripts]
-deploy = "acton script scripts/deploy.tolk --broadcast"
+deploy = "acton script scripts/deploy.tolk --net testnet"
 test-unit = "acton test tests/unit"
 custom-task = "echo 'Running custom task...'"
 ```
 
-## BEHAVIOR
+## Behavior
 
 - extra arguments passed after the script name are appended to the configured
   command
@@ -63,17 +63,19 @@ custom-task = "echo 'Running custom task...'"
 - stdin, stdout, stderr, and environment variables are inherited
 - arguments after `_script_` are forwarded even when they start with `-`; use
   `--` only as an optional visual separator if you prefer
+- forwarded arguments are appended literally, so avoid passing the same
+  single-use flag twice if the configured command already includes it
 - Acton does not guard against recursive script aliases; avoid scripts that
   call themselves through `acton run`
 
-## EXIT STATUS
+## Exit Status
 
 - `0`: The configured script finished successfully.
 - `1`: The script was missing, the shell could not start it, or the nested
   command exited non-zero. The nested command's exit code is reported in the
   error message.
 
-## EXAMPLES
+## Examples
 
 1. Run a configured script:
 
@@ -84,7 +86,7 @@ custom-task = "echo 'Running custom task...'"
 2. Append extra arguments:
 
    ```bash
-   acton run deploy --net mainnet
+   acton run deploy --explorer tonscan
    ```
 
 3. Run a custom shell task:
@@ -96,10 +98,10 @@ custom-task = "echo 'Running custom task...'"
 4. Use `--` as an explicit separator if you prefer:
 
    ```bash
-   acton run deploy -- --net testnet
+   acton run deploy -- --show-bodies
    ```
 
-## SEE ALSO
+## See Also
 
 - `acton help script`
 - [Run command guide](https://ton-blockchain.github.io/acton/docs/commands/run)

@@ -1,0 +1,6 @@
+   Compiling contracts
+   Compiling JettonWallet
+    Finished in [TIME]
+   Compiling JettonMinter
+    Finished in [TIME]
+    Finished in [TIME]

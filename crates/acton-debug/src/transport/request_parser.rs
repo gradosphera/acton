@@ -71,7 +71,7 @@ pub(crate) fn poll_request<R: BufRead>(
 
 /// Normalize requests.
 ///
-/// JetBrains sends custom empty `configurationDone`.
+/// `JetBrains` sends custom empty `configurationDone`.
 fn normalize_request_value(value: &mut Value) {
     if value.get("type").and_then(Value::as_str) != Some("request") {
         return;
@@ -83,7 +83,7 @@ fn normalize_request_value(value: &mut Value) {
     let has_empty_arguments = value
         .get("arguments")
         .and_then(Value::as_object)
-        .is_some_and(|arguments| arguments.is_empty());
+        .is_some_and(serde_json::Map::is_empty);
     if !has_empty_arguments {
         return;
     }

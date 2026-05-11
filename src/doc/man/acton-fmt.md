@@ -1,14 +1,14 @@
 # acton-fmt(1)
 
-## NAME
+## Name
 
 acton-fmt --- Format Tolk source files
 
-## SYNOPSIS
+## Synopsis
 
 `acton fmt` [_options_] [_paths_...]
 
-## DESCRIPTION
+## Description
 
 Format `.tolk` files using the built-in Tolk formatter.
 
@@ -16,7 +16,7 @@ The command can rewrite files in place or run in `--check` mode for CI and
 pre-commit validation. If no `_paths_` are provided, Acton scans the resolved
 project root recursively.
 
-## OPTIONS
+## Options
 
 ### Format Options
 
@@ -34,6 +34,15 @@ Check formatting without rewriting files.
 In this mode Acton prints diffs for mismatches and exits non-zero.
 {{/option}}
 
+{{#option "`--range` _startLine:startChar-endLine:endChar_" }}
+Format only the specified zero-based source range.
+
+This is intended for editor integrations that format a selected region. Lines
+are zero-based, and `startChar` / `endChar` are zero-based UTF-8 byte columns.
+Editor integrations that expose Unicode scalar or UTF-16 positions need to
+convert them before invoking Acton.
+{{/option}}
+
 {{/options}}
 
 ### Display Options
@@ -44,7 +53,7 @@ In this mode Acton prints diffs for mismatches and exits non-zero.
 
 {{> options-project-resolved }}
 
-## BEHAVIOR
+## Behavior
 
 - Only `.tolk` files are formatted
 - Directory traversal is recursive
@@ -56,8 +65,11 @@ In this mode Acton prints diffs for mismatches and exits non-zero.
 - Syntax errors are reported as diagnostics and cause a non-zero exit
 - `--check` prints a unified diff with three lines of context for each changed
   file
+- `--range` keeps nodes outside the specified range unchanged and disables
+  import reordering for that invocation
+- `--range` can only be used with one explicit `.tolk` file path
 
-## CONFIGURATION
+## Configuration
 
 `acton fmt` reads defaults from `[fmt]` in `Acton.toml`:
 
@@ -74,7 +86,7 @@ Useful fields include:
 - `ignore` for additional exclude globs
 - `separate-import-groups` for blank lines between import groups
 
-## IMPORT SORTING
+## Import Sorting
 
 Imports are sorted by group in this order:
 
@@ -87,14 +99,14 @@ Imports are sorted by group in this order:
 
 Within each group, imports are sorted lexicographically.
 
-## EXIT STATUS
+## Exit Status
 
 - `0`: All requested files were formatted successfully, or `--check` found no
   formatting differences.
 - `1`: Files needed formatting in `--check` mode, syntax errors prevented
   formatting, or path resolution failed.
 
-## EXAMPLES
+## Examples
 
 1. Format all Tolk files in the project:
 
@@ -126,7 +138,13 @@ Within each group, imports are sorted lexicographically.
    acton fmt contracts/main.tolk --check
    ```
 
-## SEE ALSO
+6. Format only a selected source range:
+
+   ```bash
+   acton fmt contracts/main.tolk --range 2:4-5:1
+   ```
+
+## See Also
 
 - `acton help check`
 - [Formatting guide](https://ton-blockchain.github.io/acton/docs/commands/fmt)

@@ -13,8 +13,9 @@ use tolk_syntax::{GlobalVar, HasName};
 /// clearer and less error-prone.
 ///
 /// ### Example
-/// ```tolk
+/// ```tolk twoslash
 /// global counter: int
+/// //     ^^^^^^^ E022: global variable declarations are not allowed
 /// ```
 ///
 /// Use instead:

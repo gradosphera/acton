@@ -14,24 +14,28 @@ use std::time::Duration;
 use std::time::Instant;
 use std::{fs, thread};
 use toml::Value as TomlValue;
+use toncenter_keys::{TONCENTER_MAINNET_API_KEY_ENV, TONCENTER_TESTNET_API_KEY_ENV};
 
 const LIB_HASH: &str = "b993c68c596425f05d1bc492d7c03e2979ab669901ed5a57e35e6dd4d6089d27";
-const LITENODE_LIBRARY_CONTRACT: &str = r"
+const LOCALNET_LIBRARY_CONTRACT: &str = r"
 fun onInternalMessage(_: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
 ";
 
-const LITENODE_DEPLOYER_WALLET_CONFIG: &str = r#"[wallets.deployer]
+const LOCALNET_DEPLOYER_WALLET_CONFIG: &str = r#"[wallets.deployer]
 kind = "v4r2"
 workchain = 0
 keys = { mnemonic = "cupboard match uphold miracle fog balance unknown region share hand trophy million toy narrow ability exchange first toast fresh maid report cram strong later" }
 "#;
 const TEST_LIBRARY_ACCOUNT: &str = "kQBBSo2ccLuHuGiTn1z9Lei17LfBVOPewQmFR8pA2dAv2ixT";
+const TEST_TONCENTER_MAINNET_V2_URL_ENV: &str = "ACTON_TEST_TONCENTER_MAINNET_V2_URL";
+const TEST_TONCENTER_TESTNET_V2_URL_ENV: &str = "ACTON_TEST_TONCENTER_TESTNET_V2_URL";
 
 // We don't usually want to store keys this way, but without keys it's almost
 // impossible to use API calls :(
 fn toncenter_api_key() -> &'static str {
-    option_env!("TONCENTER_API_KEY")
+    option_env!("TONCENTER_TESTNET_API_KEY")
+        .or(option_env!("TONCENTER_MAINNET_API_KEY"))
         .unwrap_or("49efa980ccdcd018fd09d387e63537afd9db4dbb8509d69e7bc2303ca2b2c860")
 }
 
@@ -49,7 +53,9 @@ fn test_library_fetch_basic() {
         .with_api_key(toncenter_api_key())
         .run()
         .success()
-        .assert_snapshot_matches("integration/snapshots/test_library_fetch_basic.stdio.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/library/test_library_fetch_basic.stdio.txt",
+        );
 }
 
 #[test]
@@ -67,7 +73,9 @@ fn test_library_fetch_json() {
         .with_json()
         .run()
         .success()
-        .assert_snapshot_matches("integration/snapshots/test_library_fetch_json.stdout.json.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/library/test_library_fetch_json.stdout.json.txt",
+        );
 }
 
 #[test]
@@ -86,7 +94,7 @@ fn test_library_fetch_fail_json() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_library_fetch_fail_json.stdout.json.txt",
+            "integration/snapshots/library/test_library_fetch_fail_json.stdout.json.txt",
         );
 }
 
@@ -105,7 +113,7 @@ fn test_library_fetch_unknown() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_fetch_unknown.stderr.txt",
+            "integration/snapshots/library/test_library_fetch_unknown.stderr.txt",
         );
 }
 
@@ -125,7 +133,7 @@ fn test_library_fetch_unknown_json() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_library_fetch_unknown.stdout.json.txt",
+            "integration/snapshots/library/test_library_fetch_unknown.stdout.json.txt",
         );
 }
 
@@ -145,7 +153,9 @@ fn test_library_fetch_disasm() {
         .run()
         .success()
         .assert_contains("Fetched successfully")
-        .assert_snapshot_matches("integration/snapshots/test_library_fetch_basic_disasm.stdio.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/library/test_library_fetch_basic_disasm.stdio.txt",
+        );
 }
 
 #[test]
@@ -173,7 +183,7 @@ fn test_library_fetch_output() {
 
     assertion().eq(
         normalize_output(content.as_str(), project.path()),
-        snapbox::file!("snapshots/test_library_fetch_basic.lib.txt"),
+        snapbox::file!("snapshots/library/test_library_fetch_basic.lib.txt"),
     );
 }
 
@@ -227,7 +237,7 @@ fn test_library_fetch_disasm_output() {
 
     assertion().eq(
         normalize_output(content.as_str(), project.path()),
-        snapbox::file!("snapshots/test_library_fetch_basic.lib.tasm.txt"),
+        snapbox::file!("snapshots/library/test_library_fetch_basic.lib.tasm.txt"),
     );
 }
 
@@ -245,7 +255,7 @@ fn test_library_fetch_invalid_hash_format() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_fetch_invalid_hash_format.stderr.txt",
+            "integration/snapshots/library/test_library_fetch_invalid_hash_format.stderr.txt",
         );
 }
 
@@ -261,7 +271,7 @@ fn test_library_fetch_invalid_network() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_fetch_invalid_network.stderr.txt",
+            "integration/snapshots/library/test_library_fetch_invalid_network.stderr.txt",
         );
 }
 
@@ -278,7 +288,7 @@ fn test_library_publish_invalid_network() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_publish_invalid_network.stderr.txt",
+            "integration/snapshots/library/test_library_publish_invalid_network.stderr.txt",
         );
 }
 
@@ -296,7 +306,24 @@ fn test_library_publish_invalid_code() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_publish_invalid_code.stderr.txt",
+            "integration/snapshots/library/test_library_publish_invalid_code.stderr.txt",
+        );
+}
+
+#[test]
+fn test_library_publish_tonconnect_rejects_localnet() {
+    let project = ProjectBuilder::new("library-publish-tonconnect-localnet").build();
+
+    project
+        .acton()
+        .library()
+        .publish()
+        .arg("--tonconnect")
+        .with_net("localnet")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/library/test_library_publish_tonconnect_rejects_localnet.stderr.txt",
         );
 }
 
@@ -320,7 +347,7 @@ version = "0.1.0"
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_publish_contract_not_found.stderr.txt",
+            "integration/snapshots/library/test_library_publish_contract_not_found.stderr.txt",
         );
 }
 
@@ -340,7 +367,7 @@ fn test_library_publish_compilation_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_publish_compilation_error.stderr.txt",
+            "integration/snapshots/library/test_library_publish_compilation_error.stderr.txt",
         );
 }
 
@@ -361,7 +388,7 @@ fn test_library_publish_invalid_duration() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_publish_invalid_duration.stderr.txt",
+            "integration/snapshots/library/test_library_publish_invalid_duration.stderr.txt",
         );
 }
 
@@ -378,7 +405,7 @@ description = ""
 version = "0.1.0"
 
 [contracts.simple]
-name = "Simple"
+display-name = "Simple"
 src = "contracts/simple.tolk"
 "#;
     fs::write(project.path().join("Acton.toml"), toml_content).expect("Write Acton.toml");
@@ -398,7 +425,7 @@ src = "contracts/simple.tolk"
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_publish_wallet_not_found.stderr.txt",
+            "integration/snapshots/library/test_library_publish_wallet_not_found.stderr.txt",
         );
 }
 
@@ -422,7 +449,7 @@ fn test_library_publish_no_wallets() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_publish_no_wallets.stderr.txt",
+            "integration/snapshots/library/test_library_publish_no_wallets.stderr.txt",
         );
 }
 
@@ -457,7 +484,7 @@ address-testnet = "kQBBSo2ccLuHuGiTn1z9Lei17LfBVOPewQmFR8pA2dAv2ixT"
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_publish_unknown_wallet.stderr.txt",
+            "integration/snapshots/library/test_library_publish_unknown_wallet.stderr.txt",
         );
 }
 
@@ -488,7 +515,9 @@ cells = 4
         .arg("my-lib")
         .run()
         .success()
-        .assert_snapshot_matches("integration/snapshots/test_library_info_basic.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/library/test_library_info_basic.stdout.txt",
+        );
 }
 
 #[test]
@@ -592,7 +621,7 @@ description = ""
 version = "0.1.0"
 
 [contracts.simple]
-name = "Simple"
+display-name = "Simple"
 src = "contracts/simple.fif"
 "#;
     fs::write(project.path().join("Acton.toml"), toml_content).expect("Write Acton.toml");
@@ -609,7 +638,7 @@ src = "contracts/simple.fif"
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_publish_rejects_non_tolk_contract_source.stderr.txt",
+            "integration/snapshots/library/test_library_publish_rejects_non_tolk_contract_source.stderr.txt",
         );
 }
 
@@ -627,7 +656,7 @@ fn test_library_topup_no_libraries() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_topup_no_libraries.stderr.txt",
+            "integration/snapshots/library/test_library_topup_no_libraries.stderr.txt",
         );
 }
 
@@ -659,7 +688,40 @@ cells = 1
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_topup_not_found.stderr.txt",
+            "integration/snapshots/library/test_library_topup_not_found.stderr.txt",
+        );
+}
+
+#[test]
+fn test_library_topup_tonconnect_rejects_localnet() {
+    let project = ProjectBuilder::new("library-topup-tonconnect-localnet").build();
+    let home_temp = tempfile::TempDir::new().unwrap();
+
+    let libraries_toml = r#"[libraries.my-lib]
+name = "MyLib"
+hash = "..."
+code = "..."
+account = "EQD..."
+duration = 100
+network = "localnet"
+timestamp = "2026-01-05T12:00:00Z"
+last_topup_timestamp = "2026-01-05T12:00:00Z"
+bits = 10
+cells = 1
+"#;
+    fs::write(project.path().join("libraries.toml"), libraries_toml).expect("Write libraries.toml");
+
+    project
+        .acton()
+        .env("HOME", home_temp.path().to_str().unwrap())
+        .library()
+        .arg("topup")
+        .arg("my-lib")
+        .arg("--tonconnect")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/library/test_library_topup_tonconnect_rejects_localnet.stderr.txt",
         );
 }
 
@@ -703,7 +765,7 @@ address-testnet = "kQBBSo2ccLuHuGiTn1z9Lei17LfBVOPewQmFR8pA2dAv2ixT"
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_topup_invalid_duration.stderr.txt",
+            "integration/snapshots/library/test_library_topup_invalid_duration.stderr.txt",
         );
 }
 
@@ -748,7 +810,7 @@ address-testnet = "kQBBSo2ccLuHuGiTn1z9Lei17LfBVOPewQmFR8pA2dAv2ixT"
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_library_topup_invalid_amount.stderr.txt",
+            "integration/snapshots/library/test_library_topup_invalid_amount.stderr.txt",
         );
 }
 
@@ -842,17 +904,17 @@ address-testnet = "kQBBSo2ccLuHuGiTn1z9Lei17LfBVOPewQmFR8pA2dAv2ixT"
     session.expect(Eof);
     session.assert_file_snapshot_matches(
         "libraries.toml",
-        "integration/snapshots/test_library_topup_interactive_cancel.libraries.toml",
+        "integration/snapshots/library/test_library_topup_interactive_cancel.libraries.toml",
     );
 }
 
 #[test]
-fn test_library_publish_happy_path_litenode_saves_local_metadata() {
-    let project = ProjectBuilder::new("library-publish-litenode-local")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+fn test_library_publish_happy_path_localnet_saves_local_metadata() {
+    let project = ProjectBuilder::new("library-publish-localnet-local")
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_deployer_wallets(project.path());
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     let output = project
         .acton()
@@ -869,8 +931,6 @@ fn test_library_publish_happy_path_litenode_saves_local_metadata() {
         .arg("5")
         .arg("--yes")
         .arg("--local")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success();
 
@@ -898,13 +958,13 @@ fn test_library_publish_happy_path_litenode_saves_local_metadata() {
 }
 
 #[test]
-fn test_library_publish_happy_path_litenode_saves_global_metadata_with_flag() {
-    let project = ProjectBuilder::new("library-publish-litenode-global")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+fn test_library_publish_happy_path_localnet_saves_global_metadata_with_flag() {
+    let project = ProjectBuilder::new("library-publish-localnet-global")
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_deployer_wallets(project.path());
     let home_temp = tempfile::TempDir::new().expect("failed to create home temp dir");
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     project
         .acton()
@@ -925,8 +985,6 @@ fn test_library_publish_happy_path_litenode_saves_global_metadata_with_flag() {
         .arg("5")
         .arg("--yes")
         .arg("--global")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success()
         .assert_contains("Library info saved");
@@ -957,15 +1015,15 @@ fn test_library_publish_happy_path_litenode_saves_global_metadata_with_flag() {
 
 #[cfg(unix)]
 #[test]
-fn test_library_publish_interactive_save_location_defaults_to_local_litenode() {
+fn test_library_publish_interactive_save_location_defaults_to_local_localnet() {
     use expectrl::Eof;
 
-    let project = ProjectBuilder::new("library-publish-litenode-interactive-save")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+    let project = ProjectBuilder::new("library-publish-localnet-interactive-save")
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_deployer_wallets(project.path());
     let home_temp = tempfile::TempDir::new().expect("failed to create home temp dir");
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     let mut session = project
         .acton()
@@ -985,8 +1043,6 @@ fn test_library_publish_interactive_save_location_defaults_to_local_litenode() {
         .arg("--amount")
         .arg("5")
         .arg("--yes")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .spawn_pty()
         .set_expect_timeout(Some(Duration::from_secs(30)));
 
@@ -1014,12 +1070,12 @@ fn test_library_publish_interactive_save_location_defaults_to_local_litenode() {
 }
 
 #[test]
-fn test_library_topup_happy_path_litenode_updates_last_topup_timestamp() {
-    let project = ProjectBuilder::new("library-topup-litenode-happy-path")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+fn test_library_topup_happy_path_localnet_updates_last_topup_timestamp() {
+    let project = ProjectBuilder::new("library-topup-localnet-happy-path")
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_deployer_wallets(project.path());
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     project
         .acton()
@@ -1036,8 +1092,6 @@ fn test_library_topup_happy_path_litenode_updates_last_topup_timestamp() {
         .arg("5")
         .arg("--yes")
         .arg("--local")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success();
 
@@ -1058,8 +1112,6 @@ fn test_library_topup_happy_path_litenode_updates_last_topup_timestamp() {
         .arg("--amount")
         .arg("1")
         .arg("--yes")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success()
         .assert_contains("Top-up transaction sent successfully");
@@ -1074,12 +1126,12 @@ fn test_library_topup_happy_path_litenode_updates_last_topup_timestamp() {
 }
 
 #[test]
-fn test_library_info_shows_balance_and_runway_on_litenode() {
-    let project = ProjectBuilder::new("library-info-litenode-balance-runway")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+fn test_library_info_shows_balance_and_runway_on_localnet() {
+    let project = ProjectBuilder::new("library-info-localnet-balance-runway")
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_deployer_wallets(project.path());
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     project
         .acton()
@@ -1096,8 +1148,6 @@ fn test_library_info_shows_balance_and_runway_on_litenode() {
         .arg("5")
         .arg("--yes")
         .arg("--local")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success();
 
@@ -1111,8 +1161,6 @@ fn test_library_info_shows_balance_and_runway_on_litenode() {
         .library()
         .arg("info")
         .arg(&library_id)
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success()
         .assert_contains("Library:")
@@ -1123,12 +1171,12 @@ fn test_library_info_shows_balance_and_runway_on_litenode() {
 }
 
 #[test]
-fn test_library_info_shows_runway_warning_when_exhausted_on_litenode() {
-    let project = ProjectBuilder::new("library-info-litenode-runway-warning")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+fn test_library_info_shows_runway_warning_when_exhausted_on_localnet() {
+    let project = ProjectBuilder::new("library-info-localnet-runway-warning")
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_deployer_wallets(project.path());
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     project
         .acton()
@@ -1145,8 +1193,6 @@ fn test_library_info_shows_runway_warning_when_exhausted_on_litenode() {
         .arg("5")
         .arg("--yes")
         .arg("--local")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success();
 
@@ -1161,8 +1207,6 @@ fn test_library_info_shows_runway_warning_when_exhausted_on_litenode() {
         .library()
         .arg("info")
         .arg(&library_id)
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success()
         .assert_contains("Storage runway is exhausted");
@@ -1171,12 +1215,12 @@ fn test_library_info_shows_runway_warning_when_exhausted_on_litenode() {
 }
 
 #[test]
-fn test_library_fetch_json_with_output_behavior_is_stable_on_litenode() {
-    let project = ProjectBuilder::new("library-fetch-json-output-litenode")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+fn test_library_fetch_json_with_output_behavior_is_stable_on_localnet() {
+    let project = ProjectBuilder::new("library-fetch-json-output-localnet")
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_deployer_wallets(project.path());
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     project
         .acton()
@@ -1193,8 +1237,6 @@ fn test_library_fetch_json_with_output_behavior_is_stable_on_litenode() {
         .arg("5")
         .arg("--yes")
         .arg("--local")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success();
 
@@ -1212,8 +1254,6 @@ fn test_library_fetch_json_with_output_behavior_is_stable_on_litenode() {
         .arg("--json")
         .arg("--output")
         .arg(output_file)
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success();
 
@@ -1235,12 +1275,12 @@ fn test_library_fetch_json_with_output_behavior_is_stable_on_litenode() {
 }
 
 #[test]
-fn test_library_fetch_json_with_disasm_behavior_is_stable_on_litenode() {
-    let project = ProjectBuilder::new("library-fetch-json-disasm-litenode")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+fn test_library_fetch_json_with_disasm_behavior_is_stable_on_localnet() {
+    let project = ProjectBuilder::new("library-fetch-json-disasm-localnet")
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_deployer_wallets(project.path());
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     project
         .acton()
@@ -1257,8 +1297,6 @@ fn test_library_fetch_json_with_disasm_behavior_is_stable_on_litenode() {
         .arg("5")
         .arg("--yes")
         .arg("--local")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success();
 
@@ -1274,8 +1312,6 @@ fn test_library_fetch_json_with_disasm_behavior_is_stable_on_litenode() {
         .arg("localnet")
         .arg("--json")
         .arg("--disasm")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success();
 
@@ -1356,12 +1392,12 @@ api = { v3 = "http://127.0.0.1:1/api/v3" }
 fn test_library_publish_interactive_selects_global_storage() {
     use expectrl::Eof;
 
-    let project = ProjectBuilder::new("library-publish-litenode-interactive-global")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+    let project = ProjectBuilder::new("library-publish-localnet-interactive-global")
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_deployer_wallets(project.path());
     let home_temp = tempfile::TempDir::new().expect("failed to create home temp dir");
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     let mut session = project
         .acton()
@@ -1381,8 +1417,6 @@ fn test_library_publish_interactive_selects_global_storage() {
         .arg("--amount")
         .arg("5")
         .arg("--yes")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .spawn_pty()
         .set_expect_timeout(Some(Duration::from_secs(30)));
 
@@ -1417,10 +1451,10 @@ fn test_library_topup_reports_metadata_update_failure_after_successful_send() {
     use std::os::unix::fs::PermissionsExt;
 
     let project = ProjectBuilder::new("library-topup-metadata-update-failure")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_deployer_wallets(project.path());
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     project
         .acton()
@@ -1437,8 +1471,6 @@ fn test_library_topup_reports_metadata_update_failure_after_successful_send() {
         .arg("5")
         .arg("--yes")
         .arg("--local")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .success();
 
@@ -1464,8 +1496,6 @@ fn test_library_topup_reports_metadata_update_failure_after_successful_send() {
         .arg("--amount")
         .arg("1")
         .arg("--yes")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .run()
         .failure();
 
@@ -1489,10 +1519,10 @@ fn test_library_info_interactive_library_select() {
     use expectrl::Eof;
 
     let project = ProjectBuilder::new("library-info-interactive-select")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_deployer_wallets(project.path());
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     for _ in 0..2 {
         project
@@ -1510,8 +1540,6 @@ fn test_library_info_interactive_library_select() {
             .arg("5")
             .arg("--yes")
             .arg("--local")
-            .arg("--api-key")
-            .arg("local-test-api-key")
             .run()
             .success();
     }
@@ -1520,8 +1548,6 @@ fn test_library_info_interactive_library_select() {
         .acton()
         .library()
         .arg("info")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .spawn_pty()
         .set_expect_timeout(Some(Duration::from_secs(30)));
 
@@ -1540,10 +1566,10 @@ fn test_library_topup_interactive_library_and_wallet_select() {
     use expectrl::Eof;
 
     let project = ProjectBuilder::new("library-topup-interactive-library-wallet-select")
-        .contract("library_contract", LITENODE_LIBRARY_CONTRACT)
+        .contract("library_contract", LOCALNET_LIBRARY_CONTRACT)
         .build();
     write_two_wallets(project.path());
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
 
     for _ in 0..2 {
         project
@@ -1561,8 +1587,6 @@ fn test_library_topup_interactive_library_and_wallet_select() {
             .arg("5")
             .arg("--yes")
             .arg("--local")
-            .arg("--api-key")
-            .arg("local-test-api-key")
             .run()
             .success();
     }
@@ -1574,8 +1598,6 @@ fn test_library_topup_interactive_library_and_wallet_select() {
         .arg("--amount")
         .arg("1")
         .arg("--yes")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .spawn_pty()
         .set_expect_timeout(Some(Duration::from_secs(30)));
 
@@ -1591,7 +1613,7 @@ fn test_library_topup_interactive_library_and_wallet_select() {
 
 #[allow(clippy::significant_drop_tightening)]
 #[test]
-fn test_library_fetch_uses_env_api_key_when_flag_missing() {
+fn test_library_fetch_uses_testnet_env_api_key() {
     let mock_response_body = serde_json::json!({
         "ok": true,
         "result": {
@@ -1610,16 +1632,16 @@ fn test_library_fetch_uses_env_api_key_when_flag_missing() {
         }]);
 
     let project = ProjectBuilder::new("library-fetch-env-api-key").build();
-    append_custom_network(project.path(), "mock-v2", &mock_url);
 
     project
         .acton()
         .library()
         .fetch(LIB_HASH)
         .arg("--net")
-        .arg("custom:mock-v2")
+        .arg("testnet")
         .arg("--json")
-        .env("TONCENTER_API_KEY", "env-api-key")
+        .env(TEST_TONCENTER_TESTNET_V2_URL_ENV, &mock_url)
+        .env(TONCENTER_TESTNET_API_KEY_ENV, "env-api-key")
         .run()
         .success()
         .assert_contains("\"success\":true");
@@ -1645,7 +1667,7 @@ fn test_library_fetch_uses_env_api_key_when_flag_missing() {
 
 #[allow(clippy::significant_drop_tightening)]
 #[test]
-fn test_library_fetch_flag_api_key_overrides_env() {
+fn test_library_fetch_uses_mainnet_env_api_key_for_mainnet() {
     let mock_response_body = serde_json::json!({
         "ok": true,
         "result": {
@@ -1663,19 +1685,18 @@ fn test_library_fetch_flag_api_key_overrides_env() {
             body: mock_response_body,
         }]);
 
-    let project = ProjectBuilder::new("library-fetch-flag-api-key").build();
-    append_custom_network(project.path(), "mock-v2", &mock_url);
+    let project = ProjectBuilder::new("library-fetch-mainnet-env-api-key").build();
 
     project
         .acton()
         .library()
         .fetch(LIB_HASH)
         .arg("--net")
-        .arg("custom:mock-v2")
+        .arg("mainnet")
         .arg("--json")
-        .arg("--api-key")
-        .arg("flag-api-key")
-        .env("TONCENTER_API_KEY", "env-api-key")
+        .env(TEST_TONCENTER_MAINNET_V2_URL_ENV, &mock_url)
+        .env(TONCENTER_MAINNET_API_KEY_ENV, "mainnet-api-key")
+        .env(TONCENTER_TESTNET_API_KEY_ENV, "testnet-api-key")
         .run()
         .success()
         .assert_contains("\"success\":true");
@@ -1690,7 +1711,7 @@ fn test_library_fetch_flag_api_key_overrides_env() {
         .iter()
         .find(|(name, _)| name.eq_ignore_ascii_case("x-api-key"))
         .map(|(_, value)| value.as_str());
-    assert_eq!(header, Some("flag-api-key"));
+    assert_eq!(header, Some("mainnet-api-key"));
 }
 
 #[allow(clippy::significant_drop_tightening)]
@@ -1866,7 +1887,7 @@ fn test_library_fetch_invalid_network_json_reports_error_object() {
 
 #[allow(clippy::significant_drop_tightening)]
 #[test]
-fn test_library_publish_uses_env_api_key_when_flag_missing() {
+fn test_library_publish_uses_testnet_env_api_key() {
     let project = ProjectBuilder::new("library-publish-env-api-key").build();
     write_deployer_wallets(project.path());
 
@@ -1874,7 +1895,6 @@ fn test_library_publish_uses_env_api_key_when_flag_missing() {
         toncenter_v2_seqno_ok_response(),
         toncenter_v2_send_boc_ok_response(),
     ]);
-    append_custom_network(project.path(), "mock-v2", &mock_url);
 
     project
         .acton()
@@ -1884,12 +1904,13 @@ fn test_library_publish_uses_env_api_key_when_flag_missing() {
         .with_duration("1d")
         .wallet("deployer")
         .arg("--net")
-        .arg("custom:mock-v2")
+        .arg("testnet")
         .arg("--amount")
         .arg("1")
         .arg("--yes")
         .arg("--local")
-        .env("TONCENTER_API_KEY", "env-api-key")
+        .env(TEST_TONCENTER_TESTNET_V2_URL_ENV, &mock_url)
+        .env(TONCENTER_TESTNET_API_KEY_ENV, "env-api-key")
         .run()
         .success();
 
@@ -1913,15 +1934,14 @@ fn test_library_publish_uses_env_api_key_when_flag_missing() {
 
 #[allow(clippy::significant_drop_tightening)]
 #[test]
-fn test_library_publish_flag_api_key_overrides_env() {
-    let project = ProjectBuilder::new("library-publish-flag-api-key").build();
+fn test_library_publish_uses_mainnet_env_api_key_for_mainnet() {
+    let project = ProjectBuilder::new("library-publish-mainnet-env-api-key").build();
     write_deployer_wallets(project.path());
 
     let (mock_url, mock_handle, captured) = spawn_toncenter_v2_mock(vec![
         toncenter_v2_seqno_ok_response(),
         toncenter_v2_send_boc_ok_response(),
     ]);
-    append_custom_network(project.path(), "mock-v2", &mock_url);
 
     project
         .acton()
@@ -1931,14 +1951,14 @@ fn test_library_publish_flag_api_key_overrides_env() {
         .with_duration("1d")
         .wallet("deployer")
         .arg("--net")
-        .arg("custom:mock-v2")
+        .arg("mainnet")
         .arg("--amount")
         .arg("1")
         .arg("--yes")
         .arg("--local")
-        .arg("--api-key")
-        .arg("flag-api-key")
-        .env("TONCENTER_API_KEY", "env-api-key")
+        .env(TEST_TONCENTER_MAINNET_V2_URL_ENV, &mock_url)
+        .env(TONCENTER_MAINNET_API_KEY_ENV, "mainnet-api-key")
+        .env(TONCENTER_TESTNET_API_KEY_ENV, "testnet-api-key")
         .run()
         .success();
 
@@ -1956,32 +1976,27 @@ fn test_library_publish_flag_api_key_overrides_env() {
             .iter()
             .find(|(name, _)| name.eq_ignore_ascii_case("x-api-key"))
             .map(|(_, value)| value.as_str());
-        assert_eq!(header, Some("flag-api-key"));
+        assert_eq!(header, Some("mainnet-api-key"));
     }
 }
 
 #[allow(clippy::significant_drop_tightening)]
 #[test]
-fn test_library_info_uses_env_api_key_when_flag_missing() {
+fn test_library_info_uses_testnet_env_api_key() {
     let project = ProjectBuilder::new("library-info-env-api-key").build();
     let libraries_path = project.path().join("libraries.toml");
-    write_library_metadata_file(
-        &libraries_path,
-        "my-lib",
-        "custom:mock-v2",
-        "2026-01-05T12:00:00Z",
-    );
+    write_library_metadata_file(&libraries_path, "my-lib", "testnet", "2026-01-05T12:00:00Z");
 
     let (mock_url, mock_handle, captured) =
         spawn_toncenter_v2_mock(vec![toncenter_v2_balance_ok_response("1000000000")]);
-    append_custom_network(project.path(), "mock-v2", &mock_url);
 
     project
         .acton()
         .library()
         .arg("info")
         .arg("my-lib")
-        .env("TONCENTER_API_KEY", "env-api-key")
+        .env(TEST_TONCENTER_TESTNET_V2_URL_ENV, &mock_url)
+        .env(TONCENTER_TESTNET_API_KEY_ENV, "env-api-key")
         .run()
         .success();
 
@@ -2000,28 +2015,22 @@ fn test_library_info_uses_env_api_key_when_flag_missing() {
 
 #[allow(clippy::significant_drop_tightening)]
 #[test]
-fn test_library_info_flag_api_key_overrides_env() {
-    let project = ProjectBuilder::new("library-info-flag-api-key").build();
+fn test_library_info_uses_mainnet_env_api_key_for_mainnet() {
+    let project = ProjectBuilder::new("library-info-mainnet-env-api-key").build();
     let libraries_path = project.path().join("libraries.toml");
-    write_library_metadata_file(
-        &libraries_path,
-        "my-lib",
-        "custom:mock-v2",
-        "2026-01-05T12:00:00Z",
-    );
+    write_library_metadata_file(&libraries_path, "my-lib", "mainnet", "2026-01-05T12:00:00Z");
 
     let (mock_url, mock_handle, captured) =
         spawn_toncenter_v2_mock(vec![toncenter_v2_balance_ok_response("1000000000")]);
-    append_custom_network(project.path(), "mock-v2", &mock_url);
 
     project
         .acton()
         .library()
         .arg("info")
         .arg("my-lib")
-        .arg("--api-key")
-        .arg("flag-api-key")
-        .env("TONCENTER_API_KEY", "env-api-key")
+        .env(TEST_TONCENTER_MAINNET_V2_URL_ENV, &mock_url)
+        .env(TONCENTER_MAINNET_API_KEY_ENV, "mainnet-api-key")
+        .env(TONCENTER_TESTNET_API_KEY_ENV, "testnet-api-key")
         .run()
         .success();
 
@@ -2035,27 +2044,21 @@ fn test_library_info_flag_api_key_overrides_env() {
         .iter()
         .find(|(name, _)| name.eq_ignore_ascii_case("x-api-key"))
         .map(|(_, value)| value.as_str());
-    assert_eq!(header, Some("flag-api-key"));
+    assert_eq!(header, Some("mainnet-api-key"));
 }
 
 #[allow(clippy::significant_drop_tightening)]
 #[test]
-fn test_library_topup_uses_env_api_key_when_flag_missing() {
+fn test_library_topup_uses_testnet_env_api_key() {
     let project = ProjectBuilder::new("library-topup-env-api-key").build();
     write_deployer_wallets(project.path());
     let libraries_path = project.path().join("libraries.toml");
-    write_library_metadata_file(
-        &libraries_path,
-        "my-lib",
-        "custom:mock-v2",
-        "2026-01-05T12:00:00Z",
-    );
+    write_library_metadata_file(&libraries_path, "my-lib", "testnet", "2026-01-05T12:00:00Z");
 
     let (mock_url, mock_handle, captured) = spawn_toncenter_v2_mock(vec![
         toncenter_v2_seqno_ok_response(),
         toncenter_v2_send_boc_ok_response(),
     ]);
-    append_custom_network(project.path(), "mock-v2", &mock_url);
 
     project
         .acton()
@@ -2067,7 +2070,8 @@ fn test_library_topup_uses_env_api_key_when_flag_missing() {
         .arg("--amount")
         .arg("1")
         .arg("--yes")
-        .env("TONCENTER_API_KEY", "env-api-key")
+        .env(TEST_TONCENTER_TESTNET_V2_URL_ENV, &mock_url)
+        .env(TONCENTER_TESTNET_API_KEY_ENV, "env-api-key")
         .run()
         .success();
 
@@ -2091,22 +2095,16 @@ fn test_library_topup_uses_env_api_key_when_flag_missing() {
 
 #[allow(clippy::significant_drop_tightening)]
 #[test]
-fn test_library_topup_flag_api_key_overrides_env() {
-    let project = ProjectBuilder::new("library-topup-flag-api-key").build();
+fn test_library_topup_uses_mainnet_env_api_key_for_mainnet() {
+    let project = ProjectBuilder::new("library-topup-mainnet-env-api-key").build();
     write_deployer_wallets(project.path());
     let libraries_path = project.path().join("libraries.toml");
-    write_library_metadata_file(
-        &libraries_path,
-        "my-lib",
-        "custom:mock-v2",
-        "2026-01-05T12:00:00Z",
-    );
+    write_library_metadata_file(&libraries_path, "my-lib", "mainnet", "2026-01-05T12:00:00Z");
 
     let (mock_url, mock_handle, captured) = spawn_toncenter_v2_mock(vec![
         toncenter_v2_seqno_ok_response(),
         toncenter_v2_send_boc_ok_response(),
     ]);
-    append_custom_network(project.path(), "mock-v2", &mock_url);
 
     project
         .acton()
@@ -2118,9 +2116,9 @@ fn test_library_topup_flag_api_key_overrides_env() {
         .arg("--amount")
         .arg("1")
         .arg("--yes")
-        .arg("--api-key")
-        .arg("flag-api-key")
-        .env("TONCENTER_API_KEY", "env-api-key")
+        .env(TEST_TONCENTER_MAINNET_V2_URL_ENV, &mock_url)
+        .env(TONCENTER_MAINNET_API_KEY_ENV, "mainnet-api-key")
+        .env(TONCENTER_TESTNET_API_KEY_ENV, "testnet-api-key")
         .run()
         .success();
 
@@ -2138,60 +2136,29 @@ fn test_library_topup_flag_api_key_overrides_env() {
             .iter()
             .find(|(name, _)| name.eq_ignore_ascii_case("x-api-key"))
             .map(|(_, value)| value.as_str());
-        assert_eq!(header, Some("flag-api-key"));
+        assert_eq!(header, Some("mainnet-api-key"));
     }
 }
 
 #[test]
-fn test_library_publish_local_and_global_flags_prefer_global_storage() {
+fn test_library_publish_rejects_local_and_global_flags_together() {
     let project = ProjectBuilder::new("library-publish-local-global-precedence").build();
-    write_deployer_wallets(project.path());
-    let home_temp = tempfile::TempDir::new().expect("failed to create home temp dir");
-
-    let (mock_url, mock_handle, _) = spawn_toncenter_v2_mock(vec![
-        toncenter_v2_seqno_ok_response(),
-        toncenter_v2_send_boc_ok_response(),
-    ]);
-    append_custom_network(project.path(), "mock-v2", &mock_url);
 
     project
         .acton()
-        .env(
-            "HOME",
-            home_temp.path().to_str().expect("home path should be utf8"),
-        )
         .library()
         .publish()
         .with_code("te6cckEBAQEAAgAAAEysuc0=")
         .with_duration("1d")
         .wallet("deployer")
-        .arg("--net")
-        .arg("custom:mock-v2")
-        .arg("--amount")
-        .arg("1")
         .arg("--yes")
         .arg("--local")
         .arg("--global")
         .run()
-        .success()
-        .assert_contains("Library info saved");
-
-    mock_handle.join().expect("mock toncenter v2 must finish");
-    assert!(
-        !project.path().join("libraries.toml").exists(),
-        "local metadata file should not be created when both --local and --global are set"
-    );
-
-    let global_path = home_temp
-        .path()
-        .join(".config")
-        .join("acton")
-        .join("libraries")
-        .join("global.libraries.toml");
-    assert!(
-        global_path.exists(),
-        "global metadata should win when both --local and --global are set"
-    );
+        .failure()
+        .assert_stderr_contains("cannot be used with")
+        .assert_stderr_contains("--local")
+        .assert_stderr_contains("--global");
 }
 
 #[cfg(unix)]
@@ -2732,7 +2699,7 @@ struct StoredLibraryEntry {
 fn write_deployer_wallets(project_path: &Path) {
     fs::write(
         project_path.join("wallets.toml"),
-        LITENODE_DEPLOYER_WALLET_CONFIG,
+        LOCALNET_DEPLOYER_WALLET_CONFIG,
     )
     .expect("failed to write wallets.toml");
 }
@@ -3015,23 +2982,26 @@ cells = 4
 }
 
 fn append_custom_network(project_path: &Path, network_name: &str, v2_url: &str) {
+    use std::fmt::Write as _;
+
     let acton_toml_path = project_path.join("Acton.toml");
     let mut acton_toml =
         fs::read_to_string(&acton_toml_path).expect("failed to read generated Acton.toml");
-    acton_toml.push_str(&format!(
+    let _ = write!(
+        acton_toml,
         r#"
 
 [networks.{network_name}]
 api = {{ v2 = "{v2_url}" }}
 "#
-    ));
+    );
     fs::write(&acton_toml_path, acton_toml)
         .expect("failed to write Acton.toml with custom network");
 }
 
-fn start_litenode_with_localnet(project: &Project) -> crate::support::litenode::LiteNodeHandle {
+fn start_localnet_with_localnet(project: &Project) -> crate::support::localnet::LocalnetHandle {
     let node = project
-        .litenode()
+        .localnet()
         .before_start(super::super::support::project::ActonCommand::build)
         .args(["--accounts", "deployer"])
         .start();
@@ -3040,16 +3010,19 @@ fn start_litenode_with_localnet(project: &Project) -> crate::support::litenode::
 }
 
 fn append_localnet_network(project_path: &Path, base_url: &str) {
+    use std::fmt::Write as _;
+
     let acton_toml_path = project_path.join("Acton.toml");
     let mut acton_toml =
         fs::read_to_string(&acton_toml_path).expect("failed to read generated Acton.toml");
-    acton_toml.push_str(&format!(
+    let _ = write!(
+        acton_toml,
         r#"
 
 [networks.localnet]
 api = {{ v2 = "{base_url}/api/v2", v3 = "{base_url}/api/v3" }}
 "#
-    ));
+    );
     fs::write(&acton_toml_path, acton_toml).expect("failed to write Acton.toml with localnet");
 }
 
@@ -3121,7 +3094,7 @@ fn mark_library_runway_exhausted(path: &Path, library_id: &str) {
 }
 
 fn wait_for_library_in_api(
-    node: &crate::support::litenode::LiteNodeHandle,
+    node: &crate::support::localnet::LocalnetHandle,
     hash: &str,
     timeout: Duration,
 ) {
@@ -3187,7 +3160,7 @@ fn normalize_hash_to_bytes(hash: &str) -> Option<[u8; 32]> {
 }
 
 fn wait_until_address_state_active(
-    node: &crate::support::litenode::LiteNodeHandle,
+    node: &crate::support::localnet::LocalnetHandle,
     address: &str,
     timeout: Duration,
 ) {

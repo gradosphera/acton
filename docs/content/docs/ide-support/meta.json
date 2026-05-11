@@ -1,0 +1,8 @@
+{
+  "title": "IDE support",
+  "icon": "FileCode",
+  "pages": [
+    "vscode",
+    "jetbrains"
+  ]
+}

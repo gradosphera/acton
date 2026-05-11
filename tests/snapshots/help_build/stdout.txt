@@ -4,18 +4,19 @@ NAME
        acton-build — Build all configured contracts or a selected contract
 
 SYNOPSIS
-       acton build [options] [contract-id]
+       acton build [options] [contract-name]
 
 DESCRIPTION
        Compile contracts declared in Acton.toml, resolve their dependencies,
        and write build artifacts for the requested build set.
 
        By default, acton build compiles every configured contract. If you pass
-       a _contract-id_, Acton builds only that contract and its transitive
+       a _contract-name_, Acton builds only that contract and its transitive
        dependencies.
 
        For each successful build, Acton writes a JSON artifact to the build
-       output directory and, when the contract config has an output path, also
+       output directory and a contract ABI JSON file to the ABI output
+       directory. When the contract config has an output path, Acton also
        writes the compiled .boc file there. Dependency helper files are emitted
        into the generated-code directory, and optional Fift output can be
        written separately.
@@ -29,10 +30,10 @@ DESCRIPTION
 
 OPTIONS
    Build Options
-       contract-id
+       contract-name
            Build only the specified contract and its transitive dependencies.
 
-           The value must match a [contracts.<id>] key in Acton.toml.
+           The value must match a [contracts.<name>] key in Acton.toml.
 
        --clear-cache
            Clear the project compilation cache before building.
@@ -48,9 +49,15 @@ OPTIONS
 
        --gen-dir dir
            Directory for generated dependency helper files such as
-           gen/<dependency>_code.tolk.
+           gen/<dependency>.code.tolk.
 
            Defaults to [build].gen-dir when configured, otherwise gen/.
+
+       --output-abi dir
+           Directory for contract ABI JSON files.
+
+           Defaults to [build].output-abi when configured, otherwise
+           build/abi/.
 
        --output-fift dir
            Directory for compiled Fift output for .tolk contracts.
@@ -84,43 +91,78 @@ OPTIONS
 CONFIGURATION
        acton build reads contracts from Acton.toml:
 
-           [contracts.wallet]
-           name = "Wallet Contract"
-           src = "contracts/wallet.tolk"
-           output = "wallet.boc"
-           depends = ["child"]
+           [contracts.Wallet]
+           display-name = "Wallet Contract"
+           src = "contracts/Wallet.tolk"
+           output = "Wallet.boc"
+           depends = ["Child"]
 
        Optional default output paths can be configured in [build]:
 
            [build]
            out-dir = "build"
            gen-dir = "gen"
+           output-abi = "build/abi"
            output-fift = "build/fift"
 
-       CLI flags override config values for the current invocation.
+       CLI flags override config values for the current invocation. For
+       dependency helpers, a per-dependency depends[].path still overrides the
+       resolved gen-dir for that helper file.
 
 OUTPUTS
        Depending on command flags and project configuration, acton build may
        write:
 
-       o  <out-dir>/<contract-id>.json with code_boc64 and hash
+       o  <out-dir>/<contract-name>.json with code_boc64 and hash
+
+       o  <output-abi>/<contract-name>.json with the compiler ABI for .tolk
+          contracts that declare ABI metadata
 
        o  the configured contract output .boc file
 
-       o  <gen-dir>/<dependency>_code.tolk helper files for dependencies
+       o  <gen-dir>/<dependency>.code.tolk helper files for dependencies by
+          default (or a dependency-specific custom path when depends[].path is
+          configured)
 
-       o  <output-fift>/<contract-id>.fif for compiled .tolk contracts
+       o  <output-fift>/<contract-name>.fif for compiled .tolk contracts
 
        o  a DOT dependency graph file when --graph is passed
 
        Existing output files at those paths are replaced with freshly generated
        artifacts.
 
+BEST-EFFORT BEHAVIOR
+       Dependency-graph failures such as missing contracts or circular
+       dependencies stop the command before the main compile loop starts, so
+       those failures do not produce partial build outputs.
+
+       After dependency resolution succeeds, acton build becomes best-effort:
+
+       o  compile failures for one contract are recorded while other eligible
+          contracts continue building
+
+       o  artifact-writing failures are also collected instead of aborting
+          immediately
+
+       o  artifacts that were written successfully before a later failure
+          remain on disk
+
+       If an earlier dependency failed, its generated helper file is not
+       produced. A later parent contract may then fail because its generated
+       import is missing.
+
+       When you build a specific _contract-name_, Acton limits the build set to
+       that contract and its transitive dependencies.
+
 SIDE EFFECTS
        acton build writes artifacts, cache entries, and optional graph output
        under the resolved project root. If one contract fails after earlier
        contracts were built successfully, the successful artifacts remain on
        disk.
+
+       Before compiling, acton build normally refreshes the bundled standard
+       library under .acton/. Set ACTON_DISABLE_AUTO_STDLIB=1 to skip that
+       automatic refresh for the current process.
 
 EXIT STATUS
        o  0: The command completed without compilation failures.
@@ -135,7 +177,7 @@ EXAMPLES
 
        2. Build one contract and its dependencies:
 
-              acton build wallet
+              acton build Wallet
 
        3. Rebuild with a cleared cache:
 
@@ -147,7 +189,7 @@ EXAMPLES
 
        5. Override output locations for a single run:
 
-              acton build --out-dir artifacts --gen-dir artifacts/gen --output-fift artifacts/fift
+              acton build --out-dir artifacts --gen-dir artifacts/gen --output-abi artifacts/abi --output-fift artifacts/fift
 
        6. Print compiled code and hashes after the build:
 
@@ -157,7 +199,7 @@ SEE ALSO
        o  acton help wrapper
 
        o  Build system configuration reference
-          <https://ton-blockchain.github.io/acton/docs/build-system/configuration-reference>
+          <https://ton-blockchain.github.io/acton/docs/building/reference>
 
        o  Acton.toml reference
           <https://ton-blockchain.github.io/acton/docs/acton-toml>

@@ -1,6 +1,6 @@
 use crate::support::TestOutputExt;
 use crate::support::compilation::extract_compiled_contracts;
-use crate::support::project::ProjectBuilder;
+use crate::support::project::{Project, ProjectBuilder, TestConfig};
 use acton_config::color::ColorMode;
 use std::fs;
 
@@ -12,7 +12,7 @@ fun onBouncedMessage(_: InMessageBounced) {}
 const PASSING_TEST: &str = r#"
 import "../../lib/testing/expect"
 
-get fun `test-manifest-path-works`() {
+get fun `test manifest path works`() {
     expect(1).toEqual(1);
 }
 "#;
@@ -25,8 +25,9 @@ val x=1;
 
 const PROFILED_TEST: &str = r#"
 import "../../lib/testing/expect"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/types/big_array"
 
 get fun `test-profiled-transaction`() {
@@ -36,7 +37,7 @@ get fun `test-profiled-transaction`() {
     };
     val address = AutoDeployAddress { stateInit: init }.calculateAddress();
 
-    val deployer = net.treasury("deployer");
+    val deployer = testing.treasury("deployer");
     val deployMessage = createMessage({
         bounce: false,
         value: ton("1.0"),
@@ -59,8 +60,9 @@ get fun `test-profiled-transaction`() {
 
 const PROFILED_TEST_WITH_DRIFT: &str = r#"
 import "../../lib/testing/expect"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/types/big_array"
 
 get fun `test-profiled-transaction`() {
@@ -70,7 +72,7 @@ get fun `test-profiled-transaction`() {
     };
     val address = AutoDeployAddress { stateInit: init }.calculateAddress();
 
-    val deployer = net.treasury("deployer");
+    val deployer = testing.treasury("deployer");
     val deployMessage = createMessage({
         bounce: false,
         value: ton("1.0"),
@@ -99,11 +101,46 @@ get fun `test-profiled-transaction`() {
 }
 "#;
 
+const PROFILED_TEST_WITH_FAILURE: &str = r#"
+import "../../lib/testing/expect"
+import "../../lib/build"
+import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
+import "../../lib/types/big_array"
+
+get fun `test-profiled-transaction`() {
+    val init = ContractState {
+        code: build("simple"),
+        data: createEmptyCell(),
+    };
+    val address = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    val deployer = testing.treasury("deployer");
+    val deployMessage = createMessage({
+        bounce: false,
+        value: ton("1.0"),
+        dest: {
+            stateInit: init,
+        },
+    });
+    val deployResult = net.send(deployer.address, deployMessage);
+    expect(deployResult.size()).toEqual(1);
+
+    val ping = createMessage({
+        bounce: false,
+        value: ton("0.2"),
+        dest: address,
+    });
+    val pingResult = net.send(deployer.address, ping);
+    expect(pingResult.size()).toEqual(2);
+}
+"#;
+
 const BUILD_WITH_PROJECT_ROOT_RELATIVE_PATH_TEST: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/testing/expect"
 
-get fun `test-build-path-from-project-root`() {
+get fun `test build path from project root`() {
     val byName = build("counter");
     val byPath = build("counter", "tests/acton-stdlib/contracts/counter.tolk");
     expect(byPath).toEqual(byName);
@@ -123,6 +160,56 @@ get fun `{test_name}`() {{
 }}
 "#
     )
+}
+
+fn append_acton_toml(project: &Project, content: &str) {
+    let acton_toml_path = project.path().join("Acton.toml");
+    let mut acton_toml =
+        fs::read_to_string(&acton_toml_path).expect("should read generated Acton.toml");
+    acton_toml.push_str(content);
+    fs::write(&acton_toml_path, acton_toml).expect("should update generated Acton.toml");
+}
+
+fn fail_fast_project(project_name: &str, configured_fail_fast: Option<bool>) -> ProjectBuilder {
+    let builder = ProjectBuilder::new(project_name)
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test1",
+            r#"
+            import "../../lib/testing/expect"
+
+            get fun `test first pass`() {
+                expect(1).toEqual(1);
+            }
+
+            get fun `test second fail`() {
+                expect(1).toEqual(2);
+            }
+
+            get fun `test third pass`() {
+                expect(1).toEqual(1);
+            }
+        "#,
+        )
+        .test_file(
+            "test2",
+            r#"
+            import "../../lib/testing/expect"
+
+            get fun `test fourth pass`() {
+                expect(1).toEqual(1);
+            }
+        "#,
+        );
+
+    if let Some(fail_fast) = configured_fail_fast {
+        builder.with_test_config(TestConfig {
+            fail_fast: Some(fail_fast),
+            ..TestConfig::default()
+        })
+    } else {
+        builder
+    }
 }
 
 fn body_printing_test_project(project_name: &str) -> ProjectBuilder {
@@ -160,14 +247,15 @@ fun onBouncedMessage(_: InMessageBounced) {}
         .test_file(
             "print_bodies",
             r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
 import "../contracts/test_body_messages"
 
-get fun `test-show-bodies-prints-decoded-transaction-body`() {
-    val sender = net.treasury("sender");
+get fun `test show bodies prints decoded transaction body`() {
+    val sender = testing.treasury("sender");
     val init = ContractState {
         code: build("test_body_sink"),
         data: createEmptyCell(),
@@ -209,7 +297,7 @@ fn test_run_specific_test_file() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-in-file-1`() {
+            get fun `test in file 1`() {
                 expect(1).toEqual(1);
             }
         "#,
@@ -219,7 +307,7 @@ fn test_run_specific_test_file() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-in-file-2`() {
+            get fun `test in file 2`() {
                 expect(2).toEqual(2);
             }
         "#,
@@ -234,8 +322,8 @@ fn test_run_specific_test_file() {
         .run()
         .success()
         .assert_passed(1)
-        .assert_contains("in-file-1")
-        .assert_not_contains("in-file-2");
+        .assert_contains("in file 1")
+        .assert_not_contains("in file 2");
 }
 
 #[test]
@@ -247,15 +335,15 @@ fn test_filter_by_name() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-unit-1`() {
+            get fun `test unit 1`() {
                 expect(1).toEqual(1);
             }
 
-            get fun `test-unit-2`() {
+            get fun `test unit 2`() {
                 expect(2).toEqual(2);
             }
 
-            get fun `test-other`() {
+            get fun `test other`() {
                 expect(3).toEqual(3);
             }
         "#,
@@ -263,12 +351,12 @@ fn test_filter_by_name() {
         .build()
         .acton()
         .test()
-        .filter("test-unit-.*")
+        .filter("test unit .*")
         .run()
         .success()
         .assert_passed(2)
-        .assert_contains("unit-1")
-        .assert_contains("unit-2")
+        .assert_contains("unit 1")
+        .assert_contains("unit 2")
         .assert_not_contains("other");
 }
 
@@ -281,15 +369,15 @@ fn test_filter_single_test() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-alpha`() {
+            get fun `test alpha`() {
                 expect(1).toEqual(1);
             }
 
-            get fun `test-beta`() {
+            get fun `test beta`() {
                 expect(2).toEqual(2);
             }
 
-            get fun `test-gamma`() {
+            get fun `test gamma`() {
                 expect(3).toEqual(3);
             }
         "#,
@@ -297,7 +385,7 @@ fn test_filter_single_test() {
         .build()
         .acton()
         .test()
-        .filter("test-beta")
+        .filter("test beta")
         .run()
         .success()
         .assert_passed(1)
@@ -315,11 +403,11 @@ fn test_combined_path_and_filter() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-unit-counter-test`() {
+            get fun `test unit counter test`() {
                 expect(1).toEqual(1);
             }
 
-            get fun `test-unit-wallet-test`() {
+            get fun `test unit wallet test`() {
                 expect(2).toEqual(2);
             }
         "#,
@@ -329,7 +417,7 @@ fn test_combined_path_and_filter() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-integration-counter-test`() {
+            get fun `test integration counter test`() {
                 expect(3).toEqual(3);
             }
         "#,
@@ -345,9 +433,9 @@ fn test_combined_path_and_filter() {
         .run()
         .success()
         .assert_passed(1)
-        .assert_contains("unit-counter-test")
-        .assert_not_contains("unit-wallet-test")
-        .assert_not_contains("integration-counter-test");
+        .assert_contains("unit counter test")
+        .assert_not_contains("unit wallet test")
+        .assert_not_contains("integration counter test");
 }
 
 #[test]
@@ -359,7 +447,7 @@ fn test_filter_with_no_matches() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-alpha`() {
+            get fun `test alpha`() {
                 expect(1).toEqual(1);
             }
         "#,
@@ -379,11 +467,11 @@ fn test_include_flag_filters_test_files() {
         .contract("simple", SIMPLE_CONTRACT)
         .raw_file(
             "tests/smoke/alpha.test.tolk",
-            &passing_test_file(NESTED_TEST_IMPORT, "test-alpha-file", 1),
+            &passing_test_file(NESTED_TEST_IMPORT, "test alpha file", 1),
         )
         .raw_file(
             "tests/slow/beta.test.tolk",
-            &passing_test_file(NESTED_TEST_IMPORT, "test-beta-file", 2),
+            &passing_test_file(NESTED_TEST_IMPORT, "test beta file", 2),
         )
         .build();
 
@@ -395,8 +483,8 @@ fn test_include_flag_filters_test_files() {
         .run()
         .success()
         .assert_passed(1)
-        .assert_contains("alpha-file")
-        .assert_not_contains("beta-file")
+        .assert_contains("alpha file")
+        .assert_not_contains("beta file")
         .assert_snapshot_matches(
             "integration/snapshots/flags/test_include_flag_filters_test_files.stdout.txt",
         );
@@ -408,11 +496,11 @@ fn test_exclude_flag_filters_test_files() {
         .contract("simple", SIMPLE_CONTRACT)
         .raw_file(
             "tests/smoke/alpha.test.tolk",
-            &passing_test_file(NESTED_TEST_IMPORT, "test-alpha-file", 1),
+            &passing_test_file(NESTED_TEST_IMPORT, "test alpha file", 1),
         )
         .raw_file(
             "tests/slow/beta.test.tolk",
-            &passing_test_file(NESTED_TEST_IMPORT, "test-beta-file", 2),
+            &passing_test_file(NESTED_TEST_IMPORT, "test beta file", 2),
         )
         .build();
 
@@ -424,8 +512,8 @@ fn test_exclude_flag_filters_test_files() {
         .run()
         .success()
         .assert_passed(1)
-        .assert_contains("alpha-file")
-        .assert_not_contains("beta-file")
+        .assert_contains("alpha file")
+        .assert_not_contains("beta file")
         .assert_snapshot_matches(
             "integration/snapshots/flags/test_exclude_flag_filters_test_files.stdout.txt",
         );
@@ -433,37 +521,7 @@ fn test_exclude_flag_filters_test_files() {
 
 #[test]
 fn test_fail_fast() {
-    let project = ProjectBuilder::new("fail-fast")
-        .contract("simple", SIMPLE_CONTRACT)
-        .test_file(
-            "test1",
-            r#"
-            import "../../lib/testing/expect"
-
-            get fun `test-first-pass`() {
-                expect(1).toEqual(1);
-            }
-
-            get fun `test-second-fail`() {
-                expect(1).toEqual(2);
-            }
-
-            get fun `test-third-pass`() {
-                expect(1).toEqual(1);
-            }
-        "#,
-        )
-        .test_file(
-            "test2",
-            r#"
-            import "../../lib/testing/expect"
-
-            get fun `test-fourth-pass`() {
-                expect(1).toEqual(1);
-            }
-        "#,
-        )
-        .build();
+    let project = fail_fast_project("fail-fast", None).build();
 
     // Without fail-fast: should fail but run all tests
     project
@@ -473,10 +531,10 @@ fn test_fail_fast() {
         .failure() // exit code 1 because of failure
         .assert_passed(3) // first, third, fourth
         .assert_failed(1) // second
-        .assert_contains("first-pass")
-        .assert_contains("second-fail")
-        .assert_contains("third-pass")
-        .assert_contains("fourth-pass")
+        .assert_contains("first pass")
+        .assert_contains("second fail")
+        .assert_contains("third pass")
+        .assert_contains("fourth pass")
         .assert_snapshot_matches("integration/snapshots/flags/test_without_fail_fast.stdout.txt");
 
     // With fail-fast: should stop after second test
@@ -488,11 +546,73 @@ fn test_fail_fast() {
         .failure()
         .assert_passed(1) // only first
         .assert_failed(1) // second
-        .assert_contains("first-pass")
-        .assert_contains("second-fail")
-        .assert_not_contains("third-pass")
-        .assert_not_contains("fourth-pass")
+        .assert_contains("first pass")
+        .assert_contains("second fail")
+        .assert_not_contains("third pass")
+        .assert_not_contains("fourth pass")
         .assert_snapshot_matches("integration/snapshots/flags/test_with_fail_fast.stdout.txt");
+}
+
+#[test]
+fn test_fail_fast_config_stops_after_first_failure() {
+    let project = fail_fast_project("fail-fast-config", Some(true)).build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_passed(1)
+        .assert_failed(1)
+        .assert_contains("first pass")
+        .assert_contains("second fail")
+        .assert_not_contains("third pass")
+        .assert_not_contains("fourth pass")
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_fail_fast_config_stops_after_first_failure.stdout.txt",
+        );
+}
+
+#[test]
+fn test_fail_fast_flag_overrides_false_config() {
+    let project = fail_fast_project("fail-fast-cli-overrides-config", Some(false)).build();
+
+    project
+        .acton()
+        .test()
+        .fail_fast()
+        .run()
+        .failure()
+        .assert_passed(1)
+        .assert_failed(1)
+        .assert_contains("first pass")
+        .assert_contains("second fail")
+        .assert_not_contains("third pass")
+        .assert_not_contains("fourth pass")
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_fail_fast_flag_overrides_false_config.stdout.txt",
+        );
+}
+
+#[test]
+fn test_fail_fast_false_flag_overrides_true_config() {
+    let project = fail_fast_project("fail-fast-false-cli-overrides-config", Some(true)).build();
+
+    project
+        .acton()
+        .test()
+        .arg("--fail-fast=false")
+        .run()
+        .failure()
+        .assert_passed(3)
+        .assert_failed(1)
+        .assert_contains("first pass")
+        .assert_contains("second fail")
+        .assert_contains("third pass")
+        .assert_contains("fourth pass")
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_fail_fast_false_flag_overrides_true_config.stdout.txt",
+        );
 }
 
 #[test]
@@ -516,7 +636,7 @@ fn test_junit_path_flag_writes_report_to_custom_directory() {
         .contract("simple", SIMPLE_CONTRACT)
         .test_file(
             "test",
-            &passing_test_file(ROOT_TEST_IMPORT, "test-junit-custom-path", 1),
+            &passing_test_file(ROOT_TEST_IMPORT, "test junit custom path", 1),
         )
         .build();
 
@@ -547,6 +667,48 @@ fn test_junit_path_flag_writes_report_to_custom_directory() {
 }
 
 #[test]
+fn test_junit_path_flag_overrides_configured_path() {
+    let project = ProjectBuilder::new("test-junit-path-overrides-config")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            &passing_test_file(ROOT_TEST_IMPORT, "test junit custom path", 1),
+        )
+        .with_test_config(TestConfig {
+            reporters: Some(vec!["junit".to_owned()]),
+            junit_path: Some("configured-reports".to_owned()),
+            ..TestConfig::default()
+        })
+        .build();
+
+    let output = project
+        .acton()
+        .test()
+        .arg("--junit-path")
+        .arg("cli-reports")
+        .run()
+        .success();
+
+    output
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_junit_path_flag_overrides_configured_path.stdout.txt",
+        )
+        .assert_file_snapshot_matches(
+            "cli-reports/TEST-test.test.tolk.xml",
+            "integration/snapshots/flags/test_junit_path_flag_overrides_configured_path.xml.gen",
+        );
+
+    let configured_report = project
+        .path()
+        .join("configured-reports/TEST-test.test.tolk.xml");
+    assert!(
+        !configured_report.exists(),
+        "configured junit report should not be written when --junit-path is set: {}",
+        configured_report.display()
+    );
+}
+
+#[test]
 fn test_clear_cache_flag_recompiles_contracts_before_running_tests() {
     let project = ProjectBuilder::new("test-clear-cache-flag")
         .contract("simple", SIMPLE_CONTRACT)
@@ -554,6 +716,10 @@ fn test_clear_cache_flag_recompiles_contracts_before_running_tests() {
             "test",
             &passing_test_file(ROOT_TEST_IMPORT, "test-clear-cache", 1),
         )
+        .with_test_config(TestConfig {
+            reporters: Some(vec!["console".to_owned()]),
+            ..TestConfig::default()
+        })
         .build();
 
     let first_run = project.acton().test().run().success();
@@ -583,6 +749,34 @@ fn test_clear_cache_flag_recompiles_contracts_before_running_tests() {
         .assert_passed(1)
         .assert_snapshot_matches(
             "integration/snapshots/flags/test_clear_cache_flag_recompiles_contracts_before_running_tests.stdout.txt",
+        );
+}
+
+#[test]
+fn test_invalid_test_fork_net_config_reports_error() {
+    let project = ProjectBuilder::new("test-invalid-fork-net-config")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            &passing_test_file(ROOT_TEST_IMPORT, "test invalid fork net config", 1),
+        )
+        .build();
+
+    append_acton_toml(
+        &project,
+        r#"
+[test]
+fork-net = "bogus"
+"#,
+    );
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/flags/test_invalid_test_fork_net_config_reports_error.stderr.txt",
         );
 }
 
@@ -779,11 +973,11 @@ fn test_project_root_build_from_nested_directory_snapshot_and_cache() {
         );
 
     assert!(
-        project.path().join(".acton/cache").exists(),
+        project.path().join("build/cache").exists(),
         "build cache should be created under project root"
     );
     assert!(
-        !nested_dir.join(".acton/cache").exists(),
+        !nested_dir.join("build/cache").exists(),
         "build cache must not be created under nested working directory"
     );
 }
@@ -885,7 +1079,7 @@ fn test_project_root_full_flow_from_sibling_directory_on_new_project() {
     );
 
     assert!(
-        project_dir.join("build/empty.json").exists(),
+        project_dir.join("build/Empty.json").exists(),
         "build output should be created under project root when using --project-root"
     );
 
@@ -952,7 +1146,7 @@ fn test_project_root_full_flow_from_sibling_directory_on_new_project() {
     );
 
     assert!(
-        project_dir.join(".acton/cache").exists(),
+        project_dir.join("build/cache").exists(),
         "cache should be created under project root"
     );
     assert!(
@@ -1021,8 +1215,8 @@ fn test_manifest_path_test_save_test_trace_default_writes_to_project_root() {
 
     let root_trace = project
         .path()
-        .join(".acton/traces/test-profiled-transaction_trace.json");
-    let nested_trace = nested_dir.join(".acton/traces/test-profiled-transaction_trace.json");
+        .join("build/traces/test-profiled-transaction_trace.json");
+    let nested_trace = nested_dir.join("build/traces/test-profiled-transaction_trace.json");
 
     project
         .acton()
@@ -1033,7 +1227,7 @@ fn test_manifest_path_test_save_test_trace_default_writes_to_project_root() {
         .current_dir(&nested_dir)
         .run()
         .success()
-        .assert_file_exists(".acton/traces/test-profiled-transaction_trace.json");
+        .assert_file_exists("build/traces/test-profiled-transaction_trace.json");
 
     assert!(
         root_trace.exists(),
@@ -1143,6 +1337,31 @@ fn test_manifest_path_test_profiling_snapshots_use_project_root() {
 }
 
 #[test]
+fn test_snapshot_nested_output_creates_parent_directories() {
+    let project = ProjectBuilder::new("profiling-snapshot-nested-output")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("profile", PROFILED_TEST)
+        .build();
+    project.acton().init().run().success();
+
+    let snapshot_path = "build/profiles/profile-baseline.json";
+
+    project
+        .acton()
+        .test()
+        .arg("--snapshot")
+        .arg(snapshot_path)
+        .run()
+        .success()
+        .assert_contains("Gas snapshot saved to build/profiles/profile-baseline.json");
+
+    assert!(
+        project.path().join(snapshot_path).exists(),
+        "snapshot file should be created with missing parent dirs"
+    );
+}
+
+#[test]
 fn test_fail_on_diff_exits_non_zero_for_profile_drift() {
     let project = ProjectBuilder::new("profiling-fail-on-diff")
         .contract("simple", SIMPLE_CONTRACT)
@@ -1217,6 +1436,30 @@ fn test_fail_on_diff_succeeds_when_profile_matches_baseline() {
         !stderr.contains("Profiling drift detected"),
         "unexpected drift error in stderr:\n{stderr}"
     );
+}
+
+#[test]
+fn test_profiling_tables_are_hidden_when_tests_fail() {
+    let project = ProjectBuilder::new("profiling-hidden-on-test-failure")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("profile", PROFILED_TEST_WITH_FAILURE)
+        .build();
+    project.acton().init().run().success();
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--baseline-snapshot")
+        .arg("missing-baseline.json")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/flags/test_profiling_tables_are_hidden_when_tests_fail.stdout.txt",
+        )
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/flags/test_profiling_tables_are_hidden_when_tests_fail.stderr.txt",
+        );
 }
 
 #[test]
@@ -1344,7 +1587,10 @@ fn test_up_rejects_conflicting_flag_combinations() {
         (&["--trunk", "--check"], &["--trunk", "--check"]),
         (&["--stable", "--list"], &["--stable", "--list"]),
         (&["--stable", "--check"], &["--stable", "--check"]),
+        (&["--force", "--list"], &["--force", "--list"]),
+        (&["--force", "--check"], &["--force", "--check"]),
         (&["--list", "--check"], &["--list", "--check"]),
+        (&["--yes", "--list", "--check"], &["--list", "--check"]),
     ];
 
     for (args, expected_needles) in cases {

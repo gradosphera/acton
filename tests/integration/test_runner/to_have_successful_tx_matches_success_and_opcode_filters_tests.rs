@@ -63,10 +63,10 @@ fun onBouncedMessage(_: InMessageBounced) {
 "#;
 
 const TEST_PRELUDE: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../../lib/types/message"
 import "../contracts/messages"
 
@@ -89,7 +89,7 @@ fun Harness.create() {
 }
 
 fun deployHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
     val harness = Harness.create();
 
     val deployMsg = createMessage({
@@ -155,7 +155,7 @@ fn to_have_successful_tx_matches_success_and_opcode_filters() {
     run_success_case(
         "ae-stdlib-successful-tx-search-filters",
         r"
-get fun `test-ae-successful-tx-search-filters`() {
+get fun `test ae successful tx search filters`() {
     val (sender, harness, _) = deployHarness();
     val res = sendPing(sender, harness, 1);
 
@@ -181,7 +181,7 @@ fn to_have_failed_tx_matches_compute_exit_code_filter() {
     run_success_case(
         "ae-stdlib-failed-tx-compute-exit-filter",
         r"
-get fun `test-ae-failed-tx-compute-exit-filter`() {
+get fun `test ae failed tx compute exit filter`() {
     val (sender, harness, _) = deployHarness();
     val res = sendPing(sender, harness, 10);
 
@@ -229,7 +229,7 @@ fn to_have_bounced_tx_matches_bounced_opcode_and_exit_code_filters() {
     run_success_case(
         "ae-stdlib-bounced-tx-opcode-filter",
         r#"
-get fun `test-ae-bounced-tx-opcode-filter`() {
+get fun `test ae bounced tx opcode filter`() {
     val (sender, harness, _) = deployHarness();
 
     val trigger = createMessage({
@@ -238,7 +238,7 @@ get fun `test-ae-bounced-tx-opcode-filter`() {
         dest: harness.address,
         body: Ping { queryId: 40 },
     });
-    val sendSingleRes = net.sendSingle(sender.address, trigger);
+    val sendSingleRes = testing.processSingleTraceStep(sender.address, trigger);
     expect(sendSingleRes.outMessages.size()).toEqual(1);
 
     val noticeBody = sendSingleRes.outMessages.at<BounceNotice>(0).loadBody().toCell();
@@ -276,7 +276,7 @@ fn to_emit_external_message_matches_emitted_type() {
     run_success_case(
         "ae-stdlib-emit-external-message-positive",
         r"
-get fun `test-ae-emit-external-message-positive`() {
+get fun `test ae emit external message positive`() {
     val (sender, harness, _) = deployHarness();
     val res = sendPing(sender, harness, 30);
 
@@ -292,7 +292,7 @@ fn to_emit_external_message_fails_for_missing_external_output() {
     run_failure_case(
         "ae-stdlib-emit-external-message-missing",
         r"
-get fun `test-ae-emit-external-message-missing`() {
+get fun `test ae emit external message missing`() {
     val (sender, harness, _) = deployHarness();
     val res = sendPing(sender, harness, 1);
 
@@ -323,11 +323,30 @@ get fun `test-ae-failed-tx-missing-exit-code`() {
 }
 
 #[test]
+fn to_have_successful_tx_failure_shows_contract_abi_exit_code_name() {
+    run_failure_case(
+        "ae-stdlib-successful-tx-failure-shows-abi-exit-code",
+        r"
+get fun `test ae successful tx failure shows abi exit code`() {
+    val (sender, harness, _) = deployHarness();
+    val res = sendPing(sender, harness, 10);
+
+    expect(res).toHaveSuccessfulTx<Ping>({
+        from: sender.address,
+        to: harness.address,
+    });
+}
+",
+        "integration/snapshots/test-runner/to_have_successful_tx_matches_success_and_opcode_filters/to_have_successful_tx_failure_shows_contract_abi_exit_code_name.stdout.txt",
+    );
+}
+
+#[test]
 fn deploy_filter_distinguishes_deploy_and_non_deploy_transactions() {
     run_success_case(
         "ae-stdlib-deploy-filter",
         r"
-get fun `test-ae-deploy-filter`() {
+get fun `test ae deploy filter`() {
     val (sender, harness, deployRes) = deployHarness();
 
     expect(deployRes).toHaveTx({

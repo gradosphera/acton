@@ -18,9 +18,9 @@ get fun singleBalance(): map<int32, int32> {
 
 const EE_MAP_TEST_PREPARE: &str = r#"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 
 struct Ledger {
     address: address
@@ -38,7 +38,7 @@ fun Ledger.fromStorage() {
 
 fun deployLedger(): Ledger {
     val ledger = Ledger.fromStorage();
-    val deployer = net.treasury("deployer");
+    val deployer = testing.treasury("deployer");
     val deployTxs = net.send(
         deployer.address,
         createMessage({
@@ -65,7 +65,7 @@ fn expect_map_to_have_length_accepts_empty_and_single_entry_maps() {
     map_project(
         "ee-stdlib-map-to-have-length-empty-non-empty-boundaries",
         r#"
-        get fun `test-ee-stdlib-map-to-have-length-empty-non-empty-boundaries`() {
+        get fun `test ee stdlib map to have length empty non empty boundaries`() {
             val ledger = deployLedger();
 
             val emptyBalances: map<int32, int32> = net.runGetMethod(ledger.address, "emptyBalances");
@@ -93,7 +93,7 @@ fn expect_map_to_have_length_reports_boundary_mismatch_for_single_entry_map() {
     map_project(
         "ee-stdlib-map-to-have-length-boundary-mismatch",
         r#"
-        get fun `test-ee-stdlib-map-to-have-length-boundary-mismatch`() {
+        get fun `test ee stdlib map to have length boundary mismatch`() {
             val ledger = deployLedger();
             val oneEntryBalances: map<int32, int32> = net.runGetMethod(ledger.address, "singleBalance");
 

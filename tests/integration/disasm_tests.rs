@@ -9,7 +9,7 @@ use crate::support::toncenter::{
 };
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
-use std::{fs, thread};
+use std::{fs, path::Path, thread};
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, CellBuilder};
 
@@ -19,7 +19,7 @@ fun onBouncedMessage(_: InMessageBounced) {}
 ";
 const COUNTER_CONTRACT: &str = include_str!("../acton-stdlib/contracts/counter.tolk");
 const COUNTER_TYPES: &str = include_str!("../acton-stdlib/contracts/types.tolk");
-const TEST_TONCENTER_API_KEY: &str = "test-toncenter-api-key";
+const TEST_API_KEY: &str = "test-toncenter-api-key";
 const TEST_TONCENTER_MAINNET_V3_URL_ENV: &str = "ACTON_TEST_TONCENTER_MAINNET_V3_URL";
 const TEST_TONCENTER_TESTNET_V3_URL_ENV: &str = "ACTON_TEST_TONCENTER_TESTNET_V3_URL";
 
@@ -51,6 +51,20 @@ fn build_counter_source_map_project(name: &str) -> crate::support::project::Proj
     project
 }
 
+fn disasm_reference_fixture(test_name: &str, fixture: &str, snapshot: &str) {
+    let project = ProjectBuilder::new(test_name).build();
+    let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/integration/testdata/disasm_reference")
+        .join(fixture);
+
+    project
+        .acton()
+        .disasm_file(fixture_path.to_str().unwrap())
+        .run()
+        .success()
+        .assert_snapshot_matches(snapshot);
+}
+
 fn simple_contract_cell(project: &crate::support::project::Project) -> Cell {
     let boc_bytes = fs::read(project.path().join("simple.boc")).unwrap();
     Boc::decode(boc_bytes).unwrap()
@@ -79,7 +93,7 @@ fn header_value<'a>(request: &'a CapturedToncenterRequest, name: &str) -> Option
 fn assert_api_key_header(request: &CapturedToncenterRequest) {
     assert_eq!(
         header_value(request, "X-API-Key"),
-        Some(TEST_TONCENTER_API_KEY),
+        Some(TEST_API_KEY),
         "expected TonCenter request to carry X-API-Key header"
     );
 }
@@ -212,6 +226,43 @@ fn test_disasm_reads_source_map_emitted_by_compile_with_show_hashes_and_offsets(
         .assert_snapshot_matches(
             "integration/snapshots/disasm/test_disasm_reads_source_map_emitted_by_compile_with_show_hashes_and_offsets.stdout.txt",
         );
+}
+
+#[test]
+fn test_disasm_json_includes_source_map_blocks() {
+    let project = build_counter_source_map_project("disasm-source-map-json");
+
+    project
+        .acton()
+        .disasm_file("counter.boc")
+        .with_source_map("counter.source_map.json")
+        .with_json()
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/disasm/test_disasm_json_includes_source_map_blocks.stdout.txt",
+        );
+}
+
+#[test]
+fn test_disasm_json_with_output_writes_assembly_file() {
+    let project = build_simple_contract_project("disasm-json-output");
+
+    let output = project
+        .acton()
+        .disasm_file("simple.boc")
+        .with_output("output.tasm")
+        .with_json()
+        .run()
+        .success();
+
+    output.assert_snapshot_matches(
+        "integration/snapshots/disasm/test_disasm_json_with_output_writes_assembly_file.stdout.txt",
+    );
+    output.assert_file_snapshot_matches(
+        "output.tasm",
+        "integration/snapshots/disasm/test_disasm_json_with_output_writes_assembly_file.tasm.gen",
+    );
 }
 
 #[test]
@@ -513,6 +564,60 @@ fn test_disasm_snapshot() {
 }
 
 #[test]
+fn test_disasm_tasm_reference_simple_counter() {
+    disasm_reference_fixture(
+        "disasm-ref-simple-counter",
+        "test_SimpleCounter.boc",
+        "integration/snapshots/disasm/tasm_reference_simple_counter.stdout.txt",
+    );
+}
+
+#[test]
+fn test_disasm_tasm_reference_pushint_long_130() {
+    disasm_reference_fixture(
+        "disasm-ref-pushint-long-130",
+        "PUSHINT_LONG_130.hex",
+        "integration/snapshots/disasm/tasm_reference_pushint_long_130.stdout.txt",
+    );
+}
+
+#[test]
+fn test_disasm_tasm_reference_some_contract() {
+    disasm_reference_fixture(
+        "disasm-ref-some-contract",
+        "SomeContract.hex",
+        "integration/snapshots/disasm/tasm_reference_some_contract.stdout.txt",
+    );
+}
+
+#[test]
+fn test_disasm_tasm_reference_some_contract_2() {
+    disasm_reference_fixture(
+        "disasm-ref-some-contract-2",
+        "SomeContract2.hex",
+        "integration/snapshots/disasm/tasm_reference_some_contract_2.stdout.txt",
+    );
+}
+
+#[test]
+fn test_disasm_tasm_reference_escrow() {
+    disasm_reference_fixture(
+        "disasm-ref-escrow",
+        "escrow_Escrow.boc",
+        "integration/snapshots/disasm/tasm_reference_escrow.stdout.txt",
+    );
+}
+
+#[test]
+fn test_disasm_tasm_reference_jetton_minter_discoverable() {
+    disasm_reference_fixture(
+        "disasm-ref-jetton-minter-discoverable",
+        "jetton_minter_discoverable_JettonMinter.boc",
+        "integration/snapshots/disasm/tasm_reference_jetton_minter_discoverable.stdout.txt",
+    );
+}
+
+#[test]
 fn test_disasm_output_file_created() {
     let project = build_simple_contract_project("disasm-create");
 
@@ -578,7 +683,7 @@ fn test_disasm_from_blockchain_custom_network_address_with_mock_toncenter() {
         .disasm()
         .with_address(address)
         .with_net("custom:mock-remote")
-        .with_api_key(TEST_TONCENTER_API_KEY)
+        .with_api_key(TEST_API_KEY)
         .run()
         .success();
 
@@ -619,7 +724,7 @@ fn test_disasm_from_blockchain_custom_network_fetch_failure_with_mock_toncenter(
         .disasm()
         .with_address(address)
         .with_net("custom:mock-remote")
-        .with_api_key(TEST_TONCENTER_API_KEY)
+        .with_api_key(TEST_API_KEY)
         .run()
         .failure();
 
@@ -658,7 +763,7 @@ fn test_disasm_from_blockchain_mainnet_address_with_mock_autodetect() {
         .acton()
         .disasm()
         .with_address(address)
-        .with_api_key(TEST_TONCENTER_API_KEY)
+        .with_api_key(TEST_API_KEY)
         .env(TEST_TONCENTER_MAINNET_V3_URL_ENV, &mainnet_url)
         .env(TEST_TONCENTER_TESTNET_V3_URL_ENV, "http://127.0.0.1:1")
         .run()
@@ -699,7 +804,7 @@ fn test_disasm_from_blockchain_testnet_address_with_mock_autodetect() {
         .acton()
         .disasm()
         .with_address(address)
-        .with_api_key(TEST_TONCENTER_API_KEY)
+        .with_api_key(TEST_API_KEY)
         .env(TEST_TONCENTER_MAINNET_V3_URL_ENV, &mainnet_url)
         .env(TEST_TONCENTER_TESTNET_V3_URL_ENV, &testnet_url)
         .run()
@@ -744,7 +849,7 @@ fn test_disasm_from_blockchain_address_not_found_on_both_networks_with_mock_auto
         .acton()
         .disasm()
         .with_address(address)
-        .with_api_key(TEST_TONCENTER_API_KEY)
+        .with_api_key(TEST_API_KEY)
         .env(TEST_TONCENTER_MAINNET_V3_URL_ENV, &mainnet_url)
         .env(TEST_TONCENTER_TESTNET_V3_URL_ENV, &testnet_url)
         .run()
@@ -794,7 +899,7 @@ fn test_disasm_follow_libraries_with_mock_toncenter() {
         .disasm()
         .with_address(address)
         .with_net("custom:mock-remote")
-        .with_api_key(TEST_TONCENTER_API_KEY)
+        .with_api_key(TEST_API_KEY)
         .follow_libraries()
         .run()
         .success();
@@ -840,7 +945,7 @@ fn test_disasm_follow_libraries_warns_and_keeps_original_code_with_mock_toncente
         .disasm()
         .with_address(address)
         .with_net("custom:mock-remote")
-        .with_api_key(TEST_TONCENTER_API_KEY)
+        .with_api_key(TEST_API_KEY)
         .follow_libraries()
         .run()
         .success();
@@ -884,7 +989,7 @@ fn test_disasm_follow_libraries_skips_lookup_for_non_library_code_with_mock_tonc
         .disasm()
         .with_address(address)
         .with_net("custom:mock-remote")
-        .with_api_key(TEST_TONCENTER_API_KEY)
+        .with_api_key(TEST_API_KEY)
         .follow_libraries()
         .run()
         .success();
@@ -908,7 +1013,8 @@ fn test_disasm_follow_libraries_skips_lookup_for_non_library_code_with_mock_tonc
 // We don't usually want to store keys this way, but without keys it's almost
 // impossible to use API calls :(
 fn toncenter_api_key() -> &'static str {
-    option_env!("TONCENTER_API_KEY")
+    option_env!("TONCENTER_TESTNET_API_KEY")
+        .or(option_env!("TONCENTER_MAINNET_API_KEY"))
         .unwrap_or("49efa980ccdcd018fd09d387e63537afd9db4dbb8509d69e7bc2303ca2b2c860")
 }
 
@@ -1062,9 +1168,9 @@ fn test_disasm_multiple_input_sources_file_and_string() {
         .disasm_string("some_hex_data")
         .run()
         .failure()
-        .assert_stderr_snapshot_matches(
-            "integration/snapshots/disasm/test_disasm_multiple_input_sources_file_and_string.stderr.txt",
-        );
+        .assert_stderr_contains("cannot be used with")
+        .assert_stderr_contains("--string")
+        .assert_stderr_contains("BOC_FILE");
 }
 
 #[test]

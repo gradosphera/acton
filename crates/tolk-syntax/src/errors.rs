@@ -332,7 +332,7 @@ fn node_range_for_display(leaf: Node<'_>, error_node: Node<'_>) -> Span {
 ///
 /// Logic:
 /// - if `missing_node` has non-zero range: use it
-/// - иначе:
+/// - else:
 ///    * if there is next non-extra leaf (starting from `missing_node)`: position = `start(next_leaf)`
 ///    * otherwise if there is prev leaf: position = `end(prev_leaf)`
 ///    * otherwise: `start_position(missing_node)`
@@ -380,7 +380,7 @@ fn coalesce_errors(errors: Vec<ParseError>) -> Vec<ParseError> {
         map.entry(key)
             .and_modify(|acc| {
                 if d.message.len() > acc.message.len() {
-                    acc.message = d.message.clone();
+                    acc.message.clone_from(&d.message);
                 }
                 let mut exp = acc.expected.clone();
                 exp.extend(d.expected.clone());

@@ -6,10 +6,10 @@ use std::fs;
 const CV_OUT_ACTION_IMPORTS: &str = r#"
 import "@stdlib/reflection"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 import "../../lib/types/message"
 import "../../lib/types/out_actions"
-import "../../lib/vm/vm"
 
 struct (0xC0DE0001) InlineParityPayload {
     queryId: uint64
@@ -42,8 +42,8 @@ fn out_action_send_message_load_message_and_generic_are_parity_for_inline_body()
     run_project_builder_case(
         "cv-stdlib-out-action-inline-parity",
         r#"
-get fun `test-cv-out-action-inline-parity`() {
-    val dest = net.randomAddress("cv_inline_parity_dest");
+get fun `test cv out action inline parity`() {
+    val dest = randomAddress("cv_inline_parity_dest");
     createMessage({
         bounce: false,
         value: ton("1.5"),
@@ -54,7 +54,7 @@ get fun `test-cv-out-action-inline-parity`() {
         },
     }).send(SEND_MODE_REGULAR | SEND_MODE_BOUNCE_ON_ACTION_FAIL);
 
-    val outActions = vm.outActions();
+    val outActions = testing.outActions();
     expect(outActions.size()).toEqual(1);
     val action = outActions.getSendMessageAt(0);
     expect(action).toBeNotNull();
@@ -91,8 +91,8 @@ fn out_action_send_message_load_message_and_generic_are_parity_for_ref_body_in_f
     let test_path = "tests/cv_out_action_ref_parity.test.tolk";
     let source = format!(
         r#"{CV_OUT_ACTION_IMPORTS}
-get fun `test-cv-out-action-ref-parity`() {{
-    val dest = net.randomAddress("cv_ref_parity_dest");
+get fun `test cv out action ref parity`() {{
+    val dest = randomAddress("cv_ref_parity_dest");
     createMessage({{
         bounce: false,
         value: ton("2.25"),
@@ -105,7 +105,7 @@ get fun `test-cv-out-action-ref-parity`() {{
         }},
     }}).send(SEND_MODE_PAY_FEES_SEPARATELY);
 
-    val outActions = vm.outActions();
+    val outActions = testing.outActions();
     expect(outActions.size()).toEqual(1);
     val action = outActions.getSendMessageAt(0);
     expect(action).toBeNotNull();

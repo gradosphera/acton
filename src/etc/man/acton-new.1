@@ -12,13 +12,14 @@ Create a new Acton project in the given directory.
 .sp
 The command creates the target directory if it does not exist, copies the
 selected template scaffold, writes starter project files such as \fBActon.toml\fR,
-\fB\&.env\fR, \fB\&.editorconfig\fR, and \fB\&.gitignore\fR, installs the bundled standard
+\fB\&.env.example\fR, \fB\&.editorconfig\fR, and \fB\&.gitignore\fR, installs the bundled standard
 library, and optionally initializes Git hooks and \fBAGENTS.md\fR guidance.
 .sp
 If \fB_path_\fR already exists as a directory, \fBacton new\fR fails instead of trying
 to merge into that directory, even when it is empty. \fBacton new .\fR is the
-explicit exception: it scaffolds into the current directory and may overwrite
-existing files whose paths collide with the selected template.
+explicit exception: it scaffolds into the current directory. If generated files
+would collide with existing files, interactive mode asks for confirmation and
+non\-interactive mode refuses unless \fB\-\-overwrite\fR is passed.
 .sp
 If \fBgit\fR is available in \fBPATH\fR, \fBacton new\fR runs \fBgit init\fR in the project
 directory and then runs \fBgit add .\fR, which stages all current\-directory
@@ -42,15 +43,16 @@ the target directory name.
 .sp
 \fB\-\-description\fR \fIdescription\fR
 .RS 4
-Project description written to \fBActon.toml\fR\&. If not provided, interactive mode
-prompts for it and defaults to \fBA TON blockchain project\fR\&.
+Project description written to \fBActon.toml\fR\&. If not provided, Acton uses
+\fBA TON blockchain project\fR by default. In interactive mode you can override it
+after opting into advanced options.
 .RE
 .sp
 \fB\-\-template\fR \fItemplate\fR
 .RS 4
 Project template to use.
 .sp
-Possible values: \fBempty\fR, \fBcounter\fR, \fBjetton\fR
+Possible values: \fBempty\fR, \fBcounter\fR, \fBjetton\fR, \fBnft\fR, \fBw5\-extension\fR
 .sp
 If not provided, interactive mode prompts for the template.
 .RE
@@ -60,15 +62,17 @@ If not provided, interactive mode prompts for the template.
 License identifier to place into \fBActon.toml\fR and use for the generated
 \fBLICENSE\fR file when Acton has a built\-in template for that license.
 .sp
-If not provided, interactive mode prompts for it.
+If not provided, Acton uses \fBMIT\fR by default. In interactive mode you can
+override it after opting into advanced options.
 .RE
 .sp
 \fB\-\-app\fR
 .RS 4
 Include the template\[cq]s TypeScript app scaffold when available.
 .sp
-At the moment only the \fBcounter\fR template supports the app layout. If you pass
-\fB\-\-app\fR for a template that does not support it, \fBacton new\fR fails.
+All built\-in templates currently support the app layout: \fBempty\fR, \fBcounter\fR,
+\fBjetton\fR, \fBnft\fR, and \fBw5\-extension\fR\&. If you pass \fB\-\-app\fR for a template that does
+not support it, \fBacton new\fR fails.
 .sp
 If the selected template supports the app layout and \fB\-\-app\fR is not provided,
 interactive mode prompts for this choice. Non\-interactive mode leaves the app
@@ -79,9 +83,9 @@ layout disabled unless \fB\-\-app\fR is passed explicitly.
 .RS 4
 Create and install the default project\-local Git hooks.
 .sp
-If \fBgit\fR is available and \fB\-\-hooks\fR is not provided, interactive mode prompts
-for this choice. Non\-interactive mode leaves hooks disabled unless \fB\-\-hooks\fR
-is passed explicitly.
+If \fBgit\fR is available and \fB\-\-hooks\fR is not provided, interactive mode offers
+this choice after you opt into advanced options. Non\-interactive mode leaves
+hooks disabled unless \fB\-\-hooks\fR is passed explicitly.
 .RE
 .sp
 \fB\-\-agents\fR
@@ -89,9 +93,18 @@ is passed explicitly.
 Include an \fBAGENTS.md\fR file with coding\-agent guidance from the selected
 template.
 .sp
-If \fB\-\-agents\fR is not provided, interactive mode prompts for this choice.
-Non\-interactive mode leaves \fBAGENTS.md\fR disabled unless \fB\-\-agents\fR is passed
-explicitly.
+If \fB\-\-agents\fR is not provided, interactive mode offers this choice after you
+opt into advanced options. Non\-interactive mode leaves \fBAGENTS.md\fR disabled
+unless \fB\-\-agents\fR is passed explicitly.
+.RE
+.sp
+\fB\-\-overwrite\fR
+.RS 4
+Overwrite existing files whose paths collide with the selected template or
+generated project files.
+.sp
+Without \fB\-\-overwrite\fR, non\-interactive mode refuses to replace colliding files.
+Interactive mode asks for confirmation unless \fB\-\-overwrite\fR is passed.
 .RE
 .SS "Display Options"
 .sp
@@ -161,11 +174,6 @@ Counter contract template with:
 .RS 4
 \h'-04'\(bu\h'+03'optional \fBAGENTS.md\fR
 .RE
-.sp
-This template also supports the optional TypeScript app layout with \fB\-\-app\fR\&.
-.sp
-With \fB\-\-app\fR, Acton also creates a Vite\-based React app, a generated
-TypeScript wrapper, and top\-level npm metadata files.
 .SS "jetton"
 Jetton minter and wallet template with:
 .sp
@@ -188,16 +196,71 @@ Jetton minter and wallet template with:
 .RS 4
 \h'-04'\(bu\h'+03'optional \fBAGENTS.md\fR
 .RE
-.SH "INTERACTIVE MODE"
-When enough information is missing and standard input/output are connected to a
-terminal, \fBacton new\fR prompts for:
+.SS "nft"
+NFT collection and item template with:
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'project name
+\h'-04'\(bu\h'+03'collection and item contracts
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'description
+\h'-04'\(bu\h'+03'wrappers and tests
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'deployment scripts
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'CI workflow
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'optional \fBAGENTS.md\fR
+.RE
+.SS "w5-extension"
+Wallet V5 extension contract and subscription example template with:
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'the extension contract and shared types
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'vendored Wallet V5 sources for end\-to\-end testing
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'extension and Wallet V5 wrappers
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'integration tests for install, payment, and cancellation flows
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'deploy, install, and delete scripts
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'CI workflow
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'optional \fBAGENTS.md\fR
+.RE
+.sp
+All built\-in templates support the optional TypeScript app layout with \fB\-\-app\fR:
+\fBempty\fR, \fBcounter\fR, \fBjetton\fR, \fBnft\fR, and \fBw5\-extension\fR\&.
+.sp
+With \fB\-\-app\fR, Acton also creates a Vite\-based React app and top\-level npm
+metadata files. App templates with frontend contract flows also include
+generated TypeScript wrappers.
+.SH "INTERACTIVE MODE"
+When enough information is missing and standard input/output are connected to a
+terminal, \fBacton new\fR uses a short default flow:
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'project name
 .RE
 .sp
 .RS 4
@@ -205,11 +268,21 @@ terminal, \fBacton new\fR prompts for:
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'license
+\h'-04'\(bu\h'+03'whether to include the TypeScript app layout when the template supports it
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'whether to include the TypeScript app layout when the template supports it
+\h'-04'\(bu\h'+03'whether to configure advanced options
+.RE
+.sp
+If you opt into advanced options, Acton can then prompt for:
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'description
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'license
 .RE
 .sp
 .RS 4
@@ -220,11 +293,14 @@ terminal, \fBacton new\fR prompts for:
 \h'-04'\(bu\h'+03'whether to include \fBAGENTS.md\fR
 .RE
 .sp
+If you skip advanced options, Acton keeps the default description \fBA TON blockchain project\fR, the default license \fBMIT\fR, and leaves optional features
+disabled unless their flags are passed explicitly.
+.sp
 In non\-interactive mode, optional features stay disabled unless their flags are
 passed explicitly. For CI or scripts, pass \fB\-\-name\fR, \fB\-\-description\fR,
 \fB\-\-template\fR, and \fB\-\-license\fR if you want to avoid prompts entirely.
 .SH "FILES"
-The generated project always includes:
+The generated project normally includes:
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'\fBActon.toml\fR
@@ -235,7 +311,7 @@ The generated project always includes:
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fB\&.env\fR
+\h'-04'\(bu\h'+03'\fB\&.env.example\fR
 .RE
 .sp
 .RS 4
@@ -261,7 +337,17 @@ Depending on the selected template and options, Acton may also generate:
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'deployment scripts
+\h'-04'\(bu\h'+03'wrappers that usually include helper shapes such as \fBfromStorage(...)\fR,
+\fBdeploy(...)\fR, \fBsend{Name}(...)\fR, \fBsendAny(...)\fR, and typed get\-method calls
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'deployment and management scripts
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fB[scripts]\fR aliases such as \fBdeploy\-emulation\fR, \fBdeploy\-testnet\fR, and
+template\-specific management aliases in \fBActon.toml\fR
 .RE
 .sp
 .RS 4
@@ -275,15 +361,20 @@ Depending on the selected template and options, Acton may also generate:
 .RS 4
 \h'-04'\(bu\h'+03'\fBAGENTS.md\fR for \fB\-\-agents\fR
 .RE
-.SH "COUNTER APP LAYOUT"
-When \fBacton new \-\-template counter \-\-app\fR is used, the project includes:
+.SH "TYPESCRIPT APP LAYOUT"
+When \fB\-\-app\fR is used with a template that supports the app layout, the project
+includes:
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'\fBcontracts/src\fR for contract sources and shared Tolk types
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fBcontracts/tests\fR for tests and generated Tolk wrappers
+\h'-04'\(bu\h'+03'\fBcontracts/tests\fR for tests
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBcontracts/wrappers\fR for generated Tolk wrappers
 .RE
 .sp
 .RS 4
@@ -291,7 +382,8 @@ When \fBacton new \-\-template counter \-\-app\fR is used, the project includes:
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fBwrappers/\fR for the generated TypeScript wrapper used by the app
+\h'-04'\(bu\h'+03'\fBwrappers\-ts/\fR for generated TypeScript wrappers in app templates that call
+contracts from the frontend
 .RE
 .sp
 .RS 4
@@ -309,12 +401,41 @@ Before running frontend commands, install the app dependencies:
 npm ci
 .fi
 .RE
+.sp
+The generated app scaffold is a real frontend workspace, not just static demo
+files. After \fBnpm ci\fR, use the usual frontend lifecycle commands from the
+generated \fBpackage.json\fR alongside normal Acton contract commands.
+.sp
+Common commands in that generated app workspace:
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBnpm run dev\fR to start the Vite development server
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBnpm run build\fR to build the frontend bundle; contract\-aware app templates run
+\fBacton build\fR first
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBnpm run typecheck\fR for TypeScript checking
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBnpm run fmt\fR and \fBnpm run fmt:check\fR for frontend formatting
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBnpm run test\fR to run the bundled \fBacton test\fR command when the template provides
+it
+.RE
 .SH "SIDE EFFECTS"
 \fBacton new\fR writes only inside the chosen target directory. When \fB_path_\fR is
 \fB\&.\fR, that means the current directory itself, and existing files with the same
 paths as template files can be overwritten.
 .sp
-It also installs \fB\&.acton/tolk\-stdlib\fR there, may create \fB\&.githooks/\fR plus an
+It also installs \fB\&.acton/tolk\-stdlib\fR there unless
+\fBACTON_DISABLE_AUTO_STDLIB=1\fR is set, may create \fB\&.githooks/\fR plus an
 \fBAGENTS.md\fR file when requested, and, when \fBgit\fR is available, initializes the
 project repository and runs \fBgit add .\fR, which stages all current\-directory
 contents.
@@ -353,11 +474,11 @@ acton new my\-project \-\-name "My Project" \-\-description "Cool description" \
 .RE
 .sp
 .RS 4
-\h'-04' 3.\h'+01'Create the counter template with the TypeScript app layout:
+\h'-04' 3.\h'+01'Create a project with the TypeScript app layout:
 .sp
 .RS 4
 .nf
-acton new my\-project \-\-template counter \-\-app
+acton new my\-project \-\-template empty \-\-app
 .fi
 .RE
 .RE
@@ -388,9 +509,9 @@ acton new . \-\-template empty \-\-name "My Project" \-\-description "A TON bloc
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fIProject initialization guide\fR <https://ton\-blockchain.github.io/acton/docs/project\-init>
+\h'-04'\(bu\h'+03'\fIProject management guide\fR <https://ton\-blockchain.github.io/acton/docs/projects>
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fIBuild system configuration reference\fR <https://ton\-blockchain.github.io/acton/docs/build\-system/configuration\-reference>
+\h'-04'\(bu\h'+03'\fIBuild system configuration reference\fR <https://ton\-blockchain.github.io/acton/docs/building/reference>
 .RE

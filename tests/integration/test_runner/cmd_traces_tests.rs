@@ -10,7 +10,7 @@ fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
 ";
 
-const STEP_TRACE_MESSAGES: &str = r#"
+const STEP_TRACE_MESSAGES: &str = r"
 struct (0x3101f001) TriggerForward {
     queryId: uint64
     target: address
@@ -19,7 +19,7 @@ struct (0x3101f001) TriggerForward {
 struct (0x3101f002) Notify {
     queryId: uint64
 }
-"#;
+";
 
 const STEP_TRACE_FORWARDER_CONTRACT: &str = r#"
 import "messages"
@@ -59,9 +59,9 @@ fun onBouncedMessage(_: InMessageBounced) {}
 
 const TRACE_TEST_PREPARE: &str = r#"
 import "../../lib/testing/expect"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
-import "../../lib/emulation/tracing"
+import "../../lib/emulation/testing"
 import "../../lib/types/big_array"
 
 struct Counter {
@@ -80,7 +80,7 @@ fun Counter.fromStorage() {
 
 fun deployCounter() {
     val counter = Counter.fromStorage();
-    val deployer = net.treasury("deployer");
+    val deployer = testing.treasury("deployer");
     val deployMsg = createMessage({
         bounce: false,
         value: ton("1.0"),
@@ -92,7 +92,7 @@ fun deployCounter() {
     val deployTxs = net.send(deployer.address, deployMsg);
     expect(deployTxs.size()).toEqual(1);
 
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
     val ping = createMessage({
         bounce: false,
         value: ton("0.2"),
@@ -267,17 +267,49 @@ fn save_test_trace_without_path_uses_default_directory() {
         .assert_snapshot_matches(
             "integration/snapshots/test-runner/cmd_agent_h/save_test_trace_without_path_uses_default_directory.stdout.txt",
         )
-        .assert_file_exists(".acton/traces/test-default-trace_trace.json")
-        .assert_file_exists(".acton/traces/contracts/simple.json")
+        .assert_file_exists("build/traces/test-default-trace_trace.json")
+        .assert_file_exists("build/traces/contracts/simple.json")
         .assert_file_snapshot_matches(
-            ".acton/traces/contracts/simple.json",
+            "build/traces/contracts/simple.json",
             "integration/snapshots/test-runner/cmd_agent_h/save_test_trace_without_path_uses_default_directory.contract.txt",
         );
 
     assert_trace_json_contract(
         &project,
-        ".acton/traces/test-default-trace_trace.json",
+        "build/traces/test-default-trace_trace.json",
         "test-default-trace",
+    );
+}
+
+#[test]
+fn save_test_trace_sanitizes_test_names_for_trace_file_paths() {
+    let project = trace_project(
+        "h-save-trace-name-with-slash",
+        r"
+        get fun `test trace/name with slash`() {
+            deployCounter();
+        }
+        ",
+    );
+
+    let output = project
+        .acton()
+        .test()
+        .arg("--save-test-trace")
+        .run()
+        .success();
+
+    output
+        .assert_passed(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/cmd_agent_h/save_test_trace_sanitizes_test_names_for_trace_file_paths.stdout.txt",
+        )
+        .assert_file_exists("build/traces/test_trace_name_with_slash_trace.json");
+
+    assert_trace_json_contract(
+        &project,
+        "build/traces/test_trace_name_with_slash_trace.json",
+        "test trace/name with slash",
     );
 }
 
@@ -315,7 +347,7 @@ fn save_test_trace_with_custom_directory_uses_regular_non_ui_flow() {
         "test-custom-trace",
     );
 
-    let default_trace_dir = project.path().join(".acton/traces");
+    let default_trace_dir = project.path().join("build/traces");
     assert!(
         !default_trace_dir.exists(),
         "Default trace dir should not be created for custom trace path: {}",
@@ -394,7 +426,7 @@ fn save_test_trace_keeps_custom_trace_names() {
         r#"
         get fun `test-custom-trace-names`() {
             val counter = Counter.fromStorage();
-            val deployer = net.treasury("deployer");
+            val deployer = testing.treasury("deployer");
             val deployMsg = createMessage({
                 bounce: false,
                 value: ton("1.0"),
@@ -404,10 +436,10 @@ fn save_test_trace_keeps_custom_trace_names() {
             });
 
             val deployTxs = net.send(deployer.address, deployMsg);
-            tracing.save(deployTxs, "deploy-counter");
+            deployTxs.giveName("deploy-counter");
             expect(deployTxs.size()).toEqual(1);
 
-            val sender = net.treasury("sender");
+            val sender = testing.treasury("sender");
             val ping = createMessage({
                 bounce: false,
                 value: ton("0.2"),
@@ -415,7 +447,7 @@ fn save_test_trace_keeps_custom_trace_names() {
             });
 
             val pingTxs = net.send(sender.address, ping);
-            tracing.save(pingTxs, "ping-counter");
+            pingTxs.giveName("ping-counter");
             expect(pingTxs.size()).toEqual(1);
         }
         "#,
@@ -492,14 +524,14 @@ fn save_test_trace_merges_step_execution_batches_into_single_named_trace() {
             "trace",
             r#"
             import "../../lib/testing/expect"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
-            import "../../lib/emulation/tracing"
-            import "../../lib/testing/transaction_expect"
+import "../../lib/emulation/testing"
+            import "../../lib/emulation/network"
             import "../contracts/messages"
 
             get fun `test-step-trace-merge`() {
-                val sender = net.treasury("sender");
+                val sender = testing.treasury("sender");
 
                 val forwarderInit = ContractState {
                     code: build("forwarder"),
@@ -525,7 +557,7 @@ fn save_test_trace_merges_step_execution_batches_into_single_named_trace() {
                     dest: { stateInit: receiverInit },
                 }))).toHaveSuccessfulDeploy({ to: receiverAddress });
 
-                val iter = net.sendIter(sender.address, createMessage({
+                val iter = testing.createTraceIterationCursor(sender.address, createMessage({
                     bounce: false,
                     value: ton("0.5"),
                     dest: forwarderAddress,
@@ -542,14 +574,14 @@ fn save_test_trace_merges_step_execution_batches_into_single_named_trace() {
                     to: forwarderAddress,
                 });
 
-                val tail = iter.executeFrom();
+                val tail = iter.executeAllRemaining();
                 expect(tail).toHaveLength(1);
                 expect(tail).toHaveSuccessfulTx<Notify>({
                     from: forwarderAddress,
                     to: receiverAddress,
                 });
 
-                tracing.save(tail, "step-forward-trace");
+                tail.giveName("step-forward-trace");
             }
             "#,
         )
@@ -610,7 +642,7 @@ fn save_test_trace_merges_step_execution_batches_into_single_named_trace() {
 
     let failed_messages = merged_trace["failed_messages"]
         .as_array()
-        .map_or_else(Vec::new, |failed_messages| failed_messages.to_vec());
+        .map_or_else(Vec::new, Clone::clone);
     assert!(
         failed_messages.is_empty(),
         "step trace should not fragment failures into extra chains"
@@ -627,14 +659,14 @@ fn profiling_snapshot_merges_step_execution_batches_into_single_named_trace_chai
             "trace",
             r#"
             import "../../lib/testing/expect"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
-            import "../../lib/emulation/tracing"
-            import "../../lib/testing/transaction_expect"
+import "../../lib/emulation/testing"
+            import "../../lib/emulation/network"
             import "../contracts/messages"
 
-            get fun `test-step-profile-merge`() {
-                val sender = net.treasury("sender");
+            get fun `test step profile merge`() {
+                val sender = testing.treasury("sender");
 
                 val forwarderInit = ContractState {
                     code: build("forwarder"),
@@ -660,7 +692,7 @@ fn profiling_snapshot_merges_step_execution_batches_into_single_named_trace_chai
                     dest: { stateInit: receiverInit },
                 }))).toHaveSuccessfulDeploy({ to: receiverAddress });
 
-                val iter = net.sendIter(sender.address, createMessage({
+                val iter = testing.createTraceIterationCursor(sender.address, createMessage({
                     bounce: false,
                     value: ton("0.5"),
                     dest: forwarderAddress,
@@ -677,9 +709,9 @@ fn profiling_snapshot_merges_step_execution_batches_into_single_named_trace_chai
                     to: forwarderAddress,
                 });
 
-                tracing.save(first, "step-forward-trace");
+                first.giveName("step-forward-trace");
 
-                val tail = iter.executeFrom();
+                val tail = iter.executeAllRemaining();
                 expect(tail).toHaveLength(1);
                 expect(tail).toHaveSuccessfulTx<Notify>({
                     from: forwarderAddress,
@@ -721,7 +753,7 @@ fn profiling_snapshot_merges_step_execution_batches_into_single_named_trace_chai
     let merged_trace = merged_traces[0];
     assert_eq!(
         merged_trace["test_name"].as_str(),
-        Some("test-step-profile-merge"),
+        Some("test step profile merge"),
         "profiling snapshot should keep the owning test name"
     );
     assert_eq!(
@@ -736,7 +768,7 @@ fn regular_run_without_trace_flag_does_not_create_trace_artifacts() {
     let project = trace_project(
         "h-regular-run-no-trace",
         r"
-        get fun `test-no-trace`() {
+        get fun `test no trace`() {
             deployCounter();
         }
         ",
@@ -750,7 +782,7 @@ fn regular_run_without_trace_flag_does_not_create_trace_artifacts() {
             "integration/snapshots/test-runner/cmd_agent_h/regular_run_without_trace_flag_does_not_create_trace_artifacts.stdout.txt",
         );
 
-    let trace_dir = project.path().join(".acton/traces");
+    let trace_dir = project.path().join("build/traces");
     assert!(
         !trace_dir.exists(),
         "Trace dir should not exist without --save-test-trace: {}",
@@ -776,7 +808,7 @@ fn save_test_trace_can_be_enabled_after_regular_run() {
             "integration/snapshots/test-runner/cmd_agent_h/save_test_trace_can_be_enabled_after_regular_run.regular.stdout.txt",
         );
 
-    let default_trace_dir = project.path().join(".acton/traces");
+    let default_trace_dir = project.path().join("build/traces");
     assert!(
         !default_trace_dir.exists(),
         "Trace dir should not exist after regular run: {}",

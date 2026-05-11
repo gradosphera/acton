@@ -3,6 +3,7 @@ use crate::support::project::ProjectBuilder;
 
 const NETWORK_IMPORTS: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 "#;
 
@@ -24,7 +25,7 @@ fn enable_broadcast_toggle_reflects_in_is_broadcasting() {
     run_network_success(
         "bn-stdlib-enable-broadcast-toggle",
         r"
-get fun `test-bn-enable-broadcast-toggle`() {
+get fun `test bn enable broadcast toggle`() {
     expect(net.isBroadcasting()).toEqual(false);
 
     net.enableBroadcast();
@@ -43,7 +44,7 @@ fn disable_broadcast_toggle_reflects_in_is_broadcasting() {
     run_network_success(
         "bn-stdlib-disable-broadcast-toggle",
         r"
-get fun `test-bn-disable-broadcast-toggle`() {
+get fun `test bn disable broadcast toggle`() {
     expect(net.isBroadcasting()).toEqual(false);
 
     net.enableBroadcast();

@@ -1,0 +1,218 @@
+---
+title: "Test attributes"
+description: "Learn how to use test attributes to control test behavior, skip tests, and set expectations"
+---
+
+The test runner reads dotted `@test.*` annotations on test functions to control execution, expectations, and status reporting.
+
+Only dotted `@test.*` syntax is supported by the test runner. Legacy `@test(...)` forms are ignored.
+
+## The `@test` Annotation
+
+Test attributes are specified using the `@test` annotation namespace:
+
+```tolk
+@test.skip
+get fun `test should be skipped`() {
+    // This test will be skipped
+}
+
+@test.todo
+get fun `test not implemented yet`() {
+    // This test will be marked as TODO
+}
+
+@test.fail_with(42)
+get fun `test expects exit code 42`() {
+    // This test expects exit code 42
+}
+
+@test.gas_limit(1000)
+get fun `test with gas limit`() {
+    // This test will fail if it uses more than 1000 gas
+}
+```
+
+Stack multiple attributes on the same function:
+
+```tolk
+@test.fail_with(13)
+@test.gas_limit(5000)
+get fun `test complex validation`() {
+    // This test expects exit code 13,
+    // and has a gas limit of 5000
+    expensive_operation_that_fails();
+}
+```
+
+## Available attributes
+
+### `skip`
+
+Skips the test. The test does not run but still appears in the summary.
+
+Syntax:
+
+```tolk
+@test.skip
+@test.skip("Custom description")
+```
+
+Examples:
+
+```tolk
+@test.skip
+get fun `test broken for now`() {
+    expect(1 + 1).toEqual(3); // This won't execute
+}
+
+@test.skip("waiting for parser cleanup")
+get fun `test blocked on parser refactor`() {
+    expect(1 + 1).toEqual(3); // This won't execute
+}
+```
+
+Output:
+
+```text noCopy
+○ test broken for now skipped
+○ test blocked on parser refactor [waiting for parser cleanup]
+```
+
+### `todo`
+
+Marks the test as TODO. The test does not run and is counted in the TODO summary line.
+
+Syntax:
+
+```tolk
+@test.todo
+@test.todo("Custom description")
+```
+
+Examples:
+
+```tolk
+@test.todo
+get fun `test new feature`() {
+    // Will show "TODO" as description
+}
+
+@test.todo("Waiting for API changes")
+get fun `test depends on external api`() {
+    // Will show custom description
+}
+```
+
+Output:
+
+```text noCopy
+□ test new feature [TODO]
+□ test depends on external api [Waiting for API changes]
+```
+
+### `fail_with`
+
+Sets the expected exit code. The default expected exit code is `0` (success). Use `fail_with` when the test should end with a different exit code.
+
+Syntax:
+
+```tolk
+@test.fail_with(<number>)
+```
+
+Example:
+
+```tolk
+@test.fail_with(42)
+get fun `test expects failure`() {
+    throw 42; // Test will pass because it expects exit code 42
+}
+```
+
+Typical uses:
+
+- Testing error conditions.
+- Validating that certain operations fail as expected.
+- Testing custom error codes in contract logic.
+
+### `gas_limit`
+
+Sets a maximum gas limit. If the test uses more gas than the limit, it fails.
+
+Syntax:
+
+```tolk
+@test.gas_limit(<number>)
+```
+
+Example:
+
+```tolk
+@test.gas_limit(1000)
+get fun `test efficient algorithm`() {
+    // If this test uses more than 1000 gas, it will fail
+    val result = expensive_computation();
+    expect(result).toEqual(42);
+}
+```
+
+Typical uses:
+
+- Performance testing and optimization.
+- Ensuring algorithms stay within gas bounds.
+- Preventing gas-related regressions.
+
+### `fuzz`
+
+Enables fuzzing for a parameterized test. The runner generates input values from the test ABI and executes the same test multiple times.
+
+Syntax:
+
+```tolk
+@test.fuzz
+// or
+@test.fuzz(<runs>)
+// or
+@test.fuzz({ runs: <runs>, max_test_rejects: <number>, seed: <number> })
+```
+
+Examples:
+
+```tolk
+@test.fuzz
+get fun `test default fuzz runs`(value: int) {
+    expect(value).toEqual(value);
+}
+
+@test.fuzz(64)
+get fun `test custom fuzz runs`(flag: bool) {
+    expect(flag).toEqual(flag);
+}
+
+@test.fuzz({ runs: 64, max_test_rejects: 1024, seed: 42 })
+get fun `test custom fuzz budget`(value: int) {
+    fuzz.assume(value != 0);
+    expect(value != 0).toBeTrue();
+}
+```
+
+Notes:
+
+- `fuzz` is valid only for tests with parameters
+- parameterized tests require explicit fuzz opt-in
+- `@test.fuzz` uses defaults from `[test.fuzz]` in `Acton.toml`
+- `@test.fuzz({ ... })` overrides individual fuzz settings for that test
+- `seed` can be set in `[test.fuzz]` or in `@test.fuzz({ seed: ... })`
+- legacy `@test({ fuzz: ... })` is ignored by the runner
+- for assumptions and bounds, import `@acton/testing/fuzz` and use `fuzz.assume(...)` / `fuzz.bound(...)`
+
+See the [fuzz testing](/docs/testing/fuzz-testing) guide for the execution model, supported types, helper APIs, and configuration details.
+
+## Guidelines
+
+1. Prefer `skip` over commenting out a whole test when disabling it temporarily.
+2. Prefer `todo` with a short description so the summary states what is missing.
+3. Use `fail_with` when asserting on expected non-zero exit codes.
+4. Use `gas_limit` when a test should guard against gas regressions.
+5. Apply `fuzz` only on parameterized tests that intentionally explore the input space.

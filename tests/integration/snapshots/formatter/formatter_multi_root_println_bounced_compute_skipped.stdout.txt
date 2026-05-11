@@ -8,12 +8,13 @@
  TEST  [ROOT]
 
  > tests/formatter_bounce.test.tolk (1 test)
-  ✓ formatter-println-bounced-and-compute-skipped [TIME]
+  ✓ formatter println bounced and compute skipped [TIME]
     └─ Test output:
        N/A -> sender A
        └── (!) empty 0.2 TON -> fm_bounce_echo B                                       gas=271
        
        N/A -> sender A
        └── FmBouncePing 0.2 TON -> EQAAAA..ALrXfh B                                    compute phase skipped aborted
+           queryId: 402
 
  ✓ 1 passed in 1 file

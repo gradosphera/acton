@@ -1,0 +1,88 @@
+---
+title: "Fork testing"
+description: "Learn how to test contracts against blockchain state by forking testnet or mainnet"
+---
+
+Fork testing runs tests against blockchain state by loading accounts and libraries from TON testnet or TON mainnet. Use it to test contract interactions with deployed contracts without a need in complex local environment setups.
+
+## What fork testing is
+
+Fork testing keeps a local view (fork) of remote chain state. When test code reads an account that exists on testnet or mainnet while fork mode is on, the runner:
+
+1. Fetches the account's state from the network
+2. Caches it locally for the test run
+3. Uses that remote state inside local execution
+
+Fork testing is useful for:
+
+- Testing integrations with existing contracts
+- Verifying behavior against real contract code
+- Debugging issues with deployed contracts
+- Testing edge cases with real on-chain data
+
+It combines real on-chain data with local test execution speed.
+
+## Enable fork testing
+
+### Basic usage
+
+Pass `--fork-net` when running tests:
+
+```bash
+# Fork from testnet
+acton test --fork-net testnet
+
+# Fork from mainnet
+acton test --fork-net mainnet
+```
+
+### Configure API access
+
+Remote state is fetched through the TON Center APIs. Obtain the API key in the [Telegram bot](https://t.me/toncenter) to access higher RPS limits.
+
+Set `TONCENTER_MAINNET_API_KEY` or `TONCENTER_TESTNET_API_KEY` environment variables in the `.env` file or export them on the shell:
+
+```bash
+# Key for and fork of the testnet
+TONCENTER_TESTNET_API_KEY=YOUR_API_KEY acton test --fork-net testnet
+
+# Key for and fork of the mainnet
+TONCENTER_MAINNET_API_KEY=YOUR_API_KEY acton test --fork-net mainnet
+```
+
+## Execution model
+
+When fork testing is enabled and a test touches an account:
+
+1. The system first checks if the account was already loaded in the local cache.
+2. If not cached and `--fork-net` is specified, it queries TON Center API.
+3. Account state, i.e., balance, code, data, status, is downloaded and deserialized.
+4. The state is cached for subsequent accesses during the test run.
+5. Tests execute using this real state in the local emulator.
+
+<Callout type="warn" title="Network latency">
+    The first fetch of each distinct account hits the network and adds latency. Subsequent fetches reuse the cache. Plan accordingly when many distinct accounts appear in one run.
+</Callout>
+
+## Cache scope and refresh behavior
+
+Forked account snapshots are cached only in memory for the current `acton test` invocation:
+
+- The cache key is the tuple of fork network, optional pinned block number, and account address.
+- The cache is shared across tests in the same run, so the second test that touches the same account does not re-fetch it.
+- The cache is not persisted to disk. A fresh `acton test --fork-net ...` run starts with an empty remote snapshot cache.
+- Failed lookups are not cached. If a request errors, the next access can try the network again.
+
+To refetch remote snapshots, rerun `acton test --fork-net ...`. Local emulator mutations do not invalidate or re-download the cached remote snapshot.
+
+Accounts deployed or changed during the test are not replaced by remote snapshots. Fork testing only loads accounts that are not already present in the local emulated environment.
+
+That precedence also applies after an account is fetched once. Once the account exists in the emulated blockchain state, later reads and message execution use the local copy from that blockchain state rather than querying the network again.
+
+## Library lookup precedence
+
+Library lookup follows the same "local first" rule.
+
+When code asks to resolve a library hash, Acton first checks libraries already registered in the current emulated blockchain state, for example via `testing.registerLibrary(...)`. Only if the library is still missing does it fall back to the configured fork network.
+
+That ordering matters when a forked test registers a different library cell than the remote network would supply: the locally registered library overrides its remote counterpart for the rest of the run.

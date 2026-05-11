@@ -1,3 +1,4 @@
+use crate::paths;
 use acton_config::config::{ActonConfig, project_root as configured_project_root};
 use dashmap::DashMap;
 use std::collections::BTreeMap;
@@ -30,9 +31,13 @@ pub async fn ls_cmd(
     }
     let project_root = dunce::canonicalize(configured_project_root())
         .unwrap_or_else(|_| configured_project_root().to_path_buf());
-    let mappings = ActonConfig::load()
-        .ok()
-        .and_then(|config| config.mappings());
+    let mappings = match ActonConfig::load() {
+        Ok(config) => config.mappings(),
+        Err(e) => {
+            eprintln!("  ⚠ Failed to load Acton.toml: {e:#}");
+            None
+        }
+    };
 
     if port.is_none() && !stdio {
         // default to stdio if no port is provided and stdio is not explicitly set
@@ -97,7 +102,11 @@ async fn ls_cmd_internal(
 }
 
 fn setup_ls_logging(log_file: Option<String>) -> anyhow::Result<()> {
-    let log_path = log_file.unwrap_or_else(|| ".acton/tolk-language-server.log".to_string());
+    let log_path = log_file.unwrap_or_else(|| {
+        paths::language_server_log_path(configured_project_root())
+            .to_string_lossy()
+            .to_string()
+    });
 
     if let Some(parent) = std::path::Path::new(&log_path).parent() {
         std::fs::create_dir_all(parent)?;

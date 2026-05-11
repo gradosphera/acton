@@ -5,6 +5,7 @@ use std::fs;
 
 const NETWORK_IMPORTS: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 "#;
 
@@ -45,12 +46,12 @@ fn get_account_state_after_top_up_returns_account_info_with_expected_balance() {
     run_project_case(
         "bj-stdlib-get-account-state-after-top-up",
         r#"
-get fun `test-bj-stdlib-get-account-state-after-top-up`() {
-    val target = net.randomAddress("bj_state_after_top_up_balance_target");
+get fun `test bj stdlib get account state after top up`() {
+    val target = randomAddress("bj_state_after_top_up_balance_target");
 
-    net.topUp(target, ton("2"));
+    testing.topUp(target, ton("2"));
 
-    val state = net.getAccountState(target);
+    val state = testing.getAccountState(target);
     expect(state).toBeNotNull();
     expect(state!.storage.balance.grams).toEqual(ton("2"));
 }
@@ -64,14 +65,14 @@ fn get_account_state_transitions_from_null_to_non_null_after_top_up() {
     run_fixture_success_case(
         "bj_get_account_state_transition_bug",
         r#"
-get fun `test-bj-stdlib-get-account-state-transition-bug`() {
-    val target = net.randomAddress("bj_state_transition_before_after_top_up");
-    val before = net.getAccountState(target);
+get fun `test bj stdlib get account state transition bug`() {
+    val target = randomAddress("bj_state_transition_before_after_top_up");
+    val before = testing.getAccountState(target);
     expect(before == null).toEqual(true);
 
-    net.topUp(target, ton("1"));
+    testing.topUp(target, ton("1"));
 
-    val after = net.getAccountState(target);
+    val after = testing.getAccountState(target);
     expect(after).toBeNotNull();
     expect(after!.storage.balance.grams).toEqual(ton("1"));
 }

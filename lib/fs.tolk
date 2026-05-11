@@ -21,16 +21,17 @@
 /// Namespace for file system operations.
 struct fs
 
-/// Reads the entire contents of a file at the given path as a string slice
-/// with snake-string encoding.
+/// Reads the entire contents of a file at the given path.
 ///
 /// Behavior details:
 /// - The file is read as UTF-8 text.
 /// - On any read failure, returns `null` (missing file, non-UTF-8 content,
 ///   permission error, or other host I/O error).
 /// - Failure reasons are intentionally collapsed to `null`; no error reason is exposed.
-/// - Relative paths are resolved by the host process working directory. Path forms such as
-///   `./a.txt` and `dir/../a.txt` are accepted and follow host path normalization rules.
+/// - Relative paths are resolved under the Acton project root. Path forms such as
+///   `./a.txt` and `dir/../a.txt` are accepted when they stay inside the project.
+/// - Absolute paths, parent-directory escapes, and symlinks that resolve outside the project
+///   are rejected and return `null`.
 /// - Newline bytes are preserved as-is after UTF-8 decoding (for example, CRLF is not
 ///   normalized to LF).
 ///
@@ -38,37 +39,46 @@ struct fs
 /// ```tolk
 /// val content = fs.readFile("config.txt");
 /// if (content != null) {
-///     println1("File content: {}", content);
+///     println("File content: {}", content);
 /// } else {
 ///     println("File not found");
 /// }
 /// ```
-fun fs.readFile(path: string): string? asm "3 EXTCALL"
+fun fs.readFile(path: string): string?
+    asm "3 EXTCALL"
 
 /// Reads the entire contents of a file as raw bytes.
 ///
 /// Returns:
 /// - `slice` with file bytes on success.
 /// - `null` on read failure (missing file, permission error, etc).
-fun fs.readBytes(path: string): slice? asm "4 EXTCALL"
+/// - `null` when the path is absolute or escapes the project root.
+fun fs.readBytes(path: string): slice?
+    asm "4 EXTCALL"
 
 /// Writes UTF-8 text to a file.
 ///
 /// Returns:
 /// - `true` if the file was written successfully.
 /// - `false` on any host I/O error.
-fun fs.writeString(path: string, data: string): bool asm "5 EXTCALL"
+/// - `false` when the path is absolute or escapes the project root.
+fun fs.writeString(path: string, data: string): bool
+    asm "5 EXTCALL"
 
 /// Writes raw bytes from a slice to a file.
 ///
 /// Returns:
 /// - `true` if the file was written successfully.
 /// - `false` on invalid byte slice input or host I/O error.
-fun fs.writeBytes(path: string, data: slice): bool asm "7 EXTCALL"
+/// - `false` when the path is absolute or escapes the project root.
+fun fs.writeBytes(path: string, data: slice): bool
+    asm "7 EXTCALL"
 
 /// Checks whether a path exists.
 ///
 /// Returns:
 /// - `true` when the path exists.
 /// - `false` when missing or if existence check fails.
-fun fs.exists(path: string): bool asm "22 EXTCALL"
+/// - `false` when the path is absolute or escapes the project root.
+fun fs.exists(path: string): bool
+    asm "22 EXTCALL"

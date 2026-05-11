@@ -8,3 +8,7 @@ rules:
   template-injection:
     ignore:
       - release.yml
+  secrets-outside-env:
+    ignore:
+      - build.yml # secrets.ACTON_PUBLIC
+      - release-objs.yml # secrets.ACTON_PUBLIC

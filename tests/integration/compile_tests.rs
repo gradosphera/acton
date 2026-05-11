@@ -8,6 +8,12 @@ fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
 ";
 
+const LIBRARY_FILE: &str = r"
+fun helper(value: int): int {
+    return value + 1;
+}
+";
+
 #[test]
 fn test_compile_simple_contract() {
     let project = ProjectBuilder::new("compile-simple")
@@ -23,6 +29,69 @@ fn test_compile_simple_contract() {
         .assert_contains("Code in base64")
         .assert_contains("Code in hex")
         .assert_contains("Code hash hex");
+}
+
+#[test]
+fn test_compile_file_without_entrypoint_requires_flag() {
+    let project = ProjectBuilder::new("compile-no-entrypoint")
+        .file("lib/helper", LIBRARY_FILE)
+        .build();
+
+    project
+        .acton()
+        .compile("lib/helper.tolk")
+        .run()
+        .failure()
+        .assert_stderr_contains("has no entrypoint");
+}
+
+#[test]
+fn test_compile_file_without_entrypoint_with_allow_no_entrypoint_flag() {
+    let project = ProjectBuilder::new("compile-no-entrypoint-allowed")
+        .file("lib/helper", LIBRARY_FILE)
+        .build();
+
+    project
+        .acton()
+        .compile("lib/helper.tolk")
+        .allow_no_entrypoint()
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_contains("Code in base64")
+        .assert_contains("Code in hex")
+        .assert_contains("Code hash hex");
+}
+
+#[test]
+fn test_compile_allow_no_entrypoint_uses_separate_cache_namespace() {
+    let project = ProjectBuilder::new("compile-no-entrypoint-cache")
+        .file("lib/helper", LIBRARY_FILE)
+        .build();
+
+    project
+        .acton()
+        .compile("lib/helper.tolk")
+        .allow_no_entrypoint()
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_not_contains("from cache");
+
+    project
+        .acton()
+        .compile("lib/helper.tolk")
+        .allow_no_entrypoint()
+        .run()
+        .success()
+        .assert_contains("Compilation successful (from cache)");
+
+    project
+        .acton()
+        .compile("lib/helper.tolk")
+        .run()
+        .failure()
+        .assert_stderr_contains("has no entrypoint");
 }
 
 #[test]
@@ -99,7 +168,9 @@ fn test_compile_undefined_symbol() {
         .compile("contracts/undefined.tolk")
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_compile_undefined_symbol.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/compile/test_compile_undefined_symbol.stdout.txt",
+        );
 }
 
 // ========================================
@@ -266,6 +337,21 @@ fn test_compile_json_error() {
 }
 
 #[test]
+fn test_compile_json_missing_file_exits_with_failure() {
+    let project = ProjectBuilder::new("compile-json-missing-file").build();
+
+    project
+        .acton()
+        .compile("missing.tolk")
+        .with_json()
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/compile/test_compile_json_missing_file_exits_with_failure.stdout.txt",
+        );
+}
+
+#[test]
 fn test_compile_base64_only() {
     let project = ProjectBuilder::new("compile-base64")
         .contract("simple", SIMPLE_CONTRACT)
@@ -399,6 +485,44 @@ fn test_compile_with_fift_output() {
 }
 
 #[test]
+fn test_compile_with_fift_output_recompiles_when_plain_cache_entry_lacks_fift() {
+    let project = ProjectBuilder::new("compile-fift-cache-miss-after-plain")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_not_contains("from cache");
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_fift_output("output.fif")
+        .run()
+        .success()
+        .assert_contains("Compilation successful")
+        .assert_not_contains("from cache");
+
+    let fift_file = project.path().join("output.fif");
+    assert!(
+        fift_file.exists(),
+        "Fift file should be created after recompilation with --fift"
+    );
+
+    project
+        .acton()
+        .compile("contracts/simple.tolk")
+        .with_fift_output("output.fif")
+        .run()
+        .success()
+        .assert_contains("Compilation successful (from cache)");
+}
+
+#[test]
 fn test_compile_with_fift_output_to_nonexistent_directory() {
     let project = ProjectBuilder::new("compile-fift-out")
         .contract("simple", SIMPLE_CONTRACT)
@@ -445,7 +569,9 @@ fn test_compile_empty_path() {
         .compile("")
         .run()
         .failure()
-        .assert_stderr_snapshot_matches("integration/snapshots/test_compile_empty_path.stderr.txt");
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/compile/test_compile_empty_path.stderr.txt",
+        );
 }
 
 #[test]
@@ -470,7 +596,7 @@ fn test_compile_file_without_read_permission() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_compile_file_without_read_permission.stderr.txt",
+            "integration/snapshots/compile/test_compile_file_without_read_permission.stderr.txt",
         );
 }
 
@@ -505,7 +631,7 @@ fn test_compile_import_from_symlink_file() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_compile_import_from_symlink_file.stderr.txt",
+            "integration/snapshots/compile/test_compile_import_from_symlink_file.stderr.txt",
         );
 }
 
@@ -523,7 +649,7 @@ fn test_compile_corrupted_cache_file() {
         .success();
 
     // Manually corrupt the cache file
-    let cache_dir = project.path().join(".acton/cache");
+    let cache_dir = project.path().join("build/cache");
     if cache_dir.exists() {
         let cache_file = first_cache_json_file(&cache_dir);
         fs::write(&cache_file, "corrupted cache data!!!").unwrap();
@@ -544,7 +670,7 @@ fn test_compile_ignores_unrelated_corrupted_cache_file_and_keeps_it() {
         .contract("simple", SIMPLE_CONTRACT)
         .build();
 
-    let cache_dir = project.path().join(".acton/cache");
+    let cache_dir = project.path().join("build/cache");
     fs::create_dir_all(&cache_dir).unwrap();
     let broken_path = cache_dir.join("broken.json");
     fs::write(&broken_path, "not-json").unwrap();
@@ -581,7 +707,7 @@ fn test_compile_clear_cache_removes_nested_cache_subdirectories() {
         .run()
         .success();
 
-    let cache_dir = project.path().join(".acton/cache");
+    let cache_dir = project.path().join("build/cache");
     let debug_dir = cache_dir.join("debug");
     let nested_dir = cache_dir.join("nested");
     fs::create_dir_all(&debug_dir).unwrap();
@@ -641,7 +767,7 @@ fn test_compile_boc_output_write_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_compile_boc_output_write_error.stderr.txt",
+            "integration/snapshots/compile/test_compile_boc_output_write_error.stderr.txt",
         );
 }
 
@@ -670,7 +796,7 @@ fn test_compile_fift_output_write_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_compile_fift_output_write_error.stderr.txt",
+            "integration/snapshots/compile/test_compile_fift_output_write_error.stderr.txt",
         );
 }
 
@@ -699,7 +825,7 @@ fn test_compile_source_map_write_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_compile_source_map_write_error.stderr.txt",
+            "integration/snapshots/compile/test_compile_source_map_write_error.stderr.txt",
         );
 }
 
@@ -719,7 +845,7 @@ fn test_compile_invalid_boc_output_path() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_compile_invalid_boc_output_path.stderr.txt",
+            "integration/snapshots/compile/test_compile_invalid_boc_output_path.stderr.txt",
         );
 }
 
@@ -739,6 +865,6 @@ fn test_compile_invalid_fift_output_path() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_compile_invalid_fift_output_path.stderr.txt",
+            "integration/snapshots/compile/test_compile_invalid_fift_output_path.stderr.txt",
         );
 }

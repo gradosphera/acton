@@ -1,12 +1,19 @@
+// This cache tracks only compiler-visible source dependencies.
+// On write, the compiler result supplies `source_map.files()`; we persist those
+// paths and their content hash. On lookup, we rehash the same paths and reuse
+// the entry only if nothing changed.
+// Acton-level contract `depends` are handled by `build` before cache lookup:
+// generated dependency files and rebuilt dependency contracts can force a
+// downstream recompile without teaching this file about the contract graph.
+
 use acton_config::config::{ActonConfig, project_root as configured_project_root};
 use anyhow::{Result, anyhow};
 use fs2::FileExt;
 use log::debug;
-use path_absolutize::*;
+use path_absolutize::Absolutize;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -14,12 +21,13 @@ use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tolkc::abi::ContractABI;
-use tolkc::compiler::CompilerResultSuccess;
-use ton_abi;
+use tolk_compiler::abi::ContractABI;
+use tolk_compiler::compiler::CompilerResultSuccess;
 use xxhash_rust::xxh3::Xxh3;
 
-const CACHE_SCHEMA_VERSION: u32 = 6;
+use crate::paths;
+
+const CACHE_SCHEMA_VERSION: u32 = 12;
 const CACHE_LOCK_WAIT_ATTEMPTS: usize = 60;
 const CACHE_LOCK_RETRY_DELAY: Duration = Duration::from_secs(1);
 const DEBUG_CACHE_SUBDIR: &str = "debug";
@@ -28,10 +36,10 @@ const DEBUG_CACHE_SUBDIR: &str = "debug";
 pub struct CacheEntry {
     pub code_boc64: String,
     pub code_hash_hex: String,
-    pub debug_mark_base64: Option<String>,
-    pub fift_code: String,
-    pub new_source_map: Option<tolkc::SourceMap>,
+    pub fift_code: Option<String>,
+    pub source_map: Option<tolk_compiler::SourceMap>,
     pub abi: Option<ContractABI>,
+    pub dependency_paths: Vec<String>,
     pub dependencies_hash: String,
     pub timestamp: u64,
     pub schema_version: u32,
@@ -49,12 +57,6 @@ struct FileHashCacheEntry {
     hash: [u8; 16],
 }
 
-#[derive(Debug, Clone)]
-struct DependenciesCacheEntry {
-    signature: Option<FileSignature>,
-    dependencies: Vec<String>,
-}
-
 struct CacheWriteLock {
     file: File,
 }
@@ -69,8 +71,6 @@ impl Drop for CacheWriteLock {
 pub struct FileBuildCache {
     cache_dir: PathBuf,
     config: ActonConfig,
-    contract_src_index: FxHashMap<String, String>,
-    dependencies_cache: FxHashMap<String, DependenciesCacheEntry>,
     file_hash_cache: FxHashMap<String, FileHashCacheEntry>,
     project_root: PathBuf,
     _temp_dir: Option<tempfile::TempDir>,
@@ -79,7 +79,7 @@ pub struct FileBuildCache {
 impl FileBuildCache {
     pub fn new(cache_dir: Option<PathBuf>) -> Result<Self> {
         let project_root = configured_project_root().to_path_buf();
-        let cache_dir = cache_dir.unwrap_or_else(|| project_root.join(".acton").join("cache"));
+        let cache_dir = cache_dir.unwrap_or_else(|| paths::build_cache_dir(&project_root));
 
         if !cache_dir.exists() {
             fs::create_dir_all(&cache_dir)?;
@@ -87,31 +87,21 @@ impl FileBuildCache {
 
         let config = ActonConfig::load().unwrap_or_default();
 
-        let contract_src_index = Self::build_contract_src_index(&config, &project_root);
-
         Ok(Self {
             cache_dir,
             config,
-            contract_src_index,
-            dependencies_cache: FxHashMap::default(),
             file_hash_cache: FxHashMap::default(),
             project_root,
             _temp_dir: None,
         })
     }
 
-    pub fn dummy() -> Result<Self> {
+    pub fn temporary_for_project(project_root: PathBuf, config: ActonConfig) -> Result<Self> {
         let tmp_dir = tempfile::TempDir::new()?;
-        let config = ActonConfig::load().unwrap_or_default();
-
-        let project_root = configured_project_root().to_path_buf();
-        let contract_src_index = Self::build_contract_src_index(&config, &project_root);
 
         Ok(Self {
             cache_dir: tmp_dir.path().to_path_buf(),
             config,
-            contract_src_index,
-            dependencies_cache: FxHashMap::default(),
             file_hash_cache: FxHashMap::default(),
             project_root,
             _temp_dir: Some(tmp_dir),
@@ -204,14 +194,21 @@ impl FileBuildCache {
         &mut self,
         file_path: &str,
         with_debug_info: bool,
+        with_fift: bool,
         optimization_level: usize,
         tolk_version: &str,
     ) -> Option<CacheEntry> {
-        let key = self.compute_key(file_path, with_debug_info, optimization_level, tolk_version);
+        let key = self.compute_key(
+            file_path,
+            with_debug_info,
+            with_fift,
+            optimization_level,
+            tolk_version,
+        );
         let entry = self.load_entry_for_key(&key, with_debug_info)?;
         let expected_dependencies_hash = entry.dependencies_hash.clone();
 
-        if let Ok(dependencies) = self.get_dependencies(file_path) {
+        if let Ok(dependencies) = self.dependency_paths_for_cache_lookup(file_path, &entry) {
             debug!("Check hash `{file_path}` with dependencies: {dependencies:?}");
             if let Ok(current_hash) = self.compute_dependencies_hash(&dependencies)
                 && current_hash == expected_dependencies_hash
@@ -228,10 +225,11 @@ impl FileBuildCache {
         file_path: &str,
         result: &CompilerResultSuccess,
         with_debug_info: bool,
+        with_fift: bool,
         optimization_level: usize,
         tolk_version: &str,
     ) -> Result<()> {
-        let dependencies = self.get_dependencies(file_path)?;
+        let dependencies = self.dependency_paths_from_compiler_result(file_path, result);
         debug!("Put new cache entry `{file_path}` with dependencies: {dependencies:?}");
 
         let dependencies_hash = self.compute_dependencies_hash(&dependencies)?;
@@ -239,10 +237,10 @@ impl FileBuildCache {
         let entry = CacheEntry {
             code_boc64: result.code_boc64.clone(),
             code_hash_hex: result.code_hash_hex.clone(),
-            debug_mark_base64: result.debug_mark_base64.clone(),
-            fift_code: result.fift_code.clone(),
-            new_source_map: result.new_source_map.clone(),
+            fift_code: with_fift.then(|| result.fift_code.clone()),
+            source_map: result.source_map.clone(),
             abi: result.abi.clone(),
+            dependency_paths: dependencies,
             dependencies_hash,
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -251,12 +249,17 @@ impl FileBuildCache {
             schema_version: CACHE_SCHEMA_VERSION,
         };
 
-        let key = self.compute_key(file_path, with_debug_info, optimization_level, tolk_version);
+        let key = self.compute_key(
+            file_path,
+            with_debug_info,
+            with_fift,
+            optimization_level,
+            tolk_version,
+        );
         let cache_file = self.cache_file_path(&key, with_debug_info);
         let cache_parent = cache_file
             .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| self.cache_dir.clone());
+            .map_or_else(|| self.cache_dir.clone(), Path::to_path_buf);
 
         let _lock = self.acquire_write_lock()?;
         fs::create_dir_all(&cache_parent)?;
@@ -274,6 +277,7 @@ impl FileBuildCache {
         &self,
         file_path: &str,
         with_debug_info: bool,
+        with_fift: bool,
         optimization_level: usize,
         tolk_version: &str,
     ) -> String {
@@ -284,131 +288,72 @@ impl FileBuildCache {
         if with_debug_info {
             hasher.update(b"debug_info = true");
         }
+        if with_fift {
+            hasher.update(b"fift = true");
+        }
         hasher.update(optimization_level.to_le_bytes());
         hasher.update(tolk_version.as_bytes());
+        self.hash_mappings(&mut hasher);
         let result = hasher.finalize();
         hex::encode(result)
     }
 
-    fn get_dependencies(&mut self, file_path: &str) -> Result<Vec<String>> {
-        self.resolve_dependencies(file_path, &mut HashSet::new())
+    fn hash_mappings(&self, hasher: &mut Sha256) {
+        if let Some(mappings) =
+            acton_config::config::normalize_mappings(&self.config.mappings, &self.project_root)
+        {
+            for (prefix, target) in mappings {
+                hasher.update(b"mapping");
+                hasher.update(prefix.as_bytes());
+                hasher.update(b"\0");
+                hasher.update(target.as_bytes());
+                hasher.update(b"\0");
+            }
+        }
     }
 
-    fn resolve_dependencies(
-        &mut self,
+    fn dependency_paths_for_cache_lookup(
+        &self,
         file_path: &str,
-        visited: &mut HashSet<String>,
+        entry: &CacheEntry,
     ) -> Result<Vec<String>> {
-        let normalized_path = self.normalize_path(file_path);
-        let signature = Self::file_signature(normalized_path.as_str()).ok();
-        let use_cache = visited.is_empty();
-        if use_cache
-            && let Some(cached) = self.dependencies_cache.get(&normalized_path)
-            && cached.signature == signature
+        if entry.dependency_paths.is_empty() {
+            return Err(anyhow!("Cache entry does not include dependency paths"));
+        }
+
+        let normalized_entrypoint = self.normalize_dependency_path(file_path);
+        if !entry
+            .dependency_paths
+            .iter()
+            .any(|path| path == &normalized_entrypoint)
         {
-            return Ok(cached.dependencies.clone());
+            return Err(anyhow!(
+                "Cache entry dependency paths do not include entrypoint {normalized_entrypoint}"
+            ));
         }
 
-        let mappings = self.config.mappings();
-        let file_deps = ton_abi::get_file_dependencies(file_path, true, &mappings)
-            .map_err(|e| anyhow!("Failed to get file dependencies: {e}"))?;
+        Ok(entry.dependency_paths.clone())
+    }
 
-        let Some(contract_name) = self.contract_src_index.get(&normalized_path).cloned() else {
-            if use_cache {
-                self.dependencies_cache.insert(
-                    normalized_path,
-                    DependenciesCacheEntry {
-                        signature,
-                        dependencies: file_deps.clone(),
-                    },
-                );
-            }
-            return Ok(file_deps);
-        };
+    fn dependency_paths_from_compiler_result(
+        &self,
+        file_path: &str,
+        result: &CompilerResultSuccess,
+    ) -> Vec<String> {
+        let dependencies = result
+            .source_map
+            .as_ref()
+            .map(|source_map| {
+                source_map
+                    .files()
+                    .iter()
+                    .map(|file| self.normalize_dependency_path(&file.file_name))
+                    .collect::<Vec<_>>()
+            })
+            .filter(|dependencies| !dependencies.is_empty())
+            .unwrap_or_else(|| vec![self.normalize_dependency_path(file_path)]);
 
-        let dep_sources = {
-            let Some(contracts) = self.config.contracts.as_ref().map(|cfg| &cfg.contracts) else {
-                if use_cache {
-                    self.dependencies_cache.insert(
-                        normalized_path,
-                        DependenciesCacheEntry {
-                            signature,
-                            dependencies: file_deps.clone(),
-                        },
-                    );
-                }
-                return Ok(file_deps);
-            };
-
-            let Some(contract_info) = contracts.get(&contract_name) else {
-                if use_cache {
-                    self.dependencies_cache.insert(
-                        normalized_path,
-                        DependenciesCacheEntry {
-                            signature,
-                            dependencies: file_deps.clone(),
-                        },
-                    );
-                }
-                return Ok(file_deps);
-            };
-
-            let has_deps = contract_info
-                .depends
-                .as_ref()
-                .is_some_and(|deps| !deps.is_empty());
-            if !has_deps {
-                debug!("Skipping deps processing for `{normalized_path}` in `get_dependencies`");
-                debug!("Using file dependencies: {file_deps:?}");
-                if use_cache {
-                    self.dependencies_cache.insert(
-                        normalized_path,
-                        DependenciesCacheEntry {
-                            signature,
-                            dependencies: file_deps.clone(),
-                        },
-                    );
-                }
-                // fast path, no deps, no extra logic to find all dependencies of each dependency
-                return Ok(file_deps);
-            }
-
-            let mut dep_sources = Vec::new();
-            if let Some(deps) = &contract_info.depends {
-                for dep in deps {
-                    let dep_name = dep.name();
-
-                    if !visited.insert(dep_name.to_owned()) {
-                        // already visited
-                        continue;
-                    }
-
-                    let contract_config = contracts
-                        .get(dep_name)
-                        .ok_or_else(|| anyhow!("Contract '{dep_name}' not found in Acton.toml"))?;
-
-                    dep_sources.push(contract_config.src.clone());
-                }
-            }
-            dep_sources
-        };
-
-        let mut result = file_deps;
-        for dep_source in dep_sources {
-            result.append(&mut self.resolve_dependencies(dep_source.as_str(), visited)?);
-        }
-
-        if use_cache {
-            self.dependencies_cache.insert(
-                normalized_path,
-                DependenciesCacheEntry {
-                    signature,
-                    dependencies: result.clone(),
-                },
-            );
-        }
-
-        Ok(result)
+        Self::sort_and_dedup_paths(dependencies)
     }
 
     fn compute_dependencies_hash(&mut self, dependencies: &[String]) -> Result<String> {
@@ -416,18 +361,35 @@ impl FileBuildCache {
 
         let mut normalized_deps: Vec<String> = dependencies
             .iter()
-            .map(|dep| self.normalize_path(dep))
+            .map(|dep| self.normalize_dependency_path(dep))
             .collect();
-        normalized_deps.sort();
-        normalized_deps.dedup();
+        normalized_deps = Self::sort_and_dedup_paths(normalized_deps);
 
         for dep_path in &normalized_deps {
-            hasher.update(self.xxh3_128_file(dep_path)?);
+            hasher.update(self.xxh3_128_dependency(dep_path)?);
             hasher.update(dep_path.as_bytes());
         }
 
         let result = hasher.finalize();
         Ok(hex::encode(result))
+    }
+
+    fn sort_and_dedup_paths(mut paths: Vec<String>) -> Vec<String> {
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
+    fn is_virtual_dependency_path(path: &str) -> bool {
+        path.starts_with("@stdlib/") || path.starts_with("@fiftlib/")
+    }
+
+    fn normalize_dependency_path(&self, path: &str) -> String {
+        if Self::is_virtual_dependency_path(path) {
+            path.to_string()
+        } else {
+            self.normalize_path(path)
+        }
     }
 
     fn normalize_path(&self, path: &str) -> String {
@@ -442,7 +404,6 @@ impl FileBuildCache {
         let _lock = self.acquire_write_lock()?;
         fs::create_dir_all(&self.cache_dir)?;
         self.clear_cache_dir_contents()?;
-        self.dependencies_cache.clear();
         self.file_hash_cache.clear();
 
         Ok(())
@@ -468,27 +429,6 @@ impl FileBuildCache {
         root_count + debug_count
     }
 
-    fn build_contract_src_index(
-        config: &ActonConfig,
-        project_root: &Path,
-    ) -> FxHashMap<String, String> {
-        let mut index = FxHashMap::default();
-        let Some(contracts) = config.contracts.as_ref().map(|cfg| &cfg.contracts) else {
-            return index;
-        };
-
-        for (name, contract) in contracts {
-            let abs_path = Path::new(&contract.src)
-                .absolutize_from(project_root)
-                .unwrap_or_else(|_| Path::new(&contract.src).into())
-                .to_string_lossy()
-                .to_string();
-            index.insert(abs_path, name.clone());
-        }
-
-        index
-    }
-
     fn file_signature(path: &str) -> Result<FileSignature> {
         let metadata = fs::metadata(path)?;
         let modified_ns = metadata
@@ -502,7 +442,21 @@ impl FileBuildCache {
         })
     }
 
-    fn xxh3_128_file(&mut self, path: &str) -> Result<[u8; 16]> {
+    fn xxh3_128_dependency(&mut self, path: &str) -> Result<[u8; 16]> {
+        if let Some(content) = path
+            .strip_prefix("@stdlib/")
+            .and_then(tolk_compiler::compiler::read_stdlib_file)
+        {
+            return Ok(Self::xxh3_128_bytes(content.as_bytes()));
+        }
+
+        if let Some(content) = path
+            .strip_prefix("@fiftlib/")
+            .and_then(tolk_compiler::compiler::read_fift_stdlib_file)
+        {
+            return Ok(Self::xxh3_128_bytes(content.as_bytes()));
+        }
+
         let signature = Self::file_signature(path)?;
         if let Some(cached) = self.file_hash_cache.get(path)
             && cached.signature == signature
@@ -525,6 +479,12 @@ impl FileBuildCache {
             .insert(path.to_string(), FileHashCacheEntry { signature, hash });
         Ok(hash)
     }
+
+    fn xxh3_128_bytes(bytes: &[u8]) -> [u8; 16] {
+        let mut h = Xxh3::new();
+        h.update(bytes);
+        h.digest128().to_le_bytes()
+    }
 }
 
 #[cfg(test)]
@@ -546,7 +506,7 @@ mod tests {
             .write_all(b"fun helper() { return 1; }")
             .unwrap();
 
-        let cached = cache.get(main_path.to_str().unwrap(), false, 2, "1.1");
+        let cached = cache.get(main_path.to_str().unwrap(), false, false, 2, "1.1");
         assert!(
             cached.is_none(),
             "Cache should be invalidated when dependency changes"
@@ -558,7 +518,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let (mut cache, _, main_path) = prepare_cache(&temp_dir).expect("Failed to prepare cache");
 
-        let cached = cache.get(main_path.to_str().unwrap(), true, 2, "1.1");
+        let cached = cache.get(main_path.to_str().unwrap(), true, false, 2, "1.1");
         assert!(
             cached.is_none(),
             "Cache should be none since debug info mismatch"
@@ -570,7 +530,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let (mut cache, _, main_path) = prepare_cache(&temp_dir).expect("Failed to prepare cache");
 
-        let cached = cache.get(main_path.to_str().unwrap(), false, 0, "1.1");
+        let cached = cache.get(main_path.to_str().unwrap(), false, false, 0, "1.1");
         assert!(
             cached.is_none(),
             "Cache should be none since optimization level mismatch"
@@ -582,7 +542,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let (mut cache, _, main_path) = prepare_cache(&temp_dir).expect("Failed to prepare cache");
 
-        let cached = cache.get(main_path.to_str().unwrap(), false, 2, "1.2");
+        let cached = cache.get(main_path.to_str().unwrap(), false, false, 2, "1.2");
         assert!(
             cached.is_none(),
             "Cache should be none since Tolk version mismatch"
@@ -593,12 +553,12 @@ mod tests {
     fn test_corrupted_cache_entry_returns_none() {
         let temp_dir = tempdir().unwrap();
         let (mut cache, _, main_path) = prepare_cache(&temp_dir).expect("Failed to prepare cache");
-        let key = cache.compute_key(main_path.to_str().unwrap(), false, 2, "1.1");
+        let key = cache.compute_key(main_path.to_str().unwrap(), false, false, 2, "1.1");
         let cache_file = cache.cache_file_path(&key, false);
 
         fs::write(cache_file, "corrupted cache data").unwrap();
 
-        let cached = cache.get(main_path.to_str().unwrap(), false, 2, "1.1");
+        let cached = cache.get(main_path.to_str().unwrap(), false, false, 2, "1.1");
         assert!(cached.is_none(), "Corrupted cache entry should be ignored");
     }
 
@@ -656,16 +616,15 @@ mod tests {
             fift_code: "test_fift_code".to_string(),
             code_boc64: "test_boc".to_string(),
             code_hash_hex: "test_hash".to_string(),
-            debug_mark_base64: Some("test_debug_marks".to_string()),
-            new_source_map: None,
+            source_map: Some(source_map_for_paths(&[&main_path, &lib_path])),
             abi: None,
         };
 
         cache
-            .put(main_path.to_str().unwrap(), &result, true, 2, "1.1")
+            .put(main_path.to_str().unwrap(), &result, true, true, 2, "1.1")
             .expect("Failed to write debug cache entry");
 
-        let key = cache.compute_key(main_path.to_str().unwrap(), true, 2, "1.1");
+        let key = cache.compute_key(main_path.to_str().unwrap(), true, true, 2, "1.1");
         assert!(
             cache.cache_file_path(&key, true).exists(),
             "Debug cache entry should be stored in debug subdirectory"
@@ -676,9 +635,68 @@ mod tests {
         );
         assert!(
             cache
-                .get(main_path.to_str().unwrap(), true, 2, "1.1")
+                .get(main_path.to_str().unwrap(), true, true, 2, "1.1")
                 .is_some(),
             "Debug cache entry should be readable back"
+        );
+    }
+
+    #[test]
+    fn test_fift_cache_key_is_separate_and_only_stored_when_requested() {
+        let temp_dir = tempdir().unwrap();
+        let cache_dir = temp_dir.path().join("cache");
+        let mut cache = FileBuildCache::new(Some(cache_dir)).expect("Failed to create cache");
+
+        let main_path = temp_dir.path().join("main.tolk");
+        File::create(&main_path)
+            .unwrap()
+            .write_all(b"fun main() { }")
+            .unwrap();
+
+        let result = CompilerResultSuccess {
+            fift_code: "test_fift_code".to_string(),
+            code_boc64: "test_boc".to_string(),
+            code_hash_hex: "test_hash".to_string(),
+            source_map: Some(source_map_for_paths(&[&main_path])),
+            abi: None,
+        };
+
+        cache
+            .put(main_path.to_str().unwrap(), &result, false, false, 2, "1.1")
+            .expect("Failed to write non-fift cache entry");
+
+        let no_fift = cache
+            .get(main_path.to_str().unwrap(), false, false, 2, "1.1")
+            .expect("non-fift cache entry should exist");
+        assert_eq!(no_fift.fift_code, None);
+
+        let with_fift_before = cache.get(main_path.to_str().unwrap(), false, true, 2, "1.1");
+        assert!(
+            with_fift_before.is_none(),
+            "fift-enabled lookup should miss when only non-fift cache entry exists"
+        );
+
+        cache
+            .put(main_path.to_str().unwrap(), &result, false, true, 2, "1.1")
+            .expect("Failed to write fift cache entry");
+
+        let with_fift = cache
+            .get(main_path.to_str().unwrap(), false, true, 2, "1.1")
+            .expect("fift cache entry should exist");
+        assert_eq!(with_fift.fift_code.as_deref(), Some("test_fift_code"));
+    }
+
+    #[test]
+    fn test_stdlib_dependency_hash_uses_embedded_content() {
+        let temp_dir = tempdir().unwrap();
+        let cache_dir = temp_dir.path().join("cache");
+        let mut cache = FileBuildCache::new(Some(cache_dir)).expect("Failed to create cache");
+
+        let hash = cache.compute_dependencies_hash(&["@stdlib/common.tolk".to_string()]);
+
+        assert!(
+            hash.is_ok(),
+            "stdlib virtual dependency should be hashable without a filesystem path"
         );
     }
 
@@ -697,21 +715,42 @@ mod tests {
             fift_code: "test_fift_code".to_string(),
             code_boc64: "test_boc".to_string(),
             code_hash_hex: "test_hash".to_string(),
-            debug_mark_base64: Some("test_debug_marks".to_string()),
-            new_source_map: None,
+            source_map: Some(source_map_for_paths(&[&main_path, &lib_path])),
             abi: None,
         };
 
-        cache.put(main_path.to_str().unwrap(), &result, false, 2, "1.1")?;
+        cache.put(main_path.to_str().unwrap(), &result, false, false, 2, "1.1")?;
 
-        let cached = cache.get(main_path.to_str().unwrap(), false, 2, "1.1");
+        let cached = cache.get(main_path.to_str().unwrap(), false, false, 2, "1.1");
         assert!(cached.is_some());
         let cached = cached.unwrap();
         assert_eq!(cached.code_boc64, "test_boc");
-        assert_eq!(
-            cached.debug_mark_base64.as_deref(),
-            Some("test_debug_marks")
-        );
+        assert_eq!(cached.fift_code, None);
         Ok((cache, lib_path, main_path))
+    }
+
+    fn source_map_for_paths(paths: &[&Path]) -> tolk_compiler::SourceMap {
+        let files = paths
+            .iter()
+            .enumerate()
+            .map(|(idx, path)| {
+                serde_json::json!({
+                    "file_id": idx + 1,
+                    "file_name": path.to_string_lossy().to_string(),
+                    "size_chars": fs::metadata(path).map_or(0, |metadata| metadata.len()),
+                    "imports": [],
+                })
+            })
+            .collect::<Vec<_>>();
+
+        serde_json::from_value(serde_json::json!({
+            "files": files,
+            "unique_types": [],
+            "struct_instantiations": [],
+            "alias_instantiations": [],
+            "declarations": [],
+            "functions": [],
+        }))
+        .expect("test source map must deserialize")
     }
 }

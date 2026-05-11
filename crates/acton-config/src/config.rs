@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::{Arc, OnceLock};
 pub use ton_networks::{CustomNetworkUrls, Network};
 
@@ -19,7 +20,7 @@ pub const DEFAULT_PROJECT_MAPPINGS: &[(&str, &str)] = &[
     ("acton", ".acton"),
     ("contracts", "contracts"),
     ("tests", "tests"),
-    ("wrappers", "tests/wrappers"),
+    ("wrappers", "wrappers"),
     ("gen", "gen"),
 ];
 
@@ -110,15 +111,15 @@ pub enum ContractDependency {
     },
 }
 
-/// TonCenter API endpoints for a custom network
+/// `TonCenter` API endpoints for a custom network
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(deny_unknown_fields)]
 pub struct CustomNetworkApiConfig {
-    /// The URL for the TonCenter API v2. For localnet this defaults to
-    /// `http://localhost:<litenode.port>/api/v2` with `5411` as the fallback port
+    /// The URL for the `TonCenter` API v2. For localnet this defaults to
+    /// `http://localhost:<localnet.port>/api/v2` with `5411` as the fallback port
     pub v2: Option<String>,
-    /// The URL for the TonCenter API v3. For localnet this defaults to
-    /// `http://localhost:<litenode.port>/api/v3` with `5411` as the fallback port
+    /// The URL for the `TonCenter` API v3. For localnet this defaults to
+    /// `http://localhost:<localnet.port>/api/v3` with `5411` as the fallback port
     pub v3: Option<String>,
 }
 
@@ -129,7 +130,7 @@ pub struct CustomNetworkConfig {
     /// Base URL used to build transaction links for this network. Acton appends
     /// `/tx/<hash>` automatically and derives links from `api.v2` when omitted
     pub explorer: Option<String>,
-    /// TonCenter API endpoints for this network
+    /// `TonCenter` API endpoints for this network
     pub api: Option<CustomNetworkApiConfig>,
 }
 
@@ -139,6 +140,8 @@ pub struct CustomNetworkConfig {
 pub struct ActonConfig {
     /// Package metadata for the Acton project
     pub package: PackageConfig,
+    /// Required versions for project-level tooling
+    pub toolchain: Option<ToolchainConfig>,
     /// Definition of contracts in the project
     pub contracts: Option<ContractsConfig>,
     /// Default settings for the test runner
@@ -151,16 +154,18 @@ pub struct ActonConfig {
     pub build: Option<BuildSettings>,
     /// Default settings for wrapper generation
     pub wrappers: Option<WrappersConfig>,
-    /// Default settings for `acton litenode` commands
-    pub litenode: Option<LitenodeSettings>,
+    /// Default settings for `acton localnet` commands
+    pub localnet: Option<LocalnetSettings>,
     /// Custom scripts that can be run with `acton run`
     pub scripts: Option<BTreeMap<String, String>>,
     #[serde(skip)] // we build wallets manually
     pub wallets: Option<WalletsConfig>,
     #[serde(skip)] // we build libraries manually
     pub libraries: Option<LibrariesConfig>,
-    /// Path mappings for Tolk compiler imports, for example mapping `"core" = "./foo/core"`
-    /// so imports can use `@core/...`
+    /// Import path mappings for Tolk compiler imports, for example mapping
+    /// `"core" = "./foo/core"` so imports can use `@core/...`
+    #[serde(rename = "import-mappings")]
+    #[schemars(rename = "import-mappings")]
     pub mappings: Option<BTreeMap<String, String>>,
     /// Custom network configurations
     pub networks: Option<BTreeMap<String, CustomNetworkConfig>>,
@@ -227,6 +232,14 @@ pub struct PackageConfig {
     pub license: Option<String>,
 }
 
+/// Required versions for project-level tooling
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct ToolchainConfig {
+    /// Acton CLI version required by this project
+    pub acton: Option<String>,
+}
+
 /// Coverage settings for the test runner
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -247,7 +260,8 @@ pub struct TestCoverageSettings {
     pub include_tests: Option<bool>,
 }
 
-/// Fuzz settings for parameterized tests marked with `@test({ fuzz: ... })`
+/// Fuzz settings for parameterized tests marked with dotted `@test.fuzz`
+/// annotations: `@test.fuzz`, `@test.fuzz(<runs>)`, or `@test.fuzz({ ... })`
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct TestFuzzSettings {
@@ -284,15 +298,13 @@ pub struct TestSettings {
     pub exclude: Option<Vec<String>>,
     /// Glob patterns to include in testing
     pub include: Option<Vec<String>>,
-    /// Directory for JUnit XML reports
+    /// Directory for `JUnit` XML reports
     pub junit_path: Option<String>,
-    /// Merge all test suites into a single JUnit file
+    /// Merge all test suites into a single `JUnit` file
     pub junit_merge: Option<bool>,
     /// Network to fork for testing
     #[schemars(with = "Option<Network>")]
     pub fork_net: Option<String>,
-    /// API key for the network provider when forking
-    pub api_key: Option<String>,
     /// Specific block number to fork from
     pub fork_block_number: Option<u64>,
     /// Configuration for mutation testing
@@ -361,13 +373,21 @@ const fn default_max_warnings() -> usize {
     usize::MAX
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn is_default_max_warnings(v: &usize) -> bool {
+    *v == default_max_warnings()
+}
+
 /// Linter configuration for the project
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct LintConfig {
     /// Glob patterns for files to exclude from lint diagnostics
     pub exclude: Option<Vec<String>>,
-    #[serde(default = "default_max_warnings")]
+    #[serde(
+        default = "default_max_warnings",
+        skip_serializing_if = "is_default_max_warnings"
+    )]
     /// Maximum allowed warning count before `acton check` exits with a non-zero code
     pub max_warnings: usize,
     /// Output format for `acton check` diagnostics
@@ -421,6 +441,8 @@ pub struct BuildSettings {
     pub out_dir: Option<String>,
     /// Directory where generated dependency files are saved
     pub gen_dir: Option<String>,
+    /// Directory where per-contract ABI JSON files are saved
+    pub output_abi: Option<String>,
     /// Directory where per-contract compiled Fift files are saved
     pub output_fift: Option<String>,
 }
@@ -454,26 +476,26 @@ pub struct TypescriptWrapperSettings {
     pub output_dir: Option<String>,
 }
 
-/// Default settings for `acton litenode` commands
+/// Default settings for `acton localnet` commands
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "kebab-case")]
-pub struct LitenodeSettings {
-    /// Litenode port used by `acton litenode` commands
-    #[schemars(default = "default_litenode_port", range(max = 65535))]
+pub struct LocalnetSettings {
+    /// Localnet port used by `acton localnet` commands
+    #[schemars(default = "default_localnet_port", range(max = 65535))]
     pub port: Option<u16>,
-    /// Network to fork from used by `acton litenode start`
+    /// Network to fork from used by `acton localnet start`
     #[schemars(with = "Option<Network>")]
     pub fork_net: Option<String>,
-    /// Block sequence number used by `acton litenode start` when forking from historical state
+    /// Block sequence number used by `acton localnet start` when forking from historical state
     pub fork_block_number: Option<u64>,
     /// Wallet names from `[wallets]` that are automatically funded and deployed on
-    /// `acton litenode start`
+    /// `acton localnet start`
     pub accounts: Option<Vec<String>>,
-    /// Maximum number of API requests per second served by LiteNode `/api` endpoints
+    /// Maximum number of API requests per second served by `Localnet` `/api` endpoints
     pub rate_limit: Option<u32>,
 }
 
-const fn default_litenode_port() -> Option<u16> {
+const fn default_localnet_port() -> Option<u16> {
     Some(3000)
 }
 
@@ -576,8 +598,9 @@ pub struct WalletsFile {
 /// Definition of a contract in the project
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 pub struct ContractConfig {
-    /// Human-readable name of the contract
-    pub name: String,
+    /// Human-readable display name of the contract
+    #[serde(rename = "display-name", skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     /// Path to the contract source (`.tolk`) or precompiled (`.boc`) file
     pub src: String,
     /// Dependencies of this contract
@@ -596,6 +619,7 @@ impl Default for ActonConfig {
                 repository: None,
                 license: Some("MIT".to_string()),
             },
+            toolchain: None,
             test: None,
             lint: None,
             contracts: None,
@@ -606,7 +630,7 @@ impl Default for ActonConfig {
             }),
             build: None,
             wrappers: None,
-            litenode: None,
+            localnet: None,
             wallets: None,
             libraries: None,
             scripts: None,
@@ -661,6 +685,14 @@ impl ContractDependency {
 
 impl ContractConfig {
     #[must_use]
+    pub fn display_name<'a>(&'a self, contract_id: &'a str) -> &'a str {
+        self.name
+            .as_deref()
+            .filter(|name| !name.is_empty())
+            .unwrap_or(contract_id)
+    }
+
+    #[must_use]
     pub fn dependency_names(&self) -> Vec<&str> {
         self.depends
             .as_ref()
@@ -672,10 +704,20 @@ impl ContractConfig {
     pub fn get_dependency(&self, name: &str) -> Option<&ContractDependency> {
         self.depends.as_ref()?.iter().find(|dep| dep.name() == name)
     }
+
+    /// Returns the contract source path resolved relative to the project root.
+    /// If `src` is already absolute, it is returned as-is.
+    #[must_use]
+    pub fn absolute_source_path(&self, project_root: &Path) -> PathBuf {
+        match Path::new(&self.src).absolutize_from(project_root) {
+            Ok(path) => path.into_owned(),
+            Err(_) => Path::new(self.src.as_str()).to_path_buf(),
+        }
+    }
 }
 
 impl ActonConfig {
-    pub fn load() -> Result<Self> {
+    pub fn load_manifest() -> Result<Self> {
         let config_path = manifest_path();
         if !config_path.exists() {
             return Err(anyhow!(
@@ -684,8 +726,10 @@ impl ActonConfig {
         }
 
         let content = fs::read_to_string(config_path)?;
-        let mut config: ActonConfig = toml::from_str(&content)?;
+        Ok(toml::from_str(&content)?)
+    }
 
+    pub fn load_wallets() -> Result<WalletsConfig> {
         // Merge wallets from different sources
         // Order of importance (later overrides earlier):
         // 1. Global ~/.config/acton/wallets/global.wallets.toml
@@ -718,9 +762,14 @@ impl ActonConfig {
             }
         }
 
-        config.wallets = Some(WalletsConfig {
+        Ok(WalletsConfig {
             wallets: merged_wallets,
-        });
+        })
+    }
+
+    pub fn load() -> Result<Self> {
+        let mut config = Self::load_manifest()?;
+        config.wallets = Some(Self::load_wallets()?);
 
         // Merge libraries from different sources
         let mut merged_libraries = BTreeMap::new();
@@ -832,7 +881,7 @@ impl ActonConfig {
         let mut result = HashMap::new();
 
         let localnet_port = self
-            .litenode
+            .localnet
             .as_ref()
             .and_then(|cfg| cfg.port)
             .unwrap_or(5411);
@@ -1195,7 +1244,6 @@ impl TestSettings {
         snapshot_override: Option<String>,
         baseline_gas_override: Option<String>,
         fork_net_override: Option<Network>,
-        api_key_override: Option<String>,
         fork_block_number_override: Option<u64>,
         save_test_trace_override: Option<String>,
         mutate_override: bool,
@@ -1235,6 +1283,7 @@ impl TestSettings {
             filter: filter_override.or_else(|| self.filter.clone()),
             report_formats: final_report_formats,
             show_bodies: show_bodies_override,
+            verbosity: 0,
             debug: debug_override.unwrap_or_else(|| self.debug.unwrap_or(false)),
             debug_port: debug_port_override.unwrap_or_else(|| self.debug_port.unwrap_or(12345)),
             backtrace: backtrace_override.or_else(|| {
@@ -1266,29 +1315,15 @@ impl TestSettings {
             include_patterns: include_override
                 .unwrap_or_else(|| self.include.clone().unwrap_or_default()),
             clear_cache: clear_cache_override.unwrap_or(false),
-            junit_path: if self.junit_path == Some("test-results".to_owned()) {
-                junit_path_override
-            } else {
-                Some(
-                    self.junit_path
-                        .clone()
-                        .unwrap_or_else(|| junit_path_override.unwrap_or_default()),
-                )
-            },
+            junit_path: junit_path_override.or_else(|| self.junit_path.clone()),
             junit_merge: junit_merge_override || self.junit_merge.unwrap_or(false),
             snapshot: snapshot_override,
             baseline_snapshot: baseline_gas_override,
             fork_net: fork_net_override.or_else(|| {
                 self.fork_net
-                    .as_ref()
-                    .and_then(|n| match n.to_lowercase().as_str() {
-                        "mainnet" => Some(Network::Mainnet),
-                        "testnet" => Some(Network::Testnet),
-                        "localnet" => Some(Network::Localnet),
-                        _ => None,
-                    })
+                    .as_deref()
+                    .and_then(|n| Network::from_str(n).ok())
             }),
-            api_key: api_key_override.or_else(|| self.api_key.clone()),
             fork_block_number: fork_block_number_override.or(self.fork_block_number),
             save_test_trace: save_test_trace_override,
             mutate: mutate_override,
@@ -1342,6 +1377,103 @@ impl TestSettings {
 mod tests {
     use super::*;
 
+    fn test_settings_to_config(
+        settings: &TestSettings,
+        clear_cache_override: Option<bool>,
+        junit_path_override: Option<&str>,
+        fork_net_override: Option<Network>,
+        fork_block_number_override: Option<u64>,
+        fail_fast_override: Option<bool>,
+        ui_port_override: Option<u16>,
+    ) -> TestConfig {
+        settings.to_test_config(
+            None,
+            Vec::new(),
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            clear_cache_override,
+            junit_path_override.map(str::to_owned),
+            false,
+            None,
+            None,
+            fork_net_override,
+            fork_block_number_override,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            Vec::new(),
+            None,
+            Vec::new(),
+            None,
+            None,
+            fail_fast_override,
+            false,
+            ui_port_override,
+        )
+    }
+
+    #[test]
+    fn test_settings_merge_cli_overrides_config_for_test_flags() {
+        let settings = TestSettings {
+            junit_path: Some("configured-reports".to_owned()),
+            fork_net: Some("custom:devnet".to_owned()),
+            fail_fast: Some(true),
+            ui_port: Some(23_456),
+            fork_block_number: Some(111_111),
+            ..TestSettings::default()
+        };
+
+        let config = test_settings_to_config(&settings, None, None, None, None, None, None);
+        assert!(!config.clear_cache);
+        assert_eq!(config.junit_path.as_deref(), Some("configured-reports"));
+        assert_eq!(config.fork_net, Some(Network::Custom(Arc::from("devnet"))));
+        assert_eq!(config.fork_block_number, Some(111_111));
+        assert!(config.fail_fast);
+        assert_eq!(config.ui_port, 23_456);
+
+        let config = test_settings_to_config(
+            &settings,
+            Some(true),
+            Some("cli-reports"),
+            Some(Network::Testnet),
+            Some(222_222),
+            Some(false),
+            Some(34_567),
+        );
+        assert!(config.clear_cache);
+        assert_eq!(config.junit_path.as_deref(), Some("cli-reports"));
+        assert_eq!(config.fork_net, Some(Network::Testnet));
+        assert_eq!(config.fork_block_number, Some(222_222));
+        assert!(!config.fail_fast);
+        assert_eq!(config.ui_port, 34_567);
+    }
+
+    #[test]
+    fn test_settings_merge_uses_test_defaults_without_config_or_cli() {
+        let config =
+            test_settings_to_config(&TestSettings::default(), None, None, None, None, None, None);
+
+        assert!(!config.clear_cache);
+        assert_eq!(config.junit_path, None);
+        assert_eq!(config.fork_net, None);
+        assert_eq!(config.fork_block_number, None);
+        assert!(!config.fail_fast);
+        assert_eq!(config.ui_port, 12_344);
+    }
+
     #[test]
     fn test_config_parsing() {
         let toml_content = r#"
@@ -1351,12 +1483,12 @@ description = "Test project"
 version = "0.1.0"
 
 [contracts.counter]
-name = "Counter Contract"
+display-name = "Counter Contract"
 src = "counter.tolk"
 depends = []
 
 [contracts.wallet-v5]
-name = "Wallet V5"
+display-name = "Wallet V5"
 src = "wallet-v5.tolk"
 depends = []
 "#;
@@ -1368,14 +1500,38 @@ depends = []
         assert_eq!(contracts.len(), 2);
 
         let counter = config.get_contract("counter").unwrap();
-        assert_eq!(counter.name, "Counter Contract");
+        assert_eq!(counter.name.as_deref(), Some("Counter Contract"));
+        assert_eq!(counter.display_name("counter"), "Counter Contract");
         assert_eq!(counter.src, "counter.tolk");
         assert_eq!(counter.depends, Some(vec![]));
 
         let wallet = config.get_contract("wallet-v5").unwrap();
-        assert_eq!(wallet.name, "Wallet V5");
+        assert_eq!(wallet.name.as_deref(), Some("Wallet V5"));
+        assert_eq!(wallet.display_name("wallet-v5"), "Wallet V5");
         assert_eq!(wallet.src, "wallet-v5.tolk");
         assert_eq!(wallet.depends, Some(vec![]));
+    }
+
+    #[test]
+    fn test_contract_config_allows_missing_display_name() {
+        let toml_content = r#"
+[package]
+name = "test-project"
+description = "Test project"
+version = "0.1.0"
+
+[contracts.counter]
+src = "counter.tolk"
+depends = []
+"#;
+
+        let config: ActonConfig = toml::from_str(toml_content).unwrap();
+        let counter = config.get_contract("counter").unwrap();
+
+        assert_eq!(counter.name, None);
+        assert_eq!(counter.display_name("counter"), "counter");
+        assert_eq!(counter.src, "counter.tolk");
+        assert_eq!(counter.depends, Some(vec![]));
     }
 
     #[test]
@@ -1458,7 +1614,7 @@ description = "Test project"
 version = "0.1.0"
 
 [contracts.counter]
-name = "Counter Contract"
+display-name = "Counter Contract"
 src = "counter.tolk"
 depends = []
 
@@ -1474,6 +1630,78 @@ rules-file = "mutation-rules.json"
             .expect("mutation settings should be present");
 
         assert_eq!(mutation.rules_file.as_deref(), Some("mutation-rules.json"));
+    }
+
+    #[test]
+    fn test_contract_config_serializes_display_name_key() {
+        let config = ActonConfig {
+            package: PackageConfig {
+                name: "test-project".to_string(),
+                description: "Test project".to_string(),
+                version: "0.1.0".to_string(),
+                repository: None,
+                license: None,
+            },
+            toolchain: None,
+            contracts: Some(ContractsConfig {
+                contracts: BTreeMap::from([(
+                    "counter".to_string(),
+                    ContractConfig {
+                        name: Some("Counter Contract".to_string()),
+                        src: "counter.tolk".to_string(),
+                        depends: Some(vec![]),
+                        output: None,
+                    },
+                )]),
+            }),
+            test: None,
+            lint: None,
+            fmt: None,
+            build: None,
+            wrappers: None,
+            localnet: None,
+            scripts: None,
+            wallets: None,
+            libraries: None,
+            mappings: None,
+            networks: None,
+        };
+
+        let toml_content = toml::to_string(&config).unwrap();
+
+        assert!(toml_content.contains("display-name = \"Counter Contract\""));
+        assert!(!toml_content.contains("\nname = \"Counter Contract\""));
+    }
+
+    #[test]
+    fn test_import_mappings_serializes_with_new_section_name() {
+        let config = ActonConfig {
+            package: PackageConfig {
+                name: "test-project".to_string(),
+                description: "Test project".to_string(),
+                version: "0.1.0".to_string(),
+                repository: None,
+                license: None,
+            },
+            toolchain: None,
+            contracts: None,
+            test: None,
+            lint: None,
+            fmt: None,
+            build: None,
+            wrappers: None,
+            localnet: None,
+            scripts: None,
+            wallets: None,
+            libraries: None,
+            mappings: Some(BTreeMap::from([("core".to_string(), "./core".to_string())])),
+            networks: None,
+        };
+
+        let toml_content = toml::to_string(&config).unwrap();
+
+        assert!(toml_content.contains("[import-mappings]"));
+        assert!(!toml_content.contains("[mappings]"));
     }
 
     #[test]
@@ -1517,14 +1745,14 @@ api = { v2 = "https://example.com/api/v2/" }
     }
 
     #[test]
-    fn test_localnet_api_defaults_to_litenode_port() {
+    fn test_localnet_api_defaults_to_localnet_port() {
         let toml_content = r#"
 [package]
 name = "test-project"
 description = "Test project"
 version = "0.1.0"
 
-[litenode]
+[localnet]
 port = 3015
 
 [networks.localnet]
@@ -1549,7 +1777,7 @@ explorer = "http://localhost:3015/explorer"
     }
 
     #[test]
-    fn test_localnet_api_defaults_to_5411_without_litenode_port() {
+    fn test_localnet_api_defaults_to_5411_without_localnet_port() {
         let toml_content = r#"
 [package]
 name = "test-project"
@@ -1624,7 +1852,7 @@ unused-variable = "allow"
 
         match lint.entries.get("unused-variable").unwrap() {
             LintEntry::Level(level) => assert_eq!(*level, LintLevel::Deny),
-            _ => panic!("Expected level"),
+            LintEntry::Config(_) => panic!("Expected level"),
         }
 
         match lint
@@ -1633,14 +1861,14 @@ unused-variable = "allow"
             .unwrap()
         {
             LintEntry::Level(level) => assert_eq!(*level, LintLevel::Warn),
-            _ => panic!("Expected level"),
+            LintEntry::Config(_) => panic!("Expected level"),
         }
 
         match lint.entries.get("counter").unwrap() {
             LintEntry::Config(config) => {
                 assert_eq!(*config.get("unused-variable").unwrap(), LintLevel::Allow);
             }
-            _ => panic!("Expected config"),
+            LintEntry::Level(_) => panic!("Expected config"),
         }
     }
 
@@ -1816,7 +2044,7 @@ name = "test-project"
 description = "Test project"
 version = "0.1.0"
 
-[mappings]
+[import-mappings]
 core = "./core"
 utils = "/usr/local/lib/tolk/utils"
 "#;
@@ -1869,6 +2097,7 @@ version = "0.1.0"
 [build]
 out-dir = "artifacts/build"
 gen-dir = "artifacts/gen"
+output-abi = "build/abi"
 output-fift = "build/fift"
 "#;
 
@@ -1876,6 +2105,7 @@ output-fift = "build/fift"
         let build = config.build.as_ref().unwrap();
         assert_eq!(build.out_dir.as_deref(), Some("artifacts/build"));
         assert_eq!(build.gen_dir.as_deref(), Some("artifacts/gen"));
+        assert_eq!(build.output_abi.as_deref(), Some("build/abi"));
         assert_eq!(build.output_fift.as_deref(), Some("build/fift"));
     }
 
@@ -1893,7 +2123,7 @@ generate-test = true
 test-output-dir = "tests/generated-tests"
 
 [wrappers.typescript]
-output-dir = "./wrappers"
+output-dir = "./wrappers-ts"
 "#;
 
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
@@ -1906,18 +2136,21 @@ output-dir = "./wrappers"
             config.tolk_wrapper_test_output_dir(),
             Some("tests/generated-tests")
         );
-        assert_eq!(config.typescript_wrapper_output_dir(), Some("./wrappers"));
+        assert_eq!(
+            config.typescript_wrapper_output_dir(),
+            Some("./wrappers-ts")
+        );
     }
 
     #[test]
-    fn test_litenode_settings_parsing() {
+    fn test_localnet_settings_parsing() {
         let toml_content = r#"
 [package]
 name = "test-project"
 description = "Test project"
 version = "0.1.0"
 
-[litenode]
+[localnet]
 port = 3015
 fork-net = "testnet"
 fork-block-number = 1234567
@@ -1926,14 +2159,14 @@ rate-limit = 3
 "#;
 
         let config: ActonConfig = toml::from_str(toml_content).unwrap();
-        let litenode = config.litenode.as_ref().unwrap();
-        assert_eq!(litenode.port, Some(3015));
-        assert_eq!(litenode.fork_net.as_deref(), Some("testnet"));
-        assert_eq!(litenode.fork_block_number, Some(1234567));
+        let localnet = config.localnet.as_ref().unwrap();
+        assert_eq!(localnet.port, Some(3015));
+        assert_eq!(localnet.fork_net.as_deref(), Some("testnet"));
+        assert_eq!(localnet.fork_block_number, Some(1234567));
         assert_eq!(
-            litenode.accounts,
+            localnet.accounts,
             Some(vec!["deployer".to_string(), "user".to_string()])
         );
-        assert_eq!(litenode.rate_limit, Some(3));
+        assert_eq!(localnet.rate_limit, Some(3));
     }
 }

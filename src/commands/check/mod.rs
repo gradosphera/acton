@@ -19,6 +19,7 @@ use tolk_resolver::file_db::FileDb;
 use tolk_resolver::file_index::{FileId, Span};
 use tolk_resolver::project_index::ProjectIndex;
 use tolk_resolver::symbol_resolver::resolve;
+use tolk_syntax::HasName;
 use tolk_ty::TypeDb;
 use tolk_ty::TypeInterner;
 use tolk_ty::infer;
@@ -154,8 +155,22 @@ pub fn check_cmd(
         })
         .unwrap_or(CheckOutputFormat::Plain);
     let is_plain_report = output_format == CheckOutputFormat::Plain;
+    if fix && !is_plain_report {
+        anyhow::bail!(
+            "{} can only be used with plain output format; pass {} {} or remove {}",
+            "--fix".yellow(),
+            "--output-format".yellow(),
+            "plain".green(),
+            "--fix".yellow()
+        )
+    }
     if is_plain_report && output_file.is_some() {
-        anyhow::bail!("output_file cannot be used with plain output format")
+        anyhow::bail!(
+            "{} cannot be used with plain output format; pass {} {}",
+            "--output-file".yellow(),
+            "--output-format".yellow(),
+            "json|sarif|github|gitlab".green()
+        )
     }
 
     let max_warnings = config
@@ -204,9 +219,11 @@ pub fn check_cmd(
             all_diagnostics.extend(contract_diagnostics);
         }
     } else {
+        let contract_roots = configured_contract_roots(&config, &project_root)?;
         let contracts = config.contracts().cloned().unwrap_or_default();
         for (contract_id, contract) in contracts {
-            if excludes.is_match(Path::new(&contract.src)) {
+            let source_path = contract.absolute_source_path(&project_root);
+            if excludes.is_match(&source_path) {
                 continue;
             }
             let contract_diagnostics =
@@ -215,12 +232,28 @@ pub fn check_cmd(
         }
 
         for file in files {
+            if excludes.is_match(&file) {
+                continue;
+            }
+
+            let canonical_file = dunce::canonicalize(&file).unwrap_or_else(|_| file.clone());
+            if contract_roots.contains(&canonical_file) {
+                continue;
+            }
+
             let Some(name) = file.file_name() else {
                 continue;
             };
-            if name.to_string_lossy().ends_with(".test.tolk") && !excludes.is_match(&file) {
+
+            if name.to_string_lossy().ends_with(".test.tolk") {
                 let contract_diagnostics = check_test_file(&file, &file_db, &run_options)?;
                 all_diagnostics.extend(contract_diagnostics);
+                continue;
+            }
+
+            if is_script_root_file(&file, &file_db)? {
+                let script_diagnostics = check_test_file(&file, &file_db, &run_options)?;
+                all_diagnostics.extend(script_diagnostics);
             }
         }
     }
@@ -448,27 +481,62 @@ fn find_acton_stdlib(project_root: &Path) -> anyhow::Result<PathBuf> {
     Ok(dunce::canonicalize(path_to_acton)?)
 }
 
+fn configured_contract_roots(
+    config: &ActonConfig,
+    project_root: &Path,
+) -> anyhow::Result<HashSet<PathBuf>> {
+    let mut roots = HashSet::new();
+
+    for contract in config
+        .contracts()
+        .into_iter()
+        .flat_map(|contracts| contracts.values())
+    {
+        let source_path = contract.absolute_source_path(project_root);
+        if source_path.extension() != Some("tolk".as_ref()) {
+            continue;
+        }
+
+        roots.insert(dunce::canonicalize(source_path)?);
+    }
+
+    Ok(roots)
+}
+
+fn is_script_root_file(file: &Path, file_db: &FileDb) -> anyhow::Result<bool> {
+    let file_info = file_db.process(file)?;
+
+    if file_info.is_contract_entry() {
+        return Ok(false);
+    }
+
+    Ok(file_info
+        .source()
+        .functions()
+        .filter_map(|func| func.name())
+        .any(|name| file_db.text_matches(file_info.id(), &name, "main")))
+}
+
 fn check_contract(
     contract_id: &str,
     config: &ContractConfig,
     file_db: &FileDb,
     options: &CheckRunOptions<'_>,
 ) -> anyhow::Result<Vec<Diagnostic>> {
-    if !config.src.ends_with(".tolk") {
+    let source_path = config.absolute_source_path(options.project_root);
+    if source_path.extension() != Some("tolk".as_ref()) {
         // skip contracts with .boc sources
         return Ok(vec![]);
     }
 
     if options.is_plain_report {
-        println!("    {} {}", "Checking".green().bold(), config.name,);
+        println!(
+            "    {} {}",
+            "Checking".green().bold(),
+            config.display_name(contract_id),
+        );
     }
 
-    let source_path = Path::new(&config.src);
-    let source_path = if source_path.is_absolute() {
-        source_path.to_path_buf()
-    } else {
-        options.project_root.join(source_path)
-    };
     let root = dunce::canonicalize(source_path)?;
     let lint_settings = Checker::build_settings(options.acton_config, Some(contract_id));
     let lint_settings = apply_rules_filter(lint_settings, options.only_rules);

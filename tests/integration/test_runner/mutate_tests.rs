@@ -2,11 +2,14 @@ use crate::common::{acton_exe, strip_ansi};
 use crate::support::TestOutputExt;
 use crate::support::project::{Project, ProjectBuilder};
 use serde_json::Value;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
+use tycho_types::boc::Boc;
+use tycho_types::cell::CellBuilder;
 
 const MUTATION_CONTRACT: &str = r"
 fun onInternalMessage(in: InMessage) {
@@ -23,13 +26,21 @@ get fun addOne(x: int): int {
 const PASSING_TEST: &str = r#"
 import "../../lib/testing/expect"
 
-get fun `test-always-pass`() {
+get fun `test always pass`() {
     expect(1).toEqual(1);
 }
 "#;
 
+const FAILING_TEST: &str = r#"
+import "../../lib/testing/expect"
+
+get fun `test baseline fails`() {
+    expect(1).toEqual(2);
+}
+"#;
+
 const DEPENDENT_MUTATION_CONTRACT: &str = r#"
-import "../gen/dependency_code.tolk"
+import "../gen/dependency.code.tolk"
 
 fun onInternalMessage(in: InMessage) {
     assert (in.valueCoins > 0) throw 5;
@@ -37,6 +48,50 @@ fun onInternalMessage(in: InMessage) {
 }
 
 fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
+const EMBEDDED_DEPENDENCY_HASH_CONTRACT: &str = r#"
+import "@gen/dependency.code"
+
+fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+
+get fun dependencyCodeHash(): uint256 {
+    return dependencyCompiledCode().hash();
+}
+"#;
+
+const CUSTOM_GEN_EMBEDDED_DEPENDENCY_HASH_CONTRACT: &str = r#"
+import "../custom-gen/dependency.code.tolk"
+
+fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+
+get fun dependencyCodeHash(): uint256 {
+    return dependencyCompiledCode().hash();
+}
+"#;
+
+const MID_EMBEDDED_LEAF_HASH_CONTRACT: &str = r#"
+import "@gen/leaf.code"
+
+fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+
+get fun leafCodeHash(): uint256 {
+    return leafCompiledCode().hash();
+}
+"#;
+
+const MAIN_EMBEDDED_MID_HASH_CONTRACT: &str = r#"
+import "@gen/mid.code"
+
+fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+
+get fun midCodeHash(): uint256 {
+    return midCompiledCode().hash();
+}
 "#;
 
 const BROKEN_DEPENDENCY_MUTATION_CONTRACT: &str = r"
@@ -79,7 +134,7 @@ get fun addOne(x: int): int {
 
 const CUSTOM_MUTATION_RULES_JSON: &str = r#"[
   {
-    "name": "flip_plus_custom",
+    "name": "replace_plus_with_multiply_custom",
     "description": "Replace + with *",
     "explanation": "Custom arithmetic mutation loaded from JSON.",
     "level": "major",
@@ -98,8 +153,8 @@ const CUSTOM_MUTATION_RULES_JSON: &str = r#"[
 
 const CUSTOM_MUTATION_RULES_OVERRIDE_JSON: &str = r#"[
   {
-    "name": "flip_plus",
-    "description": "Replace + with *",
+    "name": "replace_plus_with_minus",
+    "description": "Replace + with -",
     "explanation": "Custom override mutation loaded from JSON.",
     "level": "major",
     "group": "arithmetic",
@@ -110,7 +165,7 @@ const CUSTOM_MUTATION_RULES_OVERRIDE_JSON: &str = r#"[
     },
     "edit": {
       "type": "replace",
-      "replacement": "*"
+      "replacement": "-"
     }
   }
 ]"#;
@@ -127,7 +182,7 @@ fn git(project_root: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(project_root)
         .output()
-        .unwrap_or_else(|err| panic!("failed to run git {:?}: {err}", args))
+        .unwrap_or_else(|err| panic!("failed to run git {args:?}: {err}"))
 }
 
 fn git_ok(project_root: &Path, args: &[&str], context: &str) {
@@ -188,7 +243,7 @@ fn write_simple_contract(project: &Project, source: &str) {
 fn mutation_session_path(project: &Project, session_id: &str) -> std::path::PathBuf {
     project
         .path()
-        .join(".acton")
+        .join("build")
         .join("mutation-sessions")
         .join(format!("{session_id}.jsonl"))
 }
@@ -202,6 +257,129 @@ fn read_jsonl_events(path: &Path) -> Vec<Value> {
                 .unwrap_or_else(|err| panic!("failed to parse jsonl line '{line}': {err}"))
         })
         .collect()
+}
+
+fn generated_dependency_function_hash_hex(project: &Project, dependency: &str) -> String {
+    let acton_toml_path = project.path().join("Acton.toml");
+    let acton_toml = fs::read_to_string(&acton_toml_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", acton_toml_path.display()));
+    let gen_dir = acton_toml
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("gen-dir = \"")
+                .and_then(|line| line.strip_suffix('"'))
+        })
+        .unwrap_or("gen");
+    let generated_path = project
+        .path()
+        .join(gen_dir)
+        .join(format!("{dependency}.code.tolk"));
+    let generated = fs::read_to_string(&generated_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", generated_path.display()));
+    let boc64 = generated
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix('"')
+                .and_then(|line| line.split_once("\" base64>B B>boc"))
+                .map(|(boc64, _)| boc64)
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "failed to find embedded BoC in {}",
+                generated_path.display()
+            )
+        });
+    let cell = Boc::decode_base64(boc64)
+        .unwrap_or_else(|err| panic!("failed to decode generated BoC for {dependency}: {err}"));
+    let returned_cell = if generated.contains("hashu <b 2 8 u, swap 256 u, b>spec PUSHREF") {
+        CellBuilder::build_library(cell.repr_hash())
+    } else {
+        cell
+    };
+
+    format!("0x{}", hex::encode(returned_cell.repr_hash().as_array()))
+}
+
+fn write_parent_dependency_hash_test(project: &Project, get_method: &str, expected_hash: &str) {
+    let source = format!(
+        r#"
+import "../../lib/testing/expect"
+import "../../lib/build"
+import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
+
+const EXPECTED_DEPENDENCY_CODE_HASH = {expected_hash};
+
+fun deployMain(): address {{
+    val init = ContractState {{
+        code: build("main"),
+        data: createEmptyCell(),
+    }};
+    val address = AutoDeployAddress {{ stateInit: init }}.calculateAddress();
+    val deployer = testing.treasury("deployer");
+
+    val deployTxs = net.send(
+        deployer.address,
+        createMessage({{
+            bounce: false,
+            value: ton("1"),
+            dest: {{ stateInit: init }},
+        }}),
+    );
+    expect(deployTxs).toHaveSuccessfulDeploy({{ to: address }});
+
+    return address;
+}}
+
+get fun `test parent observes embedded dependency code hash`() {{
+    val main = deployMain();
+    val actual = net.runGetMethod<uint256>(main, "{get_method}");
+    expect(actual).toEqual(EXPECTED_DEPENDENCY_CODE_HASH);
+}}
+"#
+    );
+
+    fs::write(project.path().join("tests/mutation.test.tolk"), source)
+        .expect("failed to write embedded dependency mutation test");
+}
+
+fn assert_mutated_dependency_is_observed_by_parent(
+    project: Project,
+    mutate_contract: &str,
+    observed_dependency: &str,
+    get_method: &str,
+    snapshot_path: &str,
+) {
+    project.acton().build().run().success();
+
+    let original_dependency_hash =
+        generated_dependency_function_hash_hex(&project, observed_dependency);
+    write_parent_dependency_hash_test(&project, get_method, &original_dependency_hash);
+
+    project
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg(mutate_contract)
+        .arg("--mutation-id")
+        .arg("2")
+        .arg("--mutation-minimum-percent")
+        .arg("100")
+        .run()
+        .success()
+        .assert_snapshot_matches(snapshot_path);
+}
+
+fn append_build_gen_dir(project: &Project, gen_dir: &str) {
+    let acton_toml_path = project.path().join("Acton.toml");
+    let mut acton_toml = fs::read_to_string(&acton_toml_path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", acton_toml_path.display()));
+    writeln!(acton_toml, "\n[build]\ngen-dir = \"{gen_dir}\"").expect("write to string");
+    fs::write(&acton_toml_path, acton_toml)
+        .unwrap_or_else(|err| panic!("failed to write {}: {err}", acton_toml_path.display()));
 }
 
 fn many_asserts_contract(assert_count: usize) -> String {
@@ -235,15 +413,12 @@ fn spawn_mutation_process(project: &Project, args: &[&str]) -> Child {
 fn wait_for_event_count(progress_path: &Path, minimum_lines: usize) {
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
-        let line_count = fs::read_to_string(progress_path)
-            .ok()
-            .map(|content| {
-                content
-                    .lines()
-                    .filter(|line| !line.trim().is_empty())
-                    .count()
-            })
-            .unwrap_or(0);
+        let line_count = fs::read_to_string(progress_path).ok().map_or(0, |content| {
+            content
+                .lines()
+                .filter(|line| !line.trim().is_empty())
+                .count()
+        });
         if line_count >= minimum_lines {
             return;
         }
@@ -316,6 +491,41 @@ fn mutate_reports_summary() {
 }
 
 #[test]
+fn mutate_aborts_when_baseline_tests_fail() {
+    ProjectBuilder::new("j-mutate-baseline-fails")
+        .contract("simple", MUTATION_CONTRACT)
+        .test_file("mutation", FAILING_TEST)
+        .build()
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_aborts_when_baseline_tests_fail.stderr.txt",
+        );
+}
+
+#[test]
+fn mutate_aborts_when_filter_selects_no_baseline_tests() {
+    mutation_project("j-mutate-baseline-no-match-filter")
+        .acton()
+        .test()
+        .arg("--mutate")
+        .arg("--mutate-contract")
+        .arg("simple")
+        .arg("--filter")
+        .arg("does-not-match")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/test_runner_mutate/mutate_aborts_when_filter_selects_no_baseline_tests.stderr.txt",
+        );
+}
+
+#[test]
 fn mutate_disable_rules_filter_mutants() {
     mutation_project("j-mutate-disable-rule")
         .acton()
@@ -326,7 +536,7 @@ fn mutate_disable_rules_filter_mutants() {
         .arg("--mutation-disable-rules")
         .arg("remove_assert")
         .arg("--mutation-disable-rules")
-        .arg("flip_plus")
+        .arg("replace_plus_with_minus")
         .run()
         .success()
         .assert_snapshot_matches(
@@ -663,7 +873,7 @@ fn mutate_custom_rules_file_via_cli() {
         .arg("--mutation-disable-rules")
         .arg("remove_assert")
         .arg("--mutation-disable-rules")
-        .arg("flip_plus")
+        .arg("replace_plus_with_minus")
         .run()
         .success()
         .assert_snapshot_matches(
@@ -709,12 +919,12 @@ description = "A test project"
 version = "0.1.0"
 
 [contracts.simple]
-name = "simple"
+display-name = "simple"
 src = "contracts/simple.tolk"
 
 [test.mutation]
 rules-file = "mutation-rules.json"
-disable-rules = ["remove_assert", "flip_plus"]
+disable-rules = ["remove_assert", "replace_plus_with_minus"]
 "#,
         )
         .build()
@@ -745,12 +955,12 @@ description = "A test project"
 version = "0.1.0"
 
 [contracts.simple]
-name = "simple"
+display-name = "simple"
 src = "contracts/simple.tolk"
 
 [test.mutation]
 rules-file = "missing-rules.json"
-disable-rules = ["remove_assert", "flip_plus"]
+disable-rules = ["remove_assert", "replace_plus_with_minus"]
 "#,
         )
         .build()
@@ -1389,7 +1599,7 @@ description = "A test project"
 version = "0.1.0"
 
 [contracts.simple]
-name = "simple"
+display-name = "simple"
 src = "contracts/simple.tolk"
 
 [test.mutation]
@@ -1428,11 +1638,11 @@ description = "A test project"
 version = "0.1.0"
 
 [contracts.simple]
-name = "simple"
+display-name = "simple"
 src = "contracts/simple.tolk"
 
 [test.mutation]
-disable-rules = ["remove_assert", "flip_plus", "flip_gt_ge"]
+disable-rules = ["remove_assert", "replace_plus_with_minus", "replace_greater_than_with_greater_or_equal"]
 "#,
         )
         .build()
@@ -1462,7 +1672,7 @@ description = "A test project"
 version = "0.1.0"
 
 [contracts.simple]
-name = "simple"
+display-name = "simple"
 src = "contracts/simple.tolk"
 
 [test.mutation]
@@ -1496,7 +1706,7 @@ description = "A test project"
 version = "0.1.0"
 
 [contracts.simple]
-name = "simple"
+display-name = "simple"
 src = "contracts/simple.tolk"
 
 [test.mutation]
@@ -1530,7 +1740,7 @@ description = "A test project"
 version = "0.1.0"
 
 [contracts.simple]
-name = "simple"
+display-name = "simple"
 src = "contracts/simple.tolk"
 
 [test.mutation]
@@ -1567,6 +1777,101 @@ fn mutate_contract_with_dependencies() {
         .assert_snapshot_matches(
             "integration/snapshots/test-runner/test_runner_mutate/mutate_contract_with_dependencies.stdout.txt",
         );
+}
+
+#[test]
+fn mutate_dependency_embedded_in_parent_repro() {
+    assert_mutated_dependency_is_observed_by_parent(
+        ProjectBuilder::new("j-mutate-embedded-dependency-repro")
+            .contract("dependency", MUTATION_CONTRACT)
+            .contract_with_deps(
+                "main",
+                EMBEDDED_DEPENDENCY_HASH_CONTRACT,
+                vec!["dependency"],
+            )
+            .mapping("gen", "gen")
+            .build(),
+        "dependency",
+        "dependency",
+        "dependencyCodeHash",
+        "integration/snapshots/test-runner/test_runner_mutate/mutate_dependency_embedded_in_parent_repro.stdout.txt",
+    );
+}
+
+#[test]
+fn mutate_dependency_library_ref_in_parent() {
+    assert_mutated_dependency_is_observed_by_parent(
+        ProjectBuilder::new("j-mutate-library-ref-dependency-in-parent")
+            .contract("dependency", MUTATION_CONTRACT)
+            .contract_with_detailed_deps(
+                "main",
+                EMBEDDED_DEPENDENCY_HASH_CONTRACT,
+                vec![("dependency", Some("library_ref"), None, None)],
+            )
+            .mapping("gen", "gen")
+            .build(),
+        "dependency",
+        "dependency",
+        "dependencyCodeHash",
+        "integration/snapshots/test-runner/test_runner_mutate/mutate_dependency_library_ref_in_parent.stdout.txt",
+    );
+}
+
+#[test]
+fn mutate_dependency_embedded_in_parent_with_config_gen_dir() {
+    let project = ProjectBuilder::new("j-mutate-dependency-config-gen-dir")
+        .contract("dependency", MUTATION_CONTRACT)
+        .contract_with_deps(
+            "main",
+            CUSTOM_GEN_EMBEDDED_DEPENDENCY_HASH_CONTRACT,
+            vec!["dependency"],
+        )
+        .build();
+    append_build_gen_dir(&project, "custom-gen");
+
+    assert_mutated_dependency_is_observed_by_parent(
+        project,
+        "dependency",
+        "dependency",
+        "dependencyCodeHash",
+        "integration/snapshots/test-runner/test_runner_mutate/mutate_dependency_embedded_in_parent_with_config_gen_dir.stdout.txt",
+    );
+}
+
+#[test]
+fn mutate_transitive_embedded_dependency_in_parent() {
+    assert_mutated_dependency_is_observed_by_parent(
+        ProjectBuilder::new("j-mutate-transitive-embedded-dependency")
+            .contract("leaf", MUTATION_CONTRACT)
+            .contract_with_deps("mid", MID_EMBEDDED_LEAF_HASH_CONTRACT, vec!["leaf"])
+            .contract_with_deps("main", MAIN_EMBEDDED_MID_HASH_CONTRACT, vec!["mid"])
+            .mapping("gen", "gen")
+            .build(),
+        "leaf",
+        "mid",
+        "midCodeHash",
+        "integration/snapshots/test-runner/test_runner_mutate/mutate_transitive_embedded_dependency_in_parent.stdout.txt",
+    );
+}
+
+#[test]
+fn mutate_transitive_mixed_dependency_types_in_parent() {
+    assert_mutated_dependency_is_observed_by_parent(
+        ProjectBuilder::new("j-mutate-transitive-mixed-dependency-types")
+            .contract("leaf", MUTATION_CONTRACT)
+            .contract_with_deps("mid", MID_EMBEDDED_LEAF_HASH_CONTRACT, vec!["leaf"])
+            .contract_with_detailed_deps(
+                "main",
+                MAIN_EMBEDDED_MID_HASH_CONTRACT,
+                vec![("mid", Some("library_ref"), None, None)],
+            )
+            .mapping("gen", "gen")
+            .build(),
+        "leaf",
+        "mid",
+        "midCodeHash",
+        "integration/snapshots/test-runner/test_runner_mutate/mutate_transitive_mixed_dependency_types_in_parent.stdout.txt",
+    );
 }
 
 #[test]

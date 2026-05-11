@@ -32,9 +32,9 @@ pub enum ReportFormat {
     /// Human-readable console output
     #[default]
     Console,
-    /// TeamCity service messages
+    /// `TeamCity` service messages
     TeamCity,
-    /// JUnit XML report
+    /// `JUnit` XML report
     JUnit,
     /// Compact dot-progress output
     Dot,
@@ -78,6 +78,7 @@ pub enum MutationLevel {
 }
 
 impl MutationLevel {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             MutationLevel::Critical => "critical",
@@ -109,6 +110,7 @@ pub enum MutationDiffMode {
 }
 
 impl MutationDiffMode {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             MutationDiffMode::Worktree => "worktree",
@@ -128,6 +130,7 @@ impl std::fmt::Display for MutationDiffMode {
 pub struct TestConfig {
     pub report_formats: Vec<ReportFormat>,
     pub show_bodies: bool,
+    pub verbosity: u8,
     pub debug: bool,
     pub debug_port: u16,
     pub backtrace: Option<BacktraceMode>,
@@ -147,7 +150,6 @@ pub struct TestConfig {
     pub baseline_snapshot: Option<String>,
     pub fail_on_diff: bool,
     pub fork_net: Option<Network>,
-    pub api_key: Option<String>,
     pub fork_block_number: Option<u64>,
     pub save_test_trace: Option<String>,
     pub mutate: bool,

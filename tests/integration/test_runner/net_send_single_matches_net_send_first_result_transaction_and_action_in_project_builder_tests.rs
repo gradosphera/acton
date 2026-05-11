@@ -37,10 +37,10 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const DF_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../../lib/types/big_array"
 import "../../lib/types/message"
 import "../../lib/types/out_actions"
@@ -69,8 +69,8 @@ fn net_send_single_matches_net_send_first_result_transaction_and_action_in_proje
     run_project_success(
         "df-stdlib-send-single-vs-send-first-result-project-builder",
         r#"
-get fun `test-df-send-single-vs-send-first-result-project-builder`() {
-    val sender = net.treasury("df_sender_project");
+get fun `test df send single vs send first result project builder`() {
+    val sender = testing.treasury("df_sender_project");
 
     val init = ContractState {
         code: build("df_echo"),
@@ -87,7 +87,7 @@ get fun `test-df-send-single-vs-send-first-result-project-builder`() {
     });
     expect(net.send(sender.address, deploy)).toHaveSuccessfulDeploy({ to: echoAddress });
 
-    val sendSingleResult = net.sendSingle(
+    val sendSingleResult = testing.processSingleTraceStep(
         sender.address,
         createMessage({
             bounce: false,
@@ -171,7 +171,7 @@ fn net_send_single_matches_net_send_first_result_transaction_and_action_in_fixtu
         r#"
 
 [contracts.df_echo]
-name = "DfEcho"
+display-name = "DfEcho"
 src = "contracts/df_echo.tolk"
 depends = []
 "#,
@@ -182,8 +182,8 @@ depends = []
     let test_path = "tests/df_send_single_vs_send_first_result_equivalence.test.tolk";
     let source = format!(
         r#"{DF_IMPORTS}
-get fun `test-df-send-single-vs-send-first-result-fixture-project`() {{
-    val sender = net.treasury("df_sender_fixture");
+get fun `test df send single vs send first result fixture project`() {{
+    val sender = testing.treasury("df_sender_fixture");
 
     val init = ContractState {{
         code: build("df_echo"),
@@ -200,7 +200,7 @@ get fun `test-df-send-single-vs-send-first-result-fixture-project`() {{
     }});
     expect(net.send(sender.address, deploy)).toHaveSuccessfulDeploy({{ to: echoAddress }});
 
-    val sendSingleResult = net.sendSingle(
+    val sendSingleResult = testing.processSingleTraceStep(
         sender.address,
         createMessage({{
             bounce: false,

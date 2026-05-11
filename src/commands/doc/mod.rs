@@ -1,6 +1,6 @@
 use acton_config::color::OwoColorize;
 use anyhow::{Context, Result, anyhow};
-use tasm::spec::{SpecInstruction, load_tvm_specification};
+use tasm_core::spec::{SpecInstruction, load_tvm_specification};
 
 const FIELD_LABEL_WIDTH: usize = 14;
 
@@ -40,9 +40,12 @@ pub fn doc_tvm_cmd(
                 search_in_description,
             );
             if matches.is_empty() {
-                anyhow::bail!(
-                    "No TVM instructions found for query '{query}' in the built-in specification"
-                );
+                return Err(find_query_not_found_error(
+                    query,
+                    &spec.instructions,
+                    &normalized_search_query,
+                    search_in_description,
+                ));
             }
 
             results.push(FindQueryResult {
@@ -139,6 +142,31 @@ fn suggest_instruction_names(
         .into_iter()
         .take(limit)
         .collect()
+}
+
+fn find_query_not_found_error(
+    raw_query: &str,
+    instructions: &[SpecInstruction],
+    normalized_query: &str,
+    search_in_description: bool,
+) -> anyhow::Error {
+    let base_message =
+        format!("No TVM instructions found for query '{raw_query}' in the built-in specification");
+
+    if search_in_description {
+        return anyhow!(base_message);
+    }
+
+    let description_matches = find_instruction_names(instructions, normalized_query, true);
+    if description_matches.is_empty() {
+        anyhow!(base_message)
+    } else {
+        anyhow!(
+            "{}. Pass {} to search instruction descriptions as well.",
+            base_message,
+            "--description".yellow()
+        )
+    }
 }
 
 fn find_instruction_names(

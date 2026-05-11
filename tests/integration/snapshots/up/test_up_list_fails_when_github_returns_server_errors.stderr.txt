@@ -1,0 +1,1 @@
+Error: Failed to fetch the release list from GitHub. GitHub release API returned 500 Internal Server Error while listing releases

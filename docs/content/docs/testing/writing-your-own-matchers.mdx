@@ -1,0 +1,264 @@
+---
+title: "Custom matchers"
+description: "Learn how to add custom matchers for expect() calls"
+---
+
+Custom matchers extend `expect()` with project-specific checks while keeping the fluent `expect(...).matcher(...)` style.
+
+<Callout>
+    Before writing a custom matcher, review [built-in matchers and helpers](/docs/testing/built-in-matchers-and-helpers). Acton already ships transaction matchers, map expectations, and out-action helpers for many workflows.
+</Callout>
+
+## Standalone check helpers are vague and poorly readable
+
+Validation logic extracted into a plain helper often reads like this:
+
+```tolk
+import "@acton/testing/expect"
+import "@acton/testing/assert"
+
+fun checkIfValueIsEqualWithFlags(left: int, right: int, param1: bool, param2: bool) {
+    // some complex logic
+    Assert.equal(left, right);
+}
+
+get fun `test unit`() {
+    checkIfValueIsEqualWithFlags(5 + 5, 10, false, true);
+    expect(2 + 2).toEqual(1 + 3);
+}
+```
+
+That pattern works, but it drops out of the `expect()` fluent chain and hides what is being asserted. This makes tests harder to read.
+
+### Use custom matchers on `Expectation<T>`
+
+The same check can fit the matcher style as an extension on `Expectation<T>`:
+
+```tolk
+import "@acton/testing/expect"
+import "@acton/testing/assert"
+
+fun Expectation<int>.toEqualWithFlags(self, right: int, param1: bool, param2: bool) {
+    // some complex logic
+    Assert.equal(self.value, right);
+}
+
+get fun `test unit`() {
+    expect(5 + 5).toEqualWithFlags(10, false, true);
+    expect(2 + 2).toEqual(1 + 3);
+}
+```
+
+The `expect()` call returns `Expectation<T>` for the wrapped value `T`. Write extension methods on `Expectation<T>` to add custom matchers.
+
+Custom matchers centralize validation logic on `Expectation<T>` so failures stay consistent with the built-in matchers, carefully hiding the implementation details and providing abstractions that are easy to reason about.
+
+## Define a matcher
+
+A matcher is an extension function on `Expectation<T>`:
+
+```tolk
+fun Expectation<T>.myCustomMatcher(self, arg1: Type1, arg2: Type2) {
+    // Your validation logic goes here
+    // Use self.value to access the value passed to expect()
+}
+```
+
+### Matchers for specific types
+
+Generic matchers on `Expectation<T>` are allowed, whereas matchers on a concrete `T` are often clearer for domain-specific data types.
+
+#### Example: even `int` matcher
+
+The `toBeEven()` matcher checks if an integer is even:
+
+```tolk
+import "@acton/testing/expect"
+import "@acton/testing/assert"
+import "@acton/fmt"
+
+fun Expectation<int>.toBeEven(self) {
+    if (self.value % 2 != 0) {
+        Assert.fail(
+            format("Expected {} to be even", self.value),
+            self.location
+        );
+    }
+}
+
+get fun `test even number`() {
+    expect(10).toBeEven();
+    // expect(9).toBeEven(); // This would fail
+}
+```
+
+Here, `toBeEven` is defined on `Expectation<int>`, so it is available only after `expect()` receives an `int`. Inside the matcher, `self.value` holds that integer, e.g., `10`.
+
+#### Example: `address` workchain matcher
+
+The `toHaveWorkchain()` matcher checks if an `address` has a specific workchain:
+
+```tolk
+import "@acton/testing/expect"
+import "@acton/testing/assert"
+import "@acton/fmt"
+
+fun Expectation<address>.toHaveWorkchain(self, expectedWorkchain: int) {
+    val actualWorkchain = self.value.getWorkchain();
+    if (actualWorkchain != expectedWorkchain) {
+        Assert.fail(
+            format(
+                "Expected address to have workchain {}, but got {}",
+                expectedWorkchain,
+                actualWorkchain
+            ),
+            self.location
+        );
+    }
+}
+
+get fun `test address workchain`() {
+    val myAddress = address("0:527964d55cfa6eb731f4bfc07e9d025098097ef8505519e853986279bd8400d8");
+    expect(myAddress).toHaveWorkchain(0);
+}
+```
+
+#### Example: `string` length matcher
+
+The `toHaveLength()` matcher checks if a `string` is of desired length:
+
+```tolk
+import "@acton/testing/expect"
+import "@acton/testing/assert"
+import "@acton/fmt"
+import "@stdlib/strings"
+
+fun Expectation<string>.toHaveLength(self, expectedLen: int) {
+    if (self.value.calculateLength() != expectedLen) {
+        Assert.fail(
+            format(
+                "Expected string '{}' to have length '{}'",
+                self.value,
+                expectedLen
+            ),
+            self.location
+        );
+    }
+}
+
+get fun `test string len`() {
+    expect("hello world").toHaveLength(11);
+}
+```
+
+## Matchers for structs
+
+Matches can be created for any custom type, including structures.
+
+Start from a sample struct:
+
+```tolk
+struct User {
+    id: int
+    name: string
+    isActive: bool
+}
+```
+
+Add a matcher `toBeActive()` that asserts `isActive` is true:
+
+```tolk
+import "@acton/testing/expect"
+import "@acton/testing/assert"
+import "@acton/fmt"
+
+// NOTE: Assume User struct is defined here or imported
+
+fun Expectation<User>.toBeActive(self) {
+    if (!self.value.isActive) {
+        Assert.fail(
+            format("Expected user {} to be active", self.value.name),
+            self.location
+        );
+    }
+}
+
+get fun `test user status`() {
+    val activeUser = User { id: 1, name: "Alice", isActive: true };
+    val inactiveUser = User { id: 2, name: "Bob", isActive: false };
+
+    expect(activeUser).toBeActive();
+    // expect(inactiveUser).toBeActive(); // This would fail
+}
+```
+
+## Use `Assert` inside matchers
+
+Inside custom matchers, use the `Assert` type from the `@acton/testing/assert` library to perform checks and produce descriptive error messages. This is the preferred way to report assertion failures.
+
+```tolk
+import "@acton/testing/assert"
+```
+
+The `Assert.fail(message, location)` is the usual choice for custom error messages. Pass the error message as the first argument, and `self.location` as the second, so the runner could point to the exact line where the assertion is made when that assertion fails.
+
+```tolk
+fun Expectation<int>.toBePositive(self) {
+    if (self.value <= 0) {
+        Assert.fail(
+            format("Expected {} to be a positive number", self.value),
+            // Pass the location to attribute the failure to the code of this assertion
+            self.location,
+        );
+    }
+}
+```
+
+With `Assert` functions, custom matchers provide consistent and helpful runner output.
+
+## Guidelines
+
+### Clear error messages
+
+On failure, state both the expectation and the observed value. Including actual values and error locations in assertions helps with debugging.
+
+Bad:
+
+```tolk
+Assert.fail("Value is not even");
+```
+
+Good:
+
+```tolk
+Assert.fail(
+    format("Expected {} to be even, but it was odd.", self.value),
+    self.location,
+);
+```
+
+### Group matchers in one module
+
+As matchers accumulate, keep them in a dedicated module instead of scattering copies across test files. This keeps testing utilities organized and reusable across the project.
+
+Example layout:
+
+```text noCopy
+my-project/
+├── contracts/
+│   └── ...
+├── tests/
+│   ├── my_contract.test.tolk
+│   └── matchers.tolk
+└── Acton.toml
+```
+
+Import the shared module from tests:
+
+```tolk
+import "./matchers"
+
+get fun `test my`() {
+    expect(42).toBeEven();
+}
+```

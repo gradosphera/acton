@@ -16,7 +16,8 @@ pub(super) fn rewrite_mode_expr(expr: &Expr, source: &str, flags: &[(u32, &str)]
     match expr {
         Expr::NumberLit(lit) => {
             let literal_text = lit.text(source);
-            let mapped = parse_int_literal(literal_text)
+            let mapped = lit
+                .parse_u32(source)
                 .and_then(|value| mode_value_to_constants(value, flags));
             let fully_mapped = mapped.is_some();
 
@@ -80,7 +81,8 @@ fn rewrite_bin(bin: &Bin, source: &str, flags: &[(u32, &str)]) -> RewrittenMode 
         };
     }
 
-    if bin.operator_name(source) != "+" {
+    let operator = bin.operator_name(source);
+    if operator != "+" && operator != "|" {
         return RewrittenMode {
             text: bin.text(source).to_string(),
             has_number_literal: true,
@@ -89,29 +91,10 @@ fn rewrite_bin(bin: &Bin, source: &str, flags: &[(u32, &str)]) -> RewrittenMode 
     }
 
     RewrittenMode {
-        text: format!("{} + {}", left_rewritten.text, right_rewritten.text),
+        text: format!("{} | {}", left_rewritten.text, right_rewritten.text),
         has_number_literal: true,
         fully_mapped: left_rewritten.fully_mapped && right_rewritten.fully_mapped,
     }
-}
-
-pub(super) fn parse_int_literal(raw: &str) -> Option<u32> {
-    let normalized = raw.replace('_', "");
-
-    if let Some(hex) = normalized
-        .strip_prefix("0x")
-        .or_else(|| normalized.strip_prefix("0X"))
-    {
-        return u32::from_str_radix(hex, 16).ok();
-    }
-    if let Some(binary) = normalized
-        .strip_prefix("0b")
-        .or_else(|| normalized.strip_prefix("0B"))
-    {
-        return u32::from_str_radix(binary, 2).ok();
-    }
-
-    normalized.parse::<u32>().ok()
 }
 
 pub(super) fn mode_value_to_constants(mut value: u32, flags: &[(u32, &str)]) -> Option<String> {
@@ -137,7 +120,7 @@ pub(super) fn mode_value_to_constants(mut value: u32, flags: &[(u32, &str)]) -> 
     }
 
     parts.reverse();
-    Some(parts.join(" + "))
+    Some(parts.join(" | "))
 }
 
 pub(super) fn resolve_call_symbol(

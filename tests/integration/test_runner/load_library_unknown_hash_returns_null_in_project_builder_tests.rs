@@ -1,10 +1,12 @@
 use crate::support::TestOutputExt;
 use crate::support::fixtures::FixtureProject;
 use crate::support::project::ProjectBuilder;
+use crate::support::toncenter::append_custom_network;
 use std::fs;
 
 const NETWORK_IMPORTS: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/io"
 import "../../lib/testing/expect"
 "#;
@@ -18,7 +20,7 @@ fn load_library_unknown_hash_returns_null_in_project_builder() {
         r#"
 {NETWORK_IMPORTS}
 
-get fun `test-bm-load-library-unknown-hash-project-builder`() {{
+get fun `test bm load library unknown hash project builder`() {{
     val unknown = net.loadLibrary("{UNKNOWN_LIBRARY_HASH}");
     val empty = net.loadLibrary("");
     expect(unknown).toBeNull();
@@ -31,9 +33,16 @@ get fun `test-bm-load-library-unknown-hash-project-builder`() {{
 "#
     );
 
-    ProjectBuilder::new("bm-stdlib-load-library-unknown-hash-project-builder")
+    let project = ProjectBuilder::new("bm-stdlib-load-library-unknown-hash-project-builder")
         .test_file("load_library_unknown_hash", &source)
-        .build()
+        .build();
+    append_custom_network(
+        project.path(),
+        "bm-missing-net",
+        "http://127.0.0.1:1/api/v2",
+    );
+
+    project
         .acton()
         .test()
         .fork_net("custom:bm-missing-net")
@@ -54,7 +63,7 @@ fn load_library_unknown_hash_returns_null_in_fixture_project() {
         r#"
 {NETWORK_IMPORTS}
 
-get fun `test-bm-load-library-unknown-hash-fixture`() {{
+get fun `test bm load library unknown hash fixture`() {{
     val unknown = net.loadLibrary("{UNKNOWN_LIBRARY_HASH}");
     val malformed = net.loadLibrary("not-a-hash");
     expect(unknown).toBeNull();
@@ -69,6 +78,11 @@ get fun `test-bm-load-library-unknown-hash-fixture`() {{
 
     fs::write(fixture.path().join(test_path), source)
         .expect("failed to write bm fixture load library test");
+    append_custom_network(
+        fixture.path(),
+        "bm-missing-net",
+        "http://127.0.0.1:1/api/v2",
+    );
 
     fixture
         .acton()

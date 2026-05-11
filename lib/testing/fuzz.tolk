@@ -1,15 +1,16 @@
 /// Module for fuzz-testing helpers.
 ///
 /// This module contains helpers intended specifically for parameterized tests
-/// annotated with `@test({ fuzz: ... })`.
+/// annotated with dotted `@test.fuzz` annotations: `@test.fuzz`,
+/// `@test.fuzz(<runs>)`, or `@test.fuzz({ ... })`.
 ///
 /// Examples:
 /// ```tolk
 /// import "@acton/testing/expect"
 /// import "@acton/testing/fuzz"
 ///
-/// @test({ fuzz: true })
-/// get fun `test-balance-stays-bounded`(value: int) {
+/// @test.fuzz
+/// get fun `test balance stays bounded`(value: int) {
 ///     val bounded = fuzz.bound(value, 0, 100);
 ///     fuzz.assume(bounded != 13);
 ///     expect(bounded >= 0).toBeTrue();
@@ -17,8 +18,8 @@
 /// ```
 
 import "@stdlib/reflection"
-import "../fmt"
 import "assert"
+import "../fmt"
 
 /// Root module for fuzz-testing helpers.
 ///
@@ -32,9 +33,9 @@ struct fuzz
 fun fuzz.assume(
     condition: bool,
     message: string = "",
-    loc: SourceLocation = reflect.sourceLocation(),
+    loc: string = reflect.sourceLocationAsString(),
 ): void {
-    Assert.assume(condition, message, formatFuzzLocation(loc));
+    Assert.assume(condition, message, loc);
 }
 
 /// Maps an integer-like value into the inclusive range `[minValue, maxValue]`.
@@ -45,18 +46,18 @@ fun fuzz.bound<T>(
     value: T,
     minValue: T,
     maxValue: T,
-    loc: SourceLocation = reflect.sourceLocation(),
+    loc: string = reflect.sourceLocationAsString(),
 ): T {
     val minInt = minValue as int;
     val maxInt = maxValue as int;
     if (minInt > maxInt) {
         Assert.fail(
-            format2(
+            format(
                 "fuzz.bound(<value>, <min>, <max>): min {} must be less than or equal to max {}",
                 minInt,
                 maxInt,
             ),
-            formatFuzzLocation(loc),
+            loc,
         );
     }
 
@@ -81,8 +82,4 @@ fun fuzz.bound<T>(
         return maxValue;
     }
     return (minInt + rem - 1) as T;
-}
-
-fun formatFuzzLocation(loc: SourceLocation): string {
-    return format3("{}:{}:{}", loc.fileName, loc.lineNo, loc.charNo);
 }

@@ -3,6 +3,7 @@ use crate::support::TestOutputExt;
 use crate::support::compilation::{CompilationOrder, extract_compiled_contracts};
 use crate::support::project::ProjectBuilder;
 use crate::support::snapshots::normalize_output;
+use acton::stdlib::DISABLE_AUTO_STDLIB_ENV;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tycho_types::boc::Boc;
@@ -73,13 +74,35 @@ fn test_build_ensure_latest_uses_project_root_from_nested_directory() {
 }
 
 #[test]
+fn test_build_respects_disable_auto_stdlib_env() {
+    let project = ProjectBuilder::new("build-disable-auto-stdlib")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    let output = project
+        .acton()
+        .build()
+        .env(DISABLE_AUTO_STDLIB_ENV, "1")
+        .run()
+        .success();
+
+    assert!(
+        !project.path().join(".acton").exists(),
+        "build should not create .acton when {DISABLE_AUTO_STDLIB_ENV}=1"
+    );
+    output.assert_snapshot_matches(
+        "integration/snapshots/build/test_build_respects_disable_auto_stdlib_env.stdout.txt",
+    );
+}
+
+#[test]
 fn test_build_with_dependency() {
     let project = ProjectBuilder::new("build-with-dep")
         .contract("child", SIMPLE_CONTRACT)
         .contract_with_deps(
             "parent",
             r#"
-            import "../gen/child_code.tolk"
+            import "../gen/child.code.tolk"
 
             fun onInternalMessage(in: InMessage) {
                 val code = childCompiledCode();
@@ -99,8 +122,8 @@ fn test_build_with_dependency() {
         .assert_contains("Compiling parent")
         .assert_contains("Finished");
 
-    let gen_file = project.path().join("gen/child_code.tolk");
-    assert!(gen_file.exists(), "gen/child_code.tolk should be created");
+    let gen_file = project.path().join("gen/child.code.tolk");
+    assert!(gen_file.exists(), "gen/child.code.tolk should be created");
 
     let content = fs::read_to_string(&gen_file).expect("Should read gen file");
     assert!(
@@ -149,9 +172,9 @@ fn test_build_diamond_dependency() {
     order.assert_before("left", "top");
     order.assert_before("right", "top");
 
-    assert!(project.path().join("gen/base_code.tolk").exists());
-    assert!(project.path().join("gen/left_code.tolk").exists());
-    assert!(project.path().join("gen/right_code.tolk").exists());
+    assert!(project.path().join("gen/base.code.tolk").exists());
+    assert!(project.path().join("gen/left.code.tolk").exists());
+    assert!(project.path().join("gen/right.code.tolk").exists());
 }
 
 #[test]
@@ -185,7 +208,7 @@ fn test_build_missing_dependency_error() {
         .assert_contains("depends on 'nonexistent'")
         .assert_contains("not defined in Acton.toml")
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_missing_dependency_error.stderr.txt",
+            "integration/snapshots/build/test_build_missing_dependency_error.stderr.txt",
         );
 }
 
@@ -210,7 +233,7 @@ fn test_build_compilation_error() {
         .failure()
         .assert_contains("error: undefined symbol `nonexistent`")
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_compilation_error.stderr.txt",
+            "integration/snapshots/build/test_build_compilation_error.stderr.txt",
         );
 }
 
@@ -221,7 +244,7 @@ fn test_build_gen_file_content() {
         .contract_with_deps(
             "main",
             r#"
-            import "../gen/dependency_code.tolk"
+            import "../gen/dependency.code.tolk"
 
             fun onInternalMessage(in: InMessage) {}
             fun onBouncedMessage(_: InMessageBounced) {}
@@ -232,12 +255,12 @@ fn test_build_gen_file_content() {
 
     project.acton().build().run().success();
 
-    let gen_file = project.path().join("gen/dependency_code.tolk");
+    let gen_file = project.path().join("gen/dependency.code.tolk");
     let content = fs::read_to_string(&gen_file).expect("Should read gen file");
 
     assertion().eq(
         normalize_output(content.as_str(), project.path()),
-        snapbox::file!("snapshots/test_build_gen_file_content.tolk.gen"),
+        snapbox::file!("snapshots/build/test_build_gen_file_content.tolk.gen"),
     );
 }
 
@@ -252,9 +275,9 @@ fn test_build_multiple_dependencies() {
 
     project.acton().build().run().success();
 
-    assert!(project.path().join("gen/utils_code.tolk").exists());
-    assert!(project.path().join("gen/storage_code.tolk").exists());
-    assert!(project.path().join("gen/math_code.tolk").exists());
+    assert!(project.path().join("gen/utils.code.tolk").exists());
+    assert!(project.path().join("gen/storage.code.tolk").exists());
+    assert!(project.path().join("gen/math.code.tolk").exists());
 }
 
 #[test]
@@ -352,7 +375,7 @@ fn test_build_with_boc_output() {
 
     assertion().eq(
         hex,
-        snapbox::file!("snapshots/test_build_with_boc_output.boc.gen"),
+        snapbox::file!("snapshots/build/test_build_with_boc_output.boc.gen"),
     );
 }
 
@@ -372,7 +395,9 @@ fn test_build_with_boc_output_to_nonexistent_directory() {
 
     assertion().eq(
         hex,
-        snapbox::file!("snapshots/test_build_with_boc_output_to_nonexistent_directory.boc.gen"),
+        snapbox::file!(
+            "snapshots/build/test_build_with_boc_output_to_nonexistent_directory.boc.gen"
+        ),
     );
 }
 
@@ -417,17 +442,17 @@ fn test_build_gen_file_naming() {
 
     project.acton().build().run().success();
 
-    assert!(project.path().join("gen/my_contract_code.tolk").exists());
-    assert!(project.path().join("gen/my_contract_2_code.tolk").exists());
-    assert!(project.path().join("gen/my_contract_3_code.tolk").exists());
+    assert!(project.path().join("gen/my_contract.code.tolk").exists());
+    assert!(project.path().join("gen/my_contract_2.code.tolk").exists());
+    assert!(project.path().join("gen/my_contract_3.code.tolk").exists());
 
-    let file1 = fs::read_to_string(project.path().join("gen/my_contract_code.tolk")).unwrap();
+    let file1 = fs::read_to_string(project.path().join("gen/my_contract.code.tolk")).unwrap();
     assert!(file1.contains("fun myContractCompiledCode()"));
 
-    let file2 = fs::read_to_string(project.path().join("gen/my_contract_2_code.tolk")).unwrap();
+    let file2 = fs::read_to_string(project.path().join("gen/my_contract_2.code.tolk")).unwrap();
     assert!(file2.contains("fun myContract2CompiledCode()"));
 
-    let file3 = fs::read_to_string(project.path().join("gen/my_contract_3_code.tolk")).unwrap();
+    let file3 = fs::read_to_string(project.path().join("gen/my_contract_3.code.tolk")).unwrap();
     assert!(file3.contains("fun myContract3CompiledCode()"));
 }
 
@@ -616,7 +641,7 @@ fn test_build_dependency_embed_code() {
         .contract_with_detailed_deps(
             "parent",
             r#"
-            import "../gen/child_code.tolk"
+            import "../gen/child.code.tolk"
 
             fun onInternalMessage(in: InMessage) {
                 val code = childCompiledCode();
@@ -629,7 +654,7 @@ fn test_build_dependency_embed_code() {
 
     project.acton().build().run().success();
 
-    let gen_file = project.path().join("gen/child_code.tolk");
+    let gen_file = project.path().join("gen/child.code.tolk");
     let content = fs::read_to_string(&gen_file).expect("Should read gen file");
 
     assert!(
@@ -649,7 +674,7 @@ fn test_build_dependency_library_ref() {
         .contract_with_detailed_deps(
             "main",
             r#"
-            import "../gen/lib_code.tolk"
+            import "../gen/lib.code.tolk"
 
             fun onInternalMessage(in: InMessage) {
                 val code = libCompiledCode();
@@ -662,7 +687,7 @@ fn test_build_dependency_library_ref() {
 
     project.acton().build().run().success();
 
-    let gen_file = project.path().join("gen/lib_code.tolk");
+    let gen_file = project.path().join("gen/lib.code.tolk");
     let content = fs::read_to_string(&gen_file).expect("Should read gen file");
 
     assert!(
@@ -683,8 +708,8 @@ fn test_build_dependency_mixed_kinds() {
         .contract_with_detailed_deps(
             "main",
             r#"
-            import "../gen/embed_dep_code.tolk"
-            import "../gen/lib_dep_code.tolk"
+            import "../gen/embed_dep.code.tolk"
+            import "../gen/lib_dep.code.tolk"
 
             fun onInternalMessage(in: InMessage) {
                 val code1 = embedDepCompiledCode();
@@ -701,7 +726,7 @@ fn test_build_dependency_mixed_kinds() {
 
     project.acton().build().run().success();
 
-    let embed_file = project.path().join("gen/embed_dep_code.tolk");
+    let embed_file = project.path().join("gen/embed_dep.code.tolk");
     let embed_content = fs::read_to_string(&embed_file).expect("Should read embed file");
     assert!(
         embed_content.contains("base64>B B>boc PUSHREF"),
@@ -712,7 +737,7 @@ fn test_build_dependency_mixed_kinds() {
         "embed_dep should not use hashu"
     );
 
-    let lib_file = project.path().join("gen/lib_dep_code.tolk");
+    let lib_file = project.path().join("gen/lib_dep.code.tolk");
     let lib_content = fs::read_to_string(&lib_file).expect("Should read lib file");
     assert!(
         lib_content.contains("hashu"),
@@ -727,7 +752,7 @@ fn test_build_dependency_custom_function_name() {
         .contract_with_detailed_deps(
             "parent",
             r#"
-            import "../gen/child_code.tolk"
+            import "../gen/child.code.tolk"
 
             fun onInternalMessage(in: InMessage) {
                 val code = myCustomFunction();
@@ -740,7 +765,7 @@ fn test_build_dependency_custom_function_name() {
 
     project.acton().build().run().success();
 
-    let gen_file = project.path().join("gen/child_code.tolk");
+    let gen_file = project.path().join("gen/child.code.tolk");
     let content = fs::read_to_string(&gen_file).expect("Should read gen file");
 
     assert!(
@@ -774,7 +799,7 @@ fn test_build_dependency_custom_output_path() {
     let custom_file = project.path().join("custom/mypath.tolk");
     assert!(custom_file.exists(), "Should create file at custom path");
 
-    let default_file = project.path().join("gen/child_code.tolk");
+    let default_file = project.path().join("gen/child.code.tolk");
     assert!(
         !default_file.exists(),
         "Should NOT create file at default path"
@@ -912,7 +937,7 @@ fn test_build_gen_file_with_license() {
 
     project.acton().build().run().success();
 
-    let gen_file = project.path().join("gen/child_code.tolk");
+    let gen_file = project.path().join("gen/child.code.tolk");
     let content = fs::read_to_string(&gen_file).expect("Should read gen file");
 
     assert!(
@@ -931,7 +956,7 @@ fn test_build_gen_file_without_license() {
 
     project.acton().build().run().success();
 
-    let gen_file = project.path().join("gen/child_code.tolk");
+    let gen_file = project.path().join("gen/child.code.tolk");
     let content = fs::read_to_string(&gen_file).expect("Should read gen file");
 
     assert!(
@@ -953,7 +978,7 @@ fn test_build_gen_file_default_mit_license() {
 
     project.acton().build().run().success();
 
-    let gen_file = project.path().join("gen/child_code.tolk");
+    let gen_file = project.path().join("gen/child.code.tolk");
     let content = fs::read_to_string(&gen_file).expect("Should read gen file");
 
     assert!(
@@ -976,7 +1001,7 @@ description = ""
 version = "0.1.0"
 
 [contracts.broken]
-name = "broken"
+display-name = "broken"
 src = "contracts/missing.boc"
 depends = []
 "#;
@@ -988,7 +1013,7 @@ depends = []
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_missing_boc_file.stderr.txt",
+            "integration/snapshots/build/test_build_missing_boc_file.stderr.txt",
         );
 }
 
@@ -1004,7 +1029,7 @@ fn test_build_missing_acton_toml() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_missing_acton_toml.stderr.txt",
+            "integration/snapshots/build/test_build_missing_acton_toml.stderr.txt",
         )
         .assert_contains("Acton.toml not found");
 }
@@ -1022,7 +1047,7 @@ description = ""
 version = "0.1.0"
 
 [contracts]
-missing_closing_bracket = { name = "test", src = "contracts/test.tolk" }
+missing_closing_bracket = { display-name = "test", src = "contracts/test.tolk" }
 "#,
     )
     .expect("Failed to write invalid TOML");
@@ -1033,7 +1058,7 @@ missing_closing_bracket = { name = "test", src = "contracts/test.tolk" }
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_invalid_acton_toml.stderr.txt",
+            "integration/snapshots/build/test_build_invalid_acton_toml.stderr.txt",
         )
         .assert_contains("TOML parse error");
 }
@@ -1048,7 +1073,7 @@ description = ""
 version = "0.1.0"
 
 [contracts.missing]
-name = "missing"
+display-name = "missing"
 src = "contracts/missing_file.tolk"
 depends = []
 "#;
@@ -1060,7 +1085,7 @@ depends = []
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_contract_source_file_not_found.stderr.txt",
+            "integration/snapshots/build/test_build_contract_source_file_not_found.stderr.txt",
         );
 }
 
@@ -1074,7 +1099,7 @@ description = ""
 version = "0.1.0"
 
 [contracts.missing]
-name = "missing"
+display-name = "missing"
 src = "/contracts/missing_file.tolk"
 depends = []
 "#;
@@ -1086,7 +1111,7 @@ depends = []
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_contract_source_file_not_found_with_abs_path.stderr.txt",
+            "integration/snapshots/build/test_build_contract_source_file_not_found_with_abs_path.stderr.txt",
         );
 }
 
@@ -1102,7 +1127,7 @@ description = ""
 version = "0.1.0"
 
 [contracts.simple]
-name = "simple"
+display-name = "simple"
 src = "contracts/simple.txt"
 depends = []
 "#;
@@ -1114,7 +1139,7 @@ depends = []
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_contract_invalid_file_extension.stdout.txt",
+            "integration/snapshots/build/test_build_contract_invalid_file_extension.stdout.txt",
         );
 }
 
@@ -1142,7 +1167,7 @@ fn test_build_output_boc_write_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_output_boc_write_error.stderr.txt",
+            "integration/snapshots/build/test_build_output_boc_write_error.stderr.txt",
         );
 }
 
@@ -1164,7 +1189,7 @@ version = "0.1.0"
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_build_no_contracts_section.stdout.txt",
+            "integration/snapshots/build/test_build_no_contracts_section.stdout.txt",
         );
 }
 
@@ -1196,7 +1221,7 @@ fn test_build_dependency_custom_path_write_error() {
         .contract_with_detailed_deps(
             "parent",
             SIMPLE_CONTRACT,
-            vec![("child", None, None, Some("readonly/child_code.tolk"))],
+            vec![("child", None, None, Some("readonly/child.code.tolk"))],
         )
         .build();
 
@@ -1217,7 +1242,7 @@ fn test_build_dependency_custom_path_write_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_dependency_custom_path_write_error.stderr.txt",
+            "integration/snapshots/build/test_build_dependency_custom_path_write_error.stderr.txt",
         );
 }
 
@@ -1233,7 +1258,7 @@ description = ""
 version = "0.1.0"
 
 [contracts.simple]
-name = "simple"
+display-name = "simple"
 src = "contracts/simple file.tolk"
 depends = []
 "#;
@@ -1245,7 +1270,7 @@ depends = []
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_build_contract_with_special_characters_in_path.stdout.txt",
+            "integration/snapshots/build/test_build_contract_with_special_characters_in_path.stdout.txt",
         );
 }
 
@@ -1259,7 +1284,7 @@ fn test_build_corrupted_cache_file() {
     project.acton().build().run().success();
 
     // Manually corrupt the cache file by writing invalid base64
-    let cache_dir = project.path().join(".acton/cache");
+    let cache_dir = project.path().join("build/cache");
     if cache_dir.exists() {
         let cache_file = first_cache_json_file(&cache_dir);
         fs::write(&cache_file, "invalid base64 data!!!").unwrap();
@@ -1281,7 +1306,7 @@ fn test_build_ignores_unrelated_corrupted_cache_file_and_keeps_it() {
         .contract("simple", SIMPLE_CONTRACT)
         .build();
 
-    let cache_dir = project.path().join(".acton/cache");
+    let cache_dir = project.path().join("build/cache");
     fs::create_dir_all(&cache_dir).unwrap();
     let broken_path = cache_dir.join("broken.json");
     fs::write(&broken_path, "not-json").unwrap();
@@ -1309,7 +1334,7 @@ fn test_build_clear_cache_removes_nested_cache_subdirectories() {
 
     project.acton().build().run().success();
 
-    let cache_dir = project.path().join(".acton/cache");
+    let cache_dir = project.path().join("build/cache");
     let debug_dir = cache_dir.join("debug");
     let nested_dir = cache_dir.join("nested");
     fs::create_dir_all(&debug_dir).unwrap();
@@ -1365,7 +1390,7 @@ fn test_build_contract_with_numeric_name_dependency() {
 
     project.acton().build().run().success();
 
-    let gen_file = project.path().join("gen/123contract_code.tolk");
+    let gen_file = project.path().join("gen/123contract.code.tolk");
     assert!(
         gen_file.exists(),
         "Should create file for numeric contract name"
@@ -1375,7 +1400,7 @@ fn test_build_contract_with_numeric_name_dependency() {
 
     assertion().eq(
         normalize_output(content.as_str(), project.path()),
-        snapbox::file!("snapshots/test_build_contract_with_numeric_name_dependency.tolk.gen"),
+        snapbox::file!("snapshots/build/test_build_contract_with_numeric_name_dependency.tolk.gen"),
     );
 }
 
@@ -1399,7 +1424,7 @@ fn test_build_contract_syntax_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_contract_syntax_error.stderr.txt",
+            "integration/snapshots/build/test_build_contract_syntax_error.stderr.txt",
         );
 }
 
@@ -1432,7 +1457,7 @@ fn test_build_several_contracts_with_syntax_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_several_contracts_with_syntax_error.stderr.txt",
+            "integration/snapshots/build/test_build_several_contracts_with_syntax_error.stderr.txt",
         );
 }
 
@@ -1465,7 +1490,7 @@ fn test_build_good_and_bad_contracts_with_syntax_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_good_and_bad_contracts_with_syntax_error.stderr.txt",
+            "integration/snapshots/build/test_build_good_and_bad_contracts_with_syntax_error.stderr.txt",
         );
 }
 
@@ -1481,7 +1506,7 @@ description = ""
 version = "0.1.0"
 
 [contracts.corrupted]
-name = "corrupted"
+display-name = "corrupted"
 src = "contracts/corrupted.boc"
 depends = []
 "#;
@@ -1493,7 +1518,7 @@ depends = []
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_corrupted_boc_file.stderr.txt",
+            "integration/snapshots/build/test_build_corrupted_boc_file.stderr.txt",
         );
 }
 
@@ -1510,7 +1535,7 @@ fn test_build_contract_filter_nonexistent() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_contract_filter_nonexistent.stderr.txt",
+            "integration/snapshots/build/test_build_contract_filter_nonexistent.stderr.txt",
         );
 }
 
@@ -1771,7 +1796,7 @@ fn test_build_with_output_fift_write_error_is_non_zero() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_output_fift_write_error.stderr.txt",
+            "integration/snapshots/build/test_build_output_fift_write_error.stderr.txt",
         );
 }
 
@@ -1799,7 +1824,7 @@ fn test_build_with_out_dir_write_error_is_non_zero() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_out_dir_write_error.stderr.txt",
+            "integration/snapshots/build/test_build_out_dir_write_error.stderr.txt",
         );
 }
 
@@ -1839,7 +1864,7 @@ fn test_build_with_gen_dir_from_config() {
         .contract_with_deps(
             "parent",
             r#"
-            import "../custom-gen/child_code.tolk"
+            import "../custom-gen/child.code.tolk"
 
             fun onInternalMessage(in: InMessage) {
                 val code = childCompiledCode();
@@ -1858,12 +1883,12 @@ fn test_build_with_gen_dir_from_config() {
     project.acton().build().run().success();
 
     assert!(
-        project.path().join("custom-gen/child_code.tolk").exists(),
-        "custom-gen/child_code.tolk should be created"
+        project.path().join("custom-gen/child.code.tolk").exists(),
+        "custom-gen/child.code.tolk should be created"
     );
     assert!(
-        !project.path().join("gen/child_code.tolk").exists(),
-        "default gen/child_code.tolk should not be created when [build].gen-dir is set"
+        !project.path().join("gen/child.code.tolk").exists(),
+        "default gen/child.code.tolk should not be created when [build].gen-dir is set"
     );
 }
 
@@ -1874,7 +1899,7 @@ fn test_build_with_gen_dir_cli_overrides_config() {
         .contract_with_deps(
             "parent",
             r#"
-            import "../cli-gen/child_code.tolk"
+            import "../cli-gen/child.code.tolk"
 
             fun onInternalMessage(in: InMessage) {
                 val code = childCompiledCode();
@@ -1898,12 +1923,12 @@ fn test_build_with_gen_dir_cli_overrides_config() {
         .success();
 
     assert!(
-        project.path().join("cli-gen/child_code.tolk").exists(),
-        "cli-gen/child_code.tolk should be created"
+        project.path().join("cli-gen/child.code.tolk").exists(),
+        "cli-gen/child.code.tolk should be created"
     );
     assert!(
-        !project.path().join("config-gen/child_code.tolk").exists(),
-        "config-gen/child_code.tolk should not be created when CLI override is used"
+        !project.path().join("config-gen/child.code.tolk").exists(),
+        "config-gen/child.code.tolk should not be created when CLI override is used"
     );
 }
 
@@ -1914,7 +1939,7 @@ fn test_build_with_gen_dir_cli() {
         .contract_with_deps(
             "parent",
             r#"
-            import "../cli-gen/child_code.tolk"
+            import "../cli-gen/child.code.tolk"
 
             fun onInternalMessage(in: InMessage) {
                 val code = childCompiledCode();
@@ -1933,12 +1958,12 @@ fn test_build_with_gen_dir_cli() {
         .success();
 
     assert!(
-        project.path().join("cli-gen/child_code.tolk").exists(),
-        "cli-gen/child_code.tolk should be created"
+        project.path().join("cli-gen/child.code.tolk").exists(),
+        "cli-gen/child.code.tolk should be created"
     );
     assert!(
-        !project.path().join("gen/child_code.tolk").exists(),
-        "default gen/child_code.tolk should not be created when CLI --gen-dir is set"
+        !project.path().join("gen/child.code.tolk").exists(),
+        "default gen/child.code.tolk should not be created when CLI --gen-dir is set"
     );
 }
 
@@ -2117,7 +2142,9 @@ fn test_build_with_info_flag() {
         .with_info()
         .run()
         .success()
-        .assert_snapshot_matches("integration/snapshots/test_build_with_info_flag.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/build/test_build_with_info_flag.stdout.txt",
+        );
 }
 
 #[test]
@@ -2133,7 +2160,7 @@ fn test_build_with_info_flag_from_cache() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_build_with_info_flag_from_cache_before.stdout.txt",
+            "integration/snapshots/build/test_build_with_info_flag_from_cache_before.stdout.txt",
         );
 
     // Build form cache
@@ -2144,7 +2171,7 @@ fn test_build_with_info_flag_from_cache() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_build_with_info_flag_from_cache_after.stdout.txt",
+            "integration/snapshots/build/test_build_with_info_flag_from_cache_after.stdout.txt",
         );
 }
 
@@ -2163,7 +2190,7 @@ fn test_build_with_info_flag_for_several_contracts() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_build_with_info_flag_for_several_contracts.stdout.txt",
+            "integration/snapshots/build/test_build_with_info_flag_for_several_contracts.stdout.txt",
         );
 }
 
@@ -2181,7 +2208,7 @@ fn test_build_with_dependency_with_compilation_error() {
         .contract_with_deps(
             "parent",
             r#"
-                import "../gen/child_code.tolk"
+                import "../gen/child.code.tolk"
 
                 fun onInternalMessage(in: InMessage) {
                     val code = childCompiledCode();
@@ -2198,6 +2225,6 @@ fn test_build_with_dependency_with_compilation_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_with_dependency_with_compilation_error.stderr.txt",
+            "integration/snapshots/build/test_build_with_dependency_with_compilation_error.stderr.txt",
         );
 }

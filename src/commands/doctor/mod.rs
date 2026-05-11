@@ -1,11 +1,13 @@
 use crate::build_info;
-use crate::stdlib;
+use crate::paths;
+use crate::{http, stdlib};
 use acton_config::color::OwoColorize;
 use acton_config::config::{
     ActonConfig, LibrariesFile, WalletsFile, global_libraries_path, global_wallets_path,
     resolved_paths_diagnostics,
 };
 use anyhow::Result;
+use reqwest::header::USER_AGENT;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -142,6 +144,8 @@ struct DoctorEnvironmentVars {
     lang: Option<String>,
     shell: Option<String>,
     no_color: Option<String>,
+    disable_auto_stdlib: Option<String>,
+    use_proxy: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -588,7 +592,7 @@ fn inspect_native_libraries() -> DoctorNativeLibraries {
         },
     };
 
-    let tolk = match tolkc::native_tolk_version() {
+    let tolk = match tolk_compiler::native_tolk_version() {
         Ok(version) => DoctorNativeLibrary {
             load_ok: true,
             version: Some(version.version),
@@ -633,7 +637,7 @@ fn resolve_acton_log_dir(project_root: &Path) -> (PathBuf, &'static str) {
         if let Some(path) = env_path("HOME") {
             return (path.join(".acton").join("logs"), "HOME");
         }
-        return (project_root.join(".acton").join("logs"), "project_root");
+        return (paths::build_logs_dir(project_root), "project_root");
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -641,7 +645,7 @@ fn resolve_acton_log_dir(project_root: &Path) -> (PathBuf, &'static str) {
         if let Some(path) = env_path("HOME") {
             return (path.join(".acton").join("logs"), "HOME");
         }
-        (project_root.join(".acton").join("logs"), "project_root")
+        (paths::build_logs_dir(project_root), "project_root")
     }
 }
 
@@ -661,7 +665,7 @@ fn collect_doctor_report() -> Result<DoctorReport> {
     let manifest_source = resolved_paths.manifest_path_source.as_str();
 
     let acton_dir = project_root.join(".acton");
-    let cache_dir = project_root.join(".acton").join("cache");
+    let cache_dir = paths::build_cache_dir(&project_root);
     let local_wallets = project_root.join("wallets.toml");
     let local_libraries = project_root.join("libraries.toml");
     let global_wallets = global_wallets_path();
@@ -726,6 +730,8 @@ fn collect_doctor_report() -> Result<DoctorReport> {
                 lang: env::var("LANG").ok(),
                 shell: env::var("SHELL").ok(),
                 no_color: env::var("NO_COLOR").ok(),
+                disable_auto_stdlib: env::var(stdlib::DISABLE_AUTO_STDLIB_ENV).ok(),
+                use_proxy: env::var(http::USE_PROXY_ENV).ok(),
             },
         },
     })
@@ -870,16 +876,12 @@ fn send_doctor_api_request(
         (DoctorApiMethod::PostJson, Some(body)) => client.post(&target.url).json(body),
         (DoctorApiMethod::PostJson, None) => client.post(&target.url),
     }
-    .header("User-Agent", "acton-doctor")
+    .header(USER_AGENT, build_info::user_agent())
     .send()
 }
 
 fn build_doctor_api_client() -> Result<reqwest::blocking::Client, reqwest::Error> {
-    // `doctor` is best-effort diagnostics: prefer direct requests over
-    // reqwest system-proxy autodiscovery, which can panic in restricted
-    // macOS environments instead of returning a recoverable transport error.
-    reqwest::blocking::Client::builder()
-        .no_proxy()
+    http::blocking_client_builder()
         .connect_timeout(DOCTOR_API_CONNECT_TIMEOUT)
         .timeout(DOCTOR_API_REQUEST_TIMEOUT)
         .build()
@@ -1023,14 +1025,13 @@ fn collect_doctor_api_checks() -> DoctorApiChecks {
 
     for (index, target) in targets.into_iter().enumerate() {
         if let Some(group_name) = target.sequence_group.clone() {
-            let group_index = match grouped_indexes.get(&group_name) {
-                Some(index) => *index,
-                None => {
-                    let next_index = groups.len();
-                    grouped_indexes.insert(group_name, next_index);
-                    groups.push(Vec::new());
-                    next_index
-                }
+            let group_index = if let Some(index) = grouped_indexes.get(&group_name) {
+                *index
+            } else {
+                let next_index = groups.len();
+                grouped_indexes.insert(group_name, next_index);
+                groups.push(Vec::new());
+                next_index
             };
             groups[group_index].push((index, target));
         } else {
@@ -1418,6 +1419,24 @@ fn print_report(report: &DoctorReport) {
             .environment
             .vars
             .no_color
+            .as_deref()
+            .unwrap_or("<unset>"),
+    );
+    print_kv(
+        stdlib::DISABLE_AUTO_STDLIB_ENV,
+        report
+            .environment
+            .vars
+            .disable_auto_stdlib
+            .as_deref()
+            .unwrap_or("<unset>"),
+    );
+    print_kv(
+        http::USE_PROXY_ENV,
+        report
+            .environment
+            .vars
+            .use_proxy
             .as_deref()
             .unwrap_or("<unset>"),
     );

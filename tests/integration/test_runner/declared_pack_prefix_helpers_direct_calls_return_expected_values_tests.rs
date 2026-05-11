@@ -7,10 +7,10 @@ fun onBouncedMessage(_: InMessageBounced) {}
 ";
 
 const EP_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 
 struct (0xE5000001) EpDeclaredPrefixBody {
     queryId: uint64
@@ -31,7 +31,7 @@ fun Harness.create() {
 }
 
 fun deployHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
     val harness = Harness.create();
 
     val deployMsg = createMessage({
@@ -65,10 +65,9 @@ fn declared_pack_prefix_helpers_direct_calls_return_expected_values() {
     run_success_case(
         "ep-stdlib-declared-pack-prefix-helpers-direct-calls",
         r"
-get fun `test-ep-declared-pack-prefix-helpers-direct-calls`() {
-    expect(EpDeclaredPrefixBody.getDeclaredPackPrefix()).toEqual(0xE5000001);
-    expect(unknown.getDeclaredPackPrefix()).toEqual(-1);
-    expect(unknown.getDeclaredPackPrefixLen()).toEqual(-1);
+get fun `test ep declared pack prefix helpers direct calls`() {
+    expect(EpDeclaredPrefixBody.__getDeclaredPackPrefix()).toEqual(0xE5000001);
+    expect(unknown.__getDeclaredPackPrefix()).toEqual(-1);
 }
 ",
         "integration/snapshots/test-runner/declared_pack_prefix_helpers_direct_calls_return_expected_values/declared_pack_prefix_helpers_direct_calls_return_expected_values.stdout.txt",
@@ -80,7 +79,7 @@ fn transaction_expect_matchers_use_default_and_typed_declared_pack_prefix_paths(
     run_success_case(
         "ep-stdlib-transaction-expect-matchers-declared-pack-prefix-paths",
         r#"
-get fun `test-ep-transaction-expect-matchers-declared-pack-prefix-paths`() {
+get fun `test ep transaction expect matchers declared pack prefix paths`() {
     val (sender, harness) = deployHarness();
 
     val msg = createMessage({

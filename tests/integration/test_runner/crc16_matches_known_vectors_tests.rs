@@ -2,7 +2,9 @@ use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 
 const EI_NETWORK_IMPORTS: &str = r#"
+import "../../lib/ffi"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 "#;
 
@@ -24,11 +26,11 @@ fn crc16_matches_known_vectors() {
     run_network_success(
         "ei-stdlib-crc16-known-vectors",
         r#"
-get fun `test-ei-stdlib-crc16-known-vectors`() {
-    expect(crc16("")).toEqual(0);
-    expect(crc16("hello")).toEqual(50018);
-    expect(crc16("123456789")).toEqual(12739);
-    expect(crc16("TON")).toEqual(14070);
+get fun `test ei stdlib crc16 known vectors`() {
+    expect(ffi.crc16("")).toEqual(0);
+    expect(ffi.crc16("hello")).toEqual(50018);
+    expect(ffi.crc16("123456789")).toEqual(12739);
+    expect(ffi.crc16("TON")).toEqual(14070);
 }
 "#,
         "integration/snapshots/test-runner/crc16_matches_known_vectors/crc16_matches_known_vectors.stdout.txt",
@@ -40,10 +42,10 @@ fn crc16_is_deterministic_and_stays_in_u16_range() {
     run_network_success(
         "ei-stdlib-crc16-deterministic-u16-range",
         r#"
-get fun `test-ei-stdlib-crc16-deterministic-u16-range`() {
-    val first = crc16("Acton");
-    val second = crc16("Acton");
-    val third = crc16("Acton");
+get fun `test ei stdlib crc16 deterministic u16 range`() {
+    val first = ffi.crc16("Acton");
+    val second = ffi.crc16("Acton");
+    val third = ffi.crc16("Acton");
 
     expect(first).toEqual(60291);
     expect(second).toEqual(first);

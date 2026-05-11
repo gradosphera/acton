@@ -1,23 +1,23 @@
 # acton-ls(1)
 
-## NAME
+## Name
 
 acton-ls --- Run the Acton language server
 
-## SYNOPSIS
+## Synopsis
 
 `acton ls` [_options_]
 
-## DESCRIPTION
+## Description
 
 Start the language server used for TON language tooling.
 
-The server boots with the resolved project root, loads path mappings from
+The server boots with the resolved project root, loads import path mappings from
 `Acton.toml` when available, initializes the bundled standard library from
 `.acton/tolk-stdlib`, and serves requests either over stdio or a local TCP
 socket.
 
-## OPTIONS
+## Options
 
 ### LSP Options
 
@@ -49,7 +49,7 @@ Disable language-server logging setup.
 
 {{> options-project-resolved }}
 
-## TRANSPORT
+## Transport
 
 - if `--port` is provided, Acton binds to `127.0.0.1:<port>` and serves the
   first accepted TCP connection
@@ -58,33 +58,33 @@ Disable language-server logging setup.
 - the TCP mode is single-client; after that client disconnects, the server
   exits
 
-## LOGGING
+## Logging
 
 Unless `--no-log` is passed, the server configures file logging.
 
 The default log path is:
 
 ```text
-.acton/tolk-language-server.log
+build/logs/tolk-language-server.log
 ```
 
 Parent directories for a custom `--log-file` are created automatically.
 
-## PROJECT CONTEXT
+## Project Context
 
 Before starting the server, Acton:
 
 - resolves the project root and manifest path
-- loads `mappings` from `Acton.toml` when present
+- loads `[import-mappings]` from `Acton.toml` when present
 - preloads `.acton/tolk-stdlib/common.tolk`
 
-## EXIT STATUS
+## Exit Status
 
 - `0`: The language server started successfully and served its session.
 - `1`: Startup failed because transport binding, stdlib loading, manifest
   resolution, or log-file setup failed.
 
-## EXAMPLES
+## Examples
 
 1. Run the language server over stdio:
 
@@ -104,7 +104,7 @@ Before starting the server, Acton:
    acton ls --port 9273 --log-file logs/tolk-ls.log
    ```
 
-## SEE ALSO
+## See Also
 
 - `acton help doctor`
 - [Acton documentation](https://ton-blockchain.github.io/acton/docs/welcome)

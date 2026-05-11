@@ -4,6 +4,7 @@ mod tests {
     use crate::resolve_index::Resolved;
     use expect_test::{Expect, expect};
     use std::collections::BTreeMap;
+    use std::fmt::Write as _;
     use std::path::PathBuf;
 
     #[test]
@@ -1112,12 +1113,12 @@ mod tests {
                     val d: <caret>bytes32? = null;
                 }
             ",
-            expect![[r#"
-                uint128 -> Global(uintN at common.tolk:3633-3638)
-                int32 -> Global(intN at common.tolk:3357-3361)
-                bits256 -> Global(bitsN at common.tolk:5235-5240)
-                bytes32 -> Global(bytesN at common.tolk:5325-5331)
-            "#]],
+            expect![[r"
+                uint128 -> Global(uintN at common.tolk:3511-3516)
+                int32 -> Global(intN at common.tolk:3235-3239)
+                bits256 -> Global(bitsN at common.tolk:5113-5118)
+                bytes32 -> Global(bytesN at common.tolk:5203-5209)
+            "]],
         );
     }
 
@@ -1140,6 +1141,25 @@ mod tests {
             "#,
             expect![[r"
                 unknown_symbol at 280-294
+            "]],
+        );
+    }
+
+    #[test]
+    fn test_abi_client_type_annotation_resolves_struct_field_type_argument() {
+        check_definition(
+            r"
+                type ClientAddress = address;
+                type ClientPayload = cell;
+
+                struct Message {
+                    @abi.clientType(<caret>ClientAddress | <caret>ClientPayload)
+                    admin: address
+                }
+            ",
+            expect![[r"
+                ClientAddress -> Global(ClientAddress at test.tolk:22-35)
+                ClientPayload -> Global(ClientPayload at test.tolk:68-81)
             "]],
         );
     }
@@ -1360,6 +1380,26 @@ mod tests {
     }
 
     #[test]
+    fn test_import_preserves_non_tolk_suffix_when_appending_extension() {
+        ResolveTestBuilder::new()
+            .file("other.test.tolk", "fun other_fun() {}")
+            .file(
+                "main.tolk",
+                r#"
+                import "other.test"
+
+                fun main() {
+                    <caret>other_fun();
+                }
+                "#,
+            )
+            .target("main.tolk")
+            .check_definition(expect![[r"
+                other_fun -> Global(other_fun at other.test.tolk:4-13)
+            "]]);
+    }
+
+    #[test]
     fn test_mapped_import() {
         ResolveTestBuilder::new()
             .mapping("@core", "libs")
@@ -1569,7 +1609,7 @@ mod tests {
 
             let target_abs_path = target_abs_path.expect("Target file not found in project files");
 
-            let stdlib_path = PathBuf::from("../../crates/tolkc/assets/tolk-stdlib");
+            let stdlib_path = PathBuf::from("../../crates/tolk-compiler/assets/tolk-stdlib");
             let file_db = FileDb::new(stdlib_path.clone(), None);
 
             let stdlib_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(stdlib_path);
@@ -1637,7 +1677,7 @@ mod tests {
                                     }
                                     Resolved::Unresolved => "Unresolved".to_string(),
                                 };
-                                actual.push_str(&format!("{} -> {}\n", u.name, resolved_str));
+                                let _ = writeln!(actual, "{} -> {}", u.name, resolved_str);
                             }
                             None => {
                                 actual.push_str("Unresolved");
@@ -1655,10 +1695,8 @@ mod tests {
                                         resolved_uses.global_usages_of(*symbol_id).collect();
                                     usages.sort_by_key(|u| u.span.start);
                                     for usage in usages {
-                                        actual.push_str(&format!(
-                                            "{} at {}\n",
-                                            usage.name, usage.span
-                                        ));
+                                        let _ =
+                                            writeln!(actual, "{} at {}", usage.name, usage.span);
                                     }
                                 }
                                 Resolved::Local(local_id) => {
@@ -1666,10 +1704,8 @@ mod tests {
                                         resolved_uses.local_usages_of(*local_id).collect();
                                     usages.sort_by_key(|u| u.span.start);
                                     for usage in usages {
-                                        actual.push_str(&format!(
-                                            "{} at {}\n",
-                                            usage.name, usage.span
-                                        ));
+                                        let _ =
+                                            writeln!(actual, "{} at {}", usage.name, usage.span);
                                     }
                                 }
                                 Resolved::Unresolved => {
@@ -1689,12 +1725,53 @@ mod tests {
                         .collect();
                     unresolved.sort_by_key(|u| u.span.start);
                     for usage in unresolved {
-                        actual.push_str(&format!("{} at {}\n", usage.name, usage.span));
+                        let _ = writeln!(actual, "{} at {}", usage.name, usage.span);
                     }
                 }
             }
 
             expect.assert_eq(&actual);
         }
+    }
+
+    #[test]
+    fn reachable_files_stops_on_cyclic_imports() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let project_root = temp_dir.path();
+
+        let a_path = project_root.join("a.tolk");
+        let b_path = project_root.join("b.tolk");
+
+        std::fs::write(
+            &a_path,
+            r#"
+            import "b.tolk"
+
+            fun a() {}
+            "#,
+        )
+        .unwrap();
+        std::fs::write(
+            &b_path,
+            r#"
+            import "a.tolk"
+
+            fun b() {}
+            "#,
+        )
+        .unwrap();
+
+        let file_db = FileDb::new(project_root.join("__stdlib__"), None);
+        let a_path = file_db.canonicalize(&a_path).unwrap();
+        let b_path = file_db.canonicalize(&b_path).unwrap();
+
+        let index = crate::project_index::ProjectIndex::builder(&file_db, a_path.clone())
+            .build()
+            .unwrap();
+
+        let a_id = index.get_file_by_path(&a_path).unwrap();
+        let b_id = index.get_file_by_path(&b_path).unwrap();
+
+        assert_eq!(index.reachable_files(a_id), vec![a_id, b_id]);
     }
 }

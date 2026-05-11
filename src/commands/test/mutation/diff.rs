@@ -59,7 +59,7 @@ fn run_git(project_root: &Path, args: &[&str]) -> anyhow::Result<String> {
         .args(args)
         .current_dir(project_root)
         .output()
-        .map_err(|err| anyhow!("Failed to execute git {:?}: {err}", args))?;
+        .map_err(|err| anyhow!("Failed to execute git {args:?}: {err}"))?;
 
     if output.status.success() {
         return Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned());
@@ -75,7 +75,7 @@ fn run_git(project_root: &Path, args: &[&str]) -> anyhow::Result<String> {
         format!("exit status {}", output.status)
     };
 
-    anyhow::bail!("git {:?} failed: {details}", args);
+    anyhow::bail!("git {args:?} failed: {details}");
 }
 
 fn git_has_ref(project_root: &Path, reference: &str) -> bool {
@@ -290,7 +290,7 @@ mod tests {
     #[test]
     fn normalized_diff_ref_trims_and_rejects_blank_values() {
         assert_eq!(normalized_diff_ref(None), None);
-        assert_eq!(normalized_diff_ref(Some(&"".to_owned())), None);
+        assert_eq!(normalized_diff_ref(Some(&String::new())), None);
         assert_eq!(normalized_diff_ref(Some(&"   ".to_owned())), None);
         assert_eq!(
             normalized_diff_ref(Some(&"  origin/main  ".to_owned())),

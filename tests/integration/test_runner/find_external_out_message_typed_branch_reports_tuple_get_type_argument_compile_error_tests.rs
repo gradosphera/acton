@@ -3,6 +3,7 @@ use crate::support::project::ProjectBuilder;
 
 const EN_IMPORTS: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 import "../../lib/types/big_array"
 
@@ -36,11 +37,11 @@ fn find_external_out_message_typed_branch_reports_tuple_get_type_argument_compil
     run_find_external_out_message_success(
         "en-stdlib-find-external-out-message-typed-branch-bug",
         r"
-get fun `test-en-find-external-out-message-typed-branch-bug`() {
+get fun `test en find external out message typed branch bug`() {
     val txs: SendResultList = SendResultList.createEmpty();
 
     val found = txs.findExternalOutMessage<EnExternalNotice>({});
-    expect(found).toBeNone();
+    expect(found).toBeNull();
 }
 ",
         "integration/snapshots/test-runner/find_external_out_message_typed_branch_reports_tuple_get_type_argument_compile_error/find_external_out_message_typed_branch_reports_tuple_get_type_argument_compile_error.stdout.txt",
@@ -52,11 +53,11 @@ fn find_external_out_message_default_branch_reports_tuple_get_type_argument_comp
     run_find_external_out_message_success(
         "en-stdlib-find-external-out-message-default-branch-bug",
         r"
-get fun `test-en-find-external-out-message-default-branch-bug`() {
+get fun `test en find external out message default branch bug`() {
     val txs: SendResultList = SendResultList.createEmpty();
 
     val found = txs.findExternalOutMessage({});
-    expect(found).toBeNone();
+    expect(found).toBeNull();
 }
 ",
         "integration/snapshots/test-runner/find_external_out_message_typed_branch_reports_tuple_get_type_argument_compile_error/find_external_out_message_default_branch_reports_tuple_get_type_argument_compile_error.stdout.txt",

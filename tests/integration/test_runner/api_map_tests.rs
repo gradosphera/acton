@@ -6,15 +6,14 @@ fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
 
 get fun balances(): map<int32, int32> {
-    var m = createEmptyMap<int32, int32>();
+    var m = map<int32, int32> [];
     m.set(1, 10);
     m.set(2, 20);
     return m;
 }
 
 get fun emptyBalances(): map<int32, int32> {
-    var m = createEmptyMap<int32, int32>();
-    return m;
+    return [];
 }
 
 get fun duplicateValues(): map<int32, int32> {
@@ -36,9 +35,9 @@ get fun updatedBalances(): map<int32, int32> {
 
 const MAP_TEST_PREPARE: &str = r#"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 
 struct Ledger {
     address: address
@@ -56,7 +55,7 @@ fun Ledger.fromStorage() {
 
 fun deployLedger(): Ledger {
     val ledger = Ledger.fromStorage();
-    val deployer = net.treasury("deployer");
+    val deployer = testing.treasury("deployer");
     val deployMsg = createMessage({
         bounce: false,
         value: ton("1.0"),
@@ -85,7 +84,7 @@ fn map_contains_and_absence_matchers_pass_for_contract_side_map() {
     map_project(
         "l-lib-api-map-contains-pass",
         r#"
-        get fun `test-map-contains-and-absence`() {
+        get fun `test map contains and absence`() {
             val ledger = deployLedger();
             val balances: map<int32, int32> = net.runGetMethod(ledger.address, "balances");
 
@@ -113,7 +112,7 @@ fn map_empty_matchers_pass_for_empty_contract_side_map() {
     map_project(
         "l-lib-api-map-empty-pass",
         r#"
-        get fun `test-map-empty-matchers`() {
+        get fun `test map empty matchers`() {
             val ledger = deployLedger();
             val balances: map<int32, int32> = net.runGetMethod(ledger.address, "emptyBalances");
 
@@ -139,7 +138,7 @@ fn map_have_length_counts_unique_keys_after_overwrite() {
     map_project(
         "l-lib-api-map-length-overwrite-pass",
         r#"
-        get fun `test-map-length-after-overwrite`() {
+        get fun `test map length after overwrite`() {
             val ledger = deployLedger();
             val balances: map<int32, int32> = net.runGetMethod(ledger.address, "updatedBalances");
 
@@ -166,7 +165,7 @@ fn map_to_contain_key_failure_reports_missing_key() {
     map_project(
         "l-lib-api-map-contain-key-fail",
         r#"
-        get fun `test-map-missing-key-fails`() {
+        get fun `test map missing key fails`() {
             val ledger = deployLedger();
             val balances: map<int32, int32> = net.runGetMethod(ledger.address, "balances");
 
@@ -189,7 +188,7 @@ fn map_to_not_contain_value_failure_reports_present_value() {
     map_project(
         "l-lib-api-map-not-contain-value-fail",
         r#"
-        get fun `test-map-not-contain-value-fails`() {
+        get fun `test map not contain value fails`() {
             val ledger = deployLedger();
             val balances: map<int32, int32> = net.runGetMethod(ledger.address, "duplicateValues");
 

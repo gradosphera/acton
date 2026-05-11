@@ -1,5 +1,8 @@
 {
+  "title": "Scripting",
+  "icon": "Terminal",
   "pages": [
+    "overview",
     "passing-arguments",
     "blockchain-interaction"
   ]

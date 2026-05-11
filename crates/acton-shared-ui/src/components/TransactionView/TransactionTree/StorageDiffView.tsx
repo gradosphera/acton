@@ -45,6 +45,9 @@ function renderLeafValue(
     case "null": {
       return <span className={styles.storageNullValue}>null</span>
     }
+    case "void": {
+      return <span className={styles.storageVoidValue}>void</span>
+    }
     case "address": {
       return (
         <ContractChip
@@ -124,13 +127,38 @@ function StorageDiffRow({
     <>
       <div className={`${styles.storageEntryKey} ${statusClassName}`}>{label}:</div>
       <div className={`${styles.storageEntryValue} ${statusClassName}`}>
-        <StorageDiffView
-          diff={diff}
-          contracts={contracts}
-          onContractClick={onContractClick}
-        />
+        <StorageDiffView diff={diff} contracts={contracts} onContractClick={onContractClick} />
       </div>
     </>
+  )
+}
+
+function StorageDiffMapRow({
+  label,
+  diff,
+  contracts,
+  onContractClick,
+}: {
+  readonly label: string
+  readonly diff: StorageDiffNode
+  readonly contracts: Map<string, ContractData>
+  readonly onContractClick?: (address: string) => void
+}): React.JSX.Element {
+  const statusClassName = getEntryStatusClassName(diff.status)
+
+  return (
+    <div className={`${styles.storageMapEntry} ${statusClassName}`}>
+      <div className={styles.storageMapSection}>
+        <div className={styles.storageMapSectionLabel}>Key</div>
+        <div className={styles.storageMapKey}>{label}</div>
+      </div>
+      <div className={styles.storageMapSection}>
+        <div className={styles.storageMapSectionLabel}>Value</div>
+        <div className={styles.storageMapValue}>
+          <StorageDiffView diff={diff} contracts={contracts} onContractClick={onContractClick} />
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -162,6 +190,18 @@ export function StorageDiffView({
       {diff.typeName && <span className={styles.storageTypeLabel}>{diff.typeName}</span>}
       {diff.entries.length === 0 ? (
         <span className={styles.storageDiffPlaceholder}>—</span>
+      ) : diff.objectKind === "map" ? (
+        <div className={styles.storageNestedMap}>
+          {diff.entries.map(entry => (
+            <StorageDiffMapRow
+              key={entry.key}
+              label={entry.key}
+              diff={entry.value}
+              contracts={contracts}
+              onContractClick={onContractClick}
+            />
+          ))}
+        </div>
       ) : (
         <div className={styles.storageNested}>
           {diff.entries.map(entry => (

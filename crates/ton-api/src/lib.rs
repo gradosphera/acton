@@ -1,14 +1,18 @@
 use anyhow::{Context, anyhow};
 use num_bigint::{BigInt, ToBigInt};
 use reqwest::blocking::Response;
+use reqwest::header::USER_AGENT;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::env;
+use std::ffi::OsStr;
 use std::fmt;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 pub use ton_networks::{CustomNetworkUrls, Network};
-use tvmffi::json_stack::{json_to_legacy_stack, json_to_stack};
-use tvmffi::stack::TupleItem;
+use toncenter_keys::api_key as toncenter_api_key;
+use tvm_ffi::json_stack::{json_to_legacy_stack, json_to_stack};
+use tvm_ffi::stack::TupleItem;
 use tycho_types::boc::Boc;
 use tycho_types::cell::{Cell, HashBytes};
 
@@ -16,9 +20,35 @@ const HTTP_RETRY_ATTEMPTS: usize = 3;
 const HTTP_RETRY_BACKOFF_MS: [u64; 3] = [1000, 2000, 3000];
 const HTTP_CONNECT_TIMEOUT_SECS: u64 = 10;
 const HTTP_REQUEST_TIMEOUT_SECS: u64 = 30;
+const USE_PROXY_ENV: &str = "ACTON_USE_PROXY";
 const TONCENTER_MIN_REQUEST_INTERVAL: Duration = Duration::from_millis(1100);
 static TONCENTER_REQUEST_GATE: LazyLock<Mutex<Option<Instant>>> =
     LazyLock::new(|| Mutex::new(None));
+
+const fn user_agent() -> &'static str {
+    concat!("acton/", env!("CARGO_PKG_VERSION"))
+}
+
+fn http_client_builder() -> reqwest::blocking::ClientBuilder {
+    let builder = reqwest::blocking::Client::builder();
+    if proxy_enabled() {
+        builder
+    } else {
+        builder.no_proxy()
+    }
+}
+
+fn proxy_enabled() -> bool {
+    proxy_enabled_from_value(env::var_os(USE_PROXY_ENV).as_deref())
+}
+
+fn proxy_enabled_from_value(value: Option<&OsStr>) -> bool {
+    value.is_some_and(|value| {
+        let value = value.to_string_lossy();
+        let value = value.trim();
+        value == "1" || value == "true"
+    })
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SendBocErrorKind {
@@ -71,21 +101,17 @@ impl TonApiClient {
     pub fn new(
         network: Network,
         custom_networks: HashMap<String, CustomNetworkUrls>,
-        api_key: Option<String>,
     ) -> anyhow::Result<TonApiClient> {
-        let mut client_builder = reqwest::blocking::ClientBuilder::new()
+        let client_builder = http_client_builder()
             .connect_timeout(Duration::from_secs(HTTP_CONNECT_TIMEOUT_SECS))
             .timeout(Duration::from_secs(HTTP_REQUEST_TIMEOUT_SECS));
-        if should_disable_system_proxy() {
-            client_builder = client_builder.no_proxy();
-        }
 
         Ok(TonApiClient {
             client: client_builder
                 .build()
                 .context("Cannot create HTTP client, please check if network is available")?,
+            api_key: toncenter_api_key(&network),
             network,
-            api_key,
             custom_networks,
         })
     }
@@ -97,13 +123,12 @@ impl TonApiClient {
     }
 
     #[must_use]
-    pub fn with_api_key(mut self, api_key: String) -> Self {
-        self.api_key = Some(api_key);
-        self
+    pub const fn has_api_key(&self) -> bool {
+        self.api_key.is_some()
     }
 
     fn build_request(&self, url: &str) -> reqwest::blocking::RequestBuilder {
-        let mut request = self.client.get(url).header("User-Agent", "acton-cli");
+        let mut request = self.client.get(url).header(USER_AGENT, user_agent());
 
         if let Some(ref key) = self.api_key {
             request = request.header("X-API-Key", key);
@@ -113,7 +138,7 @@ impl TonApiClient {
     }
 
     fn build_post_request(&self, url: &str) -> reqwest::blocking::RequestBuilder {
-        let mut request = self.client.post(url).header("User-Agent", "acton-cli");
+        let mut request = self.client.post(url).header(USER_AGENT, user_agent());
 
         if let Some(ref key) = self.api_key {
             request = request.header("X-API-Key", key);
@@ -177,7 +202,7 @@ impl TonApiClient {
             if elapsed < TONCENTER_MIN_REQUEST_INTERVAL {
                 let wait_for = TONCENTER_MIN_REQUEST_INTERVAL - elapsed;
                 log::debug!("throttle for {wait_for:?}");
-                std::thread::sleep(TONCENTER_MIN_REQUEST_INTERVAL - elapsed);
+                std::thread::sleep(wait_for);
             }
         }
 
@@ -319,12 +344,9 @@ impl TonApiClient {
     pub fn get_wallet_seqno(&self, address: &str) -> anyhow::Result<(u32, bool)> {
         let result = self.run_get_method(address, "seqno", &[]);
 
-        let result = match result {
-            Ok(result) => result,
-            Err(_) => {
-                // likely uninit wallet
-                return Ok((0, true));
-            }
+        let Ok(result) = result else {
+            // likely uninit wallet
+            return Ok((0, true));
         };
 
         if result.exit_code == -13 {
@@ -374,7 +396,7 @@ impl TonApiClient {
         Ok(())
     }
 
-    pub fn get_last_block_seqno(&self) -> anyhow::Result<u64> {
+    fn get_masterchain_info_response(&self) -> anyhow::Result<Response> {
         let url = format!(
             "{}/getMasterchainInfo",
             self.network.toncenter_v2_url(&self.custom_networks)?
@@ -389,24 +411,35 @@ impl TonApiClient {
             return Err(Self::handle_fail(response));
         }
 
+        Ok(response)
+    }
+
+    pub fn get_masterchain_info(&self) -> anyhow::Result<serde_json::Value> {
+        self.get_masterchain_info_response()?
+            .json()
+            .context("Failed to parse TonCenter response")
+    }
+
+    pub fn get_last_block_seqno(&self) -> anyhow::Result<u64> {
         #[derive(Deserialize)]
         struct TonCenterMasterchainInfoResponse {
-            pub result: TonCenterMasterchainInfoResult,
+            result: TonCenterMasterchainInfoResult,
         }
 
         #[derive(Deserialize)]
         struct TonCenterMasterchainInfoResult {
-            pub last: TonCenterMasterchainInfoLastBlock,
+            last: TonCenterMasterchainInfoLastBlock,
         }
 
         #[derive(Deserialize)]
         struct TonCenterMasterchainInfoLastBlock {
-            pub seqno: u64,
+            seqno: u64,
         }
 
-        let data: TonCenterMasterchainInfoResponse = response
-            .json()
-            .context("Failed to parse TonCenter response")?;
+        let data: TonCenterMasterchainInfoResponse =
+            self.get_masterchain_info_response()?
+                .json()
+                .context("Failed to parse TonCenter response")?;
 
         Ok(data.result.last.seqno)
     }
@@ -444,6 +477,61 @@ impl TonApiClient {
             .context("Failed to parse TonCenter response")?;
 
         Ok(data.result)
+    }
+
+    pub fn get_shard_account_cell(
+        &self,
+        seqno: Option<u64>,
+        address: &str,
+    ) -> anyhow::Result<Cell> {
+        let url = format!(
+            "{}/getShardAccountCell?address={}{}",
+            self.network.toncenter_v2_url(&self.custom_networks)?,
+            urlencoding::encode(address),
+            seqno
+                .map(|seqno| format!("&seqno={seqno}"))
+                .unwrap_or_default(),
+        );
+
+        let response = self.send_with_retry(
+            || self.build_request(&url),
+            "Failed to send getShardAccountCell request to TonCenter",
+        )?;
+
+        if !response.status().is_success() {
+            return Err(Self::handle_fail(response));
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterShardAccountCellResponse {
+            ok: bool,
+            result: Option<TonCenterTvmCell>,
+            error: Option<String>,
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterTvmCell {
+            bytes: String,
+        }
+
+        let data: TonCenterShardAccountCellResponse = response
+            .json()
+            .context("Failed to parse getShardAccountCell response")?;
+
+        if !data.ok {
+            anyhow::bail!(
+                "{}",
+                data.error
+                    .unwrap_or_else(|| "TonCenter returned ok=false for getShardAccountCell".into())
+            );
+        }
+
+        let cell_boc = data
+            .result
+            .ok_or_else(|| anyhow!("TonCenter getShardAccountCell response has no result"))?
+            .bytes;
+
+        Boc::decode_base64(&cell_boc).context("Failed to decode shard account cell BOC data")
     }
 
     pub fn get_library_by_hash(&self, hash: &HashBytes) -> anyhow::Result<Cell> {
@@ -499,6 +587,49 @@ impl TonApiClient {
             .ok_or_else(|| anyhow::anyhow!("Library with hash {hash_hex} not found"))?;
 
         Boc::decode_base64(boc_data).context("Failed to decode library BOC data")
+    }
+
+    pub fn get_config_all(&self) -> anyhow::Result<Cell> {
+        let url = format!(
+            "{}/getConfigAll",
+            self.network.toncenter_v2_url(&self.custom_networks)?,
+        );
+
+        let response = self.send_with_retry(
+            || self.build_request(&url),
+            "Failed to send request to TonCenter for blockchain config",
+        )?;
+
+        if !response.status().is_success() {
+            return Err(Self::handle_fail(response));
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterConfigAllResponse {
+            ok: bool,
+            result: TonCenterConfigInfo,
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterConfigInfo {
+            config: TonCenterConfigCell,
+        }
+
+        #[derive(Deserialize)]
+        struct TonCenterConfigCell {
+            bytes: String,
+        }
+
+        let data: TonCenterConfigAllResponse = response
+            .json()
+            .context("Failed to parse TonCenter getConfigAll response")?;
+
+        if !data.ok {
+            anyhow::bail!("TonCenter returned ok=false for getConfigAll");
+        }
+
+        Boc::decode_base64(&data.result.config.bytes)
+            .context("Failed to decode blockchain config BOC data")
     }
 
     pub fn decode_optional_cell(cell_data: &String) -> anyhow::Result<Option<Cell>> {
@@ -679,7 +810,7 @@ pub struct GetMethodResult {
 }
 
 impl GetMethodResult {
-    pub fn parse_stack_tuple(&self) -> anyhow::Result<tvmffi::stack::Tuple> {
+    pub fn parse_stack_tuple(&self) -> anyhow::Result<tvm_ffi::stack::Tuple> {
         match json_to_legacy_stack(self.stack.clone()) {
             Ok(tuple) => Ok(tuple),
             Err(legacy_err) => json_to_stack(self.stack.clone()).with_context(|| {
@@ -755,6 +886,7 @@ pub struct TonCenterMessage {
     pub fwd_fee: Option<String>,
     pub ihr_fee: Option<String>,
     pub created_lt: Option<String>,
+    pub hash: Option<String>,
     pub body_hash: Option<String>,
     pub message: Option<String>,
 }
@@ -766,15 +898,309 @@ struct TonCenterErrorResponse {
     error: String,
 }
 
-fn should_disable_system_proxy() -> bool {
-    std::env::var("ACTON_DISABLE_SYSTEM_PROXY")
-        .map(|value| value.trim() == "1")
-        .unwrap_or(false)
+/// `TonCenter` v3 transaction summary returned by `/api/v3/transactionsByMessage` and
+/// embedded inside `/api/v3/traces` responses.
+///
+/// `/traces` does not ship the raw Transaction `BoC` — callers reconstruct a synthetic
+/// `Transaction` cell from the structured fields below.
+#[derive(Deserialize, Debug, Clone)]
+pub struct V3TransactionSummary {
+    pub account: String,
+    pub hash: String,
+    pub lt: String,
+    #[serde(default)]
+    pub now: u32,
+    #[serde(default)]
+    pub prev_trans_hash: Option<String>,
+    #[serde(default)]
+    pub prev_trans_lt: Option<String>,
+    #[serde(default)]
+    pub orig_status: Option<String>,
+    #[serde(default)]
+    pub end_status: Option<String>,
+    #[serde(default)]
+    pub total_fees: Option<String>,
+    #[serde(default)]
+    pub total_fees_extra_currencies: HashMap<String, String>,
+    #[serde(default)]
+    pub description: Option<V3TxDescription>,
+    #[serde(default)]
+    pub in_msg: Option<V3MessageSummary>,
+    #[serde(default)]
+    pub out_msgs: Vec<V3MessageSummary>,
+    #[serde(default)]
+    pub account_state_before: Option<V3AccountStateRef>,
+    #[serde(default)]
+    pub account_state_after: Option<V3AccountStateRef>,
+}
+
+/// Opaque pointer to the account state before/after the transaction executed. Only the
+/// `hash` is used today — it feeds `state_update` so synthesized tx cells match their
+/// on-chain `repr_hash`.
+#[derive(Deserialize, Debug, Clone)]
+pub struct V3AccountStateRef {
+    #[serde(default)]
+    pub hash: Option<String>,
+}
+
+/// v3 transaction description. Only the subset of fields consumed during synthesis is
+/// deserialized; everything else is skipped so unknown flags from future toncenter
+/// versions don't break us.
+#[derive(Deserialize, Debug, Clone)]
+pub struct V3TxDescription {
+    #[serde(default, rename = "type")]
+    pub ty: Option<String>,
+    #[serde(default)]
+    pub aborted: Option<bool>,
+    #[serde(default)]
+    pub destroyed: Option<bool>,
+    #[serde(default)]
+    pub credit_first: Option<bool>,
+    #[serde(default)]
+    pub compute_ph: Option<V3ComputePhase>,
+    #[serde(default)]
+    pub action: Option<V3ActionPhase>,
+    #[serde(default)]
+    pub storage_ph: Option<V3StoragePhase>,
+    #[serde(default)]
+    pub credit_ph: Option<V3CreditPhase>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct V3CreditPhase {
+    #[serde(default)]
+    pub due_fees_collected: Option<String>,
+    #[serde(default)]
+    pub credit: Option<String>,
+    #[serde(default)]
+    pub credit_extra_currencies: HashMap<String, String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct V3ComputePhase {
+    #[serde(default)]
+    pub skipped: Option<bool>,
+    #[serde(default)]
+    pub success: Option<bool>,
+    #[serde(default)]
+    pub msg_state_used: Option<bool>,
+    #[serde(default)]
+    pub account_activated: Option<bool>,
+    #[serde(default)]
+    pub gas_fees: Option<String>,
+    #[serde(default)]
+    pub gas_used: Option<String>,
+    #[serde(default)]
+    pub gas_limit: Option<String>,
+    #[serde(default)]
+    pub gas_credit: Option<String>,
+    #[serde(default)]
+    pub mode: Option<i8>,
+    #[serde(default)]
+    pub exit_code: Option<i32>,
+    #[serde(default)]
+    pub exit_arg: Option<i32>,
+    #[serde(default)]
+    pub vm_steps: Option<u32>,
+    #[serde(default)]
+    pub vm_init_state_hash: Option<String>,
+    #[serde(default)]
+    pub vm_final_state_hash: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct V3ActionPhase {
+    #[serde(default)]
+    pub success: Option<bool>,
+    #[serde(default)]
+    pub valid: Option<bool>,
+    #[serde(default)]
+    pub no_funds: Option<bool>,
+    #[serde(default)]
+    pub status_change: Option<String>,
+    #[serde(default)]
+    pub result_code: Option<i32>,
+    #[serde(default)]
+    pub result_arg: Option<i32>,
+    // `tot_actions` is the on-wire name; `total_actions` is accepted as a fallback so old
+    // fixtures and forks that never shortened the key still deserialize.
+    #[serde(default, alias = "total_actions")]
+    pub tot_actions: Option<u16>,
+    #[serde(default)]
+    pub spec_actions: Option<u16>,
+    #[serde(default)]
+    pub skipped_actions: Option<u16>,
+    #[serde(default)]
+    pub msgs_created: Option<u16>,
+    #[serde(default)]
+    pub total_fwd_fees: Option<String>,
+    #[serde(default)]
+    pub total_action_fees: Option<String>,
+    #[serde(default)]
+    pub action_list_hash: Option<String>,
+    #[serde(default)]
+    pub tot_msg_size: Option<V3StorageUsedShort>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct V3StorageUsedShort {
+    #[serde(default)]
+    pub cells: Option<String>,
+    #[serde(default)]
+    pub bits: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct V3StoragePhase {
+    #[serde(default)]
+    pub storage_fees_collected: Option<String>,
+    #[serde(default)]
+    pub storage_fees_due: Option<String>,
+    #[serde(default)]
+    pub status_change: Option<String>,
+}
+
+/// v3 message summary (embedded in `in_msg` / `out_msgs` of each transaction). Contains
+/// enough to reconstruct a full `Message` cell without querying raw `BoCs`.
+#[derive(Deserialize, Debug, Clone)]
+pub struct V3MessageSummary {
+    #[serde(default)]
+    pub hash: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub destination: Option<String>,
+    #[serde(default)]
+    pub value: Option<String>,
+    #[serde(default)]
+    pub value_extra_currencies: Option<HashMap<String, String>>,
+    #[serde(default)]
+    pub fwd_fee: Option<String>,
+    #[serde(default)]
+    pub ihr_fee: Option<String>,
+    #[serde(default)]
+    pub created_lt: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub ihr_disabled: Option<bool>,
+    #[serde(default)]
+    pub bounce: Option<bool>,
+    #[serde(default)]
+    pub bounced: Option<bool>,
+    #[serde(default)]
+    pub import_fee: Option<String>,
+    #[serde(default)]
+    pub message_content: Option<V3MessageContent>,
+    #[serde(default)]
+    pub init_state: Option<V3MessageContent>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct V3MessageContent {
+    #[serde(default)]
+    pub hash: Option<String>,
+    #[serde(default)]
+    pub body: Option<String>,
+}
+
+/// `TonCenter` v3 trace envelope returned by `/api/v3/traces`.
+///
+/// Only the fields actually used by acton are deserialized. `transactions_order` lists
+/// transactions in their natural parent-first order; each entry keys into `transactions`.
+#[derive(Deserialize, Debug, Clone)]
+pub struct V3Trace {
+    pub trace_id: String,
+    pub transactions_order: Vec<String>,
+    pub transactions: HashMap<String, V3TransactionSummary>,
+    /// Set by the indexer when the trace exceeds its `MaxTraceTransactions` threshold —
+    /// in that case `transactions`/`transactions_order` are truncated and retries won't
+    /// help, so callers should bail rather than return a partial `SendResultList`.
+    #[serde(default)]
+    pub is_incomplete: bool,
+}
+
+impl TonApiClient {
+    /// Fetch traces that include a message with the given hash using toncenter v3.
+    ///
+    /// `msg_hash` is accepted in hex, base64, or base64url form. A transaction may be part
+    /// of at most one trace, so callers typically want the first (or only) result. Pass
+    /// the TEP-467 `hash_norm` from `sendBocReturnHash` to avoid indexer false-misses on
+    /// cell-layout variations.
+    pub fn get_traces_by_msg_hash(
+        &self,
+        msg_hash: &str,
+        limit: u32,
+    ) -> anyhow::Result<Vec<V3Trace>> {
+        self.get_traces_by_hash_param("msg_hash", msg_hash, limit)
+    }
+
+    /// Fetch a trace by its root transaction hash using toncenter v3.
+    pub fn get_traces_by_tx_hash(&self, tx_hash: &str, limit: u32) -> anyhow::Result<Vec<V3Trace>> {
+        self.get_traces_by_hash_param("tx_hash", tx_hash, limit)
+    }
+
+    fn get_traces_by_hash_param(
+        &self,
+        hash_param: &str,
+        hash: &str,
+        limit: u32,
+    ) -> anyhow::Result<Vec<V3Trace>> {
+        let url = format!(
+            "{}/traces",
+            self.network.toncenter_v3_url(&self.custom_networks)?
+        );
+
+        let params: Vec<(&str, String)> =
+            vec![(hash_param, hash.to_owned()), ("limit", limit.to_string())];
+
+        let response = self.send_with_retry(
+            || self.build_request(&url).query(&params),
+            "Failed to send traces request",
+        )?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "TonCenter v3 traces returned status: {}",
+                response.status()
+            ));
+        }
+
+        #[derive(Deserialize)]
+        struct Resp {
+            traces: Vec<V3Trace>,
+        }
+
+        let data: Resp = response.json().context("Failed to parse traces response")?;
+        Ok(data.traces)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_toncenter_error_message;
+    use super::{normalize_toncenter_error_message, proxy_enabled_from_value};
+    use std::ffi::OsStr;
+
+    #[test]
+    fn acton_use_proxy_is_disabled_by_default() {
+        assert!(!proxy_enabled_from_value(None));
+    }
+
+    #[test]
+    fn acton_use_proxy_accepts_1_or_true() {
+        for value in ["1", "true"] {
+            assert!(proxy_enabled_from_value(Some(OsStr::new(value))));
+        }
+    }
+
+    #[test]
+    fn acton_use_proxy_rejects_other_values() {
+        for value in ["", "0", "false", "TRUE", "yes"] {
+            assert!(!proxy_enabled_from_value(Some(OsStr::new(value))));
+        }
+    }
 
     #[test]
     fn normalize_toncenter_error_message_maps_missing_account_state() {
@@ -795,11 +1221,11 @@ mod tests {
                 "cannot apply external message to current state : External message was not accepted: cannot run message on account: inbound external message rejected by account 3029B3EAEDA86A5381D86100F2A8B761C38DE45642EDB6E4BB1CCA2E6DD7FFED before smart-contract execution",
             ),
             Some(
-                r#"wallet/contract rejected the external message before contract execution; likely causes:
+                r"wallet/contract rejected the external message before contract execution; likely causes:
 - not enough balance
 - wallet/contract is not deployed
 - seqno is stale
-- message expired"#,
+- message expired",
             ),
         );
     }

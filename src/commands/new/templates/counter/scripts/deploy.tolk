@@ -1,21 +1,21 @@
 import "@acton/io"
-import "@acton/build/build"
 import "@acton/emulation/network"
+import "@acton/emulation/scripts"
 import "@contracts/types"
-
-import "@wrappers/Counter"
+import "@wrappers/Counter.gen"
 
 fun main() {
-    val deployer = net.wallet("deployer");
+    val deployer = scripts.wallet("deployer");
 
-    val counter = Counter.fromStorage(Storage {
+    val counter = Counter.fromStorage({
         id: 0,
+        owner: deployer.address,
         counter: 0,
     });
     val res = counter.deploy(deployer.address, { value: ton("0.005") });
-    if (!res.wait()) {
-        return;
-    }
+    println(res.waitForTrace());
 
-    println1("Deployed counter to {}", counter.address);
+    println("Deployed counter to {}", counter.address);
+    println("Counter owner is {}", counter.owner());
+    println("Counter value is {}", counter.currentCounter());
 }

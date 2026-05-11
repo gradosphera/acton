@@ -12,12 +12,12 @@ struct (0x43480001) ChExternalPayload {
     amount: uint32
 }
 
-fun chNoInit(): Maybe<Either<StateInit, Cell<StateInit>>> {
-    return Maybe<Either<StateInit, Cell<StateInit>>>.none();
+fun chNoInit(): TlbMaybe<TlbEither<StateInit, Cell<StateInit>>> {
+    return TlbMaybe.none();
 }
 
-fun chExtInfo(): ExtMsgInfoRelaxed {
-    return ExtMsgInfoRelaxed {
+fun chExtInfo(): TlbExtMsgInfoRelaxed {
+    return TlbExtMsgInfoRelaxed {
         src: address("0:00000000000000000000000000000000000000000000000000000000000000CC"),
         dest: createAddressNone(),
         createdLt: 0,
@@ -45,16 +45,16 @@ fn ext_message_relaxed_load_body_returns_left_value() {
     run_ext_message_case(
         "ch-stdlib-ext-message-load-body-left",
         r"
-get fun `test-ch-stdlib-ext-message-load-body-left`() {
+get fun `test ch stdlib ext message load body left`() {
     val payload = ChExternalPayload {
         queryId: 41,
         amount: 900,
     };
 
-    val msg = ExtMessageRelaxed<ChExternalPayload> {
+    val msg = TlbExtMessageRelaxed<ChExternalPayload> {
         info: chExtInfo(),
         init: chNoInit(),
-        body: Either<ChExternalPayload, Cell<ChExternalPayload>>.left(payload),
+        body: TlbEither<ChExternalPayload, Cell<ChExternalPayload>>.left(payload),
     };
 
     expect(msg.loadBody()).toEqual(payload);
@@ -69,17 +69,17 @@ fn ext_message_relaxed_load_body_loads_right_cell_value() {
     run_ext_message_case(
         "ch-stdlib-ext-message-load-body-right",
         r"
-get fun `test-ch-stdlib-ext-message-load-body-right`() {
+get fun `test ch stdlib ext message load body right`() {
     val payload = ChExternalPayload {
         queryId: 77,
         amount: 321,
     };
     val payloadCell = payload.toCell() as Cell<ChExternalPayload>;
 
-    val msg = ExtMessageRelaxed<ChExternalPayload> {
+    val msg = TlbExtMessageRelaxed<ChExternalPayload> {
         info: chExtInfo(),
         init: chNoInit(),
-        body: Either<ChExternalPayload, Cell<ChExternalPayload>>.right(payloadCell),
+        body: TlbEither<ChExternalPayload, Cell<ChExternalPayload>>.right(payloadCell),
     };
 
     expect(msg.loadBody()).toEqual(payload);

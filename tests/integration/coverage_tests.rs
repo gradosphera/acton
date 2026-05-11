@@ -10,21 +10,22 @@ fun onBouncedMessage(_: InMessageBounced) {}
 ";
 
 const COUNTER_TEMPLATE_CONTRACT: &str =
-    include_str!("../../src/commands/new/templates/counter/contracts/counter.tolk");
+    include_str!("../../src/commands/new/templates/counter/contracts/Counter.tolk");
 const COUNTER_TEMPLATE_TYPES: &str =
     include_str!("../../src/commands/new/templates/counter/contracts/types.tolk");
 const COUNTER_TEMPLATE_WRAPPER: &str =
-    include_str!("../../src/commands/new/templates/counter/tests/wrappers/Counter.tolk");
+    include_str!("../../src/commands/new/templates/counter/wrappers/Counter.gen.tolk");
 const COUNTER_TEMPLATE_TESTS: &str =
     include_str!("../../src/commands/new/templates/counter/tests/counter.test.tolk");
+const COUNTER_TEMPLATE_AUTHOR: &str = "Acton User";
 
 const COUNTER_TEMPLATE_SPLIT_UNKNOWN_MESSAGE_TESTS: &str = r#"
 import "@acton/emulation/network"
+import "@acton/emulation/testing"
 import "@acton/testing/expect"
-import "@acton/testing/transaction_expect"
 
 import "@contracts/types"
-import "@wrappers/Counter"
+import "@wrappers/Counter.gen"
 
 get fun `test unknown message reject`() {
     val (contract, deployer, _) = setupTest();
@@ -45,10 +46,10 @@ get fun `test unknown message accept`() {
 }
 
 fun setupTest(): (Counter, Treasury, Treasury) {
-    val deployer = net.treasury("deployer");
-    val notDeployer = net.treasury("not_deployer");
+    val deployer = testing.treasury("deployer");
+    val notDeployer = testing.treasury("not_deployer");
 
-    val contract = Counter.fromStorage({ id: 0, counter: 0 });
+    val contract = Counter.fromStorage({ id: 0, owner: deployer.address, counter: 0 });
     val res = contract.deploy(deployer.address, { value: ton("1") });
     expect(res).toHaveSuccessfulDeploy({ to: contract.address });
 
@@ -57,64 +58,13 @@ fun setupTest(): (Counter, Treasury, Treasury) {
 "#;
 
 fn build_counter_template_project(name: &str, test_source: &str) -> Project {
+    let contract = COUNTER_TEMPLATE_CONTRACT.replace("__ACTON_AUTHOR__", COUNTER_TEMPLATE_AUTHOR);
     let project = ProjectBuilder::new(name)
-        .contract("counter", COUNTER_TEMPLATE_CONTRACT)
+        .without_acton_toml()
+        .file("contracts/Counter", &contract)
         .file("contracts/types", COUNTER_TEMPLATE_TYPES)
-        .file("tests/wrappers/Counter", COUNTER_TEMPLATE_WRAPPER)
+        .file("wrappers/Counter.gen", COUNTER_TEMPLATE_WRAPPER)
         .test_file("counter", test_source)
-        .mapping("acton", "./.acton")
-        .mapping("contracts", "contracts")
-        .mapping("wrappers", "tests/wrappers")
-        .build();
-    project.acton().init().run().success();
-    project
-}
-
-fn build_jetton_template_project(name: &str) -> Project {
-    let project = ProjectBuilder::new(name)
-        .contract_from_path(
-            "jetton_minter",
-            "src/commands/new/templates/jetton/contracts/jetton-minter-contract.tolk",
-        )
-        .contract_from_path(
-            "jetton_wallet",
-            "src/commands/new/templates/jetton/contracts/jetton-wallet-contract.tolk",
-        )
-        .file_from_path(
-            "contracts/errors",
-            "src/commands/new/templates/jetton/contracts/errors.tolk",
-        )
-        .file_from_path(
-            "contracts/fees-management",
-            "src/commands/new/templates/jetton/contracts/fees-management.tolk",
-        )
-        .file_from_path(
-            "contracts/jetton-utils",
-            "src/commands/new/templates/jetton/contracts/jetton-utils.tolk",
-        )
-        .file_from_path(
-            "contracts/messages",
-            "src/commands/new/templates/jetton/contracts/messages.tolk",
-        )
-        .file_from_path(
-            "contracts/storage",
-            "src/commands/new/templates/jetton/contracts/storage.tolk",
-        )
-        .file_from_path(
-            "tests/wrappers/JettonMinter",
-            "src/commands/new/templates/jetton/tests/wrappers/JettonMinter.tolk",
-        )
-        .file_from_path(
-            "tests/wrappers/JettonWallet",
-            "src/commands/new/templates/jetton/tests/wrappers/JettonWallet.tolk",
-        )
-        .test_file_from_path(
-            "wallet",
-            "src/commands/new/templates/jetton/tests/wallet.test.tolk",
-        )
-        .mapping("acton", "./.acton")
-        .mapping("contracts", "contracts")
-        .mapping("wrappers", "tests/wrappers")
         .build();
     project.acton().init().run().success();
     project
@@ -141,14 +91,24 @@ fn build_coverage_scope_project(name: &str) -> Project {
             }
         "#,
         )
+        .file(
+            "tests/support_helpers",
+            r"
+            @noinline
+            fun valueFromTestsHelper(): int {
+                return 5;
+            }
+        ",
+        )
         .test_file(
             "test",
             r#"
             import "../../lib/testing/expect"
             import "@wrappers/TestWrapper"
+            import "./support_helpers.tolk"
 
-            get fun `test-coverage-scope`() {
-                expect(callThroughWrapper(5)).toEqual(6);
+            get fun `test coverage scope`() {
+                expect(callThroughWrapper(valueFromTestsHelper())).toEqual(6);
             }
         "#,
         )
@@ -177,11 +137,177 @@ fn build_partial_coverage_project(name: &str) -> ProjectBuilder {
             import "../../lib/testing/expect"
             import "../code/math"
 
-            get fun `test-partial-coverage`() {
+            get fun `test partial coverage`() {
                 expect(classify(2)).toEqual(1);
             }
         "#,
         )
+}
+
+#[test]
+fn test_coverage_resolves_contract_deployed_from_generated_dependency_code() {
+    let project = ProjectBuilder::new("coverage-generated-dependency-code")
+        .contract(
+            "Child",
+            r"
+            fun onInternalMessage(_: InMessage) {
+                if (contract.getOriginalBalance() > 0) {
+                    return;
+                }
+            }
+        ",
+        )
+        .contract_with_deps(
+            "Parent",
+            r"
+            fun onInternalMessage(_: InMessage) {}
+        ",
+            vec!["child"],
+        )
+        .mapping("gen", "gen")
+        .test_file(
+            "generated_dependency_code",
+            r#"
+            import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
+            import "../../lib/testing/expect"
+            import "@gen/child.code"
+
+            get fun `test coverage resolves generated dependency code`() {
+                val sender = testing.treasury("sender");
+                val stateInit = ContractState {
+                    code: childCompiledCode(),
+                    data: createEmptyCell(),
+                };
+                val address = AutoDeployAddress { stateInit }.calculateAddress();
+
+                val deploy = net.send(sender.address, createMessage({
+                    bounce: false,
+                    value: ton("0.1"),
+                    dest: { stateInit },
+                }));
+                expect(deploy).toHaveSuccessfulDeploy({ to: address });
+
+                val res = net.send(sender.address, createMessage({
+                    bounce: true,
+                    value: ton("0.1"),
+                    dest: address,
+                    body: createEmptyCell(),
+                }));
+                expect(res).toHaveSuccessfulTx({ from: sender.address, to: address });
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file("generated-dependency-coverage.txt")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_file_exists("generated-dependency-coverage.txt")
+        .assert_file_snapshot_matches(
+            "generated-dependency-coverage.txt",
+            "integration/snapshots/coverage/test_coverage_generated_dependency_code.txt",
+        );
+}
+
+#[test]
+fn test_coverage_matches_contract_deployed_as_library_reference() {
+    let project = ProjectBuilder::new("coverage-library-reference")
+        .contract(
+            "library_ref_target",
+            r"
+            fun onInternalMessage(_: InMessage) {
+                return;
+            }
+        ",
+        )
+        .file(
+            "wrappers/LibraryRefTarget",
+            r#"
+            import "@stdlib/exotic-cells"
+            import "../../lib/build"
+            import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
+
+            struct LibraryRefTarget {
+                address: address
+                stateInit: ContractState
+            }
+
+            fun LibraryRefTarget.fromLibraryCode(): LibraryRefTarget {
+                val realCode = build("library_ref_target");
+                testing.registerLibrary(realCode);
+                val stateInit = ContractState {
+                    code: realCode.toLibraryReference(),
+                    data: createEmptyCell(),
+                };
+                val address = AutoDeployAddress { stateInit }.calculateAddress();
+                return LibraryRefTarget { address, stateInit };
+            }
+
+            fun LibraryRefTarget.deploy(self, from: address): SendResultList {
+                return net.send(from, createMessage({
+                    bounce: false,
+                    value: ton("0.05"),
+                    dest: { stateInit: self.stateInit },
+                }));
+            }
+
+            fun LibraryRefTarget.sendEmpty(self, from: address): SendResultList {
+                return net.send(from, createMessage({
+                    bounce: true,
+                    value: ton("0.05"),
+                    dest: self.address,
+                    body: createEmptyCell(),
+                }));
+            }
+        "#,
+        )
+        .test_file(
+            "library_ref",
+            r#"
+            import "../../lib/testing/expect"
+            import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
+            import "../wrappers/LibraryRefTarget"
+
+            get fun `test coverage sees library-ref contract source`() {
+                val sender = testing.treasury("sender");
+                val target = LibraryRefTarget.fromLibraryCode();
+
+                expect(target.deploy(sender.address)).toHaveSuccessfulDeploy({ to: target.address });
+                expect(target.sendEmpty(sender.address)).toHaveSuccessfulTx({
+                    from: sender.address,
+                    to: target.address,
+                });
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file("library-ref-coverage.txt")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_contains("library_ref_target.tolk")
+        .assert_snapshot_matches(
+            "integration/snapshots/coverage/test_coverage_library_reference.stdout.txt",
+        )
+        .assert_file_snapshot_matches(
+            "library-ref-coverage.txt",
+            "integration/snapshots/coverage/test_coverage_library_reference.txt",
+        );
 }
 
 #[test]
@@ -210,7 +336,7 @@ fn test_coverage_basic_output() {
             import "../../lib/testing/expect"
             import "../code/math"
 
-            get fun `test-coverage-example`() {
+            get fun `test coverage example`() {
                 val result = add(1, 2);
                 expect(result).toEqual(3);
 
@@ -234,10 +360,12 @@ fn test_coverage_basic_output() {
         .assert_passed(1)
         .assert_contains(" COVERAGE ")
         .assert_contains("math.tolk")
-        .assert_snapshot_matches("integration/snapshots/test_coverage_basic_output.stdout.txt")
+        .assert_snapshot_matches(
+            "integration/snapshots/coverage/test_coverage_basic_output.stdout.txt",
+        )
         .assert_file_snapshot_matches(
             "coverage.txt",
-            "integration/snapshots/test_coverage_basic_output.txt",
+            "integration/snapshots/coverage/test_coverage_basic_output.txt",
         );
 }
 
@@ -266,12 +394,12 @@ fn test_coverage_multiple_tests() {
             import "../../lib/testing/expect"
             import "../code/calculator"
 
-            get fun `test-multiply`() {
+            get fun `test multiply`() {
                 val result = multiply(3, 4);
                 expect(result).toEqual(12);
             }
 
-            get fun `test-divide`() {
+            get fun `test divide`() {
                 val result = divide(10, 2);
                 expect(result).toEqual(5);
             }
@@ -289,10 +417,12 @@ fn test_coverage_multiple_tests() {
         .assert_passed(2)
         .assert_contains(" COVERAGE ")
         .assert_contains("calculator.tolk")
-        .assert_snapshot_matches("integration/snapshots/test_coverage_multiple_tests.stdout.txt")
+        .assert_snapshot_matches(
+            "integration/snapshots/coverage/test_coverage_multiple_tests.stdout.txt",
+        )
         .assert_file_snapshot_matches(
             "coverage.txt",
-            "integration/snapshots/test_coverage_multiple_tests.txt",
+            "integration/snapshots/coverage/test_coverage_multiple_tests.txt",
         );
 }
 
@@ -317,12 +447,12 @@ fn test_coverage_with_failing_tests() {
             import "../../lib/testing/expect"
             import "../code/validator"
 
-            get fun `test-passing`() {
+            get fun `test passing`() {
                 val result = validate(10);
                 expect(result).toEqual(true);
             }
 
-            get fun `test-failing`() {
+            get fun `test failing`() {
                 val result = validate(10);
                 expect(result).toEqual(false); // This will fail
             }
@@ -342,11 +472,11 @@ fn test_coverage_with_failing_tests() {
         .assert_contains(" COVERAGE ")
         .assert_contains("validator.tolk")
         .assert_snapshot_matches(
-            "integration/snapshots/test_coverage_with_failing_tests.stdout.txt",
+            "integration/snapshots/coverage/test_coverage_with_failing_tests.stdout.txt",
         )
         .assert_file_snapshot_matches(
             "coverage.txt",
-            "integration/snapshots/test_coverage_with_failing_tests.txt",
+            "integration/snapshots/coverage/test_coverage_with_failing_tests.txt",
         );
 }
 
@@ -372,12 +502,12 @@ fn test_coverage_with_filter() {
             import "../../lib/testing/expect"
             import "../code/helpers"
 
-            get fun `test-unit-double`() {
+            get fun `test unit double`() {
                 val result = double(5);
                 expect(result).toEqual(10);
             }
 
-            get fun `test-integration-triple`() {
+            get fun `test integration triple`() {
                 val result = triple(5);
                 expect(result).toEqual(15);
             }
@@ -395,16 +525,18 @@ fn test_coverage_with_filter() {
         .assert_passed(2)
         .assert_contains(" COVERAGE ")
         .assert_contains("helpers.tolk")
-        .assert_snapshot_matches("integration/snapshots/test_coverage_with_filter_all.stdout.txt")
+        .assert_snapshot_matches(
+            "integration/snapshots/coverage/test_coverage_with_filter_all.stdout.txt",
+        )
         .assert_file_snapshot_matches(
             "coverage.txt",
-            "integration/snapshots/test_coverage_with_filter_all.txt",
+            "integration/snapshots/coverage/test_coverage_with_filter_all.txt",
         );
 
     project
         .acton()
         .test()
-        .filter("test-unit-.*")
+        .filter("test unit .*")
         .with_coverage()
         .with_coverage_format("text")
         .run()
@@ -412,10 +544,12 @@ fn test_coverage_with_filter() {
         .assert_passed(1)
         .assert_contains(" COVERAGE ")
         .assert_contains("helpers.tolk")
-        .assert_snapshot_matches("integration/snapshots/test_coverage_with_filter.stdout.txt")
+        .assert_snapshot_matches(
+            "integration/snapshots/coverage/test_coverage_with_filter.stdout.txt",
+        )
         .assert_file_snapshot_matches(
             "coverage.txt",
-            "integration/snapshots/test_coverage_with_filter.txt",
+            "integration/snapshots/coverage/test_coverage_with_filter.txt",
         );
 }
 
@@ -441,7 +575,7 @@ fn test_coverage_lcov_snapshot() {
             import "../../lib/testing/expect"
             import "../code/logic"
 
-            get fun `test-lcov-snapshot`() {
+            get fun `test lcov snapshot`() {
                 val result1 = and(true, true);
                 expect(result1).toEqual(true);
 
@@ -469,7 +603,7 @@ fn test_coverage_lcov_snapshot() {
     let lcov_content = fs::read_to_string(&lcov_path).expect("Should read lcov.info");
     assertion().eq(
         normalize_output(lcov_content.as_str(), project.path()),
-        snapbox::file!("snapshots/test_coverage_lcov_snapshot.lcov"),
+        snapbox::file!("snapshots/coverage/test_coverage_lcov_snapshot.lcov"),
     );
 }
 
@@ -500,12 +634,12 @@ fn test_coverage_exports_files_with_zero_hits() {
             import "../code/main"
             import "../code/unused"
 
-            get fun `test-used-only`() {
+            get fun `test used only`() {
                 val result = used(2);
                 expect(result).toEqual(3);
             }
 
-            get fun `test-unused-helper-reference`() {
+            get fun `test unused helper reference`() {
                 val result = neverCalled(10);
                 expect(result).toEqual(20);
             }
@@ -516,7 +650,7 @@ fn test_coverage_exports_files_with_zero_hits() {
     project
         .acton()
         .test()
-        .filter("test-used-only")
+        .filter("test used only")
         .with_coverage()
         .with_coverage_format("text")
         .with_coverage_file("zero-hit-coverage.txt")
@@ -525,7 +659,7 @@ fn test_coverage_exports_files_with_zero_hits() {
         .assert_passed(1)
         .assert_file_snapshot_matches(
             "zero-hit-coverage.txt",
-            "integration/snapshots/test_coverage_zero_hit_file.txt",
+            "integration/snapshots/coverage/test_coverage_zero_hit_file.txt",
         );
 
     let lcov_path = project.path().join("zero-hit-lcov.info");
@@ -533,7 +667,7 @@ fn test_coverage_exports_files_with_zero_hits() {
     let output = project
         .acton()
         .test()
-        .filter("test-used-only")
+        .filter("test used only")
         .with_coverage()
         .with_coverage_format("lcov")
         .with_coverage_file("zero-hit-lcov.info")
@@ -547,7 +681,7 @@ fn test_coverage_exports_files_with_zero_hits() {
     let lcov_content = fs::read_to_string(&lcov_path).expect("Should read zero-hit-lcov.info");
     assertion().eq(
         normalize_output(lcov_content.as_str(), project.path()),
-        snapbox::file!("snapshots/test_coverage_zero_hit_file.lcov"),
+        snapbox::file!("snapshots/coverage/test_coverage_zero_hit_file.lcov"),
     );
 }
 
@@ -573,7 +707,7 @@ fn test_coverage_does_not_mark_function_closing_braces_as_executable() {
             import "../../lib/testing/expect"
             import "../code/helpers"
 
-            get fun `test-touch`() {
+            get fun `test touch`() {
                 touch(5);
                 expect(1).toEqual(1);
             }
@@ -634,7 +768,7 @@ fn test_coverage_empty_functions_snapshot() {
             import "../../lib/testing/expect"
             import "../code/empty_functions"
 
-            get fun `test-empty-functions-coverage`() {
+            get fun `test empty functions coverage`() {
                 singleLineTouched();
                 multiLineTouched();
                 nonEmptyTouched();
@@ -655,7 +789,7 @@ fn test_coverage_empty_functions_snapshot() {
 
     output.assert_passed(1).assert_file_snapshot_matches(
         "empty-functions-coverage.txt",
-        "integration/snapshots/test_coverage_empty_functions.txt",
+        "integration/snapshots/coverage/test_coverage_empty_functions.txt",
     );
 
     let report = fs::read_to_string(project.path().join("empty-functions-coverage.txt"))
@@ -768,7 +902,7 @@ fn test_coverage_runtime_branch_opcodes_text_snapshot() {
 
     output.assert_passed(8).assert_file_snapshot_matches(
         "runtime-branches.txt",
-        "integration/snapshots/test_coverage_runtime_branch_opcodes.txt",
+        "integration/snapshots/coverage/test_coverage_runtime_branch_opcodes.txt",
     );
 
     let report = fs::read_to_string(project.path().join("runtime-branches.txt"))
@@ -786,9 +920,7 @@ fn test_coverage_runtime_branch_opcodes_text_snapshot() {
         panic!("coverage output did not contain nullable ternary line:\n{normalized}");
     };
     assert!(
-        nullable_ternary_line.contains("site0")
-            && nullable_ternary_line.contains("site1")
-            && nullable_ternary_line.contains("site2"),
+        nullable_ternary_line.contains("site0") && nullable_ternary_line.contains("site1"),
         "expected nullable ternary line to keep separate branch sites:\n{nullable_ternary_line}"
     );
 }
@@ -833,7 +965,7 @@ fn test_coverage_keeps_multiple_branch_sites_on_same_line_separate() {
 
     output.assert_passed(2).assert_file_snapshot_matches(
         "multi-branch-sites.txt",
-        "integration/snapshots/test_coverage_multiple_branch_sites_same_line.txt",
+        "integration/snapshots/coverage/test_coverage_multiple_branch_sites_same_line.txt",
     );
 
     let report = fs::read_to_string(project.path().join("multi-branch-sites.txt"))
@@ -866,7 +998,7 @@ fn test_coverage_keeps_multiple_branch_sites_on_same_line_separate() {
     let normalized_lcov = normalize_output(lcov_content.as_str(), project.path());
     assertion().eq(
         normalized_lcov.as_str(),
-        snapbox::file!("snapshots/test_coverage_multiple_branch_sites_same_line.lcov"),
+        snapbox::file!("snapshots/coverage/test_coverage_multiple_branch_sites_same_line.lcov"),
     );
 
     let branch_records = normalized_lcov
@@ -892,10 +1024,10 @@ fn test_counter_template_coverage_text_snapshots() {
         .with_coverage_file("counter-template-all.txt")
         .run()
         .success()
-        .assert_passed(5)
+        .assert_passed(8)
         .assert_file_snapshot_matches(
             "counter-template-all.txt",
-            "integration/snapshots/test_counter_template_coverage_all.txt",
+            "integration/snapshots/coverage/test_counter_template_coverage_all.txt",
         );
 
     project
@@ -910,34 +1042,23 @@ fn test_counter_template_coverage_text_snapshots() {
         .assert_passed(1)
         .assert_file_snapshot_matches(
             "counter-template-unknown-only.txt",
-            "integration/snapshots/test_counter_template_coverage_unknown_only.txt",
+            "integration/snapshots/coverage/test_counter_template_coverage_unknown_only.txt",
         );
 
     project
         .acton()
         .test()
-        .filter("test deploy starts at zero|test increase counter|test any account can increase counter|test reset counter")
+        .filter("test increase counter|test reset counter|test decrease counter")
         .with_coverage()
         .with_coverage_format("text")
         .with_coverage_file("counter-template-non-branch.txt")
         .run()
         .success()
-        .assert_passed(4)
+        .assert_passed(5)
         .assert_file_snapshot_matches(
             "counter-template-non-branch.txt",
-            "integration/snapshots/test_counter_template_coverage_non_branch.txt",
+            "integration/snapshots/coverage/test_counter_template_coverage_non_branch.txt",
         );
-}
-
-fn assert_branch_counts(report: &str, code_snippet: &str, expected: &str) {
-    let Some(line) = report.lines().find(|line| line.contains(code_snippet)) else {
-        panic!("coverage output did not contain line for `{code_snippet}`:\n{report}");
-    };
-
-    assert!(
-        line.contains(expected),
-        "coverage line for `{code_snippet}` did not contain `{expected}`:\n{line}"
-    );
 }
 
 #[test]
@@ -959,7 +1080,7 @@ fn test_counter_template_split_unknown_message_branch_text_snapshots() {
         .assert_passed(1)
         .assert_file_snapshot_matches(
             "counter-template-reject-only.txt",
-            "integration/snapshots/test_counter_template_coverage_reject_only.txt",
+            "integration/snapshots/coverage/test_counter_template_coverage_reject_only.txt",
         );
 
     project
@@ -974,129 +1095,7 @@ fn test_counter_template_split_unknown_message_branch_text_snapshots() {
         .assert_passed(1)
         .assert_file_snapshot_matches(
             "counter-template-accept-only.txt",
-            "integration/snapshots/test_counter_template_coverage_accept_only.txt",
-        );
-}
-
-#[test]
-fn test_jetton_template_coverage_text_snapshots() {
-    let project = build_jetton_template_project("coverage-jetton-template");
-
-    project
-        .acton()
-        .test()
-        .with_coverage()
-        .with_coverage_format("text")
-        .with_coverage_file("jetton-template-all.txt")
-        .run()
-        .success()
-        .assert_passed(25)
-        .assert_file_snapshot_matches(
-            "jetton-template-all.txt",
-            "integration/snapshots/test_jetton_template_coverage_all.txt",
-        );
-    let all_report = fs::read_to_string(project.path().join("jetton-template-all.txt"))
-        .expect("Should read jetton-template-all.txt");
-    let all_report = normalize_output(all_report.as_str(), project.path());
-    assert_branch_counts(
-        &all_report,
-        "val forwardedMessagesCount = msg.forwardTonAmount ? 2 : 1;",
-        "false=",
-    );
-
-    project
-        .acton()
-        .test()
-        .filter("test no forward ton amount no forward")
-        .with_coverage()
-        .with_coverage_format("text")
-        .with_coverage_file("jetton-template-no-forward-only.txt")
-        .run()
-        .success()
-        .assert_passed(1)
-        .assert_file_snapshot_matches(
-            "jetton-template-no-forward-only.txt",
-            "integration/snapshots/test_jetton_template_coverage_no_forward_only.txt",
-        );
-    let no_forward_report =
-        fs::read_to_string(project.path().join("jetton-template-no-forward-only.txt"))
-            .expect("Should read jetton-template-no-forward-only.txt");
-    let no_forward_report = normalize_output(no_forward_report.as_str(), project.path());
-    assert_branch_counts(
-        &no_forward_report,
-        "val forwardedMessagesCount = msg.forwardTonAmount ? 2 : 1;",
-        "true=0 false=1",
-    );
-
-    project
-        .acton()
-        .test()
-        .filter("test wallet owner should be able to send jettons")
-        .with_coverage()
-        .with_coverage_format("text")
-        .with_coverage_file("jetton-template-forward-only.txt")
-        .run()
-        .success()
-        .assert_passed(1)
-        .assert_file_snapshot_matches(
-            "jetton-template-forward-only.txt",
-            "integration/snapshots/test_jetton_template_coverage_forward_only.txt",
-        );
-    let forward_report =
-        fs::read_to_string(project.path().join("jetton-template-forward-only.txt"))
-            .expect("Should read jetton-template-forward-only.txt");
-    let forward_report = normalize_output(forward_report.as_str(), project.path());
-    assert_branch_counts(
-        &forward_report,
-        "val forwardedMessagesCount = msg.forwardTonAmount ? 2 : 1;",
-        "true=1 false=0",
-    );
-
-    project
-        .acton()
-        .test()
-        .filter(
-            "test minter admin should be able to mint jettons|test not a minter admin should not be able to mint jettons",
-        )
-        .with_coverage()
-        .with_coverage_format("text")
-        .with_coverage_file("jetton-template-mint-admin-pair.txt")
-        .run()
-        .success()
-        .assert_passed(2)
-        .assert_file_snapshot_matches(
-            "jetton-template-mint-admin-pair.txt",
-            "integration/snapshots/test_jetton_template_coverage_mint_admin_pair.txt",
-        );
-
-    project
-        .acton()
-        .test()
-        .filter("test minter admin should be able to mint jettons")
-        .with_coverage()
-        .with_coverage_format("text")
-        .with_coverage_file("jetton-template-mint-admin-accept-only.txt")
-        .run()
-        .success()
-        .assert_passed(1)
-        .assert_file_snapshot_matches(
-            "jetton-template-mint-admin-accept-only.txt",
-            "integration/snapshots/test_jetton_template_coverage_mint_admin_accept_only.txt",
-        );
-
-    project
-        .acton()
-        .test()
-        .filter("test not a minter admin should not be able to mint jettons")
-        .with_coverage()
-        .with_coverage_format("text")
-        .with_coverage_file("jetton-template-mint-admin-reject-only.txt")
-        .run()
-        .success()
-        .assert_passed(1)
-        .assert_file_snapshot_matches(
-            "jetton-template-mint-admin-reject-only.txt",
-            "integration/snapshots/test_jetton_template_coverage_mint_admin_reject_only.txt",
+            "integration/snapshots/coverage/test_counter_template_coverage_accept_only.txt",
         );
 }
 
@@ -1118,9 +1117,18 @@ fn test_coverage_empty_no_tests() {
         .acton()
         .test()
         .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file("empty-coverage.txt")
         .run()
-        .success()
-        .assert_passed(0);
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/coverage/test_coverage_empty_no_tests.stdout.txt",
+        );
+
+    assert!(
+        !project.path().join("empty-coverage.txt").exists(),
+        "coverage report should not be generated when no tests are selected"
+    );
 }
 
 #[test]
@@ -1145,7 +1153,7 @@ fn test_coverage_text_custom_filename() {
             import "../../lib/testing/expect"
             import "../code/logic"
 
-            get fun `test-custom-filename`() {
+            get fun `test custom filename`() {
                 val result1 = and(true, true);
                 expect(result1).toEqual(true);
 
@@ -1171,7 +1179,7 @@ fn test_coverage_text_custom_filename() {
         .assert_file_exists("my-custom-coverage.txt")
         .assert_file_snapshot_matches(
             "my-custom-coverage.txt",
-            "integration/snapshots/test_coverage_text_custom_filename.txt",
+            "integration/snapshots/coverage/test_coverage_text_custom_filename.txt",
         );
 
     let default_path = project.path().join("coverage.txt");
@@ -1203,7 +1211,7 @@ fn test_coverage_text_custom_filename_from_config() {
             import "../../lib/testing/expect"
             import "../code/logic"
 
-            get fun `test-custom-filename`() {
+            get fun `test custom filename`() {
                 val result1 = and(true, true);
                 expect(result1).toEqual(true);
 
@@ -1237,7 +1245,7 @@ fn test_coverage_text_custom_filename_from_config() {
         .assert_file_exists("my-custom-coverage.txt")
         .assert_file_snapshot_matches(
             "my-custom-coverage.txt",
-            "integration/snapshots/test_coverage_text_custom_filename.txt",
+            "integration/snapshots/coverage/test_coverage_text_custom_filename.txt",
         );
 
     let default_path = project.path().join("coverage.txt");
@@ -1263,7 +1271,7 @@ fn test_coverage_wrappers_are_excluded_by_default_and_can_be_included() {
         .assert_file_exists("default-coverage.txt")
         .assert_file_snapshot_matches(
             "default-coverage.txt",
-            "integration/snapshots/test_coverage_scope_default.txt",
+            "integration/snapshots/coverage/test_coverage_scope_default.txt",
         );
 
     project
@@ -1279,7 +1287,7 @@ fn test_coverage_wrappers_are_excluded_by_default_and_can_be_included() {
         .assert_file_exists("with-wrappers.txt")
         .assert_file_snapshot_matches(
             "with-wrappers.txt",
-            "integration/snapshots/test_coverage_scope_with_wrappers.txt",
+            "integration/snapshots/coverage/test_coverage_scope_with_wrappers.txt",
         )
         .assert_file_contains("with-wrappers.txt", "generated/abi/TestWrapper.tolk")
         .assert_file_contains("with-wrappers.txt", "callThroughWrapper");
@@ -1301,7 +1309,7 @@ fn test_coverage_tests_are_excluded_by_default_and_can_be_included() {
         .assert_file_exists("default-coverage.txt")
         .assert_file_snapshot_matches(
             "default-coverage.txt",
-            "integration/snapshots/test_coverage_scope_default.txt",
+            "integration/snapshots/coverage/test_coverage_scope_default.txt",
         );
 
     project
@@ -1317,10 +1325,11 @@ fn test_coverage_tests_are_excluded_by_default_and_can_be_included() {
         .assert_file_exists("with-tests.txt")
         .assert_file_snapshot_matches(
             "with-tests.txt",
-            "integration/snapshots/test_coverage_scope_with_tests.txt",
+            "integration/snapshots/coverage/test_coverage_scope_with_tests.txt",
         )
         .assert_file_contains("with-tests.txt", "tests/test.test.tolk")
-        .assert_file_contains("with-tests.txt", "test-coverage-scope");
+        .assert_file_contains("with-tests.txt", "tests/support_helpers.tolk")
+        .assert_file_contains("with-tests.txt", "test coverage scope");
 }
 
 #[test]
@@ -1345,14 +1354,24 @@ fn test_coverage_include_wrappers_and_tests_from_config() {
             }
         "#,
         )
+        .file(
+            "tests/config_support_helpers",
+            r"
+            @noinline
+            fun configValueFromTestsHelper(): int {
+                return 5;
+            }
+        ",
+        )
         .test_file(
             "test",
             r#"
             import "../../lib/testing/expect"
             import "@wrappers/TestWrapper"
+            import "./config_support_helpers.tolk"
 
-            get fun `test-config-coverage-scope`() {
-                expect(callThroughWrapper(5)).toEqual(6);
+            get fun `test config coverage scope`() {
+                expect(callThroughWrapper(configValueFromTestsHelper())).toEqual(6);
             }
         "#,
         )
@@ -1376,10 +1395,11 @@ fn test_coverage_include_wrappers_and_tests_from_config() {
         .assert_file_exists("from-config.txt")
         .assert_file_snapshot_matches(
             "from-config.txt",
-            "integration/snapshots/test_coverage_scope_from_config.txt",
+            "integration/snapshots/coverage/test_coverage_scope_from_config.txt",
         )
         .assert_file_contains("from-config.txt", "generated/abi/TestWrapper.tolk")
-        .assert_file_contains("from-config.txt", "tests/test.test.tolk");
+        .assert_file_contains("from-config.txt", "tests/test.test.tolk")
+        .assert_file_contains("from-config.txt", "tests/config_support_helpers.tolk");
 }
 
 #[test]
@@ -1391,7 +1411,7 @@ fn test_coverage_text_output_write_error_is_non_zero() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-coverage-text-write-error`() {
+            get fun `test coverage text write error`() {
                 expect(1).toEqual(1);
             }
         "#,
@@ -1418,12 +1438,12 @@ fn test_coverage_text_output_write_error_is_non_zero() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_coverage_text_output_write_error.stderr.txt",
+            "integration/snapshots/coverage/test_coverage_text_output_write_error.stderr.txt",
         );
 }
 
 #[test]
-fn test_coverage_minimum_percent_via_cli_fails_when_total_coverage_is_too_low() {
+fn test_coverage_minimum_percent_via_cli_fails_when_score_is_below_threshold() {
     let project = build_partial_coverage_project("coverage-min-percent-cli").build();
 
     project
@@ -1432,27 +1452,27 @@ fn test_coverage_minimum_percent_via_cli_fails_when_total_coverage_is_too_low() 
         .with_coverage()
         .with_coverage_format("text")
         .with_coverage_file("threshold.txt")
-        .with_coverage_minimum_percent(100.0)
+        .with_coverage_minimum_percent(65.0)
         .run()
         .failure()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test_coverage_minimum_percent_via_cli.stdout.txt",
+            "integration/snapshots/coverage/test_coverage_minimum_percent_via_cli.stdout.txt",
         )
         .assert_file_snapshot_matches(
             "threshold.txt",
-            "integration/snapshots/test_coverage_minimum_percent_via_cli.txt",
+            "integration/snapshots/coverage/test_coverage_minimum_percent_via_cli.txt",
         );
 }
 
 #[test]
-fn test_coverage_minimum_percent_via_config_fails_when_total_coverage_is_too_low() {
+fn test_coverage_minimum_percent_via_config_fails_when_score_is_below_threshold() {
     let project = build_partial_coverage_project("coverage-min-percent-config")
         .with_test_config(TestConfig {
             coverage: Some(true),
             coverage_format: Some("text".to_owned()),
             coverage_file: Some("threshold.txt".to_owned()),
-            coverage_minimum_percent: Some(100.0),
+            coverage_minimum_percent: Some(65.0),
             ..Default::default()
         })
         .build();
@@ -1464,11 +1484,11 @@ fn test_coverage_minimum_percent_via_config_fails_when_total_coverage_is_too_low
         .failure()
         .assert_passed(1)
         .assert_snapshot_matches(
-            "integration/snapshots/test_coverage_minimum_percent_via_config.stdout.txt",
+            "integration/snapshots/coverage/test_coverage_minimum_percent_via_config.stdout.txt",
         )
         .assert_file_snapshot_matches(
             "threshold.txt",
-            "integration/snapshots/test_coverage_minimum_percent_via_config.txt",
+            "integration/snapshots/coverage/test_coverage_minimum_percent_via_config.txt",
         );
 }
 
@@ -1489,7 +1509,7 @@ fn test_coverage_minimum_percent_from_config_rejects_invalid_values() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_coverage_minimum_percent_invalid_config.stderr.txt",
+            "integration/snapshots/coverage/test_coverage_minimum_percent_invalid_config.stderr.txt",
         );
 }
 
@@ -1502,7 +1522,7 @@ fn test_coverage_lcov_output_write_error_is_non_zero() {
             r#"
             import "../../lib/testing/expect"
 
-            get fun `test-coverage-lcov-write-error`() {
+            get fun `test coverage lcov write error`() {
                 expect(1).toEqual(1);
             }
         "#,
@@ -1529,6 +1549,48 @@ fn test_coverage_lcov_output_write_error_is_non_zero() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_coverage_lcov_output_write_error.stderr.txt",
+            "integration/snapshots/coverage/test_coverage_lcov_output_write_error.stderr.txt",
         );
+}
+
+#[test]
+fn test_coverage_text_output_creates_parent_directories() {
+    let project = build_partial_coverage_project("coverage-text-nested-output").build();
+
+    let coverage_path = "build/reports/text/output.txt";
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("text")
+        .with_coverage_file(coverage_path)
+        .run()
+        .success()
+        .assert_contains("Text coverage file saved in build/reports/text/output.txt");
+
+    assert!(
+        project.path().join(coverage_path).exists(),
+        "text coverage file should be created with missing parent dirs"
+    );
+}
+
+#[test]
+fn test_coverage_lcov_output_creates_parent_directories() {
+    let project = build_partial_coverage_project("coverage-lcov-nested-output").build();
+
+    let coverage_path = "build/reports/lcov/output.info";
+    project
+        .acton()
+        .test()
+        .with_coverage()
+        .with_coverage_format("lcov")
+        .with_coverage_file(coverage_path)
+        .run()
+        .success()
+        .assert_contains("LCOV file saved in build/reports/lcov/output.info");
+
+    assert!(
+        project.path().join(coverage_path).exists(),
+        "lcov coverage file should be created with missing parent dirs"
+    );
 }

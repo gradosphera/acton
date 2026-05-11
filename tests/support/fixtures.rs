@@ -11,6 +11,7 @@ use tempfile::TempDir;
 pub(crate) struct FixtureProject {
     _tmp_dir: TempDir,
     project_path: PathBuf,
+    isolated_home: PathBuf,
     enabled_slots: HashMap<String, Vec<usize>>,
 }
 
@@ -22,9 +23,13 @@ impl FixtureProject {
         let project_path = tmp_dir.path().join(name);
         Self::patch_imports(&project_path);
 
+        let isolated_home = tmp_dir.path().join(".acton-test-home");
+        fs::create_dir_all(&isolated_home).expect("Failed to create isolated home dir");
+
         Self {
             _tmp_dir: tmp_dir,
             project_path,
+            isolated_home,
             enabled_slots: HashMap::new(),
         }
     }
@@ -102,6 +107,8 @@ impl FixtureProject {
     /// Get `ActonCommand` builder for this project
     pub(crate) fn acton(&self) -> ActonCommand {
         let cmd = ProcessCommandBuilder::new(acton_exe())
+            .env("HOME", &self.isolated_home)
+            .env("USERPROFILE", &self.isolated_home)
             .env("ACTON_LOG_DIR", self.project_path.join(".acton-test-logs"));
         ActonCommand {
             cmd,
@@ -115,6 +122,7 @@ impl FixtureProject {
             build_graph: None,
             build_out_dir: None,
             build_gen_dir: None,
+            build_output_abi: None,
             build_output_fift: None,
             disasm_string: None,
             disasm_output: None,
@@ -129,6 +137,7 @@ impl FixtureProject {
             compile_boc: None,
             compile_fift: None,
             compile_source_map: None,
+            compile_allow_no_entrypoint: false,
             test_reporters: vec![],
             junit_merge: false,
             test_exclude_patterns: vec![],
@@ -137,7 +146,6 @@ impl FixtureProject {
             verify_address: None,
             verify_wallet: None,
             verify_network: None,
-            script_broadcast: false,
             test_fail_fast: false,
             script_fork_net: None,
             build_info: false,

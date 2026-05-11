@@ -7,12 +7,12 @@ import "../../lib/tlb/either"
 import "../../lib/tlb/maybe"
 import "../../lib/types/message"
 
-fun ciNoInit(): Maybe<Either<StateInit, Cell<StateInit>>> {
-    return Maybe<Either<StateInit, Cell<StateInit>>>.none();
+fun ciNoInit(): TlbMaybe<TlbEither<StateInit, Cell<StateInit>>> {
+    return TlbMaybe.none();
 }
 
-fun ciExtInfo(): ExtMsgInfoRelaxed {
-    return ExtMsgInfoRelaxed {
+fun ciExtInfo(): TlbExtMsgInfoRelaxed {
+    return TlbExtMsgInfoRelaxed {
         src: address("0:00000000000000000000000000000000000000000000000000000000000000C1"),
         dest: address("0:00000000000000000000000000000000000000000000000000000000000000C2")
             as any_address,
@@ -41,10 +41,10 @@ fn ext_message_load_opcode_returns_null_for_either_right_without_ref() {
     run_message_case(
         "ci-stdlib-ext-message-load-opcode-right-without-ref",
         r"
-get fun `test-ci-stdlib-ext-message-load-opcode-right-without-ref`() {
+get fun `test ci stdlib ext message load opcode right without ref`() {
     val body = beginCell().storeBool(true).endCell().beginParse();
 
-    val msg = ExtMessageRelaxedGeneric {
+    val msg = TlbExtMessageRelaxedGeneric {
         info: ciExtInfo(),
         init: ciNoInit(),
         body,

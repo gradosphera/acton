@@ -20,7 +20,7 @@ use tolk_syntax::{
     AsCast, Assign, AstNode, Bin, BoolLit, Call, DotAccess, DotAccessField, Expr, HasName, Ident,
     Instantiation, IsType, Lambda, Lazy, Match, MatchArmBody, MatchPattern, NotNull, NullLit,
     NumberLit, ObjectLit, Paren, SetAssign, StringLit, Tensor, Ternary, TopLevel, Tuple, Type,
-    Unary, Underscore, VarDecl, VarDeclPattern,
+    Unary, Underscore, VarDecl, VarDeclPattern, parse_tolk_int_literal,
 };
 
 impl<'t> TypeInferenceWalker<'_, '_> {
@@ -69,7 +69,7 @@ impl<'t> TypeInferenceWalker<'_, '_> {
             Expr::Lambda(v) => self.infer_lambda_fun(v, flow, as_cond, hint),
             Expr::Instantiation(v) => self.infer_instantiation(v, flow, as_cond),
             Expr::Underscore(v) => self.infer_underscore(v, flow, as_cond, hint),
-            _ => ExprFlow::create(flow, as_cond),
+            Expr::Unmapped(_) => ExprFlow::create(flow, as_cond),
         }
     }
 
@@ -87,7 +87,9 @@ impl<'t> TypeInferenceWalker<'_, '_> {
         if as_cond {
             let value = self.text_of(&v);
             // `if (0)` always false
-            if value == "0" {
+            if parse_tolk_int_literal(value.as_str())
+                .is_some_and(|literal| literal.parse_i32() == Some(0))
+            {
                 after_v
                     .true_flow
                     .mark_unreachable(UnreachableKind::CantHappen);
@@ -1101,12 +1103,7 @@ impl<'t> TypeInferenceWalker<'_, '_> {
                         let index_str = self.text_of(&idx);
                         if let Ok(index_at) = index_str.parse::<usize>() {
                             match self.intrn().data(obj_ty) {
-                                TyData::Tensor(items) => {
-                                    if let Some(ty) = items.get(index_at) {
-                                        return *ty;
-                                    }
-                                }
-                                TyData::Tuple(items) => {
+                                TyData::Tensor(items) | TyData::Tuple(items) => {
                                     if let Some(ty) = items.get(index_at) {
                                         return *ty;
                                     }
@@ -1649,24 +1646,7 @@ impl<'t> TypeInferenceWalker<'_, '_> {
             && let Ok(index_at) = field_name.parse::<usize>()
         {
             match self.intrn().data(unwrapped_obj_type).clone() {
-                TyData::Tensor(items) => {
-                    if index_at >= items.len() {
-                        let unknown_ty = self.const_intrn().ty_unknown;
-                        self.ctx.set_node_type(&v, unknown_ty);
-                        self.ctx.set_node_type(&field, unknown_ty);
-                        return ExprFlow::create(flow, as_cond);
-                    }
-
-                    let mut inferred_type = items[index_at];
-                    if let Some(s_expr) = self.extract_sink_expression(Expr::DotAccess(v)) {
-                        inferred_type =
-                            flow.smart_cast_or_original(s_expr, inferred_type, self.intrn());
-                    }
-                    self.ctx.set_node_type(&v, inferred_type);
-                    self.ctx.set_node_type(&field, inferred_type);
-                    return ExprFlow::create(flow, as_cond);
-                }
-                TyData::Tuple(items) => {
+                TyData::Tensor(items) | TyData::Tuple(items) => {
                     if index_at >= items.len() {
                         let unknown_ty = self.const_intrn().ty_unknown;
                         self.ctx.set_node_type(&v, unknown_ty);
@@ -1925,23 +1905,23 @@ impl<'t> TypeInferenceWalker<'_, '_> {
             // something strange if we cannot resolve reference
             return ExprFlow::create(flow, as_cond);
         };
-        let (parameters, type_parameters) = match &declaration.kind {
-            SymbolKind::Function {
-                parameters,
-                type_parameters,
-                ..
-            } => (parameters, type_parameters),
-            SymbolKind::Method {
-                parameters,
-                type_parameters,
-                ..
-            } => (parameters, type_parameters),
-            SymbolKind::GetMethod {
-                parameters,
-                type_parameters,
-                ..
-            } => (parameters, type_parameters),
-            _ => return ExprFlow::create(flow, as_cond),
+        let (SymbolKind::Function {
+            parameters,
+            type_parameters,
+            ..
+        }
+        | SymbolKind::Method {
+            parameters,
+            type_parameters,
+            ..
+        }
+        | SymbolKind::GetMethod {
+            parameters,
+            type_parameters,
+            ..
+        }) = &declaration.kind
+        else {
+            return ExprFlow::create(flow, as_cond);
         };
 
         if let Some(instantiation_types) = instantiation_types {
@@ -2395,7 +2375,9 @@ impl<'t> TypeInferenceWalker<'_, '_> {
             .and_then(|h| self.return_type_or_none(h));
 
         let mut params_types = Vec::new();
-        let mut body_start = FlowContext::new();
+        // Closures capture outer locals by value at the moment the lambda is created, so the
+        // lambda body should see the current outer flow facts as its starting point.
+        let mut body_start = flow.clone();
 
         for (i, param) in v.parameters().enumerate() {
             let param_ty = if let Some(ty_node) = param.typ() {
@@ -2847,11 +2829,11 @@ impl<'t> TypeInferenceWalker<'_, '_> {
                 let type_parameters = match &symbol.kind {
                     SymbolKind::Function {
                         type_parameters, ..
-                    } => Some(type_parameters),
-                    SymbolKind::Method {
+                    }
+                    | SymbolKind::Method {
                         type_parameters, ..
-                    } => Some(type_parameters),
-                    SymbolKind::GetMethod {
+                    }
+                    | SymbolKind::GetMethod {
                         type_parameters, ..
                     } => Some(type_parameters),
                     _ => None,

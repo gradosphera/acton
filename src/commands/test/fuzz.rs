@@ -6,10 +6,10 @@ use num_bigint::{BigInt, Sign};
 use rand::rngs::StdRng;
 use rand::{Rng, RngCore, SeedableRng};
 use std::sync::Arc;
-use tolkc::TolkSourceMap;
-use tolkc::abi::{ABIFunctionParameter, ABIType, ContractABI as CompilerContractABI};
-use ton_abi::{BaseTypeInfo, ContractAbi, TypeInfo};
-use tvmffi::stack::{Tuple, TupleItem};
+use tolk_compiler::SourceMap;
+use tolk_compiler::abi::{ABIFunctionParameter, ContractABI, Ty};
+use tolk_compiler::types_kernel::TyIdx;
+use tvm_ffi::stack::{Tuple, TupleItem};
 use tycho_types::cell::{Cell, HashBytes};
 use tycho_types::models::{Base64StdAddrFlags, DisplayBase64StdAddr, StdAddr};
 
@@ -61,8 +61,8 @@ impl TestRunner<'_> {
         test: &TestDescriptor,
         code_cell: &Cell,
         dest_address: &str,
-        abi: Arc<ContractAbi>,
-        source_map: Arc<TolkSourceMap>,
+        abi: Option<Arc<ContractABI>>,
+        source_map: Arc<SourceMap>,
         fuzz: FuzzConfig,
     ) -> anyhow::Result<TestResult> {
         let fuzz = resolve_fuzz_config(fuzz, &self.config);
@@ -284,7 +284,7 @@ fn generate_unsigned_integer(run_idx: usize, bits: Option<usize>, rng: &mut StdR
 }
 
 fn generate_signed_integer(run_idx: usize, bits: Option<usize>, rng: &mut StdRng) -> BigInt {
-    let magnitude_bits = bits.map(|value| value.saturating_sub(1)).unwrap_or(127);
+    let magnitude_bits = bits.map_or(127, |value| value.saturating_sub(1));
     let max = if magnitude_bits == 0 {
         BigInt::ZERO
     } else {
@@ -372,32 +372,22 @@ fn format_std_address(address: &StdAddr) -> String {
 
 pub(super) fn attach_test_parameter_metadata(
     mut tests: Vec<TestDescriptor>,
-    abi: &ContractAbi,
-    compiler_abi: Option<&CompilerContractABI>,
+    abi: Option<&ContractABI>,
 ) -> Vec<TestDescriptor> {
-    for test in &mut tests {
-        if let Some(method) = compiler_abi.and_then(|abi| {
-            abi.get_methods
-                .iter()
-                .find(|method| method.tvm_method_id == test.id || method.name == test.name.as_ref())
-        }) {
-            test.parameters = method
-                .parameters
-                .iter()
-                .map(map_compiler_parameter)
-                .collect();
-            continue;
-        }
+    let Some(abi) = abi else {
+        return tests;
+    };
 
+    for test in &mut tests {
         if let Some(method) = abi
             .get_methods
             .iter()
-            .find(|method| method.id == test.id as u32 || method.name == test.name.as_ref())
+            .find(|method| method.tvm_method_id == test.id || method.name == test.name.as_ref())
         {
             test.parameters = method
                 .parameters
                 .iter()
-                .map(map_ton_abi_parameter)
+                .map(|parameter| map_compiler_parameter(abi, parameter))
                 .collect();
         }
     }
@@ -405,101 +395,55 @@ pub(super) fn attach_test_parameter_metadata(
     tests
 }
 
-fn map_compiler_parameter(parameter: &ABIFunctionParameter) -> FuzzParameter {
+fn map_compiler_parameter(abi: &ContractABI, parameter: &ABIFunctionParameter) -> FuzzParameter {
     FuzzParameter {
         name: parameter.name.clone(),
-        type_name: parameter.ty.render_type(),
-        kind: map_compiler_type(&parameter.ty),
+        type_name: abi.render_type(parameter.ty_idx),
+        kind: map_compiler_type(abi, parameter.ty_idx),
     }
 }
 
-fn map_compiler_type(ty: &ABIType) -> FuzzParameterKind {
+fn map_compiler_type(abi: &ContractABI, ty_idx: TyIdx) -> FuzzParameterKind {
+    let Some(ty) = abi.ty_by_idx(ty_idx) else {
+        return FuzzParameterKind::Unsupported;
+    };
     match ty {
-        ABIType::Int => FuzzParameterKind::Int {
+        Ty::Int => FuzzParameterKind::Int {
             signed: true,
             bits: None,
         },
-        ABIType::Coins => FuzzParameterKind::Int {
+        Ty::Coins => FuzzParameterKind::Int {
             signed: false,
             bits: Some(120),
         },
-        ABIType::UintN { n } => FuzzParameterKind::Int {
+        Ty::UintN { n } => FuzzParameterKind::Int {
             signed: false,
-            bits: Some(*n),
+            bits: Some(*n as usize),
         },
-        ABIType::VarUintN { n } => match variadic_integer_payload_bits(*n) {
+        Ty::VaruintN { n } => match variadic_integer_payload_bits(*n as usize) {
             Some(bits) => FuzzParameterKind::Int {
                 signed: false,
                 bits: Some(bits),
             },
             None => FuzzParameterKind::Unsupported,
         },
-        ABIType::IntN { n } => FuzzParameterKind::Int {
+        Ty::IntN { n } => FuzzParameterKind::Int {
             signed: true,
-            bits: Some(*n),
+            bits: Some(*n as usize),
         },
-        ABIType::VarIntN { n } => match variadic_integer_payload_bits(*n) {
+        Ty::VarintN { n } => match variadic_integer_payload_bits(*n as usize) {
             Some(bits) => FuzzParameterKind::Int {
                 signed: true,
                 bits: Some(bits),
             },
             None => FuzzParameterKind::Unsupported,
         },
-        ABIType::Bool => FuzzParameterKind::Bool,
-        ABIType::String => FuzzParameterKind::String,
-        ABIType::Address => FuzzParameterKind::Address,
-        ABIType::AddressAny => FuzzParameterKind::AnyAddress,
-        ABIType::AddressOpt => FuzzParameterKind::Nullable(Box::new(FuzzParameterKind::Address)),
-        ABIType::Nullable { inner } => match map_compiler_type(inner) {
-            FuzzParameterKind::Unsupported => FuzzParameterKind::Unsupported,
-            inner => FuzzParameterKind::Nullable(Box::new(inner)),
-        },
-        _ => FuzzParameterKind::Unsupported,
-    }
-}
-
-fn map_ton_abi_parameter(parameter: &ton_abi::Field) -> FuzzParameter {
-    FuzzParameter {
-        name: parameter.name.clone(),
-        type_name: parameter.type_info.human_readable.clone(),
-        kind: map_ton_abi_type(&parameter.type_info),
-    }
-}
-
-fn map_ton_abi_type(ty: &TypeInfo) -> FuzzParameterKind {
-    match &ty.base {
-        BaseTypeInfo::Int { width } if *width > 0 => FuzzParameterKind::Int {
-            signed: true,
-            bits: Some(*width),
-        },
-        BaseTypeInfo::UInt { width } if *width > 0 => FuzzParameterKind::Int {
-            signed: false,
-            bits: Some(*width),
-        },
-        BaseTypeInfo::Coins => FuzzParameterKind::Int {
-            signed: false,
-            bits: Some(120),
-        },
-        BaseTypeInfo::Bool => FuzzParameterKind::Bool,
-        BaseTypeInfo::Address => FuzzParameterKind::Address,
-        BaseTypeInfo::AnyAddress => FuzzParameterKind::AnyAddress,
-        BaseTypeInfo::VarInt16 => FuzzParameterKind::Int {
-            signed: true,
-            bits: Some(120),
-        },
-        BaseTypeInfo::VarInt32 => FuzzParameterKind::Int {
-            signed: true,
-            bits: Some(248),
-        },
-        BaseTypeInfo::VarUInt16 => FuzzParameterKind::Int {
-            signed: false,
-            bits: Some(120),
-        },
-        BaseTypeInfo::VarUInt32 => FuzzParameterKind::Int {
-            signed: false,
-            bits: Some(248),
-        },
-        BaseTypeInfo::Nullable { inner } => match map_ton_abi_type(inner) {
+        Ty::Bool => FuzzParameterKind::Bool,
+        Ty::String => FuzzParameterKind::String,
+        Ty::Address => FuzzParameterKind::Address,
+        Ty::AddressAny => FuzzParameterKind::AnyAddress,
+        Ty::AddressOpt => FuzzParameterKind::Nullable(Box::new(FuzzParameterKind::Address)),
+        Ty::Nullable { inner_ty_idx, .. } => match map_compiler_type(abi, *inner_ty_idx) {
             FuzzParameterKind::Unsupported => FuzzParameterKind::Unsupported,
             inner => FuzzParameterKind::Nullable(Box::new(inner)),
         },
@@ -521,14 +465,14 @@ pub(super) fn validate_test_configuration(
 ) -> anyhow::Result<()> {
     if test.fuzz.is_some() && test.declared_parameter_count == 0 {
         anyhow::bail!(
-            "Test '{}' uses @test({{ fuzz: ... }}) but has no parameters",
+            "Test '{}' uses @test.fuzz(...) but has no parameters",
             test.name
         );
     }
 
     if test.declared_parameter_count > 0 && test.fuzz.is_none() {
         anyhow::bail!(
-            "Parameterized test '{}' requires @test({{ fuzz: true }}), @test({{ fuzz: <runs> }}), or @test({{ fuzz: {{ ... }} }})",
+            "Parameterized test '{}' requires @test.fuzz, @test.fuzz(<runs>), or @test.fuzz({{ ... }})",
             test.name
         );
     }

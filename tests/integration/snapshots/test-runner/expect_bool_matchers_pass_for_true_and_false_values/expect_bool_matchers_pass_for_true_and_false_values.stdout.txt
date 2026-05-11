@@ -1,20 +1,11 @@
   Installing standard library [ACTON_VERSION]
    Compiling contracts
-No contracts section found in Acton.toml. Add at least one contract.
-To add a contract add the following section to Acton.toml:
-
-[contracts.my-contract]
-name = "MyContract"
-src = "contracts/my-contract.tolk"
-depends = []
-
-See [ACTON_DOCS_URL]/build-system/configuration-reference/#contracts-section for more information
      Running tests
 
  TEST  [ROOT]
 
  > tests/expect_bool.test.tolk (2 tests)
-  ✓ by-expect-bool-pass-true [TIME]
-  ✓ by-expect-bool-pass-false [TIME]
+  ✓ by expect bool pass true [TIME]
+  ✓ by expect bool pass false [TIME]
 
  ✓ 2 passed in 1 file

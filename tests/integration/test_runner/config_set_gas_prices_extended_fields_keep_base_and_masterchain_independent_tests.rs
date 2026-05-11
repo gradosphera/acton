@@ -4,6 +4,7 @@ use crate::support::project::ProjectBuilder;
 const CONFIG_IMPORTS: &str = r#"
 import "../../lib/emulation/config"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
 "#;
 
@@ -25,8 +26,8 @@ fn config_set_gas_prices_extended_fields_keep_base_and_masterchain_independent()
     run_config_success_case(
         "bd-stdlib-config-gas-prices-extended-dual-chain-independence",
         r"
-get fun `test-bd-stdlib-config-gas-prices-extended-dual-chain-independence`() {
-    var config = net.getConfig();
+get fun `test bd stdlib config gas prices extended dual chain independence`() {
+    var config = testing.getConfig();
 
     val baseBefore = config.getGasPrices(BASECHAIN);
     val masterBefore = config.getGasPrices(MASTERCHAIN);
@@ -60,9 +61,9 @@ get fun `test-bd-stdlib-config-gas-prices-extended-dual-chain-independence`() {
 
     config.setGasPrices(baseAfterUpdate, BASECHAIN);
     config.setGasPrices(masterAfterUpdate, MASTERCHAIN);
-    expect(net.setConfig(config)).toBeTrue();
+    expect(testing.setConfig(config)).toBeTrue();
 
-    val updated = net.getConfig();
+    val updated = testing.getConfig();
     val actualBase = updated.getGasPrices(BASECHAIN);
     val actualMaster = updated.getGasPrices(MASTERCHAIN);
 
@@ -99,8 +100,8 @@ fn config_set_gas_prices_for_basechain_does_not_change_masterchain_extended_fiel
     run_config_success_case(
         "bd-stdlib-config-gas-prices-single-chain-independence",
         r"
-get fun `test-bd-stdlib-config-gas-prices-single-chain-independence`() {
-    var config = net.getConfig();
+get fun `test bd stdlib config gas prices single chain independence`() {
+    var config = testing.getConfig();
 
     val baseBefore = config.getGasPrices(BASECHAIN);
     val masterBefore = config.getGasPrices(MASTERCHAIN);
@@ -120,9 +121,9 @@ get fun `test-bd-stdlib-config-gas-prices-single-chain-independence`() {
     };
 
     config.setGasPrices(baseAfterUpdate, BASECHAIN);
-    expect(net.setConfig(config)).toBeTrue();
+    expect(testing.setConfig(config)).toBeTrue();
 
-    val updated = net.getConfig();
+    val updated = testing.getConfig();
     val actualBase = updated.getGasPrices(BASECHAIN);
     val actualMaster = updated.getGasPrices(MASTERCHAIN);
 

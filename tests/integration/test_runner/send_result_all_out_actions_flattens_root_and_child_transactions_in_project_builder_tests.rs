@@ -82,15 +82,15 @@ fun onBouncedMessage(_: InMessageBounced) {}
 "#;
 
 const CS_IMPORTS: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../../lib/types/out_actions"
 import "../contracts/cs_messages"
 
 fun deployCsHarness() {
-    val sender = net.treasury("sender");
+    val sender = testing.treasury("sender");
 
     val rootInit = ContractState {
         code: build("cs_root"),
@@ -176,7 +176,7 @@ fn send_result_all_out_actions_flattens_root_and_child_transactions_in_project_b
     run_project_builder_success(
         "cs-stdlib-send-result-all-out-actions-project-builder",
         r#"
-get fun `test-cs-send-result-all-out-actions-project-builder`() {
+get fun `test cs send result all out actions project builder`() {
     val (sender, rootAddress, midAddress, sinkAddress) = deployCsHarness();
     val txs = sendCsRoute(sender, rootAddress, midAddress, sinkAddress, 901);
 
@@ -223,15 +223,15 @@ fn send_result_all_out_actions_terminal_transaction_without_actions_in_fixture_p
     let test_path = "tests/cs_send_result_all_out_actions_terminal.test.tolk";
 
     let source = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/testing/expect"
-import "../../lib/testing/transaction_expect"
 import "../../lib/types/out_actions"
 import "../contracts/counter_messages"
 
-get fun `test-cs-send-result-all-out-actions-terminal`() {
-    val deployer = net.treasury("deployer");
+get fun `test cs send result all out actions terminal`() {
+    val deployer = testing.treasury("deployer");
     val init = ContractState {
         code: build("counter"),
         data: Storage { id: 902, counter: 0 }.toCell(),

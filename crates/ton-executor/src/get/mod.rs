@@ -57,6 +57,9 @@ use parking_lot::ReentrantMutex;
 use std::collections::HashSet;
 use std::ffi::{CStr, CString};
 use std::ptr::{NonNull, null};
+use std::slice;
+use std::str;
+use std::sync::Arc;
 
 // Opaque native emulator handle guarded by `GetExecutor::inner`.
 struct RawGetExecutorHandle(NonNull<c_void>);
@@ -110,14 +113,14 @@ impl GetExecutor {
 
         let inner = self.inner.lock();
 
-        // SAFETY: `tvm_emulator_set_gas_limit` and `run_get_method` are safe functions
-        let run_result_ptr = unsafe {
+        // SAFETY: native pointers come from live CStrings and the locked executor handle.
+        let result_ptr = unsafe {
             // We set a very high gas limit by default for get-methods,
             // as they are typically executed off-chain and for some reason,
             // Tolk compilation consumes gas :D
             tvm_emulator_set_gas_limit(inner.0.as_ptr(), i64::MAX - 1000);
 
-            run_get_method(
+            run_get_method_struct(
                 inner.0.as_ptr(),
                 self.params_cstr.as_ptr(),
                 stack_b64_cstr.as_ptr(),
@@ -125,29 +128,41 @@ impl GetExecutor {
             )
         };
 
-        if run_result_ptr.is_null() {
-            anyhow::bail!("run_get_method returned null pointer");
+        let result_ptr =
+            NonNull::new(result_ptr).context("run_get_method_struct returned null pointer")?;
+        let result_guard = NativeGetMethodResultGuard(result_ptr);
+        // SAFETY: `result_ptr` was checked for null and is owned by `result_guard`.
+        let result = unsafe { result_guard.0.as_ref() };
+
+        if result.fail != 0 {
+            let message = native_lossy_string(result.error, result.error_len);
+            anyhow::bail!("Cannot run get method {}: {}", args.method_id, message);
         }
 
-        // SAFETY: The C++ side is expected to return a valid null-terminated C string.
-        let output_str = unsafe { CStr::from_ptr(run_result_ptr).to_string_lossy() };
-        let result: GetInternalResult = serde_json::from_str(&output_str)
-            .with_context(|| format!("Failed to parse emulator output JSON: {output_str}"))?;
-
-        match result {
-            GetInternalResult::Success { output } => match output {
-                GetMethodResult::Success(output) => {
-                    Ok(GetMethodResult::Success(GetMethodResultSuccess {
-                        code: args.code.clone().into(),
-                        ..output
-                    }))
-                }
-                GetMethodResult::Error(err) => Ok(GetMethodResult::Error(err)),
-            },
-            GetInternalResult::Fail { message, .. } => {
-                anyhow::bail!("Cannot run get method {}: {}", args.method_id, message);
-            }
+        if result.success == 0 {
+            return Ok(GetMethodResult::Error(GetMethodResultError {
+                success: false,
+                error: Arc::from(native_lossy_string(result.error, result.error_len)),
+            }));
         }
+
+        let stack = native_required_utf8(result.stack, result.stack_len, "stack", |value| {
+            Arc::from(value)
+        })?;
+
+        Ok(GetMethodResult::Success(GetMethodResultSuccess {
+            success: true,
+            stack,
+            gas_used: result.gas_used.to_string(),
+            vm_exit_code: result.vm_exit_code,
+            vm_log: native_log_arc_str(result.vm_log, result.vm_log_len),
+            missing_library: native_optional_string(
+                result.missing_library,
+                result.missing_library_len,
+                "missing_library",
+            )?,
+            code: args.code.clone().into(),
+        }))
     }
 
     /// Registers a custom extension method (external opcode) for the TVM.
@@ -217,6 +232,42 @@ impl GetExecutor {
         Ok(())
     }
 
+    /// Runs a serialized TVM continuation directly.
+    ///
+    /// # Arguments
+    ///
+    /// * `continuation_boc` - Base64 encoded `BoC` of the serialized `VmCont`.
+    /// * `stack_boc` - Base64 encoded `BoC` of the initial stack.
+    pub fn run_continuation(
+        &self,
+        continuation_boc: &str,
+        stack_boc: &str,
+    ) -> anyhow::Result<GetMethodResult> {
+        let cont_cstr =
+            CString::new(continuation_boc).context("Continuation BoC contains null bytes")?;
+        let stack_cstr = CString::new(stack_boc).context("Stack BoC contains null bytes")?;
+
+        let inner = self.inner.lock();
+
+        // SAFETY: `tvm_emulator_set_gas_limit` and `tvm_emulator_run_continuation` are safe C API functions.
+        let result_ptr = unsafe {
+            tvm_emulator_set_gas_limit(inner.0.as_ptr(), i64::MAX - 1000);
+
+            tvm_emulator_run_continuation(inner.0.as_ptr(), cont_cstr.as_ptr(), stack_cstr.as_ptr())
+        };
+
+        if result_ptr.is_null() {
+            anyhow::bail!("tvm_emulator_run_continuation returned null pointer");
+        }
+
+        // SAFETY: The C++ side is expected to return a valid null-terminated C string.
+        let output_str = unsafe { CStr::from_ptr(result_ptr).to_string_lossy() };
+        let result: GetMethodResult = serde_json::from_str(&output_str)
+            .with_context(|| format!("Failed to parse emulator output JSON: {output_str}"))?;
+
+        Ok(result)
+    }
+
     /// Registers callback that is called when TVM fails to resolve a library by hash.
     pub fn register_missing_library_callback<Ctx>(
         &mut self,
@@ -254,12 +305,14 @@ impl BaseExecutor for GetExecutor {
 unsafe extern "C" {
     pub(crate) fn create_tvm_emulator(params: *const c_char) -> *mut c_void;
 
-    pub(crate) fn run_get_method(
+    fn run_get_method_struct(
         em: *mut c_void,
         params: *const c_char,
         stack: *const c_char,
         config: *const c_char,
-    ) -> *mut c_char;
+    ) -> *mut NativeGetMethodResult;
+
+    fn tvm_emulator_get_method_result_destroy(result: *mut NativeGetMethodResult);
 
     pub(crate) fn tvm_emulator_register_extmethod(
         tvm_emulator: *mut c_void,
@@ -276,4 +329,87 @@ unsafe extern "C" {
     ) -> *const c_char;
 
     pub(crate) fn tvm_emulator_set_gas_limit(tvm_emulator: *mut c_void, gas_limit: i64) -> bool;
+
+    pub(crate) fn tvm_emulator_run_continuation(
+        tvm_emulator: *mut c_void,
+        continuation_boc: *const c_char,
+        stack_boc: *const c_char,
+    ) -> *mut c_char;
+}
+
+#[repr(C)]
+struct NativeGetMethodResult {
+    _owner: *mut c_void,
+    error: *const c_char,
+    error_len: usize,
+    stack: *const c_char,
+    stack_len: usize,
+    vm_log: *const c_char,
+    vm_log_len: usize,
+    missing_library: *const c_char,
+    missing_library_len: usize,
+    gas_used: u64,
+    vm_exit_code: i32,
+    success: u8,
+    fail: u8,
+}
+
+struct NativeGetMethodResultGuard(NonNull<NativeGetMethodResult>);
+
+impl Drop for NativeGetMethodResultGuard {
+    fn drop(&mut self) {
+        // SAFETY: the pointer came from the native get-method API and this guard owns it.
+        unsafe {
+            tvm_emulator_get_method_result_destroy(self.0.as_ptr());
+        }
+    }
+}
+
+fn native_required_utf8<T>(
+    ptr: *const c_char,
+    len: usize,
+    field: &str,
+    convert: impl FnOnce(&str) -> T,
+) -> anyhow::Result<T> {
+    if ptr.is_null() {
+        anyhow::bail!("native get-method result field `{field}` is null");
+    }
+    // SAFETY: native result fields are valid for `len` bytes while the result guard is alive.
+    let bytes = unsafe { slice::from_raw_parts(ptr.cast::<u8>(), len) };
+    let value = str::from_utf8(bytes)
+        .with_context(|| format!("native get-method result field `{field}` is not UTF-8"))?;
+    Ok(convert(value))
+}
+
+fn native_optional_string(
+    ptr: *const c_char,
+    len: usize,
+    field: &str,
+) -> anyhow::Result<Option<String>> {
+    if ptr.is_null() {
+        return Ok(None);
+    }
+    native_required_utf8(ptr, len, field, ToOwned::to_owned).map(Some)
+}
+
+fn native_lossy_string(ptr: *const c_char, len: usize) -> String {
+    if ptr.is_null() {
+        return String::new();
+    }
+    // SAFETY: native result fields are valid for `len` bytes while the result guard is alive.
+    let bytes = unsafe { slice::from_raw_parts(ptr.cast::<u8>(), len) };
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+fn native_log_arc_str(ptr: *const c_char, len: usize) -> Arc<str> {
+    if ptr.is_null() {
+        return Arc::from("");
+    }
+    // SAFETY: native result fields are valid for `len` bytes while the result guard is alive.
+    let bytes = unsafe { slice::from_raw_parts(ptr.cast::<u8>(), len) };
+    if bytes.is_ascii() {
+        // SAFETY: `bytes.is_ascii()` guarantees valid UTF-8.
+        return Arc::from(unsafe { str::from_utf8_unchecked(bytes) });
+    }
+    Arc::from(String::from_utf8_lossy(bytes).into_owned())
 }

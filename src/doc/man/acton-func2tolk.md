@@ -1,14 +1,14 @@
 # acton-func2tolk(1)
 
-## NAME
+## Name
 
 acton-func2tolk --- Convert FunC sources to Tolk through the upstream converter
 
-## SYNOPSIS
+## Synopsis
 
 `acton func2tolk` [_options_] _path_
 
-## DESCRIPTION
+## Description
 
 Convert a FunC source file or a directory of FunC files into Tolk.
 
@@ -16,7 +16,13 @@ Acton shells out to `npx` and runs the upstream
 `@ton/convert-func-to-tolk` package. Standard input, output, and error are
 forwarded directly to the converter process.
 
-## OPTIONS
+This command is best used as one step in a broader migration workflow. For
+existing FunC and TypeScript projects, see the
+[FunC to Tolk migration skill](https://ton-blockchain.github.io/acton/docs/agent-skills/func2tolk) guide, which explains
+how to use `acton func2tolk` with the `$func2tolk` skill, Acton project
+setup, wrappers, tests, and debugging.
+
+## Options
 
 ### Conversion Options
 
@@ -53,7 +59,7 @@ Version of `@ton/convert-func-to-tolk` to execute.
 
 {{> options-project-pass-through }}
 
-## REQUIREMENTS
+## Requirements
 
 This command requires:
 
@@ -65,7 +71,7 @@ Acton uses a temporary npm cache directory for each invocation.
 
 That means converter downloads are not reused across runs.
 
-## PROCESS MODEL
+## Process Model
 
 Acton runs:
 
@@ -79,13 +85,13 @@ reported as an Acton error.
 If `_path_` is a directory, file naming and directory traversal are delegated
 to the upstream converter. `--output` is forwarded directly to that tool.
 
-## EXIT STATUS
+## Exit Status
 
 - `0`: Conversion completed successfully, including runs that produced warnings.
 - `1`: `npx` or the converter could not be started, conversion failed, or the
   requested output could not be written by the converter.
 
-## EXAMPLES
+## Examples
 
 1. Convert all FunC files in a directory:
 
@@ -117,6 +123,6 @@ to the upstream converter. `--output` is forwarded directly to that tool.
    acton func2tolk jetton-minter.fc --output jetton-minter.tolk
    ```
 
-## SEE ALSO
+## See Also
 
 - [convert-func-to-tolk](https://github.com/ton-blockchain/convert-func-to-tolk)

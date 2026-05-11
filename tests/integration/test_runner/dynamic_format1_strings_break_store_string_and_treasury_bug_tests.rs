@@ -3,6 +3,7 @@ use crate::support::project::ProjectBuilder;
 
 const IMPORTS: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/fmt"
 import "../../lib/io"
 "#;
@@ -31,14 +32,14 @@ fn format1_result_can_be_stored_with_builder_store_string() {
     run_dynamic_string_success_case(
         "bz-dynamic-format1-store-string-regression",
         r#"
-get fun `test-bz-literal-store-string-works`() {
+get fun `test bz literal store string works`() {
     val literal = "hello world";
     val stored = beginCell().storeString(literal).endCell();
     println(stored);
 }
 
-get fun `test-bz-format1-store-string-not-a-cell`() {
-    val dynamic = format1("hello {}", "world");
+get fun `test bz format1 store string not a cell`() {
+    val dynamic = format("hello {}", "world");
     val stored = beginCell().storeString(dynamic).endCell();
     println(stored);
 }
@@ -52,14 +53,14 @@ fn format1_result_can_be_used_as_treasury_name() {
     run_dynamic_string_success_case(
         "bz-dynamic-format1-treasury-name-regression",
         r#"
-get fun `test-bz-static-treasury-name-works`() {
-    val treasury = net.treasury("bz_static_treasury");
+get fun `test bz static treasury name works`() {
+    val treasury = testing.treasury("bz_static_treasury");
     println(treasury.address);
 }
 
-get fun `test-bz-format1-treasury-name-not-a-cell`() {
-    val treasuryName = format1("bz_dynamic_{}", 1);
-    val treasury = net.treasury(treasuryName);
+get fun `test bz format1 treasury name not a cell`() {
+    val treasuryName = format("bz_dynamic_{}", 1);
+    val treasury = testing.treasury(treasuryName);
     println(treasury.address);
 }
 "#,

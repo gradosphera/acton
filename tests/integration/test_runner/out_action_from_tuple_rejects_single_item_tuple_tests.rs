@@ -6,15 +6,16 @@ fn parse_out_actions_rejects_node_without_prev_ref() {
     ProjectBuilder::new("stdlib-parse-out-actions-rejects-node-without-prev-ref")
         .test_file("out_actions_malformed", r#"
             import "../../lib/types/out_actions"
-            import "../../lib/vm/vm"
+            import "../../lib/emulation/testing"
+            import "../../lib/impl"
 
-            get fun `test-parse-out-actions-rejects-node-without-prev-ref`() {
+            get fun `test parse out actions rejects node without prev ref`() {
                 val malformedNode = beginCell()
                     .storeUint(0x0ec3c86d, 32)
                     .storeUint(0, 8)
                     .endCell();
 
-                vm.parseOutActions(malformedNode);
+                impl.parseOutActions(malformedNode);
             }
             "#)
         .build()
