@@ -509,7 +509,7 @@ get fun `test external send result helpers cover rejected trace`() {
     );
 
     expect(result).toBeNotAccepted();
-    expect(result).toHaveExternalVmExitCode(10);
+    expect(result).toEndWithExitCode(10);
     expect(result.isAccepted()).toBeFalse();
     expect(result.transactions).toBeNull();
     expect(result.error).toBeNotNull();
@@ -640,14 +640,14 @@ get fun `test toBeNotAccepted reports accepted external result`() {
 fn to_have_external_vm_exit_code_reports_mismatch() {
     let source = with_prelude(
         r"
-get fun `test toHaveExternalVmExitCode reports mismatch`() {
+get fun `test toEndWithExitCode reports mismatch`() {
     val (harness, _) = deployHarness();
 
     val result = net.sendExternal(
         net.createExternalMessage(harness.address, createEmptyCell()),
     );
 
-    expect(result).toHaveExternalVmExitCode(11);
+    expect(result).toEndWithExitCode(11);
 }
 ",
     );
@@ -671,14 +671,14 @@ fn to_have_external_vm_exit_code_reports_accepted_external_result() {
     run_failure_snapshot_case(
         "o-lib-api-send-external-vm-exit-code-accepted",
         r"
-get fun `test toHaveExternalVmExitCode reports accepted external result`() {
+get fun `test toEndWithExitCode reports accepted external result`() {
     val (harness, _) = deployHarness();
 
     val result = net.sendExternal(
         net.createExternalMessage(harness.address, TriggerExternal { id: 13 }),
     );
 
-    expect(result).toHaveExternalVmExitCode(10);
+    expect(result).toEndWithExitCode(10);
 }
 ",
         "integration/snapshots/test-runner/api_external/to_have_external_vm_exit_code_reports_accepted_external_result.stdout.txt",

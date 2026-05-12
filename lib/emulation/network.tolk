@@ -209,7 +209,7 @@ struct ExternalSendError {
 ///
 /// In tests, prefer `expect(result).toBeAccepted()`,
 /// `expect(result).toBeNotAccepted()`, and
-/// `expect(result).toHaveExternalVmExitCode(...)` for diagnostics.
+/// `expect(result).toEndWithExitCode(...)` for diagnostics.
 /// Use [ExternalSendResult.unwrap] when a trace is required, or
 /// [ExternalSendResult.isAccepted] when the test needs to branch on the result.
 struct ExternalSendResult {
@@ -1147,7 +1147,7 @@ fun Expectation<ExternalSendResult>.toBeNotAccepted(self): void {
 ///
 /// This matcher is intended for rejected external-in messages. For accepted
 /// external messages, use transaction matchers on the produced [SendResultList].
-fun Expectation<ExternalSendResult>.toHaveExternalVmExitCode(self, exitCode: int): void {
+fun Expectation<ExternalSendResult>.toEndWithExitCode(self, exitCode: int): void {
     if (
         self.value.error != null && self.value.error.vmExitCode != null &&
         self.value.error.vmExitCode == exitCode
@@ -1157,7 +1157,7 @@ fun Expectation<ExternalSendResult>.toHaveExternalVmExitCode(self, exitCode: int
     if (self.value.error != null) {
         self.fail(
             format(
-                "expect(<actual>).toHaveExternalVmExitCode(<expected>): expected {}, got {}",
+                "expect(<actual>).toEndWithExitCode(<expected>): expected {}, got {}",
                 exitCode,
                 self.value.error.vmExitCode,
             ),
@@ -1165,7 +1165,7 @@ fun Expectation<ExternalSendResult>.toHaveExternalVmExitCode(self, exitCode: int
     }
     self.fail(
         format(
-            "expect(<actual>).toHaveExternalVmExitCode(<expected>): expected {}, but external message was accepted",
+            "expect(<actual>).toEndWithExitCode(<expected>): expected {}, but external message was accepted",
             exitCode,
         ),
     );

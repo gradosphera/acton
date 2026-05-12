@@ -271,7 +271,7 @@ exit code, logs, elapsed time, and missing libraries.
 
 In tests, prefer `expect(result).toBeAccepted()`,
 `expect(result).toBeNotAccepted()`, and
-`expect(result).toHaveExternalVmExitCode(...)` for diagnostics.
+`expect(result).toEndWithExitCode(...)` for diagnostics.
 Use [ExternalSendResult.unwrap](#externalsendresultunwrap) when a trace is required, or
 [ExternalSendResult.isAccepted](#externalsendresultisaccepted) when the test needs to branch on the result.
 
@@ -1041,10 +1041,10 @@ Expect the external-in message to be rejected before acceptance.
 
 <SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/network.tolk#L1131" />
 
-## `Expectation<ExternalSendResult>.toHaveExternalVmExitCode`
+## `Expectation<ExternalSendResult>.toEndWithExitCode`
 
 ```tolk
-fun Expectation<ExternalSendResult>.toHaveExternalVmExitCode(self, exitCode: int): void
+fun Expectation<ExternalSendResult>.toEndWithExitCode(self, exitCode: int): void
 ```
 
 Expect the external send error to have a specific VM exit code.
