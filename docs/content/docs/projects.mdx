@@ -96,38 +96,41 @@ acton new acton-project
 
 Directory overview:
 
-```text noCopy
-acton-project/
-├── Acton.toml  # Project manifest — edit directly
-├── .env        # Local secrets — not committed
-├── .acton/     # Acton-managed internal state and Tolk libraries
-├── contracts/  # Tolk source files
-├── wrappers/   # Generated Tolk wrappers (.gen.tolk)
-├── tests/      # Test files (.test.tolk)
-├── scripts/    # Deployment and utility Tolk scripts
-├── build/      # Compiled output (.boc, .fif)
-└── gen/        # Generated dependency helpers (.code.tolk)
-```
+<Files>
+  <Folder name="acton-project" defaultOpen>
+    <File name="Acton.toml" description="Project manifest — edit directly" />
+    <File name=".env" description="Local secrets — not committed" />
+    <Folder name=".acton" description="Acton-managed internal state and Tolk libraries" />
+    <Folder name="contracts" description="Tolk source files" />
+    <Folder name="wrappers" description="Generated Tolk wrappers (.gen.tolk)" />
+    <Folder name="tests" description="Test files (.test.tolk)" />
+    <Folder name="scripts" description="Deployment and utility Tolk scripts" />
+    <Folder name="build" description="Compiled output (.boc, .fif)" />
+    <Folder name="gen" description="Generated dependency helpers (.code.tolk)" />
+  </Folder>
+</Files>
 
 ### dApp project layout
 
 Pass `--app` to `acton new` to add a React + Vite frontend. The dApp layout nests contract files under `contracts/` subdirectories and creates `app/` and `wrappers-ts/`:
 
-```files
-acton-project/
-├── Acton.toml
-├── .env
-├── .acton/
-├── app/             — React + Vite frontend
-├── wrappers-ts/     — Generated TypeScript wrappers
-├── contracts/
-│   ├── src/         — Tolk source files
-│   ├── wrappers/    — Generated Tolk wrappers
-│   ├── tests/       — Test files
-│   └── scripts/     — Deployment and utility Tolk scripts
-├── build/
-└── gen/
-```
+<Files>
+  <Folder name="acton-project" defaultOpen>
+    <File name="Acton.toml" />
+    <File name=".env" />
+    <Folder name=".acton" />
+    <Folder name="app" description="React + Vite frontend" />
+    <Folder name="wrappers-ts" description="Generated TypeScript wrappers" />
+    <Folder name="contracts" defaultOpen>
+      <Folder name="src" description="Tolk source files" />
+      <Folder name="wrappers" description="Generated Tolk wrappers" />
+      <Folder name="tests" description="Test files" />
+      <Folder name="scripts" description="Deployment and utility Tolk scripts" />
+    </Folder>
+    <Folder name="build" />
+    <Folder name="gen" />
+  </Folder>
+</Files>
 
 <Callout type="warn">
     Node.js, `npm`, and `npx` must be available in the `PATH`.

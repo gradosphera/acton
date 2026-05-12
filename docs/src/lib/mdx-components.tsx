@@ -1,5 +1,4 @@
 import defaultMdxComponents from "fumadocs-ui/mdx"
-import {File, Folder, Files} from "fumadocs-ui/components/files"
 import {Cards, Card} from "fumadocs-ui/components/card"
 import * as Twoslash from "fumadocs-twoslash/ui"
 import type {MDXComponents} from "mdx/types"
@@ -10,6 +9,7 @@ import {
   CommandOptionTitle,
 } from "@/components/CommandOptions"
 import {Callout} from "@/components/Callout"
+import {File, Files, Folder} from "@/components/Files"
 import {ImageZoom} from "@/components/image-zoom"
 
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
