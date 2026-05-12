@@ -73,12 +73,12 @@ export function createWalletKit(baseUrl: string): TonWalletKit {
     networks: {
       [Network.mainnet().chainId]: {
         apiClient: {
-          url: baseUrl,
+          url: "http://localhost:5411/",
         },
       },
       [Network.testnet().chainId]: {
         apiClient: {
-          url: baseUrl,
+          url: "http://localhost:5411/",
         },
       },
     },
