@@ -493,7 +493,6 @@ fn process_assert_failure(
         return;
     }
 
-    let mut printed_location = false;
     if let Some(message) = &failure.message() {
         if message.is_empty() {
             println!("    {}", "└─".dimmed());
@@ -511,25 +510,8 @@ fn process_assert_failure(
                 "Error:".bright_red(),
                 first_line
             );
-            let location = failure.location();
-            let print_location_in_details = location.is_some() && !detail_lines.is_empty();
-            for (idx, line) in detail_lines.iter().enumerate() {
-                let has_following_location =
-                    print_location_in_details && idx + 1 == detail_lines.len();
-                println!(
-                    "        {}",
-                    format_assert_message_line(line, has_following_location)
-                );
-            }
-            if let Some(location) = location
-                && print_location_in_details
-            {
-                println!(
-                    "        {} at {}",
-                    "└─".dimmed(),
-                    location.format().dimmed()
-                );
-                printed_location = true;
+            for line in detail_lines {
+                println!("        {line}");
             }
         }
     } else {
@@ -651,7 +633,7 @@ fn process_assert_failure(
     }
 
     let backtrace = assertion_backtrace_lines(test, result);
-    if !printed_location && let Some(location) = &failure.location() {
+    if let Some(location) = &failure.location() {
         let branch = if backtrace.is_empty() {
             "└─"
         } else {
@@ -670,38 +652,6 @@ fn process_assert_failure(
             println!("            {line}");
         }
     }
-}
-
-fn format_assert_message_line(line: &str, has_following_location: bool) -> String {
-    let Some((mut branch, rest)) = line
-        .strip_prefix("├─ ")
-        .map(|rest| ("├─", rest))
-        .or_else(|| line.strip_prefix("└─ ").map(|rest| ("└─", rest)))
-    else {
-        return line.to_string();
-    };
-
-    if has_following_location && branch == "└─" {
-        branch = "├─";
-    }
-
-    format!("{} {}", branch.dimmed(), format_assert_detail(rest))
-}
-
-fn format_assert_detail(detail: &str) -> String {
-    if let Some(value) = detail.strip_prefix("Status: ") {
-        return format!("{} {}", "Status:".dimmed(), value.yellow());
-    }
-
-    if let Some(value) = detail.strip_prefix("Reason: ") {
-        return format!("{} {}", "Reason:".dimmed(), value.yellow());
-    }
-
-    if let Some(value) = detail.strip_prefix("exit_code=") {
-        return format_exit_code_value(value);
-    }
-
-    detail.to_string()
 }
 
 fn format_exit_code_detail(exit_code: i32) -> String {
