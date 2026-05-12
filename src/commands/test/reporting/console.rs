@@ -515,7 +515,7 @@ fn process_assert_failure(
                 first_line
             );
             for line in detail_lines {
-                println!("        {line}");
+                println!("{line}");
             }
         }
     } else {
@@ -636,7 +636,17 @@ fn process_assert_failure(
         }
     }
 
-    let backtrace = assertion_backtrace_lines(test, result);
+    let suppress_backtrace = matches!(
+        failure,
+        AssertFailure::TransactionNotFound(_)
+            | AssertFailure::TransactionIsFound(_)
+            | AssertFailure::ExternalMessageNotFound(_)
+    );
+    let backtrace = if suppress_backtrace {
+        Vec::new()
+    } else {
+        assertion_backtrace_lines(test, result)
+    };
     if let Some(location) = &failure.location() {
         let branch = if backtrace.is_empty() {
             "└─"
