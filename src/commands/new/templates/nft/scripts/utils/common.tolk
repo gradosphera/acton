@@ -11,7 +11,6 @@ import "@wrappers/NftCollection.gen"
 import "@wrappers/NftItem.gen"
 
 const ONCHAIN_CONTENT_PREFIX = 0x00
-const SNAKE_PREFIX = 0x00
 
 const NFT_DEFAULT_COLLECTION_NAME = "SomeNFT"
 const NFT_DEFAULT_COLLECTION_DESCRIPTION = "Some NFT collection"
@@ -39,11 +38,7 @@ fun buildOnchainMetadata(info: NftCollectionInfo): cell {
 }
 
 fun promptNftWallet(envName: string, message: string): ActonWallet {
-    val nameFromEnv = env<string>(envName);
-    if (nameFromEnv != null) {
-        return scripts.wallet(nameFromEnv);
-    }
-    return scripts.wallet(promptWallet(message));
+    return scripts.wallet(env<string>(envName) ?? promptWallet(message));
 }
 
 fun promptNftAddress(message: string, default: address? = null): address {
