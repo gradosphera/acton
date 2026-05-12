@@ -1,6 +1,6 @@
 Mutation Testing
 ────────────────────────────────────────────────────────────
-Session:  a2f03e[BOC_HEX]
+Session:  [MUTATION_SESSION_ID]
 Contract: leaf
 Source:   contracts/leaf.tolk
 IDs:      2
