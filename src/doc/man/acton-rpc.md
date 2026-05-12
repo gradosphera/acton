@@ -1,21 +1,24 @@
 # acton-rpc(1)
 
-## NAME
+## Name
 
-acton-rpc --- Inspect remote account state and decode contract storage
+acton-rpc --- Inspect remote chain and account state
 
-## SYNOPSIS
+## Synopsis
 
 `acton rpc` [_options_] _command_
 
-## DESCRIPTION
+## Description
 
 Query blockchain account state through a configured network endpoint.
 
 `acton rpc` is intended for fast inspection workflows when you want to:
 
+- fetch the latest masterchain block number for a network
+- inspect the latest masterchain block object returned by TonCenter
 - check whether an account is active, frozen, or uninitialized
 - inspect balance, last transaction metadata, and state hashes
+- render a TonCenter v3 trace as a decoded transaction tree
 - match deployed code against a local Acton project by `code_hash`
 - decode account storage through local ABI metadata when a match is found
 
@@ -25,7 +28,7 @@ When Acton can resolve a local project and finds a contract with the same
 compiled `code_hash`, it also prints the matched contract name and decodes the
 account storage using the local compiler ABI.
 
-## SUBCOMMANDS
+## Subcommands
 
 ### acton rpc info
 
@@ -52,10 +55,6 @@ Supported values include `mainnet`, `testnet`, `localnet`, and
 `custom:<name>`.
 {{/option}}
 
-{{#option "`--api-key` _key_" }}
-TonCenter API key for blockchain queries.
-{{/option}}
-
 {{/options}}
 
 #### Output
@@ -72,24 +71,152 @@ TonCenter API key for blockchain queries.
 If no local ABI match is found, Acton still prints the raw remote account
 information and reports that decoded storage is unavailable.
 
-## DISPLAY OPTIONS
+### acton rpc block
+
+Print the latest masterchain block info returned by TonCenter.
+
+#### Synopsis
+
+`acton rpc block` [_options_]
+
+#### Options
+
+{{#options}}
+
+{{#option "`--net` _network_" }}
+Network to query.
+
+Defaults to `testnet`.
+
+Supported values include `mainnet`, `testnet`, `localnet`, and
+`custom:<name>`.
+{{/option}}
+
+{{/options}}
+
+#### Output
+
+`acton rpc block` prints the full TonCenter `getMasterchainInfo` JSON response
+for the selected network.
+
+### acton rpc block-number
+
+Print the latest masterchain block number for a network.
+
+#### Synopsis
+
+`acton rpc block-number` [_options_]
+
+#### Options
+
+{{#options}}
+
+{{#option "`--net` _network_" }}
+Network to query.
+
+Defaults to `testnet`.
+
+Supported values include `mainnet`, `testnet`, `localnet`, and
+`custom:<name>`.
+{{/option}}
+
+{{/options}}
+
+#### Output
+
+`acton rpc block-number` prints only the latest masterchain block `seqno` as a
+decimal number.
+
+### acton rpc trace
+
+Fetch a TonCenter v3 trace by root transaction hash and render it in a stable
+text format.
+
+#### Synopsis
+
+`acton rpc trace` [_options_] _hash_
+
+#### Options
+
+{{#options}}
+
+{{#option "_hash_" }}
+Root transaction hash to query through TonCenter v3 `/traces`.
+{{/option}}
+
+{{#option "`--net` _network_" }}
+Network to query.
+
+Defaults to `testnet`.
+
+Supported values include `mainnet`, `testnet`, `localnet`, and
+`custom:<name>`.
+{{/option}}
+
+{{#option "`--summary`" }}
+Print only the trace summary.
+{{/option}}
+
+{{#option "`--tree`" }}
+Print the trace summary and transaction tree. This is the default mode.
+{{/option}}
+
+{{#option "`--verbose`" }}
+Print the summary, tree, and stable per-transaction fields.
+{{/option}}
+
+{{#option "`--show-bodies`" }}
+Print decoded message bodies in the transaction tree.
+{{/option}}
+
+{{/options}}
+
+#### Output
+
+`acton rpc trace` prints a short summary first:
+
+- query hash
+- trace id
+- root transaction hash
+- whether the trace is complete
+- total transaction and message counts
+
+Tree and verbose modes then reuse the same transaction tree formatter as Acton
+tests. When current account code matches a local contract in the project,
+Acton prints local contract names through the local ABI. Add `--show-bodies`
+to print decoded inbound message bodies.
+
+## Display Options
 
 {{> options-display }}
 
-## PROJECT OPTIONS
+## Project Options
 
 {{> options-project-pass-through }}
 
-## NETWORK RESOLUTION
+## Network Resolution
 
 - `mainnet` and `testnet` use the built-in TonCenter endpoints
-- `localnet` uses the configured local LiteNode or its default URL
+- `localnet` uses the configured localnet or its default URL
 - `custom:<name>` resolves through `[networks.<name>]` in `Acton.toml`
 
 For `custom:<name>`, Acton needs access to the selected project or manifest so
 it can read the custom network configuration.
 
-## ABI MATCHING
+## TonCenter API Keys
+
+Built-in `mainnet`/`testnet` requests read `TONCENTER_MAINNET_API_KEY` or
+`TONCENTER_TESTNET_API_KEY`, depending on the selected network.
+
+For `custom:<name>`, Acton reads `<NORMALIZED_NAME>_API_KEY`. Custom network
+names are uppercased and non-alphanumeric characters are replaced with `_`, so
+`custom:mock` becomes `MOCK_API_KEY`.
+
+Acton loads `.env` automatically, so the simplest setup during project work is
+usually to keep these keys there and use shell environment variables only for
+one-off overrides or CI.
+
+## ABI Matching
 
 Storage decoding is best-effort and depends on local project context.
 
@@ -103,13 +230,13 @@ Acton attempts to:
 This means decoding is robust for contracts you control in the current Acton
 project, but not guaranteed for arbitrary third-party deployments.
 
-## EXIT STATUS
+## Exit Status
 
 - `0`: The selected RPC query completed successfully.
 - `1`: The address was invalid, the network could not be resolved, the remote
   request failed, or local ABI decoding encountered an unrecoverable error.
 
-## EXAMPLES
+## Examples
 
 1. Inspect a testnet account quickly:
 
@@ -117,10 +244,10 @@ project, but not guaranteed for arbitrary third-party deployments.
    acton rpc info EQC...
    ```
 
-2. Inspect a mainnet account with an API key:
+2. Inspect a mainnet account with an API key from the environment:
 
    ```bash
-   acton rpc info EQC... --net mainnet --api-key $TONCENTER_API_KEY
+   TONCENTER_MAINNET_API_KEY=your-key acton rpc info EQC... --net mainnet
    ```
 
 3. Inspect a localnet deployment and decode storage with the current project:
@@ -135,9 +262,27 @@ project, but not guaranteed for arbitrary third-party deployments.
    acton --manifest-path ../incident/Acton.toml rpc info EQC... --net custom:staging
    ```
 
-## SEE ALSO
+5. Print the latest mainnet masterchain block JSON:
+
+   ```bash
+   acton rpc block --net mainnet
+   ```
+
+6. Print the latest mainnet masterchain block number:
+
+   ```bash
+   acton rpc block-number --net mainnet
+   ```
+
+7. Print a transaction trace from localnet:
+
+   ```bash
+   acton rpc trace <tx-hash> --net localnet
+   ```
+
+## See Also
 
 - `acton help disasm`
 - `acton help retrace`
 - `acton help script`
-- [Command reference](https://ton-blockchain.github.io/acton/docs/commands)
+- [Command reference](https://ton-blockchain.github.io/acton/docs/commands/rpc)

@@ -18,13 +18,14 @@ use tolk_ty::InferenceResult;
 /// Named constants make intent explicit and reduce mistakes.
 ///
 /// ### Example
-/// ```tolk
+/// ```tolk twoslash
 /// outMsg.send(3);
+/// //          ^ E012: send mode should use SEND_MODE_* constants
 /// ```
 ///
 /// Use instead:
 /// ```tolk
-/// outMsg.send(SEND_MODE_PAY_FEES_SEPARATELY + SEND_MODE_IGNORE_ERRORS);
+/// outMsg.send(SEND_MODE_PAY_FEES_SEPARATELY | SEND_MODE_IGNORE_ERRORS);
 /// ```
 #[derive(ViolationMetadata)]
 #[violation_metadata(stable_since = "v0.0.1")]

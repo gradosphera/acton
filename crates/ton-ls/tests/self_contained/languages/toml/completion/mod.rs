@@ -19,12 +19,13 @@ fn test_completion_root_keys() {
             2: label=fmt kind=Field detail=object format=snippet
             3: label=import-mappings kind=Field detail=object format=snippet
             4: label=lint kind=Field detail=object format=snippet
-            5: label=litenode kind=Field detail=object format=snippet
+            5: label=localnet kind=Field detail=object format=snippet
             6: label=networks kind=Field detail=object format=snippet
             7: label=package kind=Field detail=Required, object format=snippet
             8: label=scripts kind=Field detail=object format=snippet
             9: label=test kind=Field detail=object format=snippet
-            10: label=wrappers kind=Field detail=object format=snippet"#]],
+            10: label=toolchain kind=Field detail=object format=snippet
+            11: label=wrappers kind=Field detail=object format=snippet"#]],
     );
 }
 
@@ -42,12 +43,13 @@ fn test_completion_table_header_keys() {
             2: label=fmt kind=Field detail=object format=plain
             3: label=import-mappings kind=Field detail=object format=plain
             4: label=lint kind=Field detail=object format=plain
-            5: label=litenode kind=Field detail=object format=plain
+            5: label=localnet kind=Field detail=object format=plain
             6: label=networks kind=Field detail=object format=plain
             7: label=package kind=Field detail=Required, object format=plain
             8: label=scripts kind=Field detail=object format=plain
             9: label=test kind=Field detail=object format=plain
-            10: label=wrappers kind=Field detail=object format=plain"#]],
+            10: label=toolchain kind=Field detail=object format=plain
+            11: label=wrappers kind=Field detail=object format=plain"#]],
     );
 }
 
@@ -98,12 +100,13 @@ fn test_completion_filters_existing_root_keys() {
             2: label=fmt kind=Field detail=object format=snippet
             3: label=import-mappings kind=Field detail=object format=snippet
             4: label=lint kind=Field detail=object format=snippet
-            5: label=litenode kind=Field detail=object format=snippet
+            5: label=localnet kind=Field detail=object format=snippet
             6: label=networks kind=Field detail=object format=snippet
             7: label=package kind=Field detail=Required, object format=snippet
             8: label=scripts kind=Field detail=object format=snippet
             9: label=test kind=Field detail=object format=snippet
-            10: label=wrappers kind=Field detail=object format=snippet"#]],
+            10: label=toolchain kind=Field detail=object format=snippet
+            11: label=wrappers kind=Field detail=object format=snippet"#]],
     );
 }
 
@@ -153,12 +156,13 @@ fn test_completion_lint_output_format_enum_values() {
             2: label=fmt kind=Field detail=object format=snippet
             3: label=import-mappings kind=Field detail=object format=snippet
             4: label=lint kind=Field detail=object format=snippet
-            5: label=litenode kind=Field detail=object format=snippet
+            5: label=localnet kind=Field detail=object format=snippet
             6: label=networks kind=Field detail=object format=snippet
             7: label=package kind=Field detail=Required, object format=snippet
             8: label=scripts kind=Field detail=object format=snippet
             9: label=test kind=Field detail=object format=snippet
-            10: label=wrappers kind=Field detail=object format=snippet"#]],
+            10: label=toolchain kind=Field detail=object format=snippet
+            11: label=wrappers kind=Field detail=object format=snippet"#]],
     );
 }
 
@@ -191,11 +195,12 @@ fn test_apply_completion_root_string_key() {
             "fmt",
             "import-mappings",
             "lint",
-            "litenode",
+            "localnet",
             "networks",
             "package",
             "scripts",
             "test",
+            "toolchain",
             "wrappers",
         ],
         0,
@@ -220,11 +225,12 @@ fn test_apply_completion_root_object_table() {
             "fmt",
             "import-mappings",
             "lint",
-            "litenode",
+            "localnet",
             "networks",
             "package",
             "scripts",
             "test",
+            "toolchain",
             "wrappers",
         ],
         7,
@@ -249,11 +255,12 @@ fn test_apply_completion_table_header_name_only() {
             "fmt",
             "import-mappings",
             "lint",
-            "litenode",
+            "localnet",
             "networks",
             "package",
             "scripts",
             "test",
+            "toolchain",
             "wrappers",
         ],
         0,
@@ -277,11 +284,12 @@ fn test_apply_completion_table_header_partial_replace() {
             "fmt",
             "import-mappings",
             "lint",
-            "litenode",
+            "localnet",
             "networks",
             "package",
             "scripts",
             "test",
+            "toolchain",
             "wrappers",
         ],
         7,

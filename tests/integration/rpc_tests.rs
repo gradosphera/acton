@@ -10,11 +10,118 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::{thread, vec};
 use tycho_types::boc::Boc;
-use tycho_types::cell::CellBuilder;
+use tycho_types::cell::{Cell, CellBuilder, CellFamily, Store};
+use tycho_types::models::message::IntAddr;
 
 const RAW_INFO_ADDRESS: &str = "0:1111111111111111111111111111111111111111111111111111111111111111";
 const MATCHED_INFO_ADDRESS: &str =
     "0:2222222222222222222222222222222222222222222222222222222222222222";
+const MATCHED_INFO_OWNER_ADDRESS: &str =
+    "0:3333333333333333333333333333333333333333333333333333333333333333";
+const TRACE_ROOT_HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const TRACE_CHILD_HASH: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const TRACE_RETURN_HASH: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+const TRACE_COUNTER_TYPES: &str = r"
+enum Errors {
+    NotOwner = 100
+    CounterUnderflow = 0x1001
+    InvalidMessage = 0xFFFF
+}
+
+struct Storage {
+    id: uint32
+    owner: address
+    counter: uint32
+}
+
+fun Storage.load(): Storage {
+    return Storage.fromCell(contract.getData());
+}
+
+fun Storage.save(self) {
+    contract.setData(self.toCell());
+}
+
+struct (0x7e8764ef) IncreaseCounter {
+    increaseBy: uint32
+}
+
+struct (0x283b4c3f) DecreaseCounter {
+    decreaseBy: uint32
+}
+
+struct (0x3a752f06) ResetCounter {}
+
+struct (0xd53276db) ReturnExcessesBack {
+    queryId: uint64
+}
+";
+const TRACE_COUNTER_CONTRACT: &str = r#"
+import "types"
+
+contract Counter {
+    storage: Storage
+    incomingMessages: AllowedMessage
+}
+
+type AllowedMessage =
+    | IncreaseCounter
+    | DecreaseCounter
+    | ResetCounter
+
+fun onInternalMessage(in: InMessage) {
+    val msg = lazy AllowedMessage.fromSlice(in.body);
+
+    match (msg) {
+        IncreaseCounter => {
+            var storage = lazy Storage.load();
+            assert (storage.owner == in.senderAddress) throw Errors.NotOwner;
+
+            storage.counter += msg.increaseBy;
+            storage.save();
+
+            val _sampleExcessesMsg = createMessage({
+                bounce: BounceMode.NoBounce,
+                dest: in.senderAddress,
+                value: 0,
+                body: ReturnExcessesBack { queryId: 7 },
+            });
+        }
+        DecreaseCounter => {
+            var storage = lazy Storage.load();
+            assert (storage.owner == in.senderAddress) throw Errors.NotOwner;
+            assert (storage.counter >= msg.decreaseBy) throw Errors.CounterUnderflow;
+
+            storage.counter -= msg.decreaseBy;
+            storage.save();
+        }
+        ResetCounter => {
+            var storage = lazy Storage.load();
+            assert (storage.owner == in.senderAddress) throw Errors.NotOwner;
+
+            storage.counter = 0;
+            storage.save();
+        }
+        else => {
+            assert (in.body.isEmpty()) throw Errors.InvalidMessage;
+        }
+    }
+}
+
+fun onBouncedMessage(_in: InMessageBounced) {}
+
+get fun currentCounter(): int {
+    val storage = lazy Storage.load();
+
+    return storage.counter;
+}
+
+get fun owner(): address {
+    val storage = lazy Storage.load();
+
+    return storage.owner;
+}
+"#;
 const DEPLOYER_WALLET_CONFIG: &str = r#"[wallets.deployer]
 kind = "v4r2"
 workchain = 0
@@ -22,22 +129,25 @@ keys = { mnemonic = "cupboard match uphold miracle fog balance unknown region sh
 "#;
 const PRINT_DEPLOYER_ADDRESS_SCRIPT: &str = r#"
 import "../../lib/emulation/network"
+import "../../lib/emulation/scripts"
 import "../../lib/io"
 
 fun main() {
-    val wallet = net.wallet("deployer");
+    val wallet = scripts.wallet("deployer");
     println("DEPLOYER_ADDRESS={}", wallet.address);
 }
 "#;
 const DEPLOY_COUNTER_SCRIPT: &str = r#"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/scripts"
 import "../../lib/io"
 
 fun main() {
-    val wallet = net.wallet("deployer");
+    val wallet = scripts.wallet("deployer");
     val counterData = beginCell()
         .storeUint(7, 32)
+        .storeAddress(wallet.address)
         .storeUint(42, 32)
         .endCell();
 
@@ -87,8 +197,7 @@ fn test_rpc_info_prints_remote_account_without_local_abi_match() {
         .arg(RAW_INFO_ADDRESS)
         .arg("--net")
         .arg("custom:mock")
-        .arg("--api-key")
-        .arg("test-api-key")
+        .env("MOCK_API_KEY", "custom-mock-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run();
 
@@ -112,8 +221,8 @@ fn test_rpc_info_prints_remote_account_without_local_abi_match() {
     );
     assert_eq!(
         header_value(&captured[0].headers, "X-API-Key"),
-        Some("test-api-key"),
-        "rpc info should forward the provided API key",
+        Some("custom-mock-api-key"),
+        "rpc info should send TonCenter API keys for custom networks from MOCK_API_KEY",
     );
 }
 
@@ -151,7 +260,7 @@ fn test_rpc_info_decodes_storage_when_local_code_hash_matches() {
         spawn_toncenter_v2_mock(vec![toncenter_v2_account_info_ok_response(
             1_234_000_000,
             code_boc64,
-            &counter_storage_boc64(7, 42),
+            &counter_storage_boc64(7, MATCHED_INFO_OWNER_ADDRESS, 42),
             "active",
             "",
             "999",
@@ -167,8 +276,6 @@ fn test_rpc_info_decodes_storage_when_local_code_hash_matches() {
         .arg(MATCHED_INFO_ADDRESS)
         .arg("--net")
         .arg("custom:mock")
-        .arg("--api-key")
-        .arg("test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run()
         .success()
@@ -214,7 +321,7 @@ fn test_rpc_info_skips_broken_contract_candidates_and_matches_later_contract() {
         spawn_toncenter_v2_mock(vec![toncenter_v2_account_info_ok_response(
             1_234_000_000,
             code_boc64,
-            &counter_storage_boc64(7, 42),
+            &counter_storage_boc64(7, MATCHED_INFO_OWNER_ADDRESS, 42),
             "active",
             "",
             "999",
@@ -230,8 +337,6 @@ fn test_rpc_info_skips_broken_contract_candidates_and_matches_later_contract() {
         .arg(MATCHED_INFO_ADDRESS)
         .arg("--net")
         .arg("custom:mock")
-        .arg("--api-key")
-        .arg("test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run()
         .success()
@@ -285,21 +390,19 @@ fn test_rpc_info_rejects_invalid_address() {
 }
 
 #[test]
-fn test_rpc_info_reads_wallet_account_from_litenode() {
-    let project = ProjectBuilder::new("rpc-info-litenode-wallet")
+fn test_rpc_info_reads_wallet_account_from_localnet() {
+    let project = ProjectBuilder::new("rpc-info-localnet-wallet")
         .script_file("print_deployer_address", PRINT_DEPLOYER_ADDRESS_SCRIPT)
         .build();
     write_deployer_wallets(project.path());
 
-    let node = start_litenode_with_localnet(&project);
+    let node = start_localnet_with_localnet(&project);
     let log_dir = prepare_log_dir(project.path());
 
     let script_output = project
         .acton()
         .script("scripts/print_deployer_address.tolk")
         .verify_network("localnet")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run();
     let script_stdout = stdout(&script_output);
@@ -315,22 +418,20 @@ fn test_rpc_info_reads_wallet_account_from_litenode() {
         .arg(&deployer_address)
         .arg("--net")
         .arg("localnet")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run()
         .success();
-    assert_litenode_rpc_snapshot(
+    assert_localnet_rpc_snapshot(
         &output,
-        "integration/snapshots/rpc/test_rpc_info_litenode_wallet.stdout.txt",
+        "integration/snapshots/rpc/test_rpc_info_localnet_wallet.stdout.txt",
     );
 
     node.stop();
 }
 
 #[test]
-fn test_rpc_info_decodes_storage_from_litenode() {
-    let project = ProjectBuilder::new("rpc-info-litenode-storage")
+fn test_rpc_info_decodes_storage_from_localnet() {
+    let project = ProjectBuilder::new("rpc-info-localnet-storage")
         .file_from_path(
             "contracts/types",
             "src/commands/new/templates/counter/contracts/types.tolk",
@@ -344,7 +445,7 @@ fn test_rpc_info_decodes_storage_from_litenode() {
     write_deployer_wallets(project.path());
 
     let node = project
-        .litenode()
+        .localnet()
         .before_start(ActonCommand::build)
         .args(["--accounts", "deployer"])
         .start();
@@ -355,8 +456,6 @@ fn test_rpc_info_decodes_storage_from_litenode() {
         .acton()
         .script("scripts/deploy_counter.tolk")
         .verify_network("localnet")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run();
     let deploy_stdout = stdout(&deploy_output);
@@ -373,17 +472,262 @@ fn test_rpc_info_decodes_storage_from_litenode() {
         .arg(&counter_address)
         .arg("--net")
         .arg("localnet")
-        .arg("--api-key")
-        .arg("local-test-api-key")
         .env("ACTON_LOG_DIR", &log_dir)
         .run()
         .success();
-    assert_litenode_rpc_snapshot(
+    assert_localnet_rpc_snapshot(
         &output,
-        "integration/snapshots/rpc/test_rpc_info_litenode_storage.stdout.txt",
+        "integration/snapshots/rpc/test_rpc_info_localnet_storage.stdout.txt",
     );
 
     node.stop();
+}
+
+#[allow(clippy::significant_drop_tightening)]
+#[test]
+fn test_rpc_block_prints_full_toncenter_masterchain_info() {
+    let project = ProjectBuilder::new("rpc-block-custom-network").build();
+    let log_dir = prepare_log_dir(project.path());
+    let (mock_url, mock_handle, captured) =
+        spawn_toncenter_v2_mock(vec![toncenter_v2_masterchain_info_ok_response(123_456)]);
+    write_custom_network_config(project.path(), "mock", &mock_url);
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("rpc")
+        .arg("block")
+        .arg("--net")
+        .arg("custom:mock")
+        .env("MOCK_API_KEY", "custom-mock-api-key")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/rpc/test_rpc_block_custom_network.stdout.txt",
+        );
+
+    mock_handle.join().expect("mock server thread must finish");
+
+    let captured = captured
+        .lock()
+        .expect("captured requests mutex should not be poisoned");
+    assert_eq!(captured.len(), 1, "expected exactly one TonCenter request");
+    assert_eq!(captured[0].method, "GET");
+    assert_eq!(
+        captured[0].path, "/api/v2/getMasterchainInfo",
+        "unexpected request path"
+    );
+    assert_eq!(
+        header_value(&captured[0].headers, "X-API-Key"),
+        Some("custom-mock-api-key"),
+        "rpc block should send TonCenter API keys for custom networks from MOCK_API_KEY",
+    );
+}
+
+#[allow(clippy::significant_drop_tightening)]
+#[test]
+fn test_rpc_block_number_uses_custom_network_and_api_key() {
+    let project = ProjectBuilder::new("rpc-block-number-custom-network").build();
+    let log_dir = prepare_log_dir(project.path());
+    let (mock_url, mock_handle, captured) =
+        spawn_toncenter_v2_mock(vec![toncenter_v2_masterchain_info_ok_response(123_456)]);
+    write_custom_network_config(project.path(), "mock", &mock_url);
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("rpc")
+        .arg("block-number")
+        .arg("--net")
+        .arg("custom:mock")
+        .env("MOCK_API_KEY", "custom-mock-api-key")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/rpc/test_rpc_block_number_custom_network.stdout.txt",
+        );
+
+    mock_handle.join().expect("mock server thread must finish");
+
+    let captured = captured
+        .lock()
+        .expect("captured requests mutex should not be poisoned");
+    assert_eq!(captured.len(), 1, "expected exactly one TonCenter request");
+    assert_eq!(captured[0].method, "GET");
+    assert_eq!(
+        captured[0].path, "/api/v2/getMasterchainInfo",
+        "unexpected request path"
+    );
+    assert_eq!(
+        header_value(&captured[0].headers, "X-API-Key"),
+        Some("custom-mock-api-key"),
+        "rpc block-number should send TonCenter API keys for custom networks from MOCK_API_KEY",
+    );
+}
+
+#[allow(clippy::significant_drop_tightening)]
+#[test]
+fn test_rpc_trace_uses_v3_traces_and_formatter_context() {
+    let project = ProjectBuilder::new("rpc-trace-v3-tree")
+        .file("contracts/types", TRACE_COUNTER_TYPES)
+        .contract("counter", TRACE_COUNTER_CONTRACT)
+        .build();
+    let log_dir = prepare_log_dir(project.path());
+
+    project
+        .acton()
+        .build()
+        .contract("counter")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run()
+        .success();
+
+    let artifact_path = project.path().join("build/counter.json");
+    let artifact = fs::read_to_string(&artifact_path).expect("build artifact must exist");
+    let artifact: JsonValue =
+        serde_json::from_str(&artifact).expect("build artifact must be valid json");
+    let code_boc64 = artifact["code_boc64"]
+        .as_str()
+        .expect("build artifact must contain code_boc64");
+
+    let (mock_url, mock_handle, captured) = spawn_toncenter_v2_mock(vec![
+        toncenter_v3_trace_ok_response(
+            MATCHED_INFO_ADDRESS,
+            MATCHED_INFO_OWNER_ADDRESS,
+            &counter_increase_body_boc64(5),
+        ),
+        toncenter_v3_account_states_ok_response(
+            MATCHED_INFO_ADDRESS,
+            MATCHED_INFO_OWNER_ADDRESS,
+            code_boc64,
+        ),
+        toncenter_v3_trace_ok_response(
+            MATCHED_INFO_ADDRESS,
+            MATCHED_INFO_OWNER_ADDRESS,
+            &counter_increase_body_boc64(5),
+        ),
+        toncenter_v3_account_states_ok_response(
+            MATCHED_INFO_ADDRESS,
+            MATCHED_INFO_OWNER_ADDRESS,
+            code_boc64,
+        ),
+    ]);
+    write_custom_network_config_with_v3(project.path(), "mock", &mock_url);
+
+    let output = project
+        .acton()
+        .current_dir(project.path())
+        .arg("--color")
+        .arg("never")
+        .arg("rpc")
+        .arg("trace")
+        .arg(TRACE_ROOT_HASH)
+        .arg("--net")
+        .arg("custom:mock")
+        .env("MOCK_API_KEY", "custom-mock-api-key")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run();
+
+    output
+        .success()
+        .assert_snapshot_matches("integration/snapshots/rpc/test_rpc_trace_v3_tree.stdout.txt");
+
+    let output = project
+        .acton()
+        .current_dir(project.path())
+        .arg("--color")
+        .arg("never")
+        .arg("rpc")
+        .arg("trace")
+        .arg(TRACE_ROOT_HASH)
+        .arg("--net")
+        .arg("custom:mock")
+        .arg("--show-bodies")
+        .env("MOCK_API_KEY", "custom-mock-api-key")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run();
+
+    output.success().assert_snapshot_matches(
+        "integration/snapshots/rpc/test_rpc_trace_v3_tree_show_bodies.stdout.txt",
+    );
+
+    mock_handle.join().expect("mock server thread must finish");
+
+    let captured = captured
+        .lock()
+        .expect("captured requests mutex should not be poisoned");
+    assert_eq!(
+        captured.len(),
+        4,
+        "expected exactly four TonCenter requests"
+    );
+    for request_idx in [0, 2] {
+        assert_eq!(captured[request_idx].method, "GET");
+        assert_eq!(
+            captured[request_idx].path,
+            format!("/api/v3/traces?tx_hash={TRACE_ROOT_HASH}&limit=1"),
+            "unexpected trace request path"
+        );
+        assert_eq!(
+            header_value(&captured[request_idx].headers, "X-API-Key"),
+            Some("custom-mock-api-key"),
+            "rpc trace should send TonCenter API keys for custom networks from MOCK_API_KEY",
+        );
+    }
+    for request_idx in [1, 3] {
+        assert_eq!(captured[request_idx].method, "GET");
+        assert!(
+            captured[request_idx]
+                .path
+                .starts_with("/api/v3/accountStates?"),
+            "unexpected accountStates request path: {}",
+            captured[request_idx].path
+        );
+    }
+}
+
+#[allow(clippy::significant_drop_tightening)]
+#[test]
+fn test_rpc_trace_formats_v3_trace_without_in_msg() {
+    let project = ProjectBuilder::new("rpc-trace-v3-missing-in-msg").build();
+    let log_dir = prepare_log_dir(project.path());
+    let (mock_url, mock_handle, captured) =
+        spawn_toncenter_v2_mock(vec![toncenter_v3_trace_without_in_msg_response(
+            MATCHED_INFO_ADDRESS,
+        )]);
+    write_custom_network_config_with_v3(project.path(), "mock", &mock_url);
+
+    project
+        .acton()
+        .current_dir(project.path())
+        .arg("--color")
+        .arg("never")
+        .arg("rpc")
+        .arg("trace")
+        .arg(TRACE_ROOT_HASH)
+        .arg("--net")
+        .arg("custom:mock")
+        .env("MOCK_API_KEY", "custom-mock-api-key")
+        .env("ACTON_LOG_DIR", &log_dir)
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/rpc/test_rpc_trace_without_in_msg.stdout.txt",
+        );
+
+    mock_handle.join().expect("mock server thread must finish");
+
+    let captured = captured
+        .lock()
+        .expect("captured requests mutex should not be poisoned");
+    assert_eq!(captured.len(), 1, "expected exactly one TonCenter request");
+    assert_eq!(
+        captured[0].path,
+        format!("/api/v3/traces?tx_hash={TRACE_ROOT_HASH}&limit=1"),
+        "unexpected trace request path"
+    );
 }
 
 #[derive(Debug, Clone)]
@@ -565,6 +909,205 @@ fn toncenter_v2_account_info_ok_response(
     }
 }
 
+fn toncenter_v2_masterchain_info_ok_response(seqno: u64) -> ToncenterV2MockResponse {
+    ToncenterV2MockResponse {
+        status: 200,
+        body: serde_json::json!({
+            "result": {
+                "last": {
+                    "@type": "ton.blockIdExt",
+                    "workchain": -1,
+                    "shard": "-9223372036854775808",
+                    "seqno": seqno,
+                    "root_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                    "file_hash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                }
+            }
+        })
+        .to_string(),
+    }
+}
+
+fn toncenter_v3_trace_ok_response(
+    counter_address: &str,
+    owner_address: &str,
+    body_boc64: &str,
+) -> ToncenterV2MockResponse {
+    ToncenterV2MockResponse {
+        status: 200,
+        body: serde_json::json!({
+            "traces": [{
+                "trace_id": TRACE_ROOT_HASH,
+                "transactions_order": [TRACE_ROOT_HASH, TRACE_CHILD_HASH, TRACE_RETURN_HASH],
+                "transactions": {
+                    TRACE_ROOT_HASH: {
+                        "account": counter_address,
+                        "hash": TRACE_ROOT_HASH,
+                        "lt": "100",
+                        "now": 1_700_000_000_u32,
+                        "orig_status": "active",
+                        "end_status": "active",
+                        "total_fees": "1200",
+                        "description": successful_v3_description(1),
+                        "in_msg": {
+                            "hash": "root-in-msg",
+                            "source": owner_address,
+                            "destination": counter_address,
+                            "value": "100000000",
+                            "bounce": true,
+                            "bounced": false,
+                            "message_content": {
+                                "body": body_boc64
+                            }
+                        },
+                        "out_msgs": [{
+                            "hash": "child-msg",
+                            "source": counter_address,
+                            "destination": owner_address,
+                            "value": "1",
+                            "bounce": false,
+                            "bounced": false
+                        }, {
+                            "hash": "return-msg",
+                            "source": counter_address,
+                            "destination": counter_address,
+                            "value": "2",
+                            "bounce": false,
+                            "bounced": false,
+                            "message_content": {
+                                "body": counter_return_excesses_body_boc64(7)
+                            }
+                        }]
+                    },
+                    TRACE_CHILD_HASH: {
+                        "account": owner_address,
+                        "hash": TRACE_CHILD_HASH,
+                        "lt": "101",
+                        "now": 1_700_000_001_u32,
+                        "orig_status": "active",
+                        "end_status": "active",
+                        "total_fees": "100",
+                        "description": successful_v3_description(0),
+                        "in_msg": {
+                            "hash": "child-msg",
+                            "source": counter_address,
+                            "destination": owner_address,
+                            "value": "1",
+                            "bounce": false,
+                            "bounced": false
+                        },
+                        "out_msgs": []
+                    },
+                    TRACE_RETURN_HASH: {
+                        "account": counter_address,
+                        "hash": TRACE_RETURN_HASH,
+                        "lt": "102",
+                        "now": 1_700_000_002_u32,
+                        "orig_status": "active",
+                        "end_status": "active",
+                        "total_fees": "100",
+                        "description": successful_v3_description(0),
+                        "in_msg": {
+                            "hash": "return-msg",
+                            "source": counter_address,
+                            "destination": counter_address,
+                            "value": "2",
+                            "bounce": false,
+                            "bounced": false,
+                            "message_content": {
+                                "body": counter_return_excesses_body_boc64(7)
+                            }
+                        },
+                        "out_msgs": []
+                    }
+                },
+                "is_incomplete": false
+            }]
+        })
+        .to_string(),
+    }
+}
+
+fn successful_v3_description(messages_created: u16) -> serde_json::Value {
+    serde_json::json!({
+        "type": "ord",
+        "aborted": false,
+        "destroyed": false,
+        "credit_first": false,
+        "compute_ph": {
+            "skipped": false,
+            "success": true,
+            "gas_fees": "1000",
+            "gas_used": "123",
+            "gas_limit": "1000",
+            "exit_code": 0,
+            "vm_steps": 5
+        },
+        "action": {
+            "success": true,
+            "valid": true,
+            "no_funds": false,
+            "result_code": 0,
+            "tot_actions": messages_created,
+            "msgs_created": messages_created
+        }
+    })
+}
+
+fn toncenter_v3_account_states_ok_response(
+    counter_address: &str,
+    owner_address: &str,
+    counter_code_boc64: &str,
+) -> ToncenterV2MockResponse {
+    ToncenterV2MockResponse {
+        status: 200,
+        body: serde_json::json!({
+            "accounts": [
+                {
+                    "address": counter_address,
+                    "balance": "1000000000",
+                    "code_boc": counter_code_boc64,
+                    "status": "active"
+                },
+                {
+                    "address": owner_address,
+                    "balance": "0",
+                    "code_boc": null,
+                    "status": "uninit"
+                }
+            ]
+        })
+        .to_string(),
+    }
+}
+
+fn toncenter_v3_trace_without_in_msg_response(account: &str) -> ToncenterV2MockResponse {
+    ToncenterV2MockResponse {
+        status: 200,
+        body: serde_json::json!({
+            "traces": [{
+                "trace_id": TRACE_ROOT_HASH,
+                "transactions_order": [TRACE_ROOT_HASH],
+                "transactions": {
+                    TRACE_ROOT_HASH: {
+                        "account": account,
+                        "hash": TRACE_ROOT_HASH,
+                        "lt": "100",
+                        "now": 1_700_000_000_u32,
+                        "orig_status": "active",
+                        "end_status": "active",
+                        "total_fees": "1200",
+                        "description": successful_v3_description(0),
+                        "out_msgs": []
+                    }
+                },
+                "is_incomplete": false
+            }]
+        })
+        .to_string(),
+    }
+}
+
 fn test_cell_boc64(value: u32) -> String {
     let mut builder = CellBuilder::new();
     builder.store_u32(value).expect("must store u32");
@@ -572,20 +1115,65 @@ fn test_cell_boc64(value: u32) -> String {
     Boc::encode_base64(&cell)
 }
 
-fn counter_storage_boc64(id: u32, counter: u32) -> String {
+fn counter_increase_body_boc64(increase_by: u32) -> String {
+    let mut builder = CellBuilder::new();
+    builder
+        .store_u32(0x7e87_64ef)
+        .expect("must store IncreaseCounter opcode");
+    builder
+        .store_u32(increase_by)
+        .expect("must store IncreaseCounter payload");
+    let cell = builder.build().expect("must build body cell");
+    Boc::encode_base64(&cell)
+}
+
+fn counter_return_excesses_body_boc64(query_id: u64) -> String {
+    let mut builder = CellBuilder::new();
+    builder
+        .store_u32(0xd532_76db)
+        .expect("must store ReturnExcessesBack opcode");
+    builder
+        .store_u64(query_id)
+        .expect("must store ReturnExcessesBack query_id");
+    let cell = builder.build().expect("must build body cell");
+    Boc::encode_base64(&cell)
+}
+
+fn counter_storage_boc64(id: u32, owner_address: &str, counter: u32) -> String {
+    let owner = owner_address
+        .parse::<IntAddr>()
+        .expect("owner address must parse");
     let mut builder = CellBuilder::new();
     builder.store_u32(id).expect("must store id");
+    owner
+        .store_into(&mut builder, Cell::empty_context())
+        .expect("must store owner");
     builder.store_u32(counter).expect("must store counter");
     let cell = builder.build().expect("must build storage cell");
     Boc::encode_base64(&cell)
 }
 
 fn write_custom_network_config(project_root: &Path, name: &str, url: &str) {
+    use std::fmt::Write as _;
+
     let config_path = project_root.join("Acton.toml");
     let mut config = fs::read_to_string(&config_path).expect("Acton.toml must exist");
-    config.push_str(&format!(
+    let _ = write!(
+        config,
         "\n[networks.{name}]\napi = {{ v2 = \"{url}/api/v2\" }}\n"
-    ));
+    );
+    fs::write(config_path, config).expect("failed to update Acton.toml");
+}
+
+fn write_custom_network_config_with_v3(project_root: &Path, name: &str, url: &str) {
+    use std::fmt::Write as _;
+
+    let config_path = project_root.join("Acton.toml");
+    let mut config = fs::read_to_string(&config_path).expect("Acton.toml must exist");
+    let _ = write!(
+        config,
+        "\n[networks.{name}]\napi = {{ v2 = \"{url}/api/v2\", v3 = \"{url}/api/v3\" }}\n"
+    );
     fs::write(config_path, config).expect("failed to update Acton.toml");
 }
 
@@ -594,23 +1182,26 @@ fn write_deployer_wallets(project_root: &Path) {
         .expect("failed to write wallets.toml");
 }
 
-fn start_litenode_with_localnet(project: &Project) -> crate::support::litenode::LiteNodeHandle {
-    let node = project.litenode().args(["--accounts", "deployer"]).start();
+fn start_localnet_with_localnet(project: &Project) -> crate::support::localnet::LocalnetHandle {
+    let node = project.localnet().args(["--accounts", "deployer"]).start();
     append_localnet_network(project.path(), &node.base_url());
     node
 }
 
 fn append_localnet_network(project_path: &Path, base_url: &str) {
+    use std::fmt::Write as _;
+
     let acton_toml_path = project_path.join("Acton.toml");
     let mut acton_toml =
         fs::read_to_string(&acton_toml_path).expect("failed to read generated Acton.toml");
-    acton_toml.push_str(&format!(
+    let _ = write!(
+        acton_toml,
         r#"
 
 [networks.localnet]
 api = {{ v2 = "{base_url}/api/v2", v3 = "{base_url}/api/v3" }}
 "#
-    ));
+    );
     fs::write(&acton_toml_path, acton_toml).expect("failed to write Acton.toml with localnet");
 }
 
@@ -629,7 +1220,7 @@ fn extract_marker_value(output: &str, marker: &str) -> String {
 }
 
 fn wait_until_address_state_active(
-    node: &crate::support::litenode::LiteNodeHandle,
+    node: &crate::support::localnet::LocalnetHandle,
     address: &str,
     timeout: Duration,
 ) {
@@ -655,18 +1246,18 @@ fn prepare_log_dir(project_root: &Path) -> String {
     log_dir.to_string_lossy().into_owned()
 }
 
-fn assert_litenode_rpc_snapshot(
+fn assert_localnet_rpc_snapshot(
     output: &crate::support::assertions::TestSuccess,
     snapshot_path: &str,
 ) {
-    let normalized = normalize_litenode_rpc_stdout(&output.get_normalized_stdout());
+    let normalized = normalize_localnet_rpc_stdout(&output.get_normalized_stdout());
     let expected_path = Path::new("tests").join(snapshot_path);
     let expected =
-        fs::read_to_string(&expected_path).expect("lite-node rpc snapshot file must exist");
+        fs::read_to_string(&expected_path).expect("localnet rpc snapshot file must exist");
     assertion().eq(normalized, expected);
 }
 
-fn normalize_litenode_rpc_stdout(stdout: &str) -> String {
+fn normalize_localnet_rpc_stdout(stdout: &str) -> String {
     let mut normalized_lines = Vec::new();
     for line in stdout.lines() {
         if let Some((prefix, _)) = line.split_once("Last Tx Hash:") {

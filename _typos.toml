@@ -1,15 +1,27 @@
 [files]
 extend-exclude = [
   "dist-workspace.toml",
-  "docs/**",
+  "docs/.next/**",
+  "docs/.source/**",
+  "docs/bun.lock",
+  "docs/grammars/**",
+  "docs/node_modules/**",
+  "docs/out/**",
+  "docs/public/resources/**",
+  "docs/src/lib/og/**",
   "block.tlb",
-  "crates/tasm/spec/**",
-  "crates/tolkc/assets/**",
+  "crates/tasm-core/spec/**",
+  "crates/tolk-compiler/assets/**",
+  "src/ffi/testdata/**",
   "tests/**/snapshots/**",
+  "src/commands/new/templates/*/app/**",
+  "src/commands/new/templates/*/wrappers-ts/**",
+  "src/commands/new/templates/*/package-lock.json",
 ]
 
 [default]
 extend-ignore-re = [
+  "\\b[a-zA-Z0-9_+/\\-]{48,}\\b", # user-friendly addresses
   "\\bADDD\\b",
   "\\bTrUe\\b",
   "\\balse\\b",

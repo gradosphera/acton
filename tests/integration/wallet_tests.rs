@@ -14,6 +14,7 @@ use ton::ton_core::cell::TonCell;
 use ton::ton_core::traits::tlb::TLB;
 use ton::ton_wallet::{Mnemonic, TonWallet, WalletVersion};
 use ton_api::Network;
+use toncenter_keys::{TONCENTER_MAINNET_API_KEY_ENV, TONCENTER_TESTNET_API_KEY_ENV};
 
 #[allow(dead_code)]
 const KEYRING_SERVICE: &str = "ton.acton.wallet";
@@ -575,6 +576,39 @@ fn test_wallet_list() {
         .run()
         .success()
         .assert_snapshot_matches("integration/snapshots/wallet/test_wallet_list.stdout.txt");
+}
+
+#[test]
+fn test_wallet_list_global_outside_project_without_acton_toml() {
+    let project = ProjectBuilder::new("wallet-list-global-outside-project").build();
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let home_path = home_temp.path();
+    let outside_dir = tempfile::TempDir::new().unwrap();
+
+    let global_wallets_dir = home_path.join(".config").join("acton").join("wallets");
+    fs::create_dir_all(&global_wallets_dir).unwrap();
+    fs::write(
+        global_wallets_dir.join("global.wallets.toml"),
+        format!(
+            r#"[wallets.global-only]
+kind = "v5r1"
+workchain = 0
+keys = {{ mnemonic = "{TEST_MNEMONIC}" }}
+"#
+        ),
+    )
+    .unwrap();
+
+    project
+        .acton()
+        .env("HOME", home_path.to_str().unwrap())
+        .wallet_list()
+        .current_dir(outside_dir.path())
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/wallet/test_wallet_list_global_outside_project_without_acton_toml.stdout.txt",
+        );
 }
 
 #[test]
@@ -1170,6 +1204,42 @@ fn test_wallet_sign_rejects_invalid_payload() {
         .failure();
 
     output.assert_contains("Body must be a valid BoC encoded as hex or base64");
+}
+
+#[test]
+fn test_wallet_sign_requires_explicit_wallet_in_non_interactive_mode() {
+    let project = ProjectBuilder::new("wallet-sign-multiple-non-interactive").build();
+    let home_temp = tempfile::TempDir::new().unwrap();
+    let (body_hex, _, _) = wallet_sign_fixture();
+
+    fs::write(
+        project.path().join("wallets.toml"),
+        format!(
+            r#"[wallets.first]
+kind = "v5r1"
+workchain = 0
+keys = {{ mnemonic = "{TEST_MNEMONIC}" }}
+
+[wallets.second]
+kind = "v5r1"
+workchain = 0
+keys = {{ mnemonic = "{SECOND_TEST_MNEMONIC}" }}
+"#,
+        ),
+    )
+    .expect("failed to write wallets.toml");
+
+    project
+        .acton()
+        .env("HOME", home_temp.path().to_str().unwrap())
+        .wallet_sign()
+        .arg("--body")
+        .arg(&body_hex)
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/wallet/test_wallet_sign_requires_explicit_wallet_in_non_interactive_mode.stderr.txt",
+        );
 }
 
 #[test]
@@ -1783,7 +1853,7 @@ fn test_wallet_list_balance_json_uses_env_api_key() {
         .arg("--balance")
         .arg("--json")
         .env(TEST_TONCENTER_V3_URL_ENV, &toncenter_url)
-        .env("TONCENTER_API_KEY", "env-api-key")
+        .env(TONCENTER_TESTNET_API_KEY_ENV, "env-api-key")
         .run()
         .success();
 
@@ -1812,8 +1882,8 @@ fn test_wallet_list_balance_json_uses_env_api_key() {
 
 #[allow(clippy::significant_drop_tightening)]
 #[test]
-fn test_wallet_list_balance_cli_api_key_overrides_env() {
-    let project = ProjectBuilder::new("wallet-list-balance-flag-api-key").build();
+fn test_wallet_list_balance_uses_testnet_env_over_mainnet_env() {
+    let project = ProjectBuilder::new("wallet-list-balance-network-scoped-api-key").build();
 
     project
         .acton()
@@ -1848,10 +1918,9 @@ fn test_wallet_list_balance_cli_api_key_overrides_env() {
         .acton()
         .wallet_list()
         .arg("--balance")
-        .arg("--api-key")
-        .arg("flag-api-key")
         .env(TEST_TONCENTER_V3_URL_ENV, &toncenter_url)
-        .env("TONCENTER_API_KEY", "env-api-key")
+        .env(TONCENTER_MAINNET_API_KEY_ENV, "mainnet-api-key")
+        .env(TONCENTER_TESTNET_API_KEY_ENV, "testnet-api-key")
         .run()
         .success();
 
@@ -1865,7 +1934,7 @@ fn test_wallet_list_balance_cli_api_key_overrides_env() {
         .iter()
         .find(|(name, _)| name.eq_ignore_ascii_case("x-api-key"))
         .map(|(_, value)| value.as_str());
-    assert_eq!(header, Some("flag-api-key"));
+    assert_eq!(header, Some("testnet-api-key"));
 }
 
 #[test]

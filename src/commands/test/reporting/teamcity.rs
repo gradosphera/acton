@@ -1,11 +1,10 @@
 use super::{
     TestReport, TestReporter, TestStatus, TestSuiteStats, extract_suite_name,
-    format_fuzz_failure_context,
+    format_fuzz_failure_context, formatter_for_failed_test,
 };
 use crate::commands::test::TestDescriptor;
 use crate::context::AssertFailure;
 use crate::formatter::FormatterContext;
-use std::borrow::Cow;
 use std::path::Path;
 
 pub(crate) struct TeamCityReporter;
@@ -25,26 +24,6 @@ impl TeamCityReporter {
             .replace('\'', "|'")
     }
 
-    fn formatter_for_test<'a>(&self, test: &'a TestReport) -> Option<FormatterContext<'a>> {
-        let failure = test.execution.as_ref()?.failure.as_ref()?;
-
-        Some(FormatterContext {
-            contract_abi: test.abi.clone(),
-            accounts: Cow::Borrowed(&failure.accounts),
-            build_cache: Cow::Borrowed(&failure.build_cache),
-            emulations: Cow::Borrowed(&failure.emulations),
-            known_addresses: Cow::Borrowed(&failure.known_addresses),
-            known_code_cells: Cow::Borrowed(&failure.known_code_cells),
-            show_bodies: test.show_bodies,
-            has_wallets_config: false,
-            available_wallets: vec![],
-            backtrace: test.backtrace,
-            fork_net: None,
-            network: None,
-            api_key: None,
-        })
-    }
-
     fn format_test_failure(
         &self,
         test: &TestReport,
@@ -53,7 +32,7 @@ impl TeamCityReporter {
         let mut details = String::new();
         let mut expected: Option<String> = None;
         let mut actual: Option<String> = None;
-        let formatter = self.formatter_for_test(test);
+        let formatter = formatter_for_failed_test(test);
 
         if let Some(exec) = &test.execution
             && let Some(ref assert_failure) = exec.assert_failure
@@ -69,12 +48,14 @@ impl TeamCityReporter {
                         if let Some(formatter) = &formatter {
                             expected = Some(formatter.format_tuple_value(
                                 &bin_failure.right,
-                                &bin_failure.right_type,
+                                bin_failure.right_ty_idx,
+                                &bin_failure.source_map,
                                 0,
                             ));
                             actual = Some(formatter.format_tuple_value(
                                 &bin_failure.left,
-                                &bin_failure.left_type,
+                                bin_failure.left_ty_idx,
+                                &bin_failure.source_map,
                                 0,
                             ));
                         }
@@ -84,12 +65,14 @@ impl TeamCityReporter {
                         if let Some(formatter) = &formatter {
                             expected = Some(formatter.format_tuple_value(
                                 &bin_failure.right,
-                                &bin_failure.right_type,
+                                bin_failure.right_ty_idx,
+                                &bin_failure.source_map,
                                 0,
                             ));
                             actual = Some(formatter.format_tuple_value(
                                 &bin_failure.left,
-                                &bin_failure.left_type,
+                                bin_failure.left_ty_idx,
+                                &bin_failure.source_map,
                                 0,
                             ));
                         }
@@ -101,6 +84,11 @@ impl TeamCityReporter {
                         message = "Assertion failed".to_string();
                     }
                 },
+                AssertFailure::Decimal(failure) => {
+                    message = "Decimal equality failed".to_string();
+                    expected = Some(failure.right.clone());
+                    actual = Some(failure.left.clone());
+                }
                 AssertFailure::Fail(_) => {
                     message = "Test assertion failed".to_string();
                 }
@@ -118,8 +106,16 @@ impl TeamCityReporter {
                 AssertFailure::TransactionIsFound(_) => {
                     message = "Unexpected transaction found".to_string();
                 }
+                AssertFailure::ExternalMessageNotFound(failure) => {
+                    message = format!("External message '{}' not found", failure.message_name);
+                }
                 AssertFailure::WalletNotFound(failure) => {
                     message = format!("Wallet '{}' not found", failure.wallet_name);
+                    if let Some(formatter) = &formatter {
+                        details = FormatterContext::strip_ansi_text(
+                            &formatter.format_wallet_not_found_message(failure),
+                        );
+                    }
                 }
             }
 
@@ -131,7 +127,7 @@ impl TeamCityReporter {
         }
 
         if let Some(ref test_message) = test.message {
-            message = test_message.clone();
+            message.clone_from(test_message);
         }
 
         if let Some(exec) = &test.execution
@@ -174,10 +170,10 @@ impl TestReporter for TeamCityReporter {
     ) -> anyhow::Result<()> {
         let suite_name = extract_suite_name(file_path);
         let escaped_name = self.escape_name(&suite_name);
+        let location_hint = self.escape_name(&format!("file://{}", file_path.display()));
 
         println!(
-            "##teamcity[testSuiteStarted name='{escaped_name}' nodeId='suite_{escaped_name}' parentNodeId='0' nodeType='file' locationHint='file://{}']",
-            file_path.display()
+            "##teamcity[testSuiteStarted name='{escaped_name}' nodeId='suite_{escaped_name}' parentNodeId='0' nodeType='file' locationHint='{location_hint}']"
         );
         Ok(())
     }
@@ -239,9 +235,16 @@ impl TestReporter for TeamCityReporter {
                 }
             }
             TestStatus::Skipped | TestStatus::Todo => {
-                println!(
-                    "##teamcity[testIgnored name='{test_name}' nodeId='test_{test_name}' duration='{duration_ms}']"
-                );
+                if let Some(details) = test.details.as_deref() {
+                    println!(
+                        "##teamcity[testIgnored name='{test_name}' nodeId='test_{test_name}' duration='{duration_ms}' message='{}']",
+                        self.escape_name(details),
+                    );
+                } else {
+                    println!(
+                        "##teamcity[testIgnored name='{test_name}' nodeId='test_{test_name}' duration='{duration_ms}']"
+                    );
+                }
             }
             TestStatus::Passed => {}
         }

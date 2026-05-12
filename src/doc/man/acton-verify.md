@@ -1,14 +1,14 @@
 # acton-verify(1)
 
-## NAME
+## Name
 
 acton-verify --- Verify contract source code on the TON verifier service
 
-## SYNOPSIS
+## Synopsis
 
 `acton verify` [_options_] [_contract-name_]
 
-## DESCRIPTION
+## Description
 
 Verify that a deployed contract address matches the local source code for a
 contract from your project.
@@ -17,7 +17,7 @@ The verification flow compiles local sources, prepares data for the verifier
 backend, collects the required signatures, and optionally submits the final
 verification transaction to the blockchain.
 
-## OPTIONS
+## Options
 
 ### Verify Options
 
@@ -42,20 +42,26 @@ If omitted, Acton auto-selects the only configured wallet or prompts when
 multiple wallets are available.
 {{/option}}
 
+{{#option "`--tonconnect`" }}
+Use TON Connect wallet approval for the verification transaction.
+
+This uses the wallet selected in the browser and conflicts with `--wallet`.
+{{/option}}
+
+{{#option "`--tonconnect-port` _port_" }}
+Local TON Connect page port.
+
+Defaults to `52258`.
+{{/option}}
+
 {{#option "`--compiler-version` _version_" }}
 Tolk compiler version to request on the verifier side.
 
-Currently defaults to `1.1.0`.
+Currently defaults to `1.2.0`.
 {{/option}}
 
 {{#option "`--dry-run`" }}
 Run verification without submitting the final blockchain transaction.
-{{/option}}
-
-{{#option "`--api-key` _key_" }}
-TonCenter API key for blockchain queries.
-
-Also read from `TONCENTER_API_KEY`.
 {{/option}}
 
 {{/options}}
@@ -72,6 +78,15 @@ Defaults to `testnet`.
 
 {{/options}}
 
+## TonCenter API Keys
+
+Built-in `mainnet`/`testnet` requests read `TONCENTER_MAINNET_API_KEY` or
+`TONCENTER_TESTNET_API_KEY`, depending on `--net`.
+
+Acton loads `.env` automatically, so the simplest setup during project work is
+usually to keep these keys there and use shell environment variables only for
+one-off overrides or CI.
+
 ### Display Options
 
 {{> options-display }}
@@ -80,7 +95,7 @@ Defaults to `testnet`.
 
 {{> options-project-resolved }}
 
-## PROCESS
+## Process
 
 Verification usually consists of:
 
@@ -90,15 +105,20 @@ Verification usually consists of:
 4. collecting the required signatures
 5. optionally sending the final verification transaction
 
-## PREREQUISITES
+Acton prepares the local compilation artifacts and uploads them to the
+verification service. The final deployed-code match is established by the
+verifier flow itself; `acton verify` does not first perform a separate local
+on-chain code-hash comparison against the target address before upload.
+
+## Prerequisites
 
 - a `.tolk` contract source in the current project
 - a supported verifier network: `testnet` or `mainnet`
 - verifier backend availability for the selected network
-- a configured wallet, funded when not using `--dry-run`
+- a configured wallet or TON Connect wallet, funded when not using `--dry-run`
 - reproducible compiler settings that match the deployed contract
 
-## CONTRACT AND WALLET SELECTION
+## Contract And Wallet Selection
 
 - if `_contract-name_` is omitted and exactly one contract is configured, Acton
   selects it automatically
@@ -106,17 +126,20 @@ Verification usually consists of:
 - if `--wallet` is omitted and exactly one wallet is configured, Acton selects
   it automatically
 - if multiple wallets are configured, Acton prompts for the wallet
+- if `--tonconnect` is used, Acton skips local wallet selection and uses the
+  wallet selected in the TON Connect page
 
-## REQUIREMENTS AND LIMITATIONS
+## Requirements And Limitations
 
 - only `.tolk` sources can be verified
 - precompiled `.boc` contracts cannot be verified
 - `localnet` and `custom:<name>` are not supported by verifier backends
-- verification requires a funded wallet when not using `--dry-run`
+- verification requires a funded local or TON Connect wallet when not using
+  `--dry-run`
 - if a contract with the same code hash is already verified, the backend may
   skip the final transaction
 
-## COST AND BACKEND NOTES
+## Cost And Backend Notes
 
 - when `--dry-run` is not used, the final verification transaction sends
   `0.1 TON`
@@ -124,13 +147,71 @@ Verification usually consists of:
   exits successfully without sending another transaction
 - on successful verification, Acton prints a verifier link for the contract
 
-## DRY RUN
+## Environment Overrides
+
+The verification flow also supports backend/debug environment overrides:
+
+- `ACTON_VERIFY_BACKEND` overrides only the initial `/source` backend used for
+  source upload
+- `ACTON_VERIFY_BACKENDS` replaces the later signer `/sign` backend list
+- `ACTON_VERIFY_DEBUG` enables verbose verification diagnostics by presence
+  alone
+
+Backend override values are trimmed and normalized, including removal of a
+trailing `/`.
+
+With `ACTON_VERIFY_DEBUG`, Acton prints:
+
+- compiler version
+- collected source files
+- active source-backend override
+- active signer-backend override list
+
+Example: debug source upload against a custom backend:
+
+```bash
+ACTON_VERIFY_BACKEND=http://127.0.0.1:8080 \
+ACTON_VERIFY_DEBUG=1 \
+acton verify Counter --address EQDt7LL... --net mainnet --dry-run
+```
+
+Example: separate source upload from signer backends:
+
+```bash
+ACTON_VERIFY_BACKEND=http://127.0.0.1:8080 \
+ACTON_VERIFY_BACKENDS=http://127.0.0.1:8081,http://127.0.0.1:8082 \
+acton verify Counter --address EQDt7LL... --net mainnet --dry-run
+```
+
+## Dry Run
 
 `--dry-run` still compiles the contract, uploads sources to the verifier
 backend, and collects the required signatures. It skips only the final
 blockchain transaction.
 
-## EXIT STATUS
+## TON Connect
+
+Use `--tonconnect` to approve the final verification transaction through a TON
+Connect wallet instead of a wallet configured in `wallets.toml`:
+
+```bash
+acton verify Counter --address EQDt7LL... --net mainnet --tonconnect
+```
+
+Acton starts a local TON Connect page and opens it in the browser. Use
+`--tonconnect-port` when the default page port is already busy.
+
+## Retries And Failure Hints
+
+- source upload is attempted up to 8 times total (initial try plus up to
+  7 retries) for transient transport failures and backend 5xx responses
+- retry backoff grows from 1 second to 7 seconds between attempts
+- backend error responses are printed with the response body when available
+- 5xx failures suggest retrying later and using `ACTON_VERIFY_DEBUG=1`
+- backend problems can also be narrowed down by pointing
+  `ACTON_VERIFY_BACKEND` at a specific endpoint
+
+## Exit Status
 
 - `0`: Verification completed successfully, including successful dry runs and
   flows where the backend decides that no final transaction is needed.
@@ -138,7 +219,7 @@ blockchain transaction.
   enough signatures could be collected, wallet resolution failed, or the final
   blockchain transaction could not be sent.
 
-## EXAMPLES
+## Examples
 
 1. Verify on testnet:
 
@@ -167,10 +248,10 @@ blockchain transaction.
 5. Verify with an explicit compiler version:
 
    ```bash
-   acton verify Counter --address EQDt7LL... --compiler-version 1.1.0
+   acton verify Counter --address EQDt7LL... --compiler-version 1.2.0
    ```
 
-## SEE ALSO
+## See Also
 
-- [Contract verification guide](https://ton-blockchain.github.io/acton/docs/contract-verification)
-- [Wallet setup guide](https://ton-blockchain.github.io/acton/docs/setup-wallets)
+- [Contract verification guide](https://ton-blockchain.github.io/acton/docs/verify)
+- [Wallet management guide](https://ton-blockchain.github.io/acton/docs/wallets)

@@ -10,6 +10,7 @@ use crate::support::verifier::{VerifierMockResponse, spawn_verifier_mock};
 use expectrl::Eof;
 use std::path::Path;
 use std::sync::{LazyLock, Mutex};
+use toncenter_keys::{TONCENTER_MAINNET_API_KEY_ENV, TONCENTER_TESTNET_API_KEY_ENV};
 use tycho_types::boc::Boc;
 use tycho_types::cell::CellBuilder;
 
@@ -52,6 +53,16 @@ fn write_deployer_wallets(project_path: &Path) {
 fn write_multiple_wallets(project_path: &Path) {
     std::fs::write(project_path.join("wallets.toml"), MULTI_WALLET_CONFIG)
         .expect("failed to write wallets.toml");
+}
+
+fn replace_contract_display_name(project_path: &Path, from: &str, to: &str) {
+    let acton_toml_path = project_path.join("Acton.toml");
+    let acton_toml = std::fs::read_to_string(&acton_toml_path).expect("failed to read Acton.toml");
+    let updated = acton_toml.replace(
+        &format!("display-name = \"{from}\""),
+        &format!("display-name = \"{to}\""),
+    );
+    std::fs::write(&acton_toml_path, updated).expect("failed to write Acton.toml");
 }
 
 fn build_verify_backend_project(name: &str) -> Project {
@@ -97,7 +108,25 @@ fn test_verify_contract_not_found() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_verify_contract_not_found.stderr.txt",
+            "integration/snapshots/verify/test_verify_contract_not_found.stderr.txt",
+        );
+}
+
+#[test]
+fn test_verify_contract_display_name_shows_contract_id_hint() {
+    let project = ProjectBuilder::new("verify-contract-display-name-hint")
+        .contract("simple_id", SIMPLE_CONTRACT)
+        .build();
+    replace_contract_display_name(project.path(), "simple_id", "Visible Simple");
+
+    project
+        .acton()
+        .verify()
+        .verify_contract("Visible Simple")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/verify/test_verify_contract_display_name_shows_contract_id_hint.stderr.txt",
         );
 }
 
@@ -125,7 +154,9 @@ depends = []
         .verify_contract("contract")
         .run()
         .failure()
-        .assert_stderr_snapshot_matches("integration/snapshots/test_verify_boc_file.stderr.txt");
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/verify/test_verify_boc_file.stderr.txt",
+        );
 }
 
 #[test]
@@ -153,7 +184,7 @@ depends = []
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_verify_non_tolk_file.stderr.txt",
+            "integration/snapshots/verify/test_verify_non_tolk_file.stderr.txt",
         );
 }
 
@@ -171,7 +202,7 @@ fn test_verify_invalid_network() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_verify_invalid_network.stderr.txt",
+            "integration/snapshots/verify/test_verify_invalid_network.stderr.txt",
         );
 }
 
@@ -192,7 +223,30 @@ fn test_verify_unsupported_network() {
         .assert_not_contains("Using wallet")
         .assert_not_contains("Fetching backends configuration")
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_verify_unsupported_network.stderr.txt",
+            "integration/snapshots/verify/test_verify_unsupported_network.stderr.txt",
+        );
+}
+
+#[test]
+fn test_verify_tonconnect_rejects_localnet() {
+    let project = ProjectBuilder::new("verify-tonconnect-localnet")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    project
+        .acton()
+        .verify()
+        .verify_contract("simple")
+        .verify_address(VERIFY_TEST_ADDRESS)
+        .verify_network("localnet")
+        .arg("--tonconnect")
+        .run()
+        .failure()
+        .assert_not_contains("Compiling contract")
+        .assert_not_contains("Using wallet")
+        .assert_not_contains("Fetching backends configuration")
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/verify/test_verify_tonconnect_rejects_localnet.stderr.txt",
         );
 }
 
@@ -210,7 +264,7 @@ fn test_verify_invalid_address() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_verify_invalid_address.stderr.txt",
+            "integration/snapshots/verify/test_verify_invalid_address.stderr.txt",
         );
 }
 
@@ -233,7 +287,7 @@ fn test_verify_base64_address() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_verify_base64_address.stderr.txt",
+            "integration/snapshots/verify/test_verify_base64_address.stderr.txt",
         );
 }
 
@@ -256,7 +310,7 @@ fn test_verify_wallet_not_found_without_wallets() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_verify_wallet_not_found_without_wallets.stderr.txt",
+            "integration/snapshots/verify/test_verify_wallet_not_found_without_wallets.stderr.txt",
         );
 }
 
@@ -293,7 +347,7 @@ keys = { mnemonic-file = "Acton.toml" }
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_verify_wallet_not_found.stderr.txt",
+            "integration/snapshots/verify/test_verify_wallet_not_found.stderr.txt",
         );
 }
 
@@ -318,7 +372,7 @@ fn test_verify_compilation_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_verify_compilation_error.stderr.txt",
+            "integration/snapshots/verify/test_verify_compilation_error.stderr.txt",
         );
 }
 
@@ -339,7 +393,7 @@ version = "0.1.0"
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_verify_no_contracts_configured.stderr.txt",
+            "integration/snapshots/verify/test_verify_no_contracts_configured.stderr.txt",
         );
 }
 
@@ -362,7 +416,7 @@ version = "0.1.0"
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_verify_empty_contracts_section.stderr.txt",
+            "integration/snapshots/verify/test_verify_empty_contracts_section.stderr.txt",
         );
 }
 
@@ -393,7 +447,7 @@ fn test_verify_backend_client_error_reports_response_body() {
         .failure();
 
     output.assert_stderr_snapshot_matches(
-        "integration/snapshots/test_verify_backend_client_error_reports_response_body.stderr.txt",
+        "integration/snapshots/verify/test_verify_backend_client_error_reports_response_body.stderr.txt",
     );
 
     mock_handle.join().expect("mock verifier must finish");
@@ -436,10 +490,10 @@ fn test_verify_backend_retries_after_server_error() {
         .failure();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_verify_backend_retries_after_server_error.stdout.txt",
+        "integration/snapshots/verify/test_verify_backend_retries_after_server_error.stdout.txt",
     );
     output.assert_stderr_snapshot_matches(
-        "integration/snapshots/test_verify_backend_retries_after_server_error.stderr.txt",
+        "integration/snapshots/verify/test_verify_backend_retries_after_server_error.stderr.txt",
     );
 
     mock_handle.join().expect("mock verifier must finish");
@@ -487,7 +541,7 @@ fn test_verify_backend_retries_then_proof_already_deployed_returns_success() {
         .success();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_verify_backend_retries_then_proof_already_deployed_returns_success.stdout.txt",
+        "integration/snapshots/verify/test_verify_backend_retries_then_proof_already_deployed_returns_success.stdout.txt",
     );
 
     mock_handle.join().expect("mock verifier must finish");
@@ -522,7 +576,7 @@ fn test_verify_backend_invalid_json_response_reports_parse_error() {
         .failure();
 
     output.assert_stderr_snapshot_matches(
-        "integration/snapshots/test_verify_backend_invalid_json_response_reports_parse_error.stderr.txt",
+        "integration/snapshots/verify/test_verify_backend_invalid_json_response_reports_parse_error.stderr.txt",
     );
 
     mock_handle.join().expect("mock verifier must finish");
@@ -573,7 +627,7 @@ fn test_verify_dry_run_uses_overridden_mainnet_toncenter_url() {
         .success();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_verify_dry_run_uses_overridden_mainnet_toncenter_url.stdout.txt",
+        "integration/snapshots/verify/test_verify_dry_run_uses_overridden_mainnet_toncenter_url.stdout.txt",
     );
 
     verifier_handle.join().expect("mock verifier must finish");
@@ -644,7 +698,7 @@ fn test_verify_backend_proof_already_deployed_returns_success() {
         .success();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_verify_backend_proof_already_deployed_returns_success.stdout.txt",
+        "integration/snapshots/verify/test_verify_backend_proof_already_deployed_returns_success.stdout.txt",
     );
 
     mock_handle.join().expect("mock verifier must finish");
@@ -685,7 +739,7 @@ fn test_verify_backend_proof_already_deployed_returns_success_on_testnet() {
         .success();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_verify_backend_proof_already_deployed_returns_success_on_testnet.stdout.txt",
+        "integration/snapshots/verify/test_verify_backend_proof_already_deployed_returns_success_on_testnet.stdout.txt",
     );
 
     mock_handle.join().expect("mock verifier must finish");
@@ -725,10 +779,10 @@ fn test_verify_debug_mode_prints_source_details_and_builds_multipart_upload() {
         .failure();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_verify_debug_mode_prints_source_details_and_builds_multipart_upload.stdout.txt",
+        "integration/snapshots/verify/test_verify_debug_mode_prints_source_details_and_builds_multipart_upload.stdout.txt",
     );
     output.assert_stderr_snapshot_matches(
-        "integration/snapshots/test_verify_debug_mode_prints_source_details_and_builds_multipart_upload.stderr.txt",
+        "integration/snapshots/verify/test_verify_debug_mode_prints_source_details_and_builds_multipart_upload.stderr.txt",
     );
 
     mock_handle.join().expect("mock verifier must finish");
@@ -808,14 +862,13 @@ fn test_verify_dry_run_collects_signature_from_override_backend() {
         .verify_address(VERIFY_TEST_ADDRESS)
         .verify_network("mainnet")
         .wallet("deployer")
-        .arg("--api-key")
-        .arg(VERIFY_TEST_API_KEY)
+        .env(TONCENTER_MAINNET_API_KEY_ENV, VERIFY_TEST_API_KEY)
         .arg("--dry-run")
         .run()
         .success();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_verify_dry_run_collects_signature_from_override_backend.stdout.txt",
+        "integration/snapshots/verify/test_verify_dry_run_collects_signature_from_override_backend.stdout.txt",
     );
 
     source_handle.join().expect("mock verifier must finish");
@@ -903,17 +956,16 @@ fn test_verify_fails_when_signer_backends_do_not_reach_quorum() {
         .verify_address(VERIFY_TEST_ADDRESS)
         .verify_network("mainnet")
         .wallet("deployer")
-        .arg("--api-key")
-        .arg(VERIFY_TEST_API_KEY)
+        .env(TONCENTER_MAINNET_API_KEY_ENV, VERIFY_TEST_API_KEY)
         .arg("--dry-run")
         .run()
         .failure();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_verify_fails_when_signer_backends_do_not_reach_quorum.stdout.txt",
+        "integration/snapshots/verify/test_verify_fails_when_signer_backends_do_not_reach_quorum.stdout.txt",
     );
     output.assert_stderr_snapshot_matches(
-        "integration/snapshots/test_verify_fails_when_signer_backends_do_not_reach_quorum.stderr.txt",
+        "integration/snapshots/verify/test_verify_fails_when_signer_backends_do_not_reach_quorum.stderr.txt",
     );
 
     source_handle.join().expect("mock verifier must finish");
@@ -982,13 +1034,12 @@ fn test_verify_send_transaction_successfully_after_mocked_prepare_flow() {
         .verify_address(VERIFY_TEST_ADDRESS)
         .verify_network("mainnet")
         .wallet("deployer")
-        .arg("--api-key")
-        .arg(VERIFY_TEST_API_KEY)
+        .env(TONCENTER_MAINNET_API_KEY_ENV, VERIFY_TEST_API_KEY)
         .run()
         .success();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_verify_send_transaction_successfully_after_mocked_prepare_flow.stdout.txt",
+        "integration/snapshots/verify/test_verify_send_transaction_successfully_after_mocked_prepare_flow.stdout.txt",
     );
 
     verifier_handle.join().expect("mock verifier must finish");
@@ -1066,13 +1117,12 @@ fn test_verify_send_transaction_successfully_on_testnet() {
         .verify_address(VERIFY_TEST_ADDRESS)
         .verify_network("testnet")
         .wallet("deployer")
-        .arg("--api-key")
-        .arg(VERIFY_TEST_API_KEY)
+        .env(TONCENTER_TESTNET_API_KEY_ENV, VERIFY_TEST_API_KEY)
         .run()
         .success();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_verify_send_transaction_successfully_on_testnet.stdout.txt",
+        "integration/snapshots/verify/test_verify_send_transaction_successfully_on_testnet.stdout.txt",
     );
 
     verifier_handle.join().expect("mock verifier must finish");
@@ -1135,16 +1185,15 @@ fn test_verify_reports_send_boc_failure() {
         .verify_address(VERIFY_TEST_ADDRESS)
         .verify_network("mainnet")
         .wallet("deployer")
-        .arg("--api-key")
-        .arg(VERIFY_TEST_API_KEY)
+        .env(TONCENTER_MAINNET_API_KEY_ENV, VERIFY_TEST_API_KEY)
         .run()
         .failure();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_verify_reports_send_boc_failure.stdout.txt",
+        "integration/snapshots/verify/test_verify_reports_send_boc_failure.stdout.txt",
     );
     output.assert_stderr_snapshot_matches(
-        "integration/snapshots/test_verify_reports_send_boc_failure.stderr.txt",
+        "integration/snapshots/verify/test_verify_reports_send_boc_failure.stderr.txt",
     );
 
     verifier_handle.join().expect("mock verifier must finish");

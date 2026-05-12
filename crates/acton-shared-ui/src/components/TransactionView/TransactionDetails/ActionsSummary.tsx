@@ -1,15 +1,25 @@
 import type {OutAction} from "@ton/core"
 import React, {useState} from "react"
+import {FiBookOpen, FiCode, FiCornerUpRight, FiLock, FiPackage} from "react-icons/fi"
 
-import type {BackendExecutorAction, BackendExecutorActionFailureReason} from "@/types"
+import type {
+  BackendExecutorAction,
+  BackendExecutorActionFailureReason,
+  SourceLocation,
+} from "@/types"
 import type {ContractData} from "@/types/transaction"
 import {fmt, DataBlock} from "@/index"
-import {parseSendMode} from "@/components/TransactionView/SendModeViewer/parser"
+import {decodeMessageBody, getMessageOpcode, resolveMessageOpcodeName} from "@/utils/messageBody"
 import {parseReserveMode} from "@/utils/transaction"
 
+import {ParsedBodySection} from "../ParsedBodySection/ParsedBodySection"
+import {ChangeLibraryModeViewer} from "../ChangeLibraryModeViewer/ChangeLibraryModeViewer"
 import {ContractChip} from "../ContractChip/ContractChip"
+import {DisasmSection} from "../DisasmSection/DisasmSection"
 import {ExitCodeChip} from "../ExitCodeChip/ExitCodeChip"
+import {OpcodeChip} from "../OpcodeChip/OpcodeChip"
 import {ReserveModeViewer} from "../ReserveModeViewer/ReserveModeViewer"
+import {SendModeViewer} from "../SendModeViewer/SendModeViewer"
 
 import styles from "./ActionsSummary.module.css"
 
@@ -19,6 +29,7 @@ interface ActionsSummaryProps {
   readonly contracts: Map<string, ContractData>
   readonly contractAddress: string
   readonly onContractClick?: (address: string) => void
+  readonly renderSourceLocation?: (location: SourceLocation) => React.ReactNode
 }
 
 interface ActionExecutionMeta {
@@ -27,58 +38,48 @@ interface ActionExecutionMeta {
   readonly failureReasonText: string | undefined
 }
 
-const getActionIcon = (actionType: OutAction["type"]): React.JSX.Element => {
+interface ActionIconMeta {
+  readonly badgeClassName: string
+  readonly element: React.JSX.Element
+  readonly label: string
+}
+
+const getActionIcon = (actionType: OutAction["type"]): ActionIconMeta => {
   switch (actionType) {
     case "sendMsg": {
-      return (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <title>Send Message</title>
-          <path
-            d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      )
+      return {
+        badgeClassName: styles.actionIconSendMsg,
+        element: <FiCornerUpRight size={14} />,
+        label: "Send Message",
+      }
     }
     case "setCode": {
-      return (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <title>Set Code</title>
-          <path
-            d="M16 18L22 12L16 6M8 6L2 12L8 18"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      )
+      return {
+        badgeClassName: styles.actionIconSetCode,
+        element: <FiCode size={14} />,
+        label: "Set Code",
+      }
     }
     case "reserve": {
-      return (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <title>Reserve</title>
-          <path
-            d="M12 1V23M17 5H9.5C8.57174 5 7.6815 5.36875 7.02513 6.02513C6.36875 6.6815 6 7.57174 6 8.5C6 9.42826 6.36875 10.3185 7.02513 10.9749C7.6815 11.6313 8.57174 12 9.5 12H14.5C15.4283 12 16.3185 12.3687 16.9749 13.0251C17.6313 13.6815 18 14.5717 18 15.5C18 16.4283 17.6313 17.3185 16.9749 17.9749C16.3185 18.6313 15.4283 19 14.5 19H6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      )
+      return {
+        badgeClassName: styles.actionIconReserve,
+        element: <FiLock size={14} />,
+        label: "Reserve",
+      }
+    }
+    case "changeLibrary": {
+      return {
+        badgeClassName: styles.actionIconChangeLibrary,
+        element: <FiBookOpen size={14} />,
+        label: "Change Library",
+      }
     }
     default: {
-      return (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <title>Action</title>
-          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
-          <path d="M9 9h6v6H9z" fill="currentColor" />
-        </svg>
-      )
+      return {
+        badgeClassName: styles.actionIconUnknown,
+        element: <FiPackage size={14} />,
+        label: "Action",
+      }
     }
   }
 }
@@ -90,10 +91,6 @@ const formatBoolean = (v: boolean): React.JSX.Element => (
 const formatModeNames = (names: readonly string[]): string =>
   names.length > 0 ? names.join(" + ") : "—"
 
-const formatSendModeNames = (mode: number): string => {
-  return formatModeNames(parseSendMode(mode).map(flag => flag.name))
-}
-
 const getReserveModeNames = (mode: number): readonly string[] => {
   return parseReserveMode(mode).map(flag => flag.name)
 }
@@ -102,8 +99,27 @@ const formatReserveModeNames = (mode: number): string => {
   return formatModeNames(getReserveModeNames(mode))
 }
 
+const renderExternalDestination = (
+  destination: string | undefined,
+  contracts: Map<string, ContractData>,
+  onContractClick?: (address: string) => void,
+): React.JSX.Element | string => {
+  if (!destination) {
+    return "External"
+  }
+
+  if (contracts.has(destination)) {
+    return (
+      <ContractChip address={destination} contracts={contracts} onContractClick={onContractClick} />
+    )
+  }
+
+  return <span className={styles.externalDestination}>{destination}</span>
+}
+
 const isActionFailed = (action: BackendExecutorAction): boolean => {
-  return action.failure_code !== undefined || action.failure_reason !== undefined
+  const failureReason = "failure_reason" in action ? action.failure_reason : undefined
+  return action.failure_code !== undefined || failureReason !== undefined
 }
 
 const formatNanoTon = (value: string): string => {
@@ -137,22 +153,20 @@ const mapExecutorActionsByType = (
   let cursor = 0
 
   for (const action of actions) {
-    if (action.type !== "sendMsg" && action.type !== "reserve") {
-      mapped.push(undefined)
-      continue
-    }
-
     let matched: BackendExecutorAction | undefined
-    while (cursor < executorActions.length) {
+    if (cursor < executorActions.length) {
       const candidate = executorActions[cursor]
       cursor += 1
       const typeMatches =
         (action.type === "sendMsg" && candidate.type === "send_message") ||
-        (action.type === "reserve" && candidate.type === "reserve_currency")
+        (action.type === "reserve" && candidate.type === "reserve_currency") ||
+        (action.type === "setCode" && candidate.type === "set_code") ||
+        (action.type === "changeLibrary" && candidate.type === "change_library")
 
       if (typeMatches) {
         matched = candidate
-        break
+      } else {
+        cursor -= 1
       }
     }
 
@@ -167,8 +181,37 @@ const getActionExecutionMeta = (
 ): ActionExecutionMeta => ({
   isFailed: executorAction ? isActionFailed(executorAction) : false,
   failureCode: executorAction?.failure_code,
-  failureReasonText: formatFailureReason(executorAction?.failure_reason),
+  failureReasonText: formatFailureReason(
+    executorAction && "failure_reason" in executorAction
+      ? executorAction.failure_reason
+      : undefined,
+  ),
 })
+
+const formatSourceLocation = (location: SourceLocation): string => {
+  const parts = location.file.split("/")
+  const file = parts.length > 3 ? `.../${parts.slice(-3).join("/")}` : location.file
+  return `${file}:${location.line}:${location.column}`
+}
+
+const renderActionSourceLocation = (
+  executorAction: BackendExecutorAction | undefined,
+  renderSourceLocation: ((location: SourceLocation) => React.ReactNode) | undefined,
+): React.JSX.Element | undefined => {
+  const location = executorAction?.location
+  if (!location) {
+    return undefined
+  }
+
+  return (
+    <div className={styles.detailRow}>
+      <span className={styles.detailLabel}>Source:</span>
+      <span className={`${styles.detailValue} ${styles.sourceLocationValue}`}>
+        {renderSourceLocation ? renderSourceLocation(location) : formatSourceLocation(location)}
+      </span>
+    </div>
+  )
+}
 
 const renderActionDetails = (
   action: OutAction,
@@ -176,14 +219,26 @@ const renderActionDetails = (
   contractAddress: string,
   contracts: Map<string, ContractData>,
   onContractClick?: (address: string) => void,
+  renderSourceLocation?: (location: SourceLocation) => React.ReactNode,
 ): React.JSX.Element | undefined => {
   const execution = getActionExecutionMeta(executorAction)
-  const contractAbi = contracts.get(contractAddress)?.abi
+  const contract = contracts.get(contractAddress)
+  const contractAbi = contract?.abi
 
   switch (action.type) {
     case "sendMsg": {
       const message = action.outMsg
       const info = message.info
+      const messageBodyHash = message.body.hash().toString("hex")
+      const parsedBody = decodeMessageBody(message, contracts, contractAddress)
+      const opcode = getMessageOpcode(message)
+      const opcodeName = resolveMessageOpcodeName(message, contracts, contractAddress)
+      const showMessageDataSection =
+        info.type === "internal" ||
+        (info.type === "external-out" &&
+          (parsedBody !== undefined || opcode !== undefined || opcodeName !== undefined))
+      const showRawBody =
+        parsedBody === undefined && (info.type === "internal" || info.type === "external-out")
 
       return (
         <div className={styles.actionDetails}>
@@ -193,11 +248,9 @@ const renderActionDetails = (
           <div className={styles.detailsContent}>
             <div className={styles.detailRow}>
               <span className={styles.detailLabel}>Mode:</span>
-              <span className={styles.detailValue}>{formatSendModeNames(action.mode)}</span>
-            </div>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Type:</span>
-              <span className={styles.detailValue}>{info.type}</span>
+              <div className={`${styles.detailValue} ${styles.modeDetailValue}`}>
+                <SendModeViewer mode={action.mode} />
+              </div>
             </div>
             {info.type === "internal" && (
               <>
@@ -250,25 +303,39 @@ const renderActionDetails = (
                 <div className={styles.detailRow}>
                   <span className={styles.detailLabel}>To:</span>
                   <div className={styles.detailValue}>
-                    {info.dest ? (
-                      <ContractChip
-                        address={info.dest.toString()}
-                        contracts={contracts}
-                        onContractClick={onContractClick}
-                      />
-                    ) : (
-                      "External"
-                    )}
+                    {renderExternalDestination(info.dest?.toString(), contracts, onContractClick)}
                   </div>
                 </div>
               </>
             )}
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Body:</span>
-              <div className={styles.detailValue}>
-                <DataBlock data={message.body.toBoc().toString("hex")} />
+            {showRawBody && (
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Body:</span>
+                <div className={styles.detailValue}>
+                  <DataBlock data={message.body.toBoc().toString("hex")} />
+                </div>
               </div>
-            </div>
+            )}
+            {showMessageDataSection && (
+              <div className={styles.messageDataSection}>
+                <div className={styles.messageDataTitle}>Message Data</div>
+                <div className={styles.detailRow}>
+                  <span className={styles.detailLabel}>Opcode:</span>
+                  <div className={styles.detailValue}>
+                    <OpcodeChip opcode={opcode} abiName={opcodeName} showOpcode={true} />
+                  </div>
+                </div>
+                {parsedBody && (
+                  <ParsedBodySection
+                    key={messageBodyHash}
+                    parsedBody={parsedBody}
+                    contracts={contracts}
+                    onContractClick={onContractClick}
+                    defaultExpanded={true}
+                  />
+                )}
+              </div>
+            )}
             {execution.failureReasonText && (
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>Failure:</span>
@@ -285,11 +352,14 @@ const renderActionDetails = (
                 </span>
               </div>
             )}
+            {renderActionSourceLocation(executorAction, renderSourceLocation)}
           </div>
         </div>
       )
     }
     case "setCode": {
+      const newCodeBocHex = action.newCode.toBoc().toString("hex")
+
       return (
         <div className={styles.actionDetails}>
           <div className={styles.detailsHeader}>
@@ -297,11 +367,27 @@ const renderActionDetails = (
           </div>
           <div className={styles.detailsContent}>
             <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>New Code Hash:</span>
+              <span className={styles.detailLabel}>Code Hash:</span>
               <span className={styles.detailValue}>
-                <DataBlock data={action.newCode.toBoc().toString("hex")} />
+                <DataBlock data={action.newCode.hash().toString("hex")} />
               </span>
             </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Code BoC:</span>
+              <span className={styles.detailValue}>
+                <DataBlock data={newCodeBocHex} />
+              </span>
+            </div>
+            <DisasmSection bocHex={newCodeBocHex} />
+            {execution.failureCode !== undefined && (
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Exit Code:</span>
+                <span className={styles.detailValue}>
+                  <ExitCodeChip exitCode={execution.failureCode} abi={contractAbi} phase="action" />
+                </span>
+              </div>
+            )}
+            {renderActionSourceLocation(executorAction, renderSourceLocation)}
           </div>
         </div>
       )
@@ -341,6 +427,60 @@ const renderActionDetails = (
                 </span>
               </div>
             )}
+            {renderActionSourceLocation(executorAction, renderSourceLocation)}
+          </div>
+        </div>
+      )
+    }
+    case "changeLibrary": {
+      const isEmbeddedLibrary = action.libRef.type === "ref"
+      const embeddedLibraryBocHex =
+        action.libRef.type === "ref" ? action.libRef.library.toBoc().toString("hex") : undefined
+
+      return (
+        <div className={styles.actionDetails}>
+          <div className={styles.detailsHeader}>
+            <h4>Details</h4>
+          </div>
+          <div className={styles.detailsContent}>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Mode:</span>
+              <div className={`${styles.detailValue} ${styles.modeDetailValue}`}>
+                <ChangeLibraryModeViewer mode={action.mode} />
+              </div>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Reference:</span>
+              <span className={styles.detailValue}>
+                {action.libRef.type === "hash" ? "Library Hash" : "Embedded Library"}
+              </span>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>
+                {action.libRef.type === "hash" ? "Hash:" : "Library:"}
+              </span>
+              <span className={styles.detailValue}>
+                <DataBlock
+                  data={
+                    action.libRef.type === "hash"
+                      ? action.libRef.libHash.toString("hex")
+                      : embeddedLibraryBocHex!
+                  }
+                />
+              </span>
+            </div>
+            {isEmbeddedLibrary && embeddedLibraryBocHex && (
+              <DisasmSection bocHex={embeddedLibraryBocHex} title="Library Disassembly" />
+            )}
+            {execution.failureCode !== undefined && (
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Exit Code:</span>
+                <span className={styles.detailValue}>
+                  <ExitCodeChip exitCode={execution.failureCode} abi={contractAbi} phase="action" />
+                </span>
+              </div>
+            )}
+            {renderActionSourceLocation(executorAction, renderSourceLocation)}
           </div>
         </div>
       )
@@ -356,6 +496,7 @@ export function ActionsSummary({
   contracts,
   contractAddress,
   onContractClick,
+  renderSourceLocation,
 }: ActionsSummaryProps): React.JSX.Element {
   const [selectedActionIndex, setSelectedActionIndex] = useState<number | undefined>()
   const mappedExecutorActions = mapExecutorActionsByType(actions, executorActions)
@@ -374,16 +515,16 @@ export function ActionsSummary({
     switch (action.type) {
       case "sendMsg": {
         const message = action.outMsg
-        const messageType = message.info.type === "internal" ? "Internal" : "External"
-        const destination =
-          message.info.type === "internal"
-            ? message.info.dest.toString()
-            : (message.info.dest?.toString() ?? "External")
         const value =
-          message.info.type === "internal" ? fmt.formatCurrency(message.info.value.coins) : ""
+          message.info.type === "internal"
+            ? fmt.formatCurrency(message.info.value.coins)
+            : "external-out"
         return {
           title: "Send Message",
-          description: `${messageType} → ${destination}`,
+          description:
+            message.info.type === "internal"
+              ? `Internal → ${message.info.dest.toString()}`
+              : "External → External",
           value: value,
         }
       }
@@ -401,10 +542,11 @@ export function ActionsSummary({
           value: fmt.formatCurrency(action.currency.coins),
         }
       }
-      default: {
+      case "changeLibrary": {
         return {
-          title: "Unknown",
-          description: `Type: ${action.type}`,
+          title: "Change Library",
+          description:
+            action.libRef.type === "hash" ? "Attach library by hash" : "Attach embedded library",
           value: "",
         }
       }
@@ -417,6 +559,7 @@ export function ActionsSummary({
         <div className={styles.actionsList}>
           {actions.map((action, index) => {
             const summary = getActionSummary(action)
+            const icon = getActionIcon(action.type)
             const isSelected = selectedActionIndex === index
             const execution = getActionExecutionMeta(mappedExecutorActions[index])
 
@@ -469,7 +612,13 @@ export function ActionsSummary({
               >
                 <div className={styles.actionContent}>
                   <div className={styles.actionTitle}>
-                    <div className={styles.actionIcon}>{getActionIcon(action.type)}</div>
+                    <div
+                      className={`${styles.actionIcon} ${icon.badgeClassName}`}
+                      aria-label={icon.label}
+                      title={icon.label}
+                    >
+                      {icon.element}
+                    </div>
                     <span className={styles.actionTitleText}>{summary.title}</span>
                     {execution.isFailed && <span className={styles.failureBadge}>Failed</span>}
                   </div>
@@ -490,6 +639,7 @@ export function ActionsSummary({
             contractAddress,
             contracts,
             onContractClick,
+            renderSourceLocation,
           )}
         </div>
       )}

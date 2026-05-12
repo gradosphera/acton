@@ -3,6 +3,7 @@ use crate::support::TestOutputExt;
 use crate::support::compilation::{CompilationOrder, extract_compiled_contracts};
 use crate::support::project::ProjectBuilder;
 use crate::support::snapshots::normalize_output;
+use acton::stdlib::DISABLE_AUTO_STDLIB_ENV;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tycho_types::boc::Boc;
@@ -69,6 +70,28 @@ fn test_build_ensure_latest_uses_project_root_from_nested_directory() {
     assert!(
         !nested_stdlib.exists(),
         "stdlib must not be installed in nested cwd"
+    );
+}
+
+#[test]
+fn test_build_respects_disable_auto_stdlib_env() {
+    let project = ProjectBuilder::new("build-disable-auto-stdlib")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build();
+
+    let output = project
+        .acton()
+        .build()
+        .env(DISABLE_AUTO_STDLIB_ENV, "1")
+        .run()
+        .success();
+
+    assert!(
+        !project.path().join(".acton").exists(),
+        "build should not create .acton when {DISABLE_AUTO_STDLIB_ENV}=1"
+    );
+    output.assert_snapshot_matches(
+        "integration/snapshots/build/test_build_respects_disable_auto_stdlib_env.stdout.txt",
     );
 }
 
@@ -185,7 +208,7 @@ fn test_build_missing_dependency_error() {
         .assert_contains("depends on 'nonexistent'")
         .assert_contains("not defined in Acton.toml")
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_missing_dependency_error.stderr.txt",
+            "integration/snapshots/build/test_build_missing_dependency_error.stderr.txt",
         );
 }
 
@@ -210,7 +233,7 @@ fn test_build_compilation_error() {
         .failure()
         .assert_contains("error: undefined symbol `nonexistent`")
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_compilation_error.stderr.txt",
+            "integration/snapshots/build/test_build_compilation_error.stderr.txt",
         );
 }
 
@@ -237,7 +260,7 @@ fn test_build_gen_file_content() {
 
     assertion().eq(
         normalize_output(content.as_str(), project.path()),
-        snapbox::file!("snapshots/test_build_gen_file_content.tolk.gen"),
+        snapbox::file!("snapshots/build/test_build_gen_file_content.tolk.gen"),
     );
 }
 
@@ -352,7 +375,7 @@ fn test_build_with_boc_output() {
 
     assertion().eq(
         hex,
-        snapbox::file!("snapshots/test_build_with_boc_output.boc.gen"),
+        snapbox::file!("snapshots/build/test_build_with_boc_output.boc.gen"),
     );
 }
 
@@ -372,7 +395,9 @@ fn test_build_with_boc_output_to_nonexistent_directory() {
 
     assertion().eq(
         hex,
-        snapbox::file!("snapshots/test_build_with_boc_output_to_nonexistent_directory.boc.gen"),
+        snapbox::file!(
+            "snapshots/build/test_build_with_boc_output_to_nonexistent_directory.boc.gen"
+        ),
     );
 }
 
@@ -988,7 +1013,7 @@ depends = []
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_missing_boc_file.stderr.txt",
+            "integration/snapshots/build/test_build_missing_boc_file.stderr.txt",
         );
 }
 
@@ -1004,7 +1029,7 @@ fn test_build_missing_acton_toml() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_missing_acton_toml.stderr.txt",
+            "integration/snapshots/build/test_build_missing_acton_toml.stderr.txt",
         )
         .assert_contains("Acton.toml not found");
 }
@@ -1033,7 +1058,7 @@ missing_closing_bracket = { display-name = "test", src = "contracts/test.tolk" }
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_invalid_acton_toml.stderr.txt",
+            "integration/snapshots/build/test_build_invalid_acton_toml.stderr.txt",
         )
         .assert_contains("TOML parse error");
 }
@@ -1060,7 +1085,7 @@ depends = []
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_contract_source_file_not_found.stderr.txt",
+            "integration/snapshots/build/test_build_contract_source_file_not_found.stderr.txt",
         );
 }
 
@@ -1086,7 +1111,7 @@ depends = []
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_contract_source_file_not_found_with_abs_path.stderr.txt",
+            "integration/snapshots/build/test_build_contract_source_file_not_found_with_abs_path.stderr.txt",
         );
 }
 
@@ -1114,7 +1139,7 @@ depends = []
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_contract_invalid_file_extension.stdout.txt",
+            "integration/snapshots/build/test_build_contract_invalid_file_extension.stdout.txt",
         );
 }
 
@@ -1142,7 +1167,7 @@ fn test_build_output_boc_write_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_output_boc_write_error.stderr.txt",
+            "integration/snapshots/build/test_build_output_boc_write_error.stderr.txt",
         );
 }
 
@@ -1164,7 +1189,7 @@ version = "0.1.0"
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_build_no_contracts_section.stdout.txt",
+            "integration/snapshots/build/test_build_no_contracts_section.stdout.txt",
         );
 }
 
@@ -1217,7 +1242,7 @@ fn test_build_dependency_custom_path_write_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_dependency_custom_path_write_error.stderr.txt",
+            "integration/snapshots/build/test_build_dependency_custom_path_write_error.stderr.txt",
         );
 }
 
@@ -1245,7 +1270,7 @@ depends = []
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_build_contract_with_special_characters_in_path.stdout.txt",
+            "integration/snapshots/build/test_build_contract_with_special_characters_in_path.stdout.txt",
         );
 }
 
@@ -1375,7 +1400,7 @@ fn test_build_contract_with_numeric_name_dependency() {
 
     assertion().eq(
         normalize_output(content.as_str(), project.path()),
-        snapbox::file!("snapshots/test_build_contract_with_numeric_name_dependency.tolk.gen"),
+        snapbox::file!("snapshots/build/test_build_contract_with_numeric_name_dependency.tolk.gen"),
     );
 }
 
@@ -1399,7 +1424,7 @@ fn test_build_contract_syntax_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_contract_syntax_error.stderr.txt",
+            "integration/snapshots/build/test_build_contract_syntax_error.stderr.txt",
         );
 }
 
@@ -1432,7 +1457,7 @@ fn test_build_several_contracts_with_syntax_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_several_contracts_with_syntax_error.stderr.txt",
+            "integration/snapshots/build/test_build_several_contracts_with_syntax_error.stderr.txt",
         );
 }
 
@@ -1465,7 +1490,7 @@ fn test_build_good_and_bad_contracts_with_syntax_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_good_and_bad_contracts_with_syntax_error.stderr.txt",
+            "integration/snapshots/build/test_build_good_and_bad_contracts_with_syntax_error.stderr.txt",
         );
 }
 
@@ -1493,7 +1518,7 @@ depends = []
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_corrupted_boc_file.stderr.txt",
+            "integration/snapshots/build/test_build_corrupted_boc_file.stderr.txt",
         );
 }
 
@@ -1510,7 +1535,7 @@ fn test_build_contract_filter_nonexistent() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_contract_filter_nonexistent.stderr.txt",
+            "integration/snapshots/build/test_build_contract_filter_nonexistent.stderr.txt",
         );
 }
 
@@ -1771,7 +1796,7 @@ fn test_build_with_output_fift_write_error_is_non_zero() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_output_fift_write_error.stderr.txt",
+            "integration/snapshots/build/test_build_output_fift_write_error.stderr.txt",
         );
 }
 
@@ -1799,7 +1824,7 @@ fn test_build_with_out_dir_write_error_is_non_zero() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_out_dir_write_error.stderr.txt",
+            "integration/snapshots/build/test_build_out_dir_write_error.stderr.txt",
         );
 }
 
@@ -2117,7 +2142,9 @@ fn test_build_with_info_flag() {
         .with_info()
         .run()
         .success()
-        .assert_snapshot_matches("integration/snapshots/test_build_with_info_flag.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/build/test_build_with_info_flag.stdout.txt",
+        );
 }
 
 #[test]
@@ -2133,7 +2160,7 @@ fn test_build_with_info_flag_from_cache() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_build_with_info_flag_from_cache_before.stdout.txt",
+            "integration/snapshots/build/test_build_with_info_flag_from_cache_before.stdout.txt",
         );
 
     // Build form cache
@@ -2144,7 +2171,7 @@ fn test_build_with_info_flag_from_cache() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_build_with_info_flag_from_cache_after.stdout.txt",
+            "integration/snapshots/build/test_build_with_info_flag_from_cache_after.stdout.txt",
         );
 }
 
@@ -2163,7 +2190,7 @@ fn test_build_with_info_flag_for_several_contracts() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_build_with_info_flag_for_several_contracts.stdout.txt",
+            "integration/snapshots/build/test_build_with_info_flag_for_several_contracts.stdout.txt",
         );
 }
 
@@ -2198,6 +2225,6 @@ fn test_build_with_dependency_with_compilation_error() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_build_with_dependency_with_compilation_error.stderr.txt",
+            "integration/snapshots/build/test_build_with_dependency_with_compilation_error.stderr.txt",
         );
 }

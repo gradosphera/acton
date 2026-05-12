@@ -1,14 +1,16 @@
 use crate::context::{
-    AssertBinFailure, AssertFailure, Context, FailAssertFailure, TransactionGenericAssertFailure,
-    TransactionNotFoundParams, WalletNotFoundFailure,
+    AssertBinFailure, AssertDecimalFailure, AssertFailure, Context, ExternalMessageNotFoundFailure,
+    FailAssertFailure, TransactionGenericAssertFailure, TransactionNotFoundParams,
+    WalletNotFoundFailure,
 };
-use anyhow::Context as ErrorContext;
+use acton_debug::{RenderedValue, render_tuple_as_tolk_type};
+use anyhow::{Context as ErrorContext, anyhow};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use ton_emulator::{extension, register_ext_methods};
 use ton_executor::BaseExecutor;
 use ton_source_map::SourceLocation;
-use tvmffi::stack::{Tuple, TupleItem};
+use tvm_ffi::stack::{Tuple, TupleItem};
 use tycho_types::models::{IntAddr, Transaction};
 
 extension!(assert_fail in (Context) with (location: String, message: String) using assert_fail_impl);
@@ -43,7 +45,7 @@ fn assume_reject_impl(
     Ok(())
 }
 
-extension!(assert_bin in (Context) with (location: String, message: String, right: Tuple, right_name: String, left: Tuple, left_name: String, operator: String) using assert_bin_impl);
+extension!(assert_bin in (Context) with (location: String, message: String, right: Tuple, right_ty_idx: BigInt, left: Tuple, left_ty_idx: BigInt, operator: String) using assert_bin_impl);
 #[allow(clippy::too_many_arguments)]
 fn assert_bin_impl(
     ctx: &mut Context,
@@ -51,46 +53,45 @@ fn assert_bin_impl(
     location: String,
     message: String,
     right: Tuple,
-    right_name: String,
+    right_ty_idx: BigInt,
     left: Tuple,
-    left_name: String,
+    left_ty_idx: BigInt,
     operator: String,
 ) -> anyhow::Result<()> {
     let left = left.unwrap_single();
     let right = right.unwrap_single();
+    let source_map = ctx.env.source_map.clone();
+    let left_ty_idx = left_ty_idx
+        .to_usize()
+        .ok_or_else(|| anyhow!("ty_idx=`{left_ty_idx}` does not fit into usize"))?;
+    let right_ty_idx = right_ty_idx
+        .to_usize()
+        .ok_or_else(|| anyhow!("ty_idx=`{right_ty_idx}` does not fit into usize"))?;
 
-    if operator == "==" && left.equal_to(&right) {
-        stack.push_bool(true);
-        return Ok(());
-    }
-    if operator == "!=" && !left.equal_to(&right) {
-        stack.push_bool(true);
-        return Ok(());
+    if operator == "==" || operator == "!=" {
+        let left_rendered = render_tuple_as_tolk_type(&source_map, &left, left_ty_idx);
+        let right_rendered = render_tuple_as_tolk_type(&source_map, &right, right_ty_idx);
+        let values_equal = rendered_values_equal(&left_rendered, &right_rendered);
+
+        if operator == "==" && values_equal {
+            stack.push_bool(true);
+            return Ok(());
+        }
+        if operator == "!=" && !values_equal {
+            stack.push_bool(true);
+            return Ok(());
+        }
     }
 
     if (operator == "<" || operator == ">" || operator == "<=" || operator == ">=")
         && let Some(TupleItem::Int(left_int)) = left.0.first()
         && let Some(TupleItem::Int(right_int)) = right.0.first()
-    {
-        if operator == "<" && left_int < right_int
+        && (operator == "<" && left_int < right_int
             || operator == ">" && left_int > right_int
             || operator == "<=" && left_int <= right_int
-            || operator == ">=" && left_int >= right_int
-        {
-            stack.push_bool(true);
-            return Ok(());
-        }
-
-        *ctx.asserts.assert_failure = Some(AssertFailure::Bin(AssertBinFailure {
-            operator,
-            left,
-            right,
-            left_type: left_name,
-            right_type: right_name,
-            message: Some(message),
-            location: SourceLocation::parse(&location)?,
-        }));
-        stack.push_bool(false);
+            || operator == ">=" && left_int >= right_int)
+    {
+        stack.push_bool(true);
         return Ok(());
     }
 
@@ -98,13 +99,209 @@ fn assert_bin_impl(
         operator,
         left,
         right,
-        left_type: left_name,
-        right_type: right_name,
+        left_ty_idx,
+        right_ty_idx,
+        source_map,
         message: Some(message),
         location: SourceLocation::parse(&location)?,
     }));
     stack.push_bool(false);
     Ok(())
+}
+
+pub(crate) fn rendered_values_equal(left: &RenderedValue, right: &RenderedValue) -> bool {
+    let left = visible_rendered_value(left);
+    let right = visible_rendered_value(right);
+
+    match (left, right) {
+        (
+            RenderedValue::UnionCase {
+                variant_name: left_variant,
+                fields: left_fields,
+                ..
+            },
+            RenderedValue::UnionCase {
+                variant_name: right_variant,
+                fields: right_fields,
+                ..
+            },
+        ) => {
+            if left_variant != right_variant {
+                return false;
+            }
+
+            match (
+                union_case_payload(left_fields),
+                union_case_payload(right_fields),
+            ) {
+                (Some(left), Some(right)) => rendered_values_equal(left, right),
+                (None, None) => true,
+                _ => false,
+            }
+        }
+        (
+            RenderedValue::UnionCase {
+                variant_name,
+                fields,
+                ..
+            },
+            right,
+        ) => union_case_equal_to_value(variant_name, fields, right),
+        (
+            left,
+            RenderedValue::UnionCase {
+                variant_name,
+                fields,
+                ..
+            },
+        ) => union_case_equal_to_value(variant_name, fields, left),
+        (
+            RenderedValue::Leaf {
+                value: left_value, ..
+            },
+            RenderedValue::Leaf {
+                value: right_value, ..
+            },
+        )
+        | (
+            RenderedValue::Address {
+                value: left_value, ..
+            },
+            RenderedValue::Address {
+                value: right_value, ..
+            },
+        ) => left_value == right_value,
+        (
+            RenderedValue::CellLike {
+                type_name: left_type,
+                value: left_value,
+                ..
+            },
+            RenderedValue::CellLike {
+                type_name: right_type,
+                value: right_value,
+                ..
+            },
+        )
+        | (
+            RenderedValue::CellOf {
+                type_name: left_type,
+                value: left_value,
+                ..
+            },
+            RenderedValue::CellOf {
+                type_name: right_type,
+                value: right_value,
+                ..
+            },
+        )
+        | (
+            RenderedValue::EnumValue {
+                type_name: left_type,
+                value: left_value,
+                ..
+            },
+            RenderedValue::EnumValue {
+                type_name: right_type,
+                value: right_value,
+                ..
+            },
+        ) => left_type == right_type && left_value == right_value,
+        (
+            RenderedValue::Struct {
+                type_name: left_type,
+                fields: left_fields,
+            },
+            RenderedValue::Struct {
+                type_name: right_type,
+                fields: right_fields,
+            },
+        ) => left_type == right_type && rendered_fields_equal(left_fields, right_fields),
+        (
+            RenderedValue::Tensor {
+                items: left_items, ..
+            },
+            RenderedValue::Tensor {
+                items: right_items, ..
+            },
+        )
+        | (
+            RenderedValue::ArrayOf {
+                items: left_items, ..
+            },
+            RenderedValue::ArrayOf {
+                items: right_items, ..
+            },
+        ) => rendered_items_equal(left_items, right_items),
+        (RenderedValue::OptimizedOut, RenderedValue::OptimizedOut)
+        | (RenderedValue::LazyCantParseSlice, RenderedValue::LazyCantParseSlice) => true,
+        (
+            RenderedValue::LazyUnresolved {
+                type_name: left_type,
+            },
+            RenderedValue::LazyUnresolved {
+                type_name: right_type,
+            },
+        ) => left_type == right_type,
+        _ => false,
+    }
+}
+
+fn visible_rendered_value(mut value: &RenderedValue) -> &RenderedValue {
+    loop {
+        match value {
+            RenderedValue::LastSeen { inner } => value = inner,
+            RenderedValue::LazyNotYetLoaded { preview } => value = preview,
+            _ => return value,
+        }
+    }
+}
+
+pub(crate) fn union_case_payload(fields: &[(String, RenderedValue)]) -> Option<&RenderedValue> {
+    fields
+        .iter()
+        .find_map(|(name, value)| (name == "value").then_some(value))
+}
+
+fn union_case_equal_to_value(
+    variant_name: &str,
+    fields: &[(String, RenderedValue)],
+    value: &RenderedValue,
+) -> bool {
+    if let Some(payload) = union_case_payload(fields) {
+        return rendered_values_equal(payload, value);
+    }
+
+    match value {
+        RenderedValue::Leaf {
+            value: leaf_value, ..
+        } => leaf_value == variant_name,
+        RenderedValue::Struct { type_name, fields } => {
+            fields.is_empty() && type_name == variant_name
+        }
+        _ => false,
+    }
+}
+
+fn rendered_items_equal(left: &[RenderedValue], right: &[RenderedValue]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|(left, right)| rendered_values_equal(left, right))
+}
+
+fn rendered_fields_equal(
+    left: &[(String, RenderedValue)],
+    right: &[(String, RenderedValue)],
+) -> bool {
+    left.len() == right.len()
+        && left.iter().all(|(left_name, left_value)| {
+            right
+                .iter()
+                .find(|(right_name, _)| right_name == left_name)
+                .is_some_and(|(_, right_value)| rendered_values_equal(left_value, right_value))
+        })
 }
 
 fn format_decimal(value: &BigInt, decimals: u32) -> String {
@@ -153,18 +350,18 @@ fn assert_decimal_impl(
         return Ok(());
     }
 
+    let decimals_u32 = decimals.to_u32().unwrap_or(0);
+    let left_str = format_decimal(&left, decimals_u32);
+    let right_str = format_decimal(&right, decimals_u32);
     let message = if message.is_empty() {
-        let decimals_u32 = decimals.to_u32().unwrap_or(0);
-        let left_str = format_decimal(&left, decimals_u32);
-        let right_str = format_decimal(&right, decimals_u32);
-        format!(
-            "expect(<actual>).toEqualDecimal(<expected>)\n       Actual:   {left_str}\n       Expected: {right_str}"
-        )
+        "expect(<actual>).toEqualDecimal(<expected>)".to_owned()
     } else {
         message
     };
 
-    *ctx.asserts.assert_failure = Some(AssertFailure::Fail(FailAssertFailure {
+    *ctx.asserts.assert_failure = Some(AssertFailure::Decimal(AssertDecimalFailure {
+        left: left_str,
+        right: right_str,
         message: Some(message),
         location: SourceLocation::parse(&location)?,
     }));
@@ -205,14 +402,13 @@ fn fail_to_find_transaction_by_params_impl(
     //     body: cell? = null,
     // }
 
-    let (params, parsed_txs) = match process_txs_and_search_params(&txs, &params) {
-        Some(value) => value,
-        None => return Ok(()),
+    let Some((params, parsed_txs)) = process_txs_and_search_params(&txs, &params) else {
+        return Ok(());
     };
 
     *ctx.asserts.assert_failure = Some(AssertFailure::TransactionNotFound(
         TransactionGenericAssertFailure {
-            txs: TupleItem::big_array_from_items(txs).to_typed("SendResultList"),
+            txs,
             parsed_txs,
             params,
             message: Some(message),
@@ -243,14 +439,13 @@ fn fail_to_not_find_transaction_by_params_impl(
     //     body: cell? = null,
     // }
 
-    let (params, parsed_txs) = match process_txs_and_search_params(&txs, &params) {
-        Some(value) => value,
-        None => return Ok(()),
+    let Some((params, parsed_txs)) = process_txs_and_search_params(&txs, &params) else {
+        return Ok(());
     };
 
     *ctx.asserts.assert_failure = Some(AssertFailure::TransactionIsFound(
         TransactionGenericAssertFailure {
-            txs: TupleItem::big_array_from_items(txs).to_typed("SendResultList"),
+            txs,
             parsed_txs,
             params,
             message: if message.is_empty() {
@@ -278,6 +473,28 @@ fn fail_wallet_not_found_impl(
     Ok(())
 }
 
+extension!(fail_to_find_external_message in (Context) with (opcode: BigInt, message_name: String, txs: Vec<TupleItem>, message: String, location: String) using fail_to_find_external_message_impl);
+fn fail_to_find_external_message_impl(
+    ctx: &mut Context,
+    _stack: &mut Tuple,
+    opcode: BigInt,
+    message_name: String,
+    txs: Vec<TupleItem>,
+    message: String,
+    location: String,
+) -> anyhow::Result<()> {
+    *ctx.asserts.assert_failure = Some(AssertFailure::ExternalMessageNotFound(
+        ExternalMessageNotFoundFailure {
+            message: Some(message),
+            location: SourceLocation::parse(&location)?,
+            txs,
+            message_name,
+            opcode: opcode.to_u32(),
+        },
+    ));
+    Ok(())
+}
+
 #[must_use]
 pub fn process_txs_and_search_params(
     txs: &[TupleItem],
@@ -301,7 +518,7 @@ pub fn process_txs_and_search_params(
 }
 
 /// Extract tag, predicate, and optional original value from a sub-tuple.
-/// Format: [0, null] = absent, [1, cont] = user predicate, [2, cont, original_value].
+/// Format: [0, null] = absent, [1, cont] = user predicate, [2, cont, `original_value`].
 /// Returns None for tag 0. For tag 2, `original` holds the display value.
 struct SubtupleData<'a> {
     tag: u8,
@@ -352,6 +569,7 @@ pub fn parse_search_params(params: &Tuple) -> Option<TransactionNotFoundParams> 
         action_exit_code: None,
         compute_phase_skipped: None,
         body: None,
+        state_init: None,
     };
 
     // Helper: parse a sub-tuple field as DisplayParam.
@@ -428,19 +646,20 @@ pub fn parse_search_params(params: &Tuple) -> Option<TransactionNotFoundParams> 
         };
     }
 
-    parse_field!(addr to, 12);
-    parse_field!(addr from, 11);
-    parse_field!(bigint value, 10);
-    parse_field!(u32 exit_code, 9);
-    parse_field!(bool success, 8);
-    parse_field!(bool aborted, 7);
-    parse_field!(bool deploy, 6);
-    parse_field!(bool bounce, 5);
-    parse_field!(bool bounced, 4);
-    parse_field!(u32 opcode, 3);
-    parse_field!(i32 action_exit_code, 2);
-    parse_field!(bool compute_phase_skipped, 1);
-    parse_field!(cell body, 0);
+    parse_field!(addr to, 13);
+    parse_field!(addr from, 12);
+    parse_field!(bigint value, 11);
+    parse_field!(u32 exit_code, 10);
+    parse_field!(bool success, 9);
+    parse_field!(bool aborted, 8);
+    parse_field!(bool deploy, 7);
+    parse_field!(bool bounce, 6);
+    parse_field!(bool bounced, 5);
+    parse_field!(u32 opcode, 4);
+    parse_field!(i32 action_exit_code, 3);
+    parse_field!(bool compute_phase_skipped, 2);
+    parse_field!(cell body, 1);
+    parse_field!(cell state_init, 0);
 
     Some(result)
 }
@@ -448,7 +667,6 @@ pub fn parse_search_params(params: &Tuple) -> Option<TransactionNotFoundParams> 
 fn read_optional_address_value(item: &TupleItem) -> Option<IntAddr> {
     match item {
         TupleItem::Slice(cell) | TupleItem::Cell(cell) => cell.parse::<IntAddr>().ok(),
-        TupleItem::Cont(_) => None,
         _ => None,
     }
 }
@@ -457,7 +675,6 @@ fn read_int_like_param(item: &TupleItem) -> Option<&BigInt> {
     match item {
         TupleItem::Int(num) => Some(num),
         TupleItem::Tuple(items) => items.first().and_then(read_int_like_param),
-        TupleItem::TypedTuple { inner, .. } => inner.0.first().and_then(read_int_like_param),
         _ => None,
     }
 }
@@ -479,5 +696,6 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         105 => fail_wallet_not_found : 2,
         106 => assert_decimal : 5,
         107 => assume_reject : 2,
+        108 => fail_to_find_external_message : 5,
     });
 }

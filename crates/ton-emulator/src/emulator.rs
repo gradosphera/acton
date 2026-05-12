@@ -96,7 +96,8 @@ impl Emulator {
     ///
     /// # Arguments
     ///
-    /// * `verbosity` - The level of logging detail for the executor.
+    /// * `verbosity` - The level of logging detail for the executor. Use
+    ///   [`ExecutorVerbosity::Off`] to disable VM logs completely in the native emulator.
     /// * `config_b64` - Optional Base64-encoded global configuration `BoC`.
     pub fn new(verbosity: ExecutorVerbosity, config_b64: Option<&str>) -> anyhow::Result<Emulator> {
         let executor = Executor::new(verbosity, config_b64)?;
@@ -261,12 +262,6 @@ impl Emulator {
             .parse::<Transaction>()
             .context("Failed to parse transaction")?;
 
-        let out_messages = transaction
-            .iter_out_msgs()
-            .filter_map(Result::ok)
-            .map(|it| to_cell(&it))
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
         Ok(SendMessageResult::Success(SendMessageResultSuccess {
             raw_transaction: result.transaction,
             transaction,
@@ -274,7 +269,6 @@ impl Emulator {
             child_transactions: vec![],
             shard_account_before,
             shard_account: shard_account_after,
-            out_messages,
             vm_log: result.vm_log,
             executor_logs: executor_logs.unwrap_or_default(),
             actions: result.actions,
@@ -305,24 +299,38 @@ impl Emulator {
             return Ok(results);
         };
 
-        let mut externals = Vec::new();
-        let mut child_lts = Vec::new();
-        let main_tx = main_res.transaction.clone();
+        let main_tx_lt = main_res.transaction.lt;
 
-        for out_msg_cell in main_res.out_messages {
-            let Ok(out_msg) = out_msg_cell.parse::<Message<'_>>() else {
+        let mut externals = Vec::with_capacity(4);
+        let mut child_lts = Vec::with_capacity(4);
+
+        let out_msgs = main_res
+            .transaction
+            .iter_out_msgs()
+            .zip(main_res.transaction.out_msgs.raw_values());
+
+        for (out_msg, raw_out_msg) in out_msgs {
+            let Ok(out_msg) = out_msg else {
+                continue;
+            };
+            let Ok(mut raw_out_msg) = raw_out_msg else {
                 continue;
             };
 
             match out_msg.info {
                 MsgInfo::ExtOut(_) => {
-                    externals.push(out_msg_cell);
+                    if let Ok(out_msg_cell) = raw_out_msg.load_reference_cloned() {
+                        externals.push(out_msg_cell);
+                    }
                 }
                 MsgInfo::Int(_) => {
+                    let Ok(out_msg_cell) = raw_out_msg.load_reference_cloned() else {
+                        continue;
+                    };
                     let mut sub_results =
                         Self::execute_send_message_flow(out_msg_cell, None, run_transaction)?;
                     if let Some(SendMessageResult::Success(res)) = sub_results.get_mut(0) {
-                        res.parent_transaction = Some(main_tx.lt);
+                        res.parent_transaction = Some(main_tx_lt);
                         child_lts.push(res.transaction.lt);
                     }
                     results.extend(sub_results);
@@ -402,12 +410,6 @@ impl Emulator {
             .parse::<Transaction>()
             .context("Failed to parse transaction")?;
 
-        let out_messages = transaction
-            .iter_out_msgs()
-            .filter_map(Result::ok)
-            .map(|it| to_cell(&it))
-            .collect::<anyhow::Result<Vec<_>>>()?;
-
         let main_res = SendMessageResultSuccess {
             raw_transaction: result.transaction,
             transaction: transaction.clone(),
@@ -415,7 +417,6 @@ impl Emulator {
             child_transactions: vec![],
             shard_account_before,
             shard_account: shard_account_after,
-            out_messages: out_messages.clone(),
             vm_log: result.vm_log,
             executor_logs,
             actions: result.actions,
@@ -429,16 +430,27 @@ impl Emulator {
         let mut child_lts = Vec::new();
 
         // Recursively process outgoing internal messages via send_message
-        for out_msg_cell in out_messages {
-            let Ok(out_msg) = out_msg_cell.parse::<Message<'_>>() else {
+        let out_msgs = transaction
+            .iter_out_msgs()
+            .zip(transaction.out_msgs.raw_values());
+        for (out_msg, raw_out_msg) in out_msgs {
+            let Ok(out_msg) = out_msg else {
+                continue;
+            };
+            let Ok(mut raw_out_msg) = raw_out_msg else {
                 continue;
             };
 
             match out_msg.info {
                 MsgInfo::ExtOut(_) => {
-                    externals.push(out_msg_cell);
+                    if let Ok(out_msg_cell) = raw_out_msg.load_reference_cloned() {
+                        externals.push(out_msg_cell);
+                    }
                 }
                 MsgInfo::Int(_) => {
+                    let Ok(out_msg_cell) = raw_out_msg.load_reference_cloned() else {
+                        continue;
+                    };
                     let mut sub_results = self.send_message(state, out_msg_cell, libs, None)?;
                     if let Some(SendMessageResult::Success(res)) = sub_results.get_mut(0) {
                         res.parent_transaction = Some(transaction.lt);
@@ -629,8 +641,6 @@ pub struct SendMessageResultSuccess {
     pub shard_account_before: ShardAccount,
     /// State of the account after the transaction.
     pub shard_account: ShardAccount,
-    /// Cells of outgoing messages produced by this transaction.
-    pub out_messages: Vec<Cell>,
     /// VM execution log.
     pub vm_log: Arc<str>,
     /// High-level executor logs.

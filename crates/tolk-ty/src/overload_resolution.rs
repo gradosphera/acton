@@ -4,6 +4,7 @@ use crate::type_interner::{TyId, TypeInterner};
 use crate::types::TyData;
 use rustc_hash::FxHashMap;
 use std::cmp::Ordering;
+use std::fmt::Write as _;
 use tolk_resolver::SymbolKind;
 use tolk_resolver::file_index::SymbolId;
 /*
@@ -38,7 +39,7 @@ pub(crate) struct ShapeScore {
 }
 
 impl ShapeScore {
-    pub(crate) fn is_shape_better_than(&self, other: &ShapeScore) -> bool {
+    pub(crate) fn is_shape_better_than(self, other: ShapeScore) -> bool {
         match self.kind.cmp(&other.kind) {
             Ordering::Greater => true,
             Ordering::Less => false,
@@ -237,7 +238,7 @@ pub(crate) fn resolve_methods_for_call(
     };
     for candidate in &viable {
         let s = calculate_shape_score(candidate.original_receiver, type_db.intrn);
-        if s.is_shape_better_than(&best_shape) {
+        if s.is_shape_better_than(best_shape) {
             best_shape = s;
         }
     }
@@ -310,7 +311,7 @@ pub(crate) fn choose_only_method_to_call(
             .resolve_symbol(candidate.method_id)
             .map_or_else(|| "unknown".into(), |s| s.name.clone());
 
-        msg.push_str(&format!("candidate function: `{method_name}`"));
+        let _ = write!(msg, "candidate function: `{method_name}`");
 
         if candidate.is_generic(type_db.intrn) {
             // TODO: format substitutions nicely

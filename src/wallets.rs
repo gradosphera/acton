@@ -6,7 +6,6 @@ use anyhow::{Context, anyhow};
 use hmac::{Hmac, Mac};
 use keyring::{Entry, Error as KeyringError};
 use rand::Rng;
-use retrace::Network;
 use ring::pbkdf2;
 use sha2::Sha512;
 use std::collections::{BTreeMap, HashMap};
@@ -20,6 +19,7 @@ use ton::ton_wallet::{
     Mnemonic, TonWallet, WALLET_ID_DEFAULT, WALLET_V5R1_ID_DEFAULT, WALLET_V5R1_ID_DEFAULT_TESTNET,
     WORDLIST_EN_SET, WalletVersion,
 };
+use ton_retrace::Network;
 
 const KEYRING_SERVICE: &str = "ton.acton.wallet";
 const TEST_KEYRING_DIR_ENV: &str = "ACTON_TEST_KEYRING_DIR"; // integration tests only
@@ -205,9 +205,8 @@ pub fn is_keyring_supported() -> bool {
     // Try to perform a dummy operation to check if the keyring backend is functional.
     // Real native backends will succeed (or return NoEntry for get),
     // while the default no-op mock will fail on set_password.
-    let entry = match Entry::new("ton.acton.check", "healthcheck") {
-        Ok(e) => e,
-        Err(_) => return false,
+    let Ok(entry) = Entry::new("ton.acton.check", "healthcheck") else {
+        return false;
     };
 
     match entry.set_password("test") {
@@ -289,7 +288,7 @@ pub fn open_wallets(
                     .address_testnet
                     .as_ref()
                     .map(|a| TonAddress::from_str(&a.clone())),
-                _ => None,
+                Network::Custom(_) => None,
             };
 
             if let Some(expected_addr) = expected_address {
@@ -313,7 +312,7 @@ pub fn open_wallets(
                             Network::Testnet | Network::Localnet => {
                                 expected.address_testnet.as_deref()
                             }
-                            _ => None,
+                            Network::Custom(_) => None,
                         }
                         .unwrap_or("<unknown>");
                         anyhow::bail!(

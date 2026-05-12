@@ -20,9 +20,10 @@ use tolk_ty::InferenceResult;
 /// why inputs are trusted and which invariants are required.
 ///
 /// ### Example
-/// ```tolk
+/// ```tolk twoslash
 /// fun convert(code: slice): continuation {
 ///     return transformSliceToContinuation(code);
+///     //     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ E017: converting slice to continuation requires safety comment
 /// }
 /// ```
 ///

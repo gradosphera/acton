@@ -16,11 +16,24 @@ get fun currentCounterFail(): int { throw 10 }
 get fun getCell(): cell { return beginCell().storeInt(32, 32).endCell() }
 ";
 
+const CUSTOM_GET_EXIT_CONTRACT: &str = r"
+fun onInternalMessage(in: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+
+enum Errors {
+    AbiFailure = 709
+}
+
+get fun currentCounter(): int { return 0 }
+get fun currentCounterCustomFail(): int { throw Errors.AbiFailure }
+";
+
 const TEST_PREPARE: &str = r#"
 import "../../lib/testing/expect"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/io"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/fmt"
 
 struct Counter {
@@ -40,7 +53,7 @@ fun Counter.fromStorage() {
 fun setupTest() {
     val counter = Counter.fromStorage();
 
-    val deployer = net.treasury("deployer");
+    val deployer = testing.treasury("deployer");
     val msg = createMessage({
         bounce: false,
         value: ton("1.0"),
@@ -66,7 +79,7 @@ fn test_unknown_get_method_call() {
             get fun `test foo`() {
                 val (counter, deployer) = setupTest();
 
-                val counterRes = net.runGetMethod<int, tuple>(counter.address, "currentCounter999");
+                val counterRes = net.runGetMethod<int>(counter.address, "currentCounter999");
                 println("Counter: {}", counterRes);
             }
         "#)
@@ -77,7 +90,9 @@ fn test_unknown_get_method_call() {
         .test()
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_unknown_get_method_call.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/test/test_unknown_get_method_call.stdout.txt",
+        );
 }
 
 #[test]
@@ -92,7 +107,7 @@ fn test_unknown_get_method_call_with_backtrace_full() {
             get fun `test foo`() {
                 val (counter, deployer) = setupTest();
 
-                val counterRes = net.runGetMethod<int, tuple>(counter.address, "currentCounter999");
+                val counterRes = net.runGetMethod<int>(counter.address, "currentCounter999");
                 println("Counter: {}", counterRes);
             }
         "#)
@@ -105,7 +120,7 @@ fn test_unknown_get_method_call_with_backtrace_full() {
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_unknown_get_method_call_with_backtrace_full.stdout.txt",
+            "integration/snapshots/test/test_unknown_get_method_call_with_backtrace_full.stdout.txt",
         );
 }
 
@@ -122,7 +137,7 @@ fn test_get_method_call_return_type_mismatch() {
             get fun `test foo`() {
                 val (counter, deployer) = setupTest();
 
-                val counterRes = net.runGetMethod<address, tuple>(counter.address, "getCell");
+                val counterRes = net.runGetMethod<address>(counter.address, "getCell");
                 println("Counter: {}", counterRes);
             }
         "#)
@@ -134,7 +149,7 @@ fn test_get_method_call_return_type_mismatch() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_get_method_call_return_type_mismatch.stdout.txt",
+            "integration/snapshots/test/test_get_method_call_return_type_mismatch.stdout.txt",
         );
 }
 
@@ -150,7 +165,7 @@ fn test_no_arg_get_method_call() {
             get fun `test foo`() {
                 val (counter, deployer) = setupTest();
 
-                val counterRes = net.runGetMethod<int, tuple>(counter.address, "currentCounter2");
+                val counterRes = net.runGetMethod<int>(counter.address, "currentCounter2");
                 println("Counter: {}", counterRes);
             }
         "#)
@@ -161,7 +176,9 @@ fn test_no_arg_get_method_call() {
         .test()
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_no_arg_get_method_call.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/test/test_no_arg_get_method_call.stdout.txt",
+        );
 }
 
 #[test]
@@ -176,7 +193,7 @@ fn test_no_arg_get_method_call_2() {
             get fun `test foo`() {
                 val (counter, deployer) = setupTest();
 
-                val counterRes = net.runGetMethod<int, tuple>(counter.address, "currentCounter3");
+                val counterRes = net.runGetMethod<int>(counter.address, "currentCounter3");
                 println("Counter: {}", counterRes);
             }
         "#)
@@ -187,7 +204,9 @@ fn test_no_arg_get_method_call_2() {
         .test()
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_no_arg_get_method_call_2.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/test/test_no_arg_get_method_call_2.stdout.txt",
+        );
 }
 
 #[test]
@@ -202,7 +221,7 @@ fn test_no_arg_get_method_call_2_with_backtrace_full() {
             get fun `test foo`() {
                 val (counter, deployer) = setupTest();
 
-                val counterRes = net.runGetMethod<int, tuple>(counter.address, "currentCounter3");
+                val counterRes = net.runGetMethod<int>(counter.address, "currentCounter3");
                 println("Counter: {}", counterRes);
             }
         "#)
@@ -215,7 +234,7 @@ fn test_no_arg_get_method_call_2_with_backtrace_full() {
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_no_arg_get_method_call_2_with_backtrace_full.stdout.txt",
+            "integration/snapshots/test/test_no_arg_get_method_call_2_with_backtrace_full.stdout.txt",
         );
 }
 
@@ -231,7 +250,7 @@ fn test_get_method_call_shows_exit_code_variant() {
             get fun `test foo`() {
                 val (counter, deployer) = setupTest();
 
-                val counterRes = net.runGetMethod<int, tuple>(counter.address, "currentCounterFail");
+                val counterRes = net.runGetMethod<int>(counter.address, "currentCounterFail");
                 println("Counter: {}", counterRes);
             }
         "#)
@@ -243,7 +262,66 @@ fn test_get_method_call_shows_exit_code_variant() {
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_get_method_call_shows_exit_code_variant.stdout.txt",
+            "integration/snapshots/test/test_get_method_call_shows_exit_code_variant.stdout.txt",
+        );
+}
+
+#[test]
+fn test_get_method_call_uses_contract_abi_for_custom_exit_code() {
+    ProjectBuilder::new("simple-custom-exit")
+        .contract("simple", CUSTOM_GET_EXIT_CONTRACT)
+        .test_file(
+            "test",
+            (TEST_PREPARE.to_string()
+                + r#"
+
+            get fun `test foo`() {
+                val (counter, deployer) = setupTest();
+
+                val counterRes = net.runGetMethod<int>(counter.address, "currentCounterCustomFail");
+                println("Counter: {}", counterRes);
+            }
+        "#)
+            .as_str(),
+        )
+        .build()
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_not_contains("Error: Errors.AbiFailure")
+        .assert_snapshot_matches(
+            "integration/snapshots/test/test_get_method_call_uses_contract_abi_for_custom_exit_code.stdout.txt",
+        );
+}
+
+#[test]
+fn test_get_method_call_uses_contract_abi_for_custom_exit_code_with_backtrace_full() {
+    ProjectBuilder::new("simple-custom-exit-backtrace")
+        .contract("simple", CUSTOM_GET_EXIT_CONTRACT)
+        .test_file(
+            "test",
+            (TEST_PREPARE.to_string()
+                + r#"
+
+            get fun `test foo`() {
+                val (counter, deployer) = setupTest();
+
+                val counterRes = net.runGetMethod<int>(counter.address, "currentCounterCustomFail");
+                println("Counter: {}", counterRes);
+            }
+        "#)
+            .as_str(),
+        )
+        .build()
+        .acton()
+        .test()
+        .with_backtrace("full")
+        .run()
+        .failure()
+        .assert_not_contains("Error: Errors.AbiFailure")
+        .assert_snapshot_matches(
+            "integration/snapshots/test/test_get_method_call_uses_contract_abi_for_custom_exit_code_with_backtrace_full.stdout.txt",
         );
 }
 
@@ -259,11 +337,11 @@ fn test_get_method_call_shows_backtrace_with_full_mode() {
             get fun `test foo`() {
                 val (counter, deployer) = setupTest();
 
-                val counterRes = net.runGetMethod<int, tuple>(counter.address, "currentCounterFail");
+                val counterRes = net.runGetMethod<int>(counter.address, "currentCounterFail");
                 println("Counter: {}", counterRes);
             }
         "#)
-                .as_str(),
+            .as_str(),
         )
         .build()
         .acton()
@@ -272,7 +350,7 @@ fn test_get_method_call_shows_backtrace_with_full_mode() {
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_get_method_call_shows_backtrace_with_full_mode.stdout.txt",
+            "integration/snapshots/test/test_get_method_call_shows_backtrace_with_full_mode.stdout.txt",
         );
 }
 
@@ -292,7 +370,7 @@ fn test_get_method_call_shows_backtrace_with_full_mode_from_config() {
             get fun `test foo`() {
                 val (counter, deployer) = setupTest();
 
-                val counterRes = net.runGetMethod<int, tuple>(counter.address, "currentCounterFail");
+                val counterRes = net.runGetMethod<int>(counter.address, "currentCounterFail");
                 println("Counter: {}", counterRes);
             }
         "#)
@@ -304,7 +382,7 @@ fn test_get_method_call_shows_backtrace_with_full_mode_from_config() {
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_get_method_call_shows_backtrace_with_full_mode_from_config.stdout.txt",
+            "integration/snapshots/test/test_get_method_call_shows_backtrace_with_full_mode_from_config.stdout.txt",
         );
 }
 
@@ -325,11 +403,13 @@ fn test_debug_dump_stack_output() {
     project
         .acton()
         .test()
+        .verbose()
         .run()
         .success()
         .assert_passed(1)
-        .assert_contains("Test output:")
-        .assert_snapshot_matches("integration/snapshots/test_debug_dump_stack_output.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/test/test_debug_dump_stack_output.stdout.txt",
+        );
 }
 
 #[test]
@@ -354,13 +434,14 @@ fn test_debug_dump_stack_output_mixed_with_stdout_and_stderr() {
     project
         .acton()
         .test()
+        .verbose()
         .run()
         .success()
         .assert_passed(1)
         .assert_contains("Test output:")
         .assert_contains("Test stderr:")
         .assert_snapshot_matches(
-            "integration/snapshots/test_debug_dump_stack_output_mixed_with_stdout_and_stderr.stdout.txt",
+            "integration/snapshots/test/test_debug_dump_stack_output_mixed_with_stdout_and_stderr.stdout.txt",
         );
 }
 
@@ -382,12 +463,66 @@ fn test_debug_dump_stack_output_multiple_debug_lines() {
     project
         .acton()
         .test()
+        .with_backtrace("full")
         .run()
         .success()
         .assert_passed(1)
         .assert_contains("dbg-line")
         .assert_snapshot_matches(
-            "integration/snapshots/test_debug_dump_stack_output_multiple_debug_lines.stdout.txt",
+            "integration/snapshots/test/test_debug_dump_stack_output_multiple_debug_lines.stdout.txt",
+        );
+}
+
+#[test]
+fn test_debug_dump_stack_output_requires_verbose_flag() {
+    let project = ProjectBuilder::new("test-debug-dump-stack-output-default-off")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r"
+            get fun `test debug dump stack output requires verbose`() {
+                debug.dumpStack();
+            }
+        ",
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_not_contains("stack(0 values)")
+        .assert_snapshot_matches(
+            "integration/snapshots/test/test_debug_dump_stack_output_requires_verbose_flag.stdout.txt",
+        );
+}
+
+#[test]
+fn test_debug_dump_stack_output_rejects_verbose_level_above_one() {
+    let project = ProjectBuilder::new("test-debug-dump-stack-output-verbose-level")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r"
+            get fun `test debug dump stack output rejects verbose level above one`() {
+                debug.dumpStack();
+            }
+        ",
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .arg("--verbose")
+        .arg("--verbose")
+        .run()
+        .failure()
+        .assert_stderr_contains("Verbosity levels above 1 are not supported yet")
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test/test_debug_dump_stack_output_rejects_verbose_level_above_one.stderr.txt",
         );
 }
 
@@ -402,7 +537,7 @@ fn test_test_file_not_found() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_test_file_not_found.stderr.txt",
+            "integration/snapshots/test/test_test_file_not_found.stderr.txt",
         );
 }
 
@@ -417,7 +552,7 @@ fn test_test_directory_not_found() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_test_directory_not_found.stderr.txt",
+            "integration/snapshots/test/test_test_directory_not_found.stderr.txt",
         );
 }
 
@@ -435,7 +570,7 @@ fn test_test_invalid_file_extension() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_test_invalid_file_extension.stderr.txt",
+            "integration/snapshots/test/test_test_invalid_file_extension.stderr.txt",
         );
 }
 
@@ -460,7 +595,7 @@ fn test_test_invalid_filter_regex() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_test_invalid_filter_regex.stderr.txt",
+            "integration/snapshots/test/test_test_invalid_filter_regex.stderr.txt",
         );
 }
 
@@ -485,7 +620,7 @@ fn test_test_invalid_exclude_pattern() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_test_invalid_exclude_pattern.stderr.txt",
+            "integration/snapshots/test/test_test_invalid_exclude_pattern.stderr.txt",
         );
 }
 
@@ -510,7 +645,64 @@ fn test_test_invalid_include_pattern() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_test_invalid_include_pattern.stderr.txt",
+            "integration/snapshots/test/test_test_invalid_include_pattern.stderr.txt",
+        );
+}
+
+#[test]
+fn test_empty_selection_no_test_files_fails() {
+    ProjectBuilder::new("empty-selection-no-test-files")
+        .contract("simple", SIMPLE_CONTRACT)
+        .build()
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test/test_empty_selection_no_test_files.stdout.txt",
+        );
+}
+
+#[test]
+fn test_empty_selection_include_matches_no_test_files_fails() {
+    ProjectBuilder::new("empty-selection-include-no-files")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r"
+                get fun `test foo`() {}
+            ",
+        )
+        .build()
+        .acton()
+        .test()
+        .include_pattern("tests/missing/**")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test/test_empty_selection_include_matches_no_test_files.stdout.txt",
+        );
+}
+
+#[test]
+fn test_empty_selection_test_file_without_tests_fails() {
+    ProjectBuilder::new("empty-selection-file-without-tests")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/testing/expect"
+
+            // No test functions
+        "#,
+        )
+        .build()
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/test/test_empty_selection_test_file_without_tests.stdout.txt",
         );
 }
 
@@ -536,7 +728,7 @@ fn test_test_invalid_coverage_format() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_test_invalid_coverage_format.stderr.txt",
+            "integration/snapshots/test/test_test_invalid_coverage_format.stderr.txt",
         );
 }
 
@@ -561,7 +753,7 @@ fn test_test_invalid_reporter() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_test_invalid_reporter.stderr.txt",
+            "integration/snapshots/test/test_test_invalid_reporter.stderr.txt",
         );
 }
 
@@ -585,7 +777,7 @@ fn test_invalid_test_file_syntax() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_invalid_test_file_syntax.stderr.txt",
+            "integration/snapshots/test/test_invalid_test_file_syntax.stderr.txt",
         );
 }
 
@@ -596,7 +788,7 @@ fn test_build_unknown_file() {
         .test_file(
             "test",
             r#"
-            import "../../lib/build/build"
+            import "../../lib/build"
 
             get fun `test foo`() {
                 val cell = build("counter", "unknown.tolk")
@@ -610,7 +802,7 @@ fn test_build_unknown_file() {
         .test()
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_build_unknown_file.stdout.txt");
+        .assert_snapshot_matches("integration/snapshots/build/test_build_unknown_file.stdout.txt");
 }
 
 #[test]
@@ -620,7 +812,7 @@ fn test_build_unknown_contract() {
         .test_file(
             "test",
             r#"
-            import "../../lib/build/build"
+            import "../../lib/build"
 
             get fun `test foo`() {
                 val cell = build("counter")
@@ -634,7 +826,9 @@ fn test_build_unknown_contract() {
         .test()
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_build_unknown_contract.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/build/test_build_unknown_contract.stdout.txt",
+        );
 }
 
 #[test]
@@ -645,8 +839,9 @@ fn test_run_get_method_of_not_deployed_contract() {
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
 
             get fun `test foo`() {
                 val address = address("EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot");
@@ -663,7 +858,7 @@ fn test_run_get_method_of_not_deployed_contract() {
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_run_get_method_of_not_deployed_contract.stdout.txt",
+            "integration/snapshots/run/test_run_get_method_of_not_deployed_contract.stdout.txt",
         );
 }
 
@@ -675,8 +870,9 @@ fn test_run_get_method_of_not_deployed_contract_with_backtrace_full() {
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
 
             get fun `test foo`() {
                 val address = address("EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot");
@@ -694,7 +890,7 @@ fn test_run_get_method_of_not_deployed_contract_with_backtrace_full() {
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_run_get_method_of_not_deployed_contract_with_backtrace_full.stdout.txt",
+            "integration/snapshots/run/test_run_get_method_of_not_deployed_contract_with_backtrace_full.stdout.txt",
         );
 }
 
@@ -706,11 +902,12 @@ fn test_send_message_to_not_deployed_contract() {
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
 
             get fun `test foo`() {
-                val sender = net.treasury("treasury");
+                val sender = testing.treasury("treasury");
                 val address = address("EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot");
 
                 val msg = createMessage({
@@ -732,7 +929,7 @@ fn test_send_message_to_not_deployed_contract() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_send_message_to_not_deployed_contract.stdout.txt",
+            "integration/snapshots/test/test_send_message_to_not_deployed_contract.stdout.txt",
         );
 }
 
@@ -744,11 +941,12 @@ fn test_send_message_to_not_deployed_contract_with_register() {
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
 
             get fun `test foo`() {
-                val sender = net.treasury("treasury");
+                val sender = testing.treasury("treasury");
                 val address = address("EQC2jeGorIAFh2LXwsDjHfRK-GSo9UzchdIEMh24A7T7AHot");
                 net.registerAddress(address, "some unknown contract");
 
@@ -771,7 +969,7 @@ fn test_send_message_to_not_deployed_contract_with_register() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_send_message_to_not_deployed_contract_with_register.stdout.txt",
+            "integration/snapshots/test/test_send_message_to_not_deployed_contract_with_register.stdout.txt",
         );
 }
 
@@ -783,11 +981,12 @@ fn test_run_get_method_of_deployed_contract_with_null_code() {
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
 
             get fun `test foo`() {
-                val deployer = net.treasury("deployer");
+                val deployer = testing.treasury("deployer");
                 val address = AutoDeployAddress {
                     stateInit: beginCell()
                         .storeBool(false) // fixed_prefix_length:(Maybe (## 5))
@@ -818,7 +1017,7 @@ fn test_run_get_method_of_deployed_contract_with_null_code() {
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_run_get_method_of_deployed_contract_with_null_code.stdout.txt",
+            "integration/snapshots/run/test_run_get_method_of_deployed_contract_with_null_code.stdout.txt",
         );
 }
 
@@ -830,11 +1029,12 @@ fn test_run_get_method_of_deployed_contract_with_null_code_with_backtrace_full()
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
 
             get fun `test foo`() {
-                val deployer = net.treasury("deployer");
+                val deployer = testing.treasury("deployer");
                 val address = AutoDeployAddress {
                     stateInit: beginCell()
                         .storeBool(false) // fixed_prefix_length:(Maybe (## 5))
@@ -866,7 +1066,7 @@ fn test_run_get_method_of_deployed_contract_with_null_code_with_backtrace_full()
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_run_get_method_of_deployed_contract_with_null_code_with_backtrace_full.stdout.txt",
+            "integration/snapshots/run/test_run_get_method_of_deployed_contract_with_null_code_with_backtrace_full.stdout.txt",
         );
 }
 
@@ -878,11 +1078,12 @@ fn test_send_invalid_message() {
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
 
             get fun `test foo`() {
-                val deployer = net.treasury("deployer");
+                val deployer = testing.treasury("deployer");
                 val address = AutoDeployAddress {
                     stateInit: beginCell()
                         .storeBool(false) // fixed_prefix_length:(Maybe (## 5))
@@ -905,7 +1106,7 @@ fn test_send_invalid_message() {
         .test()
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_send_invalid_message.stdout.txt");
+        .assert_snapshot_matches("integration/snapshots/test/test_send_invalid_message.stdout.txt");
 }
 
 #[test]
@@ -925,8 +1126,9 @@ fn test_debug_logs_in_contract() {
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
 
             get fun `test foo`() {
                 val init = ContractState {
@@ -937,7 +1139,7 @@ fn test_debug_logs_in_contract() {
                     stateInit: init,
                 };
 
-                val sender = net.treasury("sender");
+                val sender = testing.treasury("sender");
                 val msg = createMessage({
                     bounce: false,
                     value: ton("1"),
@@ -956,7 +1158,9 @@ fn test_debug_logs_in_contract() {
         .test()
         .run()
         .success()
-        .assert_snapshot_matches("integration/snapshots/test_debug_logs_in_contract.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/test/test_debug_logs_in_contract.stdout.txt",
+        );
 }
 
 #[test]
@@ -976,7 +1180,7 @@ fn test_filter_all_test() {
         .filter("1111111")
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_filter_all_test.stdout.txt");
+        .assert_snapshot_matches("integration/snapshots/test/test_filter_all_test.stdout.txt");
 }
 
 #[test]
@@ -1004,7 +1208,7 @@ fn test_filter_all_test_with_several_test_files() {
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_filter_all_test_with_several_test_files.stdout.txt",
+            "integration/snapshots/test/test_filter_all_test_with_several_test_files.stdout.txt",
         );
 }
 
@@ -1039,13 +1243,13 @@ fn test_auto_register_refs_if_any() {
             "test",
             r#"
             import "../../lib/testing/expect"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/io"
             import "../../lib/emulation/network"
-            import "../../lib/testing/transaction_expect"
+            import "../../lib/emulation/testing"
 
             get fun `test action fail`() {
-                val deployer = net.treasury("deployer");
+                val deployer = testing.treasury("deployer");
                 val address = AutoDeployAddress {
                     stateInit: ContractState {
                         code: build("main"),
@@ -1069,8 +1273,9 @@ fn test_auto_register_refs_if_any() {
 
     let output = project.acton().test().run().success();
 
-    output
-        .assert_snapshot_matches("integration/snapshots/test_auto_register_refs_if_any.stdout.txt");
+    output.assert_snapshot_matches(
+        "integration/snapshots/test/test_auto_register_refs_if_any.stdout.txt",
+    );
 }
 
 fn replace_library_ref_boc(generated: &str, new_boc_b64: &str) -> String {
@@ -1128,12 +1333,13 @@ fn test_missing_library_ref_is_reported_in_transaction_tree() {
             "test",
             r#"
             import "../../lib/testing/expect"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/io"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
 
             get fun `test missing library ref is reported`() {
-                val deployer = net.treasury("deployer");
+                val deployer = testing.treasury("deployer");
                 val mainStateInit = ContractState {
                     code: build("main"),
                     data: createEmptyCell(),
@@ -1202,7 +1408,7 @@ fn test_missing_library_ref_is_reported_in_transaction_tree() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_missing_library_ref_is_reported_in_transaction_tree.stdout.txt",
+            "integration/snapshots/test/test_missing_library_ref_is_reported_in_transaction_tree.stdout.txt",
         );
 }
 
@@ -1221,10 +1427,10 @@ fn test_test_success_search_param_for_tx_with_compute_exit_code_10() {
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
             import "../../lib/testing/expect"
-            import "../../lib/testing/transaction_expect"
 
             get fun `test foo`() {
                 val init = ContractState {
@@ -1235,7 +1441,7 @@ fn test_test_success_search_param_for_tx_with_compute_exit_code_10() {
                     stateInit: init,
                 };
 
-                val sender = net.treasury("sender");
+                val sender = testing.treasury("sender");
                 val msg = createMessage({
                     bounce: false,
                     value: ton("1"),
@@ -1254,12 +1460,90 @@ fn test_test_success_search_param_for_tx_with_compute_exit_code_10() {
         .test()
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_test_success_search_param_for_tx_with_compute_exit_code_10.stdout.txt");
+        .assert_snapshot_matches("integration/snapshots/test/test_test_success_search_param_for_tx_with_compute_exit_code_10.stdout.txt");
+}
+
+#[test]
+fn test_compute_phase_user_exit_code_32_uses_contract_abi_not_action_description() {
+    let project = ProjectBuilder::new("test-compute-exit-code-32")
+        .contract(
+            "simple",
+            r"
+            enum Errors {
+                UserComputeFailure = 32
+            }
+
+            fun onInternalMessage(_: InMessage) {
+                throw Errors.UserComputeFailure
+            }
+            ",
+        )
+        .test_file(
+            "test",
+            r#"
+            import "../../lib/build"
+            import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
+            import "../../lib/testing/expect"
+
+            get fun `test compute exit code 32`() {
+                val init = ContractState {
+                    code: build("simple"),
+                    data: createEmptyCell(),
+                };
+                val address = AutoDeployAddress {
+                    stateInit: init,
+                };
+
+                val sender = testing.treasury("sender");
+                val msg = createMessage({
+                    bounce: false,
+                    value: ton("1"),
+                    dest: address,
+                    body: beginCell().storeUint(1, 32).endCell(),
+                });
+                val res = net.send(sender.address, msg);
+                expect(res).toHaveSuccessfulTx();
+            }
+        "#,
+        )
+        .build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches("integration/snapshots/test/test_compute_phase_user_exit_code_32_uses_contract_abi_not_action_description.stdout.txt");
 }
 
 #[test]
 fn test_test_success_search_param_for_tx_with_action_exit_code_37() {
-    let project = ProjectBuilder::new("test-get")
+    let project = action_exit_code_37_project("test-get").build();
+
+    project
+        .acton()
+        .test()
+        .run()
+        .failure()
+        .assert_snapshot_matches("integration/snapshots/test/test_test_success_search_param_for_tx_with_action_exit_code_37.stdout.txt");
+}
+
+#[test]
+fn test_test_success_search_param_for_tx_with_action_exit_code_37_verbose() {
+    let project = action_exit_code_37_project("test-get-action-exit-code-37-verbose").build();
+
+    project
+        .acton()
+        .test()
+        .verbose()
+        .run()
+        .failure()
+        .assert_snapshot_matches("integration/snapshots/test/test_test_success_search_param_for_tx_with_action_exit_code_37_verbose.stdout.txt");
+}
+
+fn action_exit_code_37_project(project_name: &str) -> ProjectBuilder {
+    ProjectBuilder::new(project_name)
         .contract(
             "simple",
             r#"
@@ -1272,10 +1556,10 @@ fn test_test_success_search_param_for_tx_with_action_exit_code_37() {
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
             import "../../lib/testing/expect"
-            import "../../lib/testing/transaction_expect"
 
             get fun `test foo`() {
                 val init = ContractState {
@@ -1286,7 +1570,7 @@ fn test_test_success_search_param_for_tx_with_action_exit_code_37() {
                     stateInit: init,
                 };
 
-                val sender = net.treasury("sender");
+                val sender = testing.treasury("sender");
                 val msg = createMessage({
                     bounce: false,
                     value: ton("1"),
@@ -1298,14 +1582,6 @@ fn test_test_success_search_param_for_tx_with_action_exit_code_37() {
             }
         "#,
         )
-        .build();
-
-    project
-        .acton()
-        .test()
-        .run()
-        .failure()
-        .assert_snapshot_matches("integration/snapshots/test_test_success_search_param_for_tx_with_action_exit_code_37.stdout.txt");
 }
 
 #[test]
@@ -1324,10 +1600,10 @@ fn test_test_success_search_param_for_tx_with_both_compute_and_action_exit_code(
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
             import "../../lib/testing/expect"
-            import "../../lib/testing/transaction_expect"
 
             get fun `test foo`() {
                 val init = ContractState {
@@ -1338,7 +1614,7 @@ fn test_test_success_search_param_for_tx_with_both_compute_and_action_exit_code(
                     stateInit: init,
                 };
 
-                val sender = net.treasury("sender");
+                val sender = testing.treasury("sender");
                 val msg = createMessage({
                     bounce: false,
                     value: ton("1"),
@@ -1357,7 +1633,7 @@ fn test_test_success_search_param_for_tx_with_both_compute_and_action_exit_code(
         .test()
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_test_success_search_param_for_tx_with_both_compute_and_action_exit_code.stdout.txt");
+        .assert_snapshot_matches("integration/snapshots/test/test_test_success_search_param_for_tx_with_both_compute_and_action_exit_code.stdout.txt");
 }
 
 #[test]
@@ -1375,10 +1651,10 @@ fn test_test_all_successful_tx_matcher_with_fail() {
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
             import "../../lib/testing/expect"
-            import "../../lib/testing/transaction_expect"
 
             get fun `test foo`() {
                 val init = ContractState {
@@ -1389,7 +1665,7 @@ fn test_test_all_successful_tx_matcher_with_fail() {
                     stateInit: init,
                 };
 
-                val sender = net.treasury("sender");
+                val sender = testing.treasury("sender");
                 val msg = createMessage({
                     bounce: false,
                     value: ton("1"),
@@ -1409,7 +1685,7 @@ fn test_test_all_successful_tx_matcher_with_fail() {
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_test_all_successful_tx_matcher_with_fail.stdout.txt",
+            "integration/snapshots/test/test_test_all_successful_tx_matcher_with_fail.stdout.txt",
         );
 }
 
@@ -1428,10 +1704,10 @@ fn test_test_all_successful_tx_matcher_without_fail() {
             "test",
             r#"
             import "../../lib/io"
-            import "../../lib/build/build"
+            import "../../lib/build"
             import "../../lib/emulation/network"
+            import "../../lib/emulation/testing"
             import "../../lib/testing/expect"
-            import "../../lib/testing/transaction_expect"
 
             get fun `test foo`() {
                 val init = ContractState {
@@ -1442,7 +1718,7 @@ fn test_test_all_successful_tx_matcher_without_fail() {
                     stateInit: init,
                 };
 
-                val sender = net.treasury("sender");
+                val sender = testing.treasury("sender");
                 val msg = createMessage({
                     bounce: false,
                     value: ton("1"),
@@ -1462,7 +1738,7 @@ fn test_test_all_successful_tx_matcher_without_fail() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_test_all_successful_tx_matcher_without_fail.stdout.txt",
+            "integration/snapshots/test/test_test_all_successful_tx_matcher_without_fail.stdout.txt",
         );
 }
 
@@ -1509,6 +1785,6 @@ fn test_expect_to_equal_decimal_failure() {
         .run()
         .failure()
         .assert_snapshot_matches(
-            "integration/snapshots/test_expect_to_equal_decimal_failure.stdout.txt",
+            "integration/snapshots/test/test_expect_to_equal_decimal_failure.stdout.txt",
         );
 }

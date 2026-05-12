@@ -210,7 +210,7 @@ impl DapState {
         expression: &str,
     ) -> anyhow::Result<RenderedValue> {
         let Some(replayer) = self.replayer.as_ref() else {
-            return evaluate_expression(&[], None, expression);
+            return evaluate_expression(&[], expression);
         };
 
         let locals = match frame_id {
@@ -225,7 +225,7 @@ impl DapState {
             None => replayer.locals_for_frame(0),
         };
 
-        evaluate_expression(&locals, Some(replayer.source_map()), expression)
+        evaluate_expression(&locals, expression)
     }
 }
 
@@ -328,7 +328,7 @@ fn step_and_notify(
     match advance_to_next_stop(state, step_mode) {
         AdvanceStop::Terminated => send_terminated(server)?,
         AdvanceStop::Exception { description, text } => {
-            send_stopped_exception(server, &description, &text)?
+            send_stopped_exception(server, &description, &text)?;
         }
         AdvanceStop::Breakpoint(stop) => {
             send_stopped(
@@ -407,7 +407,7 @@ fn format_frame_name(f: &replayer::CallFrameInfo) -> String {
 }
 
 fn debug_value_to_variable(state: &mut DapState, name: String, dv: &RenderedValue) -> Variable {
-    let (value, type_field) = dv.dap_parts_for_client();
+    let (value, type_field) = dv.dap_parts_for_client(Some(&name));
     let (value, var_ref) = if dv.has_children() {
         (value, state.store_debug_value(dv.clone()))
     } else {
@@ -427,7 +427,7 @@ fn debug_value_to_variable(state: &mut DapState, name: String, dv: &RenderedValu
 }
 
 fn evaluate_response_from_value(state: &mut DapState, value: RenderedValue) -> EvaluateResponse {
-    let (result, type_field) = value.dap_parts_for_client();
+    let (result, type_field) = value.dap_parts_for_client(None);
     let variables_reference = if value.has_children() {
         state.store_debug_value(value)
     } else {
@@ -673,7 +673,7 @@ fn handle_configuration_done(
     match advance_to_next_stop(state, step_mode) {
         AdvanceStop::Terminated => send_terminated(server)?,
         AdvanceStop::Exception { description, text } => {
-            send_stopped_exception(server, &description, &text)?
+            send_stopped_exception(server, &description, &text)?;
         }
         AdvanceStop::Breakpoint(stop) => {
             send_stopped(
@@ -893,7 +893,7 @@ fn handle_variables(
         let variables = state
             .replayer
             .as_ref()
-            .map(|r| r.runtime_registers())
+            .map(TolkReplayer::runtime_registers)
             .unwrap_or_default()
             .into_iter()
             .map(|lv| debug_value_to_variable(state, lv.var_name, &lv.value))

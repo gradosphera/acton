@@ -1,7 +1,10 @@
-use super::GITHUB_SOURCE_BASE;
+use super::{GITHUB_SOURCE_BASE, generated_notice_from_path};
+use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 use tolk_linter::{FixAvailability, Linter, RuleGroup};
+
+const RULES_BASE_PATH: &str = "/docs/rules";
 
 #[derive(Debug)]
 struct LinterRuleDoc {
@@ -86,7 +89,7 @@ fn clear_generated_linter_rule_pages(out_dir: &Path) -> anyhow::Result<()> {
             continue;
         };
 
-        if path.extension().is_some_and(|ext| ext == "mdx") && file_name != "index.mdx" {
+        if path.extension().is_some_and(|ext| ext == "mdx") && file_name != "overview.mdx" {
             fs::remove_file(path)?;
         }
     }
@@ -97,9 +100,12 @@ fn clear_generated_linter_rule_pages(out_dir: &Path) -> anyhow::Result<()> {
 fn write_linter_index(out_dir: &Path, rules: &[LinterRuleDoc]) -> anyhow::Result<()> {
     let mut mdx_content = String::new();
     mdx_content.push_str("---\n");
-    mdx_content.push_str("title: \"Rules\"\n");
+    mdx_content.push_str("title: \"Overview\"\n");
     mdx_content.push_str("description: \"Reference for all Tolk linter checks\"\n");
     mdx_content.push_str("---\n\n");
+    mdx_content.push_str(&generated_notice_from_path(Path::new(
+        super::LINTER_RULES_SOURCE_DIR,
+    )));
     mdx_content.push_str(
         "The `acton check` command validates your Tolk code and reports diagnostics for lint rules.\n\n",
     );
@@ -107,15 +113,21 @@ fn write_linter_index(out_dir: &Path, rules: &[LinterRuleDoc]) -> anyhow::Result
         "Use `acton check --explain <CODE>` to read a detailed explanation for any specific rule right in the terminal.\n\n",
     );
     mdx_content.push_str(
-        "For setup, configuration, and CI usage, start with [Linting](/docs/linting).\n\n",
+        "`acton check --list-lint-rules` also exists as a hidden machine-readable helper, but it only prints rule names and markdown descriptions. This index is the human-readable catalog with rule codes, lifecycle status, and quick-fix availability.\n\n",
     );
+    mdx_content.push_str(
+        "Lifecycle states currently used in the catalog are mainly `Stable` and `Preview`. The generator also supports future `Deprecated` and `Removed` statuses when rules eventually transition.\n\n",
+    );
+    mdx_content
+        .push_str("For setup, configuration, and CI usage, start with [Linting](/docs/lint).\n\n");
 
     mdx_content.push_str("| Code | Rule | Status | Quick fix | What it does |\n");
     mdx_content.push_str("|:-----|:-----|:-------|:----------|:-------------|\n");
 
     for rule in rules {
-        mdx_content.push_str(&format!(
-            "| [{}](./{}) | [`{}`](./{}) | {} | {} | {} |\n",
+        let _ = writeln!(
+            mdx_content,
+            "| [{}]({RULES_BASE_PATH}/{}) | [`{}`]({RULES_BASE_PATH}/{}) | {} | {} | {} |",
             rule.code,
             rule.slug,
             rule.rule_name,
@@ -123,20 +135,25 @@ fn write_linter_index(out_dir: &Path, rules: &[LinterRuleDoc]) -> anyhow::Result
             table_cell(&format_rule_group(rule.group)),
             table_cell(fix_availability_label(rule.fix)),
             table_cell(&rule.summary),
-        ));
+        );
     }
 
-    fs::write(out_dir.join("index.mdx"), mdx_content)?;
+    fs::write(out_dir.join("overview.mdx"), mdx_content)?;
 
     Ok(())
 }
 
 fn write_linter_meta(out_dir: &Path, rules: &[LinterRuleDoc]) -> anyhow::Result<()> {
-    let pages = rules
+    let mut pages = rules
         .iter()
         .map(|rule| rule.slug.clone())
         .collect::<Vec<_>>();
-    let content = serde_json::to_string_pretty(&serde_json::json!({ "pages": pages }))?;
+    pages.insert(0, "overview".to_string());
+    let content = serde_json::to_string_pretty(&serde_json::json!({
+        "title": "Linting rules",
+        "icon": "ListChecks",
+        "pages": pages,
+    }))?;
     fs::write(out_dir.join("meta.json"), format!("{content}\n"))?;
     Ok(())
 }
@@ -145,26 +162,32 @@ fn write_linter_rule_page(out_dir: &Path, rule: &LinterRuleDoc) -> anyhow::Resul
     let mut mdx_content = String::new();
 
     mdx_content.push_str("---\n");
-    mdx_content.push_str(&format!(
-        "title: \"{}\"\n",
+    let _ = writeln!(
+        mdx_content,
+        "title: \"{}\"",
         escape_frontmatter(&format!("{}: {}", rule.code, rule.rule_name))
-    ));
-    mdx_content.push_str(&format!(
-        "description: \"{}\"\n",
-        escape_frontmatter(&rule.summary.clone())
-    ));
+    );
+    let _ = writeln!(
+        mdx_content,
+        "description: \"{}\"",
+        escape_frontmatter(&rule.summary)
+    );
     mdx_content.push_str("---\n\n");
 
     mdx_content.push_str("import { SourceCodeLink } from '@/components/SourceCodeLink';\n\n");
+    mdx_content.push_str(&generated_notice_from_path(Path::new(
+        rule.source_file.as_str(),
+    )));
 
     mdx_content.push_str("## Metadata\n\n");
-    mdx_content.push_str(&format!("- `Code`: `{}`\n", rule.code));
-    mdx_content.push_str(&format!("- `Rule`: `{}`\n", rule.rule_name));
-    mdx_content.push_str(&format!("- `Status`: {}\n", format_rule_group(rule.group)));
-    mdx_content.push_str(&format!(
-        "- `Quick fix`: {}\n\n",
+    let _ = writeln!(mdx_content, "- `Code`: `{}`", rule.code);
+    let _ = writeln!(mdx_content, "- `Rule`: `{}`", rule.rule_name);
+    let _ = writeln!(mdx_content, "- `Status`: {}", format_rule_group(rule.group));
+    let _ = writeln!(
+        mdx_content,
+        "- `Quick fix`: {}\n",
         fix_availability_label(rule.fix)
-    ));
+    );
 
     if !rule.explanation.is_empty() {
         mdx_content.push_str(&rule.explanation);
@@ -175,7 +198,7 @@ fn write_linter_rule_page(out_dir: &Path, rule: &LinterRuleDoc) -> anyhow::Resul
         "{GITHUB_SOURCE_BASE}/{}#L{}",
         rule.source_file, rule.source_line
     );
-    mdx_content.push_str(&format!("<SourceCodeLink href=\"{source_url}\" />\n"));
+    let _ = writeln!(mdx_content, "<SourceCodeLink href=\"{source_url}\" />");
 
     fs::write(out_dir.join(format!("{}.mdx", rule.slug)), mdx_content)?;
 

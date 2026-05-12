@@ -1,14 +1,14 @@
 # acton-completions(1)
 
-## NAME
+## Name
 
 acton-completions --- Generate static shell completion scripts
 
-## SYNOPSIS
+## Synopsis
 
 `acton completions` [_options_] _shell_
 
-## DESCRIPTION
+## Description
 
 Generate a static completion script for the selected shell.
 
@@ -16,14 +16,14 @@ Acton also supports dynamic completions through the `COMPLETE=<shell> acton`
 mechanism. Dynamic completions are usually more powerful because they can use
 project context such as contract and script names.
 
-## QUICK START
+## Quick Start
 
 - for dynamic completions, prefer `COMPLETE=<shell> acton`
 - for a static script without editing shell startup files yet, run
   `acton completions <shell>` and inspect the output first
 - regenerate static completion files after upgrading Acton
 
-## OPTIONS
+## Options
 
 ### Completion Options
 
@@ -32,7 +32,7 @@ project context such as contract and script names.
 {{#option "_shell_" }}
 Shell to generate completions for.
 
-Possible values: `bash`, `elvish`, `fish`, `powershell`, `zsh`
+Possible values: `bash`, `elvish`, `fish`, `powershell`, `zsh`, `nushell`
 {{/option}}
 
 {{/options}}
@@ -45,7 +45,7 @@ Possible values: `bash`, `elvish`, `fish`, `powershell`, `zsh`
 
 {{> options-project-pass-through }}
 
-## DYNAMIC COMPLETIONS
+## Dynamic Completions
 
 Dynamic completions are recommended when your shell supports them.
 
@@ -53,7 +53,7 @@ Dynamic completions are recommended when your shell supports them.
 
 Add this to `~/.zshrc`:
 
-```bash
+```acton-cli
 source <(COMPLETE=zsh acton)
 ```
 
@@ -61,7 +61,7 @@ source <(COMPLETE=zsh acton)
 
 Add this to `~/.bashrc`:
 
-```bash
+```acton-cli
 source <(COMPLETE=bash acton)
 ```
 
@@ -73,7 +73,7 @@ Add this to `~/.config/fish/config.fish`:
 COMPLETE=fish acton | source
 ```
 
-## STATIC INSTALLATION
+## Static Installation
 
 `acton completions` writes the completion script to standard output. Typical
 installation patterns include:
@@ -82,13 +82,13 @@ installation patterns include:
 
 For the current shell session:
 
-```bash
+```acton-cli
 source <(acton completions bash)
 ```
 
 For a persistent setup, either append to `~/.bashrc`:
 
-```bash
+```acton-cli
 acton completions bash >> ~/.bashrc
 ```
 
@@ -102,7 +102,7 @@ acton completions bash | sudo tee /usr/share/bash-completion/completions/acton
 
 Zsh usually expects the completion file in a directory listed in `$fpath`:
 
-```bash
+```acton-cli
 mkdir -p ~/.zsh/completions
 acton completions zsh > ~/.zsh/completions/_acton
 echo 'fpath=(~/.zsh/completions $fpath)' >> ~/.zshrc
@@ -117,7 +117,7 @@ source ~/.zshrc
 
 ### Fish
 
-```bash
+```acton-cli
 acton completions fish > ~/.config/fish/completions/acton.fish
 ```
 
@@ -133,7 +133,7 @@ For a persistent setup, add the generated script to your PowerShell profile.
 
 ### Elvish
 
-```bash
+```acton-cli
 acton completions elvish > ~/.elvish/completions/acton.elv
 ```
 
@@ -143,18 +143,30 @@ Then load it from `~/.elvish/rc.elv`:
 use completions/acton
 ```
 
-## VERIFYING INSTALLATION
+### Nushell
+
+```bash
+acton completions nushell | save --force ~/.config/nushell/completions/acton.nu
+```
+
+Then load it from `config.nu`:
+
+```nu
+source ~/.config/nushell/completions/acton.nu
+```
+
+## Verifying Installation
 
 After installation, try:
 
-```bash
+```acton-cli
 acton <TAB>
 acton test --<TAB>
 ```
 
 You should see command names and flag suggestions from the selected shell.
 
-## TROUBLESHOOTING
+## Troubleshooting
 
 - if static completions show old commands, regenerate them after updating Acton
 - Zsh usually needs `compinit` after changing completion locations
@@ -163,12 +175,12 @@ You should see command names and flag suggestions from the selected shell.
 - if PowerShell completions do not persist, verify that the generated script is
   loaded from `$PROFILE`
 
-## EXIT STATUS
+## Exit Status
 
 - `0`: The completion script was generated successfully.
 - `1`: The shell value was unsupported or output could not be written.
 
-## EXAMPLES
+## Examples
 
 1. Generate a static Zsh script:
 
@@ -188,6 +200,6 @@ You should see command names and flag suggestions from the selected shell.
    acton completions zsh | head
    ```
 
-## SEE ALSO
+## See Also
 
 - [Shell completions guide](https://ton-blockchain.github.io/acton/docs/commands/shell-completions)

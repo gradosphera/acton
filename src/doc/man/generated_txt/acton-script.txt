@@ -20,7 +20,14 @@ OPTIONS
            Path to the script file to execute.
 
        args…
-           Arguments passed through to the script.
+           Arguments parsed against the main() ABI and passed to the script.
+
+       --verbose
+           Enable executor debug logs at verbosity level 1.
+
+           Currently only level 1 is supported. Pass --verbose at most once.
+           Use this for low-level executor output such as debug.dumpStack().
+           For richer debug output, use --backtrace full or --debug.
 
    Debugging Options
        --debug
@@ -47,14 +54,29 @@ OPTIONS
        --fork-block-number seqno
            Historical block sequence number to fork from.
 
-       --api-key key
-           TonCenter API key for blockchain queries.
-
    Broadcasting Options
        --net network
            Broadcast to the selected network. If omitted, the script runs in
            emulation mode. Conflicting --net and --fork-net values are
            rejected.
+
+       --tonconnect
+           Use TON Connect wallet approval for broadcast messages.
+
+           This opens a local browser page, connects a wallet, and sends
+           net.send(...) messages through that wallet instead of loading local
+           wallet mnemonics. The TON Connect session is saved under
+           build/sessions/tonconnect/<network>.json and reused by later runs in
+           the same project. Currently supported only with --net mainnet or
+           --net testnet.
+
+       --tonconnect-port port
+           Local TON Connect page port. Defaults to 52258.
+
+           Acton keeps this port stable so injected wallets can recognize the
+           same local dApp on later runs. If the default port is busy, pass
+           another port explicitly and keep using the same value for that
+           project.
 
        --explorer name
            Explorer to use for transaction links.
@@ -97,9 +119,16 @@ SCRIPT MODEL
 
        o  --net sends real transactions using configured wallets
 
+       o  --net ... --tonconnect sends real transactions through the connected
+          TON Connect wallet
+
        Wallet names referenced by the script are resolved from the merged
        wallet configuration, with local wallets.toml entries overriding
-       global.wallets.toml on name conflicts.
+       global.wallets.toml on name conflicts. With --tonconnect, any
+       scripts.wallet("name") call resolves to the connected wallet address.
+       Acton saves the TON Connect session in
+       build/sessions/tonconnect/<network>.json, so the next script run can
+       restore the wallet connection without asking the user to connect again.
 
 ARGUMENT FORWARDING
        Arguments after _path_ are passed through to the script runtime.
@@ -109,10 +138,33 @@ ARGUMENT FORWARDING
 
            acton script scripts/query.tolk -- --net-like-value
 
+SCRIPT ARGUMENTS
+       Forwarded arguments are parsed against the ABI for main().
+
+       o  the number of CLI arguments must exactly match the main() parameters
+
+       o  integers use Tolk integer literal syntax such as 42, -1, 0xff, and
+          0b1010
+
+       o  bool accepts true and false
+
+       o  nullable supported types accept null
+
+       o  cell, slice, and bitsN accept plain BoC hex without C{} or CS{}
+          prefixes
+
+       o  arrays accept [item1, item2]
+
+       Unsupported parameter types currently include structs, tuple, map, dict,
+       builder, any_address and other complex types.
+
 SIDE EFFECTS
        acton script always compiles and executes the selected script. With
        --net, it can send real blockchain transactions; without --net,
        execution stays local even when --fork-net is used.
+
+       Executor debug logs are hidden by default. Re-run with --verbose when
+       you need level-1 executor output such as debug.dumpStack().
 
 EXIT STATUS
        o  0: The script completed successfully, including successful broadcast
@@ -137,24 +189,43 @@ EXAMPLES
 
               acton script scripts/deploy.tolk
 
-       2. Broadcast to testnet:
+       2. Show executor debug logs from debug.* helpers:
+
+              acton script scripts/deploy.tolk --verbose
+
+       3. Broadcast to testnet:
 
               acton script scripts/deploy.tolk --net testnet
 
-       3. Query mainnet state without broadcasting:
+       4. Query mainnet state without broadcasting:
 
-              acton script query.tolk --fork-net mainnet --api-key YOUR_API_KEY
+              TONCENTER_MAINNET_API_KEY=your-key acton script query.tolk --fork-net mainnet
 
-       4. Broadcast a deploy flow and print explorer links:
+       5. Broadcast a deploy flow and print explorer links:
 
-              acton script scripts/deploy.tolk --net testnet --explorer tonviewer
+              acton script scripts/deploy.tolk --net testnet --explorer tonscan
+
+       6. Broadcast through TON Connect instead of local wallet keys:
+
+              acton script scripts/deploy.tolk --net testnet --tonconnect
+
+TONCENTER API KEYS
+       Built-in mainnet/testnet requests read TONCENTER_MAINNET_API_KEY or
+       TONCENTER_TESTNET_API_KEY, depending on the selected network.
+
+       For custom:<name>, Acton reads <NORMALIZED_NAME>_API_KEY. Custom network
+       names are uppercased and non-alphanumeric characters are replaced with
+       _, so custom:mock-remote becomes MOCK_REMOTE_API_KEY.
+
+       Acton loads .env automatically, so the simplest setup during project
+       work is usually to keep these keys there and use shell environment
+       variables only for one-off overrides or CI.
 
 SEE ALSO
        o  acton help run
 
        o  Scripting guide
-          <https://ton-blockchain.github.io/acton/docs/scripting>
+          <https://ton-blockchain.github.io/acton/docs/scripting/overview>
 
-       o  Wallet setup
-          <https://ton-blockchain.github.io/acton/docs/setup-wallets>
+       o  Wallet setup <https://ton-blockchain.github.io/acton/docs/wallets>
 

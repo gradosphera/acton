@@ -1,5 +1,5 @@
 use crate::type_interner::{TyId, TypeInterner};
-use crate::types::*;
+use crate::types::{AddressKind, IntTy, TyData};
 use std::sync::Arc;
 
 pub(crate) struct TypeFormatter<'a> {
@@ -43,7 +43,7 @@ impl<'a> TypeFormatter<'a> {
             TyData::UntypedTuple => "tuple".to_string(),
             TyData::Bits { size } => format!("bits{size}"),
             TyData::Bytes { size } => format!("bytes{size}"),
-            TyData::Builtin { name } => name.to_string(),
+            TyData::Builtin { name } | TyData::Enum { name, .. } => name.to_string(),
             TyData::Tuple(elements) => {
                 let parts = elements.iter().map(|t| self.format(*t)).collect::<Vec<_>>();
                 format!("[{}]", parts.join(", "))
@@ -98,7 +98,7 @@ impl<'a> TypeFormatter<'a> {
                 parts.join(" | ")
             }
             TyData::Struct { name, args, .. } => {
-                if let Some(value) = self.format_with_type_args(name, args) {
+                if let Some(value) = self.format_with_type_args(name, args.as_deref()) {
                     return value;
                 }
                 name.to_string()
@@ -115,12 +115,11 @@ impl<'a> TypeFormatter<'a> {
                 if self.interner.equals(*inner_ty, self.interner.ty_void) {
                     return "void".to_string();
                 }
-                if let Some(value) = self.format_with_type_args(name, args) {
+                if let Some(value) = self.format_with_type_args(name, args.as_deref()) {
                     return value;
                 }
                 name.to_string()
             }
-            TyData::Enum { name, .. } => name.to_string(),
             TyData::TypeParameter { name, .. } => name.clone(),
             TyData::GenericTypeWithTs { inner_ty, types } => {
                 let a = types
@@ -140,7 +139,7 @@ impl<'a> TypeFormatter<'a> {
         }
     }
 
-    fn format_with_type_args(&self, name: &Arc<str>, args: &Option<Vec<TyId>>) -> Option<String> {
+    fn format_with_type_args(&self, name: &Arc<str>, args: Option<&[TyId]>) -> Option<String> {
         if let Some(args) = args {
             let type_args = args
                 .iter()

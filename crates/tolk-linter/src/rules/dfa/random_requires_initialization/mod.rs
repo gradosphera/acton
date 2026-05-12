@@ -1,6 +1,6 @@
-use crate::Checker;
 use crate::rules::diagnostic::{Annotation, Diagnostic};
 use crate::rules::violation::Violation;
+use crate::{Checker, FixAvailability};
 use rustc_hash::FxHashMap;
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::{FileId, SymbolId};
@@ -16,9 +16,10 @@ pub mod analysis;
 /// or invalid randomness behavior.
 ///
 /// ### Example
-/// ```tolk
+/// ```tolk twoslash
 /// fun main() {
 ///     val x = random.uint256();
+///     //      ^^^^^^^^^^^^^^^^ E018: random generator must be initialized before `random.uint256`/`random.range` call
 /// }
 /// ```
 ///
@@ -44,6 +45,8 @@ pub mod analysis;
 pub struct RandomRequiresInitialization;
 
 impl Violation for RandomRequiresInitialization {
+    const FIX_AVAILABILITY: FixAvailability = FixAvailability::None;
+
     fn message(&self) -> String {
         "random generator must be initialized before `random.uint256`/`random.range` call"
             .to_owned()
@@ -142,16 +145,13 @@ impl<'a, 'b> RandomSummaryComputer<'a, 'b> {
             };
         }
 
-        let symbol =
-            if let Some(symbol) = self.checker.type_db.project_index.resolve_symbol(symbol_id) {
-                symbol
-            } else {
-                return analysis::InitializationSummary {
-                    is_guaranteed: false,
-                    has_any_initialization: false,
-                    sample_site: None,
-                };
+        let Some(symbol) = self.checker.type_db.project_index.resolve_symbol(symbol_id) else {
+            return analysis::InitializationSummary {
+                is_guaranteed: false,
+                has_any_initialization: false,
+                sample_site: None,
             };
+        };
 
         if !symbol.is_func() {
             return analysis::InitializationSummary {

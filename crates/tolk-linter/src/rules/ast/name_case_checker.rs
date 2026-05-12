@@ -20,14 +20,18 @@ use tolk_ty::GlobalUsages;
 /// - `SCREAMING_SNAKE_CASE` for constants
 ///
 /// ### Example
-/// ```tolk
+/// ```tolk twoslash
 /// struct low_struct {
+/// //     ^^^^^^^^^^ S001: name should be in the expected case
 ///     TheBad: int
+/// //  ^^^^^^ S001: name should be in the expected case
 /// }
 ///
 /// const iAmConst_variable = 1
+/// //    ^^^^^^^^^^^^^^^^^ S001: name should be in the expected case
 ///
 /// fun BadFunctionName() {}
+/// //  ^^^^^^^^^^^^^^^ S001: name should be in the expected case
 /// ```
 ///
 /// Use instead:
@@ -112,7 +116,7 @@ fn check_case(symbol: &Symbol, checker: &mut Checker, symbol_def_file_id: FileId
             span: symbol.name_span,
             message: Some(format!("not {case_name}: `{}`", symbol.name)),
             is_primary: true,
-            tags: vec![DiagnosticTag::Unnecessary],
+            tags: vec![],
         }])
         .with_fixes(vec![Fix {
             message: format!("rename to {case_name}: {correct_case}"),

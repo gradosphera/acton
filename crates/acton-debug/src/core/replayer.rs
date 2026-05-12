@@ -9,17 +9,16 @@ use super::debug_executor_handle::DebugExecutorHandle;
 use super::debug_executor_handle::RuntimeDebugSnapshot;
 use super::types_render::{
     RenderedValue, SlotValue, debug_format_lazy, debug_print_from_stack, render_runtime_in_message,
-    render_runtime_out_actions, render_runtime_storage_with_compiler_abi, render_runtime_vm_value,
+    render_runtime_out_actions, render_runtime_storage_with_abi, render_runtime_vm_value,
 };
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
-use tolkc::TolkSourceMap;
-use tolkc::abi::ContractABI;
-use tolkc::debug_marks_dict::DebugMarksDict;
-use tolkc::source_map::{DebugMark, SourceMap, SrcRange};
-use tolkc::types_kernel::Ty;
-use vmlogs::parser::{VmLine, VmStackValue};
+use std::sync::{Arc, OnceLock};
+use tolk_compiler::abi::ContractABI;
+use tolk_compiler::debug_marks_dict::DebugMarksDict;
+use tolk_compiler::source_map::{DebugMark, SourceMap, SrcRange};
+use tolk_compiler::types_kernel::{Ty, TyIdx, render_ty};
+use tvm_logs::parser::{VmLine, VmStack, VmStackValue};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,9 +46,12 @@ pub enum ExceptionBreakMode {
     All,
 }
 
+const IGNORED_UNCAUGHT_EXCEPTION_ERRNO: &str = "65535"; // invalid message
+
 #[derive(Debug, Clone)]
 pub struct ExceptionInfo {
     pub errno: String,
+    pub symbolic_name: Option<String>,
     pub is_uncaught: bool,
 }
 
@@ -75,12 +77,43 @@ pub struct LocalVarRendered {
 #[derive(Debug, Clone)]
 pub enum RuntimeEvent {
     Position { cell_hash: String, offset: i32 },
-    Stack { values: Vec<VmStackValue> },
+    Stack { stack: RuntimeStack },
     BeforeInstruction,
     AfterInstruction { instr_name: String },
     ImplicitJmpRef,
     Exception { errno: String },
     ExceptionHandler { errno: String },
+}
+
+#[derive(Debug, Clone, Default)]
+pub enum RuntimeStack {
+    #[default]
+    Empty,
+    Raw {
+        text: Arc<str>,
+        parsed_cache: Arc<OnceLock<Vec<VmStackValue>>>,
+    },
+    Values(Vec<VmStackValue>),
+}
+
+impl RuntimeStack {
+    fn from_raw_log(text: Arc<str>) -> Self {
+        Self::Raw {
+            text,
+            parsed_cache: Arc::new(OnceLock::new()),
+        }
+    }
+
+    #[must_use]
+    pub fn parsed_values(&self) -> &[VmStackValue] {
+        match self {
+            Self::Empty => &[],
+            Self::Raw { text, parsed_cache } => {
+                parsed_cache.get_or_init(|| VmStack::new(text).parsed())
+            }
+            Self::Values(values) => values,
+        }
+    }
 }
 
 pub trait RuntimeEventSource {
@@ -95,9 +128,10 @@ pub trait RuntimeEventSource {
 #[derive(Debug, Clone)]
 struct LocalVarInScope {
     name: String,
-    ty_idx: usize,
+    ty_idx: TyIdx,
     ir_slots: Vec<usize>,
-    is_lazy: bool,
+    // None = not lazy; Some((ir_slot, slice)) = lazy, with the original CellSlice for field preview
+    lazy_info: Option<(usize, VmStackValue)>,
 }
 
 #[derive(Debug, Clone)]
@@ -176,35 +210,32 @@ impl CallFrame {
     }
 }
 
-/// Pre-converted VM log line with all owned data.
-/// Created once from `parser::VmLine<'a>` to eliminate lifetimes.
 enum OwnedVmLine {
-    Stack { tvm_stack_values: Vec<VmStackValue> },
+    Stack { raw_stack: Arc<str> },
     Loc { cell_hash: String, offset: i32 },
     Execute { instr_name: String },
     Exception { errno: String },
     ExceptionHandler { errno: String },
 }
 
-fn convert_vm_lines(parsed: &[Result<VmLine<'_>, String>]) -> Vec<OwnedVmLine> {
-    parsed
-        .iter()
-        .filter_map(|r| match r {
+fn convert_vm_log_lines(vm_logs: &str) -> Vec<OwnedVmLine> {
+    tvm_logs::parser::parse_lines(vm_logs)
+        .filter_map(|line| match line {
             Ok(VmLine::VmStack { stack }) => Some(OwnedVmLine::Stack {
-                tvm_stack_values: stack.parsed(),
+                raw_stack: Arc::from(stack.raw()),
             }),
             Ok(VmLine::VmLoc { hash, offset }) => Some(OwnedVmLine::Loc {
-                cell_hash: hash.to_string(),
+                cell_hash: hash.to_owned(),
                 offset: offset.parse().unwrap_or(0),
             }),
             Ok(VmLine::VmExecute { instr }) => Some(OwnedVmLine::Execute {
-                instr_name: instr.to_string(),
+                instr_name: instr.to_owned(),
             }),
             Ok(VmLine::VmException { errno, .. }) => Some(OwnedVmLine::Exception {
-                errno: errno.to_string(),
+                errno: errno.to_owned(),
             }),
             Ok(VmLine::VmExceptionHandler { errno }) => Some(OwnedVmLine::ExceptionHandler {
-                errno: errno.to_string(),
+                errno: errno.to_owned(),
             }),
             // we don't need other lines from TVM execution logs (about gas limits, c5, etc.)
             _ => None,
@@ -229,9 +260,9 @@ pub struct VmLogRuntimeEventSource {
 
 impl VmLogRuntimeEventSource {
     #[must_use]
-    pub fn new(vm_lines: &[Result<VmLine<'_>, String>]) -> Self {
+    pub fn from_vm_logs(vm_logs: &str) -> Self {
         Self {
-            vm_lines: convert_vm_lines(vm_lines),
+            vm_lines: convert_vm_log_lines(vm_logs),
             cur_vm_line_idx: 0,
             pending_events: VecDeque::new(),
         }
@@ -250,9 +281,9 @@ impl RuntimeEventSource for VmLogRuntimeEventSource {
             self.cur_vm_line_idx += 1;
 
             match &self.vm_lines[idx] {
-                OwnedVmLine::Stack { tvm_stack_values } => {
+                OwnedVmLine::Stack { raw_stack } => {
                     return Some(RuntimeEvent::Stack {
-                        values: tvm_stack_values.clone(),
+                        stack: RuntimeStack::from_raw_log(Arc::clone(raw_stack)),
                     });
                 }
                 OwnedVmLine::Loc { cell_hash, offset } => {
@@ -322,8 +353,9 @@ impl LiveVmRuntimeEventSource {
     fn push_snapshot_events(&mut self) {
         let snapshot = self.executor.snapshot();
         if let Some(values) = snapshot.stack_values {
-            self.pending_events
-                .push_back(RuntimeEvent::Stack { values });
+            self.pending_events.push_back(RuntimeEvent::Stack {
+                stack: RuntimeStack::Values(values),
+            });
         }
         if let Some(position) = snapshot.code_position {
             self.pending_events.push_back(RuntimeEvent::Position {
@@ -449,19 +481,19 @@ pub enum Tick {
     },
     LocalVar {
         var_name: String,
-        ty_idx: usize,
+        ty_idx: TyIdx,
         ir_slots: Vec<usize>,
         is_parameter: bool,
-        is_lazy: bool,
+        ir_lazy_slice: Option<usize>,
     },
     SmartCast {
         var_name: String,
-        ty_idx: usize,
+        ty_idx: TyIdx,
         ir_slots: Vec<usize>,
     },
     SetGlob {
         glob_name: String,
-        ty_idx: usize,
+        ty_idx: TyIdx,
         ir_slots: Vec<usize>,
     },
     ScopeStart {
@@ -470,7 +502,7 @@ pub enum Tick {
     ScopeEnd,
 
     TvmStackValues {
-        values: Vec<VmStackValue>,
+        stack: RuntimeStack,
     },
     TvmBeforeExecute,
     TvmAfterExecute {
@@ -512,11 +544,14 @@ pub struct TolkReplayer {
     // glob_name → (ty_idx, captured TVM values) for globals that have been SET
     global_var_values: HashMap<String, (usize, Vec<VmStackValue>)>,
 
-    compiler_abi: Option<Arc<ContractABI>>,
+    abi: Option<Arc<ContractABI>>,
 
-    // raw TVM stack (updated from runtime stack events);
+    // TVM stack from runtime events.
     // global (not per-context) because TvmStackValues tick arrives before PushFrame
-    tvm_stack_values: Vec<VmStackValue>,
+    tvm_stack_values: RuntimeStack,
+
+    // in coverage mode we don't want to materialize stack on ticks
+    coverage_mode: bool,
 
     // active breakpoints as (file_id, line) pairs
     breakpoints: HashSet<(usize, usize)>,
@@ -548,32 +583,37 @@ pub struct TolkReplayer {
 }
 
 impl TolkReplayer {
-    pub fn new(
-        source_map: &TolkSourceMap,
-        vm_lines: &[Result<VmLine<'_>, String>],
-    ) -> anyhow::Result<Self> {
-        let marks_dict = source_map
-            .marks_dict
-            .as_deref()
-            .ok_or_else(|| anyhow!("Compiler did not return debug info for Tolk debug session"))?;
+    pub fn new(source_map: &SourceMap, vm_logs: &str) -> anyhow::Result<Self> {
+        if !source_map.has_debug_marks() {
+            return Err(anyhow!(
+                "Compiler did not return debug info for Tolk debug session"
+            ));
+        }
         Ok(Self::new_with_boxed_runtime_source(
-            source_map.source_map.clone(),
-            marks_dict,
-            Box::new(VmLogRuntimeEventSource::new(vm_lines)),
+            source_map.clone(),
+            source_map.debug_marks_dict(),
+            Box::new(VmLogRuntimeEventSource::from_vm_logs(vm_logs)),
         ))
     }
 
+    pub fn new_for_coverage(source_map: &SourceMap, vm_logs: &str) -> anyhow::Result<Self> {
+        let mut replayer = Self::new(source_map, vm_logs)?;
+        replayer.coverage_mode = true;
+        Ok(replayer)
+    }
+
     pub fn new_live_vm(
-        source_map: &TolkSourceMap,
+        source_map: &SourceMap,
         executor: DebugExecutorHandle,
     ) -> anyhow::Result<Self> {
-        let marks_dict = source_map
-            .marks_dict
-            .as_deref()
-            .ok_or_else(|| anyhow!("Compiler did not return debug info for Tolk debug session"))?;
+        if !source_map.has_debug_marks() {
+            return Err(anyhow!(
+                "Compiler did not return debug info for Tolk debug session"
+            ));
+        }
         Ok(Self::new_with_boxed_runtime_source(
-            source_map.source_map.clone(),
-            marks_dict,
+            source_map.clone(),
+            source_map.debug_marks_dict(),
             Box::new(LiveVmRuntimeEventSource::new(executor)),
         ))
     }
@@ -593,6 +633,8 @@ impl TolkReplayer {
             }
         }
 
+        Self::fixup_fift_procinline_mark_ordering(&mut lookup, &source_map);
+
         TolkReplayer {
             source_map,
             marks_lookup: lookup,
@@ -602,8 +644,9 @@ impl TolkReplayer {
             current_vm_position: None,
             exec_stack: vec![NoinlineExecState::new()],
             global_var_values: HashMap::new(),
-            compiler_abi: None,
-            tvm_stack_values: Vec::new(),
+            abi: None,
+            tvm_stack_values: RuntimeStack::default(),
+            coverage_mode: false,
             breakpoints: HashSet::new(),
             exception_break_mode: ExceptionBreakMode::Never,
             last_exception: None,
@@ -616,8 +659,67 @@ impl TolkReplayer {
         }
     }
 
-    pub fn set_compiler_abi(&mut self, compiler_abi: Option<Arc<ContractABI>>) {
-        self.compiler_abi = compiler_abi;
+    /// THIS HACK SHOULD BE DELETED LATER
+    /// It's for `@inline` functions with multiple returns: Tolk compiler does not inline them at AST->IR stage.
+    /// Instead, it defers inlining to Fift with PROCINLINE. Fift does bytecode-level inlining.
+    /// PROCINLINE embeds bytecode into the caller, merging debug marks. Debug marks are stored
+    /// in a Dict<`mark_id`> which iterates by ascending `mark_id`. Since PROCINLINE
+    /// functions are compiled before their callers, they get lower `mark_ids`, causing
+    /// the replayer to enter the callee before the caller.
+    ///
+    /// This fixup detects such situations (multiple non-inlined `ENTER_FUN` at the same
+    /// offset) and reorders marks so the caller's group (highest `mark_ids`) comes first.
+    ///
+    /// Better solution (in the future):
+    /// 1) either assign higher `MARK_ID` inside fift-inlined functions
+    /// 2) or do bytecode-inlining inside Tolk compiler, not by Fift
+    ///
+    /// Both solutions will eliminate the need of this hack.
+    fn fixup_fift_procinline_mark_ordering(lookup: &mut MarksLookup, source_map: &SourceMap) {
+        for marks in lookup.values_mut() {
+            if marks.len() < 2 {
+                continue;
+            }
+
+            let noinline_enter_count = marks
+                .iter()
+                .filter(|&&mid| {
+                    mid < source_map.debug_marks_count()
+                        && matches!(
+                            source_map.get_debug_mark(mid),
+                            DebugMark::EnterFun {
+                                is_inlined: false,
+                                is_builtin: false,
+                                ..
+                            }
+                        )
+                })
+                .count();
+            if noinline_enter_count < 2 {
+                continue;
+            }
+
+            // Split marks into contiguous groups (detected by gaps in the sequence).
+            // Each group belongs to one function. Sort groups so the one with the
+            // highest starting mark_id (the caller) comes first.
+            let mut groups: Vec<Vec<usize>> = Vec::new();
+            for &mid in marks.iter() {
+                if groups.is_empty() || mid != *groups.last().unwrap().last().unwrap() + 1 {
+                    groups.push(vec![mid]);
+                } else {
+                    groups.last_mut().unwrap().push(mid);
+                }
+            }
+
+            if groups.len() >= 2 {
+                groups.sort_by(|a, b| b[0].cmp(&a[0]));
+                *marks = groups.into_iter().flatten().collect();
+            }
+        }
+    }
+
+    pub fn set_abi(&mut self, abi: Option<Arc<ContractABI>>) {
+        self.abi = abi;
     }
 
     /// Set breakpoints for a file. Each requested line is resolved to the nearest
@@ -658,6 +760,14 @@ impl TolkReplayer {
         self.last_exception.as_ref()
     }
 
+    fn resolve_exception_symbolic_name(&self, errno: &str) -> Option<String> {
+        let code = errno.parse::<i32>().ok()?;
+        self.abi
+            .as_deref()
+            .and_then(|abi| abi.thrown_errors.iter().find(|err| err.err_code == code))
+            .and_then(|err| (!err.name.is_empty()).then(|| err.name.clone()))
+    }
+
     #[must_use]
     pub fn runtime_backend_kind(&self) -> RuntimeBackendKind {
         self.runtime_source.backend_kind()
@@ -674,16 +784,16 @@ impl TolkReplayer {
             values.push(LocalVarRendered {
                 var_name: "c4 (storage)".to_owned(),
                 value: self
-                    .compiler_abi
+                    .abi
                     .as_deref()
-                    .and_then(|abi| render_runtime_storage_with_compiler_abi(c4, abi))
+                    .and_then(|abi| render_runtime_storage_with_abi(c4, &self.source_map, abi))
                     .unwrap_or_else(|| render_runtime_vm_value(c4)),
             });
         }
         if let Some(c5) = snapshot.c5.as_ref() {
             values.push(LocalVarRendered {
                 var_name: "c5 (output actions)".to_owned(),
-                value: render_runtime_out_actions(c5, self.compiler_abi.as_deref())
+                value: render_runtime_out_actions(c5, &self.source_map, self.abi.as_deref())
                     .unwrap_or_else(|| render_runtime_vm_value(c5)),
             });
         }
@@ -758,7 +868,7 @@ impl TolkReplayer {
                 definition_loc: self
                     .source_map
                     .get_function_by_idx(f.f_idx)
-                    .map(|fun| fun.ident_loc.clone()),
+                    .and_then(|fun| (!fun.ident_loc.is_undefined()).then(|| fun.ident_loc.clone())),
                 call_site_loc: f.call_site_loc.clone(),
             })
             .collect()
@@ -853,8 +963,11 @@ impl TolkReplayer {
             .exec_stack
             .last()
             .expect("replayer invariant: exec_stack must contain the root execution state");
-        let skip = exec.system_stack_depth.min(self.tvm_stack_values.len());
-        self.tvm_stack_values[skip..]
+        let skip = exec.system_stack_depth;
+        self.tvm_stack_values
+            .parsed_values()
+            .get(skip..)
+            .unwrap_or_default()
             .iter()
             .map(ToString::to_string)
             .collect()
@@ -869,8 +982,8 @@ impl TolkReplayer {
 
         while let Some(event) = self.runtime_source.next_event() {
             match event {
-                RuntimeEvent::Stack { values } => {
-                    return Some(Tick::TvmStackValues { values });
+                RuntimeEvent::Stack { stack } => {
+                    return Some(Tick::TvmStackValues { stack });
                 }
                 RuntimeEvent::Position { cell_hash, offset } => {
                     self.current_vm_position = Some(VmCodePosition {
@@ -969,7 +1082,7 @@ impl TolkReplayer {
                 ty_idx,
                 ir_slots,
                 is_parameter,
-                is_lazy,
+                ir_lazy_slice,
                 ..
             } => {
                 self.pending_ticks.push_back(Tick::LocalVar {
@@ -977,7 +1090,7 @@ impl TolkReplayer {
                     ty_idx: *ty_idx,
                     ir_slots: ir_slots.clone(),
                     is_parameter: *is_parameter,
-                    is_lazy: (*is_lazy).unwrap_or(false),
+                    ir_lazy_slice: *ir_lazy_slice,
                 });
             }
             DebugMark::SmartCast {
@@ -1039,7 +1152,7 @@ impl TolkReplayer {
                 let is_void = self
                     .source_map
                     .get_function_by_idx(f_idx)
-                    .and_then(|f| self.source_map.resolve_ty(f.return_ty_idx))
+                    .and_then(|f| self.source_map.ty_by_idx(f.return_ty_idx))
                     .is_some_and(|ty| matches!(ty, Ty::Void));
                 if let Some(frame) = self.call_stack.last_mut() {
                     frame.pending_ir_return = Some(ir_return);
@@ -1058,14 +1171,21 @@ impl TolkReplayer {
                 ir_import,
             } => {
                 if !is_inlined && !self.call_stack.is_empty() {
-                    self.update_last_seen();
-                    let system_depth = self.tvm_stack_values.len().saturating_sub(ir_import.len());
-                    let mut last_seen = HashMap::new();
-                    for (i, &ir_idx) in ir_import.iter().enumerate() {
-                        if let Some(val) = self.tvm_stack_values.get(system_depth + i) {
-                            last_seen.insert(ir_idx, val.clone());
+                    let (system_depth, last_seen) = if self.coverage_mode {
+                        // in coverage mode we don't need this data, so skip very expensive parsing for large VM logs
+                        (0, HashMap::new())
+                    } else {
+                        self.update_last_seen();
+                        let stack_values = self.tvm_stack_values.parsed_values();
+                        let system_depth = stack_values.len().saturating_sub(ir_import.len());
+                        let mut last_seen = HashMap::new();
+                        for (i, &ir_idx) in ir_import.iter().enumerate() {
+                            if let Some(val) = stack_values.get(system_depth + i) {
+                                last_seen.insert(ir_idx, val.clone());
+                            }
                         }
-                    }
+                        (system_depth, last_seen)
+                    };
                     self.exec_stack.push(NoinlineExecState {
                         ir_stack: ir_import,
                         system_stack_depth: system_depth,
@@ -1107,11 +1227,16 @@ impl TolkReplayer {
                 // (but there will be a problem with mutate functions, we'll still see old values)
             }
             Tick::StackLayout { ir_stack: stack } => {
+                let stack_values_len = if self.coverage_mode {
+                    0
+                } else {
+                    self.tvm_stack_values.parsed_values().len()
+                };
                 let exec = self.exec_stack.last_mut().expect(
                     "replayer invariant: exec_stack must contain the active execution state",
                 );
-                if self.tvm_stack_values.len() >= stack.len() {
-                    exec.system_stack_depth = self.tvm_stack_values.len() - stack.len();
+                if stack_values_len >= stack.len() {
+                    exec.system_stack_depth = stack_values_len - stack.len();
                 }
                 if exec.accumulated_needs_reset {
                     exec.accumulated_ir_live = stack.iter().copied().collect();
@@ -1120,11 +1245,13 @@ impl TolkReplayer {
                     exec.accumulated_ir_live.extend(stack.iter().copied());
                 }
                 exec.ir_stack = stack;
-                self.update_last_seen();
+                if !self.coverage_mode {
+                    self.update_last_seen();
+                }
             }
-            Tick::TvmStackValues { values } => {
+            Tick::TvmStackValues { stack } => {
                 self.clear_caught_exception();
-                self.tvm_stack_values = values;
+                self.tvm_stack_values = stack;
 
                 if let Some(exec) = self.exec_stack.last_mut() {
                     exec.accumulated_needs_reset = true;
@@ -1153,18 +1280,26 @@ impl TolkReplayer {
                 self.after_exception_ifret = true;
                 if self.exception_break_mode != ExceptionBreakMode::Never {
                     self.last_exception = Some(ExceptionInfo {
+                        symbolic_name: self.resolve_exception_symbolic_name(&errno),
                         errno,
                         is_uncaught: false,
                     });
                 }
                 return self.exception_break_mode == ExceptionBreakMode::All;
             }
-            Tick::TvmExceptionHandler { .. } => {
+            Tick::TvmExceptionHandler { errno } => {
                 // "default exception handler, terminating vm with exit code N" from VM log.
                 // This always follows TvmException when the exception is NOT caught by try/catch.
                 if let Some(ref mut exc) = self.last_exception {
                     // last_exception may be None if mode=All (we already stopped, and step() cleared it)
                     exc.is_uncaught = true;
+                }
+                // The executor can report 65535 for "invalid message" for example for Jettons.
+                // This is unnecessary noise for the user so we just skip it completely
+                // and do not pause on it in the source-level uncaught-exception flow.
+                if errno == IGNORED_UNCAUGHT_EXCEPTION_ERRNO {
+                    self.last_exception = None;
+                    return false;
                 }
                 return self.exception_break_mode == ExceptionBreakMode::Uncaught;
             }
@@ -1172,16 +1307,39 @@ impl TolkReplayer {
                 var_name,
                 ty_idx,
                 ir_slots,
-                is_lazy,
+                ir_lazy_slice,
                 ..
             } => {
+                let lazy_info: Option<(usize, VmStackValue)> = ir_lazy_slice.and_then(|ir| {
+                    // check if another lazy variable already captured this slice
+                    // (e.g. `self` in inlined methods shares ir_slice with the outer lazy var)
+                    for frame in self.call_stack.iter().rev() {
+                        for v in frame.all_visible_vars() {
+                            if let Some((captured_ir, ref slice)) = v.lazy_info
+                                && captured_ir == ir
+                            {
+                                return Some((ir, slice.clone()));
+                            }
+                        }
+                        if !frame.is_inlined {
+                            break;
+                        }
+                    }
+                    // first encounter: take from last_seen
+                    let slice = self
+                        .exec_stack
+                        .last()
+                        .and_then(|e| e.last_seen_values.get(&ir))?
+                        .clone();
+                    Some((ir, slice))
+                });
                 if let Some(frame) = self.call_stack.last_mut() {
                     // .expect("no last frame");
                     let new_var = LocalVarInScope {
                         name: var_name.clone(),
                         ty_idx,
                         ir_slots: ir_slots.clone(),
-                        is_lazy,
+                        lazy_info,
                     };
                     let vars = frame.current_vars_mut();
                     if let Some(existing) = vars.iter_mut().find(|v| v.name == var_name) {
@@ -1267,28 +1425,27 @@ impl TolkReplayer {
             })
             .collect();
 
-        let return_ty = self
-            .source_map
-            .get_function_by_idx(f_idx)
-            .and_then(|f| self.source_map.resolve_ty(f.return_ty_idx));
-
-        match return_ty {
-            Some(ty) => debug_print_from_stack(&self.source_map, &values, ty),
-            None => RenderedValue::leaf("return type not found"),
+        let leaving_f = self.source_map.get_function_by_idx(f_idx);
+        match leaving_f {
+            Some(leaving_f) => {
+                debug_print_from_stack(&self.source_map, &values, leaving_f.return_ty_idx)
+            }
+            None => RenderedValue::leaf("leaving_f not found"),
         }
     }
 
     /// Snapshot current `ir_stack→TVM` value mappings so that variables whose
     /// slots disappear from stack can still be shown as "last seen".
     fn update_last_seen(&mut self) {
+        let values = self.tvm_stack_values.parsed_values();
         let exec = self
             .exec_stack
             .last_mut()
             .expect("replayer invariant: exec_stack must contain the active execution state");
-        let skip = exec.system_stack_depth.min(self.tvm_stack_values.len());
+        let skip = exec.system_stack_depth.min(values.len());
         for (i, &ir_idx) in exec.ir_stack.iter().enumerate() {
-            if let Some(val) = self.tvm_stack_values.get(skip + i) {
-                exec.last_seen_values.insert(ir_idx, val.clone());
+            if let Some(value) = values.get(skip + i) {
+                exec.last_seen_values.insert(ir_idx, value.clone());
             }
         }
     }
@@ -1320,22 +1477,17 @@ impl TolkReplayer {
                 })
                 .collect();
 
-            let debug_val = if var.is_lazy {
-                match self.source_map.resolve_ty(var.ty_idx) {
-                    Some(ty) => debug_format_lazy(
-                        &self.source_map,
-                        &slot_values,
-                        &var.ir_slots,
-                        ty,
-                        last_seen,
-                    ),
-                    None => RenderedValue::leaf("var.ty_idx not found"),
-                }
+            let debug_val = if let Some((_, ref slice)) = var.lazy_info {
+                debug_format_lazy(
+                    &self.source_map,
+                    &slot_values,
+                    &var.ir_slots,
+                    var.ty_idx,
+                    last_seen,
+                    slice,
+                )
             } else {
-                match self.source_map.resolve_ty(var.ty_idx) {
-                    Some(ty) => debug_print_from_stack(&self.source_map, &slot_values, ty),
-                    None => RenderedValue::leaf("var.ty_idx not found"),
-                }
+                debug_print_from_stack(&self.source_map, &slot_values, var.ty_idx)
             };
             result.push(LocalVarRendered {
                 var_name: var.name.clone(),
@@ -1343,13 +1495,19 @@ impl TolkReplayer {
             });
         }
 
-        // TODO: unify with `in.data`? Currently `in` uses only runtime data from c7, while `in.data` takes value from the stack
         if is_top_frame
             && frame.f_name == "onInternalMessage"
             && let Some(snapshot) = self.runtime_source.runtime_debug_snapshot()
             && let Some(c7) = snapshot.c7.as_ref()
-            && let Some(value) = render_runtime_in_message(c7)
+            && let Some(mut value) = render_runtime_in_message(c7)
         {
+            // `in.body` comes from the stack; other `in` fields come from c7.
+            if let RenderedValue::Struct { fields, .. } = &mut value
+                && let Some(idx) = result.iter().position(|local| local.var_name == "in.body")
+            {
+                let body = result.remove(idx).value;
+                fields.push(("body".to_owned(), body));
+            }
             result.insert(
                 0,
                 LocalVarRendered {
@@ -1361,13 +1519,10 @@ impl TolkReplayer {
 
         for (name, (ty_idx, values)) in &self.global_var_values {
             let slot_values: Vec<SlotValue> = values.iter().map(SlotValue::Live).collect();
-            let debug_val = match self.source_map.resolve_ty(*ty_idx) {
-                Some(ty) => debug_print_from_stack(&self.source_map, &slot_values, ty),
-                None => RenderedValue::leaf("var.ty_idx not found"),
-            };
+            let rendered_g = debug_print_from_stack(&self.source_map, &slot_values, *ty_idx);
             result.push(LocalVarRendered {
                 var_name: format!("global {name}"),
-                value: debug_val,
+                value: rendered_g,
             });
         }
 
@@ -1486,8 +1641,10 @@ impl TolkReplayer {
     }
 
     #[must_use]
-    pub fn type_name(&self, ty_idx: usize) -> Option<String> {
-        self.source_map.resolve_ty(ty_idx).map(ToString::to_string)
+    pub fn type_name(&self, ty_idx: TyIdx) -> Option<String> {
+        self.source_map
+            .ty_by_idx(ty_idx)
+            .map(|_| render_ty(&self.source_map, ty_idx))
     }
 
     #[must_use]

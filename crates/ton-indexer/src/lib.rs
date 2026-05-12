@@ -69,8 +69,8 @@ pub fn categorize_wallet(hash: HashBytes) -> WalletType {
         "hNr6RJ+Ypph3ibojI1gHK8D3bcRSQAKl0JGLmnXS1Zk=" => WalletType::WalletV3R2,
         "ZN1UgFUixb6KnbWc6gEFzPDQh4bKeb64y3nogKjXMi0=" => WalletType::WalletV4R1,
         "/rX/aCDi/w2Ug+fg1iyBfYRniftK5YDIeIZtlZ2r1cA=" => WalletType::WalletV4R2,
-        "5M87L0xtamHqDytUR9JmeFsmrzY32y3u5rzRqoJvNBI=" => WalletType::WalletV5Beta,
-        "89fKU0k97trCizgZhqhJQDy6w9LFhHea8IEGWvCsS5M=" => WalletType::WalletV5Beta,
+        "5M87L0xtamHqDytUR9JmeFsmrzY32y3u5rzRqoJvNBI="
+        | "89fKU0k97trCizgZhqhJQDy6w9LFhHea8IEGWvCsS5M=" => WalletType::WalletV5Beta,
         "IINLe3KxEhR+Gy+0V7hOdNGjDwT3N9T2KmaOlVLSty8=" => WalletType::WalletV5R1,
         "2M27t58sXKpnesRQdwvgNRviHhJQSG3oXMUqoz3RZIQ=" => WalletType::WalletHighloadV1R1,
         "Dc7tISadZgE+lbGfu1xVpvAa2tQIN7qo5SHN46AqpGw=" => WalletType::WalletHighloadV1R2,

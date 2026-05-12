@@ -15,6 +15,22 @@ const FORMATTED_TOLK: &str = r"fun onInternalMessage(in: InMessage) {
 }
 ";
 
+const RANGE_UNFORMATTED_TOLK: &str = r"fun onInternalMessage(in: InMessage) {
+    val   x   =   1;
+    val   y   =   2;
+    val   z   =   3;
+}
+";
+
+const RANGE_WITH_HEADER_TOLK: &str = r"// file header
+// second header line
+
+fun onInternalMessage(in: InMessage) {
+    val   x   =   1;
+    val   y   =   2;
+}
+";
+
 const IMPORTS_UNFORMATTED_TOLK: &str = r#"import "./b"
 import "@acton/io"
 import "@stdlib/reflection"
@@ -43,7 +59,7 @@ fn test_fmt_simple() {
         .fmt()
         .run()
         .success()
-        .assert_snapshot_matches("integration/snapshots/test_fmt_simple.stdout.txt");
+        .assert_snapshot_matches("integration/snapshots/formatter/test_fmt_simple.stdout.txt");
 
     assert_eq!(fs::read_to_string(&contract_path).unwrap(), FORMATTED_TOLK);
 }
@@ -60,7 +76,9 @@ fn test_fmt_check_failure() {
         .arg("--check")
         .run()
         .failure()
-        .assert_snapshot_matches("integration/snapshots/test_fmt_check_failure.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_check_failure.stdout.txt",
+        );
 }
 
 #[test]
@@ -75,7 +93,9 @@ fn test_fmt_check_success() {
         .arg("--check")
         .run()
         .success()
-        .assert_snapshot_matches("integration/snapshots/test_fmt_check_success.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_check_success.stdout.txt",
+        );
 }
 
 #[test]
@@ -91,7 +111,9 @@ fn test_fmt_specific_file() {
         .arg("contracts/simple1.tolk")
         .run()
         .success()
-        .assert_snapshot_matches("integration/snapshots/test_fmt_specific_file.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_specific_file.stdout.txt",
+        );
 
     assert_eq!(
         fs::read_to_string(project.path().join("contracts/simple1.tolk")).unwrap(),
@@ -101,6 +123,203 @@ fn test_fmt_specific_file() {
         fs::read_to_string(project.path().join("contracts/simple2.tolk")).unwrap(),
         UNFORMATTED_TOLK
     );
+}
+
+#[test]
+fn test_fmt_range_formats_only_selected_statement() {
+    let project = ProjectBuilder::new("fmt-range")
+        .contract("ranged", RANGE_UNFORMATTED_TOLK)
+        .build();
+
+    let output = project
+        .acton()
+        .fmt()
+        .arg("--range")
+        .arg("2:4-2:24")
+        .arg("contracts/ranged.tolk")
+        .run()
+        .success();
+
+    output
+        .assert_snapshot_matches("integration/snapshots/formatter/test_fmt_range.stdout.txt")
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("contracts/ranged.tolk")
+                .to_str()
+                .unwrap(),
+            "integration/snapshots/formatter/test_fmt_range.result.txt",
+        );
+}
+
+#[test]
+fn test_fmt_range_check_failure_prints_range_diff() {
+    let project = ProjectBuilder::new("fmt-range-check")
+        .contract("ranged", RANGE_UNFORMATTED_TOLK)
+        .build();
+
+    project
+        .acton()
+        .fmt()
+        .arg("--range")
+        .arg("2:4-2:24")
+        .arg("--check")
+        .arg("contracts/ranged.tolk")
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_range_check_failure.stdout.txt",
+        );
+}
+
+#[test]
+fn test_fmt_range_end_boundary_does_not_format_next_statement() {
+    let project = ProjectBuilder::new("fmt-range-end-boundary")
+        .contract("ranged", RANGE_UNFORMATTED_TOLK)
+        .build();
+
+    let output = project
+        .acton()
+        .fmt()
+        .arg("--range")
+        .arg("1:4-2:4")
+        .arg("contracts/ranged.tolk")
+        .run()
+        .success();
+
+    output
+        .assert_snapshot_matches("integration/snapshots/formatter/test_fmt_range.stdout.txt")
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("contracts/ranged.tolk")
+                .to_str()
+                .unwrap(),
+            "integration/snapshots/formatter/test_fmt_range_end_boundary.result.txt",
+        );
+}
+
+#[test]
+fn test_fmt_range_preserves_file_header_comment() {
+    let project = ProjectBuilder::new("fmt-range-header")
+        .contract("ranged", RANGE_WITH_HEADER_TOLK)
+        .build();
+
+    let output = project
+        .acton()
+        .fmt()
+        .arg("--range")
+        .arg("4:4-4:24")
+        .arg("contracts/ranged.tolk")
+        .run()
+        .success();
+
+    output
+        .assert_snapshot_matches("integration/snapshots/formatter/test_fmt_range.stdout.txt")
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("contracts/ranged.tolk")
+                .to_str()
+                .unwrap(),
+            "integration/snapshots/formatter/test_fmt_range_header.result.txt",
+        );
+}
+
+#[test]
+fn test_fmt_range_rejects_invalid_range() {
+    let project = ProjectBuilder::new("fmt-range-invalid")
+        .contract("ranged", RANGE_UNFORMATTED_TOLK)
+        .build();
+
+    project
+        .acton()
+        .fmt()
+        .arg("--range")
+        .arg("invalid-range")
+        .arg("contracts/ranged.tolk")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_range_invalid.stderr.txt",
+        );
+}
+
+#[test]
+fn test_fmt_range_requires_single_file_path() {
+    let project = ProjectBuilder::new("fmt-range-no-path")
+        .contract("ranged", RANGE_UNFORMATTED_TOLK)
+        .build();
+
+    project
+        .acton()
+        .fmt()
+        .arg("--range")
+        .arg("2:4-2:24")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_range_requires_file.stderr.txt",
+        );
+}
+
+#[test]
+fn test_fmt_range_rejects_directory_path() {
+    let project = ProjectBuilder::new("fmt-range-directory")
+        .contract("ranged", RANGE_UNFORMATTED_TOLK)
+        .build();
+
+    project
+        .acton()
+        .fmt()
+        .arg("--range")
+        .arg("2:4-2:24")
+        .arg("contracts")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_range_directory.stderr.txt",
+        );
+}
+
+#[test]
+fn test_fmt_range_rejects_multiple_files() {
+    let project = ProjectBuilder::new("fmt-range-multiple")
+        .contract("ranged1", RANGE_UNFORMATTED_TOLK)
+        .contract("ranged2", RANGE_UNFORMATTED_TOLK)
+        .build();
+
+    project
+        .acton()
+        .fmt()
+        .arg("--range")
+        .arg("2:4-2:24")
+        .arg("contracts/ranged1.tolk")
+        .arg("contracts/ranged2.tolk")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_range_multiple_files.stderr.txt",
+        );
+}
+
+#[test]
+fn test_fmt_range_short_flag_is_not_supported() {
+    let project = ProjectBuilder::new("fmt-range-no-short-flag")
+        .contract("ranged", RANGE_UNFORMATTED_TOLK)
+        .build();
+
+    project
+        .acton()
+        .fmt()
+        .arg("-r")
+        .arg("2:4-2:24")
+        .arg("contracts/ranged.tolk")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_range_short_flag.stderr.txt",
+        );
 }
 
 #[test]
@@ -120,7 +339,9 @@ fn test_fmt_ignore_from_config() {
         .fmt()
         .run()
         .success()
-        .assert_snapshot_matches("integration/snapshots/test_fmt_ignore_from_config.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_ignore_from_config.stdout.txt",
+        );
 
     assert_eq!(
         fs::read_to_string(project.path().join("contracts/simple1.tolk")).unwrap(),
@@ -143,7 +364,9 @@ fn test_fmt_syntax_error() {
         .fmt()
         .run()
         .failure()
-        .assert_stderr_snapshot_matches("integration/snapshots/test_fmt_syntax_error.stderr.txt");
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_syntax_error.stderr.txt",
+        );
 }
 
 #[test]
@@ -161,7 +384,7 @@ fn test_fmt_syntax_errors_in_two_files() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_fmt_syntax_errors_in_two_files.stderr.txt",
+            "integration/snapshots/formatter/test_fmt_syntax_errors_in_two_files.stderr.txt",
         );
 }
 
@@ -178,7 +401,24 @@ fn test_fmt_nonexistent_path() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_fmt_nonexistent_path.stderr.txt",
+            "integration/snapshots/formatter/test_fmt_nonexistent_path.stderr.txt",
+        );
+}
+
+#[test]
+fn test_fmt_explicit_non_tolk_file_fails() {
+    let project = ProjectBuilder::new("fmt-explicit-non-tolk")
+        .raw_file("README.md", "# Notes\n")
+        .build();
+
+    project
+        .acton()
+        .fmt()
+        .arg("README.md")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/formatter/test_fmt_explicit_non_tolk_file_fails.stderr.txt",
         );
 }
 
@@ -201,11 +441,11 @@ fn test_fmt_mixed_paths_partial_failure_keeps_existing_file_unchanged() {
         .run()
         .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_fmt_mixed_paths_partial_failure.stderr.txt",
+            "integration/snapshots/formatter/test_fmt_mixed_paths_partial_failure.stderr.txt",
         )
         .assert_file_snapshot_matches(
             "contracts/simple.tolk",
-            "integration/snapshots/test_fmt_mixed_paths_partial_failure.result.txt",
+            "integration/snapshots/formatter/test_fmt_mixed_paths_partial_failure.result.txt",
         );
 }
 
@@ -225,11 +465,13 @@ fn test_fmt_custom_width() {
 
     let output = project.acton().fmt().run().success();
 
-    output.assert_snapshot_matches("integration/snapshots/test_fmt_custom_width.stdout.txt");
+    output.assert_snapshot_matches(
+        "integration/snapshots/formatter/test_fmt_custom_width.stdout.txt",
+    );
 
     output.assert_file_snapshot_matches(
         project.path().join("contracts/wide.tolk").to_str().unwrap(),
-        "integration/snapshots/test_fmt_custom_width.result.txt",
+        "integration/snapshots/formatter/test_fmt_custom_width.result.txt",
     );
 }
 
@@ -247,7 +489,7 @@ fn test_fmt_import_group_separators_from_config() {
     let output = project.acton().fmt().run().success();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_fmt_import_group_separators_from_config.stdout.txt",
+        "integration/snapshots/formatter/test_fmt_import_group_separators_from_config.stdout.txt",
     );
     output.assert_file_snapshot_matches(
         project
@@ -255,7 +497,7 @@ fn test_fmt_import_group_separators_from_config() {
             .join("contracts/imports.tolk")
             .to_str()
             .unwrap(),
-        "integration/snapshots/test_fmt_import_group_separators_from_config.result.txt",
+        "integration/snapshots/formatter/test_fmt_import_group_separators_from_config.result.txt",
     );
 }
 
@@ -273,7 +515,7 @@ fn test_fmt_import_group_separators_disabled_from_config() {
     let output = project.acton().fmt().run().success();
 
     output.assert_snapshot_matches(
-        "integration/snapshots/test_fmt_import_group_separators_disabled_from_config.stdout.txt",
+        "integration/snapshots/formatter/test_fmt_import_group_separators_disabled_from_config.stdout.txt",
     );
     output.assert_file_snapshot_matches(
         project
@@ -281,6 +523,6 @@ fn test_fmt_import_group_separators_disabled_from_config() {
             .join("contracts/imports.tolk")
             .to_str()
             .unwrap(),
-        "integration/snapshots/test_fmt_import_group_separators_disabled_from_config.result.txt",
+        "integration/snapshots/formatter/test_fmt_import_group_separators_disabled_from_config.result.txt",
     );
 }

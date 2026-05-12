@@ -1,6 +1,6 @@
-use crate::Checker;
 use crate::rules::diagnostic::{Annotation, Diagnostic};
 use crate::rules::violation::Violation;
+use crate::{Checker, FixAvailability};
 use tolk_macros::ViolationMetadata;
 use tolk_resolver::file_index::FileId;
 use tolk_resolver::resolve_index::{FileResolveIndex, LocalDefKind};
@@ -16,10 +16,11 @@ pub mod analysis;
 /// arbitrary inbound senders to mutate contract storage.
 ///
 /// ### Example
-/// ```tolk
+/// ```tolk twoslash
 /// fun onInternalMessage(in: InMessage) {
 ///     val storage = lazy Storage.fromCell(contract.getData());
 ///     storage.save();
+///     //      ^^^^ E013: possible storage write without admin sender check
 /// }
 /// ```
 ///
@@ -36,6 +37,8 @@ pub mod analysis;
 pub struct UnauthorizedAccess;
 
 impl Violation for UnauthorizedAccess {
+    const FIX_AVAILABILITY: FixAvailability = FixAvailability::None;
+
     fn message(&self) -> String {
         "possible storage write without admin sender check".to_owned()
     }

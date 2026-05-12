@@ -6,9 +6,14 @@ NAME
 SYNOPSIS
        acton wrapper [options] contract-name
 
+       acton wrapper [options] --all
+
 DESCRIPTION
        Generate a wrapper for the contract identified by _contract-name_ from
        Acton.toml.
+
+       Use --all to generate wrappers for every contract defined in Acton.toml
+       without picking a single one.
 
        Wrapper generation uses the ABI emitted by the Tolk compiler. In
        practice, the contract header is the source of truth for typed storage
@@ -23,12 +28,19 @@ DESCRIPTION
 OPTIONS
    Wrapper Options
        contract-name
-           Contract name from Acton.toml to generate the wrapper for.
+           Contract name from Acton.toml to generate the wrapper for. Required
+           unless --all is given.
+
+       --all
+           Generate wrappers for every contract defined in Acton.toml.
+
+           Conflicts with contract-name, --output, and --test-output (which
+           designate a single output file).
 
        -o, --output path
            Write the generated wrapper to an exact path.
 
-           Conflicts with --output-dir.
+           Conflicts with --output-dir and --all.
 
        --output-dir dir
            Write the generated wrapper to a directory and let Acton choose the
@@ -43,7 +55,7 @@ OPTIONS
        --test-output path
            Write the generated test file to an exact path.
 
-           Requires --test.
+           Requires --test. Conflicts with --all.
 
        --test-output-dir dir
            Write the generated test file to a directory and let Acton choose
@@ -53,7 +65,8 @@ OPTIONS
 
    TypeScript Options
        --ts
-           Generate a TypeScript wrapper through gen-typescript-from-tolk.
+           Generate a TypeScript wrapper through
+           @ton/tolk-abi-to-typescript@0.5.0.
 
            Conflicts with test stub generation.
 
@@ -91,7 +104,7 @@ ABI REQUIREMENTS
        untyped initializer.
 
 TYPESCRIPT GENERATION
-       acton wrapper --ts shells out to npx gen-typescript-from-tolk-dev.
+       acton wrapper --ts shells out to npx @ton/tolk-abi-to-typescript@0.5.0.
 
        o  Node.js, npm, and npx must be available in PATH
 
@@ -109,7 +122,7 @@ CONFIGURATION
            test-output-dir = "tests"
            
            [wrappers.typescript]
-           output-dir = "wrappers"
+           output-dir = "wrappers-ts"
 
        CLI flags override config values for the current invocation.
 
@@ -137,11 +150,17 @@ EXAMPLES
 
               acton wrapper Counter --output-dir tests/generated
               acton wrapper Counter --test --test-output-dir tests/generated
-              acton wrapper Counter --ts --output-dir wrappers
+              acton wrapper Counter --ts --output-dir wrappers-ts
 
        5. Generate a frontend-oriented TypeScript wrapper layout:
 
-              acton wrapper Counter --ts --output-dir app/src/wrappers
+              acton wrapper Counter --ts --output-dir app/src/wrappers-ts
+
+       6. Generate wrappers for every contract in Acton.toml:
+
+              acton wrapper --all
+              acton wrapper --all --ts
+              acton wrapper --all --output-dir wrappers/generated
 
 SEE ALSO
        o  acton help build
@@ -149,5 +168,5 @@ SEE ALSO
        o  acton help test
 
        o  Generating wrappers guide
-          <https://ton-blockchain.github.io/acton/docs/test-runner/generating-wrappers>
+          <https://ton-blockchain.github.io/acton/docs/testing/generating-wrappers>
 

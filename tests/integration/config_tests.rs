@@ -1,5 +1,7 @@
 use crate::support::TestOutputExt;
 use crate::support::project::{ProjectBuilder, TestConfig};
+use acton::build_info;
+use std::fmt::Write as _;
 use std::fs;
 use std::io::Write;
 
@@ -10,8 +12,9 @@ fun onBouncedMessage(_: InMessageBounced) {}
 
 const PROFILED_TEST: &str = r#"
 import "../../lib/testing/expect"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/types/big_array"
 
 get fun `test-profiled-transaction`() {
@@ -21,7 +24,7 @@ get fun `test-profiled-transaction`() {
     };
     val address = AutoDeployAddress { stateInit: init }.calculateAddress();
 
-    val deployer = net.treasury("deployer");
+    val deployer = testing.treasury("deployer");
     val deployMessage = createMessage({
         bounce: false,
         value: ton("1.0"),
@@ -44,8 +47,9 @@ get fun `test-profiled-transaction`() {
 
 const PROFILED_TEST_WITH_DRIFT: &str = r#"
 import "../../lib/testing/expect"
-import "../../lib/build/build"
+import "../../lib/build"
 import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
 import "../../lib/types/big_array"
 
 get fun `test-profiled-transaction`() {
@@ -55,7 +59,7 @@ get fun `test-profiled-transaction`() {
     };
     val address = AutoDeployAddress { stateInit: init }.calculateAddress();
 
-    val deployer = net.treasury("deployer");
+    val deployer = testing.treasury("deployer");
     val deployMessage = createMessage({
         bounce: false,
         value: ton("1.0"),
@@ -130,6 +134,117 @@ fn test_filter_via_config() {
         .assert_contains("unit 1")
         .assert_contains("unit 2")
         .assert_not_contains("other");
+}
+
+#[test]
+fn test_toolchain_acton_version_mismatch_fails_before_project_command() {
+    let project = ProjectBuilder::new("toolchain-version-mismatch")
+        .script_config("hello", "echo should-not-run")
+        .build();
+
+    let config_path = project.path().join("Acton.toml");
+    let mut toml_content = fs::read_to_string(&config_path).expect("Read Acton.toml");
+    toml_content.push_str(
+        r#"
+[toolchain]
+acton = "0.0.0"
+"#,
+    );
+    fs::write(config_path, toml_content).expect("Write Acton.toml");
+
+    project
+        .acton()
+        .run_script_cmd("hello")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/config/test_toolchain_acton_version_mismatch.stderr.txt",
+        );
+}
+
+#[test]
+fn test_toolchain_acton_empty_version_fails_with_setup_hint() {
+    let project = ProjectBuilder::new("toolchain-empty-version")
+        .script_config("hello", "echo should-not-run")
+        .build();
+
+    let config_path = project.path().join("Acton.toml");
+    let mut toml_content = fs::read_to_string(&config_path).expect("Read Acton.toml");
+    toml_content.push_str(
+        r#"
+[toolchain]
+acton = ""
+"#,
+    );
+    fs::write(config_path, toml_content).expect("Write Acton.toml");
+
+    project
+        .acton()
+        .run_script_cmd("hello")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/config/test_toolchain_acton_empty_version.stderr.txt",
+        );
+}
+
+#[test]
+#[cfg_attr(not(unix), ignore)]
+fn test_toolchain_acton_package_version_allows_project_command() {
+    let project = ProjectBuilder::new("toolchain-current-version")
+        .script_config("hello", "echo toolchain-ok")
+        .build();
+
+    let config_path = project.path().join("Acton.toml");
+    let mut toml_content = fs::read_to_string(&config_path).expect("Read Acton.toml");
+    write!(
+        toml_content,
+        r#"
+[toolchain]
+acton = "{}"
+"#,
+        build_info::PACKAGE_VERSION
+    )
+    .expect("Append toolchain config");
+    fs::write(config_path, toml_content).expect("Write Acton.toml");
+
+    project
+        .acton()
+        .run_script_cmd("hello")
+        .run()
+        .success()
+        .assert_snapshot_matches(
+            "integration/snapshots/config/test_toolchain_acton_current_version.stdout.txt",
+        );
+}
+
+#[test]
+fn test_toolchain_acton_v_prefixed_current_version_is_rejected() {
+    let project = ProjectBuilder::new("toolchain-v-prefixed-current-version")
+        .script_config("hello", "echo should-not-run")
+        .build();
+
+    let config_path = project.path().join("Acton.toml");
+    let mut toml_content = fs::read_to_string(&config_path).expect("Read Acton.toml");
+    write!(
+        toml_content,
+        r#"
+[toolchain]
+acton = "v{}"
+"#,
+        build_info::SHORT_VERSION
+    )
+    .expect("Append toolchain config");
+    fs::write(config_path, toml_content).expect("Write Acton.toml");
+
+    project
+        .acton()
+        .run_script_cmd("hello")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/config/test_toolchain_acton_v_prefixed_current_version.stderr.txt",
+        );
 }
 
 #[test]
@@ -217,7 +332,9 @@ fn test_backtrace_via_config() {
         .failure()
         .assert_failed(1)
         .assert_contains("exit_code=42")
-        .assert_snapshot_matches("integration/snapshots/test_backtrace_via_config.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/config/test_backtrace_via_config.stdout.txt",
+        );
 }
 
 #[test]
@@ -280,7 +397,7 @@ fn test_filter_and_coverage_via_config() {
         .assert_contains("unit div")
         .assert_not_contains("integration triple")
         .assert_snapshot_matches(
-            "integration/snapshots/test_filter_and_coverage_via_config.stdout.txt",
+            "integration/snapshots/config/test_filter_and_coverage_via_config.stdout.txt",
         );
 }
 
@@ -545,7 +662,7 @@ fn test_include_patterns_via_config_with_explicit_directory_path() {
         .run()
         .success()
         .assert_snapshot_matches(
-            "integration/snapshots/test_include_patterns_via_config_with_explicit_directory_path.stdout.txt",
+            "integration/snapshots/config/test_include_patterns_via_config_with_explicit_directory_path.stdout.txt",
         );
 }
 
@@ -685,7 +802,9 @@ fn test_fail_fast_via_config() {
         .assert_contains("second fail")
         .assert_not_contains("third pass")
         .assert_not_contains("fourth pass")
-        .assert_snapshot_matches("integration/snapshots/test_with_fail_fast_via_config.stdout.txt");
+        .assert_snapshot_matches(
+            "integration/snapshots/config/test_with_fail_fast_via_config.stdout.txt",
+        );
 }
 
 #[test]
@@ -730,7 +849,7 @@ fn test_fail_on_diff_via_config_exits_non_zero_for_profile_drift() {
     failed
         .assert_contains("CHAIN GAS & FEES SUMMARY COMPARISON")
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/test_fail_on_diff_via_config_exits_non_zero_for_profile_drift.stderr.txt",
+            "integration/snapshots/config/test_fail_on_diff_via_config_exits_non_zero_for_profile_drift.stderr.txt",
         );
 }
 

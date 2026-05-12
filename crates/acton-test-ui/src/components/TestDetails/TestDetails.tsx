@@ -10,6 +10,7 @@ import {VscCode} from "react-icons/vsc"
 import {
   type TestReport,
   type TestExecutionLogs,
+  type SourceLocation,
   TestStatus,
   type Trace,
   ContractData,
@@ -17,6 +18,7 @@ import {
   type TransactionInfo,
 } from "@acton/shared-ui"
 import {
+  applyParsedBodies,
   fmt,
   getTransactionOpcode,
   processTransactions,
@@ -30,10 +32,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  resolveAbiOpcodeName,
 } from "@acton/shared-ui"
 
 import {useContracts} from "../../hooks/useContracts"
-import {applyParsedBodies} from "../../utils/transactionBodies"
 
 import styles from "./TestDetails.module.css"
 
@@ -77,6 +79,30 @@ const isExternalMessageNotAcceptedError = (error: string): boolean => {
     normalized.includes("cannot apply external") ||
     normalized.includes("did not accept")
   return mentionsExternal && mentionsRejectedExternal
+}
+
+const MISSING_VM_LOG_HINT = [
+  "No VM logs were collected for this trace.",
+  "Re-run with --verbose flag",
+].join("\n")
+
+const toIdeSourcePosition = (location: SourceLocation): Pick<TestReport, "row" | "column"> => ({
+  row: Math.max(0, location.line - 1),
+  column: Math.max(0, location.column - 2),
+})
+
+const hasNonEmptyLog = (value: string | undefined): boolean => (value ?? "").trim().length > 0
+
+const getStatusDescription = (test: TestReport): string | undefined => {
+  if (test.status === TestStatus.Todo) {
+    return test.details ?? "TODO"
+  }
+
+  if (test.status === TestStatus.Skipped) {
+    return test.details
+  }
+
+  return undefined
 }
 
 export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoot}) => {
@@ -283,6 +309,26 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
     return path
   }
 
+  const renderSourceLocation = (location: SourceLocation) => {
+    const label = `${getRelativePath(location.file)}:${location.line}:${location.column}`
+    const idePosition = toIdeSourcePosition(location)
+
+    return (
+      <a
+        href={selectedIde.getUrl({
+          ...test,
+          file_path: location.file,
+          row: idePosition.row,
+          column: idePosition.column,
+        })}
+        className={styles.sourceLocationLink}
+        title={`Open ${label} in ${selectedIde.name}`}
+      >
+        {label}
+      </a>
+    )
+  }
+
   const formatDuration = (duration: {secs: number; nanos: number}) => {
     const ms = duration.secs * 1000 + duration.nanos / 1_000_000
     if (ms < 1) return `${(ms * 1000).toFixed(0)}µs`
@@ -318,6 +364,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
   }, [parsedTraceTransactionsWithBodies, selectedTraceIndex])
 
   const allContracts = useMemo(() => Object.values(backendContracts), [backendContracts])
+  const statusDescription = getStatusDescription(test)
 
   const traceFeeSummaries = useMemo((): TraceFeeSummary[] => {
     const getFirstTraceTransaction = (transactions: readonly TransactionInfo[]) => {
@@ -345,11 +392,11 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
       if (opcode === undefined) return "empty"
 
       const targetContract = tx.contractName ? backendContracts[tx.contractName] : undefined
-      let opcodeName = targetContract?.abi?.messages.find(it => it.opcode === opcode)?.name
+      let opcodeName = resolveAbiOpcodeName(targetContract?.abi, opcode, "incoming")
 
       if (!opcodeName) {
         for (const contract of allContracts) {
-          const found = contract.abi?.messages.find(it => it.opcode === opcode)?.name
+          const found = resolveAbiOpcodeName(contract.abi, opcode)
           if (found) {
             opcodeName = found
             break
@@ -422,10 +469,10 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
       const backendContract = name ? backendContracts[name] : undefined
       map.set(addrStr, {
         displayName: name ?? fmt.formatAddress(addrStr),
-        address: address,
+        address,
         letter: String.fromCodePoint(65 + (map.size % 26)),
         abi: backendContract?.abi,
-      } as ContractData)
+      })
     }
 
     if (trace?.wallets) {
@@ -519,8 +566,8 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
     const isSingleFailedMessage = failedMessages.length === 1
 
     return failedMessages.map((failedMessage, index) => {
-      const hasVmLog = (failedMessage.vm_log_diff ?? "").trim().length > 0
-      const hasExecutorLog = (failedMessage.executor_logs ?? "").trim().length > 0
+      const hasVmLog = hasNonEmptyLog(failedMessage.vm_log_diff)
+      const hasExecutorLog = hasNonEmptyLog(failedMessage.executor_logs)
       const showExternalNotAcceptedTitle =
         isSingleFailedMessage && isExternalMessageNotAcceptedError(failedMessage.error)
 
@@ -550,21 +597,19 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
               <DataBlock data={failedMessage.executor_logs ?? ""} />
             </div>
           )}
-          {hasVmLog && (
-            <div className={styles.logSection}>
-              <div className={styles.logSectionTitle}>VM Log</div>
-              <DataBlock data={failedMessage.vm_log_diff ?? ""} />
-            </div>
-          )}
+          <div className={styles.logSection}>
+            <div className={styles.logSectionTitle}>VM Log</div>
+            <DataBlock data={hasVmLog ? (failedMessage.vm_log_diff ?? "") : MISSING_VM_LOG_HINT} />
+          </div>
         </div>
       )
     })
   }
 
   const renderTestExecutionLogs = () => {
-    const hasStdout = (executionLogs?.stdout ?? "").trim().length > 0
-    const hasStderr = (executionLogs?.stderr ?? "").trim().length > 0
-    const hasVmLog = (executionLogs?.vm_log_diff ?? "").trim().length > 0
+    const hasStdout = hasNonEmptyLog(executionLogs?.stdout)
+    const hasStderr = hasNonEmptyLog(executionLogs?.stderr)
+    const hasVmLog = hasNonEmptyLog(executionLogs?.vm_log)
 
     const summaryKinds = [
       hasStdout ? "stdout" : undefined,
@@ -602,7 +647,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
             )}
             {hasVmLog && (
               <div className={styles.logSection}>
-                <DataBlock data={executionLogs?.vm_log_diff ?? ""} />
+                <DataBlock data={executionLogs?.vm_log ?? ""} />
               </div>
             )}
           </div>
@@ -618,8 +663,13 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
           <div className={styles.infoGrid}>
             <div className={styles.infoItem}>
               <div className={styles.infoLabel}>Status</div>
-              <div className={`${styles.infoValue} ${styles[test.status.toLowerCase()]}`}>
-                {test.status}
+              <div className={styles.infoValueGroup}>
+                <div className={`${styles.infoValue} ${styles[test.status.toLowerCase()]}`}>
+                  {test.status}
+                </div>
+                {statusDescription && (
+                  <div className={styles.statusDescription}>{statusDescription}</div>
+                )}
               </div>
             </div>
             <div className={styles.infoItem}>
@@ -661,6 +711,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
                     transactions={failedTransactions}
                     contracts={contracts}
                     allContracts={allContracts}
+                    renderSourceLocation={renderSourceLocation}
                   />
                 </div>
               )}
@@ -826,8 +877,8 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
       const transactionLogs =
         currentTraceList?.transactions
           .map((tx, idx) => {
-            const hasVmLog = tx.vm_log_diff && tx.vm_log_diff.trim().length > 0
-            const hasExecutorLog = tx.executor_logs && tx.executor_logs.trim().length > 0
+            const hasVmLog = hasNonEmptyLog(tx.vm_log_diff)
+            const hasExecutorLog = hasNonEmptyLog(tx.executor_logs)
 
             if (!hasVmLog && !hasExecutorLog) return
 
@@ -842,12 +893,10 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
                     <DataBlock data={tx.executor_logs} />
                   </div>
                 )}
-                {hasVmLog && (
-                  <div className={styles.logSection}>
-                    <div className={styles.logSectionTitle}>VM Log</div>
-                    <DataBlock data={tx.vm_log_diff} />
-                  </div>
-                )}
+                <div className={styles.logSection}>
+                  <div className={styles.logSectionTitle}>VM Log</div>
+                  <DataBlock data={hasVmLog ? tx.vm_log_diff : MISSING_VM_LOG_HINT} />
+                </div>
               </div>
             )
           })
@@ -858,7 +907,14 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
       const logs = [...transactionLogs, ...failedMessageLogs]
 
       if (logs.length === 0) {
-        return <div className={styles.empty}>No trace logs for this test</div>
+        return (
+          <div className={styles.txLogs}>
+            <div className={styles.logSection}>
+              <div className={styles.logSectionTitle}>VM Log</div>
+              <DataBlock data={MISSING_VM_LOG_HINT} />
+            </div>
+          </div>
+        )
       }
 
       return logs
@@ -883,6 +939,7 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
               transactions={parsedTransactions}
               contracts={contracts}
               allContracts={allContracts}
+              renderSourceLocation={renderSourceLocation}
             />
           </div>
           {failedMessages.length > 0 && <div>{renderFailedMessages(failedMessages)}</div>}

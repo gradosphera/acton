@@ -1,8 +1,9 @@
-use super::GITHUB_SOURCE_BASE;
+use super::{GITHUB_SOURCE_BASE, generated_notice_from_path};
 use anyhow::Result;
 use path_absolutize::Absolutize;
 use regex::Regex;
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tolk_syntax::{
@@ -21,15 +22,14 @@ pub(super) fn generate_stdlib_docs(
         fs::remove_dir_all(&legacy_nested_tolk_dir)?;
     }
 
-    let mut docs = collect_docs(lib_dir, stdlib_out_dir, SourceKind::Acton)?;
-    docs.extend(collect_docs(
-        tolk_stdlib_dir,
-        tolk_stdlib_out_dir,
-        SourceKind::Tolk,
-    )?);
+    let stdlib_docs = collect_docs(lib_dir, stdlib_out_dir, SourceKind::Acton)?;
+    let tolk_stdlib_docs = collect_docs(tolk_stdlib_dir, tolk_stdlib_out_dir, SourceKind::Tolk)?;
 
-    write_stdlib_index(stdlib_out_dir)?;
-    write_tolk_stdlib_index(tolk_stdlib_out_dir)?;
+    write_stdlib_index(stdlib_out_dir, &stdlib_docs)?;
+    write_tolk_stdlib_index(tolk_stdlib_out_dir, &tolk_stdlib_docs)?;
+
+    let mut docs = stdlib_docs;
+    docs.extend(tolk_stdlib_docs);
 
     let symbol_map = build_symbol_map(&docs);
     let link_regex = Regex::new(r"\[([a-zA-Z0-9_.]+)]")?;
@@ -41,39 +41,49 @@ pub(super) fn generate_stdlib_docs(
     Ok(())
 }
 
-fn write_stdlib_index(stdlib_out_dir: &Path) -> Result<()> {
+fn write_stdlib_index(stdlib_out_dir: &Path, docs: &[FileDoc]) -> Result<()> {
     fs::create_dir_all(stdlib_out_dir)?;
-    let index_article = stdlib_out_dir.join("index.mdx");
+    let index_article = stdlib_out_dir.join("overview.mdx");
+    let cards = render_cards(docs);
+    let body = format!(
+        "Acton provides a collection of functions for writing scripts and tests in Tolk.\n\nThe Tolk stdlib is documented in [Tolk standard library](/docs/tolk_standard_library/overview).\n\n{cards}"
+    );
     fs::write(
         &index_article,
-        r#"---
-title: "Acton standard library"
-description: "Learn about available functions/struct/constants available in Acton standard library"
-icon: FileCode
----
-
-Acton provides a collection of functions for writing scripts and tests in Tolk.
-
-The Tolk stdlib is documented in [Tolk standard library](../tolk_standard_library).
-"#,
+        render_generated_index_page(
+            "Overview",
+            "All available functions, structs, constants, and other entities available in Acton standard library",
+            &body,
+            Path::new(super::ACTON_STDLIB_SRC),
+        ),
     )?;
+    let meta_file = stdlib_out_dir.join("meta.json");
+    let _ = fs::write(
+        &meta_file,
+        "{\n  \"title\": \"Acton standard library\",\n  \"icon\": \"BookOpenText\",\n  \"pages\": [\n    \"overview\",\n    \"...\"\n  ]\n}\n",
+    );
     Ok(())
 }
 
-fn write_tolk_stdlib_index(tolk_stdlib_out_dir: &Path) -> Result<()> {
+fn write_tolk_stdlib_index(tolk_stdlib_out_dir: &Path, docs: &[FileDoc]) -> Result<()> {
     fs::create_dir_all(tolk_stdlib_out_dir)?;
-    let index_article = tolk_stdlib_out_dir.join("index.mdx");
+    let index_article = tolk_stdlib_out_dir.join("overview.mdx");
+    let cards = render_cards(docs);
+    let body = format!("This section contains documentation of Tolk standard library.\n\n{cards}");
     fs::write(
         &index_article,
-        r#"---
-title: "Tolk standard library"
-description: "Learn about bundled Tolk stdlib modules used by Acton standard library"
-icon: FileCode
----
-
-This section contains documentation of Tolk standard library.
-"#,
+        render_generated_index_page(
+            "Overview",
+            "Bundled Tolk stdlib modules used by Acton standard library",
+            &body,
+            Path::new(super::TOLK_STDLIB_SRC),
+        ),
     )?;
+    let meta_file = tolk_stdlib_out_dir.join("meta.json");
+    let _ = fs::write(
+        &meta_file,
+        "{\n  \"title\": \"Tolk standard library\",\n  \"icon\": \"Braces\",\n  \"pages\": [\n    \"overview\",\n    \"...\"\n  ]\n}\n",
+    );
     Ok(())
 }
 
@@ -107,6 +117,9 @@ fn collect_docs(
 
         let content = fs::read_to_string(path)?;
         let relative_path = path.strip_prefix(source_dir)?;
+        if should_skip_stdlib_doc(relative_path) {
+            continue;
+        }
         let file_stem = relative_path
             .file_stem()
             .unwrap_or_default()
@@ -122,6 +135,7 @@ fn collect_docs(
             docs.push(FileDoc {
                 source_path: path.to_path_buf(),
                 output_stem_path: output_root.join(relative_path.with_extension("")),
+                docs_url: build_docs_url(source_kind.docs_url_root(), relative_path),
                 title: file_stem.clone(),
                 description: format!("{}.tolk {}", file_stem, source_kind.description_suffix()),
                 symbols,
@@ -133,12 +147,20 @@ fn collect_docs(
     Ok(docs)
 }
 
+fn should_skip_stdlib_doc(relative_path: &Path) -> bool {
+    relative_path.file_name().is_some_and(|name| {
+        let name = name.to_string_lossy();
+        name.starts_with('_') || name == "impl.tolk"
+    })
+}
+
 fn build_symbol_map(docs: &[FileDoc]) -> HashMap<String, Vec<LinkTarget>> {
     let mut symbol_map: HashMap<String, Vec<LinkTarget>> = HashMap::new();
     for doc in docs {
         for symbol in &doc.symbols {
             let link_target = LinkTarget {
                 path: doc.output_stem_path.clone(),
+                url: doc.docs_url.clone(),
                 anchor: symbol.name.clone(),
             };
             insert_link_target(&mut symbol_map, symbol.name.clone(), link_target.clone());
@@ -164,10 +186,11 @@ fn write_doc_page(
 
     let mut mdx_content = String::new();
     mdx_content.push_str("---\n");
-    mdx_content.push_str(&format!("title: \"{}\"\n", doc.title));
-    mdx_content.push_str(&format!("description: \"{}\"\n", doc.description));
+    let _ = writeln!(mdx_content, "title: \"{}\"", doc.title);
+    let _ = writeln!(mdx_content, "description: \"{}\"", doc.description);
     mdx_content.push_str("---\n\n");
     mdx_content.push_str("import { SourceCodeLink } from '@/components/SourceCodeLink';\n\n");
+    mdx_content.push_str(&generated_notice_from_path(&doc.source_path));
 
     if let Some(header) = &doc.file_header {
         mdx_content.push_str(&sanitize_mdx_text(header));
@@ -179,7 +202,7 @@ fn write_doc_page(
     }
 
     for symbol in &doc.symbols {
-        mdx_content.push_str(&format!("## `{}`\n\n", symbol.name));
+        let _ = writeln!(mdx_content, "## `{}`\n", symbol.name);
 
         let source_url = format!(
             "{GITHUB_SOURCE_BASE}/{}#L{}",
@@ -209,15 +232,10 @@ fn write_doc_page(
                                     normalize_symbol_link(&link_target.anchor)
                                 )
                             } else {
-                                let relative_link_path =
-                                    pathdiff::diff_paths(target_path, current_file_stem_path)
-                                        .unwrap_or_else(|| target_path.clone());
-
-                                let link = relative_link_path.to_string_lossy().to_string();
                                 format!(
-                                    "[{}]({}/#{})",
+                                    "[{}]({}#{})",
                                     name,
-                                    link,
+                                    link_target.url,
                                     normalize_symbol_link(&link_target.anchor)
                                 )
                             }
@@ -240,11 +258,57 @@ fn write_doc_page(
             }
         }
 
-        mdx_content.push_str(&format!("<SourceCodeLink href=\"{source_url}\" />\n\n"));
+        let _ = writeln!(mdx_content, "<SourceCodeLink href=\"{source_url}\" />\n");
     }
 
     fs::write(output_path, mdx_content)?;
     Ok(())
+}
+
+fn render_cards(docs: &[FileDoc]) -> String {
+    if docs.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("<Cards>\n");
+    for doc in docs {
+        let first_para = doc
+            .file_header
+            .as_deref()
+            .and_then(|h| h.split("\n\n").next())
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        if let Some(desc) = first_para {
+            let sanitized = sanitize_mdx_text(desc);
+            let indented = sanitized
+                .lines()
+                .map(|l| format!("        {l}"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let _ = writeln!(
+                out,
+                "    <Card href=\"{}\" title=\"{}\">\n{}\n    </Card>",
+                doc.docs_url, doc.title, indented
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "    <Card href=\"{}\" title=\"{}\" />",
+                doc.docs_url, doc.title
+            );
+        }
+    }
+    out.push_str("</Cards>\n");
+    out
+}
+
+fn render_generated_index_page(
+    title: &str,
+    description: &str,
+    body: &str,
+    source_path: &Path,
+) -> String {
+    let generated_notice = generated_notice_from_path(source_path);
+    format!("---\ntitle: {title:?}\ndescription: {description:?}\n---\n\n{generated_notice}{body}")
 }
 
 fn normalize_symbol_link(link: &str) -> String {
@@ -288,6 +352,7 @@ struct SymbolInfo {
 struct FileDoc {
     source_path: PathBuf,
     output_stem_path: PathBuf,
+    docs_url: String,
     title: String,
     description: String,
     symbols: Vec<SymbolInfo>,
@@ -306,12 +371,26 @@ impl SourceKind {
             Self::Tolk => "Tolk standard library file",
         }
     }
+
+    const fn docs_url_root(&self) -> &'static str {
+        match self {
+            Self::Acton => "/docs/standard_library",
+            Self::Tolk => "/docs/tolk_standard_library",
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct LinkTarget {
     path: PathBuf,
+    url: String,
     anchor: String,
+}
+
+fn build_docs_url(root: &str, relative_path: &Path) -> String {
+    let path = relative_path.with_extension("");
+    let path = path.to_string_lossy().replace('\\', "/");
+    format!("{root}/{path}")
 }
 
 fn extract_symbols(source_file: &SourceFile, source: &str) -> Vec<SymbolInfo> {

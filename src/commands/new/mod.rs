@@ -1,23 +1,26 @@
-use crate::commands::common::{symlink_global_libraries, symlink_global_wallets};
+use crate::build_info;
+use crate::commands::common::{shell_quote, symlink_global_libraries, symlink_global_wallets};
 use crate::commands::hooks::scaffold_and_install_default_hooks;
 use crate::stdlib;
 use acton_config::color::OwoColorize;
 use acton_config::config::{
-    ActonConfig, ContractConfig, ContractsConfig, default_project_mappings,
+    ActonConfig, ContractConfig, ContractDependency, ContractsConfig, ToolchainConfig,
+    default_project_mappings,
 };
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use inquire::{Confirm, Select, Text};
-use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{IsTerminal, Write, stdin, stdout};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 mod licenses;
 mod template;
 use template::ProjectLayout;
-pub use template::ProjectTemplate;
+pub use template::{ProjectTemplate, extract_standalone_app_scaffold};
 
+const DEFAULT_PROJECT_DESCRIPTION: &str = "A TON blockchain project";
+const DEFAULT_PROJECT_LICENSE: &str = "MIT";
 const BASE_GITIGNORE: &str = "
 # Acton main directory
 .acton/
@@ -58,12 +61,20 @@ lcov.info
 gen/
 ";
 
-const BASE_DOT_ENV: &str = "
+const BASE_ENV_EXAMPLE: &str = "
+# Copy this file to .env for local Toncenter API keys.
+# Acton loads .env automatically.
+# App templates also let Vite read the TONCENTER_ variables.
 # Acton uses Toncenter to access blockchain data and send messages.
 # Since there's a 1 RPS limit in key-less mode, some operations require additional waiting to avoid
 # exceeding the limit. We recommend obtaining a key to speed up your transactions in Acton.
 # You can obtain a key in the bot at https://t.me/toncenter.
-# TONCENTER_API_KEY=\"your-key-here\"
+# Acton ignores HTTP_PROXY, HTTPS_PROXY, ALL_PROXY and system proxy settings by default
+# to avoid macOS sandbox proxy autodetection crashes. Set ACTON_USE_PROXY=1 or
+# ACTON_USE_PROXY=true if you need Acton CLI HTTP requests to use those proxies.
+# Uncomment the network keys you need:
+# TONCENTER_MAINNET_API_KEY=\"your-mainnet-key-here\"
+# TONCENTER_TESTNET_API_KEY=\"your-testnet-key-here\"
 ";
 
 const BASE_EDITORCONFIG: &str = "
@@ -87,6 +98,9 @@ const ACTON_TOML_REFERENCE_FOOTER: &str = "
 # https://ton-blockchain.github.io/acton/docs/acton-toml
 ";
 
+const GENERATED_PROJECT_FILES: &[&str] =
+    &["Acton.toml", ".gitignore", ".env.example", ".editorconfig"];
+
 #[derive(Clone, Copy)]
 struct TemplateSelectItem(ProjectTemplate);
 
@@ -98,7 +112,7 @@ impl std::fmt::Display for TemplateSelectItem {
 
 #[allow(clippy::too_many_arguments)]
 pub fn new_cmd(
-    path: &str,
+    path: Option<&str>,
     name: Option<String>,
     description: Option<String>,
     template: Option<ProjectTemplate>,
@@ -106,7 +120,18 @@ pub fn new_cmd(
     app: bool,
     hooks: bool,
     agents: bool,
+    overwrite: bool,
+    templates: bool,
 ) -> anyhow::Result<()> {
+    if templates {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&template::template_catalog())?
+        );
+        return Ok(());
+    }
+
+    let path = path.ok_or_else(|| anyhow!("Path is required unless --templates is passed"))?;
     let project_path = if path == "." {
         std::env::current_dir()?
     } else {
@@ -115,43 +140,33 @@ pub fn new_cmd(
             anyhow::bail!(
                 "Directory {} already exists, if you want to create a new project inside this directory run following commands:\n  {}\n  {}",
                 path.display().to_string().yellow(),
-                format!("cd {}", path.display()).bold(),
+                format!("cd {}", shell_quote(&path.display().to_string())).bold(),
                 "acton new .".bold()
             )
         }
         path
     };
 
-    if !project_path.exists() {
-        fs::create_dir_all(&project_path)?;
-    }
-
     let default_name = project_path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("my-acton-project");
+    let interactive = stdin().is_terminal() && stdout().is_terminal();
 
     let project_name = if let Some(name) = name {
         name
-    } else {
+    } else if interactive {
         Text::new("Project name:")
             .with_placeholder(default_name)
             .with_default(default_name)
             .prompt()?
-    };
-
-    let description = if let Some(description) = description {
-        description
     } else {
-        Text::new("Description:")
-            .with_placeholder("A TON blockchain project")
-            .with_default("A TON blockchain project")
-            .prompt()?
+        default_name.to_owned()
     };
 
     let template = if let Some(template) = template {
         template
-    } else {
+    } else if interactive {
         let template_options = template::get_available_templates()
             .into_iter()
             .map(TemplateSelectItem)
@@ -161,12 +176,36 @@ pub fn new_cmd(
             .with_starting_cursor(0)
             .prompt()?
             .0
+    } else {
+        let available_templates = template::get_available_templates()
+            .into_iter()
+            .map(ProjectTemplate::as_str)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let template_flag = "--template <TEMPLATE>".yellow().bold().to_string();
+        let example = format!("acton new {path} --template empty")
+            .cyan()
+            .to_string();
+        let available_templates = available_templates.cyan().to_string();
+        anyhow::bail!(
+            "Project template is required when running acton new non-interactively.\n\nPass {template_flag}, for example:\n  {example}\n\nAvailable templates: {available_templates}"
+        );
     };
 
     let git_available = is_git_available();
-    let include_app = resolve_include_app(template, app)?;
-    let include_hooks = resolve_include_hooks(hooks, git_available)?;
-    let include_agents = resolve_include_agents(agents)?;
+    let include_app = resolve_include_app(template, app, interactive)?;
+    let configure_advanced = resolve_configure_advanced_options(
+        interactive,
+        git_available,
+        description.is_none(),
+        license.is_none(),
+        hooks,
+        agents,
+    )?;
+    let description = resolve_description(description, configure_advanced)?;
+    let license = resolve_license(license, configure_advanced)?;
+    let include_hooks = resolve_include_hooks(hooks, git_available, configure_advanced)?;
+    let include_agents = resolve_include_agents(agents, configure_advanced)?;
     let scaffold = template::project_scaffold(template, include_app).ok_or_else(|| {
         anyhow!(
             "Template {} does not include a TypeScript app scaffold",
@@ -174,41 +213,38 @@ pub fn new_cmd(
         )
     })?;
 
-    let license_options = vec![
-        "MIT",
-        "Apache-2.0",
-        "GPL-3.0",
-        "BSD-3-Clause",
-        "ISC",
-        "Unlicense",
-        "Other",
-    ];
+    if !project_path.exists() {
+        fs::create_dir_all(&project_path)?;
+    }
 
-    let license = if let Some(license) = license {
-        license
-    } else {
-        let license_selection = Select::new("License:", license_options)
-            .with_starting_cursor(0)
-            .prompt()?;
+    let colliding_files =
+        find_colliding_project_files(&project_path, scaffold, include_agents, &license);
+    confirm_or_reject_colliding_files(&colliding_files, interactive, overwrite)?;
 
-        if license_selection == "Other" {
-            Text::new("Enter license:")
-                .with_placeholder("MIT")
-                .prompt()?
-        } else {
-            license_selection.to_string()
-        }
-    };
+    let author = get_git_user_name().unwrap_or_else(|| "Acton User".to_string());
 
     let mut config = ActonConfig::default();
-    config.package.name = project_name.clone();
-    config.package.description = description.clone();
+    config.package.name.clone_from(&project_name);
+    config.package.description.clone_from(&description);
     config.package.license = Some(license.clone());
+    config.toolchain = Some(ToolchainConfig {
+        acton: Some(build_info::PACKAGE_VERSION.to_owned()),
+    });
 
     std::env::set_current_dir(&project_path)?;
 
     // use `.` since we explicitly change current dir to project dir
-    template::create_project_from_scaffold(scaffold, Path::new("."), include_agents)?;
+    let normalized_npm_package_name = scaffold
+        .layout()
+        .includes_typescript_app()
+        .then(|| normalize_npm_package_name(&project_name));
+    template::create_project_from_scaffold(
+        scaffold,
+        Path::new("."),
+        include_agents,
+        normalized_npm_package_name.as_deref(),
+        &author,
+    )?;
 
     let mut contracts = BTreeMap::new();
     for contract in scaffold.contracts() {
@@ -216,8 +252,14 @@ pub fn new_cmd(
             contract.id.to_owned(),
             ContractConfig {
                 name: Some(contract.name.to_owned()),
-                src: contract.src.to_owned(),
-                depends: Some(vec![]),
+                src: scaffold.contract_src(contract),
+                depends: Some(
+                    contract
+                        .depends
+                        .iter()
+                        .map(|d| ContractDependency::Simple((*d).to_owned()))
+                        .collect(),
+                ),
                 output: None,
             },
         );
@@ -230,15 +272,18 @@ pub fn new_cmd(
     let mut scripts = BTreeMap::new();
     scripts.insert(
         "deploy-emulation".to_owned(),
-        format!("acton script {}", scaffold.layout().deploy_script_path()),
+        format!("acton script {}", scaffold.deploy_script_path()),
     );
     scripts.insert(
         "deploy-testnet".to_owned(),
         format!(
             "acton script {} --net testnet",
-            scaffold.layout().deploy_script_path()
+            scaffold.deploy_script_path()
         ),
     );
+    for (alias, command) in scaffold.extra_scripts() {
+        scripts.insert(alias, command);
+    }
     config.scripts = Some(scripts);
     config.mappings = Some(project_mappings(scaffold.layout()));
 
@@ -246,20 +291,15 @@ pub fn new_cmd(
     acton_toml.push_str(ACTON_TOML_REFERENCE_FOOTER);
     fs::write("Acton.toml", acton_toml)?;
 
-    if scaffold.layout().includes_typescript_app() {
-        update_npm_package_metadata(&project_name)?;
-    }
-
     stdlib::ensure_latest(Path::new("."))?;
 
-    let author = get_git_user_name().unwrap_or_else(|| "Acton User".to_string());
     let year = chrono::Local::now().format("%Y").to_string();
     if let Some(license_text) = licenses::get_license_text(&license, &year, &author) {
         fs::write("LICENSE", license_text)?;
     }
 
     fs::write(".gitignore", BASE_GITIGNORE.trim_start())?;
-    fs::write(".env", BASE_DOT_ENV.trim_start())?;
+    fs::write(".env.example", BASE_ENV_EXAMPLE.trim_start())?;
     fs::write(".editorconfig", BASE_EDITORCONFIG.trim_start())?;
 
     if let Err(e) = symlink_global_wallets() {
@@ -323,22 +363,30 @@ pub fn new_cmd(
     println!("Next steps:");
     println!();
     println!("  {}", "# Navigate to project".dimmed());
-    println!("  {} {}", "cd".bold(), project_path.display());
+    println!(
+        "  {} {}",
+        "cd".bold(),
+        shell_quote(&project_path.display().to_string())
+    );
     println!("  {}", "# Build your contract".dimmed());
     println!("  {} build", "acton".bold());
     println!("  {}", "# Run tests".dimmed());
     println!("  {} test", "acton".bold());
     if scaffold.layout().includes_typescript_app() {
         println!("  {}", "# Install app dependencies".dimmed());
-        println!("  npm ci");
+        println!("  {} ci", "npm".bold());
         println!("  {}", "# Start the TypeScript app".dimmed());
-        println!("  npm run dev");
+        println!("  {} run dev", "npm".bold());
     }
 
     Ok(())
 }
 
-fn resolve_include_app(template: ProjectTemplate, app: bool) -> anyhow::Result<bool> {
+fn resolve_include_app(
+    template: ProjectTemplate,
+    app: bool,
+    interactive: bool,
+) -> anyhow::Result<bool> {
     if app {
         if !template::template_supports_app(template) {
             anyhow::bail!(
@@ -354,7 +402,7 @@ fn resolve_include_app(template: ProjectTemplate, app: bool) -> anyhow::Result<b
         return Ok(false);
     }
 
-    if stdin().is_terminal() && stdout().is_terminal() {
+    if interactive {
         Confirm::new("Include the TypeScript dApp?")
             .with_default(false)
             .prompt()
@@ -364,7 +412,86 @@ fn resolve_include_app(template: ProjectTemplate, app: bool) -> anyhow::Result<b
     }
 }
 
-fn resolve_include_hooks(hooks: bool, git_available: bool) -> anyhow::Result<bool> {
+fn resolve_configure_advanced_options(
+    interactive: bool,
+    git_available: bool,
+    missing_description: bool,
+    missing_license: bool,
+    hooks: bool,
+    agents: bool,
+) -> anyhow::Result<bool> {
+    if !interactive {
+        return Ok(false);
+    }
+
+    let has_optional_advanced_prompts =
+        missing_description || missing_license || (git_available && !hooks) || !agents;
+    if !has_optional_advanced_prompts {
+        return Ok(false);
+    }
+
+    Confirm::new("Do you want to configure advanced options (Git hooks, license, etc.)?")
+        .with_default(false)
+        .prompt()
+        .map_err(Into::into)
+}
+
+fn resolve_description(
+    description: Option<String>,
+    configure_advanced: bool,
+) -> anyhow::Result<String> {
+    if let Some(description) = description {
+        return Ok(description);
+    }
+
+    if !configure_advanced {
+        return Ok(DEFAULT_PROJECT_DESCRIPTION.to_owned());
+    }
+
+    Text::new("Description:")
+        .with_placeholder(DEFAULT_PROJECT_DESCRIPTION)
+        .with_default(DEFAULT_PROJECT_DESCRIPTION)
+        .prompt()
+        .map_err(Into::into)
+}
+
+fn resolve_license(license: Option<String>, configure_advanced: bool) -> anyhow::Result<String> {
+    if let Some(license) = license {
+        return Ok(license);
+    }
+
+    if !configure_advanced {
+        return Ok(DEFAULT_PROJECT_LICENSE.to_owned());
+    }
+
+    let license_options = vec![
+        "MIT",
+        "Apache-2.0",
+        "GPL-3.0",
+        "BSD-3-Clause",
+        "ISC",
+        "Unlicense",
+        "Other",
+    ];
+    let license_selection = Select::new("License:", license_options)
+        .with_starting_cursor(0)
+        .prompt()?;
+
+    if license_selection == "Other" {
+        Text::new("Enter license:")
+            .with_placeholder(DEFAULT_PROJECT_LICENSE)
+            .prompt()
+            .map_err(Into::into)
+    } else {
+        Ok(license_selection.to_string())
+    }
+}
+
+fn resolve_include_hooks(
+    hooks: bool,
+    git_available: bool,
+    configure_advanced: bool,
+) -> anyhow::Result<bool> {
     if hooks {
         if !git_available {
             anyhow::bail!("Git hooks require the `git` command to be available in PATH");
@@ -377,8 +504,8 @@ fn resolve_include_hooks(hooks: bool, git_available: bool) -> anyhow::Result<boo
         return Ok(false);
     }
 
-    if stdin().is_terminal() && stdout().is_terminal() {
-        Confirm::new("Install the default Git hooks?")
+    if configure_advanced {
+        Confirm::new("Set up Git hooks to run checks before each commit?")
             .with_default(false)
             .prompt()
             .map_err(Into::into)
@@ -387,12 +514,12 @@ fn resolve_include_hooks(hooks: bool, git_available: bool) -> anyhow::Result<boo
     }
 }
 
-fn resolve_include_agents(agents: bool) -> anyhow::Result<bool> {
+fn resolve_include_agents(agents: bool, configure_advanced: bool) -> anyhow::Result<bool> {
     if agents {
         return Ok(true);
     }
 
-    if stdin().is_terminal() && stdout().is_terminal() {
+    if configure_advanced {
         Confirm::new("Include AGENTS.md guidance for coding agents?")
             .with_default(false)
             .prompt()
@@ -417,191 +544,69 @@ fn project_mappings(layout: ProjectLayout) -> BTreeMap<String, String> {
     mappings
 }
 
-fn update_npm_package_metadata(project_name: &str) -> anyhow::Result<()> {
-    let normalized_name = normalize_npm_package_name(project_name);
-    let has_workspaces = update_package_json_name(&normalized_name)?;
-    update_package_lock_name(&normalized_name, has_workspaces)?;
-    Ok(())
+fn find_colliding_project_files(
+    project_path: &Path,
+    scaffold: template::ProjectScaffold,
+    include_agents: bool,
+    license: &str,
+) -> Vec<PathBuf> {
+    let mut paths = template::scaffold_file_paths(scaffold, include_agents);
+    paths.extend(GENERATED_PROJECT_FILES.iter().map(PathBuf::from));
+
+    if licenses::get_license_text(license, "", "").is_some() {
+        paths.push(PathBuf::from("LICENSE"));
+    }
+
+    paths.sort();
+    paths.dedup();
+    paths
+        .into_iter()
+        .filter(|relative| project_path.join(relative).exists())
+        .collect()
 }
 
-fn update_package_json_name(normalized_name: &str) -> anyhow::Result<bool> {
-    let package_json_path = Path::new("package.json");
-
-    if !package_json_path.exists() {
-        return Ok(false);
-    }
-
-    let content = fs::read_to_string(package_json_path)
-        .with_context(|| format!("Failed to read {}", package_json_path.display()))?;
-    let mut package_json: JsonValue = serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse {}", package_json_path.display()))?;
-    let has_workspaces = matches!(
-        &package_json,
-        JsonValue::Object(object) if object.contains_key("workspaces")
-    );
-
-    if matches!(package_json, JsonValue::Object(_))
-        && let Some(updated_content) =
-            replace_top_level_json_string_field(&content, "name", normalized_name)
-    {
-        fs::write(package_json_path, updated_content)
-            .with_context(|| format!("Failed to write {}", package_json_path.display()))?;
-        return Ok(has_workspaces);
-    }
-
-    if let JsonValue::Object(object) = &mut package_json {
-        object.insert(
-            "name".to_owned(),
-            JsonValue::String(normalized_name.to_owned()),
-        );
-    } else {
-        let mut object = JsonMap::new();
-        object.insert(
-            "name".to_owned(),
-            JsonValue::String(normalized_name.to_owned()),
-        );
-        package_json = JsonValue::Object(object);
-    }
-
-    let formatted =
-        serde_json::to_string_pretty(&package_json).context("Failed to serialize package.json")?;
-    fs::write(package_json_path, format!("{formatted}\n"))
-        .with_context(|| format!("Failed to write {}", package_json_path.display()))?;
-    Ok(has_workspaces)
-}
-
-fn replace_top_level_json_string_field(content: &str, field: &str, value: &str) -> Option<String> {
-    let bytes = content.as_bytes();
-    let field_literal = serde_json::to_string(field).ok()?;
-    let replacement_literal = serde_json::to_string(value).ok()?;
-    let mut index = 0;
-    let mut depth = 0usize;
-    let mut in_string = false;
-    let mut escaped = false;
-
-    while index < bytes.len() {
-        let byte = bytes[index];
-
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if byte == b'\\' {
-                escaped = true;
-            } else if byte == b'"' {
-                in_string = false;
-            }
-            index += 1;
-            continue;
-        }
-
-        match byte {
-            b'"' => {
-                if depth == 1 && bytes[index..].starts_with(field_literal.as_bytes()) {
-                    let key_end = index + field_literal.len();
-                    let mut value_start = key_end;
-
-                    while value_start < bytes.len() && bytes[value_start].is_ascii_whitespace() {
-                        value_start += 1;
-                    }
-
-                    if bytes.get(value_start) != Some(&b':') {
-                        in_string = true;
-                        index += 1;
-                        continue;
-                    }
-
-                    value_start += 1;
-                    while value_start < bytes.len() && bytes[value_start].is_ascii_whitespace() {
-                        value_start += 1;
-                    }
-
-                    if bytes.get(value_start) != Some(&b'"') {
-                        return None;
-                    }
-
-                    let value_end = find_json_string_end(bytes, value_start)?;
-                    let mut updated = String::with_capacity(
-                        content.len() + replacement_literal.len() - (value_end - value_start),
-                    );
-                    updated.push_str(&content[..value_start]);
-                    updated.push_str(&replacement_literal);
-                    updated.push_str(&content[value_end..]);
-                    return Some(updated);
-                }
-
-                in_string = true;
-            }
-            b'{' | b'[' => depth += 1,
-            b'}' | b']' => depth = depth.saturating_sub(1),
-            _ => {}
-        }
-
-        index += 1;
-    }
-
-    None
-}
-
-fn find_json_string_end(bytes: &[u8], start_quote: usize) -> Option<usize> {
-    let mut index = start_quote + 1;
-    let mut escaped = false;
-
-    while index < bytes.len() {
-        let byte = bytes[index];
-
-        if escaped {
-            escaped = false;
-        } else if byte == b'\\' {
-            escaped = true;
-        } else if byte == b'"' {
-            return Some(index + 1);
-        }
-
-        index += 1;
-    }
-
-    None
-}
-
-fn update_package_lock_name(normalized_name: &str, has_workspaces: bool) -> anyhow::Result<()> {
-    let package_lock_path = Path::new("package-lock.json");
-
-    if !package_lock_path.exists() {
+fn confirm_or_reject_colliding_files(
+    colliding_files: &[PathBuf],
+    interactive: bool,
+    overwrite: bool,
+) -> anyhow::Result<()> {
+    if colliding_files.is_empty() || overwrite {
         return Ok(());
     }
 
-    let content = fs::read_to_string(package_lock_path)
-        .with_context(|| format!("Failed to read {}", package_lock_path.display()))?;
-    let mut package_lock: JsonValue = serde_json::from_str(&content)
-        .with_context(|| format!("Failed to parse {}", package_lock_path.display()))?;
+    let file_list = format_colliding_files(colliding_files);
 
-    let JsonValue::Object(root) = &mut package_lock else {
-        anyhow::bail!("{} must contain a JSON object", package_lock_path.display());
-    };
-
-    root.insert(
-        "name".to_owned(),
-        JsonValue::String(normalized_name.to_owned()),
-    );
-
-    if let Some(packages) = root.get_mut("packages").and_then(JsonValue::as_object_mut) {
-        if let Some(root_package) = packages.get_mut("").and_then(JsonValue::as_object_mut) {
-            root_package.insert(
-                "name".to_owned(),
-                JsonValue::String(normalized_name.to_owned()),
-            );
-        }
-
-        if !has_workspaces {
-            packages.retain(|path, _| path.is_empty() || path.starts_with("node_modules"));
-        }
+    if !interactive {
+        let overwrite_flag = "--overwrite".yellow().bold();
+        anyhow::bail!(
+            "Refusing to overwrite existing files in non-interactive mode:\n{file_list}\n\nMove or remove these files, or pass {overwrite_flag} to replace them."
+        );
     }
 
-    let formatted =
-        serde_json::to_string_pretty(&package_lock).context("Failed to serialize package-lock")?;
-    fs::write(package_lock_path, format!("{formatted}\n"))
-        .with_context(|| format!("Failed to write {}", package_lock_path.display()))?;
+    println!(
+        "\n{} acton new will overwrite existing files:",
+        "Warning:".yellow().bold()
+    );
+    print!("{file_list}");
+    println!();
+
+    let overwrite = Confirm::new("Overwrite existing files?")
+        .with_default(false)
+        .prompt()?;
+
+    if !overwrite {
+        anyhow::bail!("Aborted to avoid overwriting existing files.");
+    }
+
     Ok(())
+}
+
+fn format_colliding_files(colliding_files: &[PathBuf]) -> String {
+    colliding_files
+        .iter()
+        .map(|path| format!("  {}", path.display()))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn normalize_npm_package_name(project_name: &str) -> String {

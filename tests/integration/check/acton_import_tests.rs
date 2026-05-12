@@ -11,7 +11,7 @@ fn test_check_acton_import_in_contract_direct() {
             import "../.acton/tlb/maybe.tolk";
 
             fun onInternalMessage(_: InMessage) {
-                val maybeValue = Maybe<int>.none();
+                val maybeValue = TlbMaybe<int>.none();
                 maybeValue.unwrapOr(0);
             }
         "#,
@@ -38,7 +38,7 @@ fn test_check_acton_import_in_transitive_dependency() {
                 import "../.acton/tlb/maybe.tolk";
 
                 fun useMaybe() {
-                    val maybeValue = Maybe<int>.some(1);
+                    val maybeValue = TlbMaybe<int>.just(1);
                     maybeValue.unwrapOr(0);
                 }
             "#,
@@ -58,7 +58,7 @@ fn test_check_acton_import_with_mappings_direct() {
             import "@acton/tlb/maybe";
 
             fun onInternalMessage(_: InMessage) {
-                val maybeValue = Maybe<int>.none();
+                val maybeValue = TlbMaybe<int>.none();
                 maybeValue.unwrapOr(0);
             }
         "#,
@@ -70,7 +70,7 @@ fn test_check_acton_import_with_mappings_direct() {
         .acton()
         .check()
         .arg("--enable-only")
-        .arg("E014")
+        .arg("E010")
         .run()
         .failure()
         .assert_stderr_snapshot_matches(&format!(
@@ -100,7 +100,7 @@ fn test_check_acton_import_with_mappings_transitive_dependency() {
             import "@acton/tlb/maybe";
 
             fun useMaybe() {
-                val maybeValue = Maybe<int>.some(1);
+                val maybeValue = TlbMaybe<int>.just(1);
                 maybeValue.unwrapOr(0);
             }
         "#,
@@ -112,7 +112,7 @@ fn test_check_acton_import_with_mappings_transitive_dependency() {
         .acton()
         .check()
         .arg("--enable-only")
-        .arg("E014")
+        .arg("E010")
         .run()
         .failure()
         .assert_stderr_snapshot_matches(&format!(
@@ -131,7 +131,7 @@ fn test_check_acton_import_rule_is_disabled_for_test_files() {
                 import "../.acton/tlb/maybe.tolk";
 
                 get fun `test noop`() {
-                    val maybeValue = Maybe<int>.none();
+                    val maybeValue = TlbMaybe<int>.none();
                     maybeValue.unwrapOr(0);
                 }
             "#,
@@ -148,8 +148,8 @@ fn test_check_acton_import_rule_is_disabled_for_test_files() {
         .success();
 
     assert!(
-        !output.get_normalized_stderr().contains("E014"),
-        "E014 should not be emitted for explicit .test.tolk checks:\n{}",
+        !output.get_normalized_stderr().contains("E010"),
+        "E010 should not be emitted for explicit .test.tolk checks:\n{}",
         output.get_normalized_stderr()
     );
 }
@@ -167,7 +167,7 @@ fn run_check(group: &str, main_content: &str, files: &[(&str, &str)], name: &str
         .acton()
         .check()
         .arg("--enable-only")
-        .arg("E014")
+        .arg("E010")
         .run()
         .failure()
         .assert_stderr_snapshot_matches(&format!("integration/snapshots/check/{group}/{name}.txt"));

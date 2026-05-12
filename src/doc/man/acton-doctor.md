@@ -1,14 +1,14 @@
 # acton-doctor(1)
 
-## NAME
+## Name
 
 acton-doctor --- Inspect the resolved Acton project environment
 
-## SYNOPSIS
+## Synopsis
 
 `acton doctor` [_options_]
 
-## DESCRIPTION
+## Description
 
 Print a diagnostic report for the current Acton environment.
 
@@ -16,15 +16,15 @@ The report is intended to help debug project resolution, manifest parsing,
 wallet and library overlays, bundled standard-library state, native emulator
 and Tolk library metadata, logging paths, and relevant environment variables.
 
-## DISPLAY OPTIONS
+## Display Options
 
 {{> options-display }}
 
-## PROJECT OPTIONS
+## Project Options
 
 {{> options-project-resolved }}
 
-## REPORT SECTIONS
+## Report Sections
 
 `acton doctor` prints:
 
@@ -37,9 +37,13 @@ and Tolk library metadata, logging paths, and relevant environment variables.
 - native emulator/Tolk version metadata, including the TON commit hash and date
   embedded in the linked libraries
 - resolved logging directory and debug log path
-- selected environment variables such as `HOME`, `SHELL`, and `NO_COLOR`
+- selected environment variables such as `HOME`, `SHELL`, `NO_COLOR`, and
+  `ACTON_DISABLE_AUTO_STDLIB`
+- `ACTON_USE_PROXY`, which opts Acton CLI HTTP clients into `HTTP_PROXY`,
+  `HTTPS_PROXY`, `ALL_PROXY`, and system proxy settings. Acton ignores those
+  proxy settings by default to avoid macOS sandbox proxy autodetection crashes.
 
-## PATH AND OVERLAY CHECKS
+## Path And Overlay Checks
 
 For each reported path, Acton shows whether it exists, whether it appears
 writable, and when relevant which resolution source selected it.
@@ -50,7 +54,7 @@ Overlay inspection includes:
 - how many entries they contain
 - a merged entry count when both layers load successfully
 
-## STDLIB HEALTH
+## Stdlib Health
 
 The stdlib section reports whether `.acton/tolk-stdlib` is:
 
@@ -60,13 +64,13 @@ The stdlib section reports whether `.acton/tolk-stdlib` is:
 - `outdated`
 - `unknown-version`
 
-## EXIT STATUS
+## Exit Status
 
 - `0`: The diagnostic report was produced successfully.
 - `1`: Environment inspection failed before the report could be completed, for
   example because path resolution or manifest loading failed unexpectedly.
 
-## EXAMPLES
+## Examples
 
 1. Show diagnostics for the current project:
 
@@ -86,7 +90,7 @@ The stdlib section reports whether `.acton/tolk-stdlib` is:
    acton doctor
    ```
 
-## SEE ALSO
+## See Also
 
 - `acton help init`
 - `acton help ls`

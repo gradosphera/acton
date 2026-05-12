@@ -1,4 +1,4 @@
-//! ReplayerDebugSession exposes one DAP session over a stack of `TolkReplayer`s.
+//! `ReplayerDebugSession` exposes one DAP session over a stack of `TolkReplayer`s.
 //! The root context debugs the current script/test, while nested runtime operations
 //! (`send_message`, `run_get_method`) temporarily push child contexts backed by
 //! live executors and later pop back to the parent.
@@ -71,10 +71,20 @@ enum AdvanceOutcome {
     Stopped(StopReason),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct FrameLocator {
     context_idx: usize,
     depth_from_top: usize,
+    /// Parent contexts are still borrowed while a child VM message is stopped;
+    /// frozen locals keep those outer stack frames inspectable in DAP.
+    snapshot_locals: Option<Vec<LocalVarRendered>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct StepFramePosition {
+    context_idx: usize,
+    file_id: usize,
+    line: usize,
 }
 
 struct ReplayerContext {
@@ -127,6 +137,11 @@ pub struct ReplayerDebugSession {
     vars_debug_values: HashMap<i64, RenderedValue>,
     runtime_register_scope_requests: HashMap<i64, usize>,
     next_req_id: i64,
+    stop_requested: bool,
+    /// Parent step state must survive nested child VM stepping.
+    active_step_start: Option<StepFramePosition>,
+    /// Set after child VM returns when the parent may first land on `active_step_start`.
+    skip_active_step_start_once: bool,
 }
 
 impl ReplayerDebugSession {
@@ -135,7 +150,9 @@ impl ReplayerDebugSession {
     /// context or reach a genuinely user-visible stop.
     fn is_transparent_step_into_function(path: &str, function_name: &str) -> bool {
         let normalized = path.replace('\\', "/");
-        if !normalized.ends_with("/emulation/network.tolk") {
+        if !normalized.ends_with("/emulation/network.tolk")
+            && !normalized.ends_with("/emulation/testing.tolk")
+        {
             return false;
         }
 
@@ -143,14 +160,13 @@ impl ReplayerDebugSession {
             function_name,
             "send"
                 | "net.send"
-                | "sendSingle"
-                | "net.sendSingle"
-                | "sendIter"
-                | "net.sendIter"
+                | "processSingleTraceStep"
+                | "testing.processSingleTraceStep"
+                | "createTraceIterationCursor"
+                | "testing.createTraceIterationCursor"
                 | "sendExternal"
                 | "net.sendExternal"
-                | "net.isDeployed"
-                | "net.getDeployedCode"
+                | "testing.isDeployed"
         ) || function_name.contains("runGetMethod")
     }
 
@@ -170,6 +186,9 @@ impl ReplayerDebugSession {
             vars_debug_values: HashMap::new(),
             runtime_register_scope_requests: HashMap::new(),
             next_req_id: 1_000_000,
+            stop_requested: false,
+            active_step_start: None,
+            skip_active_step_start_once: false,
         }
     }
 
@@ -241,32 +260,32 @@ impl ReplayerDebugSession {
         frame_id: Option<i64>,
         expression: &str,
     ) -> anyhow::Result<RenderedValue> {
-        match frame_id {
-            Some(frame_id) => {
-                let locator = self
-                    .frame_to_depth
-                    .get(&frame_id)
-                    .copied()
-                    .ok_or_else(|| anyhow!("Unknown frame id {frame_id}"))?;
-                let Some(ctx) = self.contexts.get(locator.context_idx) else {
-                    return evaluate_expression(&[], None, expression);
-                };
-                let Ok(ctx) = ctx.try_borrow() else {
-                    return evaluate_expression(&[], None, expression);
-                };
-                let locals = ctx.replayer.locals_for_frame(locator.depth_from_top);
-                evaluate_expression(&locals, Some(ctx.replayer.source_map()), expression)
+        if let Some(frame_id) = frame_id {
+            let locator = self
+                .frame_to_depth
+                .get(&frame_id)
+                .cloned()
+                .ok_or_else(|| anyhow!("Unknown frame id {frame_id}"))?;
+            if let Some(locals) = locator.snapshot_locals {
+                return evaluate_expression(&locals, expression);
             }
-            None => {
-                let Some(ctx) = self.active_context() else {
-                    return evaluate_expression(&[], None, expression);
-                };
-                let Ok(ctx) = ctx.try_borrow() else {
-                    return evaluate_expression(&[], None, expression);
-                };
-                let locals = ctx.replayer.locals_for_frame(0);
-                evaluate_expression(&locals, Some(ctx.replayer.source_map()), expression)
-            }
+            let Some(ctx) = self.contexts.get(locator.context_idx) else {
+                return evaluate_expression(&[], expression);
+            };
+            let Ok(ctx) = ctx.try_borrow() else {
+                return evaluate_expression(&[], expression);
+            };
+            let locals = ctx.replayer.locals_for_frame(locator.depth_from_top);
+            evaluate_expression(&locals, expression)
+        } else {
+            let Some(ctx) = self.active_context() else {
+                return evaluate_expression(&[], expression);
+            };
+            let Ok(ctx) = ctx.try_borrow() else {
+                return evaluate_expression(&[], expression);
+            };
+            let locals = ctx.replayer.locals_for_frame(0);
+            evaluate_expression(&locals, expression)
         }
     }
 
@@ -359,20 +378,12 @@ impl ReplayerDebugSession {
         })
     }
 
-    fn step_active_context(&self, mode: StepMode, respect_stop_conditions: bool) -> bool {
+    fn step_active_context(&self, mode: StepMode) -> bool {
         let Some(ctx) = self.active_context() else {
             return true;
         };
         let visible_frames_cache = &self.cached_visible_frames;
         let mut ctx = ctx.borrow_mut();
-
-        if !respect_stop_conditions {
-            // Disconnect/Terminate should let the live executor finish naturally
-            // instead of re-stopping on user breakpoints or exception filters.
-            ctx.replayer.clear_all_breakpoints();
-            ctx.replayer
-                .set_exception_breakpoints(replayer::ExceptionBreakMode::Never);
-        }
 
         let context_idx = self.contexts.len().saturating_sub(1);
         let label = Arc::clone(&ctx.label);
@@ -383,39 +394,83 @@ impl ReplayerDebugSession {
                 label.as_ref(),
                 &outer_frames,
                 replayer,
+                true,
             );
         });
         ctx.replayer.is_finished()
     }
 
     fn advance_active_context(&mut self, mode: StepMode) -> AdvanceOutcome {
+        let track_step_start = matches!(
+            mode,
+            StepMode::StepOver | StepMode::StepInto | StepMode::StepOut
+        );
+        // Nested child contexts run their own steps, so restore the parent state
+        // when this logical debugger action completes.
+        let previous_step = self.performing_step;
         self.performing_step = Some(mode);
+        let previous_step_start = self.active_step_start;
+        self.active_step_start = if track_step_start {
+            self.active_context().and_then(|ctx| {
+                let context_idx = self.contexts.len().checked_sub(1)?;
+                let ctx = ctx.try_borrow().ok()?;
+                Some(StepFramePosition {
+                    context_idx,
+                    file_id: ctx.replayer.current_file_id(),
+                    line: ctx.replayer.current_line(),
+                })
+            })
+        } else {
+            None
+        };
 
-        loop {
-            let is_end = self.step_active_context(mode, true);
+        let outcome = loop {
+            let is_end = self.step_active_context(mode);
+            let skip_active_step_start = std::mem::take(&mut self.skip_active_step_start_once);
             if is_end {
-                return AdvanceOutcome::Terminated;
+                break AdvanceOutcome::Terminated;
             }
 
             if let Some(exc) = self
                 .active_context()
                 .and_then(|ctx| ctx.try_borrow().ok()?.replayer.last_exception().cloned())
             {
-                return AdvanceOutcome::Stopped(StopReason::Exception(exc));
+                break AdvanceOutcome::Stopped(StopReason::Exception(exc));
+            }
+
+            // Child VM return can surface the original parent call line once.
+            // Skip it before breakpoint handling so that line does not re-stop.
+            if skip_active_step_start
+                && self.active_step_start.is_some_and(|start| {
+                    let current_context_idx = self.contexts.len().saturating_sub(1);
+                    current_context_idx == start.context_idx
+                        && self.active_context().is_some_and(|ctx| {
+                            ctx.try_borrow().is_ok_and(|ctx| {
+                                ctx.replayer.current_file_id() == start.file_id
+                                    && ctx.replayer.current_line() == start.line
+                            })
+                        })
+                })
+            {
+                continue;
             }
 
             match self.current_breakpoint_check() {
                 BreakpointCheck::Hit(stop) => {
-                    return AdvanceOutcome::Stopped(StopReason::Breakpoint(stop));
+                    break AdvanceOutcome::Stopped(StopReason::Breakpoint(stop));
                 }
                 BreakpointCheck::Skip if matches!(mode, StepMode::RunUntilBreakpoint) => {
                     continue;
                 }
                 BreakpointCheck::Skip | BreakpointCheck::None => {
-                    return AdvanceOutcome::Stopped(StopReason::Step);
+                    break AdvanceOutcome::Stopped(StopReason::Step);
                 }
             }
-        }
+        };
+
+        self.active_step_start = previous_step_start;
+        self.performing_step = previous_step;
+        outcome
     }
 
     fn stop_reason_for_active_context(&self) -> StopReason {
@@ -481,10 +536,10 @@ impl ReplayerDebugSession {
         let Some(top_frame) = call_stack.last() else {
             return false;
         };
-        let file_id = top_frame.definition_loc.as_ref().map_or_else(
-            || ctx.replayer.current_file_id(),
-            tolkc::source_map::SrcRange::file_id,
-        );
+        let Some(definition_loc) = top_frame.definition_loc.as_ref() else {
+            return true;
+        };
+        let file_id = definition_loc.file_id();
         let Some(path) = ctx.replayer.file_full_path(file_id) else {
             return true;
         };
@@ -545,8 +600,21 @@ impl ReplayerDebugSession {
         context_label: &str,
         outer_frames: &[CollectedFrame],
         replayer: &TolkReplayer,
+        capture_locals: bool,
     ) -> Vec<CollectedFrame> {
         let call_stack = replayer.call_stack();
+        // Only runtime boundary helpers can open a child VM context while the
+        // parent replayer is still borrowed, so snapshot locals only there.
+        let capture_locals = capture_locals
+            && call_stack.iter().any(|frame| {
+                let file_id = frame.definition_loc.as_ref().map_or_else(
+                    || replayer.current_file_id(),
+                    tolk_compiler::source_map::SrcRange::file_id,
+                );
+                replayer.file_full_path(file_id).is_some_and(|path| {
+                    Self::is_transparent_step_into_function(path, frame.f_name.as_str())
+                })
+            });
         let file_id = replayer.current_file_id();
         let line = replayer.current_line();
         let column = replayer.current_column();
@@ -567,6 +635,7 @@ impl ReplayerDebugSession {
         frames.push(CollectedFrame {
             context_idx: ctx_index,
             depth_from_top: 0,
+            snapshot_locals: capture_locals.then(|| replayer.locals_for_frame(0)),
             name: top_name,
             source: top_source,
             line: line as i64,
@@ -594,6 +663,7 @@ impl ReplayerDebugSession {
             frames.push(CollectedFrame {
                 context_idx: ctx_index,
                 depth_from_top: depth,
+                snapshot_locals: capture_locals.then(|| replayer.locals_for_frame(depth)),
                 name: Self::format_frame_name(context_label, Some(frame), frame.f_name.as_str()),
                 source,
                 line,
@@ -618,6 +688,7 @@ impl ReplayerDebugSession {
             ctx.label.as_ref(),
             &ctx.outer_frames,
             &ctx.replayer,
+            false,
         )
     }
 
@@ -636,16 +707,20 @@ impl ReplayerDebugSession {
     fn handle_variables(&mut self, args: &VariablesArguments) -> ResponseBody {
         let req_id = args.variables_reference;
 
-        if let Some(locator) = self.frame_to_depth.get(&req_id).copied() {
-            let locals = self
-                .contexts
-                .get(locator.context_idx)
-                .and_then(|ctx| {
-                    ctx.try_borrow()
-                        .ok()
-                        .map(|ctx| ctx.replayer.locals_for_frame(locator.depth_from_top))
-                })
-                .unwrap_or_default();
+        if let Some(locator) = self.frame_to_depth.get(&req_id).cloned() {
+            let locals = if let Some(snapshot_locals) = locator.snapshot_locals {
+                // Parent frames shown under a child VM stop cannot be read live.
+                snapshot_locals
+            } else {
+                self.contexts
+                    .get(locator.context_idx)
+                    .and_then(|ctx| {
+                        ctx.try_borrow()
+                            .ok()
+                            .map(|ctx| ctx.replayer.locals_for_frame(locator.depth_from_top))
+                    })
+                    .unwrap_or_default()
+            };
             let variables = locals
                 .into_iter()
                 .map(|lv| self.debug_value_to_variable(lv))
@@ -684,7 +759,7 @@ impl ReplayerDebugSession {
     }
 
     fn debug_value_to_named_variable(&mut self, name: String, dv: &RenderedValue) -> Variable {
-        let (value, type_field) = dv.dap_parts_for_client();
+        let (value, type_field) = dv.dap_parts_for_client(Some(&name));
         let (value, var_ref) = if dv.has_children() {
             (value, self.store_debug_value(dv.clone()))
         } else {
@@ -721,7 +796,7 @@ impl ReplayerDebugSession {
     }
 
     fn evaluate_response_from_value(&mut self, value: RenderedValue) -> EvaluateResponse {
-        let (result, type_field) = value.dap_parts_for_client();
+        let (result, type_field) = value.dap_parts_for_client(None);
         let variables_reference = if value.has_children() {
             self.store_debug_value(value)
         } else {
@@ -848,14 +923,12 @@ impl ReplayerDebugSession {
             }
             Command::Disconnect(_) => {
                 self.send_response(req.success(ResponseBody::Disconnect))?;
-                self.performing_step = Some(StepMode::RunUntilBreakpoint);
-                self.step_active_context(StepMode::RunUntilBreakpoint, false);
+                self.stop_requested = true;
                 return Ok(true);
             }
             Command::Terminate(_) => {
                 self.send_response(req.success(ResponseBody::Terminate))?;
-                self.performing_step = Some(StepMode::RunUntilBreakpoint);
-                self.step_active_context(StepMode::RunUntilBreakpoint, false);
+                self.stop_requested = true;
                 return Ok(true);
             }
             Command::Evaluate(args) => {
@@ -1029,6 +1102,7 @@ impl ReplayerDebugSession {
             let id = self.alloc_frame_id(FrameLocator {
                 context_idx: frame.context_idx,
                 depth_from_top: frame.depth_from_top,
+                snapshot_locals: frame.snapshot_locals,
             });
 
             stack_frames.push(StackFrame {
@@ -1091,13 +1165,13 @@ impl ReplayerDebugSession {
 }
 
 impl ReplayerDebugSession {
-    pub fn process_incoming_requests(&mut self, terminate_at_end: bool) -> anyhow::Result<()> {
+    pub fn process_incoming_requests(&mut self, terminate_at_end: bool) -> anyhow::Result<bool> {
         for req in &self.transport.req_receiver.clone() {
             if self.handle_request(req.clone(), terminate_at_end)? {
                 break;
             }
         }
-        Ok(())
+        Ok(self.stop_requested)
     }
 
     pub const fn need_to_stop_child_thread_on_start(&self) -> bool {
@@ -1114,7 +1188,7 @@ impl ReplayerDebugSession {
         let Ok(mut replayer) = TolkReplayer::new_live_vm(source_map.as_ref(), spec.executor) else {
             return Ok(false);
         };
-        replayer.set_compiler_abi(spec.compiler_abi);
+        replayer.set_abi(spec.abi);
         replayer.set_exception_breakpoints(self.exception_mode);
 
         // Freeze the currently visible parent frames before switching active context.
@@ -1161,8 +1235,16 @@ impl ReplayerDebugSession {
     }
 
     pub fn finish_child_context(&mut self, _thread_id: i64) -> anyhow::Result<()> {
-        if self.contexts.len() > 1 {
-            self.contexts.pop();
+        if self.contexts.len() <= 1 {
+            return Ok(());
+        }
+
+        self.contexts.pop();
+        if let Some(position) = self.active_step_start
+            && position.context_idx == self.contexts.len().saturating_sub(1)
+        {
+            // The next parent step may first report the original call line.
+            self.skip_active_step_start_once = true;
         }
         Ok(())
     }
@@ -1190,19 +1272,13 @@ impl ReplayerDebugSession {
     pub const fn performing_step(&self) -> Option<StepMode> {
         self.performing_step
     }
-
-    /// Hook for a future synthetic "stop right after child returns" behavior.
-    /// The parent replayer currently resumes from its own next user-visible location,
-    /// so nested send/get calls do not require extra bookkeeping here.
-    pub const fn advance_parent_after_child_return(&mut self) -> anyhow::Result<()> {
-        Ok(())
-    }
 }
 
 #[derive(Debug, Clone)]
 struct CollectedFrame {
     context_idx: usize,
     depth_from_top: usize,
+    snapshot_locals: Option<Vec<LocalVarRendered>>,
     name: String,
     source: Option<Source>,
     line: i64,

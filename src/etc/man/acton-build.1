@@ -16,9 +16,10 @@ By default, \fBacton build\fR compiles every configured contract. If you pass a
 dependencies.
 .sp
 For each successful build, Acton writes a JSON artifact to the build output
-directory and, when the contract config has an \fBoutput\fR path, also writes the
-compiled \fB\&.boc\fR file there. Dependency helper files are emitted into the
-generated\-code directory, and optional Fift output can be written separately.
+directory and a contract ABI JSON file to the ABI output directory. When the contract config has an
+\fBoutput\fR path, Acton also writes the compiled \fB\&.boc\fR file there. Dependency
+helper files are emitted into the generated\-code directory, and optional Fift
+output can be written separately.
 .sp
 Contracts with \fB\&.boc\fR sources are treated as precompiled inputs: Acton loads
 their code, includes them in dependency resolution, and skips recompilation.
@@ -58,6 +59,13 @@ Directory for generated dependency helper files such as
 \fBgen/<dependency>.code.tolk\fR\&.
 .sp
 Defaults to \fB[build].gen\-dir\fR when configured, otherwise \fBgen/\fR\&.
+.RE
+.sp
+\fB\-\-output\-abi\fR \fIdir\fR
+.RS 4
+Directory for contract ABI JSON files.
+.sp
+Defaults to \fB[build].output\-abi\fR when configured, otherwise \fBbuild/abi/\fR\&.
 .RE
 .sp
 \fB\-\-output\-fift\fR \fIdir\fR
@@ -117,11 +125,14 @@ Optional default output paths can be configured in \fB[build]\fR:
 [build]
 out\-dir = "build"
 gen\-dir = "gen"
+output\-abi = "build/abi"
 output\-fift = "build/fift"
 .fi
 .RE
 .sp
 CLI flags override config values for the current invocation.
+For dependency helpers, a per\-dependency \fBdepends[].path\fR still overrides the
+resolved \fBgen\-dir\fR for that helper file.
 .SH "OUTPUTS"
 Depending on command flags and project configuration, \fBacton build\fR may write:
 .sp
@@ -130,11 +141,17 @@ Depending on command flags and project configuration, \fBacton build\fR may writ
 .RE
 .sp
 .RS 4
+\h'-04'\(bu\h'+03'\fB<output\-abi>/<contract\-name>.json\fR with the compiler ABI for \fB\&.tolk\fR
+contracts that declare ABI metadata
+.RE
+.sp
+.RS 4
 \h'-04'\(bu\h'+03'the configured contract \fBoutput\fR \fB\&.boc\fR file
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fB<gen\-dir>/<dependency>.code.tolk\fR helper files for dependencies
+\h'-04'\(bu\h'+03'\fB<gen\-dir>/<dependency>.code.tolk\fR helper files for dependencies by default
+(or a dependency\-specific custom path when \fBdepends[].path\fR is configured)
 .RE
 .sp
 .RS 4
@@ -147,10 +164,39 @@ Depending on command flags and project configuration, \fBacton build\fR may writ
 .sp
 Existing output files at those paths are replaced with freshly generated
 artifacts.
+.SH "BEST-EFFORT BEHAVIOR"
+Dependency\-graph failures such as missing contracts or circular dependencies
+stop the command before the main compile loop starts, so those failures do not
+produce partial build outputs.
+.sp
+After dependency resolution succeeds, \fBacton build\fR becomes best\-effort:
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'compile failures for one contract are recorded while other eligible contracts
+continue building
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'artifact\-writing failures are also collected instead of aborting immediately
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'artifacts that were written successfully before a later failure remain on disk
+.RE
+.sp
+If an earlier dependency failed, its generated helper file is not produced. A
+later parent contract may then fail because its generated import is missing.
+.sp
+When you build a specific \fB_contract\-name_\fR, Acton limits the build set to that
+contract and its transitive dependencies.
 .SH "SIDE EFFECTS"
 \fBacton build\fR writes artifacts, cache entries, and optional graph output under
 the resolved project root. If one contract fails after earlier contracts were
 built successfully, the successful artifacts remain on disk.
+.sp
+Before compiling, \fBacton build\fR normally refreshes the bundled standard library
+under \fB\&.acton/\fR\&. Set \fBACTON_DISABLE_AUTO_STDLIB=1\fR to skip that automatic
+refresh for the current process.
 .SH "EXIT STATUS"
 .sp
 .RS 4
@@ -208,7 +254,7 @@ acton build \-\-graph deps.dot
 .sp
 .RS 4
 .nf
-acton build \-\-out\-dir artifacts \-\-gen\-dir artifacts/gen \-\-output\-fift artifacts/fift
+acton build \-\-out\-dir artifacts \-\-gen\-dir artifacts/gen \-\-output\-abi artifacts/abi \-\-output\-fift artifacts/fift
 .fi
 .RE
 .RE
@@ -229,7 +275,7 @@ acton build \-\-info
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fIBuild system configuration reference\fR <https://ton\-blockchain.github.io/acton/docs/build\-system/configuration\-reference>
+\h'-04'\(bu\h'+03'\fIBuild system configuration reference\fR <https://ton\-blockchain.github.io/acton/docs/building/reference>
 .RE
 .sp
 .RS 4
