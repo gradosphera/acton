@@ -13,6 +13,7 @@ import actonCliWrapperGrammarRaw from "./grammars/grammar-acton-cli-wrapper.json
 import actonCliMutateGrammarRaw from "./grammars/grammar-acton-cli-mutate.json"
 import actonCliTraceGrammarRaw from "./grammars/grammar-acton-cli-trace.json"
 import actonTraceGrammarRaw from "./grammars/grammar-acton-trace.json"
+import actonGasReportGrammarRaw from "./grammars/grammar-acton-gas-report.json"
 import lastModified from "fumadocs-mdx/plugins/last-modified"
 import {tolkTwoslasher} from "@/lib/tolk-twoslash"
 import {pageSchema} from "fumadocs-core/source/schema"
@@ -85,6 +86,11 @@ const actonCliTraceGrammar: LanguageRegistration = {
   embeddedLangs: ["acton-cli", "acton-trace"],
 }
 
+const actonGasReportGrammar: LanguageRegistration = {
+  ...actonGasReportGrammarRaw,
+  name: "acton-gas-report",
+}
+
 // @ts-expect-error JSON grammar type is wider than LanguageRegistration
 const tlbGrammar: LanguageRegistration = {
   ...tlbGrammarRaw,
@@ -127,6 +133,7 @@ const customLangs = [
   actonCliMutateGrammar,
   actonCliTraceGrammar,
   actonTraceGrammar,
+  actonGasReportGrammar,
   actonTomlGrammar,
   tlbGrammar,
 ] as const
