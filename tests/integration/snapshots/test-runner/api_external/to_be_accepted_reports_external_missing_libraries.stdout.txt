@@ -1,0 +1,22 @@
+  Installing standard library [ACTON_VERSION]
+   Compiling contracts
+   Compiling external
+    Finished in [TIME]
+    Finished in [TIME]
+     Running tests
+
+ TEST  [ROOT]
+
+ > tests/external_api.test.tolk (1 test)
+  ✗ toBeAccepted reports external missing libraries [TIME]
+    └─ Error: expect(actual).toBeAccepted()
+        ├─ Status: external message was not accepted
+        ├─ Reason: external failed because libraries are unavailable
+        ├─ exit_code=41
+        ├─ Re-run with --backtrace full to get more information
+        ├─ Missing libraries: lib-alpha, lib-beta
+        └─ at tests/external_api.test[LINE]
+
+ ✗ 1 failed in 1 file
+
+Some tests failed.

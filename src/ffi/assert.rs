@@ -1,7 +1,7 @@
 use crate::context::{
     AssertBinFailure, AssertDecimalFailure, AssertFailure, Context, ExternalMessageNotFoundFailure,
-    FailAssertFailure, TransactionGenericAssertFailure, TransactionNotFoundParams,
-    WalletNotFoundFailure,
+    ExternalSendNotAcceptedFailure, FailAssertFailure, TransactionGenericAssertFailure,
+    TransactionNotFoundParams, WalletNotFoundFailure,
 };
 use acton_debug::{RenderedValue, render_tuple_as_tolk_type};
 use anyhow::{Context as ErrorContext, anyhow};
@@ -10,8 +10,9 @@ use num_traits::ToPrimitive;
 use ton_emulator::{extension, register_ext_methods};
 use ton_executor::BaseExecutor;
 use ton_source_map::SourceLocation;
+use tvm_ffi::from_stack::FromStack;
 use tvm_ffi::stack::{Tuple, TupleItem};
-use tycho_types::models::{IntAddr, Transaction};
+use tycho_types::models::{IntAddr, StdAddr, Transaction};
 
 extension!(assert_fail in (Context) with (location: String, message: String) using assert_fail_impl);
 fn assert_fail_impl(
@@ -495,6 +496,66 @@ fn fail_to_find_external_message_impl(
     Ok(())
 }
 
+extension!(fail_external_send_not_accepted in (Context) with (error: Tuple, message: String, location: String) using fail_external_send_not_accepted_impl);
+fn fail_external_send_not_accepted_impl(
+    ctx: &mut Context,
+    _stack: &mut Tuple,
+    error: Tuple,
+    message: String,
+    location: String,
+) -> anyhow::Result<()> {
+    *ctx.asserts.assert_failure = Some(AssertFailure::ExternalSendNotAccepted(
+        ExternalSendNotAcceptedFailure {
+            message,
+            reason: tuple_string(&error, 0)
+                .unwrap_or_else(|| "External message not accepted by smart contract".to_owned()),
+            external_not_accepted: tuple_bool(&error, 1).unwrap_or(false),
+            vm_exit_code: tuple_optional_int(&error, 2).and_then(|value| value.to_i32()),
+            vm_log: tuple_optional_string(&error, 3),
+            executor_logs: tuple_optional_string(&error, 4),
+            elapsed_time_ns: tuple_optional_int(&error, 5),
+            missing_libraries: tuple_string_vec(&error, 6).unwrap_or_default(),
+            destination: tuple_optional_std_addr(&error, 7),
+            location: SourceLocation::parse(&location)?,
+        },
+    ));
+    Ok(())
+}
+
+fn tuple_item(tuple: &Tuple, index: usize) -> TupleItem {
+    tuple.0.get(index).cloned().unwrap_or(TupleItem::Null)
+}
+
+fn tuple_string(tuple: &Tuple, index: usize) -> Option<String> {
+    String::from_item(tuple_item(tuple, index)).ok()
+}
+
+fn tuple_bool(tuple: &Tuple, index: usize) -> Option<bool> {
+    bool::from_item(tuple_item(tuple, index)).ok()
+}
+
+fn tuple_optional_string(tuple: &Tuple, index: usize) -> Option<String> {
+    Option::<String>::from_item(tuple_item(tuple, index))
+        .ok()
+        .flatten()
+}
+
+fn tuple_optional_int(tuple: &Tuple, index: usize) -> Option<BigInt> {
+    Option::<BigInt>::from_item(tuple_item(tuple, index))
+        .ok()
+        .flatten()
+}
+
+fn tuple_string_vec(tuple: &Tuple, index: usize) -> Option<Vec<String>> {
+    Vec::<String>::from_item(tuple_item(tuple, index)).ok()
+}
+
+fn tuple_optional_std_addr(tuple: &Tuple, index: usize) -> Option<StdAddr> {
+    Option::<StdAddr>::from_item(tuple_item(tuple, index))
+        .ok()
+        .flatten()
+}
+
 #[must_use]
 pub fn process_txs_and_search_params(
     txs: &[TupleItem],
@@ -697,5 +758,6 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         106 => assert_decimal : 5,
         107 => assume_reject : 2,
         108 => fail_to_find_external_message : 5,
+        109 => fail_external_send_not_accepted : 3,
     });
 }

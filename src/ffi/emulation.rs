@@ -39,6 +39,7 @@ use ton_emulator::{extension, register_ext_methods};
 use ton_executor::BaseExecutor;
 use ton_executor::get::step::StepGetExecutor;
 use ton_executor::get::{GetExecutor, GetMethodResult, RunGetMethodArgs};
+use ton_executor::message::RunTransactionResultError;
 use ton_executor::message::step::StepExecutor;
 use ton_executor::{MissingLibrariesContext, missing_library_callback};
 use tvm_ffi::serde::serialize_tuple;
@@ -342,30 +343,7 @@ fn send_message_impl(
     };
 
     if is_external && ctx.can_broadcast_to_network() {
-        if ctx.env.tonconnect.is_some() {
-            anyhow::bail!(
-                "`net.sendExternal` cannot be used with {}; use `net.send(wallet.address, createMessage(...))` so the connected wallet can sign the internal message",
-                "--tonconnect".yellow()
-            );
-        }
-
-        let parsed_ext_in = msg
-            .parse::<Message<'_>>()
-            .context("Failed to parse external-in message cell")?;
-        let norm_hash = compute_normalized_ext_in_hash(&parsed_ext_in)?;
-        drop(parsed_ext_in);
-
-        let network = ctx.network();
-        let custom_networks = ctx.env.config.custom_networks();
-        let client = TonApiClient::new(network, custom_networks)
-            .context("Failed to initialize toncenter client for external-in broadcast")?;
-        client
-            .send_boc(&Boc::encode_base64(&msg))
-            .map_err(|error| format_send_boc_error(error, SendBocContext::Generic))?;
-
-        let pseudo_tx = build_pseudo_broadcast_tx(ctx.chain.world_state.get_now(), msg, norm_hash);
-        ctx.chain.world_state.invalidate_remote_cache();
-        stack.push(TupleItem::big_array_from_items(vec![pseudo_tx]));
+        stack.push(broadcast_external_message(ctx, msg)?);
         return Ok(());
     }
 
@@ -445,6 +423,148 @@ fn send_message_impl(
         .save_message(&ctx.env.running_id, emulations);
     stack.push(TupleItem::big_array_from_items(transaction_cells));
     Ok(())
+}
+
+extension!(send_external_message in (Context) with (msg: Cell) using send_external_message_impl);
+fn send_external_message_impl(
+    ctx: &mut Context,
+    stack: &mut Tuple,
+    msg: Cell,
+) -> anyhow::Result<()> {
+    let emulator = &ctx.chain.emulator;
+
+    if ctx.can_broadcast_to_network() {
+        stack.push(external_send_result_tuple(
+            broadcast_external_message(ctx, msg)?,
+            None,
+        ));
+        return Ok(());
+    }
+
+    let src = IntAddr::Std(StdAddr::new(-1, HashBytes::ZERO));
+    let libs = ctx.chain.build_libs(&src);
+    let world_state = &mut ctx.chain.world_state;
+
+    let emulations = if ctx.debug.is_enabled() {
+        send_message_debug(ctx, &msg, &libs, Some(src))
+    } else {
+        emulator.send_message(world_state, msg, &libs, Some(src))
+    }
+    .context("Cannot send external message")?;
+
+    let error = emulations.iter().find_map(|emulation| match emulation {
+        SendMessageResult::Success(_) => None,
+        SendMessageResult::Error(error) => Some(error),
+    });
+    let transaction_cells = emulations
+        .iter()
+        .filter_map(|emulation| match emulation {
+            SendMessageResult::Success(res) => Some(res),
+            SendMessageResult::Error(_) => None,
+        })
+        .filter_map(emulation_to_send_result)
+        .collect::<Vec<_>>();
+    let transactions = if transaction_cells.is_empty() && error.is_some() {
+        TupleItem::Null
+    } else {
+        TupleItem::big_array_from_items(transaction_cells)
+    };
+
+    let result = external_send_result_tuple(transactions, error);
+    ctx.chain
+        .emulations
+        .save_message(&ctx.env.running_id, emulations);
+    stack.push(result);
+    Ok(())
+}
+
+fn broadcast_external_message(ctx: &mut Context, msg: Cell) -> anyhow::Result<TupleItem> {
+    if ctx.env.tonconnect.is_some() {
+        anyhow::bail!(
+            "`net.sendExternal` cannot be used with {}; use `net.send(wallet.address, createMessage(...))` so the connected wallet can sign the internal message",
+            "--tonconnect".yellow()
+        );
+    }
+
+    let parsed_ext_in = msg
+        .parse::<Message<'_>>()
+        .context("Failed to parse external-in message cell")?;
+    let norm_hash = compute_normalized_ext_in_hash(&parsed_ext_in)?;
+    drop(parsed_ext_in);
+
+    let network = ctx.network();
+    let custom_networks = ctx.env.config.custom_networks();
+    let client = TonApiClient::new(network, custom_networks)
+        .context("Failed to initialize toncenter client for external-in broadcast")?;
+    client
+        .send_boc(&Boc::encode_base64(&msg))
+        .map_err(|error| format_send_boc_error(error, SendBocContext::Generic))?;
+
+    let pseudo_tx = build_pseudo_broadcast_tx(ctx.chain.world_state.get_now(), msg, norm_hash);
+    ctx.chain.world_state.invalidate_remote_cache();
+    Ok(TupleItem::big_array_from_items(vec![pseudo_tx]))
+}
+
+fn external_send_result_tuple(
+    transactions: TupleItem,
+    error: Option<&RunTransactionResultError>,
+) -> TupleItem {
+    TupleItem::Tuple(Tuple(vec![
+        transactions,
+        error.map_or(TupleItem::Null, external_send_error_tuple),
+    ]))
+}
+
+fn external_send_error_tuple(error: &RunTransactionResultError) -> TupleItem {
+    let mut libraries = error.missing_libraries.iter().collect::<Vec<_>>();
+    libraries.sort();
+    let missing_libraries = Tuple(
+        libraries
+            .into_iter()
+            .map(|library| string_tuple_item(library))
+            .collect(),
+    );
+
+    TupleItem::Tuple(Tuple(vec![
+        string_tuple_item(&error.error),
+        bool_tuple_item(error.external_not_accepted),
+        optional_int_tuple_item(error.vm_exit_code),
+        optional_string_tuple_item(error.vm_log.as_deref()),
+        optional_string_tuple_item(error.executor_logs.as_deref()),
+        optional_elapsed_time_ns(error.elapsed_time),
+        TupleItem::Tuple(missing_libraries),
+    ]))
+}
+
+fn string_tuple_item(value: &str) -> TupleItem {
+    let mut tuple = Tuple::default();
+    tuple.push_string(value);
+    tuple.0.pop().expect("push_string must add one tuple item")
+}
+
+fn optional_string_tuple_item(value: Option<&str>) -> TupleItem {
+    value.map_or(TupleItem::Null, string_tuple_item)
+}
+
+fn bool_tuple_item(value: bool) -> TupleItem {
+    let mut tuple = Tuple::default();
+    tuple.push_bool(value);
+    tuple.0.pop().expect("push_bool must add one tuple item")
+}
+
+fn optional_int_tuple_item(value: Option<i64>) -> TupleItem {
+    value.map_or(TupleItem::Null, |value| TupleItem::Int(BigInt::from(value)))
+}
+
+fn optional_elapsed_time_ns(value: Option<f64>) -> TupleItem {
+    let Some(value) = value else {
+        return TupleItem::Null;
+    };
+    if !value.is_finite() || value < 0.0 {
+        return TupleItem::Null;
+    }
+
+    TupleItem::Int(BigInt::from((value * 1_000_000_000.0).round() as i64))
 }
 
 extension!(run_tick_tock in (Context) with (is_tock: BigInt, on_account: StdAddr) using run_tick_tock_impl);
@@ -733,6 +853,10 @@ fn compute_normalized_ext_in_hash(msg: &Message<'_>) -> anyhow::Result<HashBytes
 /// Only external-in is supported — the TON docs message-lookup flow is specified for
 /// messages sent to the network by the client, which are always external-in.
 fn ext_in_dest_address(msg_cell: &Cell) -> anyhow::Result<String> {
+    Ok(ext_in_dest_std_address(msg_cell)?.to_string())
+}
+
+fn ext_in_dest_std_address(msg_cell: &Cell) -> anyhow::Result<StdAddr> {
     let msg = msg_cell
         .parse::<Message<'_>>()
         .context("Failed to parse inbound message cell")?;
@@ -740,7 +864,7 @@ fn ext_in_dest_address(msg_cell: &Cell) -> anyhow::Result<String> {
         anyhow::bail!("waitForFirstTransaction expects an external-in message");
     };
     match &info.dst {
-        IntAddr::Std(addr) => Ok(addr.to_string()),
+        IntAddr::Std(addr) => Ok(addr.clone()),
         IntAddr::Var(_) => anyhow::bail!("Var addresses are not supported"),
     }
 }
@@ -3219,6 +3343,7 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         47 => parse_int : 1,
         48 => find_transaction_by_predicate_params : 3,
         49 => wait_for_trace : 4,
+        56 => send_external_message : 1,
         501 => call_tolk_function : 3,
     });
 }
@@ -3292,10 +3417,12 @@ mod tests {
     }
 
     fn test_error(message: &str) -> SendMessageResult {
-        SendMessageResult::Error(ton_executor::message::RunTransactionResultError {
+        SendMessageResult::Error(RunTransactionResultError {
             error: message.to_string(),
+            external_not_accepted: false,
             vm_log: None,
             vm_exit_code: None,
+            elapsed_time: None,
             executor_logs: None,
             missing_libraries: FxHashSet::default(),
         })

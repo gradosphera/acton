@@ -166,6 +166,20 @@ pub struct ExternalMessageNotFoundFailure {
 }
 
 #[derive(Debug, Clone)]
+pub struct ExternalSendNotAcceptedFailure {
+    pub message: String,
+    pub reason: String,
+    pub external_not_accepted: bool,
+    pub vm_exit_code: Option<i32>,
+    pub vm_log: Option<String>,
+    pub executor_logs: Option<String>,
+    pub elapsed_time_ns: Option<BigInt>,
+    pub missing_libraries: Vec<String>,
+    pub destination: Option<StdAddr>,
+    pub location: Option<SourceLocation>,
+}
+
+#[derive(Debug, Clone)]
 pub struct WalletNotFoundFailure {
     pub wallet_name: String,
     pub location: Option<SourceLocation>,
@@ -181,6 +195,7 @@ pub enum AssertFailure {
     TransactionNotFound(TransactionGenericAssertFailure),
     TransactionIsFound(TransactionGenericAssertFailure),
     ExternalMessageNotFound(ExternalMessageNotFoundFailure),
+    ExternalSendNotAccepted(ExternalSendNotAcceptedFailure),
     WalletNotFound(WalletNotFoundFailure),
 }
 
@@ -191,7 +206,9 @@ impl AssertFailure {
             AssertFailure::Bin(arg) => arg.message.clone(),
             AssertFailure::Decimal(arg) => arg.message.clone(),
             AssertFailure::Fail(arg) | AssertFailure::Assume(arg) => arg.message.clone(),
-            AssertFailure::GetMethod(_) | AssertFailure::WalletNotFound(_) => None, // Formatted in FormatterContext
+            AssertFailure::GetMethod(_)
+            | AssertFailure::ExternalSendNotAccepted(_)
+            | AssertFailure::WalletNotFound(_) => None, // Formatted in FormatterContext
             AssertFailure::TransactionNotFound(arg) | AssertFailure::TransactionIsFound(arg) => {
                 arg.message.clone()
             }
@@ -210,6 +227,7 @@ impl AssertFailure {
                 arg.location.clone()
             }
             AssertFailure::ExternalMessageNotFound(arg) => arg.location.clone(),
+            AssertFailure::ExternalSendNotAccepted(arg) => arg.location.clone(),
             AssertFailure::WalletNotFound(arg) => arg.location.clone(),
         }
     }
@@ -395,8 +413,10 @@ pub struct TracePosition {
 #[derive(Clone, Debug)]
 pub struct FailedSendMessageResult {
     pub error: String,
+    pub external_not_accepted: bool,
     pub vm_log: Option<String>,
     pub vm_exit_code: Option<i64>,
+    pub elapsed_time: Option<f64>,
     pub executor_logs: Option<Arc<str>>,
     pub missing_libraries: FxHashSet<String>,
 }
@@ -605,8 +625,10 @@ fn split_send_message_results(
             SendMessageResult::Success(_) => None,
             SendMessageResult::Error(error) => Some(FailedSendMessageResult {
                 error: error.error.clone(),
+                external_not_accepted: error.external_not_accepted,
                 vm_log: error.vm_log.clone(),
                 vm_exit_code: error.vm_exit_code,
+                elapsed_time: error.elapsed_time,
                 executor_logs: error.executor_logs.clone(),
                 missing_libraries: error.missing_libraries.clone(),
             }),

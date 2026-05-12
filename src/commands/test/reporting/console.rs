@@ -3,7 +3,7 @@ use crate::commands::test::TestDescriptor;
 use crate::context::AssertFailure;
 use crate::formatter::FormatterContext;
 use crate::retrace;
-use acton_config::color::OwoColorize;
+use acton_config::{color::OwoColorize, test::BacktraceMode};
 use acton_debug::exit_codes;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
@@ -329,7 +329,7 @@ fn process_test_fail(
     }
 
     if let Some(assert_failure) = &exec.assert_failure {
-        process_assert_failure(assert_failure, test, &fmt);
+        process_assert_failure(assert_failure, test, &fmt, result);
         // since assertions set the exit code to 567, we don't want to process exit codes
         return;
     }
@@ -348,7 +348,12 @@ fn process_test_fail(
     }
 }
 
-fn process_assert_failure(failure: &AssertFailure, _test: &TestReport, fmt: &FormatterContext<'_>) {
+fn process_assert_failure(
+    failure: &AssertFailure,
+    test: &TestReport,
+    fmt: &FormatterContext<'_>,
+    result: &GetMethodResultSuccess,
+) {
     if let AssertFailure::GetMethod(failure) = &failure {
         let formatted = fmt.format_get_method_assert_failure(failure);
         let mut lines = formatted.lines();
@@ -420,17 +425,112 @@ fn process_assert_failure(failure: &AssertFailure, _test: &TestReport, fmt: &For
         return;
     }
 
+    if let AssertFailure::ExternalSendNotAccepted(failure) = &failure {
+        println!(
+            "    {} {} {}",
+            "└─".dimmed(),
+            "Error:".bright_red(),
+            FormatterContext::highlight_actual_expected(&failure.message)
+        );
+
+        let mut details = Vec::new();
+        let status = if failure.external_not_accepted {
+            "external message was not accepted"
+        } else {
+            "external send failed before producing transactions"
+        };
+        details.push(format!("{} {}", "Status:".dimmed(), status.yellow()));
+        details.push(format!(
+            "{} {}",
+            "Reason:".dimmed(),
+            failure.reason.yellow()
+        ));
+        let backtrace = assertion_backtrace_lines(test, result);
+        if let Some(exit_code) = failure.vm_exit_code {
+            details.push(format_exit_code_detail(exit_code));
+            if test.backtrace.is_none() {
+                details.push(format!(
+                    "Re-run with {} to get more information",
+                    "--backtrace full".yellow()
+                ));
+            }
+            if let Some(description) = fmt
+                .format_compute_phase_failure_description(failure.destination.as_ref(), exit_code)
+            {
+                details.push(format!(
+                    "{} {}",
+                    "Compute phase failed:".dimmed(),
+                    description.yellow()
+                ));
+            }
+        }
+        if !failure.missing_libraries.is_empty() {
+            details.push(format!(
+                "{} {}",
+                "Missing libraries:".dimmed(),
+                failure.missing_libraries.join(", ").yellow()
+            ));
+        }
+        let has_location = failure.location.is_some();
+
+        for (idx, detail) in details.iter().enumerate() {
+            let has_next = idx + 1 < details.len() || has_location;
+            let branch = if has_next { "├─" } else { "└─" };
+            println!("        {} {}", branch.dimmed(), detail);
+        }
+
+        if let Some(location) = &failure.location {
+            println!(
+                "        {} at {}",
+                "└─".dimmed(),
+                location.format().dimmed()
+            );
+            for line in backtrace {
+                println!("              {line}");
+            }
+        }
+
+        return;
+    }
+
+    let mut printed_location = false;
     if let Some(message) = &failure.message() {
         if message.is_empty() {
             println!("    {}", "└─".dimmed());
         } else {
             let highlighted_message = FormatterContext::highlight_actual_expected(message);
+            let mut lines = highlighted_message.lines();
+            let Some(first_line) = lines.next() else {
+                println!("    {}", "└─".dimmed());
+                return;
+            };
+            let detail_lines = lines.collect::<Vec<_>>();
             println!(
                 "    {} {} {}",
                 "└─".dimmed(),
                 "Error:".bright_red(),
-                highlighted_message
+                first_line
             );
+            let location = failure.location();
+            let print_location_in_details = location.is_some() && !detail_lines.is_empty();
+            for (idx, line) in detail_lines.iter().enumerate() {
+                let has_following_location =
+                    print_location_in_details && idx + 1 == detail_lines.len();
+                println!(
+                    "        {}",
+                    format_assert_message_line(line, has_following_location)
+                );
+            }
+            if let Some(location) = location
+                && print_location_in_details
+            {
+                println!(
+                    "        {} at {}",
+                    "└─".dimmed(),
+                    location.format().dimmed()
+                );
+                printed_location = true;
+            }
         }
     } else {
         println!("    {}", "└─".dimmed());
@@ -550,9 +650,76 @@ fn process_assert_failure(failure: &AssertFailure, _test: &TestReport, fmt: &For
         }
     }
 
-    if let Some(location) = &failure.location() {
-        println!("      {} at {}", "└─".dimmed(), location.format().dimmed());
+    let backtrace = assertion_backtrace_lines(test, result);
+    if !printed_location && let Some(location) = &failure.location() {
+        let branch = if backtrace.is_empty() {
+            "└─"
+        } else {
+            "├─"
+        };
+        println!(
+            "      {} at {}",
+            branch.dimmed(),
+            location.format().dimmed()
+        );
     }
+
+    if !backtrace.is_empty() {
+        println!("      {} Backtrace:", "└─".dimmed());
+        for line in backtrace {
+            println!("            {line}");
+        }
+    }
+}
+
+fn format_assert_message_line(line: &str, has_following_location: bool) -> String {
+    let Some((mut branch, rest)) = line
+        .strip_prefix("├─ ")
+        .map(|rest| ("├─", rest))
+        .or_else(|| line.strip_prefix("└─ ").map(|rest| ("└─", rest)))
+    else {
+        return line.to_string();
+    };
+
+    if has_following_location && branch == "└─" {
+        branch = "├─";
+    }
+
+    format!("{} {}", branch.dimmed(), format_assert_detail(rest))
+}
+
+fn format_assert_detail(detail: &str) -> String {
+    if let Some(value) = detail.strip_prefix("Status: ") {
+        return format!("{} {}", "Status:".dimmed(), value.yellow());
+    }
+
+    if let Some(value) = detail.strip_prefix("Reason: ") {
+        return format!("{} {}", "Reason:".dimmed(), value.yellow());
+    }
+
+    if let Some(value) = detail.strip_prefix("exit_code=") {
+        return format_exit_code_value(value);
+    }
+
+    detail.to_string()
+}
+
+fn format_exit_code_detail(exit_code: i32) -> String {
+    format_exit_code_value(&exit_code.to_string())
+}
+
+fn format_exit_code_value(value: &str) -> String {
+    format!("{}{}", "exit_code=".dimmed(), value.yellow())
+}
+
+fn assertion_backtrace_lines(test: &TestReport, result: &GetMethodResultSuccess) -> Vec<String> {
+    if test.backtrace != Some(BacktraceMode::Full) {
+        return Vec::new();
+    }
+
+    retrace::find_exception_info(&result.vm_log, &test.source_map)
+        .map(|info| FormatterContext::format_backtrace(&info.backtrace))
+        .unwrap_or_default()
 }
 
 fn process_nonzero_exit_code(

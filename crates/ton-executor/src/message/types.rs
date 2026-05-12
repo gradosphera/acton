@@ -34,10 +34,15 @@ pub struct RunTransactionResultSuccess {
 pub struct RunTransactionResultError {
     /// Error message.
     pub error: String,
+    /// Whether the external-in message was rejected before acceptance.
+    #[serde(default)]
+    pub external_not_accepted: bool,
     /// Virtual Machine execution logs (if available).
     pub vm_log: Option<String>,
     /// VM exit code (if available).
     pub vm_exit_code: Option<i64>,
+    /// Emulator-reported elapsed time in seconds (if available).
+    pub elapsed_time: Option<f64>,
     /// Set by executor.
     pub executor_logs: Option<Arc<str>>,
     /// Hashes of missing libraries observed during this emulator run.
