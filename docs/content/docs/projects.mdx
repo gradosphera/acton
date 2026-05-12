@@ -273,7 +273,7 @@ Use the `[scripts]` section to store repeated commands in the manifest:
 ```acton-toml title="Acton.toml"
 [scripts]
 deploy = "acton script scripts/deploy.tolk"
-check = "acton test --filter=.*_check"
+check = "acton test --filter='.*_check'"
 ```
 
 Run a named script with [`acton run`](/docs/commands/run):
