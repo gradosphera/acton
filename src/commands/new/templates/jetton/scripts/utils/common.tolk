@@ -1,6 +1,5 @@
 import "@stdlib/strings"
 import "@acton/env"
-import "@acton/fmt"
 import "@acton/io"
 import "@acton/prompts"
 import "@acton/emulation/network"
@@ -30,39 +29,27 @@ struct JettonMetadata {
 }
 
 fun promptJettonString(envName: string, message: string, default: string): string {
-    val fromEnv = env<string>(envName);
-    if (fromEnv != null) {
-        return fromEnv;
-    }
-    return prompt(message, "", default);
+    return env<string>(envName) ?? prompt(message, "", default);
 }
 
-fun promptJettonAddress(envName: string, message: string, default: address): address {
+fun promptJettonIntString(envName: string, message: string, default: string): string {
+    return (env<int>(envName) ?? promptInt(message, default)).toDecimalString();
+}
+
+fun promptJettonAddress(envName: string, message: string, default: address? = null): address {
     return env<address>(envName) ?? promptAddress(message, default);
 }
 
-fun promptJettonAddressRequired(envName: string, message: string): address {
-    return env<address>(envName) ?? promptAddress(message);
-}
-
 fun promptJettonCoins(envName: string, message: string, default: string): coins {
-    val fromEnv = env<coins>(envName);
-    if (fromEnv != null) {
-        return fromEnv;
-    }
-    return parseInt(prompt(message, "in nanotons/nano-jettons", default));
+    return env<coins>(envName) ?? promptInt(message, default, "in nanotons/nano-jettons");
 }
 
 fun promptJettonWallet(envName: string, message: string): ActonWallet {
-    val nameFromEnv = env<string>(envName);
-    if (nameFromEnv != null) {
-        return scripts.wallet(nameFromEnv);
-    }
-    return scripts.wallet(promptWallet(message));
+    return scripts.wallet(env<string>(envName) ?? promptWallet(message));
 }
 
 fun promptJettonMinter(message: string): JettonMinter {
-    val addr = promptJettonAddressRequired("JETTON_MINTER_ADDRESS", message);
+    val addr = promptJettonAddress("JETTON_MINTER_ADDRESS", message);
     return JettonMinter.fromAddress(addr);
 }
 
@@ -76,7 +63,7 @@ fun promptJettonMetadata(descriptionDefault: string): JettonMetadata {
             descriptionDefault,
         ),
         image: promptJettonString("JETTON_IMAGE", "Enter jetton image URL", JETTON_DEFAULT_IMAGE),
-        decimals: promptJettonString(
+        decimals: promptJettonIntString(
             "JETTON_DECIMALS",
             "Enter jetton decimals",
             JETTON_DEFAULT_DECIMALS,

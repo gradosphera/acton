@@ -9,7 +9,7 @@ import "utils/common"
 fun main() {
     val sender = promptJettonWallet("JETTON_SENDER", "Select Jetton Sender ActonWallet");
     val minter = promptJettonMinter("Enter Jetton Minter address");
-    val recipient = promptJettonAddressRequired(
+    val recipient = promptJettonAddress(
         "JETTON_TRANSFER_RECIPIENT",
         "Enter transfer recipient",
     );
