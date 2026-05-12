@@ -32,6 +32,7 @@ export const docs = defineDocs({
   },
 })
 
+// @ts-expect-error Tolk grammar type is wider than LanguageRegistration
 const tolkGrammar: LanguageRegistration = {
   ...tolkGrammarRaw,
   name: "tolk",
