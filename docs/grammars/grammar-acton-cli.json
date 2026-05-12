@@ -350,6 +350,28 @@
     "statusLines": {
       "patterns": [
         {
+          "match": "^(\\s*)(View at:)(\\s+)(https?://\\S+)$",
+          "captures": {
+            "2": {
+              "name": "entity.name.function.acton-cli"
+            },
+            "4": {
+              "name": "markup.underline.link.acton-cli"
+            }
+          }
+        },
+        {
+          "match": "^(\\s*)(Tx:)(\\s+)(https?://\\S+)$",
+          "captures": {
+            "2": {
+              "name": "support.type.acton-cli"
+            },
+            "4": {
+              "name": "markup.underline.link.acton-cli"
+            }
+          }
+        },
+        {
           "match": "^(\\s*)(\\u2713)(\\s+)(.+)$",
           "captures": {
             "2": {
