@@ -1,5 +1,5 @@
 export default function Page() {
-  const baseUrl = "https://ton-blockchain.github.io/acton/"
+  const baseUrl = "https://ton-blockchain.github.io/acton"
 
   return (
     <>
