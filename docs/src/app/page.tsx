@@ -540,7 +540,7 @@ export function LandingHome() {
 
                     <div className="mt-8 flex flex-wrap items-center justify-start gap-x-4 gap-y-3 sm:mt-10">
                       <Link
-                        href="/docs/commands/func2tolk"
+                        href="/docs/agent-skills/func2tolk"
                         className="inline-flex h-11 items-center gap-2 rounded-lg border border-white/12 bg-white/[0.03] px-5 text-sm font-medium text-[#deddd5] transition-colors hover:bg-white/[0.06]"
                       >
                         Migrate a FunC project
