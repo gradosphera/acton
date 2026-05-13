@@ -3,6 +3,8 @@ title: "Reference"
 description: "Complete reference for all build system configuration options, CLI flags, and contract settings"
 ---
 
+import {Tabs, Tab} from "fumadocs-ui/components/tabs";
+
 This page provides a complete reference for all configuration options available in Acton's build system.
 
 ## Path resolution rules
@@ -343,16 +345,27 @@ acton build --graph deps.dot
 
 To render DOT into SVG manually (optional), use [Graphviz](https://graphviz.org):
 
-```bash
-# macOS
-brew install graphviz
+<Tabs items={["macOS", "Ubuntu/Debian", "Windows"]}>
+    <Tab value="macOS">
 
-# Ubuntu/Debian
-sudo apt-get install graphviz
+        ```bash
+        brew install graphviz
+        ```
 
-# Windows
-# Download from https://graphviz.org/download/
-```
+    </Tab>
+    <Tab value="Ubuntu/Debian">
+
+        ```bash
+        sudo apt-get install graphviz
+        ```
+
+    </Tab>
+    <Tab value="Windows">
+
+        Download from https://graphviz.org/download/
+
+    </Tab>
+</Tabs>
 
 The generated DOT contains:
 - Contract boxes labeled with contract names
