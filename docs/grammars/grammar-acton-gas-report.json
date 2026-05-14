@@ -70,27 +70,27 @@
       "patterns": [
         {
           "match": "-\\d+(?:\\.\\d+)?%",
-          "name": "markup.deleted.acton-gas-report"
+          "name": "markup.inserted.acton-gas-report"
         },
         {
           "match": "\\+\\d+(?:\\.\\d+)?%",
-          "name": "string.unquoted.acton-gas-report"
+          "name": "markup.deleted.acton-gas-report"
         },
         {
           "match": "-\\d+(?:\\.\\d+)?\\s+TON",
-          "name": "markup.deleted.acton-gas-report"
+          "name": "markup.inserted.acton-gas-report"
         },
         {
           "match": "\\+\\d+(?:\\.\\d+)?\\s+TON",
-          "name": "string.unquoted.acton-gas-report"
-        },
-        {
-          "match": "-\\d+(?:\\.\\d+)?",
           "name": "markup.deleted.acton-gas-report"
         },
         {
+          "match": "-\\d+(?:\\.\\d+)?",
+          "name": "markup.inserted.acton-gas-report"
+        },
+        {
           "match": "\\+\\d+(?:\\.\\d+)?",
-          "name": "string.unquoted.acton-gas-report"
+          "name": "markup.deleted.acton-gas-report"
         }
       ]
     },
