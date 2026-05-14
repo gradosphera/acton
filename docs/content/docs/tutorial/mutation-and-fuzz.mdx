@@ -57,7 +57,8 @@ Survived Mutants
     24 │     assert (!storage.hasVoted) throw Errors.AlreadyVoted;
     25 │     storage.hasVoted = true;
 
-  Why it's bad: This assertion is not covered by tests. This could lead to security vulnerabilities if the condition is not enforced.
+  Why it's bad: This assertion is not covered by tests. This could lead to security vulnerabilities
+  if the condition is not enforced.
 ────────────────────────────────────────────────────────────
 These mutants were not caught by your tests!
 Consider adding more test cases to improve mutation coverage.

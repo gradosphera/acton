@@ -14,7 +14,8 @@
     "lint:links:internal": "bun ./scripts/validate-links-internal.ts",
     "lint:links:external": "bun ./scripts/validate-links-external.ts",
     "lint:navigation": "bun ./scripts/validate-navigation.ts",
-    "docs-lint": "bun run lint:links && bun run lint:navigation"
+    "lint:code-block-line-length": "bun ./scripts/validate-code-block-line-length.ts",
+    "docs-lint": "bun run lint:links && bun run lint:navigation && bun run lint:code-block-line-length"
   },
   "dependencies": {
     "@orama/orama": "^3.1.18",
