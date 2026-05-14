@@ -285,7 +285,7 @@ figure.shiki > div[role="region"] {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--color-fd-background);
+  color: #121212;
   cursor: pointer;
 }
 
@@ -313,7 +313,7 @@ figure.shiki > div[role="region"] {
 }
 
 .landing-video-play-button:focus-visible .landing-video-play-surface {
-  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline: 2px solid color-mix(in srgb, var(--ui-color) 60%, white);
   outline-offset: 4px;
 }
 
