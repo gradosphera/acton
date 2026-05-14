@@ -71,6 +71,25 @@ figure.shiki > div[role="region"] {
   background-color: var(--color-fd-background);
 }
 
+.mermaid-diagram svg .edgeLabel,
+.mermaid-diagram svg .edgeLabel p,
+.mermaid-diagram svg .edgeLabel text,
+.mermaid-diagram svg .edgeLabel tspan {
+  font-size: 14px !important;
+}
+
+.mermaid-diagram[data-theme="light"] svg .edgeLabel .background {
+  fill: rgba(255, 255, 255, 0.8) !important;
+  stroke: none;
+  opacity: 1 !important;
+}
+
+.mermaid-diagram[data-theme="dark"] svg .edgeLabel .background {
+  fill: rgba(34, 34, 34, 0.8) !important;
+  stroke: none;
+  opacity: 1 !important;
+}
+
 .home-shell {
   --color-fd-background: #121212;
   --color-fd-card: #121212;
