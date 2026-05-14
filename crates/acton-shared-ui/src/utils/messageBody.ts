@@ -38,10 +38,7 @@ const getBodyTypeName = (symbols: SymTable, bodyTyIdx: number): string => {
   return renderTy(symbols, bodyTyIdx)
 }
 
-const hasAcceptableMessageDecodeRemainder = (
-  initialSlice: Slice,
-  parser: Slice,
-): boolean => {
+const hasAcceptableMessageDecodeRemainder = (initialSlice: Slice, parser: Slice): boolean => {
   if (parser.remainingRefs !== 0) {
     return false
   }
