@@ -140,6 +140,7 @@ const customLangs = [
 
 const tolkFileIcon = readFileSync("public/logo-ton-gray.svg", "utf8")
 const actonTomlIcon = readFileSync("public/logo-acton-file.svg", "utf8")
+const terminalIcon = readFileSync("public/logo-terminal.svg", "utf8")
 
 const transformerNoCopy: ShikiTransformer = {
   name: "acton:no-copy",
@@ -164,6 +165,12 @@ export default defineConfig({
       lazy: false,
       icon: {
         extend: {
+          "acton-cli": terminalIcon,
+          "acton-cli-check": terminalIcon,
+          "acton-cli-wrapper": terminalIcon,
+          "acton-cli-mutate": terminalIcon,
+          "acton-cli-trace": terminalIcon,
+          "acton-gas-report": terminalIcon,
           "acton-toml": actonTomlIcon,
           tolk: tolkFileIcon,
         },

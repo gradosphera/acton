@@ -151,7 +151,7 @@ Acton publishes a `trunk` build for the preview channel. It includes changes bef
 
 To switch to the latest `trunk` build:
 
-```acton-cli noCopy
+```bash noCopy title="terminal"
 # Switch to trunk
 acton up --trunk
 
@@ -167,17 +167,17 @@ Acton is also published as a Docker image at `ghcr.io/ton-blockchain/acton`. Thi
 
 To verify that the image is available and print the Acton version:
 
-```acton-cli
-docker run --rm ghcr.io/ton-blockchain/acton:<version> --version
+```bash
+docker run --rm ghcr.io/ton-blockchain/acton:1.0.0 --version
 ```
 
 To run Acton against the current project from a container:
 
-```acton-cli
+```bash
 docker run --rm \
   -v "$PWD":/workspace \
   -w /workspace \
-  ghcr.io/ton-blockchain/acton:<version> \
+  ghcr.io/ton-blockchain/acton:1.0.0 \
   build
 ```
 
