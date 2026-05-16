@@ -107,7 +107,7 @@ get fun `test bounce on option 1 vote`() {
     val res1 = poll.sendVote(alice.address, 1, { value: ton("0.1") });
     expect(res1).toHaveAllSuccessfulTxs();
 
-    val res2 = poll.sendVote(alice.address, 1, { value: ton("0.1") });
+    poll.sendVote(alice.address, 1, { value: ton("0.1") });
     val (_, opt1) = poll.results();
     expect(opt1).toEqual(1);
 }

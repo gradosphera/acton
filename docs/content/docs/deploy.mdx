@@ -18,7 +18,7 @@ When deploying to testnet or mainnet, `scripts.wallet()` uses a [configured depl
 - A [configured deployer wallet](/docs/wallets) with at least 1 Toncoin for testnet and mainnet deployments. Alternatively, pass `--tonconnect` to use a wallet from an external wallet service through the TON Connect protocol.
 
 <Callout type="warn" title="Real funds move on public networks">
-  Local runs stay in the emulator. Testnet and mainnet runs send real external messages from the configured wallet.
+  Local runs stay in the emulator. Testnet and mainnet runs send real external messages from the configured wallet or the connected TON Connect wallet.
 
   Use separate wallets for different networks. Validate the deployment script locally before broadcasting it, and treat mainnet deployment as irreversible.
 </Callout>
@@ -32,7 +32,7 @@ A deployment script usually does at least four things:
 - sends the deployment transaction
 - waits for the first transaction to go through or for the complete trace to form
 
-To wait until the external message reaches the wallet, use `.waitForFirstTransaction()`. To await the complete transaction chain, use `.waitForTrace()`. Both functions return `null` if Acton cannot fetch the transaction or the trace within the retry budget.
+To wait until the first transaction is found on-chain, use `.waitForFirstTransaction()`. To await the complete transaction chain, use `.waitForTrace()`. Both functions return `null` if Acton cannot fetch the transaction or the trace within the retry budget.
 
 <Callout>
   Each retry is a distinct API call when broadcasting to the testnet or mainnet.
@@ -79,10 +79,11 @@ The same pattern works for more complex contracts. Prepare dictionaries, cells, 
 
 ```tolk title="scripts/deploy.tolk"
 import "@acton/emulation/scripts"
+import "@acton/build"
 import "@acton/prompts"
 import "@acton/testing/assert"
 
-import "@wrappers/JettonMinter"
+import "@wrappers/JettonMinter.gen"
 import "@contracts/types"
 
 fun main() {
@@ -133,7 +134,7 @@ acton script scripts/deploy.tolk --net testnet
 
 In broadcast mode, `scripts.wallet()` resolves the named wallet from local `wallets.toml` or global `global.wallets.toml` wallet configuration. Select the funded testnet deployer wallet when prompted.
 
-Supply the `--tonconnect` flag to select the wallets connected through TON Connect:
+Supply the `--tonconnect` flag to use the wallet connected through TON Connect:
 
 ```bash
 acton script scripts/deploy.tolk --net testnet --tonconnect
@@ -153,7 +154,7 @@ Broadcast to mainnet only after the same script succeeds locally and on testnet:
 acton script scripts/deploy.tolk --net mainnet
 ```
 
-Select the mainnet deployer wallet when prompted. When the `--tonconnect` flag is supplied, only the wallets connected through TON Connect can be selected:
+Select the mainnet deployer wallet when prompted. When the `--tonconnect` flag is supplied, Acton uses the wallet connected through TON Connect:
 
 ```bash
 acton script scripts/deploy.tolk --net mainnet --tonconnect

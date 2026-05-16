@@ -28,7 +28,8 @@ Five built-in templates are available:
 | `nft`          | NFT collection and item contracts with wrappers, tests, and scripts.      |
 | `w5-extension` | Wallet V5 extension contract and subscription example. Alias: `w5-plugin`.|
 
-`acton new` is interactive by default. It prompts for project name, template, description, license, Git hooks, and `AGENTS.md` guidance.
+`acton new` is interactive when stdin/stdout are terminals. It prompts for project name, template, optional app layout, and whether to configure advanced options such as description, license, Git hooks, and `AGENTS.md` guidance.
+When running from scripts or CI, pass `--template` explicitly.
 
 Pass flags to skip prompts:
 
@@ -36,7 +37,7 @@ Pass flags to skip prompts:
 - `--hooks` — install a pre-commit hook under `.githooks/` and set `core.hooksPath`.
 - `--agents` — copy the template's `AGENTS.md` into the project root.
 
-All three options are disabled unless their flags are passed explicitly.
+In non-interactive mode, these options are disabled unless their flags are passed explicitly.
 
 See the [`acton new`](/docs/commands/new) command reference for all available flags.
 
@@ -51,7 +52,7 @@ acton init
 - When `Acton.toml` does not exist, `acton init` scans the directory tree for `.tolk` files that define `onInternalMessage()` and registers them as contracts in a newly created `Acton.toml`.
 - When `Acton.toml` already exists, `acton init` leaves it untouched.
 
-`acton init` refreshes Tolk libraries in `.acton/` and updates `.gitignore` with the commonly ignored Acton-related entries. It is safe to rerun `acton init` after moving files around or after removing import mappings in `Acton.toml` by accident.
+`acton init` refreshes Tolk libraries in `.acton/` and updates `.gitignore` with the commonly ignored Acton-related entries. It is safe to rerun after `.acton/` goes stale or `.gitignore` is missing Acton patterns, but it will not repair or rewrite an existing `Acton.toml`.
 
 Pass `--stdlib-only` to only refresh the standard library in `.acton/` folder:
 
@@ -65,7 +66,7 @@ Pass `--create-dapp` to skip project initialization and only scaffold a Vite-bas
 acton init --create-dapp
 ```
 
-It changes the project layout to the [dApp layout](#dapp-layout). The target `app/` directory must not already exist.
+It creates `app/` by default, or the path passed to `--create-dapp`. The target directory must not already exist. This mode does not change `Acton.toml`; use `acton new --app` when you want the full [dApp layout](#dapp-layout) in a new scaffold.
 
 <Callout>
     `acton init` also manages symlinks for [`global.wallets.toml`](/docs/wallets) and [`global.libraries.toml`](/docs/libraries):
@@ -88,7 +89,7 @@ Rerun `acton init` when the project needs a light reset:
 
 ### Default project layout
 
-To create a project with the default layout, run [`acton new`](/docs/commands/new) without `--app` and the TypeScript dApp.
+To create a project with the default layout, run [`acton new`](/docs/commands/new) without `--app`.
 
 ```bash
 acton new acton-project

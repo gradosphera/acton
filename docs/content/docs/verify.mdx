@@ -14,7 +14,7 @@ Prepare these inputs before running `acton verify`:
 
 - a [wallet configured in Acton](/docs/wallets) or a TON Connect wallet
 - a deployed `.tolk` contract that is defined in `Acton.toml`
-- [at least 1 Toncoin on the wallet](/docs/wallets#fund-a-wallet-on-testnet) to cover the final verification transaction when not using `--dry-run`
+- enough Toncoin on the wallet to cover the final verification transaction when not using `--dry-run`; Acton sends `0.1 TON` plus normal wallet/network fees
 
 Only Tolk contracts can be verified. Arbitrary `.boc` contracts are not supported by the verifier flow.
 

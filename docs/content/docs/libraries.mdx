@@ -71,8 +71,10 @@ Publish raw code with `--code` or run non-interactively:
 acton library publish --code "te6cckEBAQEAAgAAAEysuc0="
 
 # Non-interactive mode
-acton library publish Math --duration 100d --wallet my-wallet --net mainnet
+acton library publish Math --duration 100d --amount 0.2 --wallet my-wallet --net mainnet --yes --local
 ```
+
+Use `--local` or `--global` to skip the metadata storage prompt and save the library entry to `libraries.toml` or `global.libraries.toml`.
 
 ## Monitoring library status
 

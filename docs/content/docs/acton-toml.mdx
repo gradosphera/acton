@@ -264,6 +264,8 @@ Configures the behavior of `acton test`.
 | `fork-block-number`         | `integer`  | -             | Specific block number to fork from.                                    |
 | `fail-fast`                 | `boolean`  | `false`       | Stop execution after the first test failure.                           |
 | `fail-on-diff`              | `boolean`  | `false`       | Exit with non-zero code when profiling differs from baseline snapshot. |
+| `ui`                        | `boolean`  | `false`       | Enable the browser test UI server.                                     |
+| `ui-port`                   | `integer`  | `12344`       | Port for the browser test UI server.                                   |
 | `mutation`                  | `object`   | -             | Configuration for mutation testing (see below).                        |
 
 TON Center API keys are configured through the process environment, not `Acton.toml`: use `TONCENTER_TESTNET_API_KEY` or `TONCENTER_MAINNET_API_KEY` when the built-in fork target needs authentication.
@@ -277,6 +279,7 @@ Configures default coverage behavior for `acton test`.
 | `enabled`          | `boolean` | `false` | Enable code coverage collection.                                |
 | `format`           | `string`  | `lcov`  | Format for coverage report (`lcov`, `text`).                    |
 | `output-file`      | `string`  | -       | Path to save the coverage report.                               |
+| `minimum-percent`  | `float`   | -       | Fail non-UI coverage runs below this final coverage score.      |
 | `include-wrappers` | `boolean` | `false` | Include files from the `@wrappers` mapping in coverage reports. |
 | `include-tests`    | `boolean` | `false` | Include `.test.tolk` files in coverage reports.                 |
 
@@ -485,7 +488,8 @@ import "@utils/logic" // Resolves to ./libs/utils/logic.tolk
 
 ### Built-in project mappings
 
-Projects created with `acton new` or updated with `acton init` usually contain
+Projects created with `acton new`, or initialized with `acton init` when
+`Acton.toml` did not exist yet, usually contain
 these default mappings:
 
 | Mapping      | Default path                       | Common use                                               |
@@ -504,7 +508,7 @@ import "@contracts/types"
 import "@wrappers/Counter.gen"
 ```
 
-These defaults are written into `Acton.toml` by project scaffolding commands such as `acton new` and `acton init`. The exact path depends on the scaffold layout: standard templates use `contracts/`, `tests/`, and `wrappers/`, while `--app` scaffolds use `contracts/src/`, `contracts/tests/`, and `contracts/wrappers/`.
+These defaults are written into `Acton.toml` by project scaffolding commands such as `acton new` and by `acton init` only when it creates a missing manifest. The exact path depends on the scaffold layout: standard templates use `contracts/`, `tests/`, and `wrappers/`, while `--app` scaffolds use `contracts/src/`, `contracts/tests/`, and `contracts/wrappers/`.
 
 Acton does not silently recreate deleted folders during normal workflows. To recreate missing folders, manually restore them from Git within the Git-managed project.
 
