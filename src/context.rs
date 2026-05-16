@@ -287,6 +287,49 @@ impl BuildCache {
             .find(|(_, result)| result.code_hash == code_hash)
             .map(|(name, result)| ((*name).clone(), (*result).clone()))
     }
+
+    #[must_use]
+    pub(crate) fn prioritized_results(
+        &self,
+        preferred: impl IntoIterator<Item = CompilationResult>,
+    ) -> Vec<CompilationResult> {
+        let mut results = Vec::new();
+        let mut seen = FxHashSet::default();
+        for preferred in preferred {
+            if seen.insert(Self::result_key(&preferred)) {
+                results.push(preferred);
+            }
+        }
+
+        let mut fallback_results = self.built.iter().collect::<Vec<_>>();
+        fallback_results.sort_by(|(left_path, left), (right_path, right)| {
+            left.name
+                .cmp(&right.name)
+                .then_with(|| left_path.cmp(right_path))
+        });
+        for (_, result) in fallback_results {
+            if seen.insert(Self::result_key(result)) {
+                results.push(result.clone());
+            }
+        }
+
+        results
+    }
+
+    #[must_use]
+    pub(crate) fn message_name_by_opcode(
+        &self,
+        opcode: u32,
+        preferred: impl IntoIterator<Item = CompilationResult>,
+    ) -> Option<String> {
+        self.prioritized_results(preferred)
+            .into_iter()
+            .find_map(|result| result.message_name_by_opcode(opcode))
+    }
+
+    fn result_key(result: &CompilationResult) -> String {
+        format!("{}:{}", result.name, result.code_hash)
+    }
 }
 
 pub(crate) fn code_lookup_hash(code: &Cell) -> HashBytes {
@@ -312,6 +355,18 @@ pub struct CompilationResult {
     pub code_hash: HashBytes,
     pub source_map: Arc<SourceMap>,
     pub abi: Option<Arc<ContractABI>>,
+}
+
+impl CompilationResult {
+    #[must_use]
+    pub(crate) fn message_name_by_opcode(&self, opcode: u32) -> Option<String> {
+        ContractABI::find_message_name_by_opcode_with_symbols(
+            self.source_map.as_ref(),
+            self.abi.as_deref(),
+            opcode,
+        )
+        .map(str::to_owned)
+    }
 }
 
 pub(crate) fn compile_project_contract_with_cache(

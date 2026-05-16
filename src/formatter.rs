@@ -966,14 +966,14 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
 
                 self.try_decode_message_with_builds(
                     in_msg.body,
-                    self.prioritized_builds(destination_build),
+                    self.build_cache.prioritized_results(destination_build),
                     destination_direction,
                     info.bounced,
                 )
                 .or_else(|| {
                     self.try_decode_message_with_builds(
                         in_msg.body,
-                        self.prioritized_builds(source_build),
+                        self.build_cache.prioritized_results(source_build),
                         source_direction,
                         info.bounced,
                     )
@@ -1090,37 +1090,6 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         self.build_cache
             .result_for_code(&code)
             .map(|(_, result)| result)
-    }
-
-    fn prioritized_builds(
-        &self,
-        preferred: impl IntoIterator<Item = context::CompilationResult>,
-    ) -> Vec<context::CompilationResult> {
-        let mut builds = Vec::new();
-        let mut seen = HashSet::new();
-        for preferred in preferred {
-            if seen.insert(Self::build_result_key(&preferred)) {
-                builds.push(preferred);
-            }
-        }
-
-        let mut fallback_builds = self.build_cache.built.iter().collect::<Vec<_>>();
-        fallback_builds.sort_by(|(left_path, left), (right_path, right)| {
-            left.name
-                .cmp(&right.name)
-                .then_with(|| left_path.cmp(right_path))
-        });
-        for (_, build) in fallback_builds {
-            if seen.insert(Self::build_result_key(build)) {
-                builds.push(build.clone());
-            }
-        }
-
-        builds
-    }
-
-    fn build_result_key(build: &context::CompilationResult) -> String {
-        format!("{}:{}", build.name, build.code_hash)
     }
 
     fn try_decode_message_with_builds(
@@ -2234,7 +2203,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         build: Option<&context::CompilationResult>,
     ) -> String {
         if let Some(build) = build
-            && let Some(name) = Self::message_name_from_build(build, opcode)
+            && let Some(name) = build.message_name_by_opcode(opcode)
         {
             return Self::color_message_name(&name);
         }
@@ -2256,9 +2225,10 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         destination_build: Option<context::CompilationResult>,
         source_build: Option<context::CompilationResult>,
     ) -> Option<String> {
-        self.prioritized_builds([destination_build, source_build].into_iter().flatten())
-            .into_iter()
-            .find_map(|build| Self::message_name_from_build(&build, opcode))
+        self.build_cache.message_name_by_opcode(
+            opcode,
+            [destination_build, source_build].into_iter().flatten(),
+        )
     }
 
     fn message_name_from_search_params(
@@ -2279,15 +2249,6 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             return None;
         };
         self.build_result_for_address(Some(address))
-    }
-
-    fn message_name_from_build(build: &context::CompilationResult, opcode: u32) -> Option<String> {
-        ContractABI::find_message_name_by_opcode_with_symbols(
-            build.source_map.as_ref(),
-            build.abi.as_deref(),
-            opcode,
-        )
-        .map(str::to_owned)
     }
 
     fn get_contract_type(&self, addr: &IntAddr) -> Option<String> {
