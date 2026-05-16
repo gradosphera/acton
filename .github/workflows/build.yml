@@ -1,4 +1,4 @@
-name: Trunk Build
+name: Build Trunk
 
 on:
   pull_request:

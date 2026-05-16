@@ -1,4 +1,4 @@
-name: Check release binaries
+name: Build release binaries
 
 on:
   workflow_call:

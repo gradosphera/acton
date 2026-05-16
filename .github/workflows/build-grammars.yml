@@ -1,4 +1,4 @@
-name: Building tree-sitter grammar
+name: Build tree-sitter grammars
 
 on:
   pull_request:
