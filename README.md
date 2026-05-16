@@ -7,7 +7,9 @@ It combines project scaffolding, build, testing, scripting, wallet and network
 operations, verification, linting, formatting, debugging, and low-level VM
 tooling in one CLI.
 
-Documentation: https://ton-blockchain.github.io/acton/docs/welcome
+Built for **humans**. Perfect for **AI**.
+
+### [Read the docs →](https://ton-blockchain.github.io/acton/docs/welcome)
 
 <br clear="right" />
 
