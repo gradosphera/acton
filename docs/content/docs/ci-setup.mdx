@@ -51,10 +51,10 @@ Use the lint output format that matches the CI system:
 - `json` is useful for custom automation and editor integrations.
 
 <Callout>
-  Non-plain formats never rewrite files. Even with `--fix`, Acton only reports fixes in all output formats except for the default one.
+  `--fix` works only with the default `plain` output format. With `json`, `sarif`, `github`, or `gitlab`, Acton rejects `--fix` instead of rewriting files.
 </Callout>
 
-To specify the format, use `--output-format` flag. To specify the output file, use `--output-file` flag.
+To specify the format, use the `--output-format` flag. To specify the output file, use the `--output-file` flag.
 
 For example, to write a [SARIF](https://sarifweb.azurewebsites.net/) file in CI, run:
 
@@ -133,7 +133,7 @@ Acton offers a GitHub action to set itself up. [`setup-acton`](https://github.co
     # Defaults to the current github.token value.
     github-token: ${{ github.token }}
 
-# The setup-action produces following outputs: acton-path and acton-version.
+# The setup action produces the following outputs: acton-path and acton-version.
 - run: |
     # acton-path contains full path to the installed Acton binary.
     echo "Path: ${{ steps.setup-acton.outputs.acton-path }}"
@@ -218,9 +218,14 @@ on:
       - main
       - master
 
+permissions: {}
+
 jobs:
   coverage:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -232,10 +237,10 @@ jobs:
         uses: ton-blockchain/setup-acton@2d38fd579e1bf8753a3e0cff9ad695612b98a676 # v1.0.0
 
       - name: Run tests with coverage
-        run: acton test --coverage --coverage-format lcov
+        run: acton test --coverage --coverage-format lcov --coverage-file lcov.info
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -250,7 +255,7 @@ minimum-percent = 50
 
 ### Add frontend checks
 
-If the repository also contains a frontend created with `acton new --app` or a custom one, add Node.js setup and frontend validation steps:
+If the repository also contains a frontend created with `acton new --app` or a custom one, create a separate frontend workflow with Node.js setup and validation steps:
 
 ```yaml title=".github/workflows/dapp.yml"
 name: dApp
@@ -311,10 +316,12 @@ jobs:
 
 ## Set up GitLab CI
 
-For GitLab, run Acton from the published Docker image. Replace `<ACTON_VERSION>` with the version used in the project, for example `{{ acton_version }}` or `latest`.
+For GitLab, run Acton from the published Docker image. The example pins the image to `{{ acton_version }}`; use `latest` only if the pipeline should always follow the newest release.
 
 ```yaml title=".gitlab-ci.yml"
-image: ghcr.io/ton-blockchain/acton:<ACTON_VERSION>
+image:
+  name: ghcr.io/ton-blockchain/acton:{{ acton_version }}
+  entrypoint: [""]
 
 stages:
   - validate
@@ -324,15 +331,16 @@ validate:
   script:
     - acton --version
     - acton build
-    - acton test
-    - acton check --output-format gitlab --output-file gl-code-quality-report.json
     - acton fmt --check
+    - acton check --output-format gitlab --output-file gl-code-quality-report.json
+    - acton test
   artifacts:
+    when: always
     reports:
       codequality: gl-code-quality-report.json
 ```
 
-`acton check --output-format gitlab` writes a Code Quality report that GitLab can show directly in merge requests.
+The `entrypoint: [""]` override is required because the Acton Docker image uses `acton` as its entrypoint, while GitLab Runner expects to run job scripts through a shell. `acton check --output-format gitlab` writes a Code Quality report that GitLab can show directly in merge requests.
 
 ## Store secrets and wallet mnemonics
 
