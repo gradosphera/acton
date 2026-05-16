@@ -152,9 +152,15 @@ could be mistaken for a contract name
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'suppressions apply only to the immediately following line and match
-diagnostic names, including \fBcompiler\-error\fR and \fBparse\-error\fR; diagnostic
-codes such as \fBC001\fR are not matched
+\h'-04'\(bu\h'+03'suppressions apply only to suppressible linter diagnostics on the immediately
+following line and match diagnostic names; diagnostic codes such as \fBC001\fR
+are not matched
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'compiler and parser diagnostics reported as \fBcompiler\-error\fR or
+\fBparse\-error\fR are emitted outside suppressible lint processing and are not
+disabled by \fBcheck\-disable\-next\-line\fR or \fB[lint.rules]\fR
 .RE
 .sp
 .RS 4

@@ -198,9 +198,12 @@ This conflicts with `--manifest-path`.
   could be mistaken for a contract name
 - inline suppressions use rule names, for example
   `// check-disable-next-line unused-variable, write-only-variable`
-- suppressions apply only to the immediately following line and match
-  diagnostic names, including `compiler-error` and `parse-error`; diagnostic
-  codes such as `C001` are not matched
+- suppressions apply only to suppressible linter diagnostics on the immediately
+  following line and match diagnostic names; diagnostic codes such as `C001`
+  are not matched
+- compiler and parser diagnostics reported as `compiler-error` or
+  `parse-error` are emitted outside suppressible lint processing and are not
+  disabled by `check-disable-next-line` or `[lint.rules]`
 - `--fix` applies only linter-provided fixes; diagnostics without a safe fix
   remain in the report
 - `--enable-only` is applied after config is loaded: selected rules keep their
