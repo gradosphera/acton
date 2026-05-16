@@ -1,5 +1,5 @@
 use crate::commands::test::TestRunner;
-use acton_config::color::OwoColorize;
+use acton_config::color::{OwoColorize, colors_enabled};
 use chrono;
 use comfy_table::{Cell as TableCell, CellAlignment, Color, ContentArrangement, Table};
 use serde::{Deserialize, Serialize};
@@ -177,11 +177,7 @@ fn print_opcode_gas_table(
             .unwrap_or(chrono::DateTime::UNIX_EPOCH);
         let formatted_time = datetime.format("%Y-%m-%d %H:%M:%S UTC");
 
-        println!(
-            "\n{} {}\n",
-            " GAS USAGE COMPARISON ".bold().on_blue(),
-            "".dimmed()
-        );
+        print_section_header("GAS USAGE COMPARISON");
         println!(
             "Baseline: {} ({} opcodes, captured {})",
             baseline_label,
@@ -195,7 +191,7 @@ fn print_opcode_gas_table(
             .set_content_arrangement(ContentArrangement::Dynamic)
             .set_header(vec!["Opcode", "Baseline", "Current", "Diff", "% Change"]);
     } else {
-        println!("\n{} {}\n", " GAS USAGE ".bold().on_blue(), "".dimmed());
+        print_section_header("GAS USAGE");
         table
             .load_preset("  ─  ──      ─     ")
             .set_content_arrangement(ContentArrangement::Dynamic)
@@ -349,11 +345,7 @@ fn print_trace_summary_table(
             .unwrap_or(chrono::DateTime::UNIX_EPOCH);
         let formatted_time = datetime.format("%Y-%m-%d %H:%M:%S UTC");
 
-        println!(
-            "\n{} {}\n",
-            " CHAIN GAS & FEES SUMMARY COMPARISON ".bold().on_blue(),
-            "".dimmed()
-        );
+        print_section_header("CHAIN GAS & FEES SUMMARY COMPARISON");
         println!(
             "Baseline: {} ({} traces, captured {})",
             baseline_label,
@@ -494,11 +486,7 @@ fn print_trace_summary_table(
             }
         }
     } else {
-        println!(
-            "\n{} {}\n",
-            " CHAIN GAS & FEES SUMMARY ".bold().on_blue(),
-            "".dimmed()
-        );
+        print_section_header("CHAIN GAS & FEES SUMMARY");
         table
             .load_preset("  ─  ──      ─     ")
             .set_content_arrangement(ContentArrangement::Dynamic)
@@ -534,11 +522,7 @@ fn print_trace_summary_table(
 }
 
 fn print_test_trace_table_current(test_name: &str, traces: &[&TraceChainStats]) {
-    println!(
-        "\n{} {}\n",
-        format!(" CHAIN GAS & FEES · {test_name} ").bold().on_blue(),
-        "".dimmed()
-    );
+    print_section_header(&format!("CHAIN GAS & FEES · {test_name}"));
 
     let mut table = Table::new();
     table
@@ -573,11 +557,7 @@ fn print_test_trace_table_comparison(
     traces: &[&TraceChainStats],
     baseline_rows: Option<&Vec<(&str, &TraceChainSnapshotStats)>>,
 ) {
-    println!(
-        "\n{} {}\n",
-        format!(" CHAIN GAS & FEES · {test_name} ").bold().on_blue(),
-        "".dimmed()
-    );
+    print_section_header(&format!("CHAIN GAS & FEES · {test_name}"));
 
     let baseline_by_key = baseline_rows
         .map(|rows| {
@@ -720,6 +700,15 @@ fn print_test_trace_table_comparison(
     }
 
     println!("{table}\n");
+}
+
+fn print_section_header(title: &str) {
+    let padded = if colors_enabled() {
+        format!(" {title} ")
+    } else {
+        format!(" {title}")
+    };
+    println!("\n{}\n", padded.bold().on_blue());
 }
 
 #[derive(Debug, Clone, Copy, Default)]

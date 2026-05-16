@@ -9,6 +9,19 @@ fun onInternalMessage(in: InMessage) {}
 fun onBouncedMessage(_: InMessageBounced) {}
 ";
 
+const SIMPLE_CONTRACT_WITH_GAS_DRIFT: &str = r"
+fun onInternalMessage(_: InMessage) {
+    var extra = 0;
+    repeat (8) {
+        extra += 1;
+    }
+    if (extra == 0) {
+        throw 900;
+    }
+}
+fun onBouncedMessage(_: InMessageBounced) {}
+";
+
 const PASSING_TEST: &str = r#"
 import "../../lib/testing/expect"
 
@@ -136,6 +149,110 @@ get fun `test-profiled-transaction`() {
 }
 "#;
 
+const PROFILE_MESSAGES: &str = r"
+struct (0xFA170001) ProfilePing {
+    queryId: uint64
+}
+";
+
+const PROFILE_ABI_CONTRACT: &str = r#"
+import "profile_messages"
+
+contract ProfileTarget {
+    incomingMessages: ProfilePing
+}
+
+fun onInternalMessage(in: InMessage) {
+    if (in.body.isEmpty()) {
+        return;
+    }
+
+    val _msg = lazy ProfilePing.fromSlice(in.body);
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
+const PROFILE_UNKNOWN_CONTRACT: &str = r"
+fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+";
+
+const PROFILED_TYPED_OPCODE_TEST: &str = r#"
+import "../../lib/testing/expect"
+import "../../lib/build"
+import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
+import "../../lib/types/big_array"
+import "../contracts/profile_messages"
+
+get fun `test-profiled-typed-opcode`() {
+    val init = ContractState {
+        code: build("target"),
+        data: createEmptyCell(),
+    };
+    val address = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    val sender = testing.treasury("sender");
+    expect(net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("1.0"),
+        dest: {
+            stateInit: init,
+        },
+    }))).toHaveSuccessfulDeploy({ to: address });
+
+    val first = net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("0.2"),
+        dest: address,
+        body: ProfilePing { queryId: 1 },
+    }));
+    expect(first.size()).toEqual(1);
+
+    val second = net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("0.2"),
+        dest: address,
+        body: ProfilePing { queryId: 2 },
+    }));
+    expect(second.size()).toEqual(1);
+}
+"#;
+
+const PROFILED_UNKNOWN_OPCODE_TEST: &str = r#"
+import "../../lib/testing/expect"
+import "../../lib/build"
+import "../../lib/emulation/network"
+import "../../lib/emulation/testing"
+import "../../lib/types/big_array"
+
+get fun `test-profiled-unknown-opcode`() {
+    val init = ContractState {
+        code: build("target"),
+        data: createEmptyCell(),
+    };
+    val address = AutoDeployAddress { stateInit: init }.calculateAddress();
+
+    val sender = testing.treasury("sender");
+    expect(net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("1.0"),
+        dest: {
+            stateInit: init,
+        },
+    }))).toHaveSuccessfulDeploy({ to: address });
+
+    val result = net.send(sender.address, createMessage({
+        bounce: false,
+        value: ton("0.2"),
+        dest: address,
+        body: beginCell().storeUint(0xFA170099, 32).storeUint(1, 64).endCell(),
+    }));
+    expect(result.size()).toEqual(1);
+}
+"#;
+
 const BUILD_WITH_PROJECT_ROOT_RELATIVE_PATH_TEST: &str = r#"
 import "../../lib/build"
 import "../../lib/testing/expect"
@@ -168,6 +285,68 @@ fn append_acton_toml(project: &Project, content: &str) {
         fs::read_to_string(&acton_toml_path).expect("should read generated Acton.toml");
     acton_toml.push_str(content);
     fs::write(&acton_toml_path, acton_toml).expect("should update generated Acton.toml");
+}
+
+fn read_project_json(project: &Project, relative_path: &str) -> serde_json::Value {
+    let full_path = project.path().join(relative_path);
+    let content = fs::read_to_string(&full_path)
+        .unwrap_or_else(|err| panic!("should read {}: {err}", full_path.display()));
+    serde_json::from_str(&content)
+        .unwrap_or_else(|err| panic!("should parse {}: {err}", full_path.display()))
+}
+
+fn write_project_json(project: &Project, relative_path: &str, value: &serde_json::Value) {
+    let full_path = project.path().join(relative_path);
+    let content = format!(
+        "{}\n",
+        serde_json::to_string_pretty(value)
+            .unwrap_or_else(|err| panic!("should serialize {relative_path}: {err}"))
+    );
+    fs::write(&full_path, content)
+        .unwrap_or_else(|err| panic!("should write {}: {err}", full_path.display()));
+}
+
+fn normalize_profile_snapshot_file(project: &Project, relative_path: &str) {
+    let mut snapshot = read_project_json(project, relative_path);
+    snapshot["timestamp"] = serde_json::json!(0);
+    write_project_json(project, relative_path, &snapshot);
+}
+
+fn typed_profile_project(project_name: &str) -> Project {
+    ProjectBuilder::new(project_name)
+        .file("contracts/profile_messages", PROFILE_MESSAGES)
+        .contract("target", PROFILE_ABI_CONTRACT)
+        .test_file("profile", PROFILED_TYPED_OPCODE_TEST)
+        .build()
+}
+
+fn profile_trace_drift_project(project_name: &str) -> Project {
+    let project = ProjectBuilder::new(project_name)
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("profile", PROFILED_TEST)
+        .build();
+    project.acton().init().run().success();
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--snapshot")
+        .arg("profile-baseline.json")
+        .run()
+        .success();
+
+    let mut baseline = read_project_json(&project, "profile-baseline.json");
+    baseline["timestamp"] = serde_json::json!(0);
+    write_project_json(&project, "profile-baseline.json", &baseline);
+
+    fs::write(
+        project.path().join("contracts/simple.tolk"),
+        SIMPLE_CONTRACT_WITH_GAS_DRIFT,
+    )
+    .expect("Failed to write drifted contract file");
+
+    project
 }
 
 fn fail_fast_project(project_name: &str, configured_fail_fast: Option<bool>) -> ProjectBuilder {
@@ -1359,6 +1538,243 @@ fn test_snapshot_nested_output_creates_parent_directories() {
         project.path().join(snapshot_path).exists(),
         "snapshot file should be created with missing parent dirs"
     );
+}
+
+#[test]
+fn test_gas_snapshot_records_abi_opcode_stats() {
+    let project = typed_profile_project("profiling-abi-opcode-stats");
+    project.acton().init().run().success();
+
+    let output = project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--snapshot")
+        .arg("typed-profile.json")
+        .run()
+        .success();
+
+    normalize_profile_snapshot_file(&project, "typed-profile.json");
+    output
+        .assert_contains("ProfilePing")
+        .assert_file_snapshot_matches(
+            "typed-profile.json",
+            "integration/snapshots/flags/test_gas_snapshot_records_abi_opcode_stats.json",
+        );
+}
+
+#[test]
+fn test_gas_snapshot_uses_hex_opcode_when_abi_name_is_unknown() {
+    let project = ProjectBuilder::new("profiling-unknown-opcode-stats")
+        .contract("target", PROFILE_UNKNOWN_CONTRACT)
+        .test_file("profile", PROFILED_UNKNOWN_OPCODE_TEST)
+        .build();
+    project.acton().init().run().success();
+
+    let output = project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--snapshot")
+        .arg("unknown-profile.json")
+        .run()
+        .success();
+
+    normalize_profile_snapshot_file(&project, "unknown-profile.json");
+    output
+        .assert_contains("0xfa170099")
+        .assert_file_snapshot_matches(
+            "unknown-profile.json",
+            "integration/snapshots/flags/test_gas_snapshot_uses_hex_opcode_when_abi_name_is_unknown.json",
+        );
+}
+
+#[test]
+fn test_profile_compare_mode_does_not_overwrite_snapshot_argument() {
+    let project = typed_profile_project("profiling-compare-keeps-snapshot");
+    project.acton().init().run().success();
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--snapshot")
+        .arg("profile-baseline.json")
+        .run()
+        .success();
+
+    let mut baseline = read_project_json(&project, "profile-baseline.json");
+    baseline["timestamp"] = serde_json::json!(0);
+    write_project_json(&project, "profile-baseline.json", &baseline);
+
+    let candidate_path = project.path().join("candidate-profile.json");
+    let candidate_content = "{\"sentinel\":true}\n";
+    fs::write(&candidate_path, candidate_content)
+        .unwrap_or_else(|err| panic!("should write {}: {err}", candidate_path.display()));
+
+    let output = project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--snapshot")
+        .arg("candidate-profile.json")
+        .arg("--baseline-snapshot")
+        .arg("profile-baseline.json")
+        .run()
+        .success();
+
+    let actual_candidate = fs::read_to_string(&candidate_path)
+        .unwrap_or_else(|err| panic!("should read {}: {err}", candidate_path.display()));
+    assert_eq!(
+        actual_candidate, candidate_content,
+        "compare mode must not overwrite an explicit snapshot target"
+    );
+    output.assert_snapshot_matches(
+        "integration/snapshots/flags/test_profile_compare_mode_does_not_overwrite_snapshot_argument.stdout.txt",
+    );
+}
+
+#[test]
+fn test_profile_baseline_with_only_opcode_stats_prints_opcode_comparison() {
+    let project = typed_profile_project("profiling-opcodes-only-baseline");
+    project.acton().init().run().success();
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--snapshot")
+        .arg("profile-baseline.json")
+        .run()
+        .success();
+
+    let mut baseline = read_project_json(&project, "profile-baseline.json");
+    baseline["timestamp"] = serde_json::json!(0);
+    baseline["trace_chains"] = serde_json::json!({});
+    write_project_json(&project, "profile-baseline.json", &baseline);
+
+    let output = project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--baseline-snapshot")
+        .arg("profile-baseline.json")
+        .run()
+        .success();
+    output.assert_snapshot_matches(
+        "integration/snapshots/flags/test_profile_baseline_with_only_opcode_stats_prints_opcode_comparison.stdout.txt",
+    );
+}
+
+#[test]
+fn test_profile_baseline_with_only_trace_stats_prints_chain_comparison() {
+    let project = typed_profile_project("profiling-traces-only-baseline");
+    project.acton().init().run().success();
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--snapshot")
+        .arg("profile-baseline.json")
+        .run()
+        .success();
+
+    let mut baseline = read_project_json(&project, "profile-baseline.json");
+    baseline["timestamp"] = serde_json::json!(0);
+    baseline["opcodes"] = serde_json::json!({});
+    write_project_json(&project, "profile-baseline.json", &baseline);
+
+    let output = project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--baseline-snapshot")
+        .arg("profile-baseline.json")
+        .run()
+        .success();
+    output.assert_snapshot_matches(
+        "integration/snapshots/flags/test_profile_baseline_with_only_trace_stats_prints_chain_comparison.stdout.txt",
+    );
+}
+
+#[test]
+fn test_profile_baseline_comparison_renders_cli_diff_after_drift() {
+    let project = ProjectBuilder::new("profiling-baseline-cli-diff")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("profile", PROFILED_TEST)
+        .build();
+    project.acton().init().run().success();
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--snapshot")
+        .arg("profile-baseline.json")
+        .run()
+        .success();
+
+    let mut baseline = read_project_json(&project, "profile-baseline.json");
+    baseline["timestamp"] = serde_json::json!(0);
+    write_project_json(&project, "profile-baseline.json", &baseline);
+
+    fs::write(
+        project.path().join("tests/profile.test.tolk"),
+        PROFILED_TEST_WITH_DRIFT,
+    )
+    .expect("Failed to write drifted test file");
+
+    let output = project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--baseline-snapshot")
+        .arg("profile-baseline.json")
+        .run()
+        .success();
+    output.assert_snapshot_matches(
+        "integration/snapshots/flags/test_profile_baseline_comparison_renders_cli_diff_after_drift.stdout.txt",
+    );
+}
+
+#[test]
+fn test_profile_baseline_comparison_renders_per_trace_drift() {
+    let project = profile_trace_drift_project("profiling-baseline-trace-cli-diff");
+
+    let output = project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--clear-cache")
+        .arg("--baseline-snapshot")
+        .arg("profile-baseline.json")
+        .run()
+        .success();
+    output.assert_snapshot_matches(
+        "integration/snapshots/flags/test_profile_baseline_comparison_renders_per_trace_drift.stdout.txt",
+    );
+}
+
+#[test]
+fn test_profile_baseline_comparison_renders_per_trace_drift_color_snapshot() {
+    let project = profile_trace_drift_project("profiling-baseline-trace-cli-diff-color");
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .with_reporter("dot")
+        .keep_color_env()
+        .color_mode(ColorMode::Always)
+        .arg("--clear-cache")
+        .arg("--baseline-snapshot")
+        .arg("profile-baseline.json")
+        .run()
+        .success()
+        .assert_stdout_svg_snapshot_matches(
+            "integration/snapshots/flags/test_profile_baseline_comparison_renders_per_trace_drift_color.stdout.svg",
+        );
 }
 
 #[test]
