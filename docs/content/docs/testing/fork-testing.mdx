@@ -3,7 +3,7 @@ title: "Fork testing"
 description: "Learn how to test contracts against blockchain state by forking testnet or mainnet"
 ---
 
-Fork testing runs tests against blockchain state by loading accounts and libraries from TON testnet or TON mainnet. Use it to test contract interactions with deployed contracts without a need in complex local environment setups.
+Fork testing runs tests against blockchain state by loading accounts and libraries from TON testnet or TON mainnet. Use it to test contract interactions with deployed contracts without complex local environment setup.
 
 ## What fork testing is
 
@@ -36,6 +36,20 @@ acton test --fork-net testnet
 acton test --fork-net mainnet
 ```
 
+Pin a historical state by passing a block sequence number:
+
+```bash
+acton test --fork-net mainnet --fork-block-number 54321000
+```
+
+You can also set defaults in `Acton.toml`:
+
+```acton-toml title="Acton.toml"
+[test]
+fork-net = "mainnet"
+fork-block-number = 54321000
+```
+
 ### Configure API access
 
 Remote state is fetched through the TON Center APIs. Obtain the API key in the [Telegram bot](https://t.me/toncenter) to access higher RPS limits.
@@ -43,11 +57,23 @@ Remote state is fetched through the TON Center APIs. Obtain the API key in the [
 Set `TONCENTER_MAINNET_API_KEY` or `TONCENTER_TESTNET_API_KEY` environment variables in the `.env` file or export them on the shell:
 
 ```bash
-# Key for and fork of the testnet
+# Testnet API key
 TONCENTER_TESTNET_API_KEY=YOUR_API_KEY acton test --fork-net testnet
 
-# Key for and fork of the mainnet
+# Mainnet API key
 TONCENTER_MAINNET_API_KEY=YOUR_API_KEY acton test --fork-net mainnet
+```
+
+### Custom networks
+
+Use `custom:<name>` to fork from a network defined under `[networks]`:
+
+```acton-toml title="Acton.toml"
+[networks.archive-rpc]
+api = { v2 = "https://your-rpc.example/api/v2/jsonRPC" }
+
+[test]
+fork-net = "custom:archive-rpc"
 ```
 
 ## Execution model

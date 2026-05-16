@@ -11,7 +11,7 @@ Acton's test runner reports line, branch, and blended score metrics:
 - **Branch coverage**: observed branch outcomes that were hit at runtime
 - **Score**: a blended metric that combines both numbers for quick comparison
 
-Additionally, it can export coverage data in the [LCOV format](https://en.wikipedia.org/wiki/Gcov#Coverage_summaries) and present the Test UI coverage view in the browser.
+Additionally, it can export coverage data in [LCOV](https://en.wikipedia.org/wiki/Gcov#Coverage_summaries) or text format and present the Test UI coverage view in the browser.
 
 ## Enable coverage
 
@@ -126,6 +126,21 @@ For both the browser view and an LCOV artifact on disk, pass all three flags:
 acton test --coverage --ui --coverage-format lcov
 ```
 
+### Text format
+
+Acton can also write a line-by-line text artifact:
+
+```bash
+acton test --coverage --coverage-format text
+```
+
+That writes `coverage.txt` in the project root. Use `--coverage-file` to choose a different path for either format:
+
+```bash
+acton test --coverage --coverage-format text --coverage-file build/reports/coverage.txt
+acton test --coverage --coverage-format lcov --coverage-file build/reports/lcov.info
+```
+
 ### LCOV with other tools
 
 After `lcov.info` exists, typical follow-ups include:
@@ -139,6 +154,16 @@ genhtml lcov.info -o coverage-report/
 
 # Use with other CI/CD tools that support LCOV
 ```
+
+## Minimum coverage gate
+
+Use `--coverage-minimum-percent` to fail the run when the blended coverage score drops below a threshold:
+
+```bash
+acton test --coverage --coverage-minimum-percent 80
+```
+
+The threshold uses the `Score` column, not line coverage alone. It is applied after the report is printed and accepts values from `0` to `100`.
 
 ## Guidelines
 
@@ -170,7 +195,7 @@ genhtml lcov.info -o coverage-report/
 
 Coverage helps with:
 
-1. Measuring reachability: see which code line are tested;
+1. Measuring reachability: see which code lines are tested;
 2. Spotting gaps: find untouched paths or branches;
 3. Prioritizing tests: focus on low-coverage hot spots;
-4. Maintaining itself: ensure new code does not reduce the coverage.
+4. Maintaining quality: ensure new code does not reduce the coverage.

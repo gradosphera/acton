@@ -45,6 +45,7 @@ seed = 42
 # Enable code coverage by default
 enabled = true
 format = "lcov"
+minimum-percent = 80
 ```
 
 ## Command-line overrides
@@ -178,6 +179,7 @@ acton test --verbose --filter "debug.*"
 | `[test.coverage].enabled`          | `--coverage`                  | Boolean | Enable code coverage                                           |
 | `[test.coverage].format`           | `--coverage-format`           | String  | Coverage output format (`lcov`, `text`)                        |
 | `[test.coverage].output-file`      | `--coverage-file`             | String  | Path to save the coverage report                               |
+| `[test.coverage].minimum-percent`  | `--coverage-minimum-percent`  | Number  | Fail when the blended coverage score is below this percentage  |
 | `[test.coverage].include-wrappers` | `--coverage-include-wrappers` | Boolean | Include files from the `@wrappers` mapping in coverage reports |
 | `[test.coverage].include-tests`    | `--coverage-include-tests`    | Boolean | Include `.test.tolk` files in coverage reports                 |
 
@@ -187,9 +189,12 @@ Examples:
 [test.coverage]
 enabled = true
 format = "lcov"
+minimum-percent = 80
 include-wrappers = true
 include-tests = true
 ```
+
+`--coverage-minimum-percent` is ignored when the run also starts Test UI with `--ui`.
 
 ### Fuzz options
 
@@ -233,6 +238,31 @@ fail-on-diff = true
 acton test --baseline-snapshot gas-baseline.json --fail-on-diff
 ```
 
+### Mutation testing options
+
+These defaults apply when the run is started with `acton test --mutate --mutate-contract <NAME>`.
+
+| Configuration                     | CLI Flag                      | Type    | Description                                                                       |
+|-----------------------------------|-------------------------------|---------|-----------------------------------------------------------------------------------|
+| `[test.mutation].diff`            | `--mutation-diff`             | String  | Limit mutation testing to changed lines in `worktree`, `ref`, or `branch` scope   |
+| `[test.mutation].diff-ref`        | `--mutation-diff-ref`         | String  | Base ref used by `ref` mode and optional override for `branch` mode               |
+| `[test.mutation].mutation-levels` | `--mutation-levels`           | Array   | Run only selected levels such as `critical`, `major`, or `minor`                  |
+| `[test.mutation].rules-file`      | `--mutation-rules-file`       | String  | Path to a JSON file with custom query-based mutation rules                        |
+| `[test.mutation].minimum-percent` | `--mutation-minimum-percent`  | Number  | Fail when the mutation score is below this percentage                             |
+| `[test.mutation].disable-rules`   | `--mutation-disable-rules`    | Array   | Disable selected built-in or custom mutation rules                                |
+
+Examples:
+
+```acton-toml title="Acton.toml"
+[test.mutation]
+diff = "branch"
+diff-ref = "origin/main"
+mutation-levels = ["critical", "major"]
+rules-file = "mutation-rules.json"
+minimum-percent = 85
+disable-rules = ["replace_plus_with_minus"]
+```
+
 ### JUnit options
 
 | Configuration     | CLI Flag        | Type    | Description                      |
@@ -247,6 +277,21 @@ Examples:
 # Custom JUnit output directory
 junit-path = "custom-reports"
 junit-merge = true
+```
+
+### Test UI options
+
+| Configuration | CLI Flag    | Type    | Description                              |
+|---------------|-------------|---------|------------------------------------------|
+| `ui`          | `--ui`      | Boolean | Start the browser Test UI after the run  |
+| `ui-port`     | `--ui-port` | Integer | UI server port, defaulting to `12344`    |
+
+Examples:
+
+```acton-toml title="Acton.toml"
+[test]
+ui = true
+ui-port = 23456
 ```
 
 ### Fork testing options
@@ -268,9 +313,9 @@ Use `TONCENTER_TESTNET_API_KEY` or `TONCENTER_MAINNET_API_KEY` to supply fork ta
 Using a custom network:
 
 ```acton-toml title="Acton.toml"
-[networks.my-local-node]
-api = { v2 = "http://localhost:8081/api/v2/jsonRPC" }
+[networks.archive-rpc]
+api = { v2 = "https://your-rpc.example/api/v2/jsonRPC" }
 
 [test]
-fork-net = "custom:my-local-node"
+fork-net = "custom:archive-rpc"
 ```

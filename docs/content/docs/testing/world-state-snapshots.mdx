@@ -124,7 +124,8 @@ If loading fails, the current world state is left unchanged.
 
 - Snapshots restore the local emulation state only.
 - Loading a snapshot switches execution to local state, not fork mode.
-- Snapshot file paths are regular host file paths relative to the project working directory.
+- Snapshot file paths are relative to the project root.
+- Absolute paths and paths that normalize outside the project root are rejected.
 - If storage layout or config assumptions change on purpose, an older snapshot may stop loading.
 
 ## Related topics

@@ -3,7 +3,7 @@ title: "Gas profiling with snapshots"
 description: "Learn how to profile gas and fees of transaction chains with --snapshot and baseline comparison"
 ---
 
-Gas profiling records gas and fee metrics for opcodes. Performance regressions show up in the `--snapshot` and `--baseline-snapshot` outputs.
+Gas profiling records gas and fee metrics for message opcodes and transaction chains. Performance regressions show up in the `--snapshot` and `--baseline-snapshot` outputs.
 
 ## What gets profiled
 
@@ -14,6 +14,8 @@ When profiling is enabled, Acton prints:
 - Per trace gas and fees details inside each test.
 
 For chain-level metrics, Acton tracks: transaction count, gas used, gas fee, forward fee, and the total fee.
+
+Profiling is collected after the selected tests pass. If any selected test fails, Acton skips snapshot writing and comparison tables for that run.
 
 ## Quick start
 
@@ -229,6 +231,7 @@ Snapshot is written only when:
 
 - `--snapshot` is set;
 - `--baseline-snapshot` is **not** set;
+- selected tests passed;
 - profiling collected at least one opcode or trace-chain metric.
 
 ### Trace names changed but diff mapping is still stable

@@ -25,7 +25,7 @@ Further, mutation testing can reveal implementation issues. For example, two `st
 ## How it works
 
 1. **Mutant generation**: Acton scans the contract code and picks mutation sites.
-2. **Compilation**: Each mutant compiles; invalid syntax is discarded.
+2. **Compilation**: Each mutant compiles; mutants that fail to compile are reported separately and are not run through the test suite.
 3. **Testing**: Acton runs the test suite against each valid mutant.
 4. **Reporting**:
    - **Killed**: tests failed on the mutant as **expected**.
@@ -52,7 +52,7 @@ acton test --mutate --mutate-contract Wallet
 | `--mutation-rules-file <PATH>`    | Loads custom query-based mutation rules from a JSON file.                         |
 | `--mutation-session-id <ID>`      | Reuses a session ID and appends progress to `build/mutation-sessions/<ID>.jsonl`. |
 | `--mutation-workers <N>`          | Overrides mutation parallelism. Defaults to the host's available parallelism.     |
-| `--mutation-id <ID>`              | Re-runs only specific mutation IDs from a previous mutation report.               |
+| `--mutation-id <ID[,ID...]>`      | Re-runs only specific mutation IDs from a previous mutation report.               |
 | `--mutation-minimum-percent <P>`  | Fails the run when the mutation score drops below the required percentage.        |
 | `--mutation-disable-rules <RULE>` | Disables specific mutation rules (can be used multiple times).                    |
 
@@ -214,6 +214,7 @@ You can store the same filters in `Acton.toml`:
 diff = "branch"
 diff-ref = "origin/main"
 mutation-levels = ["critical", "major"]
+rules-file = "mutation-rules.json"
 minimum-percent = 85
 disable-rules = ["replace_plus_with_minus"]
 ```
