@@ -19,8 +19,8 @@ transfers, metadata changes, and admin flows.
   admin and governance flows, and protocol validation.
 - `scripts/deploy.tolk` builds on-chain metadata, deploys the minter, and reads
   total supply back from the network.
-- `.github/workflows/ci.yml` runs build, test, lint, and format checks on
-  GitHub Actions.
+- `.github/workflows/contracts.yml` runs build, format, lint, and test checks
+  on GitHub Actions.
 
 ## Build
 
@@ -113,12 +113,12 @@ there, depending on the network you use. Acton loads `.env` automatically.
 
 ## CI
 
-The generated project includes `.github/workflows/ci.yml`, which runs:
+The generated project includes `.github/workflows/contracts.yml`, which runs:
 
 - `acton build`
-- `acton test`
-- `acton check --output-format github`
 - `acton fmt --check`
+- `acton check --output-format github`
+- `acton test`
 
 ## Documentation
 

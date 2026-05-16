@@ -61,10 +61,12 @@ and `acton run delete-extension`.
 - `acton wrapper SimpleExtension --ts` and `acton wrapper WalletV5 --ts`
   regenerate the TypeScript wrappers under `wrappers-ts/`.
 - `npm run build` runs the contract build and the frontend build.
-- `npm run test` delegates to `acton test`.
-- CI runs `npm run test`, `npm run typecheck`, `npm run build`,
-  `acton check --output-format github`, `acton fmt --check`, and
-  `npm run fmt:check`.
+- `npm run test` is a placeholder dApp test script; use `acton test` for Tolk
+  integration tests.
+- `.github/workflows/contracts.yml` runs `acton build`, `acton fmt --check`,
+  `acton check --output-format github`, and `acton test`.
+- `.github/workflows/dapp.yml` runs `npm ci`, `npm run fmt:check`,
+  `npm run typecheck`, `npm run build`, and `npm run test`.
 - The scripts select a Wallet V5 with `promptWallet`. Set `W5_DEPLOYER` in
   non-interactive contexts.
 - The app reads blockchain data through Toncenter. Set

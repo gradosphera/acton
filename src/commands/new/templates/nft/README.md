@@ -17,8 +17,8 @@ ready-to-run deployment and management scripts.
   scripts.
 - `tests/nft-collection.test.tolk` and `tests/nft-item.test.tolk` cover
   collection behavior and item behavior in focused reference suites.
-- `.github/workflows/ci.yml` runs build, test, lint, and format checks on
-  GitHub Actions.
+- `.github/workflows/contracts.yml` runs build, format, lint, and test checks
+  on GitHub Actions.
 
 ## Build
 
@@ -94,12 +94,12 @@ there, depending on the network you use. Acton loads `.env` automatically.
 
 ## CI
 
-The generated project includes `.github/workflows/ci.yml`, which runs:
+The generated project includes `.github/workflows/contracts.yml`, which runs:
 
 - `acton build`
-- `acton test`
-- `acton check --output-format github`
 - `acton fmt --check`
+- `acton check --output-format github`
+- `acton test`
 
 ## Documentation
 
