@@ -43,10 +43,11 @@ acton build [OPTIONS] [CONTRACT]
 |-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `--clear-cache`       | Clear the compilation cache before building. Forces recompilation of all contracts regardless of cache state                                                 |
 | `--graph <PATH>`      | Generate a dependency graph in DOT format at the specified path.                                                                                             |
-| `--out-dir [DIR]`     | Directory to save build artifacts. Defaults to `build/`                                                                                                      |
-| `--gen-dir [DIR]`     | Directory to save generated dependency files (`<dependency>.code.tolk`). Defaults to `gen/`                                                                  |
-| `--output-abi [DIR]`  | Directory to save contract ABI JSON files (`<contract>.json`). Defaults to `build/abi/`                                                                      |
-| `--output-fift [DIR]` | Directory to save compiled Fift files (`<contract>.fif`) for `.tolk` sources. Precompiled `.boc` entries are skipped. If omitted, no Fift files are written. |
+| `--out-dir <DIR>`     | Directory to save build artifacts. Defaults to `build/`                                                                                                      |
+| `--gen-dir <DIR>`     | Directory to save generated dependency files (`<dependency>.code.tolk`). Defaults to `gen/`                                                                  |
+| `--output-abi <DIR>`  | Directory to save contract ABI JSON files (`<contract>.json`). Defaults to `build/abi/`                                                                      |
+| `--output-fift <DIR>` | Directory to save compiled Fift files (`<contract>.fif`) for `.tolk` sources. Precompiled `.boc` entries are skipped. If omitted, no Fift files are written. |
+| `--info`              | Print compiled contract code and code hash after a successful build.                                                                                         |
 
 ### Examples
 
@@ -74,6 +75,9 @@ acton build --output-abi build/abi
 
 # Build and save compiled Fift files for each contract
 acton build --output-fift build/fift
+
+# Show compiled code and hash information
+acton build Counter --info
 ```
 
 ## `Acton.toml` configuration
@@ -157,7 +161,7 @@ depends = []
 |----------------|--------|----------|--------------------------------------------------------------------------------------------------------------------|
 | `display-name` | string | No       | Overrides full name (e.g. `Wallet` instead of `JettonWallet`) in console messages and UI.                          |
 | `src`          | string | Yes      | Path to the contract source file. Can be a `.tolk` file for compilation or a `.boc` file for precompiled contracts |
-| `output`       | string | No       | Path where the compiled `.boc` file should be saved. If omitted, the compiled contract is only cached              |
+| `output`       | string | No       | Optional path where the compiled binary `.boc` file should be saved in addition to the normal JSON build artifact  |
 | `depends`      | array  | No       | Array of contract dependencies. Can be simple strings or detailed dependency objects                               |
 
 #### Contract names
@@ -165,11 +169,12 @@ depends = []
 The `[contracts.ID]` in `Acton.toml` is used:
 
 - As a contract entrypoint, referencing a Tolk file with `onInternalMessage()`
-- As a filename for generated wrappers (e.g., `wrappers/Counter.gen.tolk`, `wrappers-ts/Counter.gen.ts`)
 - As the dependency name when referencing this contract
 - To generate the output file name in the dependency output directory (default: `gen/`, e.g., `Counter` → `gen/Counter.code.tolk`)
 - To generate the function name (e.g., `Counter` → `counterCompiledCode()`)
 - In console messages and web UI, unless overridden by optional `display-name` in `Acton.toml`
+
+Generated wrapper filenames are based on the source file stem normalized to PascalCase. With the conventional `src = "contracts/Counter.tolk"`, that produces `wrappers/Counter.gen.tolk` and `wrappers-ts/Counter.gen.ts`.
 
 Contract IDs should use PascalCase, e.g., `JettonWallet`, `NftCollection`.
 
@@ -296,7 +301,7 @@ depends = []
 When using `.boc` files:
 
 - No compilation is performed
-- The BoC is loaded and cached directly
+- The BoC is loaded directly without running the Tolk compiler
 - Dependencies can still reference this contract
 
 This is useful for referencing third-party contracts.
