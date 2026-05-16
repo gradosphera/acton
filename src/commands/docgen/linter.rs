@@ -118,6 +118,12 @@ fn write_linter_index(out_dir: &Path, rules: &[LinterRuleDoc]) -> anyhow::Result
     mdx_content.push_str(
         "Lifecycle states currently used in the catalog are mainly `Stable` and `Preview`. The generator also supports future `Deprecated` and `Removed` statuses when rules eventually transition.\n\n",
     );
+    mdx_content.push_str(
+        "Rule code prefixes are not CLI severity. Most linter rules emit warnings by default; `acton-import-in-contract` emits an error, and compiler/parse diagnostics are errors outside per-rule lint processing.\n\n",
+    );
+    mdx_content.push_str(
+        "Preview status does not necessarily mean enabled by default. `unauthorized-access` and `throw-requires-documented-error-value` are currently disabled (`allow`) by default unless you enable them in `[lint.rules]`; for focused runs, use `acton check --enable-only E013` or `acton check --enable-only E030`.\n\n",
+    );
     mdx_content
         .push_str("For setup, configuration, and CI usage, start with [Linting](/docs/lint).\n\n");
 
