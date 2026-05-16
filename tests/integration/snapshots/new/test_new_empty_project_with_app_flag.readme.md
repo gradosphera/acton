@@ -10,8 +10,8 @@ or as a standalone frontend with `acton init --create-dapp`.
 - `package.json`, `tsconfig.json`, and `vite.config.ts` configure the app
   toolchain.
 - `package-lock.json` pins the npm dependency tree for reproducible installs.
-- When generated with `acton new --template empty --app`, the Acton contract
-  sources, scripts, tests, and Tolk wrappers live under `contracts/`.
+- When generated with `acton new <path> --template empty --app`, the Acton
+  contract sources, scripts, tests, and Tolk wrappers live under `contracts/`.
 
 ## Install
 
@@ -41,9 +41,12 @@ acton fmt --check
 ## Notes
 
 - The app uses Vite, npm, shadcn-style UI primitives, and Tailwind CSS.
-- CI runs `npm run typecheck`, `npm run build`, `npm run fmt:check`, and,
-  when `Acton.toml` exists, `acton build`, `acton test`,
-  `acton check --output-format github`, and `acton fmt --check`.
+- `.github/workflows/dapp.yml` runs `npm ci`, `npm run fmt:check`,
+  `npm run typecheck`, `npm run build`, and `npm run test`.
+- `npm run test` is a placeholder dApp test script until you add frontend
+  tests.
+- `.github/workflows/contracts.yml` runs `acton build`, `acton fmt --check`,
+  `acton check --output-format github`, and `acton test`.
 - Copy `.env.example` to a local `.env` for Toncenter keys. Both Acton CLI
   (when this app is generated inside an Acton project) and the Vite app read
   `TONCENTER_MAINNET_API_KEY` and `TONCENTER_TESTNET_API_KEY`; Vite allows the
