@@ -16,7 +16,7 @@
         
         Cannot find transaction from harness B EQCLlS..c1L6Hl to sender A EQAXTu..1D6wLK
         with:
-          opcode=0xae110002 unknown
+          opcode=0xae110002 BounceNotice
           send_mode=SEND_MODE_BOUNCE_ON_ACTION_FAIL | SEND_MODE_CARRY_ALL_REMAINING_MESSAGE_VALUE
       └─ at tests/predicate_matchers.test[LINE]
 

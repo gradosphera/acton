@@ -1094,13 +1094,14 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
 
     fn prioritized_builds(
         &self,
-        preferred: Option<context::CompilationResult>,
+        preferred: impl IntoIterator<Item = context::CompilationResult>,
     ) -> Vec<context::CompilationResult> {
         let mut builds = Vec::new();
         let mut seen = HashSet::new();
-        if let Some(preferred) = preferred {
-            seen.insert(Self::build_result_key(&preferred));
-            builds.push(preferred);
+        for preferred in preferred {
+            if seen.insert(Self::build_result_key(&preferred)) {
+                builds.push(preferred);
+            }
         }
 
         let mut fallback_builds = self.build_cache.built.iter().collect::<Vec<_>>();
@@ -2213,8 +2214,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
             .as_ref()
             .and_then(|src| self.build_result_for_address(Some(src)));
 
-        self.message_name_from_preferred_builds(opcode, destination_build)
-            .or_else(|| self.message_name_from_preferred_builds(opcode, source_build))
+        self.message_name_from_endpoint_builds(opcode, destination_build, source_build)
             .or_else(|| (opcode == 0).then(|| "empty".to_owned()))
     }
 
@@ -2250,14 +2250,35 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         }
     }
 
-    fn message_name_from_preferred_builds(
+    fn message_name_from_endpoint_builds(
         &self,
         opcode: u32,
-        preferred: Option<context::CompilationResult>,
+        destination_build: Option<context::CompilationResult>,
+        source_build: Option<context::CompilationResult>,
     ) -> Option<String> {
-        self.prioritized_builds(preferred)
+        self.prioritized_builds([destination_build, source_build].into_iter().flatten())
             .into_iter()
             .find_map(|build| Self::message_name_from_build(&build, opcode))
+    }
+
+    fn message_name_from_search_params(
+        &self,
+        opcode: u32,
+        params: &context::TransactionNotFoundParams,
+    ) -> Option<String> {
+        let destination_build = self.build_result_for_display_address(params.to.as_ref());
+        let source_build = self.build_result_for_display_address(params.from.as_ref());
+        self.message_name_from_endpoint_builds(opcode, destination_build, source_build)
+    }
+
+    fn build_result_for_display_address(
+        &self,
+        address: Option<&DisplayParam<IntAddr>>,
+    ) -> Option<context::CompilationResult> {
+        let Some(DisplayParam::Value(address)) = address else {
+            return None;
+        };
+        self.build_result_for_address(Some(address))
     }
 
     fn message_name_from_build(build: &context::CompilationResult, opcode: u32) -> Option<String> {
@@ -2905,22 +2926,8 @@ impl FormatterContext<'_> {
         if let Some(ref dp) = assert_failure.params.opcode {
             match dp {
                 DisplayParam::Value(opcode) => {
-                    let opcode_type = assert_failure
-                        .params
-                        .to
-                        .as_ref()
-                        .and_then(|dp| match dp {
-                            DisplayParam::Value(addr) => Some(addr),
-                            DisplayParam::Function => None,
-                        })
-                        .or_else(|| {
-                            assert_failure.params.from.as_ref().and_then(|dp| match dp {
-                                DisplayParam::Value(addr) => Some(addr),
-                                DisplayParam::Function => None,
-                            })
-                        })
-                        .and_then(|addr| self.build_result_for_address(Some(addr)))
-                        .and_then(|build| Self::message_name_from_build(&build, *opcode));
+                    let opcode_type =
+                        self.message_name_from_search_params(*opcode, &assert_failure.params);
                     params.push(format!(
                         "  opcode={} {}",
                         format!("0x{opcode:08x}").green(),
