@@ -114,6 +114,38 @@ fn run_nested_executor_until_finished(
     Ok(())
 }
 
+fn missing_generated_dependency_message(error_message: &str, contract_id: &str) -> Option<String> {
+    if !error_message.contains("Failed to import:") || !error_message.contains("@gen/") {
+        return None;
+    }
+
+    let mut generated_import = error_message
+        .split("@gen/")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split(|c: char| c == '"' || c == '\'' || c.is_whitespace())
+                .next()
+        })
+        .map_or_else(
+            || "@gen/<dependency>.code".to_owned(),
+            |rest| format!("@gen/{rest}"),
+        );
+    if !generated_import.ends_with(".tolk") {
+        generated_import.push_str(".tolk");
+    }
+
+    Some(format!(
+        "Generated dependency helper {} is missing while compiling contract {}.\n\
+         Run {} or {} before {}, then retry.\n\n\
+         {error_message}",
+        generated_import.yellow(),
+        contract_id.yellow(),
+        format!("acton build {contract_id}").cyan(),
+        "acton build".cyan(),
+        "acton script".cyan(),
+    ))
+}
+
 extension!(build in (Context) with (path: String, id: String) using build_impl);
 fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> anyhow::Result<()> {
     debug!("Building {id}");
@@ -256,7 +288,9 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
                 error.message
             );
 
-            anyhow::bail!("Compilation failed: {}", error.message);
+            let message =
+                missing_generated_dependency_message(&error.message, &id).unwrap_or(error.message);
+            anyhow::bail!("Compilation failed: {message}");
         }
     }
 

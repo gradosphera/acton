@@ -631,6 +631,26 @@ fn test_new_jetton_project_non_interactive() {
 }
 
 #[test]
+fn test_new_jetton_project_script_without_prior_build_reports_current_error() {
+    let project = ProjectBuilder::new("new-jetton-script-without-build")
+        .without_acton_toml()
+        .build();
+    let project_dir = project.path().join("foobar");
+
+    create_project_from_template(&project, &project_dir, "jetton", false);
+
+    project
+        .acton()
+        .script("scripts/deploy.tolk")
+        .current_dir(&project_dir)
+        .run()
+        .failure()
+        .assert_snapshot_matches(
+            "integration/snapshots/new/test_new_jetton_project_script_without_prior_build_reports_current_error.stdout.txt",
+        );
+}
+
+#[test]
 fn test_new_nft_project_non_interactive() {
     let project = ProjectBuilder::new("new-nft").without_acton_toml().build();
 
