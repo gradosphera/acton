@@ -25,7 +25,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use tolk_compiler::SourceMap;
 use tolk_compiler::abi::ContractABI;
@@ -56,6 +56,15 @@ use tycho_types::models::{
     StorageUsedShort, Transaction, TxInfo,
 };
 use tycho_types::num::{Tokens, Uint15};
+
+// Keep in sync with `impl.treasuryCode()` in `lib/emulation/testing.tolk`.
+const TREASURY_CODE_BOC64: &str = "te6cckEBBAEARQABFP8A9KQT9LzyyAsBAgEgAwIAWvLT/+1E0NP/0RK68qL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmWwAE0jD+omUe";
+
+static TREASURY_CODE_HASH: LazyLock<HashBytes> = LazyLock::new(|| {
+    let code =
+        Boc::decode_base64(TREASURY_CODE_BOC64).expect("testing.treasury code BoC must be valid");
+    code_lookup_hash(&code)
+});
 
 /// Resolve the unix time to use for a get method invocation.
 ///
@@ -323,6 +332,9 @@ pub(crate) fn compilation_result_for_code(
     // match that cell against local project contracts so debug/backtrace and
     // formatter paths can still use their source maps or ABI.
     let target_hash = code_lookup_hash(&code);
+    if target_hash == *TREASURY_CODE_HASH {
+        return None;
+    }
 
     let contracts = &ctx.env.config.contracts.as_ref()?.contracts;
     for (contract_id, contract) in contracts {
@@ -3450,6 +3462,22 @@ mod tests {
 
     fn test_hash(byte: u8) -> HashBytes {
         HashBytes([byte; 32])
+    }
+
+    #[test]
+    fn treasury_code_hash_is_recognized() {
+        let code = Boc::decode_base64(TREASURY_CODE_BOC64).expect("treasury code must decode");
+
+        assert_eq!(code_lookup_hash(&code), *TREASURY_CODE_HASH);
+    }
+
+    #[test]
+    fn non_treasury_code_hash_is_not_recognized() {
+        let mut builder = CellBuilder::new();
+        builder.store_uint(0xcafe, 16).expect("bits must fit");
+        let code = builder.build().expect("cell must build");
+
+        assert_ne!(code_lookup_hash(&code), *TREASURY_CODE_HASH);
     }
 
     fn test_transaction(lt: u64) -> Transaction {

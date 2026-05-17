@@ -183,6 +183,7 @@ fun testing.treasury(name: string): Treasury {
     return Treasury { address };
 }
 
+// keep in sync with TREASURY_CODE_BOC64
 fun impl.treasuryCode(): cell asm """
     "te6cckEBBAEARQABFP8A9KQT9LzyyAsBAgEgAwIAWvLT/+1E0NP/0RK68qL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmWwAE0jD+omUe" base64>B B>boc PUSHREF
 """
