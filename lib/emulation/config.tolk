@@ -460,10 +460,10 @@ struct (0xb0) PrecompiledSmartContract {
 
 /// Configuration for all precompiled contracts (Param 45).
 ///
-/// Contains a dictionary mapping contract addresses to their gas usage specifications.
+/// Contains a dictionary mapping contract code hashes to their gas usage specifications.
 /// Precompiled contracts are optimized implementations of common operations provided by the system.
 struct (0xc0) PrecompiledContractsConfig {
-    /// Dictionary mapping 256-bit contract addresses to their gas usage configurations.
+    /// Dictionary mapping 256-bit contract code hashes to their gas usage configurations.
     list: map<uint256, PrecompiledSmartContract>
 }
 

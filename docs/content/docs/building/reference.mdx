@@ -306,6 +306,23 @@ When using `.boc` files:
 
 This is useful for referencing third-party contracts.
 
+This build mode is separate from TON network precompiled contracts configured
+through Param 45. During local emulation and tests, Acton honors Param 45
+entries by contract code hash. When the executed account code hash matches a
+`PrecompiledContractsConfig` entry, `GETPRECOMPILEDGAS` observes the configured
+gas value and the resulting transaction reports that fixed gas usage with
+`vm_steps = 0`, matching the network transaction shape.
+
+Acton still executes the contract code through TVM fallback in this case; native
+C++ precompiled implementations are not used by the local emulator. This keeps
+storage updates, actions, exit codes, and other contract behavior tied to the
+actual contract code while using the network-defined fixed gas accounting.
+Writing an empty Param 45 dictionary, or omitting the matching code hash, makes
+the contract execute as a regular TVM contract.
+
+See [`PrecompiledContractsConfig`](/docs/standard_library/emulation/config#precompiledcontractsconfig)
+for the standard library helpers used to inspect or override Param 45 in tests.
+
 ### Path mappings
 
 Define additional path aliases for the Tolk compiler in the `[import-mappings]` section. These are useful for importing library code without using complex relative paths.

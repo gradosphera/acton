@@ -47,6 +47,9 @@ All notable changes to this project will be documented in this file.
   `toHaveSuccessfulTx(...)`, `toHaveFailedTx(...)`, and `executeTill(...)` can
   filter child transactions by the parent `SEND_MODE_*` action that produced
   them. Mismatch diagnostics render expected send modes as named constants.
+- Local emulation now honors Param 45 precompiled contract entries by contract
+  code hash for transaction execution and get-method C7 state, matching the
+  fixed gas and zero-step transaction shape used by the network.
 
 ## [1.0.0] - 11.05.2026
 
