@@ -66,6 +66,7 @@ fn resolve_segment(value: &RenderedValue, segment: &PathSegment) -> Result<Rende
     match segment {
         PathSegment::Field(name) => match value {
             RenderedValue::Struct { fields, .. }
+            | RenderedValue::MapKV { fields, .. }
             | RenderedValue::Address { fields, .. }
             | RenderedValue::CellLike { fields, .. }
             | RenderedValue::CellOf { fields, .. }
@@ -490,6 +491,20 @@ mod tests {
         }];
 
         let value = evaluate_expression(&locals, "foo.bar.0.baz").expect("path should resolve");
+        assert_eq!(value.to_string(), "42");
+    }
+
+    #[test]
+    fn resolves_map_kv_entries_as_fields() {
+        let locals = vec![LocalVarRendered {
+            var_name: "balances".to_owned(),
+            value: RenderedValue::MapKV {
+                type_name: "map<int32, int32>".to_owned(),
+                fields: vec![("1".to_owned(), RenderedValue::typed_leaf("42", "int32"))],
+            },
+        }];
+
+        let value = evaluate_expression(&locals, "balances.`1`").expect("path should resolve");
         assert_eq!(value.to_string(), "42");
     }
 

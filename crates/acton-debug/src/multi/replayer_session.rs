@@ -777,6 +777,7 @@ impl ReplayerDebugSession {
     fn expand_debug_value(&mut self, dv: &RenderedValue) -> Vec<Variable> {
         match dv {
             RenderedValue::Struct { fields, .. }
+            | RenderedValue::MapKV { fields, .. }
             | RenderedValue::Address { fields, .. }
             | RenderedValue::CellLike { fields, .. }
             | RenderedValue::EnumValue { fields, .. }

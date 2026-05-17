@@ -56,6 +56,10 @@ pub enum RenderedValue {
         type_name: String,
         fields: Vec<(String, RenderedValue)>,
     },
+    MapKV {
+        type_name: String,
+        fields: Vec<(String, RenderedValue)>,
+    },
     Address {
         type_name: String,
         legacy_value: String,
@@ -139,6 +143,9 @@ impl RenderedValue {
                 ..
             } => (variant_name.clone(), Some(type_name.clone())),
             RenderedValue::Struct { type_name, .. } => (String::new(), Some(type_name.clone())),
+            RenderedValue::MapKV { type_name, fields } => {
+                (map_kv_summary(fields), Some(type_name.clone()))
+            }
             RenderedValue::Tensor { type_name, items }
             | RenderedValue::ArrayOf { type_name, items } => {
                 (format!("{} items", items.len()), Some(type_name.clone()))
@@ -187,6 +194,7 @@ impl RenderedValue {
             } => format!("{type_name} {value}"),
             RenderedValue::UnionCase { variant_name, .. } => variant_name.clone(),
             RenderedValue::Struct { type_name, .. } => type_name.clone(),
+            RenderedValue::MapKV { fields, .. } => map_kv_summary(fields),
             RenderedValue::Address { legacy_value, .. } => legacy_value.clone(),
             RenderedValue::Tensor { items, .. } | RenderedValue::ArrayOf { items, .. } => {
                 format!("{} items", items.len())
@@ -261,6 +269,7 @@ impl RenderedValue {
     pub fn has_children(&self) -> bool {
         match self {
             RenderedValue::Struct { fields, .. }
+            | RenderedValue::MapKV { fields, .. }
             | RenderedValue::Address { fields, .. }
             | RenderedValue::CellLike { fields, .. }
             | RenderedValue::CellOf { fields, .. }
@@ -356,7 +365,10 @@ impl RenderedValue {
                 }
                 None => write!(out, "{}", pretty_magenta(variant_name, options)),
             },
-            RenderedValue::Struct { type_name, fields } if fields.is_empty() => {
+            RenderedValue::Struct { type_name, fields }
+            | RenderedValue::MapKV { type_name, fields }
+                if fields.is_empty() =>
+            {
                 write!(
                     out,
                     "{} {}{}",
@@ -365,7 +377,8 @@ impl RenderedValue {
                     pretty_dimmed("}", options)
                 )
             }
-            RenderedValue::Struct { type_name, fields } => {
+            RenderedValue::Struct { type_name, fields }
+            | RenderedValue::MapKV { type_name, fields } => {
                 writeln!(
                     out,
                     "{} {}",
@@ -415,7 +428,9 @@ impl RenderedValue {
 
     fn wants_multiline_pretty(&self) -> bool {
         match self {
-            RenderedValue::Struct { fields, .. } => !fields.is_empty(),
+            RenderedValue::Struct { fields, .. } | RenderedValue::MapKV { fields, .. } => {
+                !fields.is_empty()
+            }
             RenderedValue::CellOf { fields, .. } => cell_of_has_decoded(fields),
             RenderedValue::Tensor { items, .. } | RenderedValue::ArrayOf { items, .. } => {
                 items.iter().any(Self::wants_multiline_pretty)
@@ -448,6 +463,16 @@ fn pretty_field_name<'a>(
 
 fn map_key_is_address(type_name: &str) -> bool {
     type_name.starts_with("map<address,") || type_name.starts_with("map<any_address,")
+}
+
+fn map_kv_summary(fields: &[(String, RenderedValue)]) -> String {
+    if fields.is_empty() {
+        "{}".to_owned()
+    } else if fields.len() == 1 {
+        "1 entry".to_owned()
+    } else {
+        format!("{} entries", fields.len())
+    }
 }
 
 fn pretty_leaf_value(
@@ -873,10 +898,14 @@ impl fmt::Display for RenderedValue {
                 Some((_, value)) => write!(f, "{variant_name} {value}"),
                 None => write!(f, "{variant_name}"),
             },
-            RenderedValue::Struct { type_name, fields } if fields.is_empty() => {
+            RenderedValue::Struct { type_name, fields }
+            | RenderedValue::MapKV { type_name, fields }
+                if fields.is_empty() =>
+            {
                 write!(f, "{type_name} {{}}")
             }
-            RenderedValue::Struct { type_name, fields } => {
+            RenderedValue::Struct { type_name, fields }
+            | RenderedValue::MapKV { type_name, fields } => {
                 write!(f, "{type_name} {{ ")?;
                 for (i, (name, val)) in fields.iter().enumerate() {
                     if i > 0 {
@@ -1430,7 +1459,7 @@ fn render_map_raw(type_name: String, root: Option<&Cell>) -> RenderedValue {
             format!("{type_name} {{raw: {}}}", Boc::encode_hex(root)),
             type_name,
         ),
-        None => RenderedValue::Struct {
+        None => RenderedValue::MapKV {
             type_name,
             fields: vec![],
         },
@@ -1782,7 +1811,7 @@ fn render_abi_map(
         _ => (ty_idx, ty_idx),
     };
 
-    RenderedValue::Struct {
+    RenderedValue::MapKV {
         type_name,
         fields: entries
             .into_iter()
@@ -2114,7 +2143,7 @@ fn render_map_dict(
         fields.push((key, value));
     }
 
-    RenderedValue::Struct { type_name, fields }
+    RenderedValue::MapKV { type_name, fields }
 }
 
 /// Convert a range of bits from nibbles to a hex string.
@@ -2483,7 +2512,7 @@ fn debug_format(
             key_ty_idx,
             value_ty_idx,
         } => match r.read_slot() {
-            SlotValue::Live(VmStackValue::Null) => RenderedValue::Struct {
+            SlotValue::Live(VmStackValue::Null) => RenderedValue::MapKV {
                 type_name: format!(
                     "map<{}, {}>",
                     render_ty(symbols, *key_ty_idx),
@@ -3602,6 +3631,12 @@ fn render_runtime_extra_currencies_field(value: &VmStackValue) -> RenderedValue 
     match value {
         VmStackValue::Cell(cell) => {
             let (bits, refs, hash) = cell_like_meta(cell);
+            if bits == Some(0) && refs == Some(0) {
+                return RenderedValue::MapKV {
+                    type_name: "map<int32, varuint32>".to_owned(),
+                    fields: vec![],
+                };
+            }
             render_openable_cell_like_name(
                 "map<int32, varuint32>",
                 render_cell_like(cell),
@@ -3611,7 +3646,10 @@ fn render_runtime_extra_currencies_field(value: &VmStackValue) -> RenderedValue 
                 Some(cell.clone()),
             )
         }
-        VmStackValue::Null => RenderedValue::typed_leaf("()", "map<int32, varuint32>"),
+        VmStackValue::Null => RenderedValue::MapKV {
+            type_name: "map<int32, varuint32>".to_owned(),
+            fields: vec![],
+        },
         _ => RenderedValue::typed_leaf(
             render_runtime_vm_value(value).dap_value(),
             "map<int32, varuint32>",
@@ -3741,6 +3779,38 @@ mod tests {
         };
         assert_eq!(items[0].dap_parts().1.as_deref(), Some("bool"));
         assert_eq!(items[1].dap_parts().1.as_deref(), Some("uint32"));
+    }
+
+    #[test]
+    fn render_abi_data_renders_maps_as_map_kv() {
+        let mut unique_types = Vec::new();
+        let key_ty_idx = add_ty(&mut unique_types, Ty::IntN { n: 32 });
+        let value_ty_idx = add_ty(&mut unique_types, Ty::Bool);
+        let map_ty_idx = add_ty(
+            &mut unique_types,
+            Ty::MapKV {
+                key_ty_idx,
+                value_ty_idx,
+            },
+        );
+        let rendered = render_abi_data(
+            &source_map_with_types(unique_types),
+            UnpackedValue::Map(vec![(
+                UnpackedValue::Number(1.into()),
+                UnpackedValue::Bool(true),
+            )]),
+            map_ty_idx,
+        );
+
+        assert_eq!(rendered.dap_parts().0, "1 entry");
+        let RenderedValue::MapKV { type_name, fields } = rendered else {
+            panic!("expected MapKV");
+        };
+        assert_eq!(type_name, "map<int32, bool>");
+        assert_eq!(fields.len(), 1);
+        assert_eq!(fields[0].0, "1");
+        assert_eq!(fields[0].1.dap_parts().0, "true");
+        assert_eq!(fields[0].1.dap_parts().1.as_deref(), Some("bool"));
     }
 
     #[test]
@@ -3920,6 +3990,7 @@ mod tests {
         assert_eq!(fields[1].1.dap_parts().0, "1000000000");
         assert_eq!(fields[1].1.dap_parts().1.as_deref(), Some("coins"));
         assert_eq!(fields[2].0, "valueExtra");
+        assert_eq!(fields[2].1.dap_parts().0, "{}");
         assert_eq!(
             fields[2].1.dap_parts().1.as_deref(),
             Some("map<int32, varuint32>")
@@ -4549,11 +4620,24 @@ mod tests {
             2,
         );
 
-        let RenderedValue::Struct { type_name, fields } = rendered else {
-            panic!("expected present empty map to render as map struct");
+        let RenderedValue::MapKV { type_name, fields } = rendered else {
+            panic!("expected present empty map to render as MapKV");
         };
         assert_eq!(type_name, "map<int32, int32>");
         assert!(fields.is_empty());
+    }
+
+    #[test]
+    fn render_empty_map_dap_parts_show_empty_value_and_type() {
+        let rendered = RenderedValue::MapKV {
+            type_name: "map<int32, int32>".to_owned(),
+            fields: vec![],
+        };
+
+        let (value, type_field) = rendered.dap_parts();
+        assert_eq!(value, "{}");
+        assert_eq!(type_field.as_deref(), Some("map<int32, int32>"));
+        assert_eq!(rendered.legacy_dap_value(Some("balances")), "{}");
     }
 
     #[test]

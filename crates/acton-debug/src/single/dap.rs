@@ -915,6 +915,7 @@ fn handle_variables(
 fn expand_debug_value(state: &mut DapState, dv: &RenderedValue) -> Vec<Variable> {
     match dv {
         RenderedValue::Struct { fields, .. }
+        | RenderedValue::MapKV { fields, .. }
         | RenderedValue::Address { fields, .. }
         | RenderedValue::CellLike { fields, .. }
         | RenderedValue::EnumValue { fields, .. }

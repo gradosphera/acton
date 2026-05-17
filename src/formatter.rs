@@ -2467,6 +2467,18 @@ impl FormatterContext<'_> {
                 self.format_struct_diff(left_type, left_fields, right_fields)
             }
             (
+                RenderedValue::MapKV {
+                    type_name: left_type,
+                    fields: left_fields,
+                },
+                RenderedValue::MapKV {
+                    type_name: right_type,
+                    fields: right_fields,
+                },
+            ) if left_type == right_type => {
+                self.format_struct_diff(left_type, left_fields, right_fields)
+            }
+            (
                 RenderedValue::Tensor {
                     items: left_items, ..
                 },
@@ -2756,6 +2768,7 @@ impl FormatterContext<'_> {
         matches!(
             value,
             RenderedValue::Struct { .. }
+                | RenderedValue::MapKV { .. }
                 | RenderedValue::Tensor { .. }
                 | RenderedValue::ArrayOf { .. }
                 | RenderedValue::UnionCase { .. }

@@ -98,7 +98,7 @@ Step 8 (step_in):
   Variables:
     uri: string = "link"
     metadata: OnchainMetadataReply
-      contentDict: map<uint256, string_prefixed0x>
+      contentDict: map<uint256, string_prefixed0x> = {}
   Registers:
     c4 (storage): cell = empty cell
 
@@ -134,7 +134,7 @@ Step 11 (step_in):
   Variables:
     uri: string = "link" (last seen)
     metadata: OnchainMetadataReply
-      contentDict: map<uint256, string_prefixed0x>
+      contentDict: map<uint256, string_prefixed0x> = {}
   Registers:
     c4 (storage): cell = empty cell
 
@@ -148,7 +148,7 @@ Step 12 (step_in):
   Variables:
     uri: string = "link" (last seen)
     metadata: OnchainMetadataReply
-      contentDict: map<uint256, string_prefixed0x>
+      contentDict: map<uint256, string_prefixed0x> = 1 entry
   Registers:
     c4 (storage): cell = empty cell
 
@@ -162,7 +162,7 @@ Step 13 (step_in):
   Variables:
     uri: string = "link" (last seen)
     metadata: OnchainMetadataReply = (last seen)
-      contentDict: map<uint256, string_prefixed0x>
+      contentDict: map<uint256, string_prefixed0x> = 1 entry
     (return value): cell = 9 bits, 1 refs, hash: [HASH]
       bits = 9
       refs = 1
@@ -499,7 +499,7 @@ Step 30 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 10000000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 733029
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -523,7 +523,7 @@ Step 31 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 10000000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 733029
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -547,7 +547,7 @@ Step 32 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 10000000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 733029
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2310,7 +2310,7 @@ Step 102 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2334,7 +2334,7 @@ Step 103 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2358,7 +2358,7 @@ Step 104 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2383,7 +2383,7 @@ Step 105 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2412,7 +2412,7 @@ Step 106 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2441,7 +2441,7 @@ Step 107 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2499,7 +2499,7 @@ Step 109 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2533,7 +2533,7 @@ Step 110 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2567,7 +2567,7 @@ Step 111 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2601,7 +2601,7 @@ Step 112 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2635,7 +2635,7 @@ Step 113 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2676,7 +2676,7 @@ Step 114 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -2765,7 +2765,7 @@ Step 117 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -3393,7 +3393,7 @@ Step 149 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -3435,7 +3435,7 @@ Step 150 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -3498,7 +3498,7 @@ Step 152 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -3540,7 +3540,7 @@ Step 153 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -3582,7 +3582,7 @@ Step 154 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -3624,7 +3624,7 @@ Step 155 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -3666,7 +3666,7 @@ Step 156 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -3713,7 +3713,7 @@ Step 157 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -4012,7 +4012,7 @@ Step 166 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -4059,7 +4059,7 @@ Step 167 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 315000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 90891
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -4108,7 +4108,7 @@ Step 168 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4132,7 +4132,7 @@ Step 169 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4156,7 +4156,7 @@ Step 170 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4181,7 +4181,7 @@ Step 171 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4212,7 +4212,7 @@ Step 172 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4243,7 +4243,7 @@ Step 173 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4278,7 +4278,7 @@ Step 174 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4313,7 +4313,7 @@ Step 175 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4368,7 +4368,7 @@ Step 177 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4403,7 +4403,7 @@ Step 178 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4438,7 +4438,7 @@ Step 179 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4473,7 +4473,7 @@ Step 180 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4508,7 +4508,7 @@ Step 181 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4543,7 +4543,7 @@ Step 182 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4578,7 +4578,7 @@ Step 183 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4613,7 +4613,7 @@ Step 184 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4648,7 +4648,7 @@ Step 185 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4683,7 +4683,7 @@ Step 186 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4718,7 +4718,7 @@ Step 187 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4755,7 +4755,7 @@ Step 188 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4792,7 +4792,7 @@ Step 189 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4827,7 +4827,7 @@ Step 190 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4862,7 +4862,7 @@ Step 191 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4897,7 +4897,7 @@ Step 192 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -4932,7 +4932,7 @@ Step 193 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -5060,7 +5060,7 @@ Step 200 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -5096,7 +5096,7 @@ Step 201 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -5132,7 +5132,7 @@ Step 202 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -5168,7 +5168,7 @@ Step 203 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -5204,7 +5204,7 @@ Step 204 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -5240,7 +5240,7 @@ Step 205 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -5276,7 +5276,7 @@ Step 206 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -5312,7 +5312,7 @@ Step 207 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -5348,7 +5348,7 @@ Step 208 (step_in):
     in: InMessage
       senderAddress: address = 0:55260e4c760d080288961590a0da5265d2215aa47c92156cd2c2d6cf907dd588
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 378537
       createdLt: uint64 = 4000001
       createdAt: uint32 = [TIMESTAMP]
@@ -5386,7 +5386,7 @@ Step 209 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 248462231
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 44446
       createdLt: uint64 = 5000002
       createdAt: uint32 = [TIMESTAMP]
@@ -5410,7 +5410,7 @@ Step 210 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 248462231
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 44446
       createdLt: uint64 = 5000002
       createdAt: uint32 = [TIMESTAMP]
@@ -5434,7 +5434,7 @@ Step 211 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 248462231
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 44446
       createdLt: uint64 = 5000002
       createdAt: uint32 = [TIMESTAMP]
@@ -5459,7 +5459,7 @@ Step 212 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 248462231
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 44446
       createdLt: uint64 = 5000002
       createdAt: uint32 = [TIMESTAMP]
@@ -7793,7 +7793,7 @@ Step 306 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -7817,7 +7817,7 @@ Step 307 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -7841,7 +7841,7 @@ Step 308 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -7866,7 +7866,7 @@ Step 309 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -7898,7 +7898,7 @@ Step 310 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8003,7 +8003,7 @@ Step 314 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8035,7 +8035,7 @@ Step 315 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8067,7 +8067,7 @@ Step 316 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8099,7 +8099,7 @@ Step 317 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8131,7 +8131,7 @@ Step 318 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8749,7 +8749,7 @@ Step 350 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8781,7 +8781,7 @@ Step 351 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8817,7 +8817,7 @@ Step 352 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8853,7 +8853,7 @@ Step 353 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8889,7 +8889,7 @@ Step 354 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8945,7 +8945,7 @@ Step 356 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -8981,7 +8981,7 @@ Step 357 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -9269,7 +9269,7 @@ Step 366 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -9305,7 +9305,7 @@ Step 367 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -9341,7 +9341,7 @@ Step 368 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -9377,7 +9377,7 @@ Step 369 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -9413,7 +9413,7 @@ Step 370 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -9449,7 +9449,7 @@ Step 371 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -9485,7 +9485,7 @@ Step 372 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -9521,7 +9521,7 @@ Step 373 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -9559,7 +9559,7 @@ Step 374 (step_in):
     in: InMessage
       senderAddress: address = 0:6f0c1fc7ec5141b349c5e1aa7f0c175c3abc18feb308a4d555391e9259814707
       valueCoins: coins = 300000000
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 85024
       createdLt: uint64 = 0
       createdAt: uint32 = [TIMESTAMP]
@@ -9597,7 +9597,7 @@ Step 375 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -9621,7 +9621,7 @@ Step 376 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -9645,7 +9645,7 @@ Step 377 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -9670,7 +9670,7 @@ Step 378 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -9701,7 +9701,7 @@ Step 379 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -9732,7 +9732,7 @@ Step 380 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -9767,7 +9767,7 @@ Step 381 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -9802,7 +9802,7 @@ Step 382 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -9837,7 +9837,7 @@ Step 383 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10252,7 +10252,7 @@ Step 396 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10287,7 +10287,7 @@ Step 397 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10322,7 +10322,7 @@ Step 398 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10357,7 +10357,7 @@ Step 399 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10412,7 +10412,7 @@ Step 401 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10447,7 +10447,7 @@ Step 402 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10482,7 +10482,7 @@ Step 403 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10517,7 +10517,7 @@ Step 404 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10552,7 +10552,7 @@ Step 405 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10587,7 +10587,7 @@ Step 406 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10622,7 +10622,7 @@ Step 407 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10657,7 +10657,7 @@ Step 408 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10692,7 +10692,7 @@ Step 409 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10727,7 +10727,7 @@ Step 410 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10762,7 +10762,7 @@ Step 411 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10799,7 +10799,7 @@ Step 412 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10836,7 +10836,7 @@ Step 413 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10871,7 +10871,7 @@ Step 414 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10906,7 +10906,7 @@ Step 415 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10941,7 +10941,7 @@ Step 416 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -10976,7 +10976,7 @@ Step 417 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -11104,7 +11104,7 @@ Step 424 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -11140,7 +11140,7 @@ Step 425 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -11176,7 +11176,7 @@ Step 426 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -11212,7 +11212,7 @@ Step 427 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -11248,7 +11248,7 @@ Step 428 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -11284,7 +11284,7 @@ Step 429 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -11320,7 +11320,7 @@ Step 430 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -11356,7 +11356,7 @@ Step 431 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
@@ -11392,7 +11392,7 @@ Step 432 (step_in):
     in: InMessage
       senderAddress: address = 0:6f78bb3cc12ef3d097d996b7ae8414353e3f22ab5369b2dacdef8aefa23805f9
       valueCoins: coins = 298985998
-      valueExtra: map<int32, varuint32> = ()
+      valueExtra: map<int32, varuint32> = {}
       originalForwardFee: coins = 394804
       createdLt: uint64 = 8000001
       createdAt: uint32 = [TIMESTAMP]
