@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+This is the first release after `v1.0.0`, focused on improvements and bug fixes
+driven by early user feedback: external message testing, transaction matcher
+precision, local emulation fidelity, formatter/debugger ergonomics, Test UI
+hardening, and a broad documentation refresh.
+
 ### Breaking Changes and Migration
 
 - Regenerate generated wrappers after upgrading. External incoming message
@@ -12,7 +17,22 @@ All notable changes to this project will be documented in this file.
   to expose accepted/rejected metadata and the new external-in helpers and
   matchers.
 
-### Added
+### CLI and Tooling
+
+- `acton fmt` now supports `--stdin`, allowing editor integrations to read Tolk
+  source from standard input and print the formatted result to standard output
+  without creating a temporary file. The formatter also rejects incompatible
+  `--stdin`/path combinations with normal clap diagnostics.
+- `acton script` now reports missing generated dependency helpers with a more
+  direct error. Missing files such as `@gen/JettonWallet.code.tolk` are
+  highlighted in the error output, and the script stops immediately after the
+  build failure instead of continuing execution.
+- `[test].ui` in `Acton.toml` is now applied correctly as if `--ui` had been
+  passed on the command line.
+- Generated command docs, man pages, and help snapshots were refreshed around
+  the new formatter, testing, trace, verification, and retrace behavior.
+
+### Testing, Matchers, and Emulation
 
 - Added first-class test-runner support for external-in messages.
   `net.sendExternal(...)` now returns `ExternalSendResult`, a wrapper that keeps
@@ -50,6 +70,78 @@ All notable changes to this project will be documented in this file.
 - Local emulation now honors Param 45 precompiled contract entries by contract
   code hash for transaction execution and get-method C7 state, matching the
   fixed gas and zero-step transaction shape used by the network.
+- Gas profiling and transaction formatting now resolve message names from both
+  destination and source contract ABIs, improving diagnostics when the message
+  was sent to an unexpected contract.
+- Coverage output tables were tightened for more compact CLI display.
+- `acton test --save-test-trace` and Test UI trace metadata now better preserve
+  contract display names separately from stable contract ids/names, including
+  path-like display names.
+- Trace saving and UI reporting now log missing emulation results to test
+  stderr, making trace/report mismatches easier to diagnose.
+- Transaction matcher and predicate tests were expanded for send mode,
+  specialized success/failure matchers, scalar and predicate search paths,
+  missing parent actions, and expected send-mode mismatch rendering.
+- Runtime config and fork/emulation helpers were documented and tested around
+  precompiled contracts, global config updates, message-forward prices, and
+  startup accounts.
+
+### Debugging and Runtime Rendering
+
+- Debugger rendering now treats Tolk `map<K, V>` values as first-class `MapKV`
+  values instead of generic structs. Empty maps display as `{}`, non-empty maps
+  show their entry count in DAP variable summaries, and map entries still expand
+  as child variables.
+- Empty extra-currency maps in the runtime `InMessage.valueExtra` field now
+  display as `map<int32, varuint32> = {}` instead of a confusing `()` or raw
+  empty cell.
+- The debugger no longer recompiles all project contracts when resolving the
+  known treasury code hash, avoiding unnecessary work for treasury frames.
+- Debugger expression evaluation keeps map entries accessible through field
+  paths, including backticked numeric keys.
+
+### Test UI and Trace Inspection
+
+- Test UI now uses contract display names from trace metadata when available
+  while keeping stable contract ids for file lookup.
+- Contract metadata files in saved traces now include richer display-name
+  information, making UI labels more accurate for generated or path-like
+  contract names.
+- Potential trace-loading, missing-emulation, and contract-metadata issues now
+  have clearer diagnostics in the UI/backend path instead of silently producing
+  `0 transactions`.
+
+### Templates, Stdlib, and Linting
+
+- Template scripts and wrappers were cleaned up for Jetton, NFT, and W5
+  extension projects, including common helper updates and regenerated wrapper
+  output.
+- Template project READMEs now describe the generated project structure and
+  validation commands more consistently across contract-only and app templates.
+- Linter rule documentation and implementation were refreshed for compiler
+  errors, imports in contracts, bounce handlers, naming rules, documented throw
+  values, and unauthorized access.
+- Tolk linter internals gained small consistency fixes around per-root
+  settings and rule diagnostics.
+
+### Documentation and Website
+
+- The CI setup page was rewritten and corrected for GitHub Actions and GitLab
+  CI, including frontend validation guidance and clearer Acton setup examples.
+- Testing documentation was expanded across built-in matchers, coverage, gas
+  profiling, trace bundles, configuration, fork testing, cookbook examples, and
+  custom matchers.
+- Build-system, wrapper, CLI command, linter, standard-library, scripting,
+  deployment, verification, project-management, walkthrough, and tutorial pages
+  received broad factual and wording improvements.
+- The docs site gained OS-specific install tabs, no-copy controls for selected
+  snippets, richer file-tree rendering, Mermaid diagrams, gas-report
+  highlighting, Acton CLI grammar improvements, dotted Tolk annotation
+  highlighting, and an `Acton.toml` file icon.
+- Landing and installation pages were refreshed with updated assets, corrected
+  universal links, dynamic `tonconnect-manifest.json`, better light-theme
+  styling, fixed play-button styling, corrected redirects, and updated Open
+  Graph metadata.
 
 ## [1.0.0] - 11.05.2026
 

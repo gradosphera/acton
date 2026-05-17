@@ -218,8 +218,8 @@ pub(crate) fn rendered_values_equal(left: &RenderedValue, right: &RenderedValue)
                 type_name: right_type,
                 fields: right_fields,
             },
-        ) => left_type == right_type && rendered_fields_equal(left_fields, right_fields),
-        (
+        )
+        | (
             RenderedValue::MapKV {
                 type_name: left_type,
                 fields: left_fields,
