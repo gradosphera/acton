@@ -303,6 +303,66 @@ depends = []
 }
 
 #[test]
+fn ui_api_returns_no_content_for_missing_or_empty_trace_file() {
+    let project = ProjectBuilder::new("f-ui-missing-trace-file")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("ui", &ui_deploy_test_source("test-ui-missing-trace-file"))
+        .build();
+
+    let port = unused_ui_port();
+    let base_url = format!("http://127.0.0.1:{port}");
+    let mut process = spawn_test_ui(&project, port);
+    wait_for_test_ui(&mut process, &base_url);
+
+    let client = reqwest::blocking::Client::new();
+    let reports: Value = client
+        .get(format!("{base_url}/api/reports"))
+        .send()
+        .expect("should fetch UI reports")
+        .json()
+        .expect("reports response should be JSON");
+    let trace_path = reports[0]["trace_path"]
+        .as_str()
+        .expect("UI report should include trace path");
+    let trace_file = project.path().join("build/traces").join(trace_path);
+    fs::remove_file(&trace_file).expect("should remove generated trace file");
+
+    let missing_trace_response = client
+        .get(format!(
+            "{base_url}/api/trace/{}",
+            encode_component(trace_path)
+        ))
+        .send()
+        .expect("should fetch missing UI trace response");
+    let missing_trace_status = missing_trace_response.status();
+    let missing_trace_body = missing_trace_response
+        .text()
+        .expect("missing trace response body should be readable");
+    fs::write(&trace_file, "").expect("should write empty trace file");
+
+    let empty_trace_response = client
+        .get(format!(
+            "{base_url}/api/trace/{}",
+            encode_component(trace_path)
+        ))
+        .send()
+        .expect("should fetch empty UI trace response");
+    let empty_trace_status = empty_trace_response.status();
+    let empty_trace_body = empty_trace_response
+        .text()
+        .expect("empty trace response body should be readable");
+
+    assert_eq!(missing_trace_status, StatusCode::NO_CONTENT);
+    assert_eq!(empty_trace_status, StatusCode::NO_CONTENT);
+    assert_ui_api_snapshot(
+        format!(
+            "missing_trace_status: {missing_trace_status}\nmissing_trace_body: {missing_trace_body:?}\nempty_trace_status: {empty_trace_status}\nempty_trace_body: {empty_trace_body:?}\n"
+        ),
+        "integration/snapshots/test-runner/test_runner_ui/ui_api_returns_no_content_for_missing_or_empty_trace_file.txt",
+    );
+}
+
+#[test]
 fn ui_port_config_is_used_when_cli_port_is_absent() {
     let project = ProjectBuilder::new("f-ui-config-port")
         .contract("simple", SIMPLE_CONTRACT)

@@ -301,6 +301,42 @@ fn save_test_trace_without_path_uses_default_directory() {
 }
 
 #[test]
+fn save_test_trace_reports_missing_emulations_to_test_stderr() {
+    let project = trace_project(
+        "h-save-trace-empty-test-stderr",
+        r"
+        get fun `test-empty-trace-warning`() {
+            expect(1).toEqual(1);
+        }
+        ",
+    );
+
+    let output = project
+        .acton()
+        .test()
+        .arg("--save-test-trace")
+        .run()
+        .success();
+
+    output
+        .assert_passed(1)
+        .assert_snapshot_matches(
+            "integration/snapshots/test-runner/cmd_agent_h/save_test_trace_reports_missing_emulations_to_test_stderr.stdout.txt",
+        )
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/test-runner/cmd_agent_h/save_test_trace_reports_missing_emulations_to_test_stderr.stderr.txt",
+        );
+
+    assert!(
+        !project
+            .path()
+            .join("build/traces/test-empty-trace-warning_trace.json")
+            .exists(),
+        "trace file should not be written when the test recorded no emulated transactions"
+    );
+}
+
+#[test]
 fn save_test_trace_sanitizes_test_names_for_trace_file_paths() {
     let project = trace_project(
         "h-save-trace-name-with-slash",

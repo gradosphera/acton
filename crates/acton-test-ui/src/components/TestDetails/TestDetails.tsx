@@ -42,6 +42,8 @@ import styles from "./TestDetails.module.css"
 interface TestDetailsProps {
   readonly test: TestReport
   readonly trace: Trace | undefined
+  readonly traceError?: string
+  readonly isTraceLoading?: boolean
   readonly projectRoot?: string
 }
 
@@ -61,6 +63,18 @@ interface TraceFeeSummary {
   readonly totalGasFees: bigint
   readonly totalForwardFees: bigint
   readonly totalFees: bigint
+}
+
+interface ParsedTraceResult {
+  readonly transactions: readonly TransactionInfo[]
+  readonly error?: string
+}
+
+interface TraceParseIssue {
+  readonly traceIndex: number
+  readonly traceName: string
+  readonly transactionCount: number
+  readonly error: string
 }
 
 const formatTraceName = (name: string | undefined, index: number): string => {
@@ -105,7 +119,16 @@ const getStatusDescription = (test: TestReport): string | undefined => {
   return undefined
 }
 
-export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoot}) => {
+const stringifyError = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
+
+export const TestDetails: React.FC<TestDetailsProps> = ({
+  test,
+  trace,
+  traceError,
+  isTraceLoading = false,
+  projectRoot,
+}) => {
   const [activeTab, setActiveTab] = useState<"info" | "logs" | "transactions">(() => {
     const saved = localStorage.getItem("activeTab")
     if (saved === "vm" || saved === "executor") return "logs"
@@ -341,27 +364,60 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
     return trace.traces.reduce((acc, t) => acc + t.transactions.length, 0)
   }, [trace])
 
-  const parsedTraceTransactions = useMemo((): TransactionInfo[][] => {
+  const transactionStats = isTraceLoading
+    ? "loading trace..."
+    : traceError
+      ? "trace load failed"
+      : `${transactionCount} transactions`
+
+  const parsedTraceResults = useMemo((): ParsedTraceResult[] => {
     if (!trace) return []
     return trace.traces.map((traceItem, index) => {
       try {
-        return processTransactions(traceItem.transactions)
+        return {transactions: processTransactions(traceItem.transactions)}
       } catch (error) {
-        console.error(`Failed to process trace #${index + 1}`, error)
-        return []
+        const message = stringifyError(error)
+        console.error("Failed to process trace transactions", {
+          traceIndex: index,
+          traceName: formatTraceName(traceItem.name, index),
+          transactionCount: traceItem.transactions.length,
+          error,
+        })
+        return {transactions: [], error: message}
       }
     })
   }, [trace])
 
+  const traceParseIssues = useMemo((): TraceParseIssue[] => {
+    if (!trace) return []
+
+    return parsedTraceResults.flatMap((result, index) => {
+      if (!result.error) return []
+
+      return [
+        {
+          traceIndex: index,
+          traceName: formatTraceName(trace.traces[index]?.name, index),
+          transactionCount: trace.traces[index]?.transactions.length ?? 0,
+          error: result.error,
+        },
+      ]
+    })
+  }, [parsedTraceResults, trace])
+
   const parsedTraceTransactionsWithBodies = useMemo((): TransactionInfo[][] => {
-    return parsedTraceTransactions.map(transactions =>
-      applyParsedBodies(transactions, backendContracts),
+    return parsedTraceResults.map(result =>
+      applyParsedBodies([...result.transactions], backendContracts),
     )
-  }, [backendContracts, parsedTraceTransactions])
+  }, [backendContracts, parsedTraceResults])
 
   const parsedTransactions = useMemo(() => {
     return parsedTraceTransactionsWithBodies[selectedTraceIndex] ?? []
   }, [parsedTraceTransactionsWithBodies, selectedTraceIndex])
+
+  const currentTraceParseIssue = traceParseIssues.find(
+    issue => issue.traceIndex === selectedTraceIndex,
+  )
 
   const allContracts = useMemo(() => Object.values(backendContracts), [backendContracts])
   const statusDescription = getStatusDescription(test)
@@ -688,10 +744,34 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
             <div className={styles.infoItem}>
               <div className={styles.infoLabel}>Stats</div>
               <div className={styles.infoValue}>
-                {formatDuration(test.duration)} • {transactionCount} transactions
+                {formatDuration(test.duration)} • {transactionStats}
               </div>
             </div>
           </div>
+
+          {traceError && (
+            <div className={`${styles.traceNotice} ${styles.traceNoticeError}`} role="alert">
+              <div className={styles.traceNoticeTitle}>Trace could not be loaded</div>
+              <div className={styles.traceNoticeMessage}>{traceError}</div>
+              {test.trace_path && (
+                <div className={styles.traceNoticeMeta}>trace_path: {test.trace_path}</div>
+              )}
+            </div>
+          )}
+
+          {traceParseIssues.length > 0 && (
+            <div className={`${styles.traceNotice} ${styles.traceNoticeError}`} role="alert">
+              <div className={styles.traceNoticeTitle}>Trace could not be rendered completely</div>
+              <div className={styles.traceNoticeMessage}>
+                {traceParseIssues.length === 1
+                  ? `${traceParseIssues[0].traceName} contains ${traceParseIssues[0].transactionCount} raw transactions, but the browser failed to parse them.`
+                  : `${traceParseIssues.length} traces contain raw transactions that failed to parse in the browser.`}
+              </div>
+              <div className={styles.traceNoticeMeta}>
+                {traceParseIssues.map(issue => `${issue.traceName}: ${issue.error}`).join("\n")}
+              </div>
+            </div>
+          )}
 
           {test.status === TestStatus.Failed && (
             <div className={styles.errorSection}>
@@ -920,13 +1000,45 @@ export const TestDetails: React.FC<TestDetailsProps> = ({test, trace, projectRoo
       return logs
     }
 
-    if (!trace) return <div className={styles.empty}>No trace data available</div>
+    if (!trace) {
+      if (traceError) {
+        return (
+          <div className={`${styles.traceNotice} ${styles.traceNoticeError}`} role="alert">
+            <div className={styles.traceNoticeTitle}>Trace could not be loaded</div>
+            <div className={styles.traceNoticeMessage}>{traceError}</div>
+            {test.trace_path && (
+              <div className={styles.traceNoticeMeta}>trace_path: {test.trace_path}</div>
+            )}
+          </div>
+        )
+      }
+
+      if (isTraceLoading) return <div className={styles.empty}>Loading trace...</div>
+      return <div className={styles.empty}>No trace data available</div>
+    }
     const currentTraceList = trace.traces[selectedTraceIndex]
     if (!currentTraceList) return <div className={styles.empty}>Trace not found</div>
 
     if (activeTab === "transactions") {
       const failedMessages = currentTraceList.failed_messages ?? []
       if (parsedTransactions.length === 0) {
+        if (currentTraceParseIssue) {
+          return (
+            <div>
+              <div className={`${styles.traceNotice} ${styles.traceNoticeError}`} role="alert">
+                <div className={styles.traceNoticeTitle}>Trace transactions could not be parsed</div>
+                <div className={styles.traceNoticeMessage}>
+                  {currentTraceParseIssue.traceName} contains{" "}
+                  {currentTraceParseIssue.transactionCount} raw transactions, but rendering stopped
+                  while decoding transaction data.
+                </div>
+                <div className={styles.traceNoticeMeta}>{currentTraceParseIssue.error}</div>
+              </div>
+              {failedMessages.length > 0 && <div>{renderFailedMessages(failedMessages)}</div>}
+            </div>
+          )
+        }
+
         if (failedMessages.length === 0) {
           return <div className={styles.empty}>No transaction data available for this trace</div>
         }

@@ -392,17 +392,7 @@ impl<'a> TestRunner<'a> {
 
                 let get_result = executor.finish(&params.code)?;
 
-                if let Some(trace_dir) = &self.config.save_test_trace
-                    && let Some(emulations) = ctx.chain.emulations.results_of(&test.name)
-                {
-                    trace::dump_test_transactions(
-                        test,
-                        ctx.build.build_cache,
-                        ctx.build.known_addresses,
-                        emulations,
-                        trace_dir,
-                    )?;
-                }
+                dump_trace_if_available(test, &self.config, &ctx)?;
 
                 (
                     get_result,
@@ -417,17 +407,7 @@ impl<'a> TestRunner<'a> {
 
                 let get_result = executor.run_get_method(&stack, &params, Some(DEFAULT_CONFIG))?;
 
-                if let Some(trace_dir) = &self.config.save_test_trace
-                    && let Some(emulations) = ctx.chain.emulations.results_of(&test.name)
-                {
-                    trace::dump_test_transactions(
-                        test,
-                        ctx.build.build_cache,
-                        ctx.build.known_addresses,
-                        emulations,
-                        trace_dir,
-                    )?;
-                }
+                dump_trace_if_available(test, &self.config, &ctx)?;
 
                 (
                     get_result,
@@ -494,6 +474,34 @@ impl<'a> TestRunner<'a> {
         stdout.push_str(&debug_output);
         stdout.push('\n');
     }
+}
+
+fn dump_trace_if_available(
+    test: &TestDescriptor,
+    config: &TestConfig,
+    ctx: &Context<'_>,
+) -> anyhow::Result<()> {
+    let Some(trace_dir) = &config.save_test_trace else {
+        return Ok(());
+    };
+
+    let Some(emulations) = ctx.chain.emulations.results_of(&test.name) else {
+        eprintln!(
+            "Warning: trace export is enabled for test '{}', but no emulated transactions were recorded; {} will not be written to {}",
+            test.name,
+            trace::trace_file_name(&test.name),
+            trace_dir,
+        );
+        return Ok(());
+    };
+
+    trace::dump_test_transactions(
+        test,
+        ctx.build.build_cache,
+        ctx.build.known_addresses,
+        emulations,
+        trace_dir,
+    )
 }
 
 fn evaluate_test_case(

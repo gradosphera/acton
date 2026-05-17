@@ -11,10 +11,58 @@ import {TestDetails} from "./components/TestDetails/TestDetails"
 
 const RUNNER_HEALTH_POLL_INTERVAL_MS = 1500
 
+const formatResponseError = (response: Response, body: string): string => {
+  const status = `${response.status} ${response.statusText}`.trim()
+  const trimmedBody = body.trim()
+
+  if (trimmedBody.length === 0) {
+    return status
+  }
+
+  try {
+    const json = JSON.parse(trimmedBody) as {error?: unknown}
+    if (typeof json.error === "string" && json.error.trim().length > 0) {
+      return `${status}: ${json.error}`
+    }
+  } catch {
+    // Fall through to the raw response body below.
+  }
+
+  return `${status}: ${trimmedBody.slice(0, 500)}`
+}
+
+const parseTraceResponse = async (
+  response: Response,
+  tracePath: string,
+): Promise<Trace | undefined> => {
+  if (response.status === 204) {
+    return undefined
+  }
+
+  const body = await response.text()
+
+  if (!response.ok) {
+    throw new Error(formatResponseError(response, body))
+  }
+
+  if (body.trim().length === 0) {
+    return undefined
+  }
+
+  try {
+    return JSON.parse(body) as Trace
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new Error(`Trace ${tracePath} is not valid JSON: ${reason}`)
+  }
+}
+
 export const App: React.FC = () => {
   const [reports, setReports] = useState<TestReport[]>([])
   const [selectedTest, setSelectedTest] = useState<TestReport | undefined>()
   const [currentTrace, setCurrentTrace] = useState<Trace | undefined>()
+  const [currentTraceError, setCurrentTraceError] = useState<string | undefined>()
+  const [isCurrentTraceLoading, setIsCurrentTraceLoading] = useState(false)
   const [projectRoot, setProjectRoot] = useState<string>("")
   const [theme, setTheme] = useState(() => {
     return (
@@ -54,6 +102,8 @@ export const App: React.FC = () => {
   const isResizing = useRef(false)
   const lastWidth = useRef(sidebarWidth)
   const hasConnectedToRunner = useRef(false)
+  const traceFetchController = useRef<AbortController | undefined>(undefined)
+  const traceFetchId = useRef(0)
 
   const markRunnerConnected = useCallback(() => {
     hasConnectedToRunner.current = true
@@ -61,20 +111,49 @@ export const App: React.FC = () => {
   }, [])
 
   const handleSelectTest = useCallback((test: TestReport) => {
+    traceFetchController.current?.abort()
+    const fetchId = traceFetchId.current + 1
+    traceFetchId.current = fetchId
     setSelectedTest(test)
+    setCurrentTrace(undefined)
+    setCurrentTraceError(undefined)
     localStorage.setItem("selectedTest", `${test.suite_name}::${test.name}`)
     if (test.trace_path) {
-      void fetch(`/api/trace/${encodeURIComponent(test.trace_path)}`)
-        .then(async res => (await res.json()) as Trace)
+      setIsCurrentTraceLoading(true)
+      const controller = new AbortController()
+      traceFetchController.current = controller
+      void fetch(`/api/trace/${encodeURIComponent(test.trace_path)}`, {signal: controller.signal})
+        .then(res => parseTraceResponse(res, test.trace_path ?? "<unknown>"))
         .then(data => {
+          if (traceFetchId.current !== fetchId) return
           setCurrentTrace(data)
+          setCurrentTraceError(undefined)
         })
         .catch(error => {
-          console.error("Failed to fetch trace", error)
+          if (error instanceof Error && error.name === "AbortError") {
+            return
+          }
+
+          const message = error instanceof Error ? error.message : String(error)
+          console.error("Failed to fetch trace", {
+            suite: test.suite_name,
+            test: test.name,
+            tracePath: test.trace_path,
+            error,
+          })
+          if (traceFetchId.current !== fetchId) return
           setCurrentTrace(undefined)
+          setCurrentTraceError(message)
+        })
+        .finally(() => {
+          if (traceFetchId.current === fetchId) {
+            setIsCurrentTraceLoading(false)
+          }
         })
     } else {
+      setIsCurrentTraceLoading(false)
       setCurrentTrace(undefined)
+      setCurrentTraceError(undefined)
     }
   }, [])
 
@@ -335,7 +414,13 @@ export const App: React.FC = () => {
           {activeView === "coverage" && coverageLcov !== undefined ? (
             <Coverage lcov={coverageLcov} projectRoot={projectRoot} />
           ) : selectedTest ? (
-            <TestDetails test={selectedTest} trace={currentTrace} projectRoot={projectRoot} />
+            <TestDetails
+              test={selectedTest}
+              trace={currentTrace}
+              traceError={currentTraceError}
+              isTraceLoading={isCurrentTraceLoading}
+              projectRoot={projectRoot}
+            />
           ) : (
             <div className={styles.noSelection}>Select a test to see details</div>
           )}
