@@ -129,7 +129,7 @@ export const App: React.FC = () => {
           setCurrentTrace(data)
           setCurrentTraceError(undefined)
         })
-        .catch(error => {
+        .catch((error: unknown) => {
           if (error instanceof Error && error.name === "AbortError") {
             return
           }

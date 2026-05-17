@@ -1026,7 +1026,9 @@ export const TestDetails: React.FC<TestDetailsProps> = ({
           return (
             <div>
               <div className={`${styles.traceNotice} ${styles.traceNoticeError}`} role="alert">
-                <div className={styles.traceNoticeTitle}>Trace transactions could not be parsed</div>
+                <div className={styles.traceNoticeTitle}>
+                  Trace transactions could not be parsed
+                </div>
                 <div className={styles.traceNoticeMessage}>
                   {currentTraceParseIssue.traceName} contains{" "}
                   {currentTraceParseIssue.transactionCount} raw transactions, but rendering stopped
