@@ -230,6 +230,9 @@ shared contract metadata under `contracts/<contract-name>.json`.
 These filenames are derived only from the test name and contract name, so
 duplicate names overwrite earlier artifacts in the same output directory.
 Relative paths are resolved from the project root.
+
+The Test UI also enables the default `build/traces` directory when trace export
+is not configured explicitly, including when UI is enabled through `[test].ui`.
 {{/option}}
 
 {{/options}}
@@ -460,6 +463,8 @@ CLI flags override config values for the current invocation.
 - `--fail-on-diff` requires `--baseline-snapshot`
 - The UI and trace export features are useful for debugging failing tests and
   inspecting transaction trees
+- Test UI writes trace bundles to `build/traces` by default unless
+  `--save-test-trace` or `[test].save-test-trace` chooses another directory
 - You can combine `--coverage` and `--ui` to inspect the current run's coverage
   directly in the browser UI
 - `--coverage-minimum-percent` and `[test.coverage].minimum-percent` are ignored

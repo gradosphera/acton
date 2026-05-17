@@ -213,6 +213,9 @@ shared contract metadata under \fBcontracts/<contract\-name>.json\fR\&.
 These filenames are derived only from the test name and contract name, so
 duplicate names overwrite earlier artifacts in the same output directory.
 Relative paths are resolved from the project root.
+.sp
+The Test UI also enables the default \fBbuild/traces\fR directory when trace export
+is not configured explicitly, including when UI is enabled through \fB[test].ui\fR\&.
 .RE
 .SH "TONCENTER API KEYS"
 When tests fork from the built\-in \fBmainnet\fR/\fBtestnet\fR backends, authenticated
@@ -556,6 +559,11 @@ comparison mode and does not overwrite the snapshot file
 .RS 4
 \h'-04'\(bu\h'+03'The UI and trace export features are useful for debugging failing tests and
 inspecting transaction trees
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'Test UI writes trace bundles to \fBbuild/traces\fR by default unless
+\fB\-\-save\-test\-trace\fR or \fB[test].save\-test\-trace\fR chooses another directory
 .RE
 .sp
 .RS 4

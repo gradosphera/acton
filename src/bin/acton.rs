@@ -1922,13 +1922,7 @@ fn main() {
                     fail_on_diff,
                     fork_net,
                     fork_block_number,
-                    save_test_trace.or_else(|| {
-                        if ui {
-                            Some(paths::DEFAULT_BUILD_TRACES_DIR.to_owned())
-                        } else {
-                            None
-                        }
-                    }),
+                    save_test_trace,
                     mutate,
                     mutate_overrides,
                     mutate_contract,
@@ -2687,11 +2681,12 @@ fn create_test_config(
         }
         config.mutation_session_id = mutation_session_id;
         config.mutation_workers = mutation_workers;
+        apply_ui_trace_default(&mut config);
         validate_merged_test_fork_network(Some(acton_config), config.fork_net.as_ref())?;
         return Ok(config);
     }
 
-    let config = TestConfig {
+    let mut config = TestConfig {
         show_bodies,
         verbosity,
         debug,
@@ -2735,10 +2730,17 @@ fn create_test_config(
         ui_port: ui_port.unwrap_or(12344),
         fork_net,
     };
+    apply_ui_trace_default(&mut config);
 
     validate_merged_test_fork_network(acton_config.as_ref().ok(), config.fork_net.as_ref())?;
 
     Ok(config)
+}
+
+fn apply_ui_trace_default(config: &mut TestConfig) {
+    if config.ui && config.save_test_trace.is_none() {
+        config.save_test_trace = Some(paths::DEFAULT_BUILD_TRACES_DIR.to_owned());
+    }
 }
 
 fn validate_test_settings(test_settings: &TestSettings) -> anyhow::Result<()> {
@@ -2849,4 +2851,106 @@ fn parse_minimum_percent(raw: &str, kind: &str, flag: &str) -> Result<f64, Strin
     }
 
     Ok(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_settings_to_config_with_ui_trace_default(
+        settings: &TestSettings,
+        save_test_trace_override: Option<&str>,
+        ui_override: bool,
+    ) -> TestConfig {
+        let mut config = settings.to_test_config(
+            None,
+            Vec::new(),
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+            None,
+            save_test_trace_override.map(str::to_owned),
+            false,
+            None,
+            None,
+            None,
+            None,
+            Vec::new(),
+            None,
+            Vec::new(),
+            None,
+            None,
+            None,
+            ui_override,
+            None,
+        );
+        apply_ui_trace_default(&mut config);
+        config
+    }
+
+    #[test]
+    fn ui_from_test_settings_enables_default_trace_dir() {
+        let settings = TestSettings {
+            ui: Some(true),
+            ..TestSettings::default()
+        };
+
+        let config = test_settings_to_config_with_ui_trace_default(&settings, None, false);
+
+        assert!(config.ui);
+        assert_eq!(
+            config.save_test_trace.as_deref(),
+            Some(paths::DEFAULT_BUILD_TRACES_DIR)
+        );
+    }
+
+    #[test]
+    fn cli_ui_flag_enables_default_trace_dir_without_config_ui() {
+        let config =
+            test_settings_to_config_with_ui_trace_default(&TestSettings::default(), None, true);
+
+        assert!(config.ui);
+        assert_eq!(
+            config.save_test_trace.as_deref(),
+            Some(paths::DEFAULT_BUILD_TRACES_DIR)
+        );
+    }
+
+    #[test]
+    fn explicit_trace_dir_is_preserved_when_ui_is_enabled() {
+        let settings = TestSettings {
+            ui: Some(true),
+            ..TestSettings::default()
+        };
+
+        let config =
+            test_settings_to_config_with_ui_trace_default(&settings, Some("custom-traces"), false);
+
+        assert!(config.ui);
+        assert_eq!(config.save_test_trace.as_deref(), Some("custom-traces"));
+    }
+
+    #[test]
+    fn trace_dir_is_not_enabled_without_ui() {
+        let config =
+            test_settings_to_config_with_ui_trace_default(&TestSettings::default(), None, false);
+
+        assert!(!config.ui);
+        assert_eq!(config.save_test_trace, None);
+    }
 }

@@ -159,6 +159,10 @@ OPTIONS
            duplicate names overwrite earlier artifacts in the same output
            directory. Relative paths are resolved from the project root.
 
+           The Test UI also enables the default build/traces directory when
+           trace export is not configured explicitly, including when UI is
+           enabled through [test].ui.
+
 TONCENTER API KEYS
        When tests fork from the built-in mainnet/testnet backends,
        authenticated requests read TONCENTER_MAINNET_API_KEY or
@@ -406,6 +410,9 @@ NOTES
 
        o  The UI and trace export features are useful for debugging failing
           tests and inspecting transaction trees
+
+       o  Test UI writes trace bundles to build/traces by default unless
+          --save-test-trace or [test].save-test-trace chooses another directory
 
        o  You can combine --coverage and --ui to inspect the current run’s
           coverage directly in the browser UI
