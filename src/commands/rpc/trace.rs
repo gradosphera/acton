@@ -433,6 +433,7 @@ fn load_local_build_cache(config: &ActonConfig) -> anyhow::Result<BuildCache> {
     let mut build_cache = BuildCache::new();
     for candidate in load_local_contract_candidates(config)? {
         build_cache.memoize(
+            &candidate.contract_id,
             &candidate.contract_name,
             &candidate.contract_path,
             &candidate.code_boc64,

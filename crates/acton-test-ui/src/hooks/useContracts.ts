@@ -15,7 +15,7 @@ export function useContracts(contractNames: string[]) {
 
     void Promise.all(
       namesToFetch.map(name =>
-        fetch(`/api/contract/${name}`)
+        fetch(`/api/contract/${encodeURIComponent(name)}`)
           .then(async res => {
             if (!res.ok) throw new Error(`Failed to fetch contract ${name}`)
             return (await res.json()) as BackendContractInfo

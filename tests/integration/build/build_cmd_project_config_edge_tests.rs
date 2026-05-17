@@ -128,6 +128,44 @@ depends = ["child.lib"]
 }
 
 #[test]
+fn build_creates_parent_dirs_for_quoted_contract_names_with_slashes() {
+    let project = ProjectBuilder::new("build-config-edge-contract-name-slash")
+        .raw_file(
+            "contracts/nested/simple.tolk",
+            r"fun onInternalMessage(_: InMessage) {}
+fun onBouncedMessage(_: InMessageBounced) {}
+",
+        )
+        .build();
+
+    write_acton_toml(
+        project.path(),
+        r#"[package]
+name = "build-config-edge-contract-name-slash"
+description = ""
+version = "0.1.0"
+
+[contracts."nested/simple"]
+display-name = "Nested Simple"
+src = "contracts/nested/simple.tolk"
+depends = []
+"#,
+    );
+
+    project
+        .acton()
+        .build()
+        .run()
+        .success()
+        .assert_contains("Compiling Nested Simple");
+
+    assert!(
+        project.path().join("build/nested/simple.json").exists(),
+        "build artifact should create parent directories for slash-separated contract keys"
+    );
+}
+
+#[test]
 fn build_ignores_empty_output_fift_path_in_project_config() {
     let project = ProjectBuilder::new("build-config-edge-empty-output-fift")
         .contract(

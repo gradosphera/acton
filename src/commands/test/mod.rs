@@ -1369,6 +1369,7 @@ fn run_file_tests(
                 let code_boc64 = Boc::encode_base64(code);
                 runner.build_cache.memoize(
                     &test.name,
+                    &test.name,
                     &file_path,
                     &code_boc64,
                     *code.repr_hash(),

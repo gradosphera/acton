@@ -1,5 +1,6 @@
 use crate::commands::common::error_fmt;
 use crate::commands::test::reporting::{FuzzExecutionContext, TestReport, TestReporter};
+use crate::commands::test::trace;
 use crate::formatter::FormatterContext;
 use acton_config::color::OwoColorize;
 use anyhow::Context;
@@ -60,7 +61,7 @@ struct UiTestReport {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     detailed_message: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    failed_transactions: Option<Vec<crate::commands::test::trace::TransactionInfo>>,
+    failed_transactions: Option<Vec<trace::TransactionInfo>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     failed_transaction_context: Option<crate::commands::test::reporting::FailedTransactionContext>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -197,6 +198,10 @@ fn build_ui_api_router(state: Arc<UiServerState>) -> Router {
 }
 
 fn open_browser(url: &str) {
+    if std::env::var_os("ACTON_INTERNAL_SKIP_BROWSER").is_some() {
+        return;
+    }
+
     #[cfg(target_os = "macos")]
     {
         let chromium_browsers = [
@@ -418,7 +423,7 @@ async fn handle_api_contract(
     };
 
     let contracts_dir = trace_dir.join("contracts");
-    let contract_name = format!("{name}.json");
+    let contract_name = trace::contract_file_name(&name);
     let Some(contract_path) = resolve_path_within_root(&contracts_dir, Path::new(&contract_name))
     else {
         return (StatusCode::FORBIDDEN, "Access denied").into_response();

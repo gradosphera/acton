@@ -108,10 +108,11 @@ Each transaction entry carries both raw and decoded debugging context:
 
 Each `contracts/<contract-name>.json` file stores the metadata needed to decode and inspect transactions:
 
-- `name`
-- `code_boc64`
-- `source_map`
-- `abi`
+- `name`: Acton contract name from `[contracts]`, used as the stable lookup key.
+- `display_name`: configured `[contracts.<name>].display-name`, used only for presentation.
+- `code_boc64`: compiled contract code encoded as base64 BoC.
+- `source_map`: compiler source map used to connect VM/executor locations back to Tolk source.
+- `abi`: compiler ABI used to decode storage, message bodies, opcodes, and typed values.
 
 This lets offline tooling and the Test UI map traces back to source locations and known message layouts.
 

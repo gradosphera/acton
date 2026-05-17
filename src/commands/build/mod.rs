@@ -507,8 +507,17 @@ fn save_build_artifact(
         "hash": code_hash
     });
 
-    let filename = format!("{contract_key}.json");
-    let path = out_dir.join(filename);
+    let path = contract_artifact_path(out_dir, contract_key, "json");
+    if let Some(parent_dir) = path.parent()
+        && let Err(err) = fs::create_dir_all(parent_dir)
+    {
+        anyhow::bail!(
+            "Failed to create directory for build artifact file {}: {}",
+            parent_dir.display(),
+            err
+        );
+    }
+
     let display_path = path.strip_prefix(project_root).unwrap_or(&path);
     fs::write(&path, serde_json::to_string_pretty(&json_data)?).map_err(|err| {
         anyhow!(
@@ -527,8 +536,7 @@ fn save_abi_file(
     contract_key: &str,
     abi: &ContractABI,
 ) -> anyhow::Result<()> {
-    let filename = format!("{contract_key}.json");
-    let path = output_abi_dir.join(filename);
+    let path = contract_artifact_path(output_abi_dir, contract_key, "json");
 
     if let Some(parent_dir) = path.parent()
         && let Err(err) = fs::create_dir_all(parent_dir)
@@ -558,8 +566,7 @@ fn save_fift_file(
     contract_key: &str,
     fift_code: &str,
 ) -> anyhow::Result<()> {
-    let filename = format!("{contract_key}.fif");
-    let path = output_fift_dir.join(filename);
+    let path = contract_artifact_path(output_fift_dir, contract_key, "fif");
 
     if let Some(parent_dir) = path.parent()
         && let Err(err) = fs::create_dir_all(parent_dir)
@@ -581,6 +588,11 @@ fn save_fift_file(
     })?;
 
     Ok(())
+}
+
+fn contract_artifact_path(output_dir: &Path, contract_key: &str, extension: &str) -> PathBuf {
+    let filename = format!("{contract_key}.{extension}");
+    output_dir.join(filename)
 }
 
 pub(crate) fn generate_dependency_files(

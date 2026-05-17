@@ -124,6 +124,7 @@ export interface Trace {
 
 export interface BackendContractInfo {
   readonly name: string
+  readonly display_name?: string
   readonly code_boc64: string
   readonly source_map: unknown
   readonly abi?: ContractABI

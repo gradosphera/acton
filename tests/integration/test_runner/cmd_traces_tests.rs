@@ -1,3 +1,4 @@
+use crate::common::assertion;
 use crate::support::TestOutputExt;
 use crate::support::project::ProjectBuilder;
 use std::fs;
@@ -121,6 +122,24 @@ fn read_json_from_project(
         .unwrap_or_else(|e| panic!("Failed to read JSON file {}: {}", full_path.display(), e));
     serde_json::from_str(&content)
         .unwrap_or_else(|e| panic!("Failed to parse JSON file {}: {}", full_path.display(), e))
+}
+
+fn assert_trace_summary_snapshot(summary: String, snapshot_path: &str) {
+    let mut path = std::env::current_dir().expect("Failed to get current dir");
+    path.push("tests");
+    path.push(snapshot_path);
+    assertion().eq(summary, snapbox::Data::read_from(&path, None));
+}
+
+fn replace_contract_display_name(project: &crate::support::project::Project, from: &str, to: &str) {
+    let acton_toml_path = project.path().join("Acton.toml");
+    let acton_toml =
+        fs::read_to_string(&acton_toml_path).expect("should read generated Acton.toml");
+    let updated = acton_toml.replace(
+        &format!("display-name = \"{from}\""),
+        &format!("display-name = \"{to}\""),
+    );
+    fs::write(&acton_toml_path, updated).expect("should update generated Acton.toml");
 }
 
 fn trace_root_wallet_name(
@@ -352,6 +371,47 @@ fn save_test_trace_with_custom_directory_uses_regular_non_ui_flow() {
         !default_trace_dir.exists(),
         "Default trace dir should not be created for custom trace path: {}",
         default_trace_dir.display()
+    );
+}
+
+#[test]
+fn save_test_trace_custom_directory_keeps_display_name_separate_from_contract_name() {
+    let project = trace_project(
+        "h-save-trace-display-name",
+        r"
+        get fun `test-display-name-trace`() {
+            deployCounter();
+        }
+        ",
+    );
+    replace_contract_display_name(&project, "simple", "Pool/Wallet");
+
+    project
+        .acton()
+        .test()
+        .arg("--save-test-trace")
+        .arg("custom-traces")
+        .run()
+        .success()
+        .assert_passed(1)
+        .assert_file_exists("custom-traces/test-display-name-trace_trace.json")
+        .assert_file_exists("custom-traces/contracts/simple.json");
+
+    let trace =
+        read_json_from_project(&project, "custom-traces/test-display-name-trace_trace.json");
+    let contract = read_json_from_project(&project, "custom-traces/contracts/simple.json");
+    assert_trace_summary_snapshot(
+        format!(
+            "trace_contracts: {}\ncontract_json_name: {}\ncontract_json_display_name: {}\n",
+            trace["contracts"]
+                .as_array()
+                .and_then(|contracts| contracts.first())
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("<missing>"),
+            contract["name"].as_str().unwrap_or("<missing>"),
+            contract["display_name"].as_str().unwrap_or("<missing>")
+        ),
+        "integration/snapshots/test-runner/cmd_agent_h/save_test_trace_custom_directory_keeps_display_name_separate_from_contract_name.txt",
     );
 }
 

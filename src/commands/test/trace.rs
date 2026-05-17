@@ -13,6 +13,7 @@ use tolk_compiler::abi::ContractABI;
 use ton_retrace::trace::{ExecutedAction, ExecutedActionFailureReason, ExecutedActions};
 use ton_source_map::SourceLocation;
 use tycho_types::boc::Boc;
+use xxhash_rust::xxh3::xxh3_64;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct TestTrace {
@@ -34,6 +35,7 @@ pub(super) struct TransactionList {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct ContractInfo {
     pub name: String,
+    pub display_name: String,
     pub code_boc64: String,
     pub source_map: SourceMap,
     pub abi: Option<Arc<ContractABI>>,
@@ -69,8 +71,13 @@ pub struct FailedMessageInfo {
 }
 
 pub(super) fn trace_file_name(test_name: &str) -> String {
-    let mut stem = String::with_capacity(test_name.len());
-    for ch in test_name.chars() {
+    let stem = safe_file_stem(test_name, "test");
+    format!("{stem}_trace.json")
+}
+
+fn safe_file_stem(name: &str, fallback: &str) -> String {
+    let mut stem = String::with_capacity(name.len());
+    for ch in name.chars() {
         if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
             stem.push(ch);
         } else {
@@ -79,8 +86,21 @@ pub(super) fn trace_file_name(test_name: &str) -> String {
     }
 
     let stem = stem.trim_matches('_');
-    let stem = if stem.is_empty() { "test" } else { stem };
-    format!("{stem}_trace.json")
+    if stem.is_empty() {
+        fallback.to_owned()
+    } else {
+        stem.to_owned()
+    }
+}
+
+pub(super) fn contract_file_name(contract_name: &str) -> String {
+    let stem = safe_file_stem(contract_name, "contract");
+    if stem == contract_name {
+        return format!("{stem}.json");
+    }
+
+    let suffix = xxh3_64(contract_name.as_bytes());
+    format!("{stem}-{suffix:016x}.json")
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -236,6 +256,7 @@ fn contract_info(result: &CompilationResult) -> ContractInfo {
     ContractInfo {
         abi: result.abi.clone(),
         name: result.name.clone(),
+        display_name: result.display_name.clone(),
         code_boc64: result.code_boc64.clone(),
         source_map: (*result.source_map).clone(),
     }
@@ -340,7 +361,7 @@ pub(super) fn dump_test_transactions(
     }
 
     for (name, info) in known_contracts {
-        let contract_file = contracts_dir.join(format!("{name}.json"));
+        let contract_file = contracts_dir.join(contract_file_name(&name));
         let info_json = serde_json::to_string(&info)?;
         fs::write(contract_file, info_json)?;
     }

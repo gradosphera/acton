@@ -58,6 +58,7 @@
     ]
   },
   "code_boc64": "te6ccgEBAgEAFAABFP8A9KQT9LzyyAsBAArTMPiR3A==",
+  "display_name": "simple",
   "name": "simple",
   "source_map": {
     "alias_instantiations": [],

@@ -166,7 +166,9 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
 
         debug!("Found contract with info: {found_contract:?}");
 
-        display_name = found_contract.display_name(&display_name).to_owned();
+        found_contract
+            .display_name(&id)
+            .clone_into(&mut display_name);
         path = found_contract.absolute_source_path(&ctx.env.project_root);
     } else if !path.is_absolute() {
         // > build("JettonMinter", "relative/to/root/path/to/contract")
@@ -230,6 +232,7 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
         let source_map = Arc::new(cached_entry.source_map.clone().unwrap_or_default());
 
         ctx.build.build_cache.memoize(
+            &id,
             &display_name,
             &path,
             &cached_entry.code_boc64,
@@ -272,6 +275,7 @@ fn build_impl(ctx: &mut Context, stk: &mut Tuple, path: String, id: String) -> a
             let source_map = Arc::new(success.source_map.unwrap_or_default());
 
             ctx.build.build_cache.memoize(
+                &id,
                 &display_name,
                 &path,
                 &success.code_boc64,

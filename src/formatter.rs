@@ -2282,7 +2282,7 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
         // so we can find compiled contract and its name
         let compilation_result = self.build_cache.result_for_code(&Some(code));
         if let Some((_, result)) = compilation_result {
-            return Some(result.name);
+            return Some(result.display_name);
         }
 
         None

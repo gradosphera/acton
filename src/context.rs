@@ -257,9 +257,11 @@ impl BuildCache {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn memoize(
         &mut self,
         name: &str,
+        display_name: &str,
         path: &Path,
         code: &str,
         code_hash: HashBytes,
@@ -270,6 +272,7 @@ impl BuildCache {
             path.to_owned(),
             CompilationResult {
                 name: name.to_owned(),
+                display_name: display_name.to_owned(),
                 code_boc64: code.to_owned(),
                 code_hash,
                 source_map,
@@ -351,6 +354,7 @@ pub(crate) fn code_lookup_hash(code: &Cell) -> HashBytes {
 #[derive(Debug, Clone)]
 pub struct CompilationResult {
     pub name: String,
+    pub display_name: String,
     pub code_boc64: String,
     pub code_hash: HashBytes,
     pub source_map: Arc<SourceMap>,
@@ -405,7 +409,8 @@ pub(crate) fn compile_project_contract_with_cache(
     Ok((
         path,
         CompilationResult {
-            name: contract.display_name(contract_id).to_owned(),
+            name: contract_id.to_owned(),
+            display_name: contract.display_name(contract_id).to_owned(),
             code_boc64: result.code_boc64,
             code_hash: HashBytes::from_str(&result.code_hash_hex)?,
             source_map: Arc::new(result.source_map.unwrap_or_default()),
@@ -1174,6 +1179,7 @@ mod tests {
             path.clone(),
             CompilationResult {
                 name: "WalletV5".to_owned(),
+                display_name: "WalletV5".to_owned(),
                 code_boc64: String::new(),
                 code_hash: *code.repr_hash(),
                 source_map: Arc::new(SourceMap::default()),
