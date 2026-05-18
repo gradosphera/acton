@@ -14,6 +14,14 @@ Module for building contract code cells.
 scenarios. It returns a code cell; it does not deploy the contract by
 itself.
 
+## Definitions
+
+## `build`
+
+```tolk
+fun build(name: string, path: string = ""): cell
+```
+
 Build a contract with a specified name and optional path.
 
 `name` is the contract name in `Acton.toml` (the key in `[contracts.<name>]`), not
@@ -65,14 +73,6 @@ Path rules and cache behavior:
   consult the compilation cache.
 - Missing or invalid `.boc` files fail at runtime with file-read or BoC
   decode errors.
-
-## Definitions
-
-## `build`
-
-```tolk
-fun build(name: string, path: string = ""): cell
-```
 
 <SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/build.tolk#L58" />
 

@@ -3,7 +3,7 @@
 /// `build()` is a host-assisted helper for tests, scripts, and emulation
 /// scenarios. It returns a code cell; it does not deploy the contract by
 /// itself.
-///
+
 /// Build a contract with a specified name and optional path.
 ///
 /// `name` is the contract name in `Acton.toml` (the key in `[contracts.<name>]`), not
