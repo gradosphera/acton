@@ -95,7 +95,7 @@ acton test tests/wallet.test.tolk --fork-net custom:archive-rpc
 When fork testing is enabled and a test touches an account:
 
 1. The system first checks if the account was already loaded in the local cache.
-2. If not cached and `--fork-net` is specified, it queries the configured Ton API endpoint.
+2. If not cached and `--fork-net` is specified, it queries the configured API endpoint.
 3. Account state, i.e., balance, code, data, status, is downloaded and deserialized.
 4. The state is cached for subsequent accesses during the test run.
 5. Tests execute using this real state in the local emulator.
