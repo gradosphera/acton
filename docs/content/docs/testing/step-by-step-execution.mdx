@@ -138,7 +138,7 @@ expect(iter.isDone()).toBeFalse();
 
 The matching transaction is included in the returned segment.
 
-When the generic message type is supplied, Acton fills the opcode slice of the search from that type. Narrow the match further with regular [`SearchParams`](/docs/standard_library/emulation/network#searchparams) filters.
+When the generic message type is supplied, Acton fills the opcode search param with that type. Narrow the match further with regular [`SearchParams`](/docs/standard_library/emulation/network#searchparams) filters.
 
 If no matching transaction is found before the queue is exhausted, [`executeTill()`](/docs/standard_library/emulation/testing#txcursorexecutetill) fails the test.
 
