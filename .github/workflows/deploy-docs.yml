@@ -69,7 +69,7 @@ jobs:
 
       - name: Lint Check docs
         working-directory: docs
-        run: bun run lint:navigation && bun run lint:code-block-line-length
+        run: bun run docs-lint
 
       - name: Build docs
         working-directory: docs
