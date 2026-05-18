@@ -143,7 +143,7 @@ export function CommandOptionTitle({children}: {children: ReactNode}) {
 
 export function CommandOptionMeta({label, children}: {label: string; children: ReactNode}) {
   return (
-    <div className="flex items-start gap-1.5 rounded-xl bg-fd-primary/5 py-1.5">
+    <div className="flex items-start gap-1.5 rounded-xl bg-fd-primary/5 px-3 py-1.5">
       <span className="text-sm leading-6 font-semibold text-fd-primary">{label}:</span>
       <div className="min-w-0 flex-1 text-sm leading-6 text-fd-foreground/85 [&_p]:m-0 [&_code]:rounded-md [&_code]:border-fd-primary/15 [&_code]:bg-fd-background">
         {children}
