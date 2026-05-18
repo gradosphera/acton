@@ -69,6 +69,12 @@ initialization.
 If `_path_` is omitted, Acton uses `app`. The target directory must not already
 exist.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--stdlib-only`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -83,6 +89,12 @@ Update the bundled standard library without touching `Acton.toml`.
 
 This mode always re-extracts the standard library into `.acton/`, even outside
 an initialized Acton project.
+
+<CommandOptionMeta label="Conflicts with">
+
+`--create-dapp`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -106,6 +118,12 @@ Control when to use colored output.
 <CommandOptionMeta label="Possible values">
 
 `auto`, `always`, `never`
+
+</CommandOptionMeta>
+
+<CommandOptionMeta label="Default">
+
+`auto`
 
 </CommandOptionMeta>
 
@@ -135,6 +153,12 @@ Accepted as a global Acton option for CLI consistency.
 This command does not require an existing project manifest for its primary
 workflow. It remains mutually exclusive with `--project-root`.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--project-root`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -153,6 +177,12 @@ Accepted as a global Acton option for CLI consistency.
 
 This command does not require an existing project root for its primary
 workflow. It remains mutually exclusive with `--manifest-path`.
+
+<CommandOptionMeta label="Conflicts with">
+
+`--manifest-path`
+
+</CommandOptionMeta>
 
 </CommandOption>
 

@@ -47,6 +47,12 @@ _contract-name_
 Contract name from `Acton.toml` to generate the wrapper for. Required unless
 `--all` is given.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--all`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -61,8 +67,7 @@ Generate wrappers for every contract defined in `Acton.toml`.
 
 <CommandOptionMeta label="Conflicts with">
 
-_contract-name_, `--output`, and `--test-output` (which
-designate a single output file).
+`--output`, `--test-output`, _contract-name_
 
 </CommandOptionMeta>
 
@@ -80,7 +85,7 @@ Write the generated wrapper to an exact path.
 
 <CommandOptionMeta label="Conflicts with">
 
-`--output-dir` and `--all`.
+`--output-dir`, `--all`
 
 </CommandOptionMeta>
 
@@ -98,7 +103,7 @@ Write the generated wrapper to a directory and let Acton choose the file name.
 
 <CommandOptionMeta label="Conflicts with">
 
-`--output`.
+`--output`
 
 </CommandOptionMeta>
 
@@ -121,6 +126,12 @@ Write the generated wrapper to a directory and let Acton choose the file name.
 
 Generate a stub test file together with the wrapper.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--ts`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -133,7 +144,17 @@ Generate a stub test file together with the wrapper.
 
 Write the generated test file to an exact path.
 
-Requires `--test`. Conflicts with `--all`.
+<CommandOptionMeta label="Requires">
+
+`--test`.
+
+</CommandOptionMeta>
+
+<CommandOptionMeta label="Conflicts with">
+
+`--all`, `--test-output-dir`, `--ts`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -148,7 +169,17 @@ Requires `--test`. Conflicts with `--all`.
 Write the generated test file to a directory and let Acton choose the file
 name.
 
-Requires `--test` and conflicts with `--test-output`.
+<CommandOptionMeta label="Requires">
+
+`--test`.
+
+</CommandOptionMeta>
+
+<CommandOptionMeta label="Conflicts with">
+
+`--test-output`, `--ts`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -171,7 +202,7 @@ Generate a TypeScript wrapper through `@ton/tolk-abi-to-typescript@0.5.0`.
 
 <CommandOptionMeta label="Conflicts with">
 
-test stub generation.
+`--test`, `--test-output`, `--test-output-dir`
 
 </CommandOptionMeta>
 
@@ -200,6 +231,12 @@ Control when to use colored output.
 
 </CommandOptionMeta>
 
+<CommandOptionMeta label="Default">
+
+`auto`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -222,6 +259,12 @@ Path to the `Acton.toml` file to use for this invocation.
 Use this when running the command outside the project directory or when the
 manifest lives at a non-default location.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--project-root`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -235,7 +278,11 @@ manifest lives at a non-default location.
 Path to the project root to use for configuration discovery and relative
 defaults.
 
-This conflicts with `--manifest-path`.
+<CommandOptionMeta label="Conflicts with">
+
+`--manifest-path`
+
+</CommandOptionMeta>
 
 </CommandOption>
 

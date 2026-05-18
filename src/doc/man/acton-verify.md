@@ -45,7 +45,9 @@ multiple wallets are available.
 {{#option "`--tonconnect`" }}
 Use TON Connect wallet approval for the verification transaction.
 
-This uses the wallet selected in the browser and conflicts with `--wallet`.
+This uses the wallet selected in the browser.
+
+Conflicts with `--wallet`.
 {{/option}}
 
 {{#option "`--tonconnect-port` _port_" }}

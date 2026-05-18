@@ -56,7 +56,7 @@ Generate a new wallet.
 
 #### Options
 
-{{#options}}
+{{#options command="acton wallet new"}}
 
 {{#option "`--name` _name_" }}
 Wallet name.
@@ -113,7 +113,7 @@ Import an existing mnemonic-based wallet.
 
 #### Options
 
-{{#options}}
+{{#options command="acton wallet import"}}
 
 {{#option "_mnemonics_..." }}
 Mnemonic words for the wallet.
@@ -153,7 +153,7 @@ List configured wallets.
 
 #### Options
 
-{{#options}}
+{{#options command="acton wallet list"}}
 
 {{#option "`-b`, `--balance`" }}
 Fetch and print wallet balances.
@@ -186,7 +186,7 @@ Sign an external message body with the selected wallet.
 
 #### Options
 
-{{#options}}
+{{#options command="acton wallet sign"}}
 
 {{#option "_name_" }}
 Wallet name.
@@ -218,7 +218,7 @@ Request faucet funds for a wallet.
 
 #### Options
 
-{{#options}}
+{{#options command="acton wallet airdrop"}}
 
 {{#option "_name_" }}
 Wallet name.
@@ -259,7 +259,7 @@ Remove a wallet from configuration.
 
 #### Options
 
-{{#options}}
+{{#options command="acton wallet remove"}}
 
 {{#option "_name_" }}
 Wallet name.

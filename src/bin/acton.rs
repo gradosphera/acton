@@ -2267,7 +2267,11 @@ fn main() {
         Commands::Meta { command } => match command {
             MetaCommand::GetSchema { schema } => print_schema_cmd(schema),
         },
-        Commands::Docgen { output, check } => docgen_cmd(output, check),
+        Commands::Docgen { output, check } => {
+            let mut cli_command = base_cli_command();
+            cli_command.build();
+            docgen_cmd(output, check, &cli_command)
+        }
         Commands::Ls {
             port,
             stdio,

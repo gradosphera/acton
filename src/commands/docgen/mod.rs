@@ -1,5 +1,6 @@
 use acton_config::color::OwoColorize;
 use anyhow::Result;
+use clap::Command;
 use similar::{ChangeTag, TextDiff};
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -34,7 +35,7 @@ struct DocgenOutputPaths {
     terminal_help_out_dir: PathBuf,
 }
 
-pub fn docgen_cmd(output: Option<String>, check: bool) -> Result<()> {
+pub fn docgen_cmd(output: Option<String>, check: bool, cli_command: &Command) -> Result<()> {
     let repo_root = resolve_docgen_repo_root()?;
     env::set_current_dir(&repo_root)?;
 
@@ -49,7 +50,7 @@ pub fn docgen_cmd(output: Option<String>, check: bool) -> Result<()> {
                 .display()
                 .to_string(),
         ));
-        generate_docs(&generated_out)?;
+        generate_docs(&generated_out, cli_command)?;
 
         let changed_files = print_docgen_diff(&output_paths, &generated_out)?;
         if changed_files > 0 {
@@ -59,7 +60,7 @@ pub fn docgen_cmd(output: Option<String>, check: bool) -> Result<()> {
         return Ok(());
     }
 
-    generate_docs(&output_paths)
+    generate_docs(&output_paths, cli_command)
 }
 
 fn resolve_docgen_repo_root() -> Result<PathBuf> {
@@ -130,8 +131,11 @@ fn resolve_output_paths(output: Option<String>) -> DocgenOutputPaths {
     }
 }
 
-fn generate_docs(output_paths: &DocgenOutputPaths) -> Result<()> {
-    command_manual_docs::generate_command_manual_docs(&output_paths.command_docs_out_dir)?;
+fn generate_docs(output_paths: &DocgenOutputPaths, cli_command: &Command) -> Result<()> {
+    command_manual_docs::generate_command_manual_docs(
+        &output_paths.command_docs_out_dir,
+        cli_command,
+    )?;
     command_manuals::generate_command_manual_artifacts(
         &output_paths.man_out_dir,
         &output_paths.terminal_help_out_dir,

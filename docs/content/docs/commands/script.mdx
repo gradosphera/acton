@@ -46,6 +46,12 @@ _args_...
 
 Arguments parsed against the `main()` ABI and passed to the script.
 
+<CommandOptionMeta label="Repeatable">
+
+May be passed multiple times.
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -61,6 +67,18 @@ Enable executor debug logs at verbosity level `1`.
 Currently only level `1` is supported. Pass `--verbose` at most once.
 Use this for low-level executor output such as `debug.dumpStack()`. For richer
 debug output, use `--backtrace full` or `--debug`.
+
+<CommandOptionMeta label="Default">
+
+`0`
+
+</CommandOptionMeta>
+
+<CommandOptionMeta label="Repeatable">
+
+May be passed multiple times.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -95,6 +113,12 @@ Enable execution backtraces.
 
 Currently supported value: `full`.
 
+<CommandOptionMeta label="Possible values">
+
+`full`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -106,6 +130,12 @@ Currently supported value: `full`.
 </CommandOptionTitle>
 
 Debug server port.
+
+<CommandOptionMeta label="Default">
+
+`12345`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -213,6 +243,12 @@ Acton keeps this port stable so injected wallets can recognize the same local
 dApp on later runs. If the default port is busy, pass another port explicitly
 and keep using the same value for that project.
 
+<CommandOptionMeta label="Default">
+
+`52258`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -275,6 +311,12 @@ Control when to use colored output.
 
 </CommandOptionMeta>
 
+<CommandOptionMeta label="Default">
+
+`auto`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -297,6 +339,12 @@ Path to the `Acton.toml` file to use for this invocation.
 Use this when running the command outside the project directory or when the
 manifest lives at a non-default location.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--project-root`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -310,7 +358,11 @@ manifest lives at a non-default location.
 Path to the project root to use for configuration discovery and relative
 defaults.
 
-This conflicts with `--manifest-path`.
+<CommandOptionMeta label="Conflicts with">
+
+`--manifest-path`
+
+</CommandOptionMeta>
 
 </CommandOption>
 

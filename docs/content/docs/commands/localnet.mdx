@@ -75,6 +75,12 @@ Historical block sequence number to fork from.
 
 Wallet names to auto-fund and deploy on startup.
 
+<CommandOptionMeta label="Repeatable">
+
+May be passed multiple times.
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -86,6 +92,12 @@ Wallet names to auto-fund and deploy on startup.
 </CommandOptionTitle>
 
 Path to a SQLite database for persistent node state.
+
+<CommandOptionMeta label="Conflicts with">
+
+`--load-state`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -110,6 +122,12 @@ Maximum `/api` requests per second to simulate provider rate limits.
 </CommandOptionTitle>
 
 Load Localnet state from a JSON snapshot before startup.
+
+<CommandOptionMeta label="Conflicts with">
+
+`--db-path`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -163,6 +181,12 @@ Recipient address.
 </CommandOptionTitle>
 
 Amount of TON to request.
+
+<CommandOptionMeta label="Default">
+
+`100`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -265,6 +289,12 @@ Control when to use colored output.
 
 </CommandOptionMeta>
 
+<CommandOptionMeta label="Default">
+
+`auto`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -287,6 +317,12 @@ Path to the `Acton.toml` file to use for this invocation.
 Use this when running the command outside the project directory or when the
 manifest lives at a non-default location.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--project-root`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -300,7 +336,11 @@ manifest lives at a non-default location.
 Path to the project root to use for configuration discovery and relative
 defaults.
 
-This conflicts with `--manifest-path`.
+<CommandOptionMeta label="Conflicts with">
+
+`--manifest-path`
+
+</CommandOptionMeta>
 
 </CommandOption>
 

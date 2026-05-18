@@ -71,14 +71,18 @@ Generate a stub test file together with the wrapper.
 {{#option "`--test-output` _path_" }}
 Write the generated test file to an exact path.
 
-Requires `--test`. Conflicts with `--all`.
+Requires `--test`.
+
+Conflicts with `--all`.
 {{/option}}
 
 {{#option "`--test-output-dir` _dir_" }}
 Write the generated test file to a directory and let Acton choose the file
 name.
 
-Requires `--test` and conflicts with `--test-output`.
+Requires `--test`.
+
+Conflicts with `--test-output`.
 {{/option}}
 
 {{/options}}

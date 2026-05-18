@@ -96,6 +96,12 @@ Control when to use colored output.
 
 </CommandOptionMeta>
 
+<CommandOptionMeta label="Default">
+
+`auto`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -118,6 +124,12 @@ Path to the `Acton.toml` file to use for this invocation.
 Use this when running the command outside the project directory or when the
 manifest lives at a non-default location.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--project-root`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -131,7 +143,11 @@ manifest lives at a non-default location.
 Path to the project root to use for configuration discovery and relative
 defaults.
 
-This conflicts with `--manifest-path`.
+<CommandOptionMeta label="Conflicts with">
+
+`--manifest-path`
+
+</CommandOptionMeta>
 
 </CommandOption>
 

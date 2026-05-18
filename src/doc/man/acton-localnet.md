@@ -25,7 +25,7 @@ Start the local TON network.
 
 #### Options
 
-{{#options}}
+{{#options command="acton localnet start"}}
 
 {{#option "`--port` _port_" }}
 Localnet server port.
@@ -73,7 +73,7 @@ Send TON from the local faucet to an address.
 
 #### Options
 
-{{#options}}
+{{#options command="acton localnet airdrop"}}
 
 {{#option "_address_" }}
 Recipient address.

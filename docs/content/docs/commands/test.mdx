@@ -113,6 +113,12 @@ Stop after the first failing test.
 
 </CommandOptionMeta>
 
+<CommandOptionMeta label="Possible values">
+
+`true`, `false`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -140,6 +146,18 @@ Enable executor debug logs at verbosity level `1`.
 Currently only level `1` is supported. Pass `--verbose` at most once.
 Use this for low-level executor output such as `debug.dumpStack()`. For richer
 debug output, use `--backtrace full` or `--debug`.
+
+<CommandOptionMeta label="Default">
+
+`0`
+
+</CommandOptionMeta>
+
+<CommandOptionMeta label="Repeatable">
+
+May be passed multiple times.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -190,6 +208,12 @@ Enable execution backtraces.
 Currently supported value: `full`.
 Full backtraces also raise executor verbosity to collect source locations and
 call stacks without opening the debugger.
+
+<CommandOptionMeta label="Possible values">
+
+`full`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -335,7 +359,11 @@ Compare gas usage with a baseline snapshot.
 
 Exit non-zero when the current run differs from the baseline snapshot.
 
-Requires `--baseline-snapshot`.
+<CommandOptionMeta label="Requires">
+
+`--baseline-snapshot`.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -359,6 +387,12 @@ Report format list.
 <CommandOptionMeta label="Possible values">
 
 `console`, `teamcity`, `junit`, `dot`
+
+</CommandOptionMeta>
+
+<CommandOptionMeta label="Repeatable">
+
+May be passed multiple times.
 
 </CommandOptionMeta>
 
@@ -459,6 +493,12 @@ Clear the compilation cache before running tests.
 
 </CommandOptionMeta>
 
+<CommandOptionMeta label="Possible values">
+
+`true`, `false`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -524,19 +564,6 @@ is not configured explicitly, including when UI is enabled through `[test].ui`.
 
 </CommandOptions>
 
-## TonCenter API Keys
-
-When tests fork from the built-in `mainnet`/`testnet` backends, authenticated
-requests read `TONCENTER_MAINNET_API_KEY` or `TONCENTER_TESTNET_API_KEY`.
-
-When tests fork from `custom:<name>`, Acton reads `<NORMALIZED_NAME>_API_KEY`.
-Custom network names are uppercased and non-alphanumeric characters are
-replaced with `_`, so `custom:mock-remote` becomes `MOCK_REMOTE_API_KEY`.
-
-Acton loads `.env` automatically, so the simplest setup during project work is
-usually to keep these keys there and use shell environment variables only for
-one-off overrides or CI.
-
 ### Mutation Testing Options
 
 <CommandOptions>
@@ -583,6 +610,12 @@ Accepted values: `worktree`, `ref`, `branch`.
 - `branch` compares against the merge-base with the current branch upstream, or
   against `--mutation-diff-ref` when provided
 
+<CommandOptionMeta label="Possible values">
+
+`worktree`, `ref`, `branch`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -613,6 +646,18 @@ Run only selected mutation levels.
 
 Accepted values: `critical`, `major`, `minor`.
 Useful for faster local runs such as `critical,major`.
+
+<CommandOptionMeta label="Possible values">
+
+`critical`, `major`, `minor`
+
+</CommandOptionMeta>
+
+<CommandOptionMeta label="Repeatable">
+
+May be passed multiple times.
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -679,6 +724,12 @@ Pass the mutation number shown in the report, and use the same mutation filters
 such as `--mutation-diff`, `--mutation-levels`, and `--mutation-disable-rules` as the
 original run. May be passed multiple times or as a comma-separated list.
 
+<CommandOptionMeta label="Repeatable">
+
+May be passed multiple times.
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -740,6 +791,12 @@ Control when to use colored output.
 
 </CommandOptionMeta>
 
+<CommandOptionMeta label="Default">
+
+`auto`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -762,6 +819,12 @@ Path to the `Acton.toml` file to use for this invocation.
 Use this when running the command outside the project directory or when the
 manifest lives at a non-default location.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--project-root`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -775,12 +838,29 @@ manifest lives at a non-default location.
 Path to the project root to use for configuration discovery and relative
 defaults.
 
-This conflicts with `--manifest-path`.
+<CommandOptionMeta label="Conflicts with">
+
+`--manifest-path`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
 
 </CommandOptions>
+
+## TonCenter API Keys
+
+When tests fork from the built-in `mainnet`/`testnet` backends, authenticated
+requests read `TONCENTER_MAINNET_API_KEY` or `TONCENTER_TESTNET_API_KEY`.
+
+When tests fork from `custom:<name>`, Acton reads `<NORMALIZED_NAME>_API_KEY`.
+Custom network names are uppercased and non-alphanumeric characters are
+replaced with `_`, so `custom:mock-remote` becomes `MOCK_REMOTE_API_KEY`.
+
+Acton loads `.env` automatically, so the simplest setup during project work is
+usually to keep these keys there and use shell environment variables only for
+one-off overrides or CI.
 
 ## Discovery
 

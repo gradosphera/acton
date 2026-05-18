@@ -40,7 +40,7 @@ Show information about a single account.
 
 #### Options
 
-{{#options}}
+{{#options command="acton rpc info"}}
 
 {{#option "_address_" }}
 Contract address in friendly or raw format.
@@ -81,7 +81,7 @@ Print the latest masterchain block info returned by TonCenter.
 
 #### Options
 
-{{#options}}
+{{#options command="acton rpc block"}}
 
 {{#option "`--net` _network_" }}
 Network to query.
@@ -109,7 +109,7 @@ Print the latest masterchain block number for a network.
 
 #### Options
 
-{{#options}}
+{{#options command="acton rpc block-number"}}
 
 {{#option "`--net` _network_" }}
 Network to query.
@@ -138,7 +138,7 @@ text format.
 
 #### Options
 
-{{#options}}
+{{#options command="acton rpc trace"}}
 
 {{#option "_hash_" }}
 Root transaction hash to query through TonCenter v3 `/traces`.

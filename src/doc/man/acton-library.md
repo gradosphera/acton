@@ -37,7 +37,7 @@ Publish a contract or arbitrary code as a library.
 
 #### Options
 
-{{#options}}
+{{#options command="acton library publish"}}
 
 {{#option "_contract-name_" }}
 Contract name to publish.
@@ -108,7 +108,7 @@ Fetch library code from the blockchain by hash.
 
 #### Options
 
-{{#options}}
+{{#options command="acton library fetch"}}
 
 {{#option "_hash_" }}
 Library code hash.
@@ -149,7 +149,7 @@ Show information about a deployed library.
 
 #### Options
 
-{{#options}}
+{{#options command="acton library info"}}
 
 {{#option "_name_" }}
 Library name to inspect.
@@ -172,7 +172,7 @@ Top up a library account for additional storage time.
 
 #### Options
 
-{{#options}}
+{{#options command="acton library topup"}}
 
 {{#option "_library-name_" }}
 Library name to top up.

@@ -27,7 +27,7 @@ Lookup TVM instructions by exact name or fuzzy search query.
 
 #### Options
 
-{{#options}}
+{{#options command="acton doc tvm"}}
 
 {{#option "_instruction_..." }}
 Instruction names or search queries.

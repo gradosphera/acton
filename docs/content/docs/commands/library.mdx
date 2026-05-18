@@ -91,6 +91,12 @@ Wallet to use for the publication transaction.
 
 Cannot be used with `--tonconnect`.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--tonconnect`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -105,7 +111,7 @@ Network to use.
 
 <CommandOptionMeta label="Default">
 
-`testnet`.
+`testnet`
 
 </CommandOptionMeta>
 
@@ -124,6 +130,12 @@ Use TON Connect wallet approval for the publication transaction.
 Supported only with `--net mainnet` and `--net testnet`. When enabled, Acton
 opens a local TON Connect page and uses the wallet selected in the browser.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--wallet`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -138,7 +150,7 @@ Local TON Connect page port.
 
 <CommandOptionMeta label="Default">
 
-`52258`.
+`52258`
 
 </CommandOptionMeta>
 
@@ -180,6 +192,12 @@ Skip confirmation prompts.
 
 Save library metadata to local `libraries.toml`.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--global`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -191,6 +209,12 @@ Save library metadata to local `libraries.toml`.
 </CommandOptionTitle>
 
 Save library metadata to global `global.libraries.toml`.
+
+<CommandOptionMeta label="Conflicts with">
+
+`--local`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
@@ -260,7 +284,7 @@ Network to use.
 
 <CommandOptionMeta label="Default">
 
-`testnet`.
+`testnet`
 
 </CommandOptionMeta>
 
@@ -381,6 +405,12 @@ Wallet to use for the top-up transaction.
 
 Cannot be used with `--tonconnect`.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--tonconnect`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -397,6 +427,12 @@ Supported only for libraries stored with `network = "mainnet"` or
 `network = "testnet"`. When enabled, Acton opens a local TON Connect page and
 uses the wallet selected in the browser.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--wallet`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -411,7 +447,7 @@ Local TON Connect page port.
 
 <CommandOptionMeta label="Default">
 
-`52258`.
+`52258`
 
 </CommandOptionMeta>
 
@@ -468,6 +504,12 @@ Control when to use colored output.
 
 </CommandOptionMeta>
 
+<CommandOptionMeta label="Default">
+
+`auto`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -490,6 +532,12 @@ Path to the `Acton.toml` file to use for this invocation.
 Use this when running the command outside the project directory or when the
 manifest lives at a non-default location.
 
+<CommandOptionMeta label="Conflicts with">
+
+`--project-root`
+
+</CommandOptionMeta>
+
 </CommandOption>
 
 
@@ -503,7 +551,11 @@ manifest lives at a non-default location.
 Path to the project root to use for configuration discovery and relative
 defaults.
 
-This conflicts with `--manifest-path`.
+<CommandOptionMeta label="Conflicts with">
+
+`--manifest-path`
+
+</CommandOptionMeta>
 
 </CommandOption>
 
