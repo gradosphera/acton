@@ -25,16 +25,11 @@ pub(super) fn collect_profile(runner: &TestRunner) -> anyhow::Result<()> {
         .map_err(|err| anyhow::anyhow!("Failed to create gas snapshot: {err}"))?;
 
     let baseline_snapshot = if let Some(baseline_path) = &runner.config.baseline_snapshot {
-        match load_gas_snapshot(&runner.project_root, baseline_path) {
-            Ok(snapshot) => Some(snapshot),
-            Err(err) => {
-                if runner.config.fail_on_diff {
-                    anyhow::bail!("Failed to load baseline gas snapshot '{baseline_path}': {err}");
-                }
-                eprintln!("Warning: Failed to load baseline gas snapshot '{baseline_path}': {err}",);
-                None
-            }
-        }
+        Some(
+            load_gas_snapshot(&runner.project_root, baseline_path).map_err(|err| {
+                anyhow::anyhow!("Failed to load baseline gas snapshot '{baseline_path}': {err}")
+            })?,
+        )
     } else {
         None
     };
@@ -60,15 +55,13 @@ pub(super) fn collect_profile(runner: &TestRunner) -> anyhow::Result<()> {
     }
 
     if runner.config.fail_on_diff
-        && let Some(baseline_path) = runner.config.baseline_snapshot.as_deref()
+        && let (Some(baseline_path), Some(baseline_snapshot)) = (
+            runner.config.baseline_snapshot.as_deref(),
+            baseline_snapshot.as_ref(),
+        )
+        && snapshots_differ(&current_snapshot, baseline_snapshot)
     {
-        let Some(baseline_snapshot) = baseline_snapshot.as_ref() else {
-            anyhow::bail!("Failed to load baseline gas snapshot '{baseline_path}'");
-        };
-
-        if snapshots_differ(&current_snapshot, baseline_snapshot) {
-            anyhow::bail!("Profiling drift detected against baseline snapshot '{baseline_path}'");
-        }
+        anyhow::bail!("Profiling drift detected against baseline snapshot '{baseline_path}'");
     }
 
     Ok(())

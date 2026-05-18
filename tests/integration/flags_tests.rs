@@ -1590,6 +1590,30 @@ fn test_gas_snapshot_uses_hex_opcode_when_abi_name_is_unknown() {
 }
 
 #[test]
+fn test_snapshot_save_failure_exits_non_zero() {
+    let project = ProjectBuilder::new("profiling-snapshot-save-failure")
+        .contract("simple", SIMPLE_CONTRACT)
+        .test_file("profile", PROFILED_TEST)
+        .build();
+    project.acton().init().run().success();
+
+    fs::create_dir(project.path().join("profile-output.json"))
+        .expect("Failed to create directory at snapshot output path");
+
+    project
+        .acton()
+        .env("ACTON_LOG_DIR", ".acton/logs")
+        .test()
+        .arg("--snapshot")
+        .arg("profile-output.json")
+        .run()
+        .failure()
+        .assert_stderr_snapshot_matches(
+            "integration/snapshots/flags/test_snapshot_save_failure_exits_non_zero.stderr.txt",
+        );
+}
+
+#[test]
 fn test_profile_compare_mode_does_not_overwrite_snapshot_argument() {
     let project = typed_profile_project("profiling-compare-keeps-snapshot");
     project.acton().init().run().success();
@@ -1879,7 +1903,7 @@ fn test_profiling_tables_are_hidden_when_tests_fail() {
 }
 
 #[test]
-fn test_baseline_missing_without_fail_on_diff_warns_and_succeeds() {
+fn test_baseline_missing_without_fail_on_diff_fails() {
     let project = ProjectBuilder::new("profiling-baseline-missing-non-strict")
         .contract("simple", SIMPLE_CONTRACT)
         .test_file("profile", PROFILED_TEST)
@@ -1893,10 +1917,9 @@ fn test_baseline_missing_without_fail_on_diff_warns_and_succeeds() {
         .arg("--baseline-snapshot")
         .arg("missing-baseline.json")
         .run()
-        .success()
-        .assert_contains("CHAIN GAS & FEES SUMMARY")
+        .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/flags/test_baseline_missing_without_fail_on_diff_warns_and_succeeds.stderr.txt",
+            "integration/snapshots/flags/test_baseline_missing_without_fail_on_diff_fails.stderr.txt",
         );
 }
 
@@ -1923,7 +1946,7 @@ fn test_baseline_missing_with_fail_on_diff_fails() {
 }
 
 #[test]
-fn test_baseline_invalid_without_fail_on_diff_warns_and_succeeds() {
+fn test_baseline_invalid_without_fail_on_diff_fails() {
     let project = ProjectBuilder::new("profiling-baseline-invalid-non-strict")
         .contract("simple", SIMPLE_CONTRACT)
         .test_file("profile", PROFILED_TEST)
@@ -1940,10 +1963,9 @@ fn test_baseline_invalid_without_fail_on_diff_warns_and_succeeds() {
         .arg("--baseline-snapshot")
         .arg("invalid-baseline.json")
         .run()
-        .success()
-        .assert_contains("CHAIN GAS & FEES SUMMARY")
+        .failure()
         .assert_stderr_snapshot_matches(
-            "integration/snapshots/flags/test_baseline_invalid_without_fail_on_diff_warns_and_succeeds.stderr.txt",
+            "integration/snapshots/flags/test_baseline_invalid_without_fail_on_diff_fails.stderr.txt",
         );
 }
 
