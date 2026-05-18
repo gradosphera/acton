@@ -75,6 +75,57 @@ get fun double(a: int): int {
 }
 "#;
 
+const FORWARDER_CONTRACT: &str = r#"import "../counter_messages"
+
+fun onInternalMessage(in: InMessage) {
+    if (in.body.isEmpty()) {
+        return;
+    }
+
+    val msg = lazy TriggerForward.fromSlice(in.body);
+    createMessage({
+        bounce: false,
+        value: ton("0.2"),
+        dest: msg.target,
+        body: Notify {
+            queryId: msg.queryId,
+        },
+    }).send(SEND_MODE_PAY_FEES_SEPARATELY);
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+"#;
+
+const RECEIVER_CONTRACT: &str = r#"import "../counter_messages"
+
+contract Receiver {
+    storage: ReceiverStorage
+    incomingMessages: Notify
+}
+
+fun onInternalMessage(in: InMessage) {
+    if (in.body.isEmpty()) {
+        return;
+    }
+
+    val msg = lazy Notify.fromSlice(in.body);
+    var storage = ReceiverStorage.load();
+    storage.received += 1;
+    storage.lastQueryId = msg.queryId;
+    storage.save();
+}
+
+fun onBouncedMessage(_: InMessageBounced) {}
+
+get fun received(): int {
+    return ReceiverStorage.load().received;
+}
+
+get fun lastQueryId(): int {
+    return ReceiverStorage.load().lastQueryId;
+}
+"#;
+
 const COUNTER_MESSAGES: &str = r"
 struct Storage {
     id: uint32
@@ -99,6 +150,28 @@ struct (0x3a752f06) ResetCounter {
 }
 
 struct ResetData {}
+
+struct (0x5100f001) TriggerForward {
+    queryId: uint64
+    target: address
+}
+
+struct (0x5100f002) Notify {
+    queryId: uint64
+}
+
+struct ReceiverStorage {
+    received: uint32
+    lastQueryId: uint64
+}
+
+fun ReceiverStorage.load(): ReceiverStorage {
+    return ReceiverStorage.fromCell(contract.getData());
+}
+
+fun ReceiverStorage.save(self) {
+    contract.setData(self.toCell());
+}
 ";
 
 const MAIN_CODE: &str = r#"
@@ -193,6 +266,144 @@ get fun `test should reset counter`() {
     expect(resetRes).toHaveSuccessfulTx({ from: deployer.address, to: counter.address });
     expect(counter.getCounter()).toEqual(0);
 }
+
+get fun `test should run counter through tx cursor`() {
+    val (counter, deployer) = setupTest();
+
+    val msg = createMessage({
+        bounce: false,
+        value: ton("0.1"),
+        dest: counter.address,
+        body: IncreaseCounter { queryId: 0, increaseBy: 7 },
+    });
+
+    val cursor = testing.createTraceIterationCursor(deployer.address, msg);
+    val res = cursor.executeN(1);
+
+    expect(res).toHaveSuccessfulTx({ from: deployer.address, to: counter.address });
+    expect(counter.getCounter()).toEqual(7);
+}
+
+struct Forwarder {
+    address: address
+    init: ContractState
+}
+
+fun Forwarder.fromEmpty(): Forwarder {
+    val init = ContractState {
+        code: build("forwarder"),
+        data: createEmptyCell(),
+    };
+    val address = AutoDeployAddress { stateInit: init }.calculateAddress();
+    return Forwarder { address, init };
+}
+
+fun Forwarder.deploy(self, from: address, config: SendParams = {}): SendResultList {
+    return net.send(from, createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: { stateInit: self.init },
+    }));
+}
+
+fun Forwarder.createTriggerMessage(
+    self,
+    target: address,
+    queryId: uint64,
+    config: SendParams = {},
+): OutMessage {
+    return createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: self.address,
+        body: TriggerForward { queryId, target },
+    });
+}
+
+struct Receiver {
+    address: address
+    init: ContractState
+}
+
+fun Receiver.fromStorage(storage: ReceiverStorage): Receiver {
+    val init = ContractState {
+        code: build("receiver"),
+        data: storage.toCell(),
+    };
+    val address = AutoDeployAddress { stateInit: init }.calculateAddress();
+    return Receiver { address, init };
+}
+
+fun Receiver.deploy(self, from: address, config: SendParams = {}): SendResultList {
+    return net.send(from, createMessage({
+        bounce: config.bounce,
+        value: config.value,
+        dest: { stateInit: self.init },
+    }));
+}
+
+fun Receiver.received(self): int {
+    return net.runGetMethod(self.address, "received");
+}
+
+fun Receiver.lastQueryId(self): int {
+    return net.runGetMethod(self.address, "lastQueryId");
+}
+
+get fun `test txcursor can split and resume a forwarded chain`() {
+    val deployer = testing.treasury("deployer");
+    val forwarder = Forwarder.fromEmpty();
+    val receiver = Receiver.fromStorage({
+        received: 0,
+        lastQueryId: 0,
+    });
+
+    expect(forwarder.deploy(deployer.address, { value: ton("1") })).toHaveSuccessfulDeploy({
+        to: forwarder.address,
+    });
+    expect(receiver.deploy(deployer.address, { value: ton("1") })).toHaveSuccessfulDeploy({
+        to: receiver.address,
+    });
+
+    val trigger = forwarder.createTriggerMessage(receiver.address, 42, { value: ton("0.5") });
+    val cursor = testing.createTraceIterationCursor(deployer.address, trigger);
+
+    val firstHop = cursor.executeN(1);
+    expect(firstHop).toHaveSuccessfulTx<TriggerForward>({
+        from: deployer.address,
+        to: forwarder.address,
+    });
+    expect(receiver.received()).toEqual(0);
+    expect(cursor.isDone()).toEqual(false);
+
+    val receiverHop = cursor.executeTill<Notify>({
+        from: forwarder.address,
+        to: receiver.address,
+    });
+    expect(receiverHop).toHaveSuccessfulTx<Notify>({
+        from: forwarder.address,
+        to: receiver.address,
+    });
+    expect(receiver.received()).toEqual(1);
+    expect(receiver.lastQueryId()).toEqual(42);
+    expect(cursor.isDone()).toEqual(true);
+
+    val secondTrigger = forwarder.createTriggerMessage(receiver.address, 43, { value: ton("0.5") });
+    val secondCursor = testing.createTraceIterationCursor(deployer.address, secondTrigger);
+    val allRemaining = secondCursor.executeAllRemaining();
+
+    expect(allRemaining).toHaveSuccessfulTx<TriggerForward>({
+        from: deployer.address,
+        to: forwarder.address,
+    });
+    expect(allRemaining).toHaveSuccessfulTx<Notify>({
+        from: forwarder.address,
+        to: receiver.address,
+    });
+    expect(receiver.received()).toEqual(2);
+    expect(receiver.lastQueryId()).toEqual(43);
+    expect(secondCursor.isDone()).toEqual(true);
+}
 "#;
 
 fn setup_counter_project(method_name: &str) -> DebugSession {
@@ -200,6 +411,8 @@ fn setup_counter_project(method_name: &str) -> DebugSession {
 
     let project = ProjectBuilder::new("counter-test")
         .contract("counter", COUNTER)
+        .contract("forwarder", FORWARDER_CONTRACT)
+        .contract("receiver", RECEIVER_CONTRACT)
         .file("counter_messages", COUNTER_MESSAGES)
         .file("main", main_code)
         .build();
@@ -265,6 +478,40 @@ fn test_real_counter_contract_step_in() -> anyhow::Result<()> {
 
     result.assert_trace_snapshot_matches(
         "integration/snapshots/debugger/counter/test_real_counter_step_in.trace.txt",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_real_counter_contract_tx_cursor_step_in() -> anyhow::Result<()> {
+    let session = setup_counter_project("test should run counter through tx cursor");
+    let mut client = session.start();
+
+    let result = client.execute(|executor| {
+        executor.step_in_until_terminated(2_000)?;
+        Ok(())
+    })?;
+
+    result.assert_trace_snapshot_matches(
+        "integration/snapshots/debugger/counter/test_real_counter_tx_cursor_step_in.trace.txt",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_real_counter_contract_tx_cursor_forwarded_chain_step_in() -> anyhow::Result<()> {
+    let session = setup_counter_project("test txcursor can split and resume a forwarded chain");
+    let mut client = session.start();
+
+    let result = client.execute(|executor| {
+        executor.step_in_until_terminated(4_000)?;
+        Ok(())
+    })?;
+
+    result.assert_trace_snapshot_matches(
+        "integration/snapshots/debugger/counter/test_real_counter_tx_cursor_forwarded_chain_step_in.trace.txt",
     );
 
     Ok(())

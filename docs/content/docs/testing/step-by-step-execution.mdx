@@ -214,7 +214,6 @@ The same layout also supports splitting one scenario into several assertions wit
 ## Limits and caveats
 
 - [`testing.createTraceIterationCursor()`](/docs/standard_library/emulation/testing#testingcreatetraceiterationcursor) is available only in emulation mode. It is not a broadcast workflow.
-- Step-by-step execution is not supported in debug mode yet.
 - [`executeN(0)`](/docs/standard_library/emulation/testing#txcursorexecuten) is a no-op and leaves the cursor untouched.
 - [`executeTill()`](/docs/standard_library/emulation/testing#txcursorexecutetill) fails if the queue is exhausted before a match is found.
 - [`close()`](/docs/standard_library/emulation/testing#txcursorclose) discards pending work; it does not roll the state back.

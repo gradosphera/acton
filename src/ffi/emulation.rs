@@ -1250,23 +1250,35 @@ fn execute_message_iter_batch(
         anyhow::bail!("createTraceIterationCursor() is available only in emulation mode")
     }
 
-    if ctx.debug.is_enabled() {
-        anyhow::bail!("Step-by-step execution is not supported in debug mode yet")
-    }
-
-    let chain = &mut ctx.chain;
-    execute_message_iter_batch_with(
-        &mut ctx.message_iters,
+    let debug_enabled = ctx.debug.is_enabled();
+    let mut message_iters = std::mem::take(&mut ctx.message_iters);
+    let batch = execute_message_iter_batch_with(
+        &mut message_iters,
         cursor_id,
         stop,
         |pending, libs_owner| {
-            let libs = chain.build_libs_with_hash_owner(&libs_owner);
+            let libs = ctx.chain.build_libs_with_hash_owner(&libs_owner);
+            let message = pending.message;
+            let from = pending.from;
+
+            if debug_enabled {
+                let Some(result) = send_transaction_debug(ctx, &message, &libs, from)
+                    .context("Cannot execute step-by-step transaction")?
+                else {
+                    anyhow::bail!("Cannot execute step-by-step transaction");
+                };
+                return Ok(result);
+            }
+
+            let chain = &mut ctx.chain;
             chain
                 .emulator
-                .send_transaction(chain.world_state, pending.message, &libs, pending.from)
+                .send_transaction(chain.world_state, message, &libs, from)
                 .context("Cannot execute step-by-step transaction")
         },
-    )
+    );
+    ctx.message_iters = message_iters;
+    batch
 }
 
 /// Broadcast an internal message through an opened wallet. Returns the external-in cell
@@ -1499,10 +1511,6 @@ fn start_message_iter_impl(
 ) -> anyhow::Result<()> {
     if ctx.is_broadcasting {
         anyhow::bail!("createTraceIterationCursor() is available only in emulation mode")
-    }
-
-    if ctx.debug.is_enabled() {
-        anyhow::bail!("Step-by-step execution is not supported in debug mode yet")
     }
 
     let std_address = src.as_std().context("Var addresses are not supported")?;
