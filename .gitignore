@@ -2,6 +2,7 @@
 .acton/
 /objs
 /build
+.test/
 
 # Rust build artifacts
 target/

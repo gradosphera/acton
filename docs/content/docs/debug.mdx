@@ -297,7 +297,10 @@ It is useful when:
 This mechanism is available in local emulation workflows and is useful in tests or locally emulated scripts.
 
 <Callout type="warn">
-  `testing.createTraceIterationCursor()` is not source-level debugging. It is transaction-chain execution in local emulation. It is not available in broadcast mode. Under `--debug`, it still does not add source-level breakpoints or stepping.
+  `testing.createTraceIterationCursor()` is transaction-chain execution in local
+  emulation. It is not available in broadcast mode, but it can be used under
+  `--debug` and the executed transactions can be stepped through with the
+  debugger's step controls.
 </Callout>
 
 See the [step-by-step execution](/docs/testing/step-by-step-execution) page for more.

@@ -145,29 +145,51 @@ pub struct ReplayerDebugSession {
 }
 
 impl ReplayerDebugSession {
-    /// `emulation/network.tolk` functions are runtime shims rather than user code.
-    /// When Step Into lands there, keep stepping until we either enter a nested child
-    /// context or reach a genuinely user-visible stop.
-    fn is_transparent_step_into_function(path: &str, function_name: &str) -> bool {
-        let normalized = path.replace('\\', "/");
-        if !normalized.ends_with("/emulation/network.tolk")
-            && !normalized.ends_with("/emulation/testing.tolk")
-        {
-            return false;
+    /// Runtime shims and generated helpers are not user code. When Step Into
+    /// lands there, keep stepping until we either enter a nested child context
+    /// or reach a genuinely user-visible stop.
+    fn is_transparent_step_into_function(function_name: &str) -> bool {
+        fn strip_generic_suffix(name: &str) -> &str {
+            name.split_once('<').map_or(name, |(base, _)| base)
+        }
+
+        let (receiver_name, leaf_function_name) = function_name.rsplit_once('.').map_or_else(
+            || (None, strip_generic_suffix(function_name)),
+            |(receiver, leaf)| {
+                (
+                    Some(strip_generic_suffix(receiver)),
+                    strip_generic_suffix(leaf),
+                )
+            },
+        );
+
+        if leaf_function_name.starts_with("__") {
+            return true;
+        }
+
+        if receiver_name == Some("impl") {
+            // skip any impl.foo functions
+            return true;
+        }
+
+        if leaf_function_name.contains("runGetMethod") {
+            // runGetMethod or runGetMethodById
+            return true;
         }
 
         matches!(
-            function_name,
-            "send"
-                | "net.send"
-                | "processSingleTraceStep"
-                | "testing.processSingleTraceStep"
-                | "createTraceIterationCursor"
-                | "testing.createTraceIterationCursor"
-                | "sendExternal"
-                | "net.sendExternal"
-                | "testing.isDeployed"
-        ) || function_name.contains("runGetMethod")
+            (receiver_name, leaf_function_name),
+            (Some("net"), "send")
+                | (Some("net"), "sendExternal")
+                | (Some("testing"), "processSingleTraceStep")
+                | (Some("testing"), "createTraceIterationCursor")
+                | (Some("TxCursor"), "isDone")
+                | (Some("TxCursor"), "close")
+                | (Some("TxCursor"), "executeN")
+                | (Some("TxCursor"), "executeTill")
+                | (Some("TxCursor"), "executeAllRemaining")
+                | (Some("testing"), "isDeployed")
+        )
     }
 
     #[must_use]
@@ -536,15 +558,11 @@ impl ReplayerDebugSession {
         let Some(top_frame) = call_stack.last() else {
             return false;
         };
-        let Some(definition_loc) = top_frame.definition_loc.as_ref() else {
+        if top_frame.definition_loc.is_none() {
             return true;
-        };
-        let file_id = definition_loc.file_id();
-        let Some(path) = ctx.replayer.file_full_path(file_id) else {
-            return true;
-        };
+        }
 
-        Self::is_transparent_step_into_function(path, top_frame.f_name.as_str())
+        Self::is_transparent_step_into_function(top_frame.f_name.as_str())
     }
 
     fn step_into_until_user_visible_stop(&mut self) -> bool {
@@ -606,15 +624,9 @@ impl ReplayerDebugSession {
         // Only runtime boundary helpers can open a child VM context while the
         // parent replayer is still borrowed, so snapshot locals only there.
         let capture_locals = capture_locals
-            && call_stack.iter().any(|frame| {
-                let file_id = frame.definition_loc.as_ref().map_or_else(
-                    || replayer.current_file_id(),
-                    tolk_compiler::source_map::SrcRange::file_id,
-                );
-                replayer.file_full_path(file_id).is_some_and(|path| {
-                    Self::is_transparent_step_into_function(path, frame.f_name.as_str())
-                })
-            });
+            && call_stack
+                .iter()
+                .any(|frame| Self::is_transparent_step_into_function(frame.f_name.as_str()));
         let file_id = replayer.current_file_id();
         let line = replayer.current_line();
         let column = replayer.current_column();

@@ -526,37 +526,6 @@ Represents a set of parameters to search for a transaction in the transaction li
 
 <SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/network.tolk#L436" />
 
-## `SearchParams.hasPredicates`
-
-```tolk
-fun SearchParams.hasPredicates(self): bool
-```
-
-Check if user-provided SearchParams has any lambdas.
-If not (most common), fast FFI path will be used.
-
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/network.tolk#L519" />
-
-## `SearchParams.toScalarFFITuple`
-
-```tolk
-fun SearchParams.toScalarFFITuple(self): tuple
-```
-
-Convert SearchParams to a tuple of plain nullable scalar values for the fast FFI path.
-
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/network.tolk#L536" />
-
-## `SearchParams.toPredicateFFITuple`
-
-```tolk
-fun SearchParams.toPredicateFFITuple(self): tuple
-```
-
-Convert SearchParams to a tuple of [tag, predicate] pairs for FFI.
-
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/emulation/network.tolk#L557" />
-
 ## `ExternalOutSearchParams`
 
 ```tolk

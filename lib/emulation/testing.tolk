@@ -74,7 +74,7 @@ fun TxCursor.executeTill<Msg = unknown>(self, params: SearchParams = {}): SendRe
         params.opcode = declaredPrefix;
     }
 
-    val txs = ffi.executeMessageIterTill(self.id, params.toPredicateFFITuple());
+    val txs = ffi.executeMessageIterTill(self.id, params.__toPredicateFFITuple());
     if (txs == null) {
         Assert.fail("executeTill() did not find a matching transaction before queue exhaustion");
     }

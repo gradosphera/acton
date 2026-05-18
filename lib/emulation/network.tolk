@@ -516,7 +516,7 @@ fun impl.toPredicate<T>(field: (T -> bool) | T | null): tuple {
 
 /// Check if user-provided SearchParams has any lambdas.
 /// If not (most common), fast FFI path will be used.
-fun SearchParams.hasPredicates(self): bool {
+fun SearchParams.__hasPredicates(self): bool {
     return impl.isPredicate(self.to) | impl.isPredicate(self.from) | impl.isPredicate(self.value) |
     impl.isPredicate(self.exitCode) |
     impl.isPredicate(self.success) |
@@ -533,7 +533,7 @@ fun SearchParams.hasPredicates(self): bool {
 }
 
 /// Convert SearchParams to a tuple of plain nullable scalar values for the fast FFI path.
-fun SearchParams.toScalarFFITuple(self): tuple {
+fun SearchParams.__toScalarFFITuple(self): tuple {
     return [
         impl.unwrapScalar(self.to),
         impl.unwrapScalar(self.from),
@@ -554,7 +554,7 @@ fun SearchParams.toScalarFFITuple(self): tuple {
 }
 
 /// Convert SearchParams to a tuple of [tag, predicate] pairs for FFI.
-fun SearchParams.toPredicateFFITuple(self): tuple {
+fun SearchParams.__toPredicateFFITuple(self): tuple {
     return [
         impl.toPredicate(self.to),
         impl.toPredicate(self.from),
@@ -1432,16 +1432,16 @@ fun impl.findTransaction(txs: SendResultList, params: SearchParams): cell? {
         return null;
     }
 
-    return params.hasPredicates()
+    return params.__hasPredicates()
         ? ffi.findTransactionByPredicateParams(
             txs.first().lt,
             txs.last().lt,
-            params.toPredicateFFITuple(),
+            params.__toPredicateFFITuple(),
         )
         : ffi.findTransactionByScalarParams(
             txs.first().lt,
             txs.last().lt,
-            params.toScalarFFITuple(),
+            params.__toScalarFFITuple(),
         );
 }
 
@@ -1453,7 +1453,7 @@ fun impl.findTransactionOrFail(
 ): void {
     val tx = impl.findTransaction(txs, params);
     if (tx == null) {
-        ffi.failToFindTransactionByParams(location, message, txs, params.toPredicateFFITuple());
+        ffi.failToFindTransactionByParams(location, message, txs, params.__toPredicateFFITuple());
         throw ASSERTION_FAILED;
     }
 }
@@ -1466,7 +1466,12 @@ fun impl.findNoTransactionOrFail(
 ): void {
     val tx = impl.findTransaction(txs, params);
     if (tx != null) {
-        ffi.failToNotFindTransactionByParams(location, message, txs, params.toPredicateFFITuple());
+        ffi.failToNotFindTransactionByParams(
+            location,
+            message,
+            txs,
+            params.__toPredicateFFITuple(),
+        );
         throw ASSERTION_FAILED;
     }
 }
