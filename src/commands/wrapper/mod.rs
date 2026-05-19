@@ -4,7 +4,7 @@ use acton_config::config::{ActonConfig, project_root};
 use anyhow::{Context, anyhow};
 use heck::ToLowerCamelCase;
 use serde::Serialize;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,6 +12,7 @@ use std::process::Command;
 use tempfile::TempDir;
 use tolk_compiler::abi::{ABIGetMethod, ABIOpcode, ABIResolvedStruct, ContractABI};
 use tolk_compiler::source_map::Declaration;
+use tolk_compiler::types_kernel::{Ty, TyIdx};
 use tolk_compiler::{CompilerResult, SourceMap};
 
 const TYPESCRIPT_WRAPPER_PACKAGE: &str = "@ton/tolk-abi-to-typescript@0.5.0";
@@ -29,6 +30,7 @@ struct WrapperModel {
     incoming_external_messages: Vec<ABIResolvedStruct>,
     storage_path: Option<PathBuf>,
     message_paths: Vec<PathBuf>,
+    wrapper_import_paths: Vec<PathBuf>,
     wrapper_path: PathBuf,
     test_path: PathBuf,
     mappings: Option<BTreeMap<String, String>>,
@@ -149,7 +151,15 @@ fn build_model(
         configured_tolk_test_output_dir,
     );
 
-    let message_paths = message_paths.into_iter().collect();
+    let message_paths = message_paths.into_iter().collect::<Vec<_>>();
+    let wrapper_import_paths = collect_wrapper_import_paths(
+        &abi,
+        &source_map,
+        storage_path.as_ref(),
+        &message_paths,
+        &incoming_messages,
+        &incoming_external_messages,
+    );
 
     Ok(WrapperModel {
         project_root,
@@ -162,6 +172,7 @@ fn build_model(
         incoming_external_messages,
         storage_path,
         message_paths,
+        wrapper_import_paths,
         wrapper_path,
         test_path,
         mappings,
@@ -492,18 +503,195 @@ fn serialize_typescript_abi(model: &WrapperModel) -> anyhow::Result<String> {
 
 fn find_type_path(source_map: &SourceMap, type_name: &str) -> Option<PathBuf> {
     source_map.declarations().iter().find_map(|declaration| {
-        let Declaration::Struct(struct_decl) = declaration else {
-            return None;
+        let file_id = match declaration {
+            Declaration::Struct(struct_decl) if struct_decl.name == type_name => {
+                struct_decl.ident_loc.file_id()
+            }
+            Declaration::Alias(alias_decl) if alias_decl.name == type_name => {
+                alias_decl.ident_loc.file_id()
+            }
+            Declaration::Enum(enum_decl) if enum_decl.name == type_name => {
+                enum_decl.ident_loc.file_id()
+            }
+            _ => return None,
         };
 
-        if struct_decl.name != type_name {
-            return None;
-        }
-
         source_map
-            .resolve_file_full_path(struct_decl.ident_loc.file_id())
+            .resolve_file_full_path(file_id)
             .map(PathBuf::from)
     })
+}
+
+fn collect_wrapper_import_paths(
+    abi: &ContractABI,
+    source_map: &SourceMap,
+    storage_path: Option<&PathBuf>,
+    message_paths: &[PathBuf],
+    incoming_messages: &[ABIResolvedStruct],
+    incoming_external_messages: &[ABIResolvedStruct],
+) -> Vec<PathBuf> {
+    let mut paths = BTreeSet::new();
+
+    if let Some(storage_path) = storage_path {
+        paths.insert(storage_path.clone());
+    }
+
+    for message_path in message_paths {
+        paths.insert(message_path.clone());
+    }
+
+    let mut type_names = BTreeSet::new();
+    let mut visited_types = HashSet::new();
+
+    let storages = [
+        abi.storage.storage_at_deployment_ty_idx,
+        abi.storage.storage_ty_idx,
+    ]
+    .into_iter()
+    .flatten();
+
+    for storage_ty_idx in storages {
+        collect_rendered_type_dependencies(
+            abi,
+            storage_ty_idx,
+            &mut visited_types,
+            &mut type_names,
+        );
+    }
+
+    for message in incoming_messages.iter().chain(incoming_external_messages) {
+        for field in &message.fields {
+            collect_rendered_type_dependencies(
+                abi,
+                field.client_or_declared_ty_idx(),
+                &mut visited_types,
+                &mut type_names,
+            );
+        }
+    }
+
+    for get_method in &abi.get_methods {
+        for parameter in &get_method.parameters {
+            collect_rendered_type_dependencies(
+                abi,
+                parameter.ty_idx,
+                &mut visited_types,
+                &mut type_names,
+            );
+        }
+        collect_rendered_type_dependencies(
+            abi,
+            get_method.return_ty_idx,
+            &mut visited_types,
+            &mut type_names,
+        );
+    }
+
+    for type_name in type_names {
+        if let Some(path) = find_type_path(source_map, &type_name) {
+            paths.insert(path);
+        }
+    }
+
+    paths.into_iter().collect()
+}
+
+fn collect_rendered_type_dependencies(
+    abi: &ContractABI,
+    ty_idx: TyIdx,
+    visited_types: &mut HashSet<TyIdx>,
+    type_names: &mut BTreeSet<String>,
+) {
+    if !visited_types.insert(ty_idx) {
+        return;
+    }
+
+    let Some(ty) = abi.ty_by_idx(ty_idx).cloned() else {
+        return;
+    };
+
+    match ty {
+        Ty::StructRef {
+            struct_name,
+            type_args_ty_idx,
+        } => {
+            type_names.insert(struct_name);
+            collect_optional_type_args(abi, type_args_ty_idx, visited_types, type_names);
+        }
+        Ty::AliasRef {
+            alias_name,
+            type_args_ty_idx,
+        } => {
+            type_names.insert(alias_name);
+            collect_optional_type_args(abi, type_args_ty_idx, visited_types, type_names);
+        }
+        Ty::EnumRef { enum_name } => {
+            type_names.insert(enum_name);
+        }
+        Ty::Nullable { inner_ty_idx, .. }
+        | Ty::CellOf { inner_ty_idx }
+        | Ty::ArrayOf { inner_ty_idx }
+        | Ty::LispListOf { inner_ty_idx } => {
+            collect_rendered_type_dependencies(abi, inner_ty_idx, visited_types, type_names);
+        }
+        Ty::Tensor { items_ty_idx } | Ty::ShapedTuple { items_ty_idx } => {
+            for item_ty_idx in items_ty_idx {
+                collect_rendered_type_dependencies(abi, item_ty_idx, visited_types, type_names);
+            }
+        }
+        Ty::MapKV {
+            key_ty_idx,
+            value_ty_idx,
+        } => {
+            collect_rendered_type_dependencies(abi, key_ty_idx, visited_types, type_names);
+            collect_rendered_type_dependencies(abi, value_ty_idx, visited_types, type_names);
+        }
+        Ty::Union { variants, .. } => {
+            for variant in variants {
+                collect_rendered_type_dependencies(
+                    abi,
+                    variant.variant_ty_idx,
+                    visited_types,
+                    type_names,
+                );
+            }
+        }
+        Ty::Int
+        | Ty::IntN { .. }
+        | Ty::UintN { .. }
+        | Ty::VarintN { .. }
+        | Ty::VaruintN { .. }
+        | Ty::Coins
+        | Ty::Bool
+        | Ty::Cell
+        | Ty::Builder
+        | Ty::Slice
+        | Ty::String
+        | Ty::Remaining
+        | Ty::Address
+        | Ty::AddressOpt
+        | Ty::AddressExt
+        | Ty::AddressAny
+        | Ty::BitsN { .. }
+        | Ty::NullLiteral
+        | Ty::Callable
+        | Ty::Void
+        | Ty::Unknown
+        | Ty::GenericT { .. } => {}
+    }
+}
+
+fn collect_optional_type_args(
+    abi: &ContractABI,
+    type_args_ty_idx: Option<Vec<TyIdx>>,
+    visited_types: &mut HashSet<TyIdx>,
+    type_names: &mut BTreeSet<String>,
+) {
+    if let Some(type_args_ty_idx) = type_args_ty_idx {
+        for type_arg_ty_idx in type_args_ty_idx {
+            collect_rendered_type_dependencies(abi, type_arg_ty_idx, visited_types, type_names);
+        }
+    }
 }
 
 fn to_pascal_case(s: &str) -> String {
@@ -540,18 +728,8 @@ fn generate_wrapper(model: &WrapperModel) -> String {
     code.push_str(&import_stdlib("emulation/network"));
     code.push_str(&import_stdlib("testing/assert"));
 
-    if let Some(storage_path) = &model.storage_path {
-        let storage_import = get_import_path(proot, root, storage_path, mappings.as_ref());
-        code.push_str(&gen_import_path(storage_import));
-    }
-
-    for messages_path in &model.message_paths {
-        if Some(messages_path) == model.storage_path.as_ref() {
-            // don't add duplicate import
-            continue;
-        }
-
-        let types_import = get_import_path(proot, root, messages_path, mappings.as_ref());
+    for import_path in &model.wrapper_import_paths {
+        let types_import = get_import_path(proot, root, import_path, mappings.as_ref());
         code.push_str(&gen_import_path(types_import));
     }
 

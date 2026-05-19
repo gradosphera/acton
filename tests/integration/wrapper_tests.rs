@@ -847,6 +847,402 @@ fn test_wrapper_generation_with_typed_cell_param() {
 }
 
 #[test]
+fn test_wrapper_generation_imports_generic_message_field_types() {
+    let project = ProjectBuilder::new("wrapper_generic_fields")
+        .mapping("acton", ".acton")
+        .contract(
+            "my_contract",
+            r#"
+                import "messages"
+
+                contract MyContract {
+                    incomingMessages: GenericPing
+                }
+
+                fun onInternalMessage(_: InMessage) {}
+                fun onBouncedMessage(_: InMessageBounced) {}
+            "#,
+        )
+        .file(
+            "contracts/messages",
+            r#"
+                import "payloads"
+
+                struct (0x00000001) GenericPing {
+                    payload: Boxed<uint32>
+                }
+            "#,
+        )
+        .file(
+            "contracts/payloads",
+            r"
+                struct Boxed<T> {
+                    value: T
+                }
+            ",
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("wrappers/MyContract.gen.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_imports_generic_message_field_types/wrapper.tolk.txt",
+        );
+
+    project.acton().test().run().success().assert_passed(1);
+}
+
+#[test]
+fn test_wrapper_generation_imports_generic_external_message_field_types() {
+    let project = ProjectBuilder::new("wrapper_generic_external_fields")
+        .mapping("acton", ".acton")
+        .contract(
+            "my_contract",
+            r#"
+                import "@stdlib/gas-payments"
+                import "messages"
+
+                contract MyContract {
+                    incomingExternal: GenericExtPing
+                }
+
+                fun onInternalMessage(_: InMessage) {}
+                fun onExternalMessage() {
+                    acceptExternalMessage();
+                }
+                fun onBouncedMessage(_: InMessageBounced) {}
+            "#,
+        )
+        .file(
+            "contracts/messages",
+            r#"
+                import "payloads"
+
+                struct (0xF3000001) GenericExtPing {
+                    payload: Boxed<uint32>
+                }
+            "#,
+        )
+        .file(
+            "contracts/payloads",
+            r"
+                struct Boxed<T> {
+                    value: T
+                }
+            ",
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("wrappers/MyContract.gen.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_imports_generic_external_message_field_types/wrapper.tolk.txt",
+        );
+
+    project.acton().test().run().success().assert_passed(1);
+}
+
+#[test]
+fn test_wrapper_generation_imports_generic_get_method_types() {
+    let project = ProjectBuilder::new("wrapper_generic_get_method")
+        .mapping("acton", ".acton")
+        .contract(
+            "my_contract",
+            r#"
+                import "payloads"
+
+                contract MyContract {}
+
+                fun onInternalMessage(_: InMessage) {}
+                fun onBouncedMessage(_: InMessageBounced) {}
+
+                get fun echo_boxed(payload: Boxed<uint32>): Boxed<uint32> {
+                    return { value: payload.value };
+                }
+            "#,
+        )
+        .file(
+            "contracts/payloads",
+            r"
+                struct Boxed<T> {
+                    value: T
+                }
+            ",
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("wrappers/MyContract.gen.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_imports_generic_get_method_types/wrapper.tolk.txt",
+        );
+
+    project.acton().test().run().success().assert_passed(1);
+}
+
+#[test]
+fn test_wrapper_generation_imports_both_storage_and_deployment_storage_types() {
+    let project = ProjectBuilder::new("wrapper_both_storage_types")
+        .mapping("acton", ".acton")
+        .contract(
+            "my_contract",
+            r#"
+                import "deploy_storage"
+                import "runtime_storage"
+
+                contract MyContract {
+                    storage: RuntimeStorage
+                    storageAtDeployment: DeploymentStorage
+                }
+
+                fun onInternalMessage(_: InMessage) {}
+                fun onBouncedMessage(_: InMessageBounced) {}
+            "#,
+        )
+        .file(
+            "contracts/deploy_storage",
+            r"
+                struct DeploymentStorage {
+                    seed: uint32
+                }
+            ",
+        )
+        .file(
+            "contracts/runtime_storage",
+            r"
+                struct RuntimeStorage {
+                    value: uint32
+                }
+            ",
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("wrappers/MyContract.gen.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_imports_both_storage_and_deployment_storage_types/wrapper.tolk.txt",
+        );
+
+    project.acton().test().run().success().assert_passed(1);
+}
+
+#[test]
+fn test_wrapper_generation_imports_generic_message_field_type_arguments() {
+    let project = ProjectBuilder::new("wrapper_generic_field_type_arguments")
+        .mapping("acton", ".acton")
+        .contract(
+            "my_contract",
+            r#"
+                import "messages"
+
+                contract MyContract {
+                    incomingMessages: GenericPing
+                }
+
+                fun onInternalMessage(_: InMessage) {}
+                fun onBouncedMessage(_: InMessageBounced) {}
+            "#,
+        )
+        .file(
+            "contracts/messages",
+            r#"
+                import "boxes"
+                import "payloads"
+
+                struct (0x00000001) GenericPing {
+                    payload: Boxed<PayloadData>
+                }
+            "#,
+        )
+        .file(
+            "contracts/boxes",
+            r"
+                struct Boxed<T> {
+                    value: T
+                }
+            ",
+        )
+        .file(
+            "contracts/payloads",
+            r"
+                struct PayloadData {
+                    value: uint32
+                }
+            ",
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("wrappers/MyContract.gen.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_imports_generic_message_field_type_arguments/wrapper.tolk.txt",
+        );
+
+    project.acton().test().run().success().assert_passed(1);
+}
+
+#[test]
+fn test_wrapper_generation_deduplicates_import_paths_collected_from_storage_messages_and_fields() {
+    let project = ProjectBuilder::new("wrapper_dedup_imports")
+        .mapping("acton", ".acton")
+        .contract(
+            "my_contract",
+            r#"
+                import "types"
+
+                contract MyContract {
+                    storage: Storage
+                    incomingMessages: GenericPing
+                }
+
+                fun onInternalMessage(_: InMessage) {}
+                fun onBouncedMessage(_: InMessageBounced) {}
+            "#,
+        )
+        .file(
+            "contracts/types",
+            r"
+                struct Storage {
+                    payload: Boxed<uint32>
+                }
+
+                struct Boxed<T> {
+                    value: T
+                }
+
+                struct (0x00000001) GenericPing {
+                    payload: Boxed<uint32>
+                }
+            ",
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("wrappers/MyContract.gen.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_deduplicates_import_paths_collected_from_storage_messages_and_fields/wrapper.tolk.txt",
+        );
+
+    project.acton().test().run().success().assert_passed(1);
+}
+
+#[test]
+fn test_wrapper_generation_imports_client_type_variants_from_message_fields() {
+    let project = ProjectBuilder::new("wrapper_client_type_imports")
+        .mapping("acton", ".acton")
+        .contract(
+            "my_contract",
+            r#"
+                import "messages"
+
+                contract MyContract {
+                    incomingMessages: ClientTypedPing
+                }
+
+                fun onInternalMessage(_: InMessage) {}
+                fun onBouncedMessage(_: InMessageBounced) {}
+            "#,
+        )
+        .file(
+            "contracts/messages",
+            r#"
+                import "payloads"
+
+                type WirePayload = RemainingBitsAndRefs
+
+                struct (0x00000001) ClientTypedPing {
+                    @abi.clientType(PayloadInline | PayloadInRef)
+                    payload: WirePayload
+                }
+            "#,
+        )
+        .file(
+            "contracts/payloads",
+            r"
+                struct (0b0) PayloadInline {
+                    value: RemainingBitsAndRefs
+                }
+
+                struct (0b1) PayloadInRef {
+                    value: Cell<RemainingBitsAndRefs>
+                }
+            ",
+        )
+        .build();
+
+    project
+        .acton()
+        .wrapper("my_contract")
+        .generate_test_stub()
+        .run()
+        .success()
+        .assert_file_snapshot_matches(
+            project
+                .path()
+                .join("wrappers/MyContract.gen.tolk")
+                .to_str()
+                .expect(""),
+            "integration/snapshots/wrapper/test_wrapper_generation_imports_client_type_variants_from_message_fields/wrapper.tolk.txt",
+        );
+
+    project.acton().test().run().success().assert_passed(1);
+}
+
+#[test]
 fn test_wrapper_generation_with_snake_case_getters() {
     let project = ProjectBuilder::new("wrapper_getters")
         .contract(
