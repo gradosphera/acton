@@ -429,15 +429,15 @@ Defines network settings used by `--net` and `--fork-net`.
 
 | Field      | Type     | Required                                | Description                                                                                                                                                                                                                                                                                     |
 |:-----------|:---------|:----------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `api.v2`   | `string` | Yes for custom, optional for `localnet` | TON Center API v2 URL. For `localnet`, if omitted, Acton uses `http://localhost:<localnet.port>/api/v2`; if `[localnet].port` is not set, it falls back to port `5411`.                                                                                                                         |
-| `api.v3`   | `string` | No                                      | TON Center API v3 URL. For `localnet`, if omitted, Acton uses `http://localhost:<localnet.port>/api/v3`; if `[localnet].port` is not set, it falls back to port `5411`.                                                                                                                         |
-| `explorer` | `string` | No                                      | Base explorer URL for transaction links. Acton appends `/tx/<hash>` automatically (adds `/tx/` if missing). If omitted, Acton derives explorer links from `api.v2` (`<scheme>://<host>/explorer/tx/<hash>`). For default `localnet`, this becomes `http://localhost:<port>/explorer/tx/<hash>`. |
+| `api.v2`   | `string` | Yes for custom, optional for `localnet` | TON Center API v2 URL. For `localnet`, if omitted, Acton uses `http://127.0.0.1:<localnet.port>/api/v2`; if `[localnet].port` is not set, it falls back to port `5411`.                                                                                                                         |
+| `api.v3`   | `string` | No                                      | TON Center API v3 URL. For `localnet`, if omitted, Acton uses `http://127.0.0.1:<localnet.port>/api/v3`; if `[localnet].port` is not set, it falls back to port `5411`.                                                                                                                         |
+| `explorer` | `string` | No                                      | Base explorer URL for transaction links. Acton appends `/tx/<hash>` automatically (adds `/tx/` if missing). If omitted, Acton derives explorer links from `api.v2` (`<scheme>://<host>/explorer/tx/<hash>`). For default `localnet`, this becomes `http://127.0.0.1:<port>/explorer/tx/<hash>`. |
 
 Example:
 
 ```acton-toml title="Acton.toml"
 [networks.localnet]
-explorer = "http://localhost:3006"
+explorer = "http://127.0.0.1:3006"
 
 [networks.my-custom-net]
 api = { v2 = "https://my-custom-net.com/api/v2", v3 = "https://my-custom-net.com/api/v3" }

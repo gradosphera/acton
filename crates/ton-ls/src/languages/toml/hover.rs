@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn resolves_dotted_table_path() {
-        let source = "[networks.localnet]\napi = { v2 = \"http://localhost\" }\n";
+        let source = "[networks.localnet]\napi = { v2 = \"http://127.0.0.1\" }\n";
         let snapshot = parse_snapshot(source);
         let offset = source.find("v2 =").expect("key exists");
         let node = snapshot

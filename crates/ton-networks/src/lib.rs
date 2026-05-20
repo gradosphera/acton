@@ -174,8 +174,8 @@ mod tests {
         custom_networks.insert(
             "localnet".to_string(),
             CustomNetworkUrls {
-                v2_url: Arc::from("http://localhost:3010/api/v2"),
-                v3_url: Some(Arc::from("http://localhost:3010/api/v3")),
+                v2_url: Arc::from("http://127.0.0.1:3010/api/v2"),
+                v3_url: Some(Arc::from("http://127.0.0.1:3010/api/v3")),
                 explorer_url: None,
             },
         );
@@ -184,13 +184,13 @@ mod tests {
             Network::Localnet
                 .toncenter_v2_url(&custom_networks)
                 .expect("v2 url should resolve"),
-            "http://localhost:3010/api/v2"
+            "http://127.0.0.1:3010/api/v2"
         );
         assert_eq!(
             Network::Localnet
                 .toncenter_v3_url(&custom_networks)
                 .expect("v3 url should resolve"),
-            "http://localhost:3010/api/v3"
+            "http://127.0.0.1:3010/api/v3"
         );
     }
 }

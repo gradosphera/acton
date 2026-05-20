@@ -106,14 +106,14 @@ RUNTIME MODEL
        o  acton localnet start runs in the foreground until the process is
           stopped
 
-       o  Acton starts an HTTP server on localhost:<port> for localnet API,
+       o  Acton starts an HTTP server on 127.0.0.1:<port> for localnet API,
           control endpoints, and the bundled localnet UI
 
        o  the server keeps running until the process is stopped, for example
           with Ctrl+C
 
        o  the Localnet UI is available on the root path, for example
-          http://localhost:<port>/
+          http://127.0.0.1:<port>/
 
        o  the bundled UI is a single-page explorer app, so routes like
           /explorer, /tokens, /nfts, and per-address or per-transaction pages

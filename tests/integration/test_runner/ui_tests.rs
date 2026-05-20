@@ -53,7 +53,7 @@ fn ui_deploy_test_source_for_contract(test_name: &str, contract_name: &str) -> S
 }
 
 fn reserve_ui_port() -> (Option<TcpListener>, String) {
-    // Preferred mode: occupy an ephemeral localhost port so `acton test --ui`
+    // Preferred mode: occupy an ephemeral loopback port so `acton test --ui`
     // always fails fast with deterministic "address already in use".
     if let Ok(listener) = TcpListener::bind("127.0.0.1:0") {
         let port = listener

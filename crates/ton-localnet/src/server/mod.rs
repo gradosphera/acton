@@ -17,7 +17,7 @@ pub struct ServerArgs {
 pub async fn run_server(node: Arc<Localnet>, args: ServerArgs) -> anyhow::Result<()> {
     let app = router::create_router(node, args.rate_limit_rps);
 
-    let address = format!("localhost:{}", args.port);
+    let address = format!("127.0.0.1:{}", args.port);
     let listener = tokio::net::TcpListener::bind(&address).await?;
     println!(
         "    {} Localnet server and UI on http://{address}",

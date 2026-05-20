@@ -3572,7 +3572,7 @@ mod tests {
     #[test]
     fn configured_network_transaction_link_prefers_explorer_url() {
         let urls = acton_config::config::CustomNetworkUrls {
-            v2_url: Arc::from("http://localhost:3010/api/v2"),
+            v2_url: Arc::from("http://127.0.0.1:3010/api/v2"),
             v3_url: None,
             explorer_url: Some(Arc::from("https://explorer.example/explorer")),
         };
@@ -3585,7 +3585,7 @@ mod tests {
     #[test]
     fn configured_network_transaction_link_keeps_existing_tx_suffix() {
         let urls = acton_config::config::CustomNetworkUrls {
-            v2_url: Arc::from("http://localhost:3010/api/v2"),
+            v2_url: Arc::from("http://127.0.0.1:3010/api/v2"),
             v3_url: None,
             explorer_url: Some(Arc::from("https://explorer.example/explorer/tx/")),
         };
@@ -3598,27 +3598,27 @@ mod tests {
     #[test]
     fn configured_network_transaction_link_appends_tx_for_host_only_explorer() {
         let urls = acton_config::config::CustomNetworkUrls {
-            v2_url: Arc::from("http://localhost:3010/api/v2"),
+            v2_url: Arc::from("http://127.0.0.1:3010/api/v2"),
             v3_url: None,
-            explorer_url: Some(Arc::from("http://localhost:3006")),
+            explorer_url: Some(Arc::from("http://127.0.0.1:3006")),
         };
 
         let url = configured_network_transaction_link(&urls, "abc123")
             .expect("explorer link should be built");
-        assert_eq!(url, "http://localhost:3006/tx/abc123");
+        assert_eq!(url, "http://127.0.0.1:3006/tx/abc123");
     }
 
     #[test]
     fn configured_network_transaction_link_falls_back_to_v2() {
         let urls = acton_config::config::CustomNetworkUrls {
-            v2_url: Arc::from("http://localhost:3010/api/v2"),
+            v2_url: Arc::from("http://127.0.0.1:3010/api/v2"),
             v3_url: None,
             explorer_url: None,
         };
 
         let url = configured_network_transaction_link(&urls, "abc123")
             .expect("fallback link should be built");
-        assert_eq!(url, "http://localhost:3010/explorer/tx/abc123");
+        assert_eq!(url, "http://127.0.0.1:3010/explorer/tx/abc123");
     }
 
     #[test]

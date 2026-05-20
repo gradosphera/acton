@@ -278,12 +278,12 @@ one-off overrides or CI.
 
 - fork mode allows local development against remote chain state
 - `acton localnet start` runs in the foreground until the process is stopped
-- Acton starts an HTTP server on `localhost:<port>` for localnet API, control
+- Acton starts an HTTP server on `127.0.0.1:<port>` for localnet API, control
   endpoints, and the bundled localnet UI
 - the server keeps running until the process is stopped, for example with
   `Ctrl+C`
 - the Localnet UI is available on the root path, for example
-  `http://localhost:<port>/`
+  `http://127.0.0.1:<port>/`
 - the bundled UI is a single-page explorer app, so routes like `/explorer`,
   `/tokens`, `/nfts`, and per-address or per-transaction pages are served from
   the same frontend shell

@@ -198,34 +198,15 @@ pub async fn localnet_airdrop_cmd(address: &str, amount_ton: f64, port: u16) -> 
         .user_agent(crate::build_info::user_agent())
         .build()?;
     let amount_nanotons = (amount_ton * 1_000_000_000.0) as u128;
-    let mut last_connect_error = None;
-    let mut res = None;
-    for host in ["127.0.0.1", "localhost"] {
-        match client
-            .post(format!("http://{host}:{port}/acton_fundAccount"))
-            .json(&serde_json::json!({
-                "address": address,
-                "amount": amount_nanotons
-            }))
-            .send()
-            .await
-        {
-            Ok(response) => {
-                res = Some(response);
-                break;
-            }
-            Err(err) if err.is_connect() => {
-                last_connect_error = Some(err);
-            }
-            Err(err) => return Err(err.into()),
-        }
-    }
-    let Some(res) = res else {
-        if let Some(err) = last_connect_error {
-            return Err(err).context("Failed to reach localnet faucet");
-        }
-        anyhow::bail!("Failed to reach localnet faucet");
-    };
+    let res = client
+        .post(format!("http://127.0.0.1:{port}/acton_fundAccount"))
+        .json(&serde_json::json!({
+            "address": address,
+            "amount": amount_nanotons
+        }))
+        .send()
+        .await
+        .context("Failed to reach localnet faucet")?;
 
     if res.status().is_success() {
         let json: serde_json::Value = res.json().await?;

@@ -33,24 +33,7 @@ pub async fn localnet_status_cmd(port: u16, json: bool) -> anyhow::Result<()> {
     let client = crate::http::client_builder()
         .user_agent(crate::build_info::user_agent())
         .build()?;
-    let mut output = None;
-    for host in ["127.0.0.1", "localhost"] {
-        match client
-            .get(format!("http://{host}:{port}/acton_nodeInfo"))
-            .send()
-            .await
-        {
-            Ok(response) => {
-                if let Some(status_output) = parse_status_response(response, port).await? {
-                    output = Some(status_output);
-                    break;
-                }
-            }
-            Err(err) if err.is_connect() => {}
-            Err(err) => return Err(err).context("Failed to query localnet status"),
-        }
-    }
-    let output = output.unwrap_or(LocalnetStatusOutput {
+    let stopped = LocalnetStatusOutput {
         running: false,
         port,
         uptime_seconds: None,
@@ -58,7 +41,18 @@ pub async fn localnet_status_cmd(port: u16, json: bool) -> anyhow::Result<()> {
         state_source: None,
         fork_network: None,
         fork_block_number: None,
-    });
+    };
+    let output = match client
+        .get(format!("http://127.0.0.1:{port}/acton_nodeInfo"))
+        .send()
+        .await
+    {
+        Ok(response) => parse_status_response(response, port)
+            .await?
+            .unwrap_or(stopped),
+        Err(err) if err.is_connect() => stopped,
+        Err(err) => return Err(err).context("Failed to query localnet status"),
+    };
 
     if json {
         println!("{}", serde_json::to_string_pretty(&output)?);

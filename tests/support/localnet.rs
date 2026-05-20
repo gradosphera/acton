@@ -100,7 +100,7 @@ impl<'a> LocalnetBuilder<'a> {
         let mut handle = LocalnetHandle {
             child: Some(child),
             port: self.port,
-            base_url: format!("http://localhost:{}", self.port),
+            base_url: format!("http://127.0.0.1:{}", self.port),
             client: Client::builder()
                 .timeout(Duration::from_secs(5))
                 .build()
@@ -219,10 +219,7 @@ impl LocalnetHandle {
 
     fn wait_until_ready(&mut self, timeout: Duration) -> Result<String, String> {
         let deadline = Instant::now() + timeout;
-        let probe_urls = [
-            format!("http://localhost:{}/api/v2/getMasterchainInfo", self.port),
-            format!("http://127.0.0.1:{}/api/v2/getMasterchainInfo", self.port),
-        ];
+        let probe_url = format!("http://127.0.0.1:{}/api/v2/getMasterchainInfo", self.port);
 
         loop {
             if let Some(status) = self
@@ -233,22 +230,17 @@ impl LocalnetHandle {
                 return Err(format!("Localnet exited before ready with status {status}"));
             }
 
-            for url in &probe_urls {
-                if let Ok(response) = self.client.get(url).send()
-                    && response.status().is_success()
-                    && let Ok(json) = response.json::<Value>()
-                    && json.get("ok").and_then(Value::as_bool) == Some(true)
-                {
-                    let base_url = url.trim_end_matches("/api/v2/getMasterchainInfo");
-                    return Ok(base_url.to_string());
-                }
+            if let Ok(response) = self.client.get(&probe_url).send()
+                && response.status().is_success()
+                && let Ok(json) = response.json::<Value>()
+                && json.get("ok").and_then(Value::as_bool) == Some(true)
+            {
+                let base_url = probe_url.trim_end_matches("/api/v2/getMasterchainInfo");
+                return Ok(base_url.to_string());
             }
 
             if Instant::now() >= deadline {
-                return Err(format!(
-                    "Timed out waiting for readiness probe {}",
-                    probe_urls.join(" or ")
-                ));
+                return Err(format!("Timed out waiting for readiness probe {probe_url}"));
             }
 
             thread::sleep(Duration::from_millis(100));
