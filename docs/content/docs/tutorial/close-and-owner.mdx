@@ -12,8 +12,8 @@ enum Errors {
     InvalidOption  = 100
     AlreadyVoted   = 101
     NotFromPoll    = 102
-    NotOwner       = 103
-    PollClosed     = 104
+    NotOwner       = 103 // [!code ++]
+    PollClosed     = 104 // [!code ++]
     InvalidMessage = 0xFFFF
 }
 ```
@@ -25,7 +25,7 @@ struct PollStorage {
     owner:    address
     option0:  uint32
     option1:  uint32
-    isClosed: bool
+    isClosed: bool // [!code ++]
 }
 ```
 
@@ -43,7 +43,7 @@ The final `contracts/Poll.tolk` with all changes applied:
 import "@gen/Voter.code"
 import "types"
 
-type AllowedPollMessage = Vote | ClosePoll
+type AllowedPollMessage = Vote | ClosePoll // [!code ++]
 
 contract Poll {
     storage: PollStorage
@@ -82,7 +82,7 @@ fun onInternalMessage(in: InMessage) {
             });
             outMsg.send(SEND_MODE_PAY_FEES_SEPARATELY);
         }
-        ClosePoll => {
+        ClosePoll => { // [!code ++:16]
             var storage = lazy PollStorage.load();
             assert (in.senderAddress == storage.owner) throw Errors.NotOwner;
             storage.isClosed = true;
@@ -139,7 +139,7 @@ get fun owner(): address {
     return storage.owner;
 }
 
-get fun isClosed(): bool {
+get fun isClosed(): bool { // [!code ++:4]
     val storage = lazy PollStorage.load();
     return storage.isClosed;
 }
@@ -152,7 +152,8 @@ acton wrapper Poll
 ```
 
 <Callout type="info">
-  `PollStorage` now has an `isClosed` field. Update `setupTest()` to include `isClosed: false` in the `PollStorage` initializer.
+  `PollStorage` now has an `isClosed` field. Update `setupTest()` to include `isClosed: false` in
+  the `PollStorage` initializer.
 </Callout>
 
 ## Test the close logic
@@ -221,7 +222,8 @@ acton test --baseline-snapshot baseline.json --fail-on-diff
 If any test uses more gas than the baseline, the command exits with an error.
 
 <Callout type="info">
-  Re-capture the baseline after intentional changes that affect gas — for example, adding a field to storage.
+  Re-capture the baseline after intentional changes that affect gas — for example, adding a field to
+  storage.
 </Callout>
 
 ## Checkpoint
