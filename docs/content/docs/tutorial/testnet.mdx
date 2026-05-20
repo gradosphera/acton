@@ -4,7 +4,8 @@ description: "Create a funded testnet wallet, deploy the poll, verify source cod
 ---
 
 <Callout type="warn" title="Testnet only">
-  All commands on this page target testnet. TON testnet has no real value, but treat the wallet mnemonic with the same care as a mainnet wallet — never commit it to git.
+  All commands on this page target testnet. TON testnet has no real value, but treat the wallet
+  mnemonic with the same care as a mainnet wallet — never commit it to git.
 </Callout>
 
 ## Create and fund a testnet wallet
@@ -31,34 +32,60 @@ acton wallet list --balance
 ```
 
 <Callout type="info">
-  `acton wallet list --balance` queries TON Center for live balances. Set `TONCENTER_TESTNET_API_KEY` in the environment for a higher rate limit.
+  `acton wallet list --balance` queries TON Center for live balances. Set
+  `TONCENTER_TESTNET_API_KEY` in the environment for a higher rate limit.
 </Callout>
 
+If you already have a wallet, import it instead of creating a new one:
+
+```bash
+acton wallet import --name testnet-deployer --local --version v5r1 "word1 word2 ... word24"
+```
+
 ## Deploy to testnet
+
+Replace `scripts/deploy.tolk` with:
+
+```tolk
+import "@acton/io"
+import "@acton/emulation/network"
+import "@acton/emulation/scripts"
+
+import "@contracts/types"
+import "@wrappers/Poll.gen"
+
+fun main() {
+    val deployer = scripts.wallet("testnet-deployer");
+
+    val poll = Poll.fromStorage(PollStorage {
+        owner: deployer.address,
+        option0: 0,
+        option1: 0,
+        isClosed: false,
+    });
+    val res = poll.deploy(deployer.address, { value: ton("0.05") });
+    println(res.waitForTrace());
+
+    println("Deployed Poll contract to {}", poll.address);
+    println("Owner is {}", poll.owner());
+}
+```
 
 ```bash
 acton script scripts/deploy.tolk --net testnet
 ```
-
-<Callout type="tip">
-  The deploy script calls `scripts.wallet("deployer")`. Pass `WALLET=testnet-deployer` as an environment variable, or update the script to use `scripts.wallet("testnet-deployer")` for testnet runs.
-</Callout>
 
 ```acton-cli-trace noCopy title="terminal"
 $ acton script scripts/deploy.tolk --net testnet
 Awaiting trace... [Attempt 1/20]
 Trace settled with 2 transaction(s)
 N/A -> external
-└── ext-in 0x7369676e -> EQD36X..ur8XSS A     gas=4939
-    └── empty 0.05 TON -> EQBa78..XUMpRe B    gas=625
-        └── account created
+└── ext-in 0x7369676e -> EQD36X..ur8XSS A                                       gas=4939
+    └── empty 0.05 TON -> EQBa78..XUMpRe B                                      gas=625
 
-Deployed. Address: kQBa78G2p3zgNdJeCdO3KFv6hI7N55UxOegiplShSGXUMi_U
-Owner: kQD36XRy1ISfSB8zmlSQKBsa5bmeixAWwD6vUUhOXXur8c8Y
-Votes: option0=0, option1=0
+Deployed Poll contract to kQBa78G2p3zgNdJeCdO3KFv6hI7N55UxOegiplShSGXUMi_U
+Owner is kQD36XRy1ISfSB8zmlSQKBsa5bmeixAWwD6vUUhOXXur8c8Y
 ```
-
-Acton prints a link to the transaction on the testnet explorer.
 
 ## Inspect on-chain state
 
@@ -109,6 +136,30 @@ View at: https://verifier.ton.org/EQC9R1p...?testnet
 When `--dry-run` is not used, the final verification transaction sends `0.1 TON` unless the verifier backend reports that the same code hash is already verified.
 
 ## Send a vote and retrace the transaction
+
+Create `scripts/vote.tolk`:
+
+```tolk title="scripts/vote.tolk"
+import "@acton/io"
+import "@acton/prompts"
+import "@acton/emulation/network"
+import "@acton/emulation/scripts"
+
+import "@wrappers/Poll.gen"
+
+fun main(pollAddress: address, option: uint8) {
+    val voter = scripts.wallet(promptWallet("Select voter address"));
+    val poll = Poll.fromAddress(pollAddress);
+
+    val res = poll.sendVote(voter.address, option, { value: ton("0.1") });
+    println(res.waitForTrace());
+
+    val (option0, option1) = poll.results();
+    println("Results: option0={}, option1={}", option0, option1);
+}
+```
+
+The two command-line arguments become `pollAddress` and `option`:
 
 ```acton-cli
 acton script scripts/vote.tolk --net testnet <POLL_ADDRESS> 0
