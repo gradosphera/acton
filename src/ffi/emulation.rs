@@ -2701,6 +2701,18 @@ fn parse_cell_from_hex_impl(
     Ok(())
 }
 
+extension!(parse_cell_from_base64 in (Context) with (cell_base64: String) using parse_cell_from_base64_impl);
+fn parse_cell_from_base64_impl(
+    _: &mut Context,
+    stack: &mut Tuple,
+    cell_base64: String,
+) -> anyhow::Result<()> {
+    let cell = Boc::decode_base64(cell_base64.trim())
+        .with_context(|| format!("Failed to decode cell base64 {cell_base64}"))?;
+    stack.push(TupleItem::Cell(cell));
+    Ok(())
+}
+
 extension!(parse_int in (Context) with (x: String) using parse_int_impl);
 fn parse_int_impl(_: &mut Context, stack: &mut Tuple, x: String) -> anyhow::Result<()> {
     let value = x
@@ -3456,6 +3468,7 @@ pub fn register_extensions<T: BaseExecutor>(executor: &mut T, ctx: &mut Context)
         48 => find_transaction_by_predicate_params : 3,
         49 => wait_for_trace : 4,
         56 => send_external_message : 1,
+        57 => parse_cell_from_base64 : 1,
         501 => call_tolk_function : 3,
     });
 }

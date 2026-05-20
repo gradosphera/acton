@@ -134,6 +134,15 @@ fun parseCellFromHex(cellHex: string): cell {
     return ffi.cellFromHex(cellHex);
 }
 
+/// Decode a root cell from base64-encoded BOC bytes.
+///
+/// `cellBase64` must be a valid BOC serialized as base64.
+/// Invalid or malformed input (including non-BOC payloads) fails with an error like
+/// `Failed to decode cell base64 <input>`.
+fun parseCellFromBase64(cellBase64: string): cell {
+    return ffi.cellFromBase64(cellBase64);
+}
+
 fun ffi.format(
     fmt: string,
     type1: int,
@@ -154,6 +163,9 @@ fun ffi.convertAddress(addr: string): cell
 
 fun ffi.cellFromHex(cellHex: string): cell
     asm "20 EXTCALL"
+
+fun ffi.cellFromBase64(cellBase64: string): cell
+    asm "57 EXTCALL"
 
 fun ffi.parseInt(x: string): int?
     asm "47 EXTCALL"
