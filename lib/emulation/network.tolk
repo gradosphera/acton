@@ -327,6 +327,7 @@ fun SendResultList.giveName(self, nameForUI: string): void {
 ///
 /// In emulation mode (without `--net`), this method returns the first [SendResult] immediately
 /// (or `null` if the list is empty), because the trace is already fully processed locally.
+/// Use [SendResultList.waitForTrace] when you need the complete descendant transaction chain.
 ///
 /// Example:
 /// ```tolk

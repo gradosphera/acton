@@ -421,16 +421,18 @@ See https://ton-blockchain.github.io/acton/docs/wallets for more information
 
         if message.is_empty() {
             lines.push(format!(
-                "└── submitted to network; call {} to confirm inclusion",
-                "res.waitForFirstTransaction()".yellow()
+                "└── submitted to network; call {} to confirm inclusion or {} for the full trace",
+                "res.waitForFirstTransaction()".yellow(),
+                "res.waitForTrace()".yellow()
             ));
             return lines.join("\n");
         }
 
         lines.push(format!("└── {message}"));
         lines.push(format!(
-            "    └── submitted to network; call {} to confirm inclusion",
-            "res.waitForFirstTransaction()".yellow()
+            "    └── submitted to network; call {} to confirm inclusion or {} for the full trace",
+            "res.waitForFirstTransaction()".yellow(),
+            "res.waitForTrace()".yellow()
         ));
         lines.join("\n")
     }
