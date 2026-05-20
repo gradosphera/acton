@@ -202,7 +202,7 @@ pub async fn localnet_airdrop_cmd(address: &str, amount_ton: f64, port: u16) -> 
     let mut res = None;
     for host in ["127.0.0.1", "localhost"] {
         match client
-            .post(format!("http://{host}:{port}/admin/faucet"))
+            .post(format!("http://{host}:{port}/acton_fundAccount"))
             .json(&serde_json::json!({
                 "address": address,
                 "amount": amount_nanotons

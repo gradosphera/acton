@@ -101,21 +101,17 @@ pub fn create_router(node: Arc<Localnet>, rate_limit_rps: Option<u32>) -> Router
         .merge(api_v2_router)
         .merge(api_v3_router)
         .merge(emulate_router);
-    let admin_router = Router::new()
-        .route("/faucet", post(faucet))
-        .route(
-            "/address-name",
-            get(get_address_name).post(set_address_name),
-        )
-        .route("/compiler-abi", get(get_compiler_abi))
-        .route("/compiler-abis", post(register_compiler_abis))
-        .route("/dump-state", post(dump_state))
-        .route("/load-state", post(load_state))
-        .route(
-            "/state-source",
-            get(get_state_source).post(set_state_source),
-        )
-        .route("/status", get(get_status));
+    let acton_router = Router::new()
+        .route("/acton_fundAccount", post(faucet))
+        .route("/acton_getAddressName", get(get_address_name))
+        .route("/acton_setAddressName", post(set_address_name))
+        .route("/acton_getCompilerAbi", get(get_compiler_abi))
+        .route("/acton_registerCompilerAbis", post(register_compiler_abis))
+        .route("/acton_dumpState", post(dump_state))
+        .route("/acton_loadState", post(load_state))
+        .route("/acton_getStateSource", get(get_state_source))
+        .route("/acton_setStateSource", post(set_state_source))
+        .route("/acton_nodeInfo", get(get_status));
 
     if let Some(limit) = rate_limit_rps {
         let mut governor_config = GovernorConfigBuilder::default();
@@ -133,7 +129,7 @@ pub fn create_router(node: Arc<Localnet>, rate_limit_rps: Option<u32>) -> Router
 
     let app = Router::new()
         .nest("/api", api_router)
-        .nest("/admin", admin_router)
+        .merge(acton_router)
         .layer(loopback_cors())
         .layer(TraceLayer::new_for_http())
         .with_state(node);

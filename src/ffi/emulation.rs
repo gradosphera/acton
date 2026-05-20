@@ -3085,7 +3085,7 @@ fn register_localnet_abis(
         return Ok(());
     }
 
-    let url = localnet_admin_url(custom_networks, "compiler-abis")?;
+    let url = localnet_acton_url(custom_networks, "acton_registerCompilerAbis")?;
     let payload = RegisterAbiPayload {
         entries: entries_by_hash
             .into_iter()
@@ -3126,21 +3126,21 @@ fn register_localnet_abis(
     Ok(())
 }
 
-fn localnet_admin_url(
+fn localnet_acton_url(
     custom_networks: &HashMap<String, acton_config::config::CustomNetworkUrls>,
     endpoint: &str,
 ) -> anyhow::Result<String> {
     let v2_url = Network::Localnet.toncenter_v2_url(custom_networks)?;
     let mut url = reqwest::Url::parse(&v2_url)?;
     let base_path = url.path().trim_end_matches('/');
-    let admin_base = base_path.strip_suffix("/api/v2").unwrap_or(base_path);
-    let admin_path = if admin_base.is_empty() {
-        format!("/admin/{endpoint}")
+    let acton_base = base_path.strip_suffix("/api/v2").unwrap_or(base_path);
+    let acton_path = if acton_base.is_empty() {
+        format!("/{endpoint}")
     } else {
-        format!("{admin_base}/admin/{endpoint}")
+        format!("{acton_base}/{endpoint}")
     };
 
-    url.set_path(&admin_path);
+    url.set_path(&acton_path);
     url.set_query(None);
     url.set_fragment(None);
     Ok(url.to_string())

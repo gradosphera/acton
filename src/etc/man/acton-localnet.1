@@ -132,7 +132,7 @@ one\-off overrides or CI.
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'Acton starts an HTTP server on \fBlocalhost:<port>\fR for localnet API, admin
+\h'-04'\(bu\h'+03'Acton starts an HTTP server on \fBlocalhost:<port>\fR for localnet API, control
 endpoints, and the bundled localnet UI
 .RE
 .sp
@@ -153,9 +153,9 @@ the same frontend shell
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'the UI reads chain data from \fB/api/v2\fR and \fB/api/v3\fR, and uses \fB/admin\fR
-lookups for local address aliases, registered compiler ABIs, status, and
-snapshot tooling
+\h'-04'\(bu\h'+03'the UI reads chain data from \fB/api/v2\fR and \fB/api/v3\fR, and uses \fBacton_*\fR
+control endpoints for local address aliases, registered compiler ABIs,
+status, and snapshot tooling
 .RE
 .sp
 .RS 4
@@ -170,26 +170,27 @@ fallback is \fB5411\fR
 .RS 4
 \h'-04'\(bu\h'+03'\fB\-\-dump\-state\fR writes a snapshot during graceful shutdown
 .RE
-.SH "ADMIN API"
-The localnet server exposes admin routes for local development tooling:
+.SH "CONTROL ENDPOINTS"
+The localnet server exposes \fBacton_*\fR control routes for local development
+tooling:
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fBGET /admin/status\fR returns uptime, latest block seqno, and the active state
+\h'-04'\(bu\h'+03'\fBGET /acton_nodeInfo\fR returns uptime, latest block seqno, and the active state
 source
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fBPOST /admin/dump\-state\fR with \fB{"path":"snapshots/localnet.json"}\fR writes a
+\h'-04'\(bu\h'+03'\fBPOST /acton_dumpState\fR with \fB{"path":"snapshots/localnet.json"}\fR writes a
 JSON state snapshot without stopping the server
 .RE
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fBPOST /admin/load\-state\fR with \fB{"path":"snapshots/localnet.json"}\fR replaces
+\h'-04'\(bu\h'+03'\fBPOST /acton_loadState\fR with \fB{"path":"snapshots/localnet.json"}\fR replaces
 the current node state with a JSON state snapshot
 .RE
 .sp
-Admin routes are not authenticated and are intended only for local development.
-Do not expose the localnet server publicly.
+Control endpoints are not authenticated and are intended only for local
+development. Do not expose the localnet server publicly.
 .SH "PERSISTENCE"
 .sp
 .RS 4
@@ -218,7 +219,7 @@ use \fB\-\-json\fR and inspect \fBrunning\fR for automation.
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'\fB1\fR: Startup failed because port binding, state loading, remote fork
-initialization, faucet handling, or a status/admin query failed.
+initialization, faucet handling, or a status/control query failed.
 .RE
 .SH "DISPLAY OPTIONS"
 .sp

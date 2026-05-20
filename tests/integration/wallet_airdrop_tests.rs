@@ -810,7 +810,7 @@ fn test_wallet_airdrop_localnet_http_error_preserves_response_body() {
 
     let (port, faucet_handle, _) = spawn_localnet_faucet_mock(vec![FaucetMockResponse {
         method: "POST",
-        path: "/admin/faucet",
+        path: "/acton_fundAccount",
         status: 500,
         body: r#"{"error":"backend unavailable"}"#,
     }]);
@@ -852,7 +852,7 @@ fn test_wallet_airdrop_localnet_invalid_json_response_reports_parse_error() {
 
     let (port, faucet_handle, _) = spawn_localnet_faucet_mock(vec![FaucetMockResponse {
         method: "POST",
-        path: "/admin/faucet",
+        path: "/acton_fundAccount",
         status: 200,
         body: "not json",
     }]);

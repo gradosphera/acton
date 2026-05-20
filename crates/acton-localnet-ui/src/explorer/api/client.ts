@@ -199,19 +199,19 @@ export class TonClient {
   }
 
   async getAddressName(address: string): Promise<string | undefined> {
-    const url = this.buildUrl(this.addressNameBaseUrl, "/admin/address-name")
+    const url = this.buildUrl(this.addressNameBaseUrl, "/acton_getAddressName")
     url.searchParams.append("address", address)
     return this.request(url, "Failed to fetch address name")
   }
 
   async getCompilerAbi(codeHash: string): Promise<ContractABI | undefined> {
-    const url = this.buildUrl(this.addressNameBaseUrl, "/admin/compiler-abi")
+    const url = this.buildUrl(this.addressNameBaseUrl, "/acton_getCompilerAbi")
     url.searchParams.append("code_hash", codeHash)
     return this.request(url, "Failed to fetch compiler ABI")
   }
 
   async setAddressName(address: string, name: string): Promise<void> {
-    const url = this.buildUrl(this.addressNameBaseUrl, "/admin/address-name")
+    const url = this.buildUrl(this.addressNameBaseUrl, "/acton_setAddressName")
     await this.request<null>(url, "Failed to set address name", {
       method: "POST",
       headers: {"Content-Type": "application/json"},

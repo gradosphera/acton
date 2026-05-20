@@ -33,7 +33,7 @@ export default defineConfig({
         target: localnetTarget,
         changeOrigin: true,
       },
-      "/admin": {
+      "/acton_": {
         target: localnetTarget,
         changeOrigin: true,
       },

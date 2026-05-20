@@ -36,7 +36,7 @@ pub async fn localnet_status_cmd(port: u16, json: bool) -> anyhow::Result<()> {
     let mut output = None;
     for host in ["127.0.0.1", "localhost"] {
         match client
-            .get(format!("http://{host}:{port}/admin/status"))
+            .get(format!("http://{host}:{port}/acton_nodeInfo"))
             .send()
             .await
         {

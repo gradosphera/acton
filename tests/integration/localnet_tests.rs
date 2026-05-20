@@ -745,7 +745,7 @@ fn localnet_can_rate_limit_api_endpoints_to_simulate_provider_limits() {
         serde_json::to_string_pretty(&rate_limited).unwrap_or_default()
     );
 
-    let (admin_status, admin_response) = node.get_json_with_status("/admin/state-source");
+    let (admin_status, admin_response) = node.get_json_with_status("/acton_getStateSource");
     assert_eq!(
         admin_status, 200,
         "Admin endpoints must stay available when API rate-limit is enabled"
@@ -907,7 +907,7 @@ fn localnet_admin_dump_and_load_state_roundtrip() {
     let address_after = "0:2222222222222222222222222222222222222222222222222222222222222222";
 
     let funded_before = node.post_json(
-        "/admin/faucet",
+        "/acton_fundAccount",
         &json!({
             "address": address_before,
             "amount": 1_000_000_000u128,
@@ -922,14 +922,14 @@ fn localnet_admin_dump_and_load_state_roundtrip() {
     let before_balance = parse_address_balance(&before_info);
 
     let dumped = node.post_json(
-        "/admin/dump-state",
+        "/acton_dumpState",
         &json!({
             "path": snapshot_path.display().to_string(),
         }),
     );
 
     let funded_after = node.post_json(
-        "/admin/faucet",
+        "/acton_fundAccount",
         &json!({
             "address": address_after,
             "amount": 2_000_000_000u128,
@@ -944,7 +944,7 @@ fn localnet_admin_dump_and_load_state_roundtrip() {
     let after_balance_before_load = parse_address_balance(&after_info);
 
     let loaded = node.post_json(
-        "/admin/load-state",
+        "/acton_loadState",
         &json!({
             "path": snapshot_path.display().to_string(),
         }),
@@ -2105,7 +2105,7 @@ fn localnet_supports_v3_transactions_endpoints() {
         V3_TRANSACTIONS_TEST_ACCOUNT_B,
     ] {
         let faucet = node.post_json(
-            "/admin/faucet",
+            "/acton_fundAccount",
             &json!({
                 "address": address,
                 "amount": 250_000_000u128
@@ -2959,7 +2959,7 @@ fn localnet_registers_and_serves_compiler_abi_for_localnet_deploys() {
 
     let abi_response = wait_for_ok_response(
         &node,
-        &format!("/admin/compiler-abi?code_hash={code_hash_hex}"),
+        &format!("/acton_getCompilerAbi?code_hash={code_hash_hex}"),
         Duration::from_secs(12),
     );
     let abi = response_payload(&abi_response);
@@ -2977,7 +2977,7 @@ fn localnet_registers_and_serves_compiler_abi_for_localnet_deploys() {
     );
 
     let missing_response = node.get_json(
-        "/admin/compiler-abi?code_hash=1111111111111111111111111111111111111111111111111111111111111111",
+        "/acton_getCompilerAbi?code_hash=1111111111111111111111111111111111111111111111111111111111111111",
     );
     assert_eq!(missing_response["ok"].as_bool(), Some(true));
     assert!(
