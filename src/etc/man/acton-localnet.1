@@ -78,6 +78,21 @@ Amount of TON to request.
 .RS 4
 Localnet server port.
 .RE
+.SS "acton localnet status"
+Inspect the current localnet status.
+.SS "Synopsis"
+\fBacton localnet status\fR [\fIoptions\fR]
+.SS "Options"
+.sp
+\fB\-p\fR, \fB\-\-port\fR \fIport\fR
+.RS 4
+Localnet server port.
+.RE
+.sp
+\fB\-\-json\fR
+.RS 4
+Print machine\-readable JSON.
+.RE
 .SH "CONFIGURATION"
 You can store defaults in \fBActon.toml\fR:
 .sp
@@ -139,7 +154,8 @@ the same frontend shell
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'the UI reads chain data from \fB/api/v2\fR and \fB/api/v3\fR, and uses \fB/admin\fR
-lookups for local address aliases and registered compiler ABIs
+lookups for local address aliases, registered compiler ABIs, status, and
+snapshot tooling
 .RE
 .sp
 .RS 4
@@ -154,6 +170,26 @@ fallback is \fB5411\fR
 .RS 4
 \h'-04'\(bu\h'+03'\fB\-\-dump\-state\fR writes a snapshot during graceful shutdown
 .RE
+.SH "ADMIN API"
+The localnet server exposes admin routes for local development tooling:
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBGET /admin/status\fR returns uptime, latest block seqno, and the active state
+source
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBPOST /admin/dump\-state\fR with \fB{"path":"snapshots/localnet.json"}\fR writes a
+JSON state snapshot without stopping the server
+.RE
+.sp
+.RS 4
+\h'-04'\(bu\h'+03'\fBPOST /admin/load\-state\fR with \fB{"path":"snapshots/localnet.json"}\fR replaces
+the current node state with a JSON state snapshot
+.RE
+.sp
+Admin routes are not authenticated and are intended only for local development.
+Do not expose the localnet server publicly.
 .SH "PERSISTENCE"
 .sp
 .RS 4
@@ -175,12 +211,14 @@ with \fB\-\-db\-path\fR
 .SH "EXIT STATUS"
 .sp
 .RS 4
-\h'-04'\(bu\h'+03'\fB0\fR: The selected localnet subcommand completed successfully.
+\h'-04'\(bu\h'+03'\fB0\fR: The selected localnet subcommand completed successfully. For
+\fBacton localnet status\fR, this also includes the selected port not running;
+use \fB\-\-json\fR and inspect \fBrunning\fR for automation.
 .RE
 .sp
 .RS 4
 \h'-04'\(bu\h'+03'\fB1\fR: Startup failed because port binding, state loading, remote fork
-initialization, or faucet handling failed.
+initialization, faucet handling, or a status/admin query failed.
 .RE
 .SH "DISPLAY OPTIONS"
 .sp
@@ -255,6 +293,16 @@ acton localnet airdrop UQA_ftKIJsHEAE_UgtFOUK15hPzycZooFuUr8duyY9T3kwwM \-\-amou
 .RS 4
 .nf
 acton localnet start \-\-accounts deployer,user \-\-db\-path build/localnet.db
+.fi
+.RE
+.RE
+.sp
+.RS 4
+\h'-04' 6.\h'+01'Inspect a running localnet:
+.sp
+.RS 4
+.nf
+acton localnet status \-\-json
 .fi
 .RE
 .RE

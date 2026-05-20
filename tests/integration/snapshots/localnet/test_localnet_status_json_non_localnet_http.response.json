@@ -1,0 +1,9 @@
+{
+  "fork_block_number": null,
+  "fork_network": null,
+  "last_block_seqno": null,
+  "port": "[PORT]",
+  "running": false,
+  "state_source": null,
+  "uptime_seconds": null
+}

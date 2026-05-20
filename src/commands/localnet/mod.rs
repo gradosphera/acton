@@ -1,3 +1,5 @@
+mod status;
+
 use crate::context::Wallet;
 use crate::wallets;
 use acton_config::color::OwoColorize;
@@ -23,6 +25,7 @@ use tycho_types::models::{
 const STARTUP_ACCOUNT_TOPUP_NANOTONS: u128 = 100_000_000_000; // 100 TON
 const STARTUP_DEPLOY_TRANSFER_NANOTONS: u128 = 50_000_000; // 0.05 TON
 const WALLET_MSG_TTL_SECONDS: u64 = 600;
+pub use status::localnet_status_cmd;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn localnet_start_cmd(
@@ -195,15 +198,34 @@ pub async fn localnet_airdrop_cmd(address: &str, amount_ton: f64, port: u16) -> 
         .user_agent(crate::build_info::user_agent())
         .build()?;
     let amount_nanotons = (amount_ton * 1_000_000_000.0) as u128;
-
-    let res = client
-        .post(format!("http://localhost:{port}/admin/faucet"))
-        .json(&serde_json::json!({
-            "address": address,
-            "amount": amount_nanotons
-        }))
-        .send()
-        .await?;
+    let mut last_connect_error = None;
+    let mut res = None;
+    for host in ["127.0.0.1", "localhost"] {
+        match client
+            .post(format!("http://{host}:{port}/admin/faucet"))
+            .json(&serde_json::json!({
+                "address": address,
+                "amount": amount_nanotons
+            }))
+            .send()
+            .await
+        {
+            Ok(response) => {
+                res = Some(response);
+                break;
+            }
+            Err(err) if err.is_connect() => {
+                last_connect_error = Some(err);
+            }
+            Err(err) => return Err(err.into()),
+        }
+    }
+    let Some(res) = res else {
+        if let Some(err) = last_connect_error {
+            return Err(err).context("Failed to reach localnet faucet");
+        }
+        anyhow::bail!("Failed to reach localnet faucet");
+    };
 
     if res.status().is_success() {
         let json: serde_json::Value = res.json().await?;

@@ -588,17 +588,32 @@ fn perform_localnet_airdrop(
         .build()
         .context("Failed to build HTTP client")?;
     let amount_nanotons = (amount_ton * 1_000_000_000.0) as u128;
-
-    let response = client
-        .post(format!("http://localhost:{port}/admin/faucet"))
-        .json(&serde_json::json!({
-            "address": address,
-            "amount": amount_nanotons,
-        }))
-        .send()
-        .context(
-            "Failed to send request to localnet faucet. Make sure `acton localnet start` is running",
-        )?;
+    let mut response = None;
+    let mut connect_failed = false;
+    for host in ["127.0.0.1", "localhost"] {
+        match client
+            .post(format!("http://{host}:{port}/admin/faucet"))
+            .json(&serde_json::json!({
+                "address": address,
+                "amount": amount_nanotons,
+            }))
+            .send()
+        {
+            Ok(res) => {
+                response = Some(res);
+                break;
+            }
+            Err(err) if err.is_connect() => {
+                connect_failed = true;
+            }
+            Err(err) => return Err(err).context("Failed to send request to localnet faucet"),
+        }
+    }
+    let response = response.context(if connect_failed {
+        "Failed to send request to localnet faucet. Make sure `acton localnet start` is running"
+    } else {
+        "Failed to send request to localnet faucet"
+    })?;
 
     if response.status().is_success() {
         let json: serde_json::Value = response

@@ -1111,6 +1111,17 @@ pub enum LocalnetCommand {
         )]
         port: Option<u16>,
     },
+    #[command(about = "Inspect localnet status")]
+    Status {
+        #[arg(
+            long,
+            short,
+            help = "Localnet server port (default: [localnet].port or 5411)"
+        )]
+        port: Option<u16>,
+        #[arg(long, help = "Print machine-readable JSON")]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand, Clone)]
@@ -2334,6 +2345,14 @@ fn main() {
                 rt.block_on(async {
                     commands::localnet::localnet_airdrop_cmd(&address, amount, port).await
                 })
+            }
+            LocalnetCommand::Status { port, json } => {
+                let port = resolve_localnet_port(port);
+                let rt = tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to build tokio runtime");
+                rt.block_on(async { commands::localnet::localnet_status_cmd(port, json).await })
             }
         },
     };

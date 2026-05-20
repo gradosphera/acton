@@ -348,6 +348,7 @@ pub(crate) enum Request {
 
 pub struct Localnet {
     tx: mpsc::Sender<Request>,
+    started_at: SystemTime,
 }
 
 impl Default for Localnet {
@@ -360,6 +361,7 @@ impl Localnet {
     #[must_use]
     pub fn new(state_source: StateSource, db_path: Option<String>) -> Self {
         let (tx, rx) = mpsc::channel(100);
+        let started_at = SystemTime::now();
 
         std::thread::spawn(move || {
             if let Err(e) = run_node_loop(rx, state_source, db_path) {
@@ -367,7 +369,14 @@ impl Localnet {
             }
         });
 
-        Self { tx }
+        Self { tx, started_at }
+    }
+
+    #[must_use]
+    pub fn uptime_seconds(&self) -> u64 {
+        self.started_at
+            .elapsed()
+            .map_or(0, |duration| duration.as_secs())
     }
 
     pub async fn send_boc(&self, boc_str: String) -> anyhow::Result<LocalnetBlockTransactions> {

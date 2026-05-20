@@ -89,6 +89,28 @@ Localnet server port.
 
 {{/options}}
 
+### acton localnet status
+
+Inspect the current localnet status.
+
+#### Synopsis
+
+`acton localnet status` [_options_]
+
+#### Options
+
+{{#options command="acton localnet status"}}
+
+{{#option "`-p`, `--port` _port_" }}
+Localnet server port.
+{{/option}}
+
+{{#option "`--json`" }}
+Print machine-readable JSON.
+{{/option}}
+
+{{/options}}
+
 ## Configuration
 
 You can store defaults in `Acton.toml`:
@@ -133,11 +155,26 @@ one-off overrides or CI.
   `/tokens`, `/nfts`, and per-address or per-transaction pages are served from
   the same frontend shell
 - the UI reads chain data from `/api/v2` and `/api/v3`, and uses `/admin`
-  lookups for local address aliases and registered compiler ABIs
+  lookups for local address aliases, registered compiler ABIs, status, and
+  snapshot tooling
 - when `--port` and `[localnet].port` are both absent, the current runtime
   fallback is `5411`
 - `--rate-limit` applies to `/api/*` endpoints, not admin endpoints
 - `--dump-state` writes a snapshot during graceful shutdown
+
+## Admin API
+
+The localnet server exposes admin routes for local development tooling:
+
+- `GET /admin/status` returns uptime, latest block seqno, and the active state
+  source
+- `POST /admin/dump-state` with `{"path":"snapshots/localnet.json"}` writes a
+  JSON state snapshot without stopping the server
+- `POST /admin/load-state` with `{"path":"snapshots/localnet.json"}` replaces
+  the current node state with a JSON state snapshot
+
+Admin routes are not authenticated and are intended only for local development.
+Do not expose the localnet server publicly.
 
 ## Persistence
 
@@ -149,9 +186,11 @@ one-off overrides or CI.
 
 ## Exit Status
 
-- `0`: The selected localnet subcommand completed successfully.
+- `0`: The selected localnet subcommand completed successfully. For
+  `acton localnet status`, this also includes the selected port not running;
+  use `--json` and inspect `running` for automation.
 - `1`: Startup failed because port binding, state loading, remote fork
-  initialization, or faucet handling failed.
+  initialization, faucet handling, or a status/admin query failed.
 
 ## Display Options
 
@@ -191,6 +230,12 @@ one-off overrides or CI.
 
    ```bash
    acton localnet start --accounts deployer,user --db-path build/localnet.db
+   ```
+
+6. Inspect a running localnet:
+
+   ```bash
+   acton localnet status --json
    ```
 
 ## See Also

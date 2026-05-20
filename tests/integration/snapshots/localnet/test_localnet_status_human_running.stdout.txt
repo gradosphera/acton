@@ -1,0 +1,4 @@
+Running: http://127.0.0.1:[PORT]
+Last block seqno: 0
+Uptime: [UPTIME_SECONDS]s
+State source: local genesis
