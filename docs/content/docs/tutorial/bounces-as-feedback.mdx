@@ -13,6 +13,19 @@ When a bounceable message fails on the recipient:
 
 The 256-bit limit matters: the `Vote` struct is 40 bits (32-bit opcode + 8-bit option), so it fits entirely in the bounce payload. That is why `BounceMode.Only256BitsOfBody` is used when Poll forwards a `Vote` to Voter.
 
+```mermaid
+sequenceDiagram
+    participant Alice as Alice wallet
+    participant Poll
+    participant Voter as Alice Voter
+
+    Alice->>Poll: Vote(option=0)
+    Poll->>Poll: increment option0
+    Poll->>Voter: forward Vote
+    Voter--xPoll: bounce AlreadyVoted
+    Poll->>Poll: decrement option0
+```
+
 ## Implement `onBouncedMessage` in Poll
 
 In `contracts/Poll.tolk`, replace the empty `onBouncedMessage` with:
