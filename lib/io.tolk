@@ -61,7 +61,6 @@ import "ffi"
 /// - If arguments outnumber placeholders, extra arguments are appended after the formatted text.
 /// - For non-int arguments, `{:x}` and `{:ton}` fall back to the same behavior as `{}`.
 /// - For non-cell/slice/builder/Cell<T> arguments, `{:cell-tree}` falls back to the same behavior as `{}`.
-/// - `{:ton}` uses floating-point conversion, so very large values can be rounded.
 fun println<
     T1,
     T2 = void,

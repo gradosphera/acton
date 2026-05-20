@@ -1,11 +1,10 @@
-use crate::commands::common::error_fmt;
+use crate::commands::common::{error_fmt, format_nanotons};
 use crate::file_build_cache::FileBuildCache;
 use acton_config::color::OwoColorize;
 use acton_config::config::{ActonConfig, ContractConfig, project_root as configured_project_root};
 use anyhow::{Context, anyhow};
 use clap::Subcommand;
 use log::warn;
-use num_bigint::{BigInt, Sign};
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -466,22 +465,6 @@ fn format_std_address(address: &StdAddr, network: &Network) -> String {
     .to_string()
 }
 
-fn format_nanotons(value: &BigInt) -> String {
-    let sign = if value.sign() == Sign::Minus { "-" } else { "" };
-    let digits = value.to_str_radix(10);
-    let digits = digits.trim_start_matches('-');
-
-    let formatted = if digits.len() <= 9 {
-        let fractional = format!("{digits:0>9}");
-        trim_fractional(format!("0.{fractional}"))
-    } else {
-        let (whole, fractional) = digits.split_at(digits.len() - 9);
-        trim_fractional(format!("{whole}.{fractional}"))
-    };
-
-    format!("{sign}{formatted} TON")
-}
-
 const LABEL_WIDTH: usize = 18;
 
 fn print_section(title: &str) {
@@ -622,14 +605,4 @@ fn looks_like_address(value: &str) -> bool {
 fn looks_like_hash(value: &str) -> bool {
     let stripped = value.strip_prefix("0x").unwrap_or(value);
     stripped.len() == 64 && stripped.bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
-fn trim_fractional(mut formatted: String) -> String {
-    while formatted.ends_with('0') {
-        formatted.pop();
-    }
-    if formatted.ends_with('.') {
-        formatted.pop();
-    }
-    formatted
 }

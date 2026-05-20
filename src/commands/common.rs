@@ -5,6 +5,7 @@ use acton_config::config::{
 };
 use anyhow::{Context, anyhow};
 use inquire::Select;
+use num_bigint::{BigInt, Sign};
 use std::io::{IsTerminal, stdin, stdout};
 use std::path::Path;
 use ton_executor::ExecutorVerbosity;
@@ -284,6 +285,35 @@ script-name = \"command invocation\""
     }
 }
 
+#[must_use]
+pub fn format_nanotons(value: &BigInt) -> String {
+    let sign = if value.sign() == Sign::Minus { "-" } else { "" };
+    let digits = value.to_str_radix(10);
+    let digits = digits.trim_start_matches('-');
+
+    let formatted = if digits.len() <= 9 {
+        let fractional = format!("{digits:0>9}");
+        trim_nanoton_fraction(format!("0.{fractional}"))
+    } else {
+        let (whole, fractional) = digits.split_at(digits.len() - 9);
+        trim_nanoton_fraction(format!("{whole}.{fractional}"))
+    };
+
+    format!("{sign}{formatted} TON")
+}
+
+fn trim_nanoton_fraction(mut value: String) -> String {
+    if let Some(dot_index) = value.find('.') {
+        while value.ends_with('0') {
+            value.pop();
+        }
+        if value.len() == dot_index + 1 {
+            value.pop();
+        }
+    }
+    value
+}
+
 pub fn select_contract(
     contract_id: Option<String>,
     config: &ActonConfig,
@@ -425,4 +455,29 @@ pub fn symlink_global_libraries() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_nanotons;
+    use num_bigint::BigInt;
+
+    #[test]
+    fn format_nanotons_preserves_large_integer_precision() {
+        let value = BigInt::parse_bytes(b"123456789012345678901234567890123456789", 10)
+            .expect("valid decimal integer");
+
+        assert_eq!(
+            format_nanotons(&value),
+            "123456789012345678901234567890.123456789 TON"
+        );
+    }
+
+    #[test]
+    fn format_nanotons_trims_fractional_zeroes_and_preserves_sign() {
+        assert_eq!(format_nanotons(&BigInt::from(0)), "0 TON");
+        assert_eq!(format_nanotons(&BigInt::from(1)), "0.000000001 TON");
+        assert_eq!(format_nanotons(&BigInt::from(1_234_500_000)), "1.2345 TON");
+        assert_eq!(format_nanotons(&BigInt::from(-1)), "-0.000000001 TON");
+    }
 }

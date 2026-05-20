@@ -76,6 +76,24 @@ get fun `test y stdlib format5 placeholder order bug`() {
 }
 
 #[test]
+fn format_ton_preserves_nanoton_precision_for_large_values() {
+    run_fmt_success(
+        "y-stdlib-format-ton-precision",
+        r#"
+get fun `test y stdlib format ton precision`() {
+    println(format("i64_max={:ton}", 9223372036854775807));
+    println(format("above_i64_max={:ton}", parseInt("9223372036854775808")));
+    println(format("huge={:ton}", parseInt("123456789012345678901234567890123456789")));
+    println(format("negative_huge={:ton}", parseInt("-123456789012345678901234567890123456789")));
+    println(format("one_nanoton={:ton}", 1));
+    println(format("trailing_zeros={:ton}", 1234500000));
+}
+"#,
+        "integration/snapshots/test-runner/format1_and_format2_support_plain_hex_and_ton_specifiers/format_ton_preserves_nanoton_precision_for_large_values.stdout.txt",
+    );
+}
+
+#[test]
 fn format_supports_cell_tree_for_cells_slices_and_typed_cells() {
     run_fmt_success(
         "y-stdlib-format-cell-tree",

@@ -27,7 +27,6 @@ Format rules and edge cases:
   fail at runtime with a parser error that includes a byte offset.
 - For non-int arguments, `{:x}` and `{:ton}` fall back to default formatting.
 - For non-cell/slice/builder/Cell\<T> arguments, `{:cell-tree}` falls back to default formatting.
-- `{:ton}` uses `f64` internally, so very large values can lose precision.
 
 Examples:
 ```tolk
@@ -89,7 +88,7 @@ format("{:x}", "abc");   // "abc"
 format("{:ton}", true);  // "true"
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/fmt.tolk#L69" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/fmt.tolk#L68" />
 
 ## `parseInt`
 
@@ -111,7 +110,7 @@ val negative = parseInt("-42");
 val withWhitespace = parseInt(" 42 ");
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/fmt.tolk#L105" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/fmt.tolk#L104" />
 
 ## `parseAddress`
 
@@ -133,7 +132,7 @@ Example:
 val address = parseAddress("kQCPFJYFqhowz0BRAfqNPdLOC1_Rlupki_0BezWU6rHk5lbt");
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/fmt.tolk#L124" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/fmt.tolk#L123" />
 
 ## `parseCellFromHex`
 
@@ -147,5 +146,5 @@ Decode a root cell from hex-encoded BOC bytes.
 Invalid or malformed input (including non-BOC payloads) fails with an error like
 `Failed to decode cell hex <input>`.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/fmt.tolk#L134" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/fmt.tolk#L133" />
 

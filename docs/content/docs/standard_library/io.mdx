@@ -90,9 +90,8 @@ Notes:
 - If arguments outnumber placeholders, extra arguments are appended after the formatted text.
 - For non-int arguments, `{:x}` and `{:ton}` fall back to the same behavior as `{}`.
 - For non-cell/slice/builder/Cell\<T> arguments, `{:cell-tree}` falls back to the same behavior as `{}`.
-- `{:ton}` uses floating-point conversion, so very large values can be rounded.
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/io.tolk#L65" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/io.tolk#L64" />
 
 ## `eprintln`
 
@@ -107,5 +106,5 @@ Example:
 eprintln("Something went wrong");
 ```
 
-<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/io.tolk#L102" />
+<SourceCodeLink href="https://github.com/ton-blockchain/acton/blob/master/lib/io.tolk#L101" />
 

@@ -1,4 +1,4 @@
-use crate::commands::common::error_fmt;
+use crate::commands::common::{error_fmt, format_nanotons};
 use crate::context::{BuildCache, Context, to_cell};
 use crate::ffi::emulation::{compilation_result_for_code, normalize_address_input};
 use crate::formatter::FormatterContext;
@@ -265,8 +265,7 @@ fn format_single_arg(
                 && items.len() == 1
                 && let TupleItem::Int(value) = &items[0]
             {
-                let amount = value.to_f64().unwrap_or(0.0) / 1e9;
-                return Ok(format!("{amount} TON"));
+                return Ok(format_nanotons(value));
             }
             format_default(ctx, formatter, ty_idx, arg, colorize)
         }

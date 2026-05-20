@@ -17,7 +17,6 @@
 ///   fail at runtime with a parser error that includes a byte offset.
 /// - For non-int arguments, `{:x}` and `{:ton}` fall back to default formatting.
 /// - For non-cell/slice/builder/Cell<T> arguments, `{:cell-tree}` falls back to default formatting.
-/// - `{:ton}` uses `f64` internally, so very large values can lose precision.
 ///
 /// Examples:
 /// ```tolk
