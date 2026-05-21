@@ -6,15 +6,23 @@ import type {
   FullAccountState,
   JettonMaster,
   JettonWallet,
+  LocalnetNodeInfo,
   NftItem,
   Transaction,
   V3TracesResponse,
+  V3TransactionsResponse,
 } from "./types"
 
 interface TonClientOptions {
   readonly v2BaseUrl: string
   readonly v3BaseUrl: string
   readonly addressNameBaseUrl: string
+}
+
+interface FaucetResponse {
+  readonly ok?: boolean
+  readonly success?: boolean
+  readonly error?: string
 }
 
 export class TonClient {
@@ -97,6 +105,18 @@ export class TonClient {
     const addresses = owner_address || jetton_address || []
     const paramName = owner_address ? "owner_address" : "jetton_address"
 
+    return this.fetchJettonWallets(paramName, addresses)
+  }
+
+  async getJettonWalletsByAddress(address: string[]): Promise<JettonWallet[]> {
+    if (address.length === 0) return []
+    return this.fetchJettonWallets("address", address)
+  }
+
+  private async fetchJettonWallets(
+    paramName: "address" | "owner_address" | "jetton_address",
+    addresses: string[],
+  ): Promise<JettonWallet[]> {
     const results = await Promise.all(
       addresses.map(async addr => {
         const url = this.buildUrl(this.v3BaseUrl, "/jetton/wallets")
@@ -121,6 +141,12 @@ export class TonClient {
     const url = this.buildUrl(this.v3BaseUrl, "/traces")
     url.searchParams.append("hash", hash)
     return this.request(url, "Failed to fetch traces")
+  }
+
+  async getRecentTransactions(limit = 10): Promise<V3TransactionsResponse> {
+    const url = this.buildUrl(this.v3BaseUrl, "/transactions")
+    url.searchParams.append("limit", limit.toString())
+    return this.request(url, "Failed to fetch recent transactions")
   }
 
   async getNftItems(options?: {
@@ -210,6 +236,11 @@ export class TonClient {
     return this.request(url, "Failed to fetch compiler ABI")
   }
 
+  async getNodeInfo(): Promise<LocalnetNodeInfo> {
+    const url = this.buildUrl(this.addressNameBaseUrl, "/acton_nodeInfo")
+    return this.request(url, "Failed to fetch node info")
+  }
+
   async setAddressName(address: string, name: string): Promise<void> {
     const url = this.buildUrl(this.addressNameBaseUrl, "/acton_setAddressName")
     await this.request<null>(url, "Failed to set address name", {
@@ -217,6 +248,27 @@ export class TonClient {
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({address, name}),
     })
+  }
+
+  async fundAccount(address: string, amount: number): Promise<void> {
+    const url = this.buildUrl(this.addressNameBaseUrl, "/acton_fundAccount")
+    const response = await this.request<FaucetResponse>(url, "Failed to fund account", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({address, amount}),
+    })
+
+    if (response.ok === false || response.success === false) {
+      throw new Error(response.error || "Failed to fund account")
+    }
+  }
+
+  getEndpoints(): {readonly apiV2: string; readonly apiV3: string; readonly admin: string} {
+    return {
+      apiV2: this.buildUrl(this.v2BaseUrl, "").toString().replace(/\/$/, ""),
+      apiV3: this.buildUrl(this.v3BaseUrl, "").toString().replace(/\/$/, ""),
+      admin: this.buildUrl(this.addressNameBaseUrl, "").toString().replace(/\/$/, ""),
+    }
   }
 
   private buildUrl(base: string, path: string): URL {
