@@ -1388,6 +1388,11 @@ fn handle_run_get_method(
         || EMPTY_CELL_BASE64.to_owned(),
         |b| base64::engine::general_purpose::STANDARD.encode(b),
     );
+    let libs = node
+        .build_vm_global_libs_boc()?
+        .map_or_else(String::new, |boc| {
+            base64::engine::general_purpose::STANDARD.encode(boc)
+        });
 
     let balance_tokens = meta.cached_balance.unwrap_or(0);
 
@@ -1402,7 +1407,7 @@ fn handle_run_get_method(
         gas_limit: "10000000".to_owned(),
         debug_enabled: false,
         verbosity: ExecutorVerbosity::Short,
-        libs: String::new(),
+        libs,
         extra_currencies: Default::default(),
         prev_blocks_info: None,
     };

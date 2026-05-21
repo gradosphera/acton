@@ -5268,6 +5268,7 @@ dependencies = [
  "crc",
  "hex",
  "include_dir",
+ "reqwest",
  "rusqlite",
  "serde",
  "serde_json",

@@ -80,10 +80,6 @@ export const Tokens: React.FC<TokensProps> = ({wallets, client, onAddressClick})
                     })}%`
           const symbol = w.master?.jetton_content?.symbol || "UNKNOWN"
 
-          if (w.master?.jetton_content?.name == undefined) {
-            return
-          }
-
           return (
             <div
               key={w.address}
