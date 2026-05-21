@@ -2406,16 +2406,22 @@ fn validate_project_toolchain_version() -> anyhow::Result<()> {
     }
 
     let installed = acton::build_info::SHORT_VERSION;
-    if expected == installed {
-        return Ok(());
-    }
-    if acton::build_info::is_trunk_build() && expected == acton::build_info::PACKAGE_VERSION {
+    if toolchain_acton_version_matches(expected, installed) {
         return Ok(());
     }
 
     anyhow::bail!(
         "Acton CLI version mismatch for this project.\n\nActon.toml expects [toolchain].acton = \"{expected}\"\nInstalled acton version is \"{installed}\".\n\nInstall the expected version:\n  acton up {expected}\n\nOr update [toolchain].acton if this project supports acton {installed}."
     );
+}
+
+fn toolchain_acton_version_matches(expected: &str, installed: &str) -> bool {
+    if expected == installed {
+        return true;
+    }
+
+    acton::build_info::is_trunk_build()
+        && (expected == acton::build_info::PACKAGE_VERSION || expected == "trunk")
 }
 
 fn print_error(err: &anyhow::Error) {
